@@ -12,7 +12,7 @@ This roadmap delivers an AI-powered multi-sport training platform in 9 phases, p
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation + Auth** - Multi-user accounts, athlete profiles, GDPR-compliant data architecture
+- [x] **Phase 1: Foundation + Auth** - Multi-user accounts, athlete profiles, GDPR-compliant data architecture
 - [ ] **Phase 2: Training Engine** - Pure computation for TSS, CTL/ATL/TSB, zones, and FTP tracking
 - [ ] **Phase 3: Garmin Data Integration** - Sync activities and biometrics from Garmin with swappable abstraction layer
 - [ ] **Phase 4: Dashboard + Visualization** - Body status, PMC charts, training calendar, and workout previews
@@ -37,10 +37,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 4 plans
 
 Plans:
-- [ ] 01-01-PLAN.md -- Backend scaffold, Docker, async DB, User model, JWT auth endpoints
-- [ ] 01-02-PLAN.md -- Athlete profiles, consent records, goals CRUD, RLS, hypertables
-- [ ] 01-03-PLAN.md -- React frontend scaffold, auth UI, session management
-- [ ] 01-04-PLAN.md -- Frontend consent flow, profile setup, end-to-end verification
+- [x] 01-01-PLAN.md -- Backend scaffold, Docker, async DB, User model, JWT auth endpoints
+- [x] 01-02-PLAN.md -- Athlete profiles, consent records, goals CRUD, RLS, hypertables
+- [x] 01-03-PLAN.md -- React frontend scaffold, auth UI, session management
+- [x] 01-04-PLAN.md -- Frontend consent flow, profile setup, end-to-end verification
 
 ### Phase 2: Training Engine
 **Goal**: The system can compute accurate per-sport training load metrics, track fitness/fatigue/form, and calculate power/pace zones from athlete data
@@ -169,7 +169,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 1. Foundation + Auth | 0/4 | Planned | - |
+| 1. Foundation + Auth | 4/4 | Complete | 2026-04-16 |
 | 2. Training Engine | 0/TBD | Not started | - |
 | 3. Garmin Data Integration | 0/TBD | Not started | - |
 | 4. Dashboard + Visualization | 0/TBD | Not started | - |
