@@ -12,7 +12,7 @@ from app.config import settings
 
 # Import Base and ALL models so autogenerate can detect them
 from app.database import Base  # noqa: F401
-from app.models import user, athlete_profile, consent  # noqa: F401
+from app.models import user, athlete_profile, consent, activity  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -30,16 +30,21 @@ target_metadata = Base.metadata
 
 
 def include_object(object, name, type_, reflected, compare_to):
-    """Prevent autogenerate from dropping TimescaleDB auto-created indexes.
+    """Prevent autogenerate from touching TimescaleDB-managed tables and indexes.
 
-    TimescaleDB creates indexes automatically on hypertable time columns.
-    Alembic autogenerate sees these as reflected-only indexes (no Python model definition)
-    and would try to drop them. This filter excludes them.
+    - The activities and daily_metrics tables were created via raw SQL as
+      TimescaleDB hypertables (migration a076ea752213). Alembic must not try
+      to CREATE or DROP these tables during autogenerate.
+    - TimescaleDB also auto-creates indexes on hypertable time columns.
+      Alembic would try to drop them (reflected-only, no Python definition).
 
     See: https://github.com/sqlalchemy/alembic/discussions/1465
     """
+    # Skip TimescaleDB hypertables created via raw SQL (not Alembic-managed)
+    if type_ == "table" and name in ("activities", "daily_metrics"):
+        return False
+    # Skip reflected-only indexes - these are created by TimescaleDB
     if type_ == "index" and reflected and compare_to is None:
-        # Skip reflected-only indexes - these are created by TimescaleDB
         return False
     return True
 

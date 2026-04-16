@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.activity import Activity
     from app.models.athlete_profile import AthleteProfile
     from app.models.consent import ConsentRecord
 
@@ -40,4 +41,9 @@ class User(Base):
         "ConsentRecord",
         back_populates="user",
         # No cascade delete — anonymize consent records on user deletion
+    )
+    activities: Mapped[list["Activity"]] = relationship(
+        "Activity",
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
