@@ -1,8 +1,9 @@
-from typing import Annotated
+from typing import Annotated, AsyncGenerator
 
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -44,3 +45,19 @@ async def get_current_active_user(
             detail="Inactive user",
         )
     return current_user
+
+
+async def get_db_for_user(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AsyncGenerator[AsyncSession, None]:
+    """Get a database session with the current user's ID set as a PostgreSQL session variable.
+
+    This enables PostgreSQL Row-Level Security (RLS) policies to filter rows
+    by the current user. The RLS policies check current_setting('app.current_user_id').
+
+    Use this dependency for ALL user-data routes (athletes, consent, activities, etc.).
+    Use get_db (without user context) for auth routes (register, login) and admin tasks.
+    """
+    await db.execute(text(f"SET LOCAL app.current_user_id = '{current_user.id}'"))
+    yield db

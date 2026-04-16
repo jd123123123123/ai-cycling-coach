@@ -1,9 +1,14 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.athlete_profile import AthleteProfile
+    from app.models.consent import ConsentRecord
 
 
 class User(Base):
@@ -24,6 +29,15 @@ class User(Base):
         nullable=True,
     )
 
-    # Relationships to be activated when models are added in later phases:
-    # athlete_profile: one-to-one with AthleteProfile (Phase 2)
-    # consent_records: one-to-many with ConsentRecord (Phase 2)
+    # Relationships activated in Phase 2 when models were added
+    athlete_profile: Mapped["AthleteProfile | None"] = relationship(
+        "AthleteProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    consent_records: Mapped[list["ConsentRecord"]] = relationship(
+        "ConsentRecord",
+        back_populates="user",
+        # No cascade delete — anonymize consent records on user deletion
+    )

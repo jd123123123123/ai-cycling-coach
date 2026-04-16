@@ -18,8 +18,16 @@ app.add_middleware(
 )
 
 from app.api.auth import router as auth_router  # noqa: E402
+from app.api.athletes import router as athletes_router  # noqa: E402
+from app.api.goals import router as goals_router  # noqa: E402
+from app.api.consent import router as consent_router  # noqa: E402
+from app.api.users import router as users_router  # noqa: E402
 
 app.include_router(auth_router)
+app.include_router(athletes_router)
+app.include_router(goals_router)
+app.include_router(consent_router)
+app.include_router(users_router)
 
 
 @app.get("/", tags=["health"])

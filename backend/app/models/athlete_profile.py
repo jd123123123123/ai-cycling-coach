@@ -1,0 +1,59 @@
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database import Base
+
+
+class AthleteProfile(Base):
+    __tablename__ = "athlete_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+
+    # Cycling thresholds
+    ftp_watts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lthr_cycling: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Running thresholds
+    running_threshold_pace_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lthr_running: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # General
+    max_heart_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resting_heart_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    date_of_birth: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Training availability
+    weekly_hours_available: Mapped[float | None] = mapped_column(Float, nullable=True)
+    primary_sport: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    secondary_sports: Mapped[list | None] = mapped_column(JSON, default=list, nullable=True)
+
+    # Goals stored as JSON for flexibility
+    # {"target_ftp": int, "target_event": {"name": str, "date": str}, "weekly_hours": float}
+    goals: Mapped[dict | None] = mapped_column(JSON, default=dict, nullable=True)
+
+    # FTP history — list of {"ftp_watts": int, "measured_at": str} dicts
+    ftp_history: Mapped[list | None] = mapped_column(JSON, default=list, nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        onupdate=func.now(),
+        nullable=True,
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="athlete_profile")  # noqa: F821

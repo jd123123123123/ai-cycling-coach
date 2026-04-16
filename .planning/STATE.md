@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 1 of 9 (Foundation + Auth)
-Plan: 1 of TBD in current phase
-Status: In progress -- Plan 01-01 complete, next: Plan 01-02 (Athlete profile + GDPR consent)
-Last activity: 2026-04-16 -- Completed 01-01-PLAN.md (backend scaffold + JWT auth)
+Plan: 3 of TBD in current phase
+Status: In progress -- Plans 01-01 and 01-03 complete, next: Plan 01-02 (Athlete profile + GDPR consent)
+Last activity: 2026-04-16 -- Completed 01-03-PLAN.md (React frontend scaffold + auth UI)
 
-Progress: [█.........] ~10%
+Progress: [██........] ~20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 65 min
-- Total execution time: 1.08 hours
+- Total plans completed: 2
+- Average duration: 40 min
+- Total execution time: 1.33 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-auth | 1 | 65 min | 65 min |
+| 01-foundation-auth | 2 | 80 min | 40 min |
 
 **Recent Trend:**
-- Last 5 plans: 65 min
-- Trend: establishing baseline
+- Last 5 plans: 65 min, 15 min
+- Trend: frontend scaffold faster than backend
 
 *Updated after each plan completion*
 
@@ -47,6 +47,10 @@ Recent decisions affecting current work:
 - [01-01]: jti on refresh tokens from day 1 to enable Redis revocation in Phase 2 without token schema change
 - [01-01]: AthleteProfile + ConsentRecord relationships deferred to Phase 2 when models exist
 - [01-01]: Redis refresh token revocation deferred to Phase 2 -- Phase 1 known limitation documented
+- [01-03]: Access token stored in JS module variable (never localStorage) -- XSS-safe per security pattern
+- [01-03]: Axios 401 interceptor queues concurrent requests during refresh to prevent duplicate refresh calls
+- [01-03]: Login uses URLSearchParams (form data) not JSON -- OAuth2PasswordRequestForm requires username/password fields
+- [01-03]: RegisterPage redirects to /dashboard until Plan 04 creates /profile-setup route
 - [Roadmap]: Build training engine before Garmin integration (pure math, testable with synthetic data)
 - [Roadmap]: Use unofficial python-garminconnect behind abstraction layer, swap for official API later
 - [Roadmap]: Safety guardrails ship with AI coaching core (Phase 5), not deferred
@@ -65,6 +69,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-16T13:20:05Z
-Stopped at: Completed 01-01-PLAN.md (backend scaffold + full JWT auth)
+Last session: 2026-04-16T13:37:00Z
+Stopped at: Completed 01-03-PLAN.md (React frontend scaffold + auth UI)
 Resume file: None
