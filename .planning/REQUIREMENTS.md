@@ -107,47 +107,47 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAT-01 | TBD | Pending |
-| PLAT-02 | TBD | Pending |
-| PLAT-03 | TBD | Pending |
-| DATA-01 | TBD | Pending |
-| DATA-02 | TBD | Pending |
-| DATA-03 | TBD | Pending |
-| DATA-04 | TBD | Pending |
-| TRAIN-01 | TBD | Pending |
-| TRAIN-02 | TBD | Pending |
-| TRAIN-03 | TBD | Pending |
-| TRAIN-04 | TBD | Pending |
-| TRAIN-05 | TBD | Pending |
-| TRAIN-06 | TBD | Pending |
-| TRAIN-07 | TBD | Pending |
-| TRAIN-08 | TBD | Pending |
-| COACH-01 | TBD | Pending |
-| COACH-02 | TBD | Pending |
-| COACH-03 | TBD | Pending |
-| COACH-04 | TBD | Pending |
-| COACH-05 | TBD | Pending |
-| COACH-06 | TBD | Pending |
-| COACH-07 | TBD | Pending |
-| COACH-08 | TBD | Pending |
-| COACH-09 | TBD | Pending |
-| DASH-01 | TBD | Pending |
-| DASH-02 | TBD | Pending |
-| DASH-03 | TBD | Pending |
-| DASH-04 | TBD | Pending |
-| DASH-05 | TBD | Pending |
-| SOCIAL-01 | TBD | Pending |
-| SOCIAL-02 | TBD | Pending |
-| SOCIAL-03 | TBD | Pending |
-| SOCIAL-04 | TBD | Pending |
-| SOCIAL-05 | TBD | Pending |
-| SOCIAL-06 | TBD | Pending |
+| PLAT-01 | Phase 1 | Pending |
+| PLAT-02 | Phase 1 | Pending |
+| PLAT-03 | Phase 1 | Pending |
+| DATA-01 | Phase 3 | Pending |
+| DATA-02 | Phase 3 | Pending |
+| DATA-03 | Phase 8 | Pending |
+| DATA-04 | Phase 3 | Pending |
+| TRAIN-01 | Phase 2 | Pending |
+| TRAIN-02 | Phase 2 | Pending |
+| TRAIN-03 | Phase 2 | Pending |
+| TRAIN-04 | Phase 7 | Pending |
+| TRAIN-05 | Phase 7 | Pending |
+| TRAIN-06 | Phase 7 | Pending |
+| TRAIN-07 | Phase 2 | Pending |
+| TRAIN-08 | Phase 2 | Pending |
+| COACH-01 | Phase 5 | Pending |
+| COACH-02 | Phase 5 | Pending |
+| COACH-03 | Phase 5 | Pending |
+| COACH-04 | Phase 6 | Pending |
+| COACH-05 | Phase 6 | Pending |
+| COACH-06 | Phase 8 | Pending |
+| COACH-07 | Phase 8 | Pending |
+| COACH-08 | Phase 5 | Pending |
+| COACH-09 | Phase 9 | Pending |
+| DASH-01 | Phase 4 | Pending |
+| DASH-02 | Phase 4 | Pending |
+| DASH-03 | Phase 4 | Pending |
+| DASH-04 | Phase 4 | Pending |
+| DASH-05 | Phase 4 | Pending |
+| SOCIAL-01 | Phase 9 | Pending |
+| SOCIAL-02 | Phase 9 | Pending |
+| SOCIAL-03 | Phase 9 | Pending |
+| SOCIAL-04 | Phase 9 | Pending |
+| SOCIAL-05 | Phase 9 | Pending |
+| SOCIAL-06 | Phase 9 | Pending |
 
 **Coverage:**
 - v1 requirements: 35 total
-- Mapped to phases: 0
-- Unmapped: 35
+- Mapped to phases: 35
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-16*
-*Last updated: 2026-04-16 after initial definition*
+*Last updated: 2026-04-16 after roadmap creation*
