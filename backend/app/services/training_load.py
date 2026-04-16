@@ -14,6 +14,28 @@ from __future__ import annotations
 import math
 from datetime import date, timedelta
 
+# EWMA time constants (Coggan Performance Management Chart)
+CTL_TIME_CONSTANT = 42  # days — Chronic Training Load (fitness)
+ATL_TIME_CONSTANT = 7   # days — Acute Training Load (fatigue)
+
+# TRIMP k constants (Banister 1991; Busso et al.)
+TRIMP_K_MALE = 1.92
+TRIMP_K_FEMALE = 1.67
+
+# Coggan zone boundaries as fractions of FTP
+_COGGAN_ZONES = [
+    ("zone1", "Active Recovery",    0.00, 0.55),
+    ("zone2", "Endurance",          0.56, 0.75),
+    ("zone3", "Tempo",              0.76, 0.90),
+    ("zone4", "Lactate Threshold",  0.91, 1.05),
+    ("zone5", "VO2 Max",            1.06, 1.20),
+    ("zone6", "Anaerobic Capacity", 1.21, 1.50),
+    ("zone7", "Neuromuscular",      1.50, None),
+]
+
+# Seiler 3-zone LT1 boundary fraction (below threshold speed)
+SEILER_LT1_FRACTION = 0.77
+
 
 # ---------------------------------------------------------------------------
 # Normalized Power
@@ -123,7 +145,7 @@ def calculate_hr_tss(
 
     Returns 0.0 if TRIMP reference is zero (e.g. LTHR == HR_rest).
     """
-    k = 1.92 if sex.lower() == "male" else 1.67
+    k = TRIMP_K_MALE if sex.lower() == "male" else TRIMP_K_FEMALE
     hrr_range = hr_max - hr_rest
 
     hrr_activity = (average_hr - hr_rest) / hrr_range
@@ -162,8 +184,8 @@ def update_ctl_atl(
     Returns:
         (new_ctl, new_atl) rounded to 1 decimal place.
     """
-    new_ctl = ctl_yesterday + (tss_today - ctl_yesterday) * (1 / 42)
-    new_atl = atl_yesterday + (tss_today - atl_yesterday) * (1 / 7)
+    new_ctl = ctl_yesterday + (tss_today - ctl_yesterday) * (1 / CTL_TIME_CONSTANT)
+    new_atl = atl_yesterday + (tss_today - atl_yesterday) * (1 / ATL_TIME_CONSTANT)
     return round(new_ctl, 1), round(new_atl, 1)
 
 
@@ -207,15 +229,14 @@ def coggan_power_zones(ftp_watts: int | float) -> dict:
         Zone 7 Neuromuscular:    >150% FTP (open-ended)
     """
     w = int(ftp_watts)
-    return {
-        "zone1": {"name": "Active Recovery",    "min": 0,           "max": int(w * 0.55)},
-        "zone2": {"name": "Endurance",          "min": int(w * 0.56), "max": int(w * 0.75)},
-        "zone3": {"name": "Tempo",              "min": int(w * 0.76), "max": int(w * 0.90)},
-        "zone4": {"name": "Lactate Threshold",  "min": int(w * 0.91), "max": int(w * 1.05)},
-        "zone5": {"name": "VO2 Max",            "min": int(w * 1.06), "max": int(w * 1.20)},
-        "zone6": {"name": "Anaerobic Capacity", "min": int(w * 1.21), "max": int(w * 1.50)},
-        "zone7": {"name": "Neuromuscular",      "min": int(w * 1.50), "max": None},
-    }
+    result = {}
+    for zone_key, name, lower_frac, upper_frac in _COGGAN_ZONES:
+        result[zone_key] = {
+            "name": name,
+            "min": int(w * lower_frac),
+            "max": int(w * upper_frac) if upper_frac is not None else None,
+        }
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +257,7 @@ def seiler_3_zones_running(threshold_pace_ms: float) -> dict:
     The 77% boundary is derived from Seiler 2009 research and EVOQ polarized
     training guide; individual LT1 varies (60–85%) — treat as an estimate.
     """
-    lt1_speed = threshold_pace_ms * 0.77
+    lt1_speed = threshold_pace_ms * SEILER_LT1_FRACTION
     return {
         "zone1": {
             "name": "Easy (below LT1)",
