@@ -23,6 +23,7 @@ from app.api.goals import router as goals_router  # noqa: E402
 from app.api.consent import router as consent_router  # noqa: E402
 from app.api.users import router as users_router  # noqa: E402
 from app.api.activities import router as activities_router  # noqa: E402
+from app.api.training_load import router as training_load_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(athletes_router)
@@ -30,6 +31,7 @@ app.include_router(goals_router)
 app.include_router(consent_router)
 app.include_router(users_router)
 app.include_router(activities_router)
+app.include_router(training_load_router)
 
 
 @app.get("/", tags=["health"])
