@@ -48,9 +48,8 @@ export default function RegisterPage() {
 
     try {
       await register({ email, password })
-      // After registration navigate to profile setup (Plan 04)
-      // For now go to /dashboard as a placeholder until /profile-setup exists
-      navigate('/dashboard', { replace: true })
+      // New users must complete GDPR consent before accessing the app
+      navigate('/consent', { replace: true })
     } catch (err: unknown) {
       const axiosError = err as { response?: { status?: number; data?: { detail?: string } } }
       if (axiosError.response?.status === 400) {
