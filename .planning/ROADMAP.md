@@ -13,7 +13,7 @@ This roadmap delivers an AI-powered multi-sport training platform in 9 phases, p
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation + Auth** - Multi-user accounts, athlete profiles, GDPR-compliant data architecture
-- [ ] **Phase 2: Training Engine** - Pure computation for TSS, CTL/ATL/TSB, zones, and FTP tracking
+- [x] **Phase 2: Training Engine** - Pure computation for TSS, CTL/ATL/TSB, zones, and FTP tracking
 - [ ] **Phase 3: Garmin Data Integration** - Sync activities and biometrics from Garmin with swappable abstraction layer
 - [ ] **Phase 4: Dashboard + Visualization** - Body status, PMC charts, training calendar, and workout previews
 - [ ] **Phase 5: AI Coaching Core** - Daily brief, chat interface, safety guardrails, and training recommendations
@@ -54,9 +54,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — TDD: Sports science pure functions (TSS, NP, CTL/ATL/TSB, zones)
-- [ ] 02-02-PLAN.md — Activity ORM model, CRUD API with auto-TSS calculation
-- [ ] 02-03-PLAN.md — PMC endpoint, zone calculation API, FTP update with history
+- [x] 02-01-PLAN.md — TDD: Sports science pure functions (TSS, NP, CTL/ATL/TSB, zones)
+- [x] 02-02-PLAN.md — Activity ORM model, CRUD API with auto-TSS calculation
+- [x] 02-03-PLAN.md — PMC endpoint, zone calculation API, FTP update with history
 
 ### Phase 3: Garmin Data Integration
 **Goal**: The system automatically syncs real athlete data from Garmin Connect, feeding the training engine with activities and biometrics
@@ -171,7 +171,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 1. Foundation + Auth | 4/4 | Complete | 2026-04-16 |
-| 2. Training Engine | 0/TBD | Not started | - |
+| 2. Training Engine | 3/3 | Complete | 2026-04-16 |
 | 3. Garmin Data Integration | 0/TBD | Not started | - |
 | 4. Dashboard + Visualization | 0/TBD | Not started | - |
 | 5. AI Coaching Core | 0/TBD | Not started | - |

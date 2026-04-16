@@ -19,14 +19,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Training Engine
 
-- [ ] **TRAIN-01**: System calculates per-sport TSS (power-based cycling, pace-based running, HR-based gym)
-- [ ] **TRAIN-02**: System tracks CTL (fitness), ATL (fatigue), TSB (form) with PMC visualization
-- [ ] **TRAIN-03**: System tracks power/pace zones (Coggan 7-zone and Seiler 3-zone models)
+- [x] **TRAIN-01**: System calculates per-sport TSS (power-based cycling, pace-based running, HR-based gym)
+- [x] **TRAIN-02**: System tracks CTL (fitness), ATL (fatigue), TSB (form) with PMC visualization
+- [x] **TRAIN-03**: System tracks power/pace zones (Coggan 7-zone and Seiler 3-zone models)
 - [ ] **TRAIN-04**: AI builds multi-week periodized mesocycles (base/build/peak/recovery) based on goals
 - [ ] **TRAIN-05**: System adapts daily plan based on sleep, HRV, body battery, nutrition, and recent training load
 - [ ] **TRAIN-06**: AI generates structured workouts with power/pace targets for cycling, running, and gym
-- [ ] **TRAIN-07**: System manages combined training load across cycling, running, and gym (tracked per-sport, not naively combined)
-- [ ] **TRAIN-08**: FTP tracking with history timeline and progression visualization
+- [x] **TRAIN-07**: System manages combined training load across cycling, running, and gym (tracked per-sport, not naively combined)
+- [x] **TRAIN-08**: FTP tracking with history timeline and progression visualization
 
 ### AI Coaching
 
@@ -114,14 +114,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-02 | Phase 3 | Pending |
 | DATA-03 | Phase 8 | Pending |
 | DATA-04 | Phase 3 | Pending |
-| TRAIN-01 | Phase 2 | Pending |
-| TRAIN-02 | Phase 2 | Pending |
-| TRAIN-03 | Phase 2 | Pending |
+| TRAIN-01 | Phase 2 | Complete |
+| TRAIN-02 | Phase 2 | Complete |
+| TRAIN-03 | Phase 2 | Complete |
 | TRAIN-04 | Phase 7 | Pending |
 | TRAIN-05 | Phase 7 | Pending |
 | TRAIN-06 | Phase 7 | Pending |
-| TRAIN-07 | Phase 2 | Pending |
-| TRAIN-08 | Phase 2 | Pending |
+| TRAIN-07 | Phase 2 | Complete |
+| TRAIN-08 | Phase 2 | Complete |
 | COACH-01 | Phase 5 | Pending |
 | COACH-02 | Phase 5 | Pending |
 | COACH-03 | Phase 5 | Pending |
