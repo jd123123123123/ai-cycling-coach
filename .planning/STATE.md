@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 1 of 9 (Foundation + Auth)
-Plan: All complete (01-01, 01-02, 01-03)
+Plan: All complete (01-01, 01-02, 01-03, 01-04)
 Status: Phase 1 complete -- ready to move to Phase 2
-Last activity: 2026-04-16 -- Completed 01-02-PLAN.md (Athlete profile + GDPR consent + RLS)
+Last activity: 2026-04-16 -- Completed 01-04-PLAN.md (GDPR consent flow + athlete profile setup UI)
 
-Progress: [███.......] ~30%
+Progress: [████......] ~33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 42 min
-- Total execution time: 1.08 + 0.75 + 0.25 hours = ~2.1 hours
+- Total plans completed: 4
+- Average duration: 43 min
+- Total execution time: 1.08 + 0.75 + 0.25 + 0.75 hours = ~2.85 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-auth | 3 | ~125 min | ~42 min |
+| 01-foundation-auth | 4 | ~170 min | ~43 min |
 
 **Recent Trend:**
-- Last 5 plans: 65 min, 15 min, 45 min
+- Last 5 plans: 65 min, 15 min, 45 min, ~45 min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -55,6 +55,9 @@ Recent decisions affecting current work:
 - [01-03]: Axios 401 interceptor queues concurrent requests during refresh to prevent duplicate refresh calls
 - [01-03]: Login uses URLSearchParams (form data) not JSON -- OAuth2PasswordRequestForm requires username/password fields
 - [01-03]: RegisterPage redirects to /dashboard until Plan 04 creates /profile-setup route
+- [01-04]: CONSENT_TYPES as const array in types/consent.ts -- single source of truth for text sent to backend (GDPR Article 9 granularity)
+- [01-04]: Consent version pinned to "1.0" -- updating version will trigger re-consent flow for returning users
+- [01-04]: useOnboarding hook (not inline in ProtectedRoute) -- dedicated hook for testability, checks /consent + /athletes/me on every protected entry
 - [Roadmap]: Build training engine before Garmin integration (pure math, testable with synthetic data)
 - [Roadmap]: Use unofficial python-garminconnect behind abstraction layer, swap for official API later
 - [Roadmap]: Safety guardrails ship with AI coaching core (Phase 5), not deferred
@@ -75,6 +78,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-16T13:30:05Z
-Stopped at: Completed 01-02-PLAN.md (Athlete profile + GDPR consent + RLS)
+Last session: 2026-04-16
+Stopped at: Completed 01-04-PLAN.md (GDPR consent flow + athlete profile setup UI) -- Phase 1 fully complete
 Resume file: None
