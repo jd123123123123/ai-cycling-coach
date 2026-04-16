@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 
 ## Current Position
 
-Phase: 1 of 9 (Foundation + Auth)
-Plan: All complete (01-01, 01-02, 01-03, 01-04)
-Status: Phase 1 verified and complete -- ready to plan Phase 2
-Last activity: 2026-04-16 -- Completed 01-04-PLAN.md (GDPR consent flow + athlete profile setup UI)
+Phase: 2 of 9 (Training Engine)
+Plan: 02-01 complete, 02-02 and 02-03 next
+Status: In progress
+Last activity: 2026-04-16 -- Completed 02-01-PLAN.md (sports science pure functions)
 
-Progress: [████......] ~33%
+Progress: [█████.....] ~38%
 
 ## Performance Metrics
 
@@ -28,6 +28,7 @@ Progress: [████......] ~33%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-auth | 4 | ~170 min | ~43 min |
+| 02-training-engine | 1 | ~4 min | ~4 min |
 
 **Recent Trend:**
 - Last 5 plans: 65 min, 15 min, 45 min, ~45 min
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - [Roadmap]: Safety guardrails ship with AI coaching core (Phase 5), not deferred
 - [Roadmap]: Nutrition designed as enhancement (Phase 8), not dependency -- manual entry as Yazio fallback
 - [Roadmap]: Social/gamification last (Phase 9) -- needs users first, highest harm risk if rushed
+- [02-01]: Lazy numpy import inside calculate_np() body — keeps module importable without numpy in all contexts
+- [02-01]: NP test requires 60s power blocks (not 1s alternation) — 30s rolling window smooths sub-30s variation to mean
+- [02-01]: Cycling TSS formula gives 61.73 for 220W/280FTP (not 61.2 as commonly cited)
 
 ### Pending Todos
 
@@ -79,5 +83,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-04-16
-Stopped at: Completed 01-04-PLAN.md (GDPR consent flow + athlete profile setup UI) -- Phase 1 fully complete
+Stopped at: Completed 02-01-PLAN.md (sports science pure functions -- TDD, 55 tests, 9 functions)
 Resume file: None
