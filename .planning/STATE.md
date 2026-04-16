@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 2 of 9 (Training Engine)
-Plan: 02-02 complete, 02-03 next
+Plan: 02-03 complete, 02-04 next
 Status: In progress
-Last activity: 2026-04-16 -- Completed 02-02-PLAN.md (Activity ORM, schemas, TSS API)
+Last activity: 2026-04-16 -- Completed 02-03-PLAN.md (PMC API, zones, FTP history)
 
-Progress: [██████....] ~44%
+Progress: [███████...] ~50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 43 min
-- Total execution time: 1.08 + 0.75 + 0.25 + 0.75 hours = ~2.85 hours
+- Total plans completed: 5
+- Average duration: 35 min
+- Total execution time: 1.08 + 0.75 + 0.25 + 0.75 + 0.033 hours = ~2.88 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-auth | 4 | ~170 min | ~43 min |
-| 02-training-engine | 2 | ~6 min | ~3 min |
+| 02-training-engine | 3 | ~8 min | ~2.7 min |
 
 **Recent Trend:**
-- Last 5 plans: 65 min, 15 min, 45 min, ~4 min, ~2 min
+- Last 5 plans: 15 min, 45 min, ~4 min, ~2 min, ~2 min
 - Trend: accelerating (pure implementation tasks, minimal research)
 
 *Updated after each plan completion*
@@ -71,11 +71,16 @@ Recent decisions affecting current work:
 - [02-02]: TSS=None when athlete profile lacks thresholds — activity created regardless, TSS populated when thresholds are set
 - [02-02]: average_power used as NP fallback for cycling TSS (overestimates for variable-intensity rides, documented)
 - [02-02]: Gym hrTSS defaults sex="male" — TODO add sex field to AthleteProfile in future plan
+- [02-03]: Python gap-fill for rest days instead of time_bucket_gapfill — gapfill + multi-sport GROUP BY unreliable; Python iteration simpler and correct
+- [02-03]: Total PMC from summed daily TSS (single EWMA), not sum of per-sport CTLs — summing CTLs violates EWMA model
+- [02-03]: FTP endpoint separate from athlete PATCH — adds source field; legacy PATCH entries lack source, handled via .get("source","manual") fallback
+- [02-03]: PUT /athletes/me/ftp always appends to history — each call is a deliberate measurement event; dedup is caller responsibility
 
 ### Pending Todos
 
 - Legal review needed: consent record retention period after account deletion (before public launch)
 - Production deployment: use non-superuser PostgreSQL role for full RLS enforcement (coach user is superuser in dev)
+- Consider adding source field to athlete PATCH route FTP history append — currently FTP endpoint has source but PATCH route doesn't (mixed history format)
 
 ### Blockers/Concerns
 
@@ -86,6 +91,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-16T15:29:23Z
-Stopped at: Completed 02-02-PLAN.md (Activity ORM, Pydantic schemas, TSS auto-calculation API)
+Last session: 2026-04-16T15:33:45Z
+Stopped at: Completed 02-03-PLAN.md (PMC API, training zones, FTP history)
 Resume file: None
