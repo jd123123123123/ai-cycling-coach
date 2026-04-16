@@ -1,0 +1,19 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: coach
+      POSTGRES_PASSWORD: coach
+      POSTGRES_DB: cycling_coach
+    ports:
+      - "5433:5432"
+    volumes:
+      - cycling_coach_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coach -d cycling_coach"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  cycling_coach_data:
