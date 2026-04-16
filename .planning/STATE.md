@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 2 of 9 (Training Engine)
-Plan: 02-01 complete, 02-02 and 02-03 next
+Plan: 02-02 complete, 02-03 next
 Status: In progress
-Last activity: 2026-04-16 -- Completed 02-01-PLAN.md (sports science pure functions)
+Last activity: 2026-04-16 -- Completed 02-02-PLAN.md (Activity ORM, schemas, TSS API)
 
-Progress: [█████.....] ~38%
+Progress: [██████....] ~44%
 
 ## Performance Metrics
 
@@ -28,11 +28,11 @@ Progress: [█████.....] ~38%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-auth | 4 | ~170 min | ~43 min |
-| 02-training-engine | 1 | ~4 min | ~4 min |
+| 02-training-engine | 2 | ~6 min | ~3 min |
 
 **Recent Trend:**
-- Last 5 plans: 65 min, 15 min, 45 min, ~45 min
-- Trend: stable
+- Last 5 plans: 65 min, 15 min, 45 min, ~4 min, ~2 min
+- Trend: accelerating (pure implementation tasks, minimal research)
 
 *Updated after each plan completion*
 
@@ -67,6 +67,10 @@ Recent decisions affecting current work:
 - [02-01]: Lazy numpy import inside calculate_np() body — keeps module importable without numpy in all contexts
 - [02-01]: NP test requires 60s power blocks (not 1s alternation) — 30s rolling window smooths sub-30s variation to mean
 - [02-01]: Cycling TSS formula gives 61.73 for 220W/280FTP (not 61.2 as commonly cited)
+- [02-02]: Activity ORM maps to pre-existing hypertable DDL, no new migration; env.py include_object skips activities + daily_metrics
+- [02-02]: TSS=None when athlete profile lacks thresholds — activity created regardless, TSS populated when thresholds are set
+- [02-02]: average_power used as NP fallback for cycling TSS (overestimates for variable-intensity rides, documented)
+- [02-02]: Gym hrTSS defaults sex="male" — TODO add sex field to AthleteProfile in future plan
 
 ### Pending Todos
 
@@ -82,6 +86,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-16
-Stopped at: Completed 02-01-PLAN.md (sports science pure functions -- TDD, 55 tests, 9 functions)
+Last session: 2026-04-16T15:29:23Z
+Stopped at: Completed 02-02-PLAN.md (Activity ORM, Pydantic schemas, TSS auto-calculation API)
 Resume file: None
