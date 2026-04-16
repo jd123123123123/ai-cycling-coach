@@ -51,11 +51,12 @@ Plans:
   2. System computes CTL, ATL, and TSB using EWMA and displays per-sport training load without naively combining sports
   3. Power zones (Coggan 7-zone) and pace zones (Seiler 3-zone) are auto-calculated from current FTP/threshold
   4. FTP history is stored with timestamps and progression is visible as a timeline
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md — TDD: Sports science pure functions (TSS, NP, CTL/ATL/TSB, zones)
+- [ ] 02-02-PLAN.md — Activity ORM model, CRUD API with auto-TSS calculation
+- [ ] 02-03-PLAN.md — PMC endpoint, zone calculation API, FTP update with history
 
 ### Phase 3: Garmin Data Integration
 **Goal**: The system automatically syncs real athlete data from Garmin Connect, feeding the training engine with activities and biometrics
