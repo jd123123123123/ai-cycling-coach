@@ -34,11 +34,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can set training goals (target FTP, target event date, weekly hours)
   4. Two different users see only their own data with no cross-contamination
   5. GDPR consent flow is presented at signup and user can request data deletion
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md -- Backend scaffold, Docker, async DB, User model, JWT auth endpoints
+- [ ] 01-02-PLAN.md -- Athlete profiles, consent records, goals CRUD, RLS, hypertables
+- [ ] 01-03-PLAN.md -- React frontend scaffold, auth UI, session management
+- [ ] 01-04-PLAN.md -- Frontend consent flow, profile setup, end-to-end verification
 
 ### Phase 2: Training Engine
 **Goal**: The system can compute accurate per-sport training load metrics, track fitness/fatigue/form, and calculate power/pace zones from athlete data
@@ -167,7 +169,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 1. Foundation + Auth | 0/TBD | Not started | - |
+| 1. Foundation + Auth | 0/4 | Planned | - |
 | 2. Training Engine | 0/TBD | Not started | - |
 | 3. Garmin Data Integration | 0/TBD | Not started | - |
 | 4. Dashboard + Visualization | 0/TBD | Not started | - |
