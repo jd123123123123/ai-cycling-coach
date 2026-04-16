@@ -57,9 +57,14 @@ class TestCalculateNP:
         assert abs(result - 200.0) < 0.5
 
     def test_variable_effort_np_higher_than_average(self):
-        """Variable power produces NP higher than average power due to 4th-power weighting."""
-        # Alternating 100/300W — average is 200W but NP will be > 200W
-        power = ([100.0, 300.0] * 50) * 36  # 3600 points
+        """Variable power produces NP higher than average due to 4th-power weighting.
+
+        The NP algorithm uses a 30-second rolling average before raising to the 4th power.
+        Variation must exist on a scale LONGER than 30 seconds for NP to exceed average.
+        Using 60-second blocks (100W / 300W) gives mean=200W but NP ~239W.
+        """
+        # Alternating 60-second blocks of 100W and 300W — mean 200W, NP > 200W
+        power = ([100.0] * 60 + [300.0] * 60) * 30  # 3600 points
         avg = 200.0
         result = calculate_np(power)
         assert result > avg
@@ -76,10 +81,10 @@ class TestCalculateCyclingTSS:
         assert abs(result - 100.0) < 0.01
 
     def test_below_ftp_gives_less_than_100(self):
-        """1 hour at 220W with FTP 280 gives ~61.2 TSS."""
+        """1 hour at 220W with FTP 280 gives ~61.7 TSS."""
         result = calculate_cycling_tss(3600, 220.0, 280)
-        # IF = 220/280 = 0.7857; TSS = 3600 * 220 * 0.7857 / (280 * 3600) * 100 ≈ 61.2
-        assert abs(result - 61.2) < 0.2
+        # IF = 220/280 ≈ 0.7857; TSS = (3600 * 220 * IF) / (280 * 3600) * 100 ≈ 61.73
+        assert abs(result - 61.73) < 0.1
 
     def test_half_hour_at_ftp_gives_25(self):
         """30 min at FTP = 25 TSS (duration halved, but IF²×duration scales quadratically)."""
