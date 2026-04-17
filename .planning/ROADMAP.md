@@ -67,11 +67,12 @@ Plans:
   2. Sleep score, HRV, body battery, and training status are pulled from Garmin and stored per-user
   3. Synced activities flow through the training engine and update CTL/ATL/TSB automatically
   4. Garmin integration uses an abstraction layer that can swap the unofficial library for the official API without changing business logic
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md — GarminCredential + DailyMetric models, encryption, GarminProvider abstraction layer
+- [ ] 03-02-PLAN.md — Garmin data mapper, activity sync service, daily metrics sync service
+- [ ] 03-03-PLAN.md — REST API endpoints, APScheduler background sync, main.py integration
 
 ### Phase 4: Dashboard + Visualization
 **Goal**: Users have a beautiful daily touchpoint showing their body status, training load history, calendar, and workout details at a glance
