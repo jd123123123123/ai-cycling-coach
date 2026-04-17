@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 3 of 9 (Garmin Data Integration) -- In progress
-Plan: 1 of N complete (03-01 complete)
-Status: 03-01 complete -- data layer ready; Docker daemon restart needed to apply migration
-Last activity: 2026-04-17 -- Completed 03-01-PLAN.md (data models, encryption, GarminProvider)
+Plan: 2 of N complete (03-02 complete)
+Status: 03-02 complete -- sync pipeline ready (mapper + daily metrics service + orchestrator)
+Last activity: 2026-04-17 -- Completed 03-02-PLAN.md (garmin_mapper, daily_metric_service, garmin_sync_service)
 
-Progress: [██████....] ~55%
+Progress: [███████...] ~60%
 
 ## Performance Metrics
 
@@ -29,11 +29,11 @@ Progress: [██████....] ~55%
 |-------|-------|-------|----------|
 | 01-foundation-auth | 4 | ~170 min | ~43 min |
 | 02-training-engine | 3 | ~8 min | ~2.7 min |
-| 03-garmin-data-integration | 1 | 39 min | 39 min |
+| 03-garmin-data-integration | 2 | 95 min | ~48 min |
 
 **Recent Trend:**
-- Last 5 plans: 45 min, ~4 min, ~2 min, ~2 min, 39 min
-- Trend: variable (infrastructure issues added time to 03-01)
+- Last 5 plans: ~4 min, ~2 min, ~2 min, 39 min, 56 min
+- Trend: stable (both 03-x plans similar duration ~40-56 min)
 
 *Updated after each plan completion*
 
@@ -79,6 +79,10 @@ Recent decisions affecting current work:
 - [03-01]: EncryptedString reads GARMIN_ENCRYPTION_KEY lazily on first use (not import time) — module importable without key set
 - [03-01]: Alembic migrations switched from asyncpg to psycopg2 — asyncpg 0.30.0 hangs on connection to Docker PostgreSQL on macOS; psycopg2 works reliably for sync migration operations; app runtime still uses asyncpg
 - [03-01]: GarminProvider as typing.Protocol (structural typing) — no explicit implements; business logic imports Protocol, not library directly
+- [03-02]: map_garmin_activity returns None for 0-duration activities (duration_seconds=None) — avoids TSS division-by-zero
+- [03-02]: sync_activities loads AthleteProfile once per sync run (not per activity) — creates in-memory stub if none exists, activities stored with TSS=None
+- [03-02]: _safe_fetch swallows non-auth exceptions per biometric endpoint — partial biometric data better than no data for the day
+- [03-02]: sync_daily_metrics batches all days in a single db.commit() — upsert_daily_metric only flushes
 
 ### Pending Todos
 
@@ -97,7 +101,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-17
-Stopped at: Completed 03-01-PLAN.md -- data layer (models, encryption, Protocol, client wrapper)
+Last session: 2026-04-17T20:50:14Z
+Stopped at: Completed 03-02-PLAN.md -- sync pipeline (mapper, daily metric service, orchestrator)
 Resume file: None
-Pending: Restart Docker Desktop + run `alembic upgrade head` before starting 03-02
+Next: 03-03 Garmin API routes (POST /garmin/connect, POST /garmin/sync, GET /garmin/status)
+Pending: Docker Desktop restart + `alembic upgrade head` still required before running app
