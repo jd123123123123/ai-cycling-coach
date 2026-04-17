@@ -21,6 +21,7 @@ class ActivityCreate(BaseModel):
     calories: int | None = None
     title: str | None = None
     source: str = "manual"
+    external_id: str | None = None
 
 
 class ActivityRead(BaseModel):

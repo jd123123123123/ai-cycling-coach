@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from app.models.activity import Activity
     from app.models.athlete_profile import AthleteProfile
     from app.models.consent import ConsentRecord
+    from app.models.garmin_credential import GarminCredential
+    from app.models.daily_metric import DailyMetric
 
 
 class User(Base):
@@ -44,6 +46,17 @@ class User(Base):
     )
     activities: Mapped[list["Activity"]] = relationship(
         "Activity",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    garmin_credential: Mapped["GarminCredential | None"] = relationship(
+        "GarminCredential",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    daily_metrics: Mapped[list["DailyMetric"]] = relationship(
+        "DailyMetric",
         back_populates="user",
         cascade="all, delete-orphan",
     )

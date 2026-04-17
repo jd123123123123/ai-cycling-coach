@@ -122,6 +122,7 @@ async def create_activity(
         calories=data.calories,
         title=data.title,
         source=data.source,
+        external_id=data.external_id,
         tss=tss,
     )
 
