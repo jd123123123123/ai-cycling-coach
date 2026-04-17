@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 
 ## Current Position
 
-Phase: 2 of 9 (Training Engine) -- COMPLETE
-Plan: All complete (02-01, 02-02, 02-03)
-Status: Phase 2 verified and complete -- ready to plan Phase 3
-Last activity: 2026-04-16 -- Phase 2 verified (19/19 must-haves, 55/55 tests)
+Phase: 3 of 9 (Garmin Data Integration) -- In progress
+Plan: 1 of N complete (03-01 complete)
+Status: 03-01 complete -- data layer ready; Docker daemon restart needed to apply migration
+Last activity: 2026-04-17 -- Completed 03-01-PLAN.md (data models, encryption, GarminProvider)
 
-Progress: [█████.....] ~50%
+Progress: [██████....] ~55%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 35 min
-- Total execution time: 1.08 + 0.75 + 0.25 + 0.75 + 0.033 hours = ~2.88 hours
+- Total plans completed: 8
+- Average duration: 36 min
+- Total execution time: 1.08 + 0.75 + 0.25 + 0.75 + 0.033 + 0.65 hours = ~3.52 hours
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [█████.....] ~50%
 |-------|-------|-------|----------|
 | 01-foundation-auth | 4 | ~170 min | ~43 min |
 | 02-training-engine | 3 | ~8 min | ~2.7 min |
+| 03-garmin-data-integration | 1 | 39 min | 39 min |
 
 **Recent Trend:**
-- Last 5 plans: 15 min, 45 min, ~4 min, ~2 min, ~2 min
-- Trend: accelerating (pure implementation tasks, minimal research)
+- Last 5 plans: 45 min, ~4 min, ~2 min, ~2 min, 39 min
+- Trend: variable (infrastructure issues added time to 03-01)
 
 *Updated after each plan completion*
 
@@ -75,15 +76,20 @@ Recent decisions affecting current work:
 - [02-03]: Total PMC from summed daily TSS (single EWMA), not sum of per-sport CTLs — summing CTLs violates EWMA model
 - [02-03]: FTP endpoint separate from athlete PATCH — adds source field; legacy PATCH entries lack source, handled via .get("source","manual") fallback
 - [02-03]: PUT /athletes/me/ftp always appends to history — each call is a deliberate measurement event; dedup is caller responsibility
+- [03-01]: EncryptedString reads GARMIN_ENCRYPTION_KEY lazily on first use (not import time) — module importable without key set
+- [03-01]: Alembic migrations switched from asyncpg to psycopg2 — asyncpg 0.30.0 hangs on connection to Docker PostgreSQL on macOS; psycopg2 works reliably for sync migration operations; app runtime still uses asyncpg
+- [03-01]: GarminProvider as typing.Protocol (structural typing) — no explicit implements; business logic imports Protocol, not library directly
 
 ### Pending Todos
 
 - Legal review needed: consent record retention period after account deletion (before public launch)
 - Production deployment: use non-superuser PostgreSQL role for full RLS enforcement (coach user is superuser in dev)
 - Consider adding source field to athlete PATCH route FTP history append — currently FTP endpoint has source but PATCH route doesn't (mixed history format)
+- IMMEDIATE: Restart Docker Desktop (daemon became unresponsive during 03-01 execution due to disk full); then run `cd backend && docker compose up -d db && alembic upgrade head` to apply c1f8a3d9e2b7 migration
 
 ### Blockers/Concerns
 
+- IMMEDIATE: Docker daemon unresponsive (disk was 100% full during 03-01 execution). Restart Docker Desktop, then run `alembic upgrade head` to apply garmin_credentials migration.
 - Garmin Connect Developer Program requires business entity approval -- apply immediately to unblock Phase 3
 - Yazio has no official API -- run spike to validate before Phase 8 commits to integration
 - [RESOLVED 01-01] TimescaleDB hypertable decision -- decided: activities/daily_metrics will be hypertables from day 1 (done in 01-02 migration)
@@ -91,6 +97,7 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-16
-Stopped at: Phase 2 (Training Engine) complete and verified -- ready for Phase 3
+Last session: 2026-04-17
+Stopped at: Completed 03-01-PLAN.md -- data layer (models, encryption, Protocol, client wrapper)
 Resume file: None
+Pending: Restart Docker Desktop + run `alembic upgrade head` before starting 03-02
