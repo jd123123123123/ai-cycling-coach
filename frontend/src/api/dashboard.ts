@@ -91,3 +91,61 @@ export async function fetchGarminStatus(): Promise<GarminStatus> {
   const res = await apiClient.get<GarminStatus>('/garmin/status')
   return res.data
 }
+
+// ─── Planned Workouts ─────────────────────────────────────────────────────────
+
+export interface PlannedWorkout {
+  id: number
+  user_id: number
+  date: string                 // ISO yyyy-mm-dd
+  sport: 'cycling' | 'running' | 'gym'
+  title: string
+  duration_seconds_target: number | null
+  description: string | null
+  interval_structure: { intervals: Array<{ duration_seconds: number; power_target_pct_ftp: number | null; zone: number }> } | null
+  created_at: string
+}
+
+export interface PlannedWorkoutListResponse {
+  planned_workouts: PlannedWorkout[]
+  count: number
+}
+
+export interface PlannedWorkoutCreateBody {
+  date: string                 // yyyy-mm-dd
+  sport: 'cycling' | 'running' | 'gym'
+  title: string
+  duration_seconds_target?: number | null
+  description?: string | null
+  interval_structure?: PlannedWorkout['interval_structure']
+}
+
+export interface PlannedWorkoutUpdateBody {
+  date?: string
+  sport?: 'cycling' | 'running' | 'gym'
+  title?: string
+  duration_seconds_target?: number | null
+  description?: string | null
+  interval_structure?: PlannedWorkout['interval_structure']
+}
+
+export async function fetchPlannedWorkouts(start: Date, end: Date): Promise<PlannedWorkoutListResponse> {
+  const res = await apiClient.get<PlannedWorkoutListResponse>('/planned-workouts', {
+    params: { start_date: toIsoDate(start), end_date: toIsoDate(end) },
+  })
+  return res.data
+}
+
+export async function createPlannedWorkout(body: PlannedWorkoutCreateBody): Promise<PlannedWorkout> {
+  const res = await apiClient.post<PlannedWorkout>('/planned-workouts', body)
+  return res.data
+}
+
+export async function updatePlannedWorkout(id: number, body: PlannedWorkoutUpdateBody): Promise<PlannedWorkout> {
+  const res = await apiClient.patch<PlannedWorkout>(`/planned-workouts/${id}`, body)
+  return res.data
+}
+
+export async function deletePlannedWorkout(id: number): Promise<void> {
+  await apiClient.delete(`/planned-workouts/${id}`)
+}
