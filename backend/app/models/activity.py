@@ -19,10 +19,15 @@ class Activity(Base):
 
     __tablename__ = "activities"
 
-    # Composite PK: id + started_at (hypertable partition column must be in PK)
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # Composite PK: id + started_at (hypertable partition column must be in PK).
+    # autoincrement=True is required here: with a composite PK, SQLAlchemy does NOT
+    # auto-detect which column is the serial one, so RETURNING ... id would be
+    # omitted from INSERTs — breaking db.refresh() after flush ("Could not refresh
+    # instance"). Explicitly marking id as autoincrement makes SQLAlchemy include it
+    # in the INSERT's RETURNING clause.
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), primary_key=True, nullable=False
+        DateTime(timezone=True), primary_key=True, nullable=False, autoincrement=False
     )
 
     # Ownership
