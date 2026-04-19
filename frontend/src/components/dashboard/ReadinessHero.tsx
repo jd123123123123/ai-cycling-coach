@@ -16,6 +16,8 @@ import {
   trendDelta,
 } from '../../utils/metrics'
 import type { MetricZone } from '../../utils/metrics'
+import { hrvBaselineBand } from '../../utils/advanced-metrics'
+import type { HrvBandPoint } from '../../utils/advanced-metrics'
 
 const ZONE_SWATCH: Record<MetricZone, string> = {
   good: 'var(--color-forest-2)',
@@ -80,10 +82,16 @@ interface KpiProps {
   sparkValues: Array<number | null>
   delta: ReturnType<typeof trendDelta>
   invertDelta?: boolean
+  /** Optional HRV band data — shown only on HRV tile */
+  bandValues?: HrvBandPoint[]
+  /** Band status microcopy shown above the value — only rendered if non-null */
+  bandStatus?: string
+  bandStatusColor?: string
 }
 
 function KpiCard({
   icon, label, value, unit, zone, sparkValues, delta, invertDelta,
+  bandValues, bandStatus, bandStatusColor,
 }: KpiProps) {
   const swatch = ZONE_SWATCH[zone]
   const zoneLabel = ZONE_LABEL[zone]
@@ -108,6 +116,16 @@ function KpiCard({
         </span>
       </div>
 
+      {/* HRV baseline band status microcopy */}
+      {bandStatus && (
+        <span
+          className="num-mono text-[10px] -mt-1"
+          style={{ color: bandStatusColor ?? 'var(--color-muted)' }}
+        >
+          {bandStatus}
+        </span>
+      )}
+
       <div className="flex items-end justify-between gap-3">
         <div className="flex items-baseline gap-1.5 min-w-0">
           <span
@@ -129,6 +147,7 @@ function KpiCard({
             height={24}
             stroke={swatch}
             fill={swatch + '14'}
+            bandValues={bandValues?.map((b) => ({ lower: b.lower, upper: b.upper }))}
           />
         </div>
       </div>
@@ -545,6 +564,24 @@ function KpiStrip({ metrics }: { metrics: DailyMetric[] }) {
   const latestStress = stressSeries.findLast?.((v) => v != null) ?? null
   const latestRestingHr = restingHrSeries.findLast?.((v) => v != null) ?? null
 
+  // HRV baseline band (Whoop-style rolling mean ± 1 std-dev)
+  const hrvBand = hrvBaselineBand(hrvSeries, 7)
+  const latestBand = hrvBand[hrvBand.length - 1]
+
+  // Derive band status microcopy
+  const hrvBandStatus = (() => {
+    if (latestHrv == null || latestBand?.lower == null || latestBand?.upper == null) return null
+    const lower = Math.round(latestBand.lower)
+    const upper = Math.round(latestBand.upper)
+    if (latestHrv >= lower && latestHrv <= upper) {
+      return { text: `In range · ${lower}–${upper}`, color: 'var(--color-forest-2)' }
+    }
+    if (latestHrv < lower) {
+      return { text: 'Below base', color: 'var(--color-alert)' }
+    }
+    return { text: 'Above base', color: 'var(--color-forest-2)' }
+  })()
+
   return (
     <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
       <KpiCard
@@ -564,6 +601,9 @@ function KpiStrip({ metrics }: { metrics: DailyMetric[] }) {
         zone={classifyMetric(latestHrv, 60, 40, true)}
         sparkValues={hrvSeries}
         delta={hrvDelta}
+        bandValues={hrvBand}
+        bandStatus={hrvBandStatus?.text}
+        bandStatusColor={hrvBandStatus?.color}
       />
       <KpiCard
         icon={<Zap size={14} strokeWidth={1.8} />}

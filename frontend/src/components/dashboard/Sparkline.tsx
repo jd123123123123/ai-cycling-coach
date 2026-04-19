@@ -5,6 +5,8 @@ interface SparklineProps {
   stroke?: string
   fill?: string
   showDot?: boolean
+  /** Optional baseline band — lower/upper per data point (aligned to values). */
+  bandValues?: Array<{ lower: number | null; upper: number | null }>
 }
 
 /**
@@ -18,6 +20,7 @@ export default function Sparkline({
   stroke = 'currentColor',
   fill,
   showDot = true,
+  bandValues,
 }: SparklineProps) {
   const defined = values.filter((v): v is number => v != null)
   if (defined.length < 2) {
@@ -81,6 +84,30 @@ export default function Sparkline({
   const lastX = pad + lastIndex * stepX
   const lastY = lastVal != null ? toY(lastVal) : 0
 
+  // Build band path (upper line forward + lower line reversed = closed area)
+  let bandPath = ''
+  if (bandValues && bandValues.length === values.length) {
+    // Forward: upper bound
+    let bandStarted = false
+    for (let i = 0; i < values.length; i++) {
+      const bv = bandValues[i]
+      if (bv?.upper == null) { bandStarted = false; continue }
+      const x = pad + i * stepX
+      const y = toY(bv.upper)
+      if (!bandStarted) { bandPath += `M${x.toFixed(1)} ${y.toFixed(1)}`; bandStarted = true }
+      else { bandPath += `L${x.toFixed(1)} ${y.toFixed(1)}` }
+    }
+    // Reverse: lower bound
+    for (let i = values.length - 1; i >= 0; i--) {
+      const bv = bandValues[i]
+      if (bv?.lower == null) continue
+      const x = pad + i * stepX
+      const y = toY(bv.lower)
+      bandPath += `L${x.toFixed(1)} ${y.toFixed(1)}`
+    }
+    if (bandPath) bandPath += 'Z'
+  }
+
   return (
     <svg
       width={width}
@@ -89,6 +116,10 @@ export default function Sparkline({
       aria-hidden
       preserveAspectRatio="none"
     >
+      {/* Baseline band — render below main fill and stroke */}
+      {bandPath && (
+        <path d={bandPath} fill={stroke} fillOpacity={0.12} stroke="none" />
+      )}
       {fill && <path d={areaPath} fill={fill} opacity={0.8} />}
       <path
         d={path}
