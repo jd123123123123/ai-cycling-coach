@@ -17,6 +17,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { usePlannedWorkouts, useUpdatePlannedWorkout } from '../../hooks/usePlannedWorkouts'
 import type { PlannedWorkout } from '../../api/dashboard'
 import type { ActivityRead } from '../../api/dashboard'
+import WorkoutPreviewModal from './WorkoutPreviewModal'
 
 // ─── Localizer (REQUIRED — without it react-big-calendar renders nothing) ────
 const locales = { 'en-US': enUS }
@@ -90,6 +91,7 @@ export default function TrainingCalendar() {
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches
   const [view, setView] = useState<'week' | 'month'>(isMobile ? 'week' : 'month')
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [selectedPlanned, setSelectedPlanned] = useState<PlannedWorkout | null>(null)
 
   // Compute padded visible range for API queries
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -262,14 +264,21 @@ export default function TrainingCalendar() {
                 dateCellWrapper: DroppableDateCell,
               }}
               onSelectEvent={(e) => {
-                // TODO(04-04): open workout preview modal here
-                console.log('event clicked:', e)
+                if ((e as CalEvent).resource?.type === 'planned' && (e as CalEvent).resource.pw) {
+                  setSelectedPlanned((e as CalEvent).resource.pw!)
+                }
               }}
               style={{ height: '100%' }}
             />
           </div>
         </DndContext>
       )}
+
+      <WorkoutPreviewModal
+        open={selectedPlanned !== null}
+        onClose={() => setSelectedPlanned(null)}
+        planned={selectedPlanned}
+      />
     </div>
   )
 }
