@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 4 of 9 (Dashboard + Visualization) -- In progress
-Plan: 04-01 complete (Wave 1 foundation done; Wave 2 plans unblocked)
-Status: In progress -- daily-metrics endpoint + React Query + DashboardShell + BodyStatusCard shipped
-Last activity: 2026-04-19 -- Completed 04-01-PLAN.md (dashboard foundation)
+Plan: 04-02 complete (Wave 2 PMC chart done; 04-03 calendar + 04-04 modal pending)
+Status: In progress -- PMC chart shipped; recharts installed; pmc slot mounted in DashboardPage
+Last activity: 2026-04-19 -- Completed 04-02-PLAN.md (PMC chart)
 
 Progress: [█████████░] ~80%
 
@@ -93,6 +93,8 @@ Recent decisions affecting current work:
 - [04-01]: min-w-0 on every flex/grid child containing Recharts ResponsiveContainer — ResponsiveContainer renders 0px wide without it
 - [04-01]: Null readiness metrics get weight 0 and remaining weights renormalize — null→50 fallback would distort single-metric scores
 - [04-01]: toIsoDate() uses local date (not UTC) for /daily-metrics params — backend date type is timezone-agnostic calendar day
+- [04-02]: recharts v3 TooltipContentProps<any, any> required — strict ContentType generic contravariance makes narrow types incompatible; any is pragmatic workaround
+- [04-02]: Tooltip content prop must be function reference (not JSX element) in recharts v3 — element form causes TS2739
 
 ### Pending Todos
 
@@ -111,8 +113,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-19T12:20:02Z
-Stopped at: Completed 04-01-PLAN.md -- all 3 tasks committed (f0e2491, d29b350, f8f7ec8) + 04-01-SUMMARY.md written
+Last session: 2026-04-19
+Stopped at: Completed 04-02-PLAN.md -- 2 tasks committed (6d19bfd, 5f026b5) + 04-02-SUMMARY.md written
 Resume file: None
-Next: Phase 4 Wave 2 -- 04-02 (PMC chart), 04-03 (calendar), 04-04 (workout modal) can run in parallel; all unblocked by 04-01
+Next: Phase 4 Wave 2 continues -- 04-03 (TrainingCalendar, edits DashboardPage calendar slot) and 04-04 (workout modal) still pending; 04-02 (PMC chart) complete
 Pending: Docker Desktop restart + `alembic upgrade head` still required before running app (runtime only; code complete)
