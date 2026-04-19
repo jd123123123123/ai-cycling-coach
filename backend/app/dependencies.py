@@ -3,7 +3,7 @@ from typing import Annotated, AsyncGenerator
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -53,11 +53,25 @@ async def get_db_for_user(
 ) -> AsyncGenerator[AsyncSession, None]:
     """Get a database session with the current user's ID set as a PostgreSQL session variable.
 
-    This enables PostgreSQL Row-Level Security (RLS) policies to filter rows
-    by the current user. The RLS policies check current_setting('app.current_user_id').
-
-    Use this dependency for ALL user-data routes (athletes, consent, activities, etc.).
-    Use get_db (without user context) for auth routes (register, login) and admin tasks.
+    PostgreSQL's `SET LOCAL` is transaction-scoped — it's cleared on every COMMIT.
+    Endpoints that commit multiple times within a single request (notably the Garmin
+    sync flow which commits the credential before running the sync) would therefore
+    lose the RLS context mid-request. We register an `after_begin` listener on the
+    underlying sync session so the variable is re-applied at the start of every new
+    transaction (initial + each implicit BEGIN after a commit).
     """
-    await db.execute(text(f"SET LOCAL app.current_user_id = '{current_user.id}'"))
-    yield db
+    user_id = int(current_user.id)
+    set_local_sql = text(f"SET LOCAL app.current_user_id = '{user_id}'")
+
+    def _reapply_rls(session, transaction, connection):  # type: ignore[no-untyped-def]
+        connection.execute(set_local_sql)
+
+    event.listen(db.sync_session, "after_begin", _reapply_rls)
+
+    # Kick off the initial transaction immediately so the SET LOCAL applies to it
+    await db.execute(set_local_sql)
+
+    try:
+        yield db
+    finally:
+        event.remove(db.sync_session, "after_begin", _reapply_rls)
