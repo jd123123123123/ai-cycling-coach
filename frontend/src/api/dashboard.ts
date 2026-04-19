@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import type { IntervalStructure } from '../types/workoutInterval'
 
 export interface DailyMetric {
   id: number
@@ -102,7 +103,7 @@ export interface PlannedWorkout {
   title: string
   duration_seconds_target: number | null
   description: string | null
-  interval_structure: { intervals: Array<{ duration_seconds: number; power_target_pct_ftp: number | null; zone: number }> } | null
+  interval_structure: IntervalStructure | null
   created_at: string
 }
 
