@@ -42,6 +42,7 @@ from app.services.activity_service import create_activity
 from app.services.daily_metric_service import upsert_daily_metric
 from app.services.garmin_client import GarminAuthError, GarminProvider
 from app.services.garmin_mapper import map_daily_metrics, map_garmin_activity
+from app.services.intraday_sync_service import sync_intraday_samples_for_day
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +265,20 @@ async def sync_daily_metrics(
         result = await upsert_daily_metric(db, user_id, current_day, mapped_data)
         if result is not None:
             inserted += 1
+
+        # Also persist intraday samples for this day — enables fast drill-down later.
+        # Wrapped independently so a Garmin intraday API failure doesn't abort daily sync.
+        try:
+            await sync_intraday_samples_for_day(db, client, user_id, current_day)
+        except GarminAuthError:
+            raise  # Auth errors propagate to abort the whole sync
+        except Exception as exc:
+            logger.warning(
+                "Intraday sync failed for user_id=%s date=%s (non-fatal): %s",
+                user_id,
+                current_day,
+                exc,
+            )
 
         current_day += timedelta(days=1)
 

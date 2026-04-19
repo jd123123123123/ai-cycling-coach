@@ -61,6 +61,8 @@ class GarminProvider(Protocol):
 
     async def get_user_summary(self, for_date: date) -> dict | None: ...
 
+    async def get_intraday_stress(self, for_date: date) -> dict | None: ...
+
 
 class GarminConnectClient:
     """Async wrapper around the unofficial python-garminconnect library.
@@ -252,3 +254,23 @@ class GarminConnectClient:
         except GarminConnectAuthenticationError as exc:
             logger.error("Auth error in get_user_summary: %s", exc)
             raise GarminAuthError(f"Auth error during get_user_summary: {exc}") from exc
+
+    async def get_intraday_stress(self, for_date: date) -> dict | None:
+        """Fetch intraday stress time-series for a single date.
+
+        Returns dict with stressValuesArray: [[ts_ms, stress_level], ...].
+        Stress values of -1 or -2 mean 'no reading' and should be filtered out.
+
+        This is distinct from get_stress() which calls get_all_day_stress (aggregate only).
+        get_stress_data() returns the full intraday time-series needed for the chart.
+        """
+        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
+        await self._ensure_auth()
+        try:
+            return await asyncio.to_thread(
+                self._api.get_stress_data,
+                for_date.isoformat(),
+            )
+        except GarminConnectAuthenticationError as exc:
+            logger.error("Auth error in get_intraday_stress: %s", exc)
+            raise GarminAuthError(f"Auth error during get_intraday_stress: {exc}") from exc
