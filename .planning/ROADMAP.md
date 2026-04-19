@@ -84,11 +84,13 @@ Plans:
   3. Training calendar displays week and month views with planned vs completed workouts and supports drag-drop rearrangement
   4. User can preview a workout's interval structure with power/pace targets before executing it
   5. All dashboard views are usable on mobile phones without horizontal scrolling or broken layouts
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md — Backend /daily-metrics endpoint, React Query setup, DashboardShell + BodyStatusCard
+- [ ] 04-02-PLAN.md — PMC chart (Recharts) with sport filter + custom tooltip
+- [ ] 04-03-PLAN.md — PlannedWorkout model + CRUD API, training calendar with drag-drop rescheduling
+- [ ] 04-04-PLAN.md — Workout interval preview modal + mobile-responsive audit across all dashboard surfaces
 
 ### Phase 5: AI Coaching Core
 **Goal**: Users receive AI-powered daily training recommendations and can chat with an intelligent coach, with safety guardrails preventing dangerous advice
@@ -174,7 +176,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 | 1. Foundation + Auth | 4/4 | Complete | 2026-04-16 |
 | 2. Training Engine | 3/3 | Complete | 2026-04-16 |
 | 3. Garmin Data Integration | 3/3 | Complete | 2026-04-19 |
-| 4. Dashboard + Visualization | 0/TBD | Not started | - |
+| 4. Dashboard + Visualization | 0/4 | Not started | - |
 | 5. AI Coaching Core | 0/TBD | Not started | - |
 | 6. AI Deep Coaching | 0/TBD | Not started | - |
 | 7. Periodization + Workout Generation | 0/TBD | Not started | - |
