@@ -51,6 +51,7 @@ from app.api.activities import router as activities_router  # noqa: E402
 from app.api.training_load import router as training_load_router  # noqa: E402
 from app.api.ftp import router as ftp_router  # noqa: E402
 from app.api.garmin import router as garmin_router  # noqa: E402
+from app.api.daily_metrics import router as daily_metrics_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(athletes_router)
@@ -61,6 +62,7 @@ app.include_router(activities_router)
 app.include_router(training_load_router)
 app.include_router(ftp_router)
 app.include_router(garmin_router)
+app.include_router(daily_metrics_router)
 
 
 @app.get("/", tags=["health"])
