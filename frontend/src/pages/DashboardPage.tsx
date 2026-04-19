@@ -9,7 +9,7 @@ export default function DashboardPage() {
       bodyStatus={<BodyStatusCard />}
       pmc={<PMCChart />}
       calendar={<TrainingCalendar />}
-      workoutPreviewModal={null /* plan 04-04 mounts the modal here */}
+      workoutPreviewModal={null /* reserved: TrainingCalendar owns its own modal via portal; this slot is for a future lifted-state pattern (e.g. open-by-URL routing) */}
     />
   )
 }

@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation + Auth** - Multi-user accounts, athlete profiles, GDPR-compliant data architecture
 - [x] **Phase 2: Training Engine** - Pure computation for TSS, CTL/ATL/TSB, zones, and FTP tracking
 - [x] **Phase 3: Garmin Data Integration** - Sync activities and biometrics from Garmin with swappable abstraction layer
-- [ ] **Phase 4: Dashboard + Visualization** - Body status, PMC charts, training calendar, and workout previews
+- [x] **Phase 4: Dashboard + Visualization** - Body status, PMC charts, training calendar, and workout previews
 - [ ] **Phase 5: AI Coaching Core** - Daily brief, chat interface, safety guardrails, and training recommendations
 - [ ] **Phase 6: AI Deep Coaching** - On-demand analysis and workout modification via conversation
 - [ ] **Phase 7: Periodization + Workout Generation** - AI-built mesocycles, daily adaptation, and structured workouts
@@ -87,10 +87,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Backend /daily-metrics endpoint, React Query setup, DashboardShell + BodyStatusCard
-- [ ] 04-02-PLAN.md — PMC chart (Recharts) with sport filter + custom tooltip
-- [ ] 04-03-PLAN.md — PlannedWorkout model + CRUD API, training calendar with drag-drop rescheduling
-- [ ] 04-04-PLAN.md — Workout interval preview modal + mobile-responsive audit across all dashboard surfaces
+- [x] 04-01-PLAN.md — Backend /daily-metrics endpoint, React Query setup, DashboardShell + BodyStatusCard
+- [x] 04-02-PLAN.md — PMC chart (Recharts) with sport filter + custom tooltip
+- [x] 04-03-PLAN.md — PlannedWorkout model + CRUD API, training calendar with drag-drop rescheduling
+- [x] 04-04-PLAN.md — Workout interval preview modal + mobile-responsive audit across all dashboard surfaces
 
 ### Phase 5: AI Coaching Core
 **Goal**: Users receive AI-powered daily training recommendations and can chat with an intelligent coach, with safety guardrails preventing dangerous advice
@@ -176,7 +176,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 | 1. Foundation + Auth | 4/4 | Complete | 2026-04-16 |
 | 2. Training Engine | 3/3 | Complete | 2026-04-16 |
 | 3. Garmin Data Integration | 3/3 | Complete | 2026-04-19 |
-| 4. Dashboard + Visualization | 0/4 | Not started | - |
+| 4. Dashboard + Visualization | 4/4 | Complete | 2026-04-19 |
 | 5. AI Coaching Core | 0/TBD | Not started | - |
 | 6. AI Deep Coaching | 0/TBD | Not started | - |
 | 7. Periodization + Workout Generation | 0/TBD | Not started | - |

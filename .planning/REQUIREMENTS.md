@@ -42,11 +42,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Dashboard & UI
 
-- [ ] **DASH-01**: Body status dashboard with sleep score, HRV, body battery, readiness at a glance
-- [ ] **DASH-02**: PMC chart showing CTL/ATL/TSB over time with interactive hover
-- [ ] **DASH-03**: Training calendar with week/month view, planned vs completed, drag-drop rearrangement
-- [ ] **DASH-04**: Workout preview visualization (interval blocks with power/pace targets before execution)
-- [ ] **DASH-05**: Mobile-responsive design usable on phones
+- [x] **DASH-01**: Body status dashboard with sleep score, HRV, body battery, readiness at a glance
+- [x] **DASH-02**: PMC chart showing CTL/ATL/TSB over time with interactive hover
+- [x] **DASH-03**: Training calendar with week/month view, planned vs completed, drag-drop rearrangement
+- [x] **DASH-04**: Workout preview visualization (interval blocks with power/pace targets before execution)
+- [x] **DASH-05**: Mobile-responsive design usable on phones
 
 ### Social & Gamification
 
@@ -131,11 +131,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COACH-07 | Phase 8 | Pending |
 | COACH-08 | Phase 5 | Pending |
 | COACH-09 | Phase 9 | Pending |
-| DASH-01 | Phase 4 | Pending |
-| DASH-02 | Phase 4 | Pending |
-| DASH-03 | Phase 4 | Pending |
-| DASH-04 | Phase 4 | Pending |
-| DASH-05 | Phase 4 | Pending |
+| DASH-01 | Phase 4 | Complete |
+| DASH-02 | Phase 4 | Complete |
+| DASH-03 | Phase 4 | Complete |
+| DASH-04 | Phase 4 | Complete |
+| DASH-05 | Phase 4 | Complete |
 | SOCIAL-01 | Phase 9 | Pending |
 | SOCIAL-02 | Phase 9 | Pending |
 | SOCIAL-03 | Phase 9 | Pending |
