@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation + Auth** - Multi-user accounts, athlete profiles, GDPR-compliant data architecture
 - [x] **Phase 2: Training Engine** - Pure computation for TSS, CTL/ATL/TSB, zones, and FTP tracking
-- [ ] **Phase 3: Garmin Data Integration** - Sync activities and biometrics from Garmin with swappable abstraction layer
+- [x] **Phase 3: Garmin Data Integration** - Sync activities and biometrics from Garmin with swappable abstraction layer
 - [ ] **Phase 4: Dashboard + Visualization** - Body status, PMC charts, training calendar, and workout previews
 - [ ] **Phase 5: AI Coaching Core** - Daily brief, chat interface, safety guardrails, and training recommendations
 - [ ] **Phase 6: AI Deep Coaching** - On-demand analysis and workout modification via conversation
@@ -70,9 +70,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — GarminCredential + DailyMetric models, encryption, GarminProvider abstraction layer
-- [ ] 03-02-PLAN.md — Garmin data mapper, activity sync service, daily metrics sync service
-- [ ] 03-03-PLAN.md — REST API endpoints, APScheduler background sync, main.py integration
+- [x] 03-01-PLAN.md — GarminCredential + DailyMetric models, encryption, GarminProvider abstraction layer
+- [x] 03-02-PLAN.md — Garmin data mapper, activity sync service, daily metrics sync service
+- [x] 03-03-PLAN.md — REST API endpoints, APScheduler background sync, main.py integration
 
 ### Phase 4: Dashboard + Visualization
 **Goal**: Users have a beautiful daily touchpoint showing their body status, training load history, calendar, and workout details at a glance
@@ -173,7 +173,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 |-------|---------------|--------|-----------|
 | 1. Foundation + Auth | 4/4 | Complete | 2026-04-16 |
 | 2. Training Engine | 3/3 | Complete | 2026-04-16 |
-| 3. Garmin Data Integration | 0/TBD | Not started | - |
+| 3. Garmin Data Integration | 3/3 | Complete | 2026-04-19 |
 | 4. Dashboard + Visualization | 0/TBD | Not started | - |
 | 5. AI Coaching Core | 0/TBD | Not started | - |
 | 6. AI Deep Coaching | 0/TBD | Not started | - |
@@ -183,4 +183,4 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 
 ---
 *Roadmap created: 2026-04-16*
-*Last updated: 2026-04-16*
+*Last updated: 2026-04-19*

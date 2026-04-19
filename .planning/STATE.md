@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 3 - Garmin Data Integration
+**Current focus:** Phase 3 complete -- ready for Phase 4 (Dashboard + Visualization)
 
 ## Current Position
 
-Phase: 3 of 9 (Garmin Data Integration) -- In progress
-Plan: 2 of N complete (03-02 complete)
-Status: 03-02 complete -- sync pipeline ready (mapper + daily metrics service + orchestrator)
-Last activity: 2026-04-17 -- Completed 03-02-PLAN.md (garmin_mapper, daily_metric_service, garmin_sync_service)
+Phase: 3 of 9 (Garmin Data Integration) -- COMPLETE
+Plan: 3 of 3 complete (03-01, 03-02, 03-03 all complete)
+Status: Phase 3 complete -- API routes + hourly scheduler wired; sync pipeline end-to-end
+Last activity: 2026-04-19 -- Completed 03-03-PLAN.md (Garmin API routes + APScheduler + lifespan)
 
-Progress: [███████...] ~60%
+Progress: [████████░░] ~75%
 
 ## Performance Metrics
 
@@ -29,11 +29,11 @@ Progress: [███████...] ~60%
 |-------|-------|-------|----------|
 | 01-foundation-auth | 4 | ~170 min | ~43 min |
 | 02-training-engine | 3 | ~8 min | ~2.7 min |
-| 03-garmin-data-integration | 2 | 95 min | ~48 min |
+| 03-garmin-data-integration | 3 | ~135 min | ~45 min |
 
 **Recent Trend:**
-- Last 5 plans: ~4 min, ~2 min, ~2 min, 39 min, 56 min
-- Trend: stable (both 03-x plans similar duration ~40-56 min)
+- Last 5 plans: ~2 min, ~2 min, 39 min, 56 min, ~40 min
+- Trend: stable (all 03-x plans ~40-56 min)
 
 *Updated after each plan completion*
 
@@ -83,6 +83,11 @@ Recent decisions affecting current work:
 - [03-02]: sync_activities loads AthleteProfile once per sync run (not per activity) — creates in-memory stub if none exists, activities stored with TSS=None
 - [03-02]: _safe_fetch swallows non-auth exceptions per biometric endpoint — partial biometric data better than no data for the day
 - [03-02]: sync_daily_metrics batches all days in a single db.commit() — upsert_daily_metric only flushes
+- [03-03]: Scheduler bypasses RLS via async_session_maker directly — system-level job; sync_user_garmin already scopes all queries by user_id. Production hardening needed when moving to non-superuser DB role.
+- [03-03]: Per-user try/except in run_all_user_syncs — one bad credential must not block others' syncs
+- [03-03]: POST /connect returns 409 on duplicate rather than replacing — forces explicit disconnect flow, preserves audit trail
+- [03-03]: POST /sync returns 409 while sync_status=='syncing' — prevents manual trigger racing the hourly scheduler
+- [03-03]: misfire_grace_time=600s — 10 min grace for server restart; longer outages skip rather than pile up (sync is idempotent via external_id)
 
 ### Pending Todos
 
@@ -101,8 +106,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-17T20:50:14Z
-Stopped at: Completed 03-02-PLAN.md -- sync pipeline (mapper, daily metric service, orchestrator)
+Last session: 2026-04-19
+Stopped at: Phase 3 complete -- 03-03 Task 2 committed (b43ea8d) + 03-03-SUMMARY.md written
 Resume file: None
-Next: 03-03 Garmin API routes (POST /garmin/connect, POST /garmin/sync, GET /garmin/status)
-Pending: Docker Desktop restart + `alembic upgrade head` still required before running app
+Next: Phase 4 (Dashboard + Visualization) -- awaits /gsd:discuss-phase 4 or /gsd:plan-phase 4
+Pending: Docker Desktop restart + `alembic upgrade head` still required before running app (runtime only; code complete)
