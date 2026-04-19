@@ -19,10 +19,10 @@ export default function DashboardShell({
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link to="/dashboard" className="font-semibold text-gray-900">AI Cycling Coach</Link>
           <div className="flex items-center gap-3 text-sm text-gray-500">
-            <span className="hidden sm:inline truncate max-w-[160px]">{user?.email}</span>
+            <span className="hidden sm:inline truncate max-w-[160px] dashboard-break-words">{user?.email}</span>
             <button
               onClick={() => { void logout() }}
-              className="hover:text-gray-700 font-medium transition-colors"
+              className="hover:text-gray-700 font-medium transition-colors py-2 px-3 min-h-[44px] flex items-center"
             >
               Sign out
             </button>

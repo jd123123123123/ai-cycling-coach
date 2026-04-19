@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@layer base {
+  html, body { overflow-x: hidden; }
+  /* Long strings in user-generated text (workout titles, emails) must wrap */
+  .dashboard-break-words { word-break: break-word; overflow-wrap: anywhere; }
+}
+
+/* react-big-calendar mobile overrides */
+.rbc-event { padding: 4px 6px; }
+.rbc-event-content { font-size: 11px; line-height: 1.2; word-break: break-word; }
+.rbc-toolbar button { min-height: 44px; }
+
+@media (max-width: 640px) {
+  .rbc-header { font-size: 11px; padding: 4px 2px; }
+  .rbc-date-cell { font-size: 11px; }
+}

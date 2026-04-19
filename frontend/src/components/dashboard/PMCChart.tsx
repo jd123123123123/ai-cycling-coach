@@ -64,7 +64,7 @@ export default function PMCChart() {
               key={key}
               onClick={() => setSport(key)}
               className={
-                'py-2 px-3 text-sm font-medium leading-none transition-colors ' +
+                'py-2 px-3 text-sm font-medium leading-none transition-colors min-h-[44px] flex items-center justify-center ' +
                 (sport === key
                   ? 'bg-gray-900 text-white'
                   : 'text-gray-600 hover:text-gray-900 bg-white')

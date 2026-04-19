@@ -31,7 +31,7 @@ function MetricTile({ label, value, unit, good, warn }: MetricTileProps) {
         <span className="text-xs text-gray-500 truncate">{label}</span>
       </div>
       <div className="flex items-baseline gap-1">
-        <span className="text-2xl font-semibold text-gray-900 tabular-nums">
+        <span className="text-2xl sm:text-3xl font-semibold text-gray-900 tabular-nums">
           {value !== null ? value : '—'}
         </span>
         {value !== null && (
