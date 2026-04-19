@@ -1,17 +1,7 @@
-import { useState } from 'react'
-import {
-  ComposedChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceArea,
-  ReferenceLine,
-} from 'recharts'
-import type { TooltipContentProps } from 'recharts'
-import { format, parseISO } from 'date-fns'
+import { useState, useEffect, useRef } from 'react'
+import uPlot from 'uplot'
+import 'uplot/dist/uPlot.min.css'
+import { format } from 'date-fns'
 import { usePMC } from '../../hooks/usePMC'
 import type { PMCEntry } from '../../api/dashboard'
 
@@ -36,78 +26,6 @@ function formStatus(tsb: number | null): { label: string; color: string; tone: s
   if (tsb >= -10) return { label: 'Optimal', color: C_TSB, tone: 'Productive training zone.' }
   if (tsb >= -20) return { label: 'Loading', color: C_ATL, tone: 'Deep training block.' }
   return { label: 'At-risk', color: '#8a1d1d', tone: 'Overreach. Dial back.' }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function PmcTooltip({ active, payload, label }: TooltipContentProps<any, any>) {
-  if (!active || !payload || payload.length === 0) return null
-  const dateLabel = label != null ? format(parseISO(String(label)), 'EEE · MMM d') : ''
-  const getVal = (key: string): number | null => {
-    const hit = payload.find((p) => p.dataKey === key)
-    return typeof hit?.value === 'number' ? hit.value : null
-  }
-  const ctl = getVal('ctl')
-  const atl = getVal('atl')
-  const tsb = getVal('tsb')
-  const daily = getVal('daily_tss')
-  const form = formStatus(tsb)
-
-  const row = (label: string, value: number | null, color: string) => (
-    <div className="flex items-center justify-between gap-4 py-0.5">
-      <span className="flex items-center gap-2">
-        <span
-          className="inline-block w-2 h-2 rounded-full"
-          style={{ background: color }}
-        />
-        <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
-          {label}
-        </span>
-      </span>
-      <span className="num-mono text-[12px]" style={{ color: 'var(--color-ink)' }}>
-        {value != null ? value.toFixed(1) : '—'}
-      </span>
-    </div>
-  )
-
-  return (
-    <div
-      className="paper-grain rounded-[12px] px-3.5 py-3 min-w-[220px]"
-      style={{
-        backgroundColor: 'var(--color-paper-2)',
-        border: '1px solid var(--color-rule)',
-        boxShadow: '0 12px 28px -16px rgba(20, 24, 17, 0.25)',
-      }}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span
-          className="serif-caps text-[13px]"
-          style={{ color: 'var(--color-ink)' }}
-        >
-          {dateLabel}
-        </span>
-        {daily != null && daily > 0 && (
-          <span
-            className="num-mono text-[10px] px-1.5 py-0.5 rounded"
-            style={{
-              color: 'var(--color-ink)',
-              backgroundColor: 'rgba(20, 24, 17, 0.05)',
-            }}
-          >
-            TSS {Math.round(daily)}
-          </span>
-        )}
-      </div>
-      {row('Fitness (CTL)', ctl, C_CTL)}
-      {row('Fatigue (ATL)', atl, C_ATL)}
-      {row('Form (TSB)', tsb, C_TSB)}
-      <div
-        className="mt-2 pt-2 eyebrow"
-        style={{ color: form.color, borderTop: '1px solid var(--color-rule)' }}
-      >
-        {form.label} · {form.tone}
-      </div>
-    </div>
-  )
 }
 
 function SummaryStat({
@@ -159,6 +77,114 @@ function SummaryStat({
     </div>
   )
 }
+
+// ─── uPlot chart ────────────────────────────────────────────────────────────────
+
+function PmcUPlot({ series }: { series: PMCEntry[] }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!containerRef.current || series.length === 0) return
+
+    const el = containerRef.current
+    const width = el.clientWidth || 600
+
+    const opts: uPlot.Options = {
+      width,
+      height: 280,
+      series: [
+        {},
+        {
+          label: 'Fitness (CTL)',
+          stroke: C_CTL,
+          width: 2.25,
+          fill: C_CTL + '20',
+        },
+        {
+          label: 'Fatigue (ATL)',
+          stroke: C_ATL,
+          width: 1.5,
+          dash: [5, 3],
+        },
+        {
+          label: 'Form (TSB)',
+          stroke: C_TSB,
+          width: 2,
+        },
+      ],
+      axes: [
+        {
+          stroke: '#757465',
+          grid: { show: false },
+          ticks: { show: false },
+          font: '11px Geist, sans-serif',
+          values: (_u, splits) =>
+            splits.map((ts) => format(new Date(ts * 1000), 'd MMM')),
+        },
+        {
+          stroke: '#757465',
+          grid: {
+            stroke: '#e2d8c0',
+            width: 0.5,
+            dash: [2, 3],
+          },
+          ticks: { show: false },
+          font: '11px Geist, sans-serif',
+        },
+      ],
+      hooks: {
+        drawClear: [
+          (u) => {
+            // Paint TSB zone bands on the canvas before any series lines.
+            const ctx = u.ctx
+            // Zone: at-risk <-10, optimal -10..+5, fresh 5+
+            const zones: Array<[number, number, string]> = [
+              [-200, -10, 'rgba(138, 29, 29, 0.055)'],    // at-risk
+              [-10, 5, 'rgba(20, 53, 85, 0.045)'],         // optimal
+              [5, 200, 'rgba(28, 68, 51, 0.045)'],          // fresh
+            ]
+            ctx.save()
+            for (const [y0, y1, fillStyle] of zones) {
+              const yTop = u.valToPos(y1, 'y', true)
+              const yBot = u.valToPos(y0, 'y', true)
+              ctx.fillStyle = fillStyle
+              ctx.fillRect(u.bbox.left, yTop, u.bbox.width, yBot - yTop)
+            }
+            ctx.restore()
+          },
+        ],
+      },
+      cursor: {
+        drag: { x: false },
+        focus: { prox: 16 },
+      },
+      legend: { show: false },
+    }
+
+    const data: uPlot.AlignedData = [
+      series.map((s) => new Date(s.date).getTime() / 1000),
+      series.map((s) => s.ctl),
+      series.map((s) => s.atl),
+      series.map((s) => s.tsb),
+    ]
+
+    const plot = new uPlot(opts, data, el)
+
+    const ro = new ResizeObserver(() => {
+      if (el) plot.setSize({ width: el.clientWidth, height: 280 })
+    })
+    ro.observe(el)
+
+    return () => {
+      ro.disconnect()
+      plot.destroy()
+    }
+  }, [series])
+
+  return <div ref={containerRef} className="w-full min-w-0" />
+}
+
+// ─── Main component ─────────────────────────────────────────────────────────────
 
 export default function PMCChart() {
   const [sport, setSport] = useState<Sport>('total')
@@ -300,77 +326,7 @@ export default function PMCChart() {
             </p>
           </div>
         ) : (
-          <div className="w-full h-72 sm:h-80 min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                data={series}
-                margin={{ top: 10, right: 12, left: 0, bottom: 8 }}
-              >
-                <defs>
-                  <linearGradient id="ctlFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={C_CTL} stopOpacity={0.18} />
-                    <stop offset="100%" stopColor={C_CTL} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  vertical={false}
-                  stroke="var(--color-rule)"
-                  strokeDasharray="2 3"
-                />
-                {/* TSB zone bands (reference) */}
-                <ReferenceArea y1={-100} y2={-10} fill={C_ATL} fillOpacity={0.03} ifOverflow="extendDomain" />
-                <ReferenceArea y1={-10} y2={5} fill={C_TSB} fillOpacity={0.035} ifOverflow="extendDomain" />
-                <ReferenceArea y1={5} y2={500} fill={C_CTL} fillOpacity={0.03} ifOverflow="extendDomain" />
-                <ReferenceLine y={0} stroke="var(--color-rule)" strokeWidth={1} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
-                  stroke="var(--color-rule)"
-                  interval="preserveStartEnd"
-                  minTickGap={40}
-                  tickFormatter={(d: string) => format(parseISO(d), 'd MMM')}
-                  tickLine={false}
-                  axisLine={{ stroke: 'var(--color-rule)' }}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={32}
-                />
-                <Tooltip content={PmcTooltip} cursor={{ stroke: 'var(--color-ink-2)', strokeWidth: 1, strokeDasharray: '2 3' }} />
-                <Line
-                  type="monotone"
-                  dataKey="ctl"
-                  name="Fitness (CTL)"
-                  stroke={C_CTL}
-                  strokeWidth={2.25}
-                  dot={false}
-                  isAnimationActive={false}
-                  fill="url(#ctlFill)"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="atl"
-                  name="Fatigue (ATL)"
-                  stroke={C_ATL}
-                  strokeWidth={1.5}
-                  strokeDasharray="5 3"
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="tsb"
-                  name="Form (TSB)"
-                  stroke={C_TSB}
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+          <PmcUPlot series={series} />
         )}
       </div>
 
