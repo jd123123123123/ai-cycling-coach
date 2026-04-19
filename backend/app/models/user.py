@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.garmin_credential import GarminCredential
     from app.models.daily_metric import DailyMetric
     from app.models.planned_workout import PlannedWorkout
+    from app.models.daily_metric_sample import DailyMetricSample
 
 
 class User(Base):
@@ -63,6 +64,11 @@ class User(Base):
     )
     planned_workouts: Mapped[list["PlannedWorkout"]] = relationship(  # noqa: F821
         "PlannedWorkout",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    daily_metric_samples: Mapped[list["DailyMetricSample"]] = relationship(
+        "DailyMetricSample",
         back_populates="user",
         cascade="all, delete-orphan",
     )
