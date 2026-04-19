@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 
 ## Current Position
 
-Phase: 4 of 9 (Dashboard + Visualization) -- COMPLETE
-Plan: 04-04 complete (workout interval preview modal + mobile audit DASH-05 signed off)
-Status: Phase 4 complete -- full dashboard shipped; ready for Phase 5
-Last activity: 2026-04-19 -- Completed 04-04-PLAN.md (workout modal + mobile audit)
+Phase: 4.5 of 9 (Data That Differentiates) -- COMPLETE
+Plan: 04.5-01 complete (uPlot PMC + ECharts heatmap + polarized donut + EF trend + HRV band)
+Status: Phase 4.5 complete -- 5 new viz surfaces shipped; ready for Phase 5
+Last activity: 2026-04-19 -- Completed 04.5-PLAN.md (7 tasks, all 5 viz surfaces delivered)
 
-Progress: [██████████░] ~88%
+Progress: [██████████░] ~90%
 
 ## Performance Metrics
 
@@ -102,6 +102,11 @@ Recent decisions affecting current work:
 - [04-04]: WorkoutPreviewModal renders via portal from inside TrainingCalendar (not DashboardShell) — modal state co-located with calendar; shell workoutPreviewModal slot stays null for future global routing use
 - [04-04]: IntervalStructure imported into dashboard.ts replacing inline zone:number — zone 1..7 union enforced at API type boundary
 - [04-04]: zoneFromPctFtp fallback for null power returns Z2 (endurance) not Z1 — null power most likely base/endurance, not pure recovery
+- [04.5]: uPlot legend:false — native uPlot legend disabled, LegendPip bottom strip preserved for visual consistency
+- [04.5]: IntensityDistribution uses Recharts PieChart (no new bundle cost) — ECharts donut unnecessary overhead
+- [04.5]: Sparkline bandValues prop added as extension (not split into new component) — cleanest path
+- [04.5]: EF scatter dots via paths:null in uPlot — path builder returning null suppresses connecting line, only points config renders
+- [04.5]: ECharts VisualMapComponent required for CalendarHeatmap color scale — tree-shaken but ~246 KB gzipped delta (budget was 200 KB; total well under 1.3 MB ceiling)
 
 ### Pending Todos
 
@@ -120,9 +125,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-19T12:34:40Z
-Stopped at: Completed 04-04-PLAN.md -- 3 tasks committed (e57f88c, b373a52, dbdac19) + 04-04-SUMMARY.md written
+Last session: 2026-04-19
+Stopped at: Phase 4.5 complete — uPlot + ECharts integrated, 5 new viz surfaces added (commits cae0dfc..cc167f0)
 Resume file: None
-Next: Phase 5 (AI Coaching Core) -- Phase 4 fully complete; all DASH-01..05 signed off; ready to start 05-01
+Next: Phase 5 (AI Coaching Core) -- Phase 4 + 4.5 fully complete; useAthleteProfile hook + advanced-metrics.ts ready for AI coaching integration
 Pending: Docker Desktop restart + `alembic upgrade head` still required before full end-to-end app testing
 Pending: Docker Desktop restart + `alembic upgrade head` still required to apply d2f9b4c7a1e5 (planned_workouts) and earlier migrations before running app end-to-end
