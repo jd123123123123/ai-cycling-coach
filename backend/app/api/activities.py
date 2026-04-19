@@ -47,6 +47,7 @@ async def create_activity(
         data=data,
         profile=profile,
     )
+    await db.commit()
     return ActivityRead.model_validate(activity)
 
 

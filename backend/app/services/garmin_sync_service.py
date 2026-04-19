@@ -187,7 +187,8 @@ async def sync_activities(
             )
             continue
 
-        # create_activity auto-calculates TSS and commits
+        # create_activity auto-calculates TSS. It flushes (no commit) so the
+        # RLS session var (SET LOCAL app.current_user_id) survives the loop.
         await create_activity(db, user_id, mapped, profile)
         synced += 1
         logger.debug(

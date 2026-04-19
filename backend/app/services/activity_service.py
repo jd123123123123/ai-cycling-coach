@@ -127,7 +127,7 @@ async def create_activity(
     )
 
     db.add(activity)
-    await db.commit()
+    await db.flush()
     await db.refresh(activity)
     return activity
 
