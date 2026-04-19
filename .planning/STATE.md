@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 3 complete -- ready for Phase 4 (Dashboard + Visualization)
+**Current focus:** Phase 4 in progress -- 04-01 complete; Wave 2 (PMC, calendar, workout modal) unblocked
 
 ## Current Position
 
-Phase: 3 of 9 (Garmin Data Integration) -- COMPLETE
-Plan: 3 of 3 complete (03-01, 03-02, 03-03 all complete)
-Status: Phase 3 complete -- API routes + hourly scheduler wired; sync pipeline end-to-end
-Last activity: 2026-04-19 -- Completed 03-03-PLAN.md (Garmin API routes + APScheduler + lifespan)
+Phase: 4 of 9 (Dashboard + Visualization) -- In progress
+Plan: 04-01 complete (Wave 1 foundation done; Wave 2 plans unblocked)
+Status: In progress -- daily-metrics endpoint + React Query + DashboardShell + BodyStatusCard shipped
+Last activity: 2026-04-19 -- Completed 04-01-PLAN.md (dashboard foundation)
 
-Progress: [████████░░] ~75%
+Progress: [█████████░] ~80%
 
 ## Performance Metrics
 
@@ -88,6 +88,11 @@ Recent decisions affecting current work:
 - [03-03]: POST /connect returns 409 on duplicate rather than replacing — forces explicit disconnect flow, preserves audit trail
 - [03-03]: POST /sync returns 409 while sync_status=='syncing' — prevents manual trigger racing the hourly scheduler
 - [03-03]: misfire_grace_time=600s — 10 min grace for server restart; longer outages skip rather than pile up (sync is idempotent via external_id)
+- [04-01]: retry:false on 401/403/404 in React Query QueryClient — avoids racing axios 401 interceptor refresh queue
+- [04-01]: DashboardShell uses ReactNode props for section slots (not children) — named props enable parallel Wave 2 plans without shell collisions
+- [04-01]: min-w-0 on every flex/grid child containing Recharts ResponsiveContainer — ResponsiveContainer renders 0px wide without it
+- [04-01]: Null readiness metrics get weight 0 and remaining weights renormalize — null→50 fallback would distort single-metric scores
+- [04-01]: toIsoDate() uses local date (not UTC) for /daily-metrics params — backend date type is timezone-agnostic calendar day
 
 ### Pending Todos
 
@@ -106,8 +111,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-19
-Stopped at: Phase 3 complete -- 03-03 Task 2 committed (b43ea8d) + 03-03-SUMMARY.md written
+Last session: 2026-04-19T12:20:02Z
+Stopped at: Completed 04-01-PLAN.md -- all 3 tasks committed (f0e2491, d29b350, f8f7ec8) + 04-01-SUMMARY.md written
 Resume file: None
-Next: Phase 4 (Dashboard + Visualization) -- awaits /gsd:discuss-phase 4 or /gsd:plan-phase 4
+Next: Phase 4 Wave 2 -- 04-02 (PMC chart), 04-03 (calendar), 04-04 (workout modal) can run in parallel; all unblocked by 04-01
 Pending: Docker Desktop restart + `alembic upgrade head` still required before running app (runtime only; code complete)
