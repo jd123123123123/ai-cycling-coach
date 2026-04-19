@@ -6,6 +6,7 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import ConsentPage from './pages/ConsentPage'
 import ProfileSetupPage from './pages/ProfileSetupPage'
+import GarminConnectPage from './pages/GarminConnectPage'
 
 function App() {
   return (
@@ -40,6 +41,14 @@ function App() {
             element={
               <ProtectedRoute checkOnboarding>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/garmin/connect"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <GarminConnectPage />
               </ProtectedRoute>
             }
           />
