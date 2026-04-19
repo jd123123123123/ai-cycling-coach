@@ -1,5 +1,6 @@
 import DashboardShell from '../components/dashboard/DashboardShell'
 import ReadinessHero from '../components/dashboard/ReadinessHero'
+import BiometricsDetail from '../components/dashboard/BiometricsDetail'
 import PMCChart from '../components/dashboard/PMCChart'
 import CalendarHeatmap from '../components/dashboard/CalendarHeatmap'
 import IntensityDistribution from '../components/dashboard/IntensityDistribution'
@@ -12,13 +13,16 @@ export default function DashboardPage() {
     <DashboardShell
       bodyStatus={<ReadinessHero />}
       pmc={
-        <div className="flex flex-col gap-6">
-          <PMCChart />
-          <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
-            <IntensityDistribution />
-            <EfficiencyTrend />
+        <div className="flex flex-col gap-10">
+          <BiometricsDetail />
+          <div className="flex flex-col gap-6">
+            <PMCChart />
+            <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+              <IntensityDistribution />
+              <EfficiencyTrend />
+            </div>
+            <CalendarHeatmap />
           </div>
-          <CalendarHeatmap />
         </div>
       }
       calendar={

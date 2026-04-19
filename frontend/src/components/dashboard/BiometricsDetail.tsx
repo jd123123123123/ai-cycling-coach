@@ -1,0 +1,465 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import uPlot from 'uplot'
+import 'uplot/dist/uPlot.min.css'
+import { format, subDays } from 'date-fns'
+import { Heart, Moon, Zap, Waves, Activity } from 'lucide-react'
+import { useDailyMetrics } from '../../hooks/useDailyMetrics'
+import type { DailyMetric } from '../../api/dashboard'
+
+type Range = 14 | 30 | 90
+
+const RANGES: { key: Range; label: string }[] = [
+  { key: 14, label: '14d' },
+  { key: 30, label: '30d' },
+  { key: 90, label: '90d' },
+]
+
+interface BiometricSpec {
+  key: keyof DailyMetric
+  label: string
+  unit: string
+  color: string
+  icon: React.ReactNode
+  higherIsBetter: boolean
+  /** Ideal-range zone for the band coloring */
+  good?: number
+  warn?: number
+  /** Descriptive copy under the title */
+  copy: string
+}
+
+const BIOMETRICS: BiometricSpec[] = [
+  {
+    key: 'hrv_status',
+    label: 'Heart rate variability',
+    unit: 'ms',
+    color: '#1c4433',
+    icon: <Heart size={14} strokeWidth={1.8} />,
+    higherIsBetter: true,
+    good: 60,
+    warn: 40,
+    copy: 'Morning HRV. Trending up = parasympathetic recovery; down = stress load.',
+  },
+  {
+    key: 'body_battery',
+    label: 'Body battery',
+    unit: '/100',
+    color: '#2a6147',
+    icon: <Zap size={14} strokeWidth={1.8} />,
+    higherIsBetter: true,
+    good: 60,
+    warn: 30,
+    copy: 'Garmin\u2019s composite energy reserve from HRV + activity + sleep.',
+  },
+  {
+    key: 'sleep_score',
+    label: 'Sleep score',
+    unit: '/100',
+    color: '#143555',
+    icon: <Moon size={14} strokeWidth={1.8} />,
+    higherIsBetter: true,
+    good: 80,
+    warn: 60,
+    copy: 'Overall sleep quality. 80+ = restorative; under 60 = deficit accumulating.',
+  },
+  {
+    key: 'stress_level',
+    label: 'Stress',
+    unit: 'avg',
+    color: '#b04a0c',
+    icon: <Waves size={14} strokeWidth={1.8} />,
+    higherIsBetter: false,
+    good: 25,
+    warn: 50,
+    copy: 'Daily average sympathetic load (0\u2013100). Lower is better.',
+  },
+  {
+    key: 'resting_hr',
+    label: 'Resting heart rate',
+    unit: 'bpm',
+    color: '#8a1d1d',
+    icon: <Activity size={14} strokeWidth={1.8} />,
+    higherIsBetter: false,
+    good: 55,
+    warn: 68,
+    copy: 'Morning resting HR. A sustained rise of 5+ bpm = hidden fatigue or illness.',
+  },
+]
+
+// ─── Reusable uPlot detail chart ───────────────────────────────────────────────
+
+function DetailChart({
+  spec,
+  dates,
+  values,
+  heightPx,
+}: {
+  spec: BiometricSpec
+  dates: number[] // unix timestamps in seconds
+  values: Array<number | null>
+  heightPx: number
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Stats
+  const numeric = values.filter((v): v is number => v != null)
+  const hasData = numeric.length >= 2
+  const current = (() => {
+    for (let i = values.length - 1; i >= 0; i--) {
+      if (values[i] != null) return values[i]!
+    }
+    return null
+  })()
+  const avg = numeric.length > 0 ? numeric.reduce((s, v) => s + v, 0) / numeric.length : null
+  const min = numeric.length > 0 ? Math.min(...numeric) : null
+  const max = numeric.length > 0 ? Math.max(...numeric) : null
+
+  // Zone classification for current value
+  const zone = (() => {
+    if (current == null || spec.good == null || spec.warn == null) return 'unknown'
+    if (spec.higherIsBetter) {
+      if (current >= spec.good) return 'good'
+      if (current < spec.warn) return 'poor'
+      return 'fair'
+    } else {
+      if (current <= spec.good) return 'good'
+      if (current > spec.warn) return 'poor'
+      return 'fair'
+    }
+  })()
+  const zoneColor =
+    zone === 'good'
+      ? 'var(--color-forest-2)'
+      : zone === 'fair'
+      ? 'var(--color-amber-2)'
+      : zone === 'poor'
+      ? 'var(--color-alert)'
+      : 'var(--color-muted)'
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || dates.length === 0) return
+
+    const width = el.clientWidth || 400
+    const color = spec.color
+
+    // Convert nulls to NaN so uPlot draws gaps properly
+    const yData = values.map((v) => (v == null ? null : v)) as Array<number | null>
+
+    // Build data where uPlot skips nulls (uPlot v1.6+ supports nulls with gaps:true on series)
+    const opts: uPlot.Options = {
+      width,
+      height: heightPx,
+      series: [
+        {},
+        {
+          label: spec.label,
+          stroke: color,
+          width: 2,
+          fill: color + '18',
+          points: { show: true, size: 4, stroke: color, fill: color },
+          spanGaps: false,
+        },
+      ],
+      axes: [
+        {
+          stroke: '#757465',
+          grid: { show: false },
+          ticks: { show: false },
+          font: '11px Geist, sans-serif',
+          size: 30,
+          values: (_u, splits) =>
+            splits.map((ts) => format(new Date(ts * 1000), 'd MMM')),
+        },
+        {
+          stroke: '#757465',
+          grid: {
+            stroke: '#e2d8c0',
+            width: 0.5,
+            dash: [2, 3],
+          },
+          ticks: { show: false },
+          font: '11px Geist, sans-serif',
+          size: 36,
+        },
+      ],
+      hooks: {
+        drawClear: [
+          (u) => {
+            // Paint ideal-range band if thresholds exist
+            if (spec.good == null || spec.warn == null) return
+            const ctx = u.ctx
+            const [zoneTop, zoneBot] = spec.higherIsBetter
+              ? [spec.good, spec.warn]
+              : [spec.warn, spec.good]
+            const yTopPx = u.valToPos(Math.max(zoneTop, zoneBot), 'y', true)
+            const yBotPx = u.valToPos(Math.min(zoneTop, zoneBot), 'y', true)
+            ctx.save()
+            ctx.fillStyle = color + '12'
+            ctx.fillRect(u.bbox.left, yTopPx, u.bbox.width, yBotPx - yTopPx)
+            // Also paint avg baseline as dashed line
+            if (avg != null) {
+              const yAvg = u.valToPos(avg, 'y', true)
+              ctx.strokeStyle = color + '70'
+              ctx.setLineDash([4, 3])
+              ctx.lineWidth = 1
+              ctx.beginPath()
+              ctx.moveTo(u.bbox.left, yAvg)
+              ctx.lineTo(u.bbox.left + u.bbox.width, yAvg)
+              ctx.stroke()
+            }
+            ctx.restore()
+          },
+        ],
+      },
+      cursor: { drag: { x: false }, focus: { prox: 20 } },
+      legend: { show: false },
+    }
+
+    const data: uPlot.AlignedData = [dates, yData]
+    const plot = new uPlot(opts, data, el)
+
+    const ro = new ResizeObserver(() => {
+      if (el) plot.setSize({ width: el.clientWidth, height: heightPx })
+    })
+    ro.observe(el)
+
+    return () => {
+      ro.disconnect()
+      plot.destroy()
+    }
+  }, [dates, values, heightPx, spec, avg])
+
+  return (
+    <div
+      className="paper-grain relative rounded-[18px] overflow-hidden flex flex-col"
+      style={{
+        backgroundColor: 'var(--color-paper-2)',
+        border: '1px solid var(--color-rule)',
+      }}
+    >
+      {/* Header */}
+      <div className="px-5 pt-5 sm:px-6 sm:pt-6 pb-2">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <span style={{ color: spec.color }} className="opacity-80">
+              {spec.icon}
+            </span>
+            <span className="eyebrow truncate">{spec.label}</span>
+          </div>
+          {hasData && (
+            <span
+              className="eyebrow whitespace-nowrap"
+              style={{ color: zoneColor }}
+            >
+              {zone === 'good'
+                ? 'on point'
+                : zone === 'fair'
+                ? 'watch'
+                : zone === 'poor'
+                ? 'below base'
+                : '—'}
+            </span>
+          )}
+        </div>
+
+        {/* Big number — current value with unit */}
+        <div className="flex items-baseline gap-2 mt-2">
+          <span
+            className="num-display leading-none"
+            style={{ fontSize: 'clamp(36px, 4.5vw, 52px)', color: 'var(--color-ink)' }}
+          >
+            {current != null ? Math.round(current) : '—'}
+          </span>
+          <span
+            className="num-mono text-[12px]"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            {spec.unit}
+          </span>
+        </div>
+
+        {/* Micro stats row */}
+        {hasData && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+            <span
+              className="num-mono text-[11px]"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              avg {avg != null ? avg.toFixed(1) : '—'}
+            </span>
+            <span
+              className="num-mono text-[11px]"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              min {min != null ? Math.round(min) : '—'}
+            </span>
+            <span
+              className="num-mono text-[11px]"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              max {max != null ? Math.round(max) : '—'}
+            </span>
+          </div>
+        )}
+
+        <p
+          className="mt-2 text-[12px] leading-snug"
+          style={{ color: 'var(--color-ink-2)' }}
+        >
+          {spec.copy}
+        </p>
+      </div>
+
+      {/* Chart area */}
+      <div className="px-3 pb-4 pt-2 sm:px-4 min-w-0">
+        {hasData ? (
+          <div ref={containerRef} className="w-full min-w-0" />
+        ) : (
+          <div
+            className="w-full flex items-center justify-center text-center px-6"
+            style={{ height: heightPx }}
+          >
+            <p
+              className="serif-caps text-[14px] max-w-xs"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              Not enough data yet in this window. Check back after a few more sync cycles.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function BiometricsDetail() {
+  const [range, setRange] = useState<Range>(30)
+  const today = useMemo(() => new Date(), [])
+  const start = useMemo(() => subDays(today, range), [today, range])
+
+  const { data, isLoading, isError, refetch } = useDailyMetrics(start, today)
+
+  // Normalize: build per-day series covering every day in range (null for missing)
+  const { dates, seriesByKey } = useMemo(() => {
+    const byDate = new Map<string, DailyMetric>()
+    for (const m of data?.metrics ?? []) {
+      if (m.date) byDate.set(m.date, m)
+    }
+    const dayDates: number[] = []
+    const perKey: Record<string, Array<number | null>> = {
+      hrv_status: [],
+      body_battery: [],
+      sleep_score: [],
+      stress_level: [],
+      resting_hr: [],
+    }
+    for (let i = range - 1; i >= 0; i--) {
+      const d = new Date(today)
+      d.setHours(0, 0, 0, 0)
+      d.setDate(d.getDate() - i)
+      dayDates.push(d.getTime() / 1000)
+      const iso = d.toISOString().slice(0, 10)
+      const entry = byDate.get(iso)
+      for (const key of Object.keys(perKey)) {
+        const raw = entry ? (entry as unknown as Record<string, unknown>)[key] : null
+        perKey[key].push(typeof raw === 'number' ? raw : null)
+      }
+    }
+    return { dates: dayDates, seriesByKey: perKey }
+  }, [data, range, today])
+
+  return (
+    <section className="flex flex-col gap-5">
+      {/* Section header */}
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
+            Chapter II · Biometrics
+          </span>
+          <h2
+            className="num-display mt-1 leading-none"
+            style={{
+              fontSize: 'clamp(28px, 4vw, 40px)',
+              color: 'var(--color-ink)',
+            }}
+          >
+            How the body is trending.
+          </h2>
+        </div>
+        {/* Range toggle */}
+        <div
+          className="rounded-full p-0.5 inline-flex flex-shrink-0"
+          style={{
+            backgroundColor: 'rgba(20, 24, 17, 0.05)',
+            border: '1px solid var(--color-rule)',
+          }}
+        >
+          {RANGES.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setRange(key)}
+              className="py-2 px-3.5 text-[12px] font-medium rounded-full transition-all min-h-[36px]"
+              style={{
+                color: range === key ? 'var(--color-paper)' : 'var(--color-ink-2)',
+                backgroundColor: range === key ? 'var(--color-ink)' : 'transparent',
+                letterSpacing: '0.02em',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Loading / error */}
+      {isLoading ? (
+        <div className="grid gap-5 md:grid-cols-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="h-[260px] rounded-[18px] animate-pulse"
+              style={{ backgroundColor: 'var(--color-rule)' }}
+            />
+          ))}
+        </div>
+      ) : isError ? (
+        <div
+          className="rounded-[18px] p-6 flex items-center justify-between flex-wrap gap-3"
+          style={{
+            backgroundColor: 'var(--color-paper-2)',
+            border: '1px solid var(--color-rule)',
+          }}
+        >
+          <span style={{ color: 'var(--color-alert)' }}>
+            Couldn&apos;t load biometrics.
+          </span>
+          <button
+            onClick={() => refetch()}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-medium"
+            style={{
+              backgroundColor: 'var(--color-ink)',
+              color: 'var(--color-paper)',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2">
+          {BIOMETRICS.map((spec) => (
+            <DetailChart
+              key={spec.key as string}
+              spec={spec}
+              dates={dates}
+              values={seriesByKey[spec.key as string] ?? []}
+              heightPx={200}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
