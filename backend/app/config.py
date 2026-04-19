@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Must be stored in .env; never commit the actual key.
     GARMIN_ENCRYPTION_KEY: str = ""
 
+    # Root directory for per-user Garmin OAuth token stores.
+    # Container default was /data/garmin_tokens (volume-mounted) but that path is
+    # read-only on bare-metal macOS dev — override via env var when running natively.
+    GARMIN_TOKEN_STORE_ROOT: str = "/data/garmin_tokens"
+
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:

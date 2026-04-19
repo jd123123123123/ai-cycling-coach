@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.garmin_credential import GarminCredential
 from app.models.user import User
@@ -79,8 +80,10 @@ async def connect_garmin(
     await db.commit()
     await db.refresh(credential)
 
-    # Set per-user token store path and create the directory
-    token_store_path = f"/data/garmin_tokens/{current_user.id}/"
+    # Set per-user token store path and create the directory.
+    # Root is configurable via GARMIN_TOKEN_STORE_ROOT (defaults to /data/garmin_tokens for
+    # Docker; override to a writable path when running natively).
+    token_store_path = os.path.join(settings.GARMIN_TOKEN_STORE_ROOT, str(current_user.id))
     os.makedirs(token_store_path, exist_ok=True)
     credential.token_store_path = token_store_path
     await db.commit()
