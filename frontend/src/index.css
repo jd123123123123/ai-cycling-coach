@@ -1,15 +1,134 @@
 @import "tailwindcss";
 
-@layer base {
-  html, body { overflow-x: hidden; }
-  /* Long strings in user-generated text (workout titles, emails) must wrap */
-  .dashboard-break-words { word-break: break-word; overflow-wrap: anywhere; }
+@theme inline {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces", "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-paper: #f3ecdc;
+  --color-paper-2: #fbf6ea;
+  --color-rule: #e2d8c0;
+  --color-ink: #141811;
+  --color-ink-2: #323628;
+  --color-muted: #757465;
+  --color-forest: #1c4433;
+  --color-forest-2: #2a6147;
+  --color-amber: #b04a0c;
+  --color-amber-2: #d96c1a;
+  --color-amber-soft: #f6dab2;
+  --color-ink-blue: #143555;
+  --color-alert: #8a1d1d;
 }
 
-/* react-big-calendar mobile overrides */
-.rbc-event { padding: 4px 6px; }
-.rbc-event-content { font-size: 11px; line-height: 1.2; word-break: break-word; }
+:root {
+  color-scheme: light;
+  --page-bg: #f3ecdc;
+  --page-ink: #141811;
+}
+
+@layer base {
+  html, body {
+    overflow-x: hidden;
+    background: var(--page-bg);
+    color: var(--page-ink);
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-image:
+      radial-gradient(circle at 12% 8%, rgba(176, 74, 12, 0.04), transparent 42%),
+      radial-gradient(circle at 88% 0%, rgba(20, 53, 85, 0.04), transparent 45%);
+    background-attachment: fixed;
+  }
+
+  /* Long user-generated strings must wrap */
+  .dashboard-break-words { word-break: break-word; overflow-wrap: anywhere; }
+
+  /* Editorial rule between sections */
+  .hairline {
+    background-image: linear-gradient(to right, transparent, var(--color-rule) 12%, var(--color-rule) 88%, transparent);
+    height: 1px;
+    width: 100%;
+  }
+
+  /* Paper grain — near-invisible noise overlay for cards */
+  .paper-grain {
+    position: relative;
+    isolation: isolate;
+  }
+  .paper-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 0 0.03 0 0 0 0.18 0'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
+    border-radius: inherit;
+  }
+
+  .num-display {
+    font-family: "Fraunces", "Times New Roman", serif;
+    font-feature-settings: "tnum", "lnum";
+    font-variation-settings: "opsz" 144, "SOFT" 50;
+    letter-spacing: -0.02em;
+  }
+
+  .num-mono {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-feature-settings: "tnum", "ss03";
+  }
+
+  .eyebrow {
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--color-muted);
+  }
+
+  .serif-caps {
+    font-family: "Fraunces", serif;
+    font-variation-settings: "opsz" 14;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* react-big-calendar mobile + paper-theme overrides */
+.rbc-calendar {
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif !important;
+  background: transparent !important;
+  color: var(--color-ink);
+}
+.rbc-month-view, .rbc-time-view {
+  background: var(--color-paper-2);
+  border: 1px solid var(--color-rule) !important;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.rbc-header {
+  background: transparent;
+  border-bottom: 1px solid var(--color-rule) !important;
+  font-weight: 500;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  padding: 8px 4px;
+}
+.rbc-today { background: rgba(28, 68, 51, 0.05) !important; }
+.rbc-event { padding: 4px 6px; border: none !important; border-radius: 4px; }
+.rbc-event-content { font-size: 11px; line-height: 1.2; word-break: break-word; font-weight: 500; }
 .rbc-toolbar button { min-height: 44px; }
+.rbc-off-range-bg { background: rgba(226, 216, 192, 0.35) !important; }
+.rbc-day-bg + .rbc-day-bg, .rbc-month-row + .rbc-month-row {
+  border-color: var(--color-rule) !important;
+}
 
 @media (max-width: 640px) {
   .rbc-header { font-size: 11px; padding: 4px 2px; }

@@ -172,10 +172,29 @@ export default function TrainingCalendar() {
   const isError = activitiesQuery.isError || plannedQuery.isError
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 min-w-0">
+    <div
+      className="paper-grain rounded-[20px] p-5 sm:p-6 min-w-0"
+      style={{
+        backgroundColor: 'var(--color-paper-2)',
+        border: '1px solid var(--color-rule)',
+      }}
+    >
       {/* Custom toolbar */}
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Training Calendar</h2>
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+        <div>
+          <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
+            Logbook
+          </span>
+          <h2
+            className="num-display mt-1 leading-none"
+            style={{
+              fontSize: 'clamp(22px, 3vw, 28px)',
+              color: 'var(--color-ink)',
+            }}
+          >
+            Calendar
+          </h2>
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Prev / Today / Next */}
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
