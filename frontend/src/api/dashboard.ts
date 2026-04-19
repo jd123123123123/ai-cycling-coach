@@ -29,6 +29,8 @@ export interface ActivityRead {
   duration_seconds: number | null
   distance_meters: number | null
   tss: number | null
+  average_hr: number | null
+  normalized_power: number | null
   title: string | null
   source: string | null
 }
