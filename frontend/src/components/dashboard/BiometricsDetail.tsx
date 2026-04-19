@@ -100,6 +100,7 @@ function DetailChart({
   heightPx: number
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
 
   // Stats
   const numeric = values.filter((v): v is number => v != null)
@@ -211,8 +212,49 @@ function DetailChart({
             ctx.restore()
           },
         ],
+        setCursor: [
+          (u) => {
+            const tip = tooltipRef.current
+            if (!tip) return
+            const idx = u.cursor.idx
+            if (idx == null || u.cursor.left == null || u.cursor.left < 0) {
+              tip.style.opacity = '0'
+              return
+            }
+            const ts = u.data[0][idx]
+            const val = u.data[1][idx]
+            if (ts == null) { tip.style.opacity = '0'; return }
+            const date = new Date((ts as number) * 1000)
+            const dateLabel = format(date, 'EEE, d MMM yyyy')
+            const valueLabel =
+              val == null
+                ? 'no reading'
+                : `${Math.round(val as number).toLocaleString()} ${spec.unit}`
+            tip.innerHTML = `<div class="num-mono text-[10px]" style="color:var(--color-muted);letter-spacing:0.1em;text-transform:uppercase">${dateLabel}</div><div class="num-display text-[18px] leading-tight" style="color:var(--color-ink)">${valueLabel}</div>`
+            // Position tooltip near the cursor, clamped to container bounds
+            const el = containerRef.current
+            if (!el) return
+            const tipWidth = 160
+            const tipHeight = 48
+            let left = (u.cursor.left as number) + 14
+            if (left + tipWidth > el.clientWidth - 4) {
+              left = (u.cursor.left as number) - tipWidth - 14
+            }
+            let top = (u.cursor.top as number) - tipHeight - 8
+            if (top < 0) top = (u.cursor.top as number) + 12
+            tip.style.left = `${left}px`
+            tip.style.top = `${top}px`
+            tip.style.opacity = '1'
+          },
+        ],
       },
-      cursor: { drag: { x: false }, focus: { prox: 20 } },
+      cursor: {
+        drag: { x: false },
+        focus: { prox: 24 },
+        // Vertical guide line on hover
+        x: true,
+        y: false,
+      },
       legend: { show: false },
     }
 
@@ -312,9 +354,24 @@ function DetailChart({
       </div>
 
       {/* Chart area */}
-      <div className="px-3 pb-4 pt-2 sm:px-4 min-w-0">
+      <div className="px-3 pb-4 pt-2 sm:px-4 min-w-0 relative">
         {hasData ? (
-          <div ref={containerRef} className="w-full min-w-0" />
+          <>
+            <div ref={containerRef} className="w-full min-w-0" />
+            <div
+              ref={tooltipRef}
+              className="pointer-events-none absolute px-3 py-2 rounded-lg flex flex-col gap-0.5"
+              style={{
+                backgroundColor: 'var(--color-paper-2)',
+                border: '1px solid var(--color-rule)',
+                boxShadow: '0 10px 26px -12px rgba(20,24,17,0.28)',
+                opacity: 0,
+                transition: 'opacity 80ms ease',
+                zIndex: 10,
+                whiteSpace: 'nowrap',
+              }}
+            />
+          </>
         ) : (
           <div
             className="w-full flex items-center justify-center text-center px-6"

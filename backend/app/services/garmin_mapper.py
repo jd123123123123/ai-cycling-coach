@@ -194,12 +194,18 @@ def map_daily_metrics(
             sleep_score = daily_sleep_dto.get("sleepScore")
 
     # --- HRV ---
+    # Garmin's actual payload uses hrvSummary.lastNightAvg (overnight rMSSD avg).
+    # The earlier `lastNight` key was a guess and never matched — resulting in
+    # zero HRV populated. Fall back to lastNight5MinHigh then weeklyAvg so users
+    # on older firmware / partial devices still get something.
     hrv_status = None
     if hrv_data is not None:
         hrv_summary = hrv_data.get("hrvSummary") or {}
-        hrv_status = hrv_summary.get("lastNight")
-        if hrv_status is None:
-            hrv_status = hrv_data.get("hrv5MinHigh")
+        hrv_status = (
+            hrv_summary.get("lastNightAvg")
+            or hrv_summary.get("lastNight5MinHigh")
+            or hrv_summary.get("weeklyAvg")
+        )
 
     # --- Body battery ---
     body_battery = None
