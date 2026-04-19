@@ -1,12 +1,37 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.scheduler import run_all_user_syncs, scheduler
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Register hourly Garmin sync job
+    scheduler.add_job(
+        run_all_user_syncs,
+        "interval",
+        hours=1,
+        id="garmin_sync",
+        misfire_grace_time=600,
+    )
+    scheduler.start()
+    logger.info("APScheduler started with hourly Garmin sync")
+    yield
+    scheduler.shutdown()
+    logger.info("APScheduler shut down")
+
 
 app = FastAPI(
     title="AI Cycling Coach",
     description="AI-powered multi-sport training platform",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
