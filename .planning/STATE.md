@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 4 in progress -- 04-01, 04-02, 04-03 complete; 04-04 (workout modal) remaining
+**Current focus:** Phase 4 complete -- all 4 plans shipped; DASH-01 through DASH-05 signed off. Phase 5 (AI Coaching Core) is next.
 
 ## Current Position
 
-Phase: 4 of 9 (Dashboard + Visualization) -- In progress
-Plan: 04-03 complete (TrainingCalendar + PlannedWorkout backend done; 04-04 workout modal pending)
-Status: In progress -- calendar shipped; PlannedWorkout CRUD API + drag-drop calendar mounted
-Last activity: 2026-04-19 -- Completed 04-03-PLAN.md (training calendar)
+Phase: 4 of 9 (Dashboard + Visualization) -- COMPLETE
+Plan: 04-04 complete (workout interval preview modal + mobile audit DASH-05 signed off)
+Status: Phase 4 complete -- full dashboard shipped; ready for Phase 5
+Last activity: 2026-04-19 -- Completed 04-04-PLAN.md (workout modal + mobile audit)
 
-Progress: [█████████░] ~80%
+Progress: [██████████░] ~88%
 
 ## Performance Metrics
 
@@ -99,6 +99,9 @@ Recent decisions affecting current work:
 - [04-03]: PointerSensor activationConstraint:{distance:8} + TouchSensor delay+tolerance — prevents nav button clicks being intercepted as drag starts
 - [04-03]: Optimistic PATCH updates all planned-workouts cache keys via getQueriesData — calendar has multiple overlapping query keys (week vs month view)
 - [04-03]: EventRenderer typed to EventProps<CalEvent>, DroppableDateCell to DateCellWrapperProps — react-big-calendar components prop requires exact generic types
+- [04-04]: WorkoutPreviewModal renders via portal from inside TrainingCalendar (not DashboardShell) — modal state co-located with calendar; shell workoutPreviewModal slot stays null for future global routing use
+- [04-04]: IntervalStructure imported into dashboard.ts replacing inline zone:number — zone 1..7 union enforced at API type boundary
+- [04-04]: zoneFromPctFtp fallback for null power returns Z2 (endurance) not Z1 — null power most likely base/endurance, not pure recovery
 
 ### Pending Todos
 
@@ -117,8 +120,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-19T12:29:02Z
-Stopped at: Completed 04-03-PLAN.md -- 3 tasks committed (b3a7826, 2b761a9, 4844fe1) + 04-03-SUMMARY.md written
+Last session: 2026-04-19T12:34:40Z
+Stopped at: Completed 04-04-PLAN.md -- 3 tasks committed (e57f88c, b373a52, dbdac19) + 04-04-SUMMARY.md written
 Resume file: None
-Next: Phase 4 Wave 2 final -- 04-04 (workout modal / workout preview) is the only remaining plan; unblocked by 04-03 (interval_structure on PlannedWorkout, onSelectEvent TODO hook, useCreatePlannedWorkout ready)
+Next: Phase 5 (AI Coaching Core) -- Phase 4 fully complete; all DASH-01..05 signed off; ready to start 05-01
+Pending: Docker Desktop restart + `alembic upgrade head` still required before full end-to-end app testing
 Pending: Docker Desktop restart + `alembic upgrade head` still required to apply d2f9b4c7a1e5 (planned_workouts) and earlier migrations before running app end-to-end
