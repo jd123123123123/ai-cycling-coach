@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 5.2 COMPLETE -- simple/technical language toggle end-to-end (plain English is the default; FTP/TSS/CTL are opt-in) + masthead Garmin sync button with full dashboard cache invalidation. Phase 6 (training-plan-generation) is next.
+**Current focus:** Phase 5.3 COMPLETE -- post-ride review replaces the prescribed-workout card when the athlete has already trained today. Grade (perfect/strong/okay/overcooked/undercooked) vs the periodization layer's "should have been", physiological read (EF/VI/decoupling), goal trajectory (CTL/TSB projection + Mujika taper classification), next-session nudge. Works without API key via full deterministic rule-based synthesiser; simple mode is jargon-free. Phase 6 (training-plan-generation) is next.
 
 ## Current Position
 
-Phase: 5.2 of 9 (Language Toggle + Sync Button) -- COMPLETE
-Plan: 05.2-01 complete (6 tasks, 6 atomic commits; 207/207 backend tests incl. 15 new language-mode; tsc clean; build clean)
-Status: Non-athlete users now get plain-English coach output by default; athletes can opt into technical mode; Garmin sync button ships in the masthead. Phase 6 can start immediately
-Last activity: 2026-04-20 -- Completed 05.2-01-PLAN.md (coach_prompt split + JSONB-keyed cache + LanguageContext/Toggle + SyncButton + phrase map across every coach surface)
+Phase: 5.3 of 9 (Post-Ride Review + Goal Trajectory) -- COMPLETE
+Plan: 05.3-01 complete (6 tasks, 6 atomic commits; 259/259 backend tests incl. 52 new across ride_compliance + goal_trajectory + post_ride_review; tsc clean; build clean)
+Status: Athletes who already trained see a mindblowingly-good graded review instead of "nice, you're done" -- 5-grade compliance, scientific physiological read, race-day trajectory, next-session nudge. Ships in both simple and technical language modes. Phase 6 can start immediately
+Last activity: 2026-04-20 -- Completed 05.3-01-PLAN.md (ride_compliance + goal_trajectory pure services + PostRideReview React card + CoachBrief swap + 52 new tests)
 
-Progress: [███████████] 100% through Phase 5 + 5.1 + 5.2 / ~92% overall
+Progress: [████████████] 100% through Phase 5 + 5.1 + 5.2 + 5.3 / ~94% overall
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
-- Average duration: ~42 min
-- Total execution time: ~6.3 hours
+- Total plans completed: 12
+- Average duration: ~45 min
+- Total execution time: ~7.5 hours
 
 **By Phase:**
 
@@ -33,10 +33,11 @@ Progress: [███████████] 100% through Phase 5 + 5.1 + 5.2 /
 | 05-ai-coaching-core | 2 (complete) | ~107 min | ~54 min |
 | 05.1-precision-prescription | 1 (complete) | ~75 min | ~75 min |
 | 05.2-language-and-sync | 1 (complete) | ~41 min | ~41 min |
+| 05.3-post-ride-review | 1 (complete) | ~75 min | ~75 min |
 
 **Recent Trend:**
-- Last 5 plans: ~40 min, 52 min, 55 min, 75 min, 41 min
-- Trend: 5.2 came in right on the 60-min estimate — 6 tasks, language routing is a cross-cutting concern so file-modification count is high (8 created / 17 modified) but each touch is narrow
+- Last 5 plans: 52 min, 55 min, 75 min, 41 min, 75 min
+- Trend: 5.3 landed at the 90-min estimate. Two new pure services (ride_compliance + goal_trajectory) drove the time — both needed careful math unit tests. Language-mode jargon scrub and LLM-merge behaviour added on top of the shape work. File count: 6 created / 8 modified.
 
 *Updated after each plan completion*
 
@@ -161,6 +162,20 @@ Recent decisions affecting current work:
 - [05.2-01]: SyncButton invalidates 6 React Query keys on success (daily-metrics, activities, pmc, coach-brief, intraday, garmin-status) — full dashboard refresh without location.reload(); preserves scroll position and avoids white flash
 - [05.2-01]: /coach/why and /coach/transparency endpoints are NOT language-aware server-side — WhyAmITired rewrites the technical evidence strings client-side via simpleEvidenceFor (known-label map + regex fallback for unknown labels). Acceptable because evidence is structured; future phase can server-side-ify if needed
 - [05.2-01]: PMC chart + calendar heatmap retain technical labels (CTL/TSB/TSS) — they're dense analytic panels in fold 4 (collapsed by default), same role as TransparencyDrawer. Plan did not list them for language-mode work
+- [05.3-01]: score_ride grades against template.base_tss (not actual-duration-scaled TSS) — matches the "what should have been" baseline the picker chose. parametrize_template only scales TSS when duration_scale is applied, never when matching actuals to targets
+- [05.3-01]: First-match-wins grade rubric: perfect(±10 both) → overcooked(>30 either) → undercooked(<-30 either) → strong(one ≤10 + other ≤25 or both ≤20) → okay(both ≤30) → mixed fallback(TSS high=overcooked, else undercooked). Explicit and testable — no magic fuzzy scoring
+- [05.3-01]: IF target proxy averages main-block target_pct_ftp (excludes Warm-up/Cool-down/Recovery). Deterministic for multi-main templates like vo2_5x4; equals the single block's pct for steady templates
+- [05.3-01]: TSB projection bifurcates on days_to_goal — ≤14 uses Mujika ATL-decay (~15 TSB lift over full taper), >14 uses TSB_now + (ctl_7d × days/7 × 0.3). Dampener reflects fatigue catching up with fitness builds
+- [05.3-01]: taper_window='unknown' when days_to_goal>21 — Mujika classification is only meaningful inside the actual taper window
+- [05.3-01]: Offseason / maintenance phase grades against absolute TSS bands (25-80 / 30-100) instead of template target — avoids penalising chill rides against a build-phase prescription
+- [05.3-01]: CompliancePair rounding adapts to magnitude — target<5.0 (IF values) → 2 decimals, target≥5.0 (duration/TSS) → 1 decimal. Prevents IF 0.65 quantising to 0.7
+- [05.3-01]: resolve_and_prescribe forces template_id='rest_day' when snapshot.post_ride is present — post_ride_review IS the fold-1 hero, showing a second prescription card would muddy UX
+- [05.3-01]: Rule-based synthesiser + LLM path both call _build_post_ride_review — LLM narrative fields merge over the deterministic builder; compliance numbers are never LLM-writable (scorer is authority). Ships without API key
+- [05.3-01]: post_ride_review persisted inside evidence JSONB — no migration, no new column; _brief_to_read extracts via Pydantic on response, tolerates pre-5.3 rows (key missing → None)
+- [05.3-01]: Simple-mode trajectory narrative runs a defensive regex scrub on trajectory.narrative_hook (CTL→fitness, TSB→freshness, TSS→training points) even though the backend emits plain-enough text — belt-and-braces against future text changes
+- [05.3-01]: Grade pill palette mapped to paper design system — perfect=#7c9e7e (sage), overcooked=#c4614c (coral), strong=#b5874f (goldenrod), undercooked=#9b8a6b (muted warm-grey), okay=paper-2 neutral. Colour intent matches grade valence
+- [05.3-01]: Only extreme grades get visual decoration — perfect=2.4s pulse/glow loop, overcooked="Extra recovery tonight." micro-copy. Okay/strong/undercooked stay quiet per cognitive-deload principle
+- [05.3-01]: Third compliance slot prefers EF (NP/avgHR — San Millán) over IF (NP/FTP — Coggan) — EF is the more informative trend signal for endurance athletes; IF only shown when avgHR absent and NP present
 
 ### Pending Todos
 
@@ -184,7 +199,7 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-04-20
-Stopped at: Phase 5.2 COMPLETE — language toggle (simple default, technical opt-in) + masthead sync button shipped end-to-end. Backend splits coach_prompt into SYSTEM_PROMPT_SIMPLE/TECHNICAL; cache is language-keyed via JSONB (evidence->>'language' with coalesce-to-simple for pre-5.2 rows). Frontend LanguageContext persists per-browser; LanguageToggle is a 28px masthead segmented control that invalidates coach-related React Query keys on change. SyncButton is a tri-state RefreshCw icon (idle/syncing/done) that invalidates 6 cache keys on success. All 7 coach-surface components (CoachBrief, PrescribedWorkoutCard, IntervalRibbon, WhyAmITired, KpiStripCompact, TransparencyDrawer, CoachChat) branch on language via the translateCoach phrase map. 207/207 backend tests green (192 pre-existing + 15 new language hygiene); tsc + build clean. Commits c9dacfb..5f05d80 (6 task commits).
+Stopped at: Phase 5.3 COMPLETE — post-ride review shipped end-to-end. Two new pure services: ride_compliance.score_ride() grades a completed Activity against the picked template with 5 grades (perfect/strong/okay/overcooked/undercooked) + IF/VI/EF/decoupling + phase-aware rubric; goal_trajectory.project() linear-extrapolates CTL from trailing 7d delta, projects TSB via Mujika ATL-decay model, classifies taper_window (too_flat/ideal/too_fresh/overreached/unknown) + on_track (ahead/on_track/behind/no_goal). build_snapshot fetches today's primary activity when today_tss>=25, stashes compliance + trajectory under snapshot.post_ride. _rule_based_brief emits a complete post_ride_review in both language modes (simple mode asserted jargon-free across all 5 grades; technical asserts framework citation). LLM path merges its narrative fields over the deterministic builder — compliance numbers are never LLM-writable. post_ride_review persists inside evidence JSONB (no migration). Frontend PostRideReview.tsx replaces PrescribedWorkoutCard when review is present: grade pill (sage/goldenrod/neutral/coral/muted), Fraunces italic headline, compliance trio with ✓/↑/↓ band chips, three paragraphs (physio/trajectory/nudge), perfect-grade pulse/glow, overcooked warning micro-copy. 259/259 backend tests green (207 pre-existing + 52 new: 24 ride_compliance, 16 goal_trajectory, 12 post_ride coach_service); tsc + build clean. Commits fc951c8..95cf686 (6 task commits).
 Resume file: None
-Next: 06 (training-plan-generation) — templates + periodization detectors + language routing convention give the plan generator the atomic unit, weekly skeleton, AND the voice framework. Any new coach-rendered copy in Phase 6 should route through SYSTEM_PROMPT_SIMPLE/TECHNICAL on the backend + translateCoach/simpleTitleFor on the frontend
-Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; hook today_available_minutes to the calendar's free-slot field (Phase 6 work) instead of weekly_hours/7; consider server-side language routing for /coach/why + /coach/transparency if Phase 6 needs it (currently rewritten client-side via simpleEvidenceFor)
+Next: 06 (training-plan-generation) — templates + periodization detectors + language routing + post-ride grading give the plan generator the atomic unit, weekly skeleton, voice framework, AND feedback loop. Any new coach-rendered copy in Phase 6 should route through SYSTEM_PROMPT_SIMPLE/TECHNICAL on the backend + translateCoach/simpleTitleFor on the frontend. Training plans can read score_ride/project outputs directly when rendering retrospective blocks (e.g. "how last week went")
+Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; hook today_available_minutes to the calendar's free-slot field (Phase 6 work) instead of weekly_hours/7; consider server-side language routing for /coach/why + /coach/transparency if Phase 6 needs it (currently rewritten client-side via simpleEvidenceFor); wire advanced_metrics.compute_activity_metrics decoupling result back into Activity.raw_data.decoupling_pct so PostRideReview can surface the Pw:HR drift band; retrospective yesterday-morning review (generate for yesterday when user opens app next morning with no session today)
