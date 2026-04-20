@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 5.1 COMPLETE -- coach now prescribes ONE precise workout (absolute watts from FTP, 12-template library, Friel phase detector); dashboard reshaped to iPhone-style 4-fold hierarchy. Phase 6 (training-plan-generation) is next.
+**Current focus:** Phase 5.2 COMPLETE -- simple/technical language toggle end-to-end (plain English is the default; FTP/TSS/CTL are opt-in) + masthead Garmin sync button with full dashboard cache invalidation. Phase 6 (training-plan-generation) is next.
 
 ## Current Position
 
-Phase: 5.1 of 9 (Precision Prescription + iPhone Hierarchy pass) -- COMPLETE
-Plan: 05.1-01 complete (10 tasks, 10 atomic commits; 190/190 backend tests; tsc clean; build clean)
-Status: Coach now prescribes ONE workout with template-derived watts; fold discipline shipped. Phase 6 can start immediately
-Last activity: 2026-04-20 -- Completed 05.1-01-PLAN.md (workout templates + periodization + resolve_and_prescribe + IntervalRibbon + PrescribedWorkoutCard + DashboardSection + KpiStripCompact)
+Phase: 5.2 of 9 (Language Toggle + Sync Button) -- COMPLETE
+Plan: 05.2-01 complete (6 tasks, 6 atomic commits; 207/207 backend tests incl. 15 new language-mode; tsc clean; build clean)
+Status: Non-athlete users now get plain-English coach output by default; athletes can opt into technical mode; Garmin sync button ships in the masthead. Phase 6 can start immediately
+Last activity: 2026-04-20 -- Completed 05.2-01-PLAN.md (coach_prompt split + JSONB-keyed cache + LanguageContext/Toggle + SyncButton + phrase map across every coach surface)
 
-Progress: [███████████] 100% through Phase 5 + 5.1 / ~91% overall
+Progress: [███████████] 100% through Phase 5 + 5.1 + 5.2 / ~92% overall
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
-- Average duration: 42 min
-- Total execution time: ~5.6 hours
+- Total plans completed: 11
+- Average duration: ~42 min
+- Total execution time: ~6.3 hours
 
 **By Phase:**
 
@@ -32,10 +32,11 @@ Progress: [███████████] 100% through Phase 5 + 5.1 / ~91% 
 | 03-garmin-data-integration | 3 | ~135 min | ~45 min |
 | 05-ai-coaching-core | 2 (complete) | ~107 min | ~54 min |
 | 05.1-precision-prescription | 1 (complete) | ~75 min | ~75 min |
+| 05.2-language-and-sync | 1 (complete) | ~41 min | ~41 min |
 
 **Recent Trend:**
-- Last 5 plans: 56 min, ~40 min, 52 min, 55 min, 75 min
-- Trend: 5.1 ran a bit longer (10-task reshape pass across backend + frontend + tests + migration); within range for multi-surface plans
+- Last 5 plans: ~40 min, 52 min, 55 min, 75 min, 41 min
+- Trend: 5.2 came in right on the 60-min estimate — 6 tasks, language routing is a cross-cutting concern so file-modification count is high (8 created / 17 modified) but each touch is narrow
 
 *Updated after each plan completion*
 
@@ -148,6 +149,18 @@ Recent decisions affecting current work:
 - [05.1-01]: DashboardSection uses max-height transition (not display:none) — 4000px is enough for any realistic expanded content and keeps the reveal smooth. localStorage persisted per section id for returning-user preference
 - [05.1-01]: ReadinessHero drops its internal KpiStrip — duplicate with KpiStripCompact (fold 2) violated the user's iPhone bar. Fold 1 hero now only renders dial + verdict + CoachBrief. Net removal: 100 LOC, 1.2 KB gzipped
 - [05.1-01]: Zone-color palette (--color-zone-1..7) as CSS custom properties, not Tailwind classes — IntervalRibbon reads via inline style so a future theme switch updates every ribbon segment without a rebuild
+- [05.2-01]: Default coach language is 'simple' (plain English, no FTP/TSS/CTL/Z-numbers) — non-athlete users are the majority; technical mode with full Coggan/Seiler vocabulary is opt-in via the masthead toggle
+- [05.2-01]: coach_prompt.py exports SYSTEM_PROMPT_SIMPLE + SYSTEM_PROMPT_TECHNICAL + system_prompt_for_language() router; SYSTEM_PROMPT stays aliased to technical for backward compat with /coach/transparency importers (avoids rename churn)
+- [05.2-01]: Language lives inside evidence JSONB, not a new column — get_or_generate_brief filters via `func.coalesce(CoachBrief.evidence['language'].astext, 'simple') == language` so pre-5.2 rows serve simple-mode requests transparently. Zero migration cost
+- [05.2-01]: _rule_based_brief hard-coerces anything that isn't exactly 'technical' to 'simple' — corrupt / unknown language values cannot leak jargon into the plain-English response. Mirrors the endpoint's Literal narrowing
+- [05.2-01]: TransparencyDrawer stays technical by design — it IS the "show me the raw nerd data" surface. Only the intro sentence flips tone in simple mode ("Numbers and nerd details.")
+- [05.2-01]: Per-browser localStorage persistence with cross-tab storage-event mirror — phone vs laptop can have different preferences; toggling in one tab mirrors to other open tabs for free
+- [05.2-01]: React Query brief key is ['coach','brief',language] — toggling mutates the key, old-language data is removed (not just invalidated) because refetch fires automatically on the new key
+- [05.2-01]: Plain-English phrase map (frontend/src/utils/coachLanguage.ts) handles only what the backend can't write — tooltips, block name hints, CTA labels, category-based workout titles. Coach-generated text (rationale, why_this_workout) is backend-language-aware via SYSTEM_PROMPT_SIMPLE/TECHNICAL
+- [05.2-01]: Category→feel mapping drives simple-mode intensity language — recovery→"chill pace", vo2→"hard intervals", threshold→"hard pace". Same taxonomy used in titles + summary lines + interval tooltips
+- [05.2-01]: SyncButton invalidates 6 React Query keys on success (daily-metrics, activities, pmc, coach-brief, intraday, garmin-status) — full dashboard refresh without location.reload(); preserves scroll position and avoids white flash
+- [05.2-01]: /coach/why and /coach/transparency endpoints are NOT language-aware server-side — WhyAmITired rewrites the technical evidence strings client-side via simpleEvidenceFor (known-label map + regex fallback for unknown labels). Acceptable because evidence is structured; future phase can server-side-ify if needed
+- [05.2-01]: PMC chart + calendar heatmap retain technical labels (CTL/TSB/TSS) — they're dense analytic panels in fold 4 (collapsed by default), same role as TransparencyDrawer. Plan did not list them for language-mode work
 
 ### Pending Todos
 
@@ -171,7 +184,7 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-04-20
-Stopped at: Phase 5.1 COMPLETE — precision-prescription + iPhone hierarchy pass shipped. Coach now prescribes ONE workout with absolute watts computed from the athlete's FTP, grounded in a 12-template library (rest_day through vo2_5x4) picked via Friel-phase detection + Seiler-polarized weekly quota + rails-aware session-type cascade. Dashboard restructured into 4 folds: hero (ReadinessDial + CoachBrief + PrescribedWorkoutCard with IntervalRibbon) / KpiStripCompact / PMC+Recent / 4 DashboardSections collapsed-by-default with localStorage persistence. 190/190 backend tests green; tsc clean; build clean. Commits 800a5c8..86cdda7 (10 task commits).
+Stopped at: Phase 5.2 COMPLETE — language toggle (simple default, technical opt-in) + masthead sync button shipped end-to-end. Backend splits coach_prompt into SYSTEM_PROMPT_SIMPLE/TECHNICAL; cache is language-keyed via JSONB (evidence->>'language' with coalesce-to-simple for pre-5.2 rows). Frontend LanguageContext persists per-browser; LanguageToggle is a 28px masthead segmented control that invalidates coach-related React Query keys on change. SyncButton is a tri-state RefreshCw icon (idle/syncing/done) that invalidates 6 cache keys on success. All 7 coach-surface components (CoachBrief, PrescribedWorkoutCard, IntervalRibbon, WhyAmITired, KpiStripCompact, TransparencyDrawer, CoachChat) branch on language via the translateCoach phrase map. 207/207 backend tests green (192 pre-existing + 15 new language hygiene); tsc + build clean. Commits c9dacfb..5f05d80 (6 task commits).
 Resume file: None
-Next: 06 (training-plan-generation) — templates + periodization detectors give the plan generator the atomic unit and weekly skeleton; resolve_and_prescribe is the "verify before commit" contract for LLM-generated plans
-Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; hook today_available_minutes to the calendar's free-slot field (Phase 6 work) instead of weekly_hours/7
+Next: 06 (training-plan-generation) — templates + periodization detectors + language routing convention give the plan generator the atomic unit, weekly skeleton, AND the voice framework. Any new coach-rendered copy in Phase 6 should route through SYSTEM_PROMPT_SIMPLE/TECHNICAL on the backend + translateCoach/simpleTitleFor on the frontend
+Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; hook today_available_minutes to the calendar's free-slot field (Phase 6 work) instead of weekly_hours/7; consider server-side language routing for /coach/why + /coach/transparency if Phase 6 needs it (currently rewritten client-side via simpleEvidenceFor)
