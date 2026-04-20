@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 5 COMPLETE -- causal AI coach fully shipped (backend Wave 1 + frontend Wave 2). Phase 6 (training-plan-generation) is next.
+**Current focus:** Phase 5.1 COMPLETE -- coach now prescribes ONE precise workout (absolute watts from FTP, 12-template library, Friel phase detector); dashboard reshaped to iPhone-style 4-fold hierarchy. Phase 6 (training-plan-generation) is next.
 
 ## Current Position
 
-Phase: 5 of 9 (AI Coaching Core) -- COMPLETE
-Plan: 05-02 complete (frontend coach UI: CoachBrief + CoachChat + WhyAmITired + TransparencyDrawer + AdvancedMetricsStrip)
-Status: Phase 5 shipped end-to-end; Phase 6 can start immediately
-Last activity: 2026-04-20 -- Completed 05-02-PLAN.md (8 tasks, 8 atomic commits, tsc clean, build +50 KB gzipped)
+Phase: 5.1 of 9 (Precision Prescription + iPhone Hierarchy pass) -- COMPLETE
+Plan: 05.1-01 complete (10 tasks, 10 atomic commits; 190/190 backend tests; tsc clean; build clean)
+Status: Coach now prescribes ONE workout with template-derived watts; fold discipline shipped. Phase 6 can start immediately
+Last activity: 2026-04-20 -- Completed 05.1-01-PLAN.md (workout templates + periodization + resolve_and_prescribe + IntervalRibbon + PrescribedWorkoutCard + DashboardSection + KpiStripCompact)
 
-Progress: [███████████] 100% through Phase 5 / ~91% overall
+Progress: [███████████] 100% through Phase 5 + 5.1 / ~91% overall
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 38 min
-- Total execution time: ~4.4 hours
+- Total plans completed: 10
+- Average duration: 42 min
+- Total execution time: ~5.6 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [███████████] 100% through Phase 5 / ~91% overal
 | 02-training-engine | 3 | ~8 min | ~2.7 min |
 | 03-garmin-data-integration | 3 | ~135 min | ~45 min |
 | 05-ai-coaching-core | 2 (complete) | ~107 min | ~54 min |
+| 05.1-precision-prescription | 1 (complete) | ~75 min | ~75 min |
 
 **Recent Trend:**
-- Last 5 plans: 39 min, 56 min, ~40 min, 52 min, 55 min
-- Trend: stable (40-56 min is the natural rhythm for the feature-shape plans)
+- Last 5 plans: 56 min, ~40 min, 52 min, 55 min, 75 min
+- Trend: 5.1 ran a bit longer (10-task reshape pass across backend + frontend + tests + migration); within range for multi-surface plans
 
 *Updated after each plan completion*
 
@@ -131,6 +132,22 @@ Recent decisions affecting current work:
 - [05-02]: Decoupling + durability tiles shipped as placeholders — backend computes both but /activities doesn't carry sample streams yet; tiles ready for /coach/metrics-trend
 - [05-02]: 503 on /coach/chat = visible disabled state with ANTHROPIC_API_KEY guidance, not a silent toast — degradation must be legible
 - [05-02]: Root `tsc --noEmit` doesn't check anything (files:[] + references); typecheck via `-p tsconfig.app.json` or rely on `npm run build` which uses `tsc -b`
+- [05.1-01]: Templates are the atomic unit of prescription — LLM picks/substitutes from a 12-template library and cannot author intervals from scratch. Each block carries target_pct_ftp; watts are materialised server-side via parametrize_template(template, ftp) at request time. Single source of truth for athlete-scaled numbers
+- [05.1-01]: Server-side watts authority (resolve_and_prescribe) — LLM's block watts are unconditionally rewritten from athlete's current FTP. LLM can only bend duration ±15% (via the duration_minutes hint) and that bend is clamped twice (resolve_and_prescribe + parametrize_template.duration_scale). Makes LLM hallucinations harmless
+- [05.1-01]: Rails enforcement via template downgrade (not option-blocking) — Phase 5 marked options blocked=True; 5.1 has only ONE workout so above-ceiling templates are substituted with _safe_template_for_ceiling(ceiling) and the downgrade is noted inline in why_this_workout. Cleaner UX, preserves transparency
+- [05.1-01]: Zone-keyed tolerance bands — Z1 ±10%, Z2 ±8%, Z3 ±6%, Z4+ ±5%. Tighter on high-zone efforts (intent-enforcing), wider on Z2 (HR-drift-first pacing)
+- [05.1-01]: Friel phase boundaries — 7d=race, 21d=taper, 49d=peak, 112d=build, else base; base/build split on CTL threshold (40 for base, 55 for build). No goal + CTL<30 = offseason; CTL>=30 = maintenance
+- [05.1-01]: Phase-weighted Seiler polarized — base 90/10, build 75/25, taper 85/15, race 100/0. Hard-session count is phase-specific (build2 gets VO2+threshold, base2 gets threshold-only, base1 gets none)
+- [05.1-01]: session_type_for_today is a first-match-wins cascade: intensity_ceiling → phase → day-of-week → weekly_progress. Sunday=long endurance, Monday=rest, Wed=key-workout-day for build/peak phases
+- [05.1-01]: pick_template fallback chain when primary category is empty (FTP<180+vo2, etc.): sweet_spot_2x20 → z2_endurance_60 → recovery_30 → rest_day. Never returns nothing
+- [05.1-01]: Alternates resolver synthesises missing labels — a missing less_time / recover alternate is filled with a sensible default rather than rejecting the response. UI always has 2 alternates to render
+- [05.1-01]: Invalid/unknown LLM template_id falls back to snapshot.picked_template_id (the pre-LLM rules-based pick) — even a completely nonsense LLM response still produces a coherent workout
+- [05.1-01]: coach_briefs options column made nullable (not dropped) — rollback-safe; legacy rows still deserialise through BriefRead's optional options[] field
+- [05.1-01]: EF prediction band keyed by template category (recovery 1.00-1.20, endurance 1.30-1.60, sweet_spot 1.45-1.75, threshold 1.50-1.80, vo2 1.30-1.55) — VO2 band lower than threshold because VO2 effort pushes HR harder. Sets post-workout expectations without per-athlete history
+- [05.1-01]: IntervalRibbon height mapping clamped(22, 96, pct_ftp*80) — Z1 blocks stay visible at 22% min-height instead of becoming invisible warm-ups
+- [05.1-01]: DashboardSection uses max-height transition (not display:none) — 4000px is enough for any realistic expanded content and keeps the reveal smooth. localStorage persisted per section id for returning-user preference
+- [05.1-01]: ReadinessHero drops its internal KpiStrip — duplicate with KpiStripCompact (fold 2) violated the user's iPhone bar. Fold 1 hero now only renders dial + verdict + CoachBrief. Net removal: 100 LOC, 1.2 KB gzipped
+- [05.1-01]: Zone-color palette (--color-zone-1..7) as CSS custom properties, not Tailwind classes — IntervalRibbon reads via inline style so a future theme switch updates every ribbon segment without a rebuild
 
 ### Pending Todos
 
@@ -154,7 +171,7 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-04-20
-Stopped at: Phase 5 COMPLETE — causal AI coach end-to-end (backend 05-01 + frontend 05-02). Dashboard now hosts <CoachBrief> with live verdict+evidence+options+outlook, an "Ask coach" streaming drawer, a "Why am I tired?" causal modal, and a transparency drawer that exposes the raw snapshot + system prompt. Rule-based fallback keeps the UI fully functional without ANTHROPIC_API_KEY. Commits 1a74903..b8a780e (8 task commits).
+Stopped at: Phase 5.1 COMPLETE — precision-prescription + iPhone hierarchy pass shipped. Coach now prescribes ONE workout with absolute watts computed from the athlete's FTP, grounded in a 12-template library (rest_day through vo2_5x4) picked via Friel-phase detection + Seiler-polarized weekly quota + rails-aware session-type cascade. Dashboard restructured into 4 folds: hero (ReadinessDial + CoachBrief + PrescribedWorkoutCard with IntervalRibbon) / KpiStripCompact / PMC+Recent / 4 DashboardSections collapsed-by-default with localStorage persistence. 190/190 backend tests green; tsc clean; build clean. Commits 800a5c8..86cdda7 (10 task commits).
 Resume file: None
-Next: 06 (training-plan-generation) — the coach snapshot and brief are live, giving the plan generator a grounded context to extend from
-Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values
+Next: 06 (training-plan-generation) — templates + periodization detectors give the plan generator the atomic unit and weekly skeleton; resolve_and_prescribe is the "verify before commit" contract for LLM-generated plans
+Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; hook today_available_minutes to the calendar's free-slot field (Phase 6 work) instead of weekly_hours/7
