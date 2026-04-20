@@ -1,0 +1,335 @@
+"""Ride compliance scoring — how well did the athlete's completed ride match
+what the periodization layer would have prescribed for the same day?
+
+The "should have been" baseline is the template picked by `session_type_for_today`
++ `pick_template` (both already running inside build_snapshot). We compare the
+actual activity's duration + TSS + intensity against that baseline and emit a
+five-grade score:
+
+    perfect      — both duration and TSS within ±10% of target
+    strong       — one metric within 10%, the other within 25% (or both <=20%)
+    okay         — both within 30%, no severe outlier
+    overcooked   — duration OR TSS >30% above target (crossed "too much")
+    undercooked  — duration OR TSS >30% below target (crossed "too little")
+
+Mixed profiles (short-and-hard, long-and-easy) resolve toward the "too much"
+side when TSS is high, otherwise toward "too little".
+
+Additional compliance metrics we surface per activity (when data is present):
+    IF  = NP / FTP        (Coggan Intensity Factor)
+    VI  = NP / avgP       (Coggan Variability Index — >1.06 means pacing drift)
+    EF  = NP / avgHR      (Friel/San Millán aerobic-efficiency signal)
+
+All functions here are PURE — no DB, no async. The caller fetches today's
+Activity from the session and passes it in along with the picked template,
+phase, session_type, and FTP.
+
+Out-of-scope for v1:
+    - Per-second power streams (interval-by-interval compliance)
+    - Zone-distribution match (we emit `zone_match_pct=None` until streams land)
+    - RPE-power decoupling (Kolie Moore) — requires user-reported RPE
+
+References: .planning/research/training-frameworks.md §§ Coggan, Friel, San Millán.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
+from app.models.activity import Activity
+from app.services.workout_templates import WorkoutTemplate
+
+Grade = Literal["perfect", "strong", "okay", "overcooked", "undercooked"]
+Band = Literal["match", "over", "under"]
+
+
+# ======================================================================
+#  Data shapes
+# ======================================================================
+
+@dataclass(frozen=True)
+class CompliancePair:
+    """One target-vs-actual pair with its delta and band classification.
+
+    delta_pct = (actual - target) / target * 100 — signed.
+    band:
+        'match' — |delta_pct| <= 10
+        'over'  — delta_pct > 10
+        'under' — delta_pct < -10
+    """
+
+    target: float
+    actual: float
+    delta_pct: float
+    band: Band
+
+
+@dataclass(frozen=True)
+class RideCompliance:
+    """Full compliance report for one completed activity vs one target template.
+
+    `phase`, `session_type`, and `template_id` are the context the narrative
+    layer uses to craft the physiological read + goal-trajectory paragraphs.
+    """
+
+    grade: Grade
+    duration: CompliancePair
+    tss: CompliancePair
+    intensity_factor: CompliancePair | None  # IF = NP / FTP
+    variability_index: float | None          # VI = NP / avgP
+    ef: float | None                         # NP / avgHR
+    decoupling_pct: float | None             # Pw:HR drift % (if streams present)
+    zone_match_pct: float | None             # reserved for when streams land
+    phase: str
+    session_type: str
+    template_id: str
+
+
+# ======================================================================
+#  Helpers
+# ======================================================================
+
+def _pair(target: float, actual: float) -> CompliancePair:
+    """Build a CompliancePair from target + actual. delta_pct is 0 when target
+    is <= 0 (rest days have target=0 TSS; we treat any non-zero actual as 'over').
+
+    Rounding precision auto-adapts: small-magnitude targets (IF < 5) round to 2
+    decimals, everything else rounds to 1 decimal. This keeps IF=0.65 readable
+    without quantising it to 0.7.
+    """
+    if target <= 0:
+        if actual <= 0:
+            return CompliancePair(target=target, actual=actual, delta_pct=0.0, band="match")
+        # Any work on a rest day registers as "over" with delta=+inf semantics.
+        return CompliancePair(target=target, actual=actual, delta_pct=100.0, band="over")
+
+    delta = (actual - target) / target * 100.0
+    if delta > 10.0:
+        band: Band = "over"
+    elif delta < -10.0:
+        band = "under"
+    else:
+        band = "match"
+
+    # IF values (typically 0.5..1.3) need 2 decimals; TSS/duration need 1.
+    precision = 2 if target < 5.0 else 1
+    return CompliancePair(
+        target=round(target, precision),
+        actual=round(actual, precision),
+        delta_pct=round(delta, 1),
+        band=band,
+    )
+
+
+def _template_duration_minutes(template: WorkoutTemplate) -> float:
+    total_s = sum(b.duration_s for b in template.blocks)
+    return total_s / 60.0 if total_s > 0 else 0.0
+
+
+def _scale_tss_for_duration(template: WorkoutTemplate, actual_minutes: float) -> float:
+    """For rest-day templates (base_tss=0), target TSS stays 0 regardless.
+    For any other template we use the template's base_tss as the target.
+    This matches `parametrize_template` which only scales watts, not TSS
+    (TSS comes from the template's designed volume).
+    """
+    return float(template.base_tss)
+
+
+# ======================================================================
+#  Grading
+# ======================================================================
+
+def _grade_from_pairs(
+    duration: CompliancePair,
+    tss: CompliancePair,
+) -> Grade:
+    """Apply the grading rubric.
+
+    Rules (first match wins):
+        1. |dur| <= 10 AND |tss| <= 10                      → perfect
+        2. dur > +30 OR tss > +30                           → overcooked
+        3. dur < -30 OR tss < -30                           → undercooked
+        4. (one <=10 AND other <=25) OR (both <=20)         → strong
+        5. both <= 30                                        → okay
+        6. Mixed fallback: tss high → overcooked, else undercooked
+    """
+    ad, at = abs(duration.delta_pct), abs(tss.delta_pct)
+
+    # 1. perfect — tight band both sides
+    if ad <= 10.0 and at <= 10.0:
+        return "perfect"
+
+    # 2. overcooked — either axis crosses the "too much" line
+    if duration.delta_pct > 30.0 or tss.delta_pct > 30.0:
+        return "overcooked"
+
+    # 3. undercooked — either axis crosses the "too little" line
+    if duration.delta_pct < -30.0 or tss.delta_pct < -30.0:
+        return "undercooked"
+
+    # 4. strong — one tight, the other within reason, or both snug
+    if (ad <= 10.0 and at <= 25.0) or (at <= 10.0 and ad <= 25.0) or (ad <= 20.0 and at <= 20.0):
+        return "strong"
+
+    # 5. okay — both within 30%
+    if ad <= 30.0 and at <= 30.0:
+        return "okay"
+
+    # 6. mixed fallback — precedence: high TSS wins "overcooked"
+    if tss.delta_pct > 0:
+        return "overcooked"
+    return "undercooked"
+
+
+# ======================================================================
+#  Offseason / maintenance — no periodization target
+# ======================================================================
+
+# When phase is offseason or maintenance the template picker defaults to
+# endurance, but grading against a fixed picked_template in that phase can
+# penalize any chill ride. Instead, grade against an absolute TSS band.
+_ABSOLUTE_TSS_BANDS: dict[str, tuple[float, float]] = {
+    # phase → (good_low, good_high). Above good_high + 40% = overcooked,
+    # below good_low - 40% = undercooked. Between = strong/perfect by exactness.
+    "offseason":   (25.0, 80.0),
+    "maintenance": (30.0, 100.0),
+}
+
+
+def _absolute_grade(actual_tss: float, phase: str) -> Grade:
+    low, high = _ABSOLUTE_TSS_BANDS.get(phase, (25.0, 80.0))
+    if actual_tss > high * 1.5:
+        return "overcooked"
+    if actual_tss < low * 0.5:
+        return "undercooked"
+    if low <= actual_tss <= high:
+        # Tight band inside "good" → perfect; loose → strong
+        mid = (low + high) / 2.0
+        return "perfect" if abs(actual_tss - mid) / mid <= 0.15 else "strong"
+    # Outside good band but not yet extreme
+    return "okay"
+
+
+# ======================================================================
+#  Public API
+# ======================================================================
+
+def score_ride(
+    actual_activity: Activity,
+    target_template: WorkoutTemplate,
+    ftp: int | None,
+    phase: str,
+    session_type: str,
+) -> RideCompliance:
+    """Grade a single completed ride against the template that would have been
+    prescribed for the same day-state.
+
+    Handles edge cases:
+        - HR-only device (no NP / no avgP): IF/VI are None, EF computes from
+          avgHR if present, grading falls back to duration + TSS.
+        - FTP unknown or zero: IF is None, VI still computes if avgP present.
+        - Phase is offseason / maintenance: grade against absolute TSS band
+          (`_ABSOLUTE_TSS_BANDS`) since there's no specific prescribed target.
+        - target_template is rest_day (base_tss=0) but athlete rode: any
+          non-trivial TSS → overcooked.
+    """
+    # ---- Actuals --------------------------------------------------------
+    actual_minutes = (actual_activity.duration_seconds or 0) / 60.0
+    actual_tss = float(actual_activity.tss or 0.0)
+    np = actual_activity.normalized_power
+    avg_p = actual_activity.average_power
+    avg_hr = actual_activity.average_hr
+
+    # ---- Targets --------------------------------------------------------
+    target_minutes = _template_duration_minutes(target_template)
+    target_tss = _scale_tss_for_duration(target_template, actual_minutes)
+
+    duration_pair = _pair(target_minutes, actual_minutes)
+    tss_pair = _pair(target_tss, actual_tss)
+
+    # ---- Intensity factor (IF = NP / FTP) -------------------------------
+    if_pair: CompliancePair | None = None
+    if np is not None and ftp and ftp > 0:
+        # Target IF is implied by the template — use the max zone's target_pct_ftp
+        # as a coarse proxy when we don't have per-zone time. For steady templates
+        # (one main block) this equals the block's target_pct_ftp.
+        main_blocks = [b for b in target_template.blocks if b.name not in ("Warm-up", "Cool-down", "Recovery")]
+        if main_blocks:
+            target_if = sum(b.target_pct_ftp for b in main_blocks) / len(main_blocks)
+        else:
+            target_if = 0.65  # endurance default
+        actual_if = np / ftp
+        if_pair = _pair(target_if, actual_if)
+
+    # ---- Variability Index (VI = NP / avgP) -----------------------------
+    vi: float | None = None
+    if np is not None and avg_p and avg_p > 0:
+        vi = round(np / avg_p, 3)
+
+    # ---- Efficiency Factor (EF = NP / avgHR) ----------------------------
+    ef: float | None = None
+    if np is not None and avg_hr and avg_hr > 0:
+        ef = round(np / avg_hr, 3)
+    elif avg_p is not None and avg_hr and avg_hr > 0:
+        # HR-only or power-only-no-NP fallback: use avg power as NP proxy
+        ef = round(avg_p / avg_hr, 3)
+
+    # ---- Decoupling — only available when raw_data streams exist --------
+    # The advanced_metrics module handles computation from streams; we just
+    # pick up the summary if the caller already stashed it on the activity.
+    decoupling_pct: float | None = None
+    if isinstance(actual_activity.raw_data, dict):
+        stashed = actual_activity.raw_data.get("decoupling_pct")
+        if isinstance(stashed, (int, float)):
+            decoupling_pct = float(stashed)
+
+    # ---- Grade ----------------------------------------------------------
+    if phase in _ABSOLUTE_TSS_BANDS:
+        grade: Grade = _absolute_grade(actual_tss, phase)
+    else:
+        grade = _grade_from_pairs(duration_pair, tss_pair)
+
+    return RideCompliance(
+        grade=grade,
+        duration=duration_pair,
+        tss=tss_pair,
+        intensity_factor=if_pair,
+        variability_index=vi,
+        ef=ef,
+        decoupling_pct=decoupling_pct,
+        zone_match_pct=None,  # reserved for stream-based analysis
+        phase=phase,
+        session_type=session_type,
+        template_id=target_template.id,
+    )
+
+
+# ======================================================================
+#  Serialization — for sticking into the snapshot dict
+# ======================================================================
+
+def compliance_pair_to_dict(p: CompliancePair) -> dict:
+    return {
+        "target": p.target,
+        "actual": p.actual,
+        "delta_pct": p.delta_pct,
+        "band": p.band,
+    }
+
+
+def ride_compliance_to_dict(rc: RideCompliance) -> dict:
+    return {
+        "grade": rc.grade,
+        "duration": compliance_pair_to_dict(rc.duration),
+        "tss": compliance_pair_to_dict(rc.tss),
+        "intensity_factor": (
+            compliance_pair_to_dict(rc.intensity_factor) if rc.intensity_factor else None
+        ),
+        "variability_index": rc.variability_index,
+        "ef": rc.ef,
+        "decoupling_pct": rc.decoupling_pct,
+        "zone_match_pct": rc.zone_match_pct,
+        "phase": rc.phase,
+        "session_type": rc.session_type,
+        "template_id": rc.template_id,
+    }
