@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { format, subDays } from 'date-fns'
-import { Heart, Moon, Zap, Waves, Activity, ArrowUpRight } from 'lucide-react'
+import { Heart, Moon, Zap, Waves, Activity, ArrowUpRight, Gauge, Wind, Mountain } from 'lucide-react'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { DailyMetric } from '../../api/dashboard'
+import { efficiencyFactorSeries, movingAverage } from '../../utils/advanced-metrics'
+import Sparkline from './Sparkline'
 import IntradayModal, { type IntradayMetric } from './IntradayModal'
 
 type Range = 14 | 30 | 90
@@ -569,6 +572,9 @@ export default function BiometricsDetail() {
         </div>
       )}
 
+      {/* Advanced ride-science tiles — EF trend + decoupling + durability */}
+      {!isLoading && !isError && <AdvancedMetricsStrip range={range} />}
+
       <IntradayModal
         open={openIso != null}
         onClose={() => setOpenIso(null)}
@@ -576,5 +582,176 @@ export default function BiometricsDetail() {
         initialMetric={openMetric}
       />
     </section>
+  )
+}
+
+// ─── Advanced metrics strip ──────────────────────────────────────────────────
+
+interface AdvTileProps {
+  icon: React.ReactNode
+  label: string
+  value: string | null
+  unit?: string
+  copy: string
+  copyMuted?: string
+  color: string
+  trendValues?: Array<number | null>
+  eyebrow?: string
+  eyebrowColor?: string
+}
+
+function AdvancedTile({
+  icon, label, value, unit, copy, copyMuted, color, trendValues, eyebrow, eyebrowColor,
+}: AdvTileProps) {
+  const hasTrend = trendValues && trendValues.some((v) => v != null)
+  return (
+    <div
+      className="paper-grain relative rounded-[16px] p-4 sm:p-5 flex flex-col gap-3 min-w-0"
+      style={{
+        backgroundColor: 'var(--color-paper-2)',
+        border: '1px solid var(--color-rule)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span style={{ color }} className="opacity-80">{icon}</span>
+          <span className="eyebrow truncate">{label}</span>
+        </div>
+        {eyebrow && (
+          <span className="eyebrow whitespace-nowrap" style={{ color: eyebrowColor ?? color }}>
+            {eyebrow}
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex items-baseline gap-1.5 min-w-0">
+          <span
+            className="num-display leading-none"
+            style={{ fontSize: 32, color: value != null ? 'var(--color-ink)' : 'var(--color-muted)' }}
+          >
+            {value ?? '—'}
+          </span>
+          {value != null && unit && (
+            <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
+              {unit}
+            </span>
+          )}
+        </div>
+        {hasTrend && (
+          <div style={{ color }} className="flex-shrink-0">
+            <Sparkline values={trendValues} width={72} height={28} stroke={color} fill={color + '18'} />
+          </div>
+        )}
+      </div>
+
+      <p className="text-[11px] leading-snug" style={{ color: 'var(--color-ink-2)' }}>
+        {copy}
+        {copyMuted && (
+          <span className="block mt-0.5 num-mono text-[10px]" style={{ color: 'var(--color-muted)' }}>
+            {copyMuted}
+          </span>
+        )}
+      </p>
+    </div>
+  )
+}
+
+function AdvancedMetricsStrip({ range }: { range: Range }) {
+  const today = useMemo(() => new Date(), [])
+  const start = useMemo(() => subDays(today, range), [today, range])
+  const { data: activitiesData, isLoading } = useActivitiesRange(start, today)
+  const activities = activitiesData?.activities ?? []
+
+  const efPoints = useMemo(() => efficiencyFactorSeries(activities), [activities])
+  const efMa = useMemo(() => movingAverage(efPoints, 28), [efPoints])
+
+  // Build 14-slot EF trend (most-recent 14 rides) for the sparkline
+  const efTrend = useMemo(() => {
+    const tail = efPoints.slice(-14)
+    return tail.map((p) => p.ef)
+  }, [efPoints])
+
+  // Current vs 28d avg for eyebrow delta
+  const efLatest = efPoints.length > 0 ? efPoints[efPoints.length - 1].ef : null
+  const efAvg = efMa.length > 0 ? efMa[efMa.length - 1].value : null
+  const efDelta = efLatest != null && efAvg != null && efAvg !== 0
+    ? ((efLatest - efAvg) / efAvg) * 100
+    : null
+
+  const efEyebrow = efDelta != null
+    ? `${efDelta >= 0 ? '+' : ''}${efDelta.toFixed(1)}% vs 28d`
+    : undefined
+  const efEyebrowColor = efDelta == null
+    ? 'var(--color-muted)'
+    : efDelta >= 0 ? 'var(--color-forest-2)' : 'var(--color-amber-2)'
+
+  // Decoupling + durability require power/HR sample streams that the current
+  // /activities payload doesn't carry — the coach backend computes these via
+  // advanced_metrics.compute_activity_metrics(), but there's no exposed client
+  // endpoint yet. We surface the tiles now with a clear placeholder so the
+  // shape is in place for when a /coach/metrics-trend route ships.
+  const hasCyclingRides = activities.some((a) => a.sport === 'cycling')
+
+  const placeholderCopy = hasCyclingRides
+    ? 'Requires per-ride power + heart-rate samples — a backend trend endpoint will light this up.'
+    : 'Ride cycling with a power meter and heart-rate strap to unlock this.'
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-3">
+        {[0,1,2].map((i) => (
+          <div key={i} className="h-[140px] rounded-[16px] animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
+          Chapter II · Advanced ride science
+        </span>
+        <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
+          {activities.filter((a) => a.sport === 'cycling').length} cycling rides · {range}d
+        </span>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <AdvancedTile
+          icon={<Wind size={14} strokeWidth={1.8} />}
+          label="Efficiency Factor"
+          value={efLatest != null ? efLatest.toFixed(2) : null}
+          unit="W/bpm"
+          copy="NP divided by average heart rate — rising week-over-week = deeper aerobic base."
+          copyMuted={efPoints.length > 0 ? `${efPoints.length} rides in window` : undefined}
+          color="#1c4433"
+          trendValues={efTrend}
+          eyebrow={efEyebrow}
+          eyebrowColor={efEyebrowColor}
+        />
+        <AdvancedTile
+          icon={<Gauge size={14} strokeWidth={1.8} />}
+          label="Aerobic decoupling"
+          value={null}
+          unit="%"
+          copy="HR drift second-half vs first-half at steady power. Friel's most important aerobic-base metric."
+          copyMuted={placeholderCopy}
+          color="#b04a0c"
+          eyebrow="sample-stream only"
+          eyebrowColor="var(--color-muted)"
+        />
+        <AdvancedTile
+          icon={<Mountain size={14} strokeWidth={1.8} />}
+          label="Durability index"
+          value={null}
+          copy="Late-ride power as a fraction of fresh power after ~1000 kJ. The 2025 differentiator in endurance performance."
+          copyMuted={placeholderCopy}
+          color="#143555"
+          eyebrow="sample-stream only"
+          eyebrowColor="var(--color-muted)"
+        />
+      </div>
+    </div>
   )
 }
