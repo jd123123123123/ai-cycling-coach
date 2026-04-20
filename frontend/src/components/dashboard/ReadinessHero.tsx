@@ -1,169 +1,22 @@
 import { Link } from 'react-router-dom'
 import { format, subDays } from 'date-fns'
-import { ArrowUpRight, Heart, Activity, Moon, Zap, Waves } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useGarminStatus } from '../../hooks/useGarminStatus'
 import type { DailyMetric } from '../../api/dashboard'
-import Sparkline from './Sparkline'
 import CoachBrief from './CoachBrief'
 import {
   TIER_META,
-  classifyMetric,
   computeReadiness,
   latestWithData,
-  normalizeHrv,
   readinessTier,
-  seriesForSparkline,
-  trendDelta,
 } from '../../utils/metrics'
-import type { MetricZone } from '../../utils/metrics'
-import { hrvBaselineBand } from '../../utils/advanced-metrics'
-import type { HrvBandPoint } from '../../utils/advanced-metrics'
 
-const ZONE_SWATCH: Record<MetricZone, string> = {
-  good: 'var(--color-forest-2)',
-  fair: 'var(--color-amber-2)',
-  poor: 'var(--color-alert)',
-  unknown: 'var(--color-muted)',
-}
-
-const ZONE_LABEL: Record<MetricZone, string> = {
-  good: 'on point',
-  fair: 'watch',
-  poor: 'below base',
-  unknown: '—',
-}
-
-// ─── DeltaChip ───────────────────────────────────────────────────────────────
-
-function DeltaChip({
-  pct,
-  unit = '%',
-  invertSentiment = false,
-}: {
-  pct: number | null
-  unit?: string
-  invertSentiment?: boolean
-}) {
-  if (pct == null || Number.isNaN(pct)) {
-    return <span className="eyebrow opacity-60">no trend</span>
-  }
-  const isUp = pct > 0.5
-  const isDown = pct < -0.5
-  const isGood = invertSentiment ? isDown : isUp
-  const isBad = invertSentiment ? isUp : isDown
-  const color = isGood
-    ? 'var(--color-forest-2)'
-    : isBad
-    ? 'var(--color-alert)'
-    : 'var(--color-muted)'
-  const arrow = isUp ? '▲' : isDown ? '▼' : '•'
-  const abs = Math.abs(pct)
-  const formatted = abs >= 10 ? abs.toFixed(0) : abs.toFixed(1)
-  return (
-    <span
-      className="num-mono text-[11px] font-medium"
-      style={{ color }}
-      aria-label={`Trend ${isUp ? 'up' : isDown ? 'down' : 'flat'} ${formatted}${unit}`}
-    >
-      {arrow} {formatted}
-      {unit}
-    </span>
-  )
-}
-
-// ─── KPI card ────────────────────────────────────────────────────────────────
-
-interface KpiProps {
-  icon: React.ReactNode
-  label: string
-  value: number | null
-  unit?: string
-  zone: MetricZone
-  sparkValues: Array<number | null>
-  delta: ReturnType<typeof trendDelta>
-  invertDelta?: boolean
-  /** Optional HRV band data — shown only on HRV tile */
-  bandValues?: HrvBandPoint[]
-  /** Band status microcopy shown above the value — only rendered if non-null */
-  bandStatus?: string
-  bandStatusColor?: string
-}
-
-function KpiCard({
-  icon, label, value, unit, zone, sparkValues, delta, invertDelta,
-  bandValues, bandStatus, bandStatusColor,
-}: KpiProps) {
-  const swatch = ZONE_SWATCH[zone]
-  const zoneLabel = ZONE_LABEL[zone]
-  return (
-    <div
-      className="paper-grain relative flex flex-col gap-3 rounded-[14px] p-4 min-w-0 transition-colors"
-      style={{
-        backgroundColor: 'var(--color-paper-2)',
-        border: '1px solid var(--color-rule)',
-      }}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span style={{ color: swatch }} className="opacity-80">{icon}</span>
-          <span className="eyebrow truncate">{label}</span>
-        </div>
-        <span
-          className="eyebrow whitespace-nowrap"
-          style={{ color: swatch, opacity: value == null ? 0.5 : 1 }}
-        >
-          {zoneLabel}
-        </span>
-      </div>
-
-      {/* HRV baseline band status microcopy */}
-      {bandStatus && (
-        <span
-          className="num-mono text-[10px] -mt-1"
-          style={{ color: bandStatusColor ?? 'var(--color-muted)' }}
-        >
-          {bandStatus}
-        </span>
-      )}
-
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex items-baseline gap-1.5 min-w-0">
-          <span
-            className="num-display text-[44px] leading-none"
-            style={{ color: 'var(--color-ink)' }}
-          >
-            {value != null ? value : '—'}
-          </span>
-          {value != null && unit && (
-            <span className="eyebrow" style={{ letterSpacing: '0.1em' }}>
-              {unit}
-            </span>
-          )}
-        </div>
-        <div style={{ color: swatch }} className="flex-shrink-0">
-          <Sparkline
-            values={sparkValues}
-            width={72}
-            height={24}
-            stroke={swatch}
-            fill={swatch + '14'}
-            bandValues={bandValues?.map((b) => ({ lower: b.lower, upper: b.upper }))}
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <DeltaChip pct={delta?.pct ?? null} invertSentiment={invertDelta} />
-        {delta && (
-          <span className="eyebrow opacity-70">
-            7d · {delta.baseline.toFixed(delta.baseline >= 100 ? 0 : 1)}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
+// Phase 5.1: DeltaChip + KpiCard helpers previously lived here to power an
+// in-hero KPI strip. They were moved out (not just hidden) because the
+// dashboard now surfaces raw KPIs via KpiStripCompact in fold 2 — the hero
+// renders the readiness dial only, keeping fold 1 focused on the prescribed
+// workout. This is the "one call-to-action per fold" rule.
 
 // ─── ReadinessDial ───────────────────────────────────────────────────────────
 
@@ -470,119 +323,11 @@ export default function ReadinessHero() {
         </div>
       </div>
 
-      {/* KPI STRIP */}
-      <KpiStrip metrics={metrics} />
-
-      {/* COACH BRIEF — live causal AI brief (Phase 5-02) */}
+      {/* COACH BRIEF — live causal AI brief (Phase 5.1 prescriptive workout).
+         Phase 5.1 note: the old in-hero KpiStrip was moved to KpiStripCompact
+         (fold 2) to honor the iPhone-hierarchy rule: fold 1 has ONE call-to-action. */}
       <CoachBrief />
     </section>
   )
 }
 
-// ─── KPI strip — 5 metrics with sparklines ───────────────────────────────────
-
-function KpiStrip({ metrics }: { metrics: DailyMetric[] }) {
-  // Build ordered windows for each KPI. Metrics are ASC by date.
-  const sleepSeries = seriesForSparkline(metrics, 'sleep_score')
-  const hrvSeries = metrics.map((m) => normalizeHrv(m.hrv_status))
-  const batterySeries = seriesForSparkline(metrics, 'body_battery')
-  const stressSeries = seriesForSparkline(metrics, 'stress_level')
-  const restingHrSeries = seriesForSparkline(metrics, 'resting_hr')
-
-  // Adjusted metrics for HRV (normalized) — rebuild a tiny array for trendDelta
-  const sleepDelta = trendDelta(metrics, 'sleep_score')
-  const batteryDelta = trendDelta(metrics, 'body_battery')
-  const stressDelta = trendDelta(metrics, 'stress_level')
-  const restingHrDelta = trendDelta(metrics, 'resting_hr')
-  // HRV delta via synthetic array (normalized values)
-  const hrvVals = hrvSeries.filter((v): v is number => v != null)
-  const hrvDelta = (() => {
-    if (hrvVals.length < 2) return null
-    const current = hrvVals[hrvVals.length - 1]
-    const prior = hrvVals.slice(0, -1)
-    const baseline = prior.reduce((s, v) => s + v, 0) / prior.length
-    if (baseline === 0) return null
-    const delta = current - baseline
-    const pct = (delta / baseline) * 100
-    return { current, delta, pct, baseline }
-  })()
-
-  const latestSleep = sleepSeries.findLast?.((v) => v != null) ?? null
-  const latestHrv = hrvSeries.findLast?.((v) => v != null) ?? null
-  const latestBattery = batterySeries.findLast?.((v) => v != null) ?? null
-  const latestStress = stressSeries.findLast?.((v) => v != null) ?? null
-  const latestRestingHr = restingHrSeries.findLast?.((v) => v != null) ?? null
-
-  // HRV baseline band (Whoop-style rolling mean ± 1 std-dev)
-  const hrvBand = hrvBaselineBand(hrvSeries, 7)
-  const latestBand = hrvBand[hrvBand.length - 1]
-
-  // Derive band status microcopy
-  const hrvBandStatus = (() => {
-    if (latestHrv == null || latestBand?.lower == null || latestBand?.upper == null) return null
-    const lower = Math.round(latestBand.lower)
-    const upper = Math.round(latestBand.upper)
-    if (latestHrv >= lower && latestHrv <= upper) {
-      return { text: `In range · ${lower}–${upper}`, color: 'var(--color-forest-2)' }
-    }
-    if (latestHrv < lower) {
-      return { text: 'Below base', color: 'var(--color-alert)' }
-    }
-    return { text: 'Above base', color: 'var(--color-forest-2)' }
-  })()
-
-  return (
-    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-      <KpiCard
-        icon={<Moon size={14} strokeWidth={1.8} />}
-        label="Sleep"
-        value={latestSleep != null ? Math.round(latestSleep) : null}
-        unit="/ 100"
-        zone={classifyMetric(latestSleep, 80, 60, true)}
-        sparkValues={sleepSeries}
-        delta={sleepDelta}
-      />
-      <KpiCard
-        icon={<Heart size={14} strokeWidth={1.8} />}
-        label="HRV"
-        value={latestHrv != null ? Math.round(latestHrv) : null}
-        unit="idx"
-        zone={classifyMetric(latestHrv, 60, 40, true)}
-        sparkValues={hrvSeries}
-        delta={hrvDelta}
-        bandValues={hrvBand}
-        bandStatus={hrvBandStatus?.text}
-        bandStatusColor={hrvBandStatus?.color}
-      />
-      <KpiCard
-        icon={<Zap size={14} strokeWidth={1.8} />}
-        label="Body Battery"
-        value={latestBattery != null ? Math.round(latestBattery) : null}
-        unit="/ 100"
-        zone={classifyMetric(latestBattery, 60, 30, true)}
-        sparkValues={batterySeries}
-        delta={batteryDelta}
-      />
-      <KpiCard
-        icon={<Waves size={14} strokeWidth={1.8} />}
-        label="Stress"
-        value={latestStress != null ? Math.round(latestStress) : null}
-        unit="avg"
-        zone={classifyMetric(latestStress, 30, 60, false)}
-        sparkValues={stressSeries}
-        delta={stressDelta}
-        invertDelta
-      />
-      <KpiCard
-        icon={<Activity size={14} strokeWidth={1.8} />}
-        label="Resting HR"
-        value={latestRestingHr != null ? Math.round(latestRestingHr) : null}
-        unit="bpm"
-        zone={classifyMetric(latestRestingHr, 55, 70, false)}
-        sparkValues={restingHrSeries}
-        delta={restingHrDelta}
-        invertDelta
-      />
-    </div>
-  )
-}
