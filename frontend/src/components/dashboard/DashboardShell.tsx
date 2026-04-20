@@ -4,6 +4,7 @@ import { LogOut, User as UserIcon, MessageSquare } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import CoachChat from './CoachChat'
 import LanguageToggle from './LanguageToggle'
+import SyncButton from './SyncButton'
 
 interface DashboardShellProps {
   /** Fold 1 — the headline: CoachBrief + PrescribedWorkoutCard dominates. */
@@ -62,8 +63,8 @@ export default function DashboardShell({
             </span>
           </Link>
           <div className="flex items-center gap-2">
-            {/* Masthead action order (left → right): SyncButton · LanguageToggle · Ask coach.
-               SyncButton is inserted in the same task as LanguageToggle below. */}
+            {/* Masthead action order (left → right): SyncButton · LanguageToggle · Ask coach. */}
+            <SyncButton />
             <LanguageToggle />
             <button
               onClick={() => setChatOpen(true)}
