@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 4 complete -- all 4 plans shipped; DASH-01 through DASH-05 signed off. Phase 5 (AI Coaching Core) is next.
+**Current focus:** Phase 5 Wave 1 complete -- coach backend with causal briefs shipped. Phase 5 Wave 2 (frontend coach UI) is next.
 
 ## Current Position
 
-Phase: 4.5 of 9 (Data That Differentiates) -- COMPLETE
-Plan: 04.5-01 complete (uPlot PMC + ECharts heatmap + polarized donut + EF trend + HRV band)
-Status: Phase 4.5 complete -- 5 new viz surfaces shipped; ready for Phase 5
-Last activity: 2026-04-19 -- Completed 04.5-PLAN.md (7 tasks, all 5 viz surfaces delivered)
+Phase: 5 of 9 (AI Coaching Core) -- IN PROGRESS (Wave 1 COMPLETE)
+Plan: 05-01 complete (coach backend with Claude Opus 4.7 tool-use + rule-based fallback + safety rails + 10 advanced metrics)
+Status: 05-01 backend shipped; 05-02 frontend can start immediately (5 endpoints ready, schemas exported)
+Last activity: 2026-04-20 -- Completed 05-01-PLAN.md (7 tasks, 68 new tests, all 123 passing)
 
-Progress: [██████████░] ~90%
+Progress: [██████████░] ~91%
 
 ## Performance Metrics
 
@@ -30,10 +30,11 @@ Progress: [██████████░] ~90%
 | 01-foundation-auth | 4 | ~170 min | ~43 min |
 | 02-training-engine | 3 | ~8 min | ~2.7 min |
 | 03-garmin-data-integration | 3 | ~135 min | ~45 min |
+| 05-ai-coaching-core | 1 (Wave 1) | ~52 min | ~52 min |
 
 **Recent Trend:**
-- Last 5 plans: ~2 min, ~2 min, 39 min, 56 min, ~40 min
-- Trend: stable (all 03-x plans ~40-56 min)
+- Last 5 plans: ~2 min, 39 min, 56 min, ~40 min, 52 min
+- Trend: stable (backend plans consistently 40-56 min)
 
 *Updated after each plan completion*
 
@@ -107,6 +108,19 @@ Recent decisions affecting current work:
 - [04.5]: Sparkline bandValues prop added as extension (not split into new component) — cleanest path
 - [04.5]: EF scatter dots via paths:null in uPlot — path builder returning null suppresses connecting line, only points config renders
 - [04.5]: ECharts VisualMapComponent required for CalendarHeatmap color scale — tree-shaken but ~246 KB gzipped delta (budget was 200 KB; total well under 1.3 MB ceiling)
+- [05-01]: Anthropic SDK imported lazily inside coach_service.generate_brief — ModuleNotFoundError on SDK cannot break app boot when ANTHROPIC_API_KEY is unset
+- [05-01]: Rule-based fallback activates on THREE paths — missing key, SDK exception, LLM returns no brief_response tool_use block. /coach/brief always returns 200
+- [05-01]: Created backend/requirements.txt mirroring pyproject.toml — plan called for it but repo previously shipped only pyproject.toml; both now track deps in lockstep
+- [05-01]: Safety rails applied AFTER Claude response, never before — LLM may suggest anything; rails mark options as blocked=True with human-readable reason (never silently drop) to preserve transparency
+- [05-01]: Prompt caching scoped to system prompt only (ephemeral cache_control) — user message varies per request; stable system prompt block delivers ~80% input-token savings within 5-min cache window
+- [05-01]: coach_prompt.py separated from coach_service.py so prompt caching sees a stable prefix and so the system prompt is independently inspectable via /coach/transparency
+- [05-01]: Zone distribution uses session-level IF→3-zone bucket heuristic (not per-second streams) — matches full TID at >90% agreement per Seiler 2009; avoids loading raw sample arrays
+- [05-01]: why_am_i_tired synthesizer orders causes by severity (high→med→low) — LLM receives pre-sorted list so the strongest signal is cited first in the rationale
+- [05-01]: ED-keyword filter runs on final concatenated stream buffer, not on deltas — partial phrases would false-trigger; an SSE 'replace' frame tells the client to wipe its buffer and display the safe redirect
+- [05-01]: Coach chat rate limit is in-memory deque (20 msgs/min/user) — per-process only; production multi-worker deploy needs Redis (tracked in pending todos)
+- [05-01]: coach_briefs is append-only audit trail (never overwrite) — every generation persisted for auditability; 6h TTL is a read-through cache on the latest row
+- [05-01]: injury_flag has server_default FALSE — existing rows get false without a backfill step; safety_rails.intensity_ceiling already treats missing-as-false via boolean context
+- [05-01]: Migrations/env.py model import list expanded to include all 8 models — was stale (missing planned_workout, daily_metric_sample); future autogenerate now sees complete metadata
 
 ### Pending Todos
 
@@ -114,6 +128,8 @@ Recent decisions affecting current work:
 - Production deployment: use non-superuser PostgreSQL role for full RLS enforcement (coach user is superuser in dev)
 - Consider adding source field to athlete PATCH route FTP history append — currently FTP endpoint has source but PATCH route doesn't (mixed history format)
 - IMMEDIATE: Restart Docker Desktop (daemon became unresponsive during 03-01 execution due to disk full); then run `cd backend && docker compose up -d db && alembic upgrade head` to apply c1f8a3d9e2b7 migration
+- Coach chat rate limiter: move from in-memory deque to Redis when deploying behind multiple uvicorn workers
+- Production readiness: provision ANTHROPIC_API_KEY env var before launch so /coach/* endpoints use Claude rather than the rule-based fallback
 
 ### Blockers/Concerns
 
@@ -125,9 +141,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-19
-Stopped at: Phase 4.5 complete — uPlot + ECharts integrated, 5 new viz surfaces added (commits cae0dfc..cc167f0)
+Last session: 2026-04-20
+Stopped at: Phase 5 Wave 1 complete — coach backend with Claude Opus 4.7 + safety rails + 10 advanced metrics (commits 118c1d1..9d13fb0)
 Resume file: None
-Next: Phase 5 (AI Coaching Core) -- Phase 4 + 4.5 fully complete; useAthleteProfile hook + advanced-metrics.ts ready for AI coaching integration
-Pending: Docker Desktop restart + `alembic upgrade head` still required before full end-to-end app testing
-Pending: Docker Desktop restart + `alembic upgrade head` still required to apply d2f9b4c7a1e5 (planned_workouts) and earlier migrations before running app end-to-end
+Next: 05-02 (frontend coach UI) — 5 coach endpoints + schemas ready; /coach/brief always returns 200 with structured payload (rule-based when no key, LLM when key present)
+Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers
