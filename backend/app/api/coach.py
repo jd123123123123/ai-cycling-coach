@@ -1,0 +1,202 @@
+"""Coach API endpoints — brief / refresh / chat / why / transparency.
+
+All routes are RLS-protected via get_db_for_user.
+
+When ANTHROPIC_API_KEY is absent:
+    - /coach/brief and /coach/brief/refresh still return structured briefs
+      (rule-based fallback baked into coach_service.generate_brief).
+    - /coach/chat returns 503 — chat genuinely needs the LLM.
+    - /coach/why and /coach/transparency work regardless.
+"""
+from __future__ import annotations
+
+import time
+from collections import defaultdict, deque
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.dependencies import get_current_active_user, get_db_for_user
+from app.models.coach_brief import CoachBrief
+from app.models.user import User
+from app.schemas.coach import (
+    BriefOption,
+    BriefRead,
+    ChatRequest,
+    OutlookEntry,
+    TransparencyRead,
+    WhyTiredRead,
+)
+from app.services import coach_service
+from app.services.advanced_metrics import why_am_i_tired
+from app.services.coach_prompt import SYSTEM_PROMPT
+
+router = APIRouter(prefix="/coach", tags=["coach"])
+
+
+# ----------------------------------------------------------------------
+# Simple in-memory rate limiter — 20 msgs/min/user for /coach/chat
+# NOTE: this is per-process. Production behind multiple workers needs Redis;
+# acceptable for the single-uvicorn-worker phase the app is in today.
+# ----------------------------------------------------------------------
+_CHAT_RATE_WINDOW_SECONDS = 60
+_CHAT_RATE_MAX_REQUESTS = 20
+_chat_request_log: dict[int, deque[float]] = defaultdict(lambda: deque(maxlen=_CHAT_RATE_MAX_REQUESTS))
+
+
+def _check_chat_rate_limit(user_id: int) -> None:
+    now = time.monotonic()
+    log = _chat_request_log[user_id]
+    # Drop entries older than the window
+    while log and log[0] < now - _CHAT_RATE_WINDOW_SECONDS:
+        log.popleft()
+    if len(log) >= _CHAT_RATE_MAX_REQUESTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Chat rate limit exceeded (20 msgs/min).",
+        )
+    log.append(now)
+
+
+def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
+    return BriefRead(
+        id=brief.id,
+        generated_at=brief.generated_at,
+        verdict=brief.verdict,
+        rationale=brief.rationale,
+        evidence=brief.evidence,
+        options=[BriefOption(**o) for o in (brief.options or [])],
+        outlook_7d=[OutlookEntry(**e) for e in (brief.outlook_7d or [])] if brief.outlook_7d else None,
+        frameworks_cited=list(brief.frameworks_cited or []),
+        model_used=brief.model_used,
+        from_cache=from_cache,
+    )
+
+
+@router.get("/brief", response_model=BriefRead)
+async def get_brief(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> BriefRead:
+    """Return the latest cached brief if < 6h old; otherwise regenerate and cache.
+
+    Works without ANTHROPIC_API_KEY — falls back to a rule-based brief so
+    the dashboard can always render something meaningful.
+    """
+    # Was a fresh row present before this call? If yes, from_cache=True.
+    # We use a transaction-safe approach: check cache → generate if miss.
+    # get_or_generate_brief handles both paths; we derive from_cache by
+    # comparing the returned brief's generated_at to "now".
+    from datetime import datetime, timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
+
+    cache_check = await db.execute(
+        select(CoachBrief)
+        .where(CoachBrief.user_id == current_user.id, CoachBrief.generated_at >= cutoff)
+        .order_by(CoachBrief.generated_at.desc())
+        .limit(1)
+    )
+    cached = cache_check.scalar_one_or_none()
+    from_cache = cached is not None
+
+    brief = await coach_service.get_or_generate_brief(db, current_user.id, force=False)
+    return _brief_to_read(brief, from_cache=from_cache)
+
+
+@router.post("/brief/refresh", response_model=BriefRead)
+async def refresh_brief(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> BriefRead:
+    """Force-regenerate the brief (cache-bust). Always returns from_cache=False."""
+    brief = await coach_service.get_or_generate_brief(db, current_user.id, force=True)
+    return _brief_to_read(brief, from_cache=False)
+
+
+@router.post("/chat")
+async def chat(
+    req: ChatRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> StreamingResponse:
+    """SSE-stream chat with the coach. 503 if ANTHROPIC_API_KEY is not set.
+
+    Rate limit: 20 messages per minute per user.
+    Safety: every response passes through validate_chat_response; ED-adjacent
+    content is replaced wholesale with a canned safe redirect frame.
+    """
+    if not settings.ANTHROPIC_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI chat unavailable — set ANTHROPIC_API_KEY to enable this endpoint.",
+        )
+
+    _check_chat_rate_limit(current_user.id)
+
+    messages_payload = [m.model_dump() for m in req.messages]
+
+    async def event_stream():
+        async for chunk in coach_service.coach_chat_stream(
+            db, current_user.id, messages_payload
+        ):
+            yield chunk
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # disable proxy buffering for SSE
+        },
+    )
+
+
+@router.get("/why", response_model=WhyTiredRead)
+async def why_tired(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> WhyTiredRead:
+    """Causal 'why am I tired?' synthesizer.
+
+    Returns ordered list of suspected causes (high → low severity) with
+    evidence strings citing the athlete's own data. Also returns the full
+    snapshot used so the frontend can render "show me the data" panels.
+    """
+    snapshot = await coach_service.build_snapshot(db, current_user.id)
+    causes = await why_am_i_tired(db, current_user.id)
+    return WhyTiredRead(causes=causes["causes"], snapshot=snapshot)
+
+
+@router.get("/transparency", response_model=TransparencyRead)
+async def transparency(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> TransparencyRead:
+    """Transparency endpoint — returns the full snapshot + system prompt.
+
+    Closes pain-point #5 from .planning/research/athlete-pain-points.md:
+    no mainstream AI coach lets athletes see the prompt + data behind a
+    recommendation. We expose both.
+    """
+    snapshot = await coach_service.build_snapshot(db, current_user.id)
+
+    # Find the most-recent brief (if any) so the client can reference it
+    latest = await db.execute(
+        select(CoachBrief)
+        .where(CoachBrief.user_id == current_user.id)
+        .order_by(CoachBrief.generated_at.desc())
+        .limit(1)
+    )
+    last = latest.scalar_one_or_none()
+
+    return TransparencyRead(
+        snapshot=snapshot,
+        system_prompt=SYSTEM_PROMPT,
+        model=settings.COACH_MODEL if settings.ANTHROPIC_API_KEY else "rule-based-fallback",
+        last_brief_id=last.id if last else None,
+        last_generated_at=last.generated_at if last else None,
+    )
