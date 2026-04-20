@@ -9,6 +9,8 @@ import type { CoachBriefResponse, OutlookEntry } from '../../api/coach'
 import WhyAmITired from './WhyAmITired'
 import TransparencyDrawer from './TransparencyDrawer'
 import PrescribedWorkoutCard from './PrescribedWorkoutCard'
+import { useLanguage } from '../../contexts/LanguageContext'
+import { translateCoach } from '../../utils/coachLanguage'
 
 function isRuleBased(model: string): boolean {
   return model === 'rule-based-fallback'
@@ -275,6 +277,8 @@ function BriefBody({
   onOpenTransparency: () => void
 }) {
   const ruleBased = isRuleBased(brief.model_used)
+  const { language } = useLanguage()
+  const simpleMode = language === 'simple'
 
   const evidenceChips = useMemo(
     () => buildEvidenceChips(brief.evidence || {}),
@@ -368,8 +372,10 @@ function BriefBody({
         {brief.rationale}
       </p>
 
-      {/* Evidence chips — single compact row */}
-      {evidenceChips.length > 0 && (
+      {/* Evidence chips — single compact row. Hidden in simple mode because
+         these chips ARE the jargon (TSB/CTL/HRV numbers). The same signals
+         drive the simple-mode rationale, phrased in plain English above. */}
+      {!simpleMode && evidenceChips.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap">{evidenceChips}</div>
       )}
 
@@ -390,13 +396,16 @@ function BriefBody({
         </div>
       )}
 
-      {/* Outlook — secondary, compact 60px */}
+      {/* Outlook — secondary, compact 60px. The meta caption uses TSS in
+         technical mode and a plain-English summary in simple mode. */}
       {brief.outlook_7d && brief.outlook_7d.length > 0 && (
         <div className="flex flex-col gap-1.5 pt-3" style={{ borderTop: '1px solid var(--color-rule)' }}>
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="eyebrow">7-day outlook</span>
+            <span className="eyebrow">{simpleMode ? 'Next 7 days' : '7-day outlook'}</span>
             <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
-              {brief.outlook_7d.reduce((s, e) => s + (e.suggested_tss ?? 0), 0).toFixed(0)} TSS total
+              {simpleMode
+                ? `${brief.outlook_7d.length} days ahead`
+                : `${brief.outlook_7d.reduce((s, e) => s + (e.suggested_tss ?? 0), 0).toFixed(0)} TSS total`}
             </span>
           </div>
           <OutlookChart outlook={brief.outlook_7d} />
@@ -413,7 +422,9 @@ function BriefBody({
             className="num-mono text-[11px] leading-snug dashboard-break-words"
             style={{ color: 'var(--color-muted)', maxWidth: '52ch' }}
           >
-            Grounded in: {brief.frameworks_cited.join(' · ')}
+            {simpleMode
+              ? translateCoach('brief.frameworksHeading', 'simple')
+              : `${translateCoach('brief.frameworksHeading', 'technical')}: ${brief.frameworks_cited.join(' · ')}`}
           </span>
         )}
         <div className="flex items-center gap-3 flex-wrap">

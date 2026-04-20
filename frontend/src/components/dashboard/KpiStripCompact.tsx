@@ -4,6 +4,8 @@ import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { usePMC } from '../../hooks/usePMC'
 import type { DailyMetric } from '../../api/dashboard'
+import { useLanguage } from '../../contexts/LanguageContext'
+import { translateCoach } from '../../utils/coachLanguage'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -18,6 +20,8 @@ interface KpiCell {
   tone: DeltaTone
   higherIsBetter?: boolean
   intradayKey?: string
+  /** Tooltip (title attribute) shown on hover; language-aware. */
+  tooltip?: string
 }
 
 // ─── Math helpers ───────────────────────────────────────────────────────────
@@ -86,6 +90,7 @@ function KpiCellView({ cell }: { cell: KpiCell }) {
     <div
       className="flex flex-col gap-1 min-w-0 px-3 py-3"
       style={{ borderRight: '1px solid var(--color-rule)' }}
+      title={cell.tooltip}
     >
       <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
         {cell.label}
@@ -131,6 +136,7 @@ export default function KpiStripCompact() {
 
   const { data: metricsData, isLoading: metricsLoading } = useDailyMetrics(thirtyDaysAgo, today)
   const { data: pmcData, isLoading: pmcLoading } = usePMC(30)
+  const { language } = useLanguage()
 
   const cells = useMemo<KpiCell[]>(() => {
     const metrics = metricsData?.metrics ?? []
@@ -184,6 +190,12 @@ export default function KpiStripCompact() {
       ? ((rhr7d - rhr28d) / rhr28d) * 100
       : null
 
+    // Label shown in simple mode for TSB and CTL — these two are the most
+    // jargon-heavy. HRV/rHR stay (they're common abbreviations even non-
+    // athletes recognise), body battery + sleep are already plain.
+    const tsbLabel = language === 'simple' ? 'Freshness' : 'TSB'
+    const ctlLabel = language === 'simple' ? 'Fitness' : 'CTL'
+
     return [
       {
         key: 'hrv',
@@ -194,6 +206,7 @@ export default function KpiStripCompact() {
         tone: toneFromPct(hrvDelta, true),
         higherIsBetter: true,
         intradayKey: 'hrv',
+        tooltip: translateCoach('kpi.hrv.tooltip', language),
       },
       {
         key: 'body-batt',
@@ -203,6 +216,7 @@ export default function KpiStripCompact() {
         delta: fmtDelta(bbDelta),
         tone: toneFromPct(bbDelta, true),
         higherIsBetter: true,
+        tooltip: translateCoach('kpi.bodyBatt.tooltip', language),
       },
       {
         key: 'sleep',
@@ -212,10 +226,11 @@ export default function KpiStripCompact() {
         delta: fmtDelta(sleepDelta),
         tone: toneFromPct(sleepDelta, true),
         higherIsBetter: true,
+        tooltip: translateCoach('kpi.sleep.tooltip', language),
       },
       {
         key: 'tsb',
-        label: 'TSB',
+        label: tsbLabel,
         value: tsb !== null ? (tsb >= 0 ? `+${tsb.toFixed(0)}` : tsb.toFixed(0)) : null,
         unit: '',
         delta: fmtDelta(tsbDelta),
@@ -225,15 +240,17 @@ export default function KpiStripCompact() {
           : tsb < -10 ? 'warn'
           : tsb > 20 ? 'warn'
           : 'good',
+        tooltip: translateCoach('kpi.tsb.tooltip', language),
       },
       {
         key: 'ctl',
-        label: 'CTL',
+        label: ctlLabel,
         value: fmtNumber(ctl, 0),
         unit: '',
         delta: fmtDelta(ctlDelta),
         tone: toneFromPct(ctlDelta, true),
         higherIsBetter: true,
+        tooltip: translateCoach('kpi.ctl.tooltip', language),
       },
       {
         key: 'rhr',
@@ -245,9 +262,10 @@ export default function KpiStripCompact() {
         tone: toneFromPct(rhrDelta, false),
         higherIsBetter: false,
         intradayKey: 'resting_hr',
+        tooltip: translateCoach('kpi.rhr.tooltip', language),
       },
     ]
-  }, [metricsData, pmcData])
+  }, [metricsData, pmcData, language])
 
   const isLoading = metricsLoading || pmcLoading
 

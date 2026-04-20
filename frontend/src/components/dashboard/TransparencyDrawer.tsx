@@ -5,6 +5,8 @@ import { format } from 'date-fns'
 import { useTransparency } from '../../hooks/useWhyTired'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import type { BriefOption } from '../../api/coach'
+import { useLanguage } from '../../contexts/LanguageContext'
+import { translateCoach } from '../../utils/coachLanguage'
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -212,6 +214,7 @@ function CopyButton({ payload }: { payload: string }) {
 export default function TransparencyDrawer({ open, onClose }: Props) {
   const { data, isLoading, isError, refetch } = useTransparency(open)
   const { data: brief } = useCoachBrief()
+  const { language } = useLanguage()
 
   // Body scroll lock + escape
   useEffect(() => {
@@ -316,15 +319,16 @@ export default function TransparencyDrawer({ open, onClose }: Props) {
             </div>
           ) : (
             <>
-              {/* Meta intro */}
+              {/* Meta intro — one friendly line in simple mode; the full
+                 technical brief-statement in technical mode. The drawer
+                 CONTENT stays technical always; this line just resets
+                 expectations ("the nerd details") for simple-mode users. */}
               <div className="flex flex-col gap-2 pb-1">
                 <p
                   className="text-[13px] leading-relaxed dashboard-break-words"
                   style={{ color: 'var(--color-ink-2)' }}
                 >
-                  Every recommendation above is grounded in the data below. This is the
-                  exact snapshot and system prompt the coach used — you can audit it,
-                  copy it, or use it to challenge a recommendation.
+                  {translateCoach('transparency.intro', language)}
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <MetaPill label="Model" value={data.model} mono />

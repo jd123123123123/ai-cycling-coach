@@ -3,6 +3,38 @@ import { createPortal } from 'react-dom'
 import { X, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import { useWhyTired } from '../../hooks/useWhyTired'
 import type { CauseEntry } from '../../api/coach'
+import { useLanguage } from '../../contexts/LanguageContext'
+import { translateCoach } from '../../utils/coachLanguage'
+
+// Plain-English rewrites of the backend's technical `evidence` strings
+// (which contain "HRV", "TSB", "Z2", etc.). The backend label is the
+// discriminator — we match exact labels we know, and fall back to the
+// server-provided evidence for anything unexpected. This keeps simple
+// mode fully jargon-free even though /coach/why isn't language-aware.
+function simpleEvidenceFor(cause: CauseEntry): string {
+  switch (cause.label) {
+    case 'HRV suppressed':
+      return "Your body's showing signs of not fully recovering yet."
+    case 'Resting HR elevated':
+      return 'Your resting heart rate is a bit higher than normal.'
+    case 'Sleep debt accumulated':
+      return "You've been getting less sleep than your body wants."
+    case 'Overreach (TSB deep-negative)':
+      return "You've piled on a lot of training lately — your body is deep in the hole."
+    case 'Carrying productive fatigue':
+      return 'Normal tired-from-training feeling — nothing to worry about.'
+    case 'Grey-zone creep':
+      return 'Recent rides have drifted into the "too hard to be easy, too easy to be hard" zone.'
+    default:
+      // Unknown label — rewrite technical substrings to be safe
+      return cause.evidence
+        .replace(/HRV/g, 'recovery')
+        .replace(/TSB/g, 'fitness balance')
+        .replace(/CTL/g, 'fitness')
+        .replace(/ATL/g, 'fatigue')
+        .replace(/Z\d/g, 'pace zone')
+  }
+}
 
 // ─── Severity metadata ───────────────────────────────────────────────────────
 
@@ -26,6 +58,8 @@ interface Props {
 export default function WhyAmITired({ open, onClose }: Props) {
   const { data, isLoading, isError, refetch } = useWhyTired(open)
   const [showRaw, setShowRaw] = useState(false)
+  const { language } = useLanguage()
+  const simpleMode = language === 'simple'
 
   // Body scroll lock + escape
   useEffect(() => {
@@ -140,34 +174,40 @@ export default function WhyAmITired({ open, onClose }: Props) {
                 Your recent fatigue tracks {sortedCauses.length === 1 ? '1 signal' : `${sortedCauses.length} signals`}, ordered by strength:
               </p>
               <ul className="flex flex-col gap-4">
-                {sortedCauses.map((c, i) => (
-                  <li key={i} className="flex gap-3 min-w-0">
-                    <span
-                      className="inline-block w-2 h-2 rounded-full mt-2 flex-shrink-0"
-                      style={{ backgroundColor: SEVERITY_META[c.severity].dot }}
-                      aria-hidden
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className="eyebrow"
-                          style={{ color: SEVERITY_META[c.severity].dot, letterSpacing: '0.22em' }}
+                {sortedCauses.map((c, i) => {
+                  const displayLabel = simpleMode
+                    ? translateCoach(`cause.label.${c.label}`, 'simple')
+                    : c.label
+                  const displayEvidence = simpleMode ? simpleEvidenceFor(c) : c.evidence
+                  return (
+                    <li key={i} className="flex gap-3 min-w-0">
+                      <span
+                        className="inline-block w-2 h-2 rounded-full mt-2 flex-shrink-0"
+                        style={{ backgroundColor: SEVERITY_META[c.severity].dot }}
+                        aria-hidden
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className="eyebrow"
+                            style={{ color: SEVERITY_META[c.severity].dot, letterSpacing: '0.22em' }}
+                          >
+                            {SEVERITY_META[c.severity].label}
+                          </span>
+                          <span className="serif-caps text-[15px]" style={{ color: 'var(--color-ink)' }}>
+                            {displayLabel}
+                          </span>
+                        </div>
+                        <p
+                          className="mt-1 text-[13px] leading-relaxed dashboard-break-words"
+                          style={{ color: 'var(--color-ink-2)' }}
                         >
-                          {SEVERITY_META[c.severity].label}
-                        </span>
-                        <span className="serif-caps text-[15px]" style={{ color: 'var(--color-ink)' }}>
-                          {c.label}
-                        </span>
+                          {displayEvidence}
+                        </p>
                       </div>
-                      <p
-                        className="mt-1 text-[13px] leading-relaxed dashboard-break-words"
-                        style={{ color: 'var(--color-ink-2)' }}
-                      >
-                        {c.evidence}
-                      </p>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  )
+                })}
               </ul>
             </>
           )}

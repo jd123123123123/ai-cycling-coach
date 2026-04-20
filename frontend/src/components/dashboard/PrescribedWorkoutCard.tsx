@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { Clock, Zap, ChevronRight, Moon } from 'lucide-react'
 import type { AlternateWorkout, PrescribedWorkout } from '../../api/coach'
 import IntervalRibbon from './IntervalRibbon'
+import { useLanguage } from '../../contexts/LanguageContext'
+import { simpleTitleFor, translateCoach } from '../../utils/coachLanguage'
 
 interface PrescribedWorkoutCardProps {
   workout: PrescribedWorkout
@@ -17,7 +19,24 @@ function efText(pw: PrescribedWorkout): string | null {
   return `est. ${range[0].toFixed(2)}–${range[1].toFixed(2)} EF`
 }
 
-function summaryLine(pw: PrescribedWorkout): string {
+function summaryLine(pw: PrescribedWorkout, simpleMode: boolean): string {
+  if (simpleMode) {
+    // Plain-English summary: "About 60 min · easy pace" style.
+    // "Effort phrase" maps category → feel instead of wattage.
+    const category = pw.category || ''
+    const feelByCategory: Record<string, string> = {
+      recovery:   'chill pace',
+      endurance:  'easy pace',
+      tempo:      'steady push',
+      sweet_spot: 'focused effort',
+      threshold:  'hard pace',
+      vo2:        'hard intervals',
+      anaerobic:  'all-out sprints',
+      rest:       'rest up',
+    }
+    const feel = feelByCategory[category] ?? 'steady pace'
+    return `About ${pw.duration_minutes} min · ${feel}`
+  }
   const parts: string[] = [`${pw.duration_minutes} min`]
   parts.push(`${Math.round(pw.predicted_tss)} TSS`)
   const ef = efText(pw)
@@ -33,6 +52,8 @@ export default function PrescribedWorkoutCard({
   // Which card is showing — the prescribed workout (default) or an alternate.
   // We only render the alternates' templates as compact previews for now.
   const [activeAlt, setActiveAlt] = useState<string | null>(null)
+  const { language } = useLanguage()
+  const simpleMode = language === 'simple'
 
   const displayed = useMemo<PrescribedWorkout>(() => {
     if (activeAlt && alternatesPreview?.[activeAlt]) {
@@ -42,7 +63,15 @@ export default function PrescribedWorkoutCard({
   }, [activeAlt, alternatesPreview, workout])
 
   const isAlternate = activeAlt !== null
-  const frameworkChip = displayed.framework_cited
+  // In simple mode we hide the framework chip (e.g. "Coggan Z5 · Friel Build 2")
+  // entirely — it's the densest piece of jargon on the card.
+  const frameworkChip = simpleMode ? null : displayed.framework_cited
+  // Title: in simple mode, force-simplify a technical-sounding title to the
+  // category map. The backend's rule-based fallback already does this, but
+  // the LLM path may slip jargon through — this is the belt-and-braces.
+  const titleToRender = simpleMode
+    ? simpleTitleFor(displayed.category, displayed.title)
+    : displayed.title
 
   return (
     <div
@@ -60,7 +89,9 @@ export default function PrescribedWorkoutCard({
             className="eyebrow"
             style={{ color: 'var(--color-forest)' }}
           >
-            {isAlternate ? 'Alternate' : 'Today · prescribed'}
+            {isAlternate
+              ? translateCoach('workoutCard.alternateEyebrow', language)
+              : translateCoach('workoutCard.todayEyebrow', language)}
           </span>
           <h3
             className="num-display leading-tight dashboard-break-words"
@@ -70,7 +101,7 @@ export default function PrescribedWorkoutCard({
               fontVariationSettings: '"opsz" 96, "SOFT" 30',
             }}
           >
-            {displayed.title}
+            {titleToRender}
           </h3>
         </div>
         {frameworkChip && (
@@ -91,7 +122,8 @@ export default function PrescribedWorkoutCard({
       {/* Interval ribbon */}
       <IntervalRibbon
         blocks={displayed.blocks}
-        summary={summaryLine(displayed)}
+        summary={summaryLine(displayed, simpleMode)}
+        language={language}
       />
 
       {/* Why this workout */}
@@ -110,7 +142,7 @@ export default function PrescribedWorkoutCard({
               className="eyebrow"
               style={{ color: 'var(--color-forest)' }}
             >
-              Why this workout
+              {translateCoach('brief.whyThisWorkoutHeading', language)}
             </span>
             <p
               className="text-[14px] leading-relaxed dashboard-break-words"
@@ -129,7 +161,7 @@ export default function PrescribedWorkoutCard({
           style={{ borderTop: '1px solid var(--color-rule)' }}
         >
           <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
-            If today's not that day
+            {translateCoach('workoutCard.alternatesHeading', language)}
           </span>
           <div className="flex flex-wrap gap-2">
             {alternates.map((alt) => {
@@ -190,7 +222,7 @@ export default function PrescribedWorkoutCard({
           title="Coming soon — push workout to Garmin"
         >
           <Zap size={13} strokeWidth={2} />
-          <span>Start workout</span>
+          <span>{translateCoach('workoutCard.startCta', language)}</span>
           <ChevronRight size={13} strokeWidth={2} />
         </button>
         <button
