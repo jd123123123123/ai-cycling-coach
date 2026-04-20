@@ -1,4 +1,10 @@
-"""Pydantic schemas for the /coach/* endpoints."""
+"""Pydantic schemas for the /coach/* endpoints.
+
+Phase 5.1 reshape: BriefRead now carries `prescribed_workout` (ONE precisely
+structured workout with absolute watts) + `alternates` (2 compact fallbacks),
+replacing the old 4-option array. The legacy `options` field is kept optional
+for backward compatibility during rollout.
+"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -7,14 +13,56 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+# ======================================================================
+# Legacy — kept for backward compat on old rows + /coach endpoints
+# ======================================================================
+
 class BriefOption(BaseModel):
-    """A single recommended session option — one of the 4 the coach always returns."""
+    """Legacy 4-option shape from Phase 5. Unused by new responses but the
+    field stays on BriefRead as `options: list[BriefOption] | None` so old
+    rows in coach_briefs are still serialisable.
+    """
     intensity: Literal["rest", "easy", "moderate", "push"]
     title: str
     why: str
     tss_target: float
     blocked: bool = False
     block_reason: str | None = None
+
+
+# ======================================================================
+# Phase 5.1 — prescribed workout shape
+# ======================================================================
+
+class ResolvedBlock(BaseModel):
+    """One interval block, watts derived from the athlete's FTP."""
+    name: str
+    duration_s: int
+    target_watts_low: int
+    target_watts_high: int
+    target_pct_ftp: float
+    zone: int = Field(..., ge=1, le=7)
+    rpe: int = Field(..., ge=1, le=10)
+
+
+class PrescribedWorkout(BaseModel):
+    template_id: str
+    title: str
+    duration_minutes: int
+    total_duration_s: int | None = None
+    predicted_tss: float
+    predicted_ef_range: tuple[float, float] | None = None
+    framework_cited: str
+    purpose: str | None = None
+    category: str | None = None
+    blocks: list[ResolvedBlock]
+    why_this_workout: str | None = None
+
+
+class AlternateWorkout(BaseModel):
+    label: Literal["less_time", "recover"]
+    one_liner: str
+    template_id: str
 
 
 class OutlookEntry(BaseModel):
@@ -31,7 +79,10 @@ class BriefRead(BaseModel):
     verdict: str
     rationale: str
     evidence: dict                  # the full snapshot the coach saw
-    options: list[BriefOption]
+    prescribed_workout: PrescribedWorkout | None = None
+    alternates: list[AlternateWorkout] = Field(default_factory=list)
+    # Legacy — populated only when reading pre-5.1 briefs. New generations set None.
+    options: list[BriefOption] | None = None
     outlook_7d: list[OutlookEntry] | None = None
     frameworks_cited: list[str] = Field(default_factory=list)
     model_used: str

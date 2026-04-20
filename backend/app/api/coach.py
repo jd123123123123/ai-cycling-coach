@@ -24,10 +24,12 @@ from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.coach_brief import CoachBrief
 from app.models.user import User
 from app.schemas.coach import (
+    AlternateWorkout,
     BriefOption,
     BriefRead,
     ChatRequest,
     OutlookEntry,
+    PrescribedWorkout,
     TransparencyRead,
     WhyTiredRead,
 )
@@ -63,13 +65,39 @@ def _check_chat_rate_limit(user_id: int) -> None:
 
 
 def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
+    # Phase 5.1 shape: prescribed_workout + alternates. Legacy options only
+    # populated for pre-5.1 rows still in the cache.
+    prescribed = None
+    if brief.prescribed_workout:
+        try:
+            prescribed = PrescribedWorkout(**brief.prescribed_workout)
+        except Exception:  # noqa: BLE001 — tolerate malformed legacy JSON
+            prescribed = None
+
+    alternates = []
+    if brief.alternates:
+        for a in brief.alternates:
+            try:
+                alternates.append(AlternateWorkout(**a))
+            except Exception:  # noqa: BLE001
+                pass
+
+    legacy_options = None
+    if brief.options:
+        try:
+            legacy_options = [BriefOption(**o) for o in brief.options]
+        except Exception:  # noqa: BLE001
+            legacy_options = None
+
     return BriefRead(
         id=brief.id,
         generated_at=brief.generated_at,
         verdict=brief.verdict,
         rationale=brief.rationale,
         evidence=brief.evidence,
-        options=[BriefOption(**o) for o in (brief.options or [])],
+        prescribed_workout=prescribed,
+        alternates=alternates,
+        options=legacy_options,
         outlook_7d=[OutlookEntry(**e) for e in (brief.outlook_7d or [])] if brief.outlook_7d else None,
         frameworks_cited=list(brief.frameworks_cited or []),
         model_used=brief.model_used,
