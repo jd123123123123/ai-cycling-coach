@@ -27,6 +27,17 @@ class Settings(BaseSettings):
     # read-only on bare-metal macOS dev — override via env var when running natively.
     GARMIN_TOKEN_STORE_ROOT: str = "/data/garmin_tokens"
 
+    # ------------------------------------------------------------------
+    # AI Coach (Phase 5) — Anthropic Claude integration.
+    # App MUST boot when ANTHROPIC_API_KEY is unset — coach_service falls
+    # back to a rule-based brief generated purely from safety_rails + the
+    # feature snapshot so /coach/brief always returns a structured payload.
+    # ------------------------------------------------------------------
+    ANTHROPIC_API_KEY: str | None = None
+    COACH_MODEL: str = "claude-opus-4-7"          # default brief model — latest Opus for quality
+    COACH_CHAT_MODEL: str = "claude-sonnet-4-6"   # chat uses Sonnet for cost + latency
+    COACH_BRIEF_CACHE_HOURS: int = 6              # read-through cache TTL per user
+
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
