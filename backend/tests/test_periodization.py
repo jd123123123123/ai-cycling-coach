@@ -125,11 +125,25 @@ class TestSessionTypeForToday:
             intensity_ceiling="push", day_of_week=2,
         ) == "sweet_spot"
 
-    def test_monday_is_rest(self):
+    def test_monday_rests_after_hard_sunday(self):
+        assert session_type_for_today(
+            phase="build2",
+            weekly_progress={"yesterday_tss": 95.0, "last_48h_tss": 110.0},
+            tsb=5.0, intensity_ceiling="push", day_of_week=0,
+        ) == "rest"
+
+    def test_monday_active_recovery_after_moderate_weekend(self):
+        assert session_type_for_today(
+            phase="build2",
+            weekly_progress={"yesterday_tss": 20.0, "last_48h_tss": 55.0},
+            tsb=5.0, intensity_ceiling="push", day_of_week=0,
+        ) == "recovery"
+
+    def test_monday_endurance_when_weekend_was_light(self):
         assert session_type_for_today(
             phase="build2", weekly_progress=None, tsb=5.0,
             intensity_ceiling="push", day_of_week=0,
-        ) == "rest"
+        ) == "endurance"
 
     def test_sunday_build2_is_endurance(self):
         """Sunday = long Z2 regardless of day-of-week bias elsewhere."""

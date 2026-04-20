@@ -233,9 +233,21 @@ def session_type_for_today(
         pick: SessionType = "endurance"
         return _downgrade_to_ceiling(pick, intensity_ceiling)
 
-    # Monday = recovery/rest universally
+    # Monday = context-aware rest.
+    # Default coaching cadence rests after a hard Sunday; don't blanket-rest when
+    # the athlete's weekend was light or load history is sparse (CTL <= 20).
     if day_of_week == 0:
-        return "rest"
+        yesterday_tss = float(progress.get("yesterday_tss", 0.0))
+        last_48h_tss = float(progress.get("last_48h_tss", 0.0))
+        week_tss = float(progress.get("total_tss_this_week", 0.0))
+        # Earned the rest if yesterday was hard OR 48h cumulative was big
+        if yesterday_tss >= 60 or last_48h_tss >= 90:
+            return "rest"
+        # Got a decent stimulus over the weekend but nothing crushing → active recovery
+        if last_48h_tss >= 40:
+            return "recovery"
+        # Otherwise the week is behind — start it with easy endurance
+        return _downgrade_to_ceiling("endurance", intensity_ceiling)
 
     # Friday = easy before weekend long ride
     if day_of_week == 4 and phase in ("base2", "build1", "build2", "peak"):

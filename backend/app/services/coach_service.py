@@ -180,11 +180,18 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     # Week starts on Monday
     today = date.today()
     monday = today - timedelta(days=today.weekday())
-    since = datetime.combine(monday, datetime.min.time(), tzinfo=timezone.utc)
+    since_week = datetime.combine(monday, datetime.min.time(), tzinfo=timezone.utc)
+    # Rolling 48h window — independent of week boundary so Monday can see Sunday's load
+    now_utc = datetime.now(timezone.utc)
+    since_48h = now_utc - timedelta(hours=48)
+    # Yesterday's window (calendar day)
+    yesterday = today - timedelta(days=1)
+    since_yesterday = datetime.combine(yesterday, datetime.min.time(), tzinfo=timezone.utc)
+    end_yesterday = datetime.combine(yesterday, datetime.max.time(), tzinfo=timezone.utc)
 
     stmt = (
         select(Activity)
-        .where(Activity.user_id == user_id, Activity.started_at >= since)
+        .where(Activity.user_id == user_id, Activity.started_at >= min(since_week, since_48h))
     )
     result = await db.execute(stmt)
     activities = list(result.scalars().all())
@@ -193,24 +200,36 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     vo2_sessions = 0
     total_tss = 0.0
     total_hours = 0.0
+    yesterday_tss = 0.0
+    last_48h_tss = 0.0
 
     for a in activities:
         tss = float(a.tss or 0)
-        total_tss += tss
-        total_hours += float(a.duration_seconds or 0) / 3600.0
-        # Heuristic: TSS/hour > 75 → threshold-or-above session
-        if a.duration_seconds and (a.duration_seconds >= 600):
-            tss_per_hour = (tss / a.duration_seconds) * 3600.0
-            if tss_per_hour >= 75:
-                hard_sessions += 1
-            if tss_per_hour >= 100:  # very high-intensity = VO2
-                vo2_sessions += 1
+        started = a.started_at
+        # Week totals
+        if started >= since_week:
+            total_tss += tss
+            total_hours += float(a.duration_seconds or 0) / 3600.0
+            if a.duration_seconds and (a.duration_seconds >= 600):
+                tss_per_hour = (tss / a.duration_seconds) * 3600.0
+                if tss_per_hour >= 75:
+                    hard_sessions += 1
+                if tss_per_hour >= 100:
+                    vo2_sessions += 1
+        # Yesterday's cumulative TSS
+        if since_yesterday <= started <= end_yesterday:
+            yesterday_tss += tss
+        # Rolling 48h
+        if started >= since_48h:
+            last_48h_tss += tss
 
     return {
         "hard_sessions_done": hard_sessions,
         "vo2_sessions_done": vo2_sessions,
         "total_tss_this_week": round(total_tss, 1),
         "total_hours_this_week": round(total_hours, 1),
+        "yesterday_tss": round(yesterday_tss, 1),
+        "last_48h_tss": round(last_48h_tss, 1),
     }
 
 
