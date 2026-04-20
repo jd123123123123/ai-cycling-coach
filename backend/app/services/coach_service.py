@@ -779,7 +779,13 @@ async def get_or_generate_brief(
         cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
         recent = await db.execute(
             select(CoachBrief)
-            .where(CoachBrief.user_id == user_id, CoachBrief.generated_at >= cutoff)
+            .where(
+                CoachBrief.user_id == user_id,
+                CoachBrief.generated_at >= cutoff,
+                # Schema guard: pre-05.1 rows had no prescribed_workout.
+                # Treat them as cache misses so the athlete never sees a legacy brief.
+                CoachBrief.prescribed_workout.isnot(None),
+            )
             .order_by(CoachBrief.generated_at.desc())
             .limit(1)
         )
