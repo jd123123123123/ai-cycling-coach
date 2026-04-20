@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { format, subDays } from 'date-fns'
-import { Heart, Moon, Zap, Waves, Activity } from 'lucide-react'
+import { Heart, Moon, Zap, Waves, Activity, ArrowUpRight } from 'lucide-react'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import type { DailyMetric } from '../../api/dashboard'
+import IntradayModal, { type IntradayMetric } from './IntradayModal'
 
 type Range = 14 | 30 | 90
 
@@ -26,6 +27,9 @@ interface BiometricSpec {
   warn?: number
   /** Descriptive copy under the title */
   copy: string
+  /** If set, clicking a point on this chart opens the IntradayModal with this metric.
+   *  Sleep and resting HR have no per-minute granularity from Garmin — leave null. */
+  intraday: IntradayMetric | null
 }
 
 const BIOMETRICS: BiometricSpec[] = [
@@ -39,6 +43,7 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 60,
     warn: 40,
     copy: 'Morning HRV. Trending up = parasympathetic recovery; down = stress load.',
+    intraday: 'hrv',
   },
   {
     key: 'body_battery',
@@ -50,6 +55,7 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 60,
     warn: 30,
     copy: 'Garmin\u2019s composite energy reserve from HRV + activity + sleep.',
+    intraday: 'body_battery',
   },
   {
     key: 'sleep_score',
@@ -61,6 +67,7 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 80,
     warn: 60,
     copy: 'Overall sleep quality. 80+ = restorative; under 60 = deficit accumulating.',
+    intraday: null,
   },
   {
     key: 'stress_level',
@@ -72,6 +79,7 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 25,
     warn: 50,
     copy: 'Daily average sympathetic load (0\u2013100). Lower is better.',
+    intraday: 'stress',
   },
   {
     key: 'resting_hr',
@@ -83,6 +91,7 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 55,
     warn: 68,
     copy: 'Morning resting HR. A sustained rise of 5+ bpm = hidden fatigue or illness.',
+    intraday: null,
   },
 ]
 
@@ -93,14 +102,18 @@ function DetailChart({
   dates,
   values,
   heightPx,
+  onPointClick,
 }: {
   spec: BiometricSpec
   dates: number[] // unix timestamps in seconds
   values: Array<number | null>
   heightPx: number
+  /** Called with ISO date (yyyy-mm-dd) when user clicks a point on the chart. */
+  onPointClick?: (iso: string) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
+  const plotRef = useRef<uPlot | null>(null)
 
   // Stats
   const numeric = values.filter((v): v is number => v != null)
@@ -260,6 +273,7 @@ function DetailChart({
 
     const data: uPlot.AlignedData = [dates, yData]
     const plot = new uPlot(opts, data, el)
+    plotRef.current = plot
 
     const ro = new ResizeObserver(() => {
       if (el) plot.setSize({ width: el.clientWidth, height: heightPx })
@@ -269,8 +283,21 @@ function DetailChart({
     return () => {
       ro.disconnect()
       plot.destroy()
+      plotRef.current = null
     }
   }, [dates, values, heightPx, spec, avg])
+
+  const handleClick = () => {
+    if (!onPointClick) return
+    const plot = plotRef.current
+    if (!plot) return
+    const idx = plot.cursor.idx
+    if (idx == null) return
+    const ts = dates[idx]
+    if (ts == null) return
+    const iso = new Date(ts * 1000).toISOString().slice(0, 10)
+    onPointClick(iso)
+  }
 
   return (
     <div
@@ -289,20 +316,31 @@ function DetailChart({
             </span>
             <span className="eyebrow truncate">{spec.label}</span>
           </div>
-          {hasData && (
-            <span
-              className="eyebrow whitespace-nowrap"
-              style={{ color: zoneColor }}
-            >
-              {zone === 'good'
-                ? 'on point'
-                : zone === 'fair'
-                ? 'watch'
-                : zone === 'poor'
-                ? 'below base'
-                : '—'}
-            </span>
-          )}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {hasData && (
+              <span
+                className="eyebrow whitespace-nowrap"
+                style={{ color: zoneColor }}
+              >
+                {zone === 'good'
+                  ? 'on point'
+                  : zone === 'fair'
+                  ? 'watch'
+                  : zone === 'poor'
+                  ? 'below base'
+                  : '—'}
+              </span>
+            )}
+            {spec.intraday && hasData && (
+              <span
+                className="eyebrow opacity-60 flex items-center gap-1 whitespace-nowrap"
+                title="Click any day on the chart to see the 24h curve"
+              >
+                tap to explore
+                <ArrowUpRight size={11} strokeWidth={2} />
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Big number — current value with unit */}
@@ -354,7 +392,11 @@ function DetailChart({
       </div>
 
       {/* Chart area */}
-      <div className="px-3 pb-4 pt-2 sm:px-4 min-w-0 relative">
+      <div
+        className="px-3 pb-4 pt-2 sm:px-4 min-w-0 relative"
+        onClick={spec.intraday && hasData ? handleClick : undefined}
+        style={{ cursor: spec.intraday && hasData ? 'pointer' : 'default' }}
+      >
         {hasData ? (
           <>
             <div ref={containerRef} className="w-full min-w-0" />
@@ -396,6 +438,14 @@ export default function BiometricsDetail() {
   const [range, setRange] = useState<Range>(30)
   const today = useMemo(() => new Date(), [])
   const start = useMemo(() => subDays(today, range), [today, range])
+
+  // Intraday drill-down state
+  const [openIso, setOpenIso] = useState<string | null>(null)
+  const [openMetric, setOpenMetric] = useState<IntradayMetric>('body_battery')
+  const handlePointClick = (m: IntradayMetric) => (iso: string) => {
+    setOpenMetric(m)
+    setOpenIso(iso)
+  }
 
   const { data, isLoading, isError, refetch } = useDailyMetrics(start, today)
 
@@ -513,10 +563,18 @@ export default function BiometricsDetail() {
               dates={dates}
               values={seriesByKey[spec.key as string] ?? []}
               heightPx={200}
+              onPointClick={spec.intraday ? handlePointClick(spec.intraday) : undefined}
             />
           ))}
         </div>
       )}
+
+      <IntradayModal
+        open={openIso != null}
+        onClose={() => setOpenIso(null)}
+        iso={openIso}
+        initialMetric={openMetric}
+      />
     </section>
   )
 }

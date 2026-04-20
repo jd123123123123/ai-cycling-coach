@@ -95,6 +95,29 @@ export async function fetchGarminStatus(): Promise<GarminStatus> {
   return res.data
 }
 
+// ─── Intraday samples ─────────────────────────────────────────────────────────
+
+export interface IntradayPoint {
+  t: string   // ISO utc timestamp
+  v: number
+}
+
+export interface IntradayDayResponse {
+  date: string
+  body_battery: IntradayPoint[]
+  stress: IntradayPoint[]
+  hrv: IntradayPoint[]
+  hr: IntradayPoint[]
+  fetched_live: boolean
+}
+
+export async function fetchIntraday(iso: string): Promise<IntradayDayResponse> {
+  const res = await apiClient.get<IntradayDayResponse>(`/daily-metrics/${iso}/intraday`, {
+    timeout: 20_000,
+  })
+  return res.data
+}
+
 // ─── Planned Workouts ─────────────────────────────────────────────────────────
 
 export interface PlannedWorkout {
