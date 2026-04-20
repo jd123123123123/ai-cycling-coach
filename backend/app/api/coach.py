@@ -29,6 +29,7 @@ from app.schemas.coach import (
     BriefRead,
     ChatRequest,
     OutlookEntry,
+    PostRideReview,
     PrescribedWorkout,
     TransparencyRead,
     WhyTiredRead,
@@ -96,6 +97,17 @@ def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
         "technical" if lang_val == "technical" else "simple"
     )
 
+    # Phase 5.3 — post_ride_review lives inside evidence. Tolerate pre-5.3
+    # rows (key missing) and malformed payloads by returning None.
+    post_ride_review: PostRideReview | None = None
+    if isinstance(evidence, dict):
+        raw_review = evidence.get("post_ride_review")
+        if isinstance(raw_review, dict):
+            try:
+                post_ride_review = PostRideReview(**raw_review)
+            except Exception:  # noqa: BLE001 — tolerate malformed review
+                post_ride_review = None
+
     return BriefRead(
         id=brief.id,
         generated_at=brief.generated_at,
@@ -110,6 +122,7 @@ def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
         model_used=brief.model_used,
         from_cache=from_cache,
         language=language,
+        post_ride_review=post_ride_review,
     )
 
 

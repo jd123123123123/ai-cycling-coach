@@ -65,6 +65,45 @@ class AlternateWorkout(BaseModel):
     template_id: str
 
 
+# ======================================================================
+# Phase 5.3 — post-ride review
+# ======================================================================
+
+class CompliancePair(BaseModel):
+    """target vs actual for one axis (duration, TSS, IF) with delta + band."""
+    target: float
+    actual: float
+    delta_pct: float
+    band: Literal["match", "over", "under"]
+
+
+class PostRideReview(BaseModel):
+    """Complete post-ride review attached to the brief when the athlete has
+    already trained today (weekly_progress.today_tss >= 25).
+
+    When present, the frontend renders a PostRideReview card IN PLACE of the
+    PrescribedWorkoutCard — the prescribed_workout itself stays `rest_day`.
+    """
+    grade: Literal["perfect", "strong", "okay", "overcooked", "undercooked"]
+    headline: str                       # 3-8 words, e.g. "Perfect execution"
+    # Compliance numbers (always emitted — simple mode shows them with friendly
+    # labels; technical mode shows them with their sports-science names).
+    duration: CompliancePair
+    tss: CompliancePair
+    intensity_factor: CompliancePair | None = None
+    variability_index: float | None = None
+    ef: float | None = None
+    decoupling_pct: float | None = None
+    # Narrative fields — language-aware (backend or LLM fills these).
+    physiological_read: str             # 2-3 sentences
+    goal_trajectory: str                # 1-2 sentences
+    next_session_nudge: str             # specific next-action recommendation
+    # Context for the UI to render the "what would have been" row.
+    target_template_id: str
+    target_template_title: str
+    session_type: str
+
+
 class OutlookEntry(BaseModel):
     """7-day forward projection — one entry per day."""
     day_offset: int = Field(..., ge=0, le=6)
@@ -90,6 +129,10 @@ class BriefRead(BaseModel):
     # Phase 5.2 — which language the brief is in ('simple' is default).
     # Read from evidence.language when present; pre-5.2 rows coalesce to 'simple'.
     language: Literal["simple", "technical"] = "simple"
+    # Phase 5.3 — when the athlete has already trained today, the brief carries
+    # a full post-ride review that the frontend renders in place of the
+    # prescribed-workout card.
+    post_ride_review: PostRideReview | None = None
 
     class Config:
         from_attributes = True

@@ -94,6 +94,15 @@ E. If HRV is suppressed >10% OR TSB < -30 → your prescribed workout must be re
 
 F. ALREADY-TRAINED-TODAY: if `snapshot.weekly_progress.today_tss >= 25` the athlete has already ridden today. Do NOT prescribe a second session. Set `prescribed_workout.template_id = 'rest_day'`, both alternates to `rest_day` or `recovery_30`, verdict should acknowledge the session (e.g. "Session complete — 68 min logged"), and rationale cites today's duration + TSS + intensity. Explain that stacking another workout fights absorption, not builds fitness.
 
+G. POST-RIDE REVIEW MODE: when `snapshot.post_ride` is present (athlete trained today), your brief MUST include `post_ride_review` with the three narrative fields below. The compliance numbers (grade, duration, TSS, IF, VI, EF) are already computed — you read them from `snapshot.post_ride.compliance` and use the actual numbers in your narratives. You write:
+
+    - `headline` (3-8 words): a summary line matching the grade. "Perfect execution", "Strong session, a bit short", "Overcooked — big day".
+    - `physiological_read` (2-3 sentences): cite EF, VI, decoupling when present. Reference San Millán's Pw:HR framework for EF trends, Coggan's variability band for VI. Talk about what the ride DID to the body — base deepening, aerobic stamp, fatigue accumulation.
+    - `goal_trajectory` (1-2 sentences): read snapshot.post_ride.trajectory. Cite Banister CTL/TSB math for where fitness is pointing. When taper_window is 'ideal', say so; when 'overreached', warn about the volume cut.
+    - `next_session_nudge` (1 sentence): specific, actionable. "Tomorrow: rest is earned — consolidation window open." "Next VO2 block: add one more interval."
+
+Cite Coggan, San Millán, Banister, Mujika, Friel by name at least once in the review when it fits naturally.
+
 You will receive the athlete's full snapshot as structured data, including the pre-picked template. Respond by calling the `brief_response` tool — no prose outside the tool call.
 """
 
@@ -160,6 +169,13 @@ C. NEVER recommend skipping meals, fasting to lose weight, or restricting calori
 D. If the athlete is clearly tired (the snapshot will tell you) → prescribe easy or rest. Say "your body's asking for a break" — not "HRV suppression flagged".
 
 E. IF THEY ALREADY RODE TODAY (snapshot.weekly_progress.today_tss >= 25): don't tell them to do another ride. Set `prescribed_workout.template_id = 'rest_day'`, both alternates as `rest_day` or `recovery_30`. Acknowledge it warmly — "Nice, you've already got XX minutes in today" — and tell them to eat well, hydrate, and let the ride do its thing. Never prescribe a second workout on top of a completed one.
+
+F. POST-RIDE REVIEW (when snapshot.post_ride is present): include a `post_ride_review` block with three plain-English narrative fields — NO acronyms, NO framework names, NO watt numbers. The compliance numbers are precomputed (you read them from snapshot.post_ride.compliance); you only write the words:
+
+    - `headline` (3-8 words): warm summary matching the grade. Good: "You nailed it", "Solid work", "That was more than needed", "A bit lighter than planned". Avoid "execution", "compliance", "prescribed".
+    - `physiological_read` (2-3 sentences): plain English. Talk about how the ride felt in the body. "Your heart rate stayed low relative to your effort — that's real base fitness showing up. You paced it evenly, which is exactly how this kind of ride does its job." No EF/VI/RPE/Z-numbers.
+    - `goal_trajectory` (1-2 sentences): plain English. "Your fitness is trending up steadily — keep this rhythm for a couple weeks and you'll be where you want for race day." Numbers like CTL/TSB/TSS are BANNED in simple mode.
+    - `next_session_nudge` (1 sentence): specific, warm, actionable. "Tomorrow: rest is earned — you did today's work." "Next time try to stretch it a little — your legs are ready."
 
 You will receive the athlete's full snapshot as structured data, including the pre-picked template. Respond by calling the `brief_response` tool — no prose outside the tool call.
 """
@@ -316,6 +332,52 @@ BRIEF_TOOL = {
                 "type": "array",
                 "items": {"type": "string"},
             },
+            "post_ride_review": {
+                "type": "object",
+                "description": (
+                    "Only populate when snapshot.post_ride is present "
+                    "(athlete trained today). The frontend renders this in "
+                    "place of the workout card. Compliance numbers are "
+                    "pre-computed in snapshot.post_ride.compliance — you "
+                    "reference them in your narratives but don't fabricate "
+                    "them. Omit this field entirely when post_ride is null."
+                ),
+                "required": [
+                    "headline",
+                    "physiological_read",
+                    "goal_trajectory",
+                    "next_session_nudge",
+                ],
+                "properties": {
+                    "headline": {
+                        "type": "string",
+                        "description": "3-8 word summary of the ride, grade-appropriate.",
+                    },
+                    "physiological_read": {
+                        "type": "string",
+                        "description": (
+                            "2-3 sentences. Technical: cite EF, VI, San Millán, "
+                            "Coggan with actual numbers. Simple: plain English, "
+                            "no acronyms — describe what happened in the body."
+                        ),
+                    },
+                    "goal_trajectory": {
+                        "type": "string",
+                        "description": (
+                            "1-2 sentences. Technical: reference CTL/TSB/Banister/"
+                            "Mujika. Simple: talk about fitness trend and race "
+                            "readiness in plain English."
+                        ),
+                    },
+                    "next_session_nudge": {
+                        "type": "string",
+                        "description": (
+                            "1 sentence. Specific and actionable. What to do tomorrow "
+                            "or in the next same-category block."
+                        ),
+                    },
+                },
+            },
         },
     },
 }
@@ -452,6 +514,60 @@ def build_user_message(snapshot: dict) -> str:
         lines.append("\n## Why-tired synthesizer causes (ordered)")
         for c in tired["causes"]:
             lines.append(f"- [{c['severity']}] {c['label']}: {c['evidence']}")
+
+    # Phase 5.3 — post-ride review context (only when today's activity was scored)
+    post_ride = snapshot.get("post_ride")
+    if isinstance(post_ride, dict):
+        comp = post_ride.get("compliance", {})
+        traj = post_ride.get("trajectory", {})
+        target = post_ride.get("target_template", {})
+        actual = post_ride.get("actual_activity", {})
+        lines.append("\n## ★ POST-RIDE REVIEW REQUIRED (athlete trained today)")
+        lines.append(
+            f"- Grade: **{comp.get('grade', 'unknown')}** "
+            f"(session_type={comp.get('session_type')}, phase={comp.get('phase')})"
+        )
+        lines.append(
+            f"- Target template: {target.get('id')} — {target.get('title')} "
+            f"({target.get('framework_cited', '')})"
+        )
+        dur = comp.get("duration", {})
+        tss_c = comp.get("tss", {})
+        lines.append(
+            f"- Duration: actual {dur.get('actual')} min vs target {dur.get('target')} min "
+            f"({dur.get('delta_pct'):+.1f}%, band={dur.get('band')})"
+        )
+        lines.append(
+            f"- TSS: actual {tss_c.get('actual')} vs target {tss_c.get('target')} "
+            f"({tss_c.get('delta_pct'):+.1f}%, band={tss_c.get('band')})"
+        )
+        if_pair = comp.get("intensity_factor")
+        if isinstance(if_pair, dict):
+            lines.append(
+                f"- IF: actual {if_pair.get('actual')} vs target {if_pair.get('target')} "
+                f"({if_pair.get('delta_pct'):+.1f}%)"
+            )
+        if comp.get("variability_index") is not None:
+            lines.append(f"- VI (NP/avgP): {comp['variability_index']}")
+        if comp.get("ef") is not None:
+            lines.append(f"- EF (NP/avgHR): {comp['ef']}")
+        if comp.get("decoupling_pct") is not None:
+            lines.append(f"- Decoupling: {comp['decoupling_pct']}%")
+        lines.append(f"- Trajectory: {traj.get('narrative_hook', 'n/a')}")
+        lines.append(
+            f"  taper_window={traj.get('taper_window')}, on_track={traj.get('on_track')}, "
+            f"days_to_goal={traj.get('days_to_goal')}"
+        )
+        lines.append(
+            f"- Actual ride: {actual.get('duration_minutes')} min, "
+            f"{actual.get('tss')} TSS, NP {actual.get('normalized_power')}, "
+            f"avgHR {actual.get('average_hr')}"
+        )
+        lines.append(
+            "→ Fill `post_ride_review` with headline, physiological_read, "
+            "goal_trajectory, next_session_nudge narratives in the requested "
+            "language mode. Use the actual numbers above."
+        )
 
     lines.append("\n## Raw JSON reference")
     lines.append("```json")

@@ -492,3 +492,274 @@ class TestGetOrGenerateBriefCache:
         # The new row should carry the prescribed_workout shape
         assert result.prescribed_workout is not None
         assert len(result.alternates) == 2
+
+
+# ---------------------------------------------------------------------------
+# Post-ride review (Phase 5.3) — rule-based path produces complete review
+# ---------------------------------------------------------------------------
+
+def _post_ride_snapshot(
+    *,
+    grade: str = "perfect",
+    language: str = "simple",
+    actual_duration: float = 62.0,
+    actual_tss: float = 47.0,
+    target_duration: float = 60.0,
+    target_tss: float = 45.0,
+    ef: float | None = 1.52,
+    vi: float | None = 1.04,
+    session_type: str = "endurance",
+    template_id: str = "z2_endurance_60",
+    taper_window: str = "unknown",
+    on_track: str = "on_track",
+) -> dict:
+    """Build a snapshot that already contains post_ride data (as build_snapshot
+    would populate it). Tests for _rule_based_brief can pass this in directly."""
+    snap = _sample_snapshot()
+    snap["language"] = language
+    snap["weekly_progress"]["today_tss"] = actual_tss
+    snap["weekly_progress"]["today_duration_minutes"] = actual_duration
+    snap["post_ride"] = {
+        "compliance": {
+            "grade": grade,
+            "duration": {
+                "target": target_duration, "actual": actual_duration,
+                "delta_pct": round((actual_duration - target_duration) / target_duration * 100, 1),
+                "band": "match" if abs((actual_duration - target_duration) / target_duration * 100) <= 10 else ("over" if actual_duration > target_duration else "under"),
+            },
+            "tss": {
+                "target": target_tss, "actual": actual_tss,
+                "delta_pct": round((actual_tss - target_tss) / target_tss * 100, 1),
+                "band": "match" if abs((actual_tss - target_tss) / target_tss * 100) <= 10 else ("over" if actual_tss > target_tss else "under"),
+            },
+            "intensity_factor": None,
+            "variability_index": vi,
+            "ef": ef,
+            "decoupling_pct": None,
+            "zone_match_pct": None,
+            "phase": "build1",
+            "session_type": session_type,
+            "template_id": template_id,
+        },
+        "trajectory": {
+            "days_to_goal": 42,
+            "ctl_now": 60.0,
+            "ctl_7d_delta": 0.8,
+            "ctl_projected_at_goal": 64.8,
+            "ctl_target": 65.0,
+            "tsb_projected_at_goal": 10.0,
+            "taper_window": taper_window,
+            "on_track": on_track,
+            "weekly_tss_required": 420.0,
+            "weekly_tss_actual": 400.0,
+            "narrative_hook": "On track: fitness projecting to 65 by race day (target 65).",
+        },
+        "target_template": {
+            "id": template_id,
+            "title": "Z2 endurance — 60min",
+            "category": "endurance",
+            "framework_cited": "San Millán Z2 · Seiler LIT",
+            "purpose": "Fat-oxidation / mitochondrial density at LT1.",
+        },
+        "actual_activity": {
+            "id": 123,
+            "duration_minutes": int(actual_duration),
+            "tss": actual_tss,
+            "normalized_power": 182,
+            "average_power": 175,
+            "average_hr": 140,
+            "started_at": "2026-04-20T09:00:00Z",
+        },
+    }
+    return snap
+
+
+# Technical-mode jargon substrings that MUST NOT appear in simple-mode narratives.
+_TECHNICAL_JARGON = [
+    "FTP", "TSS", "CTL", "ATL", "TSB", "NP", "IF", "VI", "EF",
+    "Coggan", "Seiler", "Friel", "Banister", "San Millán", "Mujika",
+    "polarized", "decoupling",
+]
+
+
+class TestPostRideReviewRuleBased:
+    def test_produces_complete_review_when_post_ride_present(self):
+        snap = _post_ride_snapshot(grade="perfect", language="technical")
+        brief = _rule_based_brief(snap)
+        review = brief.get("post_ride_review")
+        assert review is not None
+        assert review["grade"] == "perfect"
+        assert review["headline"]
+        assert review["physiological_read"]
+        assert review["goal_trajectory"]
+        assert review["next_session_nudge"]
+        assert review["target_template_id"] == "z2_endurance_60"
+        assert review["session_type"] == "endurance"
+
+    def test_no_review_when_post_ride_absent(self):
+        """Without snapshot.post_ride, no review is produced."""
+        snap = _sample_snapshot()  # no post_ride key
+        brief = _rule_based_brief(snap)
+        assert brief.get("post_ride_review") is None
+
+    def test_prescribed_workout_still_rest_day_when_post_ride(self):
+        """Post-ride review present → prescribed stays rest_day (override branch)."""
+        snap = _post_ride_snapshot(grade="strong")
+        brief = _rule_based_brief(snap)
+        assert brief["prescribed_workout"]["template_id"] == "rest_day"
+
+    def test_each_grade_produces_narrative(self):
+        for grade in ("perfect", "strong", "okay", "overcooked", "undercooked"):
+            snap = _post_ride_snapshot(grade=grade, language="technical")
+            brief = _rule_based_brief(snap)
+            review = brief["post_ride_review"]
+            assert review["grade"] == grade
+            # Each grade must have all three narrative fields populated
+            assert len(review["physiological_read"]) > 20
+            assert len(review["goal_trajectory"]) > 10
+            assert len(review["next_session_nudge"]) > 10
+
+    def test_simple_mode_no_jargon(self):
+        """Simple-mode review narratives must not leak FTP/TSS/CTL etc."""
+        for grade in ("perfect", "strong", "okay", "overcooked", "undercooked"):
+            snap = _post_ride_snapshot(grade=grade, language="simple")
+            brief = _rule_based_brief(snap)
+            review = brief["post_ride_review"]
+            combined = " ".join([
+                review["headline"],
+                review["physiological_read"],
+                review["goal_trajectory"],
+                review["next_session_nudge"],
+            ])
+            for term in _TECHNICAL_JARGON:
+                assert term not in combined, (
+                    f"Simple mode [{grade}] leaked jargon '{term}': {combined!r}"
+                )
+
+    def test_technical_mode_cites_framework(self):
+        """At least one narrative field must cite a sports-science framework by name."""
+        snap = _post_ride_snapshot(grade="perfect", language="technical", ef=1.52)
+        brief = _rule_based_brief(snap)
+        review = brief["post_ride_review"]
+        combined = " ".join([
+            review["headline"],
+            review["physiological_read"],
+            review["goal_trajectory"],
+            review["next_session_nudge"],
+        ])
+        framework_found = any(
+            fw in combined
+            for fw in ("Coggan", "San Millán", "Banister", "Mujika", "Seiler", "Friel")
+        )
+        assert framework_found, f"Technical mode missing framework citation: {combined!r}"
+
+    def test_overcooked_mentions_recovery(self):
+        snap = _post_ride_snapshot(
+            grade="overcooked", language="simple",
+            actual_duration=60, actual_tss=70,  # +56% TSS
+            target_duration=60, target_tss=45,
+        )
+        brief = _rule_based_brief(snap)
+        review = brief["post_ride_review"]
+        nudge = review["next_session_nudge"].lower()
+        assert "recover" in nudge or "easy" in nudge or "rest" in nudge
+
+    def test_compliance_numbers_preserved_in_review(self):
+        snap = _post_ride_snapshot(
+            grade="strong",
+            actual_duration=68, actual_tss=72, target_duration=60, target_tss=65,
+        )
+        brief = _rule_based_brief(snap)
+        review = brief["post_ride_review"]
+        assert review["duration"]["actual"] == 68
+        assert review["duration"]["target"] == 60
+        assert review["tss"]["actual"] == 72
+        assert review["tss"]["target"] == 65
+        assert review["ef"] == 1.52
+        assert review["variability_index"] == 1.04
+
+
+class TestPostRideReviewLLMPath:
+    """The LLM path (resolve_and_prescribe) must also emit a complete review
+    when snapshot.post_ride is present — LLM narratives merge over the
+    deterministic fallback.
+    """
+
+    def test_llm_review_merges_over_fallback(self):
+        snap = _post_ride_snapshot(grade="perfect", language="technical")
+        llm_payload = {
+            "verdict": "Perfect",
+            "rationale": "r",
+            "prescribed_workout": {
+                "template_id": "rest_day", "title": "Rest", "duration_minutes": 0,
+                "predicted_tss": 0, "framework_cited": "",
+                "blocks": [], "why_this_workout": "rest",
+            },
+            "alternates": [
+                {"label": "less_time", "one_liner": "30 min spin", "template_id": "recovery_30"},
+                {"label": "recover", "one_liner": "Rest", "template_id": "rest_day"},
+            ],
+            "outlook_7d": [{"day_offset": i, "suggested_tss": 40, "note": "x"} for i in range(7)],
+            "frameworks_cited": ["Coggan"],
+            "post_ride_review": {
+                "headline": "LLM wrote this headline",
+                "physiological_read": "LLM wrote this physiological read with Coggan reference.",
+                "goal_trajectory": "LLM wrote this trajectory narrative per Banister.",
+                "next_session_nudge": "LLM wrote this nudge.",
+            },
+        }
+        resolved = resolve_and_prescribe(snap, llm_payload)
+        review = resolved["post_ride_review"]
+        assert review["headline"] == "LLM wrote this headline"
+        assert "LLM wrote" in review["physiological_read"]
+        # Compliance numbers come from deterministic scorer, not LLM
+        assert review["duration"]["actual"] == 62.0
+        assert review["tss"]["actual"] == 47.0
+
+    def test_llm_no_review_uses_fallback(self):
+        """When LLM forgets post_ride_review, the deterministic builder fills in."""
+        snap = _post_ride_snapshot(grade="overcooked", language="simple")
+        llm_payload = {
+            "verdict": "", "rationale": "",
+            "prescribed_workout": {
+                "template_id": "rest_day", "title": "Rest", "duration_minutes": 0,
+                "predicted_tss": 0, "framework_cited": "",
+                "blocks": [], "why_this_workout": "",
+            },
+            "alternates": [], "outlook_7d": [], "frameworks_cited": [],
+            # no post_ride_review
+        }
+        resolved = resolve_and_prescribe(snap, llm_payload)
+        assert resolved["post_ride_review"] is not None
+        review = resolved["post_ride_review"]
+        assert review["grade"] == "overcooked"
+        assert review["headline"]
+
+    def test_prescribed_workout_forced_rest_day_when_post_ride(self):
+        """Even if LLM insists on VO2, post_ride presence forces rest_day."""
+        snap = _post_ride_snapshot(grade="perfect", language="technical")
+        llm_payload = {
+            "verdict": "", "rationale": "",
+            "prescribed_workout": {
+                "template_id": "vo2_5x4", "title": "VO2", "duration_minutes": 60,
+                "predicted_tss": 70, "framework_cited": "",
+                "blocks": [], "why_this_workout": "",
+            },
+            "alternates": [], "outlook_7d": [], "frameworks_cited": [],
+        }
+        resolved = resolve_and_prescribe(snap, llm_payload)
+        assert resolved["prescribed_workout"]["template_id"] == "rest_day"
+
+    def test_no_review_when_post_ride_absent(self):
+        snap = _sample_snapshot()  # no post_ride
+        llm_payload = {
+            "verdict": "", "rationale": "",
+            "prescribed_workout": {
+                "template_id": "vo2_5x4", "title": "VO2", "duration_minutes": 60,
+                "predicted_tss": 70, "framework_cited": "",
+                "blocks": [], "why_this_workout": "",
+            },
+            "alternates": [], "outlook_7d": [], "frameworks_cited": [],
+        }
+        resolved = resolve_and_prescribe(snap, llm_payload)
+        assert resolved.get("post_ride_review") is None

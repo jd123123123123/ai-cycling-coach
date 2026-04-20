@@ -51,6 +51,9 @@ from app.services.coach_prompt import (
     build_user_message,
     system_prompt_for_language,
 )
+from app.services.goal_trajectory import project as project_trajectory, trajectory_to_dict
+from app.services.pmc_service import compute_user_pmc
+from app.services.ride_compliance import ride_compliance_to_dict, score_ride
 from app.services.safety_rails import (
     RailContext,
     intensity_ceiling,
@@ -176,6 +179,30 @@ async def _recent_daily_tss(db: AsyncSession, user_id: int, days: int = 7) -> li
         {"date": d.isoformat(), "tss": round(tss, 1)}
         for d, tss in sorted(by_date.items())
     ]
+
+
+async def _todays_primary_activity(db: AsyncSession, user_id: int) -> Activity | None:
+    """Fetch today's most significant completed activity.
+
+    "Today" is the calendar day in UTC. When multiple activities land on the
+    same day (e.g. a commute + a real ride), we return the highest-TSS one —
+    that's the session worth grading.
+    """
+    today = date.today()
+    start_of_today_utc = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
+    end_of_today_utc = datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc)
+    stmt = (
+        select(Activity)
+        .where(
+            Activity.user_id == user_id,
+            Activity.started_at >= start_of_today_utc,
+            Activity.started_at <= end_of_today_utc,
+        )
+        .order_by(Activity.tss.desc().nullslast(), Activity.started_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
 
 
 async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
@@ -346,6 +373,56 @@ async def build_snapshot(
         except ValueError:
             picked_preview = None
 
+    # ---------------------------------------------------------
+    # Post-ride review — when today_tss >= 25 the athlete has
+    # already trained; grade it against the picked template
+    # and project goal trajectory. Both live inside the snapshot
+    # under `post_ride`; the rule-based brief + LLM prompt both
+    # read from there.
+    # ---------------------------------------------------------
+    post_ride_data: dict | None = None
+    today_tss_val = float(weekly_prog.get("today_tss", 0.0))
+    if today_tss_val >= 25.0:
+        activity = await _todays_primary_activity(db, user_id)
+        if activity is not None:
+            compliance = score_ride(
+                actual_activity=activity,
+                target_template=picked_template,
+                ftp=int(ftp) if ftp else None,
+                phase=phase,
+                session_type=today_session,
+            )
+            # Goal trajectory projection — project() is pure, accepts dict rows.
+            # We hand it the 'total' PMC series; if it's empty (sparse history)
+            # project() emits a neutral narrative.
+            pmc_full = await compute_user_pmc(db, user_id, days=90)
+            trajectory = project_trajectory(
+                user_pmc=pmc_full.get("total") or [],
+                athlete_goals=profile.goals if profile and isinstance(profile.goals, dict) else None,
+                phase=phase,
+            )
+
+            post_ride_data = {
+                "compliance": ride_compliance_to_dict(compliance),
+                "trajectory": trajectory_to_dict(trajectory),
+                "target_template": {
+                    "id": picked_template.id,
+                    "title": picked_template.name,
+                    "category": picked_template.category,
+                    "framework_cited": picked_template.framework_cited,
+                    "purpose": picked_template.purpose,
+                },
+                "actual_activity": {
+                    "id": activity.id,
+                    "duration_minutes": int(round((activity.duration_seconds or 0) / 60)),
+                    "tss": float(activity.tss or 0.0),
+                    "normalized_power": activity.normalized_power,
+                    "average_power": activity.average_power,
+                    "average_hr": activity.average_hr,
+                    "started_at": activity.started_at.isoformat() if activity.started_at else None,
+                },
+            }
+
     snapshot: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "language": language,
@@ -385,6 +462,8 @@ async def build_snapshot(
             "days_since_rest": days_since_rest,
             "intensity_ceiling": ceiling,
         },
+        # Phase 5.3 — post-ride review data (None when today_tss<25 or no activity)
+        "post_ride": post_ride_data,
     }
     return snapshot
 
@@ -547,6 +626,15 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
                 f"intensity ceiling is '{ceiling}'."
             )
 
+    # Post-ride override: if the snapshot says the athlete trained today
+    # (post_ride present) we force rest_day regardless of what the LLM picked.
+    # The post_ride_review replaces the workout card in the UI — a second
+    # prescription would muddy the UX.
+    post_ride_present = bool(snapshot.get("post_ride"))
+    if post_ride_present:
+        template_id = "rest_day"
+        why = why or "You've already trained today — review below."
+
     # Step 4: rewrite watts
     duration_hint = llm_workout.get("duration_minutes")
     try:
@@ -603,6 +691,28 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     out = dict(llm_payload)
     out["prescribed_workout"] = new_workout
     out["alternates"] = resolved_alternates[:2]
+
+    # Post-ride review — if the snapshot carries post_ride data, ensure the
+    # payload has a complete review. Take the LLM's narrative fields when
+    # present and fill any missing ones from the deterministic builder.
+    if post_ride_present:
+        snapshot_post = snapshot.get("post_ride") or {}
+        language = snapshot.get("language", "simple")
+        fallback_review = _build_post_ride_review(snapshot_post, language)
+        llm_review = llm_payload.get("post_ride_review")
+        if isinstance(llm_review, dict):
+            # Merge — LLM wins on narrative fields, compliance numbers always
+            # come from the deterministic scorer (LLM can't override math).
+            merged = dict(fallback_review)
+            for narrative_key in ("headline", "physiological_read", "goal_trajectory", "next_session_nudge"):
+                if isinstance(llm_review.get(narrative_key), str) and llm_review[narrative_key].strip():
+                    merged[narrative_key] = llm_review[narrative_key]
+            out["post_ride_review"] = merged
+        else:
+            out["post_ride_review"] = fallback_review
+    else:
+        out["post_ride_review"] = None
+
     return out
 
 
@@ -647,6 +757,250 @@ _SIMPLE_VERDICT_BY_SESSION: dict[str, str] = {
 # Simple-mode alternate one-liners (smart-friend-at-the-bike-shop tone)
 _SIMPLE_ALTERNATE_LESS_TIME = "Got 30 min? Just spin the legs."
 _SIMPLE_ALTERNATE_RECOVER = "Tired? Put your legs up, do nothing."
+
+
+# ======================================================================
+# Post-ride review narrative templates — language + grade aware
+# ======================================================================
+
+# Short headlines by grade (shared — the grade pill carries the tone).
+_HEADLINE_BY_GRADE_SIMPLE: dict[str, str] = {
+    "perfect":     "You nailed it",
+    "strong":      "Solid work",
+    "okay":        "Not bad — a bit off",
+    "overcooked":  "That was more than needed",
+    "undercooked": "Lighter than planned",
+}
+
+_HEADLINE_BY_GRADE_TECHNICAL: dict[str, str] = {
+    "perfect":     "Perfect execution",
+    "strong":      "Strong session",
+    "okay":        "Okay session — margins loose",
+    "overcooked":  "Overcooked — TSS above target",
+    "undercooked": "Undercooked — below prescribed load",
+}
+
+# Simple-mode next-session nudges keyed by (grade, session_type category).
+# Grade drives tone; session_type hints at what to do next.
+def _simple_nudge(grade: str, session_type: str, phase: str) -> str:
+    if grade == "perfect":
+        return "Tomorrow: rest is earned — you got exactly what today needed."
+    if grade == "strong":
+        return "Eat well, sleep hard. Tomorrow's ride stays easy."
+    if grade == "okay":
+        return "Next time aim for a closer match to the prescribed time and effort."
+    if grade == "overcooked":
+        return "Recover hard tonight. Tomorrow's an easy day — seriously."
+    # undercooked
+    if session_type == "vo2":
+        return "Add 5-10 min to your next hard interval block."
+    if session_type == "threshold":
+        return "Your next threshold block should hit a bit longer — aim for the full target."
+    return "Your next ride can stretch a bit longer — you have the legs for it."
+
+
+def _technical_nudge(grade: str, session_type: str, phase: str) -> str:
+    if grade == "perfect":
+        return "Recovery tonight is earned — parasympathetic window open for adaptation."
+    if grade == "strong":
+        return f"Consolidate: Z1 spin or rest tomorrow so {session_type} stimulus absorbs."
+    if grade == "okay":
+        return "Next same-category block: tighten within ±10% of template prescription."
+    if grade == "overcooked":
+        return "ATL will spike tonight; TSB dropping → rest day required per Banister."
+    # undercooked
+    if session_type == "vo2":
+        return "Add one more interval (4-5→5-6) next VO2 block; Coggan Z5 stimulus needs minimum 20 min time-at-VO2max."
+    if session_type == "threshold":
+        return "Stretch threshold intervals 15→18 min next block to hit LT2 adaptation threshold."
+    return "Next endurance block can extend 10-15 min to stimulate San Millán Z2 ceiling."
+
+
+# Physiological read generators — concise "what your body did" sentences.
+def _simple_physio_read(compliance: dict, trajectory: dict) -> str:
+    parts: list[str] = []
+    grade = compliance.get("grade")
+    ef = compliance.get("ef")
+    vi = compliance.get("variability_index")
+    dur = compliance.get("duration", {})
+    tss = compliance.get("tss", {})
+    actual_min = int(round(dur.get("actual", 0)))
+    actual_effort = int(round(tss.get("actual", 0)))
+
+    # Opening line — what happened
+    if grade == "perfect":
+        parts.append(
+            f"You rode {actual_min} minutes at exactly the right effort — "
+            "base fitness quietly building."
+        )
+    elif grade == "strong":
+        parts.append(
+            f"{actual_min} minutes in the books, right in the ballpark of what today asked for."
+        )
+    elif grade == "okay":
+        parts.append(
+            f"{actual_min} minutes done — a bit off the ideal but still useful time on the bike."
+        )
+    elif grade == "overcooked":
+        delta = tss.get("delta_pct", 0)
+        parts.append(
+            f"That was bigger than the plan — {abs(int(delta))}% above target. "
+            "Your body will feel it."
+        )
+    else:  # undercooked
+        parts.append(
+            f"Lighter than today called for — {actual_min} minutes when the plan was bigger."
+        )
+
+    # Second sentence — EF / VI observation (plain English)
+    if ef is not None and ef >= 1.4:
+        parts.append(
+            "Your heart rate stayed low relative to your effort — that's base fitness showing up."
+        )
+    elif ef is not None and ef < 1.1:
+        parts.append("Your heart rate ran high for the power you put out — you might be fatigued.")
+    if vi is not None and vi > 1.08:
+        parts.append("Pacing was choppy — smoother efforts get more out of the same ride.")
+    elif vi is not None and vi <= 1.06 and grade in ("perfect", "strong"):
+        parts.append("You held steady — evenly paced rides do their work efficiently.")
+
+    return " ".join(parts[:3])
+
+
+def _technical_physio_read(compliance: dict, trajectory: dict) -> str:
+    parts: list[str] = []
+    grade = compliance.get("grade")
+    ef = compliance.get("ef")
+    vi = compliance.get("variability_index")
+    if_pair = compliance.get("intensity_factor") or {}
+    tss = compliance.get("tss", {})
+    actual_tss = int(round(tss.get("actual", 0)))
+    target_tss = int(round(tss.get("target", 0)))
+
+    # Opening sentence — data-rich
+    if grade == "perfect":
+        parts.append(
+            f"TSS {actual_tss} vs target {target_tss} — within Coggan's ±10% compliance window."
+        )
+    elif grade == "strong":
+        parts.append(
+            f"TSS {actual_tss} (target {target_tss}) — within strong-compliance band."
+        )
+    elif grade == "okay":
+        parts.append(
+            f"TSS {actual_tss} vs target {target_tss} — loose but inside the 30% margin."
+        )
+    elif grade == "overcooked":
+        parts.append(
+            f"TSS {actual_tss} vs target {target_tss} ({tss.get('delta_pct', 0):+.0f}%) — "
+            "above Coggan's compliance ceiling."
+        )
+    else:
+        parts.append(
+            f"TSS {actual_tss} vs target {target_tss} ({tss.get('delta_pct', 0):+.0f}%) — "
+            "below prescribed load."
+        )
+
+    # EF commentary — San Millán framework
+    if ef is not None:
+        if ef >= 1.45:
+            parts.append(
+                f"EF {ef} signals aerobic base deepening per San Millán's Pw:HR framework."
+            )
+        elif ef < 1.15:
+            parts.append(
+                f"EF {ef} is low — either residual fatigue or a hard effort pushing HR near ceiling."
+            )
+        else:
+            parts.append(f"EF {ef} — within expected aerobic band for this session type.")
+
+    # VI commentary — Coggan variability
+    if vi is not None:
+        if vi <= 1.06:
+            parts.append(f"VI {vi} — steady-state pacing, Coggan variability tight.")
+        elif vi > 1.10:
+            parts.append(f"VI {vi} — pacing variability above target; work on steadier output.")
+
+    return " ".join(parts[:3])
+
+
+def _simple_trajectory_narrative(trajectory: dict) -> str:
+    hook = trajectory.get("narrative_hook")
+    if not hook:
+        return "You're building consistency — that's the whole game."
+    # Strip technical terms from hook if any slipped in (defensive — the
+    # trajectory module emits plain-enough text but we scrub anyway for simple).
+    replacements = [
+        ("CTL ", "fitness "),
+        ("TSB", "freshness"),
+        ("Banister", "the fitness/fatigue model"),
+        ("Mujika", "taper research"),
+        ("Coggan", ""),
+    ]
+    out = hook
+    for term, repl in replacements:
+        out = out.replace(term, repl)
+    # Strip "TSS" tokens since simple mode shouldn't use them.
+    # Handle "TSS/week", "TSS total" etc.
+    out = out.replace(" TSS/week", "/week of training load").replace(" TSS", " training points")
+    return out.strip()
+
+
+def _technical_trajectory_narrative(trajectory: dict) -> str:
+    hook = trajectory.get("narrative_hook")
+    if hook:
+        return hook
+    return (
+        f"CTL {trajectory.get('ctl_now', 0):.1f}, 7d delta {trajectory.get('ctl_7d_delta', 0):+.1f}. "
+        "Continue current pattern."
+    )
+
+
+def _build_post_ride_review(
+    snapshot_post_ride: dict,
+    language: str,
+) -> dict:
+    """Assemble the complete post_ride_review dict for the brief payload.
+
+    Called by _rule_based_brief. The LLM path also uses this as a fallback
+    when the model forgets to populate narrative fields — so the shape is
+    always complete.
+    """
+    compliance = snapshot_post_ride.get("compliance") or {}
+    trajectory = snapshot_post_ride.get("trajectory") or {}
+    target_tpl = snapshot_post_ride.get("target_template") or {}
+
+    grade = compliance.get("grade", "okay")
+    session_type = compliance.get("session_type", "endurance")
+    phase = compliance.get("phase", "maintenance")
+
+    if language == "simple":
+        headline = _HEADLINE_BY_GRADE_SIMPLE.get(grade, "Session logged")
+        physio = _simple_physio_read(compliance, trajectory)
+        trajectory_narrative = _simple_trajectory_narrative(trajectory)
+        nudge = _simple_nudge(grade, session_type, phase)
+    else:
+        headline = _HEADLINE_BY_GRADE_TECHNICAL.get(grade, "Session logged")
+        physio = _technical_physio_read(compliance, trajectory)
+        trajectory_narrative = _technical_trajectory_narrative(trajectory)
+        nudge = _technical_nudge(grade, session_type, phase)
+
+    return {
+        "grade": grade,
+        "headline": headline,
+        "duration": compliance.get("duration", {}),
+        "tss": compliance.get("tss", {}),
+        "intensity_factor": compliance.get("intensity_factor"),
+        "variability_index": compliance.get("variability_index"),
+        "ef": compliance.get("ef"),
+        "decoupling_pct": compliance.get("decoupling_pct"),
+        "physiological_read": physio,
+        "goal_trajectory": trajectory_narrative,
+        "next_session_nudge": nudge,
+        "target_template_id": target_tpl.get("id", ""),
+        "target_template_title": target_tpl.get("title", ""),
+        "session_type": session_type,
+    }
 
 
 def _simple_rationale(
@@ -992,6 +1346,17 @@ def _rule_based_brief(snapshot: dict) -> dict:
             template.framework_cited,
         ]
 
+    # --------------------------------------------------------------
+    # Post-ride review — attached when today's activity was scored
+    # (snapshot.post_ride is populated by build_snapshot when
+    # today_tss >= 25). The review replaces the prescribed-workout
+    # card in the UI; prescribed_workout itself stays rest_day.
+    # --------------------------------------------------------------
+    post_ride_payload = snapshot.get("post_ride")
+    post_ride_review: dict | None = None
+    if isinstance(post_ride_payload, dict):
+        post_ride_review = _build_post_ride_review(post_ride_payload, language)
+
     return {
         "verdict": verdict,
         "rationale": rationale,
@@ -1000,6 +1365,7 @@ def _rule_based_brief(snapshot: dict) -> dict:
         "outlook_7d": outlook,
         "frameworks_cited": frameworks_cited,
         "model_used": "rule-based-fallback",
+        "post_ride_review": post_ride_review,
     }
 
 
@@ -1131,11 +1497,18 @@ async def get_or_generate_brief(
     if "language" not in snapshot:
         snapshot["language"] = language
 
+    # Phase 5.3 — the post_ride_review lives inside evidence (no schema
+    # migration required; JSONB keeps it cheap). _brief_to_read extracts
+    # it on response assembly.
+    evidence_payload = dict(snapshot)
+    if brief_payload.get("post_ride_review") is not None:
+        evidence_payload["post_ride_review"] = brief_payload["post_ride_review"]
+
     brief = CoachBrief(
         user_id=user_id,
         verdict=brief_payload["verdict"],
         rationale=brief_payload["rationale"],
-        evidence=snapshot,
+        evidence=evidence_payload,
         # options kept for backward compat on the old column — always None now
         options=None,
         prescribed_workout=brief_payload.get("prescribed_workout"),
