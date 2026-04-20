@@ -211,6 +211,14 @@ def session_type_for_today(
     if intensity_ceiling == "easy":
         return "recovery"
 
+    # Already trained today — don't prescribe another session.
+    # Threshold: today_tss >= 25 (anything beyond a coffee spin).
+    # We return "rest" so the prescribed_workout resolves to rest_day; the coach
+    # service writes a congratulatory verdict when progress.today_tss > 0.
+    progress_for_today_check = weekly_progress or {}
+    if float(progress_for_today_check.get("today_tss", 0.0)) >= 25.0:
+        return "rest"
+
     # Race week — nothing hard
     if phase == "race":
         return "recovery" if day_of_week < 5 else "rest"

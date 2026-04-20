@@ -189,6 +189,9 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     # Rolling 48h window — independent of week boundary so Monday can see Sunday's load
     now_utc = datetime.now(timezone.utc)
     since_48h = now_utc - timedelta(hours=48)
+    # Today's window (calendar day) — so the coach acknowledges a ride already done today
+    since_today = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
+    end_today = datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc)
     # Yesterday's window (calendar day)
     yesterday = today - timedelta(days=1)
     since_yesterday = datetime.combine(yesterday, datetime.min.time(), tzinfo=timezone.utc)
@@ -205,6 +208,9 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     vo2_sessions = 0
     total_tss = 0.0
     total_hours = 0.0
+    today_tss = 0.0
+    today_duration_minutes = 0.0
+    today_max_tss_per_hour = 0.0
     yesterday_tss = 0.0
     last_48h_tss = 0.0
 
@@ -221,6 +227,13 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
                     hard_sessions += 1
                 if tss_per_hour >= 100:
                     vo2_sessions += 1
+        # Today's cumulative TSS + duration + peak intensity
+        if since_today <= started <= end_today:
+            today_tss += tss
+            today_duration_minutes += float(a.duration_seconds or 0) / 60.0
+            if a.duration_seconds and a.duration_seconds >= 600:
+                tss_per_hour = (tss / a.duration_seconds) * 3600.0
+                today_max_tss_per_hour = max(today_max_tss_per_hour, tss_per_hour)
         # Yesterday's cumulative TSS
         if since_yesterday <= started <= end_yesterday:
             yesterday_tss += tss
@@ -233,6 +246,9 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
         "vo2_sessions_done": vo2_sessions,
         "total_tss_this_week": round(total_tss, 1),
         "total_hours_this_week": round(total_hours, 1),
+        "today_tss": round(today_tss, 1),
+        "today_duration_minutes": round(today_duration_minutes, 1),
+        "today_max_tss_per_hour": round(today_max_tss_per_hour, 1),
         "yesterday_tss": round(yesterday_tss, 1),
         "last_48h_tss": round(last_48h_tss, 1),
     }
@@ -838,6 +854,56 @@ def _rule_based_brief(snapshot: dict) -> dict:
             why_parts.append(f"HRV {hrv['delta_pct']:+.0f}%.")
         why_parts.append(template.purpose)
         why_this = " ".join(why_parts)[:300]
+
+    # --------------------------------------------------------------
+    # "Already rode today" override — acknowledge the completed session
+    # instead of prescribing another one on top of it.
+    # --------------------------------------------------------------
+    wp = snapshot.get("weekly_progress") or {}
+    today_tss = float(wp.get("today_tss", 0.0))
+    today_minutes = float(wp.get("today_duration_minutes", 0.0))
+    today_tss_per_hour = float(wp.get("today_max_tss_per_hour", 0.0))
+    if today_tss >= 25.0:
+        # Session intensity label for the friendly verdict
+        if today_tss_per_hour >= 90:
+            effort_simple = "tough session"
+            effort_tech = "high-intensity session"
+        elif today_tss_per_hour >= 65:
+            effort_simple = "solid ride"
+            effort_tech = "threshold-adjacent session"
+        else:
+            effort_simple = "ride"
+            effort_tech = "endurance session"
+        # Round display numbers
+        mins_disp = int(round(today_minutes))
+        tss_disp = int(round(today_tss))
+        if language == "simple":
+            verdict = f"Nice — {mins_disp} min done today"
+            rationale = (
+                f"You already got a {effort_simple} in today "
+                f"({mins_disp} min). That's the work — no second session needed. "
+                "Fuel, hydrate, and let recovery do its thing."
+            )
+            why_this = (
+                "You've already trained. Today's session is logged, "
+                "so the smart move is rest and recovery. "
+                "Tomorrow you'll come back stronger."
+            )[:300]
+        else:
+            verdict = f"Session complete — {tss_disp} TSS logged"
+            rationale = (
+                f"Today's {effort_tech} is on the books: {mins_disp} min, "
+                f"{tss_disp} TSS, {today_tss_per_hour:.0f} TSS/h peak. "
+                f"Stacking another workout on top would push ATL up without "
+                f"adaptive benefit — prioritise recovery."
+            )
+            why_this = (
+                f"Already trained today ({tss_disp} TSS). "
+                "A second session would fight absorption, not add fitness. "
+                "Let the body consolidate."
+            )[:300]
+        # Force the prescribed template to rest so downstream renders cleanly.
+        template = TEMPLATES.get("rest_day", template)
 
     prescribed = _rewrite_prescribed_workout(
         template_id=template.id,

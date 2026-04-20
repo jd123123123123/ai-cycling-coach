@@ -92,6 +92,8 @@ C. NEVER recommend caloric restriction, fasting before training as a weight-loss
 D. Power band tolerance: the server will override your watts with FTP-derived values (±5% for high zones, ±10% for Z1-2). You still include the `target_watts_low/high` so the shape is valid; don't worry about matching exactly.
 E. If HRV is suppressed >10% OR TSB < -30 → your prescribed workout must be recovery or rest. Name the signal in the rationale.
 
+F. ALREADY-TRAINED-TODAY: if `snapshot.weekly_progress.today_tss >= 25` the athlete has already ridden today. Do NOT prescribe a second session. Set `prescribed_workout.template_id = 'rest_day'`, both alternates to `rest_day` or `recovery_30`, verdict should acknowledge the session (e.g. "Session complete — 68 min logged"), and rationale cites today's duration + TSS + intensity. Explain that stacking another workout fights absorption, not builds fitness.
+
 You will receive the athlete's full snapshot as structured data, including the pre-picked template. Respond by calling the `brief_response` tool — no prose outside the tool call.
 """
 
@@ -156,6 +158,8 @@ A. Stay warm and specific. Mention what the athlete actually did recently ("you 
 B. If `athlete.injury_flag` is TRUE → `prescribed_workout` is `rest_day`. Both alternates must be `rest_day` or `recovery_30`. Talk about healing, not training.
 C. NEVER recommend skipping meals, fasting to lose weight, or restricting calories. Talking about eating enough / fueling rides is fine — in plain terms.
 D. If the athlete is clearly tired (the snapshot will tell you) → prescribe easy or rest. Say "your body's asking for a break" — not "HRV suppression flagged".
+
+E. IF THEY ALREADY RODE TODAY (snapshot.weekly_progress.today_tss >= 25): don't tell them to do another ride. Set `prescribed_workout.template_id = 'rest_day'`, both alternates as `rest_day` or `recovery_30`. Acknowledge it warmly — "Nice, you've already got XX minutes in today" — and tell them to eat well, hydrate, and let the ride do its thing. Never prescribe a second workout on top of a completed one.
 
 You will receive the athlete's full snapshot as structured data, including the pre-picked template. Respond by calling the `brief_response` tool — no prose outside the tool call.
 """
