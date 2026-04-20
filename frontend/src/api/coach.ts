@@ -2,8 +2,8 @@ import { apiClient, getAccessToken } from './client'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+// Legacy — Phase 5 shape. Kept for backward-tolerant parsing of pre-5.1 briefs.
 export type BriefIntensity = 'rest' | 'easy' | 'moderate' | 'push'
-
 export interface BriefOption {
   intensity: BriefIntensity
   title: string
@@ -19,13 +19,48 @@ export interface OutlookEntry {
   note: string
 }
 
+// Phase 5.1 — prescription-mode shape
+export interface ResolvedBlock {
+  name: string
+  duration_s: number
+  target_watts_low: number
+  target_watts_high: number
+  target_pct_ftp: number
+  zone: number // 1..7
+  rpe: number  // 1..10
+}
+
+export interface PrescribedWorkout {
+  template_id: string
+  title: string
+  duration_minutes: number
+  total_duration_s?: number | null
+  predicted_tss: number
+  predicted_ef_range?: [number, number] | null
+  framework_cited: string
+  purpose?: string | null
+  category?: string | null
+  blocks: ResolvedBlock[]
+  why_this_workout?: string | null
+}
+
+export interface AlternateWorkout {
+  label: 'less_time' | 'recover'
+  one_liner: string
+  template_id: string
+}
+
 export interface CoachBriefResponse {
   id: number
   generated_at: string
   verdict: string
   rationale: string
   evidence: Record<string, unknown>
-  options: BriefOption[]
+  // Phase 5.1 primary fields
+  prescribed_workout: PrescribedWorkout | null
+  alternates: AlternateWorkout[]
+  // Legacy — populated only when reading old rows
+  options?: BriefOption[] | null
   outlook_7d: OutlookEntry[] | null
   frameworks_cited: string[]
   model_used: string

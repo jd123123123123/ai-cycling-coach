@@ -18,6 +18,18 @@
   --color-amber-soft: #f6dab2;
   --color-ink-blue: #143555;
   --color-alert: #8a1d1d;
+
+  /* Phase 5.1 zone palette for the IntervalRibbon.
+     Z1 neutral (paper-toned), Z2 sage (forest-2), Z3 gold, Z4 coral, Z5+ deeper red-ochre.
+     These map to Coggan power zones — visually, the ribbon gets taller and
+     warmer as intensity rises. */
+  --color-zone-1: #c9beab;
+  --color-zone-2: #6b8f76;
+  --color-zone-3: #c79a3a;
+  --color-zone-4: #d9643f;
+  --color-zone-5: #a33e26;
+  --color-zone-6: #7a2c1b;
+  --color-zone-7: #551d12;
 }
 
 :root {
