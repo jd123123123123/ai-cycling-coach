@@ -131,7 +131,10 @@ class TestRuleBasedBrief:
             assert 335 <= b["target_watts_high"] <= 340
 
     def test_rationale_cites_data_numbers(self):
-        brief = _rule_based_brief(_sample_snapshot())
+        # Technical-mode rationale cites the numeric framework terms.
+        # (Default is 'simple' as of Phase 5.2, so we opt into technical here.)
+        snap = {**_sample_snapshot(), "language": "technical"}
+        brief = _rule_based_brief(snap)
         r = brief["rationale"]
         assert "TSB" in r or "CTL" in r
         assert "Banister" in r or "Friel" in r

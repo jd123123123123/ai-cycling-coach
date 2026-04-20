@@ -45,7 +45,12 @@ from app.services.advanced_metrics import (
     why_am_i_tired,
     zone_distribution,
 )
-from app.services.coach_prompt import BRIEF_TOOL, SYSTEM_PROMPT, build_user_message
+from app.services.coach_prompt import (
+    BRIEF_TOOL,
+    SYSTEM_PROMPT,
+    build_user_message,
+    system_prompt_for_language,
+)
 from app.services.safety_rails import (
     RailContext,
     intensity_ceiling,
@@ -233,9 +238,19 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     }
 
 
-async def build_snapshot(db: AsyncSession, user_id: int) -> dict:
+async def build_snapshot(
+    db: AsyncSession,
+    user_id: int,
+    language: str = "simple",
+) -> dict:
     """Assemble every feature the coach needs in one round of DB hits,
     including the pre-picked workout template the LLM will rubber-stamp.
+
+    `language` is stamped into the snapshot so that:
+        - `generate_brief` can route to the right system prompt
+        - the cache in `get_or_generate_brief` can key on language
+          (different language = cache miss = regenerate)
+        - `_rule_based_brief` can pick simple vs technical phrasing
     """
     profile_result = await db.execute(
         select(AthleteProfile).where(AthleteProfile.user_id == user_id)
@@ -317,6 +332,7 @@ async def build_snapshot(db: AsyncSession, user_id: int) -> dict:
 
     snapshot: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "language": language,
         "athlete": {
             "goal_event_date": goal_event_date,
             "goal_target": goal_target,
@@ -578,10 +594,141 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
 # Rule-based fallback — always produces a complete PrescribedWorkout
 # ----------------------------------------------------------------------
 
+# ----------------------------------------------------------------------
+# Language-aware phrase maps for rule-based fallback
+# ----------------------------------------------------------------------
+
+# Category-based plain-English titles (simple mode)
+_SIMPLE_TITLE_BY_CATEGORY: dict[str, str] = {
+    "recovery":   "Easy spin",
+    "endurance":  "Chill ride",
+    "tempo":      "Steady push",
+    "sweet_spot": "Focused effort",
+    "threshold":  "Hard ride",
+    "vo2":        "Hard intervals",
+    "anaerobic":  "Sprint day",
+    "rest":       "Rest day",
+}
+
+# Simple-mode verdict phrases by (ceiling, session_type)
+_SIMPLE_VERDICT_BY_CEILING: dict[str, str] = {
+    "rest":     "Rest up — let your body heal",
+    "easy":     "Take it easy today",
+    "moderate": "Steady effort — nothing crazy",
+    "push":     "You're good to go",
+}
+
+_SIMPLE_VERDICT_BY_SESSION: dict[str, str] = {
+    "vo2":        "Hard intervals — you're fresh",
+    "threshold":  "Hard ride — quality day",
+    "sweet_spot": "Focused effort today",
+    "tempo":      "Steady push today",
+    "endurance":  "Easy hour on the bike",
+    "recovery":   "Easy spin — just move",
+    "rest":       "Rest day — legs up",
+}
+
+# Simple-mode alternate one-liners (smart-friend-at-the-bike-shop tone)
+_SIMPLE_ALTERNATE_LESS_TIME = "Got 30 min? Just spin the legs."
+_SIMPLE_ALTERNATE_RECOVER = "Tired? Put your legs up, do nothing."
+
+
+def _simple_rationale(
+    pmc: dict,
+    hrv: dict,
+    sleep: dict,
+    zones: dict,
+    ceiling: str,
+    injury_flag: bool,
+) -> str:
+    """Build a plain-English rationale that avoids FTP/TSS/CTL/Z-jargon entirely.
+
+    Draws from the same signals as the technical path, but phrases them the
+    way a friend would ("your sleep's been light", "you're catching up from
+    last week's rides").
+    """
+    if injury_flag:
+        return (
+            "Your body's asking for a break while that injury heals. "
+            "A day off today pays off next week — promise."
+        )
+
+    hrv_delta = hrv.get("delta_pct") if hrv else None
+    sleep_debt = sleep.get("total_debt_hours") if sleep else None
+    tsb = pmc.get("tsb")
+
+    parts: list[str] = []
+
+    # Opener — set the tone
+    if ceiling == "rest":
+        parts.append("Your body's waving the white flag today.")
+    elif ceiling == "easy":
+        parts.append("You're running on empty — let's keep it chill.")
+    elif ceiling == "moderate":
+        parts.append("You're in decent shape but not fully fresh.")
+    else:
+        parts.append("Legs feel good, let's make it count.")
+
+    # Cite something the athlete actually did or feels
+    if isinstance(hrv_delta, (int, float)) and hrv_delta < -8:
+        parts.append("Your body's showing signs of fatigue the last week.")
+    elif isinstance(sleep_debt, (int, float)) and sleep_debt > 3:
+        parts.append("Sleep's been short lately — that adds up.")
+    elif isinstance(tsb, (int, float)) and tsb < -15:
+        parts.append("You've been riding hard — fatigue's catching up.")
+    elif isinstance(tsb, (int, float)) and tsb > 15:
+        parts.append("You've rested plenty and your legs are ready.")
+    elif zones and zones.get("grey_zone_flag"):
+        parts.append(
+            "You've been riding the middle gears a lot — let's go easy or hard, not in-between."
+        )
+
+    # Close with what the workout is for
+    if ceiling in ("rest", "easy"):
+        parts.append("Today's about recovery.")
+    elif ceiling == "moderate":
+        parts.append("Today's about putting in solid time without digging a hole.")
+    else:
+        parts.append("Today's about building the good kind of tired.")
+
+    return " ".join(parts)
+
+
+def _technical_rationale(
+    pmc: dict,
+    hrv: dict,
+    zones: dict,
+    ceiling: str,
+    max_tss: float,
+    phase: str,
+) -> str:
+    """The current (pre-5.2) rationale, kept for technical mode."""
+    parts: list[str] = []
+    parts.append(
+        f"TSB is {pmc['tsb']:.1f}, CTL {pmc['ctl']:.1f} (Banister fitness-fatigue)."
+    )
+    if hrv.get("delta_pct") is not None:
+        parts.append(
+            f"7-day HRV {hrv['delta_pct']:+.1f}% vs 28-day baseline."
+        )
+    if zones.get("grey_zone_flag"):
+        parts.append(
+            f"Z2 creep: {zones['z2_pct']}% of recent time — above Seiler grey-zone threshold."
+        )
+    parts.append(
+        f"Ceiling: '{ceiling}', TSS cap {max_tss:.0f}. Friel phase: {phase}."
+    )
+    return " ".join(parts)
+
+
 def _rule_based_brief(snapshot: dict) -> dict:
     """Deterministic brief synthesized from safety_rails + snapshot +
     pre-picked template. Used when ANTHROPIC_API_KEY is unset OR the LLM
     call fails.
+
+    Branches on `snapshot['language']` ('simple' | 'technical'; defaults to
+    'simple') to pick verdict/title/rationale/one-liner phrasing. Both paths
+    produce the same structural shape — only text tone changes.
 
     Always produces:
         - a prescribed_workout derived from snapshot.picked_template_id
@@ -594,9 +741,11 @@ def _rule_based_brief(snapshot: dict) -> dict:
     max_tss = max_tss_for_day(ctx.ctl)
     pmc = snapshot["pmc"]
     hrv = snapshot["biometrics"]["hrv"]
+    sleep = snapshot["biometrics"].get("sleep", {})
     zones = snapshot["distribution"]
     athlete = snapshot.get("athlete", {})
     ftp = int(athlete.get("ftp") or 0)
+    language = snapshot.get("language", "simple")
 
     # Verdict tuned to ceiling + picked session type
     picked_id = snapshot.get("picked_template_id") or "z2_endurance_60"
@@ -610,53 +759,81 @@ def _rule_based_brief(snapshot: dict) -> dict:
 
     template = TEMPLATES.get(picked_id, TEMPLATES["z2_endurance_60"])
 
-    if ceiling == "rest":
-        verdict = "Rest — injury takes priority"
-    elif ceiling == "easy":
-        if ctx.hrv_delta_pct < -10:
-            verdict = "Recovery only — HRV flagged"
+    # --------------------------------------------------------------
+    # Verdict
+    # --------------------------------------------------------------
+    if language == "simple":
+        if ctx.injury_flag:
+            verdict = "Rest today — take care of that injury"
+        elif ceiling in ("rest", "easy"):
+            verdict = _SIMPLE_VERDICT_BY_CEILING[ceiling]
         else:
-            verdict = "Recovery only — TSB overreach"
-    elif ceiling == "moderate":
-        verdict = f"{template.name} — manage fatigue"
+            verdict = _SIMPLE_VERDICT_BY_SESSION.get(
+                session_type, _SIMPLE_VERDICT_BY_CEILING.get(ceiling, "Easy day today")
+            )
     else:
-        # Build a session-typed verdict
-        label_by_session = {
-            "vo2":        "VO2 today — you're fresh",
-            "threshold":  "Threshold today — quality window",
-            "sweet_spot": "Sweet spot today — build fitness",
-            "tempo":      "Tempo today — sub-threshold",
-            "endurance":  f"{template.name}",
-            "recovery":   "Recovery spin — maintain parasympathetic",
-            "rest":       "Rest day — full parasympathetic",
-        }
-        verdict = label_by_session.get(session_type, template.name)
+        if ceiling == "rest":
+            verdict = "Rest — injury takes priority"
+        elif ceiling == "easy":
+            if ctx.hrv_delta_pct < -10:
+                verdict = "Recovery only — HRV flagged"
+            else:
+                verdict = "Recovery only — TSB overreach"
+        elif ceiling == "moderate":
+            verdict = f"{template.name} — manage fatigue"
+        else:
+            label_by_session = {
+                "vo2":        "VO2 today — you're fresh",
+                "threshold":  "Threshold today — quality window",
+                "sweet_spot": "Sweet spot today — build fitness",
+                "tempo":      "Tempo today — sub-threshold",
+                "endurance":  f"{template.name}",
+                "recovery":   "Recovery spin — maintain parasympathetic",
+                "rest":       "Rest day — full parasympathetic",
+            }
+            verdict = label_by_session.get(session_type, template.name)
 
-    # Rationale citing numbers
-    rationale_parts: list[str] = []
-    rationale_parts.append(
-        f"TSB is {pmc['tsb']:.1f}, CTL {pmc['ctl']:.1f} (Banister fitness-fatigue)."
-    )
-    if hrv.get("delta_pct") is not None:
-        rationale_parts.append(
-            f"7-day HRV {hrv['delta_pct']:+.1f}% vs 28-day baseline."
+    # --------------------------------------------------------------
+    # Rationale
+    # --------------------------------------------------------------
+    if language == "simple":
+        rationale = _simple_rationale(
+            pmc=pmc, hrv=hrv, sleep=sleep, zones=zones,
+            ceiling=ceiling, injury_flag=ctx.injury_flag,
         )
-    if zones.get("grey_zone_flag"):
-        rationale_parts.append(
-            f"Z2 creep: {zones['z2_pct']}% of recent time — above Seiler grey-zone threshold."
+    else:
+        rationale = _technical_rationale(
+            pmc=pmc, hrv=hrv, zones=zones,
+            ceiling=ceiling, max_tss=max_tss,
+            phase=athlete.get("goal_phase", "base"),
         )
-    rationale_parts.append(
-        f"Ceiling: '{ceiling}', TSS cap {max_tss:.0f}. Friel phase: {athlete.get('goal_phase', 'base')}."
-    )
-    rationale = " ".join(rationale_parts)
 
-    # Prescribed workout
-    why_parts: list[str] = [f"Phase: {athlete.get('goal_phase', 'base')}."]
-    why_parts.append(f"TSB {pmc['tsb']:.0f}, CTL {pmc['ctl']:.0f}.")
-    if hrv.get("delta_pct") is not None:
-        why_parts.append(f"HRV {hrv['delta_pct']:+.0f}%.")
-    why_parts.append(template.purpose)
-    why_this = " ".join(why_parts)[:300]
+    # --------------------------------------------------------------
+    # Prescribed workout — shared shape, different why_this_workout + title
+    # --------------------------------------------------------------
+    if language == "simple":
+        if ctx.injury_flag:
+            why_this = (
+                "Let's not make things worse — a rest day now pays off later."
+            )
+        elif ceiling in ("rest", "easy"):
+            why_this = (
+                "Your body's tired from what you've been doing. "
+                "Easy today means you bounce back faster."
+            )
+        else:
+            why_this = (
+                "You've been consistent — today's about adding a bit of quality "
+                "without burning a match."
+            )
+        why_this = why_this[:300]
+    else:
+        why_parts: list[str] = [f"Phase: {athlete.get('goal_phase', 'base')}."]
+        why_parts.append(f"TSB {pmc['tsb']:.0f}, CTL {pmc['ctl']:.0f}.")
+        if hrv.get("delta_pct") is not None:
+            why_parts.append(f"HRV {hrv['delta_pct']:+.0f}%.")
+        why_parts.append(template.purpose)
+        why_this = " ".join(why_parts)[:300]
 
     prescribed = _rewrite_prescribed_workout(
         template_id=template.id,
@@ -665,39 +842,85 @@ def _rule_based_brief(snapshot: dict) -> dict:
         why_this_workout=why_this,
     )
 
-    # Alternates
-    less_time_tid = "z2_endurance_60" if template.id != "z2_endurance_60" else "recovery_30"
-    less_time_tpl = TEMPLATES[less_time_tid]
-    alternates = [
-        {
-            "label": "less_time",
-            "one_liner": f"Shorter window: {less_time_tpl.name} (~{int(less_time_tpl.base_tss)} TSS)",
-            "template_id": less_time_tid,
-        },
-        {
-            "label": "recover",
-            "one_liner": "Tired? 30 min Z1 recovery spin.",
-            "template_id": "recovery_30",
-        },
-    ]
+    # In simple mode, overwrite the title with a plain-English one
+    if language == "simple":
+        simple_title = _SIMPLE_TITLE_BY_CATEGORY.get(
+            template.category, "Ride today"
+        )
+        prescribed["title"] = simple_title
 
-    # 7-day outlook
+    # --------------------------------------------------------------
+    # Alternates — shared label, different one-liners
+    # --------------------------------------------------------------
+    less_time_tid = "z2_endurance_60" if template.id != "z2_endurance_60" else "recovery_30"
+    if language == "simple":
+        alternates = [
+            {
+                "label": "less_time",
+                "one_liner": _SIMPLE_ALTERNATE_LESS_TIME,
+                "template_id": less_time_tid,
+            },
+            {
+                "label": "recover",
+                "one_liner": _SIMPLE_ALTERNATE_RECOVER,
+                "template_id": "recovery_30",
+            },
+        ]
+    else:
+        less_time_tpl = TEMPLATES[less_time_tid]
+        alternates = [
+            {
+                "label": "less_time",
+                "one_liner": f"Shorter window: {less_time_tpl.name} (~{int(less_time_tpl.base_tss)} TSS)",
+                "template_id": less_time_tid,
+            },
+            {
+                "label": "recover",
+                "one_liner": "Tired? 30 min Z1 recovery spin.",
+                "template_id": "recovery_30",
+            },
+        ]
+
+    # --------------------------------------------------------------
+    # 7-day outlook — language-aware notes
+    # --------------------------------------------------------------
     outlook: list[dict[str, Any]] = []
     for i in range(7):
         weekday = (date.today() + timedelta(days=i)).weekday()
         if weekday == 6:
             tss = round(min(ctx.ctl * 1.1, max_tss if max_tss else ctx.ctl * 1.1), 0)
-            note = "Long Z2 — build aerobic base."
+            note = "Long easy ride — build the base." if language == "simple" \
+                else "Long Z2 — build aerobic base."
         elif weekday == 2:
             tss = round(min(ctx.ctl * 0.9, max_tss if max_tss else ctx.ctl * 0.9), 0)
-            note = "Mid-week quality — intervals near threshold."
+            note = "Hard ride mid-week." if language == "simple" \
+                else "Mid-week quality — intervals near threshold."
         elif weekday in (0, 4):
             tss = round(ctx.ctl * 0.3, 0)
-            note = "Rest or easy spin."
+            note = "Rest or easy spin." if language == "simple" \
+                else "Rest or easy spin."
         else:
             tss = round(ctx.ctl * 0.6, 0)
-            note = "Endurance Z2."
+            note = "Easy hour on the bike." if language == "simple" \
+                else "Endurance Z2."
         outlook.append({"day_offset": i, "suggested_tss": tss, "note": note})
+
+    # --------------------------------------------------------------
+    # Frameworks cited — plain English in simple mode
+    # --------------------------------------------------------------
+    if language == "simple":
+        frameworks_cited = [
+            "Rest makes you faster",
+            "Easy days matter",
+            "Consistency beats intensity",
+        ]
+    else:
+        frameworks_cited = [
+            "Banister fitness-fatigue",
+            "Seiler polarized",
+            "Friel periodization",
+            template.framework_cited,
+        ]
 
     return {
         "verdict": verdict,
@@ -705,12 +928,7 @@ def _rule_based_brief(snapshot: dict) -> dict:
         "prescribed_workout": prescribed,
         "alternates": alternates,
         "outlook_7d": outlook,
-        "frameworks_cited": [
-            "Banister fitness-fatigue",
-            "Seiler polarized",
-            "Friel periodization",
-            template.framework_cited,
-        ],
+        "frameworks_cited": frameworks_cited,
         "model_used": "rule-based-fallback",
     }
 
@@ -729,13 +947,20 @@ def _extract_tool_use(message: Any) -> dict | None:
     return None
 
 
-async def generate_brief(snapshot: dict) -> dict:
+async def generate_brief(snapshot: dict, language: str = "simple") -> dict:
     """Generate a brief — LLM path with rule-based fallback.
 
     Returns a dict with keys: verdict, rationale, prescribed_workout, alternates,
     outlook_7d, frameworks_cited, model_used. The prescribed_workout watts are
     always re-derived from the athlete's FTP server-side.
+
+    `language` picks the system prompt (simple vs technical). The snapshot is
+    also stamped with `language` so the rule-based fallback can branch on it.
     """
+    # Ensure the snapshot carries the language so rule-based fallback + user
+    # message rendering both see the same value.
+    snapshot = {**snapshot, "language": language}
+
     if not settings.ANTHROPIC_API_KEY:
         logger.info("ANTHROPIC_API_KEY not set — using rule-based fallback brief")
         return _rule_based_brief(snapshot)
@@ -749,7 +974,7 @@ async def generate_brief(snapshot: dict) -> dict:
         system_blocks = [
             {
                 "type": "text",
-                "text": SYSTEM_PROMPT,
+                "text": system_prompt_for_language(language),  # type: ignore[arg-type]
                 "cache_control": {"type": "ephemeral"},
             }
         ]
@@ -788,14 +1013,29 @@ async def get_or_generate_brief(
     db: AsyncSession,
     user_id: int,
     force: bool = False,
+    language: str = "simple",
 ) -> CoachBrief:
-    """Return the most-recent brief if < COACH_BRIEF_CACHE_HOURS old, else regenerate.
+    """Return the most-recent brief for `language` if < COACH_BRIEF_CACHE_HOURS
+    old, else regenerate.
+
+    Cache key includes language — a brief cached in 'technical' is NOT served to
+    a 'simple' request. This is implemented by filtering on
+    `evidence->>'language'`; pre-5.2 rows (no language key) are treated as
+    'simple' for backward compat.
 
     Always persists the brief (even cache misses) so every generation is
     auditable. Caller is responsible for committing the session on return.
     """
+    if language not in ("simple", "technical"):
+        language = "simple"
+
     if not force:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
+        # JSONB language filter: match rows where evidence->>'language' equals
+        # the requested language. Pre-5.2 rows (language key missing) count as
+        # 'simple' — coalesce keeps them servable.
+        lang_expr = CoachBrief.evidence["language"].astext
+        from sqlalchemy import func
         recent = await db.execute(
             select(CoachBrief)
             .where(
@@ -804,6 +1044,7 @@ async def get_or_generate_brief(
                 # Schema guard: pre-05.1 rows had no prescribed_workout.
                 # Treat them as cache misses so the athlete never sees a legacy brief.
                 CoachBrief.prescribed_workout.isnot(None),
+                func.coalesce(lang_expr, "simple") == language,
             )
             .order_by(CoachBrief.generated_at.desc())
             .limit(1)
@@ -812,8 +1053,13 @@ async def get_or_generate_brief(
         if cached is not None:
             return cached
 
-    snapshot = await build_snapshot(db, user_id)
-    brief_payload = await generate_brief(snapshot)
+    snapshot = await build_snapshot(db, user_id, language=language)
+    brief_payload = await generate_brief(snapshot, language=language)
+
+    # Keep the language marker in persisted evidence so cache lookups can
+    # discriminate without requiring a schema change.
+    if "language" not in snapshot:
+        snapshot["language"] = language
 
     brief = CoachBrief(
         user_id=user_id,
@@ -826,7 +1072,7 @@ async def get_or_generate_brief(
         alternates=brief_payload.get("alternates") or [],
         outlook_7d=brief_payload.get("outlook_7d"),
         frameworks_cited=brief_payload.get("frameworks_cited") or [],
-        raw_prompt=SYSTEM_PROMPT,
+        raw_prompt=system_prompt_for_language(language),  # type: ignore[arg-type]
         model_used=brief_payload["model_used"],
     )
     db.add(brief)
@@ -843,17 +1089,26 @@ async def coach_chat_stream(
     db: AsyncSession,
     user_id: int,
     messages: list[dict],
+    language: str = "simple",
 ) -> AsyncIterator[str]:
-    """Async generator yielding SSE-formatted chunks for the /coach/chat endpoint."""
+    """Async generator yielding SSE-formatted chunks for the /coach/chat endpoint.
+
+    `language` picks the system prompt (simple vs technical). The snapshot used
+    to ground the chat also has `language` stamped, so the user message markers
+    reinforce the style.
+    """
     if not settings.ANTHROPIC_API_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY not set — chat unavailable")
+
+    if language not in ("simple", "technical"):
+        language = "simple"
 
     import anthropic
     import json as _json
 
-    snapshot = await build_snapshot(db, user_id)
+    snapshot = await build_snapshot(db, user_id, language=language)
     chat_system = (
-        SYSTEM_PROMPT
+        system_prompt_for_language(language)  # type: ignore[arg-type]
         + "\n\n--- Athlete snapshot ---\n"
         + build_user_message(snapshot)
     )
