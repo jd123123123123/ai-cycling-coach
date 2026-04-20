@@ -12,16 +12,16 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Register hourly Garmin sync job
+    # Register Garmin sync job (every 4 hours)
     scheduler.add_job(
         run_all_user_syncs,
         "interval",
-        hours=1,
+        hours=4,
         id="garmin_sync",
         misfire_grace_time=600,
     )
     scheduler.start()
-    logger.info("APScheduler started with hourly Garmin sync")
+    logger.info("APScheduler started with Garmin sync every 4 hours")
     yield
     scheduler.shutdown()
     logger.info("APScheduler shut down")

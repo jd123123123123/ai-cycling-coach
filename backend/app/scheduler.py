@@ -1,8 +1,8 @@
 """APScheduler setup for background Garmin sync.
 
-Runs an hourly job that iterates over all users with sync_enabled=True and
-calls sync_user_garmin for each one.  Individual user failures are logged and
-skipped so one bad credential never blocks the rest.
+Runs a job every 4 hours that iterates over all users with sync_enabled=True
+and calls sync_user_garmin for each one.  Individual user failures are logged
+and skipped so one bad credential never blocks the rest.
 
 Design notes:
 - Uses AsyncIOScheduler (same event loop as FastAPI).
