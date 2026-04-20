@@ -43,8 +43,16 @@ class CoachBrief(Base):
     # Full feature snapshot (what the LLM saw). JSONB for indexed querying.
     evidence: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
-    # Array of 4 options (post-safety-rails, with blocked flags embedded)
-    options: Mapped[list] = mapped_column(JSONB, nullable=False)
+    # Legacy: 4 options (phase 5). Kept nullable for backward compat / rollback.
+    # Phase 5.1 switched to prescribed_workout + alternates below.
+    options: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
+    # Phase 5.1: the ONE precisely prescribed workout (template_id, blocks, watts, TSS).
+    # Nullable for rollback / pre-5.1 rows; new generations always populate it.
+    prescribed_workout: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # Phase 5.1: exactly 2 compact alternates (less_time / recover).
+    alternates: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     # Forward 7-day outlook (suggested TSS per day with coach notes)
     outlook_7d: Mapped[list | None] = mapped_column(JSONB, nullable=True)
