@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { LogOut, User as UserIcon, MessageSquare } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import CoachChat from './CoachChat'
+import LanguageToggle from './LanguageToggle'
 
 interface DashboardShellProps {
   /** Fold 1 — the headline: CoachBrief + PrescribedWorkoutCard dominates. */
@@ -61,6 +62,9 @@ export default function DashboardShell({
             </span>
           </Link>
           <div className="flex items-center gap-2">
+            {/* Masthead action order (left → right): SyncButton · LanguageToggle · Ask coach.
+               SyncButton is inserted in the same task as LanguageToggle below. */}
+            <LanguageToggle />
             <button
               onClick={() => setChatOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-medium transition-all min-h-[40px] hover:-translate-y-0.5"

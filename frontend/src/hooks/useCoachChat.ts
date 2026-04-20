@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { streamCoachChat, type ChatMessage } from '../api/coach'
+import { useLanguage } from '../contexts/LanguageContext'
 
 export interface CoachChatState {
   messages: ChatMessage[]
@@ -16,8 +17,13 @@ export interface CoachChatState {
  * Local-state chat store — messages live for the session only.
  * Persisting to the server would require an audit table we don't want yet;
  * the coach already persists briefs, chat is ephemeral by design.
+ *
+ * The chat stream is language-aware: the current language from
+ * `<LanguageProvider>` is attached to every request body so the coach's
+ * replies match whatever the user picked in the masthead toggle.
  */
 export function useCoachChat(): CoachChatState {
+  const { language } = useLanguage()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [partial, setPartial] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -50,7 +56,7 @@ export function useCoachChat(): CoachChatState {
     let accumulated = ''
 
     try {
-      for await (const chunk of streamCoachChat(nextMessages, controller.signal)) {
+      for await (const chunk of streamCoachChat(nextMessages, language, controller.signal)) {
         if (chunk.type === 'delta' && chunk.text) {
           accumulated += chunk.text
           setPartial(accumulated)
@@ -89,7 +95,7 @@ export function useCoachChat(): CoachChatState {
       setIsStreaming(false)
       abortRef.current = null
     }
-  }, [isStreaming, messages])
+  }, [isStreaming, messages, language])
 
   const reset = useCallback(() => {
     abortRef.current?.abort()

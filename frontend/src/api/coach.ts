@@ -50,6 +50,8 @@ export interface AlternateWorkout {
   template_id: string
 }
 
+export type CoachLanguage = 'simple' | 'technical'
+
 export interface CoachBriefResponse {
   id: number
   generated_at: string
@@ -65,6 +67,8 @@ export interface CoachBriefResponse {
   frameworks_cited: string[]
   model_used: string
   from_cache: boolean
+  // Phase 5.2 — which language mode the brief is in
+  language: CoachLanguage
 }
 
 export interface CauseEntry {
@@ -93,15 +97,21 @@ export interface ChatMessage {
 
 // ─── Plain requests ──────────────────────────────────────────────────────────
 
-export async function fetchCoachBrief(): Promise<CoachBriefResponse> {
+export async function fetchCoachBrief(
+  language: CoachLanguage = 'simple',
+): Promise<CoachBriefResponse> {
   const res = await apiClient.get<CoachBriefResponse>('/coach/brief', {
+    params: { language },
     timeout: 30_000, // LLM generation can take a few seconds
   })
   return res.data
 }
 
-export async function refreshCoachBrief(): Promise<CoachBriefResponse> {
+export async function refreshCoachBrief(
+  language: CoachLanguage = 'simple',
+): Promise<CoachBriefResponse> {
   const res = await apiClient.post<CoachBriefResponse>('/coach/brief/refresh', undefined, {
+    params: { language },
     timeout: 30_000,
   })
   return res.data
@@ -138,6 +148,7 @@ export interface StreamChunk {
  */
 export async function* streamCoachChat(
   messages: ChatMessage[],
+  language: CoachLanguage = 'simple',
   signal?: AbortSignal,
 ): AsyncGenerator<StreamChunk, void, unknown> {
   const token = getAccessToken()
@@ -151,7 +162,7 @@ export async function* streamCoachChat(
     method: 'POST',
     credentials: 'include',
     headers,
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, language }),
     signal,
   })
 

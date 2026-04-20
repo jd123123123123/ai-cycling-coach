@@ -4,17 +4,23 @@ import {
   refreshCoachBrief,
   type CoachBriefResponse,
 } from '../api/coach'
+import { useLanguage } from '../contexts/LanguageContext'
 
-export const COACH_BRIEF_KEY = ['coach', 'brief'] as const
+// Phase 5.2: coach brief queries are language-keyed. Changing the language
+// toggle in the masthead mutates the key and triggers a refetch automatically.
+export const COACH_BRIEF_KEY_ROOT = ['coach', 'brief'] as const
 
 /**
- * Fetches the latest brief (cache + fallback aware on the backend).
+ * Fetches the latest brief for the currently selected language.
  * Brief TTL is 6h; staleTime matches so we don't refetch on every mount.
+ * The backend routes cache by language too, so a "miss" on a rarely-used
+ * language still regenerates cleanly.
  */
 export function useCoachBrief() {
+  const { language } = useLanguage()
   return useQuery<CoachBriefResponse>({
-    queryKey: COACH_BRIEF_KEY,
-    queryFn: fetchCoachBrief,
+    queryKey: [...COACH_BRIEF_KEY_ROOT, language],
+    queryFn: () => fetchCoachBrief(language),
     staleTime: 6 * 60 * 60 * 1000, // 6h — matches backend cache TTL
     gcTime: 12 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -31,13 +37,15 @@ export function useCoachBrief() {
 
 /**
  * Force-regenerates the brief and replaces the cache with the fresh response.
+ * Regeneration is language-scoped — the current language from context is used.
  */
 export function useRefreshBrief() {
   const qc = useQueryClient()
+  const { language } = useLanguage()
   return useMutation<CoachBriefResponse>({
-    mutationFn: refreshCoachBrief,
+    mutationFn: () => refreshCoachBrief(language),
     onSuccess: (data) => {
-      qc.setQueryData(COACH_BRIEF_KEY, data)
+      qc.setQueryData([...COACH_BRIEF_KEY_ROOT, language], data)
     },
   })
 }
