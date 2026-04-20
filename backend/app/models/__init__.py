@@ -6,5 +6,9 @@ from app.models.garmin_credential import GarminCredential
 from app.models.daily_metric import DailyMetric
 from app.models.planned_workout import PlannedWorkout  # noqa: F401
 from app.models.daily_metric_sample import DailyMetricSample  # noqa: F401
+from app.models.coach_brief import CoachBrief  # noqa: F401
 
-__all__ = ["User", "AthleteProfile", "ConsentRecord", "Activity", "GarminCredential", "DailyMetric", "PlannedWorkout", "DailyMetricSample"]
+__all__ = [
+    "User", "AthleteProfile", "ConsentRecord", "Activity", "GarminCredential",
+    "DailyMetric", "PlannedWorkout", "DailyMetricSample", "CoachBrief",
+]

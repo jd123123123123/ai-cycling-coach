@@ -10,7 +10,10 @@ from app.config import settings
 
 # Import Base and ALL models so autogenerate can detect them
 from app.database import Base  # noqa: F401
-from app.models import user, athlete_profile, consent, activity, garmin_credential, daily_metric  # noqa: F401
+from app.models import (  # noqa: F401
+    user, athlete_profile, consent, activity, garmin_credential,
+    daily_metric, planned_workout, daily_metric_sample, coach_brief,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

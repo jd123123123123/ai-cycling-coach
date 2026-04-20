@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -42,6 +42,14 @@ class AthleteProfile(Base):
 
     # FTP history — list of {"ftp_watts": int, "measured_at": str} dicts
     ftp_history: Mapped[list | None] = mapped_column(JSON, default=list, nullable=True)
+
+    # Injury tracking (Phase 5) — when injury_flag is True, safety_rails force
+    # intensity_ceiling='rest' regardless of any other signal. The optional note
+    # lets the athlete contextualise the flag for themselves and the coach brief.
+    injury_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
+    injury_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
