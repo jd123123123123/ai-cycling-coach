@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Training Engine** - Pure computation for TSS, CTL/ATL/TSB, zones, and FTP tracking
 - [x] **Phase 3: Garmin Data Integration** - Sync activities and biometrics from Garmin with swappable abstraction layer
 - [x] **Phase 4: Dashboard + Visualization** - Body status, PMC charts, training calendar, and workout previews
-- [ ] **Phase 5: AI Coaching Core** - Daily brief, chat interface, safety guardrails, and training recommendations
+- [x] **Phase 5: AI Coaching Core** - Daily brief, chat interface, safety guardrails, and training recommendations
 - [ ] **Phase 6: AI Deep Coaching** - On-demand analysis and workout modification via conversation
 - [ ] **Phase 7: Periodization + Workout Generation** - AI-built mesocycles, daily adaptation, and structured workouts
 - [ ] **Phase 8: Nutrition Integration** - Manual nutrition logging, fueling advice, and nutrition-aware adaptation
@@ -102,11 +102,11 @@ Plans:
   3. User can open a chat interface and have a coaching conversation with streaming responses
   4. AI refuses to recommend training through injury, does not suggest overtraining, and never gives ED-triggering nutrition advice
   5. Safety guardrails enforce hard-coded TSS caps relative to CTL and intensity ceilings based on recovery state
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [x] 05-01-PLAN.md — Coach backend: advanced_metrics, safety_rails, coach_service (Claude tool-use + rule-based fallback), endpoints, migration
+- [x] 05-02-PLAN.md — Coach UI: CoachBrief + CoachChat streaming drawer + WhyAmITired causal modal + TransparencyDrawer
 
 ### Phase 6: AI Deep Coaching
 **Goal**: Users can ask analytical questions and modify workouts through natural conversation, getting the depth of a real coaching relationship
@@ -177,7 +177,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 | 2. Training Engine | 3/3 | Complete | 2026-04-16 |
 | 3. Garmin Data Integration | 3/3 | Complete | 2026-04-19 |
 | 4. Dashboard + Visualization | 4/4 | Complete | 2026-04-19 |
-| 5. AI Coaching Core | 0/TBD | Not started | - |
+| 5. AI Coaching Core | 2/2 | Complete (awaiting live UAT) | 2026-04-20 |
 | 6. AI Deep Coaching | 0/TBD | Not started | - |
 | 7. Periodization + Workout Generation | 0/TBD | Not started | - |
 | 8. Nutrition Integration | 0/TBD | Not started | - |
@@ -185,4 +185,4 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 
 ---
 *Roadmap created: 2026-04-16*
-*Last updated: 2026-04-19*
+*Last updated: 2026-04-20*
