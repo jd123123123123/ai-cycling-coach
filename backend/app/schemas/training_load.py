@@ -11,6 +11,7 @@ class PMCEntry(BaseModel):
     atl: float  # Acute Training Load (fatigue)
     tsb: float  # Training Stress Balance (form = CTL - ATL)
     tss: float  # Training Stress Score for this day
+    narrative: str | None = None  # Plain-English per-day summary for hover tooltip
 
 
 class PMCResponse(BaseModel):
