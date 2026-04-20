@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 5 Wave 1 complete -- coach backend with causal briefs shipped. Phase 5 Wave 2 (frontend coach UI) is next.
+**Current focus:** Phase 5 COMPLETE -- causal AI coach fully shipped (backend Wave 1 + frontend Wave 2). Phase 6 (training-plan-generation) is next.
 
 ## Current Position
 
-Phase: 5 of 9 (AI Coaching Core) -- IN PROGRESS (Wave 1 COMPLETE)
-Plan: 05-01 complete (coach backend with Claude Opus 4.7 tool-use + rule-based fallback + safety rails + 10 advanced metrics)
-Status: 05-01 backend shipped; 05-02 frontend can start immediately (5 endpoints ready, schemas exported)
-Last activity: 2026-04-20 -- Completed 05-01-PLAN.md (7 tasks, 68 new tests, all 123 passing)
+Phase: 5 of 9 (AI Coaching Core) -- COMPLETE
+Plan: 05-02 complete (frontend coach UI: CoachBrief + CoachChat + WhyAmITired + TransparencyDrawer + AdvancedMetricsStrip)
+Status: Phase 5 shipped end-to-end; Phase 6 can start immediately
+Last activity: 2026-04-20 -- Completed 05-02-PLAN.md (8 tasks, 8 atomic commits, tsc clean, build +50 KB gzipped)
 
-Progress: [██████████░] ~91%
+Progress: [███████████] 100% through Phase 5 / ~91% overall
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 36 min
-- Total execution time: 1.08 + 0.75 + 0.25 + 0.75 + 0.033 + 0.65 hours = ~3.52 hours
+- Total plans completed: 9
+- Average duration: 38 min
+- Total execution time: ~4.4 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [██████████░] ~91%
 | 01-foundation-auth | 4 | ~170 min | ~43 min |
 | 02-training-engine | 3 | ~8 min | ~2.7 min |
 | 03-garmin-data-integration | 3 | ~135 min | ~45 min |
-| 05-ai-coaching-core | 1 (Wave 1) | ~52 min | ~52 min |
+| 05-ai-coaching-core | 2 (complete) | ~107 min | ~54 min |
 
 **Recent Trend:**
-- Last 5 plans: ~2 min, 39 min, 56 min, ~40 min, 52 min
-- Trend: stable (backend plans consistently 40-56 min)
+- Last 5 plans: 39 min, 56 min, ~40 min, 52 min, 55 min
+- Trend: stable (40-56 min is the natural rhythm for the feature-shape plans)
 
 *Updated after each plan completion*
 
@@ -121,6 +121,16 @@ Recent decisions affecting current work:
 - [05-01]: coach_briefs is append-only audit trail (never overwrite) — every generation persisted for auditability; 6h TTL is a read-through cache on the latest row
 - [05-01]: injury_flag has server_default FALSE — existing rows get false without a backfill step; safety_rails.intensity_ceiling already treats missing-as-false via boolean context
 - [05-01]: Migrations/env.py model import list expanded to include all 8 models — was stale (missing planned_workout, daily_metric_sample); future autogenerate now sees complete metadata
+- [05-02]: SSE client uses fetch + ReadableStream, not EventSource — EventSource is GET-only; /coach/chat needs POST body with messages array
+- [05-02]: Coach chat messages are session-local React state (not persisted) — briefs are the audit trail; chat is ephemeral by design
+- [05-02]: Evidence chips derived from the snapshot the LLM saw, not a separate endpoint — brief response already contains everything the component needs
+- [05-02]: Blocked options render styled (strikethrough + reason) rather than being filtered out — preserves transparency: athlete sees what the LLM suggested AND what rails intervened
+- [05-02]: motion/react (not framer-motion) — motion is the renamed package; identical API, installed cleanly
+- [05-02]: Stubbed WhyAmITired + TransparencyDrawer during Task 2 so CoachBrief commit compiled; Tasks 4/5 atomic-replaced stubs with full implementations
+- [05-02]: Custom JSON renderer for TransparencyDrawer (~40 LOC) — no highlight.js dependency; token-class colouring sufficient
+- [05-02]: Decoupling + durability tiles shipped as placeholders — backend computes both but /activities doesn't carry sample streams yet; tiles ready for /coach/metrics-trend
+- [05-02]: 503 on /coach/chat = visible disabled state with ANTHROPIC_API_KEY guidance, not a silent toast — degradation must be legible
+- [05-02]: Root `tsc --noEmit` doesn't check anything (files:[] + references); typecheck via `-p tsconfig.app.json` or rely on `npm run build` which uses `tsc -b`
 
 ### Pending Todos
 
@@ -130,6 +140,8 @@ Recent decisions affecting current work:
 - IMMEDIATE: Restart Docker Desktop (daemon became unresponsive during 03-01 execution due to disk full); then run `cd backend && docker compose up -d db && alembic upgrade head` to apply c1f8a3d9e2b7 migration
 - Coach chat rate limiter: move from in-memory deque to Redis when deploying behind multiple uvicorn workers
 - Production readiness: provision ANTHROPIC_API_KEY env var before launch so /coach/* endpoints use Claude rather than the rule-based fallback
+- Future: expose a /coach/metrics-trend endpoint so frontend AdvancedMetricsStrip can light up decoupling + durability tiles (currently placeholder)
+- Future: add "typecheck": "tsc -p tsconfig.app.json --noEmit" to frontend/package.json — root-level `tsc --noEmit` is a no-op and could hide errors
 
 ### Blockers/Concerns
 
@@ -142,7 +154,7 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-04-20
-Stopped at: Phase 5 Wave 1 complete — coach backend with Claude Opus 4.7 + safety rails + 10 advanced metrics (commits 118c1d1..9d13fb0)
+Stopped at: Phase 5 COMPLETE — causal AI coach end-to-end (backend 05-01 + frontend 05-02). Dashboard now hosts <CoachBrief> with live verdict+evidence+options+outlook, an "Ask coach" streaming drawer, a "Why am I tired?" causal modal, and a transparency drawer that exposes the raw snapshot + system prompt. Rule-based fallback keeps the UI fully functional without ANTHROPIC_API_KEY. Commits 1a74903..b8a780e (8 task commits).
 Resume file: None
-Next: 05-02 (frontend coach UI) — 5 coach endpoints + schemas ready; /coach/brief always returns 200 with structured payload (rule-based when no key, LLM when key present)
-Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers
+Next: 06 (training-plan-generation) — the coach snapshot and brief are live, giving the plan generator a grounded context to extend from
+Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values
