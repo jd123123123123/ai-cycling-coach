@@ -745,7 +745,11 @@ def _rule_based_brief(snapshot: dict) -> dict:
     zones = snapshot["distribution"]
     athlete = snapshot.get("athlete", {})
     ftp = int(athlete.get("ftp") or 0)
-    language = snapshot.get("language", "simple")
+    # Anything that isn't exactly 'technical' is treated as 'simple'. This
+    # mirrors the endpoint's Literal narrowing + keeps unknown / corrupt
+    # values from leaking jargon into what's supposed to be a plain-English
+    # response.
+    language = "technical" if snapshot.get("language") == "technical" else "simple"
 
     # Verdict tuned to ceiling + picked session type
     picked_id = snapshot.get("picked_template_id") or "z2_endurance_60"

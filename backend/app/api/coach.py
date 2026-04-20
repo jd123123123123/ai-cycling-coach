@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict, deque
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -89,6 +89,13 @@ def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
         except Exception:  # noqa: BLE001
             legacy_options = None
 
+    # Phase 5.2 — pick language from evidence. Pre-5.2 rows lack the key → 'simple'.
+    evidence = brief.evidence or {}
+    lang_val = evidence.get("language") if isinstance(evidence, dict) else None
+    language: Literal["simple", "technical"] = (
+        "technical" if lang_val == "technical" else "simple"
+    )
+
     return BriefRead(
         id=brief.id,
         generated_at=brief.generated_at,
@@ -102,6 +109,7 @@ def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
         frameworks_cited=list(brief.frameworks_cited or []),
         model_used=brief.model_used,
         from_cache=from_cache,
+        language=language,
     )
 
 
@@ -109,29 +117,42 @@ def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
 async def get_brief(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    language: Annotated[
+        Literal["simple", "technical"],
+        Query(description="Language mode: 'simple' (plain English, default) or 'technical' (full vocabulary)."),
+    ] = "simple",
 ) -> BriefRead:
     """Return the latest cached brief if < 6h old; otherwise regenerate and cache.
 
-    Works without ANTHROPIC_API_KEY — falls back to a rule-based brief so
-    the dashboard can always render something meaningful.
+    The cache is keyed by language — different language = cache miss =
+    regenerate. Works without ANTHROPIC_API_KEY: falls back to a rule-based
+    brief (still language-aware) so the dashboard can always render.
     """
-    # Was a fresh row present before this call? If yes, from_cache=True.
-    # We use a transaction-safe approach: check cache → generate if miss.
-    # get_or_generate_brief handles both paths; we derive from_cache by
-    # comparing the returned brief's generated_at to "now".
+    # Check if a fresh brief for THIS language already exists — this is the
+    # from_cache signal we return. We use the same coalesce rule as the
+    # service so pre-5.2 rows count as 'simple' for backward compat.
     from datetime import datetime, timedelta, timezone
+    from sqlalchemy import func
     cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
 
+    lang_expr = CoachBrief.evidence["language"].astext
     cache_check = await db.execute(
         select(CoachBrief)
-        .where(CoachBrief.user_id == current_user.id, CoachBrief.generated_at >= cutoff)
+        .where(
+            CoachBrief.user_id == current_user.id,
+            CoachBrief.generated_at >= cutoff,
+            CoachBrief.prescribed_workout.isnot(None),
+            func.coalesce(lang_expr, "simple") == language,
+        )
         .order_by(CoachBrief.generated_at.desc())
         .limit(1)
     )
     cached = cache_check.scalar_one_or_none()
     from_cache = cached is not None
 
-    brief = await coach_service.get_or_generate_brief(db, current_user.id, force=False)
+    brief = await coach_service.get_or_generate_brief(
+        db, current_user.id, force=False, language=language,
+    )
     return _brief_to_read(brief, from_cache=from_cache)
 
 
@@ -139,9 +160,18 @@ async def get_brief(
 async def refresh_brief(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    language: Annotated[
+        Literal["simple", "technical"],
+        Query(description="Language mode: 'simple' (default) or 'technical'."),
+    ] = "simple",
 ) -> BriefRead:
-    """Force-regenerate the brief (cache-bust). Always returns from_cache=False."""
-    brief = await coach_service.get_or_generate_brief(db, current_user.id, force=True)
+    """Force-regenerate the brief in the requested language.
+
+    Always returns from_cache=False. Cache-bust is independent per language.
+    """
+    brief = await coach_service.get_or_generate_brief(
+        db, current_user.id, force=True, language=language,
+    )
     return _brief_to_read(brief, from_cache=False)
 
 
@@ -166,10 +196,11 @@ async def chat(
     _check_chat_rate_limit(current_user.id)
 
     messages_payload = [m.model_dump() for m in req.messages]
+    chat_language = req.language  # 'simple' default, 'technical' opt-in
 
     async def event_stream():
         async for chunk in coach_service.coach_chat_stream(
-            db, current_user.id, messages_payload
+            db, current_user.id, messages_payload, language=chat_language,
         ):
             yield chunk
 

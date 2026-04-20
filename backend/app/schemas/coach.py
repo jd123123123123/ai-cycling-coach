@@ -87,6 +87,9 @@ class BriefRead(BaseModel):
     frameworks_cited: list[str] = Field(default_factory=list)
     model_used: str
     from_cache: bool
+    # Phase 5.2 — which language the brief is in ('simple' is default).
+    # Read from evidence.language when present; pre-5.2 rows coalesce to 'simple'.
+    language: Literal["simple", "technical"] = "simple"
 
     class Config:
         from_attributes = True
@@ -99,6 +102,9 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
+    # Phase 5.2 — request chat replies in simple (plain English) or technical
+    # (full vocabulary with inline explanations). Default is simple.
+    language: Literal["simple", "technical"] = "simple"
 
 
 class CauseEntry(BaseModel):
