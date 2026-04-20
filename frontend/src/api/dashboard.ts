@@ -46,6 +46,7 @@ export interface PMCEntry {
   atl: number
   tsb: number
   daily_tss: number
+  narrative?: string | null    // Plain-English per-day summary shown in hover tooltip
 }
 
 export interface PMCResponse {
@@ -85,8 +86,13 @@ export async function fetchActivitiesRange(start: Date, end: Date): Promise<Acti
   return res.data
 }
 
-export async function fetchPMC(days = 90): Promise<PMCResponse> {
-  const res = await apiClient.get<PMCResponse>('/training-load/pmc', { params: { days } })
+export async function fetchPMC(
+  days = 90,
+  language: 'simple' | 'technical' = 'simple',
+): Promise<PMCResponse> {
+  const res = await apiClient.get<PMCResponse>('/training-load/pmc', {
+    params: { days, language },
+  })
   return res.data
 }
 

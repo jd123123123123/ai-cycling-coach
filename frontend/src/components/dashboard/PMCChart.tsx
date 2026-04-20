@@ -80,8 +80,15 @@ function SummaryStat({
 
 // ─── uPlot chart ────────────────────────────────────────────────────────────────
 
+interface HoverInfo {
+  idx: number
+  left: number   // px within container
+  top: number    // px within container
+}
+
 function PmcUPlot({ series }: { series: PMCEntry[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [hover, setHover] = useState<HoverInfo | null>(null)
 
   useEffect(() => {
     if (!containerRef.current || series.length === 0) return
@@ -153,6 +160,23 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
             ctx.restore()
           },
         ],
+        setCursor: [
+          (u) => {
+            // Bridge uPlot cursor idx -> React state so we can render a rich
+            // HTML tooltip with the per-day narrative outside the canvas.
+            const idx = u.cursor.idx
+            if (idx == null || idx < 0) {
+              setHover(null)
+              return
+            }
+            const left = u.cursor.left ?? 0
+            const top = u.cursor.top ?? 0
+            // left/top from uPlot are relative to the plot canvas. The canvas
+            // is positioned inside .u-wrap which fills our container, so these
+            // coords already work as container offsets.
+            setHover({ idx, left, top })
+          },
+        ],
       },
       cursor: {
         drag: { x: false },
@@ -175,13 +199,84 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
     })
     ro.observe(el)
 
+    const onLeave = () => setHover(null)
+    el.addEventListener('mouseleave', onLeave)
+
     return () => {
       ro.disconnect()
+      el.removeEventListener('mouseleave', onLeave)
       plot.destroy()
     }
   }, [series])
 
-  return <div ref={containerRef} className="w-full min-w-0" />
+  const hoveredEntry =
+    hover && hover.idx >= 0 && hover.idx < series.length ? series[hover.idx] : null
+
+  return (
+    <div ref={containerRef} className="w-full min-w-0 relative">
+      {hoveredEntry && hover && (
+        <HoverTooltip entry={hoveredEntry} left={hover.left} top={hover.top} />
+      )}
+    </div>
+  )
+}
+
+// ─── Hover tooltip with per-day narrative ───────────────────────────────────
+
+function HoverTooltip({
+  entry,
+  left,
+  top,
+}: {
+  entry: PMCEntry
+  left: number
+  top: number
+}) {
+  // Max-width tooltip card. We nudge it right/above the cursor and cap
+  // it so long narratives wrap within ~280px for readability.
+  const OFFSET_X = 14
+  const OFFSET_Y = -12
+  const dateLabel = format(new Date(entry.date), 'EEE, d MMM')
+  const tsb = entry.tsb
+  const narrative = entry.narrative?.trim()
+  return (
+    <div
+      className="pointer-events-none absolute z-20 rounded-[10px] px-3 py-2 shadow-md"
+      style={{
+        left: left + OFFSET_X,
+        top: top + OFFSET_Y,
+        maxWidth: 280,
+        backgroundColor: 'var(--color-paper)',
+        border: '1px solid var(--color-rule)',
+        // Prevent overflow past container right edge
+        transform: 'translateZ(0)',
+      }}
+    >
+      <div
+        className="serif-caps text-[11px] mb-1"
+        style={{ color: 'var(--color-muted)' }}
+      >
+        {dateLabel}
+      </div>
+      <div className="flex gap-3 num-mono text-[12px]" style={{ color: 'var(--color-ink)' }}>
+        <span><span style={{ color: C_CTL }}>●</span> CTL {entry.ctl.toFixed(1)}</span>
+        <span><span style={{ color: C_ATL }}>●</span> ATL {entry.atl.toFixed(1)}</span>
+        <span><span style={{ color: C_TSB }}>●</span> TSB {(tsb >= 0 ? '+' : '') + tsb.toFixed(1)}</span>
+      </div>
+      {narrative && (
+        <p
+          className="mt-2 text-[13px]"
+          style={{
+            color: 'var(--color-ink-2)',
+            lineHeight: 1.35,
+            // Tight wrap — 280px max-width above; no further constraint here
+          }}
+        >
+          {narrative}
+        </p>
+      )}
+    </div>
+  )
 }
 
 // ─── Main component ─────────────────────────────────────────────────────────────
