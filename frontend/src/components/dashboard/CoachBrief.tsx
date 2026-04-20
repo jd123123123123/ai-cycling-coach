@@ -494,7 +494,7 @@ function BriefBody({
           transition={{ duration: 0.3 }}
         >
           <span
-            className="num-mono text-[11px] leading-relaxed"
+            className="num-mono text-[11px] leading-relaxed dashboard-break-words"
             style={{ color: 'var(--color-muted)' }}
           >
             Grounded in: {brief.frameworks_cited.join(' · ')}

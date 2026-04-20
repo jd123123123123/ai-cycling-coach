@@ -134,3 +134,15 @@
   .rbc-header { font-size: 11px; padding: 4px 2px; }
   .rbc-date-cell { font-size: 11px; }
 }
+
+/* Respect reduced-motion preferences for Phase 5-02 coach-surface animations */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in,
+  .animate-transparency-slide {
+    animation: none !important;
+  }
+  .streaming-caret {
+    animation: none !important;
+    opacity: 0.6 !important;
+  }
+}
