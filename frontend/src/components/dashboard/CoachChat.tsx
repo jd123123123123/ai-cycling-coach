@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { MessageSquare, X, Sparkles } from 'lucide-react'
 import { useCoachChat } from '../../hooks/useCoachChat'
 import type { ChatMessage } from '../../api/coach'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 // ─── Inline-data mono wrapping ───────────────────────────────────────────────
 
@@ -119,8 +120,16 @@ function StreamingBubble({ text }: { text: string }) {
 }
 
 // ─── Suggestions (empty state) ───────────────────────────────────────────────
+// Two sets — simple mode drops the VO2 jargon in favour of "hard intervals".
 
-const SUGGESTIONS: string[] = [
+const SUGGESTIONS_SIMPLE: string[] = [
+  'Why am I tired this week?',
+  'Am I ready for hard intervals?',
+  'Review my last 2 weeks',
+  'Should I push or rest tomorrow?',
+]
+
+const SUGGESTIONS_TECHNICAL: string[] = [
   'Why am I tired this week?',
   'Am I ready for a VO2 set?',
   'Review my last 2 weeks',
@@ -139,6 +148,9 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
   const [input, setInput] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
+  const { language } = useLanguage()
+  const simpleMode = language === 'simple'
+  const suggestions = simpleMode ? SUGGESTIONS_SIMPLE : SUGGESTIONS_TECHNICAL
 
   // Body scroll lock + escape key
   useEffect(() => {
@@ -271,13 +283,14 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
                   className="mt-3 text-[13px] leading-relaxed"
                   style={{ color: 'var(--color-ink-2)' }}
                 >
-                  The coach can cite your HRV, TSB, recent rides, sleep debt, and zone mix —
-                  and will tell you when it doesn&apos;t have enough data.
+                  {simpleMode
+                    ? "The coach looks at how you've been sleeping, how your body's recovering, and what you've been riding — and will tell you when it doesn't have enough data."
+                    : "The coach can cite your HRV, TSB, recent rides, sleep debt, and zone mix — and will tell you when it doesn't have enough data."}
                 </p>
               </div>
               <div className="flex flex-col gap-2">
                 <span className="eyebrow">Try</span>
-                {SUGGESTIONS.map((s) => (
+                {suggestions.map((s) => (
                   <button
                     key={s}
                     disabled={disabled}
