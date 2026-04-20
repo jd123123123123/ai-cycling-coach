@@ -5,14 +5,24 @@ import { useAuth } from '../../contexts/AuthContext'
 import CoachChat from './CoachChat'
 
 interface DashboardShellProps {
-  bodyStatus: ReactNode
-  pmc: ReactNode              // plan 04-02 mounts PMCChart
-  calendar: ReactNode          // plan 04-03 mounts TrainingCalendar (and RecentActivities alongside)
-  workoutPreviewModal?: ReactNode  // reserved — modal lives in portal from TrainingCalendar
+  /** Fold 1 — the headline: CoachBrief + PrescribedWorkoutCard dominates. */
+  hero: ReactNode
+  /** Fold 2 — compact one-row KPI strip. */
+  kpiStrip: ReactNode
+  /** Fold 3 — PMC chart at full width + recent activities compact list. */
+  pmc: ReactNode
+  /** Fold 4 — collapsed-by-default sections (biometrics detail, calendar, etc). */
+  collapsedSections: ReactNode
+  /** Reserved for future modals (e.g. workout preview) lifted to the shell. */
+  workoutPreviewModal?: ReactNode
 }
 
 export default function DashboardShell({
-  bodyStatus, pmc, calendar, workoutPreviewModal,
+  hero,
+  kpiStrip,
+  pmc,
+  collapsedSections,
+  workoutPreviewModal,
 }: DashboardShellProps) {
   const { user, logout } = useAuth()
   const initial = (user?.email?.[0] ?? 'A').toUpperCase()
@@ -107,15 +117,12 @@ export default function DashboardShell({
         </div>
       </header>
 
-      {/* Main editorial flow */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12 pb-20 flex flex-col gap-10 sm:gap-14 min-w-0">
-        {/* Masthead supra — a newspaper-style dateline */}
-        <div className="flex items-center gap-3 -mb-4">
+      {/* Main editorial flow — 4 folds with progressive disclosure */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-20 flex flex-col gap-6 sm:gap-8 min-w-0">
+        {/* Masthead supra — newspaper-style dateline */}
+        <div className="flex items-center gap-3 -mb-2">
           <UserIcon size={12} strokeWidth={1.8} style={{ color: 'var(--color-forest)' }} />
-          <span
-            className="eyebrow"
-            style={{ color: 'var(--color-forest)' }}
-          >
+          <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
             Today&apos;s briefing
           </span>
           <span
@@ -125,21 +132,29 @@ export default function DashboardShell({
           />
         </div>
 
-        <section data-testid="body-status-section" className="min-w-0">
-          {bodyStatus}
+        {/* Fold 1 — the hero. CoachBrief + PrescribedWorkoutCard. */}
+        <section data-testid="hero-section" className="min-w-0">
+          {hero}
         </section>
 
+        {/* Fold 2 — compact KPI strip */}
+        <section data-testid="kpi-strip-section" className="min-w-0">
+          {kpiStrip}
+        </section>
+
+        {/* Fold 3 — PMC + recent activities, full width */}
         <section data-testid="pmc-section" className="min-w-0 flex flex-col gap-6">
           {pmc}
         </section>
 
-        <section data-testid="calendar-section" className="min-w-0">
-          {calendar}
-        </section>
+        {/* Fold 4 — progressively disclosed sections */}
+        <div data-testid="collapsed-sections" className="min-w-0 flex flex-col">
+          {collapsedSections}
+        </div>
 
         {/* Colophon */}
         <footer
-          className="pt-6 flex items-center justify-between gap-3 flex-wrap"
+          className="pt-6 flex items-center justify-between gap-3 flex-wrap mt-4"
           style={{ borderTop: '1px solid var(--color-rule)' }}
         >
           <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>

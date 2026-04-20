@@ -7,35 +7,64 @@ import IntensityDistribution from '../components/dashboard/IntensityDistribution
 import EfficiencyTrend from '../components/dashboard/EfficiencyTrend'
 import TrainingCalendar from '../components/dashboard/TrainingCalendar'
 import RecentActivities from '../components/dashboard/RecentActivities'
+import KpiStripCompact from '../components/dashboard/KpiStripCompact'
+import DashboardSection from '../components/dashboard/DashboardSection'
 
 export default function DashboardPage() {
   return (
     <DashboardShell
-      bodyStatus={<ReadinessHero />}
+      // Fold 1 — the headline. CoachBrief + PrescribedWorkoutCard dominate.
+      hero={<ReadinessHero />}
+      // Fold 2 — raw KPI row, iPhone-level density.
+      kpiStrip={<KpiStripCompact />}
+      // Fold 3 — PMC + recent activities.
       pmc={
-        <div className="flex flex-col gap-10">
-          <BiometricsDetail />
-          <div className="flex flex-col gap-6">
-            <PMCChart />
+        <>
+          <PMCChart />
+          <RecentActivities limit={5} />
+        </>
+      }
+      // Fold 4 — everything else, collapsed by default. Each section persists
+      // its expanded state in localStorage per-user-device.
+      collapsedSections={
+        <>
+          <DashboardSection
+            id="biometrics-detail"
+            title="Biometrics detail"
+            subtitle="Full-length HRV / body battery / sleep charts"
+          >
+            <BiometricsDetail />
+          </DashboardSection>
+
+          <DashboardSection
+            id="intensity-efficiency"
+            title="Intensity & efficiency"
+            subtitle="Seiler distribution · EF trend"
+          >
             <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
               <IntensityDistribution />
               <EfficiencyTrend />
             </div>
+          </DashboardSection>
+
+          <DashboardSection
+            id="heatmap"
+            title="Training calendar heatmap"
+            subtitle="Load density over the past quarter"
+          >
             <CalendarHeatmap />
-          </div>
-        </div>
-      }
-      calendar={
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-          <div className="min-w-0 order-2 lg:order-1">
-            <RecentActivities />
-          </div>
-          <div className="min-w-0 order-1 lg:order-2">
+          </DashboardSection>
+
+          <DashboardSection
+            id="training-calendar"
+            title="Training calendar"
+            subtitle="Plan, drag, preview upcoming sessions"
+          >
             <TrainingCalendar />
-          </div>
-        </div>
+          </DashboardSection>
+        </>
       }
-      workoutPreviewModal={null /* reserved: TrainingCalendar owns its own modal via portal; this slot is for a future lifted-state pattern (e.g. open-by-URL routing) */}
+      workoutPreviewModal={null /* reserved: TrainingCalendar owns its own modal via portal */}
     />
   )
 }

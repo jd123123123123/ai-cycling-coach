@@ -81,7 +81,12 @@ function ActivityRow({ a }: { a: ActivityRead }) {
   )
 }
 
-export default function RecentActivities() {
+interface RecentActivitiesProps {
+  /** Max number of rows to render. Defaults to 10. Phase 5.1 uses limit=5 in fold 3. */
+  limit?: number
+}
+
+export default function RecentActivities({ limit = 10 }: RecentActivitiesProps = {}) {
   const today = new Date()
   const fourteenDaysAgo = subDays(today, 14)
   const { data, isLoading, isError, refetch } = useActivitiesRange(fourteenDaysAgo, today)
@@ -89,7 +94,7 @@ export default function RecentActivities() {
   const activities = (data?.activities ?? [])
     .slice() // don't mutate
     .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
-    .slice(0, 10)
+    .slice(0, limit)
 
   return (
     <div
