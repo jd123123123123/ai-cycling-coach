@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 5.3 COMPLETE -- post-ride review replaces the prescribed-workout card when the athlete has already trained today. Grade (perfect/strong/okay/overcooked/undercooked) vs the periodization layer's "should have been", physiological read (EF/VI/decoupling), goal trajectory (CTL/TSB projection + Mujika taper classification), next-session nudge. Works without API key via full deterministic rule-based synthesiser; simple mode is jargon-free. Phase 6 (training-plan-generation) is next.
+**Current focus:** Phase 5.4 COMPLETE -- PMC hover tooltip shows a plain-English per-day narrative below the CTL/ATL/TSB numbers. Rule-based, deterministic, <=140 chars, simple/technical language-aware. Classifies each day into rest/easy/moderate/hard/big from TSS/h and writes a 1-2 sentence summary. Phase 6 (training-plan-generation) is next.
 
 ## Current Position
 
-Phase: 5.3 of 9 (Post-Ride Review + Goal Trajectory) -- COMPLETE
-Plan: 05.3-01 complete (6 tasks, 6 atomic commits; 259/259 backend tests incl. 52 new across ride_compliance + goal_trajectory + post_ride_review; tsc clean; build clean)
-Status: Athletes who already trained see a mindblowingly-good graded review instead of "nice, you're done" -- 5-grade compliance, scientific physiological read, race-day trajectory, next-session nudge. Ships in both simple and technical language modes. Phase 6 can start immediately
-Last activity: 2026-04-20 -- Completed 05.3-01-PLAN.md (ride_compliance + goal_trajectory pure services + PostRideReview React card + CoachBrief swap + 52 new tests)
+Phase: 5.4 of 9 (PMC Hover Narratives) -- COMPLETE
+Plan: 05.4-01 complete (4 tasks, 4 atomic commits; 319/319 backend tests incl. 60 new pmc_narratives; tsc clean; build clean)
+Status: Hovering any datapoint in the fitness/fatigue timeline now shows a one-sentence explanation of what happened that day. Simple mode never leaks FTP/TSS/CTL/ATL/TSB/EF/VI/NP/RPE/Z1-Z7/Coggan/Banister/Seiler/Friel/Mujika/polarized (parametrized test firewall). Technical mode cites CTL/ATL/TSB notation. Phase 6 can start immediately
+Last activity: 2026-04-20 -- Completed 05.4-01-PLAN.md (pmc_narratives service + /training-load/pmc language param + PMCChart uPlot tooltip overlay + 60 new tests)
 
-Progress: [████████████] 100% through Phase 5 + 5.1 + 5.2 + 5.3 / ~94% overall
+Progress: [████████████] 100% through Phase 5 + 5.1 + 5.2 + 5.3 + 5.4 / ~95% overall
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: ~45 min
-- Total execution time: ~7.5 hours
+- Total plans completed: 13
+- Average duration: ~47 min
+- Total execution time: ~9.6 hours
 
 **By Phase:**
 
@@ -34,10 +34,11 @@ Progress: [████████████] 100% through Phase 5 + 5.1 + 5.
 | 05.1-precision-prescription | 1 (complete) | ~75 min | ~75 min |
 | 05.2-language-and-sync | 1 (complete) | ~41 min | ~41 min |
 | 05.3-post-ride-review | 1 (complete) | ~75 min | ~75 min |
+| 05.4-pmc-hover-narratives | 1 (complete) | ~130 min | ~130 min |
 
 **Recent Trend:**
-- Last 5 plans: 52 min, 55 min, 75 min, 41 min, 75 min
-- Trend: 5.3 landed at the 90-min estimate. Two new pure services (ride_compliance + goal_trajectory) drove the time — both needed careful math unit tests. Language-mode jargon scrub and LLM-merge behaviour added on top of the shape work. File count: 6 created / 8 modified.
+- Last 5 plans: 55 min, 75 min, 41 min, 75 min, 130 min
+- Trend: 5.4 took longer than the 35-min plan estimate primarily because the plan described PMCChart as Recharts-based when it's actually uPlot (04.5 decision). Reconciling via a setCursor->React-state bridge + overlay HTML tooltip added ~20 min. Narrator logic and jargon test firewall were on-plan. File count: 3 created / 5 modified.
 
 *Updated after each plan completion*
 
@@ -176,6 +177,14 @@ Recent decisions affecting current work:
 - [05.3-01]: Grade pill palette mapped to paper design system — perfect=#7c9e7e (sage), overcooked=#c4614c (coral), strong=#b5874f (goldenrod), undercooked=#9b8a6b (muted warm-grey), okay=paper-2 neutral. Colour intent matches grade valence
 - [05.3-01]: Only extreme grades get visual decoration — perfect=2.4s pulse/glow loop, overcooked="Extra recovery tonight." micro-copy. Okay/strong/undercooked stay quiet per cognitive-deload principle
 - [05.3-01]: Third compliance slot prefers EF (NP/avgHR — San Millán) over IF (NP/FTP — Coggan) — EF is the more informative trend signal for endurance athletes; IF only shown when avgHR absent and NP present
+- [05.4-01]: Per-day narratives computed on every /pmc call, not cached — deterministic pure-function calls over O(days) entries; caching would add language-aware invalidation complexity for zero wall-clock benefit
+- [05.4-01]: Intensity thresholds fixed at 45/75/110 TSS/h with absolute-TSS>=120 'big' override — matches coaching intuition where a 5-hour Z2 day at ~25 TSS/h is still a 'big' day physiologically even though the per-hour rate is easy
+- [05.4-01]: v1 ships narrative only on total PMC series; per_sport sub-series keep narrative=None — users hover the total chart; per-sport narratives would triple narrator work with no v1 UX signal
+- [05.4-01]: uPlot tooltip via cursor-idx bridge (hooks.setCursor -> React state -> absolute overlay), not canvas paint — keeps tooltip stylable with CSS vars and Tailwind, accessible, responsive without hand-coding canvas text metrics. Reusable pattern for future uPlot charts (EfficiencyTrend, IntensityDistribution)
+- [05.4-01]: Jargon discipline enforced as parametrized tests (not runtime scrubber) — templates are hand-written + deterministic; the ban list runs against every intensity x language x activity_count combo at CI time so the simple-mode contract cannot regress silently
+- [05.4-01]: Primary-sport detection uses longest single activity of the day (not first started, not highest TSS) — matches the athlete's own mental model of 'today's workout' when a ride + short brick are both logged
+- [05.4-01]: Activity window fetch piggybacks on the PMC date range — one extra grouped SQL per /pmc call, no N+1, no new endpoint. Helper: pmc_narratives.fetch_daily_activity_summaries(db, user_id, since, until)
+- [05.4-01]: PMCEntry.narrative is a response-only field (no migration) — computed on read; language toggle doesn't require cache invalidation server-side because narratives don't persist
 
 ### Pending Todos
 
@@ -199,7 +208,7 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-04-20
-Stopped at: Phase 5.3 COMPLETE — post-ride review shipped end-to-end. Two new pure services: ride_compliance.score_ride() grades a completed Activity against the picked template with 5 grades (perfect/strong/okay/overcooked/undercooked) + IF/VI/EF/decoupling + phase-aware rubric; goal_trajectory.project() linear-extrapolates CTL from trailing 7d delta, projects TSB via Mujika ATL-decay model, classifies taper_window (too_flat/ideal/too_fresh/overreached/unknown) + on_track (ahead/on_track/behind/no_goal). build_snapshot fetches today's primary activity when today_tss>=25, stashes compliance + trajectory under snapshot.post_ride. _rule_based_brief emits a complete post_ride_review in both language modes (simple mode asserted jargon-free across all 5 grades; technical asserts framework citation). LLM path merges its narrative fields over the deterministic builder — compliance numbers are never LLM-writable. post_ride_review persists inside evidence JSONB (no migration). Frontend PostRideReview.tsx replaces PrescribedWorkoutCard when review is present: grade pill (sage/goldenrod/neutral/coral/muted), Fraunces italic headline, compliance trio with ✓/↑/↓ band chips, three paragraphs (physio/trajectory/nudge), perfect-grade pulse/glow, overcooked warning micro-copy. 259/259 backend tests green (207 pre-existing + 52 new: 24 ride_compliance, 16 goal_trajectory, 12 post_ride coach_service); tsc + build clean. Commits fc951c8..95cf686 (6 task commits).
+Stopped at: Phase 5.4 COMPLETE — PMC hover narratives shipped end-to-end. New service pmc_narratives.py with pure-function build_pmc_narrative(entry, prev_entry, activity, language) + classify_intensity(tss, duration_min) + fetch_daily_activity_summaries(db, user_id, since, until). PMCEntry schema gains optional narrative field; /training-load/pmc accepts language query param and returns total-series entries with narratives attached (per_sport narrative=None in v1). Frontend: fetchPMC signature extended, usePMC reads language from useLanguage() context and includes it in React Query key, PMCChart bridges uPlot's hooks.setCursor into React state and renders a 280px-max-width HoverTooltip overlay with date eyebrow + CTL/ATL/TSB pips + narrative paragraph. 60 parametrized unit tests lock the simple-mode jargon contract (FTP/TSS/CTL/ATL/TSB/EF/VI/NP/IF/RPE/Z1-Z7/Coggan/Banister/Seiler/Friel/Mujika/polarized/San Millán all banned across every intensity x language x activity_count combo) and the <=140-char tooltip invariant. Plan described the chart as Recharts (from 04-02) but 04.5 migrated it to uPlot — reconciled via overlay pattern. 319/319 backend tests green (259 pre-existing + 60 new); tsc + build clean. Commits 36f3a88..a0f024f (4 task commits).
 Resume file: None
-Next: 06 (training-plan-generation) — templates + periodization detectors + language routing + post-ride grading give the plan generator the atomic unit, weekly skeleton, voice framework, AND feedback loop. Any new coach-rendered copy in Phase 6 should route through SYSTEM_PROMPT_SIMPLE/TECHNICAL on the backend + translateCoach/simpleTitleFor on the frontend. Training plans can read score_ride/project outputs directly when rendering retrospective blocks (e.g. "how last week went")
-Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; hook today_available_minutes to the calendar's free-slot field (Phase 6 work) instead of weekly_hours/7; consider server-side language routing for /coach/why + /coach/transparency if Phase 6 needs it (currently rewritten client-side via simpleEvidenceFor); wire advanced_metrics.compute_activity_metrics decoupling result back into Activity.raw_data.decoupling_pct so PostRideReview can surface the Pw:HR drift band; retrospective yesterday-morning review (generate for yesterday when user opens app next morning with no session today)
+Next: 06 (training-plan-generation) — narrator layer (build_pmc_narrative) is now reusable for per-day plan summaries with the same (entry, prev_entry, activity, language) signature. The uPlot setCursor->React state overlay pattern is the template for EfficiencyTrend + IntensityDistribution tooltips when those need richer per-point context. Phase 5.x foundations (templates, periodization, language routing, post-ride grading, per-day narrator) give the plan generator the full stack.
+Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; hook today_available_minutes to the calendar's free-slot field (Phase 6 work) instead of weekly_hours/7; consider server-side language routing for /coach/why + /coach/transparency if Phase 6 needs it (currently rewritten client-side via simpleEvidenceFor); wire advanced_metrics.compute_activity_metrics decoupling result back into Activity.raw_data.decoupling_pct so PostRideReview can surface the Pw:HR drift band; retrospective yesterday-morning review (generate for yesterday when user opens app next morning with no session today); extend narrator to per-sport sub-series when PMC chart exposes per-sport hover interaction
