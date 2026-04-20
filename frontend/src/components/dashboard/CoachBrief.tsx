@@ -3,44 +3,31 @@ import { motion } from 'motion/react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { formatDistanceToNow } from 'date-fns'
-import { RefreshCw, Sparkles, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Sparkles, ChevronRight, RefreshCw } from 'lucide-react'
 import { useCoachBrief, useRefreshBrief } from '../../hooks/useCoachBrief'
-import type {
-  BriefIntensity,
-  BriefOption,
-  CoachBriefResponse,
-  OutlookEntry,
-} from '../../api/coach'
+import type { CoachBriefResponse, OutlookEntry } from '../../api/coach'
 import WhyAmITired from './WhyAmITired'
 import TransparencyDrawer from './TransparencyDrawer'
-
-// ─── Intensity metadata ──────────────────────────────────────────────────────
-
-const INTENSITY_ORDER: BriefIntensity[] = ['rest', 'easy', 'moderate', 'push']
-
-const INTENSITY_META: Record<BriefIntensity, { label: string; color: string; bar: string }> = {
-  rest:     { label: 'Rest',     color: 'var(--color-muted)',    bar: 'repeating-linear-gradient(90deg, var(--color-muted) 0 4px, transparent 4px 8px)' },
-  easy:     { label: 'Easy',     color: 'var(--color-forest-2)', bar: 'var(--color-forest-2)' },
-  moderate: { label: 'Moderate', color: 'var(--color-ink-blue)', bar: 'var(--color-ink-blue)' },
-  push:     { label: 'Push',     color: 'var(--color-amber-2)',  bar: 'var(--color-amber-2)' },
-}
+import PrescribedWorkoutCard from './PrescribedWorkoutCard'
 
 function isRuleBased(model: string): boolean {
   return model === 'rule-based-fallback'
 }
 
-// ─── Evidence chips — inline, typographic ────────────────────────────────────
+// ─── Evidence chip — compact inline ──────────────────────────────────────────
 
-interface EvidenceChipProps { children: React.ReactNode; tone?: 'default' | 'alert' }
+interface EvidenceChipProps {
+  children: React.ReactNode
+  tone?: 'default' | 'alert'
+}
 
 function EvidenceChip({ children, tone = 'default' }: EvidenceChipProps) {
-  const fg = tone === 'alert' ? 'var(--color-alert)' : 'var(--color-ink)'
-  const bg = tone === 'alert' ? 'rgba(138, 29, 29, 0.07)' : 'rgba(20,24,17,0.05)'
+  const fg = tone === 'alert' ? 'var(--color-alert)' : 'var(--color-ink-2)'
   const border = tone === 'alert' ? 'rgba(138, 29, 29, 0.25)' : 'var(--color-rule)'
   return (
     <span
-      className="num-mono text-[12px] px-2 py-0.5 rounded-sm whitespace-nowrap"
-      style={{ color: fg, backgroundColor: bg, border: `1px solid ${border}` }}
+      className="num-mono text-[11px] px-1.5 py-0.5 rounded-sm whitespace-nowrap"
+      style={{ color: fg, border: `1px solid ${border}` }}
     >
       {children}
     </span>
@@ -48,18 +35,25 @@ function EvidenceChip({ children, tone = 'default' }: EvidenceChipProps) {
 }
 
 /**
- * Derive inline evidence chips from the snapshot the LLM was shown.
- * Falls back gracefully when fields are missing (rule-based fallback).
+ * Derive a single inline evidence row: TSB · HRV · CTL · Sleep · Last VO2.
+ * Compact on purpose — fold 1 has one hero (the workout card); chips are support.
  */
 function buildEvidenceChips(evidence: Record<string, unknown>): React.ReactNode[] {
   const chips: React.ReactNode[] = []
   const pmc = evidence.pmc as Record<string, unknown> | undefined
   const biometrics = evidence.biometrics as Record<string, unknown> | undefined
+  const hrv = biometrics?.hrv as Record<string, unknown> | undefined
+  const sleep = biometrics?.sleep as Record<string, unknown> | undefined
 
   const tsb = (pmc?.tsb ?? evidence.tsb) as number | null | undefined
   if (typeof tsb === 'number') {
     const tone = tsb < -20 ? 'alert' : 'default'
-    chips.push(<EvidenceChip key="tsb" tone={tone}>TSB {tsb >= 0 ? '+' : ''}{tsb.toFixed(0)}</EvidenceChip>)
+    chips.push(
+      <EvidenceChip key="tsb" tone={tone}>
+        TSB {tsb >= 0 ? '+' : ''}
+        {tsb.toFixed(0)}
+      </EvidenceChip>,
+    )
   }
 
   const ctl = (pmc?.ctl ?? evidence.ctl) as number | null | undefined
@@ -67,33 +61,57 @@ function buildEvidenceChips(evidence: Record<string, unknown>): React.ReactNode[
     chips.push(<EvidenceChip key="ctl">CTL {ctl.toFixed(0)}</EvidenceChip>)
   }
 
-  const hrvDelta = (biometrics?.hrv_delta_pct ?? evidence.hrv_delta_pct) as number | null | undefined
+  const hrvDelta = hrv?.delta_pct as number | null | undefined
   if (typeof hrvDelta === 'number') {
     const sign = hrvDelta >= 0 ? '+' : ''
     const tone = hrvDelta < -8 ? 'alert' : 'default'
-    chips.push(<EvidenceChip key="hrv" tone={tone}>HRV {sign}{hrvDelta.toFixed(0)}% 7d</EvidenceChip>)
+    chips.push(
+      <EvidenceChip key="hrv" tone={tone}>
+        HRV {sign}
+        {hrvDelta.toFixed(0)}%
+      </EvidenceChip>,
+    )
   }
 
-  const sleepDebt = (biometrics?.sleep_debt_hours ?? evidence.sleep_debt_hours) as number | null | undefined
+  const sleepDebt = sleep?.total_debt_hours as number | null | undefined
   if (typeof sleepDebt === 'number' && sleepDebt > 0.2) {
     const tone = sleepDebt > 3 ? 'alert' : 'default'
-    chips.push(<EvidenceChip key="sleep" tone={tone}>Sleep debt {sleepDebt.toFixed(1)}h</EvidenceChip>)
+    chips.push(
+      <EvidenceChip key="sleep" tone={tone}>
+        Sleep debt {sleepDebt.toFixed(1)}h
+      </EvidenceChip>,
+    )
   }
 
-  const zoneCreep = (evidence.zone_creep ?? (evidence.zones as Record<string, unknown> | undefined)?.grey_zone_flag) as boolean | undefined
+  const zones = evidence.distribution as Record<string, unknown> | undefined
+  const zoneCreep = zones?.grey_zone_flag as boolean | undefined
   if (zoneCreep === true) {
-    chips.push(<EvidenceChip key="zone" tone="alert">Grey-zone creep</EvidenceChip>)
+    chips.push(
+      <EvidenceChip key="zone" tone="alert">
+        Grey-zone creep
+      </EvidenceChip>,
+    )
   }
 
-  const injury = (evidence.injury_flag ?? (evidence.athlete as Record<string, unknown> | undefined)?.injury_flag) as boolean | undefined
+  const athlete = evidence.athlete as Record<string, unknown> | undefined
+  const phase = athlete?.goal_phase as string | undefined
+  if (typeof phase === 'string' && phase !== 'unknown') {
+    chips.push(<EvidenceChip key="phase">Phase: {phase}</EvidenceChip>)
+  }
+
+  const injury = athlete?.injury_flag as boolean | undefined
   if (injury === true) {
-    chips.push(<EvidenceChip key="injury" tone="alert">Injury flagged</EvidenceChip>)
+    chips.push(
+      <EvidenceChip key="injury" tone="alert">
+        Injury flagged
+      </EvidenceChip>,
+    )
   }
 
   return chips
 }
 
-// ─── 7-day outlook mini chart (uPlot bars) ───────────────────────────────────
+// ─── 7-day outlook mini chart — compact 60px ─────────────────────────────────
 
 function OutlookChart({ outlook }: { outlook: OutlookEntry[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -107,13 +125,11 @@ function OutlookChart({ outlook }: { outlook: OutlookEntry[] }) {
     const ys = outlook.map((o) => o.suggested_tss)
     const maxY = Math.max(60, ...ys)
 
-    // Use uPlot's native bars factory — 55% width, rounded corners not supported
-    // natively but we keep the editorial feel with spacing.
     const barsBuilder = uPlot.paths.bars?.({ size: [0.55] })
 
     const opts: uPlot.Options = {
       width,
-      height: 72,
+      height: 60,
       padding: [4, 8, 4, 8],
       scales: {
         x: { time: false, range: [-0.5, 6.5] },
@@ -123,8 +139,8 @@ function OutlookChart({ outlook }: { outlook: OutlookEntry[] }) {
         {},
         {
           label: 'Suggested TSS',
-          stroke: 'var(--color-ink)',
-          fill: 'var(--color-ink)',
+          stroke: 'var(--color-ink-2)',
+          fill: 'var(--color-ink-2)',
           width: 0,
           paths: barsBuilder,
           points: { show: false },
@@ -156,7 +172,7 @@ function OutlookChart({ outlook }: { outlook: OutlookEntry[] }) {
     const data: uPlot.AlignedData = [xs, ys]
     const plot = new uPlot(opts, data, el)
     const ro = new ResizeObserver(() => {
-      if (el) plot.setSize({ width: el.clientWidth, height: 72 })
+      if (el) plot.setSize({ width: el.clientWidth, height: 60 })
     })
     ro.observe(el)
 
@@ -169,79 +185,6 @@ function OutlookChart({ outlook }: { outlook: OutlookEntry[] }) {
   return <div ref={containerRef} className="w-full min-w-0" />
 }
 
-// ─── Option card ─────────────────────────────────────────────────────────────
-
-function OptionCard({ option, recommended }: { option: BriefOption; recommended: boolean }) {
-  const meta = INTENSITY_META[option.intensity]
-  const blocked = option.blocked === true
-  const opacity = blocked ? 0.45 : 1
-  const borderColor = recommended && !blocked ? meta.color : 'var(--color-rule)'
-  const glow = recommended && !blocked ? `0 0 0 1px ${meta.color}40, 0 10px 28px -18px ${meta.color}` : 'none'
-
-  return (
-    <div
-      className="relative flex flex-col gap-2 rounded-[12px] p-3 transition-all min-w-0"
-      style={{
-        backgroundColor: 'var(--color-paper)',
-        border: `1px solid ${borderColor}`,
-        opacity,
-        boxShadow: glow,
-      }}
-      title={blocked ? option.block_reason ?? 'Blocked by safety rails' : undefined}
-    >
-      {/* Intensity bar */}
-      <div className="flex items-center gap-2">
-        <span
-          className="h-1.5 flex-1 rounded-full"
-          style={{ background: meta.bar, opacity: blocked ? 0.5 : 1 }}
-        />
-        <span
-          className="eyebrow whitespace-nowrap"
-          style={{ color: meta.color, letterSpacing: '0.22em' }}
-        >
-          {meta.label}
-        </span>
-      </div>
-      {/* TSS target */}
-      <div className="flex items-baseline gap-1">
-        <span
-          className="num-display leading-none"
-          style={{ fontSize: 22, color: 'var(--color-ink)', textDecoration: blocked ? 'line-through' : 'none' }}
-        >
-          {Math.round(option.tss_target)}
-        </span>
-        <span className="num-mono text-[10px]" style={{ color: 'var(--color-muted)' }}>TSS</span>
-      </div>
-      {/* Title + why */}
-      <div className="flex flex-col gap-0.5 min-w-0">
-        <span
-          className="serif-caps text-[13px] leading-tight dashboard-break-words"
-          style={{ color: 'var(--color-ink)' }}
-        >
-          {option.title}
-        </span>
-        <span
-          className="text-[11px] leading-snug dashboard-break-words"
-          style={{ color: 'var(--color-ink-2)' }}
-        >
-          {option.why}
-        </span>
-      </div>
-      {blocked && option.block_reason && (
-        <div
-          className="flex items-start gap-1.5 mt-0.5 pt-1.5"
-          style={{ borderTop: '1px dashed var(--color-rule)' }}
-        >
-          <AlertTriangle size={11} strokeWidth={1.8} style={{ color: 'var(--color-alert)', flexShrink: 0, marginTop: 1 }} />
-          <span className="text-[10px] leading-snug" style={{ color: 'var(--color-alert)' }}>
-            {option.block_reason}
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 
 function BriefSkeleton() {
@@ -250,14 +193,22 @@ function BriefSkeleton() {
       className="paper-grain rounded-[18px] p-6 sm:p-8"
       style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
     >
-      <div className="h-4 w-32 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-      <div className="h-10 w-3/4 mt-4 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-      <div className="h-20 w-full mt-4 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-5">
-        {[0,1,2,3].map((i) => (
-          <div key={i} className="h-24 rounded-[12px] animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-        ))}
-      </div>
+      <div
+        className="h-4 w-32 rounded animate-pulse"
+        style={{ backgroundColor: 'var(--color-rule)' }}
+      />
+      <div
+        className="h-10 w-3/4 mt-4 rounded animate-pulse"
+        style={{ backgroundColor: 'var(--color-rule)' }}
+      />
+      <div
+        className="h-20 w-full mt-4 rounded animate-pulse"
+        style={{ backgroundColor: 'var(--color-rule)' }}
+      />
+      <div
+        className="h-40 w-full mt-5 rounded-[12px] animate-pulse"
+        style={{ backgroundColor: 'var(--color-rule)' }}
+      />
     </div>
   )
 }
@@ -308,10 +259,14 @@ export default function CoachBrief() {
   )
 }
 
-// ─── Body — extracted so the motion stagger has a clean parent ───────────────
+// ─── Body — the fold-1 hero ──────────────────────────────────────────────────
 
 function BriefBody({
-  brief, isRefreshing, onRefresh, onOpenWhy, onOpenTransparency,
+  brief,
+  isRefreshing,
+  onRefresh,
+  onOpenWhy,
+  onOpenTransparency,
 }: {
   brief: CoachBriefResponse
   isRefreshing: boolean
@@ -326,56 +281,35 @@ function BriefBody({
     [brief.evidence],
   )
 
-  // Identify the "recommended" option — conventionally the first non-blocked,
-  // highest-intensity-under-ceiling. Here we use the last non-blocked entry in
-  // intensity order (rest < easy < moderate < push). If none exist (all blocked),
-  // nothing highlighted.
-  const recommended = useMemo(() => {
-    const sorted = [...brief.options].sort(
-      (a, b) => INTENSITY_ORDER.indexOf(a.intensity) - INTENSITY_ORDER.indexOf(b.intensity),
-    )
-    const unblocked = sorted.filter((o) => !o.blocked)
-    return unblocked[unblocked.length - 1]?.intensity ?? null
-  }, [brief.options])
-
   const generatedAgo = useMemo(() => {
     try {
       return formatDistanceToNow(new Date(brief.generated_at), { addSuffix: true })
-    } catch { return '' }
+    } catch {
+      return ''
+    }
   }, [brief.generated_at])
 
-  // Ensure options render in canonical intensity order (rest → push)
-  const orderedOptions = useMemo(() => {
-    const byIntensity = new Map(brief.options.map((o) => [o.intensity, o]))
-    return INTENSITY_ORDER.map((i) => byIntensity.get(i)).filter(
-      (o): o is BriefOption => o !== undefined,
-    )
-  }, [brief.options])
+  // Guard: if prescribed_workout is missing (legacy row), render a degraded
+  // message. New briefs always have it.
+  const workout = brief.prescribed_workout
+  const alternates = brief.alternates ?? []
 
   return (
     <motion.div
-      className="paper-grain rounded-[18px] p-5 sm:p-7 flex flex-col gap-5 min-w-0"
-      style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
-      initial="hidden"
-      animate="visible"
-      variants={{
-        hidden: { opacity: 1 },
-        visible: { transition: { staggerChildren: 0.08, delayChildren: 0.04 } },
-      }}
+      className="flex flex-col gap-4 min-w-0"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
     >
-      {/* Header row — eyebrow + meta + refresh */}
-      <motion.div
-        className="flex items-center justify-between gap-3 flex-wrap"
-        variants={{ hidden: { opacity: 0, y: -6 }, visible: { opacity: 1, y: 0 } }}
-        transition={{ duration: 0.35 }}
-      >
-        <div className="flex items-center gap-3 min-w-0">
+      {/* Eyebrow row — coach badge + meta */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
           <Sparkles size={14} strokeWidth={1.8} style={{ color: 'var(--color-amber)' }} />
           <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
             Coach brief · today
           </span>
           {generatedAgo && (
-            <span className="eyebrow opacity-60 num-mono">{generatedAgo}</span>
+            <span className="eyebrow num-mono opacity-60">{generatedAgo}</span>
           )}
           {brief.from_cache && (
             <span
@@ -404,77 +338,61 @@ function BriefBody({
             </span>
           )}
         </div>
-        <button
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-medium transition-colors min-h-[40px] disabled:opacity-50"
-          style={{
-            color: 'var(--color-ink-2)',
-            border: '1px solid var(--color-rule)',
-            backgroundColor: 'transparent',
-          }}
-          aria-label="Regenerate brief"
-          title="Force a fresh generation"
-        >
-          <RefreshCw size={12} strokeWidth={1.8} className={isRefreshing ? 'animate-spin' : ''} />
-          <span>Refresh</span>
-        </button>
-      </motion.div>
+      </div>
 
-      {/* Verdict */}
-      <motion.h2
-        className="num-display leading-[1.02] max-w-[22ch]"
+      {/* Verdict — tighter than before */}
+      <h2
+        className="num-display leading-[1.04] max-w-[22ch]"
         style={{
-          fontSize: 'clamp(28px, 4.2vw, 42px)',
+          fontSize: 'clamp(26px, 3.6vw, 38px)',
           color: 'var(--color-ink)',
           fontStyle: 'italic',
           fontVariationSettings: '"opsz" 144, "SOFT" 30',
         }}
-        variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
-        transition={{ duration: 0.45 }}
       >
         {brief.verdict}
-      </motion.h2>
+      </h2>
 
-      {/* Rationale */}
-      <motion.p
-        className="text-[15px] sm:text-[16px] leading-relaxed dashboard-break-words"
-        style={{ color: 'var(--color-ink-2)', maxWidth: '60ch' }}
-        variants={{ hidden: { opacity: 0, y: 6 }, visible: { opacity: 1, y: 0 } }}
-        transition={{ duration: 0.4 }}
+      {/* Rationale — capped at 2 lines visually via max-width + line-clamp */}
+      <p
+        className="text-[14px] sm:text-[15px] leading-relaxed dashboard-break-words"
+        style={{
+          color: 'var(--color-ink-2)',
+          maxWidth: '62ch',
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}
       >
         {brief.rationale}
-      </motion.p>
+      </p>
 
-      {/* Evidence chips */}
+      {/* Evidence chips — single compact row */}
       {evidenceChips.length > 0 && (
-        <motion.div
-          className="flex items-center gap-2 flex-wrap"
-          variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
-          transition={{ duration: 0.35 }}
-        >
-          {evidenceChips}
-        </motion.div>
+        <div className="flex items-center gap-1.5 flex-wrap">{evidenceChips}</div>
       )}
 
-      {/* Options grid */}
-      <motion.div
-        className="grid gap-2.5 grid-cols-2 md:grid-cols-4 min-w-0"
-        variants={{ hidden: { opacity: 0, y: 6 }, visible: { opacity: 1, y: 0 } }}
-        transition={{ duration: 0.4 }}
-      >
-        {orderedOptions.map((o) => (
-          <OptionCard key={o.intensity} option={o} recommended={o.intensity === recommended} />
-        ))}
-      </motion.div>
-
-      {/* Outlook */}
-      {brief.outlook_7d && brief.outlook_7d.length > 0 && (
-        <motion.div
-          className="flex flex-col gap-2 pt-1"
-          variants={{ hidden: { opacity: 0, y: 6 }, visible: { opacity: 1, y: 0 } }}
-          transition={{ duration: 0.4 }}
+      {/* Prescribed workout hero — the single headline */}
+      {workout ? (
+        <PrescribedWorkoutCard workout={workout} alternates={alternates} />
+      ) : (
+        <div
+          className="rounded-[12px] p-4"
+          style={{
+            backgroundColor: 'var(--color-paper-2)',
+            border: '1px dashed var(--color-rule)',
+          }}
         >
+          <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
+            No prescribed workout — legacy brief shape
+          </span>
+        </div>
+      )}
+
+      {/* Outlook — secondary, compact 60px */}
+      {brief.outlook_7d && brief.outlook_7d.length > 0 && (
+        <div className="flex flex-col gap-1.5 pt-3" style={{ borderTop: '1px solid var(--color-rule)' }}>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="eyebrow">7-day outlook</span>
             <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
@@ -482,54 +400,58 @@ function BriefBody({
             </span>
           </div>
           <OutlookChart outlook={brief.outlook_7d} />
-        </motion.div>
+        </div>
       )}
 
-      {/* Frameworks cited */}
-      {brief.frameworks_cited.length > 0 && (
-        <motion.div
-          className="pt-2 border-t"
-          style={{ borderColor: 'var(--color-rule)' }}
-          variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
-          transition={{ duration: 0.3 }}
-        >
+      {/* Frameworks + transparency — one line combined */}
+      <div
+        className="flex items-center justify-between gap-2 flex-wrap pt-2"
+        style={{ borderTop: '1px solid var(--color-rule)' }}
+      >
+        {brief.frameworks_cited.length > 0 && (
           <span
-            className="num-mono text-[11px] leading-relaxed dashboard-break-words"
-            style={{ color: 'var(--color-muted)' }}
+            className="num-mono text-[11px] leading-snug dashboard-break-words"
+            style={{ color: 'var(--color-muted)', maxWidth: '52ch' }}
           >
             Grounded in: {brief.frameworks_cited.join(' · ')}
           </span>
-        </motion.div>
-      )}
-
-      {/* Transparency links */}
-      <motion.div
-        className="flex items-center gap-2 flex-wrap pt-1"
-        variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
-        transition={{ duration: 0.3 }}
-      >
-        <button
-          onClick={onOpenWhy}
-          className="inline-flex items-center gap-1 text-[12px] font-medium transition-colors"
-          style={{ color: 'var(--color-ink-2)' }}
-        >
-          <ChevronRight size={13} strokeWidth={2} />
-          <span className="underline underline-offset-2 decoration-[var(--color-rule)] hover:decoration-[var(--color-ink)]">
-            Why this?
-          </span>
-        </button>
-        <span className="eyebrow opacity-40">·</span>
-        <button
-          onClick={onOpenTransparency}
-          className="inline-flex items-center gap-1 text-[12px] font-medium transition-colors"
-          style={{ color: 'var(--color-ink-2)' }}
-        >
-          <ChevronRight size={13} strokeWidth={2} />
-          <span className="underline underline-offset-2 decoration-[var(--color-rule)] hover:decoration-[var(--color-ink)]">
-            What did the AI see?
-          </span>
-        </button>
-      </motion.div>
+        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={onOpenWhy}
+            className="inline-flex items-center gap-1 text-[11px] font-medium"
+            style={{ color: 'var(--color-ink-2)' }}
+          >
+            <ChevronRight size={12} strokeWidth={2} />
+            <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
+              Why this?
+            </span>
+          </button>
+          <button
+            onClick={onOpenTransparency}
+            className="inline-flex items-center gap-1 text-[11px] font-medium"
+            style={{ color: 'var(--color-ink-2)' }}
+          >
+            <ChevronRight size={12} strokeWidth={2} />
+            <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
+              What did the AI see?
+            </span>
+          </button>
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1 text-[11px] font-medium disabled:opacity-50"
+            style={{ color: 'var(--color-muted)' }}
+            aria-label="Regenerate brief"
+            title="Force a fresh generation"
+          >
+            <RefreshCw size={11} strokeWidth={1.8} className={isRefreshing ? 'animate-spin' : ''} />
+            <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
+              Refresh
+            </span>
+          </button>
+        </div>
+      </div>
     </motion.div>
   )
 }
