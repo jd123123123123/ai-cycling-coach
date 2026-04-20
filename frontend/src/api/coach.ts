@@ -50,6 +50,33 @@ export interface AlternateWorkout {
   template_id: string
 }
 
+// Phase 5.3 — post-ride review shape
+export interface CompliancePair {
+  target: number
+  actual: number
+  delta_pct: number
+  band: 'match' | 'over' | 'under'
+}
+
+export type RideGrade = 'perfect' | 'strong' | 'okay' | 'overcooked' | 'undercooked'
+
+export interface PostRideReview {
+  grade: RideGrade
+  headline: string
+  duration: CompliancePair
+  tss: CompliancePair
+  intensity_factor?: CompliancePair | null
+  variability_index?: number | null
+  ef?: number | null
+  decoupling_pct?: number | null
+  physiological_read: string
+  goal_trajectory: string
+  next_session_nudge: string
+  target_template_id: string
+  target_template_title: string
+  session_type: string
+}
+
 export type CoachLanguage = 'simple' | 'technical'
 
 export interface CoachBriefResponse {
@@ -69,6 +96,10 @@ export interface CoachBriefResponse {
   from_cache: boolean
   // Phase 5.2 — which language mode the brief is in
   language: CoachLanguage
+  // Phase 5.3 — when the athlete has already trained today, a complete
+  // review is attached. Frontend renders PostRideReview card in place of
+  // the PrescribedWorkoutCard. Absent / null → no review.
+  post_ride_review?: PostRideReview | null
 }
 
 export interface CauseEntry {

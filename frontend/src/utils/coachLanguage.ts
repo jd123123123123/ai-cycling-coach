@@ -189,3 +189,57 @@ export function simpleTitleFor(
   if (!category) return fallback
   return SIMPLE_TITLE_BY_CATEGORY[category] ?? fallback
 }
+
+
+// ─── Phase 5.3 — post-ride review grade labels ───────────────────────────
+//
+// The grade pill on PostRideReview uses different text in simple vs technical
+// mode. Technical keeps the raw grade; simple softens "okay" into "Good effort"
+// and "overcooked"/"undercooked" into less clinical phrasing.
+
+type Grade = 'perfect' | 'strong' | 'okay' | 'overcooked' | 'undercooked'
+
+const GRADE_LABEL_SIMPLE: Record<Grade, string> = {
+  perfect:     'Perfect',
+  strong:      'Strong',
+  okay:        'Good effort',
+  overcooked:  'Too much',
+  undercooked: 'A bit short',
+}
+
+const GRADE_LABEL_TECHNICAL: Record<Grade, string> = {
+  perfect:     'Perfect',
+  strong:      'Strong',
+  okay:        'Okay',
+  overcooked:  'Overcooked',
+  undercooked: 'Undercooked',
+}
+
+/**
+ * Grade pill display label — simple-mode softens okay / overcooked /
+ * undercooked; technical preserves the raw grade.
+ */
+export function gradeLabel(grade: Grade, language: CoachLanguage): string {
+  return language === 'simple'
+    ? GRADE_LABEL_SIMPLE[grade]
+    : GRADE_LABEL_TECHNICAL[grade]
+}
+
+
+// ─── Phase 5.3 — compliance direction phrases ───────────────────────────
+
+type ComplianceBand = 'match' | 'over' | 'under'
+
+/**
+ * Simple-mode phrase for one compliance axis. `overLabel` customises the
+ * "what went over" — e.g. "longer than planned" for duration, "harder than
+ * planned" for TSS. Match + under have stable phrasings.
+ */
+export function complianceDirectionText(
+  band: ComplianceBand,
+  overLabel: string,
+): string {
+  if (band === 'match') return 'Right on target'
+  if (band === 'over') return `A bit ${overLabel}`
+  return 'A bit lighter than planned'
+}
