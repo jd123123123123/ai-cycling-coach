@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { LogOut, User as UserIcon } from 'lucide-react'
+import { LogOut, User as UserIcon, MessageSquare } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import CoachChat from './CoachChat'
 
 interface DashboardShellProps {
   bodyStatus: ReactNode
@@ -15,6 +16,7 @@ export default function DashboardShell({
 }: DashboardShellProps) {
   const { user, logout } = useAuth()
   const initial = (user?.email?.[0] ?? 'A').toUpperCase()
+  const [chatOpen, setChatOpen] = useState(false)
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-paper)' }}>
@@ -49,6 +51,20 @@ export default function DashboardShell({
             </span>
           </Link>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setChatOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-medium transition-all min-h-[40px] hover:-translate-y-0.5"
+              style={{
+                color: 'var(--color-paper)',
+                backgroundColor: 'var(--color-ink)',
+                border: '1px solid var(--color-ink)',
+              }}
+              aria-label="Ask coach"
+              title="Open coach chat"
+            >
+              <MessageSquare size={13} strokeWidth={1.8} />
+              <span>Ask coach</span>
+            </button>
             <div
               className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full"
               style={{
@@ -136,6 +152,9 @@ export default function DashboardShell({
       </main>
 
       {workoutPreviewModal}
+
+      {/* Coach chat drawer — portal, opened from masthead */}
+      <CoachChat open={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   )
 }

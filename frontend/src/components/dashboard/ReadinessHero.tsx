@@ -5,6 +5,7 @@ import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useGarminStatus } from '../../hooks/useGarminStatus'
 import type { DailyMetric } from '../../api/dashboard'
 import Sparkline from './Sparkline'
+import CoachBrief from './CoachBrief'
 import {
   TIER_META,
   classifyMetric,
@@ -271,58 +272,6 @@ function HeroSkeleton() {
   )
 }
 
-// ─── Coach's note — Phase 5 placeholder ──────────────────────────────────────
-
-function CoachNote({ tierKey, metricsExist }: { tierKey: ReturnType<typeof readinessTier>; metricsExist: boolean }) {
-  const tier = tierKey ?? 'rest'
-  const meta = TIER_META[tier]
-  const note = metricsExist
-    ? meta.sentiment
-    : 'Connect Garmin to unlock tailored daily guidance from your cycling coach.'
-  return (
-    <div
-      className="relative rounded-[14px] px-5 py-4 sm:px-6 sm:py-5 overflow-hidden"
-      style={{
-        background: meta.bg,
-        border: `1px solid ${meta.color}33`,
-      }}
-    >
-      <div className="flex items-start gap-4">
-        <div
-          className="hidden sm:block w-[2px] h-10 rounded mt-1"
-          style={{ backgroundColor: meta.color }}
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span
-              className="eyebrow"
-              style={{ color: meta.color }}
-            >
-              Coach's note · today
-            </span>
-            <span
-              className="num-mono text-[10px] px-2 py-0.5 rounded-sm"
-              style={{
-                color: 'var(--color-muted)',
-                backgroundColor: 'rgba(20,24,17,0.04)',
-                border: '1px solid var(--color-rule)',
-              }}
-            >
-              AI brief in Phase 5
-            </span>
-          </div>
-          <p
-            className="serif-caps text-[17px] sm:text-[19px] leading-snug mt-2"
-            style={{ color: 'var(--color-ink)' }}
-          >
-            {note}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function ReadinessHero() {
@@ -524,8 +473,8 @@ export default function ReadinessHero() {
       {/* KPI STRIP */}
       <KpiStrip metrics={metrics} />
 
-      {/* COACH'S NOTE */}
-      <CoachNote tierKey={tier} metricsExist={readiness != null} />
+      {/* COACH BRIEF — live causal AI brief (Phase 5-02) */}
+      <CoachBrief />
     </section>
   )
 }
