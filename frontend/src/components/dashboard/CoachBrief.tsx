@@ -9,6 +9,7 @@ import type { CoachBriefResponse, OutlookEntry } from '../../api/coach'
 import WhyAmITired from './WhyAmITired'
 import TransparencyDrawer from './TransparencyDrawer'
 import PrescribedWorkoutCard from './PrescribedWorkoutCard'
+import PostRideReview from './PostRideReview'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { translateCoach } from '../../utils/coachLanguage'
 
@@ -297,6 +298,11 @@ function BriefBody({
   // message. New briefs always have it.
   const workout = brief.prescribed_workout
   const alternates = brief.alternates ?? []
+  // Phase 5.3 — if the athlete trained today, the backend attaches a full
+  // post_ride_review. Presence of the review hides the PrescribedWorkoutCard
+  // and renders the review in its place — the prescribed_workout is rest_day
+  // anyway in that state, so showing it would be redundant + confusing.
+  const postRideReview = brief.post_ride_review ?? null
 
   return (
     <motion.div
@@ -379,8 +385,11 @@ function BriefBody({
         <div className="flex items-center gap-1.5 flex-wrap">{evidenceChips}</div>
       )}
 
-      {/* Prescribed workout hero — the single headline */}
-      {workout ? (
+      {/* Fold-1 hero — either PostRideReview (athlete trained today) or the
+         PrescribedWorkoutCard (prescribed workout for today). Never both. */}
+      {postRideReview ? (
+        <PostRideReview review={postRideReview} language={language} />
+      ) : workout ? (
         <PrescribedWorkoutCard workout={workout} alternates={alternates} />
       ) : (
         <div
