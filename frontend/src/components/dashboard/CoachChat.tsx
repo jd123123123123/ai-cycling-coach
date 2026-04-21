@@ -1,17 +1,39 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { MessageSquare, X, Sparkles } from 'lucide-react'
-import { useCoachChat } from '../../hooks/useCoachChat'
-import type { ChatMessage } from '../../api/coach'
-import { useLanguage } from '../../contexts/LanguageContext'
-
-// ─── Inline-data mono wrapping ───────────────────────────────────────────────
-
 /**
- * Wrap numeric-data tokens in a mono span so the coach's citations read like
- * inline data rather than prose. Matches values like "46ms", "220W", "84 TSS",
- * "7.8h", "+12%", "-8%".
+ * CoachChat — Phase 6 Wave 3 upgrade.
+ *
+ * Migrated from the 05-02 ad-hoc fetch loop (useCoachChat) to the new
+ * useChatStream hook that exposes tool-use lifecycle state. Key additions
+ * vs the prior version:
+ *   - "Analyzing your training data..." intermediate indicator while the
+ *     Claude tool-use loop dispatches reads (fetch_pmc_window etc.)
+ *   - Inline rendering of tool_use_result as cards:
+ *       modify_planned_workout → WorkoutModifiedCard (before/after + rails)
+ *       fetch_pmc_window / fetch_recovery_trend → AnalyticalAnswerCard
+ *       anything else → a compact "Retrieved data" pill
+ *   - Passes toolUseLog down to TransparencyDrawer (via a lifted context
+ *     approach: we expose the log through a window-scoped singleton the
+ *     drawer reads on open). Keeps this drawer self-contained while still
+ *     letting the transparency drawer access the session's tool calls.
+ *
+ * Session-local invariant: when the drawer closes we call reset() so the
+ * next open starts with a clean messages[] + toolUseLog[].
  */
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
+import { createPortal } from 'react-dom'
+import { MessageSquare, X, Sparkles, CheckCircle2 } from 'lucide-react'
+import { useChatStream, type ChatMessage, type ToolName } from '../../hooks/useChatStream'
+import { setToolUseLogSnapshot } from '../../lib/chatToolUseLog'
+import { useLanguage } from '../../contexts/LanguageContext'
+import WorkoutModifiedCard from '../coach/WorkoutModifiedCard'
+import AnalyticalAnswerCard from '../coach/AnalyticalAnswerCard'
+
+// ─── Inline-data mono wrapping (unchanged from 05-02) ────────────────────────
+
 function highlightData(text: string): React.ReactNode[] {
   const pattern = /([+-]?\d+(?:\.\d+)?(?:ms|bpm|TSS|\s?TSS|W|%|h|kg|mi|km|min))/g
   const nodes: React.ReactNode[] = []
@@ -35,51 +57,69 @@ function highlightData(text: string): React.ReactNode[] {
   return nodes
 }
 
+// ─── Tool-use indicator copy ─────────────────────────────────────────────────
+// Per-tool copy for the "Analyzing your..." intermediate state. Keeping
+// these as a flat map makes future i18n cheap.
+const TOOL_INDICATOR_COPY: Record<
+  ToolName,
+  { simple: string; technical: string }
+> = {
+  fetch_pmc_window: {
+    simple: 'Checking your fitness history',
+    technical: 'Analyzing your training load',
+  },
+  fetch_recovery_trend: {
+    simple: 'Looking at your recovery',
+    technical: 'Checking recovery patterns',
+  },
+  fetch_recent_activities: {
+    simple: 'Reading your recent rides',
+    technical: 'Pulling recent activities',
+  },
+  fetch_ftp_history: {
+    simple: 'Checking your fitness test history',
+    technical: 'Loading FTP history',
+  },
+  fetch_planned_workout: {
+    simple: 'Reading your upcoming workout',
+    technical: 'Fetching planned workout',
+  },
+  modify_planned_workout: {
+    simple: 'Updating your workout',
+    technical: 'Modifying planned workout',
+  },
+}
+
+function toolIndicatorCopy(
+  name: ToolName,
+  language: 'simple' | 'technical',
+): string {
+  const pair = TOOL_INDICATOR_COPY[name]
+  if (pair) return language === 'simple' ? pair.simple : pair.technical
+  return language === 'simple'
+    ? 'Analyzing your training data'
+    : `Running ${name}`
+}
+
 // ─── Message bubbles ─────────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
-  if (msg.role === 'user') {
-    return (
-      <div className="flex justify-end">
-        <div
-          className="max-w-[85%] px-3.5 py-2.5 rounded-[14px] rounded-br-[4px] text-[14px] leading-relaxed dashboard-break-words"
-          style={{
-            backgroundColor: 'var(--color-ink)',
-            color: 'var(--color-paper)',
-          }}
-        >
-          {msg.content}
-        </div>
-      </div>
-    )
-  }
+function UserBubble({ text }: { text: string }) {
   return (
-    <div className="flex gap-2.5 items-start">
+    <div className="flex justify-end">
       <div
-        className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center mt-0.5"
+        className="max-w-[85%] px-3.5 py-2.5 rounded-[14px] rounded-br-[4px] text-[14px] leading-relaxed dashboard-break-words"
         style={{
-          backgroundColor: 'rgba(176, 74, 12, 0.12)',
-          border: '1px solid rgba(176, 74, 12, 0.25)',
-        }}
-        aria-hidden
-      >
-        <Sparkles size={12} strokeWidth={1.8} style={{ color: 'var(--color-amber)' }} />
-      </div>
-      <div
-        className="flex-1 min-w-0 px-3.5 py-2.5 rounded-[14px] rounded-tl-[4px] text-[14px] leading-relaxed dashboard-break-words"
-        style={{
-          backgroundColor: 'var(--color-paper)',
-          border: '1px solid var(--color-rule)',
-          color: 'var(--color-ink)',
+          backgroundColor: 'var(--color-ink)',
+          color: 'var(--color-paper)',
         }}
       >
-        {highlightData(msg.content)}
+        {text}
       </div>
     </div>
   )
 }
 
-function StreamingBubble({ text }: { text: string }) {
+function AssistantBubble({ text }: { text: string }) {
   return (
     <div className="flex gap-2.5 items-start">
       <div
@@ -100,8 +140,53 @@ function StreamingBubble({ text }: { text: string }) {
           color: 'var(--color-ink)',
         }}
       >
-        {text ? highlightData(text) : <span className="opacity-60">Thinking…</span>}
-        <span className="streaming-caret" aria-hidden />
+        {highlightData(text)}
+      </div>
+    </div>
+  )
+}
+
+function StreamingBubble({
+  text,
+  indicatorCopy,
+}: {
+  text: string
+  indicatorCopy: string | null
+}) {
+  return (
+    <div className="flex gap-2.5 items-start">
+      <div
+        className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center mt-0.5"
+        style={{
+          backgroundColor: 'rgba(176, 74, 12, 0.12)',
+          border: '1px solid rgba(176, 74, 12, 0.25)',
+        }}
+        aria-hidden
+      >
+        <Sparkles size={12} strokeWidth={1.8} style={{ color: 'var(--color-amber)' }} />
+      </div>
+      <div
+        className="flex-1 min-w-0 px-3.5 py-2.5 rounded-[14px] rounded-tl-[4px] text-[14px] leading-relaxed dashboard-break-words"
+        style={{
+          backgroundColor: 'var(--color-paper)',
+          border: '1px solid var(--color-rule)',
+          color: 'var(--color-ink)',
+        }}
+      >
+        {indicatorCopy ? (
+          <span
+            className="text-[13px] italic inline-flex items-center gap-1"
+            style={{ color: 'var(--color-ink-2)' }}
+          >
+            {indicatorCopy}
+            <span className="thinking-dots" aria-hidden />
+          </span>
+        ) : text ? (
+          highlightData(text)
+        ) : (
+          <span className="opacity-60">Thinking…</span>
+        )}
+        {!indicatorCopy && <span className="streaming-caret" aria-hidden />}
         <style>{`
           .streaming-caret {
             display: inline-block;
@@ -112,28 +197,137 @@ function StreamingBubble({ text }: { text: string }) {
             vertical-align: -2px;
             animation: blink 1.05s steps(2) infinite;
           }
+          .thinking-dots::after {
+            content: '…';
+            animation: pulse 1.4s ease-in-out infinite;
+          }
           @keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: 0 } }
+          @keyframes pulse { 0%,100% { opacity: 0.4 } 50% { opacity: 1 } }
         `}</style>
       </div>
     </div>
   )
 }
 
+/**
+ * Inline tool card — dispatches on toolName to the right component.
+ * Write tools (modify_planned_workout) → WorkoutModifiedCard.
+ * Read analytical tools (pmc / recovery) → AnalyticalAnswerCard.
+ * Everything else → compact "retrieved data" pill.
+ */
+function ToolBubble({
+  toolName,
+  result,
+  isError,
+}: {
+  toolName: ToolName
+  result: Record<string, unknown>
+  isError: boolean
+}) {
+  if (isError) {
+    return (
+      <div
+        className="rounded-[10px] px-3 py-2 text-[12px] leading-snug"
+        style={{
+          color: 'var(--color-alert)',
+          backgroundColor: 'rgba(138, 29, 29, 0.06)',
+          border: '1px solid rgba(138, 29, 29, 0.25)',
+        }}
+      >
+        <span className="eyebrow">Tool error</span> · {toolName} ·{' '}
+        {typeof result?.error === 'string' ? result.error : 'see transparency drawer'}
+      </div>
+    )
+  }
+  if (
+    toolName === 'modify_planned_workout' &&
+    (result as { success?: boolean }).success
+  ) {
+    return (
+      <WorkoutModifiedCard
+        result={result as unknown as Parameters<typeof WorkoutModifiedCard>[0]['result']}
+      />
+    )
+  }
+  if (
+    toolName === 'modify_planned_workout' &&
+    (result as { success?: boolean }).success === false
+  ) {
+    // Already-trained-today / guard-rejected modification → friendly ack
+    const reason =
+      (result as { reason?: string }).reason ||
+      'Workout could not be modified.'
+    return (
+      <div
+        className="rounded-[12px] px-3 py-2.5 text-[13px] leading-snug flex items-start gap-2"
+        style={{
+          backgroundColor: 'var(--color-paper)',
+          border: '1px solid var(--color-rule)',
+          color: 'var(--color-ink-2)',
+        }}
+      >
+        <CheckCircle2
+          size={13}
+          strokeWidth={1.8}
+          style={{ color: 'var(--color-muted)', flexShrink: 0, marginTop: 2 }}
+          aria-hidden
+        />
+        <span>{reason}</span>
+      </div>
+    )
+  }
+  if (
+    toolName === 'fetch_pmc_window' ||
+    toolName === 'fetch_recovery_trend'
+  ) {
+    return <AnalyticalAnswerCard toolName={toolName} result={result} />
+  }
+  // Generic compact pill for other read tools (FTP, activities, planned workout)
+  return (
+    <div
+      className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-sm"
+      style={{
+        color: 'var(--color-ink-2)',
+        backgroundColor: 'var(--color-paper)',
+        border: '1px solid var(--color-rule)',
+      }}
+    >
+      <CheckCircle2 size={10} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)' }} />
+      <span className="eyebrow">Retrieved</span>
+      <span className="num-mono">{toolName}</span>
+    </div>
+  )
+}
+
+function renderMessage(m: ChatMessage, key: number): React.ReactNode {
+  if (m.role === 'user') return <UserBubble key={key} text={m.content} />
+  if (m.role === 'assistant')
+    return <AssistantBubble key={key} text={m.content} />
+  // tool
+  return (
+    <ToolBubble
+      key={key}
+      toolName={m.toolName}
+      result={m.result}
+      isError={m.isError}
+    />
+  )
+}
+
 // ─── Suggestions (empty state) ───────────────────────────────────────────────
-// Two sets — simple mode drops the VO2 jargon in favour of "hard intervals".
 
 const SUGGESTIONS_SIMPLE: string[] = [
   'Why am I tired this week?',
   'Am I ready for hard intervals?',
+  'I only have 45 minutes tomorrow',
   'Review my last 2 weeks',
-  'Should I push or rest tomorrow?',
 ]
 
 const SUGGESTIONS_TECHNICAL: string[] = [
   'Why am I tired this week?',
   'Am I ready for a VO2 set?',
+  'Shorten tomorrow to 45 minutes',
   'Review my last 2 weeks',
-  'Should I push or rest tomorrow?',
 ]
 
 // ─── Drawer ──────────────────────────────────────────────────────────────────
@@ -144,13 +338,37 @@ interface CoachChatProps {
 }
 
 export default function CoachChat({ open, onClose }: CoachChatProps) {
-  const { messages, partial, isStreaming, error, disabled, sendMessage, reset } = useCoachChat()
+  const {
+    messages,
+    partial,
+    isStreaming,
+    currentToolUse,
+    toolUseLog,
+    error,
+    disabled,
+    send,
+    reset,
+  } = useChatStream({
+    onModification: () => {
+      // Transient "Workout updated" acknowledgement — kept inline rather
+      // than a toast library to avoid pulling a new dependency.
+      setFlash('Workout updated')
+    },
+  })
   const [input, setInput] = useState('')
+  const [flash, setFlash] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const { language } = useLanguage()
   const simpleMode = language === 'simple'
   const suggestions = simpleMode ? SUGGESTIONS_SIMPLE : SUGGESTIONS_TECHNICAL
+
+  // Mirror the tool-use log into the window-scoped snapshot so the
+  // TransparencyDrawer (a sibling modal) can read it on open without us
+  // having to lift chat state to the shell.
+  useEffect(() => {
+    setToolUseLogSnapshot(toolUseLog)
+  }, [toolUseLog])
 
   // Body scroll lock + escape key
   useEffect(() => {
@@ -167,6 +385,20 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
     }
   }, [open, onClose])
 
+  // Session reset on close — per 05-02's ephemeral-chat invariant the
+  // tool-use log must not leak across sessions.
+  useEffect(() => {
+    if (!open) {
+      // Delay the reset until the drawer is no longer rendered so in-flight
+      // animations don't jank.
+      const t = setTimeout(() => {
+        reset()
+        setToolUseLogSnapshot([])
+      }, 240)
+      return () => clearTimeout(t)
+    }
+  }, [open, reset])
+
   // Auto-resize textarea
   useLayoutEffect(() => {
     const el = textareaRef.current
@@ -180,7 +412,7 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
     const el = scrollerRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
-  }, [messages, partial])
+  }, [messages, partial, currentToolUse])
 
   // Focus the input when drawer opens
   useEffect(() => {
@@ -190,11 +422,18 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
     }
   }, [open])
 
+  // Auto-clear flash after a couple seconds
+  useEffect(() => {
+    if (!flash) return
+    const t = setTimeout(() => setFlash(null), 2400)
+    return () => clearTimeout(t)
+  }, [flash])
+
   const handleSubmit = async () => {
     if (!input.trim() || isStreaming || disabled) return
     const payload = input
     setInput('')
-    await sendMessage(payload)
+    await send(payload)
   }
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -205,6 +444,10 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
   }
 
   if (!open) return null
+
+  const indicatorCopy = currentToolUse
+    ? toolIndicatorCopy(currentToolUse.name, language)
+    : null
 
   const content = (
     <div
@@ -261,6 +504,21 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
           </button>
         </div>
 
+        {/* Transient flash — "Workout updated" etc. Soft, non-blocking. */}
+        {flash && (
+          <div
+            className="px-5 py-2 text-[12px] flex items-center gap-2"
+            style={{
+              backgroundColor: 'rgba(124, 158, 126, 0.12)',
+              borderBottom: '1px solid rgba(124, 158, 126, 0.3)',
+              color: 'var(--color-forest-2)',
+            }}
+          >
+            <CheckCircle2 size={12} strokeWidth={1.8} />
+            {flash}
+          </div>
+        )}
+
         {/* Body — messages + empty state */}
         <div
           ref={scrollerRef}
@@ -284,8 +542,8 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
                   style={{ color: 'var(--color-ink-2)' }}
                 >
                   {simpleMode
-                    ? "The coach looks at how you've been sleeping, how your body's recovering, and what you've been riding — and will tell you when it doesn't have enough data."
-                    : "The coach can cite your HRV, TSB, recent rides, sleep debt, and zone mix — and will tell you when it doesn't have enough data."}
+                    ? "The coach reads your recent rides, recovery, and planned workouts — and can even update tomorrow's workout if life changes your plans."
+                    : "The coach can cite your HRV, TSB, recent rides, sleep debt, and zone mix — and can modify tomorrow's planned workout in-chat (shorten, harder, easier, indoor)."}
                 </p>
               </div>
               <div className="flex flex-col gap-2">
@@ -296,8 +554,7 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
                     disabled={disabled}
                     onClick={() => {
                       setInput(s)
-                      // Immediately dispatch so the user sees responsiveness
-                      void sendMessage(s)
+                      void send(s)
                       setInput('')
                     }}
                     className="text-left text-[13px] leading-snug px-3 py-2 rounded-[10px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -314,10 +571,10 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
             </div>
           )}
 
-          {messages.map((m, i) => (
-            <MessageBubble key={i} msg={m} />
-          ))}
-          {isStreaming && <StreamingBubble text={partial} />}
+          {messages.map((m, i) => renderMessage(m, i))}
+          {isStreaming && (
+            <StreamingBubble text={partial} indicatorCopy={indicatorCopy} />
+          )}
 
           {error && (
             <div

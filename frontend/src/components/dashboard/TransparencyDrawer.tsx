@@ -1,12 +1,39 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, ChevronDown, ChevronRight, Copy, Check, AlertTriangle } from 'lucide-react'
+import { X, ChevronDown, ChevronRight, Copy, Check, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { useTransparency } from '../../hooks/useWhyTired'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import type { BriefOption } from '../../api/coach'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { translateCoach } from '../../utils/coachLanguage'
+import type { ToolUseLogEntry } from '../../hooks/useChatStream'
+import {
+  getToolUseLogSnapshot,
+  subscribeToolUseLog,
+} from '../../lib/chatToolUseLog'
+
+// ─── Humanized tool names for "Tools Used" section ───────────────────────────
+//
+// Keep in sync with TOOL_REGISTRY in backend/app/services/coach_tools.py.
+// Unknown tool ids fall back to a key-to-title-case humanization so a new
+// backend tool renders readably without a frontend release.
+const TOOL_HUMAN_NAMES: Record<string, string> = {
+  fetch_pmc_window: 'Training Load Analysis',
+  fetch_recovery_trend: 'Recovery Trend',
+  fetch_recent_activities: 'Recent Activities',
+  fetch_ftp_history: 'FTP History',
+  fetch_planned_workout: 'Planned Workout',
+  modify_planned_workout: 'Modify Planned Workout',
+}
+
+function humanizeTool(name: string): string {
+  const label = TOOL_HUMAN_NAMES[name]
+  if (label) return label
+  return name
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -211,10 +238,159 @@ function CopyButton({ payload }: { payload: string }) {
 
 // ─── Main drawer ─────────────────────────────────────────────────────────────
 
+// ─── "Tools Used" session log ────────────────────────────────────────────────
+
+function ToolUseEntry({ entry }: { entry: ToolUseLogEntry }) {
+  const [open, setOpen] = useState(false)
+  const inputJson = JSON.stringify(entry.input, null, 2)
+  const resultJson = entry.result ? JSON.stringify(entry.result, null, 2) : null
+  const inProgress = entry.completedAt === undefined
+  const isError = Boolean(entry.isError)
+
+  return (
+    <li
+      className="rounded-[10px] overflow-hidden"
+      style={{
+        backgroundColor: 'var(--color-paper-2)',
+        border: '1px solid var(--color-rule)',
+      }}
+    >
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left"
+        aria-expanded={open}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {inProgress ? (
+            <span
+              className="w-2 h-2 rounded-full animate-pulse"
+              style={{ backgroundColor: 'var(--color-amber)' }}
+              aria-hidden
+            />
+          ) : isError ? (
+            <XCircle
+              size={12}
+              strokeWidth={1.8}
+              style={{ color: 'var(--color-alert)', flexShrink: 0 }}
+              aria-hidden
+            />
+          ) : (
+            <CheckCircle2
+              size={12}
+              strokeWidth={1.8}
+              style={{ color: 'var(--color-forest-2)', flexShrink: 0 }}
+              aria-hidden
+            />
+          )}
+          <span
+            className="serif-caps text-[13px]"
+            style={{ color: 'var(--color-ink)' }}
+          >
+            {humanizeTool(entry.name)}
+          </span>
+          <span
+            className="num-mono text-[10px]"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            {entry.name}
+          </span>
+        </div>
+        {open ? (
+          <ChevronDown size={12} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} />
+        ) : (
+          <ChevronRight size={12} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} />
+        )}
+      </button>
+      {open && (
+        <div
+          className="px-3 pb-3 pt-1 flex flex-col gap-2"
+          style={{ borderTop: '1px solid var(--color-rule)' }}
+        >
+          <div>
+            <div className="eyebrow mb-1" style={{ color: 'var(--color-muted)' }}>
+              Input
+            </div>
+            <pre
+              className="num-mono text-[11px] leading-[1.5] rounded-sm px-2 py-1.5 m-0 overflow-x-auto dashboard-break-words"
+              style={{
+                backgroundColor: 'var(--color-paper)',
+                border: '1px solid var(--color-rule)',
+                color: 'var(--color-ink-2)',
+                whiteSpace: 'pre-wrap',
+                maxHeight: 160,
+                overflowY: 'auto',
+              }}
+            >
+              {inputJson}
+            </pre>
+          </div>
+          {resultJson && (
+            <div>
+              <div
+                className="eyebrow mb-1"
+                style={{
+                  color: isError ? 'var(--color-alert)' : 'var(--color-muted)',
+                }}
+              >
+                {isError ? 'Result (error)' : 'Result'}
+              </div>
+              <pre
+                className="num-mono text-[11px] leading-[1.5] rounded-sm px-2 py-1.5 m-0 overflow-x-auto dashboard-break-words"
+                style={{
+                  backgroundColor: 'var(--color-paper)',
+                  border: '1px solid var(--color-rule)',
+                  color: 'var(--color-ink-2)',
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: 320,
+                  overflowY: 'auto',
+                }}
+              >
+                {resultJson}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
+
+function ToolsUsedSection({ entries }: { entries: ToolUseLogEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+        No tools used in this chat session yet. Ask the coach a question like
+        &ldquo;why am I tired?&rdquo; or &ldquo;review my last 2 weeks&rdquo; to see the
+        analytical tools fire.
+      </p>
+    )
+  }
+  return (
+    <ul className="flex flex-col gap-2">
+      {entries.map((e, i) => (
+        <ToolUseEntry key={`${e.name}-${e.startedAt}-${i}`} entry={e} />
+      ))}
+    </ul>
+  )
+}
+
 export default function TransparencyDrawer({ open, onClose }: Props) {
   const { data, isLoading, isError, refetch } = useTransparency(open)
   const { data: brief } = useCoachBrief()
   const { language } = useLanguage()
+  const [toolUseLog, setToolUseLog] = useState<ToolUseLogEntry[]>(
+    getToolUseLogSnapshot,
+  )
+
+  // Refresh tool-use log when the drawer opens + subscribe to updates
+  // while open so live tool calls from a still-open chat show up in real
+  // time.
+  useEffect(() => {
+    if (!open) return
+    setToolUseLog(getToolUseLogSnapshot())
+    const unsub = subscribeToolUseLog((snap) => setToolUseLog(snap))
+    return unsub
+  }, [open])
 
   // Body scroll lock + escape
   useEffect(() => {
@@ -412,6 +588,33 @@ export default function TransparencyDrawer({ open, onClose }: Props) {
                     ))}
                   </ul>
                 )}
+              </Section>
+
+              {/* Tools Used — chat session tool_use log */}
+              <Section
+                title="Tools Used"
+                eyebrow="Data the coach pulled in this chat"
+                defaultOpen={toolUseLog.length > 0}
+                meta={
+                  <span
+                    className="num-mono text-[10px] px-1.5 py-0.5 rounded-sm"
+                    style={{
+                      color:
+                        toolUseLog.length > 0
+                          ? 'var(--color-ink-2)'
+                          : 'var(--color-muted)',
+                      backgroundColor:
+                        toolUseLog.length > 0
+                          ? 'rgba(20,24,17,0.04)'
+                          : 'transparent',
+                      border: '1px solid var(--color-rule)',
+                    }}
+                  >
+                    {toolUseLog.length} {toolUseLog.length === 1 ? 'call' : 'calls'}
+                  </span>
+                }
+              >
+                <ToolsUsedSection entries={toolUseLog} />
               </Section>
 
               {/* Snapshot */}
