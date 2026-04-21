@@ -91,20 +91,39 @@ class TestCascadeMappings:
         for tid in ORDERED_TEMPLATES:
             assert tid in TEMPLATE_EASIER_CASCADE
 
-    def test_harder_cascade_monotonic_tss(self):
-        """Walking the harder cascade never produces a lower-TSS template."""
+    def test_harder_cascade_monotonic_intensity(self):
+        """Walking the harder cascade never DROPS in intensity-category rank.
+
+        TSS monotonicity doesn't hold (a 3h Z2 has higher TSS than a 60min
+        VO2), so the cascade is keyed on physiological intensity category
+        (rest → recovery → endurance → tempo → sweet_spot → threshold → vo2),
+        not raw TSS.
+        """
+        _CATEGORY_RANK = {
+            "rest": 0, "recovery": 1, "endurance": 2, "tempo": 3,
+            "sweet_spot": 4, "threshold": 5, "vo2": 6, "anaerobic": 7,
+        }
         for tid in ORDERED_TEMPLATES:
             next_id = TEMPLATE_HARDER_CASCADE[tid]
-            assert TEMPLATES[next_id].base_tss >= TEMPLATES[tid].base_tss, (
-                f"{tid}→{next_id}: TSS decreased "
-                f"{TEMPLATES[tid].base_tss} → {TEMPLATES[next_id].base_tss}"
+            cur_rank = _CATEGORY_RANK[TEMPLATES[tid].category]
+            next_rank = _CATEGORY_RANK[TEMPLATES[next_id].category]
+            assert next_rank >= cur_rank, (
+                f"{tid}({TEMPLATES[tid].category})→"
+                f"{next_id}({TEMPLATES[next_id].category}): intensity dropped"
             )
 
-    def test_easier_cascade_monotonic_tss(self):
+    def test_easier_cascade_monotonic_intensity(self):
+        _CATEGORY_RANK = {
+            "rest": 0, "recovery": 1, "endurance": 2, "tempo": 3,
+            "sweet_spot": 4, "threshold": 5, "vo2": 6, "anaerobic": 7,
+        }
         for tid in ORDERED_TEMPLATES:
             prev_id = TEMPLATE_EASIER_CASCADE[tid]
-            assert TEMPLATES[prev_id].base_tss <= TEMPLATES[tid].base_tss, (
-                f"{tid}→{prev_id}: TSS increased"
+            cur_rank = _CATEGORY_RANK[TEMPLATES[tid].category]
+            prev_rank = _CATEGORY_RANK[TEMPLATES[prev_id].category]
+            assert prev_rank <= cur_rank, (
+                f"{tid}({TEMPLATES[tid].category})→"
+                f"{prev_id}({TEMPLATES[prev_id].category}): intensity increased"
             )
 
     def test_top_of_harder_cascade_self_loops(self):
