@@ -116,10 +116,13 @@ Plans:
   1. User can ask "why am I tired?" and receive an analysis referencing their actual sleep, HRV, training load, and nutrition data
   2. User can ask "analyze my last 4 weeks" and receive a structured summary of training patterns, load progression, and recovery trends
   3. User can modify workouts via chat ("I only have 45 min", "make it harder", "swap to indoor") and see the updated workout reflected
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: TBD
+- [ ] 06-01-PLAN.md — Analytical tool-use backend: tool registry + aggregate services + /coach/chat tool-use loop with deterministic fallback
+- [ ] 06-02-PLAN.md — Workout modification tool with rails-gated template cascades and append-only audit
+- [ ] 06-03-PLAN.md — Chat UI upgrades: tool-use lifecycle indicators, WorkoutModifiedCard, AnalyticalAnswerCard, Tools Used transparency
+- [ ] 06-04-PLAN.md — Multi-turn context + undo_last_modification tool with compensating audit
 
 ### Phase 7: Periodization + Workout Generation
 **Goal**: The AI builds and adapts multi-week training plans with structured workouts, dynamically adjusting daily sessions based on athlete state
