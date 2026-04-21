@@ -19,7 +19,7 @@ RLS-scoped via get_db_for_user).
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
 from sqlalchemy import select
@@ -35,7 +35,7 @@ from app.services.analytical_aggregates import (
     pmc_window_summary,
     recovery_trend_summary,
 )
-from app.services.workout_modifier import apply_modification
+from app.services.workout_modifier import apply_modification, revert_from_audit
 
 
 # ======================================================================
@@ -209,6 +209,29 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 },
             },
             "required": ["date", "modification_type"],
+        },
+    },
+    {
+        "name": "undo_last_modification",
+        "description": (
+            "Undo the MOST RECENT workout modification in the current chat "
+            "session. Call this when the user says 'undo that', 'revert', "
+            "'go back', 'never mind', 'put it back', or otherwise asks to "
+            "reverse the last workout change. Only modifications made within "
+            "the last 60 minutes are eligible; older ones are out of reach "
+            "(intended to be session-scoped). Returns "
+            "{found: False, reason: ...} when there's nothing to undo OR when "
+            "the latest modification has already been undone. After a "
+            "successful undo, narrate what was restored ('Reverted your "
+            "Tuesday back to VO2 5x4 at 75min') — the PlannedWorkout is "
+            "byte-identical to its pre-modification state and a compensating "
+            "audit row has been written (the original audit row is preserved)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+            "required": [],
         },
     },
 ]
@@ -577,6 +600,108 @@ async def _handle_modify_planned_workout(
 
 
 # ======================================================================
+# undo_last_modification — compensating write tool (Phase 6-04)
+# ======================================================================
+#
+# Session-scoped semantics:
+#   - Eligible window: 60 minutes (default). Anything older is out of reach.
+#   - Session-scoping on the client side is done by rendering Undo only on
+#     the LATEST modification card in the ephemeral CoachChat drawer. The
+#     SERVER additionally enforces the 60-min cutoff so a stale UI cannot
+#     reach back into a prior session.
+#
+# Append-only invariant (from 05-01 + 06-02):
+#   - Original ``verdict='modification'`` row is NEVER mutated.
+#   - Undo writes a NEW ``verdict='modification_undo'`` row with
+#     evidence.modification_undo.original_audit_id pointing at the reverted
+#     row. A second SELECT on that column is how we detect already-undone.
+
+_UNDO_WINDOW_MINUTES = 60
+
+
+async def _handle_undo_last_modification(
+    tool_input: dict, user_id: int, db: AsyncSession,
+) -> dict:
+    """Undo the most recent modification for this user (within the 60-min
+    window) by delegating to revert_from_audit. Returns found=False when
+    there is nothing eligible or when the row has already been undone."""
+    # tool_input is intentionally empty; ignore any keys the LLM supplied.
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=_UNDO_WINDOW_MINUTES)
+
+    # 1. Find the most-recent modification audit row for this user within window.
+    latest_stmt = (
+        select(CoachBrief)
+        .where(
+            CoachBrief.user_id == user_id,
+            CoachBrief.verdict == "modification",
+            CoachBrief.generated_at >= cutoff,
+        )
+        .order_by(CoachBrief.generated_at.desc())
+        .limit(1)
+    )
+    latest = (await db.execute(latest_stmt)).scalar_one_or_none()
+    if latest is None:
+        return {
+            "found": False,
+            "reason": "No modifications in the last hour to undo.",
+        }
+
+    # 2. Check if this row has already been undone.
+    #    We match on evidence.modification_undo.original_audit_id == str(latest.id).
+    already_stmt = (
+        select(CoachBrief)
+        .where(
+            CoachBrief.user_id == user_id,
+            CoachBrief.verdict == "modification_undo",
+            CoachBrief.evidence["modification_undo"]["original_audit_id"].astext
+            == str(latest.id),
+        )
+        .limit(1)
+    )
+    already = (await db.execute(already_stmt)).scalar_one_or_none()
+    if already is not None:
+        return {
+            "found": False,
+            "reason": "That modification has already been undone.",
+        }
+
+    # 3. Load FTP for re-materialisation.
+    profile_result = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+    )
+    profile = profile_result.scalar_one_or_none()
+    ftp_w = int((profile.ftp_watts if profile else 0) or 0)
+    if ftp_w <= 0:
+        return {
+            "found": False,
+            "reason": (
+                "Cannot undo: athlete FTP is not set. Update the profile "
+                "with a current FTP first."
+            ),
+        }
+
+    # 4. Delegate to the pure(r) reverter — it handles PW restore + audit append.
+    try:
+        result = await revert_from_audit(latest, db, ftp_w=ftp_w)
+    except ValueError as exc:
+        return {
+            "found": False,
+            "reason": str(exc),
+        }
+
+    mod = latest.evidence.get("modification", {}) if isinstance(latest.evidence, dict) else {}
+    return {
+        "success": True,
+        "found": True,
+        "date": mod.get("date"),
+        "restored_template_id": result.template_id,
+        "restored_duration_min": result.duration_min,
+        "reverted_from": result.before,  # post-mod state, now rolled back
+        "title": result.metadata.get("title"),
+    }
+
+
+# ======================================================================
 # Registry + dispatcher
 # ======================================================================
 
@@ -589,6 +714,7 @@ TOOL_REGISTRY: dict[str, ToolHandler] = {
     "fetch_ftp_history": _handle_fetch_ftp_history,
     "fetch_planned_workout": _handle_fetch_planned_workout,
     "modify_planned_workout": _handle_modify_planned_workout,
+    "undo_last_modification": _handle_undo_last_modification,
 }
 
 

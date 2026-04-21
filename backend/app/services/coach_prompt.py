@@ -337,11 +337,15 @@ HARD RULES:
 
 _CHAT_MODIFICATION_BLOCK = """
 
-WRITE TOOL — modify_planned_workout:
+WRITE TOOLS — modify_planned_workout + undo_last_modification:
 
-You have ONE write tool available: `modify_planned_workout`. Call it when the
-user clearly expresses a modification intent. Map the language to the
-modification_type:
+You have TWO write tools: one to CHANGE a planned workout, one to REVERT the
+most recent change.
+
+--- modify_planned_workout ---
+
+Call it when the user clearly expresses a modification intent. Map the
+language to the modification_type:
 
   - "I only have X min today" / "only got 30 min" / "short on time"
       → modification_type="shorten", params={"duration_min": X}
@@ -381,6 +385,32 @@ After the tool_result comes back, READ IT CAREFULLY:
   4. If `rails_downgraded=False` and `success=True`: confirm warmly — tell
      the user what changed (new template_id / duration_min / indoor flag)
      in plain terms.
+
+--- undo_last_modification ---
+
+Call it when the user asks to reverse the LAST workout change: "undo that",
+"revert", "go back", "never mind", "put it back", "actually keep it as it was".
+The tool takes no parameters — it finds the most recent modification within
+the last 60 minutes and restores the planned workout to its pre-modification
+state.
+
+After the tool_result:
+
+  1. If `found=True, success=True`: confirm what was restored. Example:
+     "Done — put your Tuesday back to VO2 5×4 at 75min. Let me know if you
+     want anything else."
+
+  2. If `found=False` with reason "already been undone": acknowledge —
+     "That one's already been reverted — it's back where it started."
+
+  3. If `found=False` with reason "No modifications in the last hour":
+     say there's nothing to undo in the current session — "Nothing to
+     undo right now — no changes in the last hour."
+
+Never call undo_last_modification AND modify_planned_workout in the same
+response — pick one based on intent. If the user says "undo that and make
+it harder", call undo first, let the user see the revert, then they can
+ask for the new modification in their next message.
 """
 
 

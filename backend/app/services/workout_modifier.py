@@ -1,4 +1,19 @@
-"""Pure modification operations for planned workouts.
+"""Modification operations for planned workouts.
+
+Two entry points:
+    - ``apply_modification`` — PURE. Computes a ModificationResult from a
+      lightweight PlannedWorkout view. No DB I/O. Callers persist.
+    - ``revert_from_audit`` — DB-aware (06-04). Reads a prior CoachBrief
+      audit row's ``evidence.modification.before`` snapshot, restores the
+      PlannedWorkout in place, and appends a NEW ``verdict='modification_undo'``
+      audit row. The original audit row is NEVER mutated (append-only
+      contract from 05-01).
+
+The undo path is DB-coupled because it has to (a) locate the live PW,
+(b) restore it atomically with a compensating audit row, and (c) run
+inside the handler's transaction. Keeping the pure/impure split visible
+in the module docstring so future readers don't file this as drift.
+
 
 The Phase 6 Wave 2 tool-use story: the LLM reads user intent from the chat
 ("I only have 45 min today", "make it harder", "swap to indoor") and emits a
@@ -38,8 +53,14 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date as _date_type
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.coach_brief import CoachBrief
+from app.models.planned_workout import PlannedWorkout
 from app.services.workout_templates import (
     TEMPLATES,
     WorkoutTemplate,
@@ -601,6 +622,145 @@ def _apply_indoor(
         rails_downgraded=False,
         reason="moved indoors; template and power targets unchanged",
         before=before,
+        predicted_tss=predicted_tss,
+        metadata=metadata,
+    )
+
+
+# ======================================================================
+# Undo — compensating write (Phase 6-04)
+# ======================================================================
+#
+# revert_from_audit consumes a prior ``verdict='modification'`` CoachBrief
+# audit row and restores the referenced PlannedWorkout to its pre-modification
+# state (``evidence.modification.before``). It then appends a NEW audit row
+# with ``verdict='modification_undo'`` — the original row is never mutated
+# (append-only contract from 05-01 + 06-02).
+#
+# Preconditions (enforced here — callers may omit defensive checks):
+#   - ``audit_row.evidence["modification"]`` present + dict-shaped
+#   - PlannedWorkout for the audit's date still exists AND belongs to the
+#     audit's user (RLS-scoped queries are caller-responsible; the audit row
+#     itself is always user-scoped by _handle_undo_last_modification)
+#   - FTP > 0 for the athlete (materialisation requires it)
+
+
+async def revert_from_audit(
+    audit_row: CoachBrief,
+    db: AsyncSession,
+    ftp_w: int,
+) -> ModificationResult:
+    """Restore a PlannedWorkout to its pre-modification state.
+
+    Reads ``audit_row.evidence.modification.before`` (captured at modification
+    time in 06-02's _handle_modify_planned_workout), substitutes the PW in
+    place, and appends a compensating ``verdict='modification_undo'`` row.
+    Returns a ``ModificationResult`` the caller (the undo tool handler) can
+    hand back to the LLM for narration.
+
+    Raises:
+        ValueError when the audit row lacks ``evidence.modification``, when
+        the referenced PlannedWorkout no longer exists, or when FTP<=0.
+    """
+    if not isinstance(audit_row.evidence, dict):
+        raise ValueError("audit_row.evidence missing or malformed")
+    mod = audit_row.evidence.get("modification")
+    if not isinstance(mod, dict):
+        raise ValueError(
+            "audit_row.evidence.modification is absent; this audit row is not "
+            "a modification — cannot undo"
+        )
+    before = mod.get("before") or {}
+    target_date_raw = mod.get("date")
+    if not target_date_raw:
+        raise ValueError("audit_row.evidence.modification.date is missing")
+    target_date = _date_type.fromisoformat(target_date_raw[:10])
+
+    if ftp_w <= 0:
+        raise ValueError("revert_from_audit requires ftp_w > 0")
+
+    before_template_id = before.get("template_id") or "z2_endurance_60"
+    before_duration_min = int(before.get("duration_min") or 60)
+
+    # 1. Look up the live PlannedWorkout (user-scoped via RLS session)
+    result = await db.execute(
+        select(PlannedWorkout).where(
+            PlannedWorkout.user_id == audit_row.user_id,
+            PlannedWorkout.date == target_date,
+        ).limit(1)
+    )
+    pw = result.scalar_one_or_none()
+    if pw is None:
+        raise ValueError(
+            f"PlannedWorkout for {target_date.isoformat()} no longer exists; cannot undo"
+        )
+
+    # 2. Capture CURRENT state so the undo audit row records what we reverted FROM
+    current_duration_min = int(
+        round((pw.duration_seconds_target or 0) / 60)
+    ) if pw.duration_seconds_target else before_duration_min
+    reverted_from = {
+        "template_id": pw.template_id,
+        "duration_min": current_duration_min,
+        "indoor": bool(pw.indoor),
+    }
+
+    # 3. Re-materialise the "before" template/duration → fresh blocks with
+    #    current FTP. This is the same pipeline apply_modification uses, so
+    #    the restored PW is byte-identical in shape to a newly prescribed one.
+    blocks, duration_min, predicted_tss, metadata = _materialize(
+        before_template_id,
+        ftp_w,
+        duration_min_target=before_duration_min,
+        indoor=bool(pw.indoor),  # preserve current indoor flag (not part of undo scope)
+    )
+
+    # 4. Restore the PlannedWorkout in place
+    pw.template_id = before_template_id
+    pw.duration_seconds_target = duration_min * 60
+    pw.interval_structure = {"intervals": blocks, "source": "user_undo"}
+    pw.blocks_source = "user_undo"
+    meta_title = metadata.get("title")
+    if meta_title:
+        pw.title = meta_title
+
+    # 5. Append compensating audit row — append-only contract preserved.
+    #    We do NOT mutate the original audit_row; a separate SELECT by
+    #    ``original_audit_id`` is the canonical way to detect "already undone"
+    #    (see _handle_undo_last_modification).
+    restored_to = {
+        "template_id": before_template_id,
+        "duration_min": duration_min,
+        "indoor": bool(pw.indoor),
+    }
+    undo_audit = CoachBrief(
+        user_id=audit_row.user_id,
+        verdict="modification_undo",
+        rationale=(
+            f"Undid modification on {target_date.isoformat()}: "
+            f"{reverted_from.get('template_id')} → {before_template_id}"
+        ),
+        evidence={
+            "modification_undo": {
+                "original_audit_id": str(audit_row.id),
+                "date": target_date.isoformat(),
+                "reverted_from": reverted_from,
+                "restored_to": restored_to,
+            },
+        },
+        model_used="tool-use-undo",
+    )
+    db.add(undo_audit)
+    await db.commit()
+
+    return ModificationResult(
+        template_id=before_template_id,
+        duration_min=duration_min,
+        blocks=blocks,
+        indoor=bool(pw.indoor),
+        rails_downgraded=False,
+        reason=f"undid modification on {target_date.isoformat()}",
+        before=reverted_from,
         predicted_tss=predicted_tss,
         metadata=metadata,
     )

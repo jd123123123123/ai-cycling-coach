@@ -82,9 +82,10 @@ class TestToolSchemas:
         registry_names = set(TOOL_REGISTRY.keys())
         assert schema_names == registry_names
 
-    def test_six_tools_registered(self):
-        """5 read-only (Phase 6-01) + 1 write (modify_planned_workout, 6-02)."""
-        assert len(TOOL_SCHEMAS) == 6
+    def test_seven_tools_registered(self):
+        """5 read-only (Phase 6-01) + 1 write (modify_planned_workout, 6-02)
+        + 1 compensating write (undo_last_modification, 6-04)."""
+        assert len(TOOL_SCHEMAS) == 7
         expected = {
             "fetch_pmc_window",
             "fetch_recovery_trend",
@@ -92,6 +93,7 @@ class TestToolSchemas:
             "fetch_ftp_history",
             "fetch_planned_workout",
             "modify_planned_workout",
+            "undo_last_modification",
         }
         assert {s["name"] for s in TOOL_SCHEMAS} == expected
 
@@ -626,3 +628,220 @@ class TestModifyPlannedWorkout:
         assert "indoor" in mod["after"]
         assert "rails_downgraded" in mod
         assert "reason" in mod
+
+
+# ---------------------------------------------------------------------------
+# undo_last_modification — compensating write tool (Phase 6-04)
+# ---------------------------------------------------------------------------
+#
+# Guarantees:
+#   - Finds the most recent verdict='modification' row within 60 min
+#   - Rejects if already undone (second SELECT on original_audit_id)
+#   - Delegates to revert_from_audit which re-materialises the PW from
+#     evidence.modification.before and appends a NEW verdict='modification_undo'
+#     audit row (append-only contract — original row is never touched)
+#   - User-scoping: handler queries CoachBrief WHERE user_id = authenticated
+#     user; cross-user undo impossible
+
+
+def _make_modification_audit(
+    *,
+    row_id: int = 7,
+    user_id: int = 1,
+    generated_at: datetime | None = None,
+    before_template: str = "vo2_5x4",
+    before_duration: int = 57,  # vo2_5x4's natural base duration
+    after_template: str = "z2_endurance_60",
+    after_duration: int = 60,
+    date_iso: str = "2026-05-01",
+):
+    return SimpleNamespace(
+        id=row_id,
+        user_id=user_id,
+        verdict="modification",
+        generated_at=generated_at or (datetime.now(timezone.utc) - timedelta(minutes=5)),
+        evidence={
+            "modification": {
+                "date": date_iso,
+                "modification_type": "easier",
+                "params": {},
+                "before": {
+                    "template_id": before_template,
+                    "duration_min": before_duration,
+                },
+                "after": {
+                    "template_id": after_template,
+                    "duration_min": after_duration,
+                    "indoor": False,
+                    "predicted_tss": 45,
+                },
+                "rails_downgraded": False,
+                "reason": "substituted down one step in the easier cascade",
+            },
+        },
+    )
+
+
+def _mock_undo_db(
+    *,
+    latest_modification=None,
+    already_undone: bool = False,
+    planned_workout=None,
+    athlete_profile=None,
+):
+    """Route undo handler's SELECTs. Returns (db, captured).
+
+    - coach_briefs: first call returns latest_modification, second returns the
+      already-undone row (if any).
+    - planned_workouts: returns planned_workout (revert_from_audit needs it).
+    - athlete_profiles: returns athlete_profile (for FTP).
+    """
+    captured: list = []
+    coach_brief_calls = {"n": 0}
+    call_order: list[str] = []
+
+    async def _execute_side(stmt, *args, **kwargs):
+        stmt_str = str(stmt).lower()
+        out = MagicMock()
+        if "coach_briefs" in stmt_str:
+            coach_brief_calls["n"] += 1
+            call_order.append("coach_briefs")
+            if coach_brief_calls["n"] == 1:
+                out.scalar_one_or_none = MagicMock(return_value=latest_modification)
+            else:
+                out.scalar_one_or_none = MagicMock(
+                    return_value=SimpleNamespace(id=99) if already_undone else None,
+                )
+        elif "planned_workouts" in stmt_str:
+            call_order.append("planned_workouts")
+            out.scalar_one_or_none = MagicMock(return_value=planned_workout)
+        elif "athlete_profiles" in stmt_str:
+            call_order.append("athlete_profiles")
+            out.scalar_one_or_none = MagicMock(return_value=athlete_profile)
+        else:
+            out.scalar_one_or_none = MagicMock(return_value=None)
+        return out
+
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=_execute_side)
+    db.add = MagicMock(side_effect=lambda obj: captured.append(obj))
+    db.commit = AsyncMock()
+    db.flush = AsyncMock()
+    db._call_order = call_order
+    return db, captured
+
+
+@pytest.mark.asyncio
+class TestUndoLastModification:
+    async def test_no_modifications_returns_found_false(self):
+        """No recent modification → {found: False, reason: ...}. No audit row."""
+        db, captured = _mock_undo_db(latest_modification=None)
+        result = await dispatch_tool(
+            "undo_last_modification", {}, user_id=1, db=db,
+        )
+        assert result["found"] is False
+        assert "no modifications" in result["reason"].lower()
+        assert captured == []
+        db.commit.assert_not_called()
+
+    async def test_happy_path_restores_pw_and_audits(self):
+        """modify → undo: PW rolls back to the pre-modification template +
+        duration, a NEW verdict='modification_undo' audit row is appended,
+        original audit row is untouched."""
+        pw = _make_planned_workout(template_id="z2_endurance_60", duration_min=60)
+        profile = _make_profile(ftp=250)
+        audit = _make_modification_audit(
+            before_template="vo2_5x4", before_duration=57,
+            after_template="z2_endurance_60", after_duration=60,
+        )
+        db, captured = _mock_undo_db(
+            latest_modification=audit,
+            planned_workout=pw,
+            athlete_profile=profile,
+        )
+        result = await dispatch_tool(
+            "undo_last_modification", {}, user_id=1, db=db,
+        )
+        assert result["success"] is True
+        assert result["found"] is True
+        assert result["restored_template_id"] == "vo2_5x4"
+        # vo2_5x4's natural base is 57min — re-materialise lands on ~57
+        assert 50 <= result["restored_duration_min"] <= 65
+        # PW was restored in place
+        assert pw.template_id == "vo2_5x4"
+        assert 50 * 60 <= pw.duration_seconds_target <= 65 * 60
+        assert pw.blocks_source == "user_undo"
+        # A new audit row was appended
+        assert len(captured) == 1
+        undo = captured[0]
+        assert undo.verdict == "modification_undo"
+        assert undo.evidence["modification_undo"]["original_audit_id"] == str(audit.id)
+        assert undo.evidence["modification_undo"]["restored_to"]["template_id"] == "vo2_5x4"
+        # Original audit was NOT mutated
+        assert audit.verdict == "modification"
+        db.commit.assert_called()
+
+    async def test_double_undo_rejected(self):
+        """Second undo of the same modification returns found=False with
+        'already been undone' reason. No additional audit row."""
+        audit = _make_modification_audit()
+        db, captured = _mock_undo_db(
+            latest_modification=audit,
+            already_undone=True,
+        )
+        result = await dispatch_tool(
+            "undo_last_modification", {}, user_id=1, db=db,
+        )
+        assert result["found"] is False
+        assert "already" in result["reason"].lower()
+        assert captured == []
+
+    async def test_missing_ftp_returns_found_false(self):
+        """Without FTP we cannot re-materialise blocks — graceful failure."""
+        audit = _make_modification_audit()
+        pw = _make_planned_workout()
+        profile = _make_profile(ftp=None)  # No FTP set
+        db, captured = _mock_undo_db(
+            latest_modification=audit,
+            planned_workout=pw,
+            athlete_profile=profile,
+        )
+        result = await dispatch_tool(
+            "undo_last_modification", {}, user_id=1, db=db,
+        )
+        assert result["found"] is False
+        assert "ftp" in result["reason"].lower()
+        assert captured == []
+
+    async def test_user_scoping_prevents_cross_user_undo(self):
+        """User B attempts undo; SELECT returns None for their user_id, and
+        no audit row is written."""
+        db, captured = _mock_undo_db(latest_modification=None)
+        # Even if the LLM tried to spoof user_id, dispatcher strips it.
+        result = await dispatch_tool(
+            "undo_last_modification",
+            {"user_id": 1},  # stripped
+            user_id=999, db=db,
+        )
+        assert result["found"] is False
+        assert captured == []
+
+    async def test_tool_input_is_ignored(self):
+        """The schema has additionalProperties=False; defensively the
+        handler should behave identically regardless of tool_input contents."""
+        audit = _make_modification_audit()
+        pw = _make_planned_workout(template_id="z2_endurance_60", duration_min=60)
+        profile = _make_profile(ftp=250)
+        db, captured = _mock_undo_db(
+            latest_modification=audit,
+            planned_workout=pw,
+            athlete_profile=profile,
+        )
+        # Garbage inputs should be ignored — handler only reads the audit row.
+        result = await dispatch_tool(
+            "undo_last_modification",
+            {"noise": "data", "anything": 123},
+            user_id=1, db=db,
+        )
+        assert result["success"] is True
+        assert pw.template_id == "vo2_5x4"
