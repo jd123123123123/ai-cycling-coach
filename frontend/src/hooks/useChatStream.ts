@@ -104,22 +104,40 @@ export interface ChatStreamState {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
+ * Maximum number of prior conversational turns (user + assistant) threaded
+ * back to /coach/chat with each send. N=10 ≈ 5 full exchanges — enough for
+ * follow-up context ("what should I do about it?" resolving to the prior
+ * "Why am I tired?") without inflating prompt-cache misses or token costs.
+ *
+ * Truncation is CLIENT-SIDE and deterministic. The backend trusts the client
+ * and threads whatever is sent — keeps the server stateless (no session
+ * storage) per 05-02's ephemeral-chat decision.
+ */
+export const MAX_CONTEXT_TURNS = 10
+
+/**
  * Filter a ChatMessage[] down to the wire-format the backend accepts —
  * user/assistant only, plain string content. Tool cards are UI artefacts
  * and must not round-trip to /coach/chat.
+ *
+ * Keeps only the last ``MAX_CONTEXT_TURNS`` conversational turns to bound
+ * prompt size. Tool-card (role='tool') messages are dropped BEFORE the
+ * slice so the window counts real exchanges, not intermediate UI cards.
  */
-function toBackendHistory(
+export function toBackendHistory(
   messages: ChatMessage[],
   appendedUser: string,
 ): Array<{ role: 'user' | 'assistant'; content: string }> {
-  const wire: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  const conversational: Array<{ role: 'user' | 'assistant'; content: string }> =
+    []
   for (const m of messages) {
     if (m.role === 'user' || m.role === 'assistant') {
-      wire.push({ role: m.role, content: m.content })
+      conversational.push({ role: m.role, content: m.content })
     }
   }
-  wire.push({ role: 'user', content: appendedUser })
-  return wire
+  const recent = conversational.slice(-MAX_CONTEXT_TURNS)
+  recent.push({ role: 'user', content: appendedUser })
+  return recent
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
