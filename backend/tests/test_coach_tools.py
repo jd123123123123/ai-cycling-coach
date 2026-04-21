@@ -82,14 +82,16 @@ class TestToolSchemas:
         registry_names = set(TOOL_REGISTRY.keys())
         assert schema_names == registry_names
 
-    def test_five_tools_registered(self):
-        assert len(TOOL_SCHEMAS) == 5
+    def test_six_tools_registered(self):
+        """5 read-only (Phase 6-01) + 1 write (modify_planned_workout, 6-02)."""
+        assert len(TOOL_SCHEMAS) == 6
         expected = {
             "fetch_pmc_window",
             "fetch_recovery_trend",
             "fetch_recent_activities",
             "fetch_ftp_history",
             "fetch_planned_workout",
+            "modify_planned_workout",
         }
         assert {s["name"] for s in TOOL_SCHEMAS} == expected
 
@@ -332,3 +334,295 @@ class TestFetchPlannedWorkout:
                 {"date": "garbage"},
                 user_id=1, db=db,
             )
+
+
+# ---------------------------------------------------------------------------
+# modify_planned_workout — write tool (Phase 6.2)
+# ---------------------------------------------------------------------------
+#
+# These tests exercise the DB-touching handler. They use a stubbed
+# AsyncSession that routes queries to pre-configured results, so nothing
+# hits a real database. What we verify:
+#   - Not found: graceful {success: False, found: False} response
+#   - Already-trained-today guard: no mutation, no audit row
+#   - Missing FTP: graceful failure
+#   - Happy path: PW mutated, CoachBrief audit row created with correct shape
+#   - Rails downgrade surfaces rails_downgraded + reason to the tool_result
+#   - User-scoping: user B cannot modify user A's PW (separate DB mocks)
+
+
+def _mock_modify_db(
+    *,
+    planned_workout=None,
+    has_today_activity: bool = False,
+    athlete_profile=None,
+    latest_brief=None,
+):
+    """Build an AsyncSession mock wired for the modify_planned_workout handler.
+
+    Returns (db, captured) where ``captured`` is a list that receives every
+    object passed to ``db.add`` — the audit CoachBrief row ends up here for
+    inspection.
+    """
+    captured: list = []
+
+    call_order: list[str] = []
+
+    async def _execute_side(stmt, *args, **kwargs):
+        # Inspect the SQL text to figure out which query we're serving.
+        # Not glamorous, but keeps this a pure unit test without a DB.
+        stmt_str = str(stmt)
+        out = MagicMock()
+        if "planned_workouts" in stmt_str.lower() and "activities" not in stmt_str.lower():
+            call_order.append("planned_workouts")
+            out.scalar_one_or_none = MagicMock(return_value=planned_workout)
+        elif "activities" in stmt_str.lower():
+            call_order.append("activities")
+            out.scalar_one_or_none = MagicMock(
+                return_value=1 if has_today_activity else None,
+            )
+        elif "athlete_profiles" in stmt_str.lower():
+            call_order.append("athlete_profiles")
+            out.scalar_one_or_none = MagicMock(return_value=athlete_profile)
+        elif "coach_briefs" in stmt_str.lower():
+            call_order.append("coach_briefs")
+            out.scalar_one_or_none = MagicMock(return_value=latest_brief)
+        else:
+            out.scalar_one_or_none = MagicMock(return_value=None)
+        return out
+
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=_execute_side)
+    db.add = MagicMock(side_effect=lambda obj: captured.append(obj))
+    db.commit = AsyncMock()
+    db._call_order = call_order  # for debugging
+    return db, captured
+
+
+def _make_planned_workout(user_id=1, template_id="z2_endurance_60", duration_min=60):
+    from datetime import date as _date
+    return SimpleNamespace(
+        id=42,
+        user_id=user_id,
+        date=_date(2026, 5, 1),  # future date — skips already-trained guard
+        sport="cycling",
+        title="Z2 endurance — 60min",
+        duration_seconds_target=duration_min * 60,
+        description=None,
+        interval_structure=None,
+        indoor=False,
+        blocks_source="ai_prescribed",
+        template_id=template_id,
+    )
+
+
+def _make_profile(ftp=250, injury=False):
+    return SimpleNamespace(
+        user_id=1,
+        ftp_watts=ftp,
+        injury_flag=injury,
+    )
+
+
+@pytest.mark.asyncio
+class TestModifyPlannedWorkout:
+    async def test_not_found_returns_graceful_failure(self):
+        db, captured = _mock_modify_db(planned_workout=None)
+        result = await dispatch_tool(
+            "modify_planned_workout",
+            {"date": "2026-05-01", "modification_type": "harder"},
+            user_id=1, db=db,
+        )
+        assert result["success"] is False
+        assert result.get("found") is False
+        # No audit row when PW doesn't exist
+        assert captured == []
+        db.commit.assert_not_called()
+
+    async def test_missing_ftp_returns_graceful_failure(self):
+        pw = _make_planned_workout()
+        profile = _make_profile(ftp=None)
+        db, captured = _mock_modify_db(planned_workout=pw, athlete_profile=profile)
+        result = await dispatch_tool(
+            "modify_planned_workout",
+            {"date": "2026-05-01", "modification_type": "harder"},
+            user_id=1, db=db,
+        )
+        assert result["success"] is False
+        assert "ftp" in result["reason"].lower()
+        # No audit row when we can't materialise watts
+        assert captured == []
+
+    async def test_happy_path_persists_and_audits(self):
+        pw = _make_planned_workout(template_id="z2_endurance_60", duration_min=60)
+        profile = _make_profile(ftp=250)
+        db, captured = _mock_modify_db(
+            planned_workout=pw, athlete_profile=profile,
+        )
+        result = await dispatch_tool(
+            "modify_planned_workout",
+            {"date": "2026-05-01", "modification_type": "harder"},
+            user_id=1, db=db,
+        )
+        assert result["success"] is True
+        assert result["rails_downgraded"] is False
+        # PW was mutated
+        assert pw.blocks_source == "user_modified"
+        assert pw.template_id != "z2_endurance_60"  # cascade step up
+        # Audit row was added + committed
+        assert len(captured) == 1
+        audit = captured[0]
+        assert audit.verdict == "modification"
+        assert audit.evidence["modification"]["modification_type"] == "harder"
+        assert audit.evidence["modification"]["before"]["template_id"] == "z2_endurance_60"
+        assert "after" in audit.evidence["modification"]
+        db.commit.assert_called_once()
+
+    async def test_injury_flag_downgrades_and_audit_records_downgrade(self):
+        pw = _make_planned_workout(template_id="vo2_5x4", duration_min=75)
+        profile = _make_profile(ftp=250, injury=True)
+        db, captured = _mock_modify_db(
+            planned_workout=pw, athlete_profile=profile,
+        )
+        result = await dispatch_tool(
+            "modify_planned_workout",
+            {"date": "2026-05-01", "modification_type": "harder"},
+            user_id=1, db=db,
+        )
+        assert result["success"] is True
+        assert result["rails_downgraded"] is True
+        assert "injury" in result["reason"].lower()
+        assert result["template_id"] in ("recovery_30", "rest_day")
+        # Audit row captures the downgrade
+        assert len(captured) == 1
+        audit = captured[0]
+        assert audit.evidence["modification"]["rails_downgraded"] is True
+        assert "injury" in audit.evidence["modification"]["reason"].lower()
+
+    async def test_shorten_requires_duration_min(self):
+        pw = _make_planned_workout()
+        profile = _make_profile(ftp=250)
+        db, captured = _mock_modify_db(
+            planned_workout=pw, athlete_profile=profile,
+        )
+        result = await dispatch_tool(
+            "modify_planned_workout",
+            {"date": "2026-05-01", "modification_type": "shorten"},  # missing duration_min
+            user_id=1, db=db,
+        )
+        # Surfaces as success=False with a clear reason (not an exception)
+        assert result["success"] is False
+        assert "duration_min" in result["reason"]
+        # No audit row on validation failure
+        assert captured == []
+
+    async def test_already_trained_today_rejects_without_mutation(self):
+        """Target today + activity on today → {success: False} + no audit row."""
+        from datetime import datetime, timezone
+        from datetime import date as _date
+        today = datetime.now(timezone.utc).date()
+        pw = _make_planned_workout()
+        pw.date = today
+        pw.template_id = "z2_endurance_60"
+        profile = _make_profile(ftp=250)
+        db, captured = _mock_modify_db(
+            planned_workout=pw, athlete_profile=profile,
+            has_today_activity=True,
+        )
+        result = await dispatch_tool(
+            "modify_planned_workout",
+            {"date": today.isoformat(), "modification_type": "harder"},
+            user_id=1, db=db,
+        )
+        assert result["success"] is False
+        assert "already trained" in result["reason"].lower()
+        # Critical: PW was NOT mutated
+        assert pw.blocks_source == "ai_prescribed"
+        assert pw.template_id == "z2_endurance_60"
+        # Critical: NO audit row written
+        assert captured == []
+        db.commit.assert_not_called()
+
+    async def test_user_scoping_blocks_cross_user_access(self):
+        """The handler queries PlannedWorkout WHERE user_id = authenticated_user.
+        Without a PW owned by user_id=999, the result is found=False.
+        """
+        # DB returns None because user 999 has no PW (our mock scalars to None)
+        db, captured = _mock_modify_db(planned_workout=None)
+        # Spoofed user_id in tool_input is stripped by dispatcher — only
+        # authenticated user_id=999 reaches the handler
+        result = await dispatch_tool(
+            "modify_planned_workout",
+            {
+                "date": "2026-05-01",
+                "modification_type": "harder",
+                "user_id": 1,  # LLM tries to spoof — must be stripped
+            },
+            user_id=999, db=db,
+        )
+        assert result["success"] is False
+        assert captured == []
+
+    async def test_unknown_modification_type_raises_via_dispatcher(self):
+        """dispatch_tool sends the input to the handler; the handler
+        delegates to apply_modification which raises ValueError."""
+        pw = _make_planned_workout()
+        profile = _make_profile(ftp=250)
+        db, captured = _mock_modify_db(
+            planned_workout=pw, athlete_profile=profile,
+        )
+        result = await dispatch_tool(
+            "modify_planned_workout",
+            {"date": "2026-05-01", "modification_type": "explode"},
+            user_id=1, db=db,
+        )
+        # Explicit success=False — not an exception bubbling up. This keeps
+        # the tool-use loop healthy: Claude can self-correct on the next turn.
+        assert result["success"] is False
+        assert "explode" in result["reason"]
+
+    async def test_indoor_only_flips_flag(self):
+        pw = _make_planned_workout(template_id="sweet_spot_2x20", duration_min=90)
+        pw.indoor = False
+        profile = _make_profile(ftp=250)
+        db, captured = _mock_modify_db(
+            planned_workout=pw, athlete_profile=profile,
+        )
+        result = await dispatch_tool(
+            "modify_planned_workout",
+            {"date": "2026-05-01", "modification_type": "indoor"},
+            user_id=1, db=db,
+        )
+        assert result["success"] is True
+        assert result["indoor"] is True
+        assert result["template_id"] == "sweet_spot_2x20"  # unchanged
+        assert pw.indoor is True
+
+    async def test_audit_row_contains_full_provenance(self):
+        pw = _make_planned_workout(template_id="z2_endurance_60", duration_min=60)
+        profile = _make_profile(ftp=250)
+        db, captured = _mock_modify_db(
+            planned_workout=pw, athlete_profile=profile,
+        )
+        await dispatch_tool(
+            "modify_planned_workout",
+            {
+                "date": "2026-05-01",
+                "modification_type": "shorten",
+                "params": {"duration_min": 45},
+            },
+            user_id=1, db=db,
+        )
+        assert len(captured) == 1
+        mod = captured[0].evidence["modification"]
+        # Every field the audit contract promises
+        assert mod["date"] == "2026-05-01"
+        assert mod["modification_type"] == "shorten"
+        assert mod["params"] == {"duration_min": 45}
+        assert mod["before"]["template_id"] == "z2_endurance_60"
+        assert mod["before"]["duration_min"] == 60
+        assert "template_id" in mod["after"]
+        assert "duration_min" in mod["after"]
+        assert "indoor" in mod["after"]
+        assert "rails_downgraded" in mod
+        assert "reason" in mod
