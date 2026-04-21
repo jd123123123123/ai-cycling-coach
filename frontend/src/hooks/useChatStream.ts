@@ -98,6 +98,12 @@ export interface ChatStreamState {
   /** True when backend returned 503 — chat disabled until ANTHROPIC_API_KEY set */
   disabled: boolean
   send: (text: string) => Promise<void>
+  /**
+   * Send "Undo that" through the LLM so the existing tool-use loop handles
+   * the rollback + narration uniformly. Sidesteps a direct API call so every
+   * mutation + compensating write flows through the same protocol.
+   */
+  undoLastModification: () => Promise<void>
   reset: () => void
 }
 
@@ -142,7 +148,10 @@ export function toBackendHistory(
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-const INITIAL: Omit<ChatStreamState, 'send' | 'reset'> = {
+const INITIAL: Omit<
+  ChatStreamState,
+  'send' | 'reset' | 'undoLastModification'
+> = {
   messages: [],
   partial: '',
   isStreaming: false,
@@ -355,6 +364,15 @@ export function useChatStream(opts: ChatStreamOptions = {}): ChatStreamState {
     setToolUseLog([])
   }, [])
 
+  // Route undo through the standard chat loop. The LLM reads "Undo that"
+  // and (per the chat_modification prompt) calls undo_last_modification,
+  // producing the same tool_use_start → tool_use_result SSE frames any
+  // other modification would. The resulting tool card renders inline via
+  // ToolBubble just like a modify_planned_workout card.
+  const undoLastModification = useCallback(async () => {
+    await send('Undo that')
+  }, [send])
+
   return {
     messages,
     partial,
@@ -364,6 +382,7 @@ export function useChatStream(opts: ChatStreamOptions = {}): ChatStreamState {
     error,
     disabled,
     send,
+    undoLastModification,
     reset,
   }
 }

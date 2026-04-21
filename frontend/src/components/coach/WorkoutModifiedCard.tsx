@@ -17,7 +17,7 @@
  * on the chat response — left as a safe fallback).
  */
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, ShieldAlert, Sparkles } from 'lucide-react'
+import { ChevronDown, ChevronRight, ShieldAlert, Sparkles, Undo2 } from 'lucide-react'
 import type { WorkoutModificationResult } from '../../hooks/useChatStream'
 import type { ResolvedBlock } from '../../api/coach'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -146,12 +146,29 @@ interface Props {
     /** Optional — backend may ship resolved blocks in a future extension */
     blocks?: ResolvedBlock[]
   }
+  /**
+   * Renders the Undo affordance when true. Only the LATEST modification
+   * card in the session should pass this — the parent (CoachChat) tracks
+   * which modify_planned_workout card is most recent.
+   */
+  isLatest?: boolean
+  /** Fires "Undo that" through the chat stream. Provided by the parent. */
+  onUndo?: () => void | Promise<void>
+  /** Disable Undo while a send/stream is in flight to avoid double-firing. */
+  undoDisabled?: boolean
 }
 
-export default function WorkoutModifiedCard({ result }: Props) {
+export default function WorkoutModifiedCard({
+  result,
+  isLatest = false,
+  onUndo,
+  undoDisabled = false,
+}: Props) {
   const { language } = useLanguage()
   const [expanded, setExpanded] = useState(false)
+  const [undoClicked, setUndoClicked] = useState(false)
   const simpleMode = language === 'simple'
+  const canUndo = isLatest && !!onUndo && !undoClicked
 
   const beforeTemplate = result.before?.template_id
   const afterTemplate = result.template_id
@@ -375,6 +392,36 @@ export default function WorkoutModifiedCard({ result }: Props) {
           </div>
         )}
       </div>
+
+      {/* Undo footer — only on the LATEST modification in session.
+          Click fires "Undo that" through useChatStream.undoLastModification
+          so the LLM narrates the revert + the backend's append-only audit
+          contract is preserved (original audit row stays immutable). */}
+      {canUndo && (
+        <footer
+          className="flex items-center justify-end px-4 py-2"
+          style={{ borderTop: '1px solid var(--color-rule)' }}
+        >
+          <button
+            type="button"
+            disabled={undoDisabled || undoClicked}
+            onClick={() => {
+              setUndoClicked(true)
+              void onUndo?.()
+            }}
+            className="inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-[8px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[rgba(20,24,17,0.04)]"
+            style={{
+              color: 'var(--color-ink-2)',
+              border: '1px solid var(--color-rule)',
+              backgroundColor: 'var(--color-paper)',
+            }}
+            aria-label={simpleMode ? 'Put it back' : 'Undo modification'}
+          >
+            <Undo2 size={12} strokeWidth={1.8} aria-hidden />
+            <span className="eyebrow">{simpleMode ? 'Put it back' : 'Undo'}</span>
+          </button>
+        </footer>
+      )}
     </section>
   )
 }

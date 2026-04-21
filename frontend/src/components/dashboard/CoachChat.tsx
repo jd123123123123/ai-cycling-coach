@@ -219,10 +219,18 @@ function ToolBubble({
   toolName,
   result,
   isError,
+  isLatestModification,
+  onUndo,
+  undoDisabled,
 }: {
   toolName: ToolName
   result: Record<string, unknown>
   isError: boolean
+  /** True when this is the most-recent successful modify_planned_workout
+      card in the session (drives the Undo button on WorkoutModifiedCard). */
+  isLatestModification: boolean
+  onUndo: () => void | Promise<void>
+  undoDisabled: boolean
 }) {
   if (isError) {
     return (
@@ -246,6 +254,9 @@ function ToolBubble({
     return (
       <WorkoutModifiedCard
         result={result as unknown as Parameters<typeof WorkoutModifiedCard>[0]['result']}
+        isLatest={isLatestModification}
+        onUndo={onUndo}
+        undoDisabled={undoDisabled}
       />
     )
   }
@@ -299,17 +310,30 @@ function ToolBubble({
   )
 }
 
-function renderMessage(m: ChatMessage, key: number): React.ReactNode {
+function renderMessage(
+  m: ChatMessage,
+  key: number,
+  ctx: {
+    isLatestModificationIndex: number | null
+    onUndo: () => void | Promise<void>
+    undoDisabled: boolean
+  },
+): React.ReactNode {
   if (m.role === 'user') return <UserBubble key={key} text={m.content} />
   if (m.role === 'assistant')
     return <AssistantBubble key={key} text={m.content} />
   // tool
+  const isLatestModification =
+    ctx.isLatestModificationIndex !== null && key === ctx.isLatestModificationIndex
   return (
     <ToolBubble
       key={key}
       toolName={m.toolName}
       result={m.result}
       isError={m.isError}
+      isLatestModification={isLatestModification}
+      onUndo={ctx.onUndo}
+      undoDisabled={ctx.undoDisabled}
     />
   )
 }
@@ -347,6 +371,7 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
     error,
     disabled,
     send,
+    undoLastModification,
     reset,
   } = useChatStream({
     onModification: () => {
@@ -571,7 +596,31 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
             </div>
           )}
 
-          {messages.map((m, i) => renderMessage(m, i))}
+          {(() => {
+            // Find the index of the LATEST successful modify_planned_workout
+            // tool card — Undo button only renders on that one. Undoing an
+            // earlier modification is out of scope for the session-local
+            // invariant (the backend 60-min window further enforces this).
+            let latestModIdx: number | null = null
+            for (let i = messages.length - 1; i >= 0; i -= 1) {
+              const m = messages[i]
+              if (
+                m.role === 'tool' &&
+                m.toolName === 'modify_planned_workout' &&
+                !m.isError &&
+                (m.result as { success?: boolean }).success === true
+              ) {
+                latestModIdx = i
+                break
+              }
+            }
+            const ctx = {
+              isLatestModificationIndex: latestModIdx,
+              onUndo: undoLastModification,
+              undoDisabled: isStreaming || disabled,
+            }
+            return messages.map((m, i) => renderMessage(m, i, ctx))
+          })()}
           {isStreaming && (
             <StreamingBubble text={partial} indicatorCopy={indicatorCopy} />
           )}
