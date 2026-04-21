@@ -1824,6 +1824,134 @@ async def _fallback_why_tired(
         return "Hmm, I couldn't pull your recent data. Try syncing Garmin and asking again."
 
 
+async def run_tool_use_loop_events(
+    messages: list[dict],
+    user_id: int,
+    db: AsyncSession,
+    language: Literal["simple", "technical"] = "simple",
+    max_iterations: int = 5,
+) -> AsyncIterator[dict]:
+    """Streaming variant of run_tool_use_loop — yields structured events
+    during the tool-use lifecycle so the UI can render intermediate state.
+
+    Event shapes:
+        {"type": "tool_use_start", "name": str, "input": dict}
+        {"type": "tool_use_result", "name": str, "result": dict | str,
+         "is_error": bool}
+        {"type": "text", "text": str}        # final assistant text (single frame)
+
+    When ANTHROPIC_API_KEY is absent, routes to the deterministic fallback
+    and yields a single {"type": "text"} event. Tool events are only
+    emitted on the LLM path (fallback has no real tool calls to narrate).
+    """
+    if not settings.ANTHROPIC_API_KEY:
+        final_text = await _fallback_analytical_answer(messages, user_id, db, language)
+        yield {"type": "text", "text": final_text}
+        return
+
+    client = _get_anthropic_client()
+    system_text = system_prompt_for_language(language, context="chat_analytical")
+
+    working_messages: list[dict] = []
+    for m in messages:
+        role = m.get("role") if isinstance(m, dict) else None
+        if role not in ("user", "assistant"):
+            continue
+        content = m.get("content")
+        if content is None:
+            continue
+        working_messages.append({"role": role, "content": content})
+
+    for _iteration in range(max_iterations):
+        response = await client.messages.create(
+            model=settings.COACH_CHAT_MODEL,
+            max_tokens=2048,
+            system=[{
+                "type": "text",
+                "text": system_text,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            tools=TOOL_SCHEMAS,
+            messages=working_messages,
+        )
+
+        stop_reason = getattr(response, "stop_reason", None)
+        content_blocks = getattr(response, "content", []) or []
+
+        if stop_reason != "tool_use":
+            text_parts: list[str] = []
+            for b in content_blocks:
+                btype = getattr(b, "type", None) or (isinstance(b, dict) and b.get("type"))
+                if btype == "text":
+                    text = getattr(b, "text", None) or (isinstance(b, dict) and b.get("text"))
+                    if text:
+                        text_parts.append(text)
+            yield {"type": "text", "text": "".join(text_parts)}
+            return
+
+        # stop_reason == 'tool_use' — dispatch every tool_use block,
+        # yield start/result events, append messages, loop.
+        tool_results: list[dict] = []
+        for block in content_blocks:
+            btype = getattr(block, "type", None) or (isinstance(block, dict) and block.get("type"))
+            if btype != "tool_use":
+                continue
+            name = (
+                getattr(block, "name", None)
+                or (isinstance(block, dict) and block.get("name"))
+            )
+            tool_input = (
+                getattr(block, "input", None)
+                or (isinstance(block, dict) and block.get("input"))
+                or {}
+            )
+            tool_use_id = getattr(block, "id", None) or (isinstance(block, dict) and block.get("id"))
+
+            # Emit start frame so UI can render "Analyzing your..." before
+            # the tool runs.
+            yield {"type": "tool_use_start", "name": name, "input": tool_input}
+
+            try:
+                result = await dispatch_tool(name, tool_input, user_id=user_id, db=db)
+                yield {
+                    "type": "tool_use_result",
+                    "name": name,
+                    "result": result,
+                    "is_error": False,
+                }
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": _json_mod.dumps(result, default=str),
+                })
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("dispatch_tool(%s) raised: %s", name, exc)
+                yield {
+                    "type": "tool_use_result",
+                    "name": name,
+                    "result": {"error": str(exc)},
+                    "is_error": True,
+                }
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": f"Error: {exc}",
+                    "is_error": True,
+                })
+
+        working_messages.append({"role": "assistant", "content": content_blocks})
+        working_messages.append({"role": "user", "content": tool_results})
+
+    # Exhausted max_iterations
+    yield {
+        "type": "text",
+        "text": (
+            "Analysis exceeded tool-use budget; returning partial result. "
+            "Try a more specific question."
+        ),
+    }
+
+
 async def generate_analytical_chat_stream(
     db: AsyncSession,
     user_id: int,
@@ -1832,25 +1960,47 @@ async def generate_analytical_chat_stream(
 ) -> AsyncIterator[str]:
     """SSE stream for /coach/chat analytical Q&A.
 
-    Runs `run_tool_use_loop` (synchronous tools pre-stream), then emits the
-    final text chunk-wise so the UI renders progressively. Applies the ED-
-    keyword filter on the full text before finalising — sends a 'replace'
-    frame if triggered.
+    Runs the tool-use event generator and emits SSE frames as tools are
+    dispatched so the UI can show "Analyzing your..." intermediate states
+    and render modification cards inline in the message stream.
 
-    Works with or without ANTHROPIC_API_KEY (fallback path in run_tool_use_loop).
+    SSE frame shapes emitted:
+        data: {"type": "tool_use_start", "name": ..., "input": {...}}
+        data: {"type": "tool_use_result", "name": ..., "result": {...}, "is_error": bool}
+        data: {"type": "delta", "text": "..."}                # chunked final text
+        data: {"type": "replace", "text": "...safe...", "reason": "nutrition_safety_filter"}
+        data: {"type": "done"}
+
+    Works with or without ANTHROPIC_API_KEY (fallback path in run_tool_use_loop_events
+    emits only a single text event — no tool frames — which is expected).
     """
     import json as _json
 
     if language not in ("simple", "technical"):
         language = "simple"
 
+    final_text = ""
+
     try:
-        final_text = await run_tool_use_loop(
+        async for evt in run_tool_use_loop_events(
             messages=messages,
             user_id=user_id,
             db=db,
             language=language,
-        )
+        ):
+            etype = evt.get("type")
+            if etype == "tool_use_start":
+                yield (
+                    "event: tool_use_start\n"
+                    f"data: {_json.dumps({'name': evt.get('name'), 'input': evt.get('input', {})}, default=str)}\n\n"
+                )
+            elif etype == "tool_use_result":
+                yield (
+                    "event: tool_use_result\n"
+                    f"data: {_json.dumps({'name': evt.get('name'), 'result': evt.get('result'), 'is_error': evt.get('is_error', False)}, default=str)}\n\n"
+                )
+            elif etype == "text":
+                final_text = evt.get("text") or ""
     except Exception as exc:  # noqa: BLE001 — surface error frame to the client
         logger.exception("Analytical chat loop failed: %s", exc)
         yield f"data: {_json.dumps({'type': 'error', 'message': str(exc)})}\n\n"

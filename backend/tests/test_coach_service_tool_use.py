@@ -338,6 +338,184 @@ class TestFallbackAnalyticalAnswer:
 
 
 # ---------------------------------------------------------------------------
+# run_tool_use_loop_events — streaming variant for SSE tool_use lifecycle
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+class TestRunToolUseLoopEvents:
+    async def test_end_turn_yields_only_text_event(self):
+        """No tool call → single text event, no tool_use_start/result frames."""
+        client = _SequencedClient([
+            _fake_response(
+                stop_reason="end_turn",
+                content=[_text_block("Plain answer.")],
+            ),
+        ])
+        db = _mock_db()
+        with patch.object(coach_service.settings, "ANTHROPIC_API_KEY", "sk-test"), \
+             patch("app.services.coach_service._get_anthropic_client", return_value=client):
+            events = [
+                e async for e in coach_service.run_tool_use_loop_events(
+                    messages=[{"role": "user", "content": "hi"}],
+                    user_id=1, db=db, language="simple",
+                )
+            ]
+        assert len(events) == 1
+        assert events[0]["type"] == "text"
+        assert events[0]["text"] == "Plain answer."
+
+    async def test_tool_use_emits_start_and_result_events(self):
+        """Tool call → tool_use_start + tool_use_result + final text, in that order."""
+        client = _SequencedClient([
+            _fake_response(
+                stop_reason="tool_use",
+                content=[_tool_use_block("fetch_ftp_history", {"days": 30}, id_="tu_1")],
+            ),
+            _fake_response(
+                stop_reason="end_turn",
+                content=[_text_block("FTP is steady.")],
+            ),
+        ])
+        db = _mock_db()
+        with patch.object(coach_service.settings, "ANTHROPIC_API_KEY", "sk-test"), \
+             patch("app.services.coach_service._get_anthropic_client", return_value=client), \
+             patch(
+                 "app.services.coach_service.dispatch_tool",
+                 new=AsyncMock(return_value={"current": 280, "trend": "stable"}),
+             ):
+            events = [
+                e async for e in coach_service.run_tool_use_loop_events(
+                    messages=[{"role": "user", "content": "FTP?"}],
+                    user_id=1, db=db, language="simple",
+                )
+            ]
+        types = [e["type"] for e in events]
+        assert types == ["tool_use_start", "tool_use_result", "text"]
+        assert events[0]["name"] == "fetch_ftp_history"
+        assert events[0]["input"] == {"days": 30}
+        assert events[1]["name"] == "fetch_ftp_history"
+        assert events[1]["result"] == {"current": 280, "trend": "stable"}
+        assert events[1]["is_error"] is False
+        assert events[2]["text"] == "FTP is steady."
+
+    async def test_dispatch_exception_yields_is_error_event(self):
+        """dispatch_tool raises → tool_use_result with is_error=True; loop continues."""
+        client = _SequencedClient([
+            _fake_response(
+                stop_reason="tool_use",
+                content=[_tool_use_block("fetch_pmc_window", {}, id_="tu_x")],
+            ),
+            _fake_response(
+                stop_reason="end_turn",
+                content=[_text_block("Could not fetch.")],
+            ),
+        ])
+        db = _mock_db()
+        with patch.object(coach_service.settings, "ANTHROPIC_API_KEY", "sk-test"), \
+             patch("app.services.coach_service._get_anthropic_client", return_value=client), \
+             patch(
+                 "app.services.coach_service.dispatch_tool",
+                 new=AsyncMock(side_effect=ValueError("bad input")),
+             ):
+            events = [
+                e async for e in coach_service.run_tool_use_loop_events(
+                    messages=[{"role": "user", "content": "Show PMC"}],
+                    user_id=1, db=db, language="simple",
+                )
+            ]
+        # tool_use_start + tool_use_result(is_error=True) + final text
+        assert [e["type"] for e in events] == ["tool_use_start", "tool_use_result", "text"]
+        assert events[1]["is_error"] is True
+
+    async def test_no_api_key_yields_only_text_event(self):
+        """Fallback path (no API key) emits a single text event — no tool frames."""
+        db = _mock_db()
+        with patch.object(coach_service.settings, "ANTHROPIC_API_KEY", None), \
+             patch(
+                 "app.services.coach_service.build_snapshot",
+                 new=AsyncMock(return_value={"language": "simple"}),
+             ), \
+             patch(
+                 "app.services.coach_service._rule_based_brief",
+                 return_value={"verdict": "Rest", "rationale": "Sleep short."},
+             ):
+            events = [
+                e async for e in coach_service.run_tool_use_loop_events(
+                    messages=[{"role": "user", "content": "Why am I tired?"}],
+                    user_id=1, db=db, language="simple",
+                )
+            ]
+        assert len(events) == 1
+        assert events[0]["type"] == "text"
+        assert len(events[0]["text"]) > 0
+
+
+@pytest.mark.asyncio
+class TestGenerateAnalyticalChatStream:
+    async def test_sse_frames_include_tool_use_lifecycle(self):
+        """SSE output must include event: tool_use_start / tool_use_result lines
+        so the frontend parser can render intermediate UI state."""
+        client = _SequencedClient([
+            _fake_response(
+                stop_reason="tool_use",
+                content=[_tool_use_block("fetch_pmc_window", {"days": 28}, id_="tu_pmc")],
+            ),
+            _fake_response(
+                stop_reason="end_turn",
+                content=[_text_block("Steady build.")],
+            ),
+        ])
+        db = _mock_db()
+        with patch.object(coach_service.settings, "ANTHROPIC_API_KEY", "sk-test"), \
+             patch("app.services.coach_service._get_anthropic_client", return_value=client), \
+             patch(
+                 "app.services.coach_service.dispatch_tool",
+                 new=AsyncMock(return_value={"trend": "building"}),
+             ):
+            frames = []
+            async for chunk in coach_service.generate_analytical_chat_stream(
+                db=db, user_id=1,
+                messages=[{"role": "user", "content": "Last 4 weeks?"}],
+                language="simple",
+            ):
+                frames.append(chunk)
+
+        blob = "".join(frames)
+        # New frame types are present
+        assert "event: tool_use_start" in blob
+        assert "event: tool_use_result" in blob
+        assert "fetch_pmc_window" in blob
+        # Existing frame shapes preserved (backward compat with 05-02 client)
+        assert '"type": "delta"' in blob
+        assert '"type": "done"' in blob
+
+    async def test_fallback_path_still_emits_delta_and_done(self):
+        """Without API key the fallback path must still stream delta + done
+        frames (backward compat with 05-02's streamCoachChat consumer)."""
+        db = _mock_db()
+        with patch.object(coach_service.settings, "ANTHROPIC_API_KEY", None), \
+             patch(
+                 "app.services.coach_service.build_snapshot",
+                 new=AsyncMock(return_value={"language": "simple"}),
+             ), \
+             patch(
+                 "app.services.coach_service._rule_based_brief",
+                 return_value={"verdict": "Rest", "rationale": "Short sleep."},
+             ):
+            blob = "".join([
+                c async for c in coach_service.generate_analytical_chat_stream(
+                    db=db, user_id=1,
+                    messages=[{"role": "user", "content": "Why tired?"}],
+                    language="simple",
+                )
+            ])
+        assert '"type": "delta"' in blob
+        assert '"type": "done"' in blob
+        # No tool frames on fallback path
+        assert "event: tool_use_start" not in blob
+
+
+# ---------------------------------------------------------------------------
 # System prompt — chat_analytical variant
 # ---------------------------------------------------------------------------
 
