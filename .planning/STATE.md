@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 5.4 COMPLETE -- PMC hover tooltip shows a plain-English per-day narrative below the CTL/ATL/TSB numbers. Rule-based, deterministic, <=140 chars, simple/technical language-aware. Classifies each day into rest/easy/moderate/hard/big from TSS/h and writes a 1-2 sentence summary. Phase 6 (training-plan-generation) is next.
+**Current focus:** Phase 6 Wave 1 (06-01) COMPLETE -- /coach/chat runs Claude tool-use loop with 5 read-only tools (PMC window, recovery trend, activities, FTP history, planned workout). Answers "why am I tired?" and "analyze my last 4 weeks" with real data citations. Deterministic fallback when ANTHROPIC_API_KEY is absent. Wave 2 (06-02, workout modification via tool-use) is next.
 
 ## Current Position
 
-Phase: 5.4 of 9 (PMC Hover Narratives) -- COMPLETE
-Plan: 05.4-01 complete (4 tasks, 4 atomic commits; 319/319 backend tests incl. 60 new pmc_narratives; tsc clean; build clean)
-Status: Hovering any datapoint in the fitness/fatigue timeline now shows a one-sentence explanation of what happened that day. Simple mode never leaks FTP/TSS/CTL/ATL/TSB/EF/VI/NP/RPE/Z1-Z7/Coggan/Banister/Seiler/Friel/Mujika/polarized (parametrized test firewall). Technical mode cites CTL/ATL/TSB notation. Phase 6 can start immediately
-Last activity: 2026-04-20 -- Completed 05.4-01-PLAN.md (pmc_narratives service + /training-load/pmc language param + PMCChart uPlot tooltip overlay + 60 new tests)
+Phase: 6 of 9 (AI Deep Coaching) -- Wave 1 of 4 COMPLETE
+Plan: 06-01 complete (3 TDD tasks, 6 atomic commits; 371/371 backend tests incl. 52 new across analytical_aggregates + coach_tools + coach_service_tool_use)
+Status: /coach/chat no longer requires ANTHROPIC_API_KEY (was 503). With key: Claude tool-use loop grounds every analytical answer in tool_result data. Without: regex routes to fatigue synthesizer or last-N-weeks PMC+recovery template. User-id spoofing via tool_input is ignored (dispatcher strips user_id/uid/owner_id/userId). Prompt cache for /coach/brief is preserved (new chat_analytical prompts are a separate cache entry)
+Last activity: 2026-04-21 -- Completed 06-01-PLAN.md (analytical_aggregates.py + coach_tools.py with 5-tool registry + run_tool_use_loop + _fallback_analytical_answer + generate_analytical_chat_stream + CHAT_ANALYTICAL_PROMPT_{SIMPLE,TECHNICAL})
 
-Progress: [████████████] 100% through Phase 5 + 5.1 + 5.2 + 5.3 + 5.4 / ~95% overall
+Progress: [████████████░] 100% through Phase 5.x + Phase 6 Wave 1 (1/4) / ~96% overall
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
-- Average duration: ~47 min
-- Total execution time: ~9.6 hours
+- Total plans completed: 14
+- Average duration: ~50 min
+- Total execution time: ~11.2 hours
 
 **By Phase:**
 
@@ -35,10 +35,11 @@ Progress: [████████████] 100% through Phase 5 + 5.1 + 5.
 | 05.2-language-and-sync | 1 (complete) | ~41 min | ~41 min |
 | 05.3-post-ride-review | 1 (complete) | ~75 min | ~75 min |
 | 05.4-pmc-hover-narratives | 1 (complete) | ~130 min | ~130 min |
+| 06-ai-deep-coaching | 1 (Wave 1 complete, 3 waves remaining) | ~95 min | ~95 min |
 
 **Recent Trend:**
-- Last 5 plans: 55 min, 75 min, 41 min, 75 min, 130 min
-- Trend: 5.4 took longer than the 35-min plan estimate primarily because the plan described PMCChart as Recharts-based when it's actually uPlot (04.5 decision). Reconciling via a setCursor->React-state bridge + overlay HTML tooltip added ~20 min. Narrator logic and jargon test firewall were on-plan. File count: 3 created / 5 modified.
+- Last 5 plans: 75 min, 41 min, 75 min, 130 min, 95 min
+- Trend: 06-01 at ~95min vs 90-min estimate — dead on. TDD cycle clean across three tasks (6 atomic commits: 3 RED + 3 GREEN). Docker was down so tests ran against a rebuilt local python3.13 venv; every DB interaction is mocked so no live DB needed for the test suite. 5 files created / 3 modified.
 
 *Updated after each plan completion*
 
@@ -185,6 +186,23 @@ Recent decisions affecting current work:
 - [05.4-01]: Primary-sport detection uses longest single activity of the day (not first started, not highest TSS) — matches the athlete's own mental model of 'today's workout' when a ride + short brick are both logged
 - [05.4-01]: Activity window fetch piggybacks on the PMC date range — one extra grouped SQL per /pmc call, no N+1, no new endpoint. Helper: pmc_narratives.fetch_daily_activity_summaries(db, user_id, since, until)
 - [05.4-01]: PMCEntry.narrative is a response-only field (no migration) — computed on read; language toggle doesn't require cache invalidation server-side because narratives don't persist
+- [06-01]: Authenticated user_id is the ONLY accepted identity in tool_use dispatcher — `user_id`/`uid`/`owner_id`/`userId` keys are stripped from tool_input before handler call. LLM cannot spoof identity
+- [06-01]: 5 read-only tools cover Phase 6 analytical surface: fetch_pmc_window, fetch_recovery_trend, fetch_recent_activities, fetch_ftp_history, fetch_planned_workout. Write tools (workout modification) are 06-02's scope, explicitly out of 06-01
+- [06-01]: Defense-in-depth clamps on numeric tool inputs — recovery days [1,90], activity limit [1,50] enforced inside dispatcher even though schemas advertise the same range. LLM cannot bypass via raw integer overflow
+- [06-01]: run_tool_use_loop hard-caps at max_iterations=5 — after that returns "Analysis exceeded tool-use budget" instead of spinning. Safety net against runaway LLM
+- [06-01]: dispatch_tool exceptions become is_error=True tool_result blocks (never raise) — Claude can self-correct on the next turn. Tool failures never crash the loop
+- [06-01]: Tool descriptions are LOAD-BEARING — they explicitly name the question patterns each tool answers ("last N weeks" → pmc_window, "why am I tired?" → recovery_trend) so Claude picks well on turn 1. Investment here pays on every call
+- [06-01]: system_prompt_for_language(language, context='brief') returns the EXACT prior strings (default context='brief') so /coach/brief prompt cache hashes are preserved. context='chat_analytical' is a new cache entry, not a modification of the old one
+- [06-01]: Fallback regex order: last_N_weeks BEFORE why_tired — "why am I tired in the last 2 weeks" routes to the specific range summary, not the generic rationale
+- [06-01]: Fallback why-tired path reuses _rule_based_brief rationale verbatim — the answer matches /coach/brief's fallback tone exactly, no new narrative infra
+- [06-01]: Fallback last-N-weeks summary uses plain-English direction language in simple mode (building→"fitness has been climbing", overreaching→"digging a deep hole"); technical mode cites Banister by name + raw numbers
+- [06-01]: run_tool_use_loop returns str; generate_analytical_chat_stream chunks the result to ~20-char SSE deltas — synchronous-tools-before-stream pattern per Anthropic docs. UI still feels streaming even though tools finish pre-stream
+- [06-01]: /coach/chat no longer 503s without ANTHROPIC_API_KEY — streams the deterministic fallback instead. Matches the 05-01 invariant "every LLM path has a rule-based fallback"
+- [06-01]: pmc_window_summary slices compute_user_pmc output rather than rewriting EWMA math — single source of truth stays in pmc_service. Slicing by date with ISO-string conversion at the boundary
+- [06-01]: recovery_trend_summary flag thresholds — low_hrv @ ≤-10% vs 28d baseline, sleep_debt @ ≥5 short nights in window, rhr_elevated @ ≥+5% vs 28d baseline. Matches advanced_metrics.why_am_i_tired convention
+- [06-01]: FTP trend label thresholds — ±2% over 30d → improving/declining/stable. Tighter than PMC's ±1.5 because FTP is a deliberate test/measurement, not an EWMA
+- [06-01]: fetch_planned_workout returns the actual PlannedWorkout ORM shape ({id, title, sport, scheduled_date, target_duration_seconds, description, blocks: interval_structure}), not the plan's aspirational template_id/target_tss shape — the Phase 4 schema doesn't carry template_id/target_tss. Phase 7 may extend
+- [06-01]: generate_analytical_chat_stream is a new function, not a mutation of coach_chat_stream — keeps the old 05.x path available for any future non-analytical chat surface and makes 06-01's addition clearly reversible
 
 ### Pending Todos
 
@@ -196,6 +214,10 @@ Recent decisions affecting current work:
 - Production readiness: provision ANTHROPIC_API_KEY env var before launch so /coach/* endpoints use Claude rather than the rule-based fallback
 - Future: expose a /coach/metrics-trend endpoint so frontend AdvancedMetricsStrip can light up decoupling + durability tiles (currently placeholder)
 - Future: add "typecheck": "tsc -p tsconfig.app.json --noEmit" to frontend/package.json — root-level `tsc --noEmit` is a no-op and could hide errors
+- 06-02 (next wave): add workout-modification tools (write tools) to coach_tools.TOOL_REGISTRY — MUST rebase on top of 06-01's `930780d` to avoid collisions on coach_tools.py / coach_service.py / coach_prompt.py
+- 06-02 should add `context='chat_modification'` variant to system_prompt_for_language; keep context='brief' default untouched so /coach/brief prompt cache stays warm
+- 06-03 (UI) consumes the exact SSE contract generate_analytical_chat_stream emits (delta / replace / done frames) — frontend can rely on the same pattern coach_chat_stream already uses
+- Docker daemon still unresponsive (carried from 03-01) — test execution moved to local python3.13 venv at backend/.venv. Every DB interaction in new code is mocked in unit tests so no live DB required. Before deploying, restart Docker and run integration smoke via `docker compose exec backend pytest` + `curl -N /coach/chat`
 
 ### Blockers/Concerns
 
@@ -207,8 +229,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-20
-Stopped at: Phase 5.4 COMPLETE — PMC hover narratives shipped end-to-end. New service pmc_narratives.py with pure-function build_pmc_narrative(entry, prev_entry, activity, language) + classify_intensity(tss, duration_min) + fetch_daily_activity_summaries(db, user_id, since, until). PMCEntry schema gains optional narrative field; /training-load/pmc accepts language query param and returns total-series entries with narratives attached (per_sport narrative=None in v1). Frontend: fetchPMC signature extended, usePMC reads language from useLanguage() context and includes it in React Query key, PMCChart bridges uPlot's hooks.setCursor into React state and renders a 280px-max-width HoverTooltip overlay with date eyebrow + CTL/ATL/TSB pips + narrative paragraph. 60 parametrized unit tests lock the simple-mode jargon contract (FTP/TSS/CTL/ATL/TSB/EF/VI/NP/IF/RPE/Z1-Z7/Coggan/Banister/Seiler/Friel/Mujika/polarized/San Millán all banned across every intensity x language x activity_count combo) and the <=140-char tooltip invariant. Plan described the chart as Recharts (from 04-02) but 04.5 migrated it to uPlot — reconciled via overlay pattern. 319/319 backend tests green (259 pre-existing + 60 new); tsc + build clean. Commits 36f3a88..a0f024f (4 task commits).
+Last session: 2026-04-21
+Stopped at: Phase 6 Wave 1 (06-01) COMPLETE — /coach/chat runs Claude tool-use loop with 5 read-only tools, with deterministic fallback for "why am I tired?" and "last N weeks" when ANTHROPIC_API_KEY is absent. Three TDD tasks (6 atomic commits f282de1..930780d): (1) analytical_aggregates.py with 4 pure aggregators — pmc_window_summary, recovery_trend_summary, activity_summary, ftp_progression_summary — each JSON-safe (ISO date strings), each exercised with mocked AsyncSession (18 tests). (2) coach_tools.py with TOOL_SCHEMAS (5 Anthropic tool_use shapes), TOOL_REGISTRY (5 async handlers), dispatch_tool — dispatcher strips user_id/uid/owner_id/userId from tool_input before handler call, clamps recovery days to [1,90] and activity limit to [1,50] (21 tests). (3) coach_service.run_tool_use_loop with max_iterations=5 safety + parallel tool dispatch + is_error tool_result recovery, plus _fallback_analytical_answer using _LAST_N_WEEKS_RE (priority) and _WHY_TIRED_RE, plus generate_analytical_chat_stream wrapping the loop with ~20-char SSE delta chunks + ED-keyword filter on final buffer (13 tests). coach_prompt.system_prompt_for_language gains optional context kwarg; CHAT_ANALYTICAL_PROMPT_{SIMPLE,TECHNICAL} name every tool + typical combos; default context='brief' preserves /coach/brief prompt cache hashes. /coach/chat API endpoint: removed 503-without-key guard, now streams fallback instead. 371/371 backend tests green (319 pre-existing + 52 new across 3 new test modules). Plan estimated 90 min; actual ~95 min — dead on. Docker was unresponsive (carried blocker from 03-01) so tests ran against a rebuilt local python3.13 venv; all DB interactions are mocked so no live DB required.
 Resume file: None
-Next: 06 (training-plan-generation) — narrator layer (build_pmc_narrative) is now reusable for per-day plan summaries with the same (entry, prev_entry, activity, language) signature. The uPlot setCursor->React state overlay pattern is the template for EfficiencyTrend + IntensityDistribution tooltips when those need richer per-point context. Phase 5.x foundations (templates, periodization, language routing, post-ride grading, per-day narrator) give the plan generator the full stack.
-Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling to multiple workers; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; hook today_available_minutes to the calendar's free-slot field (Phase 6 work) instead of weekly_hours/7; consider server-side language routing for /coach/why + /coach/transparency if Phase 6 needs it (currently rewritten client-side via simpleEvidenceFor); wire advanced_metrics.compute_activity_metrics decoupling result back into Activity.raw_data.decoupling_pct so PostRideReview can surface the Pw:HR drift band; retrospective yesterday-morning review (generate for yesterday when user opens app next morning with no session today); extend narrator to per-sport sub-series when PMC chart exposes per-sport hover interaction
+Next: 06-02 (Wave 2) — workout modification via tool-use. Extend coach_tools.TOOL_REGISTRY with write tools (modify_planned_workout, reschedule_workout, etc.). Reuse run_tool_use_loop unchanged (new tools plug in). Add context='chat_modification' variant to system_prompt_for_language. MUST rebase on top of 930780d to avoid collisions on coach_tools.py / coach_service.py / coach_prompt.py. The user-scoped dispatcher pattern + is_error recovery path + max-iteration safety net all transfer 1:1 — Wave 2 inherits the security + reliability envelope 06-01 established.
+Pending: Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling past one uvicorn worker; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; hook today_available_minutes to the calendar's free-slot field instead of weekly_hours/7; consider server-side language routing for /coach/why + /coach/transparency if a future phase needs it (currently rewritten client-side via simpleEvidenceFor); wire advanced_metrics.compute_activity_metrics decoupling result back into Activity.raw_data.decoupling_pct so PostRideReview can surface the Pw:HR drift band; retrospective yesterday-morning review (generate for yesterday when user opens app next morning with no session today); extend pmc_narratives narrator to per-sport sub-series when PMC chart exposes per-sport hover interaction; restart Docker daemon + smoke-test `/coach/chat` via `curl -N` against a local uvicorn with and without ANTHROPIC_API_KEY before cutting a production deploy.
