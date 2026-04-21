@@ -194,25 +194,25 @@ async def chat(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
 ) -> StreamingResponse:
-    """SSE-stream chat with the coach. 503 if ANTHROPIC_API_KEY is not set.
+    """SSE-stream chat with the coach.
+
+    Phase 6 upgrade: runs a Claude tool-use loop (pmc_window / recovery_trend /
+    activities / ftp / planned_workout) so the LLM can answer analytical
+    questions grounded in the athlete's own data. Falls back to a deterministic
+    synthesizer when ANTHROPIC_API_KEY is absent (supports 'why am I tired?'
+    + 'last N weeks' patterns; polite refusal for other prompts).
 
     Rate limit: 20 messages per minute per user.
-    Safety: every response passes through validate_chat_response; ED-adjacent
+    Safety: final assembled text passes through validate_chat_response; ED-adjacent
     content is replaced wholesale with a canned safe redirect frame.
     """
-    if not settings.ANTHROPIC_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI chat unavailable — set ANTHROPIC_API_KEY to enable this endpoint.",
-        )
-
     _check_chat_rate_limit(current_user.id)
 
     messages_payload = [m.model_dump() for m in req.messages]
     chat_language = req.language  # 'simple' default, 'technical' opt-in
 
     async def event_stream():
-        async for chunk in coach_service.coach_chat_stream(
+        async for chunk in coach_service.generate_analytical_chat_stream(
             db, current_user.id, messages_payload, language=chat_language,
         ):
             yield chunk

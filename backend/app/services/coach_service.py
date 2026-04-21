@@ -25,9 +25,11 @@ References: see .planning/research/training-frameworks.md and
 """
 from __future__ import annotations
 
+import json as _json_mod
 import logging
+import re
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,12 +47,17 @@ from app.services.advanced_metrics import (
     why_am_i_tired,
     zone_distribution,
 )
+from app.services.analytical_aggregates import (
+    pmc_window_summary,
+    recovery_trend_summary,
+)
 from app.services.coach_prompt import (
     BRIEF_TOOL,
     SYSTEM_PROMPT,
     build_user_message,
     system_prompt_for_language,
 )
+from app.services.coach_tools import TOOL_SCHEMAS, dispatch_tool
 from app.services.goal_trajectory import project as project_trajectory, trajectory_to_dict
 from app.services.pmc_service import compute_user_pmc
 from app.services.ride_compliance import ride_compliance_to_dict, score_ride
@@ -1589,3 +1596,393 @@ async def coach_chat_stream(
     except Exception as exc:
         logger.exception("Claude chat stream failed: %s", exc)
         yield f"data: {_json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+
+
+# ======================================================================
+#  Analytical chat — tool-use loop + deterministic fallback
+# ======================================================================
+#
+# Phase 6 extension of /coach/chat. generate_chat_stream (above) was a simple
+# passthrough to Claude with a snapshot prelude. That's enough for small-talk
+# but can't answer arbitrary analytical questions without pulling data.
+#
+# run_tool_use_loop wraps `anthropic.messages.create` with tool_use handling:
+#   1. Send messages + TOOL_SCHEMAS.
+#   2. If stop_reason='tool_use', dispatch each tool_use block via
+#      coach_tools.dispatch_tool, append results, loop.
+#   3. If stop_reason='end_turn' (or max_iterations hit), return final text.
+#
+# When ANTHROPIC_API_KEY is absent we fall back to two deterministic handlers:
+#   - "why am I tired?" — reuses the rule-based brief rationale
+#   - "analyze my last N weeks" — reads pmc_window_summary +
+#     recovery_trend_summary and writes a template-string answer
+# Any other pattern gets a polite refusal pointing at the API-key upgrade.
+# ======================================================================
+
+
+_WHY_TIRED_RE = re.compile(
+    r"\b(why.*(tired|fatigued|exhausted|wiped|beat|drained)|recover)\b",
+    re.IGNORECASE,
+)
+_LAST_N_WEEKS_RE = re.compile(
+    r"(?:last|past|previous)\s+(\d{1,2})\s+weeks?",
+    re.IGNORECASE,
+)
+
+
+def _get_anthropic_client():
+    """Lazy Anthropic client factory — patchable in tests.
+
+    Must stay a thin wrapper: it's patched in tests to inject a sequenced
+    fake client, and it's lazy so module import works without anthropic
+    installed.
+    """
+    import anthropic
+    return anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+
+async def run_tool_use_loop(
+    messages: list[dict],
+    user_id: int,
+    db: AsyncSession,
+    language: Literal["simple", "technical"] = "simple",
+    max_iterations: int = 5,
+) -> str:
+    """Tool-use loop for /coach/chat analytical Q&A.
+
+    Returns the final concatenated text (caller streams it chunk-wise to the
+    SSE client for UI consistency). When ANTHROPIC_API_KEY is absent, routes
+    to a deterministic fallback instead.
+    """
+    if not settings.ANTHROPIC_API_KEY:
+        return await _fallback_analytical_answer(messages, user_id, db, language)
+
+    client = _get_anthropic_client()
+    system_text = system_prompt_for_language(language, context="chat_analytical")
+
+    # Normalise incoming messages — strip roles we don't support, ensure
+    # 'content' is a string (frontend contract) or list (internal loop state).
+    working_messages: list[dict] = []
+    for m in messages:
+        role = m.get("role") if isinstance(m, dict) else None
+        if role not in ("user", "assistant"):
+            continue
+        content = m.get("content")
+        if content is None:
+            continue
+        working_messages.append({"role": role, "content": content})
+
+    for _iteration in range(max_iterations):
+        response = await client.messages.create(
+            model=settings.COACH_CHAT_MODEL,
+            max_tokens=2048,
+            system=[{
+                "type": "text",
+                "text": system_text,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            tools=TOOL_SCHEMAS,
+            messages=working_messages,
+        )
+
+        stop_reason = getattr(response, "stop_reason", None)
+        content_blocks = getattr(response, "content", []) or []
+
+        if stop_reason != "tool_use":
+            # Done — concatenate every text block the model emitted
+            text_parts: list[str] = []
+            for b in content_blocks:
+                btype = getattr(b, "type", None) or (isinstance(b, dict) and b.get("type"))
+                if btype == "text":
+                    text = getattr(b, "text", None) or (isinstance(b, dict) and b.get("text"))
+                    if text:
+                        text_parts.append(text)
+            return "".join(text_parts)
+
+        # stop_reason == 'tool_use' — dispatch every tool_use block,
+        # append the assistant message + tool_result user message, loop.
+        tool_results: list[dict] = []
+        for block in content_blocks:
+            btype = getattr(block, "type", None) or (isinstance(block, dict) and block.get("type"))
+            if btype != "tool_use":
+                continue
+            name = getattr(block, "name", None) or (isinstance(block, dict) and block.get("name"))
+            tool_input = (
+                getattr(block, "input", None)
+                or (isinstance(block, dict) and block.get("input"))
+                or {}
+            )
+            tool_use_id = getattr(block, "id", None) or (isinstance(block, dict) and block.get("id"))
+            try:
+                result = await dispatch_tool(name, tool_input, user_id=user_id, db=db)
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": _json_mod.dumps(result, default=str),
+                })
+            except Exception as exc:  # noqa: BLE001 — surface to Claude via is_error
+                logger.warning("dispatch_tool(%s) raised: %s", name, exc)
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": f"Error: {exc}",
+                    "is_error": True,
+                })
+
+        working_messages.append({"role": "assistant", "content": content_blocks})
+        working_messages.append({"role": "user", "content": tool_results})
+
+    # Exhausted max_iterations
+    return (
+        "Analysis exceeded tool-use budget; returning partial result. "
+        "Try a more specific question."
+    )
+
+
+async def _fallback_analytical_answer(
+    messages: list[dict],
+    user_id: int,
+    db: AsyncSession,
+    language: Literal["simple", "technical"] = "simple",
+) -> str:
+    """Deterministic chat fallback when ANTHROPIC_API_KEY is absent.
+
+    Supports two patterns:
+        - "why am I tired?" / "I'm fatigued" / recovery questions →
+          reuses the rule-based brief rationale so the answer reflects
+          today's PMC/HRV/sleep signals exactly.
+        - "analyze my last N weeks" / "past N weeks" → reads
+          pmc_window_summary + recovery_trend_summary for that window and
+          builds a plain-English summary.
+
+    Any other prompt gets a polite refusal that names the upgrade path.
+    """
+    last_user = next(
+        (m.get("content") for m in reversed(messages)
+         if isinstance(m, dict) and m.get("role") == "user"
+         and isinstance(m.get("content"), str)),
+        "",
+    )
+    text = last_user or ""
+
+    # Pattern 2 first so "why am I tired in the last 2 weeks" prefers the
+    # specific analytical range rather than the generic fatigue narrative.
+    m = _LAST_N_WEEKS_RE.search(text)
+    if m:
+        try:
+            n_weeks = max(1, min(int(m.group(1)), 12))  # clamp 1..12
+        except (TypeError, ValueError):
+            n_weeks = 4
+        return await _fallback_last_n_weeks(
+            user_id=user_id, db=db, n_weeks=n_weeks, language=language,
+        )
+
+    if _WHY_TIRED_RE.search(text):
+        return await _fallback_why_tired(user_id=user_id, db=db, language=language)
+
+    # Unknown pattern — refuse politely, name the upgrade path.
+    if language == "technical":
+        return (
+            "Analytical chat currently requires the coach upgrade "
+            "(ANTHROPIC_API_KEY). Without it I can answer 'why am I tired?' "
+            "and 'analyze my last N weeks' via the deterministic synthesizer; "
+            "anything else needs the LLM."
+        )
+    return (
+        "Chat with the full coach needs the upgrade (ANTHROPIC_API_KEY). "
+        "Without it I can still tell you 'why am I tired?' or walk you through "
+        "'my last N weeks' — ask me either of those and I've got you."
+    )
+
+
+async def _fallback_why_tired(
+    user_id: int,
+    db: AsyncSession,
+    language: str,
+) -> str:
+    """Fatigue narrative — reuses the rule-based brief rationale so the
+    tone + data footprint match the /coach/brief fallback exactly.
+    """
+    try:
+        snapshot = await build_snapshot(db, user_id, language=language)
+        snapshot = {**snapshot, "language": language}
+        brief = _rule_based_brief(snapshot)
+        rationale = brief.get("rationale") or ""
+        verdict = brief.get("verdict") or ""
+        # Two-sentence answer: verdict + rationale. If verdict is empty just
+        # return the rationale.
+        if verdict and rationale:
+            return f"{verdict}. {rationale}"
+        return rationale or verdict or "No data yet to tell you why — try syncing Garmin."
+    except Exception as exc:  # noqa: BLE001 — defensive
+        logger.exception("fallback why-tired failed: %s", exc)
+        if language == "technical":
+            return (
+                "Fallback fatigue synthesizer unavailable; snapshot build "
+                "failed. Check Garmin sync + daily_metrics freshness."
+            )
+        return "Hmm, I couldn't pull your recent data. Try syncing Garmin and asking again."
+
+
+async def generate_analytical_chat_stream(
+    db: AsyncSession,
+    user_id: int,
+    messages: list[dict],
+    language: Literal["simple", "technical"] = "simple",
+) -> AsyncIterator[str]:
+    """SSE stream for /coach/chat analytical Q&A.
+
+    Runs `run_tool_use_loop` (synchronous tools pre-stream), then emits the
+    final text chunk-wise so the UI renders progressively. Applies the ED-
+    keyword filter on the full text before finalising — sends a 'replace'
+    frame if triggered.
+
+    Works with or without ANTHROPIC_API_KEY (fallback path in run_tool_use_loop).
+    """
+    import json as _json
+
+    if language not in ("simple", "technical"):
+        language = "simple"
+
+    try:
+        final_text = await run_tool_use_loop(
+            messages=messages,
+            user_id=user_id,
+            db=db,
+            language=language,
+        )
+    except Exception as exc:  # noqa: BLE001 — surface error frame to the client
+        logger.exception("Analytical chat loop failed: %s", exc)
+        yield f"data: {_json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+        return
+
+    # Chunk the final text so the UI feels streaming (≈20 chars/chunk).
+    CHUNK_SIZE = 20
+    if not final_text:
+        yield f"data: {_json.dumps({'type': 'delta', 'text': ''})}\n\n"
+    else:
+        for i in range(0, len(final_text), CHUNK_SIZE):
+            delta = final_text[i : i + CHUNK_SIZE]
+            yield f"data: {_json.dumps({'type': 'delta', 'text': delta})}\n\n"
+
+    # Run ED-keyword filter on the assembled buffer. If triggered, emit the
+    # same 'replace' frame the prior streaming path uses so the UI pattern is
+    # consistent for both chat flows.
+    allowed, safe_text = validate_chat_response(final_text)
+    if not allowed:
+        yield f"data: {_json.dumps({'type': 'replace', 'text': safe_text, 'reason': 'nutrition_safety_filter'})}\n\n"
+
+    yield f"data: {_json.dumps({'type': 'done'})}\n\n"
+
+
+async def _fallback_last_n_weeks(
+    user_id: int,
+    db: AsyncSession,
+    n_weeks: int,
+    language: str,
+) -> str:
+    """Deterministic summary of the last N weeks: PMC trend + recovery flags."""
+    end = date.today()
+    start = end - timedelta(days=n_weeks * 7 - 1)
+
+    try:
+        pmc = await pmc_window_summary(
+            user_id=user_id, start_date=start, end_date=end, db=db,
+        )
+        recovery = await recovery_trend_summary(
+            user_id=user_id, days=n_weeks * 7, db=db,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("fallback last_n_weeks failed: %s", exc)
+        if language == "technical":
+            return (
+                f"Could not retrieve PMC + recovery aggregates for the last "
+                f"{n_weeks} weeks. Check DB connectivity."
+            )
+        return (
+            f"Hmm, I couldn't pull your last {n_weeks} weeks of data. "
+            "Try syncing Garmin and asking again."
+        )
+
+    agg = pmc.get("aggregate", {}) or {}
+    trend = pmc.get("trend", {}) or {}
+    rec_agg = recovery.get("aggregate", {}) or {}
+    flags = recovery.get("flags", []) or []
+
+    direction = trend.get("direction", "insufficient_data")
+
+    if direction == "insufficient_data":
+        if language == "technical":
+            return (
+                f"Insufficient PMC data for the last {n_weeks} weeks — "
+                "activities missing or sync gap. Nothing reliable to report."
+            )
+        return (
+            f"I don't have enough ride data for the last {n_weeks} weeks to "
+            "tell you much. Try syncing Garmin, then ask again."
+        )
+
+    total_tss = agg.get("total_tss", 0.0)
+    avg_ctl = agg.get("avg_ctl", 0.0)
+    avg_tsb = agg.get("avg_tsb", 0.0)
+    ramp = agg.get("ramp_rate", 0.0)
+    hrv_pct = rec_agg.get("hrv_trend_pct", 0.0) or 0.0
+    sleep_debt_h = rec_agg.get("sleep_debt_hours", 0.0) or 0.0
+
+    if language == "technical":
+        direction_line = {
+            "building": f"CTL climbing ({ramp:+.1f}/week) — fitness accruing.",
+            "maintaining": "CTL flat — maintenance phase.",
+            "freshening": "TSB rising — freshening / taper territory.",
+            "overreaching": "TSB crashing — ATL outpacing CTL (overreach risk).",
+        }.get(direction, direction)
+        flags_line = (
+            f"Recovery flags: {', '.join(flags)}." if flags
+            else "No recovery flags triggered."
+        )
+        return (
+            f"Last {n_weeks} weeks (Banister): {direction_line} "
+            f"Avg CTL {avg_ctl:.0f}, avg TSB {avg_tsb:+.0f}, total TSS {total_tss:.0f}. "
+            f"HRV trend {hrv_pct:+.1f}% vs baseline; sleep debt {sleep_debt_h:.1f}h. "
+            f"{flags_line}"
+        )
+
+    # Simple mode — plain English, no jargon
+    direction_friendly = {
+        "building": "your fitness has been climbing",
+        "maintaining": "you've held steady",
+        "freshening": "your legs have been freshening up",
+        "overreaching": "you've been digging a deep hole — the fatigue is outrunning the fitness",
+    }.get(direction, "your training's been mixed")
+
+    bits: list[str] = []
+    bits.append(
+        f"Over the last {n_weeks} week{'s' if n_weeks != 1 else ''}, "
+        f"{direction_friendly}."
+    )
+
+    flag_hints: list[str] = []
+    if "low_hrv" in flags:
+        flag_hints.append("your body's showing signs of fatigue")
+    if "sleep_debt" in flags:
+        flag_hints.append("you've been short on sleep")
+    if "rhr_elevated" in flags:
+        flag_hints.append("your resting heart rate has been creeping up")
+
+    if flag_hints:
+        bits.append(
+            "On the recovery side, " + " and ".join(flag_hints) + "."
+        )
+    else:
+        bits.append("Recovery's been solid — no red flags.")
+
+    if direction == "overreaching":
+        bits.append("Take an easy week — you've earned it and you need it.")
+    elif direction == "building":
+        bits.append("Keep this rhythm for a couple more weeks, then plan a down-week.")
+    elif direction == "freshening":
+        bits.append("You're coming into form — use it wisely.")
+    elif direction == "maintaining":
+        bits.append("Consistency is quietly doing the work.")
+
+    return " ".join(bits)
