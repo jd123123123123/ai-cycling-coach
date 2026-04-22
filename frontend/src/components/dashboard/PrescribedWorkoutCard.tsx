@@ -1,9 +1,83 @@
 import { useMemo, useState } from 'react'
-import { Clock, Zap, ChevronRight, Moon } from 'lucide-react'
+import { Clock, Zap, ChevronRight, Moon, Target, Flame } from 'lucide-react'
 import type { AlternateWorkout, PrescribedWorkout } from '../../api/coach'
 import IntervalRibbon from './IntervalRibbon'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { simpleTitleFor, translateCoach } from '../../utils/coachLanguage'
+
+// Category → intensity label mapping. Paired pairs of %FTP ranges come from
+// Coggan's power zone table (the de facto standard cited across TrainingPeaks,
+// Friel, and USAC). These feel-matched labels are what riders want at a glance.
+const CATEGORY_INTENSITY: Record<
+  string,
+  { label: string; range: string }
+> = {
+  recovery:   { label: 'Recovery',     range: '<55% FTP' },
+  endurance:  { label: 'Endurance',    range: '56–75% FTP' },
+  tempo:      { label: 'Tempo',        range: '76–87% FTP' },
+  sweet_spot: { label: 'Sweet Spot',   range: '88–94% FTP' },
+  threshold:  { label: 'Threshold',    range: '95–105% FTP' },
+  vo2:        { label: 'VO₂max',       range: '106–120% FTP' },
+  anaerobic:  { label: 'Anaerobic',    range: '>120% FTP' },
+  rest:       { label: 'Rest',         range: '—' },
+}
+
+function MetricTile({
+  icon: Icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: typeof Target
+  label: string
+  value: string
+  sub?: string
+}) {
+  return (
+    <div
+      className="flex items-center gap-3 rounded-xl px-3 py-2.5 min-w-0"
+      style={{
+        backgroundColor: 'var(--color-paper-2)',
+        border: '1px solid var(--color-rule)',
+      }}
+    >
+      <div
+        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
+        style={{ backgroundColor: 'rgba(48, 108, 64, 0.10)' }}
+        aria-hidden
+      >
+        <Icon size={13} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span
+          className="eyebrow"
+          style={{
+            color: 'var(--color-muted)',
+            fontSize: 9,
+            letterSpacing: '0.22em',
+          }}
+        >
+          {label}
+        </span>
+        <span
+          className="num-mono leading-tight truncate"
+          style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}
+          title={sub ? `${value} · ${sub}` : value}
+        >
+          {value}
+          {sub && (
+            <span
+              className="ml-1 opacity-70"
+              style={{ fontSize: 11, fontWeight: 400 }}
+            >
+              {sub}
+            </span>
+          )}
+        </span>
+      </div>
+    </div>
+  )
+}
 
 interface PrescribedWorkoutCardProps {
   workout: PrescribedWorkout
@@ -117,6 +191,33 @@ export default function PrescribedWorkoutCard({
             {frameworkChip}
           </span>
         )}
+      </div>
+
+      {/* Headline metrics — the three numbers a rider actually needs at a
+         glance: time commitment, target zone (framework-backed), load. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <MetricTile
+          icon={Clock}
+          label="DURATION"
+          value={`${displayed.duration_minutes}`}
+          sub="min"
+        />
+        <MetricTile
+          icon={Target}
+          label="TARGET"
+          value={(displayed.category ? CATEGORY_INTENSITY[displayed.category] : undefined)?.label ?? 'Steady'}
+          sub={
+            simpleMode
+              ? undefined
+              : (displayed.category ? CATEGORY_INTENSITY[displayed.category] : undefined)?.range
+          }
+        />
+        <MetricTile
+          icon={Flame}
+          label={simpleMode ? 'EFFORT' : 'LOAD'}
+          value={`${Math.round(displayed.predicted_tss)}`}
+          sub={simpleMode ? 'pts' : 'TSS'}
+        />
       </div>
 
       {/* Interval ribbon */}
