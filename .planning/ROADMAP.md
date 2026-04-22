@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Dashboard + Visualization** - Body status, PMC charts, training calendar, and workout previews
 - [x] **Phase 5: AI Coaching Core** - Daily brief, chat interface, safety guardrails, and training recommendations
 - [ ] **Phase 6: AI Deep Coaching** - On-demand analysis and workout modification via conversation
-- [ ] **Phase 6.1: UI Overhaul — Apple-disciplined editorial redesign (INSERTED)** - Segmented dashboard tabs, bento grid, side sheets, sticky readiness bar, command palette, spring motion tokens, applied through the editorial visual voice
+- [x] **Phase 6.1: UI Overhaul — Apple-disciplined editorial redesign (INSERTED)** - Segmented dashboard tabs, bento grid, side sheets, sticky readiness bar, command palette, spring motion tokens, applied through the editorial visual voice
 - [ ] **Phase 7: Periodization + Workout Generation** - AI-built mesocycles, daily adaptation, and structured workouts
 - [ ] **Phase 8: Nutrition Integration** - Manual nutrition logging, fueling advice, and nutrition-aware adaptation
 - [ ] **Phase 9: Social + Gamification** - Friends, rivals, streaks, events, activity feed, and social AI nudges
@@ -220,7 +220,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 | 4. Dashboard + Visualization | 4/4 | Complete | 2026-04-19 |
 | 5. AI Coaching Core | 2/2 | Complete (awaiting live UAT) | 2026-04-20 |
 | 6. AI Deep Coaching | 0/TBD | Not started | - |
-| 6.1. UI Overhaul (INSERTED) | 0/3 | Not started | - |
+| 6.1. UI Overhaul (INSERTED) | 3/3 | Complete (awaiting live UAT) | 2026-04-22 |
 | 7. Periodization + Workout Generation | 0/TBD | Not started | - |
 | 8. Nutrition Integration | 0/TBD | Not started | - |
 | 9. Social + Gamification | 0/TBD | Not started | - |
