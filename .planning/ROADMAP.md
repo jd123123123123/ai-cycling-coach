@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6.1: UI Overhaul — Apple-disciplined editorial redesign (INSERTED)** - Segmented dashboard tabs, bento grid, side sheets, sticky readiness bar, command palette, spring motion tokens, applied through the editorial visual voice
 - [ ] **Phase 7: Periodization + Workout Generation** - AI-built mesocycles, daily adaptation, and structured workouts
 - [ ] **Phase 8: Nutrition Integration** - Manual nutrition logging, fueling advice, and nutrition-aware adaptation
-- [ ] **Phase 9: Social + Gamification** - Friends, rivals, streaks, events, activity feed, and social AI nudges
+- [ ] **Phase 9: Social + Retention Rituals** - Packs (4-12 training partners), user-chosen rivals, morning/post-ride/Sunday rituals, consistency streaks, pack-kudos — all grounded in Self-Determination Theory (autonomy/competence/relatedness); explicit dark-pattern ban list (no global leaderboards, no streak ransom, no variable-ratio rewards, no guilt copy)
 
 ## Phase Details
 
@@ -190,21 +190,48 @@ Plans:
 Plans:
 - [ ] 08-01: TBD
 
-### Phase 9: Social + Gamification
-**Goal**: Users can connect with friends, track rivals, join events, and stay motivated through research-driven engagement mechanics
-**Depends on**: Phase 5
-**Requirements**: SOCIAL-01, SOCIAL-02, SOCIAL-03, SOCIAL-04, SOCIAL-05, SOCIAL-06, COACH-09
-**Success Criteria** (what must be TRUE):
-  1. User earns smart streaks that count plan adherence (rest days continue the streak, not break it)
-  2. User can give kudos on completed activities with a single tap
-  3. User can add friends and see an activity feed of their completed workouts (auto-generated summaries)
-  4. User can designate 1-3 rivals and receives weekly rival reports comparing training
-  5. User can create and join group ride/run events with location, time, and participant list
-**Plans**: TBD
+### Phase 9: Social + Retention Rituals
+**Goal**: Serious athletes keep showing up because the app helps them *become who they want to be*, not because it exploits them. Relatedness via small packs, competence via visible progress, autonomy via choices with rationale. Grounded in `.planning/research/retention-psychology.md`.
 
-Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
+**Depends on**: Phase 5 (needs brief + chat), Phase 6.1 (needs the structural UI surfaces)
+**Requirements**: SOCIAL-01, SOCIAL-02, SOCIAL-03, SOCIAL-04, SOCIAL-05, SOCIAL-06, COACH-09
+
+**Research anchors:**
+- `.planning/research/retention-psychology.md` — 12 mechanisms, dark-pattern bans, rituals, citations
+- `.planning/research/REDESIGN-BRIEF.md` §6 — concrete ruleset specifically for Phase 9
+- `.planning/research/competitor-pain-points.md` Theme D — "the social feed is decaying" + what actually works
+
+**Success Criteria** (what must be TRUE):
+  1. **Pack (not feed)**: user joins or creates a pack of 4–12 training partners; sees *their* activity only, chronological (never algorithmic), opt-in per-ride share
+  2. **Kudos**: one-tap affirmation on any ride in the pack, no daily limit on free tier, no push-spam (batched daily digest at most)
+  3. **Rivals**: user chooses 1–3 rivals by user search (not auto-suggest); weekly side-by-side shows volume + PRs filtered by user's age/FTP-per-kg cohort; no global rank number ever
+  4. **Consistency streak**: streak tracks *plan check-ins and Sunday planning*, NOT workout completion — rest days, recovery weeks, travel, illness never break it; streak freezes earned by use (never purchased); no ransom notifications
+  5. **Morning ritual < 60s**: dashboard Today tab delivers readiness + prescribed session + one subjective check-in tap at the fire-moment of the athlete's alarm/coffee cue
+  6. **Post-ride reflection**: one prompt ("easier / as expected / harder — one sentence why") fires automatically after each synced activity; answers feed adaptive planning (3× "harder" → auto-propose deload)
+  7. **Sunday planning ritual**: weekly recap + next-week preview + one user-declared intention; optionally publishable to pack as a commitment device
+  8. **Identity framing**: onboarding captures "what kind of cyclist are you becoming" (climber/endurance/racer/all-rounder/commuter-athlete); milestone and weekly-recap copy references *identity*, not just numbers
+  9. **Autonomy support**: every AI prescription ships with a *why* + *skip* + *modify* affordance; copy audits show zero guilt/shame language; loss-framing used ONLY for genuine overtraining/injury warnings (never routine reminders)
+  10. **Data integrity as foundation**: leaderboard/rival submissions require power-meter or HR-strap validation; outliers flagged; no indoor/outdoor mixing in comparisons
+
+**Anti-Goals (hard-banned — do not ship, revisit only after explicit reconsideration):**
+- Global leaderboards ranking 1..N
+- Streak ransom notifications ("Don't lose your N-day streak!")
+- Variable-ratio slot-machine rewards (random chests, mystery badges, confetti for trivial acts)
+- FOMO / social-pressure pushes ("3 friends worked out today, did you?")
+- Guilt copy / passive-aggressive mascot
+- Algorithmic feed
+- Non-consensual auto-share of activities
+- Identity flattery on empty ("pro" / "elite" badges for new users)
+- Global all-time leaderboards of any kind (cohort-filtered only; see §3)
+- AI-generated activity content in social surfaces
+- Paywalling export-my-data or retroactively paywalling previously-free features
+
+**Plans** (3 plans, suggested breakdown — revisit at `/gsd:plan-phase 09`):
+- [ ] 09-01: Pack data model + membership + opt-in per-ride share + kudos primitive + chronological pack feed
+- [ ] 09-02: Rivals (user-chosen, cohort-filtered comparisons), consistency streak tracking plan-adherence/Sunday-planning (NOT completion), streak freezes
+- [ ] 09-03: Ritual surfaces — morning <60s, post-ride reflection prompt feeding adaptive plan, Sunday planning card with pack-shareable intention; identity framing pass across onboarding + weekly recap copy
+
+**Audience discipline note**: serious athletes (WHOOP/Garmin/TrainerRoad alumni) have seen every gamification trick. The competitive moat for this audience is **honesty + insight + autonomy**, not hooks. If a proposed feature is indistinguishable from Strava/Duolingo mechanics, reject it.
 
 ## Progress
 
