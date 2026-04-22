@@ -1,29 +1,60 @@
+/**
+ * DashboardShell — the persistent chrome around all pages.
+ *
+ * Structure:
+ *   <header> editorial masthead — sticky z-40 (preserved verbatim from old shell)
+ *   <IconRail> fixed left sidebar — desktop only (lg+)
+ *   [stickyBar] — sticky z-30, below masthead; StickyReadinessBar passes its
+ *               own AnimatePresence visibility logic
+ *   <main>
+ *     [tabs] — scrolls with page (not sticky) — SegmentedTabs from DashboardPage
+ *     {children} — tab content
+ *     <footer> colophon
+ *   </main>
+ *   [workoutPreviewModal] — reserved slot (TrainingCalendar's portal is here)
+ *   <CoachChat> — portal, opened from masthead "Ask coach" button
+ *
+ * Key invariants preserved from 04-01 / 05-02 / 06-03:
+ *   - Masthead copy + ordering unchanged: SyncButton · LanguageToggle · Ask coach
+ *   - chatOpen useState + CoachChat portal untouched (06-03 invariant)
+ *   - SyncButton with 6-key invalidation unchanged
+ *   - LanguageToggle unchanged
+ *   - IconRail appears on desktop (lg+), hidden on mobile
+ *   - Main content area offset lg:pl-14 to clear the 56px IconRail
+ */
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { LogOut, User as UserIcon, MessageSquare } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import CoachChat from './CoachChat'
+import IconRail from './IconRail'
 import LanguageToggle from './LanguageToggle'
 import SyncButton from './SyncButton'
 
 interface DashboardShellProps {
-  /** Fold 1 — the headline: CoachBrief + PrescribedWorkoutCard dominates. */
-  hero: ReactNode
-  /** Fold 2 — compact one-row KPI strip. */
-  kpiStrip: ReactNode
-  /** Fold 3 — PMC chart at full width + recent activities compact list. */
-  pmc: ReactNode
-  /** Fold 4 — collapsed-by-default sections (biometrics detail, calendar, etc). */
-  collapsedSections: ReactNode
-  /** Reserved for future modals (e.g. workout preview) lifted to the shell. */
+  children: ReactNode
+  /**
+   * Optional sticky bar rendered between masthead and main content.
+   * StickyReadinessBar manages its own AnimatePresence visibility.
+   * Pass <StickyReadinessBar /> here from DashboardPage.
+   */
+  stickyBar?: ReactNode
+  /**
+   * Optional SegmentedTabs component rendered above children in main.
+   * Not sticky — scrolls with the page (Apple HIG pattern).
+   */
+  tabs?: ReactNode
+  /**
+   * Reserved for workout preview modals lifted to shell level.
+   * TrainingCalendar owns its own portal; this slot stays null.
+   */
   workoutPreviewModal?: ReactNode
 }
 
 export default function DashboardShell({
-  hero,
-  kpiStrip,
-  pmc,
-  collapsedSections,
+  children,
+  stickyBar,
+  tabs,
   workoutPreviewModal,
 }: DashboardShellProps) {
   const { user, logout } = useAuth()
@@ -32,7 +63,9 @@ export default function DashboardShell({
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-paper)' }}>
-      {/* Editorial masthead */}
+      {/* ── Editorial masthead ─────────────────────────────────────────────────
+          Preserved verbatim: copy, ordering, and styling are product-voice
+          invariants. Do NOT change the masthead without a product decision. */}
       <header
         className="sticky top-0 z-40 backdrop-blur-[6px]"
         style={{
@@ -122,8 +155,18 @@ export default function DashboardShell({
         </div>
       </header>
 
-      {/* Main editorial flow — 4 folds with progressive disclosure */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-20 flex flex-col gap-6 sm:gap-8 min-w-0">
+      {/* ── Sticky bar slot ────────────────────────────────────────────────────
+          StickyReadinessBar manages its own enter/exit animation. This slot
+          renders the bar component; the component itself decides visibility. */}
+      {stickyBar}
+
+      {/* ── IconRail ───────────────────────────────────────────────────────────
+          Fixed left sidebar — desktop only (hidden below lg). */}
+      <IconRail />
+
+      {/* ── Main editorial flow ────────────────────────────────────────────────
+          lg:pl-14 shifts content right to clear the 56px IconRail on desktop. */}
+      <main className="lg:pl-14 max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-20 flex flex-col gap-6 sm:gap-8 min-w-0">
         {/* Masthead supra — newspaper-style dateline */}
         <div className="flex items-center gap-3 -mb-2">
           <UserIcon size={12} strokeWidth={1.8} style={{ color: 'var(--color-forest)' }} />
@@ -137,25 +180,17 @@ export default function DashboardShell({
           />
         </div>
 
-        {/* Fold 1 — the hero. CoachBrief + PrescribedWorkoutCard. */}
-        <section data-testid="hero-section" className="min-w-0">
-          {hero}
-        </section>
+        {/* Tab strip — not sticky; scrolls with the page (Apple HIG) */}
+        {tabs && (
+          <div className="-mb-2">
+            {tabs}
+          </div>
+        )}
 
-        {/* Fold 2 — compact KPI strip */}
-        <section data-testid="kpi-strip-section" className="min-w-0">
-          {kpiStrip}
+        {/* Tab content */}
+        <section className="min-w-0">
+          {children}
         </section>
-
-        {/* Fold 3 — PMC + recent activities, full width */}
-        <section data-testid="pmc-section" className="min-w-0 flex flex-col gap-6">
-          {pmc}
-        </section>
-
-        {/* Fold 4 — progressively disclosed sections */}
-        <div data-testid="collapsed-sections" className="min-w-0 flex flex-col">
-          {collapsedSections}
-        </div>
 
         {/* Colophon */}
         <footer
@@ -173,7 +208,9 @@ export default function DashboardShell({
 
       {workoutPreviewModal}
 
-      {/* Coach chat drawer — portal, opened from masthead */}
+      {/* ── Coach chat drawer ─────────────────────────────────────────────────
+          Portal — opened from masthead "Ask coach" button.
+          06-03 invariant: this state + component call must not be moved. */}
       <CoachChat open={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   )
