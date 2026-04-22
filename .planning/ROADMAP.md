@@ -18,6 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Dashboard + Visualization** - Body status, PMC charts, training calendar, and workout previews
 - [x] **Phase 5: AI Coaching Core** - Daily brief, chat interface, safety guardrails, and training recommendations
 - [ ] **Phase 6: AI Deep Coaching** - On-demand analysis and workout modification via conversation
+- [ ] **Phase 6.1: UI Overhaul — Apple-disciplined editorial redesign (INSERTED)** - Segmented dashboard tabs, bento grid, side sheets, sticky readiness bar, command palette, spring motion tokens, applied through the editorial visual voice
 - [ ] **Phase 7: Periodization + Workout Generation** - AI-built mesocycles, daily adaptation, and structured workouts
 - [ ] **Phase 8: Nutrition Integration** - Manual nutrition logging, fueling advice, and nutrition-aware adaptation
 - [ ] **Phase 9: Social + Gamification** - Friends, rivals, streaks, events, activity feed, and social AI nudges
@@ -119,10 +120,47 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Analytical tool-use backend: tool registry + aggregate services + /coach/chat tool-use loop with deterministic fallback
+- [ ] 06-01-PLAN.md — Analytical tool-use backend: tool registry (incl. nutrition stub) + aggregate services + /coach/chat tool-use loop with deterministic fallback
 - [ ] 06-02-PLAN.md — Workout modification tool with rails-gated template cascades and append-only audit
 - [ ] 06-03-PLAN.md — Chat UI upgrades: tool-use lifecycle indicators, WorkoutModifiedCard, AnalyticalAnswerCard, Tools Used transparency
 - [ ] 06-04-PLAN.md — Multi-turn context + undo_last_modification tool with compensating audit
+
+**Wave Structure (sequential — shared file ownership on coach_tools.py / coach_prompt.py / api/coach.py / schemas/coach.py):**
+
+| Wave | Plans | Depends On | Notes |
+|------|-------|------------|-------|
+| 1 | 06-01 | — | Backend tool registry + tool-use loop + SSE endpoint contract |
+| 2 | 06-02 | 06-01 | Adds modify_planned_workout tool to registry + rails matrix + audit |
+| 3 | 06-03 | 06-01, 06-02 | Frontend consumes stable SSE contract; no backend changes |
+| 4 | 06-04 | 06-03 | Multi-turn context + undo tool + explicit-ftp-param design |
+
+### Phase 6.1: UI Overhaul — Apple-disciplined editorial redesign (INSERTED)
+**Goal**: Reduce scrolling, answer "should I train today, and how hard?" above the fold, drill into detail via side sheets not new routes, and unify transparency UX — all while preserving the editorial visual voice (amber/forest/paper, serif numerals, masthead).
+**Depends on**: Phase 6
+**Requirements**: DASH-01, DASH-05 (refines)
+**Success Criteria** (what must be TRUE):
+  1. Above-the-fold of Today view contains only ReadinessHero + PrescribedWorkoutCard + mini WeekStrip (nothing else in top 600px viewport)
+  2. Dashboard offers Today / Week / Trends / Plan segmented tabs — each view fits its core question without scrolling past one screen on a 1440×900 window
+  3. Activity row click, biometrics detail, and chart-expand all use a unified SideSheet primitive (no new routes, preserves dashboard scroll/filter state)
+  4. Sticky 56px readiness summary appears when the user scrolls past ReadinessHero
+  5. Cmd+K command palette navigates to any week, activity, or coach question in ≤2 keystrokes
+  6. Spring-physics motion tokens and Apple Intelligence gradient land as Tailwind theme additions; editorial amber/forest palette preserved throughout
+**Plans**: 3 plans
+
+**Wave Structure (sequential — shared file ownership on DashboardShell / DashboardPage / ReadinessHero / CoachChat):**
+
+| Wave | Plans | Depends On | Notes |
+|------|-------|------------|-------|
+| 1 | 06.1-01 | — | Tailwind v4 @theme extensions (radii/shadows/blur/easing/AI gradient) + motion.ts springs map + SideSheet/SegmentedTabs/BentoGrid primitives. No dashboard surfaces touched. |
+| 2 | 06.1-02 | 06.1-01 | Today/Week/Trends/Plan segmented tabs + component relocations + IconRail + StickyReadinessBar + first SideSheet consumers (RecentActivities row, ReadinessHero contributors) + 4 new route shells (/calendar /activities /coach /settings). |
+| 3 | 06.1-03 | 06.1-01, 06.1-02 | CommandPalette (cmdk) + unified ContributorsSheet (merges TransparencyDrawer + WhyAmITired + biometrics, preserves 06-03 chatToolUseLog live-subscription) + AI gradient on CoachChat streaming + SyncStatusPill + chart Apple-polish pass on PMC/Polarized/Intensity. |
+
+Plans:
+- [ ] 06.1-01-PLAN.md — Tokens + primitives (SideSheet, SegmentedTabs, BentoGrid, Tailwind theme extensions, motion.ts springs, AI gradient utility)
+- [ ] 06.1-02-PLAN.md — Dashboard restructure (segmented tabs, component relocations, IconRail, StickyReadinessBar, SideSheet consumers, 4 new route shells)
+- [ ] 06.1-03-PLAN.md — Polish + power (CommandPalette, unified ContributorsSheet, AI gradient on CoachChat, SyncStatusPill, chart polish on PMC + Polarized + Intensity)
+
+**Notes**: Scope derived from `.planning/research/REDESIGN-BRIEF.md` §5 P0+P1. P2 polish items (View Transitions, DynamicPill, weekly recap ritual, density toggle) defer to optional Phase 6.2. Design-direction choice = Path B: editorial voice + Apple structural discipline. Frontend-only — no backend changes. Bundle budget: ≤ +10% over 534 KB gzipped baseline (cmdk is the only new dep, ~4 KB).
 
 ### Phase 7: Periodization + Workout Generation
 **Goal**: The AI builds and adapts multi-week training plans with structured workouts, dynamically adjusting daily sessions based on athlete state
@@ -182,10 +220,11 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 | 4. Dashboard + Visualization | 4/4 | Complete | 2026-04-19 |
 | 5. AI Coaching Core | 2/2 | Complete (awaiting live UAT) | 2026-04-20 |
 | 6. AI Deep Coaching | 0/TBD | Not started | - |
+| 6.1. UI Overhaul (INSERTED) | 0/3 | Not started | - |
 | 7. Periodization + Workout Generation | 0/TBD | Not started | - |
 | 8. Nutrition Integration | 0/TBD | Not started | - |
 | 9. Social + Gamification | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-04-16*
-*Last updated: 2026-04-20*
+*Last updated: 2026-04-22*
