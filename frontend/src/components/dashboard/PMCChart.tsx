@@ -4,6 +4,7 @@ import 'uplot/dist/uPlot.min.css'
 import { format } from 'date-fns'
 import { usePMC } from '../../hooks/usePMC'
 import type { PMCEntry } from '../../api/dashboard'
+import { prefersReducedMotion } from '../../utils/motion'
 
 type Sport = 'total' | 'cycling' | 'running' | 'gym'
 
@@ -96,6 +97,11 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
     const el = containerRef.current
     const width = el.clientWidth || 600
 
+    // Apple chart-polish (Wave 3): linearGradient fill factories for CTL + ATL.
+    // Created via canvas ctx.createLinearGradient (uPlot is canvas-based).
+    // TSB stays as a plain line (the diagnostic trace — no fill intended).
+    const reducedMotion = prefersReducedMotion()
+
     const opts: uPlot.Options = {
       width,
       height: 280,
@@ -105,13 +111,33 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
           label: 'Fitness (CTL)',
           stroke: C_CTL,
           width: 2.25,
-          fill: C_CTL + '20',
+          // Fill is set dynamically in the ready hook below via gradient
+          fill: (_u, _seriesIdx) => {
+            const canvas = el.querySelector('canvas')
+            if (!canvas) return C_CTL + '25'
+            const ctx = canvas.getContext('2d')
+            if (!ctx) return C_CTL + '25'
+            const grad = ctx.createLinearGradient(0, 0, 0, 280)
+            grad.addColorStop(0, C_CTL + 'CC')   // 80% opacity top
+            grad.addColorStop(1, C_CTL + '00')   // transparent bottom
+            return grad
+          },
         },
         {
           label: 'Fatigue (ATL)',
           stroke: C_ATL,
           width: 1.5,
           dash: [5, 3],
+          fill: (_u, _seriesIdx) => {
+            const canvas = el.querySelector('canvas')
+            if (!canvas) return C_ATL + '18'
+            const ctx = canvas.getContext('2d')
+            if (!ctx) return C_ATL + '18'
+            const grad = ctx.createLinearGradient(0, 0, 0, 280)
+            grad.addColorStop(0, C_ATL + '80')   // 50% opacity top
+            grad.addColorStop(1, C_ATL + '00')   // transparent bottom
+            return grad
+          },
         },
         {
           label: 'Form (TSB)',
@@ -121,6 +147,7 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
       ],
       axes: [
         {
+          // x-axis: no grid (already off), clean labels
           stroke: '#757465',
           grid: { show: false },
           ticks: { show: false },
@@ -129,12 +156,9 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
             splits.map((ts) => format(new Date(ts * 1000), 'd MMM')),
         },
         {
+          // y-axis: REMOVE gridlines (Apple chart polish — no gridlines)
           stroke: '#757465',
-          grid: {
-            stroke: '#e2d8c0',
-            width: 0.5,
-            dash: [2, 3],
-          },
+          grid: { show: false },
           ticks: { show: false },
           font: '11px Geist, sans-serif',
         },
@@ -158,6 +182,22 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
               ctx.fillRect(u.bbox.left, yTop, u.bbox.width, yBot - yTop)
             }
             ctx.restore()
+          },
+        ],
+        // Draw-on animation (Wave 3 Apple polish): fade the canvas in on mount
+        // by animating canvas opacity from 0 → 1 over 750ms ease-out.
+        // uPlot's canvas element is the child of the container. This approach
+        // avoids interfering with the draw pipeline while still delivering the
+        // mount animation. Skipped under prefers-reduced-motion.
+        ready: [
+          (u) => {
+            if (reducedMotion) return
+            const canvas = u.ctx.canvas
+            canvas.style.opacity = '0'
+            canvas.style.transition = 'opacity 750ms cubic-bezier(0.65, 0, 0.35, 1)'
+            requestAnimationFrame(() => {
+              canvas.style.opacity = '1'
+            })
           },
         ],
         setCursor: [

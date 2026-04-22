@@ -30,9 +30,11 @@ export interface ActivityRead {
   distance_meters: number | null
   tss: number | null
   average_hr: number | null
+  max_hr: number | null
   normalized_power: number | null
   title: string | null
   source: string | null
+  date?: string | null
 }
 
 export interface ActivityListResponse {

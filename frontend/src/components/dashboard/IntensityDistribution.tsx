@@ -4,6 +4,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { currentWeekTID, classifyPolarizedZone } from '../../utils/advanced-metrics'
 import type { PolarizedZone } from '../../utils/advanced-metrics'
+import { prefersReducedMotion } from '../../utils/motion'
 
 const ZONE_COLORS: Record<PolarizedZone, string> = {
   easy: '#2a6147',      // forest-2
@@ -124,7 +125,25 @@ export default function IntensityDistribution() {
           <div className="flex items-center gap-5">
             <div className="flex-shrink-0 w-[120px] h-[120px]">
               <ResponsiveContainer width="100%" height="100%">
+                {/* Apple chart polish (Wave 3): radial gradient per slice,
+                    draw-on animation on mount (750ms), reduced-motion aware. */}
                 <PieChart>
+                  <defs>
+                    {ZONES.map((zone) => (
+                      <radialGradient
+                        key={`grad-${zone}`}
+                        id={`zone-grad-${zone}`}
+                        cx="50%"
+                        cy="50%"
+                        r="50%"
+                        fx="50%"
+                        fy="50%"
+                      >
+                        <stop offset="0%" stopColor={ZONE_COLORS[zone]} stopOpacity={0.7} />
+                        <stop offset="100%" stopColor={ZONE_COLORS[zone]} stopOpacity={1} />
+                      </radialGradient>
+                    ))}
+                  </defs>
                   <Pie
                     data={donutData}
                     cx="50%"
@@ -133,12 +152,15 @@ export default function IntensityDistribution() {
                     outerRadius={56}
                     dataKey="hours"
                     strokeWidth={0}
-                    isAnimationActive={false}
+                    isAnimationActive={!prefersReducedMotion()}
+                    animationBegin={0}
+                    animationDuration={750}
+                    animationEasing="ease"
                   >
                     {donutData.map((entry) => (
                       <Cell
                         key={entry.zone}
-                        fill={entry.hours > 0 ? ZONE_COLORS[entry.zone] : 'transparent'}
+                        fill={entry.hours > 0 ? `url(#zone-grad-${entry.zone})` : 'transparent'}
                         opacity={entry.hours > 0 ? 1 : 0}
                       />
                     ))}

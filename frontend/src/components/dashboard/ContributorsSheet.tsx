@@ -345,21 +345,23 @@ export default function ContributorsSheet({
   }, [open])
 
   // Session-reset delay (06-03 invariant):
-  // When open flips false, wait exactly 240ms before resetting section state.
-  // This prevents a flash of empty state during SideSheet's exit animation.
-  // The setTimeout(..., 240) is the mandated grep-visible form.
+  // Session-reset delay (06-03 invariant): wait exactly 240ms after close
+  // before resetting section + unsubscribing. Prevents a flash of empty state
+  // during SideSheet's exit animation. setTimeout(..., 240) grep-target below:
   useEffect(() => {
     if (open) return
-    const timer = setTimeout(() => {
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const timer = setTimeout(resetSession, 240)
+    return () => clearTimeout(timer)
+
+    function resetSession() {
       setCurrentSection(initialSection)
-      // Unsubscribe from tool log if still subscribed (belt-and-suspenders;
-      // the open effect's cleanup should have already fired).
+      // Belt-and-suspenders: the open-effect cleanup fires first, but guard anyway.
       if (unsubRef.current) {
         unsubRef.current()
         unsubRef.current = null
       }
-    }, 240)
-    return () => clearTimeout(timer)
+    }
   }, [open, initialSection])
 
   // Language-aware tab labels
