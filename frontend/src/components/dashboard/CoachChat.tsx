@@ -667,11 +667,19 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
           className="flex-shrink-0 p-4"
           style={{ borderTop: '1px solid var(--color-rule)' }}
         >
+          {/* AI-gradient rim: 2px padding around the inner input container
+              renders as the gradient ring while the coach is streaming.
+              The .ai-gradient keyframes already short-circuit under
+              prefers-reduced-motion (Wave 1 index.css) — no extra work here. */}
+          <div
+            className={isStreaming ? 'ai-gradient ai-gradient-rim rounded-[16px] p-[2px]' : ''}
+            style={isStreaming ? { transition: 'padding 200ms var(--ease-apple-default)' } : {}}
+          >
           <div
             className="flex items-end gap-2 rounded-[14px] px-3 py-2"
             style={{
               backgroundColor: 'var(--color-paper)',
-              border: '1px solid var(--color-rule)',
+              border: isStreaming ? 'none' : '1px solid var(--color-rule)',
               opacity: disabled ? 0.55 : 1,
             }}
             title={disabled ? 'Set ANTHROPIC_API_KEY in backend/.env to enable chat' : undefined}
@@ -709,6 +717,7 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
                 <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+          </div>
           </div>
           {disabled && (
             <p

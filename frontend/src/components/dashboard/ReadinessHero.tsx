@@ -8,8 +8,7 @@ import { useCountUp } from '../../hooks/useCountUp'
 import { fadeSlideInitial, fadeSlideUp } from '../../utils/motion'
 import type { DailyMetric } from '../../api/dashboard'
 import ReadinessContributors from './ReadinessContributors'
-import { SideSheet } from '../ui/SideSheet'
-import BiometricsDetail from './BiometricsDetail'
+import ContributorsSheet from './ContributorsSheet'
 import { useLanguage } from '../../contexts/LanguageContext'
 import {
   TIER_META,
@@ -402,11 +401,9 @@ export default function ReadinessHero() {
       ]
     : []
 
-  // ⚠️ TEMPORARY WIRING: biometrics SideSheet opened from "Why this?" button.
-  // Wave 3 replaces this with the unified ContributorsSheet that merges
-  // TransparencyDrawer + WhyAmITired + BiometricsDetail. Keep the
-  // data-testid="readiness-hero" — it is permanent.
-  const [biometricsOpen, setBiometricsOpen] = useState(false)
+  // Wave 3: ContributorsSheet replaces the temporary SideSheet→BiometricsDetail wiring.
+  // The data-testid="readiness-hero" on the root section is PERMANENT — IntersectionObserver target.
+  const [contributorsOpen, setContributorsOpen] = useState(false)
   const { language } = useLanguage()
 
   return (
@@ -444,12 +441,11 @@ export default function ReadinessHero() {
                 synced {lastSync}
               </span>
             )}
-            {/* "Why this?" button — opens BiometricsDetail in a SideSheet.
-                ⚠️ TEMPORARY: Wave 3 replaces with ContributorsSheet. */}
+            {/* "Why this?" button — opens ContributorsSheet (Wave 3 unified drawer). */}
             {readiness != null && (
               <button
                 type="button"
-                onClick={() => setBiometricsOpen(true)}
+                onClick={() => setContributorsOpen(true)}
                 className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-medium min-h-[32px]"
                 style={{
                   color: 'var(--color-ink-2)',
@@ -564,16 +560,13 @@ export default function ReadinessHero() {
         </div>
       </div>
 
-      {/* ⚠️ TEMPORARY: BiometricsDetail SideSheet wiring.
-         Wave 3 ContributorsSheet replaces this. See 06.1-02-SUMMARY.md. */}
-      <SideSheet
-        open={biometricsOpen}
-        onClose={() => setBiometricsOpen(false)}
-        eyebrow="Contributors"
-        title={language === 'simple' ? "What's driving it" : 'Readiness contributors'}
-      >
-        <BiometricsDetail />
-      </SideSheet>
+      {/* Wave 3: ContributorsSheet — unified "Why this?" drawer
+         replaces the temporary SideSheet→BiometricsDetail wiring from 06.1-02. */}
+      <ContributorsSheet
+        open={contributorsOpen}
+        onClose={() => setContributorsOpen(false)}
+        initialSection="contributors"
+      />
     </section>
   )
 }

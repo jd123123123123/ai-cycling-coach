@@ -31,6 +31,7 @@ import IconRail from './IconRail'
 import LanguageToggle from './LanguageToggle'
 import SyncButton from './SyncButton'
 import CommandPalette from '../ui/CommandPalette'
+import SyncStatusPill from './SyncStatusPill'
 
 interface DashboardShellProps {
   children: ReactNode
@@ -113,8 +114,9 @@ export default function DashboardShell({
             </span>
           </Link>
           <div className="flex items-center gap-2">
-            {/* Masthead action order (left → right): SyncButton · LanguageToggle · Ask coach. */}
+            {/* Masthead action order (left → right): SyncButton · SyncStatusPill · LanguageToggle · Ask coach. */}
             <SyncButton />
+            <SyncStatusPill />
             <LanguageToggle />
             <button
               onClick={() => setChatOpen(true)}

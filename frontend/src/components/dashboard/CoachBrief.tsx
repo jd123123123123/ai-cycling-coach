@@ -6,8 +6,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { Sparkles, ChevronRight, RefreshCw } from 'lucide-react'
 import { useCoachBrief, useRefreshBrief } from '../../hooks/useCoachBrief'
 import type { CoachBriefResponse, OutlookEntry } from '../../api/coach'
-import WhyAmITired from './WhyAmITired'
-import TransparencyDrawer from './TransparencyDrawer'
+import ContributorsSheet from './ContributorsSheet'
 import PrescribedWorkoutCard from './PrescribedWorkoutCard'
 import PostRideReview from './PostRideReview'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -256,8 +255,8 @@ export default function CoachBrief() {
         onOpenWhy={() => setWhyOpen(true)}
         onOpenTransparency={() => setTransparencyOpen(true)}
       />
-      <WhyAmITired open={whyOpen} onClose={() => setWhyOpen(false)} />
-      <TransparencyDrawer open={transparencyOpen} onClose={() => setTransparencyOpen(false)} />
+      <ContributorsSheet open={whyOpen} onClose={() => setWhyOpen(false)} initialSection="rationale" />
+      <ContributorsSheet open={transparencyOpen} onClose={() => setTransparencyOpen(false)} initialSection="tools" />
     </>
   )
 }
