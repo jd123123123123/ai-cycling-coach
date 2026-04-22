@@ -359,9 +359,15 @@ const SUGGESTIONS_TECHNICAL: string[] = [
 interface CoachChatProps {
   open: boolean
   onClose: () => void
+  /**
+   * Optional pre-filled draft text seeded into the composer when the drawer opens.
+   * Seeded once per unique value — will not clobber user typing on subsequent opens
+   * with the same value (tracked via lastSeededDraftRef).
+   */
+  initialDraft?: string
 }
 
-export default function CoachChat({ open, onClose }: CoachChatProps) {
+export default function CoachChat({ open, onClose, initialDraft }: CoachChatProps) {
   const {
     messages,
     partial,
@@ -387,6 +393,9 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
   const { language } = useLanguage()
   const simpleMode = language === 'simple'
   const suggestions = simpleMode ? SUGGESTIONS_SIMPLE : SUGGESTIONS_TECHNICAL
+  // Track the last seeded initialDraft value so we don't re-seed on subsequent
+  // opens with the same draft string (prevents clobbering in-progress user typing).
+  const lastSeededDraftRef = useRef<string | undefined>(undefined)
 
   // Mirror the tool-use log into the window-scoped snapshot so the
   // TransparencyDrawer (a sibling modal) can read it on open without us
@@ -446,6 +455,20 @@ export default function CoachChat({ open, onClose }: CoachChatProps) {
       return () => clearTimeout(t)
     }
   }, [open])
+
+  // Seed initialDraft into the composer when: drawer opens AND draft is non-empty
+  // AND this specific draft string hasn't already been seeded (prevents re-seeding
+  // on re-renders and lets the user clear the field without it snapping back).
+  useEffect(() => {
+    if (open && initialDraft && initialDraft !== lastSeededDraftRef.current) {
+      lastSeededDraftRef.current = initialDraft
+      setInput(initialDraft)
+    }
+    // Reset the tracker when drawer closes so a new open can re-seed a new draft.
+    if (!open) {
+      lastSeededDraftRef.current = undefined
+    }
+  }, [open, initialDraft])
 
   // Auto-clear flash after a couple seconds
   useEffect(() => {

@@ -22,7 +22,7 @@
  *   - IconRail appears on desktop (lg+), hidden on mobile
  *   - Main content area offset lg:pl-14 to clear the 56px IconRail
  */
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { LogOut, User as UserIcon, MessageSquare } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -30,6 +30,7 @@ import CoachChat from './CoachChat'
 import IconRail from './IconRail'
 import LanguageToggle from './LanguageToggle'
 import SyncButton from './SyncButton'
+import CommandPalette from '../ui/CommandPalette'
 
 interface DashboardShellProps {
   children: ReactNode
@@ -60,6 +61,22 @@ export default function DashboardShell({
   const { user, logout } = useAuth()
   const initial = (user?.email?.[0] ?? 'A').toUpperCase()
   const [chatOpen, setChatOpen] = useState(false)
+  // Task 1 (06.1-03): Cmd+K palette state + coach draft for CommandPalette → CoachChat wiring
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [coachDraft, setCoachDraft] = useState<string | undefined>(undefined)
+
+  // Global Cmd+K (or Ctrl+K) keyboard binding — opens the palette from anywhere in the shell.
+  // Binding lives here (not inside CommandPalette) so the palette cannot self-open.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-paper)' }}>
@@ -209,9 +226,28 @@ export default function DashboardShell({
       {workoutPreviewModal}
 
       {/* ── Coach chat drawer ─────────────────────────────────────────────────
-          Portal — opened from masthead "Ask coach" button.
-          06-03 invariant: this state + component call must not be moved. */}
-      <CoachChat open={chatOpen} onClose={() => setChatOpen(false)} />
+          Portal — opened from masthead "Ask coach" button OR from CommandPalette.
+          06-03 invariant: this state + component call must not be moved.
+          Task 1 (06.1-03): initialDraft prop passes CommandPalette's onAskCoach
+          question through to the composer. */}
+      <CoachChat
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        initialDraft={coachDraft}
+      />
+
+      {/* ── Command palette (Cmd+K) ───────────────────────────────────────────
+          Task 1 (06.1-03): global Cmd+K palette. Binding is above in useEffect.
+          onAskCoach seeds the CoachChat composer and opens the drawer. */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onAskCoach={(q) => {
+          setCoachDraft(q)
+          setChatOpen(true)
+          setPaletteOpen(false)
+        }}
+      />
     </div>
   )
 }
