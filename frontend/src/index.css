@@ -30,6 +30,68 @@
   --color-zone-5: #a33e26;
   --color-zone-6: #7a2c1b;
   --color-zone-7: #551d12;
+
+  /* --- 06.1 Apple-disciplined additions (do not replace editorial palette above) --- */
+
+  /* Radii (apple-2027 §1.4) */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-2xl: 36px;
+  --radius-pill: 9999px;
+
+  /* Shadows (apple-2027 §1.5) — tinted, soft, low-offset */
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-2: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-3: 0 12px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+  --shadow-4: 0 24px 64px rgba(0,0,0,0.18), 0 8px 16px rgba(0,0,0,0.08);
+  --shadow-glass-rim: inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.04);
+
+  /* Backdrop blur ladder (apple-2027 §1.6) */
+  --blur-ultra-thin: 10px;
+  --blur-thin: 20px;
+  --blur-regular: 30px;
+  --blur-thick: 40px;
+  --blur-ultra-thick: 50px;
+
+  /* Easing (apple-2027 §2.2) */
+  --ease-apple-default: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-apple-decel: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-apple-accel: cubic-bezier(0.4, 0.0, 1, 1);
+  --ease-chart-draw: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Duration ladder */
+  --duration-micro: 120ms;
+  --duration-short: 250ms;
+  --duration-medium: 400ms;
+  --duration-long: 750ms;
+  --duration-xlong: 1000ms;
+}
+
+/* Apple Intelligence gradient (apple-2027 §1.1 + §1.6) — ONLY for AI-acting surfaces.
+   Content surfaces keep the editorial amber/forest palette. */
+@keyframes ai-gradient-shift {
+  0%   { background-position:   0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position:   0% 50%; }
+}
+
+.ai-gradient {
+  background-image: linear-gradient(135deg,
+    #BC82F3 0%, #F5B9EA 30%, #8D9FFF 60%, #FFBA71 100%);
+  background-size: 300% 300%;
+  animation: ai-gradient-shift 5s ease-in-out infinite;
+}
+
+.ai-gradient-rim {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
+
+/* Reduced-motion opt-out */
+@media (prefers-reduced-motion: reduce) {
+  .ai-gradient { animation: none; background-position: 0% 50%; }
 }
 
 :root {
