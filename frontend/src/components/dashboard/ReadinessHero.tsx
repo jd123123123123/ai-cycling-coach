@@ -1,16 +1,43 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, subDays } from 'date-fns'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight, TrendingDown, TrendingUp, Minus, Info } from 'lucide-react'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useGarminStatus } from '../../hooks/useGarminStatus'
+import { useCountUp } from '../../hooks/useCountUp'
+import { fadeSlideInitial, fadeSlideUp } from '../../utils/motion'
 import type { DailyMetric } from '../../api/dashboard'
-import CoachBrief from './CoachBrief'
+import ReadinessContributors from './ReadinessContributors'
+import { SideSheet } from '../ui/SideSheet'
+import BiometricsDetail from './BiometricsDetail'
+import { useLanguage } from '../../contexts/LanguageContext'
 import {
   TIER_META,
   computeReadiness,
   latestWithData,
   readinessTier,
 } from '../../utils/metrics'
+
+// ─── Insight helpers ─────────────────────────────────────────────────────────
+// Personal baseline percentile — "better than X% of your last N days" is the
+// single most dopamine-loaded signal from Whoop/Oura. Computed client-side off
+// the 30-day metrics window so we don't need any backend work.
+
+function percentileRank(values: number[], target: number): number | null {
+  const clean = values.filter((v) => Number.isFinite(v))
+  if (clean.length < 3) return null
+  const below = clean.filter((v) => v < target).length
+  return Math.round((below / clean.length) * 100)
+}
+
+function readinessSeries(metrics: DailyMetric[]): Array<{ date: string; score: number }> {
+  return metrics
+    .map((m) => {
+      const score = computeReadiness(m.hrv_status, m.body_battery, m.sleep_score)
+      return score == null ? null : { date: m.date, score }
+    })
+    .filter((x): x is { date: string; score: number } => x != null)
+}
 
 // Phase 5.1: DeltaChip + KpiCard helpers previously lived here to power an
 // in-hero KPI strip. They were moved out (not just hidden) because the
@@ -32,7 +59,11 @@ function ReadinessDial({ score }: { score: number }) {
   const startAngle = Math.PI
   const endAngle = 0
   const scoreClamped = Math.max(0, Math.min(100, score))
-  const progressAngle = startAngle - (scoreClamped / 100) * Math.PI
+  // Animate both the arc sweep and the big center number. The arc already
+  // transitions via stroke-dasharray; we drive the number with the same
+  // count-up used across the app for visual consistency.
+  const animatedScore = useCountUp(scoreClamped, { durationMs: 1100, digits: 0 })
+  const progressAngle = startAngle - (animatedScore / 100) * Math.PI
 
   const polar = (angle: number, r: number) => [
     cx + r * Math.cos(angle),
@@ -96,7 +127,7 @@ function ReadinessDial({ score }: { score: number }) {
         className="num-display"
         style={{ fontSize: 64, fontWeight: 500, fill: 'var(--color-ink)' }}
       >
-        {scoreClamped}
+        {animatedScore}
       </text>
       <text
         x={cx}
@@ -125,18 +156,130 @@ function HeroSkeleton() {
   )
 }
 
+// ─── Insight chips ───────────────────────────────────────────────────────────
+
+function DeltaChip({ delta }: { delta: number }) {
+  const rounded = Math.round(delta)
+  const isUp = rounded > 0
+  const isDown = rounded < 0
+  const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus
+  const color = isUp
+    ? 'var(--color-forest-2)'
+    : isDown
+      ? 'var(--color-alert)'
+      : 'var(--color-muted)'
+  const bg = isUp
+    ? 'rgba(48, 108, 64, 0.10)'
+    : isDown
+      ? 'rgba(138, 29, 29, 0.10)'
+      : 'rgba(100, 100, 100, 0.08)'
+  const sign = isUp ? '+' : ''
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 num-mono text-[12px]"
+      style={{ color, backgroundColor: bg }}
+      aria-label={`${sign}${rounded} vs yesterday`}
+    >
+      <Icon size={12} strokeWidth={2.2} />
+      {sign}{rounded} <span className="opacity-70">vs yesterday</span>
+    </span>
+  )
+}
+
+// One-shot fade-slide wrapper — used for the insight strip so all chips lift
+// in together instead of individually. Lighter than per-chip state.
+function EnterGroup({
+  children,
+  delayMs = 0,
+  className,
+}: {
+  children: React.ReactNode
+  delayMs?: number
+  className?: string
+}) {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setVisible(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  return (
+    <div
+      className={className}
+      style={visible ? fadeSlideUp({ delayMs }) : fadeSlideInitial}
+    >
+      {children}
+    </div>
+  )
+}
+
+function PercentileChip({ percentile, color }: { percentile: number; color: string }) {
+  // Flip the framing above 50 so the message always reads as a positive
+  // reinforcement ("Top 27%") or an honest mirror ("Bottom 18%"). Whoop does
+  // the same inversion in its summaries.
+  const label = percentile >= 50
+    ? `Top ${100 - percentile}%`
+    : `Bottom ${percentile}%`
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px]"
+      style={{
+        color,
+        backgroundColor: 'rgba(0, 0, 0, 0.04)',
+        border: '1px solid rgba(0, 0, 0, 0.06)',
+      }}
+      title={`Your readiness today ranks against the last 30 days`}
+    >
+      <span className="num-mono">{label}</span>
+      <span className="opacity-60" style={{ color: 'var(--color-muted)' }}>· 30d</span>
+    </span>
+  )
+}
+
+function MetricChip({
+  label,
+  value,
+  suffix,
+}: {
+  label: string
+  value: number | null | undefined
+  suffix?: string
+}) {
+  const display = value == null || !Number.isFinite(value) ? '—' : Math.round(value)
+  return (
+    <span
+      className="inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+      style={{
+        backgroundColor: 'var(--color-paper)',
+        border: '1px solid var(--color-rule)',
+      }}
+    >
+      <span
+        className="eyebrow"
+        style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}
+      >
+        {label.toUpperCase()}
+      </span>
+      <span className="num-mono font-medium" style={{ color: 'var(--color-ink)' }}>
+        {display}{suffix ?? ''}
+      </span>
+    </span>
+  )
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function ReadinessHero() {
   const today = new Date()
-  const sevenDaysAgo = subDays(today, 7)
+  // 30-day window so the hero can surface personal-baseline percentile +
+  // day-over-day delta + mini-trend insights without extra API work.
+  const thirtyDaysAgo = subDays(today, 30)
 
   const {
     data: metricsData,
     isLoading: metricsLoading,
     isError: metricsError,
     refetch,
-  } = useDailyMetrics(sevenDaysAgo, today)
+  } = useDailyMetrics(thirtyDaysAgo, today)
 
   const { data: garminData, isLoading: garminLoading } = useGarminStatus()
 
@@ -231,14 +374,56 @@ export default function ReadinessHero() {
     ? format(new Date(garminData.last_sync_at), 'MMM d, HH:mm')
     : null
 
+  // Insight layer — computed off the 30-day window we already fetch.
+  // Kept dead-simple: the hero doesn't need to be right about every edge,
+  // it needs to make the user feel *seen*.
+  const series = readinessSeries(metrics)
+  const sortedByDate = series
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date))
+  const latestIdx = latest ? sortedByDate.findIndex((s) => s.date === latest.date) : -1
+  const prevScore = latestIdx > 0 ? sortedByDate[latestIdx - 1].score : null
+  const delta = readiness != null && prevScore != null ? readiness - prevScore : null
+
+  // Percentile excludes today so the comparison is "vs history", not "vs itself".
+  const historicalScores = sortedByDate
+    .filter((_, i) => i !== latestIdx)
+    .map((s) => s.score)
+  const percentile = readiness != null
+    ? percentileRank(historicalScores, readiness)
+    : null
+
+  // Metric chips — pull raw numbers for the trio that drive readiness.
+  const chips: Array<{ label: string; value: number | null | undefined; suffix?: string }> = latest
+    ? [
+        { label: 'Sleep', value: latest.sleep_score },
+        { label: 'HRV', value: latest.hrv_status, suffix: '/100' },
+        { label: 'Battery', value: latest.body_battery },
+      ]
+    : []
+
+  // ⚠️ TEMPORARY WIRING: biometrics SideSheet opened from "Why this?" button.
+  // Wave 3 replaces this with the unified ContributorsSheet that merges
+  // TransparencyDrawer + WhyAmITired + BiometricsDetail. Keep the
+  // data-testid="readiness-hero" — it is permanent.
+  const [biometricsOpen, setBiometricsOpen] = useState(false)
+  const { language } = useLanguage()
+
   return (
-    <section className="flex flex-col gap-5">
-      {/* HERO CARD */}
+    // data-testid="readiness-hero" — permanent attribute used by StickyReadinessBar's
+    // IntersectionObserver to know when the hero has scrolled out of view.
+    <section data-testid="readiness-hero" className="flex flex-col gap-4">
+      {/* HERO CARD — tier-tinted so the whole card signals body state at a
+         glance. The radial gradient fades to the normal paper colour so the
+         tint reads as atmosphere, not a hard block of colour. */}
       <div
         className="paper-grain relative rounded-[20px] overflow-hidden"
         style={{
           backgroundColor: 'var(--color-paper-2)',
           border: '1px solid var(--color-rule)',
+          backgroundImage: meta
+            ? `radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, ${meta.color} 14%, transparent), transparent 60%)`
+            : undefined,
         }}
       >
         {/* Top meta row */}
@@ -253,11 +438,31 @@ export default function ReadinessHero() {
               {format(metricDate, 'EEEE · dd MMM yyyy')}
             </span>
           </div>
-          {lastSync && (
-            <span className="eyebrow opacity-70 num-mono">
-              synced {lastSync}
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {lastSync && (
+              <span className="eyebrow opacity-70 num-mono">
+                synced {lastSync}
+              </span>
+            )}
+            {/* "Why this?" button — opens BiometricsDetail in a SideSheet.
+                ⚠️ TEMPORARY: Wave 3 replaces with ContributorsSheet. */}
+            {readiness != null && (
+              <button
+                type="button"
+                onClick={() => setBiometricsOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-medium min-h-[32px]"
+                style={{
+                  color: 'var(--color-ink-2)',
+                  backgroundColor: 'var(--color-paper)',
+                  border: '1px solid var(--color-rule)',
+                }}
+                title={language === 'simple' ? 'Why this score?' : 'Why this?'}
+              >
+                <Info size={11} strokeWidth={1.8} />
+                {language === 'simple' ? 'Why?' : 'Why this?'}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Main reading */}
@@ -297,6 +502,42 @@ export default function ReadinessHero() {
                 >
                   {meta.sentiment}
                 </p>
+
+                {/* Insight strip — delta vs yesterday · percentile vs last 30 days.
+                   This is the "wow, I can't live without this" moment per Whoop/Oura
+                   playbook: a raw score means nothing without personal context. */}
+                {(delta != null || percentile != null) && (
+                  <EnterGroup
+                    delayMs={300}
+                    className="flex items-center gap-2 flex-wrap mt-1"
+                  >
+                    {delta != null && (
+                      <DeltaChip delta={delta} />
+                    )}
+                    {percentile != null && (
+                      <PercentileChip percentile={percentile} color={meta.color} />
+                    )}
+                  </EnterGroup>
+                )}
+
+                {/* Supporting metric trio — the signals that drive readiness.
+                   Small enough not to fight the hero number; present enough
+                   that a glance tells you which system is carrying today. */}
+                {chips.length > 0 && (
+                  <EnterGroup
+                    delayMs={500}
+                    className="flex gap-2 flex-wrap pt-1"
+                  >
+                    {chips.map((c) => (
+                      <MetricChip key={c.label} {...c} />
+                    ))}
+                  </EnterGroup>
+                )}
+
+                {/* Contributors drawer — "Why this score?" expander.
+                   Direct counter to the #1 Whoop complaint: opaque scoring.
+                   Show the math, always. */}
+                <ReadinessContributors metrics={metrics} latest={latest ?? null} />
               </div>
             </>
           ) : (
@@ -323,10 +564,16 @@ export default function ReadinessHero() {
         </div>
       </div>
 
-      {/* COACH BRIEF — live causal AI brief (Phase 5.1 prescriptive workout).
-         Phase 5.1 note: the old in-hero KpiStrip was moved to KpiStripCompact
-         (fold 2) to honor the iPhone-hierarchy rule: fold 1 has ONE call-to-action. */}
-      <CoachBrief />
+      {/* ⚠️ TEMPORARY: BiometricsDetail SideSheet wiring.
+         Wave 3 ContributorsSheet replaces this. See 06.1-02-SUMMARY.md. */}
+      <SideSheet
+        open={biometricsOpen}
+        onClose={() => setBiometricsOpen(false)}
+        eyebrow="Contributors"
+        title={language === 'simple' ? "What's driving it" : 'Readiness contributors'}
+      >
+        <BiometricsDetail />
+      </SideSheet>
     </section>
   )
 }

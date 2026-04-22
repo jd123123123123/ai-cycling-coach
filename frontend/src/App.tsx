@@ -7,6 +7,10 @@ import DashboardPage from './pages/DashboardPage'
 import ConsentPage from './pages/ConsentPage'
 import ProfileSetupPage from './pages/ProfileSetupPage'
 import GarminConnectPage from './pages/GarminConnectPage'
+import CalendarPage from './pages/CalendarPage'
+import ActivitiesPage from './pages/ActivitiesPage'
+import CoachPage from './pages/CoachPage'
+import SettingsPage from './pages/SettingsPage'
 
 function App() {
   return (
@@ -49,6 +53,40 @@ function App() {
             element={
               <ProtectedRoute checkOnboarding>
                 <GarminConnectPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* 06.1-02 Wave 2 — new destination routes (IconRail navigation) */}
+          <Route
+            path="/calendar"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <CalendarPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/activities"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <ActivitiesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/coach"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <CoachPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <SettingsPage />
               </ProtectedRoute>
             }
           />
