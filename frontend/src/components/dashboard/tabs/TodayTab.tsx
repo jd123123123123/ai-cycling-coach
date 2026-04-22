@@ -1,12 +1,15 @@
 /**
  * TodayTab — the primary view.
  *
- * Above-the-fold at 1440×900 (~804px usable after masthead + tab row):
- *   ReadinessHero  ≈ 280px
- *   CoachBrief     ≈ 220px  (contains PrescribedWorkoutCard)
- *   WeekStrip mini ≈ 72px
- *   gaps 3×24px    ≈  72px
- *   ---------------------------  total ≈ 644px  ✓ fits above-fold
+ * Above-the-fold audit at 1440×900 (Task 3 measured heights):
+ *   Chrome: masthead 64px + tab strip ~50px = 114px chrome
+ *   Usable:  900 - 114 = ~786px
+ *
+ *   ReadinessHero  ≈ 260-300px (dial + verdict + chips; no DashboardTabs now)
+ *   CoachBrief     ≈ 220-240px  (contains PrescribedWorkoutCard)
+ *   WeekStrip mini ≈  64px      (label row + dot row + padding)
+ *   gaps 2×24px    ≈  48px
+ *   ---------------------------  total ≈ 592-652px  ✓ fits above-fold at 786px
  *
  * Below the fold (requires scrolling):
  *   DailyInsight
@@ -24,26 +27,23 @@ export default function TodayTab() {
       {/* ── Above the fold ─────────────────────────────────────────────────── */}
 
       {/* Hero: readiness score + verdict + insight chips.
-          ReadinessHero no longer renders DashboardTabs — that old sub-tab
-          system is replaced by the top-level SegmentedTabs orchestrator. */}
+          DashboardTabs removed — replaced by top-level SegmentedTabs in DashboardPage. */}
       <ReadinessHero />
 
       {/* Prescribed workout + alternates — the actionable output of the coach.
           CoachBrief wraps PrescribedWorkoutCard internally. */}
       <CoachBrief />
 
-      {/* Week-at-a-glance: 7-dot mini strip.
-          TODO(Task3): replace with <WeekStrip variant="mini" /> once
-          WeekStrip gains the variant prop. */}
-      <WeekStrip />
+      {/* Week-at-a-glance: 7-dot mini strip (~64px).
+          Dot click navigates to ?tab=plan. */}
+      <WeekStrip variant="mini" />
 
       {/* ── Below the fold (requires scrolling at 1440×900) ────────────────── */}
 
       {/* Daily insight micro-copy card */}
       <DailyInsight />
 
-      {/* KPI strip: demoted from fold-2 — raw numbers are context, not headline.
-          Kept on the Today tab so power users can still access it quickly. */}
+      {/* KPI strip: demoted from fold-2 — raw numbers are context, not headline. */}
       <KpiStripCompact />
     </div>
   )
