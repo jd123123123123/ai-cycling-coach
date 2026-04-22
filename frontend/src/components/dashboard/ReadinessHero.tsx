@@ -282,6 +282,10 @@ export default function ReadinessHero() {
 
   const { data: garminData, isLoading: garminLoading } = useGarminStatus()
 
+  // All hooks MUST be called before any early returns (Rules of Hooks).
+  const [contributorsOpen, setContributorsOpen] = useState(false)
+  const { language } = useLanguage()
+
   const isLoading = metricsLoading || garminLoading
 
   if (isLoading) return <HeroSkeleton />
@@ -403,8 +407,7 @@ export default function ReadinessHero() {
 
   // Wave 3: ContributorsSheet replaces the temporary SideSheet→BiometricsDetail wiring.
   // The data-testid="readiness-hero" on the root section is PERMANENT — IntersectionObserver target.
-  const [contributorsOpen, setContributorsOpen] = useState(false)
-  const { language } = useLanguage()
+  // (contributorsOpen / language hooks are declared at the top per Rules of Hooks.)
 
   return (
     // data-testid="readiness-hero" — permanent attribute used by StickyReadinessBar's
