@@ -3,9 +3,12 @@ import { subDays } from 'date-fns'
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { usePMC } from '../../hooks/usePMC'
+import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
 import type { DailyMetric } from '../../api/dashboard'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { translateCoach } from '../../utils/coachLanguage'
+import { useCountUp } from '../../hooks/useCountUp'
+import Sparkline from './Sparkline'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -15,13 +18,21 @@ interface KpiCell {
   key: string
   label: string
   value: string | null
+  rawValue: number | null
+  digits?: number
+  format?: (n: number) => string
   unit?: string
   delta?: string | null
   tone: DeltaTone
   higherIsBetter?: boolean
   intradayKey?: string
-  /** Tooltip (title attribute) shown on hover; language-aware. */
   tooltip?: string
+  sparkline?: Array<number | null>
+  sparklineColor?: string
+  // Step 6: when set, the cell renders a compact `wake → now` pair instead
+  // of the count-up number. Only Battery uses this; Stress/HRV stay as their
+  // existing single-value tiles per the today-runthrough scope.
+  wakeNow?: { wake: number | null; now: number | null }
 }
 
 // ─── Math helpers ───────────────────────────────────────────────────────────
@@ -48,6 +59,17 @@ function latestValue(metrics: DailyMetric[], key: keyof DailyMetric): number | n
     if (typeof v === 'number') return v
   }
   return null
+}
+
+function sparklineSeries(metrics: DailyMetric[], key: keyof DailyMetric, days: number): Array<number | null> {
+  const sorted = metrics
+    .slice()
+    .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime())
+    .slice(-days)
+  return sorted.map((m) => {
+    const v = m[key]
+    return typeof v === 'number' ? v : null
+  })
 }
 
 function toneFromPct(pct: number | null, higherIsBetter: boolean): DeltaTone {
@@ -86,35 +108,103 @@ function KpiCellView({ cell }: { cell: KpiCell }) {
     cell.tone === 'bad' || cell.tone === 'warn' ? ArrowDownRight :
     Minus
 
+  // Count-up: if rawValue present, animate the number on mount.
+  // TSB can be negative — useCountUp handles it since skipZero only skips if target===0.
+  const animated = useCountUp(cell.rawValue ?? 0, {
+    durationMs: 900,
+    digits: cell.digits ?? 0,
+    skipZero: false,
+  })
+  const displayValue = cell.rawValue == null
+    ? '—'
+    : cell.format
+      ? cell.format(animated)
+      : animated.toFixed(cell.digits ?? 0)
+
   return (
     <div
-      className="flex flex-col gap-1 min-w-0 px-3 py-3"
-      style={{ borderRight: '1px solid var(--color-rule)' }}
+      className="group flex flex-col gap-1 min-w-0 px-3 py-3 cursor-default transition-colors"
+      style={{
+        borderRight: '1px solid var(--color-rule)',
+        transition: 'background-color 180ms ease',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.backgroundColor =
+          'color-mix(in srgb, var(--color-rule) 40%, transparent)'
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
+      }}
       title={cell.tooltip}
     >
       <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
         {cell.label}
       </span>
       <div className="flex items-baseline gap-1 min-w-0">
-        <span
-          className="num-mono dashboard-break-words"
-          style={{
-            fontSize: 'clamp(20px, 2.6vw, 26px)',
-            color: 'var(--color-ink)',
-            lineHeight: 1,
-          }}
-        >
-          {cell.value ?? '—'}
-        </span>
-        {cell.unit && (
-          <span
-            className="num-mono text-[10px]"
-            style={{ color: 'var(--color-muted)' }}
-          >
-            {cell.unit}
-          </span>
+        {cell.wakeNow ? (
+          // Step 6: compact wake → now pair for Battery only. Same tile
+          // styling — just two stacked-baseline numerals with a discreet
+          // arrow. `now` carries the dominant size to keep the eye on the
+          // current reading; `wake` is the reference.
+          <>
+            <span
+              className="num-mono"
+              style={{
+                color: 'var(--color-ink-2)',
+                fontSize: 13,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {cell.wakeNow.wake == null ? '—' : Math.round(cell.wakeNow.wake)}
+            </span>
+            <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>→</span>
+            <span
+              className="num-mono dashboard-break-words"
+              style={{
+                fontSize: 'clamp(20px, 2.6vw, 26px)',
+                color: 'var(--color-ink)',
+                lineHeight: 1,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {cell.wakeNow.now == null ? '—' : Math.round(cell.wakeNow.now)}
+            </span>
+          </>
+        ) : (
+          <>
+            <span
+              className="num-mono dashboard-break-words"
+              style={{
+                fontSize: 'clamp(20px, 2.6vw, 26px)',
+                color: 'var(--color-ink)',
+                lineHeight: 1,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {displayValue}
+            </span>
+            {cell.unit && cell.rawValue != null && (
+              <span
+                className="num-mono text-[10px]"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                {cell.unit}
+              </span>
+            )}
+          </>
         )}
       </div>
+      {cell.sparkline && cell.sparkline.some((v) => v != null) && (
+        <div className="mt-0.5 -mx-0.5" aria-hidden>
+          <Sparkline
+            values={cell.sparkline}
+            width={72}
+            height={20}
+            stroke={cell.sparklineColor ?? 'var(--color-ink-2)'}
+            showDot
+          />
+        </div>
+      )}
       {cell.delta && (
         <span
           className="inline-flex items-center gap-0.5 num-mono text-[11px]"
@@ -136,6 +226,7 @@ export default function KpiStripCompact() {
 
   const { data: metricsData, isLoading: metricsLoading } = useDailyMetrics(thirtyDaysAgo, today)
   const { data: pmcData, isLoading: pmcLoading } = usePMC(30)
+  const { data: snapshot } = useTodaySnapshot()
   const { language } = useLanguage()
 
   const cells = useMemo<KpiCell[]>(() => {
@@ -190,51 +281,78 @@ export default function KpiStripCompact() {
       ? ((rhr7d - rhr28d) / rhr28d) * 100
       : null
 
-    // Label shown in simple mode for TSB and CTL — these two are the most
-    // jargon-heavy. HRV/rHR stay (they're common abbreviations even non-
-    // athletes recognise), body battery + sleep are already plain.
+    // Steps — daily movement outside structured training; key recovery signal
+    const stepsLatest = latestValue(metrics, 'steps')
+    const steps7d = meanOfRecent(metrics, 'steps', 7)
+    const steps28d = meanOfRecent(metrics, 'steps', 28)
+    const stepsDelta = steps7d !== null && steps28d !== null && steps28d !== 0
+      ? ((steps7d - steps28d) / steps28d) * 100
+      : null
+
     const tsbLabel = language === 'simple' ? 'Freshness' : 'TSB'
     const ctlLabel = language === 'simple' ? 'Fitness' : 'CTL'
+
+    const hrvSparkline = sparklineSeries(metrics, 'hrv_status', 14)
+    const rhrSparkline = sparklineSeries(metrics, 'resting_hr', 14)
+    const sleepSparkline = sparklineSeries(metrics, 'sleep_score', 14)
 
     return [
       {
         key: 'hrv',
         label: 'HRV',
         value: fmtNumber(hrvLatest, 0),
+        rawValue: hrvLatest,
         unit: 'ms',
         delta: fmtDelta(hrvDelta),
         tone: toneFromPct(hrvDelta, true),
         higherIsBetter: true,
         intradayKey: 'hrv',
         tooltip: translateCoach('kpi.hrv.tooltip', language),
+        sparkline: hrvSparkline,
+        sparklineColor: 'var(--color-forest-2)',
       },
       {
         key: 'body-batt',
+        // Step 6: Battery is the only KPI that gets a wake → now pair in the
+        // strip. When the snapshot is unavailable (cold start, sleep window
+        // missing) we fall back to the latest single value so the tile never
+        // collapses to two `—`s.
         label: 'Body batt',
         value: fmtNumber(bbLatest, 0),
-        unit: '/100',
-        delta: fmtDelta(bbDelta),
+        rawValue: bbLatest,
+        unit: snapshot?.body_battery ? undefined : '/100',
+        delta: snapshot?.body_battery ? null : fmtDelta(bbDelta),
         tone: toneFromPct(bbDelta, true),
         higherIsBetter: true,
         tooltip: translateCoach('kpi.bodyBatt.tooltip', language),
+        wakeNow: snapshot?.body_battery
+          ? {
+              wake: snapshot.body_battery.wake,
+              now: snapshot.body_battery.now ?? bbLatest,
+            }
+          : undefined,
       },
       {
         key: 'sleep',
         label: 'Sleep',
         value: fmtNumber(sleepLatest, 0),
+        rawValue: sleepLatest,
         unit: 'score',
         delta: fmtDelta(sleepDelta),
         tone: toneFromPct(sleepDelta, true),
         higherIsBetter: true,
         tooltip: translateCoach('kpi.sleep.tooltip', language),
+        sparkline: sleepSparkline,
+        sparklineColor: '#0A84FF',
       },
       {
         key: 'tsb',
         label: tsbLabel,
         value: tsb !== null ? (tsb >= 0 ? `+${tsb.toFixed(0)}` : tsb.toFixed(0)) : null,
+        rawValue: tsb,
+        format: (n: number) => n >= 0 ? `+${Math.round(n)}` : `${Math.round(n)}`,
         unit: '',
         delta: fmtDelta(tsbDelta),
-        // TSB: very negative = bad; fresh+ = neutral; near zero = optimal
         tone: tsb === null ? 'neutral'
           : tsb < -20 ? 'bad'
           : tsb < -10 ? 'warn'
@@ -246,6 +364,7 @@ export default function KpiStripCompact() {
         key: 'ctl',
         label: ctlLabel,
         value: fmtNumber(ctl, 0),
+        rawValue: ctl,
         unit: '',
         delta: fmtDelta(ctlDelta),
         tone: toneFromPct(ctlDelta, true),
@@ -256,34 +375,46 @@ export default function KpiStripCompact() {
         key: 'rhr',
         label: 'rHR',
         value: fmtNumber(rhrLatest, 0),
+        rawValue: rhrLatest,
         unit: 'bpm',
         delta: fmtDelta(rhrDelta),
-        // rHR lower is better — a rise is warning
         tone: toneFromPct(rhrDelta, false),
         higherIsBetter: false,
         intradayKey: 'resting_hr',
         tooltip: translateCoach('kpi.rhr.tooltip', language),
+        sparkline: rhrSparkline,
+        sparklineColor: 'rgba(214, 87, 47, 0.8)',
+      },
+      {
+        key: 'steps',
+        label: language === 'simple' ? 'Steps' : 'Steps',
+        value: stepsLatest != null ? Math.round(stepsLatest).toLocaleString() : null,
+        rawValue: stepsLatest,
+        format: (n: number) => Math.round(n).toLocaleString(),
+        unit: '',
+        delta: fmtDelta(stepsDelta),
+        tone: toneFromPct(stepsDelta, true),
+        higherIsBetter: true,
+        tooltip: 'Daily steps — active recovery movement between training sessions.',
       },
     ]
-  }, [metricsData, pmcData, language])
+  }, [metricsData, pmcData, snapshot, language])
 
   const isLoading = metricsLoading || pmcLoading
 
   if (isLoading) {
     return (
       <div
-        className="rounded-[12px] h-[84px] animate-pulse"
-        style={{
-          backgroundColor: 'var(--color-paper-2)',
-          border: '1px solid var(--color-rule)',
-        }}
+        className="rounded-[12px] h-[84px] shimmer-bg overflow-hidden"
+        style={{ border: '1px solid var(--color-rule)' }}
+        aria-hidden
       />
     )
   }
 
   return (
     <div
-      className="rounded-[12px] overflow-hidden grid grid-cols-3 sm:grid-cols-6 min-w-0"
+      className="rounded-[12px] overflow-hidden grid grid-cols-4 sm:grid-cols-7 min-w-0"
       style={{
         backgroundColor: 'var(--color-paper-2)',
         border: '1px solid var(--color-rule)',
@@ -293,8 +424,7 @@ export default function KpiStripCompact() {
       {cells.map((c, idx) => (
         <div
           key={c.key}
-          // Remove right border from the last col on each row to avoid stutter
-          className={`${(idx + 1) % 3 === 0 ? 'border-r-transparent' : ''} ${idx >= 3 ? 'border-t sm:border-t-0' : ''}`}
+          className={`${(idx + 1) % 4 === 0 ? 'border-r-transparent' : ''} ${idx >= 4 ? 'border-t sm:border-t-0' : ''}`}
           style={{ minWidth: 0 }}
         >
           <KpiCellView cell={c} />

@@ -1,14 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { format, subDays } from 'date-fns'
+import { format, startOfWeek, subDays } from 'date-fns'
 import { ArrowUpRight, TrendingDown, TrendingUp, Minus, Info } from 'lucide-react'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useGarminStatus } from '../../hooks/useGarminStatus'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useCountUp } from '../../hooks/useCountUp'
+import { useTodaySnapshot, type WakeNowPair } from '../../hooks/useTodaySnapshot'
+import { useIntradayDay } from '../../hooks/useIntraday'
 import { fadeSlideInitial, fadeSlideUp } from '../../utils/motion'
 import type { DailyMetric } from '../../api/dashboard'
 import ReadinessContributors from './ReadinessContributors'
 import ContributorsSheet from './ContributorsSheet'
+import Sparkline from './Sparkline'
 import { useLanguage } from '../../contexts/LanguageContext'
 import {
   TIER_META,
@@ -44,100 +49,164 @@ function readinessSeries(metrics: DailyMetric[]): Array<{ date: string; score: n
 // renders the readiness dial only, keeping fold 1 focused on the prescribed
 // workout. This is the "one call-to-action per fold" rule.
 
-// ─── ReadinessDial ───────────────────────────────────────────────────────────
+// ─── ActivityRings — 3 concentric rings (Apple Watch / Whoop style) ───────────
+// Outer ring = weekly training load vs target hours
+// Middle ring = readiness / recovery (the main score)
+// Inner ring = last night's sleep score
 
-function ReadinessDial({ score }: { score: number }) {
+const RING_LOAD_COLOR = '#BF5AF2'   // purple — load/strain
+const RING_SLEEP_COLOR = '#0A84FF'  // blue   — sleep
+
+function ActivityRings({
+  score,
+  sleepScore,
+  loadPct,
+}: {
+  score: number
+  sleepScore: number | null
+  loadPct: number
+}) {
   const tier = readinessTier(score) ?? 'rest'
   const meta = TIER_META[tier]
-  // Arc geometry — semi-circle gauge from -90° to 90° (pointing up)
-  const size = 200
-  const stroke = 16
-  const radius = (size - stroke) / 2
-  const cx = size / 2
-  const cy = size / 2 + 4
-  const startAngle = Math.PI
-  const endAngle = 0
-  const scoreClamped = Math.max(0, Math.min(100, score))
-  // Animate both the arc sweep and the big center number. The arc already
-  // transitions via stroke-dasharray; we drive the number with the same
-  // count-up used across the app for visual consistency.
-  const animatedScore = useCountUp(scoreClamped, { durationMs: 1100, digits: 0 })
-  const progressAngle = startAngle - (animatedScore / 100) * Math.PI
 
-  const polar = (angle: number, r: number) => [
-    cx + r * Math.cos(angle),
-    cy - r * Math.sin(angle),
+  const size = 240
+  const cx = size / 2   // 120
+  const cy = size / 2   // 120
+  const sw = 11         // strokeWidth — consistent across all rings
+
+  // Rings ordered outer→inner: Load, Recovery, Sleep
+  const ringDefs = [
+    { r: 98,  color: RING_LOAD_COLOR,   rawPct: Math.max(0, Math.min(100, loadPct)),           label: 'Load',     durationMs: 1100 },
+    { r: 78,  color: meta.color,        rawPct: Math.max(0, Math.min(100, score)),              label: 'Recovery', durationMs: 1200 },
+    { r: 58,  color: RING_SLEEP_COLOR,  rawPct: Math.max(0, Math.min(100, sleepScore ?? 0)),   label: 'Sleep',    durationMs: 1000 },
   ]
-  const [bgStartX, bgStartY] = polar(startAngle, radius)
-  const [bgEndX, bgEndY] = polar(endAngle, radius)
-  const [progEndX, progEndY] = polar(progressAngle, radius)
 
-  // Notches for 0, 25, 50, 75, 100
-  const notches = [0, 25, 50, 75, 100].map((v) => {
-    const a = startAngle - (v / 100) * Math.PI
-    const [x1, y1] = polar(a, radius - 2)
-    const [x2, y2] = polar(a, radius + 10)
-    return { v, x1, y1, x2, y2 }
-  })
+  // Three separate count-up animations drive both the ring fill and the stat label
+  const animLoad     = useCountUp(ringDefs[0].rawPct, { durationMs: ringDefs[0].durationMs, digits: 0 })
+  const animRecovery = useCountUp(ringDefs[1].rawPct, { durationMs: ringDefs[1].durationMs, digits: 0 })
+  const animSleep    = useCountUp(ringDefs[2].rawPct, { durationMs: ringDefs[2].durationMs, digits: 0 })
+  const animValues   = [animLoad, animRecovery, animSleep]
 
   return (
-    <svg
-      width={size}
-      height={size / 2 + 28}
-      viewBox={`0 0 ${size} ${size / 2 + 28}`}
-      className="block"
-      aria-label={`Readiness ${score} out of 100`}
-    >
-      {/* Background track */}
-      <path
-        d={`M ${bgStartX} ${bgStartY} A ${radius} ${radius} 0 0 1 ${bgEndX} ${bgEndY}`}
-        fill="none"
-        stroke="var(--color-rule)"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-      />
-      {/* Progress arc */}
-      <path
-        d={`M ${bgStartX} ${bgStartY} A ${radius} ${radius} 0 0 1 ${progEndX} ${progEndY}`}
-        fill="none"
-        stroke={meta.color}
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        style={{ transition: 'stroke-dasharray 600ms ease' }}
-      />
-      {/* Notches */}
-      {notches.map((n) => (
-        <line
-          key={n.v}
-          x1={n.x1}
-          y1={n.y1}
-          x2={n.x2}
-          y2={n.y2}
-          stroke="var(--color-muted)"
-          strokeWidth={1}
-          opacity={0.25}
+    <div className="flex flex-col items-center gap-3 shrink-0">
+      {/* Ring canvas */}
+      <div
+        className="relative flex items-center justify-center"
+        style={{ width: size, height: size }}
+        aria-label={`Recovery ${score}, Sleep ${sleepScore ?? 0}, Weekly load ${Math.round(loadPct)}%`}
+      >
+        {/* Ambient glow — recovery tier color bleeds through center */}
+        <div
+          className="absolute inset-0 rounded-full pointer-events-none"
+          style={{
+            background: `radial-gradient(50% 50% at 50% 50%, color-mix(in srgb, ${meta.color} 22%, transparent) 0%, transparent 100%)`,
+            filter: 'blur(28px)',
+            transform: 'scale(0.55)',
+            animation: 'fade-in 1s ease-out 600ms both',
+          }}
+          aria-hidden
         />
-      ))}
-      {/* Center number */}
-      <text
-        x={cx}
-        y={cy - 16}
-        textAnchor="middle"
-        className="num-display"
-        style={{ fontSize: 64, fontWeight: 500, fill: 'var(--color-ink)' }}
+
+        {/* SVG rotated -90° so all rings start at 12 o'clock */}
+        <svg
+          width={size}
+          height={size}
+          style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}
+          aria-hidden
+        >
+          <defs>
+            {ringDefs.map((_, i) => (
+              <filter key={i} id={`rg-tip-${i}`} x="-70%" y="-70%" width="240%" height="240%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            ))}
+          </defs>
+
+          {ringDefs.map((ring, i) => {
+            const circ = 2 * Math.PI * ring.r
+            const anim = animValues[i]
+            const offset = circ * (1 - anim / 100)
+            const tipAngle = (anim / 100) * 2 * Math.PI
+            const tipX = cx + ring.r * Math.cos(tipAngle)
+            const tipY = cy + ring.r * Math.sin(tipAngle)
+            return (
+              <g key={i}>
+                {/* Track */}
+                <circle cx={cx} cy={cy} r={ring.r} fill="none"
+                  stroke="var(--color-rule)" strokeWidth={sw} opacity={0.4} />
+                {/* Progress */}
+                <circle cx={cx} cy={cy} r={ring.r} fill="none"
+                  stroke={ring.color} strokeWidth={sw}
+                  strokeLinecap="round"
+                  strokeDasharray={`${circ} ${circ}`}
+                  strokeDashoffset={offset} />
+                {/* Glowing tip dot */}
+                {anim > 2 && (
+                  <circle cx={tipX} cy={tipY} r={sw / 2 + 1.5}
+                    fill={ring.color}
+                    filter={`url(#rg-tip-${i})`}
+                    style={{
+                      animation: 'tip-glow-pulse 2.4s ease-in-out infinite',
+                      animationDelay: `${i * 400}ms`,
+                      transformOrigin: `${tipX}px ${tipY}px`,
+                    }}
+                  />
+                )}
+              </g>
+            )
+          })}
+        </svg>
+
+        {/* Center overlay — recovery score, not rotated */}
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center"
+          style={{ animation: 'score-enter 700ms cubic-bezier(.22,1,.36,1) 350ms both' }}
+        >
+          <span
+            className="num-display leading-none"
+            style={{ fontSize: 58, color: 'var(--color-ink)' }}
+          >
+            {animRecovery}
+          </span>
+          <span
+            className="eyebrow mt-1"
+            style={{ color: 'var(--color-muted)', fontSize: 8, letterSpacing: '0.3em' }}
+          >
+            YOUR RECOVERY
+          </span>
+        </div>
+      </div>
+
+      {/* Ring legend — 3 pills showing each ring's value */}
+      <div
+        className="flex items-center gap-3"
+        style={{ animation: 'fade-in 400ms ease-out 900ms both' }}
       >
-        {animatedScore}
-      </text>
-      <text
-        x={cx}
-        y={cy + 10}
-        textAnchor="middle"
-        className="eyebrow"
-        style={{ fill: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.24em' }}
-      >
-        READINESS · /100
-      </text>
-    </svg>
+        {[
+          { color: RING_SLEEP_COLOR, label: 'Sleep', value: animSleep },
+          { color: meta.color,       label: 'Recovery', value: animRecovery },
+          { color: RING_LOAD_COLOR,  label: 'Load', value: animLoad, suffix: '%' },
+        ].map((s) => (
+          <div key={s.label} className="flex items-center gap-1.5">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: s.color }}
+              aria-hidden
+            />
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>
+              {s.label.toUpperCase()}
+            </span>
+            <span className="num-mono text-[12px]" style={{ color: s.color }}>
+              {s.value}{s.suffix ?? ''}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -168,10 +237,10 @@ function DeltaChip({ delta }: { delta: number }) {
       ? 'var(--color-alert)'
       : 'var(--color-muted)'
   const bg = isUp
-    ? 'rgba(48, 108, 64, 0.10)'
+    ? 'rgba(48, 209, 88, 0.14)'
     : isDown
-      ? 'rgba(138, 29, 29, 0.10)'
-      : 'rgba(100, 100, 100, 0.08)'
+      ? 'rgba(255, 69, 58, 0.14)'
+      : 'rgba(255, 255, 255, 0.07)'
   const sign = isUp ? '+' : ''
   return (
     <span
@@ -223,8 +292,8 @@ function PercentileChip({ percentile, color }: { percentile: number; color: stri
       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px]"
       style={{
         color,
-        backgroundColor: 'rgba(0, 0, 0, 0.04)',
-        border: '1px solid rgba(0, 0, 0, 0.06)',
+        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        border: '1px solid rgba(255, 255, 255, 0.09)',
       }}
       title={`Your readiness today ranks against the last 30 days`}
     >
@@ -265,13 +334,107 @@ function MetricChip({
   )
 }
 
+// ─── Wake → Now row (Step 6 — today-runthrough) ──────────────────────────────
+// Whoop-grade discipline: dominant numeral = `now`, monochrome surface, single
+// accent on the delta arrow. The wake reading and arrow are subordinated so the
+// eye lands on "where you are right now" before reading drift. Sparkline hugs
+// the row baseline; we reuse the existing Sparkline primitive rather than
+// introducing a new SVG idiom.
+
+function WakeNowRow({
+  label,
+  pair,
+  sparkline,
+}: {
+  label: string
+  pair: WakeNowPair
+  sparkline?: Array<number | null>
+}) {
+  const wake = pair.wake
+  const now = pair.now
+  const hasPair = wake != null && now != null
+  const delta = hasPair ? now - wake : null
+
+  // Color discipline: a drop in body battery / stress is interpreted by the
+  // user — we don't impose good/bad, just direction. The arrow gets ink-2
+  // tone unless the delta is large enough to be informative on its own.
+  const arrow = delta == null
+    ? null
+    : delta < 0 ? '▼'
+    : delta > 0 ? '▲'
+    : '·'
+
+  const wakeStr = wake == null ? '—' : Math.round(wake).toString()
+  const nowStr = now == null ? '—' : Math.round(now).toString()
+  const deltaStr = delta == null ? '' : `${Math.abs(Math.round(delta))}`
+
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <span
+        className="eyebrow shrink-0"
+        style={{
+          color: 'var(--color-muted)',
+          fontSize: 10,
+          letterSpacing: '0.18em',
+          width: 56,
+        }}
+      >
+        {label.toUpperCase()}
+      </span>
+      <div className="flex items-baseline gap-1.5 num-mono">
+        <span
+          style={{
+            color: 'var(--color-ink-2)',
+            fontSize: 14,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {wakeStr}
+        </span>
+        <span style={{ color: 'var(--color-muted)', fontSize: 12 }}>→</span>
+        <span
+          style={{
+            color: 'var(--color-ink)',
+            fontSize: 22,
+            lineHeight: 1,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {nowStr}
+        </span>
+        {arrow && delta !== 0 && (
+          <span
+            style={{
+              color: 'var(--color-ink-2)',
+              fontSize: 11,
+              marginLeft: 4,
+            }}
+          >
+            {arrow}{deltaStr}
+          </span>
+        )}
+      </div>
+      {sparkline && sparkline.some((v) => v != null) && (
+        <div className="ml-auto" aria-hidden>
+          <Sparkline
+            values={sparkline}
+            width={84}
+            height={22}
+            stroke="var(--color-ink-2)"
+            showDot
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function ReadinessHero() {
   const today = new Date()
-  // 30-day window so the hero can surface personal-baseline percentile +
-  // day-over-day delta + mini-trend insights without extra API work.
   const thirtyDaysAgo = subDays(today, 30)
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 })
 
   const {
     data: metricsData,
@@ -281,10 +444,42 @@ export default function ReadinessHero() {
   } = useDailyMetrics(thirtyDaysAgo, today)
 
   const { data: garminData, isLoading: garminLoading } = useGarminStatus()
+  const { data: weekActs } = useActivitiesRange(weekStart, today)
+  const { data: profile } = useAthleteProfile()
 
   // All hooks MUST be called before any early returns (Rules of Hooks).
   const [contributorsOpen, setContributorsOpen] = useState(false)
   const { language } = useLanguage()
+
+  // Step 6: wake → now snapshot. Hook stays unconditional at the top per the
+  // 06.1-03 ContributorsSheet hoist precedent; downstream we tolerate undefined.
+  const { data: snapshot } = useTodaySnapshot()
+
+  // 6h intraday sparkline source — already cached for 30min by useIntradayDay
+  // and shared with the existing biometrics drawer. No extra request when the
+  // user has already opened today's intraday surfaces.
+  const todayIso = format(today, 'yyyy-MM-dd')
+  const { data: intraday } = useIntradayDay(todayIso)
+
+  // Slice last 6h of body_battery samples for the hero sparkline. We don't
+  // surface stress/HRV sparklines on small wake→now rows — the band is too
+  // narrow to be honest with sub-points-per-hour.
+  const sixHourSparkline = useMemo<Array<number | null>>(() => {
+    const points = intraday?.body_battery ?? []
+    if (points.length === 0) return []
+    const cutoff = Date.now() - 6 * 60 * 60 * 1000
+    return points
+      .filter((p) => new Date(p.t).getTime() >= cutoff)
+      .map((p) => (typeof p.v === 'number' ? p.v : null))
+  }, [intraday])
+
+  // Weekly load ring — hours trained this week vs target (from athlete profile)
+  const loadPct = useMemo(() => {
+    const acts = weekActs?.activities ?? []
+    const weeklyHours = acts.reduce((s, a) => s + (a.duration_seconds ?? 0), 0) / 3600
+    const targetHours = profile?.weekly_hours_available ?? 10
+    return Math.min(100, (weeklyHours / targetHours) * 100)
+  }, [weekActs, profile])
 
   const isLoading = metricsLoading || garminLoading
 
@@ -396,14 +591,35 @@ export default function ReadinessHero() {
     ? percentileRank(historicalScores, readiness)
     : null
 
-  // Metric chips — pull raw numbers for the trio that drive readiness.
-  const chips: Array<{ label: string; value: number | null | undefined; suffix?: string }> = latest
-    ? [
-        { label: 'Sleep', value: latest.sleep_score },
-        { label: 'HRV', value: latest.hrv_status, suffix: '/100' },
-        { label: 'Battery', value: latest.body_battery },
-      ]
-    : []
+  // Step 6: wake → now rows replace the static chip trio for the two metrics
+  // that genuinely drift through the day (Battery, Stress). HRV is overnight-
+  // only — keep it as a single MetricChip so we don't fake a "now" reading the
+  // sensor doesn't actually produce. Sleep stays as a chip too; nothing
+  // changes there hour-to-hour. The single wake/now/now_at fallback is `—` per
+  // the row component's null handling.
+  const battery: WakeNowPair = snapshot?.body_battery ?? {
+    wake: latest?.body_battery ?? null,
+    now: latest?.body_battery ?? null,
+    now_at: null,
+  }
+  const stress: WakeNowPair = snapshot?.stress ?? {
+    wake: null,
+    now: null,
+    now_at: null,
+  }
+  const hrvOvernight = snapshot?.hrv_overnight_avg ?? latest?.hrv_status ?? null
+
+  // "as of HH:MM" — tied to body_battery.now_at so the user knows when the
+  // hero last reflected reality. Garmin publishes body battery on a ~5–10min
+  // lag; an honest stamp beats a confident lie. Berlin user → 24h locale-aware.
+  const asOfLabel = battery.now_at
+    ? format(new Date(battery.now_at), 'HH:mm')
+    : null
+
+  // Sleep chip retained — it's a once-per-day reading, not drifting.
+  const sleepChip: { label: string; value: number | null | undefined; suffix?: string } | null = latest
+    ? { label: 'Sleep', value: latest.sleep_score }
+    : null
 
   // Wave 3: ContributorsSheet replaces the temporary SideSheet→BiometricsDetail wiring.
   // The data-testid="readiness-hero" on the root section is PERMANENT — IntersectionObserver target.
@@ -420,9 +636,10 @@ export default function ReadinessHero() {
         className="paper-grain relative rounded-[20px] overflow-hidden"
         style={{
           backgroundColor: 'var(--color-paper-2)',
-          border: '1px solid var(--color-rule)',
+          border: meta ? `1px solid color-mix(in srgb, ${meta.color} 22%, var(--color-rule))` : '1px solid var(--color-rule)',
           backgroundImage: meta
-            ? `radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, ${meta.color} 14%, transparent), transparent 60%)`
+            ? `radial-gradient(140% 100% at 0% 0%, color-mix(in srgb, ${meta.color} 18%, transparent), transparent 55%),
+               radial-gradient(60% 40% at 100% 100%, color-mix(in srgb, ${meta.color} 6%, transparent), transparent 70%)`
             : undefined,
         }}
       >
@@ -430,8 +647,12 @@ export default function ReadinessHero() {
         <div className="flex items-center justify-between px-6 pt-5 sm:px-8 sm:pt-7">
           <div className="flex items-center gap-3">
             <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: meta?.color ?? 'var(--color-muted)' }}
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{
+                backgroundColor: meta?.color ?? 'var(--color-muted)',
+                color: meta?.color ?? 'var(--color-muted)',
+                animation: 'dot-breathe 3s ease-in-out infinite',
+              }}
               aria-hidden
             />
             <span className="eyebrow">
@@ -439,8 +660,28 @@ export default function ReadinessHero() {
             </span>
           </div>
           <div className="flex items-center gap-3">
+            {/* Percentile pill — "Top X% vs your own 30-day history".
+               Why it works: social-proof-against-self, the most motivating
+               comparison (you can always beat yesterday-you). */}
+            {percentile != null && readiness != null && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold num-mono"
+                style={{
+                  color: meta?.color ?? 'var(--color-forest-2)',
+                  backgroundColor: meta
+                    ? `color-mix(in srgb, ${meta.color} 12%, transparent)`
+                    : 'rgba(48, 209, 88, 0.10)',
+                  border: meta
+                    ? `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`
+                    : '1px solid rgba(48, 209, 88, 0.25)',
+                }}
+                title={`Recovery is in the top ${100 - Math.round(percentile)}% of your last 30 days`}
+              >
+                Top {Math.max(1, 100 - Math.round(percentile))}% · 30d
+              </span>
+            )}
             {lastSync && (
-              <span className="eyebrow opacity-70 num-mono">
+              <span className="eyebrow opacity-70 num-mono hidden sm:inline">
                 synced {lastSync}
               </span>
             )}
@@ -468,8 +709,12 @@ export default function ReadinessHero() {
         <div className="px-6 pb-7 pt-4 sm:px-8 sm:pb-9 sm:pt-5 grid gap-6 sm:gap-10 sm:grid-cols-[auto_1fr] items-center">
           {readiness != null && tier && meta ? (
             <>
-              <div className="flex flex-col items-center sm:items-start -mt-2">
-                <ReadinessDial score={readiness} />
+              <div className="flex flex-col items-center sm:items-start">
+                <ActivityRings
+                  score={readiness}
+                  sleepScore={latest?.sleep_score ?? null}
+                  loadPct={loadPct}
+                />
               </div>
               <div className="flex flex-col gap-3 min-w-0">
                 <div className="flex items-baseline gap-3 flex-wrap">
@@ -519,19 +764,43 @@ export default function ReadinessHero() {
                   </EnterGroup>
                 )}
 
-                {/* Supporting metric trio — the signals that drive readiness.
-                   Small enough not to fight the hero number; present enough
-                   that a glance tells you which system is carrying today. */}
-                {chips.length > 0 && (
-                  <EnterGroup
-                    delayMs={500}
-                    className="flex gap-2 flex-wrap pt-1"
-                  >
-                    {chips.map((c) => (
-                      <MetricChip key={c.label} {...c} />
-                    ))}
-                  </EnterGroup>
-                )}
+                {/* Step 6 — wake → now rows for the metrics that actually drift
+                   through the day. Battery + Stress get paired wake/now with a
+                   delta arrow; HRV stays a single overnight number; Sleep stays
+                   a static chip. The "as of HH:MM" stamp is wired to
+                   body_battery.now_at so freshness is honest. */}
+                <EnterGroup
+                  delayMs={500}
+                  className="flex flex-col gap-1.5 pt-1"
+                >
+                  <WakeNowRow
+                    label="Battery"
+                    pair={battery}
+                    sparkline={sixHourSparkline}
+                  />
+                  <WakeNowRow label="Stress" pair={stress} />
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    <MetricChip
+                      label="HRV"
+                      value={hrvOvernight}
+                      suffix={hrvOvernight != null ? '/100' : undefined}
+                    />
+                    {sleepChip && <MetricChip {...sleepChip} />}
+                    {asOfLabel && (
+                      <span
+                        className="eyebrow num-mono"
+                        style={{
+                          color: 'var(--color-muted)',
+                          fontSize: 10,
+                          letterSpacing: '0.16em',
+                        }}
+                        title="Garmin publishes body battery on a ~5–10 minute lag"
+                      >
+                        AS OF {asOfLabel}
+                      </span>
+                    )}
+                  </div>
+                </EnterGroup>
 
                 {/* Contributors drawer — "Why this score?" expander.
                    Direct counter to the #1 Whoop complaint: opaque scoring.

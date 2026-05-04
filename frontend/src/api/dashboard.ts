@@ -126,6 +126,31 @@ export async function fetchIntraday(iso: string): Promise<IntradayDayResponse> {
   return res.data
 }
 
+// ─── Today snapshot (Step 6 — wake vs now) ───────────────────────────────────
+
+export interface WakeNowPair {
+  wake: number | null
+  now: number | null
+  now_at: string | null   // ISO datetime
+}
+
+export interface TodaySnapshotResponse {
+  body_battery: WakeNowPair
+  stress: WakeNowPair
+  hrv_overnight_avg: number | null
+  training_readiness: number | null
+  recovery_time_hours: number | null
+  generated_at: string    // ISO datetime
+  cached: boolean
+}
+
+export async function fetchTodaySnapshot(): Promise<TodaySnapshotResponse> {
+  const res = await apiClient.get<TodaySnapshotResponse>('/daily-metrics/today/snapshot', {
+    timeout: 20_000,
+  })
+  return res.data
+}
+
 // ─── Planned Workouts ─────────────────────────────────────────────────────────
 
 export interface PlannedWorkout {
