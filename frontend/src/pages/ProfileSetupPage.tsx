@@ -1,6 +1,15 @@
 import { useState, type FormEvent, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { UserCircle2 } from 'lucide-react'
 import { updateProfile, updateGoals } from '../api/athletes'
+
+// Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
+const steps = [
+  { label: 'Account' },
+  { label: 'Consent' },
+  { label: 'Goals' },
+]
+const ACTIVE_STEP = 2
 
 export default function ProfileSetupPage() {
   const navigate = useNavigate()
@@ -73,199 +82,351 @@ export default function ProfileSetupPage() {
     navigate('/dashboard', { replace: true })
   }
 
-  function inputClass(extraClass = '') {
-    return `w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${extraClass}`
-  }
-
-  function labelClass() {
-    return 'block text-sm font-medium text-gray-700 mb-1'
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-12">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-semibold text-gray-900">Set Up Your Profile</h1>
-          <p className="mt-3 text-base text-gray-600">
-            Help us personalize your training. All fields are optional — you can fill these in later.
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-8"
+      style={{ background: 'var(--color-paper)' }}
+    >
+      <div className="w-full max-w-2xl">
+        <div
+          className="paper-grain rounded-[20px] p-6 sm:p-7"
+          style={{
+            background: 'var(--color-paper-2)',
+            border: '1px solid var(--color-rule)',
+          }}
+        >
+          {/* Eyebrow */}
+          <div className="flex items-center gap-2 mb-2">
+            <UserCircle2 size={14} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)' }} />
+            <span
+              className="eyebrow"
+              style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
+            >
+              Profile
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1
+            className="num-display leading-[0.95]"
+            style={{ fontSize: 'clamp(28px, 5vw, 36px)', color: 'var(--color-ink)' }}
+          >
+            Tell us about you.
+          </h1>
+          <p className="mt-2 text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+            Help us personalize your training. All fields are optional — fill them in later if you
+            prefer.
           </p>
-        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Profile section */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">Athlete Profile</h2>
+          {/* 3-dot progress strip */}
+          <div className="flex items-center gap-3 my-4">
+            {steps.map((step, i) => (
+              <div key={step.label} className="flex flex-col items-center gap-1">
+                <span
+                  style={{
+                    display: 'block',
+                    width: 16,
+                    height: 16,
+                    borderRadius: 9999,
+                    background:
+                      i < ACTIVE_STEP
+                        ? 'var(--color-muted)'
+                        : i === ACTIVE_STEP
+                          ? 'var(--color-ink)'
+                          : 'var(--color-rule)',
+                    border: '1px solid var(--color-rule)',
+                  }}
+                />
+                <span className="eyebrow text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <label className={labelClass()}>FTP (watts)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="2000"
+          <form onSubmit={handleSubmit} className="mt-2 space-y-5">
+            {/* Athlete Profile section */}
+            <div
+              className="rounded-xl p-5"
+              style={{
+                border: '1px solid var(--color-rule)',
+                background: 'rgba(255, 255, 255, 0.02)',
+              }}
+            >
+              <h2
+                className="text-[13px] font-semibold mb-4 eyebrow"
+                style={{ color: 'var(--color-muted)', letterSpacing: '0.12em' }}
+              >
+                Athlete Profile
+              </h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <NumberField
+                  label="FTP (watts)"
+                  min={0}
+                  max={2000}
                   placeholder="e.g. 250"
                   value={ftp}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setFtp(e.target.value)}
-                  className={inputClass()}
+                  onChange={setFtp}
+                  hint="Functional Threshold Power"
                 />
-                <p className="mt-1 text-xs text-gray-500">Functional Threshold Power</p>
-              </div>
-
-              <div>
-                <label className={labelClass()}>Weight (kg)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="500"
-                  step="0.1"
+                <NumberField
+                  label="Weight (kg)"
+                  min={0}
+                  max={500}
+                  step={0.1}
                   placeholder="e.g. 75"
                   value={weight}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setWeight(e.target.value)}
-                  className={inputClass()}
+                  onChange={setWeight}
                 />
-              </div>
-
-              <div>
-                <label className={labelClass()}>Max Heart Rate (bpm)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="300"
+                <NumberField
+                  label="Max Heart Rate (bpm)"
+                  min={0}
+                  max={300}
                   placeholder="e.g. 185"
                   value={maxHr}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setMaxHr(e.target.value)}
-                  className={inputClass()}
+                  onChange={setMaxHr}
                 />
-              </div>
-
-              <div>
-                <label className={labelClass()}>Resting Heart Rate (bpm)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="200"
+                <NumberField
+                  label="Resting Heart Rate (bpm)"
+                  min={0}
+                  max={200}
                   placeholder="e.g. 55"
                   value={restingHr}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setRestingHr(e.target.value)}
-                  className={inputClass()}
+                  onChange={setRestingHr}
                 />
-              </div>
-
-              <div>
-                <label className={labelClass()}>Weekly Hours Available</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="168"
-                  step="0.5"
+                <NumberField
+                  label="Weekly Hours Available"
+                  min={0}
+                  max={168}
+                  step={0.5}
                   placeholder="e.g. 8"
                   value={weeklyHours}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setWeeklyHours(e.target.value)}
-                  className={inputClass()}
+                  onChange={setWeeklyHours}
                 />
-              </div>
 
-              <div>
-                <label className={labelClass()}>Primary Sport</label>
-                <select
-                  value={primarySport}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setPrimarySport(e.target.value)}
-                  className={inputClass('bg-white')}
-                >
-                  <option value="">Select a sport...</option>
-                  <option value="cycling">Cycling</option>
-                  <option value="running">Running</option>
-                  <option value="triathlon">Triathlon</option>
-                </select>
+                {/* Sport select */}
+                <label className="flex flex-col gap-1.5">
+                  <span
+                    className="eyebrow"
+                    style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
+                  >
+                    Primary Sport
+                  </span>
+                  <select
+                    value={primarySport}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setPrimarySport(e.target.value)}
+                    className="w-full px-3 py-2.5 text-[14px] rounded-md focus:outline-none focus:ring-1"
+                    style={{
+                      background: 'var(--color-paper)',
+                      border: '1px solid var(--color-rule)',
+                      color: primarySport ? 'var(--color-ink)' : 'var(--color-muted)',
+                    }}
+                  >
+                    <option value="" style={{ background: 'var(--color-paper-2)' }}>
+                      Select a sport...
+                    </option>
+                    <option value="cycling" style={{ background: 'var(--color-paper-2)' }}>
+                      Cycling
+                    </option>
+                    <option value="running" style={{ background: 'var(--color-paper-2)' }}>
+                      Running
+                    </option>
+                    <option value="triathlon" style={{ background: 'var(--color-paper-2)' }}>
+                      Triathlon
+                    </option>
+                  </select>
+                </label>
               </div>
             </div>
-          </div>
 
-          {/* Goals section */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">Training Goals</h2>
+            {/* Goals section */}
+            <div
+              className="rounded-xl p-5"
+              style={{
+                border: '1px solid var(--color-rule)',
+                background: 'rgba(255, 255, 255, 0.02)',
+              }}
+            >
+              <h2
+                className="text-[13px] font-semibold mb-4 eyebrow"
+                style={{ color: 'var(--color-muted)', letterSpacing: '0.12em' }}
+              >
+                Training Goals
+              </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <label className={labelClass()}>Target FTP (watts)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="2000"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <NumberField
+                  label="Target FTP (watts)"
+                  min={0}
+                  max={2000}
                   placeholder="e.g. 300"
                   value={targetFtp}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setTargetFtp(e.target.value)}
-                  className={inputClass()}
+                  onChange={setTargetFtp}
                 />
-              </div>
-
-              <div>
-                <label className={labelClass()}>Weekly Training Hours Goal</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="168"
-                  step="0.5"
+                <NumberField
+                  label="Weekly Training Hours Goal"
+                  min={0}
+                  max={168}
+                  step={0.5}
                   placeholder="e.g. 10"
                   value={goalWeeklyHours}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setGoalWeeklyHours(e.target.value)
-                  }
-                  className={inputClass()}
+                  onChange={setGoalWeeklyHours}
                 />
-              </div>
 
-              <div className="sm:col-span-2">
-                <label className={labelClass()}>Target Event Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. L'Etape du Tour 2026"
-                  value={targetEventName}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setTargetEventName(e.target.value)}
-                  className={inputClass()}
-                />
-              </div>
+                <div className="sm:col-span-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span
+                      className="eyebrow"
+                      style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
+                    >
+                      Target Event Name
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="e.g. L'Etape du Tour 2026"
+                      value={targetEventName}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setTargetEventName(e.target.value)
+                      }
+                      className="w-full px-3 py-2.5 text-[14px] rounded-md focus:outline-none focus:ring-1"
+                      style={{
+                        background: 'var(--color-paper)',
+                        border: '1px solid var(--color-rule)',
+                        color: 'var(--color-ink)',
+                        caretColor: 'var(--color-forest-2)',
+                      }}
+                    />
+                  </label>
+                </div>
 
-              <div>
-                <label className={labelClass()}>Target Event Date</label>
-                <input
-                  type="date"
-                  value={targetEventDate}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setTargetEventDate(e.target.value)}
-                  className={inputClass()}
-                />
+                <div>
+                  <label className="flex flex-col gap-1.5">
+                    <span
+                      className="eyebrow"
+                      style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
+                    >
+                      Target Event Date
+                    </span>
+                    <input
+                      type="date"
+                      value={targetEventDate}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setTargetEventDate(e.target.value)
+                      }
+                      className="w-full px-3 py-2.5 text-[14px] rounded-md focus:outline-none focus:ring-1"
+                      style={{
+                        background: 'var(--color-paper)',
+                        border: '1px solid var(--color-rule)',
+                        color: 'var(--color-ink)',
+                        caretColor: 'var(--color-forest-2)',
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Error */}
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
+            {/* Error */}
+            {error && (
+              <div
+                className="rounded-xl px-3 py-3"
+                style={{
+                  backgroundColor: 'rgba(255, 69, 58, 0.06)',
+                  border: '1px solid rgba(255, 69, 58, 0.22)',
+                }}
+                role="alert"
+              >
+                <p
+                  className="text-[13px] leading-relaxed"
+                  style={{ color: 'var(--color-alert)' }}
+                >
+                  {error}
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex-1 rounded-full text-[14px] font-medium transition-colors disabled:opacity-50"
+                style={{
+                  background: 'var(--color-ink)',
+                  color: 'var(--color-paper)',
+                  minHeight: 44,
+                }}
+              >
+                {submitting ? 'Saving…' : 'Save and continue'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSkip}
+                disabled={submitting}
+                className="flex-none sm:w-40 rounded-full text-[14px] font-medium transition-colors disabled:opacity-50"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--color-rule)',
+                  color: 'var(--color-ink-2)',
+                  minHeight: 44,
+                }}
+              >
+                Skip for now
+              </button>
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              {submitting ? 'Saving...' : 'Save and continue'}
-            </button>
-            <button
-              type="button"
-              onClick={handleSkip}
-              disabled={submitting}
-              className="flex-1 sm:flex-none sm:w-40 py-3 px-4 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2"
-            >
-              Skip for now
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
+  )
+}
+
+function NumberField({
+  label,
+  min,
+  max,
+  step,
+  placeholder,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string
+  min?: number
+  max?: number
+  step?: number
+  placeholder?: string
+  value: string
+  onChange: (v: string) => void
+  hint?: string
+}) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
+        {label}
+      </span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
+        className="w-full px-3 py-2.5 text-[14px] rounded-md focus:outline-none focus:ring-1"
+        style={{
+          background: 'var(--color-paper)',
+          border: '1px solid var(--color-rule)',
+          color: 'var(--color-ink)',
+          caretColor: 'var(--color-forest-2)',
+        }}
+      />
+      {hint && (
+        <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+          {hint}
+        </span>
+      )}
+    </label>
   )
 }

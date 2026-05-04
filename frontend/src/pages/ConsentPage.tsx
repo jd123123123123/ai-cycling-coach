@@ -1,7 +1,16 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Check, Shield } from 'lucide-react'
 import { CONSENT_TYPES } from '../types/consent'
 import { grantConsent } from '../api/consent'
+
+// Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
+const steps = [
+  { label: 'Account' },
+  { label: 'Consent' },
+  { label: 'Goals' },
+]
+const ACTIVE_STEP = 1
 
 export default function ConsentPage() {
   const navigate = useNavigate()
@@ -54,93 +63,193 @@ export default function ConsentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-12">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-semibold text-gray-900">Your Privacy Choices</h1>
-          <p className="mt-3 text-base text-gray-600 max-w-lg mx-auto">
-            Before you start, please review how we use your data. Under GDPR, you must grant each
-            consent separately and deliberately.
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-8"
+      style={{ background: 'var(--color-paper)' }}
+    >
+      <div className="w-full max-w-2xl">
+        <div
+          className="paper-grain rounded-[20px] p-6 sm:p-7"
+          style={{
+            background: 'var(--color-paper-2)',
+            border: '1px solid var(--color-rule)',
+          }}
+        >
+          {/* Eyebrow */}
+          <div className="flex items-center gap-2 mb-2">
+            <Shield size={14} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)' }} />
+            <span
+              className="eyebrow"
+              style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
+            >
+              Consent
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1
+            className="num-display leading-[0.95]"
+            style={{ fontSize: 'clamp(28px, 5vw, 36px)', color: 'var(--color-ink)' }}
+          >
+            Your data, your call.
+          </h1>
+          <p className="mt-2 text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+            Under GDPR, you must grant each consent separately and deliberately.
           </p>
-        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {CONSENT_TYPES.map((consent) => {
-            const isChecked = !!checked[consent.type]
-            return (
-              <div
-                key={consent.type}
-                className={`bg-white rounded-xl border-2 p-6 transition-colors ${
-                  isChecked ? 'border-blue-500' : 'border-gray-200'
-                }`}
-              >
-                <div className="flex items-start gap-4">
-                  {/* Checkbox */}
-                  <div className="flex-shrink-0 mt-0.5">
-                    <input
-                      id={`consent-${consent.type}`}
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => handleToggle(consent.type, consent.required)}
+          {/* 3-dot progress strip */}
+          <div className="flex items-center gap-3 my-4">
+            {steps.map((step, i) => (
+              <div key={step.label} className="flex flex-col items-center gap-1">
+                <span
+                  style={{
+                    display: 'block',
+                    width: 16,
+                    height: 16,
+                    borderRadius: 9999,
+                    background:
+                      i < ACTIVE_STEP
+                        ? 'var(--color-muted)'
+                        : i === ACTIVE_STEP
+                          ? 'var(--color-ink)'
+                          : 'var(--color-rule)',
+                    border: '1px solid var(--color-rule)',
+                  }}
+                />
+                <span className="eyebrow text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-2 space-y-3">
+            {CONSENT_TYPES.map((consent) => {
+              const isChecked = !!checked[consent.type]
+              return (
+                <div
+                  key={consent.type}
+                  className="rounded-xl p-4 transition-colors"
+                  style={{
+                    border: `1px solid ${isChecked ? 'var(--color-forest-2)' : 'var(--color-rule)'}`,
+                    background: isChecked
+                      ? 'rgba(52, 199, 89, 0.04)'
+                      : 'rgba(255, 255, 255, 0.02)',
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Custom checkbox */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggle(consent.type, consent.required)}
                       disabled={consent.required}
-                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-default"
-                    />
-                  </div>
+                      className="flex-shrink-0 mt-0.5 relative flex items-center justify-center transition-colors disabled:cursor-default"
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 4,
+                        border: `1.5px solid ${isChecked ? 'var(--color-forest-2)' : 'var(--color-rule)'}`,
+                        background: isChecked ? 'var(--color-forest-2)' : 'transparent',
+                      }}
+                      aria-checked={isChecked}
+                      role="checkbox"
+                    >
+                      {isChecked && (
+                        <Check
+                          size={11}
+                          strokeWidth={2.5}
+                          style={{ color: 'var(--color-paper)' }}
+                        />
+                      )}
+                    </button>
 
-                  {/* Content */}
-                  <label
-                    htmlFor={consent.required ? undefined : `consent-${consent.type}`}
-                    className="flex-1 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-base font-semibold text-gray-900">{consent.title}</span>
-                      {consent.required ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                          Required
+                    {/* Content */}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span
+                          className="text-[14px] font-medium"
+                          style={{ color: 'var(--color-ink)' }}
+                        >
+                          {consent.title}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                          Optional
-                        </span>
+                        {consent.required ? (
+                          <span
+                            className="eyebrow text-[10px] px-1.5 py-0.5 rounded-full"
+                            style={{
+                              background: 'rgba(52, 199, 89, 0.12)',
+                              color: 'var(--color-forest-2)',
+                            }}
+                          >
+                            Required
+                          </span>
+                        ) : (
+                          <span
+                            className="eyebrow text-[10px] px-1.5 py-0.5 rounded-full"
+                            style={{
+                              background: 'rgba(255, 255, 255, 0.06)',
+                              color: 'var(--color-muted)',
+                            }}
+                          >
+                            Optional
+                          </span>
+                        )}
+                      </div>
+                      <p
+                        className="text-[13px] leading-relaxed"
+                        style={{ color: 'var(--color-ink-2)' }}
+                      >
+                        {consent.description}
+                      </p>
+                      {consent.required && (
+                        <p className="mt-1.5 text-[12px]" style={{ color: 'var(--color-muted)' }}>
+                          This consent is required to use the service.
+                        </p>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 leading-relaxed">{consent.description}</p>
-                    {consent.required && (
-                      <p className="mt-2 text-xs text-blue-600">
-                        This consent is required to use the service.
-                      </p>
-                    )}
-                  </label>
+                  </div>
                 </div>
+              )
+            })}
+
+            {/* Error */}
+            {error && (
+              <div
+                className="rounded-xl px-3 py-3"
+                style={{
+                  backgroundColor: 'rgba(255, 69, 58, 0.06)',
+                  border: '1px solid rgba(255, 69, 58, 0.22)',
+                }}
+                role="alert"
+              >
+                <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-alert)' }}>
+                  {error}
+                </p>
               </div>
-            )
-          })}
-
-          {/* Error */}
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
-
-          {/* Submit */}
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={submitting || !canSubmit}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              {submitting ? 'Saving your choices...' : 'Continue to profile setup'}
-            </button>
-
-            {!canSubmit && (
-              <p className="mt-2 text-center text-xs text-gray-500">
-                You must grant the required "Health Data Processing" consent to continue.
-              </p>
             )}
-          </div>
-        </form>
+
+            {/* Submit */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={submitting || !canSubmit}
+                className="w-full rounded-full text-[14px] font-medium transition-colors disabled:opacity-50"
+                style={{
+                  background: 'var(--color-ink)',
+                  color: 'var(--color-paper)',
+                  minHeight: 44,
+                }}
+              >
+                {submitting ? 'Saving your choices…' : 'Continue to profile setup'}
+              </button>
+
+              {!canSubmit && (
+                <p className="mt-2 text-center text-[12px]" style={{ color: 'var(--color-muted)' }}>
+                  You must grant the required "Health Data Processing" consent to continue.
+                </p>
+              )}
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   )
