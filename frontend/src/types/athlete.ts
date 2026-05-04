@@ -14,6 +14,10 @@ export interface AthleteProfile {
   secondary_sports: string[] | null
   goals: TrainingGoals | null
   ftp_history: unknown[] | null
+  // Phase 7 periodization engine — first-class target event fields
+  target_event_date: string | null   // ISO date YYYY-MM-DD
+  target_event_type: 'race' | 'fondo' | 'audax' | 'maintenance' | null
+  target_priority: 'A' | 'B' | 'C' | null
   created_at: string
   updated_at: string | null
 }
@@ -37,4 +41,8 @@ export interface AthleteProfileUpdate {
   lthr_running?: number
   running_threshold_pace_ms?: number
   secondary_sports?: string[]
+  // Phase 7 periodization engine — target event fields
+  target_event_date?: string | null
+  target_event_type?: 'race' | 'fondo' | 'audax' | 'maintenance' | null
+  target_priority?: 'A' | 'B' | 'C' | null
 }

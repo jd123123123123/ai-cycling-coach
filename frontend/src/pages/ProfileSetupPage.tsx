@@ -28,6 +28,11 @@ export default function ProfileSetupPage() {
   const [targetEventDate, setTargetEventDate] = useState('')
   const [goalWeeklyHours, setGoalWeeklyHours] = useState('')
 
+  // Target event fields (Phase 7 periodization engine)
+  const [eventDate, setEventDate] = useState('')
+  const [eventType, setEventType] = useState<'race' | 'fondo' | 'audax' | 'maintenance' | ''>('')
+  const [eventPriority, setEventPriority] = useState<'A' | 'B' | 'C' | ''>('')
+
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -48,13 +53,18 @@ export default function ProfileSetupPage() {
 
     try {
       // Build profile update (only include fields that have values)
-      const profileData: Record<string, number | string> = {}
+      const profileData: Record<string, number | string | null> = {}
       if (ftp) profileData.ftp_watts = intOrUndefined(ftp)!
       if (weight) profileData.weight_kg = numOrUndefined(weight)!
       if (maxHr) profileData.max_heart_rate = intOrUndefined(maxHr)!
       if (restingHr) profileData.resting_heart_rate = intOrUndefined(restingHr)!
       if (weeklyHours) profileData.weekly_hours_available = numOrUndefined(weeklyHours)!
       if (primarySport) profileData.primary_sport = primarySport
+      // Target event fields — send null to clear, string when set
+      if (eventDate) profileData.target_event_date = eventDate
+      else if (eventType) profileData.target_event_date = null  // maintenance with no date
+      if (eventType) profileData.target_event_type = eventType
+      if (eventPriority) profileData.target_priority = eventPriority
 
       await updateProfile(profileData)
 
@@ -324,6 +334,131 @@ export default function ProfileSetupPage() {
                     />
                   </label>
                 </div>
+              </div>
+            </div>
+
+            {/* Target Event section */}
+            <div
+              className="rounded-xl p-5"
+              style={{
+                border: '1px solid var(--color-rule)',
+                background: 'rgba(255, 255, 255, 0.02)',
+              }}
+            >
+              <h2
+                className="text-[13px] font-semibold mb-4 eyebrow"
+                style={{ color: 'var(--color-muted)', letterSpacing: '0.12em' }}
+              >
+                Target Event
+              </h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Event type select */}
+                <label className="flex flex-col gap-1.5">
+                  <span
+                    className="eyebrow"
+                    style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
+                  >
+                    Event Type
+                  </span>
+                  <select
+                    value={eventType}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                      setEventType(e.target.value as typeof eventType)
+                    }
+                    className="w-full px-3 py-2.5 text-[14px] rounded-md focus:outline-none focus:ring-1"
+                    style={{
+                      background: 'var(--color-paper)',
+                      border: '1px solid var(--color-rule)',
+                      color: eventType ? 'var(--color-ink)' : 'var(--color-muted)',
+                    }}
+                  >
+                    <option value="" style={{ background: 'var(--color-paper-2)' }}>
+                      Select type...
+                    </option>
+                    <option value="race" style={{ background: 'var(--color-paper-2)' }}>
+                      Race
+                    </option>
+                    <option value="fondo" style={{ background: 'var(--color-paper-2)' }}>
+                      Fondo
+                    </option>
+                    <option value="audax" style={{ background: 'var(--color-paper-2)' }}>
+                      Audax
+                    </option>
+                    <option value="maintenance" style={{ background: 'var(--color-paper-2)' }}>
+                      Maintenance
+                    </option>
+                  </select>
+                  {eventType === 'maintenance' && (
+                    <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                      Maintenance mode — no specific event; we'll keep you fit.
+                    </span>
+                  )}
+                </label>
+
+                {/* Priority select */}
+                <label className="flex flex-col gap-1.5">
+                  <span
+                    className="eyebrow"
+                    style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
+                  >
+                    Priority
+                  </span>
+                  <select
+                    value={eventPriority}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                      setEventPriority(e.target.value as typeof eventPriority)
+                    }
+                    className="w-full px-3 py-2.5 text-[14px] rounded-md focus:outline-none focus:ring-1"
+                    style={{
+                      background: 'var(--color-paper)',
+                      border: '1px solid var(--color-rule)',
+                      color: eventPriority ? 'var(--color-ink)' : 'var(--color-muted)',
+                    }}
+                  >
+                    <option value="" style={{ background: 'var(--color-paper-2)' }}>
+                      Select priority...
+                    </option>
+                    <option value="A" style={{ background: 'var(--color-paper-2)' }}>
+                      A — Peak race
+                    </option>
+                    <option value="B" style={{ background: 'var(--color-paper-2)' }}>
+                      B — Important
+                    </option>
+                    <option value="C" style={{ background: 'var(--color-paper-2)' }}>
+                      C — Tune-up
+                    </option>
+                  </select>
+                  <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                    A = peak race · B = important · C = tune-up
+                  </span>
+                </label>
+
+                {/* Event date — hidden for maintenance mode (date optional) */}
+                {eventType !== 'maintenance' && (
+                  <div>
+                    <label className="flex flex-col gap-1.5">
+                      <span
+                        className="eyebrow"
+                        style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
+                      >
+                        Event Date
+                      </span>
+                      <input
+                        type="date"
+                        value={eventDate}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setEventDate(e.target.value)}
+                        className="w-full px-3 py-2.5 text-[14px] rounded-md focus:outline-none focus:ring-1"
+                        style={{
+                          background: 'var(--color-paper)',
+                          border: '1px solid var(--color-rule)',
+                          color: 'var(--color-ink)',
+                          caretColor: 'var(--color-forest-2)',
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
 
