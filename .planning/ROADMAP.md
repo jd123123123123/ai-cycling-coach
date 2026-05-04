@@ -20,7 +20,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 6: AI Deep Coaching** - On-demand analysis and workout modification via conversation
 - [x] **Phase 6.1: UI Overhaul — Apple-disciplined editorial redesign (INSERTED)** - Segmented dashboard tabs, bento grid, side sheets, sticky readiness bar, command palette, spring motion tokens, applied through the editorial visual voice
 - [x] **Phase 6.2: Whoop-grade redesign of untouched surfaces (INSERTED)** - Sharpen the editorial system across auth pages, Garmin connect, PMC chart, polarized distribution, week strip, recent activities, sync button, and trends/week tabs. Reclaim amber for caution-only, consolidate zone palettes, codify number presentation utilities, deprecate `.serif-caps` as a third numeral idiom.
-- [ ] **Phase 7: Periodization + Workout Generation** - AI-built mesocycles, daily adaptation, and structured workouts
+- [ ] **Phase 7.0: Periodization engine + week view shell** - Friel macrocycle + Issurin block mesocycles + Seiler weekly TID, week-view tab, weekly preface rationale
+- [ ] **Phase 7.1: Readiness-driven daily adaptation** - HRV-SWC-gated multi-signal adapter, soft-swap → hard-deload tier system, audit trail extension
+- [ ] **Phase 7.2: Rationale + taper/race polish** - Per-day rationale generation, Bosquet/Mujika taper, template library expansion 12 → ~30
+- [ ] ~~**Phase 7: Periodization + Workout Generation**~~ — split into 7.0/7.1/7.2 (research 2026-05-04)
 - [ ] **Phase 8: Nutrition Integration** - Manual nutrition logging, fueling advice, and nutrition-aware adaptation
 - [ ] **Phase 9: Social + Retention Rituals** - Packs (4-12 training partners), user-chosen rivals, morning/post-ride/Sunday rituals, consistency streaks, pack-kudos — all grounded in Self-Determination Theory (autonomy/competence/relatedness); explicit dark-pattern ban list (no global leaderboards, no streak ransom, no variable-ratio rewards, no guilt copy)
 
@@ -186,11 +189,24 @@ Plans:
   2. System adapts the daily plan based on sleep, HRV, body battery, nutrition, and recent training load — swapping or modifying today's session
   3. AI generates structured workouts with specific power/pace targets for cycling, running, and gym sessions
   4. Generated workouts respect current FTP/threshold values and use appropriate interval structures
-**Plans**: TBD
+**Plans**: Split into 7.0 / 7.1 / 7.2 per .planning/phases/07-periodization-workout-generation/07-RESEARCH.md §10.
 
+#### Phase 7.0: Periodization engine + week view shell
+**Goal**: Friel macrocycle + Issurin block mesocycles + Seiler weekly TID, week-view tab, weekly preface rationale.
+**Depends on**: Phase 6.2
+**Plans**: 5 plans in 4 waves
 Plans:
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
+- [ ] 07.0-PLAN-01.md — AthleteProfile target_event_date/type/priority migration + ProfileSetupPage form fields
+- [ ] 07.0-PLAN-02.md — MesocyclePlan model + mesocycle_generator service (Friel/Issurin/Seiler) + tests
+- [ ] 07.0-PLAN-03.md — Weekly rationale generator (rule-based, language-aware) + jargon-discipline tests
+- [ ] 07.0-PLAN-04.md — GET /weeks/current endpoint + useCurrentWeek React Query hook
+- [ ] 07.0-PLAN-05.md — WeekTab redesign (WeekPreface + DayPlanCard) + visual checkpoint
+
+#### Phase 7.1: Daily readiness-driven adaptation (planned)
+Vesterinen SWC gate + multi-signal voting → today's session swap. Estimated 3-4 plans.
+
+#### Phase 7.2: Rationale LLM polish + taper / race-prep (planned)
+LLM-polished per-week and per-day rationales (replacing Plan 03 deterministic) + Mujika taper countdown + template library expansion (12→~30). Estimated 3-4 plans.
 
 ### Phase 8: Nutrition Integration
 **Goal**: Users can log nutrition and receive fueling advice that integrates with training recommendations
