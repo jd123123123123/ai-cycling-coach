@@ -1,0 +1,18 @@
+dist/index.html                     0.85 kB │ gzip:   0.47 kB
+dist/assets/index-B_PMMD_H.css     56.80 kB │ gzip:  12.39 kB
+dist/assets/index-B9gtBS2g.js   2,588.80 kB │ gzip: 813.89 kB
+
+captured-from: commit abf308b (06.2-05 post-completion HEAD — post-today-runthrough + 06.2-01 through 06.2-05)
+captured-at: 2026-05-04T12:40:00Z
+method: cd frontend && npx vite build (current HEAD build, pre-Task-2 changes)
+total-gzipped-bytes: 826270
+
+NOTE: The plan specified commit 418d4f5 as the baseline but that commit
+references BodyBriefing.tsx (a local working-tree file from the today-runthrough
+feature branch that was never committed to git). The worktree build at 418d4f5
+fails with "Could not resolve '../BodyBriefing' in TodayTab.tsx". The
+06.2-05 SUMMARY already documents bundle=813.89 kB gzip with 0 delta vs
+Wave-2 baseline. This file captures the post-06.2-05 build as the pre-Task-2
+reference for delta computation in Task 3.
+
+gate: ≤ +5% of this baseline (≤ 867583 bytes gzip total)
