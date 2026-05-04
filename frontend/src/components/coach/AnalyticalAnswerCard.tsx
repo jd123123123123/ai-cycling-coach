@@ -117,7 +117,7 @@ function PmcCard({
             aria-hidden
           />
           <span
-            className="serif-caps text-[13px]"
+            className="text-[13px] font-medium"
             style={{ color: 'var(--color-ink)' }}
           >
             {directionLabel}
@@ -255,7 +255,7 @@ function RecoveryCard({
             aria-hidden
           />
           <span
-            className="serif-caps text-[13px]"
+            className="text-[13px] font-medium"
             style={{ color: 'var(--color-ink)' }}
           >
             {headline}

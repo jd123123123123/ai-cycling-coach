@@ -9,10 +9,10 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { translateCoach } from '../../utils/coachLanguage'
 import { useCountUp } from '../../hooks/useCountUp'
 import Sparkline from './Sparkline'
+import { toneFromPct as toneFromPctShared, tokenForTone } from '../../utils/delta'
+import { formatSigned } from '../../utils/format'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-
-type DeltaTone = 'good' | 'warn' | 'bad' | 'neutral'
 
 interface KpiCell {
   key: string
@@ -23,8 +23,11 @@ interface KpiCell {
   format?: (n: number) => string
   unit?: string
   delta?: string | null
-  tone: DeltaTone
+  /** CSS color string — produced by tokenForTone(toneFromPct(…)) from utils/delta */
+  tone: string
+  /** Whether positive delta is good (true) or bad (false); used to pick arrow icon */
   higherIsBetter?: boolean
+  deltaPct?: number | null
   intradayKey?: string
   tooltip?: string
   sparkline?: Array<number | null>
@@ -72,14 +75,9 @@ function sparklineSeries(metrics: DailyMetric[], key: keyof DailyMetric, days: n
   })
 }
 
-function toneFromPct(pct: number | null, higherIsBetter: boolean): DeltaTone {
-  if (pct === null) return 'neutral'
-  const abs = Math.abs(pct)
-  const positive = pct >= 0
-  if (abs < 3) return 'neutral'
-  const good = higherIsBetter ? positive : !positive
-  if (abs > 10) return good ? 'good' : 'bad'
-  return good ? 'good' : 'warn'
+/** Compute a CSS color token from a percent change and direction. */
+function cellTone(pct: number | null, higherIsBetter: boolean): string {
+  return tokenForTone(toneFromPctShared(pct, higherIsBetter ? 'good' : 'bad'))
 }
 
 function fmtNumber(value: number | null, decimals = 0): string | null {
@@ -89,24 +87,22 @@ function fmtNumber(value: number | null, decimals = 0): string | null {
 
 function fmtDelta(pct: number | null): string | null {
   if (pct === null || !isFinite(pct)) return null
-  const sign = pct >= 0 ? '+' : ''
-  return `${sign}${pct.toFixed(0)}%`
+  return formatSigned(pct, 0) + '%'
 }
 
 // ─── Cell component ─────────────────────────────────────────────────────────
 
 function KpiCellView({ cell }: { cell: KpiCell }) {
-  const toneColor: Record<DeltaTone, string> = {
-    good: 'var(--color-forest-2)',
-    warn: 'var(--color-amber)',
-    bad: 'var(--color-alert)',
-    neutral: 'var(--color-muted)',
-  }
+  // cell.tone is already a CSS var() string — use directly
+  const toneColor = cell.tone
 
+  // Determine arrow direction from deltaPct + higherIsBetter.
+  // Muted tone → show Minus; positive delta in good direction → ArrowUpRight; else ArrowDownRight.
+  const dp = cell.deltaPct
   const Icon =
-    cell.tone === 'good' ? ArrowUpRight :
-    cell.tone === 'bad' || cell.tone === 'warn' ? ArrowDownRight :
-    Minus
+    dp == null || Math.abs(dp) < 3 ? Minus :
+    (dp > 0) === (cell.higherIsBetter !== false) ? ArrowUpRight :
+    ArrowDownRight
 
   // Count-up: if rawValue present, animate the number on mount.
   // TSB can be negative — useCountUp handles it since skipZero only skips if target===0.
@@ -152,7 +148,6 @@ function KpiCellView({ cell }: { cell: KpiCell }) {
               style={{
                 color: 'var(--color-ink-2)',
                 fontSize: 13,
-                fontVariantNumeric: 'tabular-nums',
               }}
             >
               {cell.wakeNow.wake == null ? '—' : Math.round(cell.wakeNow.wake)}
@@ -164,7 +159,6 @@ function KpiCellView({ cell }: { cell: KpiCell }) {
                 fontSize: 'clamp(20px, 2.6vw, 26px)',
                 color: 'var(--color-ink)',
                 lineHeight: 1,
-                fontVariantNumeric: 'tabular-nums',
               }}
             >
               {cell.wakeNow.now == null ? '—' : Math.round(cell.wakeNow.now)}
@@ -178,7 +172,6 @@ function KpiCellView({ cell }: { cell: KpiCell }) {
                 fontSize: 'clamp(20px, 2.6vw, 26px)',
                 color: 'var(--color-ink)',
                 lineHeight: 1,
-                fontVariantNumeric: 'tabular-nums',
               }}
             >
               {displayValue}
@@ -208,7 +201,7 @@ function KpiCellView({ cell }: { cell: KpiCell }) {
       {cell.delta && (
         <span
           className="inline-flex items-center gap-0.5 num-mono text-[11px]"
-          style={{ color: toneColor[cell.tone] }}
+          style={{ color: toneColor }}
         >
           <Icon size={10} strokeWidth={2} />
           {cell.delta}
@@ -304,7 +297,8 @@ export default function KpiStripCompact() {
         rawValue: hrvLatest,
         unit: 'ms',
         delta: fmtDelta(hrvDelta),
-        tone: toneFromPct(hrvDelta, true),
+        tone: cellTone(hrvDelta, true),
+        deltaPct: hrvDelta,
         higherIsBetter: true,
         intradayKey: 'hrv',
         tooltip: translateCoach('kpi.hrv.tooltip', language),
@@ -322,7 +316,8 @@ export default function KpiStripCompact() {
         rawValue: bbLatest,
         unit: snapshot?.body_battery ? undefined : '/100',
         delta: snapshot?.body_battery ? null : fmtDelta(bbDelta),
-        tone: toneFromPct(bbDelta, true),
+        tone: cellTone(bbDelta, true),
+        deltaPct: bbDelta,
         higherIsBetter: true,
         tooltip: translateCoach('kpi.bodyBatt.tooltip', language),
         wakeNow: snapshot?.body_battery
@@ -339,7 +334,8 @@ export default function KpiStripCompact() {
         rawValue: sleepLatest,
         unit: 'score',
         delta: fmtDelta(sleepDelta),
-        tone: toneFromPct(sleepDelta, true),
+        tone: cellTone(sleepDelta, true),
+        deltaPct: sleepDelta,
         higherIsBetter: true,
         tooltip: translateCoach('kpi.sleep.tooltip', language),
         sparkline: sleepSparkline,
@@ -353,11 +349,14 @@ export default function KpiStripCompact() {
         format: (n: number) => n >= 0 ? `+${Math.round(n)}` : `${Math.round(n)}`,
         unit: '',
         delta: fmtDelta(tsbDelta),
-        tone: tsb === null ? 'neutral'
-          : tsb < -20 ? 'bad'
-          : tsb < -10 ? 'warn'
-          : tsb > 20 ? 'warn'
-          : 'good',
+        // TSB has a non-monotonic good/bad logic: extreme positive TSB is also a warning.
+        // Keep this bespoke mapping and convert to a CSS token directly.
+        tone: tsb === null ? 'var(--color-muted)'
+          : tsb < -20 ? 'var(--color-alert)'
+          : tsb < -10 ? 'var(--color-amber)'
+          : tsb > 20 ? 'var(--color-amber)'
+          : 'var(--color-forest-2)',
+        deltaPct: tsbDelta,
         tooltip: translateCoach('kpi.tsb.tooltip', language),
       },
       {
@@ -367,7 +366,8 @@ export default function KpiStripCompact() {
         rawValue: ctl,
         unit: '',
         delta: fmtDelta(ctlDelta),
-        tone: toneFromPct(ctlDelta, true),
+        tone: cellTone(ctlDelta, true),
+        deltaPct: ctlDelta,
         higherIsBetter: true,
         tooltip: translateCoach('kpi.ctl.tooltip', language),
       },
@@ -378,7 +378,8 @@ export default function KpiStripCompact() {
         rawValue: rhrLatest,
         unit: 'bpm',
         delta: fmtDelta(rhrDelta),
-        tone: toneFromPct(rhrDelta, false),
+        tone: cellTone(rhrDelta, false),
+        deltaPct: rhrDelta,
         higherIsBetter: false,
         intradayKey: 'resting_hr',
         tooltip: translateCoach('kpi.rhr.tooltip', language),
@@ -393,7 +394,8 @@ export default function KpiStripCompact() {
         format: (n: number) => Math.round(n).toLocaleString(),
         unit: '',
         delta: fmtDelta(stepsDelta),
-        tone: toneFromPct(stepsDelta, true),
+        tone: cellTone(stepsDelta, true),
+        deltaPct: stepsDelta,
         higherIsBetter: true,
         tooltip: 'Daily steps — active recovery movement between training sessions.',
       },

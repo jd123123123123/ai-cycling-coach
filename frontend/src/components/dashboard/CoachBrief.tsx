@@ -13,6 +13,7 @@ import TomorrowCard from './TomorrowCard'
 import RegenerationCard from './RegenerationCard'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { translateCoach } from '../../utils/coachLanguage'
+import { formatSigned } from '../../utils/format'
 
 function isRuleBased(model: string): boolean {
   return model === 'rule-based-fallback'
@@ -54,8 +55,7 @@ function buildEvidenceChips(evidence: Record<string, unknown>): React.ReactNode[
     const tone = tsb < -20 ? 'alert' : 'default'
     chips.push(
       <EvidenceChip key="tsb" tone={tone}>
-        TSB {tsb >= 0 ? '+' : ''}
-        {tsb.toFixed(0)}
+        TSB {formatSigned(tsb, 0)}
       </EvidenceChip>,
     )
   }
@@ -67,12 +67,10 @@ function buildEvidenceChips(evidence: Record<string, unknown>): React.ReactNode[
 
   const hrvDelta = hrv?.delta_pct as number | null | undefined
   if (typeof hrvDelta === 'number') {
-    const sign = hrvDelta >= 0 ? '+' : ''
     const tone = hrvDelta < -8 ? 'alert' : 'default'
     chips.push(
       <EvidenceChip key="hrv" tone={tone}>
-        HRV {sign}
-        {hrvDelta.toFixed(0)}%
+        HRV {formatSigned(hrvDelta, 0)}%
       </EvidenceChip>,
     )
   }

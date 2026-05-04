@@ -396,7 +396,7 @@ export default function IntradayModal({
               style={{ backgroundColor: 'var(--color-rule)' }}
             >
               <span
-                className="serif-caps text-[14px]"
+                className="text-[14px]"
                 style={{ color: 'var(--color-muted)' }}
               >
                 Fetching from Garmin — first-time loads can take ~10 seconds
@@ -407,7 +407,7 @@ export default function IntradayModal({
               className="w-full h-[360px] flex items-center justify-center text-center px-6"
             >
               <p
-                className="serif-caps text-[15px] max-w-sm"
+                className="text-[15px] max-w-sm"
                 style={{ color: 'var(--color-alert)' }}
               >
                 Couldn&apos;t fetch intraday data. Try again in a moment.
@@ -418,7 +418,7 @@ export default function IntradayModal({
               className="w-full h-[360px] flex items-center justify-center text-center px-6"
             >
               <p
-                className="serif-caps text-[15px] max-w-sm"
+                className="text-[15px] max-w-sm"
                 style={{ color: 'var(--color-muted)' }}
               >
                 No {meta.label.toLowerCase()} readings for this day. Either

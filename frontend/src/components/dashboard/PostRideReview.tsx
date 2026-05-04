@@ -34,6 +34,7 @@ import type {
 } from '../../api/coach'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
 import { complianceDirectionText, gradeLabel } from '../../utils/coachLanguage'
+import { formatSigned } from '../../utils/format'
 
 type Grade = NonNullable<PostRideReviewType['grade']>
 
@@ -89,11 +90,9 @@ function BandChip({
       : pair.band === 'over'
         ? '#c4614c'
         : '#9b8a6b'
-  const delta = pair.delta_pct.toFixed(0)
-  const sign = pair.delta_pct > 0 ? '+' : ''
   const copy = simpleMode
     ? complianceDirectionText(pair.band, overLabel)
-    : `${symbol} ${sign}${delta}% vs target`
+    : `${symbol} ${formatSigned(pair.delta_pct, 0)}% vs target`
   return (
     <span
       className="num-mono text-[11px] leading-tight"

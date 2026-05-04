@@ -423,7 +423,7 @@ function DetailChart({
             style={{ height: heightPx }}
           >
             <p
-              className="serif-caps text-[14px] max-w-xs"
+              className="text-[14px] max-w-xs"
               style={{ color: 'var(--color-muted)' }}
             >
               Not enough data yet in this window. Check back after a few more sync cycles.

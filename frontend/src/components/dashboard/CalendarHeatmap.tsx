@@ -140,7 +140,7 @@ export default function CalendarHeatmap() {
           <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
             No data yet
           </span>
-          <p className="serif-caps text-[14px]" style={{ color: 'var(--color-ink-2)' }}>
+          <p className="text-[14px]" style={{ color: 'var(--color-ink-2)' }}>
             Log a few sessions to see your training pattern.
           </p>
         </div>

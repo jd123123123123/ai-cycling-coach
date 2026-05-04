@@ -66,7 +66,7 @@ export default function DashboardSection({
       >
         <div className="flex flex-col gap-0.5 min-w-0">
           <span
-            className="serif-caps text-[18px] sm:text-[20px] leading-tight dashboard-break-words"
+            className="text-[18px] sm:text-[20px] leading-tight dashboard-break-words font-medium"
             style={{ color: 'var(--color-ink)' }}
           >
             {title}

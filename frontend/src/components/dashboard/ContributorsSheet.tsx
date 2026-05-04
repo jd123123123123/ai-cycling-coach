@@ -141,7 +141,7 @@ function ToolUseEntry({ entry }: { entry: ToolUseLogEntry }) {
           ) : (
             <CheckCircle2 size={12} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)', flexShrink: 0 }} aria-hidden />
           )}
-          <span className="serif-caps text-[13px]" style={{ color: 'var(--color-ink)' }}>
+          <span className="text-[13px] font-medium" style={{ color: 'var(--color-ink)' }}>
             {humanizeTool(entry.name)}
           </span>
           <span className="num-mono text-[10px]" style={{ color: 'var(--color-muted)' }}>
@@ -296,7 +296,7 @@ function RationaleSection() {
                   >
                     {SEVERITY_META[c.severity].label}
                   </span>
-                  <span className="serif-caps text-[15px]" style={{ color: 'var(--color-ink)' }}>
+                  <span className="text-[15px] font-medium" style={{ color: 'var(--color-ink)' }}>
                     {displayLabel}
                   </span>
                 </div>

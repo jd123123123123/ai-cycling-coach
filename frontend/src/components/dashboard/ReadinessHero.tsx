@@ -10,6 +10,7 @@ import { useCountUp } from '../../hooks/useCountUp'
 import { useTodaySnapshot, type WakeNowPair } from '../../hooks/useTodaySnapshot'
 import { useIntradayDay } from '../../hooks/useIntraday'
 import { fadeSlideInitial, fadeSlideUp } from '../../utils/motion'
+import { formatSigned } from '../../utils/format'
 import type { DailyMetric } from '../../api/dashboard'
 import ReadinessContributors from './ReadinessContributors'
 import ContributorsSheet from './ContributorsSheet'
@@ -241,15 +242,15 @@ function DeltaChip({ delta }: { delta: number }) {
     : isDown
       ? 'rgba(255, 69, 58, 0.14)'
       : 'rgba(255, 255, 255, 0.07)'
-  const sign = isUp ? '+' : ''
+  const signedStr = formatSigned(rounded, 0)
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 num-mono text-[12px]"
       style={{ color, backgroundColor: bg }}
-      aria-label={`${sign}${rounded} vs yesterday`}
+      aria-label={`${signedStr} vs yesterday`}
     >
       <Icon size={12} strokeWidth={2.2} />
-      {sign}{rounded} <span className="opacity-70">vs yesterday</span>
+      {signedStr} <span className="opacity-70">vs yesterday</span>
     </span>
   )
 }
@@ -386,7 +387,6 @@ function WakeNowRow({
           style={{
             color: 'var(--color-ink-2)',
             fontSize: 14,
-            fontVariantNumeric: 'tabular-nums',
           }}
         >
           {wakeStr}
@@ -397,7 +397,6 @@ function WakeNowRow({
             color: 'var(--color-ink)',
             fontSize: 22,
             lineHeight: 1,
-            fontVariantNumeric: 'tabular-nums',
           }}
         >
           {nowStr}
@@ -719,7 +718,7 @@ export default function ReadinessHero() {
               <div className="flex flex-col gap-3 min-w-0">
                 <div className="flex items-baseline gap-3 flex-wrap">
                   <span
-                    className="serif-caps text-[11px] tracking-[0.28em] uppercase"
+                    className="eyebrow"
                     style={{ color: meta.color }}
                   >
                     {meta.label}

@@ -1,4 +1,5 @@
 import type { TomorrowPlan, IntensityChip } from '../../api/coach'
+import { formatSigned } from '../../utils/format'
 
 // Intensity chip → human label. Matches the technical zone vocabulary on
 // the prescribed-workout card (recovery / endurance / tempo / threshold /
@@ -30,6 +31,7 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
   if (!data) return null
 
   const tssRounded = Math.round(data.predicted_tss || 0)
+  const tssDisplay = formatSigned(tssRounded, 0)
   const chipLabel = CHIP_LABEL[data.intensity_chip] ?? data.intensity_chip
 
   return (
@@ -70,7 +72,7 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
             }}
             title="Predicted training stress score"
           >
-            {tssRounded} TSS
+            {tssDisplay} TSS
           </span>
         </div>
       </div>

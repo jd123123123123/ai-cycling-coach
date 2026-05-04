@@ -242,13 +242,6 @@
     font-weight: 500;
     color: var(--color-muted);
   }
-
-  .serif-caps {
-    font-family: "Fraunces", serif;
-    font-variation-settings: "opsz" 14;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-  }
 }
 
 /* ── Calendar overrides (dark mode) ─────────────────────────────────── */
