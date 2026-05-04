@@ -1,25 +1,21 @@
-"""Garmin Connect client abstraction layer.
+"""Garmin Connect client using garmin-health-data.
 
-Defines the GarminProvider Protocol (structural typing interface) and
-GarminConnectClient (concrete implementation wrapping the unofficial
-python-garminconnect library).
+Replaces python-garminconnect + garth with diegoscarabelli/garmin-health-data,
+which uses a 5-strategy OAuth2 SSO fallback chain with curl_cffi TLS browser
+fingerprint impersonation to bypass Cloudflare WAF bot detection.
 
-ALL sync library calls are wrapped in asyncio.to_thread() to avoid
-blocking the FastAPI event loop. The garminconnect library uses the
-requests library internally (synchronous HTTP).
+Auth flow:
+    1. If token_store_path contains garmin_tokens.json, load + refresh — no login needed.
+    2. Otherwise: login(email, password) via the 5-strategy chain (~30–45 s) then
+       dump tokens to token_store_path for all future syncs.
 
-Usage:
-    client = GarminConnectClient(email="me@example.com", password="secret")
-    await client.authenticate()
-    activities = await client.get_activities(start_date, end_date)
-
-Architecture:
-    Business logic (garmin_sync_service.py) imports GarminProvider (Protocol),
-    not GarminConnectClient directly. This allows swapping the unofficial library
-    for the official Garmin Connect API later without changing business logic.
+Missing endpoints vs old garminconnect library:
+    get_hrv         — no dedicated endpoint; returns None (HRV syncs as null)
+    get_body_battery — no dedicated endpoint; returns [] (body battery syncs as null)
 """
 import asyncio
 import logging
+import os
 from datetime import date
 from typing import Protocol
 
@@ -27,63 +23,43 @@ logger = logging.getLogger(__name__)
 
 
 class GarminAuthError(Exception):
-    """Raised when Garmin Connect authentication fails.
+    """Raised when Garmin Connect authentication fails."""
 
-    Caught by the sync service to disable sync and update sync_status
-    to "auth_error" on the GarminCredential record.
-    """
+
+class GarminRateLimitError(GarminAuthError):
+    """Raised when Garmin rate-limits the server IP."""
 
 
 class GarminProvider(Protocol):
-    """Structural typing interface for Garmin data providers.
-
-    Concrete implementations must provide all listed async methods.
-    Business logic imports this Protocol rather than GarminConnectClient,
-    enabling future swap to the official Garmin API without touching
-    sync service code.
-    """
+    """Structural typing interface for Garmin data providers."""
 
     async def authenticate(self) -> None: ...
-
     async def get_activities(self, start_date: date, end_date: date) -> list[dict]: ...
-
     async def get_sleep(self, for_date: date) -> dict | None: ...
-
     async def get_hrv(self, for_date: date) -> dict | None: ...
-
     async def get_body_battery(self, start_date: date, end_date: date) -> list[dict]: ...
-
     async def get_training_status(self, for_date: date) -> dict | None: ...
-
     async def get_heart_rates(self, for_date: date) -> dict | None: ...
-
     async def get_stress(self, for_date: date) -> dict | None: ...
-
     async def get_user_summary(self, for_date: date) -> dict | None: ...
-
     async def get_intraday_stress(self, for_date: date) -> dict | None: ...
+    async def get_training_readiness(self, for_date: date) -> dict | None: ...
 
 
-class GarminConnectClient:
-    """Async wrapper around the unofficial python-garminconnect library.
+class GarminHealthDataClient:
+    """Async wrapper around garmin-health-data's GarminClient.
 
-    Implements GarminProvider via structural subtyping (no explicit
-    `implements GarminProvider` — duck typing is sufficient for Protocol).
-
-    All sync library calls are wrapped in asyncio.to_thread() to prevent
-    blocking the FastAPI event loop. The garminconnect library uses the
-    requests library which is synchronous.
+    Implements GarminProvider via structural subtyping.
+    All sync library calls run in asyncio.to_thread() to avoid blocking the event loop.
 
     Token store:
-        Garmin OAuth tokens are persisted at token_store_path (a directory).
-        On subsequent logins, the library reuses stored tokens without
-        requiring re-entry of credentials. Recommended path:
-        /data/garmin_tokens/{user_id}/
+        Tokens are persisted at {token_store_path}/garmin_tokens.json.
+        On subsequent auths, tokens load and auto-refresh without requiring credentials.
+        The directory must exist before authenticate() is called.
 
-    Auth error handling:
-        GarminConnectAuthenticationError is caught and re-raised as
-        GarminAuthError so the sync service can set sync_enabled=False
-        and update sync_status="auth_error" on the credential record.
+    Rate limiting:
+        GarminTooManyRequestsError is surfaced as GarminRateLimitError so the API
+        layer can return HTTP 429 with a user-friendly message.
     """
 
     def __init__(
@@ -95,25 +71,42 @@ class GarminConnectClient:
         self._email = email
         self._password = password
         self._token_store_path = token_store_path
-        self._api = None  # Set after authenticate()
+        self._api = None
 
     async def authenticate(self) -> None:
-        """Authenticate with Garmin Connect and store the API client.
+        from garmin_health_data.garmin_client.client import GarminClient  # noqa: PLC0415
+        from garmin_health_data.garmin_client.exceptions import (  # noqa: PLC0415
+            GarminAuthenticationError,
+            GarminTooManyRequestsError,
+        )
 
-        Uses stored OAuth tokens if token_store_path exists; falls back to
-        password login. Raises GarminAuthError on any auth failure.
-        """
-        from garminconnect import Garmin, GarminConnectAuthenticationError  # noqa: PLC0415
+        def _auth_sync():
+            # Token-first: skip password auth if we have a persisted session.
+            if self._token_store_path:
+                token_file = os.path.join(self._token_store_path, "garmin_tokens.json")
+                if os.path.exists(token_file):
+                    try:
+                        client = GarminClient.from_tokens(self._token_store_path)
+                        logger.info("Loaded Garmin tokens from %s", self._token_store_path)
+                        return client
+                    except Exception as exc:
+                        logger.warning("Token load failed, re-authenticating: %s", exc)
 
-        def _login_sync():
-            api = Garmin(self._email, self._password)
-            api.login(tokenstore=self._token_store_path)
-            return api
+            # Fresh login — runs 5-strategy SSO chain, may take up to ~45 s.
+            client = GarminClient()
+            client.login(self._email, self._password)
+            if self._token_store_path:
+                client.dump(self._token_store_path)
+                logger.info("Garmin tokens saved to %s", self._token_store_path)
+            return client
 
         try:
-            self._api = await asyncio.to_thread(_login_sync)
+            self._api = await asyncio.to_thread(_auth_sync)
             logger.info("Garmin authentication successful for %s", self._email)
-        except GarminConnectAuthenticationError as exc:
+        except GarminTooManyRequestsError as exc:
+            logger.warning("Garmin rate limit hit for %s: %s", self._email, exc)
+            raise GarminRateLimitError("Garmin is rate-limiting this server IP") from exc
+        except GarminAuthenticationError as exc:
             logger.error("Garmin authentication failed for %s: %s", self._email, exc)
             raise GarminAuthError(f"Garmin auth failed: {exc}") from exc
         except Exception as exc:
@@ -121,156 +114,106 @@ class GarminConnectClient:
             raise GarminAuthError(f"Garmin auth error: {exc}") from exc
 
     async def _ensure_auth(self) -> None:
-        """Ensure the API client is authenticated before use."""
         if self._api is None:
             await self.authenticate()
 
-    async def get_activities(self, start_date: date, end_date: date) -> list[dict]:
-        """Fetch activities for the date range (inclusive).
-
-        Returns a list of activity dicts from get_activities_by_date.
-        Each dict contains activityId, activityType, duration, distance, etc.
-        """
-        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
-        await self._ensure_auth()
+    def _wrap(self, fn, *args, **kwargs):
+        """Run a sync Garmin API call, translating auth/rate-limit errors."""
+        from garmin_health_data.garmin_client.exceptions import (  # noqa: PLC0415
+            GarminAuthenticationError,
+            GarminTooManyRequestsError,
+        )
         try:
-            return await asyncio.to_thread(
-                self._api.get_activities_by_date,
-                start_date.isoformat(),
-                end_date.isoformat(),
-            )
-        except GarminConnectAuthenticationError as exc:
-            logger.error("Auth error in get_activities: %s", exc)
-            raise GarminAuthError(f"Auth error during get_activities: {exc}") from exc
+            return fn(*args, **kwargs)
+        except GarminTooManyRequestsError as exc:
+            raise GarminRateLimitError("Garmin rate limit hit") from exc
+        except GarminAuthenticationError as exc:
+            raise GarminAuthError(f"Auth error: {exc}") from exc
+
+    async def get_activities(self, start_date: date, end_date: date) -> list[dict]:
+        await self._ensure_auth()
+        return await asyncio.to_thread(
+            self._wrap,
+            self._api.get_activities_by_date,
+            start_date.isoformat(),
+            end_date.isoformat(),
+        )
 
     async def get_sleep(self, for_date: date) -> dict | None:
-        """Fetch sleep data for a single date.
-
-        Returns dict with dailySleepDTO key, or None if no data available.
-        """
-        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
         await self._ensure_auth()
-        try:
-            return await asyncio.to_thread(
-                self._api.get_sleep_data,
-                for_date.isoformat(),
-            )
-        except GarminConnectAuthenticationError as exc:
-            logger.error("Auth error in get_sleep: %s", exc)
-            raise GarminAuthError(f"Auth error during get_sleep: {exc}") from exc
+        return await asyncio.to_thread(
+            self._wrap, self._api.get_sleep_data, for_date.isoformat()
+        )
 
     async def get_hrv(self, for_date: date) -> dict | None:
-        """Fetch HRV data for a single date.
-
-        Returns None if the device does not support HRV or data unavailable.
-        Callers must guard against None before accessing keys.
-        """
-        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
+        # garmin-health-data omits this endpoint but the OAuth token grants full API
+        # access. Call the HRV service directly via _connectapi — same auth/retry logic.
         await self._ensure_auth()
-        try:
-            return await asyncio.to_thread(
-                self._api.get_hrv_data,
-                for_date.isoformat(),
-            )
-        except GarminConnectAuthenticationError as exc:
-            logger.error("Auth error in get_hrv: %s", exc)
-            raise GarminAuthError(f"Auth error during get_hrv: {exc}") from exc
+        return await asyncio.to_thread(
+            self._wrap,
+            self._api._connectapi,
+            f"/hrv-service/hrv/{for_date.isoformat()}",
+        )
 
-    async def get_body_battery(
-        self, start_date: date, end_date: date
-    ) -> list[dict]:
-        """Fetch body battery data for the date range.
-
-        Returns a list of daily objects; use [0] when fetching a single day.
-        Each object has a `charged` field with the peak body battery value.
-        """
-        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
+    async def get_body_battery(self, start_date: date, end_date: date) -> list[dict]:
+        # garmin-health-data omits this endpoint but the OAuth token grants full API
+        # access. Call the body battery daily reports endpoint directly via _connectapi.
         await self._ensure_auth()
-        try:
-            return await asyncio.to_thread(
-                self._api.get_body_battery,
-                start_date.isoformat(),
-                end_date.isoformat(),
-            )
-        except GarminConnectAuthenticationError as exc:
-            logger.error("Auth error in get_body_battery: %s", exc)
-            raise GarminAuthError(f"Auth error during get_body_battery: {exc}") from exc
+        result = await asyncio.to_thread(
+            self._wrap,
+            self._api._connectapi,
+            "/wellness-service/wellness/bodyBattery/reports/daily",
+            params={"startDate": start_date.isoformat(), "endDate": end_date.isoformat()},
+        )
+        return result if isinstance(result, list) else []
 
     async def get_training_status(self, for_date: date) -> dict | None:
-        """Fetch training status for a single date.
-
-        Returns dict with trainingStatus sub-key (e.g., "PRODUCTIVE", "RECOVERY").
-        Store in raw_data on DailyMetric — no dedicated column in current schema.
-        """
-        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
         await self._ensure_auth()
-        try:
-            return await asyncio.to_thread(
-                self._api.get_training_status,
-                for_date.isoformat(),
-            )
-        except GarminConnectAuthenticationError as exc:
-            logger.error("Auth error in get_training_status: %s", exc)
-            raise GarminAuthError(f"Auth error during get_training_status: {exc}") from exc
+        return await asyncio.to_thread(
+            self._wrap, self._api.get_training_status, for_date.isoformat()
+        )
 
     async def get_heart_rates(self, for_date: date) -> dict | None:
-        """Fetch heart rate data including resting HR for a single date."""
-        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
         await self._ensure_auth()
-        try:
-            return await asyncio.to_thread(
-                self._api.get_heart_rates,
-                for_date.isoformat(),
-            )
-        except GarminConnectAuthenticationError as exc:
-            logger.error("Auth error in get_heart_rates: %s", exc)
-            raise GarminAuthError(f"Auth error during get_heart_rates: {exc}") from exc
+        return await asyncio.to_thread(
+            self._wrap, self._api.get_heart_rates, for_date.isoformat()
+        )
 
     async def get_stress(self, for_date: date) -> dict | None:
-        """Fetch all-day stress data for a single date.
-
-        Returns dict with avgStressLevel field.
-        """
-        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
         await self._ensure_auth()
-        try:
-            return await asyncio.to_thread(
-                self._api.get_all_day_stress,
-                for_date.isoformat(),
-            )
-        except GarminConnectAuthenticationError as exc:
-            logger.error("Auth error in get_stress: %s", exc)
-            raise GarminAuthError(f"Auth error during get_stress: {exc}") from exc
+        return await asyncio.to_thread(
+            self._wrap, self._api.get_stress_data, for_date.isoformat()
+        )
 
     async def get_user_summary(self, for_date: date) -> dict | None:
-        """Fetch user daily summary including steps for a single date."""
-        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
+        """Adapt get_steps_data to the {totalSteps: N} shape the mapper expects."""
         await self._ensure_auth()
-        try:
-            return await asyncio.to_thread(
-                self._api.get_user_summary,
-                for_date.isoformat(),
-            )
-        except GarminConnectAuthenticationError as exc:
-            logger.error("Auth error in get_user_summary: %s", exc)
-            raise GarminAuthError(f"Auth error during get_user_summary: {exc}") from exc
+        steps_list = await asyncio.to_thread(
+            self._wrap, self._api.get_steps_data, for_date.isoformat()
+        )
+        if not steps_list:
+            return None
+        total = sum(entry.get("steps", 0) or 0 for entry in steps_list)
+        return {"totalSteps": total}
 
     async def get_intraday_stress(self, for_date: date) -> dict | None:
-        """Fetch intraday stress time-series for a single date.
-
-        Returns dict with stressValuesArray: [[ts_ms, stress_level], ...].
-        Stress values of -1 or -2 mean 'no reading' and should be filtered out.
-
-        This is distinct from get_stress() which calls get_all_day_stress (aggregate only).
-        get_stress_data() returns the full intraday time-series needed for the chart.
-        """
-        from garminconnect import GarminConnectAuthenticationError  # noqa: PLC0415
         await self._ensure_auth()
-        try:
-            return await asyncio.to_thread(
-                self._api.get_stress_data,
-                for_date.isoformat(),
-            )
-        except GarminConnectAuthenticationError as exc:
-            logger.error("Auth error in get_intraday_stress: %s", exc)
-            raise GarminAuthError(f"Auth error during get_intraday_stress: {exc}") from exc
+        return await asyncio.to_thread(
+            self._wrap, self._api.get_stress_data, for_date.isoformat()
+        )
+
+    async def get_training_readiness(self, for_date: date) -> dict | None:
+        """Garmin training readiness for a given date.
+
+        Hits /metrics-service/metrics/trainingreadiness/{date} via the
+        underlying _connectapi (same pattern as get_hrv / get_body_battery —
+        garmin-health-data omits a typed wrapper but the OAuth token grants
+        full API access). Returns the raw JSON dict; mapping is the caller's
+        responsibility. Auth/rate-limit errors are translated by self._wrap.
+        """
+        await self._ensure_auth()
+        return await asyncio.to_thread(
+            self._wrap,
+            self._api._connectapi,
+            f"/metrics-service/metrics/trainingreadiness/{for_date.isoformat()}",
+        )

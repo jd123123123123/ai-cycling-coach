@@ -16,8 +16,15 @@ from app.schemas.daily_metric import (
     DailyMetricRead,
     IntradayDayResponse,
     IntradayPoint,
+    TodaySnapshotResponse,
+    WakeNowPairOut,
 )
 from app.services import daily_metric_service
+from app.services.biometrics_snapshot import (
+    compute_today_snapshot,
+    get_cached_snapshot,
+    store_cached_snapshot,
+)
 from app.services.garmin_sync_service import create_garmin_client_for_user
 from app.services.intraday_sync_service import sync_intraday_samples_for_day
 
@@ -129,4 +136,52 @@ async def get_intraday_for_day(
         hrv=to_points(cached.get("hrv", [])),
         hr=to_points(cached.get("hr", [])),
         fetched_live=fetched_live,
+    )
+
+
+@router.get("/today/snapshot", response_model=TodaySnapshotResponse)
+async def get_today_snapshot(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> TodaySnapshotResponse:
+    """Wake-vs-now biometric snapshot for the user's "today".
+
+    Cache: process-local 15-min TTL keyed by user_id. On cache miss we
+    compute from the local DB (daily_metric_samples + daily_metrics);
+    we deliberately DO NOT trigger an inline Garmin refresh here even
+    though the plan permits it — the scheduler-driven sync runs every 4h
+    and the 04.5.1 intraday sync hook fills samples on demand. Forcing a
+    Garmin round-trip on every cache miss would (a) blow the snapshot
+    response time from <50 ms to 5–10 s, (b) burn rate-limit budget on a
+    background-priority concern, and (c) make the endpoint racy with the
+    explicit /sync route. If the user wants fresher data they hit
+    /sync — that path will invalidate this cache once Step 1 lands.
+
+    "today" is computed as datetime.now(UTC).date(). When Step 2 of the
+    run-through lands the athlete-local timezone, switch to that here.
+    """
+    today_local = datetime.now(timezone.utc).date()
+
+    cached = get_cached_snapshot(current_user.id)
+    if cached is not None:
+        return TodaySnapshotResponse(
+            body_battery=WakeNowPairOut(**vars(cached.body_battery)),
+            stress=WakeNowPairOut(**vars(cached.stress)),
+            hrv_overnight_avg=cached.hrv_overnight_avg,
+            training_readiness=cached.training_readiness,
+            recovery_time_hours=cached.recovery_time_hours,
+            generated_at=cached.generated_at,
+            cached=True,
+        )
+
+    snapshot = await compute_today_snapshot(db, current_user.id, today_local)
+    store_cached_snapshot(current_user.id, snapshot)
+    return TodaySnapshotResponse(
+        body_battery=WakeNowPairOut(**vars(snapshot.body_battery)),
+        stress=WakeNowPairOut(**vars(snapshot.stress)),
+        hrv_overnight_avg=snapshot.hrv_overnight_avg,
+        training_readiness=snapshot.training_readiness,
+        recovery_time_hours=snapshot.recovery_time_hours,
+        generated_at=snapshot.generated_at,
+        cached=False,
     )

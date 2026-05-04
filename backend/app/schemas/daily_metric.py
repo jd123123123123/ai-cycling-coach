@@ -47,3 +47,29 @@ class IntradayDayResponse(BaseModel):
     hrv: list[IntradayPoint]
     hr: list[IntradayPoint] = []  # reserved for future — not yet synced
     fetched_live: bool
+
+
+# ─── Wake-vs-now snapshot (today-runthrough Step 5) ───────────────────────────
+
+
+class WakeNowPairOut(BaseModel):
+    """One metric, paired wake → now."""
+    wake: int | None
+    now: int | None
+    now_at: datetime | None
+
+
+class TodaySnapshotResponse(BaseModel):
+    """Composite today snapshot served from /daily-metrics/today/snapshot.
+
+    Cached server-side for SNAPSHOT_TTL (15 minutes). The frontend's
+    React Query staleTime can be shorter — the server is the source of
+    truth for "is this fresh enough to redisplay".
+    """
+    body_battery: WakeNowPairOut
+    stress: WakeNowPairOut
+    hrv_overnight_avg: int | None
+    training_readiness: int | None
+    recovery_time_hours: int | None
+    generated_at: datetime
+    cached: bool

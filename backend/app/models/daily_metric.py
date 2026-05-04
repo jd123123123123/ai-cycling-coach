@@ -46,6 +46,21 @@ class DailyMetric(Base):
     steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Wake-vs-now biometric snapshot columns (today-runthrough Step 5).
+    # Populated by services/biometrics_snapshot.py from daily_metric_samples +
+    # Garmin training_readiness endpoint. All nullable — historic rows are
+    # backfilled None and the service tolerates missing values.
+    body_battery_wake: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    body_battery_now: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    body_battery_now_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    stress_wake: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stress_now: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hrv_overnight_avg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    training_readiness: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    recovery_time_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Data source: "garmin" | "manual"
     source: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
