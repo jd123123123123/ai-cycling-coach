@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 6.2 Wave 1 in progress. 06.2-01 shipped token foundation: 4 CSS sport-accent/chart-axis tokens added to index.css @theme inline, formatSigned/formatHours/formatDelta utilities (utils/format.ts), toneFromPct/tokenForTone delta tone system (utils/delta.ts), and RevealCascade stagger primitive. Bundle delta: 0 KB gzipped. Purely additive — no rendered-surface changes. Plans 02-05 consume these primitives.
+**Current focus:** Phase 6.2 Wave 2 in progress. 06.2-03 complete: amber-discipline sweep across DailyInsight (icon-tile+gradient removed, tone left-bar added), RecentActivities (Dossier/serif-caps removed, sport-accent tokens consumed), SyncButton (ghost RefreshCw removed, Retry-in-toast), CoachBrief (2 decorative amber → muted, 1 caution-state preserved). Bundle delta: +0.09% vs 418d4f5 baseline.
 
 ## Current Position
 
 Phase: 6.2 of 9 (Whoop-grade redesign)
-Plan: 06.2-01 complete (3 tasks; 3 atomic feat commits + 1 metadata commit; vite build green; 0 KB bundle delta)
-Status: Phase 6.2 Wave 1 (token foundation) complete. 5 plans remaining in Phase 6.2.
-Last activity: 2026-05-04 -- Completed 06.2-PLAN-01.md (sport-accent tokens + format/delta utils + RevealCascade)
+Plan: 06.2-03 complete (3 tasks; 2 atomic feat commits + Task 1 captured in concurrent 06.2-04 commit; vite build green; +0.09% bundle delta)
+Status: Phase 6.2 Wave 2 in progress. Plans 02, 03, 04 complete (concurrently). Plans 05, 06 remaining.
+Last activity: 2026-05-04 -- Completed 06.2-PLAN-03.md (amber-discipline + sport-accent token consolidation)
 
 Progress: [██████████████░░] ~90% (Phases 1-6 + 6.1 complete; Phases 6.2, 7, 8, 9 remaining)
 
@@ -259,6 +259,11 @@ Recent decisions affecting current work:
 - [06.2-01]: toneFromPct thresholds — |Δ| < 3 = muted, 3-10 in good dir = forest-2, >10 good = forest, 3-10 bad = amber, >10 bad = alert. Direction param is 'good'|'bad' (vs KpiStripCompact's boolean higherIsBetter — Plan 03 migrates).
 - [06.2-01]: RevealCascade uses React.ReactElement return type (not JSX.Element) — avoids JSX namespace lookup without explicit @types/react import in tsconfig.app.json. Functionally equivalent.
 - [06.2-01]: No consumers of new tokens/utils in Plan 01 — additive only. Plans 02-05 wire them up.
+- [06.2-03]: TONE_COLOR single-source-of-truth: one const drives left-border + eyebrow-dot + secondary indicators in DailyInsight. Old toneColor (bar+icon split) removed.
+- [06.2-03]: CoachBrief "AI offline · rule-based" chip = caution-state amber (preserved): communicates degraded rule-based fallback, not decorative flair.
+- [06.2-03]: compact prop kept in SyncButton: TodayTab.tsx:185 passes compact={true} in dense masthead — branch is live.
+- [06.2-03]: DailyInsight 14-day timeline deferred: dailyTones[] not exposed by useDailyMetrics; needs data plumbing follow-up plan.
+- [06.2-03]: RecentActivities NP sparkline deferred: requires intraday per-second power data not yet wired in activity API response.
 
 ### Roadmap Evolution
 
@@ -289,8 +294,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-04 — Phase 6.2 Wave 1 (06.2-PLAN-01.md) complete
-Stopped at: 06.2-01 complete. Commits: (1) 9764be3 feat(06.2-01): sport-accent + chart-axis tokens. (2) d590809 feat(06.2-01): format.ts + delta.ts. (3) 172d8bb feat(06.2-01): RevealCascade. Build: vite build green (812.85 KB gzipped, 0 KB delta vs 418d4f5 baseline). Zero rendered-surface changes.
+Last session: 2026-05-04 — Phase 6.2 Wave 2 (06.2-PLAN-03.md) complete
+Stopped at: 06.2-03 complete. Commits: (Task 1 in concurrent 4e604f1) (ba19ca6) feat(06.2-03): RecentActivities. (d206b21) feat(06.2-03): SyncButton. Build: vite build green (813.57 KB gzipped, +0.09% vs 418d4f5 baseline).
 Resume file: None
-Next: Phase 6.2 Plan 02 (WeekStrip redesign — consumes formatHours, sport-accent tokens, RevealCascade).
-Pending: Per-provider sync endpoint (SyncStatusPill currently single-provider); WeekStrip URL-driven week selection for CommandPalette "Last/This/Next week" items; test infra install (vitest + @testing-library/react) to activate CommandPalette.test.tsx stubs; Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling past one uvicorn worker; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; restart Docker daemon + `alembic upgrade head` (b9c4d1e8f2a3) + smoke-test `/coach/chat` with modification intent before production deploy; Fresh `npm ci` in frontend to fix empty .bin directory ergonomics.
+Next: Phase 6.2 Plans 05-06 (CoachBrief number formatting + final integration).
+Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend.
