@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 6.2 Wave 2 in progress. 06.2-02 and 06.2-03 both complete. 06.2-02: PMCChart muted eyebrow + 3 SummaryStat Sparklines; PolarizedDistribution rgba→zone-tokens + BarTile→3-row table; WeekStrip zone-token intensityColor + tip-glow today + week-vs-4w-avg line (wired 28-day). Plans 05, 06 remaining.
+**Current focus:** Phase 6.2 Wave 3 in progress. 06.2-05 complete. 06.2-05: shared number-presentation utils (format.ts/delta.ts) adopted by 5 of 7 today-runthrough components; local toneFromPct in KpiStripCompact deleted; per-KPI Sparklines at 64×16 with delta-tone stroke; .serif-caps erased from all 11 call sites and deleted from index.css. Plan 06 remaining.
 
 ## Current Position
 
 Phase: 6.2 of 9 (Whoop-grade redesign)
-Plan: 06.2-02 complete (3 tasks; 3 atomic feat commits; vite build green)
-Status: Phase 6.2 Wave 2 in progress. Plans 02, 03, 04 complete (concurrently). Plans 05, 06 remaining.
-Last activity: 2026-05-03 -- Completed 06.2-PLAN-02.md (PMCChart + PolarizedDistribution + WeekStrip chart-cards redesign)
+Plan: 06.2-05 complete (2 tasks; vite build green; bundle 813.89 kB gzip, 0 delta; tsc --noEmit clean)
+Status: Phase 6.2 Wave 3 in progress. Plans 01-05 complete. Plan 06 remaining.
+Last activity: 2026-05-03 -- Completed 06.2-PLAN-05.md (today-runthrough utils migration + .serif-caps deletion + KpiStripCompact Sparkline)
 
 Progress: [██████████████░░] ~90% (Phases 1-6 + 6.1 complete; Phases 6.2, 7, 8, 9 remaining)
 
@@ -267,6 +267,14 @@ Recent decisions affecting current work:
 - [06.2-02]: ATL sparkline uses var(--color-amber) — caution-semantic for fatigue; the only permitted amber in PMCChart post-02.
 - [06.2-02]: Polarized 14-day sparkline deferred — useActivitiesRange returns flat ActivityRead list, not daily zone-second aggregates; no per-day lowPctSeries derivable without O(n) date-bucketing; a follow-up plan needs a daily-zone-breakdown endpoint or per-day aggregation utility.
 - [06.2-02]: WeekStrip week-vs-4w-avg line WIRED (not deferred) — second useActivitiesRange call with subDays(weekStart, 21) was single-line-trivial; no new endpoint needed.
+- [06.2-04]: ProtectedRoute confirmed pure-logical — returns <Navigate /> or children only; no visible chrome exists to migrate. Audited and cleaned of any stale literals.
+- [06.2-04]: GarminConnectPage radial gradient migrated to color-mix(in srgb, var(--color-forest-2) 18%, transparent) — removes hard-coded rgba(48,209,88); ties gradient to theme token; matches ReadinessHero ready-tier pattern from Phase 6.1.
+- [06.2-04]: 3-dot onboarding strip ordering: Account (Login/Register) → Garmin (GarminConnect) → Goals (ConsentPage/ProfileSetupPage). Reflects actual App.tsx routing sequence; future devs should maintain this ordering if routing changes.
+- [06.2-04 HYGIENE]: Commit 4e604f1 over-staged DailyInsight.tsx + CoachBrief.tsx (Plan 03 files) alongside Plan 04 LoginPage/RegisterPage work. Caused by Wave 2 concurrent execution; all work is functionally correct; commit attribution is muddled. Do not retroactively split. Diff 4e604f1 directly when auditing Plan 03 surface-card changes.
+- [06.2-05]: KpiCell.tone changed from local DeltaTone enum ('good'/'warn'/'bad'/'neutral') to CSS var() string (from tokenForTone) — direct use in stroke/color without lookup table; TSB tone mapping kept bespoke (non-monotonic good/bad: high TSB = over-rested = amber warning)
+- [06.2-05]: Sparkline stroke uses cell.tone (delta tone) not sport-specific hardcoded colors — single source of truth; sparkline color = delta chip color = toneFromPct result
+- [06.2-05]: .serif-caps replaced by .eyebrow on small uppercase labels, text-[Npx] font-medium on larger display labels — .serif-caps (Fraunces 14opsz) retired; eyebrow (Geist uppercase) is the system's small-caps idiom
+- [06.2-05]: ReadinessHero EnterGroup NOT swapped to RevealCascade — coexistence intentional; RevealCascade is for newly designed surfaces; ReadinessHero swap deferred to future polish
 
 ### Roadmap Evolution
 
@@ -297,8 +305,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-03 — Phase 6.2 Wave 2 (06.2-PLAN-02.md) complete
-Stopped at: 06.2-02 complete. Commits: (7134ce5) feat(06.2-02): PMCChart. (c6264f8) feat(06.2-02): PolarizedDistribution. (585d59a) feat(06.2-02): WeekStrip. Build: vite build green (813.94 KB gzipped, ~+0.05% vs 418d4f5 baseline).
+Last session: 2026-05-03 — Phase 6.2 Wave 3 (06.2-PLAN-05.md) complete
+Stopped at: 06.2-05 complete. Commits: (5bfc796) feat(06.2-05): today-runthrough utils migration + .serif-caps deletion. (5f6db74) feat(06.2-05): KpiStripCompact per-KPI mini-trend Sparkline. Build: vite build green, 813.89 kB gzip, 0 delta vs Wave-2 baseline.
 Resume file: None
-Next: Phase 6.2 Plans 05-06 (amber-typography global sweep + final integration).
-Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend.
+Next: Phase 6.2 Plan 06 (DashboardShell paper-grain, DashboardPage tab hairline + tabpanel-in fade, TrendsTab maxHeight clip removal, WeekTab ComplianceStrip placement, final bundle audit).
+Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
