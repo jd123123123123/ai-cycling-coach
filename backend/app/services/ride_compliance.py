@@ -33,11 +33,18 @@ References: .planning/research/training-frameworks.md §§ Coggan, Friel, San Mi
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Literal
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.activity import Activity
-from app.services.workout_templates import WorkoutTemplate
+from app.services.workout_templates import IntervalBlock, WorkoutTemplate, get_template
+
+_log = logging.getLogger(__name__)
 
 Grade = Literal["perfect", "strong", "okay", "overcooked", "undercooked"]
 Band = Literal["match", "over", "under"]
@@ -315,6 +322,150 @@ def compliance_pair_to_dict(p: CompliancePair) -> dict:
         "delta_pct": p.delta_pct,
         "band": p.band,
     }
+
+
+# ======================================================================
+#  Recommendation-aware scoring (Phase 4 — today-runthrough Step 4)
+# ======================================================================
+#
+# The original `score_ride()` above is pure: caller supplies a
+# `target_template`, we grade. The problem with that flow as the *outer*
+# evaluation entry point is that the caller (build_snapshot) re-runs the
+# template picker against post-ride state — so the picker is grading
+# itself. We need the grader to read what the coach actually told the
+# athlete to do, which lives in `coach_recommendations` keyed by
+# (user_id, target_date).
+#
+# `score()` is the new entry point. It looks up the recommendation row
+# for the activity's local date and grades against its blocks. If no row
+# exists (e.g. older briefs from before this plumbing landed) we fall
+# back to the supplied `target_template` so callers don't break.
+
+def _local_date_for_activity(activity: Activity):
+    """Best-effort local-calendar date for a completed activity.
+
+    The Activity model only carries a UTC-aware `started_at`. Until we
+    persist an explicit `local_date` column we approximate the local
+    date from `started_at` (UTC). For most riders this is correct ±1
+    day at the timezone boundary — acceptable for grading lookup.
+    """
+    if activity.started_at is None:
+        return None
+    return activity.started_at.date()
+
+
+def _template_from_recommendation(rec) -> WorkoutTemplate | None:
+    """Reconstruct a WorkoutTemplate from a CoachRecommendation row so the
+    pure `score_ride()` grader can run unchanged.
+
+    Strategy: prefer rebuilding from `rec.blocks` (% FTP + duration is what
+    grading needs — watts are irrelevant to TSS/duration banding). If the
+    blocks payload is malformed or empty, fall back to the canonical
+    template registry by `template_id` so we still produce a sensible grade.
+    """
+    blocks_data = rec.blocks if isinstance(rec.blocks, list) else []
+    rebuilt: list[IntervalBlock] = []
+    for b in blocks_data:
+        if not isinstance(b, dict):
+            continue
+        try:
+            rebuilt.append(
+                IntervalBlock(
+                    name=str(b.get("name") or "Main"),
+                    duration_s=int(b.get("duration_s") or 0),
+                    target_pct_ftp=float(b.get("target_pct_ftp") or 0.0),
+                    target_rpe=int(b.get("rpe") or b.get("target_rpe") or 5),
+                    zone=int(b.get("zone") or 1),
+                )
+            )
+        except (TypeError, ValueError):
+            continue
+
+    if rebuilt:
+        return WorkoutTemplate(
+            id=str(rec.template_id),
+            name=str(rec.title or rec.template_id),
+            category="endurance",  # category is not stored on the rec; placeholder
+            purpose="",
+            framework_cited=str(rec.framework_cited or ""),
+            blocks=rebuilt,
+            base_tss=float(rec.predicted_tss or 0),
+        )
+
+    # Fallback: registry lookup by template_id.
+    return get_template(str(rec.template_id))
+
+
+async def score(
+    db: AsyncSession,
+    user_id: int,
+    actual_activity: Activity,
+    target_template: WorkoutTemplate,
+    ftp: int | None,
+    phase: str,
+    session_type: str,
+) -> RideCompliance:
+    """Recommendation-aware compliance score.
+
+    1. Look up `coach_recommendations` for (user_id, activity.local_date).
+    2. If found: grade against its template (rebuilt from blocks); persist
+       the eval back onto the row so the audit trail is complete.
+    3. If not found: fall back to `target_template` (existing re-pick flow)
+       so older briefs don't break.
+
+    Return shape is identical to `score_ride()` — callers don't change.
+    """
+    # Lazy import to avoid any import-cycle risk; the model is registered
+    # via app.models.__init__ at process start anyway.
+    from app.models.coach_recommendation import CoachRecommendation
+
+    target_date = _local_date_for_activity(actual_activity)
+    rec = None
+    if target_date is not None:
+        try:
+            rec_q = await db.execute(
+                select(CoachRecommendation).where(
+                    CoachRecommendation.user_id == user_id,
+                    CoachRecommendation.target_date == target_date,
+                )
+            )
+            rec = rec_q.scalar_one_or_none()
+        except Exception:  # pragma: no cover — DB hiccup, fall back
+            _log.exception(
+                "coach_recommendations lookup failed; falling back to re-pick "
+                "(user_id=%s, date=%s)", user_id, target_date,
+            )
+            rec = None
+
+    chosen_template: WorkoutTemplate = target_template
+    used_recommendation = False
+    if rec is not None:
+        rec_template = _template_from_recommendation(rec)
+        if rec_template is not None:
+            chosen_template = rec_template
+            used_recommendation = True
+
+    compliance = score_ride(
+        actual_activity=actual_activity,
+        target_template=chosen_template,
+        ftp=ftp,
+        phase=phase,
+        session_type=session_type,
+    )
+
+    # Persist the eval back onto the recommendation row when we used it.
+    if used_recommendation and rec is not None:
+        try:
+            rec.evaluated_at = datetime.now(UTC)
+            rec.eval_grade = compliance.grade
+            rec.eval_payload = ride_compliance_to_dict(compliance)
+            await db.commit()
+        except Exception:  # pragma: no cover — best-effort write-back
+            _log.exception(
+                "coach_recommendations eval write-back failed (id=%s)", rec.id,
+            )
+
+    return compliance
 
 
 def ride_compliance_to_dict(rc: RideCompliance) -> dict:

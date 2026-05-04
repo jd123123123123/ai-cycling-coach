@@ -38,6 +38,7 @@ from app.config import settings
 from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
 from app.models.coach_brief import CoachBrief
+from app.models.coach_recommendation import CoachRecommendation
 from app.services import advanced_metrics
 from app.services.advanced_metrics import (
     ctl_atl_tsb_snapshot,
@@ -1528,7 +1529,96 @@ async def get_or_generate_brief(
     db.add(brief)
     await db.commit()
     await db.refresh(brief)
+
+    # Phase 4 (today-runthrough Step 4): persist the prescription as a
+    # coach_recommendations row keyed by (user_id, target_date). Post-ride
+    # compliance grading reads from this table so it scores against what
+    # the athlete actually saw — not against a re-pick of the template.
+    #
+    # TODO(Step 6 — tomorrow_plan): when the brief carries a tomorrow_plan
+    # block, also upsert a row for target_date=today+1. For now we only
+    # write today's row.
+    try:
+        await _upsert_recommendation_for_today(
+            db=db,
+            user_id=user_id,
+            brief=brief,
+            language=language,
+        )
+    except Exception:  # pragma: no cover — best-effort plumbing
+        # We never want recommendation persistence to break brief generation.
+        # Log + swallow; the fallback path in ride_compliance will re-pick.
+        logging.getLogger(__name__).exception(
+            "coach_recommendation upsert failed for user_id=%s", user_id,
+        )
+
     return brief
+
+
+async def _upsert_recommendation_for_today(
+    db: AsyncSession,
+    user_id: int,
+    brief: CoachBrief,
+    language: str,
+) -> None:
+    """Write (or replace) the coach_recommendations row for today's local date.
+
+    Idempotent on (user_id, target_date): if a row exists for today we update
+    in place rather than appending — there's only ever one "what's prescribed
+    today" answer per athlete per day, even if the brief is regenerated.
+    """
+    pw = brief.prescribed_workout
+    if not isinstance(pw, dict) or not pw.get("template_id"):
+        # Rest-day briefs / pre-5.1 fallbacks — nothing to grade against.
+        return
+
+    today_local = date.today()
+
+    existing_q = await db.execute(
+        select(CoachRecommendation).where(
+            CoachRecommendation.user_id == user_id,
+            CoachRecommendation.target_date == today_local,
+        )
+    )
+    existing = existing_q.scalar_one_or_none()
+
+    blocks = pw.get("blocks") or []
+    template_id = str(pw.get("template_id"))
+    title = str(pw.get("title") or template_id)
+    duration_minutes = int(pw.get("duration_minutes") or 0)
+    predicted_tss = int(round(float(pw.get("predicted_tss") or 0)))
+    framework_cited = pw.get("framework_cited") or None
+    why = pw.get("why_this_workout") or None
+
+    if existing is None:
+        rec = CoachRecommendation(
+            user_id=user_id,
+            target_date=today_local,
+            template_id=template_id,
+            title=title,
+            duration_minutes=duration_minutes,
+            predicted_tss=predicted_tss,
+            framework_cited=framework_cited,
+            blocks=blocks,
+            why_this_workout=why,
+            source_brief_id=brief.id,
+        )
+        db.add(rec)
+    else:
+        existing.template_id = template_id
+        existing.title = title
+        existing.duration_minutes = duration_minutes
+        existing.predicted_tss = predicted_tss
+        existing.framework_cited = framework_cited
+        existing.blocks = blocks
+        existing.why_this_workout = why
+        existing.source_brief_id = brief.id
+        # Reset eval — the new prescription hasn't been graded yet.
+        existing.evaluated_at = None
+        existing.eval_grade = None
+        existing.eval_payload = None
+
+    await db.commit()
 
 
 # ======================================================================

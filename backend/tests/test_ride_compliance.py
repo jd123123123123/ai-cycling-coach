@@ -270,3 +270,106 @@ class TestSerialization:
         p = _pair(60.0, 62.0)
         d = compliance_pair_to_dict(p)
         assert d == {"target": 60.0, "actual": 62.0, "delta_pct": pytest.approx(3.3, abs=0.1), "band": "match"}
+
+
+# ======================================================================
+# Recommendation-aware score() — Phase 4 plumbing (today-runthrough Step 4)
+# ======================================================================
+#
+# We don't spin up a real DB here; we use AsyncMock to stand in for the
+# AsyncSession. The two paths we care about:
+#   1. No recommendation row → falls back to supplied target_template,
+#      returns the same grade as score_ride() would have.
+#   2. Recommendation row present → grades against the rec's blocks and
+#      writes evaluated_at / eval_grade / eval_payload back.
+
+from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+from app.services.ride_compliance import score
+
+
+def _activity_with_date(
+    *,
+    duration_minutes: float = 60.0,
+    tss: float | None = 45.0,
+):
+    a = _activity(duration_minutes=duration_minutes, tss=tss)
+    a.started_at = datetime(2026, 5, 3, 8, 30, tzinfo=timezone.utc)
+    return a
+
+
+def _mock_session_with_rec(rec):
+    """Build an AsyncSession-like mock whose .execute(...) returns a result
+    object whose .scalar_one_or_none() yields `rec`."""
+    session = MagicMock()
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=rec)
+    session.execute = AsyncMock(return_value=result)
+    session.commit = AsyncMock()
+    return session
+
+
+@pytest.mark.asyncio
+async def test_score_falls_back_to_template_when_no_recommendation():
+    tpl = TEMPLATES["z2_endurance_60"]
+    act = _activity_with_date(duration_minutes=62, tss=47)
+    session = _mock_session_with_rec(None)
+
+    rc = await score(
+        db=session,
+        user_id=1,
+        actual_activity=act,
+        target_template=tpl,
+        ftp=280,
+        phase="build1",
+        session_type="endurance",
+    )
+    # Same result as the legacy path.
+    assert rc.grade == "perfect"
+    assert rc.template_id == "z2_endurance_60"
+    # No write-back when there's no rec to update.
+    session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_score_uses_recommendation_and_writes_back_eval():
+    tpl = TEMPLATES["z2_endurance_60"]
+    # Build a stand-in recommendation row whose blocks reproduce the same
+    # 60-min Z2 template — grading should produce "perfect" for a 62-min/47-TSS ride.
+    rec = SimpleNamespace(
+        id=99,
+        user_id=1,
+        target_date=datetime(2026, 5, 3).date(),
+        template_id="z2_endurance_60",
+        title="Z2 Endurance 60",
+        framework_cited="Coggan Z2",
+        predicted_tss=45,
+        blocks=[
+            {"name": "Warm-up", "duration_s": 600, "target_pct_ftp": 0.55, "zone": 1, "rpe": 3},
+            {"name": "Main",    "duration_s": 2400, "target_pct_ftp": 0.70, "zone": 2, "rpe": 4},
+            {"name": "Cool-down","duration_s": 600, "target_pct_ftp": 0.50, "zone": 1, "rpe": 2},
+        ],
+        evaluated_at=None,
+        eval_grade=None,
+        eval_payload=None,
+    )
+    act = _activity_with_date(duration_minutes=60, tss=45)
+    session = _mock_session_with_rec(rec)
+
+    rc = await score(
+        db=session,
+        user_id=1,
+        actual_activity=act,
+        target_template=tpl,
+        ftp=280,
+        phase="build1",
+        session_type="endurance",
+    )
+    assert rc.grade in ("perfect", "strong")
+    # Eval was written back onto the rec.
+    assert rec.evaluated_at is not None
+    assert rec.eval_grade == rc.grade
+    assert rec.eval_payload is not None
+    session.commit.assert_awaited()
