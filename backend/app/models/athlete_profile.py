@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -39,6 +39,14 @@ class AthleteProfile(Base):
     # Goals stored as JSON for flexibility
     # {"target_ftp": int, "target_event": {"name": str, "date": str}, "weekly_hours": float}
     goals: Mapped[dict | None] = mapped_column(JSON, default=dict, nullable=True)
+
+    # Target event — first-class columns for the periodization engine (Phase 7).
+    # Supersedes goals.target_event_date; legacy goals JSONB preserved for back-compat.
+    # target_event_type values: 'race' | 'fondo' | 'audax' | 'maintenance'
+    # target_priority values: 'A' | 'B' | 'C'
+    target_event_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_event_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    target_priority: Mapped[str | None] = mapped_column(String(1), nullable=True)
 
     # FTP history — list of {"ftp_watts": int, "measured_at": str} dicts
     ftp_history: Mapped[list | None] = mapped_column(JSON, default=list, nullable=True)

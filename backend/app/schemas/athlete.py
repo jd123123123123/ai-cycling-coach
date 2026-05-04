@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -36,6 +37,10 @@ class AthleteProfileUpdate(BaseModel):
     weekly_hours_available: float | None = None
     primary_sport: str | None = None
     secondary_sports: list[str] | None = None
+    # Target event fields (Phase 7 periodization engine)
+    target_event_date: date | None = None
+    target_event_type: Literal['race', 'fondo', 'audax', 'maintenance'] | None = None
+    target_priority: Literal['A', 'B', 'C'] | None = None
 
 
 class AthleteProfileRead(BaseModel):
@@ -64,6 +69,11 @@ class AthleteProfileRead(BaseModel):
     # Goals and history
     goals: dict | None = None
     ftp_history: list | None = None
+
+    # Target event fields (Phase 7 periodization engine)
+    target_event_date: date | None = None
+    target_event_type: Literal['race', 'fondo', 'audax', 'maintenance'] | None = None
+    target_priority: Literal['A', 'B', 'C'] | None = None
 
     # Timestamps
     created_at: datetime
