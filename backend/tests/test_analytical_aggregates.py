@@ -328,6 +328,30 @@ class TestActivitySummary:
         assert result["aggregate"]["sport_mix"]["cycling"] == 3
         assert result["aggregate"]["sport_mix"]["running"] == 2
 
+    async def test_running_activity_produces_unknown_zone(self):
+        """Running activities must NOT inherit cycling FTP for IF calculation.
+
+        A running activity with avg_power=332 W and FTP=240 W would produce
+        IF=1.38 → zone "z3", which is nonsense. Sport guard must return
+        if_=None and zone="unknown" for non-cycling activities.
+        """
+        acts = [
+            _fake_activity(
+                sport="running",
+                normalized_power=332.0,
+                average_power=332.0,
+            )
+        ]
+        db = _mock_db_returning_activities(acts)
+        with patch(
+            "app.services.analytical_aggregates._fetch_athlete_ftp",
+            new=AsyncMock(return_value=240),
+        ):
+            result = await activity_summary(user_id=1, limit=5, sport_filter=None, db=db)
+        row = result["activities"][0]
+        assert row["if_"] is None, "running activities must not produce an IF value"
+        assert row["zone"] == "unknown", "running activities must not be assigned a power zone"
+
     async def test_empty_activities(self):
         db = _mock_db_returning_activities([])
         with patch(

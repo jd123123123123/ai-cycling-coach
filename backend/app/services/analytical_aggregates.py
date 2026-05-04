@@ -377,7 +377,11 @@ async def recovery_trend_summary(
 # ======================================================================
 
 def _activity_if(activity: Any, ftp: int | None) -> float | None:
-    """IF = NP / FTP (Coggan). Falls back to avg_power/FTP when NP absent."""
+    """IF = NP / FTP (Coggan). Cycling only — running watts must not be divided
+    by cycling FTP (a running activity at ~330 W / 240 W FTP = IF 1.38 → bogus z3).
+    Falls back to avg_power/FTP when NP absent."""
+    if getattr(activity, "sport", None) != "cycling":
+        return None
     if ftp is None or ftp <= 0:
         return None
     np_val = activity.normalized_power or activity.average_power
