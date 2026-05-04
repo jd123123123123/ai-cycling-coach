@@ -77,14 +77,59 @@ class CompliancePair(BaseModel):
     band: Literal["match", "over", "under"]
 
 
+class ActivityWrapup(BaseModel):
+    """One activity inside a multi-activity post-ride review (Step 3).
+
+    Populated when the athlete completed >=2 activities on the local day.
+    The frontend renders these as per-row mini cards (sport icon + title +
+    duration + distance + TSS chip + per-ride compliance chip).
+
+    All numeric fields are nullable — HR-only devices, treadmill running,
+    and strength work won't have IF/EF/VI.
+    """
+    title: str
+    sport: str
+    tss: float | None = None
+    duration_minutes: int | None = None
+    distance_km: float | None = None
+    intensity_factor: float | None = None
+    efficiency_factor: float | None = None
+    variability_index: float | None = None
+    # Per-ride compliance chip — only populated when count >= 2; for n=1
+    # the top-level `grade` carries this instead.
+    compliance_grade: Literal["perfect", "strong", "okay", "overcooked", "undercooked"] | None = None
+
+
+class WrapupTotals(BaseModel):
+    """Sum across all activities for the local day (Step 3)."""
+    tss: float = 0.0
+    duration_minutes: int = 0
+    distance_km: float = 0.0
+    count: int = 0
+
+
 class PostRideReview(BaseModel):
     """Complete post-ride review attached to the brief when the athlete has
-    already trained today (weekly_progress.today_tss >= 25).
+    already trained today.
 
-    When present, the frontend renders a PostRideReview card IN PLACE of the
-    PrescribedWorkoutCard — the prescribed_workout itself stays `rest_day`.
+    Trigger (post Step 3): >=1 activity AND total_duration_minutes >= 20.
+
+    Single-session mode (count == 1): the existing fields populate exactly
+    as before — top-level `grade`, `duration`, `tss`, narrative paragraphs.
+    The new `activities` / `totals` fields are still emitted (one entry +
+    matching totals) so the frontend has a uniform shape to read from.
+
+    Multi-session mode (count >= 2): top-level `grade` is None and the
+    per-axis pairs (`duration`, `tss`) are aggregated totals; per-ride
+    compliance chips live inside `activities[].compliance_grade`. Narrative
+    fields are populated with a single combined paragraph covering both
+    sessions.
+
+    All new fields default to empty / null so older briefs still validate.
+    `grade` is now nullable (was required) — necessary for the multi-session
+    case. Existing single-session payloads continue to set it.
     """
-    grade: Literal["perfect", "strong", "okay", "overcooked", "undercooked"]
+    grade: Literal["perfect", "strong", "okay", "overcooked", "undercooked"] | None = None
     headline: str                       # 3-8 words, e.g. "Perfect execution"
     # Compliance numbers (always emitted — simple mode shows them with friendly
     # labels; technical mode shows them with their sports-science names).
@@ -102,6 +147,11 @@ class PostRideReview(BaseModel):
     target_template_id: str
     target_template_title: str
     session_type: str
+    # Step 3 — multi-activity additions. Default to empty so older briefs still
+    # validate. When count >= 2, frontend renders the stacked summary header
+    # + per-row mini-cards with per-ride compliance chips.
+    activities: list[ActivityWrapup] = Field(default_factory=list)
+    totals: WrapupTotals = Field(default_factory=WrapupTotals)
 
 
 class OutlookEntry(BaseModel):

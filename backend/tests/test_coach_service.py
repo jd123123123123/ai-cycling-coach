@@ -763,3 +763,169 @@ class TestPostRideReviewLLMPath:
         }
         resolved = resolve_and_prescribe(snap, llm_payload)
         assert resolved.get("post_ride_review") is None
+
+
+# ---------------------------------------------------------------------------
+# Step 3 — _todays_activities multi-activity wrap-up
+# ---------------------------------------------------------------------------
+
+class _MockResult:
+    """Mimics what AsyncSession.execute() returns for both
+    `select(Activity)` (rows) and `select(AthleteProfile)` (single row).
+    """
+    def __init__(self, payload):
+        self._payload = payload
+
+    def scalar_one_or_none(self):
+        # Single AthleteProfile row
+        return self._payload if not isinstance(self._payload, list) else None
+
+    def scalars(self):
+        # Activity list path
+        rows = self._payload if isinstance(self._payload, list) else []
+
+        class _Scalars:
+            def __init__(self, items): self._items = items
+            def all(self): return list(self._items)
+
+        return _Scalars(rows)
+
+
+class _ActivitiesMockDB:
+    """Mock AsyncSession returning a fixed list of activities for the first
+    execute() call, then a fixed AthleteProfile for the second.
+    """
+    def __init__(self, activities, profile):
+        self._calls = 0
+        self._activities = activities
+        self._profile = profile
+
+    async def execute(self, stmt):
+        self._calls += 1
+        # First call inside _todays_activities is the activity range query;
+        # second is the AthleteProfile lookup. Order is deterministic in
+        # the implementation.
+        if self._calls == 1:
+            return _MockResult(self._activities)
+        return _MockResult(self._profile)
+
+
+def _make_activity(*, started_at, duration_seconds, tss, np=None, avg_p=None,
+                   avg_hr=None, distance_meters=None, sport="cycling",
+                   title="Ride"):
+    return SimpleNamespace(
+        id=id(object()) % 100000,
+        user_id=1,
+        started_at=started_at,
+        duration_seconds=duration_seconds,
+        distance_meters=distance_meters,
+        tss=tss,
+        normalized_power=np,
+        average_power=avg_p,
+        average_hr=avg_hr,
+        sport=sport,
+        title=title,
+        raw_data=None,
+    )
+
+
+@pytest.mark.asyncio
+class TestTodaysActivities:
+    async def test_two_activities_sum_correctly(self):
+        from app.services.coach_service import _todays_activities
+
+        # Two rides today — one tempo (steady NP/avg_p ratio), one Z2 commute.
+        # Note: started_at must fall inside the athlete-local window. We pick
+        # current UTC time so the window unconditionally includes them.
+        now = datetime.now(timezone.utc)
+        a1 = _make_activity(
+            started_at=now - timedelta(hours=4),
+            duration_seconds=3600,           # 60 min
+            tss=80.0,
+            np=240.0, avg_p=235.0, avg_hr=148,
+            distance_meters=28000.0,
+            title="Tempo intervals",
+        )
+        a2 = _make_activity(
+            started_at=now - timedelta(hours=1),
+            duration_seconds=2700,           # 45 min
+            tss=35.0,
+            np=160.0, avg_p=155.0, avg_hr=128,
+            distance_meters=18000.0,
+            title="Easy spin",
+        )
+        profile = SimpleNamespace(ftp_watts=280)
+        db = _ActivitiesMockDB([a1, a2], profile)
+
+        bundle = await _todays_activities(db, user_id=1)
+
+        # Totals
+        assert bundle["totals"]["count"] == 2
+        assert bundle["totals"]["tss"] == pytest.approx(115.0)
+        assert bundle["totals"]["duration_minutes"] == 105
+        assert bundle["totals"]["distance_km"] == pytest.approx(46.0)
+
+        # Per-activity shape
+        assert len(bundle["activities"]) == 2
+        first = bundle["activities"][0]
+        assert first["title"] == "Tempo intervals"
+        assert first["sport"] == "cycling"
+        assert first["tss"] == pytest.approx(80.0)
+        assert first["duration_minutes"] == 60
+        assert first["distance_km"] == pytest.approx(28.0)
+        # IF = 240 / 280 = 0.857
+        assert first["intensity_factor"] == pytest.approx(0.857, abs=0.01)
+        # EF = 240 / 148 = 1.622
+        assert first["efficiency_factor"] == pytest.approx(1.622, abs=0.01)
+        # VI = 240 / 235 = 1.021
+        assert first["variability_index"] == pytest.approx(1.021, abs=0.01)
+
+    async def test_single_activity_still_works(self):
+        from app.services.coach_service import _todays_activities
+
+        now = datetime.now(timezone.utc)
+        a = _make_activity(
+            started_at=now - timedelta(hours=2),
+            duration_seconds=1800,           # 30 min
+            tss=22.0,
+            np=180.0, avg_p=175.0, avg_hr=140,
+            distance_meters=12000.0,
+            title="Recovery spin",
+        )
+        profile = SimpleNamespace(ftp_watts=260)
+        db = _ActivitiesMockDB([a], profile)
+
+        bundle = await _todays_activities(db, user_id=1)
+
+        assert bundle["totals"]["count"] == 1
+        assert bundle["totals"]["tss"] == pytest.approx(22.0)
+        assert bundle["totals"]["duration_minutes"] == 30
+        assert len(bundle["activities"]) == 1
+        only = bundle["activities"][0]
+        assert only["title"] == "Recovery spin"
+        # IF = 180 / 260 ≈ 0.692
+        assert only["intensity_factor"] == pytest.approx(0.692, abs=0.01)
+
+    async def test_missing_metrics_return_none_not_crash(self):
+        """HR-only ride (no NP, no avg_p) must not crash — IF/EF/VI = None."""
+        from app.services.coach_service import _todays_activities
+
+        now = datetime.now(timezone.utc)
+        a = _make_activity(
+            started_at=now - timedelta(hours=1),
+            duration_seconds=1800,
+            tss=20.0,
+            np=None, avg_p=None, avg_hr=140,
+            distance_meters=None,
+            title="HR-only ride",
+        )
+        profile = SimpleNamespace(ftp_watts=None)
+        db = _ActivitiesMockDB([a], profile)
+
+        bundle = await _todays_activities(db, user_id=1)
+
+        only = bundle["activities"][0]
+        assert only["intensity_factor"] is None
+        assert only["efficiency_factor"] is None
+        assert only["variability_index"] is None
+        assert only["distance_km"] is None

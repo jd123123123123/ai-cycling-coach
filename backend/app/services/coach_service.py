@@ -237,12 +237,12 @@ async def _recent_daily_tss(db: AsyncSession, user_id: int, days: int = 7) -> li
 
 
 async def _todays_primary_activity(db: AsyncSession, user_id: int) -> Activity | None:
-    """Fetch today's most significant completed activity.
+    """DEPRECATED — kept for any external import. Step 3 callers use
+    `_todays_activities` to support multi-activity wrap-ups.
 
     "Today" is the athlete's local calendar day (Europe/Berlin for now —
-    see `_ATHLETE_TZ` TODO). When multiple activities land on the same
-    local day (e.g. a commute + a real ride), we return the highest-TSS
-    one — that's the session worth grading.
+    see `_ATHLETE_TZ` TODO). Returns the highest-TSS activity when multiple
+    land on the same local day.
     """
     start_today_utc, end_today_utc = _today_local_window()
     stmt = (
@@ -257,6 +257,143 @@ async def _todays_primary_activity(db: AsyncSession, user_id: int) -> Activity |
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def _todays_activities(db: AsyncSession, user_id: int) -> dict:
+    """Step 3 — fetch ALL activities for the athlete's local "today" with
+    their summary metrics, plus aggregated totals.
+
+    Replaces `_todays_primary_activity` for the post-ride review flow. The
+    frontend renders a stacked summary + per-row mini cards when count >= 2.
+
+    Returns:
+        {
+            "rows": [Activity, ...],              # ORM rows, sorted by started_at asc
+            "activities": [                       # serialised per-activity wrap-ups
+                {
+                    "title": str, "sport": str, "tss": float|None,
+                    "duration_minutes": int|None, "distance_km": float|None,
+                    "intensity_factor": float|None,   # NP / FTP
+                    "efficiency_factor": float|None,  # NP / avg_hr
+                    "variability_index": float|None,  # NP / avg_p
+                },
+                ...
+            ],
+            "totals": {
+                "tss": float, "duration_minutes": int,
+                "distance_km": float, "count": int,
+            },
+        }
+
+    `intensity_factor` / `efficiency_factor` / `variability_index` return
+    None when the underlying inputs are missing (HR-only ride, no FTP, no
+    NP) — never crashes on missing fields.
+    """
+    start_today_utc, end_today_utc = _today_local_window()
+    stmt = (
+        select(Activity)
+        .where(
+            Activity.user_id == user_id,
+            Activity.started_at >= start_today_utc,
+            Activity.started_at < end_today_utc,
+        )
+        .order_by(Activity.started_at.asc())
+    )
+    result = await db.execute(stmt)
+    rows = list(result.scalars().all())
+
+    # FTP for IF computation — single profile lookup.
+    profile_q = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+    )
+    profile = profile_q.scalar_one_or_none()
+    ftp = (
+        int(profile.ftp_watts)
+        if profile is not None and profile.ftp_watts and profile.ftp_watts > 0
+        else None
+    )
+
+    activities: list[dict] = []
+    total_tss = 0.0
+    total_duration_minutes = 0
+    total_distance_km = 0.0
+
+    for a in rows:
+        np = a.normalized_power
+        avg_p = a.average_power
+        avg_hr = a.average_hr
+
+        # IF = NP / FTP
+        intensity_factor: float | None = None
+        if np is not None and ftp:
+            try:
+                intensity_factor = round(float(np) / float(ftp), 3)
+            except (TypeError, ValueError, ZeroDivisionError):
+                intensity_factor = None
+
+        # EF = NP / avgHR (or avgP / avgHR fallback)
+        efficiency_factor: float | None = None
+        if np is not None and avg_hr and float(avg_hr) > 0:
+            try:
+                efficiency_factor = round(float(np) / float(avg_hr), 3)
+            except (TypeError, ValueError, ZeroDivisionError):
+                efficiency_factor = None
+        elif avg_p is not None and avg_hr and float(avg_hr) > 0:
+            try:
+                efficiency_factor = round(float(avg_p) / float(avg_hr), 3)
+            except (TypeError, ValueError, ZeroDivisionError):
+                efficiency_factor = None
+
+        # VI = NP / avgP
+        variability_index: float | None = None
+        if np is not None and avg_p and float(avg_p) > 0:
+            try:
+                variability_index = round(float(np) / float(avg_p), 3)
+            except (TypeError, ValueError, ZeroDivisionError):
+                variability_index = None
+
+        duration_min = (
+            int(round(float(a.duration_seconds) / 60.0))
+            if a.duration_seconds
+            else None
+        )
+        distance_km = (
+            round(float(a.distance_meters) / 1000.0, 2)
+            if a.distance_meters
+            else None
+        )
+        tss_val = float(a.tss) if a.tss is not None else None
+        sport = str(a.sport) if a.sport else "cycling"
+        title = a.title or sport.title()
+
+        activities.append({
+            "title": str(title)[:120],
+            "sport": sport,
+            "tss": tss_val,
+            "duration_minutes": duration_min,
+            "distance_km": distance_km,
+            "intensity_factor": intensity_factor,
+            "efficiency_factor": efficiency_factor,
+            "variability_index": variability_index,
+        })
+
+        if tss_val is not None:
+            total_tss += tss_val
+        if duration_min is not None:
+            total_duration_minutes += duration_min
+        if distance_km is not None:
+            total_distance_km += distance_km
+
+    return {
+        "rows": rows,
+        "activities": activities,
+        "totals": {
+            "tss": round(total_tss, 1),
+            "duration_minutes": int(total_duration_minutes),
+            "distance_km": round(total_distance_km, 2),
+            "count": len(rows),
+        },
+    }
 
 
 async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
@@ -428,54 +565,165 @@ async def build_snapshot(
             picked_preview = None
 
     # ---------------------------------------------------------
-    # Post-ride review — when today_tss >= 25 the athlete has
-    # already trained; grade it against the picked template
-    # and project goal trajectory. Both live inside the snapshot
-    # under `post_ride`; the rule-based brief + LLM prompt both
-    # read from there.
+    # Post-ride review — Step 3: trigger lowered to >=1 activity
+    # AND total today duration >= 20 minutes (was today_tss >= 25).
+    # When count >= 2 we also assemble per-activity wrap-ups so the
+    # frontend can render a stacked summary + per-row mini cards.
     # ---------------------------------------------------------
     post_ride_data: dict | None = None
-    today_tss_val = float(weekly_prog.get("today_tss", 0.0))
-    if today_tss_val >= 25.0:
-        activity = await _todays_primary_activity(db, user_id)
-        if activity is not None:
-            compliance = score_ride(
-                actual_activity=activity,
-                target_template=picked_template,
-                ftp=int(ftp) if ftp else None,
-                phase=phase,
-                session_type=today_session,
-            )
-            # Goal trajectory projection — project() is pure, accepts dict rows.
-            # We hand it the 'total' PMC series; if it's empty (sparse history)
-            # project() emits a neutral narrative.
-            pmc_full = await compute_user_pmc(db, user_id, days=90)
-            trajectory = project_trajectory(
-                user_pmc=pmc_full.get("total") or [],
-                athlete_goals=profile.goals if profile and isinstance(profile.goals, dict) else None,
-                phase=phase,
-            )
+    today_bundle = await _todays_activities(db, user_id)
+    today_rows: list[Activity] = today_bundle["rows"]  # type: ignore[assignment]
+    today_count = int(today_bundle["totals"]["count"])
+    today_total_minutes = int(today_bundle["totals"]["duration_minutes"])
 
-            post_ride_data = {
-                "compliance": ride_compliance_to_dict(compliance),
-                "trajectory": trajectory_to_dict(trajectory),
-                "target_template": {
-                    "id": picked_template.id,
-                    "title": picked_template.name,
-                    "category": picked_template.category,
-                    "framework_cited": picked_template.framework_cited,
-                    "purpose": picked_template.purpose,
+    if today_count >= 1 and today_total_minutes >= 20:
+        # Primary activity for the top-level grade (highest-TSS when n=1
+        # there's only one; when n>=2 we still pick a "primary" so the
+        # narrative + targets fall back gracefully — the FE will hide the
+        # top-level grade for n>=2 and show per-ride chips instead).
+        primary = max(
+            today_rows,
+            key=lambda a: (a.tss or 0.0, a.duration_seconds or 0),
+        )
+
+        # Goal trajectory projection — project() is pure, accepts dict rows.
+        # Compute once for the day; same trajectory applies regardless of
+        # whether the athlete did one ride or two.
+        pmc_full = await compute_user_pmc(db, user_id, days=90)
+        trajectory = project_trajectory(
+            user_pmc=pmc_full.get("total") or [],
+            athlete_goals=profile.goals if profile and isinstance(profile.goals, dict) else None,
+            phase=phase,
+        )
+
+        # Per-activity compliance (await — uses async ride_compliance.score()
+        # which reads the persisted coach_recommendations row from Step 4).
+        from app.services import ride_compliance as _ride_compliance_module
+        per_activity_compliance: list[dict | None] = []
+        for row in today_rows:
+            try:
+                rc = await _ride_compliance_module.score(
+                    db=db,
+                    user_id=user_id,
+                    actual_activity=row,
+                    target_template=picked_template,
+                    ftp=int(ftp) if ftp else None,
+                    phase=phase,
+                    session_type=today_session,
+                )
+                per_activity_compliance.append(ride_compliance_to_dict(rc))
+            except Exception:  # pragma: no cover — never block the brief
+                logger.exception(
+                    "per-activity compliance scoring failed (activity_id=%s)",
+                    getattr(row, "id", None),
+                )
+                per_activity_compliance.append(None)
+
+        # Single-session fields (top-level compliance) — populated only when
+        # exactly one activity. For n>=2 we still need the schema fields, but
+        # we leave the top-level grade None and aggregate the duration/TSS pairs
+        # so the FE has totals available.
+        if today_count == 1:
+            primary_compliance = per_activity_compliance[0] or ride_compliance_to_dict(
+                score_ride(
+                    actual_activity=primary,
+                    target_template=picked_template,
+                    ftp=int(ftp) if ftp else None,
+                    phase=phase,
+                    session_type=today_session,
+                )
+            )
+        else:
+            # For n>=2, build aggregate duration / tss pairs (target = sum
+            # over per-ride targets, actual = sum of actuals). Grade is
+            # intentionally None — the FE renders per-ride chips instead.
+            agg_target_min = 0.0
+            agg_actual_min = float(today_total_minutes)
+            agg_target_tss = 0.0
+            agg_actual_tss = float(today_bundle["totals"]["tss"])
+            for c in per_activity_compliance:
+                if not c:
+                    continue
+                d = c.get("duration") or {}
+                t = c.get("tss") or {}
+                agt = d.get("target")
+                tgt = t.get("target")
+                if isinstance(agt, (int, float)):
+                    agg_target_min += float(agt)
+                if isinstance(tgt, (int, float)):
+                    agg_target_tss += float(tgt)
+
+            def _pct(target: float, actual: float) -> float:
+                if target <= 0:
+                    return 0.0
+                return round((actual - target) / target * 100.0, 1)
+
+            def _band(delta_pct: float) -> str:
+                if delta_pct > 10:
+                    return "over"
+                if delta_pct < -10:
+                    return "under"
+                return "match"
+
+            dur_delta = _pct(agg_target_min, agg_actual_min)
+            tss_delta = _pct(agg_target_tss, agg_actual_tss)
+            primary_compliance = {
+                "grade": None,
+                "duration": {
+                    "target": round(agg_target_min, 1),
+                    "actual": round(agg_actual_min, 1),
+                    "delta_pct": dur_delta,
+                    "band": _band(dur_delta),
                 },
-                "actual_activity": {
-                    "id": activity.id,
-                    "duration_minutes": int(round((activity.duration_seconds or 0) / 60)),
-                    "tss": float(activity.tss or 0.0),
-                    "normalized_power": activity.normalized_power,
-                    "average_power": activity.average_power,
-                    "average_hr": activity.average_hr,
-                    "started_at": activity.started_at.isoformat() if activity.started_at else None,
+                "tss": {
+                    "target": round(agg_target_tss, 1),
+                    "actual": round(agg_actual_tss, 1),
+                    "delta_pct": tss_delta,
+                    "band": _band(tss_delta),
                 },
+                "intensity_factor": None,
+                "variability_index": None,
+                "ef": None,
+                "decoupling_pct": None,
+                "zone_match_pct": None,
+                "phase": phase,
+                "session_type": today_session,
+                "template_id": picked_template.id,
             }
+
+        # Stitch per-activity compliance grades into the activities[] list so
+        # _build_post_ride_review can hand them to the frontend untouched.
+        activities_out: list[dict] = []
+        for entry, comp in zip(today_bundle["activities"], per_activity_compliance):
+            row = dict(entry)
+            row["compliance_grade"] = (
+                comp.get("grade") if isinstance(comp, dict) else None
+            )
+            activities_out.append(row)
+
+        post_ride_data = {
+            "compliance": primary_compliance,
+            "trajectory": trajectory_to_dict(trajectory),
+            "target_template": {
+                "id": picked_template.id,
+                "title": picked_template.name,
+                "category": picked_template.category,
+                "framework_cited": picked_template.framework_cited,
+                "purpose": picked_template.purpose,
+            },
+            "actual_activity": {
+                "id": primary.id,
+                "duration_minutes": int(round((primary.duration_seconds or 0) / 60)),
+                "tss": float(primary.tss or 0.0),
+                "normalized_power": primary.normalized_power,
+                "average_power": primary.average_power,
+                "average_hr": primary.average_hr,
+                "started_at": primary.started_at.isoformat() if primary.started_at else None,
+            },
+            # Step 3 — multi-activity additions
+            "activities": activities_out,
+            "totals": today_bundle["totals"],
+        }
 
     snapshot: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1039,8 +1287,29 @@ def _build_post_ride_review(
         trajectory_narrative = _technical_trajectory_narrative(trajectory)
         nudge = _technical_nudge(grade, session_type, phase)
 
+    activities = snapshot_post_ride.get("activities") or []
+    totals = snapshot_post_ride.get("totals") or {
+        "tss": 0.0,
+        "duration_minutes": 0,
+        "distance_km": 0.0,
+        "count": 0,
+    }
+    count = int(totals.get("count") or len(activities))
+
+    # Step 3 — multi-activity headline override. When n>=2 the LLM/fallback
+    # narrative refers to "today's sessions" rather than a single ride; the
+    # top-level grade is None (per-ride chips render instead) so the headline
+    # should not promise a single grade.
+    if count >= 2:
+        headline = "Two sessions logged" if count == 2 else f"{count} sessions logged"
+        # Top-level grade is None for multi-session — frontend hides the
+        # grade pill and renders per-ride chips on each row.
+        emitted_grade: str | None = None
+    else:
+        emitted_grade = grade
+
     return {
-        "grade": grade,
+        "grade": emitted_grade,
         "headline": headline,
         "duration": compliance.get("duration", {}),
         "tss": compliance.get("tss", {}),
@@ -1054,6 +1323,9 @@ def _build_post_ride_review(
         "target_template_id": target_tpl.get("id", ""),
         "target_template_title": target_tpl.get("title", ""),
         "session_type": session_type,
+        # Step 3 — pass through the per-activity wrap-ups + totals.
+        "activities": list(activities),
+        "totals": dict(totals),
     }
 
 
@@ -1271,7 +1543,11 @@ def _rule_based_brief(snapshot: dict) -> dict:
     today_tss = float(wp.get("today_tss", 0.0))
     today_minutes = float(wp.get("today_duration_minutes", 0.0))
     today_tss_per_hour = float(wp.get("today_max_tss_per_hour", 0.0))
-    if today_tss >= 25.0:
+    # Step 3 — match the new post-ride review trigger: any activity today
+    # with at least 20 min of total duration triggers the recap framing.
+    # Falls through to normal prescription when shorter than 20 min.
+    post_ride_present_for_rule = bool(snapshot.get("post_ride"))
+    if post_ride_present_for_rule or today_minutes >= 20.0:
         # Session intensity label for the friendly verdict
         if today_tss_per_hour >= 90:
             effort_simple = "tough session"

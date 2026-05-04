@@ -60,8 +60,33 @@ export interface CompliancePair {
 
 export type RideGrade = 'perfect' | 'strong' | 'okay' | 'overcooked' | 'undercooked'
 
+// Step 3 — multi-activity wrap-up. Populated when the athlete completed
+// >=2 activities on the local day (also emitted as a single-element array
+// when count == 1 so the frontend has a uniform shape to read from).
+export interface ActivityWrapup {
+  title: string
+  sport: string
+  tss?: number | null
+  duration_minutes?: number | null
+  distance_km?: number | null
+  intensity_factor?: number | null
+  efficiency_factor?: number | null
+  variability_index?: number | null
+  // Per-ride compliance chip — present only when count >= 2; for n=1 the
+  // top-level PostRideReview.grade carries this instead.
+  compliance_grade?: RideGrade | null
+}
+
+export interface WrapupTotals {
+  tss: number
+  duration_minutes: number
+  distance_km: number
+  count: number
+}
+
 export interface PostRideReview {
-  grade: RideGrade
+  // grade is null when count >= 2 (per-ride chips render instead).
+  grade: RideGrade | null
   headline: string
   duration: CompliancePair
   tss: CompliancePair
@@ -75,6 +100,10 @@ export interface PostRideReview {
   target_template_id: string
   target_template_title: string
   session_type: string
+  // Step 3 — multi-activity additions. Default to [] / zero-totals on older
+  // briefs so the frontend can read defensively.
+  activities?: ActivityWrapup[]
+  totals?: WrapupTotals
 }
 
 export type CoachLanguage = 'simple' | 'technical'

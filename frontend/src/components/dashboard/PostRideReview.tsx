@@ -25,11 +25,17 @@
  *   - okay / strong / undercooked: no extra decoration
  */
 import { motion } from 'motion/react'
-import type { CompliancePair, PostRideReview as PostRideReviewType } from '../../api/coach'
+import { Bike, Footprints, Dumbbell } from 'lucide-react'
+import type {
+  ActivityWrapup,
+  CompliancePair,
+  PostRideReview as PostRideReviewType,
+  RideGrade,
+} from '../../api/coach'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
 import { complianceDirectionText, gradeLabel } from '../../utils/coachLanguage'
 
-type Grade = PostRideReviewType['grade']
+type Grade = NonNullable<PostRideReviewType['grade']>
 
 // ─── Grade palette (paper colours) ────────────────────────────────────────
 
@@ -161,6 +167,245 @@ function MetricCell({
   )
 }
 
+// ─── Multi-activity helpers (Step 3) ──────────────────────────────────────
+
+const SPORT_ICON: Record<string, React.ReactNode> = {
+  cycling: <Bike size={14} strokeWidth={1.8} />,
+  running: <Footprints size={14} strokeWidth={1.8} />,
+  gym: <Dumbbell size={14} strokeWidth={1.8} />,
+}
+
+function formatHM(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  if (h <= 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+const COMPLIANCE_CHIP_TONE: Record<RideGrade, { fg: string; bg: string }> = {
+  perfect: { fg: '#ffffff', bg: '#7c9e7e' },
+  strong: { fg: '#ffffff', bg: '#b5874f' },
+  okay: { fg: 'var(--color-ink)', bg: 'var(--color-paper-2)' },
+  overcooked: { fg: '#ffffff', bg: '#c4614c' },
+  undercooked: { fg: '#ffffff', bg: '#9b8a6b' },
+}
+
+function ActivityRow({
+  activity,
+  index,
+  language,
+}: {
+  activity: ActivityWrapup
+  index: number
+  language: CoachLanguage
+}) {
+  const icon = SPORT_ICON[activity.sport] ?? SPORT_ICON.cycling
+  const tssLabel = language === 'simple' ? 'pts' : 'TSS'
+  const tssDisp =
+    typeof activity.tss === 'number' ? Math.round(activity.tss) : null
+  const durDisp =
+    typeof activity.duration_minutes === 'number'
+      ? formatHM(activity.duration_minutes)
+      : null
+  const distDisp =
+    typeof activity.distance_km === 'number' && activity.distance_km > 0
+      ? `${activity.distance_km.toFixed(1)} km`
+      : null
+  const grade = activity.compliance_grade ?? null
+  const chipTone = grade ? COMPLIANCE_CHIP_TONE[grade] : null
+
+  return (
+    <motion.div
+      className="flex items-center gap-3 py-3"
+      style={{ borderTop: index === 0 ? 'none' : '1px solid var(--color-rule)' }}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, delay: 0.08 + index * 0.06, ease: 'easeOut' }}
+    >
+      <span
+        aria-hidden
+        className="inline-flex items-center justify-center rounded-full shrink-0"
+        style={{
+          width: 28,
+          height: 28,
+          backgroundColor: 'var(--color-paper-2)',
+          border: '1px solid var(--color-rule)',
+          color: 'var(--color-ink-2)',
+        }}
+      >
+        {icon}
+      </span>
+      <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+        <span
+          className="text-[13px] leading-tight truncate"
+          style={{ color: 'var(--color-ink)', fontWeight: 500 }}
+          title={activity.title}
+        >
+          {activity.title}
+        </span>
+        <span
+          className="num-mono text-[11px] leading-tight"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          {[durDisp, distDisp].filter(Boolean).join(' · ') || '—'}
+        </span>
+      </div>
+      {tssDisp != null && (
+        <span
+          className="num-mono inline-flex items-baseline gap-1 rounded-full px-2.5 py-1 shrink-0"
+          style={{
+            backgroundColor: 'var(--color-paper-2)',
+            border: '1px solid var(--color-rule)',
+            color: 'var(--color-ink)',
+            fontSize: 12,
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>{tssDisp}</span>
+          <span style={{ color: 'var(--color-muted)', fontSize: 10 }}>
+            {tssLabel}
+          </span>
+        </span>
+      )}
+      {grade && chipTone && (
+        <span
+          className="inline-flex items-center rounded-full px-2 py-0.5 shrink-0"
+          style={{
+            backgroundColor: chipTone.bg,
+            color: chipTone.fg,
+            border: '1px solid var(--color-rule)',
+            fontSize: 10.5,
+            letterSpacing: '0.04em',
+            fontWeight: 500,
+          }}
+        >
+          {gradeLabel(grade, language)}
+        </span>
+      )}
+    </motion.div>
+  )
+}
+
+function MultiActivityReview({
+  review,
+  language,
+}: {
+  review: PostRideReviewType
+  language: CoachLanguage
+}) {
+  const totals = review.totals ?? {
+    tss: review.tss?.actual ?? 0,
+    duration_minutes:
+      typeof review.duration?.actual === 'number'
+        ? Math.round(review.duration.actual)
+        : 0,
+    distance_km: 0,
+    count: review.activities?.length ?? 0,
+  }
+  const activities = review.activities ?? []
+  const tssDisp = Math.round(totals.tss || 0)
+  const durDisp = formatHM(totals.duration_minutes || 0)
+  const eyebrow = language === 'simple' ? "Today · you trained" : "Today's sessions"
+
+  return (
+    <motion.div
+      className="paper-grain rounded-[18px] p-5 sm:p-6 flex flex-col gap-4 min-w-0"
+      style={{
+        backgroundColor: 'var(--color-paper)',
+        border: '1px solid var(--color-rule)',
+        boxShadow: '0 10px 30px -22px rgba(20, 24, 17, 0.35)',
+      }}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+    >
+      {/* Stacked summary header — count · TSS · duration */}
+      <div className="flex flex-col gap-1.5">
+        <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
+          {eyebrow}
+        </span>
+        <h3
+          className="num-display leading-tight"
+          style={{
+            fontSize: 'clamp(22px, 3vw, 30px)',
+            color: 'var(--color-ink)',
+            fontStyle: 'italic',
+            fontVariationSettings: '"opsz" 96, "SOFT" 30',
+          }}
+        >
+          <span className="num-mono" style={{ fontStyle: 'normal' }}>
+            {totals.count}
+          </span>{' '}
+          sessions ·{' '}
+          <span className="num-mono" style={{ fontStyle: 'normal' }}>
+            {tssDisp}
+          </span>{' '}
+          {language === 'simple' ? 'pts' : 'TSS'} ·{' '}
+          <span className="num-mono" style={{ fontStyle: 'normal' }}>
+            {durDisp}
+          </span>
+        </h3>
+      </div>
+
+      {/* Per-row mini-cards */}
+      <div
+        className="flex flex-col pt-2"
+        style={{ borderTop: '1px solid var(--color-rule)' }}
+      >
+        {activities.map((a, i) => (
+          <ActivityRow
+            key={`${a.title}-${i}`}
+            activity={a}
+            index={i}
+            language={language}
+          />
+        ))}
+      </div>
+
+      {/* Combined narrative */}
+      <motion.p
+        className="text-[14px] sm:text-[15px] leading-relaxed dashboard-break-words pt-3"
+        style={{
+          color: 'var(--color-ink-2)',
+          maxWidth: '62ch',
+          borderTop: '1px solid var(--color-rule)',
+        }}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.36, ease: 'easeOut' }}
+      >
+        {review.physiological_read}
+      </motion.p>
+
+      {/* Tomorrow setup (next-session nudge) */}
+      <motion.div
+        className="flex gap-2.5 pt-3"
+        style={{ borderTop: '1px solid var(--color-rule)' }}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.48, ease: 'easeOut' }}
+      >
+        <span
+          className="inline-block w-[3px] rounded-sm flex-shrink-0"
+          style={{ backgroundColor: 'var(--color-amber)' }}
+          aria-hidden
+        />
+        <div className="flex flex-col gap-1 min-w-0">
+          <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
+            {language === 'simple' ? 'Tomorrow' : 'Tomorrow setup'}
+          </span>
+          <p
+            className="text-[14px] leading-relaxed dashboard-break-words"
+            style={{ color: 'var(--color-ink-2)', maxWidth: '62ch' }}
+          >
+            {review.next_session_nudge}
+          </p>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ─── Main component ──────────────────────────────────────────────────────
 
 interface Props {
@@ -169,6 +414,21 @@ interface Props {
 }
 
 export default function PostRideReview({ review, language }: Props) {
+  // Step 3 — branch on activity count. >=2 sessions render a stacked summary
+  // header + per-row mini cards with per-ride compliance chips. <=1 keeps the
+  // existing single-session UI exactly as it was.
+  const activitiesCount = review.activities?.length ?? 0
+  if (activitiesCount >= 2) {
+    return <MultiActivityReview review={review} language={language} />
+  }
+
+  // Single-session fallback — `grade` is required for this layout. If it's
+  // ever null (defensive against bad payloads) we render the multi-activity
+  // shell anyway since totals + the single activity row still read cleanly.
+  if (!review.grade) {
+    return <MultiActivityReview review={review} language={language} />
+  }
+
   const simpleMode = language === 'simple'
   const palette = GRADE_PALETTE[review.grade]
 
