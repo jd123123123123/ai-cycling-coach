@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 7.0 of 9 (Periodization engine and week view) — IN PROGRESS
-Plan: 07.0-02 complete (3 tasks; MesocyclePlan model + migration + mesocycle_generator + 23 tests)
-Status: Phase 7.0 Plans 01, 02, and 03 done. Plans 04, 05 remain.
-Last activity: 2026-05-04 -- Completed 07.0-PLAN-02.md (mesocycle generator engine)
+Plan: 07.0-04 complete (GET /weeks/current endpoint + useCurrentWeek hook + 7 smoke tests)
+Status: Phase 7.0 Plans 01, 02, 03, and 04 done. Plan 05 (WeekTab UI) remains.
+Last activity: 2026-05-03 — Completed 07.0-PLAN-04.md (endpoint + hook)
 
-Progress: [████████████████░] ~94% (Phases 1-6 + 6.1 + 6.2 complete; Phase 7.0 plan 01 done; Phases 7.0 plans 02-05, 8, 9 remaining)
+Progress: [████████████████░] ~95% (Phases 1-6 + 6.1 + 6.2 complete; Phase 7.0 plans 01-04 done; Phase 7.0 plan 05, 8, 9 remaining)
 
 ## Performance Metrics
 
@@ -293,6 +293,10 @@ Recent decisions affecting current work:
 - [07.0-02]: Non-Monday plan_start_date advanced (not rejected) with logger.warning — more robust for UI callers; next Monday computed deterministically
 - [07.0-02]: Conflict-skip (not overwrite) for existing PlannedWorkout rows — user-modified workouts from Phase 6.x flows are preserved on meso regeneration
 - [07.0-02]: Migration e6f7a8b9c0d1 created but NOT applied — Docker down; requires alembic upgrade head when Docker available
+- [07.0-04]: _per_day_rationale uses day_date.weekday() (Mon=0..Sun=6) to index into 7-sentence copy bank — deterministic, each weekday gets distinct sentence regardless of user or date
+- [07.0-04]: Gap-fill days (no PlannedWorkout for a date in today..today+6) render as category='rest' with rest-day rationale — prevents empty holes when meso was anchored in a prior week
+- [07.0-04]: FTP guard in endpoint AND in generate_mesocycle service — belt-and-suspenders; endpoint short-circuits before calling service when profile loaded but FTP=0
+- [07.0-04]: 409 does NOT retry in useCurrentWeek — Plan 05 UI renders 'set FTP first' CTA; retrying a 409 is pointless
 
 ### Roadmap Evolution
 
@@ -323,8 +327,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-04 — Phase 7.0 Plan 03 complete (07.0-PLAN-03.md)
-Stopped at: 07.0-03 complete. Commits: (92cd3d5) feat(07.0-03): weekly rationale service. (197b098) feat(07.0-03): rationale tests + jargon discipline — 189 passing.
+Last session: 2026-05-03 — Phase 7.0 Plan 04 complete (07.0-PLAN-04.md)
+Stopped at: 07.0-04 complete. Commits: (0437c74) feat: frontend API client + hook, (766d911) feat: weeks endpoint + schemas, (b244137) feat: 7 smoke tests.
 Resume file: None
-Next: Phase 7.0 Plan 02 (mesocycle generator) and Plan 04 (week-view API endpoint consuming build_weekly_rationale). Apply migration d5e6f7a8b9c0 first (requires Docker restart).
+Next: Phase 7.0 Plan 05 (WeekTab UI — WeekPreface + DayPlanCard components consuming useCurrentWeek). Apply migrations d5e6f7a8b9c0 + e6f7a8b9c0d1 before running against live DB (requires Docker restart).
 Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); Legacy literal sweep in TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap; SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
