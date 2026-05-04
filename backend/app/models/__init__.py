@@ -9,9 +9,10 @@ from app.models.daily_metric_sample import DailyMetricSample  # noqa: F401
 from app.models.coach_brief import CoachBrief  # noqa: F401
 from app.models.user_dashboard import UserDashboard  # noqa: F401
 from app.models.coach_recommendation import CoachRecommendation  # noqa: F401
+from app.models.mesocycle_plan import MesocyclePlan  # noqa: F401
 
 __all__ = [
     "User", "AthleteProfile", "ConsentRecord", "Activity", "GarminCredential",
     "DailyMetric", "PlannedWorkout", "DailyMetricSample", "CoachBrief",
-    "UserDashboard", "CoachRecommendation",
+    "UserDashboard", "CoachRecommendation", "MesocyclePlan",
 ]
