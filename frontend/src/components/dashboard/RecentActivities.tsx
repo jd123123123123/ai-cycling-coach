@@ -20,6 +20,7 @@ import {
   formatRelativeDay,
 } from '../../utils/metrics'
 import { focusFor } from '../../utils/focusBadge'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { SideSheet } from '../ui/SideSheet'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -281,7 +282,7 @@ function ActivityRow({
                 </span>
               )}
               {(() => {
-                const focus = focusFor(a)
+                const focus = focusFor(a, profile)
                 if (!focus) return null
                 return (
                   <span
@@ -330,6 +331,7 @@ export default function RecentActivities({
     today,
   )
   const { language } = useLanguage()
+  const { data: profile } = useAthleteProfile()
 
   // Selected activity for SideSheet detail view. URL stays at /dashboard?tab=today.
   const [selectedId, setSelectedId] = useState<number | null>(null)
