@@ -23,6 +23,16 @@ import { focusFor } from '../../utils/focusBadge'
 import { SideSheet } from '../ui/SideSheet'
 import { useLanguage } from '../../contexts/LanguageContext'
 
+/** Format a UTC/local ISO timestamp to HH:MM. Falls back to UTC if no TZ info. */
+function formatTime(iso: string): string {
+  try {
+    const d = new Date(iso)
+    return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false })
+  } catch {
+    return ''
+  }
+}
+
 const SPORT_META: Record<
   ActivityRead['sport'],
   { icon: React.ReactNode; label: string; accent: string }
@@ -30,17 +40,17 @@ const SPORT_META: Record<
   cycling: {
     icon: <Bike size={14} strokeWidth={1.8} />,
     label: 'Ride',
-    accent: 'var(--color-forest)',
+    accent: 'var(--color-sport-bike)',
   },
   running: {
     icon: <Footprints size={14} strokeWidth={1.8} />,
     label: 'Run',
-    accent: 'var(--color-amber-2)',
+    accent: 'var(--color-sport-run)',
   },
   gym: {
     icon: <Dumbbell size={14} strokeWidth={1.8} />,
     label: 'Strength',
-    accent: 'var(--color-ink-blue)',
+    accent: 'var(--color-sport-strength)',
   },
 }
 
@@ -185,6 +195,8 @@ function ActivityRow({
   if (a.duration_seconds) parts.push(formatDuration(a.duration_seconds))
   if (a.distance_meters) parts.push(formatDistanceKm(a.distance_meters))
 
+  const timeStr = formatTime(a.started_at)
+
   return (
     <li
       className="relative group"
@@ -196,7 +208,13 @@ function ActivityRow({
         onClick={() => onClick(a.id)}
         aria-label={`View details for ${title}`}
       >
-        <div className="flex items-stretch gap-4 py-4 hover:opacity-80 transition-opacity">
+        <div className="flex items-stretch gap-4 py-4 hover:opacity-80 transition-opacity relative">
+          {/* Sport-color left accent */}
+          <div
+            className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full"
+            style={{ backgroundColor: meta.accent, opacity: 0.7 }}
+            aria-hidden
+          />
           {/* Sport dot column */}
           <div className="flex flex-col items-center pt-1 flex-shrink-0 w-10">
             <div
@@ -214,17 +232,28 @@ function ActivityRow({
           <div className="flex-1 min-w-0 flex flex-col gap-1.5">
             <div className="flex items-start justify-between gap-3">
               <span
-                className="serif-caps text-[15px] sm:text-[16px] dashboard-break-words"
+                className="text-[15px] sm:text-[16px] font-medium leading-snug dashboard-break-words"
                 style={{ color: 'var(--color-ink)' }}
               >
                 {title}
               </span>
-              <span
-                className="num-mono text-[11px] whitespace-nowrap flex-shrink-0 mt-1"
-                style={{ color: 'var(--color-muted)' }}
-              >
-                {formatRelativeDay(a.started_at)}
-              </span>
+              {/* Date + time-of-day — single source, right-aligned */}
+              <div className="flex flex-col items-end flex-shrink-0 mt-1 gap-0.5">
+                <span
+                  className="num-mono text-[11px] whitespace-nowrap"
+                  style={{ color: 'var(--color-muted)' }}
+                >
+                  {formatRelativeDay(a.started_at)}
+                </span>
+                {timeStr && (
+                  <div
+                    className="num-mono text-[10px]"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    {timeStr}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="eyebrow" style={{ color: meta.accent }}>
@@ -243,9 +272,9 @@ function ActivityRow({
                 <span
                   className="num-mono text-[11px] px-1.5 py-0.5 rounded"
                   style={{
-                    backgroundColor: 'rgba(20, 24, 17, 0.05)',
-                    color: 'var(--color-ink)',
-                    border: '1px solid var(--color-rule)',
+                    backgroundColor: 'rgba(255,255,255,0.07)',
+                    color: 'var(--color-ink-2)',
+                    border: '1px solid rgba(255,255,255,0.10)',
                   }}
                 >
                   TSS {Math.round(a.tss)}
@@ -280,13 +309,24 @@ function ActivityRow({
 interface RecentActivitiesProps {
   /** Max number of rows to render. Defaults to 10. Phase 5.1 uses limit=5 in fold 3. */
   limit?: number
+  /** Filter to a single sport. When omitted, all sports are shown. */
+  sport?: ActivityRead['sport']
+  /** Lookback window in days. Defaults to 14. */
+  windowDays?: number
+  /** Optional override for the section heading. */
+  heading?: string
 }
 
-export default function RecentActivities({ limit = 10 }: RecentActivitiesProps = {}) {
+export default function RecentActivities({
+  limit = 10,
+  sport,
+  windowDays = 14,
+  heading,
+}: RecentActivitiesProps = {}) {
   const today = new Date()
-  const fourteenDaysAgo = subDays(today, 14)
+  const since = subDays(today, windowDays)
   const { data, isLoading, isError, refetch } = useActivitiesRange(
-    fourteenDaysAgo,
+    since,
     today,
   )
   const { language } = useLanguage()
@@ -296,6 +336,7 @@ export default function RecentActivities({ limit = 10 }: RecentActivitiesProps =
 
   const activities = (data?.activities ?? [])
     .slice()
+    .filter((a) => (sport ? a.sport === sport : true))
     .sort(
       (a, b) =>
         new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
@@ -318,8 +359,8 @@ export default function RecentActivities({ limit = 10 }: RecentActivitiesProps =
         {/* Header */}
         <div className="flex items-baseline justify-between px-5 pt-5 pb-3 sm:px-6 sm:pt-6 gap-2 flex-wrap">
           <div>
-            <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
-              Dossier
+            <span className="eyebrow" style={{ letterSpacing: '0.18em' }}>
+              Recent · last 14 days
             </span>
             <h2
               className="num-display mt-1 leading-none"
@@ -328,7 +369,7 @@ export default function RecentActivities({ limit = 10 }: RecentActivitiesProps =
                 color: 'var(--color-ink)',
               }}
             >
-              Recent training
+              {heading ?? 'Recent training'}
             </h2>
           </div>
           {!isLoading && !isError && activities.length > 0 && (
@@ -381,7 +422,7 @@ export default function RecentActivities({ limit = 10 }: RecentActivitiesProps =
                 A blank page
               </span>
               <p
-                className="serif-caps text-[16px] max-w-xs"
+                className="text-[16px] font-medium max-w-xs"
                 style={{ color: 'var(--color-ink)' }}
               >
                 Every logbook starts empty. Connect Garmin or log a ride to begin.
