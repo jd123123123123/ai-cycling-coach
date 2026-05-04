@@ -54,6 +54,9 @@ from app.api.garmin import router as garmin_router  # noqa: E402
 from app.api.daily_metrics import router as daily_metrics_router  # noqa: E402
 from app.api.planned_workouts import router as planned_workouts_router  # noqa: E402
 from app.api.coach import router as coach_router  # noqa: E402
+from app.api.analytics import router as analytics_router  # noqa: E402
+from app.api.dashboards import router as dashboards_router  # noqa: E402
+from app.api.weeks import router as weeks_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(athletes_router)
@@ -67,6 +70,9 @@ app.include_router(garmin_router)
 app.include_router(daily_metrics_router)
 app.include_router(planned_workouts_router)
 app.include_router(coach_router)
+app.include_router(analytics_router)
+app.include_router(dashboards_router)
+app.include_router(weeks_router)
 
 
 @app.get("/", tags=["health"])

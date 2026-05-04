@@ -268,10 +268,11 @@ def build_week_drafts(
 #  Public generator
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _next_monday(from_date: date) -> date:
-    """Return the next Monday on or after from_date."""
-    days_ahead = (0 - from_date.weekday()) % 7  # Monday = 0
-    return from_date + timedelta(days=days_ahead)
+def _next_monday(from_date: date | None = None) -> date:
+    """Return the next Monday on or after from_date (defaults to today)."""
+    d = from_date if from_date is not None else date.today()
+    days_ahead = (0 - d.weekday()) % 7  # Monday = 0
+    return d + timedelta(days=days_ahead)
 
 
 async def generate_mesocycle(
