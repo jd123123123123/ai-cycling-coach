@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 7.0 of 9 (Periodization engine and week view) — IN PROGRESS
-Plan: 07.0-03 complete (2 tasks; weekly_rationale service + 189 tests)
-Status: Phase 7.0 Plans 01 and 03 done. Plans 02, 04, 05 remain.
-Last activity: 2026-05-04 -- Completed 07.0-PLAN-03.md (weekly rationale generator)
+Plan: 07.0-02 complete (3 tasks; MesocyclePlan model + migration + mesocycle_generator + 23 tests)
+Status: Phase 7.0 Plans 01, 02, and 03 done. Plans 04, 05 remain.
+Last activity: 2026-05-04 -- Completed 07.0-PLAN-02.md (mesocycle generator engine)
 
 Progress: [████████████████░] ~94% (Phases 1-6 + 6.1 + 6.2 complete; Phase 7.0 plan 01 done; Phases 7.0 plans 02-05, 8, 9 remaining)
 
@@ -288,6 +288,11 @@ Recent decisions affecting current work:
 - [07.0-01]: goals JSONB untouched alongside new columns — legacy code can still read goals.target_event_date; consolidation is a future cleanup plan
 - [07.0-01]: Migration d5e6f7a8b9c0 parents off b2c3d4e5f6a7 (wake_now_columns head); apply deferred until Docker daemon restarted — orchestrator handles before Wave 2
 - [07.0-01]: No athletes.py API changes needed — existing PUT /athletes/me PATCH handler uses model_dump(exclude_unset=True) + setattr loop; new fields flow automatically without explicit wiring
+- [07.0-02]: Seiler TID single source of truth — mesocycle_generator imports _PHASE_MIX from training_periodization instead of duplicating. Any future TID changes propagate automatically
+- [07.0-02]: generate_mesocycle uses estimated CTL=40 at plan-time — no live PMC at generation; TODO 7.1 should thread actual CTL from daily_metrics aggregation
+- [07.0-02]: Non-Monday plan_start_date advanced (not rejected) with logger.warning — more robust for UI callers; next Monday computed deterministically
+- [07.0-02]: Conflict-skip (not overwrite) for existing PlannedWorkout rows — user-modified workouts from Phase 6.x flows are preserved on meso regeneration
+- [07.0-02]: Migration e6f7a8b9c0d1 created but NOT applied — Docker down; requires alembic upgrade head when Docker available
 
 ### Roadmap Evolution
 
