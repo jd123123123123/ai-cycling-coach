@@ -57,6 +57,16 @@ You are trained in and MUST ground your advice in these frameworks:
 
 7. KOLIE MOORE — RPE vs power decoupling is an earlier overreach signal than HRV/rHR. Same watts + higher RPE = brewing fatigue.
 
+8. NORWEGIAN SUB-THRESHOLD (Casado, Hanley, Tjelta, 2023–2025) — double-threshold days with two shorter LT1/LT2-zone sessions (morning + evening) accumulate high-quality aerobic time without the overreach cost of a single long threshold block. Marker: lactate 2.5–3.5 mmol/L, RPE 6/10, HR at ~88% LTHR. Use when athlete has high CTL, TSB ≥ 0, and recovery markers green.
+
+9. PLEWS & LAURSEN HRV-GUIDED (updated meta-analysis 2024) — daily HRV variability is a better guide to intensity readiness than absolute HRV. 7-day rolling SD of rMSSD: if today sits within ±1 SD of the 7d baseline, proceed with planned intensity; if <−1 SD, drop to Z2; if <−2 SD, rest. The band beats any single threshold number.
+
+10. EMPIRICAL CYCLING CP/W' (Passfield, Hopker, 2024 review) — for racers, the critical-power model (CP + W') outperforms FTP alone for prescribing above-threshold efforts. W' (anaerobic work capacity, kJ) depletes in ~2-3min at 120% CP. Brief should respect W' in VO2 prescriptions: "5×3min at 115% FTP" ≈ "5×3min draining ~80% W' per rep" — recovery must allow W' to refill (≥2× interval length).
+
+11. VLAMAX + FAT-OX (INSCYD / Skiba, 2024) — high VLaMax (glycolytic rate) depresses fat oxidation and flattens lactate shuttle. Z2 volume is the primary VLaMax-lowering stimulus. For athletes with suppressed fat-ox (bonking early, can't hold Z2 HR at target watts), prescribe Z2 block ≥ 90 min with sub-70% FTP and no surges.
+
+12. MAFFETONE MAF (180-formula, contemporary) — conservative aerobic ceiling = 180 − age (±5 by context). Useful as a LOW-intensity governor during base-building for athletes with low CTL or poor HR recovery. Not a race-prep tool.
+
 HOW YOU RESPOND — THE PRESCRIPTION FLOW:
 
 You will receive a PICKED TEMPLATE (via snapshot.picked_template_preview) chosen by the rules-based selector. Your job:
@@ -182,6 +192,51 @@ You will receive the athlete's full snapshot as structured data, including the p
 """
 
 
+# ----------------------------------------------------------------------
+# Today-runthrough Step 7 — tomorrow + regen + recap-with-eval addendum
+#
+# Stable text appended to the brief prefix in one place so prompt caching
+# keeps hitting. We never interleave Step 7 instructions inside the body
+# of the language prompts — that would shift the cached prefix and bust
+# every existing cache hash.
+# ----------------------------------------------------------------------
+STEP7_BRIEF_ADDENDUM = """
+
+## Forward-looking blocks (optional)
+
+You MAY emit two additional optional fields when you have signal for them:
+
+  - `tomorrow_plan`: a 3–5 sentence preview of tomorrow's session plus
+    `predicted_tss` and an `intensity_chip` from
+    {recovery, endurance, tempo, threshold, vo2, race}. The snapshot ships
+    `outlook_7d[1]` (tomorrow's projection) and, when known,
+    `tomorrow_planned_workout` (a real PlannedWorkout row). If no planned
+    workout exists for tomorrow, describe the TYPE of day, not specific
+    intervals — never fabricate an interval structure.
+
+  - `regeneration`: 2–3 short bullets covering sleep target, fuel window,
+    mobility / active recovery, and caffeine cutoff. Plain prose; in simple
+    mode no acronyms. Calibrate the sleep / fuel numbers to today's session
+    load (snapshot.weekly_progress.today_tss) and tomorrow's intensity_chip.
+
+Both blocks are OPTIONAL — omit them rather than guessing. They never
+replace the prescribed_workout or post_ride_review.
+
+## Recap-with-eval (post_ride_review.physiological_read)
+
+When the snapshot includes `yesterday_recommendation` (a coach_recommendations
+row keyed to today's local date), the post_ride_review.physiological_read
+MUST: (1) name yesterday's recommended workout by its title, (2) quote
+yesterday's predicted target numbers (duration_minutes, predicted_tss),
+(3) compare to the actual numbers from snapshot.post_ride.compliance.
+Example shape (technical mode): "Yesterday we recommended 'VO2 — 5×4min'
+at 75 min / 78 TSS; you actually did 71 min / 84 TSS — slightly hotter,
+slightly shorter, well inside spec." In simple mode, keep the same
+structure but drop acronyms ("we asked for a 75-minute hard session aiming
+around 78 effort points; you went 71 minutes at 84").
+"""
+
+
 # Backward-compat alias — `SYSTEM_PROMPT` is the technical prompt.
 # /coach/transparency and existing importers still read this name.
 SYSTEM_PROMPT = SYSTEM_PROMPT_TECHNICAL
@@ -215,9 +270,18 @@ def system_prompt_for_language(
             return CHAT_ANALYTICAL_PROMPT_SIMPLE
         return CHAT_ANALYTICAL_PROMPT_TECHNICAL
 
-    if language == "simple":
-        return SYSTEM_PROMPT_SIMPLE
-    return SYSTEM_PROMPT_TECHNICAL
+    # Brief context — prefix the curated coaching knowledge base so every
+    # prescription is grounded in the same evidence-backed values (HRV,
+    # TSS/CTL/ATL/TSB, polarized distribution, Friel periodization, safety
+    # rails). The block is stable text, so prompt caching keeps it cheap.
+    from .coach_knowledge import COACH_KNOWLEDGE_BASE
+
+    base = SYSTEM_PROMPT_SIMPLE if language == "simple" else SYSTEM_PROMPT_TECHNICAL
+    # Step 7 addendum — appended to the prefix in ONE place so prompt-cache
+    # hashes stay stable across requests. The text is stable; the variable
+    # inputs (yesterday's recommendation, today's activities, tomorrow's
+    # planned workout) live in the user message instead.
+    return f"{COACH_KNOWLEDGE_BASE}\n\n{base}{STEP7_BRIEF_ADDENDUM}"
 
 
 # ======================================================================
@@ -588,6 +652,47 @@ BRIEF_TOOL = {
                 "type": "array",
                 "items": {"type": "string"},
             },
+            "tomorrow_plan": {
+                "type": "object",
+                "description": (
+                    "OPTIONAL forward-looking preview of tomorrow's session. "
+                    "Populate when you have a clear read on tomorrow (the "
+                    "snapshot ships outlook_7d[1] and may include "
+                    "tomorrow_planned_workout). 3–5 sentences in `description`. "
+                    "If no PlannedWorkout exists for tomorrow, describe the "
+                    "TYPE of day (recovery / endurance / tempo / threshold / "
+                    "vo2 / race) — do not fabricate specific intervals."
+                ),
+                "required": ["description", "predicted_tss", "intensity_chip"],
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "3–5 sentence preview, language-aware.",
+                    },
+                    "predicted_tss": {"type": "number"},
+                    "intensity_chip": {
+                        "type": "string",
+                        "enum": ["recovery", "endurance", "tempo", "threshold", "vo2", "race"],
+                    },
+                },
+            },
+            "regeneration": {
+                "type": "object",
+                "description": (
+                    "OPTIONAL 2–3 plain bullets covering sleep target, fuel "
+                    "window, mobility / active recovery, and caffeine cutoff. "
+                    "Each bullet is short prose — no acronyms in simple mode."
+                ),
+                "required": ["bullets"],
+                "properties": {
+                    "bullets": {
+                        "type": "array",
+                        "minItems": 2,
+                        "maxItems": 4,
+                        "items": {"type": "string"},
+                    },
+                },
+            },
             "post_ride_review": {
                 "type": "object",
                 "description": (
@@ -823,6 +928,63 @@ def build_user_message(snapshot: dict) -> str:
             "→ Fill `post_ride_review` with headline, physiological_read, "
             "goal_trajectory, next_session_nudge narratives in the requested "
             "language mode. Use the actual numbers above."
+        )
+
+    # ------------------------------------------------------------------
+    # Step 7 (today-runthrough) — variable inputs that go in the USER
+    # message (NOT the cached system prefix). All are optional; missing
+    # blocks are skipped silently so older snapshots still render.
+    # ------------------------------------------------------------------
+    yesterday_rec = snapshot.get("yesterday_recommendation")
+    if isinstance(yesterday_rec, dict):
+        lines.append("\n## Yesterday's recommendation (recap-with-eval input)")
+        lines.append(
+            f"- title: {yesterday_rec.get('title')} "
+            f"(template_id={yesterday_rec.get('template_id')})"
+        )
+        lines.append(
+            f"- target: {yesterday_rec.get('duration_minutes')} min, "
+            f"{yesterday_rec.get('predicted_tss')} TSS"
+        )
+        if yesterday_rec.get("framework_cited"):
+            lines.append(f"- framework: {yesterday_rec['framework_cited']}")
+        if yesterday_rec.get("why_this_workout"):
+            lines.append(f"- why we asked for it: {yesterday_rec['why_this_workout']}")
+        lines.append(
+            "→ post_ride_review.physiological_read MUST name this workout "
+            "by title and quote target vs actual numbers."
+        )
+
+    todays_activities = snapshot.get("todays_activities")
+    if isinstance(todays_activities, list) and todays_activities:
+        lines.append("\n## Today's completed activities (athlete-local)")
+        for a in todays_activities:
+            lines.append(
+                f"- {a.get('title') or a.get('sport', 'activity')}: "
+                f"{a.get('duration_minutes', 'n/a')} min, "
+                f"{a.get('tss', 'n/a')} TSS, "
+                f"IF {a.get('intensity_factor', 'n/a')}, "
+                f"EF {a.get('efficiency_factor', 'n/a')}"
+            )
+
+    tomorrow_outlook = snapshot.get("tomorrow_outlook")
+    if isinstance(tomorrow_outlook, dict):
+        lines.append("\n## Tomorrow (forward-looking inputs)")
+        lines.append(
+            f"- outlook_7d[1]: ~{tomorrow_outlook.get('suggested_tss', 'n/a')} TSS — "
+            f"{tomorrow_outlook.get('note', '')}"
+        )
+    tomorrow_pw = snapshot.get("tomorrow_planned_workout")
+    if isinstance(tomorrow_pw, dict):
+        lines.append(
+            f"- planned workout: {tomorrow_pw.get('title')} "
+            f"(template_id={tomorrow_pw.get('template_id')}, "
+            f"duration={tomorrow_pw.get('duration_minutes')} min)"
+        )
+    elif isinstance(tomorrow_outlook, dict):
+        lines.append(
+            "- no planned workout for tomorrow — describe the TYPE of day, "
+            "not specific intervals."
         )
 
     lines.append("\n## Raw JSON reference")

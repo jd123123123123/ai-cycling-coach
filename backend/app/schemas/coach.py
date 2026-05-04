@@ -161,6 +161,39 @@ class OutlookEntry(BaseModel):
     note: str
 
 
+# ======================================================================
+# Today-runthrough Step 7 — tomorrow plan + regeneration
+# ======================================================================
+
+
+IntensityChip = Literal["recovery", "endurance", "tempo", "threshold", "vo2", "race"]
+
+
+class TomorrowPlan(BaseModel):
+    """Forward-looking 3–5 sentence preview of tomorrow's session.
+
+    Step 7 (today-runthrough): rendered as a compact card below the workout
+    card. `description` is the prose ("steady push for ~75 minutes…"), the
+    `predicted_tss` and `intensity_chip` drive the chips above the paragraph.
+
+    Optional everywhere — older briefs that don't ship this block still
+    validate. When the LLM omits it, the frontend simply hides the card.
+    """
+    description: str  # 3–5 sentences
+    predicted_tss: float
+    intensity_chip: IntensityChip
+
+
+class Regeneration(BaseModel):
+    """Plain-text regeneration bullets — sleep, fuel, mobility, caffeine.
+
+    Step 7: 2–3 short lines, no acronyms. Frontend renders as a hairline-
+    divided list under the tomorrow card. Optional on purpose so older
+    briefs still parse.
+    """
+    bullets: list[str] = Field(default_factory=list, max_length=4)
+
+
 class BriefRead(BaseModel):
     """Response for GET /coach/brief and POST /coach/brief/refresh."""
     id: int
@@ -183,6 +216,10 @@ class BriefRead(BaseModel):
     # a full post-ride review that the frontend renders in place of the
     # prescribed-workout card.
     post_ride_review: PostRideReview | None = None
+    # Step 7 (today-runthrough) — optional forward-looking blocks. Older briefs
+    # without these fields continue to validate (defaults are None).
+    tomorrow_plan: TomorrowPlan | None = None
+    regeneration: Regeneration | None = None
 
     class Config:
         from_attributes = True

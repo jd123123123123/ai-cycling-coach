@@ -106,6 +106,25 @@ export interface PostRideReview {
   totals?: WrapupTotals
 }
 
+// Today-runthrough Step 7 — tomorrow plan + regeneration
+export type IntensityChip =
+  | 'recovery'
+  | 'endurance'
+  | 'tempo'
+  | 'threshold'
+  | 'vo2'
+  | 'race'
+
+export interface TomorrowPlan {
+  description: string
+  predicted_tss: number
+  intensity_chip: IntensityChip
+}
+
+export interface Regeneration {
+  bullets: string[]
+}
+
 export type CoachLanguage = 'simple' | 'technical'
 
 export interface CoachBriefResponse {
@@ -129,6 +148,10 @@ export interface CoachBriefResponse {
   // review is attached. Frontend renders PostRideReview card in place of
   // the PrescribedWorkoutCard. Absent / null → no review.
   post_ride_review?: PostRideReview | null
+  // Step 7 (today-runthrough) — optional forward-looking blocks. Older
+  // briefs without these fields stay backward-compatible.
+  tomorrow_plan?: TomorrowPlan | null
+  regeneration?: Regeneration | null
 }
 
 export interface CauseEntry {

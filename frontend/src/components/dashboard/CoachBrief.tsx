@@ -9,6 +9,8 @@ import type { CoachBriefResponse, OutlookEntry } from '../../api/coach'
 import ContributorsSheet from './ContributorsSheet'
 import PrescribedWorkoutCard from './PrescribedWorkoutCard'
 import PostRideReview from './PostRideReview'
+import TomorrowCard from './TomorrowCard'
+import RegenerationCard from './RegenerationCard'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { translateCoach } from '../../utils/coachLanguage'
 
@@ -404,21 +406,13 @@ function BriefBody({
         </div>
       )}
 
-      {/* Outlook — secondary, compact 60px. The meta caption uses TSS in
-         technical mode and a plain-English summary in simple mode. */}
-      {brief.outlook_7d && brief.outlook_7d.length > 0 && (
-        <div className="flex flex-col gap-1.5 pt-3" style={{ borderTop: '1px solid var(--color-rule)' }}>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="eyebrow">{simpleMode ? 'Next 7 days' : '7-day outlook'}</span>
-            <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
-              {simpleMode
-                ? `${brief.outlook_7d.length} days ahead`
-                : `${brief.outlook_7d.reduce((s, e) => s + (e.suggested_tss ?? 0), 0).toFixed(0)} TSS total`}
-            </span>
-          </div>
-          <OutlookChart outlook={brief.outlook_7d} />
-        </div>
-      )}
+      {/* Step 7 (today-runthrough) — forward-looking + regen. Both render nothing
+         when their data is missing, so the visual layout stays identical for
+         older briefs that don't ship these blocks. */}
+      <TomorrowCard data={brief.tomorrow_plan ?? null} />
+      <RegenerationCard bullets={brief.regeneration?.bullets ?? null} />
+
+      {/* Outlook removed per product decision — CoachBrief focuses on TODAY only. */}
 
       {/* Frameworks + transparency — one line combined */}
       <div

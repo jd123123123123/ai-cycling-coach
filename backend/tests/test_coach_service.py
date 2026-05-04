@@ -495,6 +495,114 @@ class TestGetOrGenerateBriefCache:
 
 
 # ---------------------------------------------------------------------------
+# Today-runthrough Step 7 — tomorrow_plan upsert
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestTomorrowRecommendationUpsert:
+    """Step 7: when generate_brief returns a tomorrow_plan block, the service
+    must upsert a coach_recommendations row for tomorrow's local date.
+    Skipping cleanly when tomorrow_plan is absent is the other half of the
+    contract.
+    """
+
+    async def _run(self, monkeypatch, brief_payload):
+        """Drive get_or_generate_brief with a fake generate_brief and observe
+        whether _upsert_recommendation_for_tomorrow gets called."""
+        monkeypatch.setattr("app.services.coach_service.settings.ANTHROPIC_API_KEY", None)
+        monkeypatch.setattr("app.services.coach_service.settings.COACH_BRIEF_CACHE_HOURS", 6)
+
+        db = _MockDB(initial_cache=[])
+        monkeypatch.setattr(
+            "app.services.coach_service.build_snapshot",
+            AsyncMock(return_value=_sample_snapshot()),
+        )
+        monkeypatch.setattr(
+            "app.services.coach_service.generate_brief",
+            AsyncMock(return_value=brief_payload),
+        )
+        # Stub today's recommendation upsert so it doesn't reach the DB.
+        monkeypatch.setattr(
+            "app.services.coach_service._upsert_recommendation_for_today",
+            AsyncMock(return_value=None),
+        )
+
+        tomorrow_calls: list[dict] = []
+
+        async def _fake_tomorrow_upsert(*, db, user_id, brief, tomorrow_plan):
+            tomorrow_calls.append({
+                "user_id": user_id,
+                "tomorrow_plan": tomorrow_plan,
+            })
+
+        monkeypatch.setattr(
+            "app.services.coach_service._upsert_recommendation_for_tomorrow",
+            _fake_tomorrow_upsert,
+        )
+
+        await get_or_generate_brief(db, user_id=1, force=False)
+        return tomorrow_calls
+
+    async def test_tomorrow_plan_present_writes_row(self, monkeypatch):
+        payload = {
+            "verdict": "Easy day",
+            "rationale": "fresh",
+            "prescribed_workout": {
+                "template_id": "z2_endurance_60",
+                "title": "Z2 60",
+                "duration_minutes": 60,
+                "predicted_tss": 45,
+                "framework_cited": "San Millán Z2",
+                "blocks": [],
+                "why_this_workout": "",
+            },
+            "alternates": [
+                {"label": "less_time", "one_liner": "Z2 30", "template_id": "recovery_30"},
+                {"label": "recover", "one_liner": "rest", "template_id": "rest_day"},
+            ],
+            "outlook_7d": [{"day_offset": i, "suggested_tss": 50, "note": "d"} for i in range(7)],
+            "frameworks_cited": ["Seiler"],
+            "model_used": "rule-based-fallback",
+            "tomorrow_plan": {
+                "description": "Steady push at the high-Z2 end for ~75 minutes.",
+                "predicted_tss": 70,
+                "intensity_chip": "endurance",
+            },
+        }
+        calls = await self._run(monkeypatch, payload)
+        assert len(calls) == 1
+        assert calls[0]["user_id"] == 1
+        assert calls[0]["tomorrow_plan"]["intensity_chip"] == "endurance"
+        assert calls[0]["tomorrow_plan"]["predicted_tss"] == 70
+
+    async def test_tomorrow_plan_absent_skips_upsert(self, monkeypatch):
+        payload = {
+            "verdict": "Easy day",
+            "rationale": "fresh",
+            "prescribed_workout": {
+                "template_id": "z2_endurance_60",
+                "title": "Z2 60",
+                "duration_minutes": 60,
+                "predicted_tss": 45,
+                "framework_cited": "",
+                "blocks": [],
+                "why_this_workout": "",
+            },
+            "alternates": [
+                {"label": "less_time", "one_liner": "Z2 30", "template_id": "recovery_30"},
+                {"label": "recover", "one_liner": "rest", "template_id": "rest_day"},
+            ],
+            "outlook_7d": [{"day_offset": i, "suggested_tss": 50, "note": "d"} for i in range(7)],
+            "frameworks_cited": [],
+            "model_used": "rule-based-fallback",
+            # tomorrow_plan intentionally absent
+        }
+        calls = await self._run(monkeypatch, payload)
+        assert calls == []
+
+
+# ---------------------------------------------------------------------------
 # Post-ride review (Phase 5.3) — rule-based path produces complete review
 # ---------------------------------------------------------------------------
 

@@ -31,6 +31,8 @@ from app.schemas.coach import (
     OutlookEntry,
     PostRideReview,
     PrescribedWorkout,
+    Regeneration,
+    TomorrowPlan,
     TransparencyRead,
     WhyTiredRead,
 )
@@ -108,6 +110,24 @@ def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
             except Exception:  # noqa: BLE001 — tolerate malformed review
                 post_ride_review = None
 
+    # Step 7 — tomorrow_plan + regeneration also live in evidence. Tolerate
+    # missing keys (older briefs) and malformed payloads.
+    tomorrow_plan: TomorrowPlan | None = None
+    regeneration: Regeneration | None = None
+    if isinstance(evidence, dict):
+        raw_tom = evidence.get("tomorrow_plan")
+        if isinstance(raw_tom, dict):
+            try:
+                tomorrow_plan = TomorrowPlan(**raw_tom)
+            except Exception:  # noqa: BLE001
+                tomorrow_plan = None
+        raw_regen = evidence.get("regeneration")
+        if isinstance(raw_regen, dict):
+            try:
+                regeneration = Regeneration(**raw_regen)
+            except Exception:  # noqa: BLE001
+                regeneration = None
+
     return BriefRead(
         id=brief.id,
         generated_at=brief.generated_at,
@@ -123,6 +143,8 @@ def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
         from_cache=from_cache,
         language=language,
         post_ride_review=post_ride_review,
+        tomorrow_plan=tomorrow_plan,
+        regeneration=regeneration,
     )
 
 

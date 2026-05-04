@@ -725,6 +725,108 @@ async def build_snapshot(
             "totals": today_bundle["totals"],
         }
 
+    # ---------------------------------------------------------
+    # Today-runthrough Step 7 — forward-looking + recap inputs.
+    # All threaded into the user message (not the cached prefix)
+    # so prompt-cache hashes stay stable.
+    # ---------------------------------------------------------
+    today_local_date = _today_local()
+    tomorrow_local_date = today_local_date + timedelta(days=1)
+
+    # Yesterday's recommendation row keyed to TODAY's local date — the row
+    # we wrote when yesterday's brief generated. Used by the recap-with-eval
+    # narrative ("we recommended X; you actually did Y").
+    yesterday_rec_payload: dict | None = None
+    try:
+        ye_q = await db.execute(
+            select(CoachRecommendation).where(
+                CoachRecommendation.user_id == user_id,
+                CoachRecommendation.target_date == today_local_date,
+            )
+        )
+        ye_rec = ye_q.scalar_one_or_none()
+        if ye_rec is not None:
+            yesterday_rec_payload = {
+                "template_id": ye_rec.template_id,
+                "title": ye_rec.title,
+                "duration_minutes": ye_rec.duration_minutes,
+                "predicted_tss": ye_rec.predicted_tss,
+                "framework_cited": ye_rec.framework_cited,
+                "why_this_workout": ye_rec.why_this_workout,
+            }
+    except Exception:  # pragma: no cover — best-effort; never break snapshot
+        logger.exception("failed to load yesterday_recommendation for user_id=%s", user_id)
+
+    # Today's aggregated activity list (Step 3) — flat dicts the LLM can read.
+    todays_activities_payload: list[dict] = []
+    for row in today_rows:
+        todays_activities_payload.append({
+            "title": getattr(row, "name", None) or getattr(row, "title", None) or "Activity",
+            "sport": getattr(row, "sport", None) or "cycling",
+            "duration_minutes": int(round((getattr(row, "duration_seconds", 0) or 0) / 60)),
+            "tss": float(getattr(row, "tss", 0) or 0),
+            "intensity_factor": getattr(row, "intensity_factor", None),
+            "efficiency_factor": getattr(row, "efficiency_factor", None),
+            "variability_index": getattr(row, "variability_index", None),
+        })
+
+    # Tomorrow's outlook — pre-compute the same way _rule_based_brief does
+    # (CTL × weekday multiplier + plain-English note) so the LLM has
+    # outlook_7d[1] available in the user message even on its own path.
+    _ctl_for_outlook = float(pmc.get("ctl") or 0.0)
+    _tomorrow_weekday = tomorrow_local_date.weekday()
+    if _tomorrow_weekday == 6:
+        _tomorrow_tss = round(_ctl_for_outlook * 1.1, 0)
+        _tomorrow_note = (
+            "Long easy ride — build the base." if language == "simple"
+            else "Long Z2 — build aerobic base."
+        )
+    elif _tomorrow_weekday == 2:
+        _tomorrow_tss = round(_ctl_for_outlook * 0.9, 0)
+        _tomorrow_note = (
+            "Hard ride mid-week." if language == "simple"
+            else "Mid-week quality — intervals near threshold."
+        )
+    elif _tomorrow_weekday in (0, 4):
+        _tomorrow_tss = round(_ctl_for_outlook * 0.3, 0)
+        _tomorrow_note = "Rest or easy spin."
+    else:
+        _tomorrow_tss = round(_ctl_for_outlook * 0.6, 0)
+        _tomorrow_note = (
+            "Easy hour on the bike." if language == "simple" else "Endurance Z2."
+        )
+    tomorrow_outlook_payload: dict = {
+        "day_offset": 1,
+        "suggested_tss": _tomorrow_tss,
+        "note": _tomorrow_note,
+    }
+
+    # Tomorrow's PlannedWorkout — optional; present if the athlete has a
+    # scheduled session. Skipped silently when the model isn't reachable.
+    tomorrow_planned_payload: dict | None = None
+    try:
+        from app.models.planned_workout import PlannedWorkout
+        pw_q = await db.execute(
+            select(PlannedWorkout).where(
+                PlannedWorkout.user_id == user_id,
+                PlannedWorkout.date == tomorrow_local_date,
+            )
+        )
+        pw_row = pw_q.scalar_one_or_none()
+        if pw_row is not None:
+            tomorrow_planned_payload = {
+                "title": pw_row.title,
+                "template_id": pw_row.template_id,
+                "sport": pw_row.sport,
+                "duration_minutes": (
+                    int(round((pw_row.duration_seconds_target or 0) / 60))
+                    if pw_row.duration_seconds_target else None
+                ),
+                "indoor": bool(pw_row.indoor),
+            }
+    except Exception:  # pragma: no cover — model may be absent in some envs
+        logger.exception("failed to load tomorrow_planned_workout for user_id=%s", user_id)
+
     snapshot: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "language": language,
@@ -766,6 +868,16 @@ async def build_snapshot(
         },
         # Phase 5.3 — post-ride review data (None when today_tss<25 or no activity)
         "post_ride": post_ride_data,
+        # Step 7 (today-runthrough) — forward-looking + recap inputs. Each
+        # block is optional from the LLM's perspective: build_user_message
+        # only renders sections that are present.
+        "yesterday_recommendation": yesterday_rec_payload,
+        "todays_activities": todays_activities_payload,
+        "tomorrow_planned_workout": tomorrow_planned_payload,
+        # tomorrow_outlook — pre-computed forward projection (CTL ×
+        # weekday multiplier) so the LLM has outlook_7d[1] in the user
+        # message regardless of which path generates the brief.
+        "tomorrow_outlook": tomorrow_outlook_payload,
     }
     return snapshot
 
@@ -1833,6 +1945,12 @@ async def get_or_generate_brief(
     evidence_payload = dict(snapshot)
     if brief_payload.get("post_ride_review") is not None:
         evidence_payload["post_ride_review"] = brief_payload["post_ride_review"]
+    # Step 7 — stash forward-looking blocks in evidence (no schema migration).
+    # _brief_to_read pulls them back out for the API response.
+    if brief_payload.get("tomorrow_plan") is not None:
+        evidence_payload["tomorrow_plan"] = brief_payload["tomorrow_plan"]
+    if brief_payload.get("regeneration") is not None:
+        evidence_payload["regeneration"] = brief_payload["regeneration"]
 
     brief = CoachBrief(
         user_id=user_id,
@@ -1872,6 +1990,23 @@ async def get_or_generate_brief(
         # Log + swallow; the fallback path in ride_compliance will re-pick.
         logging.getLogger(__name__).exception(
             "coach_recommendation upsert failed for user_id=%s", user_id,
+        )
+
+    # Step 7 (today-runthrough) — when the brief carries a tomorrow_plan,
+    # also persist a coach_recommendations row for tomorrow's local date so
+    # tomorrow's post-ride compliance grader has something to score against.
+    try:
+        tomorrow_plan_payload = brief_payload.get("tomorrow_plan")
+        if isinstance(tomorrow_plan_payload, dict):
+            await _upsert_recommendation_for_tomorrow(
+                db=db,
+                user_id=user_id,
+                brief=brief,
+                tomorrow_plan=tomorrow_plan_payload,
+            )
+    except Exception:  # pragma: no cover
+        logging.getLogger(__name__).exception(
+            "tomorrow coach_recommendation upsert failed for user_id=%s", user_id,
         )
 
     return brief
@@ -1939,6 +2074,69 @@ async def _upsert_recommendation_for_today(
         existing.evaluated_at = None
         existing.eval_grade = None
         existing.eval_payload = None
+
+    await db.commit()
+
+
+async def _upsert_recommendation_for_tomorrow(
+    db: AsyncSession,
+    user_id: int,
+    brief: CoachBrief,
+    tomorrow_plan: dict,
+) -> None:
+    """Persist tomorrow's `tomorrow_plan` payload as a coach_recommendations row.
+
+    The tomorrow_plan shape is lighter than today's prescribed_workout — no
+    blocks, no template_id mapping. We store the intensity_chip as the
+    `template_id` (so ride_compliance has a category anchor) and the
+    description as the title. `blocks` is required by the schema → store an
+    empty list; ride_compliance falls back to re-picking when blocks is empty.
+
+    Idempotent on (user_id, tomorrow_local).
+    """
+    description = str(tomorrow_plan.get("description") or "").strip()
+    intensity_chip = str(tomorrow_plan.get("intensity_chip") or "").strip()
+    if not description or not intensity_chip:
+        return
+
+    tomorrow_local = _today_local() + timedelta(days=1)
+    predicted_tss = int(round(float(tomorrow_plan.get("predicted_tss") or 0)))
+    # Title is capped at the schema column length; description shows in full
+    # via why_this_workout.
+    title = (description[:197] + "...") if len(description) > 200 else description
+
+    existing_q = await db.execute(
+        select(CoachRecommendation).where(
+            CoachRecommendation.user_id == user_id,
+            CoachRecommendation.target_date == tomorrow_local,
+        )
+    )
+    existing = existing_q.scalar_one_or_none()
+
+    if existing is None:
+        rec = CoachRecommendation(
+            user_id=user_id,
+            target_date=tomorrow_local,
+            template_id=intensity_chip,
+            title=title,
+            duration_minutes=0,        # unknown until tomorrow's brief
+            predicted_tss=predicted_tss,
+            framework_cited=None,
+            blocks=[],
+            why_this_workout=description,
+            source_brief_id=brief.id,
+        )
+        db.add(rec)
+    else:
+        # Don't clobber a more-detailed row already written by tomorrow's
+        # actual brief generation — only update if this is still the
+        # forward-looking placeholder (blocks empty).
+        if not existing.blocks:
+            existing.template_id = intensity_chip
+            existing.title = title
+            existing.predicted_tss = predicted_tss
+            existing.why_this_workout = description
+            existing.source_brief_id = brief.id
 
     await db.commit()
 
