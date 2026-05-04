@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
+import { ArrowUpRight, Lock, Mail, ShieldCheck, Watch } from 'lucide-react'
 import { apiClient } from '../api/client'
+import { prefersReducedMotion } from '../utils/motion'
 
 interface ConnectResponse {
   activities_synced: number
@@ -18,6 +20,32 @@ export default function GarminConnectPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // Simulated progress — the real /garmin/connect call takes up to ~60s because
+  // the SSO chain includes deliberate delays to bypass Cloudflare bot detection.
+  // Asymptote to 92% so it never feels "stuck at 100" before the server returns,
+  // then snap to 100 on success.
+  const [progress, setProgress] = useState(0)
+  useEffect(() => {
+    if (!submitting) {
+      setProgress(0)
+      return
+    }
+    if (prefersReducedMotion()) {
+      setProgress(50)
+      return
+    }
+    const started = performance.now()
+    let raf = 0
+    const tick = (now: number) => {
+      const elapsed = (now - started) / 1000
+      const pct = Math.min(92, 92 * (1 - Math.exp(-elapsed / 14)))
+      setProgress(pct)
+      if (submitting) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [submitting])
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
@@ -25,105 +53,283 @@ export default function GarminConnectPage() {
 
     try {
       const res = await apiClient.post<ConnectResponse>('/garmin/connect', { email, password })
-      // Refresh cached Garmin status + metric data so dashboard picks up the new state
+      setProgress(100)
       await qc.invalidateQueries({ queryKey: ['garmin', 'status'] })
       await qc.invalidateQueries({ queryKey: ['daily-metrics'] })
       await qc.invalidateQueries({ queryKey: ['activities'] })
       await qc.invalidateQueries({ queryKey: ['pmc'] })
       const { activities_synced, metrics_days } = res.data
-      navigate('/dashboard', {
-        replace: true,
-        state: { garminJustConnected: { activities_synced, metrics_days } },
-      })
+      setTimeout(() => {
+        navigate('/dashboard', {
+          replace: true,
+          state: { garminJustConnected: { activities_synced, metrics_days } },
+        })
+      }, 250)
     } catch (err: unknown) {
       const axiosError = err as { response?: { status?: number; data?: { detail?: string } } }
       if (axiosError.response?.status === 401) {
         setError('Garmin authentication failed. Check your email and password.')
       } else if (axiosError.response?.status === 409) {
         setError('Garmin account is already connected. Disconnect first.')
+      } else if (axiosError.response?.status === 429) {
+        setError(
+          'Garmin is rate-limiting this server. Wait 15–30 minutes or switch networks (phone hotspot / VPN) and try again.',
+        )
       } else if (axiosError.response?.data?.detail) {
         setError(axiosError.response.data.detail)
       } else {
         setError('Something went wrong connecting Garmin. Please try again.')
       }
-    } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-8"
+      style={{ backgroundColor: 'var(--color-paper)' }}
+    >
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-semibold text-gray-900">Connect Garmin</h1>
-            <p className="mt-2 text-sm text-gray-500">
-              Sign in with your Garmin Connect credentials to sync activities and biometrics
-            </p>
+        <div
+          className="paper-grain rounded-[20px] p-6 sm:p-7 relative overflow-hidden"
+          style={{
+            backgroundColor: 'var(--color-paper-2)',
+            border: '1px solid var(--color-rule)',
+            backgroundImage:
+              'radial-gradient(140% 100% at 100% 0%, color-mix(in srgb, var(--color-forest-2) 18%, transparent), transparent 60%)',
+          }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Watch size={14} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)' }} />
+            <span
+              className="eyebrow"
+              style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
+            >
+              Last step · Garmin
+            </span>
+          </div>
+          <h1
+            className="num-display leading-[0.95]"
+            style={{
+              fontSize: 'clamp(28px, 4.5vw, 36px)',
+              color: 'var(--color-ink)',
+            }}
+          >
+            Connect your Garmin.
+          </h1>
+          <p
+            className="mt-2 text-[14px] leading-relaxed"
+            style={{ color: 'var(--color-ink-2)' }}
+          >
+            Sign in with your Garmin Connect credentials. Your coach needs sleep, HRV, body battery,
+            and activity history to build an accurate picture.
+          </p>
+
+          {/* 3-dot progress strip — Garmin Connect is accessed post-onboarding (not part of the
+              Account→Consent→Goals flow), so we show it as a standalone connection step */}
+          <div className="flex items-center gap-3 my-4">
+            {[{ label: 'Account' }, { label: 'Consent' }, { label: 'Goals' }].map((step, i) => (
+              <div key={step.label} className="flex flex-col items-center gap-1">
+                <span
+                  style={{
+                    display: 'block',
+                    width: 16,
+                    height: 16,
+                    borderRadius: 9999,
+                    background: i < 3 ? 'var(--color-muted)' : 'var(--color-rule)',
+                    border: '1px solid var(--color-rule)',
+                  }}
+                />
+                <span className="eyebrow text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
           </div>
 
-          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <p className="text-xs text-amber-800">
-              Your credentials are encrypted before storage. Initial sync pulls the last 90 days of
-              activities and 30 days of metrics — this may take up to a minute.
+          <div
+            className="mt-5 flex items-start gap-2.5 rounded-xl px-3 py-3"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--color-forest-2) 6%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-forest-2) 18%, transparent)',
+            }}
+          >
+            <ShieldCheck
+              size={14}
+              strokeWidth={1.8}
+              style={{ color: 'var(--color-forest-2)', marginTop: 2 }}
+            />
+            <p className="text-[12px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+              Credentials are encrypted with a key only your server holds. Initial sync pulls 90
+              days of activities and 30 days of daily metrics — up to a minute.
             </p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
+            <div
+              className="mt-4 rounded-xl px-3 py-3"
+              style={{
+                backgroundColor: 'rgba(255, 69, 58, 0.06)',
+                border: '1px solid rgba(255, 69, 58, 0.22)',
+              }}
+              role="alert"
+            >
+              <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-alert)' }}>
+                {error}
+              </p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Garmin email
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="you@example.com"
-              />
-            </div>
+          <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-3">
+            <FormField
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="you@example.com"
+              label="Garmin email"
+              icon={<Mail size={14} strokeWidth={1.8} />}
+              disabled={submitting}
+            />
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Garmin password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="••••••••"
-              />
-            </div>
+            <FormField
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={setPassword}
+              placeholder="••••••••"
+              label="Garmin password"
+              icon={<Lock size={14} strokeWidth={1.8} />}
+              disabled={submitting}
+            />
 
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-2.5 px-4 min-h-[44px] bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="mt-2 relative inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-[14px] font-medium min-h-[44px] transition-all overflow-hidden"
+              style={{
+                color: 'var(--color-paper)',
+                backgroundColor: 'var(--color-ink)',
+                opacity: submitting ? 0.95 : 1,
+              }}
             >
-              {submitting ? 'Connecting and syncing (up to 60s)...' : 'Connect Garmin'}
+              {submitting && (
+                <span
+                  className="absolute inset-0"
+                  style={{
+                    width: `${progress}%`,
+                    backgroundColor: 'var(--color-forest-2)',
+                    transition: 'width 400ms ease-out',
+                    opacity: 0.55,
+                  }}
+                  aria-hidden
+                />
+              )}
+              <span className="relative flex items-center gap-2">
+                {submitting
+                  ? progress < 100
+                    ? `Syncing ${Math.round(progress)}%`
+                    : 'Done — redirecting…'
+                  : 'Connect Garmin'}
+                {!submitting && <ArrowUpRight size={14} strokeWidth={2} />}
+              </span>
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-500">
-            <Link to="/dashboard" className="text-blue-600 hover:text-blue-700 font-medium">
-              Back to dashboard
+          <p className="mt-6 text-center text-[13px]" style={{ color: 'var(--color-muted)' }}>
+            <Link
+              to="/dashboard"
+              className="font-medium"
+              style={{ color: 'var(--color-forest-2)' }}
+            >
+              ← Back to dashboard
             </Link>
           </p>
         </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+          <ReassuranceChip text="Encrypted at rest" />
+          <ReassuranceChip text="Never shared" />
+          <ReassuranceChip text="Revoke anytime" />
+        </div>
       </div>
     </div>
+  )
+}
+
+function FormField({
+  id,
+  type,
+  autoComplete,
+  value,
+  onChange,
+  placeholder,
+  label,
+  icon,
+  disabled,
+}: {
+  id: string
+  type: 'email' | 'password'
+  autoComplete: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  label: string
+  icon: React.ReactNode
+  disabled?: boolean
+}) {
+  return (
+    <label htmlFor={id} className="flex flex-col gap-1.5">
+      <span
+        className="eyebrow"
+        style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
+      >
+        {label.toUpperCase()}
+      </span>
+      <div
+        className="relative flex items-center rounded-xl px-3"
+        style={{
+          backgroundColor: 'var(--color-paper)',
+          border: '1px solid var(--color-rule)',
+        }}
+      >
+        <span
+          className="flex-shrink-0 opacity-60"
+          style={{ color: 'var(--color-ink-2)' }}
+          aria-hidden
+        >
+          {icon}
+        </span>
+        <input
+          id={id}
+          type={type}
+          autoComplete={autoComplete}
+          required
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          placeholder={placeholder}
+          className="flex-1 py-2.5 pl-2 text-[14px] bg-transparent outline-none"
+          style={{ color: 'var(--color-ink)' }}
+        />
+      </div>
+    </label>
+  )
+}
+
+function ReassuranceChip({ text }: { text: string }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center gap-1 rounded-full py-1.5 px-2 text-center"
+      style={{
+        backgroundColor: 'var(--color-paper-2)',
+        border: '1px solid var(--color-rule)',
+      }}
+    >
+      <ShieldCheck size={10} strokeWidth={2} />
+      {text}
+    </span>
   )
 }

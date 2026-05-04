@@ -11,10 +11,21 @@ interface ProtectedRouteProps {
 
 function Spinner() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{ background: 'var(--color-paper)' }}
+    >
       <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-gray-500">Loading...</p>
+        <div
+          className="w-8 h-8 rounded-full animate-spin"
+          style={{
+            border: '3px solid var(--color-rule)',
+            borderTopColor: 'var(--color-forest-2)',
+          }}
+        />
+        <p className="text-[13px]" style={{ color: 'var(--color-muted)' }}>
+          Loading...
+        </p>
       </div>
     </div>
   )
