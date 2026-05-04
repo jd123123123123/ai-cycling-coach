@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 6.1 Wave 3 COMPLETE. 06.1-03 shipped CommandPalette (Cmd+K via cmdk), ContributorsSheet (unified Why-this? drawer merging Contributors/Rationale/Tools-Used; 240ms session-reset; chatToolUseLog live-subscription), retired TransparencyDrawer + WhyAmITired + coach/TransparencyDrawer shim, AI gradient on CoachChat input while streaming, SyncStatusPill masthead freshness indicator, Apple chart polish (PMC uPlot gradient fills + draw-on animation, PolarizedDistribution gradient bars, IntensityDistribution radial gradients + draw-on). Bundle: 569.29 KB gzipped (+6.6% over 534 KB baseline). All 6 Phase 6.1 success criteria verified. Phase 6.1 COMPLETE — ready for Phase 6.2 (DynamicPill, View Transitions, density toggle).
+**Current focus:** Phase 6.2 Wave 1 in progress. 06.2-01 shipped token foundation: 4 CSS sport-accent/chart-axis tokens added to index.css @theme inline, formatSigned/formatHours/formatDelta utilities (utils/format.ts), toneFromPct/tokenForTone delta tone system (utils/delta.ts), and RevealCascade stagger primitive. Bundle delta: 0 KB gzipped. Purely additive — no rendered-surface changes. Plans 02-05 consume these primitives.
 
 ## Current Position
 
-Phase: 6.1 of 9 (UI Overhaul — Apple-disciplined editorial redesign) — ALL 3 WAVES COMPLETE
-Plan: 06.1-03 complete (3 tasks; 3 atomic feat commits + 1 metadata commit; vite build green; editorial --color-* palette unchanged; bundle +6.6% over 534 KB baseline)
-Status: Phase 6.1 COMPLETE. Waves 1+2+3 all shipped. CommandPalette (Cmd+K, cmdk), ContributorsSheet (unified Why-this? with chatToolUseLog 06-03 invariant preserved), TransparencyDrawer + WhyAmITired retired, AI gradient on CoachChat input, SyncStatusPill masthead freshness, Apple chart polish (PMC/Polarized/Intensity). All 6 phase success criteria verified.
-Last activity: 2026-04-22 -- Completed 06.1-03-PLAN.md (CommandPalette + ContributorsSheet + SyncStatusPill + chart polish)
+Phase: 6.2 of 9 (Whoop-grade redesign)
+Plan: 06.2-01 complete (3 tasks; 3 atomic feat commits + 1 metadata commit; vite build green; 0 KB bundle delta)
+Status: Phase 6.2 Wave 1 (token foundation) complete. 5 plans remaining in Phase 6.2.
+Last activity: 2026-05-04 -- Completed 06.2-PLAN-01.md (sport-accent tokens + format/delta utils + RevealCascade)
 
 Progress: [██████████████░░] ~90% (Phases 1-6 + 6.1 complete; Phases 6.2, 7, 8, 9 remaining)
 
@@ -254,6 +254,11 @@ Recent decisions affecting current work:
 - [06.1-03]: uPlot PMC draw-on animation via canvas.style.opacity fade (not clip-based left-to-right reveal) — uPlot's draw pipeline is not cleanly interruptible; opacity fade delivers equivalent impact with zero frame overhead
 - [06.1-03]: SyncStatusPill click navigates to /settings — simple and extensible; per-provider endpoint deferred to future phase
 - [06.1-03]: ActivityRead type extended with max_hr + date fields — both exist in backend schema; absence was causing TS errors in new Wave-2 untracked components
+- [06.2-01]: Sport-accent hex values promoted to CSS tokens without changing values — #30D158 (bike=forest), #FFD60A (run=amber-2), #0A84FF (strength=ink-blue). No visual change.
+- [06.2-01]: formatHours canonical: Whoop-style (always Xh suffix, ≤9.9h decimal) diverges from WeekStrip.formatHours (shows min for <1h). New function is canonical; WeekStrip migrates in Plan 02.
+- [06.2-01]: toneFromPct thresholds — |Δ| < 3 = muted, 3-10 in good dir = forest-2, >10 good = forest, 3-10 bad = amber, >10 bad = alert. Direction param is 'good'|'bad' (vs KpiStripCompact's boolean higherIsBetter — Plan 03 migrates).
+- [06.2-01]: RevealCascade uses React.ReactElement return type (not JSX.Element) — avoids JSX namespace lookup without explicit @types/react import in tsconfig.app.json. Functionally equivalent.
+- [06.2-01]: No consumers of new tokens/utils in Plan 01 — additive only. Plans 02-05 wire them up.
 
 ### Roadmap Evolution
 
@@ -284,8 +289,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-22 — Phase 6.1 Wave 3 COMPLETE (06.1-03-PLAN.md)
-Stopped at: Phase 6.1 ALL 3 WAVES COMPLETE. Wave 3 commits: (1) bccae39 feat(06.1-03): CommandPalette (Cmd+K) + initialDraft prop on CoachChat [prior executor]. (2) b4ffb08 feat(06.1-03): ContributorsSheet + retire TransparencyDrawer/WhyAmITired + SyncStatusPill + AI-gradient chat input. (3) df39755 feat(06.1-03): Apple chart polish on PMC + Polarized + Intensity + Wave 3 ship-green. Build: vite build green (569.29 KB gzipped, +6.6% over 534 KB baseline). Editorial --color-* palette unchanged (19 variables). cmdk only new dep.
+Last session: 2026-05-04 — Phase 6.2 Wave 1 (06.2-PLAN-01.md) complete
+Stopped at: 06.2-01 complete. Commits: (1) 9764be3 feat(06.2-01): sport-accent + chart-axis tokens. (2) d590809 feat(06.2-01): format.ts + delta.ts. (3) 172d8bb feat(06.2-01): RevealCascade. Build: vite build green (812.85 KB gzipped, 0 KB delta vs 418d4f5 baseline). Zero rendered-surface changes.
 Resume file: None
-Next: Phase 6.2 (DynamicPill, View Transitions, density toggle, weekly-recap ritual). Token vocabulary stable from 6.1 — safe to consume in 6.2.
+Next: Phase 6.2 Plan 02 (WeekStrip redesign — consumes formatHours, sport-accent tokens, RevealCascade).
 Pending: Per-provider sync endpoint (SyncStatusPill currently single-provider); WeekStrip URL-driven week selection for CommandPalette "Last/This/Next week" items; test infra install (vitest + @testing-library/react) to activate CommandPalette.test.tsx stubs; Provision ANTHROPIC_API_KEY in production before launch; migrate chat rate limiter to Redis when scaling past one uvicorn worker; expose /coach/metrics-trend endpoint so AdvancedMetricsStrip can show real decoupling + durability values; restart Docker daemon + `alembic upgrade head` (b9c4d1e8f2a3) + smoke-test `/coach/chat` with modification intent before production deploy; Fresh `npm ci` in frontend to fix empty .bin directory ergonomics.
