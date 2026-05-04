@@ -260,8 +260,13 @@ class _MockDB:
         return result
 
     def add(self, obj):
-        self.add_count += 1
-        self._last_added = obj
+        # Scope add_count to CoachBrief instances only — get_or_generate_brief
+        # also writes CoachRecommendation rows (Step 4 + Step 7), which would
+        # otherwise inflate the counter and break cache-hit/miss assertions.
+        from app.models.coach_brief import CoachBrief
+        if isinstance(obj, CoachBrief):
+            self.add_count += 1
+            self._last_added = obj
 
     async def commit(self):
         self.commit_count += 1

@@ -1239,7 +1239,6 @@ def _simple_physio_read(compliance: dict, trajectory: dict) -> str:
     dur = compliance.get("duration", {})
     tss = compliance.get("tss", {})
     actual_min = int(round(dur.get("actual", 0)))
-    actual_effort = int(round(tss.get("actual", 0)))
 
     # Opening line — what happened
     if grade == "perfect":
@@ -1974,10 +1973,6 @@ async def get_or_generate_brief(
     # coach_recommendations row keyed by (user_id, target_date). Post-ride
     # compliance grading reads from this table so it scores against what
     # the athlete actually saw — not against a re-pick of the template.
-    #
-    # TODO(Step 6 — tomorrow_plan): when the brief carries a tomorrow_plan
-    # block, also upsert a row for target_date=today+1. For now we only
-    # write today's row.
     try:
         await _upsert_recommendation_for_today(
             db=db,
