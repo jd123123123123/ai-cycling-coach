@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { format } from 'date-fns'
 import { usePMC } from '../../hooks/usePMC'
 import type { PMCEntry } from '../../api/dashboard'
 import { prefersReducedMotion } from '../../utils/motion'
+import Sparkline from './Sparkline'
 
 type Sport = 'total' | 'cycling' | 'running' | 'gym'
 
@@ -15,9 +16,9 @@ const SPORTS: { key: Sport; label: string }[] = [
   { key: 'gym', label: 'Strength' },
 ]
 
-const C_CTL = '#1C4433'    // forest (fitness)
-const C_ATL = '#B04A0C'    // amber (fatigue)
-const C_TSB = '#143555'    // ink-blue (form)
+const C_CTL = '#30D158'    // bright green (fitness)
+const C_ATL = '#FF9F0A'    // amber (fatigue — caution semantic, legitimate amber use)
+const C_TSB = '#0A84FF'    // blue (form)
 
 // Interpret TSB (form): >5 fresh, -10..+5 optimal window, <-10 at-risk of overreaching
 function formStatus(tsb: number | null): { label: string; color: string; tone: string } {
@@ -26,7 +27,7 @@ function formStatus(tsb: number | null): { label: string; color: string; tone: s
   if (tsb > 5) return { label: 'Fresh', color: C_CTL, tone: 'Peak window. Race or push.' }
   if (tsb >= -10) return { label: 'Optimal', color: C_TSB, tone: 'Productive training zone.' }
   if (tsb >= -20) return { label: 'Loading', color: C_ATL, tone: 'Deep training block.' }
-  return { label: 'At-risk', color: '#8a1d1d', tone: 'Overreach. Dial back.' }
+  return { label: 'At-risk', color: 'var(--color-alert)', tone: 'Overreach. Dial back.' }
 }
 
 function SummaryStat({
@@ -35,12 +36,15 @@ function SummaryStat({
   unit,
   trend,
   accent,
+  children,
 }: {
   label: string
   value: string
   unit?: string
   trend?: string
   accent: string
+  /** Optional content rendered below the value row (e.g. a Sparkline) */
+  children?: React.ReactNode
 }) {
   return (
     <div
@@ -75,6 +79,7 @@ function SummaryStat({
           {trend}
         </span>
       )}
+      {children}
     </div>
   )
 }
@@ -148,7 +153,7 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
       axes: [
         {
           // x-axis: no grid (already off), clean labels
-          stroke: '#757465',
+          stroke: 'var(--color-chart-axis)',
           grid: { show: false },
           ticks: { show: false },
           font: '11px Geist, sans-serif',
@@ -157,7 +162,7 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
         },
         {
           // y-axis: REMOVE gridlines (Apple chart polish — no gridlines)
-          stroke: '#757465',
+          stroke: 'var(--color-chart-axis)',
           grid: { show: false },
           ticks: { show: false },
           font: '11px Geist, sans-serif',
@@ -170,9 +175,9 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
             const ctx = u.ctx
             // Zone: at-risk <-10, optimal -10..+5, fresh 5+
             const zones: Array<[number, number, string]> = [
-              [-200, -10, 'rgba(138, 29, 29, 0.055)'],    // at-risk
-              [-10, 5, 'rgba(20, 53, 85, 0.045)'],         // optimal
-              [5, 200, 'rgba(28, 68, 51, 0.045)'],          // fresh
+              [-200, -10, 'rgba(255, 69, 58, 0.08)'],      // at-risk
+              [-10, 5, 'rgba(10, 132, 255, 0.07)'],         // optimal
+              [5, 200, 'rgba(48, 209, 88, 0.07)'],           // fresh
             ]
             ctx.save()
             for (const [y0, y1, fillStyle] of zones) {
@@ -215,6 +220,70 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
             // is positioned inside .u-wrap which fills our container, so these
             // coords already work as container offsets.
             setHover({ idx, left, top })
+          },
+        ],
+        // Forward TSB projection: draw 14 dashed projected lines on top of
+        // existing series after each render. Zero-TSS rest scenario (worst
+        // case). Formula: CTL decays τ=42d, ATL decays τ=7d.
+        draw: [
+          (u) => {
+            if (series.length === 0) return
+            const last = series[series.length - 1]
+            const ctx = u.ctx
+            const PROJ_DAYS = 14
+            const DAY_S = 86400  // seconds
+
+            const lastTs = new Date(last.date).getTime() / 1000
+
+            // Build projected arrays
+            const projCTL: number[] = []
+            const projATL: number[] = []
+            const projTSB: number[] = []
+            const projTs: number[] = []
+
+            let ctl = last.ctl
+            let atl = last.atl
+            for (let i = 0; i <= PROJ_DAYS; i++) {
+              projTs.push(lastTs + i * DAY_S)
+              projCTL.push(ctl)
+              projATL.push(atl)
+              projTSB.push(ctl - atl)
+              // Decay for next step (zero TSS)
+              ctl = ctl * (1 - 1 / 42)
+              atl = atl * (1 - 1 / 7)
+            }
+
+            ctx.save()
+            ctx.setLineDash([5, 4])
+
+            const drawLine = (ts: number[], values: number[], color: string, lineWidth: number) => {
+              ctx.strokeStyle = color
+              ctx.lineWidth = lineWidth
+              ctx.globalAlpha = 0.55
+              ctx.beginPath()
+              ts.forEach((t, i) => {
+                const x = u.valToPos(t, 'x', true)
+                const y = u.valToPos(values[i], 'y', true)
+                if (i === 0) ctx.moveTo(x, y)
+                else ctx.lineTo(x, y)
+              })
+              ctx.stroke()
+            }
+
+            drawLine(projTs, projCTL, C_CTL, 1.5)
+            drawLine(projTs, projATL, C_ATL, 1.5)
+            drawLine(projTs, projTSB, C_TSB, 1.5)
+
+            // "Projection" label at the start of the dashed region
+            const labelX = u.valToPos(lastTs + DAY_S * 2, 'x', true)
+            const labelY = u.bbox.top + 12
+            ctx.globalAlpha = 0.45
+            ctx.fillStyle = 'var(--color-muted)'
+            ctx.font = '9px Geist, sans-serif'
+            ctx.textAlign = 'center'
+            ctx.fillText('rest →', labelX, labelY)
+
+            ctx.restore()
           },
         ],
       },
@@ -292,8 +361,9 @@ function HoverTooltip({
         transform: 'translateZ(0)',
       }}
     >
+      {/* Date label: .eyebrow class (muted caps) */}
       <div
-        className="serif-caps text-[11px] mb-1"
+        className="eyebrow text-[11px] mb-1"
         style={{ color: 'var(--color-muted)' }}
       >
         {dateLabel}
@@ -340,6 +410,12 @@ export default function PMCChart() {
   const ctlDelta = latest && priorWeek ? latest.ctl - priorWeek.ctl : null
   const form = formStatus(latest?.tsb ?? null)
 
+  // 12-day sparkline slices for each summary stat
+  const last12 = series.length >= 2 ? series.slice(-12) : []
+  const ctlLast12: Array<number | null> = last12.map((e) => e.ctl)
+  const atlLast12: Array<number | null> = last12.map((e) => e.atl)
+  const tsbLast12: Array<number | null> = last12.map((e) => e.tsb)
+
   return (
     <div
       className="paper-grain relative rounded-[20px] overflow-hidden"
@@ -351,8 +427,9 @@ export default function PMCChart() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-6 pb-3">
         <div>
-          <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
-            Chapter II · Training Load
+          {/* Muted eyebrow — amber decoration removed per 06.2 must_haves */}
+          <span className="eyebrow">
+            Training load · 90 days
           </span>
           <h2
             className="num-display mt-1 leading-none"
@@ -367,7 +444,7 @@ export default function PMCChart() {
         <div
           className="rounded-full p-0.5 inline-flex"
           style={{
-            backgroundColor: 'rgba(20, 24, 17, 0.05)',
+            backgroundColor: 'var(--color-paper)',
             border: '1px solid var(--color-rule)',
           }}
         >
@@ -375,7 +452,7 @@ export default function PMCChart() {
             <button
               key={key}
               onClick={() => setSport(key)}
-              className="py-2 px-3.5 text-[12px] font-medium rounded-full transition-all min-h-[40px]"
+              className="py-1.5 px-3.5 text-[12px] font-medium rounded-full transition-all min-h-[36px]"
               style={{
                 color: sport === key ? 'var(--color-paper)' : 'var(--color-ink-2)',
                 backgroundColor: sport === key ? 'var(--color-ink)' : 'transparent',
@@ -395,7 +472,7 @@ export default function PMCChart() {
           style={{
             borderTop: '1px solid var(--color-rule)',
             borderBottom: '1px solid var(--color-rule)',
-            backgroundColor: 'rgba(20, 24, 17, 0.02)',
+            backgroundColor: 'rgba(255,255,255,0.02)',
           }}
         >
           <SummaryStat
@@ -408,19 +485,40 @@ export default function PMCChart() {
                 : `${ctlDelta >= 0 ? '+' : ''}${ctlDelta.toFixed(1)} · 7d`
             }
             accent={C_CTL}
-          />
+          >
+            {/* 12-day CTL sparkline */}
+            {ctlLast12.length >= 2 ? (
+              <div className="mt-1">
+                <Sparkline values={ctlLast12} width={84} height={20} stroke="var(--color-forest-2)" showDot />
+              </div>
+            ) : <div style={{ height: 0 }} />}
+          </SummaryStat>
           <SummaryStat
             label="Fatigue · ATL"
             value={latest.atl.toFixed(1)}
             unit="TSS/d"
             accent={C_ATL}
-          />
+          >
+            {/* 12-day ATL sparkline — amber is caution-semantic for fatigue, not decoration */}
+            {atlLast12.length >= 2 ? (
+              <div className="mt-1">
+                <Sparkline values={atlLast12} width={84} height={20} stroke="var(--color-amber)" showDot />
+              </div>
+            ) : <div style={{ height: 0 }} />}
+          </SummaryStat>
           <SummaryStat
             label="Form · TSB"
             value={(latest.tsb >= 0 ? '+' : '') + latest.tsb.toFixed(1)}
             trend={form.label}
             accent={C_TSB}
-          />
+          >
+            {/* 12-day TSB sparkline */}
+            {tsbLast12.length >= 2 ? (
+              <div className="mt-1">
+                <Sparkline values={tsbLast12} width={84} height={20} stroke="var(--color-ink-blue)" showDot />
+              </div>
+            ) : <div style={{ height: 0 }} />}
+          </SummaryStat>
         </div>
       )}
 
@@ -454,7 +552,7 @@ export default function PMCChart() {
               Nothing plotted yet
             </span>
             <p
-              className="serif-caps text-[15px] max-w-sm"
+              className="text-[15px] max-w-sm"
               style={{ color: 'var(--color-ink-2)' }}
             >
               The curves paint themselves once a few sessions are in the logbook.
@@ -464,6 +562,16 @@ export default function PMCChart() {
           <PmcUPlot series={series} />
         )}
       </div>
+
+      {/* TSB tone caption — below chart canvas, not inside summary cell */}
+      {latest && !isLoading && !isError && series.length > 0 && (
+        <p
+          className="eyebrow px-5 pb-3 sm:px-6"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          {form.tone}
+        </p>
+      )}
 
       {/* Legend at bottom */}
       {!isLoading && !isError && series.length > 0 && (
@@ -496,7 +604,7 @@ function LegendPip({
       </svg>
       <div className="flex flex-col leading-tight">
         <span
-          className="serif-caps text-[12px]"
+          className="eyebrow text-[12px]"
           style={{ color: 'var(--color-ink)' }}
         >
           {label}
