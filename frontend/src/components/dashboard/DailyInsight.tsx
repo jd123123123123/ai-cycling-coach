@@ -21,10 +21,11 @@ interface Insight {
   strength: number
 }
 
-const toneColor: Record<Tone, { bar: string; icon: string }> = {
-  positive: { bar: 'var(--color-forest-2)', icon: 'var(--color-forest-2)' },
-  caution: { bar: 'var(--color-alert)', icon: 'var(--color-alert)' },
-  neutral: { bar: 'var(--color-ink-2)', icon: 'var(--color-ink-2)' },
+// Tone → CSS var for left-bar and eyebrow dot. Single source of truth.
+const TONE_COLOR: Record<Tone, string> = {
+  positive: 'var(--color-forest-2)',
+  caution:  'var(--color-alert)',
+  neutral:  'var(--color-ink-2)',
 }
 
 function mean(values: number[]): number | null {
@@ -233,81 +234,111 @@ export default function DailyInsight() {
   )
 
   const top = insights[0]
+  const secondary = insights.slice(1, 3)
 
   if (mLoad || aLoad) {
     return (
       <div
-        className="paper-grain rounded-[20px] px-5 py-4 sm:px-6 sm:py-5"
+        className="paper-grain rounded-[20px] px-5 py-5 sm:px-6 sm:py-6"
         style={{
           backgroundColor: 'var(--color-paper-2)',
           border: '1px solid var(--color-rule)',
         }}
       >
-        <div
-          className="h-4 w-28 rounded animate-pulse"
-          style={{ backgroundColor: 'var(--color-rule)' }}
-        />
-        <div
-          className="mt-3 h-6 rounded animate-pulse"
-          style={{ backgroundColor: 'var(--color-rule)' }}
-        />
+        <div className="h-3 w-24 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+        <div className="mt-4 h-8 w-3/4 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+        <div className="mt-2 h-4 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
       </div>
     )
   }
 
   if (!top) return null
 
-  const Icon = top.icon
-  const colors = toneColor[top.tone]
+  const toneColorVar = TONE_COLOR[top.tone]
 
   return (
     <div
-      className="paper-grain rounded-[20px] px-5 py-4 sm:px-6 sm:py-5 relative overflow-hidden"
+      className="paper-grain rounded-[20px] px-5 py-5 sm:px-6 sm:py-6 relative overflow-hidden"
       style={{
         backgroundColor: 'var(--color-paper-2)',
         border: '1px solid var(--color-rule)',
+        borderLeft: `3px solid ${toneColorVar}`,
       }}
     >
-      {/* Tone bar — a visible claim about what kind of signal this is. */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-[3px]"
-        style={{ backgroundColor: colors.bar }}
-        aria-hidden
-      />
-      <div className="flex items-center gap-2 mb-2">
-        <Sparkles size={12} strokeWidth={1.8} style={{ color: 'var(--color-muted)' }} />
+      {/* Top label — with 8×8 tier-color dot */}
+      <div className="flex items-center gap-2 mb-4">
         <span
-          className="eyebrow"
-          style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
-        >
+          aria-hidden
+          style={{
+            display: 'inline-block',
+            width: 8,
+            height: 8,
+            borderRadius: 9999,
+            background: toneColorVar,
+            marginRight: 2,
+            flexShrink: 0,
+          }}
+        />
+        <Sparkles size={12} strokeWidth={1.8} style={{ color: toneColorVar }} />
+        <span className="eyebrow" style={{ color: toneColorVar, letterSpacing: '0.22em' }}>
           Today&apos;s signal
         </span>
+        {secondary.length > 0 && (
+          <span
+            className="num-mono text-[10px] px-1.5 py-0.5 rounded-full"
+            style={{
+              color: 'var(--color-muted)',
+              backgroundColor: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.09)',
+            }}
+          >
+            +{secondary.length} more
+          </span>
+        )}
       </div>
-      <div className="flex items-start gap-3">
-        <div
-          className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center mt-0.5"
-          style={{
-            backgroundColor: `color-mix(in srgb, ${colors.icon} 10%, transparent)`,
-          }}
-          aria-hidden
+
+      {/* Primary insight — no icon tile */}
+      <div className="flex flex-col gap-1.5 min-w-0">
+        <h3
+          className="num-display leading-tight"
+          style={{ fontSize: 'clamp(20px, 2.8vw, 26px)', color: 'var(--color-ink)' }}
         >
-          <Icon size={16} strokeWidth={2} style={{ color: colors.icon }} />
-        </div>
-        <div className="flex flex-col gap-1 min-w-0">
-          <h3
-            className="num-display text-[18px] sm:text-[20px] leading-tight"
-            style={{ color: 'var(--color-ink)' }}
-          >
-            {top.headline}
-          </h3>
-          <p
-            className="text-[13.5px] leading-relaxed"
-            style={{ color: 'var(--color-ink-2)' }}
-          >
-            {top.body}
-          </p>
-        </div>
+          {top.headline}
+        </h3>
+        <p className="text-[13.5px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+          {top.body}
+        </p>
       </div>
+
+      {/* Secondary signals — compact pills */}
+      {secondary.length > 0 && (
+        <div
+          className="flex flex-col gap-2 mt-4 pt-4"
+          style={{ borderTop: '1px solid var(--color-rule)' }}
+        >
+          {secondary.map((s, i) => {
+            const sc = TONE_COLOR[s.tone]
+            return (
+              <div key={i} className="flex items-center gap-2.5 min-w-0">
+                <span
+                  aria-hidden
+                  style={{
+                    display: 'inline-block',
+                    width: 6,
+                    height: 6,
+                    borderRadius: 9999,
+                    background: sc,
+                    flexShrink: 0,
+                  }}
+                />
+                <span className="text-[12px] leading-snug truncate" style={{ color: 'var(--color-ink-2)' }}>
+                  {s.headline}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

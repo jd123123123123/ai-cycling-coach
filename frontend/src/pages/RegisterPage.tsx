@@ -1,6 +1,15 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, Navigate } from 'react-router-dom'
+import { Sparkles } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+
+// Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
+const steps = [
+  { label: 'Account' },
+  { label: 'Consent' },
+  { label: 'Goals' },
+]
+const ACTIVE_STEP = 0
 
 export default function RegisterPage() {
   const { register, isAuthenticated, isLoading } = useAuth()
@@ -70,91 +79,189 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div
+      className="min-h-screen flex items-center justify-center px-4"
+      style={{ background: 'var(--color-paper)' }}
+    >
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-semibold text-gray-900">Create your account</h1>
-            <p className="mt-2 text-sm text-gray-500">Your personal AI cycling coach awaits</p>
+        <div
+          className="paper-grain rounded-[20px] p-6 sm:p-7"
+          style={{
+            background: 'var(--color-paper-2)',
+            border: '1px solid var(--color-rule)',
+          }}
+        >
+          {/* Eyebrow */}
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles size={14} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)' }} />
+            <span
+              className="eyebrow"
+              style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
+            >
+              Create account
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1
+            className="num-display leading-[0.95]"
+            style={{ fontSize: 'clamp(28px, 5vw, 36px)', color: 'var(--color-ink)' }}
+          >
+            Create your account.
+          </h1>
+          <p className="mt-2 text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+            Your personal AI cycling coach awaits.
+          </p>
+
+          {/* 3-dot progress strip */}
+          <div className="flex items-center gap-3 my-4">
+            {steps.map((step, i) => (
+              <div key={step.label} className="flex flex-col items-center gap-1">
+                <span
+                  style={{
+                    display: 'block',
+                    width: 16,
+                    height: 16,
+                    borderRadius: 9999,
+                    background: i === ACTIVE_STEP ? 'var(--color-ink)' : 'var(--color-rule)',
+                    border: '1px solid var(--color-rule)',
+                  }}
+                />
+                <span className="eyebrow text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
           </div>
 
           {/* Error message */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
+            <div
+              className="mb-4 rounded-xl px-3 py-3"
+              style={{
+                backgroundColor: 'rgba(255, 69, 58, 0.06)',
+                border: '1px solid rgba(255, 69, 58, 0.22)',
+              }}
+              role="alert"
+            >
+              <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-alert)' }}>
+                {error}
+              </p>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="you@example.com"
-              />
-            </div>
+          <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
+            <FormField
+              id="email"
+              type="email"
+              label="Email"
+              autoComplete="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="you@example.com"
+              disabled={submitting}
+            />
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Min. 8 characters"
-              />
-            </div>
+            <FormField
+              id="password"
+              type="password"
+              label="Password"
+              autoComplete="new-password"
+              value={password}
+              onChange={setPassword}
+              placeholder="Min. 8 characters"
+              disabled={submitting}
+              minLength={8}
+            />
 
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                Confirm password
-              </label>
-              <input
-                id="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Repeat your password"
-              />
-            </div>
+            <FormField
+              id="confirmPassword"
+              type="password"
+              label="Confirm password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              placeholder="Repeat your password"
+              disabled={submitting}
+            />
 
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="w-full rounded-full text-[14px] font-medium transition-colors disabled:opacity-50"
+              style={{
+                background: 'var(--color-ink)',
+                color: 'var(--color-paper)',
+                minHeight: 44,
+                marginTop: 4,
+              }}
             >
-              {submitting ? 'Creating account...' : 'Create account'}
+              {submitting ? 'Creating account…' : 'Create account'}
             </button>
           </form>
 
           {/* Footer */}
-          <p className="mt-6 text-center text-sm text-gray-500">
+          <p className="text-[13px] mt-5 text-center" style={{ color: 'var(--color-muted)' }}>
             Already have an account?{' '}
-            <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+            <Link
+              to="/login"
+              className="underline underline-offset-2"
+              style={{ color: 'var(--color-forest-2)' }}
+            >
               Sign in
             </Link>
           </p>
         </div>
       </div>
     </div>
+  )
+}
+
+function FormField({
+  id,
+  type,
+  label,
+  autoComplete,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  minLength,
+}: {
+  id: string
+  type: 'email' | 'password'
+  label: string
+  autoComplete: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  disabled?: boolean
+  minLength?: number
+}) {
+  return (
+    <label htmlFor={id} className="flex flex-col gap-1.5">
+      <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
+        {label.toUpperCase()}
+      </span>
+      <input
+        id={id}
+        type={type}
+        autoComplete={autoComplete}
+        required
+        minLength={minLength}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        placeholder={placeholder}
+        className="w-full px-3 py-2.5 text-[14px] rounded-md focus:outline-none focus:ring-1"
+        style={{
+          background: 'var(--color-paper)',
+          border: '1px solid var(--color-rule)',
+          color: 'var(--color-ink)',
+          caretColor: 'var(--color-forest-2)',
+        }}
+      />
+    </label>
   )
 }

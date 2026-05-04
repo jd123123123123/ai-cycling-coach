@@ -315,8 +315,8 @@ function BriefBody({
       {/* Eyebrow row — coach badge + meta */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
-          <Sparkles size={14} strokeWidth={1.8} style={{ color: 'var(--color-amber)' }} />
-          <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
+          <Sparkles size={14} strokeWidth={1.8} style={{ color: 'var(--color-muted)' }} />
+          <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
             Coach brief · today
           </span>
           {generatedAgo && (
@@ -336,6 +336,8 @@ function BriefBody({
             </span>
           )}
           {ruleBased && (
+            // caution-state amber — meaning-bearing, do not remove
+            // "AI offline" is a degraded-fallback indicator, not decorative flair.
             <span
               className="eyebrow num-mono px-1.5 py-0.5 rounded-sm"
               style={{
