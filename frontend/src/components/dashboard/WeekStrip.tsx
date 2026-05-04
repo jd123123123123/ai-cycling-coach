@@ -3,9 +3,8 @@
  *
  * Supports two variants:
  *   'full' (default): full card with totals header + 7-cell grid (existing behavior)
- *   'mini': compact 7-dot strip, ≤ 80px tall. Used in TodayTab above-the-fold.
- *           Dot click: navigates to ?tab=plan.
- *           TODO(future): dot click opens SideSheet for completed activity.
+ *   'mini': compact 7-bar strip, ≤ 80px tall. Used in TodayTab above-the-fold.
+ *           Bar click: navigates to ?tab=plan.
  *
  * Whoop/Strava playbook: a single "what have I done this week" strip
  * collapses 7 days of training into a glanceable answer.
@@ -18,10 +17,13 @@ import {
   isAfter,
   isSameDay,
   startOfWeek,
+  subDays,
 } from 'date-fns'
 import { useSearchParams } from 'react-router-dom'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { ActivityRead } from '../../api/dashboard'
+import { formatHours, formatDelta } from '../../utils/format'
+import { toneFromPct, tokenForTone } from '../../utils/delta'
 
 interface DayCell {
   date: Date
@@ -32,6 +34,10 @@ interface DayCell {
   isToday: boolean
 }
 
+/**
+ * intensityColor — returns zone CSS var() tokens for a TSS value.
+ * Both mini and full variants consume this; returns CSS var() zone tokens only.
+ */
 function intensityColor(tss: number): { bg: string; border: string } {
   if (tss <= 0) {
     return {
@@ -40,48 +46,25 @@ function intensityColor(tss: number): { bg: string; border: string } {
     }
   }
   if (tss < 50) {
-    // Easy / recovery — soft forest tint
-    return { bg: 'rgba(48, 108, 64, 0.18)', border: 'rgba(48, 108, 64, 0.40)' }
+    // Easy / recovery — Z2 low endurance
+    return { bg: 'var(--color-zone-2)', border: 'var(--color-zone-2)' }
   }
   if (tss < 100) {
-    // Endurance — mid forest
-    return { bg: 'rgba(48, 108, 64, 0.38)', border: 'rgba(48, 108, 64, 0.70)' }
+    // Endurance — mid Z2/Z3 boundary
+    return { bg: 'var(--color-zone-3)', border: 'var(--color-zone-3)' }
   }
   if (tss < 150) {
-    // Hard / threshold — amber
-    return { bg: 'rgba(190, 124, 34, 0.45)', border: 'rgba(190, 124, 34, 0.80)' }
+    // Hard / threshold — Z4
+    return { bg: 'var(--color-zone-4)', border: 'var(--color-zone-4)' }
   }
-  // Peak / overreach — alert red
-  return { bg: 'rgba(138, 29, 29, 0.48)', border: 'rgba(138, 29, 29, 0.85)' }
-}
-
-/** Mini variant: color-coded 10-12px dots */
-function miniDotColor(
-  cell: DayCell,
-): { bg: string; outline: boolean } {
-  if (cell.count > 0 && !cell.isFuture) {
-    // Completed session — use intensity color from TSS
-    const { bg } = intensityColor(cell.tss)
-    return { bg, outline: cell.isToday }
-  }
-  if (cell.isToday) {
-    return { bg: 'var(--color-paper-2)', outline: true }
-  }
-  // Rest day or future
-  return { bg: 'var(--color-rule)', outline: false }
-}
-
-function formatHours(seconds: number): string {
-  if (seconds <= 0) return '0 h'
-  const hours = seconds / 3600
-  if (hours < 1) return `${Math.round(seconds / 60)} min`
-  return hours < 10 ? `${hours.toFixed(1)} h` : `${Math.round(hours)} h`
+  // Peak / overreach — Z5
+  return { bg: 'var(--color-zone-5)', border: 'var(--color-zone-5)' }
 }
 
 interface WeekStripProps {
   /**
    * 'full' (default): full card with totals header + 7-cell grid.
-   * 'mini': compact 7-dot row ≤ 80px tall, used above-the-fold on TodayTab.
+   * 'mini': compact 7-bar row ≤ 80px tall, used above-the-fold on TodayTab.
    */
   variant?: 'mini' | 'full'
 }
@@ -93,8 +76,15 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
 
+  // This-week query (7 days)
   const { data, isLoading } = useActivitiesRange(weekStart, weekEnd)
   const [, setSearchParams] = useSearchParams()
+
+  // 28-day query for week-vs-4w-avg line (full variant only).
+  // Uses the same useActivitiesRange hook with an extended window — no new
+  // endpoint, no backend change. Single-line extension of existing data path.
+  const fourWeekStart = subDays(weekStart, 21) // 3 prior weeks + current = 28 days
+  const { data: data28 } = useActivitiesRange(fourWeekStart, weekEnd)
 
   const cells: DayCell[] = useMemo(() => {
     const activities: ActivityRead[] = data?.activities ?? []
@@ -128,8 +118,57 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
     return { ridesDone, tssTotal, hoursTotal }
   }, [cells])
 
+  // Compute 4-week average TSS and hours from 28-day data.
+  // Prior 3 complete weeks are used for the "avg" denominator (not current partial week).
+  const weekVsAvg = useMemo(() => {
+    const allActs: ActivityRead[] = data28?.activities ?? []
+    if (allActs.length === 0) return null
+
+    // Current week TSS/hours already in totals — use from cells
+    const thisWeekTSS = totals.tssTotal
+    const thisWeekSeconds = totals.hoursTotal
+
+    // Build weekly TSS buckets for the prior 3 weeks
+    const priorWeekTSS: number[] = [0, 0, 0] // index 0 = most recent prior week
+    const priorWeekSeconds: number[] = [0, 0, 0]
+
+    for (const a of allActs) {
+      const actDate = new Date(a.started_at)
+      // Skip activities in current week
+      if (!isAfter(actDate, weekStart) || isSameDay(actDate, weekStart)) {
+        // In prior 3 weeks: determine which week bucket (0=last, 1=2wk ago, 2=3wk ago)
+        for (let w = 0; w < 3; w++) {
+          const wkStart = subDays(weekStart, (w + 1) * 7)
+          const wkEnd = subDays(weekStart, w * 7 + 1)
+          if (actDate >= wkStart && actDate <= wkEnd) {
+            priorWeekTSS[w] += a.tss ?? 0
+            priorWeekSeconds[w] += a.duration_seconds ?? 0
+            break
+          }
+        }
+      }
+    }
+
+    const avgTSS = (priorWeekTSS[0] + priorWeekTSS[1] + priorWeekTSS[2]) / 3
+    const avgSeconds = (priorWeekSeconds[0] + priorWeekSeconds[1] + priorWeekSeconds[2]) / 3
+
+    if (avgTSS === 0 && avgSeconds === 0) return null
+
+    return {
+      thisWeekTSS,
+      thisWeekSeconds,
+      avgTSS,
+      avgSeconds,
+      deltaPct: avgTSS > 0 ? ((thisWeekTSS - avgTSS) / avgTSS) * 100 : null,
+    }
+  }, [data28, totals, weekStart])
+
   // ── Mini variant ────────────────────────────────────────────────────────────
   if (variant === 'mini') {
+    const maxTss = Math.max(1, ...cells.map((c) => c.tss))
+    const BAR_MAX_H = 28 // px
+    const BAR_MIN_H = 4  // px for days with a session but tiny TSS
+
     return (
       <div
         className="paper-grain rounded-[16px] px-4 py-3"
@@ -138,28 +177,26 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
           border: '1px solid var(--color-rule)',
         }}
       >
-        <div className="flex items-center gap-2 mb-2">
-          <span
-            className="eyebrow"
-            style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}
-          >
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
             {format(weekStart, 'MMM d')}–{format(weekEnd, 'd')}
           </span>
-          {!isLoading && (
-            <span
-              className="num-mono text-[9px]"
-              style={{ color: 'var(--color-muted)' }}
-            >
-              · {totals.ridesDone} {totals.ridesDone === 1 ? 'session' : 'sessions'}
+          {!isLoading && totals.tssTotal > 0 && (
+            <span className="num-mono text-[9px]" style={{ color: 'var(--color-muted)' }}>
+              {Math.round(totals.tssTotal)} TSS · {formatHours(totals.hoursTotal)}
             </span>
           )}
         </div>
 
-        {/* 7-dot row */}
-        <div className="grid grid-cols-7 gap-1.5">
+        {/* 7-bar row — bar height scales with TSS so you see the load at a glance */}
+        <div className="grid grid-cols-7 gap-1" style={{ height: BAR_MAX_H + 14 }}>
           {cells.map((cell, i) => {
-            const { bg, outline } = miniDotColor(cell)
-            const dayLetter = format(cell.date, 'EEEEE') // M T W T F S S
+            const hasSession = cell.count > 0 && !cell.isFuture
+            const barH = hasSession
+              ? Math.max(BAR_MIN_H, (cell.tss / maxTss) * BAR_MAX_H)
+              : 0
+            const { bg } = intensityColor(hasSession ? cell.tss : 0)
+            const dayLetter = format(cell.date, 'EEEEE')
             return (
               <button
                 key={i}
@@ -169,35 +206,42 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
                     ? `${format(cell.date, 'EEE, MMM d')} · upcoming`
                     : cell.count === 0
                       ? `${format(cell.date, 'EEE, MMM d')} · rest`
-                      : `${format(cell.date, 'EEE, MMM d')} · ${cell.count} session${cell.count > 1 ? 's' : ''}`
+                      : `${format(cell.date, 'EEE, MMM d')} · ${formatHours(cell.durationSeconds)} · ${Math.round(cell.tss)} TSS`
                 }
                 onClick={() => setSearchParams({ tab: 'plan' }, { replace: true })}
                 aria-label={`${format(cell.date, 'EEEE, MMM d')} — tap to view plan`}
-                className="flex flex-col items-center gap-0.5 focus:outline-none"
+                className="flex flex-col items-end justify-end gap-1 focus:outline-none"
+                style={{ paddingBottom: 2 }}
               >
+                {/* Bar */}
+                <div
+                  style={{
+                    width: '100%',
+                    height: hasSession ? barH : 3,
+                    borderRadius: 3,
+                    backgroundColor: hasSession ? bg : 'var(--color-rule)',
+                    opacity: cell.isFuture ? 0.3 : hasSession ? 0.85 : 0.5,
+                    boxShadow: cell.isToday && hasSession
+                      ? `0 0 6px color-mix(in srgb, ${bg} 60%, transparent)`
+                      : cell.isToday
+                      ? '0 0 0 1.5px var(--color-ink), 0 0 6px color-mix(in srgb, var(--color-ink) 28%, transparent)'
+                      : 'none',
+                    outline: 'none',
+                    transition: 'height 600ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                />
+                {/* Day letter */}
                 <span
                   className="eyebrow"
                   style={{
                     fontSize: 9,
                     color: cell.isToday ? 'var(--color-ink)' : 'var(--color-muted)',
-                    letterSpacing: '0.1em',
+                    letterSpacing: '0.05em',
                     fontWeight: cell.isToday ? 600 : 400,
                   }}
                 >
                   {dayLetter}
                 </span>
-                <div
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    backgroundColor: bg,
-                    border: `1px solid ${outline ? 'var(--color-ink)' : 'rgba(0,0,0,0.08)'}`,
-                    outlineOffset: 2,
-                    opacity: cell.isFuture ? 0.4 : 1,
-                    boxShadow: outline ? `0 0 0 1.5px var(--color-ink)` : undefined,
-                  }}
-                />
               </button>
             )
           })}
@@ -206,7 +250,7 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
     )
   }
 
-  // ── Full variant (original) ─────────────────────────────────────────────────
+  // ── Full variant ─────────────────────────────────────────────────────────────
   return (
     <div
       className="paper-grain rounded-[20px] px-5 py-4 sm:px-6 sm:py-5"
@@ -257,9 +301,27 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
         </div>
       </div>
 
-      {/* 7-day cell strip. Each cell = one day; size scales with load via
-          intensity color. Today gets a thicker outline. Upcoming days render
-          hollow so the strip reads as a progress map. */}
+      {/* Week-vs-4w-avg line — wired against real 28-day series.
+          Uses formatHours + formatDelta from utils/format and toneFromPct + tokenForTone from utils/delta. */}
+      {!isLoading && weekVsAvg !== null && (
+        <p className="num-mono text-[12px] mt-1 mb-3" style={{ color: 'var(--color-muted)' }}>
+          {formatHours(weekVsAvg.thisWeekSeconds)}
+          {weekVsAvg.deltaPct != null && (
+            <>
+              {' · '}
+              <span
+                style={{ color: tokenForTone(toneFromPct(weekVsAvg.deltaPct, 'good')) }}
+              >
+                {formatDelta(weekVsAvg.thisWeekTSS, weekVsAvg.avgTSS)}
+              </span>
+              {' vs avg'}
+            </>
+          )}
+        </p>
+      )}
+
+      {/* 7-day cell strip. Each cell = one day; background from zone tokens via
+          intensityColor. Today gets tip-glow box-shadow instead of outline. */}
       <div className="grid grid-cols-7 gap-1.5 mt-4">
         {cells.map((cell, i) => {
           const { bg, border } = intensityColor(cell.isFuture ? 0 : cell.tss)
@@ -295,7 +357,10 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
                   backgroundColor: bg,
                   border: `1px solid ${border}`,
                   opacity: cell.isFuture ? 0.55 : 1,
-                  outline: cell.isToday ? `2px solid var(--color-ink)` : 'none',
+                  // Today highlight: tip-glow box-shadow (ring-tip-glow pattern)
+                  boxShadow: cell.isToday
+                    ? '0 0 0 1.5px var(--color-ink), 0 0 8px color-mix(in srgb, var(--color-ink) 30%, transparent)'
+                    : 'none',
                   outlineOffset: cell.isToday ? 2 : 0,
                 }}
               >
