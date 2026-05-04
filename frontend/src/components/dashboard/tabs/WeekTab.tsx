@@ -1,45 +1,42 @@
-/**
- * WeekTab — weekly recap bento.
- *
- * Components arranged in a 12-col BentoGrid.
- * At 1440×900 the bento lays out in two rows:
- *   Row 1: WeekStrip (8-col) + ComplianceStrip (4-col)
- *   Row 2: WeeklySportMetrics (4-col) + PolarizedDistribution (8-col)
- *   Row 3: LastWeekRecap (full 12-col)
- */
 import { BentoCell, BentoGrid } from '../../ui/BentoGrid'
 import ComplianceStrip from '../ComplianceStrip'
-import LastWeekRecap from '../LastWeekRecap'
+import PersonalBests from '../PersonalBests'
 import PolarizedDistribution from '../PolarizedDistribution'
+import RampRate from '../RampRate'
 import WeekStrip from '../WeekStrip'
-import WeeklySportMetrics from '../WeeklySportMetrics'
+import WeekVsLast from '../WeekVsLast'
 
 export default function WeekTab() {
   return (
     <BentoGrid>
-      {/* Full weekly strip — full week overview, wider card */}
+      {/* Plan vs actual compliance — leading cell, most action-informing signal */}
+      <BentoCell span={3}>
+        <ComplianceStrip />
+      </BentoCell>
+
+      {/* Week calendar — the anchor */}
       <BentoCell span={2}>
         <WeekStrip />
       </BentoCell>
 
-      {/* Compliance dumbbell — planned vs actual per day */}
+      {/* Load delta — this week vs last */}
       <BentoCell span={1}>
-        <ComplianceStrip />
+        <WeekVsLast />
       </BentoCell>
 
-      {/* Sport breakdown metrics */}
+      {/* Ramp rate — overreaching traffic light */}
       <BentoCell span={1}>
-        <WeeklySportMetrics />
+        <RampRate />
       </BentoCell>
 
-      {/* Polarized distribution donut — zone balance */}
+      {/* Zone balance — training quality */}
       <BentoCell span={2}>
         <PolarizedDistribution />
       </BentoCell>
 
-      {/* Last week recap — celebration card, full width */}
+      {/* Personal records — dopamine hit */}
       <BentoCell span={3}>
-        <LastWeekRecap />
+        <PersonalBests />
       </BentoCell>
     </BentoGrid>
   )

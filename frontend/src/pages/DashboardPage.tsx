@@ -16,19 +16,22 @@
  *   - SegmentedTabs passed as tabs prop (not sticky, scrolls with page)
  *   - Chat drawer lives in DashboardShell (06-03 invariant)
  */
+import { useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useReducedMotion } from 'motion/react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import StickyReadinessBar from '../components/dashboard/StickyReadinessBar'
 import TodayTab from '../components/dashboard/tabs/TodayTab'
 import WeekTab from '../components/dashboard/tabs/WeekTab'
-import TrendsTab from '../components/dashboard/tabs/TrendsTab'
-import PlanTab from '../components/dashboard/tabs/PlanTab'
+import CrewTab from '../components/dashboard/tabs/CrewTab'
+import BikeTab from '../components/dashboard/tabs/BikeTab'
+import RunTab from '../components/dashboard/tabs/RunTab'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { useLanguage } from '../contexts/LanguageContext'
 
-type TabId = 'today' | 'week' | 'trends' | 'plan'
+type TabId = 'today' | 'bike' | 'run' | 'week' | 'crew'
 
-const VALID_TABS: TabId[] = ['today', 'week', 'trends', 'plan']
+const VALID_TABS: TabId[] = ['today', 'bike', 'run', 'week', 'crew']
 
 function isValidTab(v: string | null): v is TabId {
   return VALID_TABS.includes(v as TabId)
@@ -37,6 +40,7 @@ function isValidTab(v: string | null): v is TabId {
 export default function DashboardPage() {
   const { language } = useLanguage()
   const [searchParams, setSearchParams] = useSearchParams()
+  const reducedMotion = useReducedMotion()
 
   const rawTab = searchParams.get('tab')
   const activeTab: TabId = isValidTab(rawTab) ? rawTab : 'today'
@@ -45,21 +49,28 @@ export default function DashboardPage() {
     setSearchParams({ tab: id }, { replace: true })
   }
 
+  // Reset scroll on tab change so users don't land mid-scroll
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [activeTab])
+
   // Language-aware tab labels.
   // The only simple/technical divergence is Week → "This week".
   const tabs: readonly { id: TabId; label: string }[] = [
-    { id: 'today',  label: 'Today' },
-    { id: 'week',   label: language === 'simple' ? 'This week' : 'Week' },
-    { id: 'trends', label: 'Trends' },
-    { id: 'plan',   label: 'Plan' },
+    { id: 'today', label: 'Today' },
+    { id: 'bike',  label: 'Bike' },
+    { id: 'run',   label: 'Run' },
+    { id: 'week',  label: language === 'simple' ? 'This week' : 'Week' },
+    { id: 'crew',  label: 'Crew' },
   ]
 
   const tabContent = (() => {
     switch (activeTab) {
-      case 'today':  return <TodayTab />
-      case 'week':   return <WeekTab />
-      case 'trends': return <TrendsTab />
-      case 'plan':   return <PlanTab />
+      case 'today': return <TodayTab />
+      case 'bike':  return <BikeTab />
+      case 'run':   return <RunTab />
+      case 'week':  return <WeekTab />
+      case 'crew':  return <CrewTab />
     }
   })()
 
@@ -67,15 +78,23 @@ export default function DashboardPage() {
     <DashboardShell
       stickyBar={<StickyReadinessBar />}
       tabs={
-        <SegmentedTabs
-          tabs={tabs}
-          value={activeTab}
-          onChange={handleTabChange}
-          ariaLabel="Dashboard sections"
-        />
+        <>
+          <SegmentedTabs
+            tabs={tabs}
+            value={activeTab}
+            onChange={handleTabChange}
+            ariaLabel="Dashboard sections"
+          />
+          <div className="hairline" />
+        </>
       }
     >
-      {tabContent}
+      <div
+        key={activeTab}
+        style={reducedMotion ? undefined : { animation: 'tabpanel-in 250ms var(--ease-apple-default) both' }}
+      >
+        {tabContent}
+      </div>
     </DashboardShell>
   )
 }
