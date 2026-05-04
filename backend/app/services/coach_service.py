@@ -30,6 +30,7 @@ import logging
 import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Literal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,8 +88,49 @@ logger = logging.getLogger(__name__)
 
 
 # ======================================================================
+#  Athlete-local time helpers
+# ======================================================================
+#
+# All "today" / "this week" windows in this module are computed in the
+# athlete's local timezone, then converted to UTC for DB queries against
+# `Activity.started_at` (stored in UTC). Without this, an athlete in
+# Berlin riding at 22:00 local would see their activity attributed to
+# the *next* UTC day — the coach would prescribe a second session on
+# top of the one they just finished.
+#
+# TODO(today-runthrough/step2): replace _ATHLETE_TZ with
+# AthleteProfile.timezone once a tz column lands. Hardcoded to
+# Europe/Berlin for the single-user MVP (user is in Berlin).
+_ATHLETE_TZ = ZoneInfo("Europe/Berlin")
+
+
+def _today_local(now_utc: datetime | None = None) -> date:
+    """Return today's date in the athlete's local timezone."""
+    now = (now_utc or datetime.now(timezone.utc)).astimezone(_ATHLETE_TZ)
+    return now.date()
+
+
+def _today_local_window(now_utc: datetime | None = None) -> tuple[datetime, datetime]:
+    """Athlete-local today 00:00 → tomorrow 00:00, returned as UTC datetimes."""
+    today = _today_local(now_utc)
+    start_local = datetime.combine(today, datetime.min.time(), tzinfo=_ATHLETE_TZ)
+    end_local = start_local + timedelta(days=1)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
+def _week_local_window(now_utc: datetime | None = None) -> tuple[datetime, datetime]:
+    """Monday 00:00 → next Monday 00:00 in athlete-local, returned as UTC datetimes."""
+    today = _today_local(now_utc)
+    monday_local = today - timedelta(days=today.weekday())
+    start_local = datetime.combine(monday_local, datetime.min.time(), tzinfo=_ATHLETE_TZ)
+    end_local = start_local + timedelta(days=7)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
+# ======================================================================
 #  Snapshot builder — ALL the features the coach sees
 # ======================================================================
+
 
 async def _activity_summary_14d(db: AsyncSession, user_id: int) -> dict:
     """Aggregate metrics across the last 14 days of activities.
@@ -154,12 +196,17 @@ async def _days_since_rest(db: AsyncSession, user_id: int) -> int:
     result = await db.execute(stmt)
     activities = list(result.scalars().all())
 
+    # Bucket activity dates in athlete-local time so "today" lines up with
+    # the rest of the snapshot (a 22:00 Berlin ride is "today", not "tomorrow").
     non_rest_dates: set[date] = set()
     for a in activities:
-        if (a.tss or 0) > 20:
-            non_rest_dates.add(a.started_at.date())
+        if (a.tss or 0) > 20 and a.started_at is not None:
+            started = a.started_at
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            non_rest_dates.add(started.astimezone(_ATHLETE_TZ).date())
 
-    today = date.today()
+    today = _today_local()
     count = 0
     d = today
     while d in non_rest_dates and count < 30:
@@ -192,19 +239,18 @@ async def _recent_daily_tss(db: AsyncSession, user_id: int, days: int = 7) -> li
 async def _todays_primary_activity(db: AsyncSession, user_id: int) -> Activity | None:
     """Fetch today's most significant completed activity.
 
-    "Today" is the calendar day in UTC. When multiple activities land on the
-    same day (e.g. a commute + a real ride), we return the highest-TSS one —
-    that's the session worth grading.
+    "Today" is the athlete's local calendar day (Europe/Berlin for now —
+    see `_ATHLETE_TZ` TODO). When multiple activities land on the same
+    local day (e.g. a commute + a real ride), we return the highest-TSS
+    one — that's the session worth grading.
     """
-    today = date.today()
-    start_of_today_utc = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
-    end_of_today_utc = datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc)
+    start_today_utc, end_today_utc = _today_local_window()
     stmt = (
         select(Activity)
         .where(
             Activity.user_id == user_id,
-            Activity.started_at >= start_of_today_utc,
-            Activity.started_at <= end_of_today_utc,
+            Activity.started_at >= start_today_utc,
+            Activity.started_at < end_today_utc,
         )
         .order_by(Activity.tss.desc().nullslast(), Activity.started_at.desc())
         .limit(1)
@@ -216,21 +262,21 @@ async def _todays_primary_activity(db: AsyncSession, user_id: int) -> Activity |
 async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     """This calendar-week's training progress — used by session_type_for_today
     to avoid exceeding the weekly hard-session quota.
+
+    All "today" / "this week" / "yesterday" windows are computed in the
+    athlete's local timezone (see `_ATHLETE_TZ`). Activities are filtered
+    by their UTC-stored `started_at` against the local-day boundaries
+    converted to UTC.
     """
-    # Week starts on Monday
-    today = date.today()
-    monday = today - timedelta(days=today.weekday())
-    since_week = datetime.combine(monday, datetime.min.time(), tzinfo=timezone.utc)
+    # Athlete-local week (Monday → next Monday) and today/yesterday windows
+    since_week, _end_week_utc = _week_local_window()
+    since_today, end_today = _today_local_window()
+    # Yesterday's window (athlete-local calendar day)
+    since_yesterday = since_today - timedelta(days=1)
+    end_yesterday = since_today
     # Rolling 48h window — independent of week boundary so Monday can see Sunday's load
     now_utc = datetime.now(timezone.utc)
     since_48h = now_utc - timedelta(hours=48)
-    # Today's window (calendar day) — so the coach acknowledges a ride already done today
-    since_today = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
-    end_today = datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc)
-    # Yesterday's window (calendar day)
-    yesterday = today - timedelta(days=1)
-    since_yesterday = datetime.combine(yesterday, datetime.min.time(), tzinfo=timezone.utc)
-    end_yesterday = datetime.combine(yesterday, datetime.max.time(), tzinfo=timezone.utc)
 
     stmt = (
         select(Activity)
@@ -262,15 +308,15 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
                     hard_sessions += 1
                 if tss_per_hour >= 100:
                     vo2_sessions += 1
-        # Today's cumulative TSS + duration + peak intensity
-        if since_today <= started <= end_today:
+        # Today's cumulative TSS + duration + peak intensity (half-open window)
+        if since_today <= started < end_today:
             today_tss += tss
             today_duration_minutes += float(a.duration_seconds or 0) / 60.0
             if a.duration_seconds and a.duration_seconds >= 600:
                 tss_per_hour = (tss / a.duration_seconds) * 3600.0
                 today_max_tss_per_hour = max(today_max_tss_per_hour, tss_per_hour)
-        # Yesterday's cumulative TSS
-        if since_yesterday <= started <= end_yesterday:
+        # Yesterday's cumulative TSS (half-open window)
+        if since_yesterday <= started < end_yesterday:
             yesterday_tss += tss
         # Rolling 48h
         if started >= since_48h:
@@ -359,7 +405,7 @@ async def build_snapshot(
         weekly_progress=weekly_prog,
         tsb=float(pmc.get("tsb", 0.0)),
         intensity_ceiling=ceiling,
-        day_of_week=date.today().weekday(),
+        day_of_week=_today_local().weekday(),
     )
 
     # Today's available minutes — weekly_hours/7 rounded up, capped at 180 min
@@ -1318,7 +1364,7 @@ def _rule_based_brief(snapshot: dict) -> dict:
     # --------------------------------------------------------------
     outlook: list[dict[str, Any]] = []
     for i in range(7):
-        weekday = (date.today() + timedelta(days=i)).weekday()
+        weekday = (_today_local() + timedelta(days=i)).weekday()
         if weekday == 6:
             tss = round(min(ctx.ctl * 1.1, max_tss if max_tss else ctx.ctl * 1.1), 0)
             note = "Long easy ride — build the base." if language == "simple" \
@@ -1572,7 +1618,7 @@ async def _upsert_recommendation_for_today(
         # Rest-day briefs / pre-5.1 fallbacks — nothing to grade against.
         return
 
-    today_local = date.today()
+    today_local = _today_local()
 
     existing_q = await db.execute(
         select(CoachRecommendation).where(
@@ -2122,7 +2168,7 @@ async def _fallback_last_n_weeks(
     language: str,
 ) -> str:
     """Deterministic summary of the last N weeks: PMC trend + recovery flags."""
-    end = date.today()
+    end = _today_local()
     start = end - timedelta(days=n_weeks * 7 - 1)
 
     try:
