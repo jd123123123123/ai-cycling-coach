@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { subDays } from 'date-fns'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { ActivityRead } from '../../api/dashboard'
+import { formatHours } from '../../utils/format'
 
 // Seiler's polarized model: ~80% time in Z1–Z2 (low), ~20% in Z4–Z5 (high),
 // minimal "grey zone" Z3. This two-peak histogram makes the 80/20 split
@@ -76,7 +77,7 @@ function grade(pct: { low: number; grey: number; high: number }): {
   if (grey > 30) {
     return {
       letter: 'C',
-      color: 'rgba(190, 124, 34, 0.95)',
+      color: 'var(--color-amber)',
       note: 'Grey-zone drift. Too much tempo dulls both endurance and peak gains.',
       nextMove:
         'Next ride: cap HR at 75% LTHR. Give the aerobic engine the easy work it needs.',
@@ -98,71 +99,6 @@ function grade(pct: { low: number; grey: number; high: number }): {
     nextMove:
       'Rebuild the week: 1 hard, 1 medium, 2 easy — the minimum pattern that actually builds fitness.',
   }
-}
-
-function BarTile({
-  label,
-  pct,
-  seconds,
-  accent,
-  isTarget = false,
-  subtitle,
-}: {
-  label: string
-  pct: number
-  seconds: number
-  accent: string
-  isTarget?: boolean
-  subtitle: string
-}) {
-  const hours = seconds / 3600
-  // Apple chart polish (Wave 3): vertical linearGradient fill — full color at
-  // top, 60% opacity at bottom. Matches gradient-bars rule from REDESIGN-BRIEF §3.
-  const linearGradient = `linear-gradient(to bottom, ${accent} 0%, ${accent}99 100%)`
-  return (
-    <div className="flex flex-col gap-1 min-w-0 flex-1">
-      <div className="flex items-baseline justify-between gap-2">
-        <span
-          className="eyebrow"
-          style={{
-            color: 'var(--color-muted)',
-            fontSize: 9,
-            letterSpacing: '0.22em',
-          }}
-        >
-          {label.toUpperCase()}
-        </span>
-        <span
-          className="num-mono"
-          style={{ color: 'var(--color-ink)', fontSize: 13, fontWeight: 500 }}
-        >
-          {pct.toFixed(0)}%
-        </span>
-      </div>
-      <div
-        className="relative h-14 rounded-md overflow-hidden"
-        style={{
-          backgroundColor: 'var(--color-paper)',
-          border: '1px solid var(--color-rule)',
-        }}
-      >
-        <div
-          className="absolute bottom-0 left-0 right-0 transition-all"
-          style={{
-            height: `${Math.max(4, pct)}%`,
-            background: linearGradient,
-            opacity: isTarget ? 1 : 0.5,
-          }}
-        />
-      </div>
-      <span
-        className="num-mono text-[10px]"
-        style={{ color: 'var(--color-muted)' }}
-      >
-        {hours.toFixed(1)} h · {subtitle}
-      </span>
-    </div>
-  )
 }
 
 export default function PolarizedDistribution() {
@@ -206,48 +142,94 @@ export default function PolarizedDistribution() {
         border: '1px solid var(--color-rule)',
       }}
     >
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <span
-            className="eyebrow"
-            style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
+      <div className="flex items-start gap-4">
+        {/* Grade letter — hero anchor. Drop-shadow glow at 35% mix preserved per research §5. */}
+        {gradeInfo ? (
+          <div
+            className="shrink-0 flex flex-col items-center leading-none"
+            style={{ animation: 'score-enter 600ms cubic-bezier(.22,1,.36,1) 100ms both' }}
           >
+            <span
+              className="num-display"
+              style={{
+                fontSize: 'clamp(52px, 7vw, 72px)',
+                color: gradeInfo.color,
+                lineHeight: 1,
+                filter: `drop-shadow(0 0 16px color-mix(in srgb, ${gradeInfo.color} 35%, transparent))`,
+              }}
+            >
+              {gradeInfo.letter}
+            </span>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 8, letterSpacing: '0.2em', marginTop: 2 }}>
+              GRADE
+            </span>
+          </div>
+        ) : (
+          <div className="shrink-0 w-14" />
+        )}
+
+        <div className="flex flex-col gap-1 min-w-0 flex-1 pt-1">
+          <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
             Polarized training · last 14 days
           </span>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span
               className="num-display leading-none"
-              style={{
-                fontSize: 'clamp(22px, 3vw, 28px)',
-                color: 'var(--color-ink)',
-              }}
+              style={{ fontSize: 'clamp(20px, 2.8vw, 26px)', color: 'var(--color-ink)' }}
             >
-              {gradeInfo ? `Grade ${gradeInfo.letter}` : 'Awaiting data'}
+              {gradeInfo ? `${pct.low.toFixed(0)}% easy · ${pct.high.toFixed(0)}% hard` : 'Awaiting data'}
             </span>
-            <span
-              className="num-mono text-[11px]"
-              style={{ color: 'var(--color-muted)' }}
-              title="Target: Seiler 80/20 — 75%+ low, 5–25% high, <10% grey"
-            >
-              · target 80 / &lt;10 / 20
+          </div>
+          <span
+            className="num-mono text-[11px]"
+            style={{ color: 'var(--color-muted)' }}
+            title="Target: Seiler 80/20 — 75%+ low, 5–25% high, <10% grey"
+          >
+            Target 80 / &lt;10 / 20
+          </span>
+        </div>
+      </div>
+
+      {/* Horizontal stacked bar — one-glance zone snapshot. Uses zone CSS tokens. */}
+      {!isLoading && distribution.total > 0 && (
+        <div className="mt-3 flex flex-col gap-1">
+          <div
+            className="flex rounded-full overflow-hidden h-2.5"
+            style={{ backgroundColor: 'var(--color-rule)' }}
+          >
+            <div
+              className="h-full transition-all duration-700 ease-out"
+              style={{ width: `${pct.low}%`, backgroundColor: 'var(--color-forest-2)' }}
+              title={`Easy: ${pct.low.toFixed(0)}%`}
+            />
+            <div
+              className="h-full transition-all duration-700 ease-out"
+              style={{ width: `${pct.grey}%`, backgroundColor: 'var(--color-zone-3)', marginLeft: pct.grey > 0 && pct.low > 0 ? 1 : 0 }}
+              title={`Grey zone: ${pct.grey.toFixed(0)}%`}
+            />
+            <div
+              className="h-full transition-all duration-700 ease-out"
+              style={{ width: `${pct.high}%`, backgroundColor: 'var(--color-zone-4)', marginLeft: pct.high > 0 && (pct.grey > 0 || pct.low > 0) ? 1 : 0 }}
+              title={`Hard: ${pct.high.toFixed(0)}%`}
+            />
+          </div>
+          {/* Legend — zone token colors */}
+          <div className="flex items-center gap-4">
+            <span className="inline-flex items-center gap-1 num-mono text-[10px]" style={{ color: 'var(--color-forest-2)' }}>
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--color-forest-2)' }} />
+              {pct.low.toFixed(0)}% easy
+            </span>
+            <span className="inline-flex items-center gap-1 num-mono text-[10px]" style={{ color: 'var(--color-zone-3)' }}>
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--color-zone-3)' }} />
+              {pct.grey.toFixed(0)}% grey
+            </span>
+            <span className="inline-flex items-center gap-1 num-mono text-[10px]" style={{ color: 'var(--color-zone-4)' }}>
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--color-zone-4)' }} />
+              {pct.high.toFixed(0)}% hard
             </span>
           </div>
         </div>
-        {gradeInfo && (
-          <span
-            className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center"
-            style={{
-              backgroundColor: `color-mix(in srgb, ${gradeInfo.color} 14%, transparent)`,
-              color: gradeInfo.color,
-              fontSize: 16,
-              fontWeight: 600,
-            }}
-            aria-hidden
-          >
-            {gradeInfo.letter}
-          </span>
-        )}
-      </div>
+      )}
 
       {isLoading ? (
         <div
@@ -263,31 +245,70 @@ export default function PolarizedDistribution() {
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-3 mt-4">
-            <BarTile
-              label="Low · Z1–2"
-              pct={pct.low}
-              seconds={distribution.low}
-              accent="var(--color-forest-2)"
-              isTarget
-              subtitle="target 75%+"
-            />
-            <BarTile
-              label="Grey · Z3"
-              pct={pct.grey}
-              seconds={distribution.grey}
-              accent="rgba(190, 124, 34, 0.95)"
-              subtitle="target <10%"
-            />
-            <BarTile
-              label="High · Z4–5"
-              pct={pct.high}
-              seconds={distribution.high}
-              accent="rgba(214, 87, 47, 1)"
-              isTarget
-              subtitle="target 5–25%"
-            />
+          {/* 3-row zone table using var(--color-zone-N) swatches. formatHours from utils/format.ts. */}
+          <div
+            className="mt-4"
+            role="table"
+            aria-label="Zone distribution"
+          >
+            {/* Row: Endurance Z1-Z2 */}
+            <div
+              className="flex items-center gap-3 py-2"
+              style={{ borderBottom: '1px solid var(--color-rule)' }}
+              role="row"
+            >
+              <span
+                className="inline-block w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: 'var(--color-zone-2)' }}
+                aria-hidden
+              />
+              <span className="text-[13px] flex-1" style={{ color: 'var(--color-ink-2)' }}>Endurance (Z1–Z2)</span>
+              <span className="num-mono text-[13px] tabular-nums" style={{ color: 'var(--color-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                {formatHours(distribution.low)}
+              </span>
+              <span className="num-mono text-[13px] tabular-nums w-[38px] text-right" style={{ color: 'var(--color-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                {pct.low.toFixed(0)}%
+              </span>
+            </div>
+            {/* Row: Tempo Z3 */}
+            <div
+              className="flex items-center gap-3 py-2"
+              style={{ borderBottom: '1px solid var(--color-rule)' }}
+              role="row"
+            >
+              <span
+                className="inline-block w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: 'var(--color-zone-3)' }}
+                aria-hidden
+              />
+              <span className="text-[13px] flex-1" style={{ color: 'var(--color-ink-2)' }}>Tempo (Z3)</span>
+              <span className="num-mono text-[13px] tabular-nums" style={{ color: 'var(--color-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                {formatHours(distribution.grey)}
+              </span>
+              <span className="num-mono text-[13px] tabular-nums w-[38px] text-right" style={{ color: 'var(--color-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                {pct.grey.toFixed(0)}%
+              </span>
+            </div>
+            {/* Row: Hard Z4+ */}
+            <div
+              className="flex items-center gap-3 py-2"
+              role="row"
+            >
+              <span
+                className="inline-block w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: 'var(--color-zone-4)' }}
+                aria-hidden
+              />
+              <span className="text-[13px] flex-1" style={{ color: 'var(--color-ink-2)' }}>Hard (Z4+)</span>
+              <span className="num-mono text-[13px] tabular-nums" style={{ color: 'var(--color-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                {formatHours(distribution.high)}
+              </span>
+              <span className="num-mono text-[13px] tabular-nums w-[38px] text-right" style={{ color: 'var(--color-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                {pct.high.toFixed(0)}%
+              </span>
+            </div>
           </div>
+
           {gradeInfo && (
             <div className="mt-3 flex flex-col gap-2">
               <p
