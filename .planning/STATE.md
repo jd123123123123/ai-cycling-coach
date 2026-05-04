@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 6.2 Wave 2 in progress. 06.2-03 complete: amber-discipline sweep across DailyInsight (icon-tile+gradient removed, tone left-bar added), RecentActivities (Dossier/serif-caps removed, sport-accent tokens consumed), SyncButton (ghost RefreshCw removed, Retry-in-toast), CoachBrief (2 decorative amber → muted, 1 caution-state preserved). Bundle delta: +0.09% vs 418d4f5 baseline.
+**Current focus:** Phase 6.2 Wave 2 in progress. 06.2-02 and 06.2-03 both complete. 06.2-02: PMCChart muted eyebrow + 3 SummaryStat Sparklines; PolarizedDistribution rgba→zone-tokens + BarTile→3-row table; WeekStrip zone-token intensityColor + tip-glow today + week-vs-4w-avg line (wired 28-day). Plans 05, 06 remaining.
 
 ## Current Position
 
 Phase: 6.2 of 9 (Whoop-grade redesign)
-Plan: 06.2-03 complete (3 tasks; 2 atomic feat commits + Task 1 captured in concurrent 06.2-04 commit; vite build green; +0.09% bundle delta)
+Plan: 06.2-02 complete (3 tasks; 3 atomic feat commits; vite build green)
 Status: Phase 6.2 Wave 2 in progress. Plans 02, 03, 04 complete (concurrently). Plans 05, 06 remaining.
-Last activity: 2026-05-04 -- Completed 06.2-PLAN-03.md (amber-discipline + sport-accent token consolidation)
+Last activity: 2026-05-03 -- Completed 06.2-PLAN-02.md (PMCChart + PolarizedDistribution + WeekStrip chart-cards redesign)
 
 Progress: [██████████████░░] ~90% (Phases 1-6 + 6.1 complete; Phases 6.2, 7, 8, 9 remaining)
 
@@ -264,6 +264,9 @@ Recent decisions affecting current work:
 - [06.2-03]: compact prop kept in SyncButton: TodayTab.tsx:185 passes compact={true} in dense masthead — branch is live.
 - [06.2-03]: DailyInsight 14-day timeline deferred: dailyTones[] not exposed by useDailyMetrics; needs data plumbing follow-up plan.
 - [06.2-03]: RecentActivities NP sparkline deferred: requires intraday per-second power data not yet wired in activity API response.
+- [06.2-02]: ATL sparkline uses var(--color-amber) — caution-semantic for fatigue; the only permitted amber in PMCChart post-02.
+- [06.2-02]: Polarized 14-day sparkline deferred — useActivitiesRange returns flat ActivityRead list, not daily zone-second aggregates; no per-day lowPctSeries derivable without O(n) date-bucketing; a follow-up plan needs a daily-zone-breakdown endpoint or per-day aggregation utility.
+- [06.2-02]: WeekStrip week-vs-4w-avg line WIRED (not deferred) — second useActivitiesRange call with subDays(weekStart, 21) was single-line-trivial; no new endpoint needed.
 
 ### Roadmap Evolution
 
@@ -294,8 +297,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-04 — Phase 6.2 Wave 2 (06.2-PLAN-03.md) complete
-Stopped at: 06.2-03 complete. Commits: (Task 1 in concurrent 4e604f1) (ba19ca6) feat(06.2-03): RecentActivities. (d206b21) feat(06.2-03): SyncButton. Build: vite build green (813.57 KB gzipped, +0.09% vs 418d4f5 baseline).
+Last session: 2026-05-03 — Phase 6.2 Wave 2 (06.2-PLAN-02.md) complete
+Stopped at: 06.2-02 complete. Commits: (7134ce5) feat(06.2-02): PMCChart. (c6264f8) feat(06.2-02): PolarizedDistribution. (585d59a) feat(06.2-02): WeekStrip. Build: vite build green (813.94 KB gzipped, ~+0.05% vs 418d4f5 baseline).
 Resume file: None
-Next: Phase 6.2 Plans 05-06 (CoachBrief number formatting + final integration).
-Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend.
+Next: Phase 6.2 Plans 05-06 (amber-typography global sweep + final integration).
+Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend.
