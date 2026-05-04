@@ -13,7 +13,9 @@ Design notes:
     - Credentials are stored encrypted via GarminCredential (EncryptedString TypeDecorator)
     - Token store lives under /data/garmin_tokens/{user_id}/ (volume-mounted in Docker)
     - Initial sync on connect: 90-day activity backfill + 30-day metrics backfill
+    - Auth uses garmin-health-data's 5-strategy SSO chain (~30–45 s for fresh login)
     - On GarminAuthError during connect: credential is rolled back (bad creds not stored)
+    - On GarminRateLimitError: 429 returned; user should wait 15–30 min or switch IP
     - On generic error during connect: credential is kept, sync_status="error" (will retry hourly)
 """
 import logging
@@ -33,7 +35,7 @@ from app.schemas.garmin import (
     GarminStatusResponse,
     GarminSyncResponse,
 )
-from app.services.garmin_client import GarminAuthError
+from app.services.garmin_client import GarminAuthError, GarminRateLimitError
 from app.services.garmin_sync_service import sync_user_garmin
 
 logger = logging.getLogger(__name__)
@@ -101,6 +103,22 @@ async def connect_garmin(
             activities_synced=sync_result["activities_synced"],
             metrics_days=sync_result["metrics_days"],
             message="Garmin connected and initial sync complete",
+            dates_touched=sync_result.get("dates_touched", []),
+        )
+    except GarminRateLimitError:
+        # Rate-limited — roll back credential (not a bad-creds problem)
+        logger.warning(
+            "Garmin rate limit hit during connect for user_id=%s — removing credential",
+            current_user.id,
+        )
+        await db.delete(credential)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "Garmin is rate-limiting this server. "
+                "Wait 15–30 minutes or try from a different network and reconnect."
+            ),
         )
     except GarminAuthError:
         # Bad credentials — roll back the credential entirely
@@ -254,6 +272,7 @@ async def trigger_garmin_sync(
             activities_synced=sync_result["activities_synced"],
             metrics_days=sync_result["metrics_days"],
             message="Sync complete",
+            dates_touched=sync_result.get("dates_touched", []),
         )
     except GarminAuthError:
         logger.warning(

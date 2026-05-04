@@ -30,13 +30,14 @@ Transaction model:
 """
 import asyncio
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
+from app.models.coach_brief import CoachBrief
 from app.models.garmin_credential import GarminCredential
 from app.services.activity_service import create_activity
 from app.services.daily_metric_service import upsert_daily_metric
@@ -90,9 +91,9 @@ async def create_garmin_client_for_user(credential: GarminCredential):
     Raises:
         GarminAuthError: If authentication fails.
     """
-    from app.services.garmin_client import GarminConnectClient  # noqa: PLC0415 — lazy import
+    from app.services.garmin_client import GarminHealthDataClient  # noqa: PLC0415 — lazy import
 
-    client = GarminConnectClient(
+    client = GarminHealthDataClient(
         email=credential.encrypted_email,
         password=credential.encrypted_password,
         token_store_path=credential.token_store_path,
@@ -427,7 +428,39 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         credential.sync_status = "ok"
         await db.commit()
 
-        result = {"activities_synced": total_activities, "metrics_days": metrics_days}
+        # Build the list of athlete-days the sync may have changed. Step 2 will
+        # rethread this through athlete-local time; UTC `today` is fine for now.
+        dates_touched: list[date] = []
+        cursor = activity_start
+        while cursor <= activity_end:
+            dates_touched.append(cursor)
+            cursor += timedelta(days=1)
+
+        # Invalidate cached coach briefs that were generated today (UTC). The
+        # next read of /coach/brief will regenerate against the freshly-synced
+        # activities + daily metrics. Defensive: a delete failure must NOT
+        # break the sync return — the brief will simply stay stale until TTL.
+        try:
+            await db.execute(
+                delete(CoachBrief).where(
+                    CoachBrief.user_id == user_id,
+                    CoachBrief.generated_at >= datetime.combine(today, datetime.min.time(), tzinfo=UTC),
+                )
+            )
+            await db.commit()
+        except Exception as exc:
+            logger.warning(
+                "Failed to invalidate coach_briefs for user_id=%s after sync (non-fatal): %s",
+                user_id,
+                exc,
+            )
+            await db.rollback()
+
+        result = {
+            "activities_synced": total_activities,
+            "metrics_days": metrics_days,
+            "dates_touched": dates_touched,
+        }
         logger.info(
             "Garmin sync complete for user_id=%s: %s", user_id, result
         )

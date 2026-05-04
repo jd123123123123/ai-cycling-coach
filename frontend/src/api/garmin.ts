@@ -12,6 +12,12 @@ export interface GarminSyncResponse {
   activities_synced: number
   metrics_days: number
   message: string
+  /**
+   * ISO date strings (YYYY-MM-DD) for every athlete-day the sync may have
+   * changed (activity_start through today, inclusive). Used by the frontend
+   * for targeted React Query invalidation. May be `[]` from older backends.
+   */
+  dates_touched?: string[]
 }
 
 /**

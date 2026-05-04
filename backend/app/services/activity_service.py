@@ -10,13 +10,14 @@ If the athlete profile lacks the required thresholds, TSS is left as None.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, time
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
+from app.models.coach_brief import CoachBrief
 from app.schemas.activity import ActivityCreate
 from app.services.training_load import (
     calculate_cycling_tss,
@@ -129,6 +130,26 @@ async def create_activity(
     db.add(activity)
     await db.flush()
     await db.refresh(activity)
+
+    # Invalidate any coach brief generated on the same day as this activity so
+    # the next /coach/brief read regenerates with the new ride in evidence.
+    # Defensive: failure must not break activity creation.
+    try:
+        activity_day = activity.started_at.date()
+        day_start_utc = datetime.combine(activity_day, time.min, tzinfo=UTC)
+        await db.execute(
+            delete(CoachBrief).where(
+                CoachBrief.user_id == user_id,
+                CoachBrief.generated_at >= day_start_utc,
+            )
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to invalidate coach_briefs for user_id=%s after activity create (non-fatal): %s",
+            user_id,
+            exc,
+        )
+
     return activity
 
 

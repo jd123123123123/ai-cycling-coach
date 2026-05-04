@@ -6,18 +6,13 @@ These schemas define the request/response shapes for:
 - GET /garmin/status (→ GarminStatusResponse)
 - POST /garmin/sync (→ GarminSyncResponse)
 """
-from datetime import datetime
+from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class GarminConnectRequest(BaseModel):
-    """Request body for POST /garmin/connect.
-
-    Credentials are stored encrypted at rest in the garmin_credentials table.
-    The password must be a valid Garmin Connect password; it will be used for
-    re-authentication when OAuth tokens expire.
-    """
+    """Request body for POST /garmin/connect."""
 
     email: str
     password: str
@@ -39,12 +34,15 @@ class GarminStatusResponse(BaseModel):
 class GarminSyncResponse(BaseModel):
     """Response for POST /garmin/connect and POST /garmin/sync.
 
-    Reports the outcome of a sync operation including counts of new data.
+    `dates_touched` enumerates every athlete-day the sync may have changed
+    (activity date through today, inclusive). Frontends use it for targeted
+    React Query invalidation. Defaults to `[]` so older clients don't break.
     """
 
     activities_synced: int
     metrics_days: int
     message: str
+    dates_touched: list[date] = Field(default_factory=list)
 
 
 class GarminDisconnectResponse(BaseModel):

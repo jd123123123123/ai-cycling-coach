@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { forceGarminSync, type GarminSyncResponse } from '../api/garmin'
+import { COACH_BRIEF_KEY_ROOT } from './useCoachBrief'
 
 /**
  * Mutation wrapper around POST /garmin/sync.
@@ -26,7 +27,7 @@ export function useForceSync() {
       qc.invalidateQueries({ queryKey: ['daily-metrics'] })
       qc.invalidateQueries({ queryKey: ['activities'] })
       qc.invalidateQueries({ queryKey: ['pmc'] })
-      qc.invalidateQueries({ queryKey: ['coach', 'brief'] })
+      qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
       qc.invalidateQueries({ queryKey: ['intraday'] })
       qc.invalidateQueries({ queryKey: ['garmin', 'status'] })
     },

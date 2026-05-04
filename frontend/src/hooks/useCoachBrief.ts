@@ -12,18 +12,31 @@ export const COACH_BRIEF_KEY_ROOT = ['coach', 'brief'] as const
 
 /**
  * Fetches the latest brief for the currently selected language.
- * Brief TTL is 6h; staleTime matches so we don't refetch on every mount.
- * The backend routes cache by language too, so a "miss" on a rarely-used
- * language still regenerates cleanly.
+ *
+ * Step 1 (today-runthrough): staleTime drops from 6h → 30min so a brief
+ * regenerated server-side after a sync surfaces quickly. While the athlete
+ * has trained today (`today_tss > 0`) but the post-ride review hasn't been
+ * attached yet, we also refetch on window focus — this catches the case
+ * where a sync completes in the background and the user tabs back in
+ * expecting their recap.
  */
 export function useCoachBrief() {
   const { language } = useLanguage()
   return useQuery<CoachBriefResponse>({
     queryKey: [...COACH_BRIEF_KEY_ROOT, language],
     queryFn: () => fetchCoachBrief(language),
-    staleTime: 6 * 60 * 60 * 1000, // 6h — matches backend cache TTL
+    staleTime: 30 * 60 * 1000, // 30min — was 6h; brief now invalidated on sync
     gcTime: 12 * 60 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: (query) => {
+      // React Query v5 accepts a function returning boolean.
+      const data = query.state.data as CoachBriefResponse | undefined
+      if (!data) return false
+      const evidence = (data.evidence ?? {}) as Record<string, unknown>
+      const todayTssRaw = evidence['today_tss']
+      const todayTss = typeof todayTssRaw === 'number' ? todayTssRaw : 0
+      const reviewMissing = data.post_ride_review == null
+      return reviewMissing && todayTss > 0
+    },
     // Brief endpoint always returns 200 (rule-based fallback). If it still 5xx'd,
     // retry once; 401 handled by the axios interceptor.
     retry: (failureCount, error: unknown) => {
