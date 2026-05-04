@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: AI Coaching Core** - Daily brief, chat interface, safety guardrails, and training recommendations
 - [ ] **Phase 6: AI Deep Coaching** - On-demand analysis and workout modification via conversation
 - [x] **Phase 6.1: UI Overhaul — Apple-disciplined editorial redesign (INSERTED)** - Segmented dashboard tabs, bento grid, side sheets, sticky readiness bar, command palette, spring motion tokens, applied through the editorial visual voice
+- [x] **Phase 6.2: Whoop-grade redesign of untouched surfaces (INSERTED)** - Sharpen the editorial system across auth pages, Garmin connect, PMC chart, polarized distribution, week strip, recent activities, sync button, and trends/week tabs. Reclaim amber for caution-only, consolidate zone palettes, codify number presentation utilities, deprecate `.serif-caps` as a third numeral idiom.
 - [ ] **Phase 7: Periodization + Workout Generation** - AI-built mesocycles, daily adaptation, and structured workouts
 - [ ] **Phase 8: Nutrition Integration** - Manual nutrition logging, fueling advice, and nutrition-aware adaptation
 - [ ] **Phase 9: Social + Retention Rituals** - Packs (4-12 training partners), user-chosen rivals, morning/post-ride/Sunday rituals, consistency streaks, pack-kudos — all grounded in Self-Determination Theory (autonomy/competence/relatedness); explicit dark-pattern ban list (no global leaderboards, no streak ransom, no variable-ratio rewards, no guilt copy)
@@ -162,6 +163,20 @@ Plans:
 
 **Notes**: Scope derived from `.planning/research/REDESIGN-BRIEF.md` §5 P0+P1. P2 polish items (View Transitions, DynamicPill, weekly recap ritual, density toggle) defer to optional Phase 6.2. Design-direction choice = Path B: editorial voice + Apple structural discipline. Frontend-only — no backend changes. Bundle budget: ≤ +10% over 534 KB gzipped baseline (cmdk is the only new dep, ~4 KB).
 
+### Phase 6.2: Whoop-grade redesign of untouched surfaces (INSERTED)
+**Goal**: Apply Whoop-grade visual discipline (dominant-numeral hierarchy, monochrome surface + reclaimed amber-as-caution-only, codified number presentation, single zone palette) to every dashboard surface and entry-point page that the today-runthrough did not already redo, so a logged-out → onboarding → dashboard flow feels like one app instead of two.
+**Depends on**: Phase 6.1, today-runthrough (commits af026eb..418d4f5)
+**Requirements**: DASH-01, DASH-05 (extends 6.1 across all surfaces)
+**Success Criteria** (what must be TRUE):
+  1. Auth pages (LoginPage, RegisterPage) and GarminConnectPage use the same paper/rule/forest/ink token system as the dashboard — no Tailwind light-mode color literals remain (`bg-gray-50`, `text-blue-600`, etc. eliminated)
+  2. Amber appears ONLY on caution/warning surfaces (rule-mark, alert states); decorative amber eyebrows in CoachBrief, PMCChart, RecentActivities are gone
+  3. PolarizedDistribution and WeekStrip render via shared `--color-zone-N` tokens; no inline RGBA color literals remain in either component
+  4. Number presentation utilities (`utils/format.ts` for dominant-numeral + tiny-unit, `utils/delta.ts` for sign-disciplined polarized accent, `<Sparkline>` primitive shared across surfaces) exist and are consumed by every numeric-rendering component
+  5. `.serif-caps` class is removed from the codebase; Fraunces is reserved for `.num-display` only
+  6. Bundle gzipped size ≤ +5% over post-today-runthrough baseline; no new dependencies beyond what the redesign strictly requires
+
+**Notes**: Scope derived from `.planning/phases/06.2-whoop-grade-redesign/06.2-RESEARCH.md` (~600-line design language doc). Frontend-only — zero backend changes. Reference apps: Whoop, Strava, Athletica, Intervals.icu (observed, not fetched). Explicit rejected directions: no neumorphism, no decorative gradients/glow, no gamification badges, no dark-mode-only — sharpen the existing system, don't replace it.
+
 ### Phase 7: Periodization + Workout Generation
 **Goal**: The AI builds and adapts multi-week training plans with structured workouts, dynamically adjusting daily sessions based on athlete state
 **Depends on**: Phase 6
@@ -248,6 +263,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 | 5. AI Coaching Core | 2/2 | Complete (awaiting live UAT) | 2026-04-20 |
 | 6. AI Deep Coaching | 0/TBD | Not started | - |
 | 6.1. UI Overhaul (INSERTED) | 3/3 | Complete (awaiting live UAT) | 2026-04-22 |
+| 6.2. Whoop-grade redesign (INSERTED) | 6/6 | Complete (6/6 must-haves verified, +2.66% bundle) | 2026-05-04 |
 | 7. Periodization + Workout Generation | 0/TBD | Not started | - |
 | 8. Nutrition Integration | 0/TBD | Not started | - |
 | 9. Social + Gamification | 0/TBD | Not started | - |

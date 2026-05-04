@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 6.2 Wave 3 in progress. 06.2-05 complete. 06.2-05: shared number-presentation utils (format.ts/delta.ts) adopted by 5 of 7 today-runthrough components; local toneFromPct in KpiStripCompact deleted; per-KPI Sparklines at 64×16 with delta-tone stroke; .serif-caps erased from all 11 call sites and deleted from index.css. Plan 06 remaining.
+**Current focus:** Phase 6.2 complete. All 6 plans done. 06.2-06: DashboardShell paper-grain + scroll-reset, DashboardPage tab hairline + tabpanel-in fade (reduced-motion-safe), TrendsTab 320px maxHeight clip removed, WeekTab ComplianceStrip wired with real data. Bundle audit: +1.64 KB / +0.20% — PASS. Zero new dependencies across Phase 6.2. Follow-up sweep targets noted (TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap legacy literals).
 
 ## Current Position
 
-Phase: 6.2 of 9 (Whoop-grade redesign)
-Plan: 06.2-05 complete (2 tasks; vite build green; bundle 813.89 kB gzip, 0 delta; tsc --noEmit clean)
-Status: Phase 6.2 Wave 3 in progress. Plans 01-05 complete. Plan 06 remaining.
-Last activity: 2026-05-03 -- Completed 06.2-PLAN-05.md (today-runthrough utils migration + .serif-caps deletion + KpiStripCompact Sparkline)
+Phase: 6.2 of 9 (Whoop-grade redesign) — COMPLETE
+Plan: 06.2-06 complete (2 tasks + human-verify checkpoint approved; bundle +0.20%; vite build green)
+Status: Phase 6.2 ALL DONE (Plans 01–06 complete). Ready for Phase 7.
+Last activity: 2026-05-03 -- Completed 06.2-PLAN-06.md (structural polish + bundle audit; Phase 6.2 complete)
 
-Progress: [██████████████░░] ~90% (Phases 1-6 + 6.1 complete; Phases 6.2, 7, 8, 9 remaining)
+Progress: [███████████████░] ~93% (Phases 1-6 + 6.1 + 6.2 complete; Phases 7, 8, 9 remaining)
 
 ## Performance Metrics
 
@@ -275,6 +275,10 @@ Recent decisions affecting current work:
 - [06.2-05]: Sparkline stroke uses cell.tone (delta tone) not sport-specific hardcoded colors — single source of truth; sparkline color = delta chip color = toneFromPct result
 - [06.2-05]: .serif-caps replaced by .eyebrow on small uppercase labels, text-[Npx] font-medium on larger display labels — .serif-caps (Fraunces 14opsz) retired; eyebrow (Geist uppercase) is the system's small-caps idiom
 - [06.2-05]: ReadinessHero EnterGroup NOT swapped to RevealCascade — coexistence intentional; RevealCascade is for newly designed surfaces; ReadinessHero swap deferred to future polish
+- [06.2-06]: baseline-bundle.txt captured against post-06.2-05 HEAD (not commit 418d4f5) — 418d4f5 worktree build fails due to uncommitted BodyBriefing.tsx import in TodayTab.tsx; post-05 HEAD is the valid pre-Plan-06 reference consistent with 06.2-05 SUMMARY's 813.89 kB figure
+- [06.2-06]: tabpanel-in animation gated via useReducedMotion() — animation style dropped entirely (not shortened) when reduced motion active; prefers-reduced-motion emulation verified
+- [06.2-06]: ComplianceStrip placed with real props (not deferred) — planned-workouts query already in scope at WeekTab level; no new data plumbing required
+- [06.2-06]: Follow-up legacy-literal sweep deferred — TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap have bg-gray-/text-blue-/Chapter II-III hits; pre-existing from Phase 4/6.1; outside Plan 06 allowed-modify list; do not affect 6.2 success criteria
 
 ### Roadmap Evolution
 
@@ -305,8 +309,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-03 — Phase 6.2 Wave 3 (06.2-PLAN-05.md) complete
-Stopped at: 06.2-05 complete. Commits: (5bfc796) feat(06.2-05): today-runthrough utils migration + .serif-caps deletion. (5f6db74) feat(06.2-05): KpiStripCompact per-KPI mini-trend Sparkline. Build: vite build green, 813.89 kB gzip, 0 delta vs Wave-2 baseline.
+Last session: 2026-05-03 — Phase 6.2 ALL PLANS COMPLETE (06.2-PLAN-06.md)
+Stopped at: 06.2-06 complete. Commits: (d6fd339) feat(06.2-06): capture baseline-bundle.txt. (83df34a) feat(06.2-06): DashboardShell/Page/TrendsTab/WeekTab structural polish. Bundle audit: 813.89 kB → 815.53 kB (+0.20%) PASS. Phase 6.2 done.
 Resume file: None
-Next: Phase 6.2 Plan 06 (DashboardShell paper-grain, DashboardPage tab hairline + tabpanel-in fade, TrendsTab maxHeight clip removal, WeekTab ComplianceStrip placement, final bundle audit).
-Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
+Next: Phase 7 (next roadmap phase). Phase 6.2 complete; all 6 plans shipped.
+Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); Legacy literal sweep in TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap; SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
