@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 7.0 of 9 (Periodization engine and week view) — IN PROGRESS
-Plan: 07.0-01 complete (2 tasks; migration + ORM + schema + ProfileSetupPage form; vite build green)
-Status: Phase 7.0 Plan 01 done. Plans 02–05 remain.
-Last activity: 2026-05-03 -- Completed 07.0-PLAN-01.md (athlete target-event schema; migration d5e6f7a8b9c0)
+Plan: 07.0-03 complete (2 tasks; weekly_rationale service + 189 tests)
+Status: Phase 7.0 Plans 01 and 03 done. Plans 02, 04, 05 remain.
+Last activity: 2026-05-04 -- Completed 07.0-PLAN-03.md (weekly rationale generator)
 
 Progress: [████████████████░] ~94% (Phases 1-6 + 6.1 + 6.2 complete; Phase 7.0 plan 01 done; Phases 7.0 plans 02-05, 8, 9 remaining)
 
@@ -280,6 +280,10 @@ Recent decisions affecting current work:
 - [06.2-06]: ComplianceStrip placed with real props (not deferred) — planned-workouts query already in scope at WeekTab level; no new data plumbing required
 - [06.2-06]: Follow-up legacy-literal sweep deferred — TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap have bg-gray-/text-blue-/Chapter II-III hits; pre-existing from Phase 4/6.1; outside Plan 06 allowed-modify list; do not affect 6.2 success criteria
 - [07.0-01]: String(20) not Enum for target_event_type — extensible without migrations; matches primary_sport convention; values: race|fondo|audax|maintenance
+- [07.0-03]: Decimal avoidance in technical PMC sentence — round CTL delta to integer to prevent split('.') false sentence-splits on e.g. "1.0"
+- [07.0-03]: Recovery block_position keeps TID sentence (sentence 3) for actual intensity description; recovery positive-framing lives in sentence 5 (_recovery_sentence_or_none) — single-responsibility per helper
+- [07.0-03]: Event sentence suppressed beyond 112 days — too far out to anchor week-level copy; aligns with Friel base1 horizon
+- [07.0-03]: Race week deduplication — _event_sentence_or_none returns None for days_to_event <= 7; race-week framing already in sentences 1 and 3
 - [07.0-01]: All three target-event columns nullable — maintenance mode = type='maintenance' + date=null; past-date accepted (engine handles it); no future validation added
 - [07.0-01]: goals JSONB untouched alongside new columns — legacy code can still read goals.target_event_date; consolidation is a future cleanup plan
 - [07.0-01]: Migration d5e6f7a8b9c0 parents off b2c3d4e5f6a7 (wake_now_columns head); apply deferred until Docker daemon restarted — orchestrator handles before Wave 2
@@ -314,8 +318,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-03 — Phase 7.0 Plan 01 complete (07.0-PLAN-01.md)
-Stopped at: 07.0-01 complete. Commits: (ee520d1) feat(07.0-01): migration + ORM + schema. (e6e6d3b) feat(07.0-01): API round-trip + ProfileSetupPage form.
+Last session: 2026-05-04 — Phase 7.0 Plan 03 complete (07.0-PLAN-03.md)
+Stopped at: 07.0-03 complete. Commits: (92cd3d5) feat(07.0-03): weekly rationale service. (197b098) feat(07.0-03): rationale tests + jargon discipline — 189 passing.
 Resume file: None
-Next: Phase 7.0 Plan 02 (mesocycle generator — reads target_event_date/type/priority). Apply migration d5e6f7a8b9c0 first (requires Docker restart).
+Next: Phase 7.0 Plan 02 (mesocycle generator) and Plan 04 (week-view API endpoint consuming build_weekly_rationale). Apply migration d5e6f7a8b9c0 first (requires Docker restart).
 Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); Legacy literal sweep in TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap; SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
