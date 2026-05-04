@@ -189,11 +189,13 @@ function KpiCellView({ cell }: { cell: KpiCell }) {
       </div>
       {cell.sparkline && cell.sparkline.some((v) => v != null) && (
         <div className="mt-0.5 -mx-0.5" aria-hidden>
+          {/* Per-KPI mini-trend — stroke matches delta tone (single source of truth).
+              Width=64 height=16 keeps it inside the cell budget without breaking the strip height. */}
           <Sparkline
             values={cell.sparkline}
-            width={72}
-            height={20}
-            stroke={cell.sparklineColor ?? 'var(--color-ink-2)'}
+            width={64}
+            height={16}
+            stroke={toneColor}
             showDot
           />
         </div>
