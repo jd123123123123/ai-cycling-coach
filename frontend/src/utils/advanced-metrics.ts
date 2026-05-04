@@ -1,4 +1,5 @@
 import type { ActivityRead, PMCEntry } from '../api/dashboard'
+import type { AthleteProfile } from '../types/athlete'
 
 // Efficiency Factor = NP / avg_HR. Higher = better aerobic economy.
 // Requires both normalized_power and average_hr — returns null if either missing.
@@ -56,6 +57,32 @@ export function classifyPolarizedZone(
   if (pct < 0.82) return 'easy'
   if (pct <= 0.97) return 'moderate'
   return 'hard'
+}
+
+// Activity-level wrapper: resolves LTHR from the athlete profile using the
+// same cascade as focusBadge.ts (commit 1439005), never from session max_hr.
+//
+// Cascade order:
+//   1. profile.lthr_cycling / profile.lthr_running (sport-specific, direct measurement)
+//   2. profile.max_heart_rate * 0.88 (Friel estimate, anchored on athlete HRmax)
+//   3. null — no power path here; caller must handle the null case honestly
+//
+// Returns null when LTHR cannot be determined (no usable profile data).
+export function classifyActivityPolarizedZone(
+  a: ActivityRead,
+  profile: AthleteProfile | null | undefined,
+): PolarizedZone | null {
+  if (!a.average_hr) return null
+
+  // Cascade 1: sport-specific LTHR directly measured by athlete or lab test.
+  const lthr =
+    (a.sport === 'running' ? profile?.lthr_running : profile?.lthr_cycling) ??
+    // Cascade 2: estimate from athlete HRmax in profile (NOT session peak HR).
+    (profile?.max_heart_rate != null ? profile.max_heart_rate * 0.88 : null)
+
+  // If no usable LTHR anchor is available, return null — honest absence beats
+  // a wrong classification. The component should skip null activities.
+  return classifyPolarizedZone(a.average_hr, lthr)
 }
 
 export interface TIDWeek {

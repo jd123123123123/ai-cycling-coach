@@ -1,14 +1,17 @@
 import { useMemo } from 'react'
 import { subDays } from 'date-fns'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
-import type { ActivityRead } from '../../api/dashboard'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { classifyActivityPolarizedZone } from '../../utils/advanced-metrics'
 import { formatHours } from '../../utils/format'
 
 // Seiler's polarized model: ~80% time in Z1–Z2 (low), ~20% in Z4–Z5 (high),
 // minimal "grey zone" Z3. This two-peak histogram makes the 80/20 split
 // instantly visible, whereas every consumer app shows a stacked zone bar
-// that smears the insight. We compute zones from a TSS-proxy (normalized
-// power / FTP if available; falls back to average HR / threshold HR).
+// that smears the insight. We compute zones from the canonical
+// classifyActivityPolarizedZone, which anchors on profile LTHR (not session
+// peak HR). Activities that cannot be classified are skipped — honest absence
+// beats a wrong bucket.
 
 // Grade scale based on Stephen Seiler's public interviews and
 // Laursen/Plews review papers: A = 75%+ low, 5-25% high, <10% grey;
@@ -23,29 +26,11 @@ interface Distribution {
   total: number
 }
 
-function bucketFromIntensityRatio(ratio: number): ZoneBucket {
-  // Ratio = %FTP or %LTHR. Seiler's 3-zone model:
-  //   low  < ~82% LTHR (≈ roughly <75% FTP / < LT1)
-  //   grey ~82–92% LTHR (LT1..LT2, "tempo/SweetSpot")
-  //   high > 92% LTHR (LT2+)
-  if (ratio < 0.82) return 'low'
-  if (ratio < 0.92) return 'grey'
+// Map classifyActivityPolarizedZone's return values to the component's bucket names.
+function polarizedZoneToZoneBucket(zone: 'easy' | 'moderate' | 'hard'): ZoneBucket {
+  if (zone === 'easy') return 'low'
+  if (zone === 'moderate') return 'grey'
   return 'high'
-}
-
-function activityZoneSplit(a: ActivityRead): ZoneBucket | null {
-  // Prefer power — more reliable. Use normalized_power as proxy for intensity.
-  // Without FTP we can't compute the ratio exactly; use a heuristic:
-  //   np > ~230W historically means "high-ish" for many cyclists, but that's
-  //   guesswork. Fall back to HR when that happens.
-  if (a.average_hr && a.max_hr && a.max_hr > 0) {
-    // Rough LTHR ≈ 88% of max (Joe Friel). Ratio = avg_hr / LTHR.
-    const lthr = a.max_hr * 0.88
-    const ratio = a.average_hr / lthr
-    return bucketFromIntensityRatio(ratio)
-  }
-  // If only duration — call it endurance (low).
-  return 'low'
 }
 
 function grade(pct: { low: number; grey: number; high: number }): {
@@ -105,6 +90,7 @@ export default function PolarizedDistribution() {
   const today = new Date()
   const start = subDays(today, 14)
   const { data, isLoading } = useActivitiesRange(start, today)
+  const { data: profile } = useAthleteProfile()
 
   const { distribution, gradeInfo } = useMemo(() => {
     const acts = data?.activities ?? []
@@ -112,8 +98,11 @@ export default function PolarizedDistribution() {
     for (const a of acts) {
       const dur = a.duration_seconds ?? 0
       if (dur <= 0) continue
-      const bucket = activityZoneSplit(a)
-      if (!bucket) continue
+      // Use canonical classifier anchored on profile LTHR, not session max_hr.
+      // Returns null when no usable LTHR is available — skip rather than guess.
+      const zone = classifyActivityPolarizedZone(a, profile)
+      if (zone == null) continue
+      const bucket = polarizedZoneToZoneBucket(zone)
       dist[bucket] += dur
       dist.total += dur
     }
