@@ -5,73 +5,81 @@
   --font-serif: "Fraunces", "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-paper: #f3ecdc;
-  --color-paper-2: #fbf6ea;
-  --color-rule: #e2d8c0;
-  --color-ink: #141811;
-  --color-ink-2: #323628;
-  --color-muted: #757465;
-  --color-forest: #1c4433;
-  --color-forest-2: #2a6147;
-  --color-amber: #b04a0c;
-  --color-amber-2: #d96c1a;
-  --color-amber-soft: #f6dab2;
-  --color-ink-blue: #143555;
-  --color-alert: #8a1d1d;
+  /* ── Dark surface hierarchy ─────────────────────────────────────────── */
+  --color-paper:   #0C0C0E;                    /* page bg — near black     */
+  --color-paper-2: #1C1C1E;                    /* card surface             */
+  --color-rule:    rgba(255, 255, 255, 0.09);  /* dividers / borders       */
 
-  /* Phase 5.1 zone palette for the IntervalRibbon.
-     Z1 neutral (paper-toned), Z2 sage (forest-2), Z3 gold, Z4 coral, Z5+ deeper red-ochre.
-     These map to Coggan power zones — visually, the ribbon gets taller and
-     warmer as intensity rises. */
-  --color-zone-1: #c9beab;
-  --color-zone-2: #6b8f76;
-  --color-zone-3: #c79a3a;
-  --color-zone-4: #d9643f;
-  --color-zone-5: #a33e26;
-  --color-zone-6: #7a2c1b;
-  --color-zone-7: #551d12;
+  /* ── Typography ─────────────────────────────────────────────────────── */
+  --color-ink:   #F5F5F7;                      /* primary text             */
+  --color-ink-2: rgba(235, 235, 245, 0.72);   /* secondary text           */
+  --color-muted: rgba(235, 235, 245, 0.40);   /* labels / muted           */
 
-  /* --- 06.1 Apple-disciplined additions (do not replace editorial palette above) --- */
+  /* ── Electric action palette ────────────────────────────────────────── */
+  --color-forest:      #30D158;               /* peak / success           */
+  --color-forest-2:    #34C759;               /* ready / positive         */
+  --color-amber:       #FF9F0A;               /* caution                  */
+  --color-amber-2:     #FFD60A;               /* bright accent            */
+  --color-amber-soft:  rgba(255, 159, 10, 0.14);
+  --color-ink-blue:    #0A84FF;               /* info                     */
+  --color-alert:       #FF453A;               /* error / rest             */
 
-  /* Radii (apple-2027 §1.4) */
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
-  --radius-2xl: 36px;
+  /* ── Zone palette (dark) ────────────────────────────────────────────── */
+  --color-zone-1: #3A3A3C;
+  --color-zone-2: #1D5C3F;
+  --color-zone-3: #7A5800;
+  --color-zone-4: #7A2E1A;
+  --color-zone-5: #5A1A0E;
+  --color-zone-6: #3D0F07;
+  --color-zone-7: #280A04;
+
+  /* ── Sport accents (per-discipline) ─────────────────────────────────── */
+  --color-sport-bike:     #30D158;             /* cycling = forest        */
+  --color-sport-run:      #FFD60A;             /* running = bright amber  */
+  --color-sport-strength: #0A84FF;             /* gym = ink-blue          */
+
+  /* ── Chart-only ─────────────────────────────────────────────────────── */
+  --color-chart-axis:     #757465;             /* PMC axis colour (already used inline today) */
+
+  /* ── Radius scale ───────────────────────────────────────────────────── */
+  --radius-xs:   6px;
+  --radius-sm:   10px;
+  --radius-md:   14px;
+  --radius-lg:   20px;
+  --radius-xl:   28px;
+  --radius-2xl:  36px;
   --radius-pill: 9999px;
 
-  /* Shadows (apple-2027 §1.5) — tinted, soft, low-offset */
-  --shadow-1: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
-  --shadow-2: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
-  --shadow-3: 0 12px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
-  --shadow-4: 0 24px 64px rgba(0,0,0,0.18), 0 8px 16px rgba(0,0,0,0.08);
-  --shadow-glass-rim: inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.04);
+  /* ── Shadows (deep for dark mode) ───────────────────────────────────── */
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.50), 0 1px 3px rgba(0,0,0,0.35);
+  --shadow-2: 0 4px 12px rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.40);
+  --shadow-3: 0 12px 32px rgba(0,0,0,0.70), 0 4px 8px rgba(0,0,0,0.50);
+  --shadow-4: 0 24px 64px rgba(0,0,0,0.85), 0 8px 16px rgba(0,0,0,0.60);
+  --shadow-glass-rim: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.40);
 
-  /* Backdrop blur ladder (apple-2027 §1.6) */
-  --blur-ultra-thin: 10px;
-  --blur-thin: 20px;
-  --blur-regular: 30px;
-  --blur-thick: 40px;
+  /* ── Backdrop blur ──────────────────────────────────────────────────── */
+  --blur-ultra-thin:  10px;
+  --blur-thin:        20px;
+  --blur-regular:     30px;
+  --blur-thick:       40px;
   --blur-ultra-thick: 50px;
 
-  /* Easing (apple-2027 §2.2) */
+  /* ── Easing ─────────────────────────────────────────────────────────── */
   --ease-apple-default: cubic-bezier(0.25, 0.1, 0.25, 1);
-  --ease-apple-decel: cubic-bezier(0.0, 0.0, 0.2, 1);
-  --ease-apple-accel: cubic-bezier(0.4, 0.0, 1, 1);
-  --ease-chart-draw: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-apple-decel:   cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-apple-accel:   cubic-bezier(0.4, 0.0, 1, 1);
+  --ease-chart-draw:    cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring:        cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* Duration ladder */
-  --duration-micro: 120ms;
-  --duration-short: 250ms;
+  /* ── Duration ───────────────────────────────────────────────────────── */
+  --duration-micro:  120ms;
+  --duration-short:  250ms;
   --duration-medium: 400ms;
-  --duration-long: 750ms;
-  --duration-xlong: 1000ms;
+  --duration-long:   750ms;
+  --duration-xlong:  1100ms;
 }
 
-/* Apple Intelligence gradient (apple-2027 §1.1 + §1.6) — ONLY for AI-acting surfaces.
-   Content surfaces keep the editorial amber/forest palette. */
+/* ── AI gradient (unchanged — only for AI-acting surfaces) ───────────── */
 @keyframes ai-gradient-shift {
   0%   { background-position:   0% 50%; }
   50%  { background-position: 100% 50%; }
@@ -84,20 +92,83 @@
   background-size: 300% 300%;
   animation: ai-gradient-shift 5s ease-in-out infinite;
 }
+.ai-gradient-rim { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); }
 
-.ai-gradient-rim {
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+/* ── Micro-dopamine keyframes ────────────────────────────────────────── */
+
+/* Ring tip glow — the live, breathing arc head */
+@keyframes tip-glow-pulse {
+  0%, 100% { opacity: 0.9; transform: scale(1);    }
+  50%       { opacity: 1;   transform: scale(1.35); }
 }
 
-/* Reduced-motion opt-out */
-@media (prefers-reduced-motion: reduce) {
-  .ai-gradient { animation: none; background-position: 0% 50%; }
+/* Score number entrance — springs in from small */
+@keyframes score-enter {
+  0%   { opacity: 0; transform: scale(0.78); }
+  65%  { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1);    }
 }
 
+/* Generic fade in — safe for SVG containers */
+@keyframes fade-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Slide up */
+@keyframes slide-up {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0);    }
+}
+
+/* Shimmer loading skeleton */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0;  }
+}
+
+/* Status dot — gentle breath */
+@keyframes dot-breathe {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0   currentColor; }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 5px rgba(0,0,0,0); }
+}
+
+/* Ring fill reveal — used for the progress circle draw-on */
+@keyframes ring-reveal {
+  from { stroke-dashoffset: var(--ring-circumference, 553); }
+  to   { stroke-dashoffset: var(--ring-target, 0); }
+}
+
+/* Card enter (stagger children) */
+@keyframes card-enter {
+  0%   { opacity: 0; transform: translateY(12px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Tabpanel in */
+@keyframes tabpanel-in {
+  0%   { opacity: 0; transform: translateY(5px); }
+  100% { opacity: 1; transform: translateY(0);   }
+}
+
+/* ── Utility classes ─────────────────────────────────────────────────── */
+
+.shimmer-bg {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0px,
+    rgba(255,255,255,0.08) 300px,
+    rgba(255,255,255,0.04) 600px
+  );
+  background-size: 1200px 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────── */
 :root {
-  color-scheme: light;
-  --page-bg: #f3ecdc;
-  --page-ink: #141811;
+  color-scheme: dark;
+  --page-bg:  #0C0C0E;
+  --page-ink: #F5F5F7;
 }
 
 @layer base {
@@ -113,22 +184,27 @@
 
   body {
     background-image:
-      radial-gradient(circle at 12% 8%, rgba(176, 74, 12, 0.04), transparent 42%),
-      radial-gradient(circle at 88% 0%, rgba(20, 53, 85, 0.04), transparent 45%);
+      radial-gradient(circle at 15% 10%, rgba(48, 209, 88, 0.055), transparent 40%),
+      radial-gradient(circle at 85% 5%,  rgba(10, 132, 255, 0.04),  transparent 44%);
     background-attachment: fixed;
   }
 
-  /* Long user-generated strings must wrap */
   .dashboard-break-words { word-break: break-word; overflow-wrap: anywhere; }
 
-  /* Editorial rule between sections */
+  /* Hairline divider — now subtle on dark */
   .hairline {
-    background-image: linear-gradient(to right, transparent, var(--color-rule) 12%, var(--color-rule) 88%, transparent);
+    background-image: linear-gradient(
+      to right,
+      transparent,
+      var(--color-rule) 12%,
+      var(--color-rule) 88%,
+      transparent
+    );
     height: 1px;
     width: 100%;
   }
 
-  /* Paper grain — near-invisible noise overlay for cards */
+  /* Surface grain — very light on dark so it adds texture without noise */
   .paper-grain {
     position: relative;
     isolation: isolate;
@@ -138,11 +214,13 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.35;
-    mix-blend-mode: multiply;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 0 0.03 0 0 0 0.18 0'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
+    opacity: 0.06;
+    mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.3 0'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
     border-radius: inherit;
   }
+
+  /* ── Type utilities ────────────────────────────────────────────────── */
 
   .num-display {
     font-family: "Fraunces", "Times New Roman", serif;
@@ -173,7 +251,7 @@
   }
 }
 
-/* react-big-calendar mobile + paper-theme overrides */
+/* ── Calendar overrides (dark mode) ─────────────────────────────────── */
 .rbc-calendar {
   font-family: "Geist", ui-sans-serif, system-ui, sans-serif !important;
   background: transparent !important;
@@ -195,28 +273,25 @@
   letter-spacing: 0.12em;
   padding: 8px 4px;
 }
-.rbc-today { background: rgba(28, 68, 51, 0.05) !important; }
+.rbc-today { background: rgba(48, 209, 88, 0.05) !important; }
 .rbc-event { padding: 4px 6px; border: none !important; border-radius: 4px; }
 .rbc-event-content { font-size: 11px; line-height: 1.2; word-break: break-word; font-weight: 500; }
 .rbc-toolbar button { min-height: 44px; }
-.rbc-off-range-bg { background: rgba(226, 216, 192, 0.35) !important; }
+.rbc-off-range-bg { background: rgba(255,255,255,0.02) !important; }
 .rbc-day-bg + .rbc-day-bg, .rbc-month-row + .rbc-month-row {
   border-color: var(--color-rule) !important;
 }
 
 @media (max-width: 640px) {
-  .rbc-header { font-size: 11px; padding: 4px 2px; }
-  .rbc-date-cell { font-size: 11px; }
+  .rbc-header   { font-size: 11px; padding: 4px 2px; }
+  .rbc-date-cell{ font-size: 11px; }
 }
 
-/* Respect reduced-motion preferences for Phase 5-02 coach-surface animations */
+/* ── Reduced motion ──────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .animate-slide-in,
-  .animate-transparency-slide {
-    animation: none !important;
-  }
-  .streaming-caret {
-    animation: none !important;
-    opacity: 0.6 !important;
-  }
+  .animate-transparency-slide { animation: none !important; }
+  .streaming-caret { animation: none !important; opacity: 0.6 !important; }
+  .shimmer-bg { animation: none !important; background: rgba(255,255,255,0.05); }
+  .ai-gradient { animation: none !important; background-position: 0% 50%; }
 }
