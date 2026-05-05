@@ -21,6 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6.1: UI Overhaul — Apple-disciplined editorial redesign (INSERTED)** - Segmented dashboard tabs, bento grid, side sheets, sticky readiness bar, command palette, spring motion tokens, applied through the editorial visual voice
 - [x] **Phase 6.2: Whoop-grade redesign of untouched surfaces (INSERTED)** - Sharpen the editorial system across auth pages, Garmin connect, PMC chart, polarized distribution, week strip, recent activities, sync button, and trends/week tabs. Reclaim amber for caution-only, consolidate zone palettes, codify number presentation utilities, deprecate `.serif-caps` as a third numeral idiom.
 - [ ] **Phase 7.0: Periodization engine + week view shell** - Friel macrocycle + Issurin block mesocycles + Seiler weekly TID, week-view tab, weekly preface rationale
+- [ ] **Phase 7.05: One-Screen Truth — subtractive Whoop redesign (INSERTED)** - Today: 6 widgets → 3 primitives (state / trajectory / prescription). Week: 14 elements → 8 minimal pills + tap-to-expand SideSheet. Honesty layer (`<UncertainValue>` for thin data). Bike/Run sport-filtered version. **Negative bundle delta target.**
 - [ ] **Phase 7.1: Readiness-driven daily adaptation** - HRV-SWC-gated multi-signal adapter, soft-swap → hard-deload tier system, audit trail extension
 - [ ] **Phase 7.2: Rationale + taper/race polish** - Per-day rationale generation, Bosquet/Mujika taper, template library expansion 12 → ~30
 - [ ] ~~**Phase 7: Periodization + Workout Generation**~~ — split into 7.0/7.1/7.2 (research 2026-05-04)
@@ -201,6 +202,17 @@ Plans:
 - [ ] 07.0-PLAN-03.md — Weekly rationale generator (rule-based, language-aware) + jargon-discipline tests
 - [ ] 07.0-PLAN-04.md — GET /weeks/current endpoint + useCurrentWeek React Query hook
 - [ ] 07.0-PLAN-05.md — WeekTab redesign (WeekPreface + DayPlanCard) + visual checkpoint
+
+#### Phase 7.05: One-Screen Truth — subtractive Whoop redesign
+**Goal**: Subtractive redesign. Above 600px viewport on Today, athlete sees only 3 primitives (state / trajectory / prescription). Week tab collapses 14 elements to 8 minimal pills + analytics drawer. Bike/Run adopt same layout. Honesty layer ({UncertainValue}) refuses to fabricate numbers when data is thin. Hard rail: negative bundle delta vs current HEAD.
+**Depends on**: Phase 7.0
+**Plans**: 5 plans in 4 waves
+Plans:
+- [ ] 07.05-PLAN-01.md — UncertainValue primitive + confidence.ts utility (no consumers; foundation)
+- [ ] 07.05-PLAN-02.md — Today tab subtractive collapse: 3 primitives + TrajectorySentence + delete DailyInsight/KpiStripCompact/BodyBriefing
+- [ ] 07.05-PLAN-03.md — Week tab subtractive collapse: 1 preface + 7 minimal pills + SideSheet detail + analytics drawer
+- [ ] 07.05-PLAN-04.md — SportTab (Bike + Run) adopt 3-primitive layout reusing TrajectorySentence + UncertainValue
+- [ ] 07.05-PLAN-05.md — Bundle audit (git worktree, negative delta required) + 7-rail check + visual checkpoint
 
 #### Phase 7.1: Daily readiness-driven adaptation (planned)
 Vesterinen SWC gate + multi-signal voting → today's session swap. Estimated 3-4 plans.
