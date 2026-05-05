@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 6.2 complete. All 6 plans done. 06.2-06: DashboardShell paper-grain + scroll-reset, DashboardPage tab hairline + tabpanel-in fade (reduced-motion-safe), TrendsTab 320px maxHeight clip removed, WeekTab ComplianceStrip wired with real data. Bundle audit: +1.64 KB / +0.20% — PASS. Zero new dependencies across Phase 6.2. Follow-up sweep targets noted (TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap legacy literals).
+**Current focus:** Phase 7.05 Plan 01 complete. Honesty-layer primitives shipped: confidence() pure function, UncertainValue shimmer-skeleton primitive, and threshold constants (HRV=7d, CTL_TREND=14d, POLARIZED=7d) pinned in pending unit tests. Zero new dependencies. Plans 02-04 can now wire these in.
 
 ## Current Position
 
-Phase: 7.0 of 9 (Periodization engine and week view) — IN PROGRESS
-Plan: 07.0-04 complete (GET /weeks/current endpoint + useCurrentWeek hook + 7 smoke tests)
-Status: Phase 7.0 Plans 01, 02, 03, and 04 done. Plan 05 (WeekTab UI) remains.
-Last activity: 2026-05-03 — Completed 07.0-PLAN-04.md (endpoint + hook)
+Phase: 7.05 of 9 (One screen of truth — honesty layer) — IN PROGRESS
+Plan: 07.05-01 complete (confidence.ts + UncertainValue.tsx + confidence.test.ts)
+Status: Phase 7.05 Plan 01 done. Plans 02, 03, 04, 05 remain.
+Last activity: 2026-05-05 — Completed 07.05-PLAN-01.md (honesty-layer primitives)
 
-Progress: [████████████████░] ~95% (Phases 1-6 + 6.1 + 6.2 complete; Phase 7.0 plans 01-04 done; Phase 7.0 plan 05, 8, 9 remaining)
+Progress: [████████████████░] ~96% (Phases 1-6 + 6.1 + 6.2 + 7.0 plans 01-04 + 7.05 plan 01 done; 7.0 plan 05, 7.05 plans 02-05, 8, 9 remaining)
 
 ## Performance Metrics
 
@@ -243,6 +243,10 @@ Recent decisions affecting current work:
 - [06.1-01]: SideSheet left-edge radius uses CSS clamp(0px, calc((100vw - 767px) * 9999), var(--radius-xl)) — eliminates a JS matchMedia listener; renders --radius-xl on ≥768px viewports, 0px below
 - [06.1-01]: BentoGrid mobile reflow via module-level injected <style data-id="bento-grid-responsive"> targeting [data-bento-cell] — keeps primitive self-contained without Tailwind breakpoint coupling
 - [06.1-01]: Pre-existing TS errors in 7 untracked files (DailyInsight, WeeklySportMetrics, PolarizedDistribution, PrescribedWorkoutCard, ReadinessContributors, focusBadge, LastWeekRecap) are not Wave 1 regressions; vite build succeeds; should be resolved during Wave 2 when those files are modified
+- [07.05-01]: ConfidenceLevel is binary ('high'|'low') not 0..1 score — UI only needs "show number" vs "show placeholder"; no third state in v1
+- [07.05-01]: preconditions record optional in ConfidenceInput — polarized (n_days only) and CTL trend (n_days + has_ftp) share one signature without overloading
+- [07.05-01]: prefers-reduced-motion detected in useState initializer (not useEffect) in UncertainValue — ensures correct first-paint shimmer/no-shimmer state without flicker
+- [07.05-01]: confidence.test.ts created as PENDING per [06.1-01] convention — threshold documentation in comments + active void smoke forces compile-time export validation without vitest
 - [06.1-02]: DashboardShell API changed from hero/kpiStrip/pmc/collapsedSections slots to children+stickyBar+tabs — new multi-page shell usage pattern; all pages now use <DashboardShell> without old slot props
 - [06.1-02]: Tab URL persistence: useSearchParams ?tab= URL param + replace:true prevents back-button accumulation; valid values: today|week|trends|plan; default: 'today'
 - [06.1-02]: ReadinessHero data-testid="readiness-hero" is PERMANENT — IntersectionObserver target for StickyReadinessBar; must survive all future ReadinessHero edits including Wave 3 ContributorsSheet refactor
@@ -327,8 +331,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-03 — Phase 7.0 Plan 04 complete (07.0-PLAN-04.md)
-Stopped at: 07.0-04 complete. Commits: (0437c74) feat: frontend API client + hook, (766d911) feat: weeks endpoint + schemas, (b244137) feat: 7 smoke tests.
+Last session: 2026-05-05 — Phase 7.05 Plan 01 complete (07.05-PLAN-01.md)
+Stopped at: 07.05-01 complete. Commits: (a70c128) confidence.ts, (b1907a8) UncertainValue.tsx, (4771a89) confidence.test.ts.
 Resume file: None
 Next: Phase 7.0 Plan 05 (WeekTab UI — WeekPreface + DayPlanCard components consuming useCurrentWeek). Apply migrations d5e6f7a8b9c0 + e6f7a8b9c0d1 before running against live DB (requires Docker restart).
 Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); Legacy literal sweep in TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap; SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
