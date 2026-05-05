@@ -1,66 +1,28 @@
-import { format, parseISO } from 'date-fns'
-import { Bike, Dumbbell, PersonStanding } from 'lucide-react'
+import { useState } from 'react'
+import { format, parseISO, isToday, isFuture } from 'date-fns'
+import { SideSheet } from '../ui/SideSheet'
 import IntervalRibbon from './IntervalRibbon'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
 import type { ResolvedBlock } from '../../api/coach'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
+import type { ActivityRead } from '../../api/dashboard'
+import { formatHours } from '../../utils/format'
 
 interface DayPlanCardProps {
   day: DayPlan
   language: CoachLanguage
+  /** Pass-through activity so card doesn't refetch — WeekTab passes the matching activity from useActivitiesRange */
+  activity?: ActivityRead | null
 }
 
-// Sport → icon mapping (no new dependencies — lucide is already in tree)
-function SportIcon({ sport }: { sport: string }) {
-  const size = 14
-  const strokeWidth = 1.8
-  if (sport === 'running') {
-    return <PersonStanding size={size} strokeWidth={strokeWidth} style={{ color: 'var(--color-muted)' }} />
-  }
-  if (sport === 'strength') {
-    return <Dumbbell size={size} strokeWidth={strokeWidth} style={{ color: 'var(--color-muted)' }} />
-  }
-  // default: cycling
-  return <Bike size={size} strokeWidth={strokeWidth} style={{ color: 'var(--color-muted)' }} />
+// Category → zone token (no new color literals)
+const CATEGORY_DOT_COLOR: Record<string, string> = {
+  rest: 'var(--color-zone-2)', recovery: 'var(--color-zone-2)',
+  endurance: 'var(--color-zone-2)', tempo: 'var(--color-zone-3)',
+  sweet_spot: 'var(--color-zone-3)', threshold: 'var(--color-zone-4)',
+  vo2: 'var(--color-zone-5)',
 }
 
-// Category → display label (eyebrow) — technical
-const CATEGORY_LABEL_TECHNICAL: Record<string, string> = {
-  rest:       'REST',
-  recovery:   'RECOVERY',
-  endurance:  'ENDURANCE',
-  tempo:      'TEMPO',
-  sweet_spot: 'SWEET SPOT',
-  threshold:  'THRESHOLD',
-  vo2:        'VO₂',
-}
-
-// Category → display label (eyebrow) — simple mode
-const CATEGORY_LABEL_SIMPLE: Record<string, string> = {
-  rest:       'REST',
-  recovery:   'EASY SPIN',
-  endurance:  'CHILL RIDE',
-  tempo:      'STEADY PUSH',
-  sweet_spot: 'FOCUSED EFFORT',
-  threshold:  'HARD RIDE',
-  vo2:        'HARD INTERVALS',
-}
-
-function categoryLabel(category: string, language: CoachLanguage): string {
-  if (language === 'simple') {
-    return CATEGORY_LABEL_SIMPLE[category] ?? category.toUpperCase().replace('_', ' ')
-  }
-  return CATEGORY_LABEL_TECHNICAL[category] ?? category.toUpperCase().replace('_', ' ')
-}
-
-/**
- * Adapt IntervalBlockOut (weeks API shape) → ResolvedBlock (IntervalRibbon shape).
- *
- * IntervalBlockOut only has duration_seconds / power_target_pct_ftp / zone.
- * We synthesise the missing fields so IntervalRibbon works without modification.
- * The ribbon only uses: duration_s, target_pct_ftp, zone (for height + color).
- * watts + rpe are used by hover tooltips — we approximate them.
- */
 function adaptIntervals(intervals: IntervalBlockOut[]): ResolvedBlock[] {
   return intervals.map((b, i) => {
     const pct = b.power_target_pct_ftp ?? 0.65
@@ -68,150 +30,100 @@ function adaptIntervals(intervals: IntervalBlockOut[]): ResolvedBlock[] {
       name: `Segment ${i + 1}`,
       duration_s: b.duration_seconds,
       target_pct_ftp: pct,
-      target_watts_low: Math.round(pct * 200 * 0.95),  // rough approximation; hover tooltip only
+      target_watts_low: Math.round(pct * 200 * 0.95),
       target_watts_high: Math.round(pct * 200 * 1.05),
       zone: b.zone,
-      rpe: Math.round(b.zone * 1.2),  // rough rpe from zone
+      rpe: Math.round(b.zone * 1.2),
     }
   })
 }
 
-function formatMinutesShort(seconds: number | null): string {
-  if (!seconds) return '—'
-  const m = Math.round(seconds / 60)
-  return `~${m} min`
-}
+function parsedDate(dateStr: string) { try { return parseISO(dateStr) } catch { return null } }
+function weekdayLetter(dateStr: string): string { return parsedDate(dateStr) ? format(parsedDate(dateStr)!, 'EEEEE') : '?' }
+function dateNumber(dateStr: string): string { return parsedDate(dateStr) ? format(parsedDate(dateStr)!, 'd') : '' }
+function fullDateLabel(dateStr: string): string { return parsedDate(dateStr) ? format(parsedDate(dateStr)!, 'EEEE, MMMM d') : dateStr }
 
 /**
- * DayPlanCard — per-day card with sport icon, category eyebrow,
- * IntervalRibbon, TSS chip, and inline per-day rationale.
- *
- * Hard rails:
- * - No new color literals — all via CSS custom properties.
- * - No new dependencies — IntervalRibbon + lucide (already in tree).
- * - Rest day: no ribbon, no TSS, "Recovery is part of the work." copy.
+ * DayPlanCard — Phase 7.05 minimal day pill.
+ * Above fold: weekday letter + intensity dot + duration only.
+ * Tap opens SideSheet with IntervalRibbon + rationale + activity link.
  */
-export default function DayPlanCard({ day, language }: DayPlanCardProps) {
-  const technical = language === 'technical'
-  const isRest = day.category === 'rest'
+export default function DayPlanCard({ day, language, activity = null }: DayPlanCardProps) {
+  const [sheetOpen, setSheetOpen] = useState(false)
 
-  let dayLabel = ''
-  try {
-    const d = parseISO(day.date)
-    dayLabel = format(d, 'EEE · d')
-  } catch {
-    dayLabel = day.date
-  }
-
-  const label = categoryLabel(day.category, language)
+  const dateObj = parsedDate(day.date)
+  const isFutureDay = dateObj ? isFuture(dateObj) && !isToday(dateObj) : false
+  const isTodayDay = day.is_today
+  const dotColor = CATEGORY_DOT_COLOR[day.category] ?? 'var(--color-zone-2)'
+  const duration = day.duration_seconds_target ? formatHours(day.duration_seconds_target) : day.category === 'rest' ? 'Rest' : '—'
   const adaptedBlocks = adaptIntervals(day.intervals)
 
   return (
-    <div
-      className={[
-        'rounded-lg p-4 border transition',
-        day.is_today ? 'ring-2 ring-offset-1' : '',
-      ].join(' ')}
-      style={{
-        backgroundColor: 'var(--color-paper-2)',
-        borderColor: 'var(--color-rule)',
-        ...(day.is_today
-          ? {
-              ringColor: 'var(--color-forest-2)',
-              outline: '2px solid var(--color-forest-2)',
-              outlineOffset: '2px',
-            }
-          : {}),
-      }}
-    >
-      {/* Top row — day label + sport icon */}
-      <div className="flex items-center justify-between mb-2">
-        <span
-          className="eyebrow"
-          style={{ color: 'var(--color-muted)' }}
-        >
-          {dayLabel}
-        </span>
-        {!isRest && <SportIcon sport={day.sport} />}
-      </div>
-
-      {/* Category eyebrow */}
-      <p
-        className="eyebrow mb-1"
-        style={{ color: 'var(--color-ink-2)', fontSize: 9, letterSpacing: '0.18em' }}
+    <>
+      <button
+        type="button"
+        onClick={() => !isFutureDay && setSheetOpen(true)}
+        disabled={isFutureDay}
+        className="flex flex-col items-center justify-center gap-1 rounded-lg border transition"
+        style={{
+          backgroundColor: 'var(--color-paper-2)',
+          borderColor: 'var(--color-rule)',
+          padding: '10px 4px',
+          minHeight: 72,
+          cursor: isFutureDay ? 'default' : 'pointer',
+          opacity: isFutureDay ? 0.55 : 1,
+          pointerEvents: isFutureDay ? 'none' : undefined,
+          textAlign: 'center',
+          width: '100%',
+          ...(isTodayDay ? { outline: '1.5px solid var(--color-ink)', outlineOffset: '2px' } : {}),
+        }}
+        aria-label={`${fullDateLabel(day.date)} — ${day.category}, ${duration}`}
       >
-        {label}
-      </p>
+        <span className="eyebrow" style={{ color: isTodayDay ? 'var(--color-ink)' : 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em', fontWeight: isTodayDay ? 700 : undefined }}>
+          {weekdayLetter(day.date)}
+        </span>
+        <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 10 }}>
+          {dateNumber(day.date)}
+        </span>
+        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0 }} aria-hidden />
+        <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10 }}>
+          {duration}
+        </span>
+      </button>
 
-      {isRest ? (
-        /* Rest day shape — no ribbon, no TSS, positive copy */
-        <div className="flex flex-col items-center justify-center py-4 gap-1">
-          <span
-            className="eyebrow"
-            style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
-          >
-            REST
-          </span>
-          <p
-            className="text-[12px] text-center mt-1"
-            style={{ color: 'var(--color-ink-2)' }}
-          >
-            Recovery is part of the work.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Title */}
-          <p
-            className="text-[15px] font-medium mb-3"
-            style={{ color: 'var(--color-ink)' }}
-          >
-            {day.title}
-          </p>
-
-          {/* IntervalRibbon */}
-          {adaptedBlocks.length > 0 && (
-            <div className="mb-3">
-              <IntervalRibbon
-                blocks={adaptedBlocks}
-                className="h-16"
-                language={language}
-              />
-            </div>
-          )}
-
-          {/* Footer row — TSS chip (technical) or duration (simple) */}
-          <div className="flex items-center justify-end mt-2">
-            {technical ? (
-              day.target_tss != null && (
-                <span
-                  className="eyebrow num-mono"
-                  style={{ color: 'var(--color-ink-2)', fontSize: 11 }}
-                >
-                  {day.target_tss} TSS
-                </span>
-              )
-            ) : (
-              <span
-                className="eyebrow num-mono"
-                style={{ color: 'var(--color-ink-2)', fontSize: 11 }}
-              >
-                {formatMinutesShort(day.duration_seconds_target)}
-              </span>
-            )}
-          </div>
-
-          {/* Per-day rationale */}
+      <SideSheet open={sheetOpen} onClose={() => setSheetOpen(false)} eyebrow={weekdayLetter(day.date)} title={fullDateLabel(day.date)} width={560}>
+        <div className="flex flex-col gap-5">
           {day.rationale && (
-            <p
-              className="text-[13px] italic mt-2"
-              style={{ color: 'var(--color-ink-2)' }}
-            >
+            <p className="text-[14px] leading-relaxed italic" style={{ color: 'var(--color-ink-2)' }}>
               {day.rationale}
             </p>
           )}
-        </>
-      )}
-    </div>
+
+          {day.category !== 'rest' && (
+            <div>
+              <p className="eyebrow mb-2" style={{ color: 'var(--color-muted)' }}>WORKOUT STRUCTURE</p>
+              <IntervalRibbon blocks={adaptedBlocks} className="h-16" language={language} />
+            </div>
+          )}
+
+          {day.target_tss != null && (
+            <div className="flex items-center gap-2">
+              <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>TARGET TSS</span>
+              <span className="num-mono text-[14px]" style={{ color: 'var(--color-ink)' }}>{day.target_tss}</span>
+            </div>
+          )}
+
+          {activity ? (
+            <p className="text-[13px]" style={{ color: 'var(--color-ink-2)' }}>
+              <span className="eyebrow" style={{ color: 'var(--color-muted)', marginRight: 6 }}>ACTIVITY</span>
+              {activity.title ?? 'Untitled activity'}
+              {activity.duration_seconds && <span style={{ marginLeft: 6, color: 'var(--color-muted)' }}>· {formatHours(activity.duration_seconds)}</span>}
+            </p>
+          ) : (
+            <p className="text-[13px] italic" style={{ color: 'var(--color-muted)' }}>No activity logged.</p>
+          )}
+        </div>
+      </SideSheet>
+    </>
   )
 }
