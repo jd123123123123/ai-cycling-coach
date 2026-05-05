@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 7.05 Plans 02 + 03 complete (concurrent wave). Today tab collapsed to 3 above-fold primitives; Week tab collapsed to preface + 7 minimal pills + 1 analytics drawer. DayPlanCard reshaped to pill, WeekPreface to 1 sentence, PolarizedDistribution gated through UncertainValue (≥7 days). Plans 04, 05 remain.
+**Current focus:** Phase 7.05 Plan 04 complete. SportTab (Bike + Run) restructured to 3-primitive above-fold layout: VO2MaxEstimate (state) + TrajectorySentence sport-filtered (trajectory) + CoachBrief (prescription). TrajectorySentence extended with optional sport prop selecting per_sport CTL series. Plan 05 (verification sweep) remains.
 
 ## Current Position
 
 Phase: 7.05 of 9 (One screen of truth — honesty layer) — IN PROGRESS
-Plan: 07.05-03 complete (DayPlanCard pill + WeekTab collapse + WeekPreface condensed + PolarizedDistribution honesty gating)
-Status: Phase 7.05 Plans 01-03 done. Plans 04, 05 remain.
-Last activity: 2026-05-03 — Completed 07.05-PLAN-03.md (week subtractive collapse)
+Plan: 07.05-04 complete (SportTab 3-primitive layout + TrajectorySentence sport prop)
+Status: Phase 7.05 Plans 01-04 done. Plan 05 remains.
+Last activity: 2026-05-05 — Completed 07.05-PLAN-04.md (sport tab redesign)
 
-Progress: [████████████████░] ~97% (Phases 1-6 + 6.1 + 6.2 + 7.0 plans 01-04 + 7.05 plans 01-03 done; 7.0 plan 05, 7.05 plans 04-05, 8, 9 remaining)
+Progress: [████████████████░] ~98% (Phases 1-6 + 6.1 + 6.2 + 7.0 plans 01-04 + 7.05 plans 01-04 done; 7.0 plan 05, 7.05 plan 05, 8, 9 remaining)
 
 ## Performance Metrics
 
@@ -310,6 +310,9 @@ Recent decisions affecting current work:
 - [07.05-03]: Single polarizedConfidence flag for both grade letter and percentage triplet — low-confidence copy rendered once under grade, percentage row shows muted skeleton only
 - [07.05-03]: WeekPreface firstSentence() regex extracts first sentence (split on /.!?/) capped at 140 chars — no new dependency, full preface available in data prop for future "expand" feature
 - [07.05-03]: nDays for polarized confidence = activities.filter(a => (a.duration_seconds ?? 0) > 0).length — counts classifiable activities only, not raw API rows
+- [07.05-04]: TrajectorySentence sport prop (Path A) selects per_sport[sport].ctl[] series from PMCResponse — PMCResponse already carries per_sport: { cycling, running, gym }; no gymnastics needed; total-series behavior unchanged when prop omitted
+- [07.05-04]: CoachBrief rendered unfiltered in SportTab v1 — adding sport prop requires backend changes; documented as TODO in SportTab header for Phase 7.1
+- [07.05-04]: SportTab line count constraint (<450) is unachievable without new files — TrainingHeatmap alone is ~145 lines; constraint was optimistic given the "no new files" hard rule; structural layout objective is fully met
 
 ### Roadmap Evolution
 
@@ -340,8 +343,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-03 — Phase 7.05 Plans 02 + 03 complete (concurrent wave execution)
-Stopped at: 07.05-03 complete. Commits: (33f0022) DayPlanCard pill, (98cd09a) WeekTab+WeekPreface collapse, (f1e635c) PolarizedDistribution UncertainValue gating.
+Last session: 2026-05-05 — Phase 7.05 Plan 04 complete (SportTab 3-primitive layout + TrajectorySentence sport prop)
+Stopped at: 07.05-04 complete. Commits: (3551c03) TrajectorySentence sport prop, (36b88e9) SportTab 3-primitive rewrite.
 Resume file: None
 Next: Phase 7.05 Plans 04 (TrendsTab collapse) + 05 (bundle audit). Apply migrations d5e6f7a8b9c0 + e6f7a8b9c0d1 before running against live DB (requires Docker restart).
 Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); Legacy literal sweep in TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap; SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
