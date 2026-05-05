@@ -247,6 +247,10 @@ Recent decisions affecting current work:
 - [07.05-01]: preconditions record optional in ConfidenceInput — polarized (n_days only) and CTL trend (n_days + has_ftp) share one signature without overloading
 - [07.05-01]: prefers-reduced-motion detected in useState initializer (not useEffect) in UncertainValue — ensures correct first-paint shimmer/no-shimmer state without flicker
 - [07.05-01]: confidence.test.ts created as PENDING per [06.1-01] convention — threshold documentation in comments + active void smoke forces compile-time export validation without vitest
+- [07.05-02]: TrajectorySentence passes React node (not string) as UncertainValue value — preserves tone-color formatting in high-confidence path
+- [07.05-02]: RecentActivities fetches profile internally (no prop) — removed profile passthrough from TodayTab after compile error
+- [07.05-02]: DashboardTabs.tsx had stale DailyInsight consumer — removed import + render as Rule 3 deviation
+- [07.05-02]: BodyBriefing.tsx was untracked by git — deleted with rm (not git rm); git rm returned "pathspec did not match" for untracked files
 - [06.1-02]: DashboardShell API changed from hero/kpiStrip/pmc/collapsedSections slots to children+stickyBar+tabs — new multi-page shell usage pattern; all pages now use <DashboardShell> without old slot props
 - [06.1-02]: Tab URL persistence: useSearchParams ?tab= URL param + replace:true prevents back-button accumulation; valid values: today|week|trends|plan; default: 'today'
 - [06.1-02]: ReadinessHero data-testid="readiness-hero" is PERMANENT — IntersectionObserver target for StickyReadinessBar; must survive all future ReadinessHero edits including Wave 3 ContributorsSheet refactor
