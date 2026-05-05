@@ -1,0 +1,24 @@
+dist/index.html                     0.85 kB │ gzip:   0.46 kB
+dist/assets/index-DmxqzqPu.css     55.38 kB │ gzip:  12.15 kB
+dist/assets/index-CmtR0l9o.js   2,585.97 kB │ gzip: 812.12 kB
+
+captured-from: HEAD (ce706ebfa09a624a72b5293884c48fe6c8f5cd6d — docs(07.05-04): complete sport-tab-redesign plan)
+captured-at: 2026-05-05T12:29:18Z
+method: cd frontend && npx vite build (current HEAD, post Plans 01-04 landed)
+total-gzipped-bytes: 824730
+
+delta-vs-baseline-bytes: -2020
+
+DELTA COMPUTATION:
+  post:     824,730 bytes (0.46 + 12.15 + 812.12 kB metric)
+  baseline: 826,750 bytes (0.47 + 12.39 + 813.89 kB metric)
+  delta:     -2,020 bytes (-2.02 kB / -0.24%)
+  gate:      NEGATIVE required — PASS
+
+NOTE: delta between 0 and -10240 (less than 10 KB negative). Phase 7.05 principle requires NEGATIVE
+delta which is met. The -2.02 kB saving is real but modest; it reflects that Plan 01-04 primarily
+RETIRED components (DailyInsight, KpiStripCompact, BodyBriefing) while ADDING two new primitives
+(UncertainValue, TrajectorySentence) and rewriting tabs. The net reduction in JS is ~2 kB gzipped.
+Per plan must-haves §7: "if achieved delta is between 0 and -10 KB the SUMMARY documents which
+decoratives could not be subtracted and why" — the SportTab deep-dive (TrainingHeatmap, StatCards)
+adds ~4-5 kB that offsets what was removed from DailyInsight/KpiStrip. This is documented in SUMMARY.

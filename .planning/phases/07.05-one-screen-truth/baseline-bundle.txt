@@ -1,0 +1,14 @@
+dist/index.html                     0.85 kB │ gzip:   0.47 kB
+dist/assets/index-B_PMMD_H.css     56.80 kB │ gzip:  12.39 kB
+dist/assets/index-B9gtBS2g.js   2,588.80 kB │ gzip: 813.89 kB
+
+captured-from: commit abf308b (06.2-05 post-completion HEAD — the last clean buildable commit before Phase 7.05 began; same build captured in 06.2-whoop-grade-redesign/baseline-bundle.txt)
+captured-at: 2026-05-04T12:40:00Z
+method: cd frontend && npx vite build — direct working-tree build (git worktree approach not viable: all commits from 83df34a onward reference MobileBottomNav.tsx, BikeTab.tsx, RunTab.tsx, CrewTab.tsx as untracked files that fail worktree builds; same limitation as 06.2-06 baseline — see that phase's baseline-bundle.txt NOTE)
+total-gzipped-bytes: 826750
+
+NOTE: Phase 7.05's first implementation commit (a70c128, feat: create confidence.ts) parents off 88b4e59
+which parents off fe2b959/25389da/e3235f1/83df34a — all of which reference untracked files and cannot be
+built in isolation via git worktree. This is the same pattern documented in 06.2-06 SUMMARY (key-decision
+item 1). The baseline is therefore the 06.2-06 confirmed pre-Phase-7.05 bundle: 826,750 bytes gzipped
+(0.47 + 12.39 + 813.89 kB metric — exact match to Phase 6.2 baseline-bundle.txt values).
