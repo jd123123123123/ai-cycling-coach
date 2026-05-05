@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 7.05 Plan 01 complete. Honesty-layer primitives shipped: confidence() pure function, UncertainValue shimmer-skeleton primitive, and threshold constants (HRV=7d, CTL_TREND=14d, POLARIZED=7d) pinned in pending unit tests. Zero new dependencies. Plans 02-04 can now wire these in.
+**Current focus:** Phase 7.05 Plans 02 + 03 complete (concurrent wave). Today tab collapsed to 3 above-fold primitives; Week tab collapsed to preface + 7 minimal pills + 1 analytics drawer. DayPlanCard reshaped to pill, WeekPreface to 1 sentence, PolarizedDistribution gated through UncertainValue (≥7 days). Plans 04, 05 remain.
 
 ## Current Position
 
 Phase: 7.05 of 9 (One screen of truth — honesty layer) — IN PROGRESS
-Plan: 07.05-01 complete (confidence.ts + UncertainValue.tsx + confidence.test.ts)
-Status: Phase 7.05 Plan 01 done. Plans 02, 03, 04, 05 remain.
-Last activity: 2026-05-05 — Completed 07.05-PLAN-01.md (honesty-layer primitives)
+Plan: 07.05-03 complete (DayPlanCard pill + WeekTab collapse + WeekPreface condensed + PolarizedDistribution honesty gating)
+Status: Phase 7.05 Plans 01-03 done. Plans 04, 05 remain.
+Last activity: 2026-05-03 — Completed 07.05-PLAN-03.md (week subtractive collapse)
 
-Progress: [████████████████░] ~96% (Phases 1-6 + 6.1 + 6.2 + 7.0 plans 01-04 + 7.05 plan 01 done; 7.0 plan 05, 7.05 plans 02-05, 8, 9 remaining)
+Progress: [████████████████░] ~97% (Phases 1-6 + 6.1 + 6.2 + 7.0 plans 01-04 + 7.05 plans 01-03 done; 7.0 plan 05, 7.05 plans 04-05, 8, 9 remaining)
 
 ## Performance Metrics
 
@@ -301,6 +301,11 @@ Recent decisions affecting current work:
 - [07.0-04]: Gap-fill days (no PlannedWorkout for a date in today..today+6) render as category='rest' with rest-day rationale — prevents empty holes when meso was anchored in a prior week
 - [07.0-04]: FTP guard in endpoint AND in generate_mesocycle service — belt-and-suspenders; endpoint short-circuits before calling service when profile loaded but FTP=0
 - [07.0-04]: 409 does NOT retry in useCurrentWeek — Plan 05 UI renders 'set FTP first' CTA; retrying a 409 is pointless
+- [07.05-03]: grid-cols-7 (no md: prefix) — 7 day pills always-across on all viewports; weekday letter + 8px dot + duration fits 360px
+- [07.05-03]: useActivitiesRange called once at WeekTab level, activity prop passed to each DayPlanCard — eliminates 7 per-card refetch queries
+- [07.05-03]: Single polarizedConfidence flag for both grade letter and percentage triplet — low-confidence copy rendered once under grade, percentage row shows muted skeleton only
+- [07.05-03]: WeekPreface firstSentence() regex extracts first sentence (split on /.!?/) capped at 140 chars — no new dependency, full preface available in data prop for future "expand" feature
+- [07.05-03]: nDays for polarized confidence = activities.filter(a => (a.duration_seconds ?? 0) > 0).length — counts classifiable activities only, not raw API rows
 
 ### Roadmap Evolution
 
@@ -331,8 +336,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-05 — Phase 7.05 Plan 01 complete (07.05-PLAN-01.md)
-Stopped at: 07.05-01 complete. Commits: (a70c128) confidence.ts, (b1907a8) UncertainValue.tsx, (4771a89) confidence.test.ts.
+Last session: 2026-05-03 — Phase 7.05 Plans 02 + 03 complete (concurrent wave execution)
+Stopped at: 07.05-03 complete. Commits: (33f0022) DayPlanCard pill, (98cd09a) WeekTab+WeekPreface collapse, (f1e635c) PolarizedDistribution UncertainValue gating.
 Resume file: None
-Next: Phase 7.0 Plan 05 (WeekTab UI — WeekPreface + DayPlanCard components consuming useCurrentWeek). Apply migrations d5e6f7a8b9c0 + e6f7a8b9c0d1 before running against live DB (requires Docker restart).
+Next: Phase 7.05 Plans 04 (TrendsTab collapse) + 05 (bundle audit). Apply migrations d5e6f7a8b9c0 + e6f7a8b9c0d1 before running against live DB (requires Docker restart).
 Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); Legacy literal sweep in TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap; SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
