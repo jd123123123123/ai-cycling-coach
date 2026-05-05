@@ -47,10 +47,9 @@ function readinessSeries(metrics: DailyMetric[]): Array<{ date: string; score: n
 }
 
 // Phase 5.1: DeltaChip + KpiCard helpers previously lived here to power an
-// in-hero KPI strip. They were moved out (not just hidden) because the
-// dashboard now surfaces raw KPIs via KpiStripCompact in fold 2 — the hero
-// renders the readiness dial only, keeping fold 1 focused on the prescribed
-// workout. This is the "one call-to-action per fold" rule.
+// in-hero KPI strip. They were removed — the readiness dial is the
+// canonical single score; contributors live in ContributorsSheet.
+// This is the "one call-to-action per fold" rule (Phase 7.05 Plan 02).
 
 // ─── ActivityRings — 3 concentric rings (Apple Watch / Whoop style) ───────────
 // Outer ring = weekly training load vs target hours
