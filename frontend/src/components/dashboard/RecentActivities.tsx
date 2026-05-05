@@ -20,7 +20,7 @@ import {
   formatRelativeDay,
 } from '../../utils/metrics'
 import { focusFor } from '../../utils/focusBadge'
-import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { useAthleteProfile, type AthleteProfile } from '../../hooks/useAthleteProfile'
 import { SideSheet } from '../ui/SideSheet'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -186,9 +186,11 @@ function ActivityDetail({
 function ActivityRow({
   a,
   onClick,
+  profile,
 }: {
   a: ActivityRead
   onClick: (id: number) => void
+  profile: AthleteProfile | null | undefined
 }) {
   const meta = SPORT_META[a.sport]
   const title = a.title?.trim() || `${meta.label} · ${formatRelativeDay(a.started_at)}`
@@ -445,6 +447,7 @@ export default function RecentActivities({
                   key={a.id}
                   a={a}
                   onClick={(id) => setSelectedId(id)}
+                  profile={profile}
                 />
               ))}
             </ul>
