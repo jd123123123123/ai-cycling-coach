@@ -14,8 +14,10 @@ import { formatSigned } from '../../utils/format'
 import type { DailyMetric } from '../../api/dashboard'
 import ReadinessContributors from './ReadinessContributors'
 import ContributorsSheet from './ContributorsSheet'
+import UncertainValue from './UncertainValue'
 import Sparkline from './Sparkline'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { confidence, MIN_DAYS_HRV } from '../../utils/confidence'
 import {
   TIER_META,
   computeReadiness,
@@ -608,6 +610,12 @@ export default function ReadinessHero() {
   }
   const hrvOvernight = snapshot?.hrv_overnight_avg ?? latest?.hrv_status ?? null
 
+  // Phase 7.05: HRV cell confidence gating — need ≥7 days of HRV data.
+  // Thin data shows muted skeleton + "Need N more days of HRV." via <UncertainValue>.
+  const hrvDays = metrics.filter((m) => m.hrv_status != null).length
+  const hrvConfidence = confidence({ n_days: hrvDays, min_days: MIN_DAYS_HRV })
+  const hrvLowCopy = `Need ${Math.max(1, MIN_DAYS_HRV - hrvDays)} more day${Math.max(1, MIN_DAYS_HRV - hrvDays) === 1 ? '' : 's'} of HRV.`
+
   // "as of HH:MM" — tied to body_battery.now_at so the user knows when the
   // hero last reflected reality. Garmin publishes body battery on a ~5–10min
   // lag; an honest stamp beats a confident lie. Berlin user → 24h locale-aware.
@@ -779,10 +787,17 @@ export default function ReadinessHero() {
                   />
                   <WakeNowRow label="Stress" pair={stress} />
                   <div className="flex items-center gap-2 flex-wrap pt-1">
-                    <MetricChip
-                      label="HRV"
-                      value={hrvOvernight}
-                      suffix={hrvOvernight != null ? '/100' : undefined}
+                    {/* Phase 7.05: HRV gated through UncertainValue — thin data shows muted skeleton. */}
+                    <UncertainValue
+                      value={
+                        <MetricChip
+                          label="HRV"
+                          value={hrvOvernight}
+                          suffix={hrvOvernight != null ? '/100' : undefined}
+                        />
+                      }
+                      confidence={hrvConfidence}
+                      lowConfidenceCopy={hrvLowCopy}
                     />
                     {sleepChip && <MetricChip {...sleepChip} />}
                     {asOfLabel && (
