@@ -1,8 +1,6 @@
 import { format, parseISO } from 'date-fns'
-import { RevealCascade } from './RevealCascade'
 import type { MesoBlockContext } from '../../api/weeks'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
-import { formatHours } from '../../utils/format'
 
 interface WeekPrefaceProps {
   preface: string
@@ -13,41 +11,36 @@ interface WeekPrefaceProps {
 }
 
 const PHASE_LABEL: Record<string, string> = {
-  base:         'Base',
-  build1:       'Build',
-  build2:       'Build',
-  build:        'Build',
-  peak:         'Peak',
-  race_prep:    'Race prep',
-  maintenance:  'Maintenance',
-  recovery:     'Recovery',
-  taper:        'Taper',
+  base: 'Base', build1: 'Build', build2: 'Build', build: 'Build',
+  peak: 'Peak', race_prep: 'Race prep', maintenance: 'Maintenance',
+  recovery: 'Recovery', taper: 'Taper',
 }
 
 function humanPhase(phase: string): string {
   return PHASE_LABEL[phase] ?? phase
 }
 
+/** Extract the first sentence from a paragraph (≤140 chars). */
+function firstSentence(text: string): string {
+  const match = text.match(/^[^.!?]*[.!?]/)
+  const sentence = match ? match[0].trim() : text.trim()
+  return sentence.length > 140 ? sentence.slice(0, 137) + '…' : sentence
+}
+
 /**
- * WeekPreface — top-of-week rationale card.
+ * WeekPreface — Phase 7.05 "One-Screen Truth" edition.
  *
- * Shows the coach's weekly preface paragraph, the mesocycle block context,
- * and race-aware chip when an event is within 35 days.
- *
- * Hard rails:
- * - No new color literals. All colors via existing CSS custom properties.
- * - No new dependencies. Only date-fns (already in tree), RevealCascade, format util.
+ * Collapsed to a single-sentence weekly intent + mesocycle eyebrow.
+ * No h1, no multi-paragraph, no dominant numeral.
+ * Tightened to px-5 py-4 (was p-6).
  */
 export default function WeekPreface({
   preface,
   mesoBlock,
   weekStart,
   weekEnd,
-  language,
+  language: _language,
 }: WeekPrefaceProps) {
-  const technical = language === 'technical'
-
-  // Format date range eyebrow: "Week of Mon DD – Sun DD"
   let dateRange = ''
   try {
     const start = parseISO(weekStart)
@@ -58,20 +51,9 @@ export default function WeekPreface({
   }
 
   const blockNum = mesoBlock.block_index_in_meso + 1
-  const blockLabel = technical ? `Block ${blockNum} of 4` : `Week ${blockNum} of 4`
-  const eyebrow = `Week of ${dateRange} · ${humanPhase(mesoBlock.phase)} · ${blockLabel}`
+  const eyebrow = `${humanPhase(mesoBlock.phase).toUpperCase()} · WEEK ${blockNum} · ${dateRange}`
 
-  // Dominant numeral — TSS in technical, approximate hours in simple
-  const dominantNum = technical
-    ? mesoBlock.weekly_tss_target.toFixed(0)
-    : (() => {
-        // Z2-equivalent hours estimate: TSS / 50; clamp to nearest .5
-        const raw = mesoBlock.weekly_tss_target / 50
-        const clamped = Math.round(raw * 2) / 2
-        return formatHours(clamped * 3600)
-      })()
-
-  const dominantUnit = technical ? 'TSS' : 'target'
+  const sentence = firstSentence(preface)
 
   // Race-week chip
   const daysToEvent = mesoBlock.days_to_event
@@ -80,74 +62,38 @@ export default function WeekPreface({
   const eventType = mesoBlock.target_event_type ?? 'event'
 
   return (
-    <RevealCascade animation="card-enter" durationMs={400}>
-      <div
-        className="rounded-xl p-6 border"
+    <div
+      className="rounded-xl px-5 py-4 border"
+      style={{
+        backgroundColor: 'var(--color-paper-2)',
+        borderColor: 'var(--color-rule)',
+      }}
+    >
+      {/* Mesocycle eyebrow */}
+      <p className="eyebrow mb-2" style={{ color: 'var(--color-muted)' }}>
+        {eyebrow}
+      </p>
+
+      {/* One-sentence intent — max 2 lines */}
+      <p
+        className="text-[14px] leading-snug"
         style={{
-          backgroundColor: 'var(--color-paper-2)',
-          borderColor: 'var(--color-rule)',
+          color: 'var(--color-ink-2)',
+          display: '-webkit-box',
+          WebkitBoxOrient: 'vertical',
+          WebkitLineClamp: 2,
+          overflow: 'hidden',
         }}
       >
-        {/* Eyebrow strip */}
-        <p
-          className="eyebrow mb-3"
-          style={{ color: 'var(--color-muted)' }}
-        >
-          {eyebrow}
+        {sentence}
+      </p>
+
+      {/* Race chip */}
+      {showRaceChip && (
+        <p className="eyebrow mt-2" style={{ color: 'var(--color-coral)' }}>
+          {isRaceWeek ? 'RACE WEEK' : `${daysToEvent} days to ${eventType}`}
         </p>
-
-        {/* Dominant numeral row */}
-        <div className="flex items-baseline gap-2 mb-4">
-          <span
-            className="num-display"
-            style={{
-              fontSize: 'clamp(28px, 3.6vw, 40px)',
-              lineHeight: 1,
-              color: 'var(--color-ink)',
-              fontVariationSettings: '"opsz" 144',
-            }}
-          >
-            {dominantNum}
-          </span>
-          {technical && (
-            <span
-              className="eyebrow"
-              style={{ color: 'var(--color-muted)' }}
-            >
-              {dominantUnit}
-            </span>
-          )}
-        </div>
-
-        {/* Preface paragraph */}
-        <p
-          className="text-[15px] leading-relaxed"
-          style={{ color: 'var(--color-ink-2)', maxWidth: '72ch' }}
-        >
-          {preface}
-        </p>
-
-        {/* Race-week chip */}
-        {showRaceChip && (
-          <div className="mt-3">
-            {isRaceWeek ? (
-              <span
-                className="eyebrow"
-                style={{ color: 'var(--color-coral)' }}
-              >
-                RACE WEEK
-              </span>
-            ) : (
-              <span
-                className="eyebrow"
-                style={{ color: 'var(--color-coral)' }}
-              >
-                {daysToEvent} days to {eventType}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    </RevealCascade>
+      )}
+    </div>
   )
 }

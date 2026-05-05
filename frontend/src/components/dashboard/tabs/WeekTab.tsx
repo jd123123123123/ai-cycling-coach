@@ -1,4 +1,17 @@
+/**
+ * WeekTab — Phase 7.05 "One-Screen Truth" edition.
+ *
+ * Above the fold: one-sentence weekly intent + 7 minimal day pills + 1 collapsed analytics disclosure.
+ *
+ * Hard rule (verified in Plan 05): pre-disclosure element count ≤ 8 (1 preface + 7 day pills).
+ *
+ * What was retired here (vs the prior 232-line tab):
+ * - BentoGrid hoisted to above-fold (now lives inside DashboardSection disclosure, collapsed by default)
+ * - Day cards' inline IntervalRibbon + TSS + rationale (now behind SideSheet tap)
+ * - Multi-paragraph WeekPreface (collapsed to one-sentence intent + mesocycle eyebrow)
+ */
 import { Link } from 'react-router-dom'
+import { parseISO } from 'date-fns'
 import { BentoCell, BentoGrid } from '../../ui/BentoGrid'
 import ComplianceStrip from '../ComplianceStrip'
 import PersonalBests from '../PersonalBests'
@@ -8,52 +21,43 @@ import WeekStrip from '../WeekStrip'
 import WeekVsLast from '../WeekVsLast'
 import WeekPreface from '../WeekPreface'
 import DayPlanCard from '../DayPlanCard'
+import DashboardSection from '../DashboardSection'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
+import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLanguage } from '../../../hooks/useLanguage'
+import type { ActivityRead } from '../../../api/dashboard'
 
-// ─── Skeleton — matches CoachBrief loading pattern ───────────────────────────
+// ─── Skeleton — minimal to match new pill shape ────────────────────────────────
 
 function WeekPlanSkeleton() {
   return (
     <div className="flex flex-col gap-4">
-      {/* Preface skeleton */}
+      {/* Preface skeleton — single line */}
       <div
-        className="rounded-xl p-6 border"
-        style={{
-          backgroundColor: 'var(--color-paper-2)',
-          borderColor: 'var(--color-rule)',
-        }}
+        className="rounded-xl px-5 py-4 border"
+        style={{ backgroundColor: 'var(--color-paper-2)', borderColor: 'var(--color-rule)' }}
       >
-        <div
-          className="h-3 w-28 rounded animate-pulse mb-4"
-          style={{ backgroundColor: 'var(--color-rule)' }}
-        />
-        <div
-          className="h-8 w-20 rounded animate-pulse mb-4"
-          style={{ backgroundColor: 'var(--color-rule)' }}
-        />
-        <div className="flex flex-col gap-2">
-          <div className="h-3 w-full rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-          <div className="h-3 w-5/6 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-          <div className="h-3 w-4/6 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-        </div>
+        <div className="h-2.5 w-24 rounded animate-pulse mb-2" style={{ backgroundColor: 'var(--color-rule)' }} />
+        <div className="h-3.5 w-full rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
       </div>
 
-      {/* Day cards skeleton row */}
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+      {/* 7 mini pill skeletons */}
+      <div className="grid grid-cols-7 gap-1.5">
         {Array.from({ length: 7 }).map((_, i) => (
           <div
             key={i}
-            className="rounded-lg p-4 border"
+            className="rounded-lg border"
             style={{
               backgroundColor: 'var(--color-paper-2)',
               borderColor: 'var(--color-rule)',
-              minHeight: 140,
+              minHeight: 72,
             }}
           >
-            <div className="h-2.5 w-12 rounded animate-pulse mb-3" style={{ backgroundColor: 'var(--color-rule)' }} />
-            <div className="h-3 w-full rounded animate-pulse mb-2" style={{ backgroundColor: 'var(--color-rule)' }} />
-            <div className="h-12 w-full rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+            <div className="h-full flex flex-col items-center justify-center gap-1.5 p-2">
+              <div className="h-2 w-3 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+              <div className="h-2 w-5 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+            </div>
           </div>
         ))}
       </div>
@@ -64,38 +68,21 @@ function WeekPlanSkeleton() {
 // ─── Error / CTA states ────────────────────────────────────────────────────────
 
 function ProfileSetupCTA({ language }: { language: 'simple' | 'technical' }) {
-  const headline =
-    language === 'simple'
-      ? 'We need your FTP to plan your week'
-      : 'FTP required to generate a training plan'
+  const headline = language === 'simple'
+    ? 'We need your FTP to plan your week'
+    : 'FTP required to generate a training plan'
 
   return (
     <div
       className="rounded-xl p-8 border text-center"
-      style={{
-        backgroundColor: 'var(--color-paper-2)',
-        borderColor: 'var(--color-rule)',
-      }}
+      style={{ backgroundColor: 'var(--color-paper-2)', borderColor: 'var(--color-rule)' }}
     >
-      <p
-        className="eyebrow mb-3"
-        style={{ color: 'var(--color-muted)' }}
-      >
-        Set up first
-      </p>
-      <h3
-        className="text-[18px] font-medium mb-4"
-        style={{ color: 'var(--color-ink)' }}
-      >
-        {headline}
-      </h3>
+      <p className="eyebrow mb-3" style={{ color: 'var(--color-muted)' }}>Set up first</p>
+      <h3 className="text-[18px] font-medium mb-4" style={{ color: 'var(--color-ink)' }}>{headline}</h3>
       <Link
         to="/profile-setup"
         className="inline-flex items-center justify-center rounded-full px-5 py-2.5 text-[13px] font-medium min-h-[40px]"
-        style={{
-          backgroundColor: 'var(--color-ink)',
-          color: 'var(--color-paper)',
-        }}
+        style={{ backgroundColor: 'var(--color-ink)', color: 'var(--color-paper)' }}
       >
         Finish profile
       </Link>
@@ -107,17 +94,9 @@ function WeekErrorBanner({ onRetry }: { onRetry: () => void }) {
   return (
     <div
       className="rounded-xl p-5 border flex items-center justify-between gap-3 flex-wrap"
-      style={{
-        backgroundColor: 'var(--color-paper-2)',
-        borderColor: 'var(--color-rule)',
-      }}
+      style={{ backgroundColor: 'var(--color-paper-2)', borderColor: 'var(--color-rule)' }}
     >
-      <span
-        className="eyebrow"
-        style={{ color: 'var(--color-alert)' }}
-      >
-        Couldn&apos;t load this week
-      </span>
+      <span className="eyebrow" style={{ color: 'var(--color-alert)' }}>Couldn&apos;t load this week</span>
       <button
         onClick={onRetry}
         className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium min-h-[40px]"
@@ -129,33 +108,40 @@ function WeekErrorBanner({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-// ─── Primary surface — week plan ──────────────────────────────────────────────
+// ─── Primary week plan ────────────────────────────────────────────────────────
 
 function WeekPlanPrimary() {
   const { data, isLoading, isError, error, refetch } = useCurrentWeek()
   const { language } = useLanguage()
 
+  // Single useActivitiesRange call for the whole week — passed down to each card
+  const weekStart = data?.week_start ? parseISO(data.week_start) : new Date()
+  const weekEnd = data?.week_end ? parseISO(data.week_end) : new Date()
+  const { data: activitiesData } = useActivitiesRange(weekStart, weekEnd)
+
   if (isLoading) return <WeekPlanSkeleton />
 
-  // Detect 409 (ftp_required / profile_required)
   if (isError) {
     const status = (error as { response?: { status?: number } })?.response?.status
-    if (status === 409) {
-      return <ProfileSetupCTA language={language} />
-    }
+    if (status === 409) return <ProfileSetupCTA language={language} />
     return <WeekErrorBanner onRetry={() => void refetch()} />
   }
 
   if (!data) return <WeekPlanSkeleton />
 
-  // Defensive: log a warning if days count is unexpected
   if (data.days.length !== 7) {
     console.warn(`[WeekTab] Expected 7 days from server, got ${data.days.length}. Rendering available days.`)
   }
 
+  // Match each day to its activity by date
+  const activities = activitiesData?.activities ?? []
+  function activityForDay(dateStr: string): ActivityRead | null {
+    return activities.find(a => (a.date ?? a.started_at?.slice(0, 10)) === dateStr) ?? null
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      {/* Weekly preface card */}
+    <div className="flex flex-col gap-3">
+      {/* 1. One-sentence weekly intent */}
       <WeekPreface
         preface={data.preface}
         mesoBlock={data.meso_block}
@@ -164,13 +150,14 @@ function WeekPlanPrimary() {
         language={language}
       />
 
-      {/* 7-day grid — 1 col mobile, 7 col desktop */}
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+      {/* 2. 7-day pill row — always 7 columns, even on mobile (letters fit) */}
+      <div className="grid grid-cols-7 gap-1.5">
         {data.days.map((day) => (
           <DayPlanCard
             key={day.date}
             day={day}
             language={language}
+            activity={activityForDay(day.date)}
           />
         ))}
       </div>
@@ -178,54 +165,25 @@ function WeekPlanPrimary() {
   )
 }
 
-// ─── WeekTab — primary surface above existing analytics ───────────────────────
+// ─── WeekTab ──────────────────────────────────────────────────────────────────
 
 export default function WeekTab() {
   return (
-    <div className="flex flex-col gap-8">
-      {/* PRIMARY — periodization week plan (NEW) */}
+    <div className="flex flex-col gap-6">
+      {/* Above fold: preface + 7 pills */}
       <WeekPlanPrimary />
 
-      {/* SECONDARY — existing analytics (PRESERVED) */}
-      <section>
-        <p
-          className="eyebrow mb-4"
-          style={{ color: 'var(--color-muted)' }}
-        >
-          This week&apos;s analytics
-        </p>
+      {/* 3. Single collapsed analytics disclosure */}
+      <DashboardSection title="This week's analytics" id="week-analytics" defaultExpanded={false}>
         <BentoGrid>
-          {/* Plan vs actual compliance — leading cell, most action-informing signal */}
-          <BentoCell span={3}>
-            <ComplianceStrip />
-          </BentoCell>
-
-          {/* Week calendar — the anchor */}
-          <BentoCell span={2}>
-            <WeekStrip />
-          </BentoCell>
-
-          {/* Load delta — this week vs last */}
-          <BentoCell span={1}>
-            <WeekVsLast />
-          </BentoCell>
-
-          {/* Ramp rate — overreaching traffic light */}
-          <BentoCell span={1}>
-            <RampRate />
-          </BentoCell>
-
-          {/* Zone balance — training quality */}
-          <BentoCell span={2}>
-            <PolarizedDistribution />
-          </BentoCell>
-
-          {/* Personal records — dopamine hit */}
-          <BentoCell span={3}>
-            <PersonalBests />
-          </BentoCell>
+          <BentoCell span={3}><ComplianceStrip /></BentoCell>
+          <BentoCell span={2}><WeekStrip /></BentoCell>
+          <BentoCell span={1}><WeekVsLast /></BentoCell>
+          <BentoCell span={1}><RampRate /></BentoCell>
+          <BentoCell span={2}><PolarizedDistribution /></BentoCell>
+          <BentoCell span={3}><PersonalBests /></BentoCell>
         </BentoGrid>
-      </section>
+      </DashboardSection>
     </div>
   )
 }
