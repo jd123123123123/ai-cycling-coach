@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** All your body data combined with sports science into one intelligent coach that tells you exactly what to do today and adapts when life happens.
-**Current focus:** Phase 7.05 Plan 04 complete. SportTab (Bike + Run) restructured to 3-primitive above-fold layout: VO2MaxEstimate (state) + TrajectorySentence sport-filtered (trajectory) + CoachBrief (prescription). TrajectorySentence extended with optional sport prop selecting per_sport CTL series. Plan 05 (verification sweep) remains.
+**Current focus:** Phase 7.05 ALL 5 plans complete. One-Screen Truth honesty layer shipped and verified: subtractive Whoop-discipline redesign (Today/Week/Bike/Run tabs), UncertainValue + TrajectorySentence primitives, 3 components retired (DailyInsight, KpiStripCompact, BodyBriefing), negative bundle delta confirmed (−2,020 bytes / −0.24%), all 7 programmatic rails PASS, visual checkpoint approved. Next: Phase 7.0 Plan 05 (TrendsTab collapse) or Phase 8 (Nutrition).
 
 ## Current Position
 
-Phase: 7.05 of 9 (One screen of truth — honesty layer) — IN PROGRESS
-Plan: 07.05-04 complete (SportTab 3-primitive layout + TrajectorySentence sport prop)
-Status: Phase 7.05 Plans 01-04 done. Plan 05 remains.
-Last activity: 2026-05-05 — Completed 07.05-PLAN-04.md (sport tab redesign)
+Phase: 7.05 of 9 (One screen of truth — honesty layer) — COMPLETE
+Plan: 07.05-05 complete (bundle audit + 7-rail check + visual checkpoint)
+Status: Phase 7.05 ALL 5 plans done. Phase complete.
+Last activity: 2026-05-03 — Completed 07.05-PLAN-05.md (bundle audit + visual checkpoint)
 
-Progress: [████████████████░] ~98% (Phases 1-6 + 6.1 + 6.2 + 7.0 plans 01-04 + 7.05 plans 01-04 done; 7.0 plan 05, 7.05 plan 05, 8, 9 remaining)
+Progress: [████████████████░] ~98% (Phases 1-6 + 6.1 + 6.2 + 7.0 plans 01-04 + 7.05 plans 01-05 done; 7.0 plan 05, 8, 9 remaining)
 
 ## Performance Metrics
 
@@ -343,8 +343,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-05 — Phase 7.05 Plan 04 complete (SportTab 3-primitive layout + TrajectorySentence sport prop)
-Stopped at: 07.05-04 complete. Commits: (3551c03) TrajectorySentence sport prop, (36b88e9) SportTab 3-primitive rewrite.
+Last session: 2026-05-03 — Phase 7.05 Plan 05 complete (bundle audit + 7-rail check + visual checkpoint)
+Stopped at: 07.05-05 complete. Commits: (239eb9c) bundle artifacts, docs(07.05-05) plan metadata. Phase 7.05 DONE.
 Resume file: None
-Next: Phase 7.05 Plans 04 (TrendsTab collapse) + 05 (bundle audit). Apply migrations d5e6f7a8b9c0 + e6f7a8b9c0d1 before running against live DB (requires Docker restart).
+Next: Phase 7.0 Plan 05 (TrendsTab collapse) or Phase 8 (Nutrition). Apply migrations d5e6f7a8b9c0 + e6f7a8b9c0d1 before running against live DB (requires Docker restart).
 Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); Legacy literal sweep in TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap; SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
