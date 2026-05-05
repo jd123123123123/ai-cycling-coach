@@ -4,6 +4,8 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { classifyActivityPolarizedZone } from '../../utils/advanced-metrics'
 import { formatHours } from '../../utils/format'
+import UncertainValue from './UncertainValue'
+import { confidence, MIN_DAYS_POLARIZED } from '../../utils/confidence'
 
 // Seiler's polarized model: ~80% time in Z1–Z2 (low), ~20% in Z4–Z5 (high),
 // minimal "grey zone" Z3. This two-peak histogram makes the 80/20 split
@@ -92,7 +94,7 @@ export default function PolarizedDistribution() {
   const { data, isLoading } = useActivitiesRange(start, today)
   const { data: profile } = useAthleteProfile()
 
-  const { distribution, gradeInfo } = useMemo(() => {
+  const { distribution, gradeInfo, nDays } = useMemo(() => {
     const acts = data?.activities ?? []
     const dist: Distribution = { low: 0, grey: 0, high: 0, total: 0 }
     for (const a of acts) {
@@ -114,6 +116,7 @@ export default function PolarizedDistribution() {
     return {
       distribution: dist,
       gradeInfo: dist.total > 0 ? grade(pct) : null,
+      nDays: acts.filter(a => (a.duration_seconds ?? 0) > 0).length,
     }
   }, [data])
 
@@ -122,6 +125,10 @@ export default function PolarizedDistribution() {
     grey: distribution.total > 0 ? (distribution.grey / distribution.total) * 100 : 0,
     high: distribution.total > 0 ? (distribution.high / distribution.total) * 100 : 0,
   }
+
+  const polarizedConfidence = confidence({ n_days: nDays, min_days: MIN_DAYS_POLARIZED })
+  const daysNeeded = Math.max(1, MIN_DAYS_POLARIZED - nDays)
+  const lowConfidenceCopy = `Need ${daysNeeded} more day${daysNeeded !== 1 ? 's' : ''} of training data.`
 
   return (
     <div
@@ -132,23 +139,29 @@ export default function PolarizedDistribution() {
       }}
     >
       <div className="flex items-start gap-4">
-        {/* Grade letter — hero anchor. Drop-shadow glow at 35% mix preserved per research §5. */}
+        {/* Grade letter — hero anchor. Gated through UncertainValue when n_days < MIN_DAYS_POLARIZED. */}
         {gradeInfo ? (
           <div
             className="shrink-0 flex flex-col items-center leading-none"
             style={{ animation: 'score-enter 600ms cubic-bezier(.22,1,.36,1) 100ms both' }}
           >
-            <span
-              className="num-display"
-              style={{
-                fontSize: 'clamp(52px, 7vw, 72px)',
-                color: gradeInfo.color,
-                lineHeight: 1,
-                filter: `drop-shadow(0 0 16px color-mix(in srgb, ${gradeInfo.color} 35%, transparent))`,
-              }}
-            >
-              {gradeInfo.letter}
-            </span>
+            <UncertainValue
+              confidence={polarizedConfidence}
+              value={
+                <span
+                  className="num-display"
+                  style={{
+                    fontSize: 'clamp(52px, 7vw, 72px)',
+                    color: gradeInfo.color,
+                    lineHeight: 1,
+                    filter: `drop-shadow(0 0 16px color-mix(in srgb, ${gradeInfo.color} 35%, transparent))`,
+                  }}
+                >
+                  {gradeInfo.letter}
+                </span>
+              }
+              lowConfidenceCopy={lowConfidenceCopy}
+            />
             <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 8, letterSpacing: '0.2em', marginTop: 2 }}>
               GRADE
             </span>
@@ -162,12 +175,17 @@ export default function PolarizedDistribution() {
             Polarized training · last 14 days
           </span>
           <div className="flex items-baseline gap-2 flex-wrap">
-            <span
-              className="num-display leading-none"
-              style={{ fontSize: 'clamp(20px, 2.8vw, 26px)', color: 'var(--color-ink)' }}
-            >
-              {gradeInfo ? `${pct.low.toFixed(0)}% easy · ${pct.high.toFixed(0)}% hard` : 'Awaiting data'}
-            </span>
+            <UncertainValue
+              confidence={polarizedConfidence}
+              value={
+                <span
+                  className="num-display leading-none"
+                  style={{ fontSize: 'clamp(20px, 2.8vw, 26px)', color: 'var(--color-ink)' }}
+                >
+                  {gradeInfo ? `${pct.low.toFixed(0)}% easy · ${pct.high.toFixed(0)}% hard` : 'Awaiting data'}
+                </span>
+              }
+            />
           </div>
           <span
             className="num-mono text-[11px]"
