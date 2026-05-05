@@ -215,6 +215,27 @@ Plans:
 - [ ] 07.05-PLAN-04.md — SportTab (Bike + Run) adopt 3-primitive layout reusing TrajectorySentence + UncertainValue
 - [ ] 07.05-PLAN-05.md — Bundle audit (git worktree, negative delta required) + 7-rail check + visual checkpoint
 
+#### Phase 7.06: Activity detail with streams (INSERTED)
+**Goal**: Clicking a bike or run row in RecentActivities opens the SideSheet with a headline metric strip (NP/IF/TSS/EF/work/elev) plus time-series charts (HR, power+FTP%, elevation, pace) sourced from a new Activity.sample_streams JSONB column populated by Garmin sync. Honesty rail: missing streams render an explanatory empty state.
+**Depends on**: Phase 7.05
+**Plans**: 6 plans in 3 waves
+
+Plans:
+- [ ] 07.06-01-PLAN.md — Activity.sample_streams JSONB column + Alembic migration
+- [ ] 07.06-02-PLAN.md — Extract ActivityDetail from RecentActivities into its own file (refactor only)
+- [ ] 07.06-03-PLAN.md — Garmin get_activity_details + map_activity_streams + sync persists streams (incremental only)
+- [ ] 07.06-04-PLAN.md — GET /activities/{id}/streams endpoint with EF/IF/work_kj/ftp_reference headline derivation
+- [ ] 07.06-05-PLAN.md — Frontend useActivityStreams hook + API wrapper + TS types
+- [ ] 07.06-06-PLAN.md — ActivityDetail SideSheet: headline strip + uPlot stream charts (rAF init) + honesty rail
+
+**Wave Structure (parallel where possible):**
+
+| Wave | Plans | Depends On | Notes |
+|------|-------|------------|-------|
+| 1 | 07.06-01, 07.06-02 | — | Backend column + frontend extraction; no overlap |
+| 2 | 07.06-03, 07.06-04 | 07.06-01 | Garmin sync extension + streams endpoint share the new column |
+| 3 | 07.06-05, 07.06-06 | 07.06-04 (05), 07.06-02+05 (06) | Frontend hook + UI |
+
 #### Phase 7.1: Daily readiness-driven adaptation (planned)
 Vesterinen SWC gate + multi-signal voting → today's session swap. Estimated 3-4 plans.
 
