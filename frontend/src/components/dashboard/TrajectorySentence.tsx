@@ -6,6 +6,10 @@
  * - confidence 'low'  → muted skeleton + "Need N more days of training data."
  *                       or "Set your FTP to unlock the trend." when FTP absent.
  *
+ * Optional `sport` prop: when set, derives CTL series from per_sport[sport] entries
+ * instead of the total series. Copy adapts: "Cycling fitness climbing +8 over 14 days."
+ * When omitted, renders the total-series trajectory (default, unchanged from Plan 02).
+ *
  * No icons. No motion library. Static is correct for the honesty layer.
  * Zero new dependencies.
  */
@@ -19,7 +23,15 @@ import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 interface TrajectorySentenceProps {
+  /** When set, shows sport-filtered CTL trajectory (per_sport series). Omit for total. */
+  sport?: 'cycling' | 'running' | 'gym' | null
   className?: string
+}
+
+const SPORT_LABEL: Record<string, string> = {
+  cycling: 'Cycling',
+  running: 'Running',
+  gym: 'Gym',
 }
 
 /**
@@ -31,15 +43,19 @@ function directionWord(deltaPct: number): string {
   return deltaPct > 0 ? 'climbing' : 'drifting down'
 }
 
-export default function TrajectorySentence({ className }: TrajectorySentenceProps) {
+export default function TrajectorySentence({ sport, className }: TrajectorySentenceProps) {
   const { data: pmcData, isLoading } = usePMC(14)
   const { data: profile } = useAthleteProfile()
   const { language } = useLanguage()
 
   const hasFtp = !!profile?.ftp_watts
 
-  // Extract a sorted, valid CTL series from the 14-day window
-  const usableSeries = (pmcData?.entries ?? [])
+  // Extract a sorted, valid CTL series from the 14-day window.
+  // When `sport` is set, use the per-sport sub-series; otherwise use the total series.
+  const rawEntries = sport
+    ? (pmcData?.per_sport?.[sport] ?? [])
+    : (pmcData?.entries ?? [])
+  const usableSeries = rawEntries
     .filter((e) => typeof e.ctl === 'number' && isFinite(e.ctl))
     .sort((a, b) => a.date.localeCompare(b.date))
 
@@ -65,17 +81,19 @@ export default function TrajectorySentence({ className }: TrajectorySentenceProp
   const tone = toneFromPct(deltaPct, 'good')
   const toneColor = tokenForTone(tone)
 
-  // Language-aware sentence copy for the numeric portion
+  // Language-aware sentence copy for the numeric portion.
+  // When sport is set, prefix with the sport label for clarity.
+  const sportLabel = sport ? SPORT_LABEL[sport] : null
   const numericNode =
     deltaCTL != null && deltaPct != null ? (
       language === 'technical' ? (
         <span className="num-mono" style={{ color: toneColor }}>
           {/* U+2212 typographic minus on negative */}
-          CTL {formatSigned(deltaCTL, 0)} over 14d.
+          {sportLabel ? `${sportLabel} CTL` : 'CTL'} {formatSigned(deltaCTL, 0)} over 14d.
         </span>
       ) : (
         <span>
-          Fitness{' '}
+          {sportLabel ? `${sportLabel} fitness` : 'Fitness'}{' '}
           <span style={{ color: toneColor }}>
             {directionWord(deltaPct)} {deltaCTL !== 0 ? Math.abs(deltaCTL) : ''}
           </span>{' '}
