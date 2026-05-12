@@ -9,7 +9,6 @@ import PrescribedWorkoutCard from './PrescribedWorkoutCard'
 import PostRideReview from './PostRideReview'
 import TomorrowCard from './TomorrowCard'
 import RegenerationCard from './RegenerationCard'
-import ExternalWorkouts from './ExternalWorkouts'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { translateCoach } from '../../utils/coachLanguage'
 import { formatSigned } from '../../utils/format'
@@ -330,10 +329,6 @@ function BriefBody({
           </span>
         </div>
       )}
-
-      {/* Curated Zwift / TrainerRoad shortlist that matches today's prescription.
-         Hidden when no matches (e.g. a pure rest day) so it never adds noise. */}
-      <ExternalWorkouts />
 
       {/* Step 7 (today-runthrough) — forward-looking + regen. Both render nothing
          when their data is missing, so the visual layout stays identical for

@@ -13,6 +13,7 @@
 import CoachBrief from '../CoachBrief'
 import PMCCompact from '../PMCCompact'
 import TrainingLogStrip from '../TrainingLogStrip'
+import ExternalWorkouts from '../ExternalWorkouts'
 import PMCChart from '../PMCChart'
 import PolarizedDistribution from '../PolarizedDistribution'
 import ReadinessHero from '../ReadinessHero'
@@ -34,6 +35,7 @@ export default function TodayTab() {
       {/* ── Below the fold: collapsible deep-dive ────────────────────────── */}
       <DashboardSection id="today-deep-dive" title="Deep dive" defaultExpanded={false}>
         <div className="flex flex-col gap-6">
+          <ExternalWorkouts />
           <WorkoutExportRow />
           <PMCChart />
           <PolarizedDistribution />
