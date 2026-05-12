@@ -11,6 +11,8 @@ import ExternalWorkouts from '../ExternalWorkouts'
 import ReadinessHero from '../ReadinessHero'
 import TrajectorySentence from '../TrajectorySentence'
 import WorkoutExportRow from '../WorkoutExportRow'
+import StreakStrip from '../StreakStrip'
+import WeeklyChallenge from '../WeeklyChallenge'
 import DashboardSection from '../DashboardSection'
 
 export default function TodayTab() {
@@ -19,6 +21,13 @@ export default function TodayTab() {
       <ReadinessHero />
       <TrajectorySentence />
       <CoachBrief />
+
+      {/* Momentum — the addiction spine: streak chain + weekly-challenge ring */}
+      <div className="grid gap-4 md:grid-cols-[1fr_auto] items-stretch">
+        <StreakStrip />
+        <WeeklyChallenge />
+      </div>
+
       <PMCCompact />
       <TrainingLogStrip />
 
