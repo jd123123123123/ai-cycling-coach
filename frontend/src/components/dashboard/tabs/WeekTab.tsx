@@ -173,13 +173,18 @@ export default function WeekTab() {
       {/* Above fold: preface + 7 pills */}
       <WeekPlanPrimary />
 
-      {/* 3. Single collapsed analytics disclosure */}
-      <DashboardSection title="This week's analytics" id="week-analytics" defaultExpanded={false}>
+      {/* Plan-vs-actual + build position — hoisted out of the disclosure so the
+          week tab is informative on open instead of an empty shell. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
+        <div className="flex-1 min-w-0"><ComplianceStrip /></div>
+        <div className="flex-1 min-w-0"><RampRate /></div>
+      </div>
+
+      {/* Deeper analytics — expanded by default now that it carries the tab. */}
+      <DashboardSection title="This week's analytics" id="week-analytics" defaultExpanded>
         <BentoGrid>
-          <BentoCell span={3}><ComplianceStrip /></BentoCell>
           <BentoCell span={2}><WeekStrip /></BentoCell>
           <BentoCell span={1}><WeekVsLast /></BentoCell>
-          <BentoCell span={1}><RampRate /></BentoCell>
           <BentoCell span={2}><PolarizedDistribution /></BentoCell>
           <BentoCell span={3}><PersonalBests /></BentoCell>
         </BentoGrid>
