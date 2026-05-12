@@ -1,16 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'motion/react'
-import uPlot from 'uplot'
-import 'uplot/dist/uPlot.min.css'
 import { formatDistanceToNow } from 'date-fns'
 import { Sparkles, ChevronRight, RefreshCw } from 'lucide-react'
 import { useCoachBrief, useRefreshBrief } from '../../hooks/useCoachBrief'
-import type { CoachBriefResponse, OutlookEntry } from '../../api/coach'
+import type { CoachBriefResponse } from '../../api/coach'
 import ContributorsSheet from './ContributorsSheet'
 import PrescribedWorkoutCard from './PrescribedWorkoutCard'
 import PostRideReview from './PostRideReview'
 import TomorrowCard from './TomorrowCard'
 import RegenerationCard from './RegenerationCard'
+import ExternalWorkouts from './ExternalWorkouts'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { translateCoach } from '../../utils/coachLanguage'
 import { formatSigned } from '../../utils/format'
@@ -111,80 +110,6 @@ function buildEvidenceChips(evidence: Record<string, unknown>): React.ReactNode[
   }
 
   return chips
-}
-
-// ─── 7-day outlook mini chart — compact 60px ─────────────────────────────────
-
-function OutlookChart({ outlook }: { outlook: OutlookEntry[] }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el || outlook.length === 0) return
-    const width = el.clientWidth || 400
-
-    const xs = outlook.map((o) => o.day_offset)
-    const ys = outlook.map((o) => o.suggested_tss)
-    const maxY = Math.max(60, ...ys)
-
-    const barsBuilder = uPlot.paths.bars?.({ size: [0.55] })
-
-    const opts: uPlot.Options = {
-      width,
-      height: 60,
-      padding: [4, 8, 4, 8],
-      scales: {
-        x: { time: false, range: [-0.5, 6.5] },
-        y: { range: [0, maxY * 1.1] },
-      },
-      series: [
-        {},
-        {
-          label: 'Suggested TSS',
-          stroke: 'var(--color-ink-2)',
-          fill: 'var(--color-ink-2)',
-          width: 0,
-          paths: barsBuilder,
-          points: { show: false },
-        },
-      ],
-      axes: [
-        {
-          show: true,
-          stroke: '#757465',
-          grid: { show: false },
-          ticks: { show: false },
-          font: '10px JetBrains Mono, monospace',
-          size: 18,
-          values: (_u, splits) =>
-            splits.map((v) => {
-              const offset = Math.round(v as number)
-              if (offset === 0) return 'today'
-              const d = new Date()
-              d.setDate(d.getDate() + offset)
-              return d.toLocaleDateString('en', { weekday: 'short' }).slice(0, 3)
-            }),
-        },
-        { show: false },
-      ],
-      legend: { show: false },
-      cursor: { drag: { x: false, y: false }, x: false, y: false },
-    }
-
-    const data: uPlot.AlignedData = [xs, ys]
-    const plot = new uPlot(opts, data, el)
-    const ro = new ResizeObserver(() => {
-      if (el) plot.setSize({ width: el.clientWidth, height: 60 })
-    })
-    ro.observe(el)
-
-    return () => {
-      ro.disconnect()
-      plot.destroy()
-    }
-  }, [outlook])
-
-  return <div ref={containerRef} className="w-full min-w-0" />
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -405,6 +330,10 @@ function BriefBody({
           </span>
         </div>
       )}
+
+      {/* Curated Zwift / TrainerRoad shortlist that matches today's prescription.
+         Hidden when no matches (e.g. a pure rest day) so it never adds noise. */}
+      <ExternalWorkouts />
 
       {/* Step 7 (today-runthrough) — forward-looking + regen. Both render nothing
          when their data is missing, so the visual layout stays identical for

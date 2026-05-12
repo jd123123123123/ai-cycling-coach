@@ -24,6 +24,11 @@
   --color-ink-blue:    #0A84FF;               /* info                     */
   --color-alert:       #FF453A;               /* error / rest             */
 
+  /* ── Tri-color status — use these (not zone tokens) for good/caution/bad ── */
+  --color-good:    #30D158;
+  --color-caution: #FF9F0A;
+  --color-bad:     #FF453A;
+
   /* ── Zone palette (dark) ────────────────────────────────────────────── */
   --color-zone-1: #3A3A3C;
   --color-zone-2: #1D5C3F;
