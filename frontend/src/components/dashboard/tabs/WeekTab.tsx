@@ -14,13 +14,12 @@ import { Link } from 'react-router-dom'
 import { parseISO } from 'date-fns'
 import { BentoCell, BentoGrid } from '../../ui/BentoGrid'
 import ComplianceStrip from '../ComplianceStrip'
-import PersonalBests from '../PersonalBests'
-import PolarizedDistribution from '../PolarizedDistribution'
 import RampRate from '../RampRate'
 import WeekStrip from '../WeekStrip'
 import WeekVsLast from '../WeekVsLast'
 import WeekPreface from '../WeekPreface'
 import DayPlanCard from '../DayPlanCard'
+import TrainingCalendar from '../TrainingCalendar'
 import DashboardSection from '../DashboardSection'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
@@ -170,24 +169,28 @@ function WeekPlanPrimary() {
 export default function WeekTab() {
   return (
     <div className="flex flex-col gap-6">
-      {/* Above fold: preface + 7 pills */}
+      {/* This week's intent + 7 day cards */}
       <WeekPlanPrimary />
 
-      {/* Plan-vs-actual + build position — hoisted out of the disclosure so the
-          week tab is informative on open instead of an empty shell. */}
+      {/* Plan-vs-actual + build ramp */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
         <div className="flex-1 min-w-0"><ComplianceStrip /></div>
         <div className="flex-1 min-w-0"><RampRate /></div>
       </div>
 
-      {/* Deeper analytics — expanded by default now that it carries the tab. */}
-      <DashboardSection title="This week's analytics" id="week-analytics" defaultExpanded>
+      {/* This week at a glance */}
+      <DashboardSection title="This week" id="week-summary" defaultExpanded>
         <BentoGrid>
           <BentoCell span={2}><WeekStrip /></BentoCell>
           <BentoCell span={1}><WeekVsLast /></BentoCell>
-          <BentoCell span={2}><PolarizedDistribution /></BentoCell>
-          <BentoCell span={3}><PersonalBests /></BentoCell>
         </BentoGrid>
+      </DashboardSection>
+
+      {/* The whole training plan — month calendar with drag-to-reschedule */}
+      <DashboardSection title="Full plan" id="week-calendar" defaultExpanded={false}>
+        <div className="min-w-0">
+          <TrainingCalendar />
+        </div>
       </DashboardSection>
     </div>
   )
