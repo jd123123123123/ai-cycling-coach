@@ -5,6 +5,7 @@
  * today-relevant extras (curated external workouts + the file-export row).
  */
 import CoachBrief from '../CoachBrief'
+import MissedYesterdayChip from '../MissedYesterdayChip'
 import PMCCompact from '../PMCCompact'
 import TrainingLogStrip from '../TrainingLogStrip'
 import ExternalWorkouts from '../ExternalWorkouts'
@@ -20,6 +21,7 @@ export default function TodayTab() {
     <div className="flex flex-col gap-4 sm:gap-5 min-w-0">
       <ReadinessHero />
       <TrajectorySentence />
+      <MissedYesterdayChip />
       <CoachBrief />
 
       {/* Momentum — the addiction spine: streak chain + weekly-challenge ring */}
