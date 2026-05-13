@@ -149,6 +149,7 @@ export default function PrescribedWorkoutCard({
 
   return (
     <div
+      data-prescribed-workout-card
       className="paper-grain rounded-[18px] p-5 sm:p-6 flex flex-col gap-4 min-w-0"
       style={{
         backgroundColor: 'var(--color-paper)',

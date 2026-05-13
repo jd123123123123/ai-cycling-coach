@@ -275,18 +275,9 @@ function BriefBody({
         </div>
       </div>
 
-      {/* Verdict — tighter than before */}
-      <h2
-        className="num-display leading-[1.04] max-w-[22ch]"
-        style={{
-          fontSize: 'clamp(26px, 3.6vw, 38px)',
-          color: 'var(--color-ink)',
-          fontStyle: 'italic',
-          fontVariationSettings: '"opsz" 144, "SOFT" 30',
-        }}
-      >
-        {brief.verdict}
-      </h2>
+      {/* Verdict moved to TodayHero (Phase 2 rebuild). CoachBrief now opens
+         with the rationale + the workout card; the headline lives on the
+         hero card above so the page has exactly one "today's call" surface. */}
 
       {/* Rationale — capped at 2 lines visually via max-width + line-clamp */}
       <p
