@@ -707,6 +707,39 @@ async def build_snapshot(
     ):
         preferred_template_id = "race_pace_60_95"
 
+    # Peak-phase Thursday for race-targeted athletes — surges + tempo base
+    # that mirrors road-race / crit demands. Threshold-class load but with
+    # the stochastic profile races actually deliver, not a clean 4×8 block.
+    if (
+        phase == "peak"
+        and today_local_date.weekday() == 3  # Thursday
+        and today_session in ("threshold", "vo2")
+        and profile is not None
+        and profile.target_event_type == "race"
+    ):
+        preferred_template_id = "crit_simulation_stochastic"
+
+    # FTP test slot — first Tuesday of a fresh build/peak block, when CTL
+    # is rebuilding and a clean test anchors the next 4-week ramp. We
+    # detect "early in the block" via days-since-last-recovery-week:
+    # `weekly_progress.last_72h_quality_count == 0` AND the athlete is in
+    # build1/build2/peak AND no test in the last 5 weeks. The 5-week
+    # cooldown lives in activity history; we proxy it by skipping when the
+    # athlete is mid-block (hard_done already counted this week). First
+    # Tuesday of the phase will have hard_done == 0 and no recent quality.
+    if (
+        phase in ("build1", "build2", "peak")
+        and today_local_date.weekday() == 1  # Tuesday
+        and today_session in ("sweet_spot", "threshold")
+        and int((weekly_prog or {}).get("hard_sessions_done", 0)) == 0
+        and int((weekly_prog or {}).get("last_72h_quality_count", 0)) == 0
+        and int((weekly_prog or {}).get("total_tss_this_week", 0)) < 50
+    ):
+        # Block-opener test. Quietly skipped when the athlete already has
+        # a recent quality session or any meaningful week-load — i.e. the
+        # rule only fires on a *clean* Tuesday at block start.
+        preferred_template_id = "ftp_test_20min"
+
     # Pick + parametrize the template
     picked_template = pick_template(
         session_type=today_session,
