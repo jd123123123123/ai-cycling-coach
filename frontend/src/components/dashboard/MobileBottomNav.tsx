@@ -1,22 +1,24 @@
 import { useSearchParams } from 'react-router-dom'
-import { Sun, CalendarDays, LineChart } from 'lucide-react'
+import { Sun, CalendarDays, LineChart, Users } from 'lucide-react'
 
 // Mobile bottom navigation — your thumb can't reach a top tab strip on a
 // phone. Apple HIG / Strava / Whoop / Garmin Connect all use bottom nav on
-// mobile. Appears only below 'lg'. Mirrors the three desktop surfaces:
-// Today (the verdict) · Train (the plan) · Trends (the evidence).
+// mobile. Appears only below 'lg'. Mirrors the four desktop surfaces:
+// Today (verdict) · Train (plan) · Trends (evidence) · Crew (squad cup).
 
-type TabId = 'today' | 'train' | 'trends'
+type TabId = 'today' | 'train' | 'trends' | 'crew'
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: 'today',  label: 'Today',  icon: <Sun size={20} strokeWidth={1.8} /> },
   { id: 'train',  label: 'Train',  icon: <CalendarDays size={20} strokeWidth={1.8} /> },
   { id: 'trends', label: 'Trends', icon: <LineChart size={20} strokeWidth={1.8} /> },
+  { id: 'crew',   label: 'Crew',   icon: <Users size={20} strokeWidth={1.8} /> },
 ]
 
 function resolveActive(raw: string | null): TabId {
   if (raw === 'train' || raw === 'week') return 'train'
   if (raw === 'trends') return 'trends'
+  if (raw === 'crew') return 'crew'
   return 'today'
 }
 

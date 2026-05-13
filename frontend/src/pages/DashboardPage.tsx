@@ -23,10 +23,9 @@ import TrendsTab from '../components/dashboard/tabs/TrendsTab'
 import CrewTab from '../components/dashboard/tabs/CrewTab'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 
-type TabId = 'today' | 'train' | 'trends'
-type RouteTab = TabId | 'crew'
+type TabId = 'today' | 'train' | 'trends' | 'crew'
 
-function resolveTab(raw: string | null): RouteTab {
+function resolveTab(raw: string | null): TabId {
   switch (raw) {
     case 'today': return 'today'
     case 'train':
@@ -44,7 +43,7 @@ export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const reducedMotion = useReducedMotion()
 
-  const activeTab: RouteTab = resolveTab(searchParams.get('tab'))
+  const activeTab: TabId = resolveTab(searchParams.get('tab'))
 
   const handleTabChange = (id: TabId) => {
     setSearchParams({ tab: id }, { replace: true })
@@ -58,6 +57,7 @@ export default function DashboardPage() {
     { id: 'today',  label: 'Today' },
     { id: 'train',  label: 'Train' },
     { id: 'trends', label: 'Trends' },
+    { id: 'crew',   label: 'Crew' },
   ]
 
   const tabContent = (() => {
@@ -69,9 +69,7 @@ export default function DashboardPage() {
     }
   })()
 
-  // Crew isn't in the nav yet — fall the segmented control back to 'today'
-  // so it doesn't try to highlight a tab that isn't there.
-  const navValue: TabId = activeTab === 'crew' ? 'today' : activeTab
+  const navValue: TabId = activeTab
 
   return (
     <DashboardShell
