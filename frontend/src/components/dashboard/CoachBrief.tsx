@@ -9,6 +9,7 @@ import PrescribedWorkoutCard from './PrescribedWorkoutCard'
 import PostRideReview from './PostRideReview'
 import TomorrowCard from './TomorrowCard'
 import RegenerationCard from './RegenerationCard'
+import DashboardSection from './DashboardSection'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { translateCoach } from '../../utils/coachLanguage'
 import { formatSigned } from '../../utils/format'
@@ -321,11 +322,23 @@ function BriefBody({
         </div>
       )}
 
-      {/* Step 7 (today-runthrough) — forward-looking + regen. Both render nothing
-         when their data is missing, so the visual layout stays identical for
-         older briefs that don't ship these blocks. */}
-      <TomorrowCard data={brief.tomorrow_plan ?? null} />
-      <RegenerationCard bullets={brief.regeneration?.bullets ?? null} />
+      {/* Tomorrow + recovery — both are forward-looking secondary content.
+         Wrap them in a collapsed disclosure so the brief stops at the
+         workout card by default. Tapping the section expands both
+         (TomorrowCard / RegenerationCard each render nothing on missing
+         data, so the section is auto-empty for legacy brief shapes). */}
+      {(brief.tomorrow_plan || (brief.regeneration?.bullets ?? []).length > 0) && (
+        <DashboardSection
+          id="brief-tomorrow-recovery"
+          title="Tomorrow & recovery"
+          defaultExpanded={false}
+        >
+          <div className="flex flex-col gap-4">
+            <TomorrowCard data={brief.tomorrow_plan ?? null} />
+            <RegenerationCard bullets={brief.regeneration?.bullets ?? null} />
+          </div>
+        </DashboardSection>
+      )}
 
       {/* Outlook removed per product decision — CoachBrief focuses on TODAY only. */}
 

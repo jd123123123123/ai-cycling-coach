@@ -5,14 +5,12 @@
  * today-relevant extras (curated external workouts + the file-export row).
  */
 import CoachBrief from '../CoachBrief'
-import MissedYesterdayChip from '../MissedYesterdayChip'
 import MorningCheckin from '../MorningCheckin'
+import MorningRecap from '../MorningRecap'
 import PMCCompact from '../PMCCompact'
 import TrainingLogStrip from '../TrainingLogStrip'
 import ExternalWorkouts from '../ExternalWorkouts'
 import TodayHero from '../TodayHero'
-import TodayPostRecoveryReview from '../TodayPostRecoveryReview'
-import TodayPostRideReview from '../TodayPostRideReview'
 import WorkoutExportRow from '../WorkoutExportRow'
 import StreakStrip from '../StreakStrip'
 import WeeklyChallenge from '../WeeklyChallenge'
@@ -23,14 +21,10 @@ export default function TodayTab() {
     <div className="flex flex-col gap-4 sm:gap-5 min-w-0">
       {/* Subjective check-in — disappears once logged today. */}
       <MorningCheckin />
-      {/* Morning-after recap — one of these renders depending on yesterday:
-         · TodayPostRideReview when a ride was logged (PostRideReview internals)
-         · TodayPostRecoveryReview when yesterday was a planned rest/recovery
-         Both are self-gating so it's safe to render both; at most one shows. */}
-      <TodayPostRideReview />
-      <TodayPostRecoveryReview />
+      {/* Morning recap — picks the right yesterday-card automatically:
+         ride review · recovery review · missed-yesterday chip · or nothing. */}
+      <MorningRecap />
       <TodayHero />
-      <MissedYesterdayChip />
       <CoachBrief />
 
       {/* Momentum — the addiction spine: streak chain + weekly-challenge ring */}
