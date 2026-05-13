@@ -1,16 +1,31 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { format, subDays } from 'date-fns'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Loader2 } from 'lucide-react'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
+import { useGoalTrajectory } from '../../hooks/useGoalTrajectory'
 import { useCountUp } from '../../hooks/useCountUp'
+import { downloadWorkoutExport, type WorkoutFormat } from '../../api/coach'
 import {
   computeReadiness,
   latestWithData,
   readinessTier,
   TIER_META,
 } from '../../utils/metrics'
+
+function useViewportIsMobile(breakpoint = 640): boolean {
+  const [isMobile, setIsMobile] = useState<boolean>(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false,
+  )
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [breakpoint])
+  return isMobile
+}
 
 /**
  * TodayHero — the first card on Today.
@@ -27,19 +42,17 @@ import {
  * this card is the verdict, not the data dump.
  */
 
-const RING_SIZE = 140
-const RING_STROKE = 12
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
-const RING_CIRC = 2 * Math.PI * RING_RADIUS
-
-function StateRing({ score, color }: { score: number; color: string }) {
+function StateRing({ score, color, size }: { score: number; color: string; size: number }) {
   const animated = useCountUp(score, { durationMs: 1200, digits: 0 })
+  const stroke = Math.max(9, Math.round(size * 0.085))
+  const radius = (size - stroke) / 2
+  const circ = 2 * Math.PI * radius
   const pct = Math.max(0, Math.min(100, animated))
-  const dashOffset = RING_CIRC * (1 - pct / 100)
+  const dashOffset = circ * (1 - pct / 100)
   return (
     <div
       className="relative shrink-0 flex items-center justify-center"
-      style={{ width: RING_SIZE, height: RING_SIZE }}
+      style={{ width: size, height: size }}
       aria-label={`Recovery ${score}`}
     >
       {/* Ambient color glow — the state tint, soft */}
@@ -52,26 +65,17 @@ function StateRing({ score, color }: { score: number; color: string }) {
         }}
         aria-hidden
       />
-      <svg width={RING_SIZE} height={RING_SIZE} style={{ transform: 'rotate(-90deg)', overflow: 'visible' }} aria-hidden>
-        {/* Track */}
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', overflow: 'visible' }} aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--color-rule)" strokeWidth={stroke} />
         <circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
-          fill="none"
-          stroke="var(--color-rule)"
-          strokeWidth={RING_STROKE}
-        />
-        {/* Score arc */}
-        <circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
           fill="none"
           stroke={color}
-          strokeWidth={RING_STROKE}
+          strokeWidth={stroke}
           strokeLinecap="round"
-          strokeDasharray={RING_CIRC}
+          strokeDasharray={circ}
           strokeDashoffset={dashOffset}
           style={{
             transition: 'stroke-dashoffset 1.2s cubic-bezier(.22,1,.36,1)',
@@ -80,7 +84,15 @@ function StateRing({ score, color }: { score: number; color: string }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 38, fontWeight: 500, lineHeight: 1 }}>
+        <span
+          className="num-mono"
+          style={{
+            color: 'var(--color-ink)',
+            fontSize: Math.round(size * 0.27),
+            fontWeight: 500,
+            lineHeight: 1,
+          }}
+        >
           {animated}
         </span>
         <span className="eyebrow mt-1" style={{ color, fontSize: 10, letterSpacing: '0.24em', fontWeight: 600 }}>
@@ -143,6 +155,11 @@ export default function TodayHero() {
   const { data: brief } = useCoachBrief()
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 30), [today]), today)
   const { data: snapshot } = useTodaySnapshot()
+  const { data: trajectory } = useGoalTrajectory()
+  const isMobile = useViewportIsMobile(640)
+  const ringSize = isMobile ? 108 : 140
+  const [exporting, setExporting] = useState<WorkoutFormat | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const metrics = metricsResp?.metrics ?? []
   const latest = latestWithData(metrics, 'hrv_status') ?? latestWithData(metrics, 'body_battery') ?? latestWithData(metrics, 'sleep_score')
@@ -205,15 +222,52 @@ export default function TodayHero() {
   const strainPct = Math.min(100, Math.round((tssWeek / tssTarget) * 100))
   const sleepScore = latest?.sleep_score ?? null
 
-  const onStart = () => {
-    // The actual Start CTA lives on the workout card below — this hero button
-    // just scrolls the user to it (no business logic duplication). The card
-    // there owns the trainer/export flow.
-    const el = document.querySelector('[data-prescribed-workout-card]')
-    if (el && 'scrollIntoView' in el) {
-      (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // "Start ride" — downloads today's prescribed workout as a .zwo file (Zwift
+  // / MyWhoosh / indieVelo compatible — broadest player support). The full
+  // multi-format export row is still in the deep-dive for power users who
+  // want .erg/.mrc/.fit. After the download fires we *also* scroll to the
+  // workout card so the structure is visible while the file lands.
+  const DEFAULT_FORMAT: WorkoutFormat = 'zwo'
+  const onStart = async () => {
+    setExportError(null)
+    setExporting(DEFAULT_FORMAT)
+    try {
+      await downloadWorkoutExport(DEFAULT_FORMAT)
+      const el = document.querySelector('[data-prescribed-workout-card]')
+      if (el && 'scrollIntoView' in el) {
+        (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setExporting(null)
     }
   }
+
+  // Trajectory micro-line: "On track · CTL projected NN at race day"
+  function trajectoryLine(): { tone: 'good' | 'caution' | 'neutral'; text: string } | null {
+    if (!trajectory || trajectory.on_track === 'no_goal' || trajectory.event_name == null) return null
+    const ctlProj = Math.round(trajectory.ctl_projected_at_goal)
+    const ctlTarget = trajectory.ctl_target ? Math.round(trajectory.ctl_target) : null
+    const stateLabel: Record<typeof trajectory.on_track, string> = {
+      ahead: 'Ahead of plan',
+      on_track: 'On track',
+      behind: 'Behind plan',
+      no_goal: '',
+    }
+    const tone: 'good' | 'caution' | 'neutral' =
+      trajectory.on_track === 'ahead' || trajectory.on_track === 'on_track'
+        ? 'good'
+        : trajectory.on_track === 'behind'
+          ? 'caution'
+          : 'neutral'
+    const targetPart = ctlTarget ? ` of ${ctlTarget} target` : ''
+    return {
+      tone,
+      text: `${stateLabel[trajectory.on_track]} · CTL projected ${ctlProj}${targetPart} at race day`,
+    }
+  }
+  const trajLine = trajectoryLine()
 
   return (
     <div
@@ -255,7 +309,7 @@ export default function TodayHero() {
 
       {/* Main row: ring + verdict + workout + CTA */}
       <div className="flex gap-5 sm:gap-7 items-center flex-wrap">
-        <StateRing score={score ?? 0} color={color} />
+        <StateRing score={score ?? 0} color={color} size={ringSize} />
 
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           <h1
@@ -299,20 +353,37 @@ export default function TodayHero() {
           )}
 
           {pw && (
-            <button
-              type="button"
-              onClick={onStart}
-              className="self-start mt-3 inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium min-h-[40px]"
-              style={{
-                backgroundColor: color,
-                color: 'var(--color-paper)',
-                boxShadow: `0 1px 8px color-mix(in srgb, ${color} 35%, transparent)`,
-              }}
-              aria-label="Open today's prescribed workout"
-            >
-              Start ride
-              <ArrowRight size={14} strokeWidth={2.2} />
-            </button>
+            <div className="self-start mt-3 flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={onStart}
+                disabled={exporting != null}
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium min-h-[40px] disabled:opacity-70"
+                style={{
+                  backgroundColor: color,
+                  color: 'var(--color-paper)',
+                  boxShadow: `0 1px 8px color-mix(in srgb, ${color} 35%, transparent)`,
+                }}
+                aria-label="Download today's workout as .zwo and open it"
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 size={14} strokeWidth={2.2} className="animate-spin" />
+                    Preparing .zwo…
+                  </>
+                ) : (
+                  <>
+                    Start ride
+                    <ArrowRight size={14} strokeWidth={2.2} />
+                  </>
+                )}
+              </button>
+              {exportError && (
+                <span className="num-mono text-[11px]" style={{ color: 'var(--color-bad)' }}>
+                  {exportError}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -336,16 +407,36 @@ export default function TodayHero() {
           </span>
         </div>
         {meta && (
-          <div className="ml-auto">
-            <span
-              className="eyebrow num-mono"
-              style={{ color, fontSize: 11, letterSpacing: '0.18em', fontWeight: 600 }}
-            >
-              {meta.label.toUpperCase()}
-            </span>
-          </div>
+          <span
+            className="eyebrow num-mono"
+            style={{ color, fontSize: 11, letterSpacing: '0.18em', fontWeight: 600 }}
+          >
+            {meta.label.toUpperCase()}
+          </span>
         )}
       </div>
+
+      {/* Trajectory micro-line — forward-looking carrot. Only renders when a
+         goal event is configured and the trajectory endpoint returns a
+         projection (no_goal → no line, no clutter). */}
+      {trajLine && (
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          <span
+            className="num-mono"
+            style={{
+              color:
+                trajLine.tone === 'good'
+                  ? 'var(--color-good)'
+                  : trajLine.tone === 'caution'
+                    ? 'var(--color-caution)'
+                    : 'var(--color-ink-2)',
+              fontSize: 12,
+            }}
+          >
+            ▸ {trajLine.text}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

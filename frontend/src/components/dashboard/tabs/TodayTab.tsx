@@ -6,10 +6,12 @@
  */
 import CoachBrief from '../CoachBrief'
 import MissedYesterdayChip from '../MissedYesterdayChip'
+import MorningCheckin from '../MorningCheckin'
 import PMCCompact from '../PMCCompact'
 import TrainingLogStrip from '../TrainingLogStrip'
 import ExternalWorkouts from '../ExternalWorkouts'
 import TodayHero from '../TodayHero'
+import TodayPostRideReview from '../TodayPostRideReview'
 import WorkoutExportRow from '../WorkoutExportRow'
 import StreakStrip from '../StreakStrip'
 import WeeklyChallenge from '../WeeklyChallenge'
@@ -18,6 +20,11 @@ import DashboardSection from '../DashboardSection'
 export default function TodayTab() {
   return (
     <div className="flex flex-col gap-4 sm:gap-5 min-w-0">
+      {/* Subjective check-in — disappears once logged today. */}
+      <MorningCheckin />
+      {/* If yesterday's ride is logged with a post-ride review, surface it
+         above the hero — "good morning, here's how yesterday landed." */}
+      <TodayPostRideReview />
       <TodayHero />
       <MissedYesterdayChip />
       <CoachBrief />
