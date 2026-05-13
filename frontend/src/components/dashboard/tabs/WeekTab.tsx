@@ -17,9 +17,9 @@ import ComplianceStrip from '../ComplianceStrip'
 import RampRate from '../RampRate'
 import WeekStrip from '../WeekStrip'
 import WeekVsLast from '../WeekVsLast'
-import WeekPreface from '../WeekPreface'
 import DayPlanCard from '../DayPlanCard'
 import TrainingCalendar from '../TrainingCalendar'
+import TrainHero from '../TrainHero'
 import DashboardSection from '../DashboardSection'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
@@ -140,16 +140,8 @@ function WeekPlanPrimary() {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* 1. One-sentence weekly intent */}
-      <WeekPreface
-        preface={data.preface}
-        mesoBlock={data.meso_block}
-        weekStart={data.week_start}
-        weekEnd={data.week_end}
-        language={language}
-      />
-
-      {/* 2. 7-day pill row — always 7 columns, even on mobile (letters fit) */}
+      {/* 7-day pill row — TrainHero above owns the week framing now,
+         so the pills are the visual core here. */}
       <div className="grid grid-cols-7 gap-1.5">
         {data.days.map((day) => (
           <DayPlanCard
@@ -169,7 +161,10 @@ function WeekPlanPrimary() {
 export default function WeekTab() {
   return (
     <div className="flex flex-col gap-6">
-      {/* This week's intent + 7 day cards */}
+      {/* Hero — phase, week framing (AI preface), TSS plan-vs-actual, quota */}
+      <TrainHero />
+
+      {/* 7 day pills */}
       <WeekPlanPrimary />
 
       {/* Plan-vs-actual + build ramp */}

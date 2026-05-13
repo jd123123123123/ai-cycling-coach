@@ -4,6 +4,7 @@
  * sections; the most decision-relevant one (fitness & form) is open by default.
  */
 import DashboardSection from '../DashboardSection'
+import TrendsHero from '../TrendsHero'
 import PMCChart from '../PMCChart'
 import RampRate from '../RampRate'
 import IntensityDistribution from '../IntensityDistribution'
@@ -21,6 +22,9 @@ import RecentActivities from '../RecentActivities'
 export default function TrendsTab() {
   return (
     <div className="flex flex-col gap-4 sm:gap-5 min-w-0">
+      {/* Hero — 90-day summary with AI per-day narrative */}
+      <TrendsHero />
+
       {/* Fitness & form — the gold-standard endurance picture */}
       <PMCChart />
       <div className="grid gap-4 md:grid-cols-2">
@@ -42,7 +46,7 @@ export default function TrendsTab() {
       <DashboardSection id="trends-estimates" title="Estimates" defaultExpanded={false}>
         <div className="grid gap-4 md:grid-cols-2">
           <FTPEstimate />
-          <VO2MaxEstimate />
+          <VO2MaxEstimate sport="cycling" />
         </div>
       </DashboardSection>
 
