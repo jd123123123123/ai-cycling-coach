@@ -11,6 +11,7 @@ import PMCCompact from '../PMCCompact'
 import TrainingLogStrip from '../TrainingLogStrip'
 import ExternalWorkouts from '../ExternalWorkouts'
 import TodayHero from '../TodayHero'
+import TodayPostRecoveryReview from '../TodayPostRecoveryReview'
 import TodayPostRideReview from '../TodayPostRideReview'
 import WorkoutExportRow from '../WorkoutExportRow'
 import StreakStrip from '../StreakStrip'
@@ -22,9 +23,12 @@ export default function TodayTab() {
     <div className="flex flex-col gap-4 sm:gap-5 min-w-0">
       {/* Subjective check-in — disappears once logged today. */}
       <MorningCheckin />
-      {/* If yesterday's ride is logged with a post-ride review, surface it
-         above the hero — "good morning, here's how yesterday landed." */}
+      {/* Morning-after recap — one of these renders depending on yesterday:
+         · TodayPostRideReview when a ride was logged (PostRideReview internals)
+         · TodayPostRecoveryReview when yesterday was a planned rest/recovery
+         Both are self-gating so it's safe to render both; at most one shows. */}
       <TodayPostRideReview />
+      <TodayPostRecoveryReview />
       <TodayHero />
       <MissedYesterdayChip />
       <CoachBrief />
