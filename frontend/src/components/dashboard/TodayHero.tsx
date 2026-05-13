@@ -244,28 +244,30 @@ export default function TodayHero() {
     }
   }
 
-  // Trajectory micro-line: "On track · CTL projected NN at race day"
+  // Trajectory micro-line. Prefer the AI-generated `narrative_hook` from the
+  // trajectory endpoint — it carries phase/event context and an actionable
+  // delta ("add ~23 TSS/week to close the gap") that a templated state-label
+  // string can't. Fall back to a composed line only if the hook is empty.
   function trajectoryLine(): { tone: 'good' | 'caution' | 'neutral'; text: string } | null {
     if (!trajectory || trajectory.on_track === 'no_goal' || trajectory.event_name == null) return null
-    const ctlProj = Math.round(trajectory.ctl_projected_at_goal)
-    const ctlTarget = trajectory.ctl_target ? Math.round(trajectory.ctl_target) : null
-    const stateLabel: Record<typeof trajectory.on_track, string> = {
-      ahead: 'Ahead of plan',
-      on_track: 'On track',
-      behind: 'Behind plan',
-      no_goal: '',
-    }
     const tone: 'good' | 'caution' | 'neutral' =
       trajectory.on_track === 'ahead' || trajectory.on_track === 'on_track'
         ? 'good'
         : trajectory.on_track === 'behind'
           ? 'caution'
           : 'neutral'
-    const targetPart = ctlTarget ? ` of ${ctlTarget} target` : ''
-    return {
-      tone,
-      text: `${stateLabel[trajectory.on_track]} · CTL projected ${ctlProj}${targetPart} at race day`,
+    const hook = (trajectory.narrative_hook || '').trim()
+    if (hook) return { tone, text: hook }
+    // Fallback composition (rare — backend almost always provides a hook)
+    const ctlProj = Math.round(trajectory.ctl_projected_at_goal)
+    const ctlTarget = trajectory.ctl_target ? Math.round(trajectory.ctl_target) : null
+    const stateLabel: Record<'ahead' | 'on_track' | 'behind', string> = {
+      ahead: 'Ahead of plan',
+      on_track: 'On track',
+      behind: 'Behind plan',
     }
+    const targetPart = ctlTarget ? ` of ${ctlTarget} target` : ''
+    return { tone, text: `${stateLabel[trajectory.on_track]} · CTL projected ${ctlProj}${targetPart} at race day` }
   }
   const trajLine = trajectoryLine()
 

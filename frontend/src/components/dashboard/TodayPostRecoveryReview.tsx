@@ -75,17 +75,37 @@ export default function TodayPostRecoveryReview() {
     caution: 'var(--color-caution)',
     bad: 'var(--color-bad)',
   }
+  // Headline still uses a tri-state cue (the eye needs an at-a-glance label),
+  // but the *substance* below is AI prose pulled from existing brief fields:
+  //   - `why_tired.causes[]` — structured AI explanations of fatigue drivers
+  //   - `regeneration.bullets[]` — AI-generated recovery actions
+  //   - `brief.rationale` / `verdict` — the model's read on today
+  // We DON'T templete a "Recovery — mixed" two-liner anymore.
   const headline: Record<typeof tone, string> = {
     good: 'Recovery landed.',
     caution: 'Recovery — mixed.',
     bad: 'Recovery fell short.',
   }
-  const followup: Record<typeof tone, string> = {
-    good: "Body's rebounded. Today can be a quality day.",
-    caution:
-      "Some markers rebuilt, some didn't. Hold today inside the readiness ceiling — don't force it.",
-    bad: "Yesterday's rest didn't reset you. Consider keeping today easy and looking at sleep / stress upstream.",
-  }
+
+  // AI-driven body. Priority order:
+  //   1. brief.rationale — the model's own paragraph for today, which already
+  //      references yesterday's rest contextually.
+  //   2. fallback: synthesized from why_tired causes + first regen bullet so
+  //      we still ship a paragraph when the rationale string isn't present.
+  const rationale = (brief.rationale || '').trim()
+  const causes = (evidence.why_tired as { causes?: Array<{ label: string; evidence: string }> } | undefined)?.causes ?? []
+  const regenBullets = (evidence.regeneration as { bullets?: string[] } | undefined)?.bullets ?? []
+  const causesProse = causes
+    .slice(0, 2)
+    .map((c) => `${c.label} — ${c.evidence}`)
+    .join(' ')
+  const aiBody = rationale || [causesProse, regenBullets[0]].filter(Boolean).join(' ')
+
+  // A second, optional AI line — the most-actionable regen tip if the
+  // rationale didn't already cover next steps.
+  const aiAction = !rationale && regenBullets[0]
+    ? regenBullets[0]
+    : regenBullets.find((b) => /sleep|fuel|protein|stretch|hydrat/i.test(b)) || null
 
   // Format helpers
   function signed(n: number, digits = 1): string {
@@ -165,12 +185,22 @@ export default function TodayPostRecoveryReview() {
         )}
       </div>
 
-      <p
-        className="text-[13px] sm:text-[14px] leading-relaxed mt-1"
-        style={{ color: 'var(--color-ink-2)', maxWidth: '60ch' }}
-      >
-        ▸ {followup[tone]}
-      </p>
+      {aiBody && (
+        <p
+          className="text-[13px] sm:text-[14px] leading-relaxed mt-1"
+          style={{ color: 'var(--color-ink-2)', maxWidth: '64ch' }}
+        >
+          {aiBody}
+        </p>
+      )}
+      {aiAction && aiAction !== aiBody && (
+        <p
+          className="text-[12px] sm:text-[13px] leading-relaxed"
+          style={{ color: 'var(--color-ink-2)', maxWidth: '64ch' }}
+        >
+          ▸ {aiAction}
+        </p>
+      )}
     </div>
   )
 }
