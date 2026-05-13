@@ -161,7 +161,7 @@ _INTENSITY_CEILING_MAX: dict[str, SessionType] = {
     "rest":     "rest",
     "easy":     "recovery",     # at most a Z1 spin
     "moderate": "sweet_spot",   # tempo or sweet spot at most
-    "push":     "vo2",          # everything allowed
+    "push":     "anaerobic",    # everything allowed, incl. neuromuscular sprints
 }
 
 
@@ -169,10 +169,15 @@ def _downgrade_to_ceiling(pick: SessionType, ceiling: str) -> SessionType:
     """If the picked session exceeds the safety-rails ceiling, downgrade.
 
     Precedence (low→high): rest < recovery < endurance < tempo < sweet_spot <
-    threshold < vo2.
+    threshold < vo2 < anaerobic. Anaerobic sits at the top because it's the
+    most acutely stressful — short / fully-rested / above-VO2 efforts — and
+    should never auto-downgrade *to* (it's only picked by explicit rules,
+    e.g. taper sharpening). When the ceiling caps below anaerobic, the
+    cap-to-vo2 fallback is the sensible neighbor.
     """
     precedence: list[SessionType] = [
-        "rest", "recovery", "endurance", "tempo", "sweet_spot", "threshold", "vo2",
+        "rest", "recovery", "endurance", "tempo", "sweet_spot",
+        "threshold", "vo2", "anaerobic",
     ]
     max_allowed = _INTENSITY_CEILING_MAX.get(ceiling, "vo2")
     allowed_idx = precedence.index(max_allowed)
@@ -219,14 +224,24 @@ def session_type_for_today(
     if float(progress_for_today_check.get("today_tss", 0.0)) >= 25.0:
         return "rest"
 
-    # Race week — nothing hard
+    # Race week — easy except one race-pace tune-up. Wed gets a short
+    # sub-threshold opener so the engine is primed without depleting the
+    # tank (the picker resolves "threshold" + the race-week intensity ceiling
+    # to race_pace_60_95 when it's a sane fit; otherwise it falls to the
+    # short threshold reps).
     if phase == "race":
+        if day_of_week == 2:
+            return _downgrade_to_ceiling("threshold", intensity_ceiling)
         return "recovery" if day_of_week < 5 else "rest"
 
-    # Taper — keep intensity but volume is low; Wed is key session
+    # Taper — keep intensity, drop volume. Mujika's taper protocol: short
+    # neuromuscular sharpening (≤30s sprints with long rests) preserves peak
+    # power without accumulating fatigue. Wed in taper → anaerobic (sprints
+    # are first in the candidate list, ahead of Tabata's higher-strain
+    # capacity work). Mon/Fri/Sun easy; Tue/Thu/Sat endurance.
     if phase == "taper":
         if day_of_week == 2:
-            return "sweet_spot"
+            return _downgrade_to_ceiling("anaerobic", intensity_ceiling)
         if day_of_week in (0, 4, 6):
             return "rest" if day_of_week == 0 else "recovery"
         return "endurance"
@@ -361,14 +376,18 @@ _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
         "vo2_map_5x3", "vo2_descending_5_4_3_2_1",
         "vo2_micro_30x30",
     ],
-    # Anaerobic / neuromuscular — capacity work + peak power.
+    # Anaerobic / neuromuscular — peak power + capacity. Order is
+    # taper-friendly first (short, fully-rested sprints preserve peak power
+    # without fatigue accumulation — Mujika neuromuscular protocol). When
+    # session_type_for_today returns "anaerobic" in taper week, sprints win
+    # the picker; capacity work sits below for non-taper peak/build use.
     "anaerobic": [
-        "anaerobic_capacity_5x3_130",
-        "anaerobic_8x90s",
-        "anaerobic_tabata_8x20_10",
         "neuromuscular_sprints_8x15",
         "neuromuscular_spinup_6x30",
         "neuromuscular_standing_6x10",
+        "anaerobic_capacity_5x3_130",
+        "anaerobic_8x90s",
+        "anaerobic_tabata_8x20_10",
     ],
 }
 

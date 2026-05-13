@@ -28,6 +28,7 @@ from __future__ import annotations
 import json as _json_mod
 import logging
 import re
+from contextvars import ContextVar
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Literal
 from zoneinfo import ZoneInfo
@@ -40,6 +41,7 @@ from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
 from app.models.coach_brief import CoachBrief
 from app.models.coach_recommendation import CoachRecommendation
+from app.models.daily_metric import DailyMetric
 from app.services import advanced_metrics
 from app.services.advanced_metrics import (
     ctl_atl_tsb_snapshot,
@@ -98,31 +100,63 @@ logger = logging.getLogger(__name__)
 # the *next* UTC day — the coach would prescribe a second session on
 # top of the one they just finished.
 #
-# TODO(today-runthrough/step2): replace _ATHLETE_TZ with
-# AthleteProfile.timezone once a tz column lands. Hardcoded to
-# Europe/Berlin for the single-user MVP (user is in Berlin).
-_ATHLETE_TZ = ZoneInfo("Europe/Berlin")
+# Today-runthrough Step 2 — the active athlete tz lives in a ContextVar so
+# every helper in this module reads the same value without threading a `tz`
+# argument through every call. `set_athlete_tz_from_profile` is invoked at the
+# top of `build_snapshot` (the single entry point for every brief / chat /
+# upsert flow) right after the profile is loaded. The default keeps the
+# single-user MVP working when called outside a request context (e.g. tests
+# that instantiate helpers directly, scheduler tasks).
+_DEFAULT_ATHLETE_TZ = ZoneInfo("Europe/Berlin")
+_athlete_tz_var: ContextVar[ZoneInfo] = ContextVar(
+    "athlete_tz", default=_DEFAULT_ATHLETE_TZ
+)
+
+
+def _athlete_tz() -> ZoneInfo:
+    """Return the current request's athlete tz, falling back to Europe/Berlin."""
+    return _athlete_tz_var.get()
+
+
+def set_athlete_tz_from_profile(profile: "AthleteProfile | None") -> None:
+    """Resolve the athlete tz from a loaded AthleteProfile and bind it to the
+    current async context. Bad/empty values silently fall back to the default
+    so a typo in the column never blocks brief generation.
+    """
+    if profile is None:
+        _athlete_tz_var.set(_DEFAULT_ATHLETE_TZ)
+        return
+    raw = getattr(profile, "timezone", None)
+    if not raw:
+        _athlete_tz_var.set(_DEFAULT_ATHLETE_TZ)
+        return
+    try:
+        _athlete_tz_var.set(ZoneInfo(raw))
+    except Exception:
+        _athlete_tz_var.set(_DEFAULT_ATHLETE_TZ)
 
 
 def _today_local(now_utc: datetime | None = None) -> date:
     """Return today's date in the athlete's local timezone."""
-    now = (now_utc or datetime.now(timezone.utc)).astimezone(_ATHLETE_TZ)
+    now = (now_utc or datetime.now(timezone.utc)).astimezone(_athlete_tz())
     return now.date()
 
 
 def _today_local_window(now_utc: datetime | None = None) -> tuple[datetime, datetime]:
     """Athlete-local today 00:00 → tomorrow 00:00, returned as UTC datetimes."""
+    tz = _athlete_tz()
     today = _today_local(now_utc)
-    start_local = datetime.combine(today, datetime.min.time(), tzinfo=_ATHLETE_TZ)
+    start_local = datetime.combine(today, datetime.min.time(), tzinfo=tz)
     end_local = start_local + timedelta(days=1)
     return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
 
 def _week_local_window(now_utc: datetime | None = None) -> tuple[datetime, datetime]:
     """Monday 00:00 → next Monday 00:00 in athlete-local, returned as UTC datetimes."""
+    tz = _athlete_tz()
     today = _today_local(now_utc)
     monday_local = today - timedelta(days=today.weekday())
-    start_local = datetime.combine(monday_local, datetime.min.time(), tzinfo=_ATHLETE_TZ)
+    start_local = datetime.combine(monday_local, datetime.min.time(), tzinfo=tz)
     end_local = start_local + timedelta(days=7)
     return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
@@ -204,7 +238,7 @@ async def _days_since_rest(db: AsyncSession, user_id: int) -> int:
             started = a.started_at
             if started.tzinfo is None:
                 started = started.replace(tzinfo=timezone.utc)
-            non_rest_dates.add(started.astimezone(_ATHLETE_TZ).date())
+            non_rest_dates.add(started.astimezone(_athlete_tz()).date())
 
     today = _today_local()
     count = 0
@@ -241,7 +275,7 @@ async def _todays_primary_activity(db: AsyncSession, user_id: int) -> Activity |
     `_todays_activities` to support multi-activity wrap-ups.
 
     "Today" is the athlete's local calendar day (Europe/Berlin for now —
-    see `_ATHLETE_TZ` TODO). Returns the highest-TSS activity when multiple
+    athlete tz from `set_athlete_tz_from_profile`). Returns the highest-TSS activity when multiple
     land on the same local day.
     """
     start_today_utc, end_today_utc = _today_local_window()
@@ -401,7 +435,7 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     to avoid exceeding the weekly hard-session quota.
 
     All "today" / "this week" / "yesterday" windows are computed in the
-    athlete's local timezone (see `_ATHLETE_TZ`). Activities are filtered
+    athlete's local timezone (athlete tz from `set_athlete_tz_from_profile`). Activities are filtered
     by their UTC-stored `started_at` against the local-day boundaries
     converted to UTC.
     """
@@ -411,13 +445,14 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     # Yesterday's window (athlete-local calendar day)
     since_yesterday = since_today - timedelta(days=1)
     end_yesterday = since_today
-    # Rolling 48h window — independent of week boundary so Monday can see Sunday's load
+    # Rolling 48h / 72h windows — independent of week boundary so Monday can see Sunday's load
     now_utc = datetime.now(timezone.utc)
     since_48h = now_utc - timedelta(hours=48)
+    since_72h = now_utc - timedelta(hours=72)
 
     stmt = (
         select(Activity)
-        .where(Activity.user_id == user_id, Activity.started_at >= min(since_week, since_48h))
+        .where(Activity.user_id == user_id, Activity.started_at >= min(since_week, since_72h))
     )
     result = await db.execute(stmt)
     activities = list(result.scalars().all())
@@ -431,6 +466,11 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     today_max_tss_per_hour = 0.0
     yesterday_tss = 0.0
     last_48h_tss = 0.0
+    # Count of "quality" sessions in the prior 72h. Quality = sustained intensity
+    # at or near tempo: TSS/hour >= 60 (≈ IF 0.78+) over a session of 25min+.
+    # Used by session_type_for_today to avoid stacking back-to-back hard days
+    # without an easy buffer — the standard hard/easy alternation rule.
+    last_72h_quality_count = 0
 
     for a in activities:
         tss = float(a.tss or 0)
@@ -458,6 +498,13 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
         # Rolling 48h
         if started >= since_48h:
             last_48h_tss += tss
+        # Rolling 72h — flag prior quality sessions so today's picker doesn't
+        # stack a second hard session without an easy day in between. We count
+        # the session itself; whether it was today is filtered by the picker.
+        if started >= since_72h and a.duration_seconds and a.duration_seconds >= 1500:
+            tss_per_hour_72h = (tss / a.duration_seconds) * 3600.0
+            if tss_per_hour_72h >= 60.0:
+                last_72h_quality_count += 1
 
     return {
         "hard_sessions_done": hard_sessions,
@@ -469,6 +516,7 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
         "today_max_tss_per_hour": round(today_max_tss_per_hour, 1),
         "yesterday_tss": round(yesterday_tss, 1),
         "last_48h_tss": round(last_48h_tss, 1),
+        "last_72h_quality_count": last_72h_quality_count,
     }
 
 
@@ -490,6 +538,10 @@ async def build_snapshot(
         select(AthleteProfile).where(AthleteProfile.user_id == user_id)
     )
     profile = profile_result.scalar_one_or_none()
+
+    # Step 2 — bind the athlete tz for the rest of this request before any
+    # _today_local() / _today_local_window() call runs further down.
+    set_athlete_tz_from_profile(profile)
 
     goal_event_date = None
     goal_target = None
@@ -527,13 +579,90 @@ async def build_snapshot(
     phase = detect_training_phase(goal_date_obj, float(pmc.get("ctl", 0.0)))
     quota = weekly_intensity_quota(phase, float(weekly_hours))
 
+    # ---------------------------------------------------------
+    # Multi-factor readiness + new safety signals
+    # ---------------------------------------------------------
+    # ACWR (Bourdon 2017): ATL/CTL — sweet-spot 0.8-1.3, danger > 1.5.
+    ctl_val = float(pmc.get("ctl") or 0.0)
+    atl_val = float(pmc.get("atl") or 0.0)
+    acwr_val = (atl_val / ctl_val) if ctl_val > 0 else None
+
+    # TSB velocity over last 2 days — Banister-derived NFOR predictor.
+    # Pull the trailing PMC series (compute_user_pmc is called later for the
+    # trajectory; we issue a lightweight 7-day fetch here to avoid double work).
+    tsb_velocity_2d: float | None = None
+    try:
+        from app.services.pmc_service import compute_user_pmc as _pmc_recent
+        pmc_recent = await _pmc_recent(db, user_id, days=7)
+        rows = pmc_recent.get("total") or []
+        if len(rows) >= 3:
+            tsb_today = float(rows[-1].get("tsb") or 0.0)
+            tsb_yest = float(rows[-2].get("tsb") or 0.0)
+            tsb_dby = float(rows[-3].get("tsb") or 0.0)
+            d1 = tsb_today - tsb_yest
+            d2 = tsb_yest - tsb_dby
+            tsb_velocity_2d = round((d1 + d2) / 2.0, 2)
+    except Exception:
+        tsb_velocity_2d = None
+
+    # Readiness score (multi-factor composite). Inputs are pulled from already-
+    # computed aggregates; missing signals are skipped (weights renormalize).
+    from app.services.readiness_score import ReadinessInputs, compute_readiness
+
+    hrv_data = hrv if isinstance(hrv, dict) else {}
+    rhr_data = rhr if isinstance(rhr, dict) else {}
+    sleep_data = sleep if isinstance(sleep, dict) else {}
+    body_battery_wake_val: int | None = None
+    # Pull today's biometrics two ways:
+    #   1. daily_metrics row (Garmin's daily summary — `body_battery_wake` column,
+    #      often NULL on accounts where user_summary endpoint returns nothing).
+    #   2. compute_today_snapshot — derives wake from intraday samples directly,
+    #      so it works even when Garmin's summary endpoint hasn't populated.
+    # Prefer the intraday-derived value (more reliable / always-fresh); fall
+    # back to the DB column when intraday is empty.
+    today_metric_q = await db.execute(
+        select(DailyMetric)
+        .where(DailyMetric.user_id == user_id, DailyMetric.date == _today_local())
+        .order_by(DailyMetric.recorded_at.desc())
+        .limit(1)
+    )
+    today_metric_row = today_metric_q.scalar_one_or_none()
+    try:
+        from app.services.biometrics_snapshot import compute_today_snapshot
+        today_snap = await compute_today_snapshot(db, user_id, _today_local())
+        if today_snap.body_battery.wake is not None:
+            body_battery_wake_val = today_snap.body_battery.wake
+    except Exception:
+        # Snapshot is best-effort — fall through to the DB column.
+        pass
+    if body_battery_wake_val is None and today_metric_row is not None:
+        body_battery_wake_val = today_metric_row.body_battery_wake
+
+    readiness_inputs = ReadinessInputs(
+        hrv_7d_mean=hrv_data.get("current_mean"),
+        hrv_28d_baseline=hrv_data.get("baseline_28d_mean"),
+        hrv_cv_pct=None,  # not currently computed; placeholder for future Plews CV
+        rhr_7d_mean=rhr_data.get("current_mean"),
+        rhr_28d_baseline=rhr_data.get("baseline_28d_mean"),
+        sleep_score_last_night=(today_metric_row.sleep_score if today_metric_row else None),
+        avg_nightly_debt_h=sleep_data.get("avg_nightly_debt"),
+        tsb=pmc.get("tsb"),
+        ctl=ctl_val,
+        atl=atl_val,
+        body_battery_wake=body_battery_wake_val,
+    )
+    readiness_report = compute_readiness(readiness_inputs)
+
     rails_ctx = RailContext(
-        ctl=float(pmc["ctl"]),
-        atl=float(pmc["atl"]),
+        ctl=ctl_val,
+        atl=atl_val,
         tsb=float(pmc["tsb"]),
         hrv_delta_pct=float(hrv.get("delta_pct") or 0.0),
         injury_flag=bool(profile.injury_flag) if profile else False,
         days_since_rest=int(days_since_rest),
+        acwr=acwr_val,
+        tsb_velocity_2d=tsb_velocity_2d,
+        readiness_score=readiness_report.overall,
     )
     ceiling = intensity_ceiling(rails_ctx)
 
@@ -549,11 +678,41 @@ async def build_snapshot(
     # so we don't auto-pick a 3h long ride on a Tuesday.
     today_available_minutes = min(180, max(30, int(round((weekly_hours * 60) / 7))))
 
+    # Event-specific keystone override — when the athlete has a fondo / race
+    # A-event inside 8 weeks and today is Saturday, pin the climbing-emphasis
+    # Z2 template. Maratona dles Dolomites and similar grand fondos are
+    # bottlenecked by sustained sub-threshold climbing endurance, not by
+    # generic Z2 hours. Saving climbing-specific blocks for closer to the
+    # event is Issurin block-periodization (Transmutation phase).
+    preferred_template_id: str | None = None
+    today_local_date = _today_local()
+    if (
+        today_local_date.weekday() == 5  # Saturday
+        and profile is not None
+        and profile.target_event_type in ("fondo", "race")
+        and profile.target_event_date is not None
+        and 14 <= (profile.target_event_date - today_local_date).days <= 56
+    ):
+        preferred_template_id = "z2_climbing_long"
+
+    # Race-week Wednesday gets a single race-pace tune-up — the Mujika
+    # taper's "confidence ride": one sustained sub-threshold effort that
+    # primes the engine without depleting freshness. session_type_for_today
+    # returns 'threshold' for race-week Wed; we pin the specific template
+    # here so the picker doesn't fall to a heavier 2×15 / over-unders.
+    if (
+        phase == "race"
+        and today_local_date.weekday() == 2  # Wednesday
+        and today_session == "threshold"
+    ):
+        preferred_template_id = "race_pace_60_95"
+
     # Pick + parametrize the template
     picked_template = pick_template(
         session_type=today_session,
         athlete_ftp=ftp,
         available_minutes=today_available_minutes,
+        preferred_template_id=preferred_template_id,
     )
 
     picked_preview: dict | None = None
@@ -833,6 +992,12 @@ async def build_snapshot(
         "athlete": {
             "goal_event_date": goal_event_date,
             "goal_target": goal_target,
+            "goal_event_type": profile.target_event_type if profile else None,
+            "goal_priority": profile.target_priority if profile else None,
+            "days_to_goal": (
+                (profile.target_event_date - _today_local()).days
+                if profile and profile.target_event_date else None
+            ),
             "weekly_hours": weekly_hours,
             "ftp": ftp,
             "weight_kg": profile.weight_kg if profile else None,
@@ -841,6 +1006,17 @@ async def build_snapshot(
             "goal_phase": phase,
             "today_available_minutes": today_available_minutes,
         },
+        "readiness": {
+            "score": readiness_report.overall,
+            "ceiling": readiness_report.ceiling,
+            "flags": readiness_report.flags,
+            "components": [
+                {"name": c.name, "score": c.score, "weight": c.weight, "note": c.note}
+                for c in readiness_report.components
+            ],
+        },
+        "acwr": acwr_val,
+        "tsb_velocity_2d": tsb_velocity_2d,
         "pmc": pmc,
         "biometrics": {
             "hrv": hrv,

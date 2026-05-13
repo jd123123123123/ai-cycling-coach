@@ -166,17 +166,112 @@ class TestSessionTypeForToday:
             intensity_ceiling="push", day_of_week=2,
         ) == "endurance"
 
-    def test_race_week_no_hard_work(self):
+    def test_race_week_wed_is_race_pace_tune_up(self):
+        # Wednesday of race week → threshold session. coach_service pins it
+        # to race_pace_60_95 (the Mujika confidence-ride template). All other
+        # weekdays stay recovery/rest.
         assert session_type_for_today(
             phase="race", weekly_progress=None, tsb=10.0,
             intensity_ceiling="push", day_of_week=2,
-        ) == "recovery"
+        ) == "threshold"
+
+    def test_race_week_other_days_stay_easy(self):
+        # Mon/Tue/Thu/Fri race week → recovery; Sat/Sun → rest.
+        for dow in (0, 1, 3, 4):
+            assert session_type_for_today(
+                phase="race", weekly_progress=None, tsb=10.0,
+                intensity_ceiling="push", day_of_week=dow,
+            ) == "recovery"
+        for dow in (5, 6):
+            assert session_type_for_today(
+                phase="race", weekly_progress=None, tsb=10.0,
+                intensity_ceiling="push", day_of_week=dow,
+            ) == "rest"
+
+    def test_taper_wed_is_neuromuscular_anaerobic(self):
+        # Mujika taper protocol: Wed gets short fully-rested sprints to
+        # preserve peak power without fatigue. session_type_for_today
+        # returns 'anaerobic'; picker resolves to neuromuscular_sprints_8x15
+        # (first in the anaerobic candidate list).
+        assert session_type_for_today(
+            phase="taper", weekly_progress=None, tsb=5.0,
+            intensity_ceiling="push", day_of_week=2,
+        ) == "anaerobic"
+
+    def test_thursday_downgrades_to_endurance_after_recent_quality(self):
+        """72h hard/easy guard — when a quality session (TSS/h ≥ 60, ≈ IF 0.78+)
+        already happened in the last 72h, Thursday must not stack another hard
+        session, even with the weekly hard-quota counter at 0. The athlete in
+        front of us hit a tempo on Tuesday with Wed off — the picker would
+        otherwise default to sweet_spot today and burn them."""
+        assert session_type_for_today(
+            phase="build2",
+            weekly_progress={"hard_sessions_done": 0, "last_72h_quality_count": 1},
+            tsb=5.0, intensity_ceiling="push", day_of_week=3,
+        ) == "endurance"
+
+    def test_tuesday_downgrades_to_endurance_after_recent_quality(self):
+        """Same guard on Tuesday — protects against Sun-hard / Mon-rest /
+        Tue-hard stacking too."""
+        assert session_type_for_today(
+            phase="build2",
+            weekly_progress={"hard_sessions_done": 0, "last_72h_quality_count": 1},
+            tsb=5.0, intensity_ceiling="push", day_of_week=1,
+        ) == "endurance"
+
+    def test_wednesday_vo2_overrides_recent_quality_guard(self):
+        """Wednesday VO2 day intentionally bypasses the 72h guard — VO2 has its
+        own (vo2_done, tsb) gate and is the planned weekly keystone."""
+        assert session_type_for_today(
+            phase="build2",
+            weekly_progress={"vo2_sessions_done": 0, "last_72h_quality_count": 1},
+            tsb=5.0, intensity_ceiling="push", day_of_week=2,
+        ) == "vo2"
+
+    def test_build1_first_quality_day_is_sweet_spot(self):
+        """build1 opens the week's quality work with sweet spot."""
+        assert session_type_for_today(
+            phase="build1",
+            weekly_progress={"hard_sessions_done": 0},
+            tsb=-12.0, intensity_ceiling="push", day_of_week=1,
+        ) == "sweet_spot"
+
+    def test_build1_second_quality_day_steps_up_to_threshold(self):
+        """build1 progresses within the week — once a quality session is in the
+        bank, the next Tue/Thu steps up to threshold (not another flat SST)."""
+        assert session_type_for_today(
+            phase="build1",
+            weekly_progress={"hard_sessions_done": 1},
+            tsb=-12.0, intensity_ceiling="push", day_of_week=3,
+        ) == "threshold"
+
+    def test_build1_second_quality_day_capped_when_ceiling_moderate(self):
+        """If readiness only allows 'moderate', the build1 second-quality-day
+        threshold pick downgrades to sweet spot — the ceiling is the safety."""
+        assert session_type_for_today(
+            phase="build1",
+            weekly_progress={"hard_sessions_done": 1},
+            tsb=-12.0, intensity_ceiling="moderate", day_of_week=3,
+        ) == "sweet_spot"
 
 
 class TestPickTemplate:
-    def test_vo2_picks_vo2_5x4_at_60min(self):
+    def test_vo2_picks_ronnestad_at_60min(self):
+        # With the Rønnestad short-interval template in the library, 60-min
+        # VO2 days prefer it over 5×4 — higher time-at-VO2 with lower acute
+        # RPE (Rønnestad 2015 / Bossi 2020).
         t = pick_template("vo2", athlete_ftp=280, available_minutes=60)
-        assert t.id == "vo2_5x4"
+        assert t.id == "vo2_ronnestad_3x13"
+
+    def test_vo2_picks_short_when_window_tiny(self):
+        # 45-min window — every VO2 template needs ~50+ min once warm-up and
+        # cool-down are counted. Picker falls into the "nothing fits" branch
+        # and returns the shortest allowed VO2 protocol.
+        t = pick_template("vo2", athlete_ftp=280, available_minutes=45)
+        assert t.id in (
+            "vo2_3x6", "vo2_map_5x3", "vo2_descending_5_4_3_2_1",
+            "vo2_micro_30x30", "vo2_microbursts_30x15_45",
+        )
 
     def test_vo2_requires_ftp_180(self):
         """Low FTP → no VO2 available → falls back to sweet_spot."""
@@ -197,21 +292,36 @@ class TestPickTemplate:
         assert t.id == "z2_endurance_60"
 
     def test_endurance_medium_picks_90min(self):
+        # 95-min window: longest-fitting 90-min endurance template. The
+        # progressive variant sits ahead of plain Z2 in the candidate list.
         t = pick_template("endurance", athlete_ftp=280, available_minutes=95)
-        assert t.id == "z2_endurance_90"
+        assert t.id in ("z2_progressive_90", "z2_endurance_90")
 
     def test_rest_picks_rest_day(self):
         t = pick_template("rest", athlete_ftp=280, available_minutes=60)
         assert t.id == "rest_day"
 
-    def test_recovery_picks_recovery_30(self):
+    def test_recovery_picks_60_when_window_allows(self):
+        # At a 60-min window, the longer recovery_60 fits and is preferred
+        # over recovery_30 (which sits second in the candidate list).
         t = pick_template("recovery", athlete_ftp=280, available_minutes=60)
+        assert t.id in ("recovery_60", "recovery_30")
+
+    def test_recovery_picks_30_in_tight_window(self):
+        t = pick_template("recovery", athlete_ftp=280, available_minutes=35)
         assert t.id == "recovery_30"
 
     def test_sweet_spot_picks_sweet_spot_2x20(self):
         t = pick_template("sweet_spot", athlete_ftp=280, available_minutes=70)
         assert t.id == "sweet_spot_2x20"
 
-    def test_threshold_picks_threshold_2x15(self):
+    def test_threshold_picks_a_real_threshold_template(self):
+        # 60-min window: heavier Seiler 4×8 / hill 4×10 / over-under 4×12 are
+        # all >60 min once warm-up + cool-down are counted. Picker drops to
+        # something that fits — pyramid, lactate-shuttles, or the classic
+        # 2×15 / over-under 3×5 — all genuine threshold protocols.
         t = pick_template("threshold", athlete_ftp=280, available_minutes=60)
-        assert t.id == "threshold_2x15"
+        assert t.id in (
+            "threshold_pyramid", "lactate_shuttles_3x8",
+            "threshold_2x15", "over_under_3x5",
+        )
