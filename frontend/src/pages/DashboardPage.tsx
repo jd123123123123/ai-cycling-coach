@@ -77,7 +77,9 @@ export default function DashboardPage() {
     <DashboardShell
       stickyBar={<StickyReadinessBar />}
       tabs={
-        <>
+        // Desktop only — on <lg viewports MobileBottomNav owns navigation
+        // and the top tab strip is redundant + steals header height.
+        <div className="hidden lg:block">
           <SegmentedTabs
             tabs={tabs}
             value={navValue}
@@ -85,7 +87,7 @@ export default function DashboardPage() {
             ariaLabel="Dashboard sections"
           />
           <div className="hairline" />
-        </>
+        </div>
       }
     >
       <div

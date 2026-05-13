@@ -329,56 +329,55 @@ function BriefBody({
 
       {/* Outlook removed per product decision — CoachBrief focuses on TODAY only. */}
 
-      {/* Frameworks + transparency — one line combined */}
+      {/* Footer — one tight row. Frameworks now collapse into a single
+         "Sources" link instead of a comma-laden inline list (the names were
+         eating visual budget without informing the day's decision). Why /
+         AI-saw / Refresh stay; the click targets open the same sheets. */}
       <div
-        className="flex items-center justify-between gap-2 flex-wrap pt-2"
+        className="flex items-center justify-end gap-3 flex-wrap pt-2"
         style={{ borderTop: '1px solid var(--color-rule)' }}
       >
         {brief.frameworks_cited.length > 0 && (
-          <span
-            className="num-mono text-[11px] leading-snug dashboard-break-words"
-            style={{ color: 'var(--color-muted)', maxWidth: '52ch' }}
-          >
-            {simpleMode
-              ? translateCoach('brief.frameworksHeading', 'simple')
-              : `${translateCoach('brief.frameworksHeading', 'technical')}: ${brief.frameworks_cited.join(' · ')}`}
-          </span>
-        )}
-        <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={onOpenWhy}
-            className="inline-flex items-center gap-1 text-[11px] font-medium"
-            style={{ color: 'var(--color-ink-2)' }}
-          >
-            <ChevronRight size={12} strokeWidth={2} />
-            <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
-              Why this?
-            </span>
-          </button>
-          <button
+            type="button"
             onClick={onOpenTransparency}
             className="inline-flex items-center gap-1 text-[11px] font-medium"
-            style={{ color: 'var(--color-ink-2)' }}
-          >
-            <ChevronRight size={12} strokeWidth={2} />
-            <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
-              What did the AI see?
-            </span>
-          </button>
-          <button
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            className="inline-flex items-center gap-1 text-[11px] font-medium disabled:opacity-50"
             style={{ color: 'var(--color-muted)' }}
-            aria-label="Regenerate brief"
-            title="Force a fresh generation"
+            title={
+              simpleMode
+                ? translateCoach('brief.frameworksHeading', 'simple')
+                : `${translateCoach('brief.frameworksHeading', 'technical')}: ${brief.frameworks_cited.join(' · ')}`
+            }
           >
-            <RefreshCw size={11} strokeWidth={1.8} className={isRefreshing ? 'animate-spin' : ''} />
+            <ChevronRight size={11} strokeWidth={2} />
             <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
-              Refresh
+              {brief.frameworks_cited.length} sources
             </span>
           </button>
-        </div>
+        )}
+        <button
+          onClick={onOpenWhy}
+          className="inline-flex items-center gap-1 text-[11px] font-medium"
+          style={{ color: 'var(--color-ink-2)' }}
+        >
+          <ChevronRight size={11} strokeWidth={2} />
+          <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
+            Why this?
+          </span>
+        </button>
+        <button
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className="inline-flex items-center gap-1 text-[11px] font-medium disabled:opacity-50"
+          style={{ color: 'var(--color-muted)' }}
+          aria-label="Regenerate brief"
+          title="Force a fresh generation"
+        >
+          <RefreshCw size={11} strokeWidth={1.8} className={isRefreshing ? 'animate-spin' : ''} />
+          <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
+            Refresh
+          </span>
+        </button>
       </div>
     </motion.div>
   )

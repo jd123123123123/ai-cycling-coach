@@ -235,6 +235,11 @@ def session_type_for_today(
     progress = weekly_progress or {}
     hard_done = int(progress.get("hard_sessions_done", 0))
     vo2_done = int(progress.get("vo2_sessions_done", 0))
+    # Hard/easy alternation: if a quality session (TSS/h ≥ 60, ≈ IF 0.78+) has
+    # already happened in the last 72h, the picker mustn't stack another hard
+    # day. Wednesday is allowed to override because VO2 is the keystone weekly
+    # session and Wed-VO2 already has its own (vo2_done, tsb) guards.
+    recent_quality = int(progress.get("last_72h_quality_count", 0))
 
     # Sunday = long Z2 for base/build/peak (unless TSB is deeply negative)
     if day_of_week == 6 and phase in ("base1", "base2", "build1", "build2", "peak"):
@@ -263,6 +268,10 @@ def session_type_for_today(
 
     # Mid-week quality — the "workout day" in Friel periodization
     if day_of_week in (1, 2, 3):
+        # 72h hard/easy guard on Tue (1) / Thu (3) — Wednesday's VO2 has its
+        # own quota guard and is the planned keystone, so we don't block it.
+        if day_of_week in (1, 3) and recent_quality >= 1:
+            return _downgrade_to_ceiling("endurance", intensity_ceiling)
         if phase in ("build1", "build2", "peak"):
             # Wed=VO2 priority, Tue/Thu=threshold or sweet_spot
             if day_of_week == 2:
@@ -270,10 +279,17 @@ def session_type_for_today(
                 if vo2_done < 1 and tsb > -15:
                     return _downgrade_to_ceiling("vo2", intensity_ceiling)
                 return _downgrade_to_ceiling("sweet_spot", intensity_ceiling)
-            # Tue/Thu threshold or sweet spot
+            # Tue/Thu quality. build2/peak run two threshold days. build1
+            # progresses *within* the week: first quality day = sweet spot,
+            # second quality day = threshold (real periodization isn't a flat
+            # week of identical SST — it ramps). The intensity-ceiling
+            # downgrade below still caps the pick when readiness says so, so
+            # there's no need for a separate TSB gate here.
             if hard_done < 2:
-                # base2 prefers sweet_spot; build prefers threshold
-                pick = "threshold" if phase in ("build2", "peak") else "sweet_spot"
+                if phase in ("build2", "peak"):
+                    pick = "threshold"
+                else:  # build1
+                    pick = "threshold" if hard_done >= 1 else "sweet_spot"
                 return _downgrade_to_ceiling(pick, intensity_ceiling)
             return _downgrade_to_ceiling("endurance", intensity_ceiling)
         if phase == "base2":
@@ -302,14 +318,58 @@ def session_type_for_today(
 # If none fit, it returns the shortest member of the category (best effort).
 _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
     "rest":       ["rest_day"],
-    "recovery":   ["recovery_30"],
+    # Recovery day rotation — easy spin OR the FSR fast-pedal skill drill.
+    # Both stay sub-LT1 in power; the drill adds neuromuscular maintenance
+    # without raising load. Listed by descending length so the picker walks
+    # to whichever fits the window.
+    "recovery":   ["recovery_60", "cadence_high_fsr_6x3", "recovery_30"],
+    # Endurance: longest first. MAF / fasted / progressive variants are
+    # phase-specific and not in the default picker rotation (use them via
+    # preferred_template_id at the planner level).
     "endurance":  [
-        "z2_long_180", "z2_long_120", "z2_endurance_90", "z2_endurance_60",
+        "z2_long_240", "z2_long_180", "z2_long_120",
+        "z2_progressive_90", "z2_endurance_90", "z2_endurance_60",
     ],
-    "tempo":      ["tempo_3x10"],
-    "sweet_spot": ["sweet_spot_2x20"],
-    "threshold":  ["threshold_2x15", "over_under_3x5"],
-    "vo2":        ["vo2_5x4", "vo2_micro_30x30"],
+    # Tempo includes the low-cadence force drill (still Z3 power, but a
+    # strength-biased rep that targets Type-IIa recruitment via cadence).
+    "tempo":      [
+        "tempo_2x30", "tempo_4x15", "tempo_progression_60",
+        "cadence_low_lcf_4x6", "tempo_3x10",
+    ],
+    # Sweet-spot ordered longest→shortest. sub_threshold_2x40 is genuinely
+    # SST density even though categorized internally as sweet_spot.
+    "sweet_spot": [
+        "sub_threshold_2x40", "sweet_spot_4x15", "sweet_spot_3x20",
+        "sweet_spot_2x20",
+    ],
+    # Threshold: Norwegian 4×8 (highest tolerance) + heavy hill / pyramid /
+    # descending variants for race specificity, then the classic 2×15 +
+    # short over-unders.
+    "threshold": [
+        "threshold_seiler_4x8", "threshold_hill_4x10",
+        "over_under_4x12", "threshold_descending",
+        "threshold_pyramid", "lactate_shuttles_3x8",
+        "threshold_2x15", "over_under_3x5",
+    ],
+    # VO2: long polarized for big days, then highest-evidence short-intervals
+    # (Rønnestad), then the long 3×6 and 5×4 reps, hill VO2, microbursts,
+    # MAP 5×3, descending ladder, and the Billat 30×30.
+    "vo2": [
+        "polarized_long_z2_4x4",
+        "vo2_ronnestad_3x13", "vo2_3x6", "vo2_5x4",
+        "vo2_hill_6x3", "vo2_microbursts_30x15_45",
+        "vo2_map_5x3", "vo2_descending_5_4_3_2_1",
+        "vo2_micro_30x30",
+    ],
+    # Anaerobic / neuromuscular — capacity work + peak power.
+    "anaerobic": [
+        "anaerobic_capacity_5x3_130",
+        "anaerobic_8x90s",
+        "anaerobic_tabata_8x20_10",
+        "neuromuscular_sprints_8x15",
+        "neuromuscular_spinup_6x30",
+        "neuromuscular_standing_6x10",
+    ],
 }
 
 
@@ -322,6 +382,7 @@ def pick_template(
     athlete_ftp: int | None,
     available_minutes: int,
     templates: dict[str, WorkoutTemplate] | None = None,
+    preferred_template_id: str | None = None,
 ) -> WorkoutTemplate:
     """Pick the best-fit template for today's session type + time window.
 
@@ -339,6 +400,21 @@ def pick_template(
         none fit — better to prescribe something than nothing.
     """
     lib = templates if templates is not None else TEMPLATES
+
+    # Event-specific override: caller can pin a preferred template (e.g.
+    # climbing-emphasis on Saturday for fondo athletes). We honour it iff
+    # the template exists, passes the FTP gate, and fits the time window.
+    if preferred_template_id:
+        t = lib.get(preferred_template_id)
+        if t is not None:
+            ftp_ok = (
+                t.min_ftp_required is None
+                or (athlete_ftp is not None and athlete_ftp >= t.min_ftp_required)
+            )
+            if ftp_ok and _template_minutes(t) <= max(1, available_minutes):
+                return t
+        # Preferred template didn't fit — fall through to normal candidate flow.
+
     candidates = _CATEGORY_CANDIDATES.get(session_type, ["z2_endurance_60"])
 
     allowed: list[WorkoutTemplate] = []
