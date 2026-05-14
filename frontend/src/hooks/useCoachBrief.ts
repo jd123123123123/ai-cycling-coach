@@ -5,6 +5,7 @@ import {
   type CoachBriefResponse,
 } from '../api/coach'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useLocale } from '../contexts/LocaleContext'
 
 // Phase 5.2: coach brief queries are language-keyed. Changing the language
 // toggle in the masthead mutates the key and triggers a refetch automatically.
@@ -22,9 +23,10 @@ export const COACH_BRIEF_KEY_ROOT = ['coach', 'brief'] as const
  */
 export function useCoachBrief() {
   const { language } = useLanguage()
+  const { locale } = useLocale()
   return useQuery<CoachBriefResponse>({
-    queryKey: [...COACH_BRIEF_KEY_ROOT, language],
-    queryFn: () => fetchCoachBrief(language),
+    queryKey: [...COACH_BRIEF_KEY_ROOT, language, locale],
+    queryFn: () => fetchCoachBrief(language, locale),
     staleTime: 30 * 60 * 1000, // 30min — was 6h; brief now invalidated on sync
     gcTime: 12 * 60 * 60 * 1000,
     refetchOnWindowFocus: (query) => {
@@ -55,10 +57,11 @@ export function useCoachBrief() {
 export function useRefreshBrief() {
   const qc = useQueryClient()
   const { language } = useLanguage()
+  const { locale } = useLocale()
   return useMutation<CoachBriefResponse>({
-    mutationFn: () => refreshCoachBrief(language),
+    mutationFn: () => refreshCoachBrief(language, locale),
     onSuccess: (data) => {
-      qc.setQueryData([...COACH_BRIEF_KEY_ROOT, language], data)
+      qc.setQueryData([...COACH_BRIEF_KEY_ROOT, language, locale], data)
     },
   })
 }

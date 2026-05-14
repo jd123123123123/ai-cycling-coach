@@ -2113,7 +2113,7 @@ def _extract_tool_use(message: Any) -> dict | None:
     return None
 
 
-async def generate_brief(snapshot: dict, language: str = "simple") -> dict:
+async def generate_brief(snapshot: dict, language: str = "simple", locale: str = "en") -> dict:
     """Generate a brief — LLM path with rule-based fallback.
 
     Returns a dict with keys: verdict, rationale, prescribed_workout, alternates,
@@ -2140,7 +2140,7 @@ async def generate_brief(snapshot: dict, language: str = "simple") -> dict:
         system_blocks = [
             {
                 "type": "text",
-                "text": system_prompt_for_language(language),  # type: ignore[arg-type]
+                "text": system_prompt_for_language(language, locale=locale),  # type: ignore[arg-type]
                 "cache_control": {"type": "ephemeral"},
             }
         ]
@@ -2180,27 +2180,25 @@ async def get_or_generate_brief(
     user_id: int,
     force: bool = False,
     language: str = "simple",
+    locale: str = "en",
 ) -> CoachBrief:
-    """Return the most-recent brief for `language` if < COACH_BRIEF_CACHE_HOURS
-    old, else regenerate.
+    """Return the most-recent brief for `language` + `locale` if <
+    COACH_BRIEF_CACHE_HOURS old, else regenerate.
 
-    Cache key includes language — a brief cached in 'technical' is NOT served to
-    a 'simple' request. This is implemented by filtering on
-    `evidence->>'language'`; pre-5.2 rows (no language key) are treated as
-    'simple' for backward compat.
-
-    Always persists the brief (even cache misses) so every generation is
-    auditable. Caller is responsible for committing the session on return.
+    Cache key is (language, locale) — a brief in (technical, en) is NOT served
+    to a (technical, de) request. Implemented as a coalesce filter on
+    evidence->>'language' / evidence->>'locale' so pre-locale rows still match
+    'en' for backward compat.
     """
     if language not in ("simple", "technical"):
         language = "simple"
+    if locale not in ("en", "de"):
+        locale = "en"
 
     if not force:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
-        # JSONB language filter: match rows where evidence->>'language' equals
-        # the requested language. Pre-5.2 rows (language key missing) count as
-        # 'simple' — coalesce keeps them servable.
         lang_expr = CoachBrief.evidence["language"].astext
+        locale_expr = CoachBrief.evidence["locale"].astext
         from sqlalchemy import func
         recent = await db.execute(
             select(CoachBrief)
@@ -2211,6 +2209,7 @@ async def get_or_generate_brief(
                 # Treat them as cache misses so the athlete never sees a legacy brief.
                 CoachBrief.prescribed_workout.isnot(None),
                 func.coalesce(lang_expr, "simple") == language,
+                func.coalesce(locale_expr, "en") == locale,
             )
             .order_by(CoachBrief.generated_at.desc())
             .limit(1)
@@ -2220,12 +2219,12 @@ async def get_or_generate_brief(
             return cached
 
     snapshot = await build_snapshot(db, user_id, language=language)
-    brief_payload = await generate_brief(snapshot, language=language)
+    brief_payload = await generate_brief(snapshot, language=language, locale=locale)
 
-    # Keep the language marker in persisted evidence so cache lookups can
-    # discriminate without requiring a schema change.
+    # Persist language + locale markers in evidence for cache discrimination.
     if "language" not in snapshot:
         snapshot["language"] = language
+    snapshot["locale"] = locale
 
     # Phase 5.3 — the post_ride_review lives inside evidence (no schema
     # migration required; JSONB keeps it cheap). _brief_to_read extracts
@@ -2251,7 +2250,7 @@ async def get_or_generate_brief(
         alternates=brief_payload.get("alternates") or [],
         outlook_7d=brief_payload.get("outlook_7d"),
         frameworks_cited=brief_payload.get("frameworks_cited") or [],
-        raw_prompt=system_prompt_for_language(language),  # type: ignore[arg-type]
+        raw_prompt=system_prompt_for_language(language, locale=locale),  # type: ignore[arg-type]
         model_used=brief_payload["model_used"],
     )
     db.add(brief)

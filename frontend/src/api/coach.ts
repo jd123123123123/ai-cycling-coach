@@ -186,9 +186,10 @@ export interface ChatMessage {
 
 export async function fetchCoachBrief(
   language: CoachLanguage = 'simple',
+  locale: 'en' | 'de' = 'en',
 ): Promise<CoachBriefResponse> {
   const res = await apiClient.get<CoachBriefResponse>('/coach/brief', {
-    params: { language },
+    params: { language, locale },
     timeout: 30_000, // LLM generation can take a few seconds
   })
   return res.data
@@ -196,9 +197,10 @@ export async function fetchCoachBrief(
 
 export async function refreshCoachBrief(
   language: CoachLanguage = 'simple',
+  locale: 'en' | 'de' = 'en',
 ): Promise<CoachBriefResponse> {
   const res = await apiClient.post<CoachBriefResponse>('/coach/brief/refresh', undefined, {
-    params: { language },
+    params: { language, locale },
     timeout: 30_000,
   })
   return res.data

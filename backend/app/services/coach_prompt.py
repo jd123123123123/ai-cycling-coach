@@ -242,9 +242,24 @@ around 78 effort points; you went 71 minutes at 84").
 SYSTEM_PROMPT = SYSTEM_PROMPT_TECHNICAL
 
 
+LOCALE_DE_INSTRUCTION = (
+    "\n\n=== OUTPUT LANGUAGE: GERMAN ===\n"
+    "Write the entire athlete-facing prose in German (Deutsch) — verdict, "
+    "rationale, why_this_workout, tomorrow_plan.description, regeneration "
+    "bullets, why_tired causes (label + evidence). Keep these technical "
+    "terms as-is in English, since they are international cycling vocabulary: "
+    "TSS, CTL, ATL, TSB, FTP, HRV, RHR, EF, Pw:HR, RPE, watts (W), bpm, "
+    "and zone numbers (Z1–Z7). Workout titles, framework citations, and "
+    "structured JSON keys also stay in English. Use a respectful but warm "
+    "tone (du-form, not Sie).\n"
+    "=========================="
+)
+
+
 def system_prompt_for_language(
     language: Language,
     context: PromptContext = "brief",
+    locale: str | None = None,
 ) -> str:
     """Return the system prompt for the requested language mode + context.
 
@@ -260,15 +275,23 @@ def system_prompt_for_language(
                                     modification intent ("I only have 45 min",
                                     "make it harder", "swap to indoor").
     """
+    locale_suffix = LOCALE_DE_INSTRUCTION if locale == "de" else ""
+
     if context == "chat_modification":
-        if language == "simple":
-            return CHAT_MODIFICATION_PROMPT_SIMPLE
-        return CHAT_MODIFICATION_PROMPT_TECHNICAL
+        base = (
+            CHAT_MODIFICATION_PROMPT_SIMPLE
+            if language == "simple"
+            else CHAT_MODIFICATION_PROMPT_TECHNICAL
+        )
+        return f"{base}{locale_suffix}"
 
     if context == "chat_analytical":
-        if language == "simple":
-            return CHAT_ANALYTICAL_PROMPT_SIMPLE
-        return CHAT_ANALYTICAL_PROMPT_TECHNICAL
+        base = (
+            CHAT_ANALYTICAL_PROMPT_SIMPLE
+            if language == "simple"
+            else CHAT_ANALYTICAL_PROMPT_TECHNICAL
+        )
+        return f"{base}{locale_suffix}"
 
     # Brief context — prefix the curated coaching knowledge base so every
     # prescription is grounded in the same evidence-backed values (HRV,
@@ -281,7 +304,7 @@ def system_prompt_for_language(
     # hashes stay stable across requests. The text is stable; the variable
     # inputs (yesterday's recommendation, today's activities, tomorrow's
     # planned workout) live in the user message instead.
-    return f"{COACH_KNOWLEDGE_BASE}\n\n{base}{STEP7_BRIEF_ADDENDUM}"
+    return f"{COACH_KNOWLEDGE_BASE}\n\n{base}{STEP7_BRIEF_ADDENDUM}{locale_suffix}"
 
 
 # ======================================================================

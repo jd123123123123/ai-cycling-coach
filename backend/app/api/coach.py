@@ -15,7 +15,7 @@ from collections import defaultdict, deque
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,9 @@ from app.schemas.coach import (
     BriefOption,
     BriefRead,
     ChatRequest,
+    ExternalWorkoutMatch,
+    ExternalWorkoutsRead,
+    GoalTrajectoryRead,
     OutlookEntry,
     PostRideReview,
     PrescribedWorkout,
@@ -36,9 +39,15 @@ from app.schemas.coach import (
     TransparencyRead,
     WhyTiredRead,
 )
+from app.models.athlete_profile import AthleteProfile
 from app.services import coach_service
 from app.services.advanced_metrics import why_am_i_tired
 from app.services.coach_prompt import SYSTEM_PROMPT
+from app.services.external_workouts import match_workouts, predict_tss
+from app.services.goal_trajectory import project as project_trajectory, trajectory_to_dict
+from app.services.pmc_service import compute_user_pmc
+from app.services.training_periodization import detect_training_phase
+from app.services.workout_export import blocks_from_dicts, to_erg, to_fit, to_mrc, to_zwo
 
 router = APIRouter(prefix="/coach", tags=["coach"])
 
@@ -156,21 +165,23 @@ async def get_brief(
         Literal["simple", "technical"],
         Query(description="Language mode: 'simple' (plain English, default) or 'technical' (full vocabulary)."),
     ] = "simple",
+    locale: Annotated[
+        Literal["en", "de"],
+        Query(description="UI locale — 'en' (default) or 'de'. Drives the LLM to write its prose in that language."),
+    ] = "en",
 ) -> BriefRead:
     """Return the latest cached brief if < 6h old; otherwise regenerate and cache.
 
-    The cache is keyed by language — different language = cache miss =
+    The cache is keyed by language + locale — different combo = cache miss =
     regenerate. Works without ANTHROPIC_API_KEY: falls back to a rule-based
     brief (still language-aware) so the dashboard can always render.
     """
-    # Check if a fresh brief for THIS language already exists — this is the
-    # from_cache signal we return. We use the same coalesce rule as the
-    # service so pre-5.2 rows count as 'simple' for backward compat.
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import func
     cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
 
     lang_expr = CoachBrief.evidence["language"].astext
+    locale_expr = CoachBrief.evidence["locale"].astext
     cache_check = await db.execute(
         select(CoachBrief)
         .where(
@@ -178,6 +189,7 @@ async def get_brief(
             CoachBrief.generated_at >= cutoff,
             CoachBrief.prescribed_workout.isnot(None),
             func.coalesce(lang_expr, "simple") == language,
+            func.coalesce(locale_expr, "en") == locale,
         )
         .order_by(CoachBrief.generated_at.desc())
         .limit(1)
@@ -186,7 +198,7 @@ async def get_brief(
     from_cache = cached is not None
 
     brief = await coach_service.get_or_generate_brief(
-        db, current_user.id, force=False, language=language,
+        db, current_user.id, force=False, language=language, locale=locale,
     )
     return _brief_to_read(brief, from_cache=from_cache)
 
@@ -199,13 +211,14 @@ async def refresh_brief(
         Literal["simple", "technical"],
         Query(description="Language mode: 'simple' (default) or 'technical'."),
     ] = "simple",
+    locale: Annotated[
+        Literal["en", "de"],
+        Query(description="UI locale — 'en' (default) or 'de'."),
+    ] = "en",
 ) -> BriefRead:
-    """Force-regenerate the brief in the requested language.
-
-    Always returns from_cache=False. Cache-bust is independent per language.
-    """
+    """Force-regenerate the brief in the requested language + locale."""
     brief = await coach_service.get_or_generate_brief(
-        db, current_user.id, force=True, language=language,
+        db, current_user.id, force=True, language=language, locale=locale,
     )
     return _brief_to_read(brief, from_cache=False)
 
@@ -293,4 +306,316 @@ async def transparency(
         model=settings.COACH_MODEL if settings.ANTHROPIC_API_KEY else "rule-based-fallback",
         last_brief_id=last.id if last else None,
         last_generated_at=last.generated_at if last else None,
+    )
+
+
+# ----------------------------------------------------------------------
+# Goal trajectory — event-aware projection for the dashboard.
+# A coach-grade view: days to event, projected race-day CTL/TSB, Mujika
+# taper window, on-track gap, and a one-line narrative the UI drops in.
+#
+# Default `target_ctl` is derived from event_type + priority when goals.target_ctl
+# isn't set explicitly. The defaults are conservative coaching floors taken from
+# Friel's Cyclist's Training Bible Ch.5 (training-stress thresholds for event
+# success). They're intentionally low-end so the gap reads "behind" rather than
+# "way behind" for athletes still in early base.
+# ----------------------------------------------------------------------
+
+# event_type → priority → CTL floor for "race-ready"
+_DEFAULT_TARGET_CTL: dict[str, dict[str, float]] = {
+    "fondo":       {"A": 70.0, "B": 60.0, "C": 50.0},
+    "race":        {"A": 75.0, "B": 65.0, "C": 55.0},
+    "audax":       {"A": 65.0, "B": 55.0, "C": 50.0},
+    "maintenance": {"A": 50.0, "B": 45.0, "C": 40.0},
+}
+
+
+def _default_target_ctl(event_type: str | None, priority: str | None) -> float | None:
+    if not event_type:
+        return None
+    by_priority = _DEFAULT_TARGET_CTL.get(event_type.lower())
+    if not by_priority:
+        return None
+    return by_priority.get((priority or "B").upper())
+
+
+@router.get("/trajectory", response_model=GoalTrajectoryRead)
+async def goal_trajectory(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> GoalTrajectoryRead:
+    """Forward-looking projection of fitness toward the athlete's target event.
+
+    Pulls the same `goal_trajectory.project()` the coach brief uses. Surfaced
+    on its own endpoint so the dashboard's trajectory primitive can render
+    instantly without waiting for a brief regeneration.
+    """
+    profile_q = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
+    )
+    profile = profile_q.scalar_one_or_none()
+
+    pmc_full = await compute_user_pmc(db, current_user.id, days=90)
+    ctl_now = 0.0
+    if profile:
+        # detect_training_phase needs the goal date + ctl_now; degrade gracefully.
+        rows = pmc_full.get("total") or []
+        if rows:
+            ctl_now = float(rows[-1].get("ctl") or 0.0)
+
+    goal_date = profile.target_event_date if profile else None
+    phase = detect_training_phase(goal_date, ctl_now) if profile else "base"
+
+    # Build the goals dict that project() understands. Inject default target_ctl
+    # when the profile didn't pin one explicitly so the on-track classifier can
+    # answer "behind / on / ahead" instead of degrading to no_goal.
+    goals: dict = {}
+    if profile and isinstance(profile.goals, dict):
+        goals = dict(profile.goals)
+    if profile and profile.target_event_date:
+        goals.setdefault(
+            "target_event",
+            {
+                "name": (
+                    goals.get("target_event", {}).get("name")
+                    if isinstance(goals.get("target_event"), dict)
+                    else None
+                ),
+                "date": profile.target_event_date.isoformat(),
+            },
+        )
+    if "target_ctl" not in goals and profile:
+        derived = _default_target_ctl(profile.target_event_type, profile.target_priority)
+        if derived is not None:
+            goals["target_ctl"] = derived
+
+    projection = project_trajectory(
+        user_pmc=pmc_full.get("total") or [],
+        athlete_goals=goals,
+        phase=phase,
+    )
+    payload = trajectory_to_dict(projection)
+
+    # Enrich with event metadata so the UI doesn't need a second fetch.
+    event_name: str | None = None
+    if isinstance(goals.get("target_event"), dict):
+        event_name = goals["target_event"].get("name")
+    payload["event_name"] = event_name
+    payload["event_date"] = (
+        profile.target_event_date.isoformat()
+        if profile and profile.target_event_date
+        else None
+    )
+    payload["event_type"] = profile.target_event_type if profile else None
+    payload["target_priority"] = profile.target_priority if profile else None
+
+    return GoalTrajectoryRead(**payload)
+
+
+# ----------------------------------------------------------------------
+# External workouts — curated Zwift / TrainerRoad / etc. matches for today.
+# Reads the brief's prescribed_workout to derive (category, target_minutes),
+# then asks the matcher for a ranked shortlist. The matcher itself is pure
+# (file-loaded JSON); fetching this endpoint never costs an LLM call.
+# ----------------------------------------------------------------------
+
+# Internal SessionType values that the picker emits (see
+# training_periodization.SessionType). 'rest' has no library — endpoint
+# returns an empty list. 'recovery' shares the recovery library.
+_SESSION_TO_LIBRARY_CATEGORY: dict[str, str] = {
+    "rest":       "recovery",
+    "recovery":   "recovery",
+    "endurance":  "endurance",
+    "tempo":      "tempo",
+    "sweet_spot": "sweet_spot",
+    "threshold":  "threshold",
+    "vo2":        "vo2",
+}
+
+
+@router.get("/external-workouts", response_model=ExternalWorkoutsRead)
+async def external_workouts(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    platforms: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Comma-separated platform filter (e.g. 'zwift,trainerroad'). "
+                "Omit for all."
+            ),
+        ),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+) -> ExternalWorkoutsRead:
+    """Today's external-platform workout shortlist.
+
+    Derives `(category, target_minutes)` from the most recent brief's
+    prescribed_workout. When no brief exists yet, falls back to ('endurance',
+    60) — a reasonable default that lets new users see workouts before their
+    first sync.
+    """
+    # Pull the latest brief for category + duration; OK if none exists.
+    latest_q = await db.execute(
+        select(CoachBrief)
+        .where(CoachBrief.user_id == current_user.id)
+        .order_by(CoachBrief.generated_at.desc())
+        .limit(1)
+    )
+    latest = latest_q.scalar_one_or_none()
+
+    session_type = "endurance"
+    target_minutes = 60
+    if latest and isinstance(latest.prescribed_workout, dict):
+        pw = latest.prescribed_workout
+        # category lives on the picked template; we proxied it through as
+        # `category` in the snapshot but most generators pass `intensity_chip`.
+        cat = pw.get("category") or pw.get("intensity_chip") or "endurance"
+        if isinstance(cat, str):
+            session_type = cat.lower()
+        dur = pw.get("duration_minutes")
+        if isinstance(dur, (int, float)) and dur > 0:
+            target_minutes = int(dur)
+
+    library_category = _SESSION_TO_LIBRARY_CATEGORY.get(session_type, "endurance")
+
+    # Athlete FTP guards out workouts with a min_ftp the rider can't safely
+    # hold (TrainerRoad-style).
+    profile_q = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
+    )
+    profile = profile_q.scalar_one_or_none()
+    ftp = profile.ftp_watts if profile else None
+
+    platform_filter: tuple[str, ...] | None = None
+    if platforms:
+        platform_filter = tuple(p.strip().lower() for p in platforms.split(",") if p.strip())
+
+    matches = match_workouts(
+        category=library_category,
+        target_minutes=target_minutes,
+        athlete_ftp=ftp,
+        limit=limit,
+        platforms=platform_filter,
+    )
+
+    return ExternalWorkoutsRead(
+        session_type=session_type,
+        target_minutes=target_minutes,
+        matches=[
+            ExternalWorkoutMatch(
+                id=w.id,
+                title=w.title,
+                platform=w.platform,  # type: ignore[arg-type]
+                category=w.category,
+                duration_min=w.duration_min,
+                intensity_factor=w.intensity_factor,
+                structure=w.structure,
+                min_ftp=w.min_ftp,
+                predicted_tss=predict_tss(w),
+            )
+            for w in matches
+        ],
+    )
+
+
+# ----------------------------------------------------------------------
+# Workout export — turn today's prescribed workout into a structured file
+# every major indoor app understands.
+# ----------------------------------------------------------------------
+
+
+_EXPORT_CONTENT_TYPES: dict[str, str] = {
+    # .zwo is technically XML but most trainer apps key off the extension,
+    # not the MIME. Use application/xml; that's the spec-correct answer.
+    "zwo": "application/xml",
+    "erg": "text/plain",
+    "mrc": "text/plain",
+    # Garmin's registered FIT MIME. Garmin Connect, Fenix/Edge, Wahoo all
+    # accept `application/octet-stream` too — using the registered type is
+    # the safer answer for stricter importers.
+    "fit": "application/vnd.ant.fit",
+}
+
+
+def _safe_filename(title: str) -> str:
+    """Sanitize the workout title into a filename. Allow letters, digits,
+    underscores, hyphens; collapse everything else to underscores. Caps at
+    80 chars so the resulting Content-Disposition stays readable."""
+    out = "".join(c if c.isalnum() or c in "-_" else "_" for c in title.strip())
+    out = out.strip("_") or "workout"
+    return out[:80]
+
+
+@router.get(
+    "/workout/export",
+    summary="Export today's prescribed workout to a structured file",
+    description=(
+        "Returns the latest brief's prescribed_workout serialized to one of "
+        ".zwo (Zwift), .erg (watts-by-time), or .mrc (%FTP-by-time). The "
+        ".zwo and .mrc variants are FTP-relative; .erg is absolute watts."
+    ),
+)
+async def export_workout(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    format: Annotated[
+        Literal["zwo", "erg", "mrc", "fit"],
+        Query(description="Target file format"),
+    ] = "zwo",
+) -> Response:
+    latest_q = await db.execute(
+        select(CoachBrief)
+        .where(CoachBrief.user_id == current_user.id)
+        .order_by(CoachBrief.generated_at.desc())
+        .limit(1)
+    )
+    latest = latest_q.scalar_one_or_none()
+
+    pw = latest.prescribed_workout if latest else None
+    if not isinstance(pw, dict) or not isinstance(pw.get("blocks"), list) or not pw["blocks"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No prescribed workout available to export.",
+        )
+
+    profile_q = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
+    )
+    profile = profile_q.scalar_one_or_none()
+    ftp = profile.ftp_watts if profile else None
+    if not ftp or ftp <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Set your FTP first — workout export needs an FTP anchor.",
+        )
+
+    blocks = blocks_from_dicts(pw["blocks"])
+    title = str(pw.get("title") or pw.get("template_id") or "workout")
+    description = str(pw.get("why_this_workout") or pw.get("purpose") or "")
+    category = pw.get("category") if isinstance(pw.get("category"), str) else None
+
+    body: str | bytes
+    if format == "zwo":
+        body = to_zwo(
+            title=title, description=description, blocks=blocks,
+            ftp=ftp, category=category,
+        )
+    elif format == "erg":
+        body = to_erg(title=title, description=description, blocks=blocks, ftp=ftp)
+    elif format == "mrc":
+        body = to_mrc(title=title, description=description, blocks=blocks, ftp=ftp)
+    else:  # fit
+        body = to_fit(title=title, description=description, blocks=blocks, ftp=ftp)
+
+    filename = f"{_safe_filename(title)}.{format}"
+    return Response(
+        content=body,
+        media_type=_EXPORT_CONTENT_TYPES[format],
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # CORS exposure so the frontend can read the filename if it ever
+            # wants to suggest a save name programmatically.
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
     )
