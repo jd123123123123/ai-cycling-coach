@@ -7,6 +7,7 @@
 import CoachBrief from '../CoachBrief'
 import MorningCheckin from '../MorningCheckin'
 import MorningRecap from '../MorningRecap'
+import DidYouKnow from '../DidYouKnow'
 import MomentumChips from '../MomentumChips'
 import PMCCompact from '../PMCCompact'
 import SeasonStats from '../SeasonStats'
@@ -38,6 +39,7 @@ export default function TodayTab() {
 
       <PMCCompact />
       <SeasonStats />
+      <DidYouKnow />
       <TrainingLogStrip />
 
       <DashboardSection id="today-deep-dive" title="Deep dive" defaultExpanded={false}>

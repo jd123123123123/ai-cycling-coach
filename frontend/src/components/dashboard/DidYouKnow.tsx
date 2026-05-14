@@ -1,0 +1,201 @@
+import { useMemo } from 'react'
+import { differenceInCalendarDays, getDayOfYear, startOfYear, subDays } from 'date-fns'
+import { Lightbulb } from 'lucide-react'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useDailyMetrics } from '../../hooks/useDailyMetrics'
+import type { ActivityRead } from '../../api/dashboard'
+
+/**
+ * DidYouKnow — a single rotating data-driven trivia line on Today.
+ *
+ * Computes a pool of season-long facts from the athlete's own activity
+ * history, then picks one deterministically per day (day-of-year mod N) so
+ * the card is stable across page reloads but shifts each morning. Each fact
+ * is one sentence with one bolded number — the "look how far you've come"
+ * mechanic that makes Strava's year-in-review work, on a daily cadence.
+ *
+ * Renders nothing if there's not enough data (< 5 logged activities this
+ * year) so brand-new accounts don't see thin numbers framed as triumphs.
+ */
+
+const KM_BETWEEN: Array<{ km: number; label: string }> = [
+  { km: 200, label: 'Berlin to Hamburg' },
+  { km: 500, label: 'Munich to Hamburg' },
+  { km: 580, label: 'Berlin to Munich' },
+  { km: 870, label: 'a full Paris-Brest-Paris loop' },
+  { km: 1200, label: 'a London Edinburgh London' },
+  { km: 1800, label: 'Berlin to Lisbon' },
+  { km: 3500, label: 'a Tour de France in distance' },
+  { km: 5000, label: 'the Tour Divide in distance' },
+  { km: 7000, label: 'Berlin to Beijing' },
+]
+
+function kmComparison(km: number): string | null {
+  const best = [...KM_BETWEEN].reverse().find((c) => km >= c.km)
+  if (!best) return null
+  const ratio = km / best.km
+  if (ratio < 0.95) return null
+  return best.label
+}
+
+interface Fact {
+  text: string
+}
+
+function buildPool(
+  acts: ActivityRead[],
+  yearStartActs: ActivityRead[],
+  today: Date,
+): Fact[] {
+  const pool: Fact[] = []
+
+  // YTD totals
+  let kmYtd = 0
+  let hoursYtd = 0
+  let sessionsYtd = 0
+  let tssYtd = 0
+  for (const a of yearStartActs) {
+    if ((a.duration_seconds ?? 0) < 600) continue
+    sessionsYtd += 1
+    hoursYtd += (a.duration_seconds ?? 0) / 3600
+    kmYtd += (a.distance_meters ?? 0) / 1000
+    tssYtd += a.tss ?? 0
+  }
+
+  if (kmYtd >= 50) {
+    const cmp = kmComparison(kmYtd)
+    pool.push({
+      text: cmp
+        ? `You've ridden ${Math.round(kmYtd).toLocaleString()} km this year — about ${cmp}.`
+        : `You've ridden ${Math.round(kmYtd).toLocaleString()} km this year.`,
+    })
+  }
+
+  if (hoursYtd >= 5) {
+    const fullDays = Math.floor(hoursYtd / 24)
+    if (fullDays >= 1) {
+      pool.push({
+        text: `${hoursYtd.toFixed(1)} hours in the saddle this year — that's ${fullDays} full ${fullDays === 1 ? 'day' : 'days'} of riding.`,
+      })
+    } else {
+      pool.push({ text: `${hoursYtd.toFixed(1)} hours in the saddle this year.` })
+    }
+  }
+
+  if (sessionsYtd >= 8) {
+    const daysSoFar = differenceInCalendarDays(today, startOfYear(today)) + 1
+    const perWeek = (sessionsYtd / daysSoFar) * 7
+    pool.push({
+      text: `${sessionsYtd} sessions logged this year — averaging ${perWeek.toFixed(1)} per week.`,
+    })
+  }
+
+  // Longest ride this year
+  const longest = [...yearStartActs]
+    .filter((a) => (a.duration_seconds ?? 0) >= 600)
+    .sort((a, b) => (b.duration_seconds ?? 0) - (a.duration_seconds ?? 0))[0]
+  if (longest) {
+    const h = (longest.duration_seconds ?? 0) / 3600
+    const km = (longest.distance_meters ?? 0) / 1000
+    if (h >= 1.5) {
+      pool.push({
+        text: km > 5
+          ? `Your longest ride this year was ${h.toFixed(1)} h and ${Math.round(km)} km — that one earned its post-ride coffee.`
+          : `Your longest ride this year clocked ${h.toFixed(1)} hours.`,
+      })
+    }
+  }
+
+  // Day-of-week pattern (last 90 days)
+  if (acts.length >= 5) {
+    const counts = [0, 0, 0, 0, 0, 0, 0]  // Sun..Sat
+    for (const a of acts) {
+      try {
+        const d = new Date(a.started_at)
+        counts[d.getDay()] += 1
+      } catch {
+        /* ignore */
+      }
+    }
+    const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    let maxIdx = 0
+    for (let i = 1; i < 7; i++) if (counts[i] > counts[maxIdx]) maxIdx = i
+    if (counts[maxIdx] >= 3) {
+      pool.push({
+        text: `Your most-ridden day this quarter is ${dayLabels[maxIdx]} — ${counts[maxIdx]} sessions on the books.`,
+      })
+    }
+  }
+
+  // Energy expenditure proxy from TSS (rough: 1 TSS @ FTP 250 ≈ ~10-12 kJ for
+  // a 75 kg rider; we use 11 as a middling constant since FTP isn't passed in
+  // and the fact is conversational, not clinical).
+  if (tssYtd >= 200) {
+    const kJ = tssYtd * 11
+    const calories = Math.round(kJ / 4.184)  // 1 kcal ≈ 4.184 kJ
+    if (calories >= 10_000) {
+      const pizzas = Math.round(calories / 2500)
+      pool.push({
+        text: `Roughly ${kJ.toLocaleString()} kJ of work this year — that's about ${pizzas} large pizzas worth of dinner.`,
+      })
+    }
+  }
+
+  return pool
+}
+
+export default function DidYouKnow() {
+  const today = useMemo(() => new Date(), [])
+  const yearStart = useMemo(() => startOfYear(today), [today])
+  const ninetyAgo = useMemo(() => subDays(today, 90), [today])
+
+  const { data: ytdData, isLoading } = useActivitiesRange(yearStart, today)
+  const { data: ninetyData } = useActivitiesRange(ninetyAgo, today)
+  // Bound the daily-metrics request the same way other Today components do
+  // — keeps React Query cache hits warm even though we don't read it directly.
+  useDailyMetrics(useMemo(() => subDays(today, 14), [today]), today)
+
+  const fact = useMemo(() => {
+    const acts = ninetyData?.activities ?? []
+    const ytdActs = ytdData?.activities ?? []
+    const pool = buildPool(acts, ytdActs, today)
+    if (pool.length === 0) return null
+    const seed = getDayOfYear(today)
+    return pool[seed % pool.length]
+  }, [ninetyData, ytdData, today])
+
+  if (isLoading) return null
+  if (!fact) return null
+
+  return (
+    <div
+      className="rounded-[12px] px-4 py-3 flex items-start gap-3"
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--color-amber-2) 6%, var(--color-paper-2))',
+        border: '1px solid color-mix(in srgb, var(--color-amber-2) 24%, var(--color-rule))',
+      }}
+    >
+      <Lightbulb
+        size={14}
+        strokeWidth={2}
+        style={{ color: 'var(--color-amber-2)', marginTop: 2, flexShrink: 0 }}
+      />
+      <div className="flex flex-col gap-1 min-w-0">
+        <span
+          className="eyebrow num-mono"
+          style={{
+            color: 'var(--color-amber-2)',
+            fontSize: 9,
+            letterSpacing: '0.22em',
+            fontWeight: 600,
+          }}
+        >
+          DID YOU KNOW
+        </span>
+        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink)', maxWidth: '60ch' }}>
+          {fact.text}
+        </p>
+      </div>
+    </div>
+  )
+}
