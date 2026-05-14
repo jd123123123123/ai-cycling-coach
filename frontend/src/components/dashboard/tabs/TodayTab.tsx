@@ -7,7 +7,9 @@
 import CoachBrief from '../CoachBrief'
 import MorningCheckin from '../MorningCheckin'
 import MorningRecap from '../MorningRecap'
+import MomentumChips from '../MomentumChips'
 import PMCCompact from '../PMCCompact'
+import SeasonStats from '../SeasonStats'
 import TrainingLogStrip from '../TrainingLogStrip'
 import ExternalWorkouts from '../ExternalWorkouts'
 import TodayHero from '../TodayHero'
@@ -25,6 +27,7 @@ export default function TodayTab() {
          ride review · recovery review · missed-yesterday chip · or nothing. */}
       <MorningRecap />
       <TodayHero />
+      <MomentumChips />
       <CoachBrief />
 
       {/* Momentum — the addiction spine: streak chain + weekly-challenge ring */}
@@ -34,6 +37,7 @@ export default function TodayTab() {
       </div>
 
       <PMCCompact />
+      <SeasonStats />
       <TrainingLogStrip />
 
       <DashboardSection id="today-deep-dive" title="Deep dive" defaultExpanded={false}>
