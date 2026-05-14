@@ -7,6 +7,7 @@
 import CoachBrief from '../CoachBrief'
 import MorningCheckin from '../MorningCheckin'
 import MorningRecap from '../MorningRecap'
+import AchievementBadges from '../AchievementBadges'
 import DidYouKnow from '../DidYouKnow'
 import MomentumChips from '../MomentumChips'
 import PMCCompact from '../PMCCompact'
@@ -39,6 +40,7 @@ export default function TodayTab() {
 
       <PMCCompact />
       <SeasonStats />
+      <AchievementBadges />
       <DidYouKnow />
       <TrainingLogStrip />
 

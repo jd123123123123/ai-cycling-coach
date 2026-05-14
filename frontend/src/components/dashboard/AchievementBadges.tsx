@@ -1,0 +1,378 @@
+import { useEffect, useMemo, useState } from 'react'
+import { format, parseISO, startOfYear, subDays } from 'date-fns'
+import {
+  Award,
+  Calendar,
+  Clock,
+  Flame,
+  Mountain,
+  Rocket,
+  Sparkles,
+  Trophy,
+} from 'lucide-react'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { usePMC } from '../../hooks/usePMC'
+import type { ActivityRead, PMCEntry } from '../../api/dashboard'
+
+/**
+ * AchievementBadges — first-time training milestones derived from activity
+ * and PMC history. Pure-frontend, persisted in localStorage so a returning
+ * athlete sees the same unlocks even after a long offline gap.
+ *
+ * What we show
+ * ────────────
+ * Unlocked badges, newest first. Locked badges aren't rendered — the goal
+ * is celebration, not a punishment surface. The newest unlock (within 7
+ * days) gets a small "NEW" indicator.
+ *
+ * Why localStorage v0
+ * ───────────────────
+ * The dates we record here are *first-seen* dates from the *current* user's
+ * device. Switching devices recomputes from history (the date might shift to
+ * "today" for legacy unlocks). That's fine — the achievement is real either
+ * way; the timestamp is a nice-to-have. A backend table (`crew_achievements`-
+ * style) is the natural next step.
+ */
+
+interface Achievement {
+  id: string
+  label: string
+  hint: string                       // tooltip
+  icon: React.ReactNode
+  unlockedAt: string                 // ISO yyyy-mm-dd
+}
+
+const STORAGE_KEY = 'achievements_v0'
+
+interface StoredDates {
+  [id: string]: string  // id → first-seen ISO date
+}
+
+function loadStored(): StoredDates {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as StoredDates) : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveStored(dates: StoredDates) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dates))
+  } catch {
+    /* ignore */
+  }
+}
+
+// ── Achievement detectors ────────────────────────────────────────────
+// Each detector returns the earliest activity / PMC entry date that
+// triggered the milestone, or null if not yet earned.
+
+function activityDate(a: ActivityRead): string {
+  return (a.date ?? a.started_at.slice(0, 10)).slice(0, 10)
+}
+
+function firstActivityMatching(
+  acts: ActivityRead[],
+  pred: (a: ActivityRead) => boolean,
+): string | null {
+  const sorted = [...acts].sort((a, b) => a.started_at.localeCompare(b.started_at))
+  const hit = sorted.find(pred)
+  return hit ? activityDate(hit) : null
+}
+
+function firstDailyTssAtLeast(
+  acts: ActivityRead[],
+  target: number,
+): string | null {
+  const byDay = new Map<string, number>()
+  for (const a of acts) {
+    const d = activityDate(a)
+    byDay.set(d, (byDay.get(d) ?? 0) + (a.tss ?? 0))
+  }
+  const sortedDates = Array.from(byDay.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+  const hit = sortedDates.find(([, tss]) => tss >= target)
+  return hit ? hit[0] : null
+}
+
+function firstWeeklyHoursAtLeast(
+  acts: ActivityRead[],
+  hours: number,
+): string | null {
+  if (acts.length === 0) return null
+  // Group by ISO week (Mon-anchored). Sum duration. Return Monday of the
+  // first week that clears the bar.
+  const byWeek = new Map<string, { sumS: number; mondayIso: string }>()
+  for (const a of acts) {
+    const d = parseISO(a.started_at)
+    const dow = (d.getDay() + 6) % 7  // Mon=0
+    const monday = new Date(d)
+    monday.setDate(d.getDate() - dow)
+    const key = format(monday, 'yyyy-MM-dd')
+    const cur = byWeek.get(key) ?? { sumS: 0, mondayIso: key }
+    cur.sumS += a.duration_seconds ?? 0
+    byWeek.set(key, cur)
+  }
+  const sorted = Array.from(byWeek.values()).sort((a, b) =>
+    a.mondayIso.localeCompare(b.mondayIso),
+  )
+  const hit = sorted.find((w) => w.sumS / 3600 >= hours)
+  return hit ? hit.mondayIso : null
+}
+
+function firstCtlAtLeast(entries: PMCEntry[], target: number): string | null {
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date))
+  const hit = sorted.find((e) => e.ctl >= target)
+  return hit ? hit.date : null
+}
+
+const ACHIEVEMENT_DEFS: Array<{
+  id: string
+  label: string
+  hint: string
+  icon: React.ReactNode
+  // Compute unlock date; takes the inputs we have on hand.
+  resolve: (acts: ActivityRead[], pmc: PMCEntry[]) => string | null
+}> = [
+  {
+    id: 'first-ride',
+    label: 'First ride',
+    hint: 'Your first logged activity. The streak starts here.',
+    icon: <Sparkles size={11} strokeWidth={2.2} />,
+    resolve: (acts) =>
+      firstActivityMatching(acts, (a) => (a.duration_seconds ?? 0) >= 600),
+  },
+  {
+    id: 'first-hour',
+    label: '1 hour',
+    hint: 'First ride of 60 minutes or more.',
+    icon: <Clock size={11} strokeWidth={2.2} />,
+    resolve: (acts) =>
+      firstActivityMatching(acts, (a) => (a.duration_seconds ?? 0) >= 3600),
+  },
+  {
+    id: 'first-2h',
+    label: '2-hour ride',
+    hint: 'First single ride that broke two hours.',
+    icon: <Clock size={11} strokeWidth={2.2} />,
+    resolve: (acts) =>
+      firstActivityMatching(acts, (a) => (a.duration_seconds ?? 0) >= 2 * 3600),
+  },
+  {
+    id: 'first-3h',
+    label: 'Big day · 3h',
+    hint: 'First ride at or past three hours — durability begins here.',
+    icon: <Mountain size={11} strokeWidth={2.2} />,
+    resolve: (acts) =>
+      firstActivityMatching(acts, (a) => (a.duration_seconds ?? 0) >= 3 * 3600),
+  },
+  {
+    id: 'first-50km',
+    label: '50 km',
+    hint: 'First ride at 50 km or more.',
+    icon: <Mountain size={11} strokeWidth={2.2} />,
+    resolve: (acts) =>
+      firstActivityMatching(acts, (a) => (a.distance_meters ?? 0) >= 50_000),
+  },
+  {
+    id: 'first-century',
+    label: 'Century · 100 km',
+    hint: 'First century ride. A real one.',
+    icon: <Trophy size={11} strokeWidth={2.2} />,
+    resolve: (acts) =>
+      firstActivityMatching(acts, (a) => (a.distance_meters ?? 0) >= 100_000),
+  },
+  {
+    id: 'first-100tss',
+    label: '100 TSS day',
+    hint: 'First day with 100+ TSS — meaningful daily load.',
+    icon: <Rocket size={11} strokeWidth={2.2} />,
+    resolve: (acts) => firstDailyTssAtLeast(acts, 100),
+  },
+  {
+    id: 'first-150tss',
+    label: '150 TSS day',
+    hint: 'First day with 150+ TSS — a proper big day.',
+    icon: <Rocket size={11} strokeWidth={2.2} />,
+    resolve: (acts) => firstDailyTssAtLeast(acts, 150),
+  },
+  {
+    id: 'week-10h',
+    label: '10-hour week',
+    hint: 'First training week that crossed 10 hours.',
+    icon: <Calendar size={11} strokeWidth={2.2} />,
+    resolve: (acts) => firstWeeklyHoursAtLeast(acts, 10),
+  },
+  {
+    id: 'week-15h',
+    label: '15-hour week',
+    hint: 'First training week at 15+ hours.',
+    icon: <Calendar size={11} strokeWidth={2.2} />,
+    resolve: (acts) => firstWeeklyHoursAtLeast(acts, 15),
+  },
+  {
+    id: 'ctl-30',
+    label: 'CTL 30',
+    hint: 'Fitness climbed past 30 for the first time.',
+    icon: <Award size={11} strokeWidth={2.2} />,
+    resolve: (_acts, pmc) => firstCtlAtLeast(pmc, 30),
+  },
+  {
+    id: 'ctl-50',
+    label: 'CTL 50',
+    hint: 'Fitness climbed past 50 for the first time — solid amateur base.',
+    icon: <Award size={11} strokeWidth={2.2} />,
+    resolve: (_acts, pmc) => firstCtlAtLeast(pmc, 50),
+  },
+  {
+    id: 'ctl-70',
+    label: 'CTL 70',
+    hint: 'Fitness climbed past 70 — race-ready territory.',
+    icon: <Trophy size={11} strokeWidth={2.2} />,
+    resolve: (_acts, pmc) => firstCtlAtLeast(pmc, 70),
+  },
+  {
+    id: 'streak-7',
+    label: '7-day streak',
+    hint: 'Seven straight logged days.',
+    icon: <Flame size={11} strokeWidth={2.2} />,
+    resolve: (acts) => {
+      if (acts.length === 0) return null
+      const days = new Set(acts.map(activityDate))
+      // Walk the sorted day list; find the first 7-in-a-row.
+      const sorted = Array.from(days).sort()
+      for (let i = 0; i + 6 < sorted.length; i++) {
+        const start = parseISO(sorted[i])
+        let ok = true
+        for (let k = 1; k < 7; k++) {
+          const need = format(
+            new Date(start.getTime() + k * 86400000),
+            'yyyy-MM-dd',
+          )
+          if (!days.has(need)) { ok = false; break }
+        }
+        if (ok) {
+          return format(
+            new Date(start.getTime() + 6 * 86400000),
+            'yyyy-MM-dd',
+          )
+        }
+      }
+      return null
+    },
+  },
+]
+
+export default function AchievementBadges() {
+  const today = useMemo(() => new Date(), [])
+  const yearStart = useMemo(() => startOfYear(today), [today])
+  const { data: actsData, isLoading } = useActivitiesRange(yearStart, today)
+  const { data: pmc } = usePMC(365)
+
+  const [stored, setStored] = useState<StoredDates>(() => loadStored())
+
+  const unlocked = useMemo<Achievement[]>(() => {
+    const acts = actsData?.activities ?? []
+    const entries = pmc?.entries ?? []
+    const result: Achievement[] = []
+    const next: StoredDates = { ...stored }
+
+    for (const def of ACHIEVEMENT_DEFS) {
+      const earliest = def.resolve(acts, entries)
+      if (!earliest) continue
+      // First-seen wins — only set if not previously stored.
+      const unlockedAt = next[def.id] ?? earliest
+      next[def.id] = unlockedAt
+      result.push({
+        id: def.id,
+        label: def.label,
+        hint: def.hint,
+        icon: def.icon,
+        unlockedAt,
+      })
+    }
+    // Persist only when something actually changed.
+    if (Object.keys(next).length !== Object.keys(stored).length) {
+      // Defer the write so render is pure. useEffect below picks it up.
+    }
+    return result
+  }, [actsData, pmc, stored])
+
+  useEffect(() => {
+    if (unlocked.length === 0) return
+    const next: StoredDates = {}
+    for (const u of unlocked) next[u.id] = u.unlockedAt
+    const a = Object.keys(stored).sort().join('|')
+    const b = Object.keys(next).sort().join('|')
+    if (a !== b) {
+      saveStored(next)
+      setStored(next)
+    }
+  }, [unlocked, stored])
+
+  if (isLoading) return null
+  if (unlocked.length === 0) return null
+
+  // Sort newest unlock first; mark "NEW" for unlocks within 7 days.
+  const sevenAgo = subDays(today, 7)
+  const sorted = [...unlocked].sort((a, b) => b.unlockedAt.localeCompare(a.unlockedAt))
+
+  return (
+    <div
+      className="rounded-[12px] px-4 py-3"
+      style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
+    >
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <span
+          className="eyebrow num-mono"
+          style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.22em' }}
+        >
+          BADGES · {sorted.length} UNLOCKED
+        </span>
+        <span
+          className="num-mono"
+          style={{ color: 'var(--color-muted)', fontSize: 10 }}
+        >
+          {ACHIEVEMENT_DEFS.length - sorted.length} more to chase
+        </span>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {sorted.map((b) => {
+          const isFresh = parseISO(b.unlockedAt) >= sevenAgo
+          return (
+            <span
+              key={b.id}
+              className="num-mono text-[11px] px-2 py-1 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
+              style={{
+                color: isFresh ? 'var(--color-good)' : 'var(--color-ink)',
+                border: `1px solid ${isFresh ? 'color-mix(in srgb, var(--color-good) 35%, var(--color-rule))' : 'var(--color-rule)'}`,
+                backgroundColor: isFresh ? 'color-mix(in srgb, var(--color-good) 6%, transparent)' : 'transparent',
+              }}
+              title={`${b.hint} · ${b.unlockedAt}`}
+            >
+              <span style={{ color: isFresh ? 'var(--color-good)' : 'var(--color-amber-2)' }}>
+                {b.icon}
+              </span>
+              {b.label}
+              {isFresh && (
+                <span
+                  className="eyebrow ml-0.5"
+                  style={{
+                    color: 'var(--color-good)',
+                    fontSize: 8,
+                    letterSpacing: '0.18em',
+                    fontWeight: 700,
+                  }}
+                >
+                  NEW
+                </span>
+              )}
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
