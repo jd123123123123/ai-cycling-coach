@@ -43,6 +43,7 @@ interface Achievement {
 }
 
 const STORAGE_KEY = 'achievements_v0'
+const CELEBRATED_KEY = 'achievements_celebrated_v0'
 
 interface StoredDates {
   [id: string]: string  // id → first-seen ISO date
@@ -60,6 +61,23 @@ function loadStored(): StoredDates {
 function saveStored(dates: StoredDates) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dates))
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadCelebrated(): Set<string> {
+  try {
+    const raw = localStorage.getItem(CELEBRATED_KEY)
+    return new Set(raw ? (JSON.parse(raw) as string[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function saveCelebrated(ids: Set<string>) {
+  try {
+    localStorage.setItem(CELEBRATED_KEY, JSON.stringify(Array.from(ids)))
   } catch {
     /* ignore */
   }
@@ -272,6 +290,8 @@ export default function AchievementBadges() {
   const { data: pmc } = usePMC(365)
 
   const [stored, setStored] = useState<StoredDates>(() => loadStored())
+  const [celebrated, setCelebrated] = useState<Set<string>>(() => loadCelebrated())
+  const [toast, setToast] = useState<Achievement | null>(null)
 
   const unlocked = useMemo<Achievement[]>(() => {
     const acts = actsData?.activities ?? []
@@ -312,6 +332,58 @@ export default function AchievementBadges() {
     }
   }, [unlocked, stored])
 
+  // First-time celebration: any unlock that's not yet in `celebrated` AND
+  // was earned within the last 7 days gets a one-shot mid-screen toast.
+  // We pick the most recent fresh-and-uncelebrated badge; if a session
+  // unlocked several at once (rare — new account replay), we toast each in
+  // turn as the user dismisses them.
+  useEffect(() => {
+    if (toast) return  // a toast is already on screen
+    const sevenAgo = subDays(new Date(), 7)
+    const fresh = unlocked
+      .filter((u) => !celebrated.has(u.id))
+      .filter((u) => {
+        try {
+          return parseISO(u.unlockedAt) >= sevenAgo
+        } catch {
+          return false
+        }
+      })
+      .sort((a, b) => b.unlockedAt.localeCompare(a.unlockedAt))
+    if (fresh.length > 0) {
+      setToast(fresh[0])
+    } else {
+      // Backfill: mark any non-fresh unlocks as already celebrated so the
+      // toast queue never resurfaces them.
+      const next = new Set(celebrated)
+      let changed = false
+      for (const u of unlocked) {
+        if (!next.has(u.id)) { next.add(u.id); changed = true }
+      }
+      if (changed) {
+        saveCelebrated(next)
+        setCelebrated(next)
+      }
+    }
+  }, [unlocked, celebrated, toast])
+
+  // Auto-dismiss after 8 seconds.
+  useEffect(() => {
+    if (!toast) return
+    const id = window.setTimeout(() => dismissToast(), 8000)
+    return () => window.clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast])
+
+  function dismissToast() {
+    if (!toast) return
+    const next = new Set(celebrated)
+    next.add(toast.id)
+    saveCelebrated(next)
+    setCelebrated(next)
+    setToast(null)
+  }
+
   if (isLoading) return null
   if (unlocked.length === 0) return null
 
@@ -320,6 +392,86 @@ export default function AchievementBadges() {
   const sorted = [...unlocked].sort((a, b) => b.unlockedAt.localeCompare(a.unlockedAt))
 
   return (
+    <>
+    {/* Mid-screen celebration toast — fires once per fresh unlock. Auto-
+       dismisses after 8s or on click. The fixed overlay sits above the
+       page; tapping the backdrop dismisses too. */}
+    {toast && (
+      <div
+        role="dialog"
+        aria-modal="false"
+        aria-label={`New badge unlocked: ${toast.label}`}
+        onClick={dismissToast}
+        className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-auto"
+        style={{
+          background: 'radial-gradient(80% 60% at 50% 50%, rgba(0,0,0,0.45), rgba(0,0,0,0))',
+          animation: 'fade-in 320ms ease-out',
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="rounded-[18px] px-6 py-5 max-w-sm w-full text-center flex flex-col items-center gap-3"
+          style={{
+            backgroundColor: 'var(--color-paper-2)',
+            border: '1px solid color-mix(in srgb, var(--color-good) 40%, var(--color-rule))',
+            backgroundImage: `radial-gradient(80% 60% at 50% 0%, color-mix(in srgb, var(--color-good) 15%, transparent), transparent 70%)`,
+            boxShadow: '0 12px 40px -12px rgba(0,0,0,0.45)',
+            animation: 'score-enter 360ms cubic-bezier(.22,1,.36,1) both',
+          }}
+        >
+          <span
+            className="eyebrow num-mono"
+            style={{
+              color: 'var(--color-good)',
+              fontSize: 10,
+              letterSpacing: '0.28em',
+              fontWeight: 700,
+            }}
+          >
+            NEW BADGE
+          </span>
+          <div
+            className="rounded-full p-3 flex items-center justify-center"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--color-good) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-good) 40%, var(--color-rule))',
+            }}
+          >
+            <span style={{ color: 'var(--color-good)', display: 'flex' }}>
+              {toast.icon}
+            </span>
+          </div>
+          <h3
+            className="leading-tight"
+            style={{
+              fontFamily: 'var(--font-serif, serif)',
+              fontStyle: 'italic',
+              fontSize: 22,
+              color: 'var(--color-ink)',
+            }}
+          >
+            {toast.label}
+          </h3>
+          <p
+            className="text-[13px] leading-relaxed"
+            style={{ color: 'var(--color-ink-2)', maxWidth: '34ch' }}
+          >
+            {toast.hint}
+          </p>
+          <button
+            type="button"
+            onClick={dismissToast}
+            className="mt-2 inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium min-h-[40px]"
+            style={{
+              backgroundColor: 'var(--color-good)',
+              color: 'var(--color-paper)',
+            }}
+          >
+            Nice
+          </button>
+        </div>
+      </div>
+    )}
     <div
       className="rounded-[12px] px-4 py-3"
       style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
@@ -374,5 +526,6 @@ export default function AchievementBadges() {
         })}
       </div>
     </div>
+    </>
   )
 }
