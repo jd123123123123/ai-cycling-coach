@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { format, subDays } from 'date-fns'
 import { ArrowRight, Loader2 } from 'lucide-react'
+import SkipTodayDialog from './SkipTodayDialog'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
@@ -160,6 +161,7 @@ export default function TodayHero() {
   const ringSize = isMobile ? 108 : 140
   const [exporting, setExporting] = useState<WorkoutFormat | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [skipOpen, setSkipOpen] = useState(false)
 
   const metrics = metricsResp?.metrics ?? []
   const latest = latestWithData(metrics, 'hrv_status') ?? latestWithData(metrics, 'body_battery') ?? latestWithData(metrics, 'sleep_score')
@@ -272,6 +274,8 @@ export default function TodayHero() {
   const trajLine = trajectoryLine()
 
   return (
+    <>
+    <SkipTodayDialog open={skipOpen} onClose={() => setSkipOpen(false)} />
     <div
       className="rounded-[18px] p-5 sm:p-6"
       style={{
@@ -385,6 +389,16 @@ export default function TodayHero() {
                   {exportError}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => setSkipOpen(true)}
+                className="text-[12px] font-medium"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
+                  Can't train today?
+                </span>
+              </button>
             </div>
           )}
         </div>
@@ -440,5 +454,6 @@ export default function TodayHero() {
         </div>
       )}
     </div>
+    </>
   )
 }
