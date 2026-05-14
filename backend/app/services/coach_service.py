@@ -1019,6 +1019,61 @@ async def build_snapshot(
     except Exception:  # pragma: no cover — model may be absent in some envs
         logger.exception("failed to load tomorrow_planned_workout for user_id=%s", user_id)
 
+    # Fall back: if no DB row, project tomorrow's session via the same
+    # picker that drives today's. Keeps the LLM from defaulting to "rest
+    # day" just because the planned_workouts table happens to be empty.
+    # Conservative weekly_progress: assume today's quality session lands
+    # (bump hard_done if today is hard) so the picker respects the
+    # alternation rule when projecting tomorrow.
+    if tomorrow_planned_payload is None:
+        try:
+            projected_progress = dict(weekly_prog or {})
+            # If today is a quality session category, count it as done for
+            # tomorrow's projection — prevents stacking two hard days.
+            if today_session in ("threshold", "vo2", "sweet_spot", "anaerobic"):
+                projected_progress["hard_sessions_done"] = int(
+                    projected_progress.get("hard_sessions_done", 0)
+                ) + 1
+                if today_session == "vo2":
+                    projected_progress["vo2_sessions_done"] = int(
+                        projected_progress.get("vo2_sessions_done", 0)
+                    ) + 1
+                # Today counts as a recent quality session for the 72h guard.
+                projected_progress["last_72h_quality_count"] = int(
+                    projected_progress.get("last_72h_quality_count", 0)
+                ) + 1
+
+            tomorrow_session: SessionType = session_type_for_today(
+                phase=phase,
+                weekly_progress=projected_progress,
+                tsb=float(pmc.get("tsb", 0.0)),
+                intensity_ceiling=ceiling,
+                day_of_week=tomorrow_local_date.weekday(),
+            )
+            # Use the same per-day-minutes the today flow already computed
+            # — close enough for a one-day projection; the picker only
+            # needs a window, not a calendar.
+            tomorrow_template = pick_template(
+                session_type=tomorrow_session,
+                athlete_ftp=ftp,
+                available_minutes=today_available_minutes,
+            )
+            tomorrow_planned_payload = {
+                "title": tomorrow_template.name,
+                "template_id": tomorrow_template.id,
+                "sport": "cycling",
+                "duration_minutes": int(round(
+                    sum(b.duration_s for b in tomorrow_template.blocks) / 60
+                )),
+                "indoor": False,
+                "category": tomorrow_template.category,
+                "predicted_tss": tomorrow_template.base_tss,
+                "projected": True,  # marker so downstream knows this isn't
+                                    # a user-scheduled row, it's a projection
+            }
+        except Exception:  # pragma: no cover
+            logger.exception("failed to project tomorrow's session for user_id=%s", user_id)
+
     snapshot: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "language": language,

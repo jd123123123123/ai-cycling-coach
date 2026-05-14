@@ -1,9 +1,10 @@
+import { addDays, format } from 'date-fns'
+import { useCoachBrief } from '../../hooks/useCoachBrief'
 import type { TomorrowPlan, IntensityChip } from '../../api/coach'
-import { formatSigned } from '../../utils/format'
 
-// Intensity chip → human label. Matches the technical zone vocabulary on
-// the prescribed-workout card (recovery / endurance / tempo / threshold /
-// vo2 / race) but stays compact — one word fits inside the chip.
+// Intensity → human label + state color. Same vocabulary as the
+// prescribed-workout card; ties tomorrow's tint to the same tone system
+// the rest of the new cards use.
 const CHIP_LABEL: Record<IntensityChip, string> = {
   recovery: 'Recovery',
   endurance: 'Endurance',
@@ -13,75 +14,150 @@ const CHIP_LABEL: Record<IntensityChip, string> = {
   race: 'Race',
 }
 
+const CHIP_TONE: Record<IntensityChip, 'good' | 'caution' | 'bad' | 'neutral'> = {
+  recovery: 'good',
+  endurance: 'good',
+  tempo: 'neutral',
+  threshold: 'caution',
+  vo2: 'bad',
+  race: 'bad',
+}
+
+const TONE_COLOR: Record<'good' | 'caution' | 'bad' | 'neutral', string> = {
+  good: 'var(--color-good)',
+  caution: 'var(--color-caution)',
+  bad: 'var(--color-bad)',
+  neutral: 'var(--color-ink-2)',
+}
+
 interface TomorrowCardProps {
   data: TomorrowPlan | null | undefined
 }
 
 /**
- * Compact forward-looking card: one paragraph + TSS chip + intensity chip.
+ * TomorrowCard — forward-looking sister card to the workout / hero cards.
  *
- * Step 7 (today-runthrough). Renders nothing when `data` is missing so the
- * brief stays visually clean for older rows / models that don't ship the
- * tomorrow_plan block.
+ * Visual treatment matches the rest of the new dashboard vocabulary:
+ *   - tone-tinted background gradient
+ *   - eyebrow row with weekday + date + "projected" indicator when the
+ *     plan is picker-projected (no DB row)
+ *   - serif italic headline showing the actual projected workout title
+ *   - duration + TSS stat row (mono numerics, eyebrow labels)
+ *   - the AI description as the body paragraph
  *
- * Whoop-grade discipline: monochrome surface, single accent on the
- * predicted-TSS chip, no decorative chrome.
+ * Tomorrow's `predicted_tss` and `intensity_chip` come from the brief;
+ * the *title* (e.g. "Recovery spin — 60min") comes from
+ * `evidence.tomorrow_planned_workout` so this card needs the brief data
+ * pipe rather than a single prop — switched to reading the brief inline.
  */
 export default function TomorrowCard({ data }: TomorrowCardProps) {
+  const { data: brief } = useCoachBrief()
   if (!data) return null
 
-  const tssRounded = Math.round(data.predicted_tss || 0)
-  const tssDisplay = formatSigned(tssRounded, 0)
-  const chipLabel = CHIP_LABEL[data.intensity_chip] ?? data.intensity_chip
+  const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
+  const planned = evidence.tomorrow_planned_workout as
+    | { title?: string; category?: string; duration_minutes?: number; projected?: boolean; predicted_tss?: number }
+    | undefined
+
+  const tss = Math.round(
+    (planned?.predicted_tss as number | undefined) ?? data.predicted_tss ?? 0,
+  )
+  const chip = (data.intensity_chip as IntensityChip) ?? 'endurance'
+  const tone = CHIP_TONE[chip] ?? 'neutral'
+  const color = TONE_COLOR[tone]
+  const title = planned?.title || `${CHIP_LABEL[chip] ?? 'Endurance'} day`
+  const duration = planned?.duration_minutes ?? null
+  const tomorrow = addDays(new Date(), 1)
+  const isProjected = planned?.projected === true
 
   return (
     <div
-      className="rounded-[12px] p-4 flex flex-col gap-3 min-w-0"
+      className="rounded-[18px] p-5 sm:p-6 flex flex-col gap-3"
       style={{
-        backgroundColor: 'var(--color-paper)',
-        border: '1px solid var(--color-rule)',
+        backgroundColor: `color-mix(in srgb, ${color} 6%, var(--color-paper-2))`,
+        border: `1px solid color-mix(in srgb, ${color} 28%, var(--color-rule))`,
+        backgroundImage: `linear-gradient(180deg, color-mix(in srgb, ${color} 5%, transparent) 0%, transparent 70%)`,
       }}
     >
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* Eyebrow */}
+      <div className="flex items-center gap-3 flex-wrap">
         <span
-          className="eyebrow"
+          className="eyebrow num-mono"
           style={{
-            color: 'var(--color-muted)',
+            color,
             fontSize: 10,
             letterSpacing: '0.22em',
+            fontWeight: 600,
           }}
         >
-          Tomorrow
+          TOMORROW · {format(tomorrow, 'EEE d MMM').toUpperCase()}
         </span>
-        <div className="flex items-center gap-1.5">
+        <span
+          className="num-mono text-[11px] px-1.5 py-0.5 rounded-sm whitespace-nowrap"
+          style={{
+            color,
+            border: `1px solid color-mix(in srgb, ${color} 35%, var(--color-rule))`,
+          }}
+        >
+          {CHIP_LABEL[chip] ?? chip}
+        </span>
+        {isProjected && (
           <span
-            className="num-mono text-[11px] px-1.5 py-0.5 rounded-sm whitespace-nowrap"
-            style={{
-              color: 'var(--color-ink-2)',
-              border: '1px solid var(--color-rule)',
-            }}
+            className="num-mono"
+            style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.12em' }}
+            title="Projected from the periodization picker — no scheduled session yet for tomorrow."
           >
-            {chipLabel}
+            · PROJECTED
           </span>
-          <span
-            className="num-mono text-[11px] px-1.5 py-0.5 rounded-sm whitespace-nowrap"
-            style={{
-              color: 'var(--color-forest)',
-              backgroundColor: 'rgba(48, 108, 64, 0.08)',
-              border: '1px solid rgba(48, 108, 64, 0.25)',
-            }}
-            title="Predicted training stress score"
-          >
-            {tssDisplay} TSS
-          </span>
-        </div>
+        )}
       </div>
-      <p
-        className="text-[14px] leading-relaxed dashboard-break-words"
-        style={{ color: 'var(--color-ink-2)', maxWidth: '62ch' }}
+
+      {/* Headline — the actual workout */}
+      <h3
+        className="leading-tight"
+        style={{
+          fontFamily: 'var(--font-serif, serif)',
+          fontStyle: 'italic',
+          fontSize: 'clamp(20px, 2.6vw, 26px)',
+          color: 'var(--color-ink)',
+        }}
       >
-        {data.description}
-      </p>
+        {title}
+      </h3>
+
+      {/* Stat row */}
+      <div className="flex items-baseline gap-5 flex-wrap">
+        {duration != null && (
+          <div className="flex flex-col">
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+              DURATION
+            </span>
+            <span className="num-mono leading-none mt-1" style={{ color: 'var(--color-ink)', fontSize: 18, fontWeight: 500 }}>
+              {duration} min
+            </span>
+          </div>
+        )}
+        {tss > 0 && (
+          <div className="flex flex-col">
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+              TARGET TSS
+            </span>
+            <span className="num-mono leading-none mt-1" style={{ color, fontSize: 18, fontWeight: 500 }}>
+              {tss}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* AI description */}
+      {data.description && (
+        <p
+          className="text-[13px] sm:text-[14px] leading-relaxed mt-1"
+          style={{ color: 'var(--color-ink-2)', maxWidth: '64ch' }}
+        >
+          {data.description}
+        </p>
+      )}
     </div>
   )
 }
