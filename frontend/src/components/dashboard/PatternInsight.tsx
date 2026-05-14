@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
-import { subDays } from 'date-fns'
+import { subDays, format, parseISO } from 'date-fns'
 import { Eye } from 'lucide-react'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { usePMC } from '../../hooks/usePMC'
-import type { DailyMetric, PMCEntry } from '../../api/dashboard'
+import type { ActivityRead, DailyMetric, PMCEntry } from '../../api/dashboard'
 
 /**
  * PatternInsight — one coaching observation per day. A human coach
@@ -135,23 +136,128 @@ function tsbVolatility(pmc: PMCEntry[]): Pattern | null {
   }
 }
 
+// ── RHR adaptation — sustained drop below 14-day baseline ──────────
+function rhrAdaptation(metrics: DailyMetric[]): Pattern | null {
+  const last14 = lastN(metrics, 14).filter((m) => m.resting_hr != null)
+  if (last14.length < 9) return null
+  const recent = lastN(last14, 5)
+  const baseline = meanOrNull(last14.slice(0, -5).map((m) => m.resting_hr))
+  if (!baseline) return null
+  const belowBase = recent.filter((m) => (m.resting_hr ?? Infinity) < baseline).length
+  if (belowBase < 4) return null  // 4 of 5 = sustained
+  const recentMean = meanOrNull(recent.map((m) => m.resting_hr)) ?? baseline
+  const dropPct = ((baseline - recentMean) / baseline) * 100
+  if (dropPct < 1.5) return null
+  return {
+    priority: 60,
+    tone: 'good',
+    headline: `RHR has been below baseline ${belowBase} of the last 5 nights — averaging ${dropPct.toFixed(1)}% lower.`,
+    followup:
+      'Classic adaptation signature. The body is banking the work — keep the load steady this week.',
+  }
+}
+
+// ── Sleep consistency win — 5+ straight strong nights ──────────────
+function sleepConsistency(metrics: DailyMetric[]): Pattern | null {
+  const recent = lastN(metrics, 7).filter((m) => m.sleep_score != null)
+  if (recent.length < 5) return null
+  const tail = lastN(recent, 5)
+  const allStrong = tail.every((m) => (m.sleep_score ?? 0) >= 70)
+  if (!allStrong) return null
+  const mean = meanOrNull(tail.map((m) => m.sleep_score)) ?? 0
+  return {
+    priority: 50,
+    tone: 'good',
+    headline: `Sleep has scored 70+ for ${tail.length} straight nights — averaging ${Math.round(mean)}.`,
+    followup:
+      'This is the recovery-stack adaptations actually use. Treat today as a green-light day if everything else agrees.',
+  }
+}
+
+// ── Day-of-week miss pattern (last 4 weeks) ────────────────────────
+// Looks at the last 28 days and finds the weekday with the *most* expected-
+// but-empty slots. Only flags when the same weekday has gone empty 3+ of
+// the last 4 occurrences AND the athlete's overall weekly cadence is ≥4
+// sessions (so this isn't false-flagged on a 2-rides-a-week athlete).
+function dayOfWeekMiss(acts: ActivityRead[]): Pattern | null {
+  if (acts.length < 8) return null
+  const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+  // Bucket activity dates by ISO date.
+  const dateSet = new Set<string>()
+  for (const a of acts) {
+    try {
+      const k = format(parseISO(a.started_at), 'yyyy-MM-dd')
+      dateSet.add(k)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Last 28 days, weekday counts: total occurrences + matched.
+  const now = new Date()
+  const counts = Array.from({ length: 7 }, () => ({ total: 0, matched: 0 }))
+  for (let i = 1; i <= 28; i++) {
+    const d = subDays(now, i)
+    const k = format(d, 'yyyy-MM-dd')
+    const dow = d.getDay()
+    counts[dow].total += 1
+    if (dateSet.has(k)) counts[dow].matched += 1
+  }
+
+  // Bail if cadence is low; "skipped Wednesdays" doesn't apply to a
+  // weekend-only rider.
+  const totalSessions = counts.reduce((s, c) => s + c.matched, 0)
+  if (totalSessions < 16) return null  // < 4/wk avg
+
+  let worstDow = -1
+  let worstMissRatio = 0
+  for (let i = 0; i < 7; i++) {
+    const total = counts[i].total
+    if (total < 4) continue
+    const missed = total - counts[i].matched
+    if (missed < 3) continue
+    const ratio = missed / total
+    if (ratio > worstMissRatio) {
+      worstMissRatio = ratio
+      worstDow = i
+    }
+  }
+  if (worstDow < 0) return null
+
+  const c = counts[worstDow]
+  const missed = c.total - c.matched
+  return {
+    priority: 40,
+    tone: 'neutral',
+    headline: `You've skipped ${missed} of the last ${c.total} ${dayLabels[worstDow]}s.`,
+    followup:
+      "Move the day to a different slot or commit to a short Z2 spin — even 30 min keeps the chain unbroken.",
+  }
+}
+
 export default function PatternInsight() {
   const today = useMemo(() => new Date(), [])
-  const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 14), [today]), today)
+  const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 28), [today]), today)
   const { data: pmc } = usePMC(28)
+  const { data: actsResp } = useActivitiesRange(useMemo(() => subDays(today, 28), [today]), today)
 
   const pattern = useMemo<Pattern | null>(() => {
     const metrics = metricsResp?.metrics ?? []
     const entries = pmc?.entries ?? []
+    const acts = actsResp?.activities ?? []
     const candidates: Pattern[] = []
     const a = hrvStreak(metrics); if (a) candidates.push(a)
     const b = sleepShortfall(metrics); if (b) candidates.push(b)
     const c = ctlRamp(entries); if (c) candidates.push(c)
     const d = tsbVolatility(entries); if (d) candidates.push(d)
+    const e = rhrAdaptation(metrics); if (e) candidates.push(e)
+    const f = sleepConsistency(metrics); if (f) candidates.push(f)
+    const g = dayOfWeekMiss(acts); if (g) candidates.push(g)
     if (candidates.length === 0) return null
     candidates.sort((x, y) => y.priority - x.priority)
     return candidates[0]
-  }, [metricsResp, pmc])
+  }, [metricsResp, pmc, actsResp])
 
   if (!pattern) return null
 
