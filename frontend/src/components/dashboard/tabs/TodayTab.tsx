@@ -10,6 +10,7 @@ import MorningRecap from '../MorningRecap'
 import AchievementBadges from '../AchievementBadges'
 import DidYouKnow from '../DidYouKnow'
 import MomentumChips from '../MomentumChips'
+import PatternInsight from '../PatternInsight'
 import PMCCompact from '../PMCCompact'
 import SeasonStats from '../SeasonStats'
 import TrainingLogStrip from '../TrainingLogStrip'
@@ -30,6 +31,7 @@ export default function TodayTab() {
       <MorningRecap />
       <TodayHero />
       <MomentumChips />
+      <PatternInsight />
       <CoachBrief />
 
       {/* Momentum — the addiction spine: streak chain + weekly-challenge ring */}
