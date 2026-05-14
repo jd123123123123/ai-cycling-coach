@@ -1,5 +1,6 @@
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
+import { useT } from '../../contexts/LocaleContext'
 
 /**
  * TodayPostRecoveryReview — the rest-day twin of TodayPostRideReview.
@@ -24,6 +25,7 @@ import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
 export default function TodayPostRecoveryReview() {
   const { data: brief } = useCoachBrief()
   const { data: snapshot } = useTodaySnapshot()
+  const t = useT()
   if (!brief) return null
 
   // If a ride review exists, the ride card takes precedence — bail.
@@ -126,7 +128,7 @@ export default function TodayPostRecoveryReview() {
           className="eyebrow num-mono"
           style={{ color, fontSize: 10, letterSpacing: '0.22em', fontWeight: 600 }}
         >
-          RECOVERY · YESTERDAY
+          {t('recovery_yesterday')}
         </span>
         {yesterdayTitle && (
           <span

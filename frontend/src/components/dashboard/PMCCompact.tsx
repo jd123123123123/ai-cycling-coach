@@ -14,11 +14,16 @@ import Sparkline from './Sparkline'
  * sport toggles + projections stays in the Deep-dive accordion.
  */
 
+// Form-state bands match the readiness re-tune from Phase 1 and the
+// TrendsHero form-status helper — so PMCCompact, TrendsHero, and the
+// PMC chart agree on what "productive" / "optimal" / "deep fatigue"
+// look like.
 function formColor(tsb: number | null): string {
   if (tsb == null) return 'var(--color-muted)'
-  if (tsb <= -20) return 'var(--color-bad)'
-  if (tsb < -10) return 'var(--color-caution)'
-  return 'var(--color-good)'
+  if (tsb < -22) return 'var(--color-bad)'        // deep fatigue / overreach
+  if (tsb < -10) return 'var(--color-caution)'    // productive build-fatigue
+  if (tsb <= 5) return 'var(--color-ink)'         // optimal training zone
+  return 'var(--color-good)'                      // fresh / race-ready
 }
 
 function signed(n: number): string {
@@ -107,11 +112,16 @@ export default function PMCCompact() {
   const ctlValues = series.map((e) => e.ctl)
   const atlValues = series.map((e) => e.atl)
 
+  // Display the *raw* TSB so this card matches TrendsHero, the deep-dive
+  // PMCChart, and the Train tab — one number for "form" across the whole
+  // app. The HRV-adjusted TSB' (Phase-1 coach math) lives in the tooltip
+  // as supplemental context, never as the displayed value, so two charts
+  // never disagree on what TSB is.
   const adj = hrvAdjustedTsb(latest.tsb, metricsResp?.metrics ?? [])
-  const formVal = adj ? adj.value : latest.tsb
-  const formSub = adj ? "′" : undefined
+  const formVal = latest.tsb
+  const formSub: string | undefined = undefined
   const formTitle = adj
-    ? `HRV-adjusted form (TSB′). Raw TSB ${signed(latest.tsb)} · HRV ${adj.factorPct >= 0 ? '+' : ''}${adj.factorPct}% vs 28d baseline`
+    ? `Form (TSB) ${signed(latest.tsb)} · HRV-adjusted TSB' ≈ ${signed(adj.value)} (HRV ${adj.factorPct >= 0 ? '+' : ''}${adj.factorPct}% vs 28d baseline)`
     : `Form (TSB) — calendar load balance`
 
   return (

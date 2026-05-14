@@ -22,6 +22,7 @@ import WeekTab from '../components/dashboard/tabs/WeekTab'
 import TrendsTab from '../components/dashboard/tabs/TrendsTab'
 import CrewTab from '../components/dashboard/tabs/CrewTab'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
+import { useT } from '../contexts/LocaleContext'
 
 type TabId = 'today' | 'train' | 'trends' | 'crew'
 
@@ -53,11 +54,12 @@ export default function DashboardPage() {
     window.scrollTo(0, 0)
   }, [activeTab])
 
+  const t = useT()
   const tabs: readonly { id: TabId; label: string }[] = [
-    { id: 'today',  label: 'Today' },
-    { id: 'train',  label: 'Train' },
-    { id: 'trends', label: 'Trends' },
-    { id: 'crew',   label: 'Crew' },
+    { id: 'today',  label: t('tab_today') },
+    { id: 'train',  label: t('tab_train') },
+    { id: 'trends', label: t('tab_trends') },
+    { id: 'crew',   label: t('tab_crew') },
   ]
 
   const tabContent = (() => {

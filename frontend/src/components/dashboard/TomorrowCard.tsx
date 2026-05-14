@@ -1,5 +1,6 @@
 import { addDays, format } from 'date-fns'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
+import { useT } from '../../contexts/LocaleContext'
 import type { TomorrowPlan, IntensityChip } from '../../api/coach'
 
 // Intensity → human label + state color. Same vocabulary as the
@@ -52,6 +53,7 @@ interface TomorrowCardProps {
  */
 export default function TomorrowCard({ data }: TomorrowCardProps) {
   const { data: brief } = useCoachBrief()
+  const t = useT()
   if (!data) return null
 
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
@@ -90,7 +92,7 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
             fontWeight: 600,
           }}
         >
-          TOMORROW · {format(tomorrow, 'EEE d MMM').toUpperCase()}
+          {t('tomorrow_label')} · {format(tomorrow, 'EEE d MMM').toUpperCase()}
         </span>
         <span
           className="num-mono text-[11px] px-1.5 py-0.5 rounded-sm whitespace-nowrap"
@@ -107,7 +109,7 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
             style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.12em' }}
             title="Projected from the periodization picker — no scheduled session yet for tomorrow."
           >
-            · PROJECTED
+            · {t('projected')}
           </span>
         )}
       </div>
@@ -130,7 +132,7 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
         {duration != null && (
           <div className="flex flex-col">
             <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
-              DURATION
+              {t('duration').toUpperCase()}
             </span>
             <span className="num-mono leading-none mt-1" style={{ color: 'var(--color-ink)', fontSize: 18, fontWeight: 500 }}>
               {duration} min
@@ -140,7 +142,7 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
         {tss > 0 && (
           <div className="flex flex-col">
             <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
-              TARGET TSS
+              {t('target_tss').toUpperCase()}
             </span>
             <span className="num-mono leading-none mt-1" style={{ color, fontSize: 18, fontWeight: 500 }}>
               {tss}

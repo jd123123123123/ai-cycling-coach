@@ -3,6 +3,7 @@ import { differenceInCalendarDays, getDayOfYear, startOfYear, subDays } from 'da
 import { Lightbulb } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
+import { useT } from '../../contexts/LocaleContext'
 import type { ActivityRead } from '../../api/dashboard'
 
 /**
@@ -145,6 +146,7 @@ function buildPool(
 }
 
 export default function DidYouKnow() {
+  const t = useT()
   const today = useMemo(() => new Date(), [])
   const yearStart = useMemo(() => startOfYear(today), [today])
   const ninetyAgo = useMemo(() => subDays(today, 90), [today])
@@ -190,7 +192,7 @@ export default function DidYouKnow() {
             fontWeight: 600,
           }}
         >
-          DID YOU KNOW
+          {t('did_you_know')}
         </span>
         <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink)', maxWidth: '60ch' }}>
           {fact.text}

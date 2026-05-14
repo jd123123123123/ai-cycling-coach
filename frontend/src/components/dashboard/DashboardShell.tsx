@@ -19,6 +19,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import CoachChat from './CoachChat'
 import CommandPalette from '../ui/CommandPalette'
 import MobileBottomNav from './MobileBottomNav'
+import SyncButton from './SyncButton'
+import LocaleSwitch from './LocaleSwitch'
 
 interface DashboardShellProps {
   children: ReactNode
@@ -54,6 +56,11 @@ export default function DashboardShell({
       {stickyBar}
 
       <main className="paper-grain max-w-6xl mx-auto px-4 sm:px-6 pb-28 lg:pb-20 flex flex-col gap-6 sm:gap-8 min-w-0">
+        <div className="flex justify-end items-center gap-2 pt-3">
+          <LocaleSwitch />
+          <SyncButton compact />
+        </div>
+
         {tabs && <div className="-mb-2">{tabs}</div>}
 
         <section className="min-w-0">

@@ -4,6 +4,7 @@ import { Eye } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { usePMC } from '../../hooks/usePMC'
+import { useT } from '../../contexts/LocaleContext'
 import type { ActivityRead, DailyMetric, PMCEntry } from '../../api/dashboard'
 
 /**
@@ -237,6 +238,7 @@ function dayOfWeekMiss(acts: ActivityRead[]): Pattern | null {
 }
 
 export default function PatternInsight() {
+  const t = useT()
   const today = useMemo(() => new Date(), [])
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 28), [today]), today)
   const { data: pmc } = usePMC(28)
@@ -285,7 +287,7 @@ export default function PatternInsight() {
             fontWeight: 600,
           }}
         >
-          PATTERN SPOTTED
+          {t('pattern_spotted')}
         </span>
         <p
           className="text-[13px] leading-relaxed"

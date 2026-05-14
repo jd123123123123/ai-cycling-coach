@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { LocaleProvider } from './contexts/LocaleContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -11,11 +12,13 @@ import CalendarPage from './pages/CalendarPage'
 import ActivitiesPage from './pages/ActivitiesPage'
 import CoachPage from './pages/CoachPage'
 import SettingsPage from './pages/SettingsPage'
+import DashboardsPage from './pages/DashboardsPage'
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <LocaleProvider>
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -90,6 +93,14 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/dashboards"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <DashboardsPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -97,6 +108,7 @@ function App() {
           {/* Catch-all: redirect unknown paths to dashboard (ProtectedRoute handles auth check) */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        </LocaleProvider>
       </AuthProvider>
     </BrowserRouter>
   )

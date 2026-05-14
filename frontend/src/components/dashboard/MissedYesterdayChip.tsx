@@ -1,4 +1,5 @@
 import { useCoachBrief } from '../../hooks/useCoachBrief'
+import { useT } from '../../contexts/LocaleContext'
 
 /**
  * MissedYesterdayChip — surfaces a single line on Today when yesterday had a
@@ -11,6 +12,7 @@ import { useCoachBrief } from '../../hooks/useCoachBrief'
  */
 export default function MissedYesterdayChip() {
   const { data } = useCoachBrief()
+  const t = useT()
   if (!data) return null
 
   const evidence = data.evidence as Record<string, unknown>
@@ -54,7 +56,7 @@ export default function MissedYesterdayChip() {
           className="eyebrow num-mono"
           style={{ color: 'var(--color-caution)', fontSize: 10, letterSpacing: '0.22em' }}
         >
-          YESTERDAY · MISSED
+          {t('yesterday_missed')}
         </span>
         <span style={{ color: 'var(--color-ink)', fontSize: 14 }}>
           {plannedTitle}

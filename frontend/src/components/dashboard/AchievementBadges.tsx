@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { usePMC } from '../../hooks/usePMC'
+import { useT } from '../../contexts/LocaleContext'
 import type { ActivityRead, PMCEntry } from '../../api/dashboard'
 
 /**
@@ -284,6 +285,7 @@ const ACHIEVEMENT_DEFS: Array<{
 ]
 
 export default function AchievementBadges() {
+  const t = useT()
   const today = useMemo(() => new Date(), [])
   const yearStart = useMemo(() => startOfYear(today), [today])
   const { data: actsData, isLoading } = useActivitiesRange(yearStart, today)
@@ -428,7 +430,7 @@ export default function AchievementBadges() {
               fontWeight: 700,
             }}
           >
-            NEW BADGE
+            {t('new_badge')}
           </span>
           <div
             className="rounded-full p-3 flex items-center justify-center"
@@ -481,13 +483,13 @@ export default function AchievementBadges() {
           className="eyebrow num-mono"
           style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.22em' }}
         >
-          BADGES · {sorted.length} UNLOCKED
+          {t('badges_eyebrow')} · {sorted.length} {t('unlocked').toUpperCase()}
         </span>
         <span
           className="num-mono"
           style={{ color: 'var(--color-muted)', fontSize: 10 }}
         >
-          {ACHIEVEMENT_DEFS.length - sorted.length} more to chase
+          {ACHIEVEMENT_DEFS.length - sorted.length} {t('more_to_chase')}
         </span>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
@@ -518,7 +520,7 @@ export default function AchievementBadges() {
                     fontWeight: 700,
                   }}
                 >
-                  NEW
+                  {t('new_chip')}
                 </span>
               )}
             </span>

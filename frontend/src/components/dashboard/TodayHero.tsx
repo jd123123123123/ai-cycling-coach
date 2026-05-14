@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { format, subDays } from 'date-fns'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import SkipTodayDialog from './SkipTodayDialog'
+import { useT } from '../../contexts/LocaleContext'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
@@ -43,7 +44,7 @@ function useViewportIsMobile(breakpoint = 640): boolean {
  * this card is the verdict, not the data dump.
  */
 
-function StateRing({ score, color, size }: { score: number; color: string; size: number }) {
+function StateRing({ score, color, size, recoveryLabel }: { score: number; color: string; size: number; recoveryLabel: string }) {
   const animated = useCountUp(score, { durationMs: 1200, digits: 0 })
   const stroke = Math.max(9, Math.round(size * 0.085))
   const radius = (size - stroke) / 2
@@ -97,7 +98,7 @@ function StateRing({ score, color, size }: { score: number; color: string; size:
           {animated}
         </span>
         <span className="eyebrow mt-1" style={{ color, fontSize: 10, letterSpacing: '0.24em', fontWeight: 600 }}>
-          RECOVERY
+          {recoveryLabel}
         </span>
       </div>
     </div>
@@ -159,6 +160,7 @@ export default function TodayHero() {
   const { data: trajectory } = useGoalTrajectory()
   const isMobile = useViewportIsMobile(640)
   const ringSize = isMobile ? 108 : 140
+  const t = useT()
   const [exporting, setExporting] = useState<WorkoutFormat | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [skipOpen, setSkipOpen] = useState(false)
@@ -297,7 +299,7 @@ export default function TodayHero() {
           <>
             <span style={{ color: 'var(--color-muted)', fontSize: 10 }}>·</span>
             <EyebrowChip color="var(--color-amber-2)">
-              {daysToGoal}D TO {(goalName ?? 'GOAL').toUpperCase()}
+              {daysToGoal}{t('days_to')} {(goalName ?? 'GOAL').toUpperCase()}
             </EyebrowChip>
           </>
         )}
@@ -308,14 +310,14 @@ export default function TodayHero() {
               className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle"
               style={{ backgroundColor: 'var(--color-good)' }}
             />
-            AS OF {asOf}
+            {t('as_of')} {asOf}
           </EyebrowChip>
         )}
       </div>
 
       {/* Main row: ring + verdict + workout + CTA */}
       <div className="flex gap-5 sm:gap-7 items-center flex-wrap">
-        <StateRing score={score ?? 0} color={color} size={ringSize} />
+        <StateRing score={score ?? 0} color={color} size={ringSize} recoveryLabel={t('recovery_label')} />
 
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           <h1
@@ -342,7 +344,7 @@ export default function TodayHero() {
 
           {why.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap mt-1">
-              <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>WHY</span>
+              <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{t('why_label')}</span>
               {why.map((c) => (
                 <span
                   key={c.key}
@@ -375,11 +377,11 @@ export default function TodayHero() {
                 {exporting ? (
                   <>
                     <Loader2 size={14} strokeWidth={2.2} className="animate-spin" />
-                    Preparing .zwo…
+                    {t('preparing_zwo')}
                   </>
                 ) : (
                   <>
-                    Start ride
+                    {t('start_ride')}
                     <ArrowRight size={14} strokeWidth={2.2} />
                   </>
                 )}
@@ -396,7 +398,7 @@ export default function TodayHero() {
                 style={{ color: 'var(--color-muted)' }}
               >
                 <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
-                  Can't train today?
+                  {t('cant_train_today')}
                 </span>
               </button>
             </div>
@@ -411,12 +413,12 @@ export default function TodayHero() {
       >
         {sleepScore != null && (
           <div className="flex items-baseline gap-1.5">
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>SLEEP</span>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{t('sleep_label')}</span>
             <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}>{Math.round(sleepScore)}</span>
           </div>
         )}
         <div className="flex items-baseline gap-1.5">
-          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>STRAIN · WEEK</span>
+          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{t('strain_week_label')}</span>
           <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}>{strainPct}%</span>
           <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
             of {tssTarget}
