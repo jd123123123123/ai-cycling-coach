@@ -53,6 +53,14 @@ class IntervalBlock:
     target_pct_ftp: float        # 0.65 = 65% FTP
     target_rpe: int              # 1-10
     zone: int                    # Coggan 1-7
+    # Cadence prescription — optional. When set, surfaces on the workout card
+    # and on the .zwo / .fit exports. Friel/Coggan defaults by zone:
+    #   Z1-Z2: 85-95 (aerobic natural)
+    #   Z3-Z4: 88-100 (tempo to threshold)
+    #   Z5+:   95-110 (high RPM neuromuscular)
+    # Override with 60-75 for climbing-specific strength-endurance blocks.
+    cadence_low: int | None = None
+    cadence_high: int | None = None
 
 
 @dataclass(frozen=True)
@@ -69,7 +77,12 @@ class WorkoutTemplate:
 
 @dataclass(frozen=True)
 class ResolvedBlock:
-    """Absolute-watts version of an IntervalBlock, keyed to the athlete's FTP."""
+    """Absolute-watts version of an IntervalBlock, keyed to the athlete's FTP.
+
+    HR bounds (target_hr_low/high) are populated when the caller can supply
+    an LTHR (or one can be derived from MHR / age via `services.hr_zones`).
+    Both `None` for sprints (Zone 7) where HR has no meaningful target.
+    """
 
     name: str
     duration_s: int
@@ -78,6 +91,10 @@ class ResolvedBlock:
     target_pct_ftp: float
     zone: int
     rpe: int
+    cadence_low: int | None = None   # 60-75 for climbing blocks; None = "natural"
+    cadence_high: int | None = None
+    target_hr_low: int | None = None  # bpm
+    target_hr_high: int | None = None # bpm
 
 
 @dataclass
@@ -226,6 +243,53 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         base_tss=135.0,
     ),
 
+    "z2_climbing_long": WorkoutTemplate(
+        id="z2_climbing_long",
+        name="Climbing Z2 — 3h with low-cadence strength blocks",
+        category="endurance",
+        purpose=(
+            "Maratona / Dolomites-style preparation. Two 20-min sub-threshold "
+            "climbing blocks at 60-70rpm embedded in a 3h Z2 ride to build "
+            "muscular endurance under sustained climbing load. The low cadence "
+            "biases recruitment toward Type IIa fibres (Lucia 2004; Hansen 2007)."
+        ),
+        framework_cited="Friel build 1 climbing · Hansen 2007 cadence-specific endurance",
+        blocks=[
+            IntervalBlock(
+                name="Endurance", duration_s=45 * 60,
+                target_pct_ftp=0.65, target_rpe=5, zone=2,
+                cadence_low=85, cadence_high=95,
+            ),
+            IntervalBlock(
+                name="Low-cadence climb 1", duration_s=20 * 60,
+                target_pct_ftp=0.82, target_rpe=7, zone=3,
+                cadence_low=60, cadence_high=70,
+            ),
+            IntervalBlock(
+                name="Endurance recovery", duration_s=15 * 60,
+                target_pct_ftp=0.62, target_rpe=4, zone=2,
+                cadence_low=85, cadence_high=95,
+            ),
+            IntervalBlock(
+                name="Low-cadence climb 2", duration_s=20 * 60,
+                target_pct_ftp=0.82, target_rpe=7, zone=3,
+                cadence_low=60, cadence_high=70,
+            ),
+            IntervalBlock(
+                name="Endurance", duration_s=70 * 60,
+                target_pct_ftp=0.65, target_rpe=5, zone=2,
+                cadence_low=85, cadence_high=95,
+            ),
+            IntervalBlock(
+                name="Cool-down", duration_s=10 * 60,
+                target_pct_ftp=0.50, target_rpe=2, zone=1,
+                cadence_low=80, cadence_high=90,
+            ),
+        ],
+        base_tss=160.0,
+        min_ftp_required=180,
+    ),
+
     # ---- Tempo / sweet spot / threshold ----------------------------------
     "tempo_3x10": WorkoutTemplate(
         id="tempo_3x10",
@@ -331,6 +395,815 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         base_tss=65.0,
         min_ftp_required=180,
     ),
+
+    # Rønnestad short-interval VO2 — Rønnestad et al. 2015 (Scand J Med Sci
+    # Sports). Higher total time-at-VO2 than long intervals with lower
+    # perceptual cost; the strongest "more bang per minute" VO2 protocol
+    # in the trained-cyclist literature.
+    "vo2_ronnestad_3x13": WorkoutTemplate(
+        id="vo2_ronnestad_3x13",
+        name="VO2 short-intervals — 3×(13×30/15s) (Rønnestad)",
+        category="vo2",
+        purpose=(
+            "Rønnestad short-interval protocol: 3 sets × 13 reps × (30s @ "
+            "~108–112% FTP / 15s easy), 3-min recoveries between sets. Higher "
+            "time-at-VO2 than 5×4min with lower RPE — the highest-evidence "
+            "VO2 stimulus for trained cyclists."
+        ),
+        framework_cited="Rønnestad 2015 · Bossi 2020 short-interval VO2",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Set 1 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="Set 2 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="Set 3 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            _cd(),
+        ],
+        base_tss=78.0,
+        min_ftp_required=180,
+    ),
+
+    # MAP 5×3min @ 110% — Vandewalle/Coggan MAP development. Shorter than
+    # the 5×4 @ 115% canonical session — more accessible when fatigued or
+    # ramping back, still genuine VO2 stimulus.
+    "vo2_map_5x3": WorkoutTemplate(
+        id="vo2_map_5x3",
+        name="MAP — 5×3min @ 110% FTP",
+        category="vo2",
+        purpose="MAP-development VO2 dose; shorter reps than 5×4, easier to nail clean.",
+        framework_cited="Coggan Z5 · Vandewalle MAP",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="MAP 1", duration_s=3 * 60, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="MAP 2", duration_s=3 * 60, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="MAP 3", duration_s=3 * 60, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="MAP 4", duration_s=3 * 60, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="MAP 5", duration_s=3 * 60, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            _cd(),
+        ],
+        base_tss=62.0,
+        min_ftp_required=180,
+    ),
+
+    # ---- Norwegian threshold (Seiler) ------------------------------------
+    # Seiler's signature interval block — 4×8min @ 90–94% FTP with 2-min
+    # recoveries. The 4×8 has more VO2-time than 2×15 threshold (smaller
+    # but more reps) while staying sub-LT2, so it's tolerable repeatedly
+    # week after week. Used by Ingebrigtsen-era Norwegian endurance.
+    "threshold_seiler_4x8": WorkoutTemplate(
+        id="threshold_seiler_4x8",
+        name="Norwegian threshold — 4×8min @ 92% FTP",
+        category="threshold",
+        purpose=(
+            "Sub-threshold (LT2-) intervals — Seiler/Norwegian threshold "
+            "model. High weekly tolerance, more time-at-threshold than 2×15 "
+            "with less acute strain. Cornerstone of the Ingebrigtsen system."
+        ),
+        framework_cited="Seiler HIT · Norwegian threshold (Tjelta 2019)",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Seiler 1", duration_s=8 * 60, target_pct_ftp=0.92, target_rpe=8, zone=4),
+            _rec(2 * 60),
+            IntervalBlock(name="Seiler 2", duration_s=8 * 60, target_pct_ftp=0.92, target_rpe=8, zone=4),
+            _rec(2 * 60),
+            IntervalBlock(name="Seiler 3", duration_s=8 * 60, target_pct_ftp=0.92, target_rpe=8, zone=4),
+            _rec(2 * 60),
+            IntervalBlock(name="Seiler 4", duration_s=8 * 60, target_pct_ftp=0.92, target_rpe=8, zone=4),
+            _cd(),
+        ],
+        base_tss=88.0,
+    ),
+
+    # ---- Longer SST — Allen/Coggan classic durability builder -----------
+    "sweet_spot_4x15": WorkoutTemplate(
+        id="sweet_spot_4x15",
+        name="Sweet spot — 4×15min",
+        category="sweet_spot",
+        purpose=(
+            "Long sub-threshold accumulation — 60 minutes of work in the "
+            "sweet-spot band. CTL builder for fondo / climbing prep without "
+            "the recovery cost of pure threshold."
+        ),
+        framework_cited="Allen & Coggan sweet-spot · Friel build 1",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="SST 1", duration_s=15 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
+            _rec(5 * 60),
+            IntervalBlock(name="SST 2", duration_s=15 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
+            _rec(5 * 60),
+            IntervalBlock(name="SST 3", duration_s=15 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
+            _rec(5 * 60),
+            IntervalBlock(name="SST 4", duration_s=15 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
+            _cd(),
+        ],
+        base_tss=120.0,
+    ),
+
+    # ---- Anaerobic / neuromuscular ---------------------------------------
+    # Sprint repeats — Mujika neuromuscular template. Short, fully-rested,
+    # peak-power-preserving. Useful in taper weeks and as a peak-power
+    # maintenance dose during base.
+    "neuromuscular_sprints_8x15": WorkoutTemplate(
+        id="neuromuscular_sprints_8x15",
+        name="Sprint repeats — 8×15s all-out",
+        category="anaerobic",
+        purpose=(
+            "Peak-power & neuromuscular recruitment. Full 3-min recoveries "
+            "keep each rep maximal — this is *not* anaerobic capacity work, "
+            "it's pure top-end preservation."
+        ),
+        framework_cited="Mujika neuromuscular · Coggan NM",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Sprint set (8×15s · 3-min easy between)", duration_s=8 * (15 + 3 * 60), target_pct_ftp=1.80, target_rpe=10, zone=6),
+            _cd(),
+        ],
+        base_tss=45.0,
+    ),
+
+    # Tabata 8×20/10s @ ~170% — anaerobic capacity. Classic. Lactate-tolerance
+    # work. Use sparingly — high systemic cost for the duration.
+    "anaerobic_tabata_8x20_10": WorkoutTemplate(
+        id="anaerobic_tabata_8x20_10",
+        name="Tabata — 8×(20s on / 10s off)",
+        category="anaerobic",
+        purpose=(
+            "Anaerobic-capacity / lactate-tolerance. 4-minute set of 20s @ "
+            "~170% FTP / 10s easy. Originally Tabata 1996 (speed skaters); "
+            "high acute strain — schedule once every 10–14 days max."
+        ),
+        framework_cited="Tabata 1996 · Coggan anaerobic capacity",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Tabata set 1 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6),
+            _rec(5 * 60),
+            IntervalBlock(name="Tabata set 2 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6),
+            _cd(),
+        ],
+        base_tss=55.0,
+        min_ftp_required=180,
+    ),
+
+    # ---- Polarized long ride — Seiler / Stöggl signature -----------------
+    # 3-hour Z1/Z2 long ride with 4×4min VO2 efforts inserted late, when the
+    # athlete is already fatigued — the polarized model's high-intensity dose
+    # delivered on a base of low-intensity volume.
+    "polarized_long_z2_4x4": WorkoutTemplate(
+        id="polarized_long_z2_4x4",
+        name="Polarized long — 3h Z2 + 4×4 VO2 finisher",
+        category="vo2",
+        purpose=(
+            "Seiler/Stöggl polarized session: long aerobic volume with the "
+            "high-intensity dose embedded late, on pre-fatigued legs. Builds "
+            "durability and VO2 simultaneously."
+        ),
+        framework_cited="Seiler & Tønnessen 2009 · Stöggl polarized",
+        blocks=[
+            IntervalBlock(name="Warm-up easy", duration_s=15 * 60, target_pct_ftp=0.55, target_rpe=3, zone=1),
+            IntervalBlock(name="Z2 long base", duration_s=130 * 60, target_pct_ftp=0.65, target_rpe=5, zone=2),
+            IntervalBlock(name="VO2 1 @ 115%", duration_s=4 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="VO2 2 @ 115%", duration_s=4 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="VO2 3 @ 115%", duration_s=4 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="VO2 4 @ 115%", duration_s=4 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5),
+            _cd(15 * 60),
+        ],
+        base_tss=180.0,
+        min_ftp_required=200,
+    ),
+
+    # ======================================================================
+    #  Expanded library — curated, distinct protocols across every system.
+    #  Each entry is a genuinely-different structure (not just a duration
+    #  variant of an existing template), drawn from the modern endurance
+    #  literature and coaching practice.
+    # ======================================================================
+
+    # ---- Endurance / aerobic base (5) -----------------------------------
+    "maf_aerobic_90": WorkoutTemplate(
+        id="maf_aerobic_90",
+        name="MAF aerobic — 90min HR-capped",
+        category="endurance",
+        purpose=(
+            "Maffetone Aerobic Function — strictly HR-capped Z1/low-Z2. "
+            "Power may sit at 55–62% FTP depending on fitness; the HR cap "
+            "(180 − age, adjusted) is the controlling variable. Long-term "
+            "aerobic-capacity tool when used 80%+ of weekly volume."
+        ),
+        framework_cited="Maffetone MAF · Hawley aerobic base",
+        blocks=[
+            IntervalBlock(name="MAF aerobic", duration_s=90 * 60, target_pct_ftp=0.60, target_rpe=3, zone=2),
+        ],
+        base_tss=60.0,
+    ),
+    "z2_progressive_90": WorkoutTemplate(
+        id="z2_progressive_90",
+        name="Progressive Z2 — 90min negative-split",
+        category="endurance",
+        purpose=(
+            "Negative-split aerobic ride — start at 60% FTP, finish at 72%. "
+            "Trains aerobic durability under accumulating fatigue without "
+            "crossing LT1; teaches even-perceived-effort pacing."
+        ),
+        framework_cited="Friel · Allen & Coggan progressive endurance",
+        blocks=[
+            IntervalBlock(name="Easy Z2", duration_s=30 * 60, target_pct_ftp=0.60, target_rpe=4, zone=2),
+            IntervalBlock(name="Mid Z2", duration_s=30 * 60, target_pct_ftp=0.66, target_rpe=5, zone=2),
+            IntervalBlock(name="High Z2", duration_s=30 * 60, target_pct_ftp=0.72, target_rpe=6, zone=2),
+        ],
+        base_tss=78.0,
+    ),
+    "z2_long_240": WorkoutTemplate(
+        id="z2_long_240",
+        name="Long Z2 — 4h base ride",
+        category="endurance",
+        purpose=(
+            "4-hour Z2 — the cornerstone of grand-tour / fondo base prep. "
+            "Tests fueling, position durability, and Pw:HR decoupling at "
+            "fixed power. Sunday session in Friel base 2 / build 1."
+        ),
+        framework_cited="San Millán Z2 · Friel base 2 · Hawley endurance",
+        blocks=[
+            IntervalBlock(name="Long endurance", duration_s=240 * 60, target_pct_ftp=0.65, target_rpe=5, zone=2),
+        ],
+        base_tss=180.0,
+    ),
+    "z2_fasted_60": WorkoutTemplate(
+        id="z2_fasted_60",
+        name="Fasted Z2 — 60min metabolic",
+        category="endurance",
+        purpose=(
+            "Pre-breakfast 60-min Z2 — train-low-compete-high stimulus for "
+            "fat-oxidation rate and mitochondrial signaling (PGC-1α). Cap at "
+            "low Z2 — never push fasted to upper Z2."
+        ),
+        framework_cited="Hawley & Burke train-low · San Millán Z2",
+        blocks=[
+            IntervalBlock(name="Fasted Z2", duration_s=60 * 60, target_pct_ftp=0.60, target_rpe=4, zone=2),
+        ],
+        base_tss=42.0,
+    ),
+    "recovery_60": WorkoutTemplate(
+        id="recovery_60",
+        name="Recovery spin — 60min",
+        category="recovery",
+        purpose="Longer parasympathetic-reset ride; high cadence, low force.",
+        framework_cited="Coggan Z1 · Seiler LIT",
+        blocks=[
+            IntervalBlock(name="Easy spin", duration_s=60 * 60, target_pct_ftp=0.50, target_rpe=2, zone=1, cadence_low=90, cadence_high=100),
+        ],
+        base_tss=28.0,
+    ),
+
+    # ---- Tempo / sub-threshold (5) --------------------------------------
+    "tempo_2x30": WorkoutTemplate(
+        id="tempo_2x30",
+        name="Long tempo — 2×30min @ 80% FTP",
+        category="tempo",
+        purpose=(
+            "Coyle / Holloszy long-tempo durability — sustained sub-LT work "
+            "for muscular endurance and substrate-utilisation efficiency."
+        ),
+        framework_cited="Coyle 1984 · Friel build 1 tempo",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Tempo 1 (30min @ 80%)", duration_s=30 * 60, target_pct_ftp=0.80, target_rpe=6, zone=3),
+            _rec(8 * 60),
+            IntervalBlock(name="Tempo 2 (30min @ 80%)", duration_s=30 * 60, target_pct_ftp=0.80, target_rpe=6, zone=3),
+            _cd(),
+        ],
+        base_tss=98.0,
+    ),
+    "tempo_4x15": WorkoutTemplate(
+        id="tempo_4x15",
+        name="Tempo — 4×15min @ 83% FTP",
+        category="tempo",
+        purpose="High-density tempo accumulation; aerobic-density ceiling lift.",
+        framework_cited="Friel tempo · Allen & Coggan Z3",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Tempo 1", duration_s=15 * 60, target_pct_ftp=0.83, target_rpe=6, zone=3),
+            _rec(4 * 60),
+            IntervalBlock(name="Tempo 2", duration_s=15 * 60, target_pct_ftp=0.83, target_rpe=6, zone=3),
+            _rec(4 * 60),
+            IntervalBlock(name="Tempo 3", duration_s=15 * 60, target_pct_ftp=0.83, target_rpe=6, zone=3),
+            _rec(4 * 60),
+            IntervalBlock(name="Tempo 4", duration_s=15 * 60, target_pct_ftp=0.83, target_rpe=6, zone=3),
+            _cd(),
+        ],
+        base_tss=92.0,
+    ),
+    "tempo_progression_60": WorkoutTemplate(
+        id="tempo_progression_60",
+        name="Tempo progression — 60min ramping 75→90%",
+        category="tempo",
+        purpose=(
+            "Continuous progression from upper Z2 into sweet-spot — trains "
+            "the LT1→LT2 transition with one long aerobic effort."
+        ),
+        framework_cited="Friel progression · Coggan Z3-Z4 transition",
+        blocks=[
+            _wu(10 * 60),
+            IntervalBlock(name="Progression 75%", duration_s=20 * 60, target_pct_ftp=0.75, target_rpe=5, zone=3),
+            IntervalBlock(name="Progression 82%", duration_s=20 * 60, target_pct_ftp=0.82, target_rpe=6, zone=3),
+            IntervalBlock(name="Progression 90%", duration_s=20 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
+            _cd(),
+        ],
+        base_tss=88.0,
+    ),
+    "sub_threshold_2x40": WorkoutTemplate(
+        id="sub_threshold_2x40",
+        name="Sub-threshold — 2×40min @ 88% FTP",
+        category="sweet_spot",
+        purpose=(
+            "80 min of sub-threshold work in two long reps — the heaviest "
+            "sustainable sweet-spot dose for trained athletes. CTL builder "
+            "for stage races and long climbs."
+        ),
+        framework_cited="Allen & Coggan SST · Friel build 2",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Sub-LT 1 (40min @ 88%)", duration_s=40 * 60, target_pct_ftp=0.88, target_rpe=7, zone=3),
+            _rec(10 * 60),
+            IntervalBlock(name="Sub-LT 2 (40min @ 88%)", duration_s=40 * 60, target_pct_ftp=0.88, target_rpe=7, zone=3),
+            _cd(),
+        ],
+        base_tss=145.0,
+    ),
+    "sweet_spot_3x20": WorkoutTemplate(
+        id="sweet_spot_3x20",
+        name="Sweet spot — 3×20min @ 90% FTP",
+        category="sweet_spot",
+        purpose="Classic 60-min-of-work SST — the canonical fondo CTL builder.",
+        framework_cited="Allen & Coggan SST · Friel build 1-2",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="SST 1", duration_s=20 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
+            _rec(5 * 60),
+            IntervalBlock(name="SST 2", duration_s=20 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
+            _rec(5 * 60),
+            IntervalBlock(name="SST 3", duration_s=20 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
+            _cd(),
+        ],
+        base_tss=108.0,
+    ),
+
+    # ---- Threshold / LT2 (5) --------------------------------------------
+    "threshold_pyramid": WorkoutTemplate(
+        id="threshold_pyramid",
+        name="Threshold pyramid — 1/2/3/4/3/2/1 min @ 100% FTP",
+        category="threshold",
+        purpose=(
+            "Ascending-descending threshold pyramid; matched recoveries. "
+            "Lactate-tolerance under varying-duration stress — useful for "
+            "criterium / fluctuating-effort race demands."
+        ),
+        framework_cited="Friel pyramid · Coggan Z4",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="1 min", duration_s=60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(60),
+            IntervalBlock(name="2 min", duration_s=2 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(2 * 60),
+            IntervalBlock(name="3 min", duration_s=3 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(3 * 60),
+            IntervalBlock(name="4 min", duration_s=4 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(3 * 60),
+            IntervalBlock(name="3 min", duration_s=3 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(2 * 60),
+            IntervalBlock(name="2 min", duration_s=2 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(60),
+            IntervalBlock(name="1 min", duration_s=60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _cd(),
+        ],
+        base_tss=68.0,
+    ),
+    "threshold_hill_4x10": WorkoutTemplate(
+        id="threshold_hill_4x10",
+        name="Hill threshold — 4×10min @ 98% FTP",
+        category="threshold",
+        purpose=(
+            "Long climbing-threshold reps on a 5–8% gradient (indoor: simulate "
+            "with 60-65rpm on the trainer). Specific to sustained-climbing "
+            "demands of fondos and grand tours."
+        ),
+        framework_cited="Friel climbing · Hansen 2007 cadence-specific",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Hill 1", duration_s=10 * 60, target_pct_ftp=0.98, target_rpe=8, zone=4, cadence_low=65, cadence_high=80),
+            _rec(5 * 60),
+            IntervalBlock(name="Hill 2", duration_s=10 * 60, target_pct_ftp=0.98, target_rpe=8, zone=4, cadence_low=65, cadence_high=80),
+            _rec(5 * 60),
+            IntervalBlock(name="Hill 3", duration_s=10 * 60, target_pct_ftp=0.98, target_rpe=8, zone=4, cadence_low=65, cadence_high=80),
+            _rec(5 * 60),
+            IntervalBlock(name="Hill 4", duration_s=10 * 60, target_pct_ftp=0.98, target_rpe=8, zone=4, cadence_low=65, cadence_high=80),
+            _cd(),
+        ],
+        base_tss=105.0,
+    ),
+    "over_under_4x12": WorkoutTemplate(
+        id="over_under_4x12",
+        name="Long over-unders — 4×(6×1/1min) @ 95/105%",
+        category="threshold",
+        purpose=(
+            "Long over-under blocks — repeated lactate spikes and clearances. "
+            "Trains LT2 resilience and shuttle-clearance more aggressively "
+            "than the short 3×5min over-unders."
+        ),
+        framework_cited="Coggan over-unders · Bishop lactate clearance",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="OU set 1 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(5 * 60),
+            IntervalBlock(name="OU set 2 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(5 * 60),
+            IntervalBlock(name="OU set 3 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(5 * 60),
+            IntervalBlock(name="OU set 4 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _cd(),
+        ],
+        base_tss=110.0,
+        min_ftp_required=180,
+    ),
+    "threshold_descending": WorkoutTemplate(
+        id="threshold_descending",
+        name="Descending threshold — 15/12/10/8 min @ 95→102%",
+        category="threshold",
+        purpose=(
+            "Reps shorten while intensity creeps up — trains the ability to "
+            "find a higher gear as the rep clock shrinks. Pre-race specificity."
+        ),
+        framework_cited="Friel · Magness descending sets",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="15 min @ 95%", duration_s=15 * 60, target_pct_ftp=0.95, target_rpe=8, zone=4),
+            _rec(5 * 60),
+            IntervalBlock(name="12 min @ 98%", duration_s=12 * 60, target_pct_ftp=0.98, target_rpe=8, zone=4),
+            _rec(5 * 60),
+            IntervalBlock(name="10 min @ 100%", duration_s=10 * 60, target_pct_ftp=1.00, target_rpe=9, zone=4),
+            _rec(5 * 60),
+            IntervalBlock(name="8 min @ 102%", duration_s=8 * 60, target_pct_ftp=1.02, target_rpe=9, zone=4),
+            _cd(),
+        ],
+        base_tss=98.0,
+    ),
+    "lactate_shuttles_3x8": WorkoutTemplate(
+        id="lactate_shuttles_3x8",
+        name="Lactate shuttles — 3×8min Z3/Z4 alternation",
+        category="threshold",
+        purpose=(
+            "Alternating 2-min Z3 / 2-min Z4 inside each 8-min rep. Bishop's "
+            "lactate-shuttle protocol — clearance kinetics and MCT4/MCT1 "
+            "upregulation."
+        ),
+        framework_cited="Bishop lactate shuttle · Brooks lactate clearance",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Shuttle 1 (2/2/2/2 @ 85/105%)", duration_s=8 * 60, target_pct_ftp=0.95, target_rpe=8, zone=4),
+            _rec(5 * 60),
+            IntervalBlock(name="Shuttle 2 (2/2/2/2 @ 85/105%)", duration_s=8 * 60, target_pct_ftp=0.95, target_rpe=8, zone=4),
+            _rec(5 * 60),
+            IntervalBlock(name="Shuttle 3 (2/2/2/2 @ 85/105%)", duration_s=8 * 60, target_pct_ftp=0.95, target_rpe=8, zone=4),
+            _cd(),
+        ],
+        base_tss=70.0,
+    ),
+
+    # ---- VO2 (4 additional) ---------------------------------------------
+    "vo2_hill_6x3": WorkoutTemplate(
+        id="vo2_hill_6x3",
+        name="Hill VO2 — 6×3min @ 115% FTP on climb",
+        category="vo2",
+        purpose=(
+            "VO2 reps on a 5–8% gradient. Lower cadence + higher torque "
+            "drives recruitment of Type IIa fibres at VO2 power; specific "
+            "stimulus for sustained climbing demands."
+        ),
+        framework_cited="Friel climbing VO2 · Coggan Z5 · Hansen cadence",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Hill VO2 1", duration_s=3 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5, cadence_low=70, cadence_high=85),
+            _rec(3 * 60),
+            IntervalBlock(name="Hill VO2 2", duration_s=3 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5, cadence_low=70, cadence_high=85),
+            _rec(3 * 60),
+            IntervalBlock(name="Hill VO2 3", duration_s=3 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5, cadence_low=70, cadence_high=85),
+            _rec(3 * 60),
+            IntervalBlock(name="Hill VO2 4", duration_s=3 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5, cadence_low=70, cadence_high=85),
+            _rec(3 * 60),
+            IntervalBlock(name="Hill VO2 5", duration_s=3 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5, cadence_low=70, cadence_high=85),
+            _rec(3 * 60),
+            IntervalBlock(name="Hill VO2 6", duration_s=3 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5, cadence_low=70, cadence_high=85),
+            _cd(),
+        ],
+        base_tss=82.0,
+        min_ftp_required=180,
+    ),
+    "vo2_microbursts_30x15_45": WorkoutTemplate(
+        id="vo2_microbursts_30x15_45",
+        name="VO2 microbursts — 30×(15s on / 45s off) @ 150%",
+        category="vo2",
+        purpose=(
+            "Short-burst micros — Stepto/Hawley style. 30 reps of 15s @ "
+            "~150% FTP with 45s easy. Drives VO2 with surge-recovery cycling "
+            "that mirrors race-winning attacks."
+        ),
+        framework_cited="Stepto & Hawley HIT · Coggan Z5+",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Microburst set (30×15/45s)", duration_s=30 * 60, target_pct_ftp=1.20, target_rpe=9, zone=5),
+            _cd(),
+        ],
+        base_tss=70.0,
+        min_ftp_required=180,
+    ),
+    "vo2_3x6": WorkoutTemplate(
+        id="vo2_3x6",
+        name="Long VO2 — 3×6min @ 108% FTP",
+        category="vo2",
+        purpose=(
+            "Longer-rep VO2 — sustained time-at-VO2 with bigger lactate "
+            "accumulation. The hardest single-session VO2 stimulus most "
+            "athletes can tolerate weekly."
+        ),
+        framework_cited="Friel VO2 · Coggan Z5",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="VO2 long 1", duration_s=6 * 60, target_pct_ftp=1.08, target_rpe=9, zone=5),
+            _rec(4 * 60),
+            IntervalBlock(name="VO2 long 2", duration_s=6 * 60, target_pct_ftp=1.08, target_rpe=9, zone=5),
+            _rec(4 * 60),
+            IntervalBlock(name="VO2 long 3", duration_s=6 * 60, target_pct_ftp=1.08, target_rpe=9, zone=5),
+            _cd(),
+        ],
+        base_tss=72.0,
+        min_ftp_required=180,
+    ),
+    "vo2_descending_5_4_3_2_1": WorkoutTemplate(
+        id="vo2_descending_5_4_3_2_1",
+        name="VO2 descending ladder — 5/4/3/2/1 min",
+        category="vo2",
+        purpose=(
+            "Descending-rep VO2 ladder, intensity climbing as reps shorten "
+            "(110→125% FTP). Trains the ability to dig deeper as the rep "
+            "gets shorter — race-finish specificity."
+        ),
+        framework_cited="Friel ladder · Coggan Z5/Z6",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="5 min @ 110%", duration_s=5 * 60, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            _rec(4 * 60),
+            IntervalBlock(name="4 min @ 113%", duration_s=4 * 60, target_pct_ftp=1.13, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="3 min @ 117%", duration_s=3 * 60, target_pct_ftp=1.17, target_rpe=9, zone=5),
+            _rec(3 * 60),
+            IntervalBlock(name="2 min @ 122%", duration_s=2 * 60, target_pct_ftp=1.22, target_rpe=10, zone=5),
+            _rec(2 * 60),
+            IntervalBlock(name="1 min @ 130%", duration_s=60, target_pct_ftp=1.30, target_rpe=10, zone=6),
+            _cd(),
+        ],
+        base_tss=72.0,
+        min_ftp_required=180,
+    ),
+
+    # ---- Anaerobic / neuromuscular (4 additional) -----------------------
+    "anaerobic_capacity_5x3_130": WorkoutTemplate(
+        id="anaerobic_capacity_5x3_130",
+        name="Anaerobic capacity — 5×3min @ 130% FTP",
+        category="anaerobic",
+        purpose=(
+            "Above-VO2 anaerobic-capacity work — depletes the anaerobic "
+            "bucket repeatedly. Build phase: develops repeated-effort "
+            "tolerance for race attacks."
+        ),
+        framework_cited="Coggan anaerobic capacity · Bishop W'",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="AC 1", duration_s=3 * 60, target_pct_ftp=1.30, target_rpe=10, zone=6),
+            _rec(5 * 60),
+            IntervalBlock(name="AC 2", duration_s=3 * 60, target_pct_ftp=1.30, target_rpe=10, zone=6),
+            _rec(5 * 60),
+            IntervalBlock(name="AC 3", duration_s=3 * 60, target_pct_ftp=1.30, target_rpe=10, zone=6),
+            _rec(5 * 60),
+            IntervalBlock(name="AC 4", duration_s=3 * 60, target_pct_ftp=1.30, target_rpe=10, zone=6),
+            _rec(5 * 60),
+            IntervalBlock(name="AC 5", duration_s=3 * 60, target_pct_ftp=1.30, target_rpe=10, zone=6),
+            _cd(),
+        ],
+        base_tss=68.0,
+        min_ftp_required=180,
+    ),
+    "anaerobic_8x90s": WorkoutTemplate(
+        id="anaerobic_8x90s",
+        name="Lactate tolerance — 8×90s @ 135% FTP",
+        category="anaerobic",
+        purpose=(
+            "90-second above-VO2 reps — lactate-tolerance / W' depletion. "
+            "The crit-rider's bread-and-butter session."
+        ),
+        framework_cited="Skiba W' · Coggan Z6",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="LT 1", duration_s=90, target_pct_ftp=1.35, target_rpe=10, zone=6),
+            _rec(3 * 60),
+            IntervalBlock(name="LT 2", duration_s=90, target_pct_ftp=1.35, target_rpe=10, zone=6),
+            _rec(3 * 60),
+            IntervalBlock(name="LT 3", duration_s=90, target_pct_ftp=1.35, target_rpe=10, zone=6),
+            _rec(3 * 60),
+            IntervalBlock(name="LT 4", duration_s=90, target_pct_ftp=1.35, target_rpe=10, zone=6),
+            _rec(3 * 60),
+            IntervalBlock(name="LT 5", duration_s=90, target_pct_ftp=1.35, target_rpe=10, zone=6),
+            _rec(3 * 60),
+            IntervalBlock(name="LT 6", duration_s=90, target_pct_ftp=1.35, target_rpe=10, zone=6),
+            _rec(3 * 60),
+            IntervalBlock(name="LT 7", duration_s=90, target_pct_ftp=1.35, target_rpe=10, zone=6),
+            _rec(3 * 60),
+            IntervalBlock(name="LT 8", duration_s=90, target_pct_ftp=1.35, target_rpe=10, zone=6),
+            _cd(),
+        ],
+        base_tss=60.0,
+        min_ftp_required=180,
+    ),
+    "neuromuscular_spinup_6x30": WorkoutTemplate(
+        id="neuromuscular_spinup_6x30",
+        name="Spin-up sprints — 6×30s @ 130%, high cadence",
+        category="anaerobic",
+        purpose=(
+            "Open-gear, high-cadence (110–120rpm) 30-second sprints. Develops "
+            "leg speed and neuromuscular recruitment without the high force "
+            "of seated big-gear work."
+        ),
+        framework_cited="Mujika neuromuscular · Hansen cadence",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Spin-up set (6×30s · 4-min easy between)", duration_s=6 * (30 + 4 * 60), target_pct_ftp=1.30, target_rpe=10, zone=6, cadence_low=110, cadence_high=125),
+            _cd(),
+        ],
+        base_tss=50.0,
+    ),
+    "neuromuscular_standing_6x10": WorkoutTemplate(
+        id="neuromuscular_standing_6x10",
+        name="Standing-start power — 6×10s from a near-stop",
+        category="anaerobic",
+        purpose=(
+            "Standing 10-second efforts from 50rpm in a big gear — develops "
+            "maximal force and torque the seated spin-up can't reach. Track-"
+            "sprint methodology, useful for road sprinters too."
+        ),
+        framework_cited="Coggan NM · track sprint methodology",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Standing-start set (6×10s · 4-min easy)", duration_s=6 * (10 + 4 * 60), target_pct_ftp=2.00, target_rpe=10, zone=7, cadence_low=50, cadence_high=85),
+            _cd(),
+        ],
+        base_tss=42.0,
+    ),
+
+    # ---- Specialty / drills (4) -----------------------------------------
+    "cadence_high_fsr_6x3": WorkoutTemplate(
+        id="cadence_high_fsr_6x3",
+        name="Fast-pedal drills — 6×3min @ 110rpm, Z2 power",
+        # Categorized as 'recovery' even though power is Z2 — this is a skill /
+        # neural drill, not a load-building endurance session, and treating it
+        # as a recovery-tier item keeps it out of the endurance shortening
+        # cascade in workout_modifier (which would otherwise substitute a real
+        # endurance ride for this drill).
+        category="recovery",
+        purpose=(
+            "Fast-spin recruitment drills (FSR) — develops smooth high-cadence "
+            "pedaling without raising power above Z2. Useful early-season "
+            "neural-efficiency work."
+        ),
+        framework_cited="Carmichael CTS FastPedal · Friel skill",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="FSR set (6×3min @ 110rpm)", duration_s=6 * (3 * 60 + 2 * 60), target_pct_ftp=0.65, target_rpe=5, zone=2, cadence_low=105, cadence_high=120),
+            _cd(),
+        ],
+        base_tss=45.0,
+    ),
+    "cadence_low_lcf_4x6": WorkoutTemplate(
+        id="cadence_low_lcf_4x6",
+        name="Low-cadence force — 4×6min @ 60rpm, Z3",
+        category="tempo",
+        purpose=(
+            "Low-cadence force reps (LCF) — high torque at modest power. "
+            "Type-IIa recruitment + on-bike strength stimulus without the "
+            "knee load of true big-gear sprints."
+        ),
+        framework_cited="Friel force · Hansen 2007 · Lucia 2004",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="LCF 1", duration_s=6 * 60, target_pct_ftp=0.85, target_rpe=7, zone=3, cadence_low=55, cadence_high=65),
+            _rec(3 * 60),
+            IntervalBlock(name="LCF 2", duration_s=6 * 60, target_pct_ftp=0.85, target_rpe=7, zone=3, cadence_low=55, cadence_high=65),
+            _rec(3 * 60),
+            IntervalBlock(name="LCF 3", duration_s=6 * 60, target_pct_ftp=0.85, target_rpe=7, zone=3, cadence_low=55, cadence_high=65),
+            _rec(3 * 60),
+            IntervalBlock(name="LCF 4", duration_s=6 * 60, target_pct_ftp=0.85, target_rpe=7, zone=3, cadence_low=55, cadence_high=65),
+            _cd(),
+        ],
+        base_tss=58.0,
+    ),
+    "crit_simulation_stochastic": WorkoutTemplate(
+        id="crit_simulation_stochastic",
+        name="Crit simulation — stochastic surges 60min",
+        category="threshold",
+        purpose=(
+            "Stochastic race simulation — 60-min ride with unpredictable 20–"
+            "45-second surges to 120–140% FTP every 90–180 seconds, on a Z3 "
+            "tempo base. Replicates crit/road-race demands."
+        ),
+        framework_cited="Allen race simulation · Phinney 2016 stochastic",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Crit set (60min variable, base Z3, surges 130%)", duration_s=60 * 60, target_pct_ftp=0.90, target_rpe=8, zone=4),
+            _cd(),
+        ],
+        base_tss=92.0,
+        min_ftp_required=180,
+    ),
+    "group_ride_variable": WorkoutTemplate(
+        id="group_ride_variable",
+        name="Group-ride simulation — 90min variable",
+        category="tempo",
+        purpose=(
+            "Variable-power group-ride simulation — Z2 base with periodic "
+            "Z4 surges (1–3 min) and recoveries. Trains race-pack durability "
+            "and pacing flexibility."
+        ),
+        framework_cited="Allen variable-power training",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Group ride (90min variable)", duration_s=90 * 60, target_pct_ftp=0.75, target_rpe=6, zone=3),
+            _cd(),
+        ],
+        base_tss=85.0,
+    ),
+
+    # ---- Field tests (2) -------------------------------------------------
+    "ftp_test_20min": WorkoutTemplate(
+        id="ftp_test_20min",
+        name="FTP test — 20-min max effort",
+        category="threshold",
+        purpose=(
+            "Standard 20-min max-effort field test. New FTP = avg power × "
+            "0.95. Use after a recovery week and at the start of each new "
+            "training block."
+        ),
+        framework_cited="Allen & Coggan 20-min protocol",
+        blocks=[
+            _wu(20 * 60),
+            IntervalBlock(name="5-min openers @ 100%", duration_s=5 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            _rec(10 * 60),
+            IntervalBlock(name="20-min ALL-OUT test", duration_s=20 * 60, target_pct_ftp=1.05, target_rpe=10, zone=4),
+            _cd(),
+        ],
+        base_tss=88.0,
+    ),
+    "ftp_ramp_test": WorkoutTemplate(
+        id="ftp_ramp_test",
+        name="FTP ramp test — Coggan progressive",
+        category="threshold",
+        purpose=(
+            "Progressive 1-min ramp to failure starting at 100W +20W/min "
+            "(scale for fitness). FTP = 75% of MAP (max 1-min sustained). "
+            "Lower acute fatigue than the 20-min test."
+        ),
+        framework_cited="Coggan ramp test · MAP→FTP regression",
+        blocks=[
+            _wu(15 * 60),
+            IntervalBlock(name="Ramp to failure (1-min steps)", duration_s=25 * 60, target_pct_ftp=1.00, target_rpe=10, zone=4),
+            _cd(),
+        ],
+        base_tss=55.0,
+    ),
+
+    # ---- Taper / race-pace confidence (1) -------------------------------
+    "race_pace_60_95": WorkoutTemplate(
+        id="race_pace_60_95",
+        name="Race-pace confidence — 60min @ 95% FTP",
+        category="threshold",
+        purpose=(
+            "Single sustained 60-min effort at 95% FTP — taper-week "
+            "confidence ride. Confirms the engine is firing before race day "
+            "without depleting freshness."
+        ),
+        framework_cited="Mujika taper · Friel race-week",
+        blocks=[
+            _wu(15 * 60),
+            IntervalBlock(name="Race-pace 60min @ 95%", duration_s=60 * 60, target_pct_ftp=0.95, target_rpe=8, zone=4),
+            _cd(),
+        ],
+        base_tss=95.0,
+        min_ftp_required=180,
+    ),
 }
 
 
@@ -383,10 +1256,32 @@ def _tolerance_for_zone(zone: int) -> float:
     return 0.05
 
 
+def _default_cadence_for_zone(zone: int) -> tuple[int, int]:
+    """Default cadence range when a block doesn't override.
+
+    Friel & Coggan defaults:
+        Z1 (recovery)    : 80-95 — easy spin
+        Z2 (endurance)   : 85-95 — aerobic natural
+        Z3 (tempo)       : 85-95 — tempo
+        Z4 (threshold)   : 90-100 — threshold cadence
+        Z5+ (VO2/AC)     : 95-110 — high RPM
+    """
+    if zone <= 1:
+        return (80, 95)
+    if zone == 2:
+        return (85, 95)
+    if zone == 3:
+        return (85, 95)
+    if zone == 4:
+        return (90, 100)
+    return (95, 110)
+
+
 def parametrize_template(
     template: WorkoutTemplate,
     ftp: int,
     duration_scale: float = 1.0,
+    lthr: int | None = None,
 ) -> PrescribedWorkout:
     """Return a concrete PrescribedWorkout with absolute watts computed from FTP.
 
@@ -422,6 +1317,16 @@ def parametrize_template(
             base_work_seconds += block.duration_s
         tol = _tolerance_for_zone(block.zone)
         low, high = _watts_band(ftp, block.target_pct_ftp, tolerance_pct=tol)
+        # Cadence: prefer block-level override, else fall back to a sensible
+        # zone-based default (Friel / Coggan conventions).
+        c_low, c_high = block.cadence_low, block.cadence_high
+        if c_low is None or c_high is None:
+            c_low, c_high = _default_cadence_for_zone(block.zone)
+        # HR target band — only when LTHR is known. The helper returns None
+        # for Z7 sprints (HR can't catch up to a 10-second effort).
+        from app.services.hr_zones import hr_band_for_zone
+        hr_band = hr_band_for_zone(block.zone, lthr)
+        hr_low, hr_high = (hr_band[0], hr_band[1]) if hr_band else (None, None)
         resolved.append(
             ResolvedBlock(
                 name=block.name,
@@ -431,6 +1336,10 @@ def parametrize_template(
                 target_pct_ftp=round(block.target_pct_ftp, 3),
                 zone=block.zone,
                 rpe=block.target_rpe,
+                cadence_low=c_low,
+                cadence_high=c_high,
+                target_hr_low=hr_low,
+                target_hr_high=hr_high,
             )
         )
 
@@ -480,6 +1389,10 @@ def prescribed_workout_to_dict(pw: PrescribedWorkout) -> dict:
                 "target_pct_ftp": b.target_pct_ftp,
                 "zone": b.zone,
                 "rpe": b.rpe,
+                "cadence_low": b.cadence_low,
+                "cadence_high": b.cadence_high,
+                "target_hr_low": b.target_hr_low,
+                "target_hr_high": b.target_hr_high,
             }
             for b in pw.blocks
         ],

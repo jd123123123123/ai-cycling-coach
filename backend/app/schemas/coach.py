@@ -35,7 +35,9 @@ class BriefOption(BaseModel):
 # ======================================================================
 
 class ResolvedBlock(BaseModel):
-    """One interval block, watts derived from the athlete's FTP."""
+    """One interval block, watts derived from the athlete's FTP. HR bounds
+    are populated when the athlete's LTHR is known (or can be derived from
+    MHR / age via services.hr_zones)."""
     name: str
     duration_s: int
     target_watts_low: int
@@ -43,6 +45,10 @@ class ResolvedBlock(BaseModel):
     target_pct_ftp: float
     zone: int = Field(..., ge=1, le=7)
     rpe: int = Field(..., ge=1, le=10)
+    cadence_low: int | None = None     # rpm — None means "natural cadence"
+    cadence_high: int | None = None
+    target_hr_low: int | None = None   # bpm — None when LTHR is unknown
+    target_hr_high: int | None = None  # bpm
 
 
 class PrescribedWorkout(BaseModel):
@@ -223,6 +229,55 @@ class BriefRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ExternalWorkoutMatch(BaseModel):
+    """One entry from the curated external-workout catalogue."""
+    id: str
+    title: str
+    platform: Literal["zwift", "trainerroad", "rouvy"]
+    category: str
+    duration_min: int
+    intensity_factor: float
+    structure: str
+    min_ftp: int | None = None
+    predicted_tss: int
+
+
+class ExternalWorkoutsRead(BaseModel):
+    """Today's external-platform recommendations, scoped to the brief's
+    session category and duration window."""
+    session_type: str
+    target_minutes: int
+    matches: list[ExternalWorkoutMatch] = Field(default_factory=list)
+
+
+class GoalTrajectoryRead(BaseModel):
+    """Structured projection surfaced on the dashboard for A-event athletes.
+
+    The backend's `goal_trajectory.project()` already computes everything an
+    informed athlete needs: days to event, projected race-day CTL/TSB, Mujika
+    taper classification, on-track gap, and a coach-grade narrative_hook.
+    This endpoint is the thin pass-through that exposes it without forcing
+    the frontend to re-fetch the full coach brief.
+    """
+    days_to_goal: int | None = None
+    ctl_now: float
+    ctl_7d_delta: float
+    ctl_projected_at_goal: float
+    ctl_target: float | None = None
+    tsb_projected_at_goal: float
+    taper_window: Literal["too_flat", "ideal", "too_fresh", "overreached", "unknown"]
+    on_track: Literal["ahead", "on_track", "behind", "no_goal"]
+    weekly_tss_required: float
+    weekly_tss_actual: float
+    narrative_hook: str
+    # Event metadata enriches the UI without a second profile fetch. All optional
+    # so the no-goal path renders the trend-only narrative.
+    event_name: str | None = None
+    event_date: str | None = None  # ISO date
+    event_type: str | None = None  # 'race' | 'fondo' | 'audax' | 'maintenance'
+    target_priority: str | None = None  # 'A' | 'B' | 'C'
 
 
 class ChatMessage(BaseModel):

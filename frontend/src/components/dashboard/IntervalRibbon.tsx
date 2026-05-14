@@ -135,12 +135,22 @@ export default function IntervalRibbon({
           // simple shows a block-name + duration + feel only.
           const simpleName = simpleMode ? simpleBlockName(b.name) : b.name
           const feel = ZONE_FEEL_SIMPLE[b.zone] ?? 'steady'
+          // Cadence appendix — only added when explicitly set (climbing blocks
+          // override to 60-70rpm; otherwise the zone default still renders).
+          const cadenceStr =
+            b.cadence_low != null && b.cadence_high != null
+              ? ` · ${b.cadence_low}-${b.cadence_high}rpm`
+              : ''
+          const hrStr =
+            b.target_hr_low != null && b.target_hr_high != null
+              ? ` · ${b.target_hr_low}-${b.target_hr_high} bpm`
+              : ''
           const ariaLabel = simpleMode
             ? `${simpleName}: ${formatMinutes(b.duration_s)}, ${feel} pace`
-            : `${b.name}: ${formatMinutes(b.duration_s)} at ${b.target_watts_low}-${b.target_watts_high}W, zone ${b.zone}, RPE ${b.rpe}`
+            : `${b.name}: ${formatMinutes(b.duration_s)} at ${b.target_watts_low}-${b.target_watts_high}W${hrStr}, zone ${b.zone}, RPE ${b.rpe}${cadenceStr ? ', ' + cadenceStr.slice(3) : ''}`
           const titleAttr = simpleMode
             ? `${simpleName} · ${formatMinutes(b.duration_s)} · ${feel}`
-            : `${b.name} · ${formatMinutes(b.duration_s)} · ${b.target_watts_low}–${b.target_watts_high}W · Z${b.zone} · RPE ${b.rpe}`
+            : `${b.name} · ${formatMinutes(b.duration_s)} · ${b.target_watts_low}–${b.target_watts_high}W${hrStr} · Z${b.zone} · RPE ${b.rpe}${cadenceStr}`
           return (
             <button
               key={`${b.name}-${idx}`}
@@ -195,8 +205,21 @@ export default function IntervalRibbon({
             ) : (
               <>
                 {formatMinutes(blocks[hoverIdx].duration_s)} ·{' '}
-                {blocks[hoverIdx].target_watts_low}–{blocks[hoverIdx].target_watts_high}W · Z
-                {blocks[hoverIdx].zone} · RPE {blocks[hoverIdx].rpe}
+                {blocks[hoverIdx].target_watts_low}–{blocks[hoverIdx].target_watts_high}W
+                {blocks[hoverIdx].target_hr_low != null &&
+                  blocks[hoverIdx].target_hr_high != null && (
+                    <>
+                      {' · '}
+                      {blocks[hoverIdx].target_hr_low}–{blocks[hoverIdx].target_hr_high} bpm
+                    </>
+                  )}
+                {' · '}Z{blocks[hoverIdx].zone} · RPE {blocks[hoverIdx].rpe}
+                {blocks[hoverIdx].cadence_low != null && blocks[hoverIdx].cadence_high != null && (
+                  <>
+                    {' · '}
+                    {blocks[hoverIdx].cadence_low}–{blocks[hoverIdx].cadence_high}rpm
+                  </>
+                )}
               </>
             )}
           </div>

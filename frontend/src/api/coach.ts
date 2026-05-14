@@ -28,6 +28,10 @@ export interface ResolvedBlock {
   target_pct_ftp: number
   zone: number // 1..7
   rpe: number  // 1..10
+  cadence_low: number | null
+  cadence_high: number | null
+  target_hr_low: number | null    // bpm — null when LTHR unknown
+  target_hr_high: number | null
 }
 
 export interface PrescribedWorkout {
@@ -208,6 +212,102 @@ export async function fetchWhyTired(): Promise<WhyTiredResponse> {
 export async function fetchTransparency(): Promise<TransparencyResponse> {
   const res = await apiClient.get<TransparencyResponse>('/coach/transparency')
   return res.data
+}
+
+// ─── Goal trajectory ────────────────────────────────────────────────────────
+//
+// Event-aware projection — the dashboard's primary source for "are you on
+// track for your A-event?" Mirrors backend's GoalTrajectoryRead.
+
+export type TaperWindow = 'too_flat' | 'ideal' | 'too_fresh' | 'overreached' | 'unknown'
+export type OnTrack = 'ahead' | 'on_track' | 'behind' | 'no_goal'
+
+export interface GoalTrajectoryResponse {
+  days_to_goal: number | null
+  ctl_now: number
+  ctl_7d_delta: number
+  ctl_projected_at_goal: number
+  ctl_target: number | null
+  tsb_projected_at_goal: number
+  taper_window: TaperWindow
+  on_track: OnTrack
+  weekly_tss_required: number
+  weekly_tss_actual: number
+  narrative_hook: string
+  event_name: string | null
+  event_date: string | null
+  event_type: string | null
+  target_priority: string | null
+}
+
+export async function fetchGoalTrajectory(): Promise<GoalTrajectoryResponse> {
+  const res = await apiClient.get<GoalTrajectoryResponse>('/coach/trajectory')
+  return res.data
+}
+
+// ─── External workouts ───────────────────────────────────────────────────────
+
+export type ExternalPlatform = 'zwift' | 'trainerroad' | 'rouvy'
+
+export interface ExternalWorkoutMatch {
+  id: string
+  title: string
+  platform: ExternalPlatform
+  category: string
+  duration_min: number
+  intensity_factor: number
+  structure: string
+  min_ftp: number | null
+  predicted_tss: number
+}
+
+export interface ExternalWorkoutsResponse {
+  session_type: string
+  target_minutes: number
+  matches: ExternalWorkoutMatch[]
+}
+
+export async function fetchExternalWorkouts(opts?: {
+  platforms?: ExternalPlatform[]
+  limit?: number
+}): Promise<ExternalWorkoutsResponse> {
+  const params: Record<string, string | number> = {}
+  if (opts?.platforms?.length) params.platforms = opts.platforms.join(',')
+  if (opts?.limit) params.limit = opts.limit
+  const res = await apiClient.get<ExternalWorkoutsResponse>('/coach/external-workouts', {
+    params,
+  })
+  return res.data
+}
+
+// ─── Workout export (.zwo / .erg / .mrc) ─────────────────────────────────
+
+export type WorkoutFormat = 'zwo' | 'erg' | 'mrc' | 'fit'
+
+/**
+ * Download today's prescribed workout as a structured file. We fetch the body
+ * with our auth-aware apiClient (so the token is attached) instead of using a
+ * naked <a download> link, then trigger a Blob download client-side. This
+ * keeps the auth session intact and lets us read the Content-Disposition for
+ * the filename.
+ */
+export async function downloadWorkoutExport(format: WorkoutFormat): Promise<void> {
+  const res = await apiClient.get(`/coach/workout/export`, {
+    params: { format },
+    responseType: 'blob',
+  })
+  const blob = res.data as Blob
+  const cd = (res.headers['content-disposition'] as string | undefined) ?? ''
+  const match = /filename="?([^"]+)"?/i.exec(cd)
+  const filename = match?.[1] ?? `workout.${format}`
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 // ─── Streaming chat ──────────────────────────────────────────────────────────

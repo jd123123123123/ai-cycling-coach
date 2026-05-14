@@ -748,10 +748,21 @@ async def build_snapshot(
         preferred_template_id=preferred_template_id,
     )
 
+    # Derive best-available LTHR so workout blocks can show HR targets
+    # alongside watts. Priority: stored LTHR → 0.85 × MHR → 0.85 × Tanaka(age).
+    from app.services.hr_zones import derive_lthr
+    derived_lthr = derive_lthr(
+        lthr=getattr(profile, "lthr_cycling", None) if profile else None,
+        max_heart_rate=getattr(profile, "max_heart_rate", None) if profile else None,
+        date_of_birth=getattr(profile, "date_of_birth", None) if profile else None,
+    )
+
     picked_preview: dict | None = None
     if ftp and ftp > 0:
         try:
-            prescribed = parametrize_template(picked_template, int(ftp), duration_scale=1.0)
+            prescribed = parametrize_template(
+                picked_template, int(ftp), duration_scale=1.0, lthr=derived_lthr,
+            )
             picked_preview = prescribed_workout_to_dict(prescribed)
         except ValueError:
             picked_preview = None
@@ -1093,6 +1104,15 @@ async def build_snapshot(
             "injury_note": profile.injury_note if profile else None,
             "goal_phase": phase,
             "today_available_minutes": today_available_minutes,
+            # Best-available LTHR for HR-zone derivation downstream. Priority:
+            # stored LTHR → 0.85 × MHR → 0.85 × Tanaka(age) → None.
+            "lthr": derived_lthr,
+            "max_hr": (
+                profile.max_heart_rate if profile and profile.max_heart_rate else None
+            ),
+            "resting_hr": (
+                profile.resting_heart_rate if profile and profile.resting_heart_rate else None
+            ),
         },
         "readiness": {
             "score": readiness_report.overall,
@@ -1204,6 +1224,7 @@ def _rewrite_prescribed_workout(
     ftp: int,
     duration_minutes_hint: int | None,
     why_this_workout: str | None,
+    lthr: int | None = None,
 ) -> dict:
     """Re-derive watts from FTP for the given template, applying a duration
     nudge if the LLM's suggested duration_minutes differs by <= ±15% from the
@@ -1251,7 +1272,7 @@ def _rewrite_prescribed_workout(
         }
 
     prescribed: PrescribedWorkout = parametrize_template(
-        template, int(ftp), duration_scale=duration_scale,
+        template, int(ftp), duration_scale=duration_scale, lthr=lthr,
     )
     out = prescribed_workout_to_dict(prescribed)
     out["why_this_workout"] = why_this_workout or template.purpose
@@ -1278,6 +1299,10 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     ftp = int(athlete.get("ftp") or 0)
     rails_ctx = snapshot.get("rails_context", {})
     ceiling = str(rails_ctx.get("intensity_ceiling", "push"))
+    # LTHR for HR-target derivation. Snapshot carries the derived value
+    # under athlete.lthr; falls back to None.
+    lthr_for_hr = athlete.get("lthr")
+    lthr_for_hr = int(lthr_for_hr) if isinstance(lthr_for_hr, (int, float)) and lthr_for_hr > 0 else None
 
     llm_workout = llm_payload.get("prescribed_workout") or {}
     template_id = str(llm_workout.get("template_id") or "")
@@ -1320,7 +1345,7 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     except (TypeError, ValueError):
         duration_hint = None
 
-    new_workout = _rewrite_prescribed_workout(template_id, ftp, duration_hint, why)
+    new_workout = _rewrite_prescribed_workout(template_id, ftp, duration_hint, why, lthr=lthr_for_hr)
 
     # Step 5: alternates — validate ids, rewrite watts
     llm_alternates = llm_payload.get("alternates") or []
