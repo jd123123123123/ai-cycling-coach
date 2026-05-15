@@ -4,22 +4,26 @@ import type { AlternateWorkout, PrescribedWorkout } from '../../api/coach'
 import IntervalRibbon from './IntervalRibbon'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { simpleTitleFor, translateCoach } from '../../utils/coachLanguage'
+import { useT } from '../../contexts/LocaleContext'
+import type { StringKey } from '../../i18n/strings'
 
 // Category → intensity label mapping. Paired pairs of %FTP ranges come from
 // Coggan's power zone table (the de facto standard cited across TrainingPeaks,
 // Friel, and USAC). These feel-matched labels are what riders want at a glance.
+// Category → translation-key + FTP range. Range strings stay non-localised
+// (FTP / numeric bands are international vocabulary).
 const CATEGORY_INTENSITY: Record<
   string,
-  { label: string; range: string }
+  { key: StringKey; range: string }
 > = {
-  recovery:   { label: 'Recovery',     range: '<55% FTP' },
-  endurance:  { label: 'Endurance',    range: '56–75% FTP' },
-  tempo:      { label: 'Tempo',        range: '76–87% FTP' },
-  sweet_spot: { label: 'Sweet Spot',   range: '88–94% FTP' },
-  threshold:  { label: 'Threshold',    range: '95–105% FTP' },
-  vo2:        { label: 'VO₂max',       range: '106–120% FTP' },
-  anaerobic:  { label: 'Anaerobic',    range: '>120% FTP' },
-  rest:       { label: 'Rest',         range: '—' },
+  recovery:   { key: 'cat_recovery',   range: '<55% FTP' },
+  endurance:  { key: 'cat_endurance',  range: '56–75% FTP' },
+  tempo:      { key: 'cat_tempo',      range: '76–87% FTP' },
+  sweet_spot: { key: 'cat_sweet_spot', range: '88–94% FTP' },
+  threshold:  { key: 'cat_threshold',  range: '95–105% FTP' },
+  vo2:        { key: 'cat_vo2',        range: '106–120% FTP' },
+  anaerobic:  { key: 'cat_anaerobic',  range: '>120% FTP' },
+  rest:       { key: 'cat_rest',       range: '—' },
 }
 
 function MetricTile({
@@ -127,6 +131,7 @@ export default function PrescribedWorkoutCard({
   // We only render the alternates' templates as compact previews for now.
   const [activeAlt, setActiveAlt] = useState<string | null>(null)
   const { language } = useLanguage()
+  const t = useT()
   const simpleMode = language === 'simple'
 
   const displayed = useMemo<PrescribedWorkout>(() => {
@@ -199,14 +204,17 @@ export default function PrescribedWorkoutCard({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <MetricTile
           icon={Clock}
-          label="DURATION"
+          label={t('metric_duration')}
           value={`${displayed.duration_minutes}`}
           sub="min"
         />
         <MetricTile
           icon={Target}
-          label="TARGET"
-          value={(displayed.category ? CATEGORY_INTENSITY[displayed.category] : undefined)?.label ?? 'Steady'}
+          label={t('metric_target')}
+          value={(() => {
+            const c = displayed.category ? CATEGORY_INTENSITY[displayed.category] : undefined
+            return c ? t(c.key) : t('steady_default')
+          })()}
           sub={
             simpleMode
               ? undefined
@@ -215,7 +223,7 @@ export default function PrescribedWorkoutCard({
         />
         <MetricTile
           icon={Flame}
-          label={simpleMode ? 'EFFORT' : 'LOAD'}
+          label={simpleMode ? t('metric_effort') : t('metric_load')}
           value={`${Math.round(displayed.predicted_tss)}`}
           sub={simpleMode ? 'pts' : 'TSS'}
         />
@@ -302,7 +310,7 @@ export default function PrescribedWorkoutCard({
               className="eyebrow underline underline-offset-2 self-start"
               style={{ color: 'var(--color-muted)' }}
             >
-              Back to prescribed
+              {t('back_to_prescribed')}
             </button>
           )}
         </div>
@@ -321,7 +329,7 @@ export default function PrescribedWorkoutCard({
             backgroundColor: 'var(--color-forest)',
             border: '1px solid var(--color-forest)',
           }}
-          title="Coming soon — push workout to Garmin"
+          title={t('push_to_garmin_soon')}
         >
           <Zap size={13} strokeWidth={2} />
           <span>{translateCoach('workoutCard.startCta', language)}</span>
@@ -335,9 +343,9 @@ export default function PrescribedWorkoutCard({
             backgroundColor: 'transparent',
             border: '1px solid var(--color-rule)',
           }}
-          title="Coming soon — re-plan from tomorrow"
+          title={t('replan_tomorrow_soon')}
         >
-          <span>Snooze 1 day</span>
+          <span>{t('snooze_one_day')}</span>
         </button>
       </div>
     </div>

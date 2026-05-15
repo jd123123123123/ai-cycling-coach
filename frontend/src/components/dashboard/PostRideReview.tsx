@@ -35,6 +35,7 @@ import type {
 import type { CoachLanguage } from '../../contexts/LanguageContext'
 import { complianceDirectionText, gradeLabel } from '../../utils/coachLanguage'
 import { formatSigned } from '../../utils/format'
+import { useT } from '../../contexts/LocaleContext'
 
 type Grade = NonNullable<PostRideReviewType['grade']>
 
@@ -292,6 +293,7 @@ function MultiActivityReview({
   review: PostRideReviewType
   language: CoachLanguage
 }) {
+  const t = useT()
   const totals = review.totals ?? {
     tss: review.tss?.actual ?? 0,
     duration_minutes:
@@ -304,7 +306,7 @@ function MultiActivityReview({
   const activities = review.activities ?? []
   const tssDisp = Math.round(totals.tss || 0)
   const durDisp = formatHM(totals.duration_minutes || 0)
-  const eyebrow = language === 'simple' ? "Today · you trained" : "Today's sessions"
+  const eyebrow = language === 'simple' ? t('today_you_trained_eyebrow') : t('todays_sessions_eyebrow')
 
   return (
     <motion.div
@@ -391,7 +393,7 @@ function MultiActivityReview({
         />
         <div className="flex flex-col gap-1 min-w-0">
           <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
-            {language === 'simple' ? 'Tomorrow' : 'Tomorrow setup'}
+            {language === 'simple' ? t('tomorrow_short_label') : t('tomorrow_setup_label')}
           </span>
           <p
             className="text-[14px] leading-relaxed dashboard-break-words"
@@ -429,6 +431,7 @@ export default function PostRideReview({ review, language }: Props) {
   }
 
   const simpleMode = language === 'simple'
+  const t = useT()
   const palette = GRADE_PALETTE[review.grade]
 
   // Duration — always shown
@@ -485,7 +488,7 @@ export default function PostRideReview({ review, language }: Props) {
             className="eyebrow"
             style={{ color: 'var(--color-forest)' }}
           >
-            {simpleMode ? 'Today · you rode' : "Today's ride"}
+            {simpleMode ? t('today_you_rode_eyebrow') : t('todays_ride_simple_eyebrow')}
           </span>
           <h3
             className="num-display leading-tight dashboard-break-words"
@@ -503,7 +506,7 @@ export default function PostRideReview({ review, language }: Props) {
               className="eyebrow text-[11px] mt-0.5"
               style={{ color: '#c4614c' }}
             >
-              Extra recovery tonight.
+              {t('extra_recovery_tonight')}
             </span>
           )}
         </div>
@@ -615,7 +618,7 @@ export default function PostRideReview({ review, language }: Props) {
             className="eyebrow"
             style={{ color: 'var(--color-forest)' }}
           >
-            {simpleMode ? 'Where this points' : 'Goal trajectory'}
+            {simpleMode ? t('where_this_points_label') : t('goal_trajectory_label')}
           </span>
           <p
             className="text-[14px] leading-relaxed dashboard-break-words"
@@ -644,7 +647,7 @@ export default function PostRideReview({ review, language }: Props) {
             className="eyebrow"
             style={{ color: 'var(--color-amber)' }}
           >
-            {simpleMode ? "What's next" : 'Next session'}
+            {simpleMode ? t('whats_next_label') : t('next_session_label')}
           </span>
           <p
             className="text-[14px] leading-relaxed dashboard-break-words"

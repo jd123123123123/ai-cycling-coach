@@ -7,6 +7,7 @@ import type { ResolvedBlock } from '../../api/coach'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
 import type { ActivityRead } from '../../api/dashboard'
 import { formatHours } from '../../utils/format'
+import { useT } from '../../contexts/LocaleContext'
 
 interface DayPlanCardProps {
   day: DayPlan
@@ -34,6 +35,8 @@ function adaptIntervals(intervals: IntervalBlockOut[]): ResolvedBlock[] {
       target_watts_high: Math.round(pct * 200 * 1.05),
       zone: b.zone,
       rpe: Math.round(b.zone * 1.2),
+      cadence_low: null,
+      cadence_high: null,
     }
   })
 }
@@ -50,6 +53,7 @@ function fullDateLabel(dateStr: string): string { return parsedDate(dateStr) ? f
  */
 export default function DayPlanCard({ day, language, activity = null }: DayPlanCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
+  const t = useT()
 
   const dateObj = parsedDate(day.date)
   const isFutureDay = dateObj ? isFuture(dateObj) && !isToday(dateObj) : false
@@ -101,26 +105,26 @@ export default function DayPlanCard({ day, language, activity = null }: DayPlanC
 
           {day.category !== 'rest' && (
             <div>
-              <p className="eyebrow mb-2" style={{ color: 'var(--color-muted)' }}>WORKOUT STRUCTURE</p>
+              <p className="eyebrow mb-2" style={{ color: 'var(--color-muted)' }}>{t('workout_structure_eyebrow')}</p>
               <IntervalRibbon blocks={adaptedBlocks} className="h-16" language={language} />
             </div>
           )}
 
           {day.target_tss != null && (
             <div className="flex items-center gap-2">
-              <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>TARGET TSS</span>
+              <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>{t('target_tss_eyebrow')}</span>
               <span className="num-mono text-[14px]" style={{ color: 'var(--color-ink)' }}>{day.target_tss}</span>
             </div>
           )}
 
           {activity ? (
             <p className="text-[13px]" style={{ color: 'var(--color-ink-2)' }}>
-              <span className="eyebrow" style={{ color: 'var(--color-muted)', marginRight: 6 }}>ACTIVITY</span>
-              {activity.title ?? 'Untitled activity'}
+              <span className="eyebrow" style={{ color: 'var(--color-muted)', marginRight: 6 }}>{t('activity_eyebrow')}</span>
+              {activity.title ?? t('untitled_activity')}
               {activity.duration_seconds && <span style={{ marginLeft: 6, color: 'var(--color-muted)' }}>· {formatHours(activity.duration_seconds)}</span>}
             </p>
           ) : (
-            <p className="text-[13px] italic" style={{ color: 'var(--color-muted)' }}>No activity logged.</p>
+            <p className="text-[13px] italic" style={{ color: 'var(--color-muted)' }}>{t('no_activity_logged')}</p>
           )}
         </div>
       </SideSheet>

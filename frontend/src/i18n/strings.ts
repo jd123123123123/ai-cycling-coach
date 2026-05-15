@@ -205,6 +205,56 @@ export const STRINGS = {
     de: 'Müde ist ein Signal. Ein lockerer Tag jetzt erspart zwei erzwungene Ruhetage später.',
   },
   logged_chip: { en: 'Logged', de: 'Erfasst' },
+
+  // PrescribedWorkoutCard — category labels (chips next to the title)
+  cat_recovery: { en: 'Recovery', de: 'Erholung' },
+  cat_endurance: { en: 'Endurance', de: 'Ausdauer' },
+  cat_tempo: { en: 'Tempo', de: 'Tempo' },
+  cat_sweet_spot: { en: 'Sweet Spot', de: 'Sweet Spot' },
+  cat_threshold: { en: 'Threshold', de: 'Schwelle' },
+  cat_vo2: { en: 'VO₂max', de: 'VO₂max' },
+  cat_anaerobic: { en: 'Anaerobic', de: 'Anaerob' },
+  cat_rest: { en: 'Rest', de: 'Ruhetag' },
+  workout_structure_eyebrow: { en: 'WORKOUT STRUCTURE', de: 'TRAININGSAUFBAU' },
+  alternates_heading_de_fallback: { en: 'Alternates', de: 'Alternativen' },
+  push_to_garmin_soon: { en: 'Coming soon — push workout to Garmin', de: 'Demnächst — Workout an Garmin senden' },
+  replan_tomorrow_soon: { en: 'Coming soon — re-plan from tomorrow', de: 'Demnächst — ab Morgen neu planen' },
+
+  // DayPlanCard side-sheet
+  target_tss_eyebrow: { en: 'TARGET TSS', de: 'ZIEL-TSS' },
+  activity_eyebrow: { en: 'ACTIVITY', de: 'AKTIVITÄT' },
+  untitled_activity: { en: 'Untitled activity', de: 'Aktivität ohne Titel' },
+  no_activity_logged: { en: 'No activity logged.', de: 'Keine Aktivität erfasst.' },
+
+  // PostRideReview — top-level labels (the grade pill text + headline come
+  // from the AI/eval payload — translated server-side once the brief LLM
+  // sees locale=de; these are the surrounding chrome labels only).
+  todays_ride_eyebrow: { en: "TODAY'S RIDE", de: 'HEUTIGES TRAINING' },
+  todays_sessions_eyebrow: { en: "Today's sessions", de: 'Heutige Einheiten' },
+  today_you_trained_eyebrow: { en: 'Today · you trained', de: 'Heute · trainiert' },
+  tomorrow_setup_label: { en: 'Tomorrow setup', de: 'Morgen-Plan' },
+  tomorrow_short_label: { en: 'Tomorrow', de: 'Morgen' },
+  today_you_rode_eyebrow: { en: 'Today · you rode', de: 'Heute · gefahren' },
+  todays_ride_simple_eyebrow: { en: "Today's ride", de: 'Heutige Fahrt' },
+  extra_recovery_tonight: { en: 'Extra recovery tonight.', de: 'Heute Abend extra Erholung.' },
+  goal_trajectory_label: { en: 'Goal trajectory', de: 'Ziel-Verlauf' },
+  where_this_points_label: { en: 'Where this points', de: 'Wohin das führt' },
+  next_session_label: { en: 'Next session', de: 'Nächste Einheit' },
+  whats_next_label: { en: "What's next", de: 'Was kommt' },
+
+  // WorkoutExportRow
+  export_workout_eyebrow: { en: 'Export workout', de: 'Workout exportieren' },
+  export_failed: { en: 'Export failed.', de: 'Export fehlgeschlagen.' },
+  snooze_one_day: { en: 'Snooze 1 day', de: '1 Tag verschieben' },
+  back_to_prescribed: { en: 'Back to prescribed', de: 'Zurück zum Plan' },
+  metric_duration: { en: 'DURATION', de: 'DAUER' },
+  metric_target: { en: 'TARGET', de: 'ZIEL' },
+  metric_load: { en: 'LOAD', de: 'LAST' },
+  metric_effort: { en: 'EFFORT', de: 'AUFWAND' },
+  steady_default: { en: 'Steady', de: 'Stetig' },
+
+  // Generic
+  loading: { en: 'Loading…', de: 'Wird geladen…' },
 } as const satisfies Record<string, StringSet>
 
 export type StringKey = keyof typeof STRINGS
