@@ -140,6 +140,25 @@ export const STRINGS = {
   // Other section titles
   full_plan: { en: 'Full plan', de: 'Gesamtplan' },
   this_week: { en: 'This week', de: 'Diese Woche' },
+
+  // SyncButton — tone labels + relative ages
+  sync_just_now: { en: 'just now', de: 'gerade eben' },
+  sync_min_ago: { en: 'min ago', de: 'Min.' },
+  sync_h_ago: { en: 'h ago', de: 'Std.' },
+  sync_d_ago: { en: 'd ago', de: 'T.' },
+  sync_label_synced: { en: 'Synced', de: 'Synchronisiert' },
+  sync_label_syncing: { en: 'Syncing…', de: 'Synchronisiere…' },
+  sync_label_failed: { en: 'Sync failed', de: 'Sync fehlgeschlagen' },
+  sync_label_not_connected: { en: 'Not connected', de: 'Nicht verbunden' },
+
+  // StreakStrip
+  streak_goal_train: { en: 'TRAIN', de: 'TRAINING' },
+  streak_goal_checkin: { en: 'CHECK IN', de: 'CHECK-IN' },
+  streak_goal_recover: { en: 'RECOVER', de: 'ERHOLEN' },
+
+  // WeeklyChallenge
+  week_in_motion: { en: 'Your week is in motion.', de: 'Deine Woche läuft.' },
+  tss_to_close_ring: { en: 'TSS to close the ring', de: 'TSS bis der Ring schließt' },
 } as const satisfies Record<string, StringSet>
 
 export type StringKey = keyof typeof STRINGS

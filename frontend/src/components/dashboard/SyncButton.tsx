@@ -24,6 +24,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { AlertTriangle, Check, RefreshCw, WifiOff } from 'lucide-react'
 import { useForceSync } from '../../hooks/useForceSync'
+import { useLocale } from '../../contexts/LocaleContext'
+import { tFor } from '../../i18n/strings'
 import { useGarminStatus } from '../../hooks/useGarminStatus'
 
 // After this many minutes since last_sync_at the pill flips ok → stale.
@@ -34,16 +36,16 @@ const ERROR_HOLD_MS = 6000
 
 type Tone = 'ok' | 'stale' | 'syncing' | 'error' | 'disconnected'
 
-function relativeAge(iso: string | null, now: number): string {
+function relativeAge(iso: string | null, now: number, locale: 'en' | 'de' = 'en'): string {
   if (!iso) return '—'
   const diffMs = Math.max(0, now - new Date(iso).getTime())
   const diffMin = Math.round(diffMs / 60_000)
-  if (diffMin < 1) return 'just now'
-  if (diffMin < 60) return `${diffMin} min ago`
+  if (diffMin < 1) return tFor(locale, 'sync_just_now')
+  if (diffMin < 60) return `${diffMin} ${tFor(locale, 'sync_min_ago')}`
   const diffH = Math.round(diffMin / 60)
-  if (diffH < 24) return `${diffH} h ago`
+  if (diffH < 24) return `${diffH} ${tFor(locale, 'sync_h_ago')}`
   const diffD = Math.round(diffH / 24)
-  return `${diffD} d ago`
+  return `${diffD} ${tFor(locale, 'sync_d_ago')}`
 }
 
 function extractAxiosMessage(err: unknown): string {
@@ -65,6 +67,7 @@ interface SyncButtonProps {
 export default function SyncButton({ compact = false, className = '' }: SyncButtonProps) {
   const { data: status, isLoading } = useGarminStatus()
   const sync = useForceSync()
+  const { locale } = useLocale()
   const reduce = useReducedMotion()
 
   // Tick the relative-age string every 30 s — purely UI-side, no refetch.
@@ -103,15 +106,15 @@ export default function SyncButton({ compact = false, className = '' }: SyncButt
   else if (isStale) tone = 'stale'
 
   const TONE_MAP: Record<Tone, { dot: string; text: string; label: string }> = {
-    ok:           { dot: 'var(--color-forest)', text: 'var(--color-forest)', label: 'Synced' },
-    stale:        { dot: 'var(--color-amber)',  text: 'var(--color-amber)',  label: 'Synced' },
-    syncing:      { dot: 'var(--color-amber)',  text: 'var(--color-amber)',  label: 'Syncing…' },
-    error:        { dot: 'var(--color-alert)',  text: 'var(--color-alert)',  label: 'Sync failed' },
-    disconnected: { dot: 'var(--color-muted)',  text: 'var(--color-muted)',  label: 'Not connected' },
+    ok:           { dot: 'var(--color-forest)', text: 'var(--color-forest)', label: tFor(locale, 'sync_label_synced') },
+    stale:        { dot: 'var(--color-amber)',  text: 'var(--color-amber)',  label: tFor(locale, 'sync_label_synced') },
+    syncing:      { dot: 'var(--color-amber)',  text: 'var(--color-amber)',  label: tFor(locale, 'sync_label_syncing') },
+    error:        { dot: 'var(--color-alert)',  text: 'var(--color-alert)',  label: tFor(locale, 'sync_label_failed') },
+    disconnected: { dot: 'var(--color-muted)',  text: 'var(--color-muted)',  label: tFor(locale, 'sync_label_not_connected') },
   }
   const TONE = TONE_MAP[tone]
 
-  const ageStr = relativeAge(status?.last_sync_at ?? null, now)
+  const ageStr = relativeAge(status?.last_sync_at ?? null, now, locale)
   const disabled = isLoading || isSyncing || tone === 'disconnected'
 
   const handleClick = useCallback(() => {
