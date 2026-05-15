@@ -159,6 +159,52 @@ export const STRINGS = {
   // WeeklyChallenge
   week_in_motion: { en: 'Your week is in motion.', de: 'Deine Woche läuft.' },
   tss_to_close_ring: { en: 'TSS to close the ring', de: 'TSS bis der Ring schließt' },
+
+  // Crew tab — empty state
+  start_your_squad_cup: { en: 'Start your Squad Cup', de: 'Starte deinen Squad Cup' },
+  riders_go_further: { en: 'Riders go further in a pack.', de: 'Im Rudel kommst du weiter.' },
+  squad_cup_pitch: {
+    en: "Spin up a 7-day TSS competition with up to 7 training partners. Points compound as the week goes on; the leader at Sunday midnight takes the cup. The mechanic stays simple — no kudos, no comments, just a shared bar nobody wants to drop under.",
+    de: 'Starte einen 7-Tage-TSS-Wettkampf mit bis zu 7 Trainingspartnern. Punkte summieren sich über die Woche; wer am Sonntagabend führt, gewinnt den Cup. Bewusst minimalistisch — keine Kudos, keine Kommentare, nur eine gemeinsame Latte, unter die niemand fallen will.',
+  },
+  crew_name_placeholder: {
+    en: "Name your crew (e.g. 'Maratona Squad')",
+    de: "Crew-Name (z. B. 'Maratona Squad')",
+  },
+  create_crew: { en: 'Create crew', de: 'Crew erstellen' },
+  creating: { en: 'Creating…', de: 'Wird erstellt…' },
+  create_crew_error: {
+    en: "Couldn't create the crew — try again, or refresh the page.",
+    de: 'Konnte die Crew nicht anlegen — versuche es erneut oder lade die Seite neu.',
+  },
+  solo_laps_copy: {
+    en: 'Solo laps are training. Racing friends is compounding interest.',
+    de: 'Allein zu fahren ist Training. Mit Freunden zu fahren ist Zinseszins.',
+  },
+  consistency_24x: {
+    en: 'Athletes with 3+ accountability partners stay consistent 2.4× longer.',
+    de: 'Athleten mit 3+ Accountability-Partnern bleiben 2,4× länger konsistent.',
+  },
+  squad_cup_this_week: { en: 'Squad Cup · this week', de: 'Squad Cup · diese Woche' },
+  points_label: { en: 'POINTS', de: 'PUNKTE' },
+  rank_label: { en: 'RANK', de: 'RANG' },
+  of_label: { en: 'OF', de: 'VON' },
+  share_invite_link: { en: 'Share invite link', de: 'Einladungslink teilen' },
+
+  // MorningCheckin celebration prose
+  feeling_great_followup: {
+    en: 'Feeling strong. This is the fitness your last hard block earned — cash it in.',
+    de: 'Fühl dich stark. Das ist die Fitness, die du dir mit dem letzten Block erarbeitet hast — hol sie raus.',
+  },
+  feeling_ok_followup: {
+    en: 'Steady. The riders who stack steady days are the ones who peak on demand.',
+    de: 'Solide. Wer regelmäßig ruhig stark fährt, hat am Renntag die Spitze parat.',
+  },
+  feeling_tired_followup: {
+    en: 'Tired is data. One easy day here saves two forced rest days later.',
+    de: 'Müde ist ein Signal. Ein lockerer Tag jetzt erspart zwei erzwungene Ruhetage später.',
+  },
+  logged_chip: { en: 'Logged', de: 'Erfasst' },
 } as const satisfies Record<string, StringSet>
 
 export type StringKey = keyof typeof STRINGS

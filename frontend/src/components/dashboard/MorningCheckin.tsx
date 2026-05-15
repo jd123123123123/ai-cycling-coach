@@ -98,14 +98,14 @@ export default function MorningCheckin() {
           <span style={{ fontSize: 28 }}>{meta.emoji}</span>
           <div>
             <span className="eyebrow" style={{ color: meta.color, letterSpacing: '0.22em' }}>
-              Logged
+              {t('logged_chip')}
             </span>
             <p className="text-[15px] font-medium mt-0.5" style={{ color: 'var(--color-ink)' }}>
               {meta.key === 'great'
-                ? "Feeling strong. This is the fitness your last hard block earned — cash it in."
+                ? t('feeling_great_followup')
                 : meta.key === 'ok'
-                ? "Steady. The riders who stack steady days are the ones who peak on demand."
-                : "Tired is data. One easy day here saves two forced rest days later."}
+                ? t('feeling_ok_followup')
+                : t('feeling_tired_followup')}
             </p>
           </div>
         </div>

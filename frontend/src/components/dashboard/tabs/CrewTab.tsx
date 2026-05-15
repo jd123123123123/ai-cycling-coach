@@ -21,6 +21,7 @@ import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useCountUp } from '../../../hooks/useCountUp'
 import { useCrew, useCreateCrew, useMyCrew } from '../../../hooks/useCrew'
 import type { CrewMember } from '../../../hooks/useCrew'
+import { useT } from '../../../contexts/LocaleContext'
 
 // CrewTab — Apple-Fitness-inspired "Squad Cup" weekly competition.
 // Mechanic: 7-day race (resets Monday 00:00). Each day, each rider earns
@@ -227,6 +228,7 @@ function StandingRow({ standing, rank }: { standing: Standing; rank: number }) {
 // ─── The tab ────────────────────────────────────────────────────────────────
 
 export default function CrewTab() {
+  const t = useT()
   const today = new Date()
   const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
@@ -323,7 +325,7 @@ export default function CrewTab() {
           <div className="flex items-center gap-2 mb-3">
             <Trophy size={14} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} />
             <span className="eyebrow" style={{ color: 'var(--color-ink)', letterSpacing: '0.24em', fontSize: 10, fontWeight: 600 }}>
-              Start your Squad Cup
+              {t('start_your_squad_cup')}
             </span>
           </div>
           <h2
@@ -335,13 +337,10 @@ export default function CrewTab() {
               color: 'var(--color-ink)',
             }}
           >
-            Riders go further in a pack.
+            {t('riders_go_further')}
           </h2>
           <p className="text-[13px] leading-relaxed mb-5" style={{ color: 'var(--color-ink-2)' }}>
-            Spin up a 7-day TSS competition with up to 7 training partners.
-            Points compound as the week goes on; the leader at Sunday midnight
-            takes the cup. The mechanic stays simple — no kudos, no comments,
-            just a shared bar nobody wants to drop under.
+            {t('squad_cup_pitch')}
           </p>
           <form
             onSubmit={(e) => {
@@ -355,7 +354,7 @@ export default function CrewTab() {
             <input
               value={crewNameDraft}
               onChange={(e) => setCrewNameDraft(e.target.value)}
-              placeholder="Name your crew (e.g. 'Maratona Squad')"
+              placeholder={t('crew_name_placeholder')}
               maxLength={60}
               className="flex-1 min-w-[200px] px-3 py-2 rounded-md text-[13px]"
               style={{
@@ -375,13 +374,13 @@ export default function CrewTab() {
                 boxShadow: '0 1px 8px color-mix(in srgb, var(--color-forest-2) 35%, transparent)',
               }}
             >
-              {createCrew.isPending ? 'Creating…' : 'Create crew'}
+              {createCrew.isPending ? t('creating') : t('create_crew')}
               <UserPlus size={14} strokeWidth={2} />
             </button>
           </form>
           {createCrew.isError && (
             <p className="mt-2 text-[12px]" style={{ color: 'var(--color-bad)' }}>
-              Couldn't create the crew — try again, or refresh the page.
+              {t('create_crew_error')}
             </p>
           )}
         </div>
@@ -392,10 +391,10 @@ export default function CrewTab() {
         >
           <Flame size={16} strokeWidth={2} style={{ color: 'var(--color-amber)' }} />
           <p className="text-[13px] leading-relaxed mt-2" style={{ color: 'var(--color-muted)' }}>
-            Solo laps are training. Racing friends is compounding interest.
+            {t('solo_laps_copy')}
             <br />
             <span style={{ color: 'var(--color-ink-2)' }}>
-              Athletes with 3+ accountability partners stay consistent 2.4× longer.
+              {t('consistency_24x')}
             </span>
           </p>
         </div>
@@ -430,7 +429,7 @@ export default function CrewTab() {
                 className="eyebrow"
                 style={{ color: 'var(--color-ink)', letterSpacing: '0.28em', fontSize: 10, fontWeight: 600 }}
               >
-                Squad Cup · this week
+                {t('squad_cup_this_week')}
               </span>
             </div>
             <Countdown weekEnd={weekEnd} />
@@ -448,14 +447,14 @@ export default function CrewTab() {
               {countedMyScore}
             </span>
             <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)', letterSpacing: '0.14em' }}>
-              POINTS
+              {t('points_label')}
             </span>
             {standings.length > 1 && (
               <span
                 className="num-mono"
                 style={{ fontSize: 11, color: 'var(--color-muted)', letterSpacing: '0.12em' }}
               >
-                · RANK {yourRank} OF {standings.length}
+                · {t('rank_label')} {yourRank} {t('of_label')} {standings.length}
               </span>
             )}
           </div>
@@ -524,7 +523,7 @@ export default function CrewTab() {
           </div>
           <div>
             <p className="text-[15px] font-medium" style={{ color: 'var(--color-ink)' }}>
-              Riders go further in a pack.
+              {t('riders_go_further')}
             </p>
             <p className="text-[12px] leading-relaxed mt-1" style={{ color: 'var(--color-muted)' }}>
               Up to 8 riders. Only training outputs (streak, weekly TSS, points) are shared — never body data.
@@ -578,7 +577,7 @@ export default function CrewTab() {
           ) : (
             <>
               <Link2 size={14} strokeWidth={2} />
-              Share invite link
+              {t('share_invite_link')}
             </>
           )}
         </button>
@@ -627,9 +626,9 @@ export default function CrewTab() {
         >
           <Flame size={16} strokeWidth={2} style={{ color: 'var(--color-amber)' }} />
           <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-            Solo laps are training. Racing friends is compounding interest.
+            {t('solo_laps_copy')}
             <br />
-            <span style={{ color: 'var(--color-ink-2)' }}>Athletes with 3+ accountability partners stay consistent 2.4× longer.</span>
+            <span style={{ color: 'var(--color-ink-2)' }}>{t('consistency_24x')}</span>
           </p>
         </div>
       )}
