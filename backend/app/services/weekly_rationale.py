@@ -308,6 +308,71 @@ def _recovery_sentence_or_none(
 # Public API
 # ---------------------------------------------------------------------------
 
+def _de_preface(
+    phase: Phase,
+    block_position: BlockPosition,
+    block_index_in_meso: int,
+    ctl_delta_7d: float,
+    days_to_event: int | None,
+    target_event_type: str | None,
+    seiler_z3_pct: float,
+) -> str:
+    """German 2-3 sentence preface (du-form). Used when locale='de'.
+
+    Avoids the full rule-based English templates being re-translated by hand;
+    instead emits a tight phrase set covering phase, fitness trend, intensity
+    distribution, and optional event countdown. The brief LLM still writes the
+    rich daily prose in German via its own prompt; this is the lightweight
+    weekly framing for the Train tab header.
+    """
+    week_n = block_index_in_meso + 1
+    phase_label = {
+        "base1": "Grundlage 1", "base2": "Grundlage 2",
+        "build1": "Aufbau 1", "build2": "Aufbau 2",
+        "peak": "Peak", "taper": "Taper", "race": "Wettkampfwoche",
+        "maintenance": "Erhaltung",
+    }.get(phase, phase.capitalize())
+    position_label = {
+        "accumulation": "Akkumulation",
+        "transmutation": "Transmutation",
+        "realization": "Realisation",
+        "recovery": "Erholungswoche",
+    }.get(block_position, block_position)
+
+    if phase == "race":
+        sentences = [
+            "Wettkampfwoche — kein hartes Training, kein neuer Reiz.",
+            "Ein kurzer Race-Pace-Eröffner am Tag vor dem Event hält die Beine wach.",
+        ]
+    else:
+        s1 = f"{phase_label} · Woche {week_n} · {position_label}."
+        if ctl_delta_7d > 1.0:
+            s2 = "Die Fitness steigt diese Woche solide — wir halten den Aufbau überschaubar."
+        elif ctl_delta_7d > 0:
+            s2 = "Die Fitness zieht stetig an — gleichmäßig, ohne zu übertreiben."
+        elif ctl_delta_7d < -0.5:
+            s2 = "Die Fitness ist leicht zurückgegangen — geplante Entlastung."
+        else:
+            s2 = "Die Fitness bleibt stabil — der Körper verarbeitet die letzten Einheiten."
+        z3_pct = int(round(seiler_z3_pct * 100))
+        if z3_pct <= 10:
+            s3 = "Vor allem ruhige Fahrten mit einem fokussierten harten Tag — so passt sich der Körper wirklich an."
+        elif z3_pct <= 20:
+            s3 = "Zwei harte Tage, der Rest ruhig — die Balance, die Fitness baut, ohne auszubrennen."
+        else:
+            s3 = "Mehr harte Tage diese Woche — bewusster Reiz vor der nächsten Entlastung."
+        sentences = [s1, s2, s3]
+
+    if days_to_event is not None and 7 < days_to_event <= 112 and target_event_type not in (None, "maintenance"):
+        weeks = (days_to_event + 6) // 7
+        event_label = {
+            "race": "Rennen", "fondo": "Marathon", "audax": "Brevet",
+        }.get(target_event_type or "", "Event")
+        sentences.append(f"Noch {weeks} Woche{'n' if weeks != 1 else ''} bis zum {event_label}.")
+
+    return " ".join(sentences)
+
+
 def build_weekly_rationale(
     *,
     phase: Phase,
@@ -320,6 +385,7 @@ def build_weekly_rationale(
     target_event_type: str | None,
     seiler_z3_pct: float,
     language: Language,
+    locale: str = "en",
 ) -> str:
     """Return a 3-5 sentence paragraph explaining why this week looks like it does.
 
@@ -345,6 +411,20 @@ def build_weekly_rationale(
         Issurin, Friel, Coggan, sweet-spot, threshold, VO2, polarized, pyramidal.
         Technical mode may freely cite all of the above.
     """
+    # Early-return for German: emit a focused 2-3 sentence du-form preface
+    # via the dedicated builder. Skips the rich English-only sentence
+    # templates so the Train tab reads naturally in German.
+    if locale == "de":
+        return _de_preface(
+            phase=phase,
+            block_position=block_position,
+            block_index_in_meso=block_index_in_meso,
+            ctl_delta_7d=ctl_delta_7d,
+            days_to_event=days_to_event,
+            target_event_type=target_event_type,
+            seiler_z3_pct=seiler_z3_pct,
+        )
+
     # Sentence 1: always present
     s1 = _phase_block_sentence(phase, block_position, block_index_in_meso, language)
 

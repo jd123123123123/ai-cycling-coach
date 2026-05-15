@@ -207,6 +207,10 @@ async def get_current_week(
         Language,
         Query(description="Language mode: 'simple' (default) or 'technical'."),
     ] = "simple",
+    locale: Annotated[
+        Literal["en", "de"],
+        Query(description="UI locale — 'en' (default) or 'de'."),
+    ] = "en",
     db: AsyncSession = Depends(get_db_for_user),
     current_user: User = Depends(get_current_active_user),
 ) -> WeekResponse:
@@ -389,6 +393,7 @@ async def get_current_week(
         target_event_type=target_event_type,
         seiler_z3_pct=seiler_z3_pct,
         language=language,
+        locale=locale,
     )
 
     # ── 10. Assemble response ─────────────────────────────────────────────

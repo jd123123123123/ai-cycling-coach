@@ -39,7 +39,8 @@ export interface WeekResponse {
 
 export async function fetchCurrentWeek(
   language: 'simple' | 'technical',
+  locale: 'en' | 'de' = 'en',
 ): Promise<WeekResponse> {
-  const res = await apiClient.get<WeekResponse>('/weeks/current', { params: { language } })
+  const res = await apiClient.get<WeekResponse>('/weeks/current', { params: { language, locale } })
   return res.data
 }
