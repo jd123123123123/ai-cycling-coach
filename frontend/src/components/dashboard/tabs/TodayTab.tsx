@@ -7,6 +7,7 @@
 import CoachBrief from '../CoachBrief'
 import MorningCheckin from '../MorningCheckin'
 import MorningRecap from '../MorningRecap'
+import { useT } from '../../../contexts/LocaleContext'
 import AchievementBadges from '../AchievementBadges'
 import DidYouKnow from '../DidYouKnow'
 import MomentumChips from '../MomentumChips'
@@ -22,6 +23,7 @@ import WeeklyChallenge from '../WeeklyChallenge'
 import DashboardSection from '../DashboardSection'
 
 export default function TodayTab() {
+  const t = useT()
   return (
     <div className="flex flex-col gap-4 sm:gap-5 min-w-0">
       {/* Subjective check-in — disappears once logged today. */}
@@ -46,7 +48,7 @@ export default function TodayTab() {
       <DidYouKnow />
       <TrainingLogStrip />
 
-      <DashboardSection id="today-deep-dive" title="Deep dive" defaultExpanded={false}>
+      <DashboardSection id="today-deep-dive" title={t('deep_dive')} defaultExpanded={false}>
         <div className="flex flex-col gap-6">
           <ExternalWorkouts />
           <WorkoutExportRow />

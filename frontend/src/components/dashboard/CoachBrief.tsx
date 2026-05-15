@@ -11,6 +11,7 @@ import TomorrowCard from './TomorrowCard'
 import RegenerationCard from './RegenerationCard'
 import DashboardSection from './DashboardSection'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useT } from '../../contexts/LocaleContext'
 import { translateCoach } from '../../utils/coachLanguage'
 import { formatSigned } from '../../utils/format'
 
@@ -203,6 +204,7 @@ function BriefBody({
 }) {
   const ruleBased = isRuleBased(brief.model_used)
   const { language } = useLanguage()
+  const t = useT()
   const simpleMode = language === 'simple'
 
   const evidenceChips = useMemo(
@@ -240,7 +242,7 @@ function BriefBody({
         <div className="flex items-center gap-2 min-w-0">
           <Sparkles size={14} strokeWidth={1.8} style={{ color: 'var(--color-muted)' }} />
           <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
-            Coach brief · today
+            {t('coach_brief_today')}
           </span>
           {generatedAgo && (
             <span className="eyebrow num-mono opacity-60">{generatedAgo}</span>
@@ -255,7 +257,7 @@ function BriefBody({
               }}
               title="Served from the 6h read-through cache"
             >
-              cached
+              {t('cached_chip')}
             </span>
           )}
           {ruleBased && (
@@ -270,7 +272,7 @@ function BriefBody({
               }}
               title="Set ANTHROPIC_API_KEY in backend/.env to enable Claude coaching"
             >
-              AI offline · rule-based
+              {t('ai_offline_chip')}
             </span>
           )}
         </div>
@@ -330,7 +332,7 @@ function BriefBody({
       {(brief.tomorrow_plan || (brief.regeneration?.bullets ?? []).length > 0) && (
         <DashboardSection
           id="brief-tomorrow-recovery"
-          title="Tomorrow & recovery"
+          title={t('tomorrow_recovery_section')}
           defaultExpanded={false}
         >
           <div className="flex flex-col gap-4">
@@ -364,7 +366,7 @@ function BriefBody({
           >
             <ChevronRight size={11} strokeWidth={2} />
             <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
-              {brief.frameworks_cited.length} sources
+              {brief.frameworks_cited.length} {t('sources_link')}
             </span>
           </button>
         )}
@@ -375,7 +377,7 @@ function BriefBody({
         >
           <ChevronRight size={11} strokeWidth={2} />
           <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
-            Why this?
+            {t('why_this')}
           </span>
         </button>
         <button
@@ -388,7 +390,7 @@ function BriefBody({
         >
           <RefreshCw size={11} strokeWidth={1.8} className={isRefreshing ? 'animate-spin' : ''} />
           <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
-            Refresh
+            {t('refresh')}
           </span>
         </button>
       </div>

@@ -6,6 +6,7 @@ import { usePMC } from '../../hooks/usePMC'
 import type { PMCEntry } from '../../api/dashboard'
 import { prefersReducedMotion } from '../../utils/motion'
 import Sparkline from './Sparkline'
+import { useT } from '../../contexts/LocaleContext'
 
 type Sport = 'total' | 'cycling' | 'running' | 'gym'
 
@@ -392,6 +393,7 @@ function HoverTooltip({
 // ─── Main component ─────────────────────────────────────────────────────────────
 
 export default function PMCChart() {
+  const t = useT()
   const [sport, setSport] = useState<Sport>('total')
   const { data, isLoading, isError, refetch } = usePMC(90)
 
@@ -429,7 +431,7 @@ export default function PMCChart() {
         <div>
           {/* Muted eyebrow — amber decoration removed per 06.2 must_haves */}
           <span className="eyebrow">
-            Training load · 90 days
+            {t('training_load_90d')}
           </span>
           <h2
             className="num-display mt-1 leading-none"
@@ -438,7 +440,7 @@ export default function PMCChart() {
               color: 'var(--color-ink)',
             }}
           >
-            Fitness, fatigue, form
+            {t('fitness_fatigue_form')}
           </h2>
         </div>
         <div
@@ -476,7 +478,7 @@ export default function PMCChart() {
           }}
         >
           <SummaryStat
-            label="Fitness · CTL"
+            label={t('fitness_ctl')}
             value={latest.ctl.toFixed(1)}
             unit="TSS/d"
             trend={
@@ -494,7 +496,7 @@ export default function PMCChart() {
             ) : <div style={{ height: 0 }} />}
           </SummaryStat>
           <SummaryStat
-            label="Fatigue · ATL"
+            label={t('fatigue_atl')}
             value={latest.atl.toFixed(1)}
             unit="TSS/d"
             accent={C_ATL}
@@ -507,7 +509,7 @@ export default function PMCChart() {
             ) : <div style={{ height: 0 }} />}
           </SummaryStat>
           <SummaryStat
-            label="Form · TSB"
+            label={t('form_tsb')}
             value={(latest.tsb >= 0 ? '+' : '') + latest.tsb.toFixed(1)}
             trend={form.label}
             accent={C_TSB}

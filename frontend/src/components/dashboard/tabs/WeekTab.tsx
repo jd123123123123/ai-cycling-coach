@@ -21,6 +21,7 @@ import DayPlanCard from '../DayPlanCard'
 import TrainingCalendar from '../TrainingCalendar'
 import TrainHero from '../TrainHero'
 import DashboardSection from '../DashboardSection'
+import { useT } from '../../../contexts/LocaleContext'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLanguage } from '../../../hooks/useLanguage'
@@ -159,6 +160,7 @@ function WeekPlanPrimary() {
 // ─── WeekTab ──────────────────────────────────────────────────────────────────
 
 export default function WeekTab() {
+  const t = useT()
   return (
     <div className="flex flex-col gap-6">
       {/* Hero — phase, week framing (AI preface), TSS plan-vs-actual, quota */}
@@ -174,7 +176,7 @@ export default function WeekTab() {
       </div>
 
       {/* This week at a glance */}
-      <DashboardSection title="This week" id="week-summary" defaultExpanded>
+      <DashboardSection title={t('this_week')} id="week-summary" defaultExpanded>
         <BentoGrid>
           <BentoCell span={2}><WeekStrip /></BentoCell>
           <BentoCell span={1}><WeekVsLast /></BentoCell>
@@ -182,7 +184,7 @@ export default function WeekTab() {
       </DashboardSection>
 
       {/* The whole training plan — month calendar with drag-to-reschedule */}
-      <DashboardSection title="Full plan" id="week-calendar" defaultExpanded={false}>
+      <DashboardSection title={t('full_plan')} id="week-calendar" defaultExpanded={false}>
         <div className="min-w-0">
           <TrainingCalendar />
         </div>

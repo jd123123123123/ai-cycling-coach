@@ -95,6 +95,51 @@ export const STRINGS = {
   tab_train: { en: 'Train', de: 'Training' },
   tab_trends: { en: 'Trends', de: 'Trends' },
   tab_crew: { en: 'Crew', de: 'Crew' },
+
+  // PMCChart
+  training_load_90d: { en: 'Training load · 90 days', de: 'Trainingslast · 90 Tage' },
+  fitness_fatigue_form: { en: 'Fitness, fatigue, form', de: 'Fitness, Ermüdung, Form' },
+  fitness_ctl: { en: 'Fitness · CTL', de: 'Fitness · CTL' },
+  fatigue_atl: { en: 'Fatigue · ATL', de: 'Ermüdung · ATL' },
+  form_tsb: { en: 'Form · TSB', de: 'Form · TSB' },
+
+  // ComplianceStrip grade prose
+  grade_a_note: {
+    en: 'Plan nailed. This is how fitness compounds.',
+    de: 'Plan voll umgesetzt. Genau so baust du Fitness auf.',
+  },
+  grade_b_note: {
+    en: 'Close — minor drift, still productive.',
+    de: 'Knapp dran — kleine Abweichung, trotzdem produktiv.',
+  },
+  grade_big_miss_note: {
+    en: 'Big miss. Either the plan was too ambitious or life got in the way.',
+    de: 'Großer Ausfall. Entweder war der Plan zu ehrgeizig oder das Leben kam dazwischen.',
+  },
+  grade_over_note: {
+    en: 'Overdelivering. Good effort — just watch the fatigue side of the ledger.',
+    de: 'Über dem Plan. Starker Einsatz — aber pass auf die Ermüdung auf.',
+  },
+  grade_mixed_note: {
+    en: 'Mixed week — a few days off target.',
+    de: 'Gemischte Woche — ein paar Tage neben dem Ziel.',
+  },
+
+  // CoachBrief
+  coach_brief_today: { en: 'Coach brief · today', de: 'Coach-Brief · heute' },
+  ai_offline_chip: { en: 'AI offline · rule-based', de: 'KI offline · regelbasiert' },
+  cached_chip: { en: 'cached', de: 'gespeichert' },
+  why_this: { en: 'Why this?', de: 'Warum das?' },
+  refresh: { en: 'Refresh', de: 'Aktualisieren' },
+  sources_link: { en: 'sources', de: 'Quellen' },
+
+  // Tomorrow & recovery section + Deep dive
+  tomorrow_recovery_section: { en: 'Tomorrow & recovery', de: 'Morgen & Erholung' },
+  deep_dive: { en: 'Deep dive', de: 'Details' },
+
+  // Other section titles
+  full_plan: { en: 'Full plan', de: 'Gesamtplan' },
+  this_week: { en: 'This week', de: 'Diese Woche' },
 } as const satisfies Record<string, StringSet>
 
 export type StringKey = keyof typeof STRINGS
