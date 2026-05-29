@@ -1,0 +1,305 @@
+{
+  "_comment": "Curated catalogue of well-known structured indoor workouts. Every entry has a stable name + platform; URLs are search links rather than deep-links to avoid the broken-link tax when external sites reorganise. Categories mirror training_periodization.SessionType.",
+  "workouts": [
+    {
+      "id": "zwift-recovery-30",
+      "title": "Recovery",
+      "platform": "zwift",
+      "category": "recovery",
+      "duration_min": 30,
+      "intensity_factor": 0.55,
+      "structure": "Steady Z1 spin",
+      "min_ftp": null
+    },
+    {
+      "id": "tr-pettit-minus-1",
+      "title": "Pettit -1",
+      "platform": "trainerroad",
+      "category": "recovery",
+      "duration_min": 60,
+      "intensity_factor": 0.65,
+      "structure": "Steady Z1-Z2, conversational",
+      "min_ftp": null
+    },
+    {
+      "id": "tr-recovery-plus-1",
+      "title": "Recovery +1",
+      "platform": "trainerroad",
+      "category": "recovery",
+      "duration_min": 45,
+      "intensity_factor": 0.55,
+      "structure": "Easy spin",
+      "min_ftp": null
+    },
+    {
+      "id": "zwift-tempus-fugit",
+      "title": "Tempus Fugit",
+      "platform": "zwift",
+      "category": "endurance",
+      "duration_min": 60,
+      "intensity_factor": 0.70,
+      "structure": "Flat Z2 — pure aerobic base",
+      "min_ftp": null
+    },
+    {
+      "id": "tr-pettit",
+      "title": "Pettit",
+      "platform": "trainerroad",
+      "category": "endurance",
+      "duration_min": 60,
+      "intensity_factor": 0.70,
+      "structure": "Steady Z2 60min",
+      "min_ftp": null
+    },
+    {
+      "id": "tr-bald-knob",
+      "title": "Bald Knob",
+      "platform": "trainerroad",
+      "category": "endurance",
+      "duration_min": 90,
+      "intensity_factor": 0.72,
+      "structure": "Z2 with mid-ride 5min Z3 surges",
+      "min_ftp": null
+    },
+    {
+      "id": "tr-spencer",
+      "title": "Spencer",
+      "platform": "trainerroad",
+      "category": "endurance",
+      "duration_min": 60,
+      "intensity_factor": 0.70,
+      "structure": "Z2 with three 5min Z3 efforts",
+      "min_ftp": null
+    },
+    {
+      "id": "tr-clark",
+      "title": "Clark",
+      "platform": "trainerroad",
+      "category": "endurance",
+      "duration_min": 90,
+      "intensity_factor": 0.71,
+      "structure": "90min Z2 — long aerobic builder",
+      "min_ftp": null
+    },
+    {
+      "id": "zwift-volcano-flat",
+      "title": "Volcano Flat (free ride)",
+      "platform": "zwift",
+      "category": "endurance",
+      "duration_min": 90,
+      "intensity_factor": 0.65,
+      "structure": "Free-ride a flat route holding Z2",
+      "min_ftp": null
+    },
+    {
+      "id": "tr-mt-field",
+      "title": "Mt. Field",
+      "platform": "trainerroad",
+      "category": "endurance",
+      "duration_min": 120,
+      "intensity_factor": 0.72,
+      "structure": "2h Z2 with intermittent Z3 — Maratona-style endurance",
+      "min_ftp": null
+    },
+    {
+      "id": "zwift-the-tempo",
+      "title": "The Tempo",
+      "platform": "zwift",
+      "category": "tempo",
+      "duration_min": 60,
+      "intensity_factor": 0.80,
+      "structure": "3x10 Z3 tempo",
+      "min_ftp": null
+    },
+    {
+      "id": "tr-tunemah",
+      "title": "Tunemah",
+      "platform": "trainerroad",
+      "category": "tempo",
+      "duration_min": 90,
+      "intensity_factor": 0.83,
+      "structure": "Long tempo intervals — climb-specific",
+      "min_ftp": null
+    },
+    {
+      "id": "tr-carillon",
+      "title": "Carillon",
+      "platform": "trainerroad",
+      "category": "sweet_spot",
+      "duration_min": 60,
+      "intensity_factor": 0.86,
+      "structure": "2x20 sweet spot @ 88-90% FTP",
+      "min_ftp": 180
+    },
+    {
+      "id": "tr-eclipse",
+      "title": "Eclipse",
+      "platform": "trainerroad",
+      "category": "sweet_spot",
+      "duration_min": 60,
+      "intensity_factor": 0.88,
+      "structure": "3x10 sweet spot",
+      "min_ftp": 180
+    },
+    {
+      "id": "tr-tallac",
+      "title": "Tallac",
+      "platform": "trainerroad",
+      "category": "sweet_spot",
+      "duration_min": 90,
+      "intensity_factor": 0.85,
+      "structure": "3x15 sweet spot — long-form SST",
+      "min_ftp": 180
+    },
+    {
+      "id": "tr-antelope",
+      "title": "Antelope",
+      "platform": "trainerroad",
+      "category": "sweet_spot",
+      "duration_min": 90,
+      "intensity_factor": 0.88,
+      "structure": "4x12 sweet spot — SST volume builder",
+      "min_ftp": 180
+    },
+    {
+      "id": "zwift-the-wringer",
+      "title": "The Wringer",
+      "platform": "zwift",
+      "category": "sweet_spot",
+      "duration_min": 60,
+      "intensity_factor": 0.85,
+      "structure": "Sweet-spot intervals over rolling terrain",
+      "min_ftp": 180
+    },
+    {
+      "id": "zwift-ftp-booster-ss",
+      "title": "FTP Booster — Sweet Spot",
+      "platform": "zwift",
+      "category": "sweet_spot",
+      "duration_min": 60,
+      "intensity_factor": 0.87,
+      "structure": "2x20 @ 88-94% FTP",
+      "min_ftp": 180
+    },
+    {
+      "id": "tr-mary-austin-3",
+      "title": "Mary Austin -3",
+      "platform": "trainerroad",
+      "category": "threshold",
+      "duration_min": 60,
+      "intensity_factor": 0.93,
+      "structure": "2x20 threshold @ 95-100% FTP",
+      "min_ftp": 200
+    },
+    {
+      "id": "tr-donner",
+      "title": "Donner",
+      "platform": "trainerroad",
+      "category": "threshold",
+      "duration_min": 60,
+      "intensity_factor": 0.95,
+      "structure": "3x12 threshold",
+      "min_ftp": 200
+    },
+    {
+      "id": "tr-gendarme",
+      "title": "Gendarme",
+      "platform": "trainerroad",
+      "category": "threshold",
+      "duration_min": 60,
+      "intensity_factor": 0.94,
+      "structure": "4x10 threshold",
+      "min_ftp": 200
+    },
+    {
+      "id": "zwift-2x20-ftp",
+      "title": "2x20 FTP",
+      "platform": "zwift",
+      "category": "threshold",
+      "duration_min": 60,
+      "intensity_factor": 0.94,
+      "structure": "Classic 2x20 at FTP",
+      "min_ftp": 200
+    },
+    {
+      "id": "zwift-4x8",
+      "title": "4x8 (Coggan)",
+      "platform": "zwift",
+      "category": "threshold",
+      "duration_min": 60,
+      "intensity_factor": 0.95,
+      "structure": "4x8min @ 105% FTP — over-threshold builder",
+      "min_ftp": 200
+    },
+    {
+      "id": "tr-spanish-needle",
+      "title": "Spanish Needle",
+      "platform": "trainerroad",
+      "category": "vo2",
+      "duration_min": 60,
+      "intensity_factor": 0.95,
+      "structure": "5x3 VO2max @ 110-115% FTP",
+      "min_ftp": 200
+    },
+    {
+      "id": "tr-bashful",
+      "title": "Bashful",
+      "platform": "trainerroad",
+      "category": "vo2",
+      "duration_min": 45,
+      "intensity_factor": 0.93,
+      "structure": "5x3 VO2max — short option",
+      "min_ftp": 200
+    },
+    {
+      "id": "tr-mills",
+      "title": "Mills",
+      "platform": "trainerroad",
+      "category": "vo2",
+      "duration_min": 60,
+      "intensity_factor": 0.98,
+      "structure": "40/20s — VO2 micro-bursts",
+      "min_ftp": 200
+    },
+    {
+      "id": "tr-baird",
+      "title": "Baird",
+      "platform": "trainerroad",
+      "category": "vo2",
+      "duration_min": 60,
+      "intensity_factor": 0.96,
+      "structure": "30/30s — Norwegian-style VO2",
+      "min_ftp": 200
+    },
+    {
+      "id": "zwift-the-gorby",
+      "title": "The Gorby",
+      "platform": "zwift",
+      "category": "vo2",
+      "duration_min": 60,
+      "intensity_factor": 0.97,
+      "structure": "5x5 VO2max @ 120% FTP",
+      "min_ftp": 200
+    },
+    {
+      "id": "zwift-30-30s",
+      "title": "30/30s (Anaerobic)",
+      "platform": "zwift",
+      "category": "vo2",
+      "duration_min": 45,
+      "intensity_factor": 0.95,
+      "structure": "Repeated 30s on / 30s off",
+      "min_ftp": 200
+    },
+    {
+      "id": "tr-mt-jackson",
+      "title": "Mt. Jackson",
+      "platform": "trainerroad",
+      "category": "endurance",
+      "duration_min": 180,
+      "intensity_factor": 0.70,
+      "structure": "3h Z2 — long-ride builder for fondo prep",
+      "min_ftp": null
+    }
+  ]
+}
