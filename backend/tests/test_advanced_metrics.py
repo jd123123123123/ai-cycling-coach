@@ -249,8 +249,10 @@ class TestSleepDebt:
         assert result["samples_n"] == 0
 
     async def test_extracts_hours_from_sleep_hours_shape(self):
-        """raw_data.sleep.hours form is read correctly."""
-        # 14 nights of 7h sleep vs 8h target = 14h total debt
+        """raw_data.sleep.hours form is read correctly. Target updated to 7.5h
+        per AASM healthy-adult range (was 8h, which over-flagged athletes
+        averaging 7.5h as 'short on sleep')."""
+        # 14 nights of 7h sleep vs 7.5h target = 7h total debt (0.5h × 14)
         metrics = [
             _fake_metric(days_ago=d, raw={"sleep": {"hours": 7.0}})
             for d in range(14)
@@ -258,7 +260,7 @@ class TestSleepDebt:
         db = _mock_db_returning(metrics)
         result = await sleep_debt(db, user_id=1, days=14)
         assert result["samples_n"] == 14
-        assert result["total_debt_hours"] == 14.0
+        assert result["total_debt_hours"] == 7.0
         assert result["nights_short"] == 14
         assert result["nights_healthy"] == 0
 

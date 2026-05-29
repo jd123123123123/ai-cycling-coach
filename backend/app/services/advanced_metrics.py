@@ -36,7 +36,12 @@ from app.services.training_load import calculate_np
 # Sleep target (hours) used for sleep-debt calculation.
 # 8h is the generally-accepted recommendation for endurance athletes training >10h/week
 # (see Walker "Why We Sleep"; endurance-specific: Samuels 2008).
-SLEEP_TARGET_HOURS = 8.0
+# AASM / Sleep Foundation: healthy adult range is 7–9h. The previous 8h
+# target produced false-positive "short on sleep" flags for athletes
+# averaging 7.5h who feel fine. 7.5h matches the modal "good night" in
+# adult sleep literature and is the floor the endurance research
+# (Halson 2008, Watson 2017) ties to performance preservation.
+SLEEP_TARGET_HOURS = 7.5
 
 # Seiler grey-zone creep threshold: >20% in the 3-zone middle (LT1–LT2) is the flag
 # for "junk miles" (Seiler & Tonnessen 2009; reinforced in 2024 meta-analysis).
@@ -526,15 +531,27 @@ async def why_am_i_tired(db: AsyncSession, user_id: int) -> dict:
             ),
         })
 
-    # Sleep debt — >6h total over 14 days is the threshold (~30min/night shortfall)
-    if sleep["total_debt_hours"] >= 6:
-        severity = "high" if sleep["total_debt_hours"] >= 14 else "med"
+    # Sleep debt — flag only when the shortfall is BIG and SUSTAINED, not a
+    # few minutes per night. Two gates:
+    #   1. avg_nightly_debt >= 0.75h (~45min/night below 7.5h, i.e. averaging
+    #      <6.75h — genuinely under-slept by sport-science standards)
+    #   2. nights_short >= max(3, 0.5 * samples_n) — at least half the logged
+    #      nights, and never on a single bad night.
+    # Together these stop "you slept 7.5h, you're short" false positives that
+    # earlier hard-target logic produced.
+    avg_debt = float(sleep.get("avg_nightly_debt") or 0.0)
+    nights_short = int(sleep.get("nights_short") or 0)
+    samples_n = int(sleep.get("samples_n") or 0)
+    sustained = nights_short >= max(3, samples_n // 2)
+    if avg_debt >= 0.75 and sustained:
+        severity = "high" if avg_debt >= 1.5 else "med"
         causes.append({
             "label": "Sleep debt accumulated",
             "severity": severity,
             "evidence": (
-                f"You're {sleep['total_debt_hours']}h short of the 8h target across "
-                f"{sleep['samples_n']} nights; {sleep['nights_short']} nights under target."
+                f"Averaging {sleep.get('target_hours', SLEEP_TARGET_HOURS) - avg_debt:.1f}h "
+                f"across {samples_n} logged nights ({nights_short} under target). "
+                f"Target {sleep.get('target_hours', SLEEP_TARGET_HOURS)}h."
             ),
         })
 

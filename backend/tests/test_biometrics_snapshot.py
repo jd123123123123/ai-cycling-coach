@@ -70,13 +70,23 @@ def _mock_db(daily_metric, samples):
 # ----------------------------------------------------------------------
 
 class TestResolveWakeTime:
-    def test_falls_back_to_04_utc_when_metric_missing(self):
+    def test_falls_back_to_06_utc_when_metric_missing(self):
+        # No sleep_end_timestamp + no tz → 06:00 UTC (was 04:00 UTC; bumped
+        # because Garmin's overnight HRV syncs commonly land 02–04 UTC and
+        # were being filed as "wake" values).
         wake = _resolve_wake_time(None, TARGET)
-        assert wake == datetime(2026, 5, 3, 4, 0, tzinfo=timezone.utc)
+        assert wake == datetime(2026, 5, 3, 6, 0, tzinfo=timezone.utc)
 
     def test_falls_back_when_raw_data_empty(self):
         dm = SimpleNamespace(raw_data=None)
         wake = _resolve_wake_time(dm, TARGET)
+        assert wake == datetime(2026, 5, 3, 6, 0, tzinfo=timezone.utc)
+
+    def test_athlete_tz_anchors_fallback_to_06_local(self):
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("Europe/Berlin")
+        wake = _resolve_wake_time(None, TARGET, tz)
+        # 06:00 Berlin on 2026-05-03 (CEST = +02:00) → 04:00 UTC
         assert wake == datetime(2026, 5, 3, 4, 0, tzinfo=timezone.utc)
 
     def test_uses_iso_string_sleep_end_timestamp(self):
@@ -146,9 +156,11 @@ class TestComputeTodaySnapshot:
         assert snap.hrv_overnight_avg is None
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_first_sample_when_none_after_wake(self):
-        # Wake at 04:00 UTC fallback, all samples are *before* 04:00 → wake pair
-        # falls back to samples[0] rather than returning None.
+    async def test_pre_wake_only_samples_yield_none_now(self):
+        # All samples are *before* the 06:00-UTC wake fallback (overnight Garmin
+        # HRV sync at ~02:00). Wake still falls back to the latest pre-wake
+        # sample so we have some baseline, but `now` is None — showing a 2am
+        # reading as "current" is misleading ("AS OF 02:00").
         dm = SimpleNamespace(
             raw_data=None,
             hrv_overnight_avg=None,
@@ -161,8 +173,9 @@ class TestComputeTodaySnapshot:
         ]
         db = _mock_db(dm, samples)
         snap = await compute_today_snapshot(db, USER_ID, TARGET)
-        assert snap.body_battery.wake == 50
-        assert snap.body_battery.now == 55
+        assert snap.body_battery.wake == 55  # latest pre-wake = baseline
+        assert snap.body_battery.now is None
+        assert snap.body_battery.now_at is None
 
 
 # ----------------------------------------------------------------------

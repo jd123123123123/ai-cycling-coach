@@ -26,6 +26,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time as dtime, timedelta, timezone
+from zoneinfo import ZoneInfo
+from typing import Any  # noqa: F401 — kept for older type-hint usage below
 from typing import Any
 
 from sqlalchemy import select as sql_select
@@ -81,15 +83,26 @@ def _coerce_int(value: Any) -> int | None:
         return None
 
 
-def _resolve_wake_time(daily_metric: DailyMetric | None, target_date: date) -> datetime:
+def _resolve_wake_time(
+    daily_metric: DailyMetric | None,
+    target_date: date,
+    athlete_tz: ZoneInfo | None = None,
+) -> datetime:
     """Derive the wake timestamp.
 
     Order of preference:
         1. daily_metric.raw_data["sleep"]["sleep_end_timestamp"] / "sleepEndTimestampGMT"
            (string ISO or ms-epoch — both shapes seen across firmware versions)
-        2. 04:00 UTC for target_date (documented fallback).
+        2. 06:00 in the athlete's local timezone (a defensible "after-most-
+           people-wake" cutoff). If no tz is provided, fall back to 06:00 UTC —
+           still later than the previous 04:00 UTC which was filing overnight
+           Garmin HRV syncs as "wake" values.
     """
-    fallback = datetime.combine(target_date, dtime(4, 0), tzinfo=timezone.utc)
+    if athlete_tz is not None:
+        local_fallback = datetime.combine(target_date, dtime(6, 0), tzinfo=athlete_tz)
+        fallback = local_fallback.astimezone(timezone.utc)
+    else:
+        fallback = datetime.combine(target_date, dtime(6, 0), tzinfo=timezone.utc)
     if daily_metric is None or not daily_metric.raw_data:
         return fallback
 
@@ -164,40 +177,89 @@ def _pair_from_samples(
 ) -> WakeNowPair:
     if not samples:
         return _empty_pair()
-    # First sample at or after wake_at — falls back to first-of-day if none.
-    wake_sample = next((s for s in samples if s.recorded_at >= wake_at), samples[0])
-    now_sample = samples[-1]
+    # Wake reading: first sample at or after wake_at — falls back to the latest
+    # pre-wake sample (overnight HRV/body-battery sync) so we have *some*
+    # baseline rather than nothing.
+    post_wake = [s for s in samples if s.recorded_at >= wake_at]
+    wake_sample = post_wake[0] if post_wake else samples[-1]
+    # "Now" only makes sense if we actually have a post-wake reading — showing
+    # an overnight 3am Garmin sync as the day's "current" value is misleading
+    # ("AS OF 3:24am"). When the day's first post-wake sample hasn't landed
+    # yet, leave now/now_at as None so the UI can show "awaiting today's data"
+    # instead of a stale pre-wake number.
+    now_sample = post_wake[-1] if post_wake else None
     return WakeNowPair(
         wake=_coerce_int(wake_sample.value),
-        now=_coerce_int(now_sample.value),
-        now_at=now_sample.recorded_at,
+        now=_coerce_int(now_sample.value) if now_sample else None,
+        now_at=now_sample.recorded_at if now_sample else None,
     )
 
 
 async def compute_today_snapshot(
-    db: AsyncSession, user_id: int, target_date: date
+    db: AsyncSession,
+    user_id: int,
+    target_date: date,
+    athlete_tz: ZoneInfo | None = None,
 ) -> TodaySnapshot:
     """Compose a TodaySnapshot from DB rows only — no Garmin round-trip.
+
+    Garmin's API convention: overnight metrics (sleep, HRV-overnight,
+    training-readiness, recovery-time) for the night that ENDED this morning
+    are filed under YESTERDAY's date (the day sleep started). Today's row is
+    a stub until Garmin's backend post-processes the day. To surface "last
+    night's" numbers immediately, we read today's row first and fall back to
+    yesterday's row field-by-field for any None values.
 
     The endpoint layer is responsible for any pre-compute Garmin refresh.
     Keeping the service pure-DB makes it cheap to call from tests and from
     the scheduler.
     """
     daily_metric = await _fetch_today_metric(db, user_id, target_date)
-    samples_by_type = await _fetch_samples(db, user_id, target_date)
+    yesterday_metric = await _fetch_today_metric(
+        db, user_id, target_date - timedelta(days=1)
+    )
 
-    wake_at = _resolve_wake_time(daily_metric, target_date)
+    # Intraday samples: today first, but for body_battery / stress "now"
+    # values, fall back to yesterday's stream when today has no data yet
+    # (e.g., watch hasn't uploaded today's samples). The wake-vs-now framing
+    # still holds — wake = first-of-today-or-yesterday-evening, now = latest
+    # sample we have.
+    samples_today = await _fetch_samples(db, user_id, target_date)
+    samples_used: dict[str, list[DailyMetricSample]] = dict(samples_today)
+    if not any(samples_today.values()):
+        samples_used = await _fetch_samples(
+            db, user_id, target_date - timedelta(days=1)
+        )
 
-    body_battery_pair = _pair_from_samples(samples_by_type.get("body_battery", []), wake_at)
-    stress_pair = _pair_from_samples(samples_by_type.get("stress", []), wake_at)
+    wake_at = _resolve_wake_time(
+        daily_metric or yesterday_metric, target_date, athlete_tz
+    )
+
+    body_battery_pair = _pair_from_samples(samples_used.get("body_battery", []), wake_at)
+    stress_pair = _pair_from_samples(samples_used.get("stress", []), wake_at)
+
+    # Field-by-field fallback to yesterday's overnight row. Garmin files the
+    # overnight HRV / readiness / recovery numbers under the night-start date,
+    # so on a fresh morning yesterday's row holds last night's data.
+    def _field(today_val, yest_val):
+        return today_val if today_val is not None else yest_val
 
     hrv_overnight_avg: int | None = None
     training_readiness: int | None = None
     recovery_time_hours: int | None = None
-    if daily_metric is not None:
-        hrv_overnight_avg = daily_metric.hrv_overnight_avg
-        training_readiness = daily_metric.training_readiness
-        recovery_time_hours = daily_metric.recovery_time_hours
+    if daily_metric is not None or yesterday_metric is not None:
+        hrv_overnight_avg = _field(
+            getattr(daily_metric, "hrv_overnight_avg", None),
+            getattr(yesterday_metric, "hrv_overnight_avg", None),
+        )
+        training_readiness = _field(
+            getattr(daily_metric, "training_readiness", None),
+            getattr(yesterday_metric, "training_readiness", None),
+        )
+        recovery_time_hours = _field(
+            getattr(daily_metric, "recovery_time_hours", None),
+            getattr(yesterday_metric, "recovery_time_hours", None),
+        )
 
     return TodaySnapshot(
         body_battery=body_battery_pair,

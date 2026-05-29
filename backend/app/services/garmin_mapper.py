@@ -208,9 +208,21 @@ def map_daily_metrics(
         )
 
     # --- Body battery ---
+    # Prefer the most recent intraday reading (bodyBatteryValuesArray[-1][1]) over
+    # the daily `charged` field. `charged` is the morning/peak value captured when
+    # you wake up; the intraday array tracks the live value throughout the day and
+    # matches what the watch face displays.
     body_battery = None
     if body_battery_data and len(body_battery_data) > 0:
-        body_battery = body_battery_data[0].get("charged")
+        entry = body_battery_data[0]
+        bb_array = entry.get("bodyBatteryValuesArray") or []
+        for row in reversed(bb_array):
+            if isinstance(row, list) and len(row) >= 2 and row[1] is not None:
+                body_battery = row[1]
+                break
+        # Fall back to daily charged value if no intraday readings exist
+        if body_battery is None:
+            body_battery = entry.get("charged")
 
     # --- Resting heart rate ---
     resting_hr = None

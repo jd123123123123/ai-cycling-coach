@@ -24,61 +24,89 @@ async def upsert_daily_metric(
     for_date: date,
     data: dict,
 ) -> DailyMetric | None:
-    """Insert a DailyMetric for the given user + date, skipping if one already exists.
+    """Insert or progressively update a DailyMetric for (user_id, for_date).
 
-    App-layer uniqueness: queries for an existing row with the same (user_id, date)
-    before inserting. If found, returns None without modifying the existing record.
-    This prevents duplicate rows since the TimescaleDB hypertable cannot enforce
-    a UNIQUE constraint on (user_id, date) without including the partition column.
+    Garmin's daily summary is not a single end-of-day write — it accumulates
+    through the day as the watch finalizes sleep, HRV, body battery, etc. A
+    sync at 10am gets a near-empty stub; the same sync at 4pm gets last
+    night's full sleep score. Earlier "insert-if-not-exists" semantics
+    permanently locked in whichever stub was first to arrive.
 
-    Caller controls the transaction — this method calls db.flush() (not db.commit())
-    so the caller can batch multiple inserts into a single transaction and commit once.
+    Behaviour:
+      - No row → insert with provided data.
+      - Row exists → update field-by-field, but **only when the new value
+        is non-None**. This protects real data already recorded from being
+        clobbered by a later partial sync that happened to time out on one
+        endpoint. raw_data is always overwritten because it's an opaque
+        snapshot of the latest API response (callers want the freshest copy).
+      - TimescaleDB hypertable: still single-row per (user_id, date) at the
+        application layer; the partition column `recorded_at` is updated to
+        the latest write timestamp.
 
-    Args:
-        db: SQLAlchemy async session (transaction controlled by caller).
-        user_id: ID of the user who owns this metric.
-        for_date: Calendar date the metric represents.
-        data: Dict with metric fields — keys: sleep_score, hrv_status, body_battery,
-              resting_hr, stress_level, steps, raw_data. Missing keys default to None.
+    Caller controls the transaction — flushes only.
 
     Returns:
-        Created DailyMetric if inserted, None if record already exists for that date.
+        DailyMetric (either newly inserted or updated). None only if the
+        input data dict is empty AND no existing row was found.
     """
-    # App-layer uniqueness check: does a record already exist for this user + date?
-    existing = await db.execute(
+    existing_q = await db.execute(
         select(DailyMetric).where(
             DailyMetric.user_id == user_id,
             DailyMetric.date == for_date,
         )
     )
-    if existing.scalar_one_or_none() is not None:
-        logger.debug(
-            "Skipping DailyMetric insert for user_id=%s date=%s — record already exists",
-            user_id,
-            for_date,
+    existing = existing_q.scalar_one_or_none()
+
+    fields = ("sleep_score", "hrv_status", "body_battery", "resting_hr",
+              "stress_level", "steps")
+
+    if existing is None:
+        metric = DailyMetric(
+            user_id=user_id,
+            date=for_date,
+            recorded_at=datetime.now(timezone.utc),
+            sleep_score=data.get("sleep_score"),
+            hrv_status=data.get("hrv_status"),
+            body_battery=data.get("body_battery"),
+            resting_hr=data.get("resting_hr"),
+            stress_level=data.get("stress_level"),
+            steps=data.get("steps"),
+            source="garmin",
+            raw_data=data.get("raw_data"),
         )
-        return None
+        db.add(metric)
+        await db.flush()
+        logger.debug(
+            "Inserted DailyMetric for user_id=%s date=%s", user_id, for_date
+        )
+        return metric
 
-    metric = DailyMetric(
-        user_id=user_id,
-        date=for_date,
-        recorded_at=datetime.now(timezone.utc),  # Required partition column
-        sleep_score=data.get("sleep_score"),
-        hrv_status=data.get("hrv_status"),
-        body_battery=data.get("body_battery"),
-        resting_hr=data.get("resting_hr"),
-        stress_level=data.get("stress_level"),
-        steps=data.get("steps"),
-        source="garmin",
-        raw_data=data.get("raw_data"),
-    )
+    # Progressive update — only overwrite NULL columns with new non-None values.
+    # Once a real reading is captured, we don't let a later partial sync wipe it.
+    updated_fields: list[str] = []
+    for f in fields:
+        new_val = data.get(f)
+        if new_val is None:
+            continue
+        if getattr(existing, f, None) is None:
+            setattr(existing, f, new_val)
+            updated_fields.append(f)
 
-    db.add(metric)
-    await db.flush()  # Caller commits — do NOT call db.commit() here
-    logger.debug(
-        "Inserted DailyMetric for user_id=%s date=%s", user_id, for_date
-    )
-    return metric
+    # raw_data is the opaque latest API snapshot — always refresh when present
+    # so downstream consumers (biometrics_snapshot, etc.) get the newest payload.
+    new_raw = data.get("raw_data")
+    if new_raw is not None:
+        existing.raw_data = new_raw
+        updated_fields.append("raw_data")
+
+    if updated_fields:
+        existing.recorded_at = datetime.now(timezone.utc)
+        await db.flush()
+        logger.info(
+            "Updated DailyMetric for user_id=%s date=%s fields=%s",
+            user_id, for_date, updated_fields,
+        )
+    return existing
 
 
 async def get_daily_metrics(
