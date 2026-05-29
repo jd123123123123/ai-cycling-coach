@@ -85,9 +85,16 @@ class TestIntensityCeiling:
         ctx = _ctx(tsb=-35.0)
         assert intensity_ceiling(ctx) == "easy"
 
-    def test_tsb_mildly_negative_gives_moderate(self):
-        """Rule 4: -30 <= TSB < -10 → moderate."""
-        ctx = _ctx(tsb=-15.0)
+    def test_tsb_grey_zone_still_allows_push(self):
+        """TSB -10..-25 is productive fatigue — build blocks live here, so the
+        ceiling stays 'push' and intensity is governed by the acute markers,
+        not the calendar TSB number."""
+        ctx = _ctx(tsb=-15.0, hrv_delta_pct=2.0, days_since_rest=3)
+        assert intensity_ceiling(ctx) == "push"
+
+    def test_tsb_deep_grey_zone_gives_moderate(self):
+        """Rule 8: TSB < -25 (deep grey zone, not yet the -30 'easy' line) → moderate."""
+        ctx = _ctx(tsb=-27.0)
         assert intensity_ceiling(ctx) == "moderate"
 
     def test_forced_rest_after_10_days(self):
