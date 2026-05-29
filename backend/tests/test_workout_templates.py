@@ -24,12 +24,42 @@ from app.services.workout_templates import (
 
 
 class TestTemplateLibrary:
-    def test_all_12_templates_registered(self):
+    def test_all_templates_registered(self):
+        # 50-template library: 13 originals + 7 first-batch + 30 second-batch.
+        # Categories: rest/recovery (3), endurance (10), tempo (4),
+        # sweet_spot (4), threshold (10), vo2 (9), anaerobic (6).
         expected = {
+            # Originals
             "rest_day", "recovery_30",
             "z2_endurance_60", "z2_endurance_90", "z2_long_120", "z2_long_180",
+            "z2_climbing_long",
             "tempo_3x10", "sweet_spot_2x20", "threshold_2x15", "over_under_3x5",
             "vo2_5x4", "vo2_micro_30x30",
+            # First-batch additions
+            "vo2_ronnestad_3x13", "vo2_map_5x3", "threshold_seiler_4x8",
+            "sweet_spot_4x15", "neuromuscular_sprints_8x15",
+            "anaerobic_tabata_8x20_10", "polarized_long_z2_4x4",
+            # Second-batch additions — endurance (4)
+            "maf_aerobic_90", "z2_progressive_90", "z2_long_240", "z2_fasted_60",
+            # recovery
+            "recovery_60",
+            # tempo (3)
+            "tempo_2x30", "tempo_4x15", "tempo_progression_60",
+            # sweet-spot (2)
+            "sub_threshold_2x40", "sweet_spot_3x20",
+            # threshold (5)
+            "threshold_pyramid", "threshold_hill_4x10", "over_under_4x12",
+            "threshold_descending", "lactate_shuttles_3x8",
+            # vo2 (4)
+            "vo2_hill_6x3", "vo2_microbursts_30x15_45", "vo2_3x6",
+            "vo2_descending_5_4_3_2_1",
+            # anaerobic (4)
+            "anaerobic_capacity_5x3_130", "anaerobic_8x90s",
+            "neuromuscular_spinup_6x30", "neuromuscular_standing_6x10",
+            # specialty + tests (5)
+            "cadence_high_fsr_6x3", "cadence_low_lcf_4x6",
+            "crit_simulation_stochastic", "group_ride_variable",
+            "ftp_test_20min", "ftp_ramp_test", "race_pace_60_95",
         }
         assert set(TEMPLATES.keys()) == expected
 
