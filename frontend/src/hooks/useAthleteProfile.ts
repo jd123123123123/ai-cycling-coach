@@ -1,13 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
+import type { AthleteProfile } from '../types/athlete'
 
-export interface AthleteProfile {
-  id: number
-  user_id: number
-  ftp_watts: number | null
-  lthr_cycling: number | null
-  // Additional fields exist on the server but only these are needed for Phase 4.5
-}
+export type { AthleteProfile }
 
 export function useAthleteProfile() {
   return useQuery<AthleteProfile>({

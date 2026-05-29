@@ -55,28 +55,28 @@ export const TIER_META: Record<ReadinessTier, TierMeta> = {
     verb: 'Push it',
     sentiment: 'Every system green — a rare window to go deep.',
     color: 'var(--color-forest-2)',
-    bg: 'rgba(42, 97, 71, 0.08)',
+    bg: 'rgba(48, 209, 88, 0.10)',
   },
   ready: {
     label: 'Ready',
     verb: 'Train hard',
     sentiment: 'Recovery is complete. Today can be a quality day.',
     color: 'var(--color-forest)',
-    bg: 'rgba(28, 68, 51, 0.07)',
+    bg: 'rgba(52, 199, 89, 0.08)',
   },
   caution: {
     label: 'Middling',
     verb: 'Keep it easy',
     sentiment: 'Body is muddled. Hold intensity down until trends turn.',
     color: 'var(--color-amber-2)',
-    bg: 'rgba(217, 108, 26, 0.08)',
+    bg: 'rgba(255, 159, 10, 0.10)',
   },
   rest: {
     label: 'Drained',
     verb: 'Rest',
     sentiment: 'Too much fatigue in the tank. A true rest day compounds later.',
     color: 'var(--color-alert)',
-    bg: 'rgba(138, 29, 29, 0.07)',
+    bg: 'rgba(255, 69, 58, 0.10)',
   },
 }
 
