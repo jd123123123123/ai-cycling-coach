@@ -157,10 +157,28 @@ async def get_today_snapshot(
     explicit /sync route. If the user wants fresher data they hit
     /sync — that path will invalidate this cache once Step 1 lands.
 
-    "today" is computed as datetime.now(UTC).date(). When Step 2 of the
-    run-through lands the athlete-local timezone, switch to that here.
+    "today" is computed in the athlete's local timezone (falls back to UTC if
+    no tz on profile). The wake-time fallback inside compute_today_snapshot
+    also uses that tz, so "AS OF" never anchors to an overnight Garmin sync.
     """
-    today_local = datetime.now(timezone.utc).date()
+    from zoneinfo import ZoneInfo
+    from app.models.athlete_profile import AthleteProfile
+
+    athlete_tz: ZoneInfo | None = None
+    try:
+        profile = (
+            await db.execute(
+                sql_select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
+            )
+        ).scalar_one_or_none()
+        if profile and profile.timezone:
+            athlete_tz = ZoneInfo(profile.timezone)
+    except Exception:
+        logger.exception("failed to load athlete tz for user_id=%s", current_user.id)
+
+    today_local = (
+        datetime.now(athlete_tz).date() if athlete_tz else datetime.now(timezone.utc).date()
+    )
 
     cached = get_cached_snapshot(current_user.id)
     if cached is not None:
@@ -174,7 +192,9 @@ async def get_today_snapshot(
             cached=True,
         )
 
-    snapshot = await compute_today_snapshot(db, current_user.id, today_local)
+    snapshot = await compute_today_snapshot(
+        db, current_user.id, today_local, athlete_tz=athlete_tz
+    )
     store_cached_snapshot(current_user.id, snapshot)
     return TodaySnapshotResponse(
         body_battery=WakeNowPairOut(**vars(snapshot.body_battery)),

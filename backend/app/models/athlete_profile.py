@@ -51,6 +51,14 @@ class AthleteProfile(Base):
     # FTP history — list of {"ftp_watts": int, "measured_at": str} dicts
     ftp_history: Mapped[list | None] = mapped_column(JSON, default=list, nullable=True)
 
+    # IANA timezone string used to compute athlete-local "today" / "this week"
+    # windows in coach_service. Nullable + defaults to "Europe/Berlin" at the
+    # DB level (single-user MVP); onboarding will start setting this from the
+    # browser tz. See today-runthrough Step 2.
+    timezone: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, server_default="Europe/Berlin"
+    )
+
     # Injury tracking (Phase 5) — when injury_flag is True, safety_rails force
     # intensity_ceiling='rest' regardless of any other signal. The optional note
     # lets the athlete contextualise the flag for themselves and the coach brief.
