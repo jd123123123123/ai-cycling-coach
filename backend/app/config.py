@@ -34,9 +34,12 @@ class Settings(BaseSettings):
     # feature snapshot so /coach/brief always returns a structured payload.
     # ------------------------------------------------------------------
     ANTHROPIC_API_KEY: str | None = None
-    COACH_MODEL: str = "claude-opus-4-7"          # default brief model — latest Opus for quality
-    COACH_CHAT_MODEL: str = "claude-sonnet-4-6"   # chat uses Sonnet for cost + latency
-    COACH_BRIEF_CACHE_HOURS: int = 6              # read-through cache TTL per user
+    # Sonnet 4.6 — broadly available tier, ~5× cheaper than Opus, fast enough
+    # for daily briefs, plenty smart for structured tool-use output. Opus 4.7
+    # was overkill (and tier-gated → silent fallback to rule-based on many keys).
+    COACH_MODEL: str = "claude-sonnet-4-6"
+    COACH_CHAT_MODEL: str = "claude-sonnet-4-6"   # chat uses same model
+    COACH_BRIEF_CACHE_HOURS: int = 1              # short TTL — briefs stay fresh
 
     @field_validator("DATABASE_URL")
     @classmethod

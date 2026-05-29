@@ -535,12 +535,20 @@ class TestChatAnalyticalSystemPrompt:
         assert "tool" in prompt.lower()
 
     def test_default_context_is_brief(self):
-        """Omitting context kwarg must return the existing SYSTEM_PROMPT_* strings
-        (backward compat for generate_brief)."""
+        """Omitting context kwarg must return the brief-flow prompt — i.e. the
+        SYSTEM_PROMPT_* string wrapped by the COACH_KNOWLEDGE_BASE prefix and
+        the Step 7 tomorrow_plan/regeneration addendum. We verify the base
+        prompt is embedded; equality no longer holds since the wrappers are
+        deliberate."""
         from app.services.coach_prompt import (
             SYSTEM_PROMPT_SIMPLE,
             SYSTEM_PROMPT_TECHNICAL,
             system_prompt_for_language,
         )
-        assert system_prompt_for_language("simple") == SYSTEM_PROMPT_SIMPLE
-        assert system_prompt_for_language("technical") == SYSTEM_PROMPT_TECHNICAL
+        simple = system_prompt_for_language("simple")
+        technical = system_prompt_for_language("technical")
+        assert SYSTEM_PROMPT_SIMPLE in simple
+        assert SYSTEM_PROMPT_TECHNICAL in technical
+        # Sanity-check: brief variant still differs from the chat variants.
+        assert "tool_result" not in simple
+        assert "tool_result" not in technical

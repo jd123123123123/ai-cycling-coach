@@ -1219,6 +1219,34 @@ def _safe_template_for_ceiling(ceiling: str) -> str:
     }.get(ceiling, "z2_endurance_60")
 
 
+def _verdict_for_template(template_id: str, language: str, ceiling: str) -> str | None:
+    """Verdict line that matches the actual prescribed template — used after
+    the safety rails (or post-ride override) replace the LLM's pick so the
+    hero verdict doesn't contradict the workout card.
+    """
+    tpl = TEMPLATES.get(template_id)
+    if tpl is None:
+        return None
+    # Template categories line up with session_type keys for everything except
+    # "anaerobic" (which we treat as the closest neighbour, vo2).
+    category = "vo2" if tpl.category == "anaerobic" else tpl.category
+    if language == "simple":
+        if ceiling in ("rest", "easy") and category in ("rest", "recovery"):
+            return _SIMPLE_VERDICT_BY_CEILING[ceiling]
+        return _SIMPLE_VERDICT_BY_SESSION.get(category, tpl.name)
+    # technical
+    technical_by_session = {
+        "vo2":        "VO2 today — you're fresh",
+        "threshold":  "Threshold today — quality window",
+        "sweet_spot": "Sweet spot today — build fitness",
+        "tempo":      "Tempo today — sub-threshold",
+        "endurance":  tpl.name,
+        "recovery":   "Recovery spin — maintain parasympathetic",
+        "rest":       "Rest day — full parasympathetic",
+    }
+    return technical_by_session.get(category, tpl.name)
+
+
 def _rewrite_prescribed_workout(
     template_id: str,
     ftp: int,
@@ -1306,6 +1334,7 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
 
     llm_workout = llm_payload.get("prescribed_workout") or {}
     template_id = str(llm_workout.get("template_id") or "")
+    original_template_id = template_id
     why = llm_workout.get("why_this_workout")
 
     # Step 1+2: validate template_id
@@ -1337,6 +1366,21 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     if post_ride_present:
         template_id = "rest_day"
         why = why or "You've already trained today — review below."
+
+    # If the rails (or post-ride override) replaced the LLM's pick, the LLM's
+    # verdict line was written for the *old* workout — it'll read "Hard
+    # intervals — you're fresh" while the card now shows an easy spin. Realign
+    # verdict to the actual prescribed template so the hero matches the
+    # recommendation.
+    template_changed = (
+        original_template_id in TEMPLATES and original_template_id != template_id
+    ) or (rank > max_rank) or post_ride_present
+    if template_changed:
+        language = "technical" if snapshot.get("language") == "technical" else "simple"
+        realigned = _verdict_for_template(template_id, language, ceiling)
+        if realigned:
+            llm_payload = dict(llm_payload)
+            llm_payload["verdict"] = realigned
 
     # Step 4: rewrite watts
     duration_hint = llm_workout.get("duration_minutes")
@@ -1858,6 +1902,10 @@ def _rule_based_brief(snapshot: dict) -> dict:
         picked_id = _safe_template_for_ceiling(ceiling)
 
     template = TEMPLATES.get(picked_id, TEMPLATES["z2_endurance_60"])
+    # Keep session_type in sync with the (possibly downgraded) template so the
+    # verdict maps below don't describe a harder session than what we actually
+    # prescribed — "anaerobic" collapses to "vo2" for verdict purposes.
+    session_type = "vo2" if template.category == "anaerobic" else template.category
 
     # --------------------------------------------------------------
     # Verdict

@@ -487,7 +487,11 @@ class TestGetOrGenerateBriefCache:
 
         result = await get_or_generate_brief(db, user_id=1, force=False)
         assert db.add_count == 1
-        assert db.commit_count == 1
+        # Step 4: brief commit + coach_recommendations upsert commit (= 2).
+        # The mock's execute() returns the latest stored row regardless of
+        # entity type, so the recommendation upsert finds the just-stored
+        # brief, takes the "existing" branch and only commits without adding.
+        assert db.commit_count == 2
         assert result.model_used == "rule-based-fallback"
         # The new row should carry the prescribed_workout shape
         assert result.prescribed_workout is not None
