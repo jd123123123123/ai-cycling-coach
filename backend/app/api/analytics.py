@@ -19,11 +19,13 @@ from app.config import settings
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.user import User
 from app.schemas.analytics import QueryResult, QuerySpec
+from app.schemas.period_report import PeriodReport
 from app.services.analytics_query import (
     QuerySpecError,
     execute_query,
     list_datasets,
 )
+from app.services.period_report import build_report
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -172,3 +174,20 @@ async def post_summarize(
             ),
             model_used="rule-based-fallback",
         )
+
+@router.get(
+    "/period-report",
+    response_model=PeriodReport,
+    summary="Periodized report card for the last N days vs the previous N days",
+)
+async def get_period_report(
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    days: int = 7,
+) -> PeriodReport:
+    if days < 3 or days > 365:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="days must be between 3 and 365",
+        )
+    return await build_report(db, _user.id, days)
