@@ -49,3 +49,71 @@ class TestLetterBanding:
     def test_monotonic_non_increasing_grade(self):
         for s in range(100, -1, -5):
             letter_for_score(s)
+
+
+def _full_window(**over) -> WindowMetrics:
+    """A WindowMetrics with healthy defaults; override per test."""
+    base = dict(
+        days=7, pmc_days=7,
+        avg_ctl=50.0, ctl_delta=4.0, avg_tsb=-5.0,
+        total_tss=500.0, activity_count=5, training_days=5, longest_streak=3,
+        avg_if=0.72, avg_ef=1.5, avg_decoupling=4.0, grey_pct=10.0,
+        avg_hrv=60.0, avg_rhr=50.0, avg_sleep_hours=7.5,
+        sleep_debt_hours=1.0, biometric_days=7,
+    )
+    base.update(over)
+    return WindowMetrics(**base)
+
+
+class TestRadar:
+    def test_full_data_all_axes_scored(self):
+        axes = build_radar(_full_window(), _full_window())
+        keys = {a.key for a in axes}
+        assert keys == {"aerobic", "recovery", "consistency", "intensity", "durability"}
+        assert all(a.score is not None and not a.insufficient_data for a in axes)
+
+    def test_no_pmc_marks_aerobic_insufficient(self):
+        cur = _full_window(pmc_days=0, avg_ctl=None, ctl_delta=None)
+        axis = next(a for a in build_radar(cur, _full_window()) if a.key == "aerobic")
+        assert axis.insufficient_data is True
+        assert axis.score is None
+
+    def test_no_activities_marks_intensity_and_durability_insufficient(self):
+        cur = _full_window(activity_count=0, avg_if=None, avg_decoupling=None, grey_pct=None)
+        axes = {a.key: a for a in build_radar(cur, _full_window())}
+        assert axes["intensity"].insufficient_data is True
+        assert axes["durability"].insufficient_data is True
+
+    def test_climbing_fitness_scores_higher_than_detraining(self):
+        up = next(a for a in build_radar(_full_window(ctl_delta=6.0), None) if a.key == "aerobic")
+        down = next(a for a in build_radar(_full_window(ctl_delta=-6.0), None) if a.key == "aerobic")
+        assert up.score > down.score
+
+    def test_more_grey_zone_lowers_intensity(self):
+        clean = next(a for a in build_radar(_full_window(grey_pct=5.0), None) if a.key == "intensity")
+        junk = next(a for a in build_radar(_full_window(grey_pct=35.0), None) if a.key == "intensity")
+        assert clean.score > junk.score
+
+
+class TestComposite:
+    def test_grade_from_axes(self):
+        score, letter = composite_grade(build_radar(_full_window(), _full_window()))
+        assert 0 <= score <= 100
+        assert letter == letter_for_score(score)
+
+    def test_renormalizes_over_available_axes(self):
+        cur = _full_window(pmc_days=0, avg_ctl=None, ctl_delta=None)
+        score, letter = composite_grade(build_radar(cur, _full_window()))
+        assert score is not None
+
+    def test_all_insufficient_returns_none(self):
+        empty = WindowMetrics(
+            days=7, pmc_days=0, avg_ctl=None, ctl_delta=None, avg_tsb=None,
+            total_tss=0.0, activity_count=0, training_days=0, longest_streak=0,
+            avg_if=None, avg_ef=None, avg_decoupling=None, grey_pct=None,
+            avg_hrv=None, avg_rhr=None, avg_sleep_hours=None,
+            sleep_debt_hours=None, biometric_days=0,
+        )
+        score, letter = composite_grade(build_radar(empty, None))
+        assert score is not None
+        assert score < 40
