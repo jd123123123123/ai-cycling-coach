@@ -260,3 +260,30 @@ def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None):
     weaknesses.sort(key=lambda d: abs(d.delta), reverse=True)
     return improvements, weaknesses
 
+
+def build_milestones(cur: WindowMetrics) -> list:
+    """Game-y achievement chips for the window. Conservative thresholds so a
+    milestone always means something."""
+    from app.schemas.period_report import Milestone
+    out: list[Milestone] = []
+
+    if cur.longest_streak >= 3:
+        out.append(Milestone(
+            icon_key="flame",
+            label=f"{cur.longest_streak}-day streak",
+            detail="Consecutive days trained in this window.",
+        ))
+    if cur.total_tss >= 700:
+        out.append(Milestone(
+            icon_key="zap",
+            label=f"{round(cur.total_tss)} TSS",
+            detail="High training load banked this window.",
+        ))
+    if cur.training_days >= max(1, int(round(cur.days * 0.7))):
+        out.append(Milestone(
+            icon_key="trophy",
+            label="Iron consistency",
+            detail=f"Trained {cur.training_days} of {cur.days} days.",
+        ))
+    return out
+

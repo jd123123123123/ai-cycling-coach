@@ -147,3 +147,22 @@ class TestDeltas:
     def test_no_previous_window_returns_empty(self):
         imp, weak = build_deltas(_full_window(), None)
         assert imp == [] and weak == []
+
+
+class TestMilestones:
+    def test_streak_milestone_when_streak_long(self):
+        ms = build_milestones(_full_window(longest_streak=5))
+        assert any(m.icon_key == "flame" for m in ms)
+
+    def test_no_streak_milestone_for_short_streak(self):
+        ms = build_milestones(_full_window(longest_streak=1))
+        assert not any(m.icon_key == "flame" for m in ms)
+
+    def test_big_load_milestone(self):
+        ms = build_milestones(_full_window(total_tss=900.0))
+        assert any(m.icon_key == "zap" for m in ms)
+
+    def test_empty_window_no_milestones(self):
+        ms = build_milestones(_full_window(
+            longest_streak=0, total_tss=0.0, training_days=0, activity_count=0))
+        assert ms == []
