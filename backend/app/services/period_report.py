@@ -11,6 +11,7 @@ are dropped from the composite, which renormalizes over what's available.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import statistics
 from dataclasses import dataclass
@@ -21,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
 from app.models.daily_metric import DailyMetric
-from app.services.advanced_metrics import compute_activity_metrics
+from app.services.advanced_metrics import compute_activity_metrics, why_am_i_tired
 from app.services.analytical_aggregates import (
     _activity_if,
     _extract_sleep_hours,
@@ -528,11 +529,38 @@ def build_next_step(grade_score: float | None, cur: WindowMetrics, causes: list)
     )
 
 
+async def _historical_composites(
+    db: AsyncSession, user_id: int, days: int, ftp: int | None,
+    n_samples: int = 8, step_days: int = 7,
+) -> list[float]:
+    """Composite grade for `n_samples` trailing windows stepped back weekly,
+    oldest→newest. Powers the percentile rank and the hero sparkline. Windows
+    are fetched concurrently to bound latency."""
+    today = date.today()
+    starts_ends = []
+    for i in range(n_samples - 1, -1, -1):  # oldest first
+        end = today - timedelta(days=i * step_days)
+        start = end - timedelta(days=days - 1)
+        starts_ends.append((start, end))
+
+    metrics = await asyncio.gather(
+        *[_fetch_window_metrics(db, user_id, s, e, ftp) for s, e in starts_ends]
+    )
+    scores: list[float] = []
+    for wm in metrics:
+        score, _ = composite_grade(build_radar(wm, None))
+        if score is not None:
+            scores.append(round(score, 1))
+    return scores
+
+
 _VERDICT_SYSTEM = (
-    "You are an endurance coach giving an athlete a punchy verdict on their "
-    "training window. One or two sentences, plain and direct. Name the grade "
-    "and the single most important thing to celebrate or fix. No platitudes, "
-    "no emoji, no hedging. Do not exceed 280 characters."
+    "You are an elite endurance coach writing an athlete's training-window review. "
+    "Write 3-4 sentences, plain and direct, second person. Open with the headline "
+    "verdict, cite 2-3 REAL numbers from the data (CTL, TSB, HRV %, sleep, grey-zone), "
+    "name the single biggest win and the single biggest risk, and end with the one "
+    "thing to do next. No platitudes, no emoji, no hedging, no bullet lists. "
+    "Keep it under 600 characters."
 )
 
 
@@ -542,21 +570,29 @@ async def _ai_verdict(
     grade_score: float | None,
     improvements: list,
     weaknesses: list,
+    evidence: list | None = None,
+    next_step: object | None = None,
 ) -> tuple[str, str]:
     """Return (verdict_text, model_used). Falls back to a rule-based string when
     no API key is set or the call fails — mirrors /analytics/summarize."""
     top_imp = improvements[0].label if improvements else None
     top_weak = weaknesses[0].label if weaknesses else None
     fallback = _rule_based_verdict(days, grade_letter, grade_score, top_imp, top_weak)
+    if next_step is not None:
+        fallback = (fallback + f" Next: {next_step.headline.lower()}.")[:600]
 
     if not settings.ANTHROPIC_API_KEY:
         return fallback, "rule-based-fallback"
 
+    ev = ", ".join(f"{c.label} {c.value}" for c in (evidence or [])) or "n/a"
+    step = f"{next_step.headline} — {next_step.detail}" if next_step is not None else "n/a"
     user_msg = (
         f"Window: last {days} days\n"
         f"Grade: {grade_letter} ({grade_score}/100)\n"
+        f"Evidence: {ev}\n"
         f"Improvements: {[i.detail for i in improvements[:4]]}\n"
         f"Weaknesses: {[w.detail for w in weaknesses[:4]]}\n"
+        f"Recommended next step: {step}\n"
     )
     try:
         import anthropic
@@ -564,7 +600,7 @@ async def _ai_verdict(
         client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         response = await client.messages.create(
             model=settings.COACH_MODEL,
-            max_tokens=160,
+            max_tokens=320,
             system=[{"type": "text", "text": _VERDICT_SYSTEM,
                      "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_msg}],
@@ -577,7 +613,7 @@ async def _ai_verdict(
         text = text.strip()
         if not text:
             raise RuntimeError("empty Claude response")
-        return text[:280], settings.COACH_MODEL
+        return text[:600], settings.COACH_MODEL
     except Exception as exc:  # noqa: BLE001
         logger.exception("Period-report verdict failed: %s", exc)
         return fallback, "rule-based-fallback"
@@ -585,7 +621,8 @@ async def _ai_verdict(
 
 async def build_report(db: AsyncSession, user_id: int, days: int):
     """Assemble the full PeriodReport for the last `days` days vs the previous
-    equal window."""
+    equal window, enriched with evidence, causes, a forward next-step, a
+    historical composite trend, and a richer coach verdict."""
     from app.schemas.period_report import PeriodReport
 
     days = max(3, min(int(days), 365))
@@ -604,10 +641,39 @@ async def build_report(db: AsyncSession, user_id: int, days: int):
 
     radar = build_radar(cur, prev_for_calc)
     grade_score, grade_letter = composite_grade(radar)
+
+    # Grade delta vs previous equal window
+    grade_delta = None
+    if has_baseline and grade_score is not None:
+        prev_score, _ = composite_grade(build_radar(prev, None))
+        if prev_score is not None:
+            grade_delta = round(grade_score - prev_score, 1)
+
+    # Historical composite series → percentile + sparkline
+    trend = await _historical_composites(db, user_id, days, ftp)
+    grade_percentile = (
+        _percentile(grade_score, trend) if grade_score is not None and trend else None
+    )
+
     improvements, weaknesses = build_deltas(cur, prev_for_calc)
     milestones = build_milestones(cur)
+    evidence = build_evidence(cur, prev_for_calc)
+
+    # Causes (why am I dragging) — reuse the today-anchored synthesizer.
+    causes: list = []
+    try:
+        from app.schemas.period_report import Cause
+        wt = await why_am_i_tired(db, user_id)
+        for c in (wt.get("causes") or [])[:4]:
+            causes.append(Cause(label=c["label"], severity=c["severity"], evidence=c["evidence"]))
+    except Exception:  # noqa: BLE001
+        logger.exception("why_am_i_tired failed in period report")
+
+    next_step = build_next_step(grade_score, cur, causes)
+
     verdict, model = await _ai_verdict(
-        days, grade_letter, grade_score, improvements, weaknesses
+        days, grade_letter, grade_score, improvements, weaknesses,
+        evidence=evidence, next_step=next_step,
     )
 
     return PeriodReport(
@@ -619,10 +685,16 @@ async def build_report(db: AsyncSession, user_id: int, days: int):
         has_baseline=has_baseline,
         grade_letter=grade_letter,
         grade_score=grade_score,
+        grade_delta=grade_delta,
+        grade_percentile=grade_percentile,
+        composite_trend=trend,
         radar=radar,
         improvements=improvements,
         weaknesses=weaknesses,
         milestones=milestones,
+        evidence=evidence,
+        causes=causes,
+        next_step=next_step,
         ai_verdict=verdict,
         ai_model=model,
     )
