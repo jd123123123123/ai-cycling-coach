@@ -20,6 +20,8 @@ from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.user import User
 from app.schemas.analytics import QueryResult, QuerySpec
 from app.schemas.period_report import PeriodReport
+from app.schemas.user_dashboard import ChartSpec
+from app.services.chart_interpreter import ChartInterpretError, interpret_chart
 from app.services.analytics_query import (
     QuerySpecError,
     execute_query,
@@ -191,3 +193,30 @@ async def get_period_report(
             detail="days must be between 3 and 365",
         )
     return await build_report(db, _user.id, days)
+
+
+class InterpretRequest(BaseModel):
+    """A plain-English phrase describing the chart the user wants."""
+    text: str = Field(min_length=1, max_length=400)
+
+
+@router.post(
+    "/interpret",
+    response_model=ChartSpec,
+    summary="Interpret a phrase into a ChartSpec (for the dashboard text-to-card flow)",
+)
+async def post_interpret(
+    payload: InterpretRequest,
+    _user: Annotated[User, Depends(get_current_active_user)],
+) -> ChartSpec:
+    # Stateless interpretation — no DB access here. The compiler enforces the
+    # column allowlist + RLS when the resulting chart is actually rendered.
+    try:
+        return await interpret_chart(payload.text)
+    except ChartInterpretError as exc:
+        code = (
+            status.HTTP_503_SERVICE_UNAVAILABLE
+            if exc.code == "no_key"
+            else status.HTTP_422_UNPROCESSABLE_ENTITY
+        )
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
