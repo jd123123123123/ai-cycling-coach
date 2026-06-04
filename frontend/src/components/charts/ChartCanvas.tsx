@@ -320,6 +320,10 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
   const instanceRef = useRef<echarts.ECharts | null>(null)
   const { data, isLoading, isError, error } = useAnalyticsQuery(spec.query)
 
+  // Only fetch the athlete profile when a reference line actually needs it
+  // (FTP/zone). Most charts have none, so this avoids a needless /athletes/me
+  // round-trip per chart.
+  const needsProfile = (spec.reference_lines ?? []).some((r) => r.kind === 'profile')
   const { data: profile } = useQuery({
     queryKey: ['athlete', 'me', 'chart-ref'],
     queryFn: async () => {
@@ -327,6 +331,7 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
       return res.data as { ftp_watts?: number | null; lthr_cycling?: number | null }
     },
     staleTime: 5 * 60_000,
+    enabled: needsProfile,
   })
 
   // A non-finite height (DashboardCanvas passes NaN) means "fill the parent
