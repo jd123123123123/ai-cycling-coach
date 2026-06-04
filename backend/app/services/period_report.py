@@ -174,3 +174,89 @@ def composite_grade(axes: list) -> tuple[float | None, str | None]:
         return None, None
     score = round(num / denom, 1)
     return score, letter_for_score(score)
+
+
+# Per-metric significance config. Each entry:
+#   attr           -> WindowMetrics field
+#   label          -> plain verdict noun
+#   why            -> one line on why it matters
+#   unit           -> display unit
+#   threshold      -> minimum |delta| to surface
+#   relative       -> threshold is a percent of the previous value
+#   higher_is_good -> True if a rise is an improvement
+_DELTA_METRICS: list[dict] = [
+    {"key": "ctl", "attr": "avg_ctl", "label": "Fitness", "unit": "CTL",
+     "threshold": 2.0, "relative": False, "higher_is_good": True,
+     "why": "Chronic load is your fitness ceiling — up is fitter."},
+    {"key": "tsb", "attr": "avg_tsb", "label": "Form", "unit": "TSB",
+     "threshold": 5.0, "relative": False, "higher_is_good": True,
+     "why": "Positive form means you're fresher and race-ready."},
+    {"key": "tss", "attr": "total_tss", "label": "Training load", "unit": "TSS",
+     "threshold": 10.0, "relative": True, "higher_is_good": True,
+     "why": "More quality load drives adaptation — if recovery keeps up."},
+    {"key": "training_days", "attr": "training_days", "label": "Consistency", "unit": "days",
+     "threshold": 1.0, "relative": False, "higher_is_good": True,
+     "why": "Frequency beats heroics — more days trained compounds."},
+    {"key": "hrv", "attr": "avg_hrv", "label": "HRV", "unit": "ms",
+     "threshold": 5.0, "relative": True, "higher_is_good": True,
+     "why": "Rising HRV signals your nervous system is adapting well."},
+    {"key": "rhr", "attr": "avg_rhr", "label": "Resting HR", "unit": "bpm",
+     "threshold": 2.0, "relative": False, "higher_is_good": False,
+     "why": "A lower resting heart rate tracks improving aerobic health."},
+    {"key": "sleep", "attr": "avg_sleep_hours", "label": "Sleep", "unit": "h",
+     "threshold": 0.5, "relative": False, "higher_is_good": True,
+     "why": "Sleep is the biggest lever on recovery and adaptation."},
+    {"key": "ef", "attr": "avg_ef", "label": "Efficiency", "unit": "W/bpm",
+     "threshold": 0.05, "relative": False, "higher_is_good": True,
+     "why": "More watts per heartbeat means a stronger aerobic engine."},
+    {"key": "decoupling", "attr": "avg_decoupling", "label": "Durability", "unit": "%",
+     "threshold": 1.5, "relative": False, "higher_is_good": False,
+     "why": "Less Pw:HR drift means you hold power deeper into rides."},
+]
+
+
+def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None):
+    """Return (improvements, weaknesses). Only metrics whose change crosses
+    their significance threshold surface; everything else is noise."""
+    from app.schemas.period_report import DeltaItem
+    improvements: list[DeltaItem] = []
+    weaknesses: list[DeltaItem] = []
+    if prev is None:
+        return improvements, weaknesses
+
+    for m in _DELTA_METRICS:
+        a = getattr(cur, m["attr"])
+        b = getattr(prev, m["attr"])
+        if a is None or b is None:
+            continue
+        delta = a - b
+        if m["relative"]:
+            if b == 0:
+                continue
+            significant = abs(delta) / abs(b) * 100.0 >= m["threshold"]
+        else:
+            significant = abs(delta) >= m["threshold"]
+        if not significant or delta == 0:
+            continue
+
+        rose = delta > 0
+        is_improvement = rose == m["higher_is_good"]
+        direction = "up" if rose else "down"
+        verb = "improving" if is_improvement else "slipping"
+        detail = f"{m['label']}: {b:g} → {a:g} {m['unit']} ({delta:+g})"
+        item = DeltaItem(
+            key=m["key"],
+            label=f"{m['label']} {verb}",
+            detail=detail,
+            why=m["why"],
+            delta=round(delta, 2),
+            unit=m["unit"],
+            direction=direction,
+            is_improvement=is_improvement,
+        )
+        (improvements if is_improvement else weaknesses).append(item)
+
+    improvements.sort(key=lambda d: abs(d.delta), reverse=True)
+    weaknesses.sort(key=lambda d: abs(d.delta), reverse=True)
+    return improvements, weaknesses
+

@@ -117,3 +117,33 @@ class TestComposite:
         score, letter = composite_grade(build_radar(empty, None))
         assert score is not None
         assert score < 40
+
+
+class TestDeltas:
+    def test_significant_ctl_gain_is_improvement(self):
+        cur = _full_window(avg_ctl=54.0)
+        prev = _full_window(avg_ctl=50.0)
+        imp, weak = build_deltas(cur, prev)
+        assert any(i.key == "ctl" and i.is_improvement for i in imp)
+
+    def test_tiny_ctl_change_is_filtered(self):
+        cur = _full_window(avg_ctl=50.5)
+        prev = _full_window(avg_ctl=50.0)
+        imp, weak = build_deltas(cur, prev)
+        assert not any(i.key == "ctl" for i in imp + weak)
+
+    def test_rising_rhr_is_weakness(self):
+        cur = _full_window(avg_rhr=55.0)
+        prev = _full_window(avg_rhr=50.0)
+        imp, weak = build_deltas(cur, prev)
+        assert any(w.key == "rhr" and not w.is_improvement for w in weak)
+
+    def test_falling_decoupling_is_improvement(self):
+        cur = _full_window(avg_decoupling=2.0)
+        prev = _full_window(avg_decoupling=6.0)
+        imp, weak = build_deltas(cur, prev)
+        assert any(i.key == "decoupling" and i.is_improvement for i in imp)
+
+    def test_no_previous_window_returns_empty(self):
+        imp, weak = build_deltas(_full_window(), None)
+        assert imp == [] and weak == []
