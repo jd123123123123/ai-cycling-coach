@@ -51,6 +51,25 @@ export interface QuerySpec {
 
 export type MarkType = 'line' | 'area' | 'bar' | 'scatter'
 
+export type AxisSide = 'left' | 'right'
+export type ReferenceKind = 'value' | 'average' | 'profile' | 'band'
+
+export interface MeasureStyle {
+  key: string            // a measure alias present in query.measures
+  label?: string
+  mark?: MarkType
+  axis?: AxisSide        // omit → renderer auto-assigns
+}
+
+export interface ReferenceLine {
+  kind: ReferenceKind
+  label?: string
+  value?: number
+  valueMax?: number
+  axis?: AxisSide
+  source?: 'ftp' | 'lthr'
+}
+
 export interface ChartEncoding {
   /** Column alias from the query result that drives the X axis. */
   x: string
@@ -58,6 +77,7 @@ export interface ChartEncoding {
   y: string
   /** Optional series-splitting dimension alias (e.g. 'sport'). */
   series?: string
+  measures?: MeasureStyle[]
 }
 
 export interface ChartSpec {
@@ -73,6 +93,7 @@ export interface ChartSpec {
   smooth?: boolean
   /** Stack series (only meaningful when `series` is set). */
   stacked?: boolean
+  reference_lines?: ReferenceLine[]
 }
 
 // ─── Query result mirror ───────────────────────────────────────────────────
