@@ -78,6 +78,10 @@ class TestInterpretChart:
         assert isinstance(spec, ChartSpec)
         assert create.await_count == 2  # retried once
 
+        second_call = create.call_args_list[1]
+        second_user_msg = second_call.kwargs["messages"][0]["content"]
+        assert "previous attempt was invalid" in second_user_msg.lower() or "invalid" in second_user_msg.lower()
+
     async def test_invalid_twice_raises(self, monkeypatch):
         bad = {"mark": "bar", "query": {"dataset": "activities", "measures": []},
                "encoding": {"x": "x", "y": "y"}}

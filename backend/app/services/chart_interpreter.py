@@ -31,7 +31,10 @@ class ChartInterpretError(Exception):
         self.code = code
 
 
-_CHART_TOOL = {
+def _build_chart_tool() -> dict:
+    """Build the emit_chart tool definition, deriving the dataset enum from the
+    live allowlist so it stays in sync with list_datasets()."""
+    return {
     "name": "emit_chart",
     "description": "Emit the chart specification that answers the user's request.",
     "input_schema": {
@@ -42,7 +45,7 @@ _CHART_TOOL = {
             "query": {
                 "type": "object",
                 "properties": {
-                    "dataset": {"type": "string", "enum": ["activities", "daily_metrics"]},
+                    "dataset": {"type": "string", "enum": list(list_datasets().keys())},
                     "dimensions": {
                         "type": "array",
                         "items": {
@@ -122,8 +125,14 @@ def build_system_prompt() -> str:
         "- For a time trend, make the X dimension the time column with a time_grain "
         "(day/week/month/year) and set mark to 'line' or 'bar'.",
         "- Aggregations: count, sum, avg, min, max, p50, p95.",
-        "- Give the measure an explicit alias and set encoding.y to that alias. "
-        "Set encoding.x to the X dimension's column name.",
+        "- Aliasing (required so the chart renders correctly):",
+        "    * X dimension: if its column is 'started_at' or 'date', set its alias to "
+        "\"date\"; otherwise set alias to the column name. Set encoding.x to that alias.",
+        "    * Y measure: set its alias to \"{aggregation}_{column}\" (e.g. \"sum_tss\", "
+        "\"avg_hrv_status\", or \"count_count\" for a count). Set encoding.y to that alias.",
+        "    * Set query.order_by to the X alias and order_dir to \"asc\".",
+        "    * To split into multiple series, add a SECOND dimension (no alias) and set "
+        "encoding.series to that column.",
         "- For relative ranges ('last 3 months') set query.start_date/end_date "
         "as YYYY-MM-DD using today as the end; otherwise omit them.",
         "- Always call emit_chart. Never answer in prose.",
@@ -165,7 +174,7 @@ async def interpret_chart(text: str) -> ChartSpec:
                 temperature=0,
                 system=[{"type": "text", "text": system,
                          "cache_control": {"type": "ephemeral"}}],
-                tools=[_CHART_TOOL],
+                tools=[_build_chart_tool()],
                 tool_choice={"type": "tool", "name": "emit_chart"},
                 messages=[{"role": "user", "content": user_content}],
             )
