@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { Plus, Save, Pencil, Trash2, ArrowLeft } from 'lucide-react'
 import ChartBuilder from '../components/charts/ChartBuilder'
+import ChartTextPrompt from '../components/charts/ChartTextPrompt'
 import DashboardCanvas from '../components/charts/DashboardCanvas'
 import {
   useCreateDashboard,
@@ -264,6 +265,7 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
   const [layout, setLayout] = useState<GridLayoutItem[]>([])
   const [builderOpen, setBuilderOpen] = useState(false)
   const [editingChartId, setEditingChartId] = useState<string | null>(null)
+  const [draftSpec, setDraftSpec] = useState<ChartSpec | null>(null)
 
   useEffect(() => {
     if (!data) return
@@ -331,6 +333,14 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
         <div className="flex items-center gap-2 ml-auto flex-wrap">
           {editing ? (
             <>
+              <ChartTextPrompt
+                disabled={charts.length >= MAX_CHARTS}
+                onSpec={(spec) => {
+                  setEditingChartId(null)
+                  setDraftSpec(spec)
+                  setBuilderOpen(true)
+                }}
+              />
               <button
                 type="button"
                 onClick={() => setBuilderOpen(true)}
@@ -446,9 +456,13 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
         onClose={() => {
           setBuilderOpen(false)
           setEditingChartId(null)
+          setDraftSpec(null)
         }}
-        onSave={handleAddChart}
-        initial={editingChart}
+        onSave={(spec) => {
+          setDraftSpec(null)
+          handleAddChart(spec)
+        }}
+        initial={editingChart ?? draftSpec}
       />
     </div>
   )
