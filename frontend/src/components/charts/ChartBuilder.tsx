@@ -9,6 +9,8 @@ import type {
   ChartSpec,
   DatasetId,
   MarkType,
+  MeasureStyle,
+  ReferenceLine,
   TimeGrain,
 } from '../../types/chartSpec'
 
@@ -66,13 +68,23 @@ interface ChartBuilderProps {
   initial?: ChartSpec | null
 }
 
+interface ExtraMeasure {
+  column: string
+  agg: Aggregation
+  mark: MarkType | ''   // '' = inherit chart mark
+  axis: '' | 'left' | 'right'  // '' = auto
+}
+
 interface BuilderState {
   dataset: DatasetId
   xColumn: string
   xGrain: TimeGrain | ''
   yColumn: string
   yAgg: Aggregation
-  seriesColumn: string // '' = none
+  yMark: MarkType | ''        // first metric's mark override ('' = inherit)
+  yAxis: '' | 'left' | 'right'
+  extraMeasures: ExtraMeasure[]
+  seriesColumn: string
   mark: MarkType
   title: string
   smooth: boolean
@@ -85,6 +97,9 @@ const DEFAULT_STATE: BuilderState = {
   xGrain: 'week',
   yColumn: 'tss',
   yAgg: 'sum',
+  yMark: '',
+  yAxis: '',
+  extraMeasures: [],
   seriesColumn: 'sport',
   mark: 'bar',
   title: '',
@@ -92,31 +107,53 @@ const DEFAULT_STATE: BuilderState = {
   stacked: true,
 }
 
-function buildSpec(s: BuilderState): ChartSpec {
+function aliasFor(column: string, agg: Aggregation): string {
+  return `${agg}_${column === '*' ? 'count' : column}`
+}
+
+function buildSpec(s: BuilderState, referenceLines: ReferenceLine[]): ChartSpec {
   const xAlias = s.xColumn === 'started_at' || s.xColumn === 'date' ? 'date' : s.xColumn
-  const yAlias = `${s.yAgg}_${s.yColumn === '*' ? 'count' : s.yColumn}`
+  const multi = s.extraMeasures.length > 0
+
+  const allMeasures = [
+    { column: s.yColumn === '*' ? '*' : s.yColumn, aggregation: s.yAgg, alias: aliasFor(s.yColumn, s.yAgg) },
+    ...s.extraMeasures.map((m) => ({
+      column: m.column === '*' ? '*' : m.column,
+      aggregation: m.agg,
+      alias: aliasFor(m.column, m.agg),
+    })),
+  ]
+  const yAlias = allMeasures[0].alias
+
+  // Per-metric styling only when multi-metric OR the first metric has overrides.
+  const measureStyles: MeasureStyle[] | undefined =
+    multi || s.yMark !== '' || s.yAxis !== ''
+      ? [
+          { key: allMeasures[0].alias, label: pretty(s.yColumn), ...(s.yMark ? { mark: s.yMark } : {}), ...(s.yAxis ? { axis: s.yAxis } : {}) },
+          ...s.extraMeasures.map((m) => ({
+            key: aliasFor(m.column, m.agg),
+            label: pretty(m.column),
+            ...(m.mark ? { mark: m.mark } : {}),
+            ...(m.axis ? { axis: m.axis } : {}),
+          })),
+        ]
+      : undefined
+
+  // Category split is mutually exclusive with multi-metric.
+  const useSplit = !multi && s.seriesColumn !== ''
+
   return {
-    title: s.title.trim() || `${pretty(s.yColumn)} by ${pretty(s.xColumn)}`,
+    title: s.title.trim() || (multi ? allMeasures.map((m) => pretty(m.column)).join(' & ') : `${pretty(s.yColumn)} by ${pretty(s.xColumn)}`),
     mark: s.mark,
     smooth: s.smooth,
-    stacked: s.stacked && s.seriesColumn !== '',
+    stacked: s.stacked && useSplit,
     query: {
       dataset: s.dataset,
       dimensions: [
-        {
-          column: s.xColumn,
-          time_grain: s.xGrain || undefined,
-          alias: xAlias,
-        },
-        ...(s.seriesColumn ? [{ column: s.seriesColumn }] : []),
+        { column: s.xColumn, time_grain: s.xGrain || undefined, alias: xAlias },
+        ...(useSplit ? [{ column: s.seriesColumn }] : []),
       ],
-      measures: [
-        {
-          column: s.yColumn === '*' ? '*' : s.yColumn,
-          aggregation: s.yAgg,
-          alias: yAlias,
-        },
-      ],
+      measures: allMeasures,
       limit: 500,
       order_by: xAlias,
       order_dir: 'asc',
@@ -124,8 +161,10 @@ function buildSpec(s: BuilderState): ChartSpec {
     encoding: {
       x: xAlias,
       y: yAlias,
-      series: s.seriesColumn || undefined,
+      series: useSplit ? s.seriesColumn : undefined,
+      ...(measureStyles ? { measures: measureStyles } : {}),
     },
+    ...(referenceLines.length ? { reference_lines: referenceLines } : {}),
   }
 }
 
@@ -137,6 +176,7 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
   })
 
   const [state, setState] = useState<BuilderState>(DEFAULT_STATE)
+  const [referenceLines, setReferenceLines] = useState<ReferenceLine[]>([])
 
   // Hydrate from `initial` when editing.
   useEffect(() => {
@@ -144,21 +184,33 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
     if (initial) {
       const dim0 = initial.query.dimensions[0]
       const dim1 = initial.query.dimensions[1]
+      const ms = initial.encoding.measures ?? []
       const m0 = initial.query.measures[0]
+      const styleFor = (alias: string) => ms.find((x) => x.key === alias)
       setState({
         dataset: initial.query.dataset,
         xColumn: dim0?.column ?? 'started_at',
         xGrain: (dim0?.time_grain as TimeGrain) ?? '',
         yColumn: m0?.column ?? 'tss',
         yAgg: m0?.aggregation ?? 'sum',
+        yMark: (styleFor(m0 ? aliasFor(m0.column, m0.aggregation) : '')?.mark as MarkType) ?? '',
+        yAxis: (styleFor(m0 ? aliasFor(m0.column, m0.aggregation) : '')?.axis as 'left' | 'right') ?? '',
+        extraMeasures: initial.query.measures.slice(1).map((m) => ({
+          column: m.column,
+          agg: m.aggregation,
+          mark: (styleFor(aliasFor(m.column, m.aggregation))?.mark as MarkType) ?? '',
+          axis: (styleFor(aliasFor(m.column, m.aggregation))?.axis as 'left' | 'right') ?? '',
+        })),
         seriesColumn: dim1?.column ?? '',
         mark: initial.mark,
         title: initial.title ?? '',
         smooth: initial.smooth ?? true,
         stacked: initial.stacked ?? false,
       })
+      setReferenceLines(initial.reference_lines ?? [])
     } else {
       setState(DEFAULT_STATE)
+      setReferenceLines([])
     }
   }, [open, initial])
 
@@ -173,7 +225,7 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
   const stringCols = allCols.filter((c) => c.type === 'string')
 
   // Live spec for preview.
-  const spec = useMemo(() => buildSpec(state), [state])
+  const spec = useMemo(() => buildSpec(state, referenceLines), [state, referenceLines])
 
   if (!open) return null
 
@@ -263,33 +315,50 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                 )}
               </Field>
 
-              <Field label="Y axis (measure)">
-                <Select
-                  value={state.yColumn}
-                  onChange={(v) => setState({ ...state, yColumn: v })}
-                  options={[
-                    { value: '*', label: 'Count rows' },
-                    ...numericCols.map((c) => ({ value: c.name, label: pretty(c.name) })),
-                  ]}
+              <Field label="Metrics">
+                <MetricRow
+                  columnOptions={[{ value: '*', label: 'Count rows' }, ...numericCols.map((c) => ({ value: c.name, label: pretty(c.name) }))]}
+                  column={state.yColumn}
+                  agg={state.yAgg}
+                  mark={state.yMark}
+                  axis={state.yAxis}
+                  showStyle={state.extraMeasures.length > 0}
+                  onChange={(p) => setState({ ...state, yColumn: p.column ?? state.yColumn, yAgg: p.agg ?? state.yAgg, yMark: p.mark ?? state.yMark, yAxis: p.axis ?? state.yAxis })}
                 />
-                <Select
-                  className="mt-2"
-                  value={state.yAgg}
-                  onChange={(v) => setState({ ...state, yAgg: v as Aggregation })}
-                  options={
-                    state.yColumn === '*'
-                      ? [{ value: 'count', label: 'count' }]
-                      : NUM_AGGS.map((a) => ({ value: a, label: a }))
-                  }
-                />
+                {state.extraMeasures.map((m, i) => (
+                  <MetricRow
+                    key={i}
+                    columnOptions={[{ value: '*', label: 'Count rows' }, ...numericCols.map((c) => ({ value: c.name, label: pretty(c.name) }))]}
+                    column={m.column}
+                    agg={m.agg}
+                    mark={m.mark}
+                    axis={m.axis}
+                    showStyle
+                    onRemove={() => setState({ ...state, extraMeasures: state.extraMeasures.filter((_, j) => j !== i) })}
+                    onChange={(p) => setState({
+                      ...state,
+                      extraMeasures: state.extraMeasures.map((x, j) => j === i ? { ...x, ...('column' in p ? { column: p.column! } : {}), ...('agg' in p ? { agg: p.agg! } : {}), ...('mark' in p ? { mark: p.mark! } : {}), ...('axis' in p ? { axis: p.axis! } : {}) } : x),
+                    })}
+                  />
+                ))}
+                {state.extraMeasures.length < 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setState({ ...state, extraMeasures: [...state.extraMeasures, { column: numericCols[0]?.name ?? 'tss', agg: 'avg', mark: '', axis: '' }] })}
+                    className="mt-1 text-[12px] rounded-[10px] py-1.5"
+                    style={{ color: 'var(--color-forest-2)', border: '1px dashed var(--color-rule)' }}
+                  >
+                    + Add metric
+                  </button>
+                )}
               </Field>
 
               <Field label="Split into series (optional)">
                 <Select
-                  value={state.seriesColumn}
+                  value={state.extraMeasures.length > 0 ? '' : state.seriesColumn}
                   onChange={(v) => setState({ ...state, seriesColumn: v })}
                   options={[
-                    { value: '', label: 'None — single series' },
+                    { value: '', label: state.extraMeasures.length > 0 ? 'Disabled — using multiple metrics' : 'None — single series' },
                     ...stringCols.map((c) => ({ value: c.name, label: pretty(c.name) })),
                   ]}
                 />
@@ -497,5 +566,58 @@ function Toggle({
         {label}
       </span>
     </label>
+  )
+}
+
+function MetricRow({
+  columnOptions, column, agg, mark, axis, showStyle, onChange, onRemove,
+}: {
+  columnOptions: { value: string; label: string }[]
+  column: string
+  agg: Aggregation
+  mark: MarkType | ''
+  axis: '' | 'left' | 'right'
+  showStyle: boolean
+  onChange: (p: Partial<{ column: string; agg: Aggregation; mark: MarkType | ''; axis: '' | 'left' | 'right' }>) => void
+  onRemove?: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 mb-2 pb-2" style={{ borderBottom: showStyle ? '1px solid var(--color-rule)' : 'none' }}>
+      <div className="flex gap-1.5">
+        <select value={column} onChange={(e) => onChange({ column: e.target.value })}
+          className="flex-1 rounded-[10px] px-2 py-2 text-[13px]"
+          style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }}>
+          {columnOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <select value={agg} onChange={(e) => onChange({ agg: e.target.value as Aggregation })}
+          className="rounded-[10px] px-2 py-2 text-[13px]"
+          style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }}>
+          {(column === '*' ? (['count'] as string[]) : (NUM_AGGS as string[])).map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        {onRemove && (
+          <button type="button" onClick={onRemove} aria-label="Remove metric"
+            className="px-2 rounded-[10px] text-[13px]" style={{ color: 'var(--color-alert)', border: '1px solid var(--color-rule)' }}>×</button>
+        )}
+      </div>
+      {showStyle && (
+        <div className="flex gap-1.5">
+          <select value={mark} onChange={(e) => onChange({ mark: e.target.value as MarkType | '' })}
+            className="flex-1 rounded-[10px] px-2 py-1.5 text-[12px]"
+            style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)' }}>
+            <option value="">mark: auto</option>
+            <option value="line">line</option>
+            <option value="area">area</option>
+            <option value="bar">bar</option>
+          </select>
+          <select value={axis} onChange={(e) => onChange({ axis: e.target.value as '' | 'left' | 'right' })}
+            className="rounded-[10px] px-2 py-1.5 text-[12px]"
+            style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)' }}>
+            <option value="">axis: auto</option>
+            <option value="left">left</option>
+            <option value="right">right</option>
+          </select>
+        </div>
+      )}
+    </div>
   )
 }
