@@ -557,10 +557,12 @@ async def _historical_composites(
 _VERDICT_SYSTEM = (
     "You are an elite endurance coach writing an athlete's training-window review. "
     "Write 3-4 sentences, plain and direct, second person. Open with the headline "
-    "verdict, cite 2-3 REAL numbers from the data (CTL, TSB, HRV %, sleep, grey-zone), "
-    "name the single biggest win and the single biggest risk, and end with the one "
-    "thing to do next. No platitudes, no emoji, no hedging, no bullet lists. "
-    "Keep it under 600 characters."
+    "verdict, cite 2-3 REAL numbers from the data, name the single biggest win and "
+    "the single biggest risk, and end with the one thing to do next. "
+    "STRICT: use ONLY the numbers given in the data block — never invent, round "
+    "differently, or infer figures that aren't provided. Do NOT claim how many days "
+    "ago a session happened or imply sessions were consecutive unless the data says "
+    "so. No platitudes, no emoji, no hedging, no bullet lists. Under 600 characters."
 )
 
 
@@ -601,6 +603,10 @@ async def _ai_verdict(
         response = await client.messages.create(
             model=settings.COACH_MODEL,
             max_tokens=320,
+            # temperature=0 → stable wording across reloads for the same data, so
+            # the verdict stops "changing between page loads" and is less prone to
+            # fabricating numbers.
+            temperature=0,
             system=[{"type": "text", "text": _VERDICT_SYSTEM,
                      "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_msg}],

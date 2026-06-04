@@ -129,8 +129,14 @@ async def pmc_window_summary(
     # Number of days to cover in the compute_user_pmc call. The service works
     # off 'last N days from today' — we request enough to cover start_date
     # and then slice.
+    #
+    # CTL/ATL are EWMAs (42-/7-day constants): they MUST warm up over history
+    # BEFORE the window or they cold-start from zero and badly understate
+    # fitness (a 7-day window produced CTL ~4 vs the true ~22). Pull a ≥60-day
+    # warmup tail past the window start, with a 90-day floor, then slice to
+    # [start_date, end_date] below.
     today = date.today()
-    days_back = max((today - start_date).days + 1, 7)
+    days_back = max((today - start_date).days + 1 + 60, 90)
     pmc_all = await compute_user_pmc(db, user_id, days=days_back)
     total_series = pmc_all.get("total") or []
 
