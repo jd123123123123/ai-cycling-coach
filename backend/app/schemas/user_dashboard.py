@@ -13,11 +13,34 @@ from app.schemas.analytics import QuerySpec
 
 MarkType = Literal["line", "area", "bar", "scatter"]
 
+AxisSide = Literal["left", "right"]
+ReferenceKind = Literal["value", "average", "profile", "band"]
+ProfileSource = Literal["ftp", "lthr"]
+
+
+class MeasureStyle(BaseModel):
+    """Per-metric rendering for multi-measure charts."""
+    key: str = Field(description="A measure alias present in query.measures")
+    label: str | None = Field(default=None, max_length=120)
+    mark: MarkType | None = None
+    axis: AxisSide | None = Field(default=None, description="omit → renderer auto-assigns")
+
+
+class ReferenceLine(BaseModel):
+    """A horizontal marker (value/average/profile) or a shaded band."""
+    kind: ReferenceKind
+    label: str | None = Field(default=None, max_length=120)
+    value: float | None = None
+    valueMax: float | None = None
+    axis: AxisSide | None = None
+    source: ProfileSource | None = None
+
 
 class ChartEncoding(BaseModel):
     x: str
     y: str
     series: str | None = None
+    measures: list[MeasureStyle] | None = Field(default=None, max_length=4)
 
 
 class ChartSpec(BaseModel):
@@ -35,6 +58,7 @@ class ChartSpec(BaseModel):
     accent: str | None = Field(default=None, max_length=64)
     smooth: bool | None = None
     stacked: bool | None = None
+    reference_lines: list[ReferenceLine] = Field(default_factory=list, max_length=8)
 
 
 class GridLayoutItem(BaseModel):
