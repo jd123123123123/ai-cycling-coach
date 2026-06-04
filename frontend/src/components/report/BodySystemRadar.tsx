@@ -2,6 +2,15 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as echarts from 'echarts'
 import type { RadarAxis } from '../../api/report'
 
+/** Resolve a `var(--token)` string to its concrete computed value. ECharts
+ * draws to a canvas, which cannot read CSS custom properties, so colors must
+ * be resolved before they reach the chart option. Mirrors ChartCanvas. */
+function resolveCssVar(value: string): string {
+  if (typeof window === 'undefined' || !value.startsWith('var(')) return value
+  const name = value.slice(4, -1).trim()
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || value
+}
+
 /** Five-axis body-system radar. Insufficient axes render at 0 with a muted note
  * below the chart so a hollow spoke never reads as "you scored zero". */
 export default function BodySystemRadar({ axes }: { axes: RadarAxis[] }) {
@@ -14,25 +23,29 @@ export default function BodySystemRadar({ axes }: { axes: RadarAxis[] }) {
 
   useEffect(() => {
     if (!ref.current) return
+    const good = resolveCssVar('var(--color-good)')
+    const ink2 = resolveCssVar('var(--color-ink-2)')
+    const rule = resolveCssVar('var(--color-rule)')
+
     const chart = echarts.init(ref.current)
     chart.setOption({
       tooltip: {},
       radar: {
         indicator: indicators,
-        radius: '68%',
+        radius: '66%',
         splitNumber: 4,
-        axisName: { color: 'var(--color-ink-2)', fontSize: 11 },
-        splitLine: { lineStyle: { color: 'var(--color-rule)' } },
+        axisName: { color: ink2, fontSize: 11 },
+        splitLine: { lineStyle: { color: rule } },
         splitArea: { areaStyle: { color: ['transparent', 'transparent'] } },
-        axisLine: { lineStyle: { color: 'var(--color-rule)' } },
+        axisLine: { lineStyle: { color: rule } },
       },
       series: [{
         type: 'radar',
         data: [{
           value: values,
-          areaStyle: { color: 'color-mix(in srgb, var(--color-good) 22%, transparent)' },
-          lineStyle: { color: 'var(--color-good)' },
-          itemStyle: { color: 'var(--color-good)' },
+          areaStyle: { color: good, opacity: 0.22 },
+          lineStyle: { color: good, width: 2 },
+          itemStyle: { color: good },
         }],
       }],
     })
@@ -51,7 +64,7 @@ export default function BodySystemRadar({ axes }: { axes: RadarAxis[] }) {
       <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
         BODY SYSTEMS
       </span>
-      <div ref={ref} style={{ width: '100%', height: 300 }} />
+      <div ref={ref} style={{ width: '100%', height: 320 }} />
       {missing.length > 0 && (
         <p className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
           Not enough data: {missing.join(', ')}
