@@ -445,6 +445,89 @@ def _rule_based_verdict(
     return text[:280]
 
 
+def _percentile(value: float, population: list[float]) -> int | None:
+    """Percent of `population` <= `value`, 0-100. None when population empty.
+    Used for 'Top X% vs your recent history'."""
+    if not population:
+        return None
+    n_le = sum(1 for p in population if p <= value)
+    return round(n_le / len(population) * 100)
+
+
+def build_evidence(cur: WindowMetrics, prev: WindowMetrics | None) -> list:
+    """Compact metric chips for under the verdict — CoachBrief style. Level
+    chips (CTL/TSB) always show; trend chips (HRV/RHR) only with a baseline."""
+    from app.schemas.period_report import EvidenceChip
+    chips: list[EvidenceChip] = []
+
+    if cur.avg_ctl is not None:
+        chips.append(EvidenceChip(label="CTL", value=str(round(cur.avg_ctl)), tone="neutral"))
+    if cur.avg_tsb is not None:
+        tsb = round(cur.avg_tsb)
+        tone = "good" if tsb > 5 else "bad" if tsb < -20 else "neutral"
+        chips.append(EvidenceChip(label="TSB", value=f"{tsb:+d}", tone=tone))
+    if cur.total_tss:
+        chips.append(EvidenceChip(label="TSS", value=str(round(cur.total_tss)), tone="neutral"))
+
+    hrv_pct = _pct_change(cur.avg_hrv, prev.avg_hrv) if prev else None
+    if hrv_pct is not None:
+        chips.append(EvidenceChip(label="HRV", value=f"{hrv_pct:+.0f}%",
+                                  tone="good" if hrv_pct >= 0 else "bad"))
+    if cur.sleep_debt_hours is not None and cur.sleep_debt_hours >= 0.5:
+        chips.append(EvidenceChip(label="Sleep debt", value=f"{cur.sleep_debt_hours:.1f}h",
+                                  tone="bad" if cur.sleep_debt_hours >= 4 else "neutral"))
+    if cur.grey_pct is not None and cur.grey_pct >= 20:
+        chips.append(EvidenceChip(label="Grey zone", value=f"{round(cur.grey_pct)}%", tone="bad"))
+    return chips
+
+
+def build_next_step(grade_score: float | None, cur: WindowMetrics, causes: list) -> object:
+    """Rule-based forward recommendation, safety-leaning. A high-severity cause
+    or deep-negative form always wins (back off); else build/hold/consistency."""
+    from app.schemas.period_report import NextStep
+
+    high = any(getattr(c, "severity", None) == "high" for c in causes)
+    deep_neg_form = cur.avg_tsb is not None and cur.avg_tsb < -20
+    ratio = cur.training_days / cur.days if cur.days else 0.0
+    ramp = cur.ctl_delta if cur.ctl_delta is not None else 0.0
+
+    if high or deep_neg_form:
+        return NextStep(
+            headline="Back off and recover",
+            detail=("Your recovery signals are flashing. Take 2-3 easy days or a rest day "
+                    "before any hard efforts — adaptation happens when you absorb load, not "
+                    "when you pile more on."),
+            tone="bad",
+        )
+    if ratio < 0.3:
+        return NextStep(
+            headline="Build the habit first",
+            detail=(f"You trained {cur.training_days} of {cur.days} days. Consistency beats "
+                    "intensity — aim for one more short session next week before chasing big days."),
+            tone="caution",
+        )
+    if ramp >= 4.0:
+        return NextStep(
+            headline="Strong build — watch the ramp",
+            detail=("Fitness is climbing fast. Keep the stimulus but hold the weekly load "
+                    "increase under ~8% (Friel's cap) and bank a recovery week soon to lock it in."),
+            tone="good",
+        )
+    if grade_score is not None and grade_score >= 80:
+        return NextStep(
+            headline="Keep doing what works",
+            detail=("Balanced, productive window. Repeat the structure — maybe nudge one "
+                    "session's quality up — and protect your sleep and easy days."),
+            tone="good",
+        )
+    return NextStep(
+        headline="Hold steady and sharpen",
+        detail=("Solid base. Add a touch more polarized intensity (hard days hard, easy days "
+                "easy) and keep the grey-zone tempo work in check to move the needle."),
+        tone="neutral",
+    )
+
+
 _VERDICT_SYSTEM = (
     "You are an endurance coach giving an athlete a punchy verdict on their "
     "training window. One or two sentences, plain and direct. Name the grade "

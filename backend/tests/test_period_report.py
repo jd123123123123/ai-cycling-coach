@@ -209,3 +209,63 @@ class TestVerdictFallback:
         )
         assert "14" in text
         assert len(text) <= 280
+
+
+class TestPercentile:
+    def test_percentile_basic(self):
+        from app.services.period_report import _percentile
+        # value equal to the max of population -> 100; min -> low
+        assert _percentile(90, [10, 50, 90]) == 100
+        assert _percentile(10, [10, 50, 90]) == 33
+        assert _percentile(50, [10, 50, 90]) == 67
+
+    def test_percentile_empty_population_is_none(self):
+        from app.services.period_report import _percentile
+        assert _percentile(50, []) is None
+
+
+class TestEvidence:
+    def test_evidence_includes_ctl_and_tsb(self):
+        from app.services.period_report import build_evidence
+        chips = build_evidence(_full_window(), _full_window(avg_ctl=46.0))
+        labels = {c.label for c in chips}
+        assert "CTL" in labels and "TSB" in labels
+
+    def test_hrv_chip_tone_good_when_rising(self):
+        from app.services.period_report import build_evidence
+        chips = build_evidence(_full_window(avg_hrv=66.0), _full_window(avg_hrv=60.0))
+        hrv = next(c for c in chips if c.label == "HRV")
+        assert hrv.tone == "good"
+
+    def test_no_prev_still_emits_level_chips(self):
+        from app.services.period_report import build_evidence
+        chips = build_evidence(_full_window(), None)
+        labels = {c.label for c in chips}
+        assert "CTL" in labels  # level chips don't need a baseline
+
+
+class TestNextStep:
+    def test_high_severity_cause_means_back_off(self):
+        from app.services.period_report import build_next_step
+        from app.schemas.period_report import Cause
+        step = build_next_step(
+            grade_score=72.0, cur=_full_window(),
+            causes=[Cause(label="HRV suppressed", severity="high", evidence="x")],
+        )
+        assert step.tone in ("caution", "bad")
+        assert "back" in step.headline.lower() or "recover" in step.headline.lower()
+
+    def test_strong_ramp_no_causes_means_build(self):
+        from app.services.period_report import build_next_step
+        step = build_next_step(
+            grade_score=88.0, cur=_full_window(ctl_delta=5.0, avg_tsb=2.0), causes=[],
+        )
+        assert step.tone in ("good", "neutral")
+
+    def test_low_consistency_flags_consistency(self):
+        from app.services.period_report import build_next_step
+        step = build_next_step(
+            grade_score=60.0,
+            cur=_full_window(training_days=1, days=7, ctl_delta=-1.0), causes=[],
+        )
+        assert "consisten" in (step.headline + step.detail).lower()
