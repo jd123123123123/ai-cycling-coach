@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as echarts from 'echarts'
 import { motion } from 'motion/react'
+import { useQuery } from '@tanstack/react-query'
 import { useAnalyticsQuery } from '../../hooks/useAnalyticsQuery'
+import { apiClient } from '../../api/client'
 import type { ChartSpec, MarkType, MeasureStyle, QueryResult } from '../../types/chartSpec'
 
 /**
@@ -149,12 +151,34 @@ function resolveAxisIndices(
   return measures.map((_v, i) => (explicit[i] === -1 ? 0 : explicit[i]))
 }
 
+function buildReferenceMarks(
+  spec: ChartSpec,
+  profile?: { ftp?: number | null; lthr?: number | null },
+): { line: Record<number, unknown[]>; area: Record<number, unknown[]> } {
+  const line: Record<number, unknown[]> = { 0: [], 1: [] }
+  const area: Record<number, unknown[]> = { 0: [], 1: [] }
+  for (const ref of spec.reference_lines ?? []) {
+    const ax = ref.axis === 'right' ? 1 : 0
+    const name = ref.label ?? ''
+    if (ref.kind === 'value' && typeof ref.value === 'number') {
+      line[ax].push({ yAxis: ref.value, name })
+    } else if (ref.kind === 'average') {
+      line[ax].push({ type: 'average', name: name || 'avg' })
+    } else if (ref.kind === 'profile') {
+      const v = ref.source === 'lthr' ? profile?.lthr : profile?.ftp
+      if (typeof v === 'number' && v > 0) line[ax].push({ yAxis: v, name: name || (ref.source ?? 'ftp').toUpperCase() })
+    } else if (ref.kind === 'band' && typeof ref.value === 'number' && typeof ref.valueMax === 'number') {
+      area[ax].push([{ yAxis: ref.value, name }, { yAxis: ref.valueMax }])
+    }
+  }
+  return { line, area }
+}
+
 function buildEChartsOption(
   spec: ChartSpec,
   result: QueryResult,
   profile?: { ftp?: number | null; lthr?: number | null },
 ): echarts.EChartsOption {
-  void profile // used by reference lines (Task 4)
   const xType = inferXAxisType(result, spec.encoding.x)
   const palette = DEFAULT_PALETTE.map(resolveCssVar)
   const accent = spec.accent ? resolveCssVar(spec.accent) : palette[0]
@@ -226,6 +250,29 @@ function buildEChartsOption(
       ]
     : yAxisBase
 
+  const refs = buildReferenceMarks(spec, profile)
+  const refLineColor = resolveCssVar('var(--color-ink-2)')
+  const refBandColor = `${resolveCssVar('var(--color-good)')}22`
+  for (const ax of [0, 1] as const) {
+    const host = series.find((s) => ((s as { yAxisIndex?: number }).yAxisIndex ?? 0) === ax) ?? series[0]
+    if (!host) continue
+    if (refs.line[ax].length) {
+      ;(host as { markLine?: unknown }).markLine = {
+        symbol: 'none',
+        lineStyle: { color: refLineColor, type: 'dashed', width: 1.5 },
+        label: { color: refLineColor, fontSize: 10, formatter: '{b}' },
+        data: refs.line[ax],
+      }
+    }
+    if (refs.area[ax].length) {
+      ;(host as { markArea?: unknown }).markArea = {
+        itemStyle: { color: refBandColor },
+        label: { color: refLineColor, fontSize: 10, position: 'insideTopLeft' },
+        data: refs.area[ax],
+      }
+    }
+  }
+
   const showLegend = series.length > 1
   return {
     animationDuration: 480,
@@ -273,6 +320,15 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
   const instanceRef = useRef<echarts.ECharts | null>(null)
   const { data, isLoading, isError, error } = useAnalyticsQuery(spec.query)
 
+  const { data: profile } = useQuery({
+    queryKey: ['athlete', 'me', 'chart-ref'],
+    queryFn: async () => {
+      const res = await apiClient.get('/athletes/me')
+      return res.data as { ftp_watts?: number | null; lthr_cycling?: number | null }
+    },
+    staleTime: 5 * 60_000,
+  })
+
   // A non-finite height (DashboardCanvas passes NaN) means "fill the parent
   // cell". Applying NaN as a CSS height collapses the container to 0, so
   // ECharts can't size and renders nothing. In fill mode we flex to fill
@@ -281,8 +337,8 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
 
   const option = useMemo(() => {
     if (!data) return null
-    return buildEChartsOption(spec, data)
-  }, [data, spec])
+    return buildEChartsOption(spec, data, { ftp: profile?.ftp_watts ?? null, lthr: profile?.lthr_cycling ?? null })
+  }, [data, spec, profile])
 
   // Init / dispose.
   useEffect(() => {
