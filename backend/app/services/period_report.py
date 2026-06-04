@@ -126,9 +126,15 @@ def build_radar(cur: WindowMetrics, prev: WindowMetrics | None) -> list:
         axes.append(_axis("recovery", "Recovery", None, "No recovery data in this window."))
     else:
         score = sum(parts) / len(parts)
-        axes.append(_axis("recovery", "Recovery", score,
-                          f"Sleep debt {round(cur.sleep_debt_hours or 0, 1)}h"
-                          + (f", HRV {hrv_pct:+.0f}%" if hrv_pct is not None else "") + "."))
+        detail_bits = []
+        if cur.sleep_debt_hours is not None:
+            detail_bits.append(f"Sleep debt {round(cur.sleep_debt_hours, 1)}h")
+        if hrv_pct is not None:
+            detail_bits.append(f"HRV {hrv_pct:+.0f}%")
+        if rhr_pct is not None:
+            detail_bits.append(f"RHR {rhr_pct:+.0f}%")
+        recovery_detail = (", ".join(detail_bits) + ".") if detail_bits else "Recovery signals tracked."
+        axes.append(_axis("recovery", "Recovery", score, recovery_detail))
 
     # --- Consistency: training-day ratio (target 0.6) + small streak bonus ---
     ratio = cur.training_days / cur.days if cur.days else 0.0
@@ -161,7 +167,10 @@ def build_radar(cur: WindowMetrics, prev: WindowMetrics | None) -> list:
 
 def composite_grade(axes: list) -> tuple[float | None, str | None]:
     """Weighted mean over available (scored) axes, renormalized. Returns
-    (score, letter) or (None, None) when every axis is insufficient."""
+    (score, letter) or (None, None) only when the axes list is empty or every
+    provided axis has score None. Note: the consistency axis is always computable
+    (it requires only training_days and days, which are always populated), so in
+    practice (None, None) should not occur from a normal build_radar call."""
     num = 0.0
     denom = 0.0
     for a in axes:
@@ -219,10 +228,10 @@ def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None):
     """Return (improvements, weaknesses). Only metrics whose change crosses
     their significance threshold surface; everything else is noise."""
     from app.schemas.period_report import DeltaItem
-    improvements: list[DeltaItem] = []
-    weaknesses: list[DeltaItem] = []
+    improvements: list[tuple[float, DeltaItem]] = []
+    weaknesses: list[tuple[float, DeltaItem]] = []
     if prev is None:
-        return improvements, weaknesses
+        return [], []
 
     for m in _DELTA_METRICS:
         a = getattr(cur, m["attr"])
@@ -234,8 +243,10 @@ def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None):
             if b == 0:
                 continue
             significant = abs(delta) / abs(b) * 100.0 >= m["threshold"]
+            sig = abs(delta) / abs(b) * 100.0 / m["threshold"]
         else:
             significant = abs(delta) >= m["threshold"]
+            sig = abs(delta) / m["threshold"]
         if not significant or delta == 0:
             continue
 
@@ -254,11 +265,11 @@ def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None):
             direction=direction,
             is_improvement=is_improvement,
         )
-        (improvements if is_improvement else weaknesses).append(item)
+        (improvements if is_improvement else weaknesses).append((sig, item))
 
-    improvements.sort(key=lambda d: abs(d.delta), reverse=True)
-    weaknesses.sort(key=lambda d: abs(d.delta), reverse=True)
-    return improvements, weaknesses
+    improvements.sort(key=lambda t: t[0], reverse=True)
+    weaknesses.sort(key=lambda t: t[0], reverse=True)
+    return [item for _, item in improvements], [item for _, item in weaknesses]
 
 
 def build_milestones(cur: WindowMetrics) -> list:

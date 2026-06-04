@@ -47,8 +47,12 @@ class TestLetterBanding:
         assert letter_for_score(50) == "D"
 
     def test_monotonic_non_increasing_grade(self):
-        for s in range(100, -1, -5):
-            letter_for_score(s)
+        order = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"]
+        last_idx = -1
+        for s in range(100, -1, -1):
+            idx = order.index(letter_for_score(s))
+            assert idx >= last_idx, f"score {s} -> {letter_for_score(s)} broke ordering"
+            last_idx = idx
 
 
 def _full_window(**over) -> WindowMetrics:
@@ -106,7 +110,7 @@ class TestComposite:
         score, letter = composite_grade(build_radar(cur, _full_window()))
         assert score is not None
 
-    def test_all_insufficient_returns_none(self):
+    def test_empty_window_returns_low_score(self):
         empty = WindowMetrics(
             days=7, pmc_days=0, avg_ctl=None, ctl_delta=None, avg_tsb=None,
             total_tss=0.0, activity_count=0, training_days=0, longest_streak=0,
