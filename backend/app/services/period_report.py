@@ -11,7 +11,23 @@ are dropped from the composite, which renormalizes over what's available.
 """
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta, timezone
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.activity import Activity
+from app.models.daily_metric import DailyMetric
+from app.services.advanced_metrics import compute_activity_metrics
+from app.services.analytical_aggregates import (
+    _activity_if,
+    _extract_sleep_hours,
+    _fetch_athlete_ftp,
+    _zone_from_if,
+    pmc_window_summary,
+)
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
@@ -297,4 +313,109 @@ def build_milestones(cur: WindowMetrics) -> list:
             detail=f"Trained {cur.training_days} of {cur.days} days.",
         ))
     return out
+
+
+def _longest_streak(training_dates: set[date]) -> int:
+    """Longest run of consecutive calendar days in the set."""
+    if not training_dates:
+        return 0
+    ordered = sorted(training_dates)
+    best = run = 1
+    for prev, cur in zip(ordered, ordered[1:]):
+        if (cur - prev).days == 1:
+            run += 1
+            best = max(best, run)
+        else:
+            run = 1
+    return best
+
+
+async def _fetch_window_metrics(
+    db: AsyncSession, user_id: int, start: date, end: date, ftp: int | None
+) -> WindowMetrics:
+    """Aggregate one [start, end] window into a WindowMetrics. DB-touching but
+    delegates all numeric judgement to the pure core."""
+    days = (end - start).days + 1
+    start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
+    end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+
+    # --- PMC (CTL/ATL/TSB) via the existing windowed summary ---
+    pmc = await pmc_window_summary(user_id=user_id, start_date=start, end_date=end, db=db)
+    pmc_days = len(pmc["days"])
+    agg = pmc["aggregate"]
+    avg_ctl = agg["avg_ctl"] if pmc_days else None
+    avg_tsb = agg["avg_tsb"] if pmc_days else None
+    ctl_delta = pmc["trend"]["ctl_delta"] if pmc_days >= 2 else (0.0 if pmc_days else None)
+
+    # --- Activities in the window ---
+    a_stmt = (
+        select(Activity)
+        .where(Activity.user_id == user_id,
+               Activity.started_at >= start_dt,
+               Activity.started_at <= end_dt)
+        .order_by(Activity.started_at.asc())
+    )
+    activities = list((await db.execute(a_stmt)).scalars().all())
+
+    total_tss = sum(float(a.tss or 0) for a in activities)
+    training_dates = {a.started_at.date() for a in activities}
+    if_values: list[float] = []
+    ef_values: list[float] = []
+    dec_values: list[float] = []
+    grey = 0
+    classified = 0
+    for a in activities:
+        if_val = _activity_if(a, ftp)
+        if if_val is not None:
+            if_values.append(if_val)
+            classified += 1
+            if _zone_from_if(if_val) == "z3":
+                grey += 1
+        m = compute_activity_metrics(a)
+        if m["ef"] is not None:
+            ef_values.append(m["ef"])
+        if m["decoupling"] is not None:
+            dec_values.append(m["decoupling"])
+
+    # --- Biometrics in the window ---
+    m_stmt = (
+        select(DailyMetric)
+        .where(DailyMetric.user_id == user_id,
+               DailyMetric.recorded_at >= start_dt,
+               DailyMetric.recorded_at <= end_dt)
+    )
+    metrics = list((await db.execute(m_stmt)).scalars().all())
+    hrv_vals = [m.hrv_status for m in metrics if m.hrv_status is not None]
+    rhr_vals = [m.resting_hr for m in metrics if m.resting_hr is not None]
+    sleep_vals: list[float] = []
+    for m in metrics:
+        hrs = _extract_sleep_hours(m)  # tolerates Garmin's nested raw_data shapes
+        if hrs is not None:
+            sleep_vals.append(hrs)
+    avg_sleep = statistics.mean(sleep_vals) if sleep_vals else None
+    # Sleep debt vs 7.5h target, summed over nights with data.
+    sleep_debt = (
+        sum(max(0.0, 7.5 - h) for h in sleep_vals) if sleep_vals else None
+    )
+
+    return WindowMetrics(
+        days=days,
+        pmc_days=pmc_days,
+        avg_ctl=avg_ctl,
+        ctl_delta=ctl_delta,
+        avg_tsb=avg_tsb,
+        total_tss=round(total_tss, 1),
+        activity_count=len(activities),
+        training_days=len(training_dates),
+        longest_streak=_longest_streak(training_dates),
+        avg_if=round(statistics.mean(if_values), 3) if if_values else None,
+        avg_ef=round(statistics.mean(ef_values), 3) if ef_values else None,
+        avg_decoupling=round(statistics.mean(dec_values), 2) if dec_values else None,
+        grey_pct=round(grey / classified * 100.0, 1) if classified else None,
+        avg_hrv=round(statistics.mean(hrv_vals), 1) if hrv_vals else None,
+        avg_rhr=round(statistics.mean(rhr_vals), 1) if rhr_vals else None,
+        avg_sleep_hours=round(avg_sleep, 2) if avg_sleep is not None else None,
+        sleep_debt_hours=round(sleep_debt, 1) if sleep_debt is not None else None,
+        biometric_days=len(metrics),
+    )
 

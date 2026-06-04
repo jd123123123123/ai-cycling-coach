@@ -1,6 +1,8 @@
 """Unit tests for the period_report pure scoring core."""
 from __future__ import annotations
 
+from datetime import date
+
 from app.services.period_report import (
     WindowMetrics,
     _clamp,
@@ -170,3 +172,19 @@ class TestMilestones:
         ms = build_milestones(_full_window(
             longest_streak=0, total_tss=0.0, training_days=0, activity_count=0))
         assert ms == []
+
+
+from app.services.period_report import _longest_streak
+
+
+class TestStreak:
+    def test_consecutive_days(self):
+        days = {date(2026, 6, 1), date(2026, 6, 2), date(2026, 6, 3)}
+        assert _longest_streak(days) == 3
+
+    def test_gap_breaks_streak(self):
+        days = {date(2026, 6, 1), date(2026, 6, 2), date(2026, 6, 5)}
+        assert _longest_streak(days) == 2
+
+    def test_empty(self):
+        assert _longest_streak(set()) == 0
