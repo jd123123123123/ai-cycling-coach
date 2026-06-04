@@ -196,6 +196,12 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
   const instanceRef = useRef<echarts.ECharts | null>(null)
   const { data, isLoading, isError, error } = useAnalyticsQuery(spec.query)
 
+  // A non-finite height (DashboardCanvas passes NaN) means "fill the parent
+  // cell". Applying NaN as a CSS height collapses the container to 0, so
+  // ECharts can't size and renders nothing. In fill mode we flex to fill
+  // instead; a finite height keeps the fixed-size behaviour (e.g. previews).
+  const fill = !Number.isFinite(height)
+
   const option = useMemo(() => {
     if (!data) return null
     return buildEChartsOption(spec, data)
@@ -227,7 +233,7 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className={`relative @container ${className}`}
+      className={`relative @container ${fill ? 'flex flex-col h-full min-h-0' : ''} ${className}`}
     >
       {(spec.title || spec.subtitle) && (
         <header className="flex items-baseline gap-3 mb-3 flex-wrap">
@@ -266,7 +272,7 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
         ref={containerRef}
         style={{
           width: '100%',
-          height,
+          ...(fill ? { flexGrow: 1, minHeight: 0 } : { height }),
           opacity: isLoading || !data ? 0.4 : 1,
           transition: 'opacity 240ms ease',
         }}
