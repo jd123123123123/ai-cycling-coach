@@ -499,3 +499,48 @@ async def _ai_verdict(
         logger.exception("Period-report verdict failed: %s", exc)
         return fallback, "rule-based-fallback"
 
+
+async def build_report(db: AsyncSession, user_id: int, days: int):
+    """Assemble the full PeriodReport for the last `days` days vs the previous
+    equal window."""
+    from app.schemas.period_report import PeriodReport
+
+    days = max(3, min(int(days), 365))
+    today = date.today()
+    end = today
+    start = today - timedelta(days=days - 1)
+    prev_end = start - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=days - 1)
+
+    ftp = await _fetch_athlete_ftp(db, user_id)
+    cur = await _fetch_window_metrics(db, user_id, start, end, ftp)
+    prev = await _fetch_window_metrics(db, user_id, prev_start, prev_end, ftp)
+    has_baseline = (prev.activity_count > 0 or prev.pmc_days > 0
+                    or prev.biometric_days > 0)
+    prev_for_calc = prev if has_baseline else None
+
+    radar = build_radar(cur, prev_for_calc)
+    grade_score, grade_letter = composite_grade(radar)
+    improvements, weaknesses = build_deltas(cur, prev_for_calc)
+    milestones = build_milestones(cur)
+    verdict, model = await _ai_verdict(
+        days, grade_letter, grade_score, improvements, weaknesses
+    )
+
+    return PeriodReport(
+        days=days,
+        start_date=start.isoformat(),
+        end_date=end.isoformat(),
+        prev_start_date=prev_start.isoformat(),
+        prev_end_date=prev_end.isoformat(),
+        has_baseline=has_baseline,
+        grade_letter=grade_letter,
+        grade_score=grade_score,
+        radar=radar,
+        improvements=improvements,
+        weaknesses=weaknesses,
+        milestones=milestones,
+        ai_verdict=verdict,
+        ai_model=model,
+    )
+
