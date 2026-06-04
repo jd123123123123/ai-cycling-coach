@@ -5,6 +5,9 @@ import GradeHero from '../../report/GradeHero'
 import BodySystemRadar from '../../report/BodySystemRadar'
 import DeltaCard from '../../report/DeltaCard'
 import MilestoneStrip from '../../report/MilestoneStrip'
+import WhyThisGrade from '../../report/WhyThisGrade'
+import CausesPanel from '../../report/CausesPanel'
+import NextStepCard from '../../report/NextStepCard'
 
 /** Report tab — periodized verdict: pick a window, see grade + radar +
  * improvements/weaknesses + milestones. */
@@ -29,6 +32,7 @@ export default function ReportTab() {
         <>
           <GradeHero report={report} />
           <BodySystemRadar axes={report.radar} />
+          <WhyThisGrade axes={report.radar} />
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="flex flex-col gap-3">
@@ -57,7 +61,9 @@ export default function ReportTab() {
             </div>
           </div>
 
+          <CausesPanel causes={report.causes} />
           <MilestoneStrip milestones={report.milestones} />
+          {report.next_step && <NextStepCard step={report.next_step} />}
         </>
       )}
     </div>
