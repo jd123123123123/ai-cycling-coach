@@ -404,6 +404,63 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                 />
               </Field>
 
+              <Field label="Reference lines (optional)">
+                <div className="flex flex-col gap-2">
+                  {referenceLines.map((r, i) => (
+                    <div key={i} className="flex gap-1.5 items-center">
+                      <select value={r.kind}
+                        onChange={(e) => setReferenceLines(referenceLines.map((x, j) => j === i ? { ...x, kind: e.target.value as ReferenceLine['kind'] } : x))}
+                        className="rounded-[10px] px-2 py-1.5 text-[12px]"
+                        style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }}>
+                        <option value="value">value</option>
+                        <option value="average">average</option>
+                        <option value="profile">FTP/zone</option>
+                        <option value="band">band</option>
+                      </select>
+                      {r.kind === 'value' && (
+                        <input type="number" value={r.value ?? ''} placeholder="value"
+                          onChange={(e) => setReferenceLines(referenceLines.map((x, j) => j === i ? { ...x, value: Number(e.target.value) } : x))}
+                          className="w-20 rounded-[10px] px-2 py-1.5 text-[12px]"
+                          style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }} />
+                      )}
+                      {r.kind === 'band' && (
+                        <>
+                          <input type="number" value={r.value ?? ''} placeholder="min"
+                            onChange={(e) => setReferenceLines(referenceLines.map((x, j) => j === i ? { ...x, value: Number(e.target.value) } : x))}
+                            className="w-16 rounded-[10px] px-2 py-1.5 text-[12px]"
+                            style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }} />
+                          <input type="number" value={r.valueMax ?? ''} placeholder="max"
+                            onChange={(e) => setReferenceLines(referenceLines.map((x, j) => j === i ? { ...x, valueMax: Number(e.target.value) } : x))}
+                            className="w-16 rounded-[10px] px-2 py-1.5 text-[12px]"
+                            style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }} />
+                        </>
+                      )}
+                      {r.kind === 'profile' && (
+                        <select value={r.source ?? 'ftp'}
+                          onChange={(e) => setReferenceLines(referenceLines.map((x, j) => j === i ? { ...x, source: e.target.value as 'ftp' | 'lthr' } : x))}
+                          className="rounded-[10px] px-2 py-1.5 text-[12px]"
+                          style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }}>
+                          <option value="ftp">FTP</option>
+                          <option value="lthr">LTHR</option>
+                        </select>
+                      )}
+                      <button type="button" aria-label="Remove reference line"
+                        onClick={() => setReferenceLines(referenceLines.filter((_, j) => j !== i))}
+                        className="ml-auto px-2 rounded-[10px] text-[13px]"
+                        style={{ color: 'var(--color-alert)', border: '1px solid var(--color-rule)' }}>×</button>
+                    </div>
+                  ))}
+                  {referenceLines.length < 6 && (
+                    <button type="button"
+                      onClick={() => setReferenceLines([...referenceLines, { kind: 'average' }])}
+                      className="text-[12px] rounded-[10px] py-1.5"
+                      style={{ color: 'var(--color-forest-2)', border: '1px dashed var(--color-rule)' }}>
+                      + Add reference line
+                    </button>
+                  )}
+                </div>
+              </Field>
+
               <div className="flex flex-col gap-2">
                 {(state.mark === 'line' || state.mark === 'area') && (
                   <Toggle
