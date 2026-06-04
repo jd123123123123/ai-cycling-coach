@@ -135,7 +135,10 @@ def build_system_prompt() -> str:
         "encoding.series to that column.",
         "- For relative ranges ('last 3 months') set query.start_date/end_date "
         "as YYYY-MM-DD using today as the end; otherwise omit them.",
-        "- Always call emit_chart. Never answer in prose.",
+        "- If the request genuinely cannot be turned into a chart over the data "
+        "above (gibberish, or unrelated to training/health/sleep), do NOT call "
+        "emit_chart — reply with one short sentence saying you can't chart that. "
+        "Otherwise ALWAYS call emit_chart and never answer in prose.",
     ]
     return "\n".join(lines)
 
@@ -175,7 +178,7 @@ async def interpret_chart(text: str) -> ChartSpec:
                 system=[{"type": "text", "text": system,
                          "cache_control": {"type": "ephemeral"}}],
                 tools=[_build_chart_tool()],
-                tool_choice={"type": "tool", "name": "emit_chart"},
+                tool_choice={"type": "auto"},
                 messages=[{"role": "user", "content": user_content}],
             )
         except Exception as exc:  # noqa: BLE001
@@ -186,8 +189,11 @@ async def interpret_chart(text: str) -> ChartSpec:
 
         tool_input = _extract_tool_input(response)
         if tool_input is None:
-            last_err = "model did not call emit_chart"
-            continue
+            # Model declined — uninterpretable. Do not retry into inventing one.
+            raise ChartInterpretError(
+                "Couldn't turn that into a chart — try naming a metric like TSS, HRV, or sleep.",
+                code="invalid",
+            )
         try:
             return ChartSpec(**tool_input)
         except ValidationError as exc:

@@ -95,6 +95,14 @@ class TestInterpretChart:
         with pytest.raises(ChartInterpretError):
             await interpret_chart("???")
 
+    async def test_decline_does_not_retry(self, monkeypatch):
+        empty = SimpleNamespace(content=[SimpleNamespace(type="text", text="I can't chart that.")])
+        create = _patch_anthropic(monkeypatch, empty, empty)
+        with pytest.raises(ChartInterpretError) as exc:
+            await interpret_chart("asdf qwer")
+        assert exc.value.code == "invalid"
+        assert create.await_count == 1  # declined → no retry
+
     async def test_no_api_key_raises(self, monkeypatch):
         monkeypatch.setattr(chart_interpreter.settings, "ANTHROPIC_API_KEY", None)
         with pytest.raises(ChartInterpretError) as exc:
