@@ -1,5 +1,6 @@
 import { apiClient } from './client'
 import type { QueryResult, QuerySpec } from '../types/chartSpec'
+import type { ChartSpec } from '../types/chartSpec'
 
 export interface DatasetIntrospection {
   datasets: Record<
@@ -40,5 +41,10 @@ export async function summarizeChart(
   payload: SummarizeRequest,
 ): Promise<SummarizeResponse> {
   const res = await apiClient.post<SummarizeResponse>('/analytics/summarize', payload)
+  return res.data
+}
+
+export async function interpretChart(text: string): Promise<ChartSpec> {
+  const res = await apiClient.post<ChartSpec>('/analytics/interpret', { text })
   return res.data
 }
