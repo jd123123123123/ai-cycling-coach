@@ -1041,3 +1041,69 @@ class TestTodaysActivities:
         assert only["efficiency_factor"] is None
         assert only["variability_index"] is None
         assert only["distance_km"] is None
+
+
+@pytest.mark.asyncio
+class TestRecommendationPinning:
+    """Once a real (non-rest) plan is written for today, a post-ride
+    regeneration that prescribes rest_day must NOT clobber it — otherwise the
+    post-ride review grades the completed ride against a rest target."""
+
+    async def _run(self, existing_template_id, new_template_id):
+        from app.models.coach_brief import CoachBrief
+        from app.models.coach_recommendation import CoachRecommendation
+        from app.services.coach_service import (
+            _today_local,
+            _upsert_recommendation_for_today,
+        )
+
+        existing = CoachRecommendation(
+            user_id=5,
+            target_date=_today_local(),
+            template_id=existing_template_id,
+            title="90-min Endurance",
+            duration_minutes=90,
+            predicted_tss=110,
+            framework_cited="Coggan Z2",
+            blocks=[{"zone": 2}],
+            why_this_workout="base ride",
+            source_brief_id=1,
+        )
+        existing.evaluated_at = "set"
+        existing.eval_grade = "A"
+
+        brief = CoachBrief(id=2, user_id=5)
+        brief.prescribed_workout = {
+            "template_id": new_template_id,
+            "title": "Rest day" if new_template_id == "rest_day" else "Tempo",
+            "duration_minutes": 0 if new_template_id == "rest_day" else 60,
+            "predicted_tss": 0 if new_template_id == "rest_day" else 70,
+            "blocks": [],
+        }
+
+        db = MagicMock()
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none = MagicMock(return_value=existing)
+        db.execute = AsyncMock(return_value=exec_result)
+        db.commit = AsyncMock()
+        db.add = MagicMock()
+
+        await _upsert_recommendation_for_today(db, 5, brief, "simple")
+        return existing, db
+
+    async def test_rest_day_does_not_clobber_pinned_ride(self):
+        existing, db = await self._run("z2_endurance_90", "rest_day")
+        # pinned plan preserved as the compliance target
+        assert existing.template_id == "z2_endurance_90"
+        assert existing.duration_minutes == 90
+        assert existing.predicted_tss == 110
+        # eval left intact, latest brief linked
+        assert existing.eval_grade == "A"
+        assert existing.source_brief_id == 2
+        db.add.assert_not_called()
+
+    async def test_non_rest_update_still_replaces(self):
+        # A legitimate non-rest replan before riding still updates the row.
+        existing, db = await self._run("z2_endurance_90", "tempo_2x20")
+        assert existing.template_id == "tempo_2x20"
+        assert existing.eval_grade is None  # reset for re-grading

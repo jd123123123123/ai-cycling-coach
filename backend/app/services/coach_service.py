@@ -2393,6 +2393,21 @@ async def _upsert_recommendation_for_today(
         )
         db.add(rec)
     else:
+        # Pin the day's plan. Once a real (non-rest) prescription has been
+        # written for today, a later regeneration must NOT replace it with a
+        # rest_day. Regenerations are forced to rest_day the moment the athlete
+        # has trained today (see resolve_and_prescribe / session_type_for_today),
+        # and they fire often (1h TTL + activity-create + Garmin-sync all
+        # invalidate the brief). If we clobbered the pinned plan, the post-ride
+        # review would grade the completed ride against a rest target (duration
+        # and TSS 0) and report "rode on a rest day" — contradicting the
+        # morning's prescription. Keep the pinned plan as the compliance target;
+        # only link the latest brief and leave any eval intact.
+        existing_tid = getattr(existing, "template_id", None)
+        if existing_tid not in (None, "rest_day") and template_id == "rest_day":
+            existing.source_brief_id = brief.id
+            await db.commit()
+            return
         existing.template_id = template_id
         existing.title = title
         existing.duration_minutes = duration_minutes
