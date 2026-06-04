@@ -82,7 +82,7 @@ class WindowMetrics:
     avg_if: float | None
     avg_ef: float | None
     avg_decoupling: float | None
-    grey_pct: float | None       # % of activities classified in the z3 grey zone
+    grey_pct: float | None       # % of activities classified in the z2 grey zone
     avg_hrv: float | None
     avg_rhr: float | None
     avg_sleep_hours: float | None
@@ -374,7 +374,7 @@ async def _fetch_window_metrics(
         if if_val is not None:
             if_values.append(if_val)
             classified += 1
-            if _zone_from_if(if_val) == "z3":
+            if _zone_from_if(if_val) == "z2":
                 grey += 1
         m = compute_activity_metrics(a)
         if m["ef"] is not None:
