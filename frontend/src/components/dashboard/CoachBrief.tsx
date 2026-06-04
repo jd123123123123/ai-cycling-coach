@@ -6,7 +6,6 @@ import { useCoachBrief, useRefreshBrief } from '../../hooks/useCoachBrief'
 import type { CoachBriefResponse } from '../../api/coach'
 import ContributorsSheet from './ContributorsSheet'
 import PrescribedWorkoutCard from './PrescribedWorkoutCard'
-import PostRideReview from './PostRideReview'
 import TomorrowCard from './TomorrowCard'
 import RegenerationCard from './RegenerationCard'
 import DashboardSection from './DashboardSection'
@@ -304,13 +303,14 @@ function BriefBody({
         <div className="flex items-center gap-1.5 flex-wrap">{evidenceChips}</div>
       )}
 
-      {/* Fold-1 hero — either PostRideReview (athlete trained today) or the
-         PrescribedWorkoutCard (prescribed workout for today). Never both. */}
-      {postRideReview ? (
-        <PostRideReview review={postRideReview} language={language} />
-      ) : workout ? (
+      {/* Fold-1 hero — the prescribed workout for today. The post-ride review
+         card is owned by TodayPostRideReview at the top of the tab, so we do
+         NOT render it again here (it used to show twice when the athlete had
+         already trained today). When a review is showing above and there's no
+         workout to prescribe, render nothing rather than the legacy fallback. */}
+      {workout ? (
         <PrescribedWorkoutCard workout={workout} alternates={alternates} />
-      ) : (
+      ) : postRideReview ? null : (
         <div
           className="rounded-[12px] p-4"
           style={{
