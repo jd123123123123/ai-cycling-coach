@@ -21,10 +21,11 @@ import TodayTab from '../components/dashboard/tabs/TodayTab'
 import WeekTab from '../components/dashboard/tabs/WeekTab'
 import TrendsTab from '../components/dashboard/tabs/TrendsTab'
 import CrewTab from '../components/dashboard/tabs/CrewTab'
+import ReportTab from '../components/dashboard/tabs/ReportTab'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { useT } from '../contexts/LocaleContext'
 
-type TabId = 'today' | 'train' | 'trends' | 'crew'
+type TabId = 'today' | 'train' | 'trends' | 'crew' | 'report'
 
 function resolveTab(raw: string | null): TabId {
   switch (raw) {
@@ -33,6 +34,7 @@ function resolveTab(raw: string | null): TabId {
     case 'week': return 'train'
     case 'trends': return 'trends'
     case 'crew': return 'crew'
+    case 'report': return 'report'
     // legacy sport tabs collapsed into Today
     case 'bike':
     case 'run':
@@ -60,6 +62,7 @@ export default function DashboardPage() {
     { id: 'train',  label: t('tab_train') },
     { id: 'trends', label: t('tab_trends') },
     { id: 'crew',   label: t('tab_crew') },
+    { id: 'report', label: t('tab_report') },
   ]
 
   const tabContent = (() => {
@@ -68,6 +71,7 @@ export default function DashboardPage() {
       case 'train':  return <WeekTab />
       case 'trends': return <TrendsTab />
       case 'crew':   return <CrewTab />
+      case 'report': return <ReportTab />
     }
   })()
 
