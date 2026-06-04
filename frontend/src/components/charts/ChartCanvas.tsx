@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as echarts from 'echarts'
 import { motion } from 'motion/react'
 import { useAnalyticsQuery } from '../../hooks/useAnalyticsQuery'
-import type { ChartSpec, QueryResult } from '../../types/chartSpec'
+import type { ChartSpec, MarkType, MeasureStyle, QueryResult } from '../../types/chartSpec'
 
 /**
  * ChartCanvas — renders any ChartSpec.
@@ -81,77 +81,166 @@ function inferXAxisType(result: QueryResult, xKey: string): 'time' | 'category' 
   return 'category'
 }
 
-function buildEChartsOption(spec: ChartSpec, result: QueryResult): echarts.EChartsOption {
-  const seriesData = pivot(result, spec)
-  const xType = inferXAxisType(result, spec.encoding.x)
+// One ECharts series from a name+data+style. Centralises mark→series mapping
+// so single-measure, category-split, and multi-measure paths share it.
+function makeSeries(opts: {
+  name: string
+  data: Array<[string | number, number]>
+  color: string
+  mark: MarkType
+  smooth: boolean
+  stacked: boolean
+  yAxisIndex: number
+  singleSeries: boolean
+}): echarts.SeriesOption {
+  const { name, data, color, mark, smooth, stacked, yAxisIndex, singleSeries } = opts
+  const base = { name, data, itemStyle: { color }, yAxisIndex }
+  if (mark === 'bar') {
+    return { ...base, type: 'bar', ...(stacked ? { stack: 'all' } : {}), barMaxWidth: 22 }
+  }
+  if (mark === 'scatter') {
+    return { ...base, type: 'scatter', symbolSize: 7 }
+  }
+  return {
+    ...base,
+    type: 'line',
+    smooth,
+    symbol: 'circle',
+    symbolSize: singleSeries ? 4 : 0,
+    showSymbol: false,
+    lineStyle: { width: 2, color },
+    ...(mark === 'area'
+      ? {
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: `${color}55` },
+              { offset: 1, color: `${color}05` },
+            ]),
+          },
+        }
+      : {}),
+    ...(stacked ? { stack: 'all' } : {}),
+  }
+}
 
-  // Resolve palette + accent up-front so we don't pay per-series.
+// Max absolute Y across a series' points — used for the auto-dual-axis heuristic.
+function seriesMaxAbs(pairs: Array<[string | number, number]>): number {
+  return pairs.reduce((m, [, y]) => Math.max(m, Math.abs(Number(y) || 0)), 0)
+}
+
+// Decide each measure's axis (0=left,1=right). Honors explicit axis; otherwise
+// auto-assigns the smaller-magnitude metric to the right ONLY when exactly two
+// measures differ by ≥5×. 3+ measures with no explicit axis all go left.
+function resolveAxisIndices(
+  measures: MeasureStyle[],
+  maxByKey: Record<string, number>,
+): number[] {
+  const explicit = measures.map((m) => (m.axis === 'right' ? 1 : m.axis === 'left' ? 0 : -1))
+  if (explicit.every((v) => v !== -1)) return explicit
+  if (measures.length === 2 && explicit.every((v) => v === -1)) {
+    const a = maxByKey[measures[0].key] || 0
+    const b = maxByKey[measures[1].key] || 0
+    const hi = Math.max(a, b), lo = Math.min(a, b)
+    if (hi > 0 && lo > 0 && hi / lo >= 5) {
+      // smaller one → right
+      return a <= b ? [1, 0] : [0, 1]
+    }
+  }
+  return measures.map((_v, i) => (explicit[i] === -1 ? 0 : explicit[i]))
+}
+
+function buildEChartsOption(
+  spec: ChartSpec,
+  result: QueryResult,
+  profile?: { ftp?: number | null; lthr?: number | null },
+): echarts.EChartsOption {
+  void profile // used by reference lines (Task 4)
+  const xType = inferXAxisType(result, spec.encoding.x)
   const palette = DEFAULT_PALETTE.map(resolveCssVar)
   const accent = spec.accent ? resolveCssVar(spec.accent) : palette[0]
+  const smooth = spec.smooth ?? true
 
-  const series: echarts.SeriesOption[] = seriesData.map((s, i) => {
-    const color = seriesData.length === 1 ? accent : palette[i % palette.length]
-    const base = {
-      name: s.name,
-      data: s.pairs,
-      itemStyle: { color },
-    }
-    if (spec.mark === 'bar') {
-      return {
-        ...base,
-        type: 'bar',
-        ...(spec.stacked ? { stack: 'all' } : {}),
-        barMaxWidth: 22,
-      } satisfies echarts.SeriesOption
-    }
-    if (spec.mark === 'scatter') {
-      return {
-        ...base,
-        type: 'scatter',
-        symbolSize: 7,
-      } satisfies echarts.SeriesOption
-    }
-    // line / area
-    return {
-      ...base,
-      type: 'line',
-      smooth: spec.smooth ?? true,
-      symbol: 'circle',
-      symbolSize: seriesData.length === 1 ? 4 : 0,
-      showSymbol: false,
-      lineStyle: { width: 2, color },
-      ...(spec.mark === 'area'
-        ? {
-            areaStyle: {
-              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: `${color}55` },
-                { offset: 1, color: `${color}05` },
-              ]),
-            },
-          }
-        : {}),
-      ...(spec.stacked ? { stack: 'all' } : {}),
-    } satisfies echarts.SeriesOption
-  })
+  const measures = spec.encoding.measures ?? null
+  let series: echarts.SeriesOption[]
+  let useRightAxis = false
+  let rightAxisName = ''
+  let leftAxisName = ''
 
+  if (measures && measures.length > 0) {
+    // Multi-measure: one series per measure, value = row[measure.key].
+    const maxByKey: Record<string, number> = {}
+    for (const m of measures) {
+      maxByKey[m.key] = seriesMaxAbs(
+        result.rows.map((r) => [r[spec.encoding.x] as string | number, (r[m.key] as number) ?? 0]),
+      )
+    }
+    const axisIdx = resolveAxisIndices(measures, maxByKey)
+    series = measures.map((m, i) => {
+      const data = result.rows.map(
+        (r) => [r[spec.encoding.x] as string | number, (r[m.key] as number) ?? 0] as [string | number, number],
+      )
+      if (axisIdx[i] === 1) { useRightAxis = true; rightAxisName = m.label ?? m.key }
+      else leftAxisName = leftAxisName || (m.label ?? m.key)
+      return makeSeries({
+        name: m.label ?? m.key,
+        data,
+        color: palette[i % palette.length],
+        mark: m.mark ?? spec.mark,
+        smooth,
+        stacked: false,
+        yAxisIndex: axisIdx[i],
+        singleSeries: false,
+      })
+    })
+  } else {
+    // Legacy: single measure, optionally split into series by a category.
+    const seriesData = pivot(result, spec)
+    series = seriesData.map((s, i) =>
+      makeSeries({
+        name: s.name,
+        data: s.pairs,
+        color: seriesData.length === 1 ? accent : palette[i % palette.length],
+        mark: spec.mark,
+        smooth,
+        stacked: !!spec.stacked,
+        yAxisIndex: 0,
+        singleSeries: seriesData.length === 1,
+      }),
+    )
+  }
+
+  const axisLabelStyle = {
+    color: resolveCssVar('var(--color-muted)'),
+    fontSize: 10.5,
+    fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+  }
+  const yAxisBase = {
+    type: 'value' as const,
+    splitLine: { lineStyle: { color: resolveCssVar('var(--color-rule)'), type: 'dashed' as const } },
+    axisLabel: axisLabelStyle,
+  }
+  const yAxis: echarts.EChartsOption['yAxis'] = useRightAxis
+    ? [
+        { ...yAxisBase, name: leftAxisName, nameTextStyle: { color: resolveCssVar('var(--color-muted)'), fontSize: 10 } },
+        { ...yAxisBase, name: rightAxisName, splitLine: { show: false }, nameTextStyle: { color: resolveCssVar('var(--color-muted)'), fontSize: 10 } },
+      ]
+    : yAxisBase
+
+  const showLegend = series.length > 1
   return {
     animationDuration: 480,
     animationEasing: 'cubicOut',
-    grid: { left: 8, right: 12, top: 24, bottom: 24, containLabel: true },
-    legend:
-      seriesData.length > 1
-        ? {
-            top: 0,
-            left: 0,
-            icon: 'roundRect',
-            itemWidth: 10,
-            itemHeight: 10,
-            textStyle: {
-              fontSize: 11,
-              color: resolveCssVar('var(--color-ink-2)'),
-            },
-          }
-        : { show: false },
+    grid: { left: 8, right: 12, top: showLegend ? 24 : 16, bottom: 24, containLabel: true },
+    legend: showLegend
+      ? {
+          top: 0,
+          left: 0,
+          icon: 'roundRect',
+          itemWidth: 10,
+          itemHeight: 10,
+          textStyle: { fontSize: 11, color: resolveCssVar('var(--color-ink-2)') },
+        }
+      : { show: false },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'line', lineStyle: { type: 'dashed', opacity: 0.6 } },
@@ -162,24 +251,12 @@ function buildEChartsOption(spec: ChartSpec, result: QueryResult): echarts.EChar
     },
     xAxis: {
       type: xType,
-      boundaryGap: spec.mark === 'bar',
+      boundaryGap: series.some((s) => s.type === 'bar'),
       axisLine: { lineStyle: { color: resolveCssVar('var(--color-rule)') } },
       axisTick: { show: false },
-      axisLabel: {
-        color: resolveCssVar('var(--color-muted)'),
-        fontSize: 10.5,
-        fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-      },
+      axisLabel: axisLabelStyle,
     },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: resolveCssVar('var(--color-rule)'), type: 'dashed' } },
-      axisLabel: {
-        color: resolveCssVar('var(--color-muted)'),
-        fontSize: 10.5,
-        fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-      },
-    },
+    yAxis,
     series,
   }
 }
