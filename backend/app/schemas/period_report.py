@@ -37,6 +37,27 @@ class Milestone(BaseModel):
     detail: str = ""
 
 
+class EvidenceChip(BaseModel):
+    """A compact metric chip shown under the verdict, e.g. CTL 58 / HRV -8%."""
+    label: str
+    value: str
+    tone: str = Field(default="neutral", description="'good' | 'bad' | 'neutral'")
+
+
+class Cause(BaseModel):
+    """A ranked reason something is dragging, with live evidence numbers."""
+    label: str
+    severity: str = Field(description="'low' | 'med' | 'high'")
+    evidence: str
+
+
+class NextStep(BaseModel):
+    """Forward-looking recommendation for the coming period."""
+    headline: str
+    detail: str
+    tone: str = Field(default="neutral", description="'good' | 'caution' | 'bad' | 'neutral'")
+
+
 class PeriodReport(BaseModel):
     days: int
     start_date: str
@@ -46,6 +67,12 @@ class PeriodReport(BaseModel):
     has_baseline: bool = Field(description="false when the previous window has no data")
     grade_letter: str | None
     grade_score: float | None = Field(description="composite 0-100, or null")
+    grade_delta: float | None = Field(default=None, description="composite vs previous window")
+    grade_percentile: int | None = Field(default=None, description="0-100 rank vs recent history")
+    composite_trend: list[float] = Field(default_factory=list, description="historical composite scores oldest→newest for a sparkline")
+    evidence: list[EvidenceChip] = Field(default_factory=list)
+    causes: list[Cause] = Field(default_factory=list)
+    next_step: NextStep | None = None
     radar: list[RadarAxis]
     improvements: list[DeltaItem]
     weaknesses: list[DeltaItem]
