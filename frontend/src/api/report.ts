@@ -25,6 +25,24 @@ export interface Milestone {
   detail: string
 }
 
+export interface EvidenceChip {
+  label: string
+  value: string
+  tone: string
+}
+
+export interface Cause {
+  label: string
+  severity: string
+  evidence: string
+}
+
+export interface NextStep {
+  headline: string
+  detail: string
+  tone: string
+}
+
 export interface PeriodReport {
   days: number
   start_date: string
@@ -34,6 +52,12 @@ export interface PeriodReport {
   has_baseline: boolean
   grade_letter: string | null
   grade_score: number | null
+  grade_delta: number | null
+  grade_percentile: number | null
+  composite_trend: number[]
+  evidence: EvidenceChip[]
+  causes: Cause[]
+  next_step: NextStep | null
   radar: RadarAxis[]
   improvements: DeltaItem[]
   weaknesses: DeltaItem[]
