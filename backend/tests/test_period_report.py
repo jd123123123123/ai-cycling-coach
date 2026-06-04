@@ -188,3 +188,24 @@ class TestStreak:
 
     def test_empty(self):
         assert _longest_streak(set()) == 0
+
+
+class TestVerdictFallback:
+    def test_rule_based_verdict_mentions_grade_and_window(self):
+        from app.services.period_report import _rule_based_verdict
+        text = _rule_based_verdict(
+            days=7, grade_letter="B+", grade_score=84.0,
+            top_improvement="Fitness improving", top_weakness="Sleep slipping",
+        )
+        assert "7" in text
+        assert "B+" in text
+        assert len(text) <= 280
+
+    def test_rule_based_verdict_handles_no_grade(self):
+        from app.services.period_report import _rule_based_verdict
+        text = _rule_based_verdict(
+            days=14, grade_letter=None, grade_score=None,
+            top_improvement=None, top_weakness=None,
+        )
+        assert "14" in text
+        assert len(text) <= 280

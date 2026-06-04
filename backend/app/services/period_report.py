@@ -11,6 +11,7 @@ are dropped from the composite, which renormalizes over what's available.
 """
 from __future__ import annotations
 
+import logging
 import statistics
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
@@ -28,6 +29,10 @@ from app.services.analytical_aggregates import (
     _zone_from_if,
     pmc_window_summary,
 )
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
@@ -418,4 +423,79 @@ async def _fetch_window_metrics(
         sleep_debt_hours=round(sleep_debt, 1) if sleep_debt is not None else None,
         biometric_days=len(metrics),
     )
+
+
+def _rule_based_verdict(
+    days: int,
+    grade_letter: str | None,
+    grade_score: float | None,
+    top_improvement: str | None,
+    top_weakness: str | None,
+) -> str:
+    """Deterministic 1-2 sentence summary used when Claude is unavailable."""
+    if grade_letter is None:
+        return (f"Your last {days} days don't have enough data to grade yet — "
+                "connect a device or log a few rides to unlock your report.")
+    bits = [f"Your last {days} days grade {grade_letter} ({round(grade_score or 0)}/100)."]
+    if top_improvement:
+        bits.append(f"Biggest win: {top_improvement.lower()}.")
+    if top_weakness:
+        bits.append(f"Watch: {top_weakness.lower()}.")
+    text = " ".join(bits)
+    return text[:280]
+
+
+_VERDICT_SYSTEM = (
+    "You are an endurance coach giving an athlete a punchy verdict on their "
+    "training window. One or two sentences, plain and direct. Name the grade "
+    "and the single most important thing to celebrate or fix. No platitudes, "
+    "no emoji, no hedging. Do not exceed 280 characters."
+)
+
+
+async def _ai_verdict(
+    days: int,
+    grade_letter: str | None,
+    grade_score: float | None,
+    improvements: list,
+    weaknesses: list,
+) -> tuple[str, str]:
+    """Return (verdict_text, model_used). Falls back to a rule-based string when
+    no API key is set or the call fails — mirrors /analytics/summarize."""
+    top_imp = improvements[0].label if improvements else None
+    top_weak = weaknesses[0].label if weaknesses else None
+    fallback = _rule_based_verdict(days, grade_letter, grade_score, top_imp, top_weak)
+
+    if not settings.ANTHROPIC_API_KEY:
+        return fallback, "rule-based-fallback"
+
+    user_msg = (
+        f"Window: last {days} days\n"
+        f"Grade: {grade_letter} ({grade_score}/100)\n"
+        f"Improvements: {[i.detail for i in improvements[:4]]}\n"
+        f"Weaknesses: {[w.detail for w in weaknesses[:4]]}\n"
+    )
+    try:
+        import anthropic
+
+        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        response = await client.messages.create(
+            model=settings.COACH_MODEL,
+            max_tokens=160,
+            system=[{"type": "text", "text": _VERDICT_SYSTEM,
+                     "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        text = ""
+        for block in getattr(response, "content", None) or []:
+            block_text = getattr(block, "text", None)
+            if block_text:
+                text += block_text
+        text = text.strip()
+        if not text:
+            raise RuntimeError("empty Claude response")
+        return text[:280], settings.COACH_MODEL
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Period-report verdict failed: %s", exc)
+        return fallback, "rule-based-fallback"
 
