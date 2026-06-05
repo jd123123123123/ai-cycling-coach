@@ -71,6 +71,7 @@ from app.services.safety_rails import (
     max_tss_for_day,
     validate_chat_response,
 )
+from app.services.mesocycle_generator import current_block_position
 from app.services.training_periodization import (
     SessionType,
     detect_training_phase,
@@ -582,9 +583,19 @@ async def build_snapshot(
     training_model = goals_json.get("training_model")
     days_per_week = goals_json.get("days_per_week")
 
+    # Where today sits in the athlete's Issurin 3:1 mesocycle (if they have an
+    # active plan) — so the live brief deloads on a break week, not just the
+    # generated plan. None when off-plan → loading default.
+    today_block = await current_block_position(db, user_id, _today_local())
+    today_is_recovery = today_block == "recovery"
+
     phase = detect_training_phase(goal_date_obj, float(pmc.get("ctl", 0.0)))
     quota = weekly_intensity_quota(
-        phase, float(weekly_hours), training_model=training_model, days_per_week=days_per_week
+        phase,
+        float(weekly_hours),
+        training_model=training_model,
+        days_per_week=days_per_week,
+        block_position=today_block,
     )
 
     # ---------------------------------------------------------
@@ -681,6 +692,7 @@ async def build_snapshot(
         intensity_ceiling=ceiling,
         day_of_week=_today_local().weekday(),
         training_model=training_model,
+        is_recovery_week=today_is_recovery,
     )
 
     # Today's available minutes — weekly_hours/7 rounded up, capped at 180 min
@@ -1063,6 +1075,8 @@ async def build_snapshot(
                     projected_progress.get("last_72h_quality_count", 0)
                 ) + 1
 
+            # Tomorrow may cross into a new mesocycle week — re-resolve its block.
+            tomorrow_block = await current_block_position(db, user_id, tomorrow_local_date)
             tomorrow_session: SessionType = session_type_for_today(
                 phase=phase,
                 weekly_progress=projected_progress,
@@ -1070,6 +1084,7 @@ async def build_snapshot(
                 intensity_ceiling=ceiling,
                 day_of_week=tomorrow_local_date.weekday(),
                 training_model=training_model,
+                is_recovery_week=(tomorrow_block == "recovery"),
             )
             # Use the same per-day-minutes the today flow already computed
             # — close enough for a one-day projection; the picker only

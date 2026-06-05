@@ -28,6 +28,7 @@ from app.services.mesocycle_generator import (
     MESO_LENGTH_WEEKS,
     PlannedWorkoutDraft,
     build_week_drafts,
+    current_block_position,
     generate_mesocycle,
     issurin_block_for_week,
     weekly_tss_target,
@@ -589,3 +590,46 @@ class TestMondayNormalisation:
         # _next_monday of Monday = same Monday (no advancement)
         result = _next_monday(monday)
         assert result == monday
+
+
+class _FakeResult:
+    def __init__(self, row):
+        self._row = row
+
+    def scalar_one_or_none(self):
+        return self._row
+
+
+class _FakeDB:
+    """Minimal AsyncSession stand-in: execute() → result.scalar_one_or_none()."""
+
+    def __init__(self, row):
+        self._row = row
+
+    async def execute(self, *_a, **_k):
+        return _FakeResult(self._row)
+
+
+class TestCurrentBlockPosition:
+    def _plan(self, start: date):
+        return SimpleNamespace(plan_start_date=start, plan_end_date=start + timedelta(days=27))
+
+    async def test_week0_is_accumulation(self):
+        start = date(2026, 6, 1)
+        db = _FakeDB(self._plan(start))
+        assert await current_block_position(db, 1, start) == "accumulation"
+
+    async def test_week3_is_recovery(self):
+        start = date(2026, 6, 1)
+        db = _FakeDB(self._plan(start))
+        assert await current_block_position(db, 1, start + timedelta(days=21)) == "recovery"
+
+    async def test_no_active_plan_returns_none(self):
+        db = _FakeDB(None)
+        assert await current_block_position(db, 1, date(2026, 6, 1)) is None
+
+    async def test_day_past_plan_end_clamps_to_recovery(self):
+        # Defensive: a stray query result past week 3 clamps, never raises.
+        start = date(2026, 6, 1)
+        db = _FakeDB(self._plan(start))
+        assert await current_block_position(db, 1, start + timedelta(days=40)) == "recovery"

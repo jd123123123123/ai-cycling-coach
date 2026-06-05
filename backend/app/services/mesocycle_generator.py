@@ -110,6 +110,38 @@ def issurin_block_for_week(
     return _ISSURIN_BLOCK_NAMES[week_index]
 
 
+async def current_block_position(
+    db: AsyncSession,
+    user_id: int,
+    today: date | None = None,
+) -> str | None:
+    """Return the Issurin block position the athlete is in *today*.
+
+    Finds the most recent generated mesocycle plan that brackets ``today`` and
+    maps the day onto its 4-week structure (week 3 → 'recovery'). Returns None
+    when there's no active plan, so callers fall back to the loading default.
+    Lets the live coach brief deload on a break week, not just the plan.
+    """
+    if today is None:
+        today = date.today()
+    row = (
+        await db.execute(
+            select(MesocyclePlan)
+            .where(
+                MesocyclePlan.user_id == user_id,
+                MesocyclePlan.plan_start_date <= today,
+                MesocyclePlan.plan_end_date >= today,
+            )
+            .order_by(MesocyclePlan.plan_start_date.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    week_index = max(0, min((today - row.plan_start_date).days // 7, 3))
+    return issurin_block_for_week(week_index)
+
+
 def weekly_tss_target(
     ctl: float,
     phase: Phase,
