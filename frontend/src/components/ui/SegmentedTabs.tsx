@@ -12,6 +12,12 @@ interface SegmentedTabsProps<T extends string> {
   value: T
   onChange: (id: T) => void
   ariaLabel: string
+  /**
+   * Distinct motion layoutId for the sliding indicator. Required when more than
+   * one SegmentedTabs renders on the same page (e.g. the primary nav and the
+   * Analyze sub-control) — a shared id makes the indicator jump between them.
+   */
+  indicatorId?: string
 }
 
 /**
@@ -27,6 +33,7 @@ export function SegmentedTabs<T extends string>({
   value,
   onChange,
   ariaLabel,
+  indicatorId = 'segmented-indicator',
 }: SegmentedTabsProps<T>) {
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -120,7 +127,7 @@ export function SegmentedTabs<T extends string>({
             {/* Sliding background indicator */}
             {isActive && (
               <motion.span
-                layoutId="segmented-indicator"
+                layoutId={indicatorId}
                 transition={springs.snappy}
                 aria-hidden
                 style={{

@@ -87,9 +87,19 @@ export default function CommandPalette({ open, onClose, onAskCoach }: CommandPal
       action: () => handleNavigate('/dashboard', { tab: 'week' }),
     },
     {
-      id: 'trends',
-      label: 'Trends',
-      action: () => handleNavigate('/dashboard', { tab: 'trends' }),
+      id: 'analyze',
+      label: simple ? 'Trends' : 'Analyze',
+      action: () => handleNavigate('/dashboard', { tab: 'analyze', sub: 'overview' }),
+    },
+    {
+      id: 'report',
+      label: 'Report',
+      action: () => handleNavigate('/dashboard', { tab: 'analyze', sub: 'report' }),
+    },
+    {
+      id: 'workspace',
+      label: simple ? 'Charts' : 'Workspace',
+      action: () => handleNavigate('/dashboard', { tab: 'analyze', sub: 'workspace' }),
     },
     {
       id: 'plan',

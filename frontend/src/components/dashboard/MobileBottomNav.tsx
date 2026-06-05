@@ -1,31 +1,31 @@
 import { useSearchParams } from 'react-router-dom'
-import { Sun, CalendarDays, LineChart, Users, Award } from 'lucide-react'
+import { Sun, CalendarDays, BarChart3, Users } from 'lucide-react'
+import { useT } from '../../contexts/LocaleContext'
 
 // Mobile bottom navigation — your thumb can't reach a top tab strip on a
 // phone. Apple HIG / Strava / Whoop / Garmin Connect all use bottom nav on
 // mobile. Appears only below 'lg'. Mirrors the four desktop surfaces:
-// Today (verdict) · Train (plan) · Trends (evidence) · Crew (squad cup).
+// Today (verdict) · Train (plan) · Analyze (evidence/report/workspace) · Crew.
 
-type TabId = 'today' | 'train' | 'trends' | 'crew' | 'report'
+type TabId = 'today' | 'train' | 'analyze' | 'crew'
 
-const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
-  { id: 'today',  label: 'Today',  icon: <Sun size={20} strokeWidth={1.8} /> },
-  { id: 'train',  label: 'Train',  icon: <CalendarDays size={20} strokeWidth={1.8} /> },
-  { id: 'trends', label: 'Trends', icon: <LineChart size={20} strokeWidth={1.8} /> },
-  { id: 'crew',   label: 'Crew',   icon: <Users size={20} strokeWidth={1.8} /> },
-  { id: 'report', label: 'Report', icon: <Award size={20} strokeWidth={1.8} /> },
+const TABS: Array<{ id: TabId; labelKey: 'tab_today' | 'tab_train' | 'tab_analyze' | 'tab_crew'; icon: React.ReactNode }> = [
+  { id: 'today',   labelKey: 'tab_today',   icon: <Sun size={20} strokeWidth={1.8} /> },
+  { id: 'train',   labelKey: 'tab_train',   icon: <CalendarDays size={20} strokeWidth={1.8} /> },
+  { id: 'analyze', labelKey: 'tab_analyze', icon: <BarChart3 size={20} strokeWidth={1.8} /> },
+  { id: 'crew',    labelKey: 'tab_crew',    icon: <Users size={20} strokeWidth={1.8} /> },
 ]
 
 function resolveActive(raw: string | null): TabId {
   if (raw === 'train' || raw === 'week') return 'train'
-  if (raw === 'trends') return 'trends'
+  if (raw === 'analyze' || raw === 'trends' || raw === 'report') return 'analyze'
   if (raw === 'crew') return 'crew'
-  if (raw === 'report') return 'report'
   return 'today'
 }
 
 export default function MobileBottomNav() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const t = useT()
   const active = resolveActive(searchParams.get('tab'))
 
   function handleTab(id: TabId) {
@@ -45,8 +45,9 @@ export default function MobileBottomNav() {
       }}
       aria-label="Main navigation"
     >
-      {TABS.map(({ id, label, icon }) => {
+      {TABS.map(({ id, labelKey, icon }) => {
         const isActive = id === active
+        const label = t(labelKey)
         return (
           <button
             key={id}

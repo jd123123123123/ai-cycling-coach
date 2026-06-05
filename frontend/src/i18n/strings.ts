@@ -96,6 +96,10 @@ export const STRINGS = {
   tab_trends: { en: 'Trends', de: 'Trends' },
   tab_crew: { en: 'Crew', de: 'Crew' },
   tab_report: { en: 'Report', de: 'Report' },
+  tab_analyze: { en: 'Analyze', de: 'Analyse' },
+  analyze_overview: { en: 'Overview', de: 'Übersicht' },
+  analyze_report: { en: 'Report', de: 'Report' },
+  analyze_workspace: { en: 'Workspace', de: 'Workspace' },
 
   // PMCChart
   training_load_90d: { en: 'Training load · 90 days', de: 'Trainingslast · 90 Tage' },
