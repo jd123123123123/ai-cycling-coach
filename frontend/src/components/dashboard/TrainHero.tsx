@@ -108,6 +108,17 @@ export default function TrainHero() {
   const thresholdSessions = (quota?.threshold_sessions as number | undefined) ?? null
   const restDays = (quota?.rest_days as number | undefined) ?? null
   const totalHours = (quota?.total_hours as number | undefined) ?? null
+
+  // Where this week sits in the Issurin 3:1 cycle + the athlete's chosen model.
+  // The live quota carries the authoritative block; fall back to the meso block.
+  const blockPosition = (quota?.block_position as string | undefined) ?? meso?.block_position ?? null
+  const isRecovery = blockPosition === 'recovery'
+  const trainingModel = (quota?.training_model as string | undefined) ?? null
+  const modelLabel =
+    trainingModel === 'polarized' ? (locale === 'de' ? 'Polarisiert 80/20' : 'Polarized 80/20')
+    : trainingModel === 'sweetspot' ? 'Sweet-Spot'
+    : trainingModel === 'pyramidal' ? 'Pyramidal'
+    : null
   const quotaLine =
     vo2Sessions != null && thresholdSessions != null && totalHours != null
       ? `${totalHours}h ${t('quota_plan')} · ${vo2Sessions} VO2 · ${thresholdSessions} ${t('quota_threshold')} · ${restDays ?? '?'} ${t('quota_rest')}`
@@ -128,12 +139,31 @@ export default function TrainHero() {
     >
       {/* Eyebrow */}
       <div className="flex items-center gap-3 flex-wrap mb-3">
+        {/* Deload weeks get a prominent, filled chip — it's the most
+           decision-relevant context the athlete can have ("ease off this week"). */}
+        {isRecovery && (
+          <span
+            className="num-mono"
+            style={{
+              fontSize: 10,
+              letterSpacing: '0.14em',
+              fontWeight: 600,
+              color: 'var(--color-paper)',
+              backgroundColor: 'var(--color-amber-2)',
+              borderRadius: 999,
+              padding: '2px 9px',
+              textTransform: 'uppercase',
+            }}
+          >
+            {t('pos_recovery')}
+          </span>
+        )}
         {phaseLabel && (
           <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
             {phaseLabel.toUpperCase()}
           </span>
         )}
-        {positionLabel && (
+        {positionLabel && !isRecovery && (
           <>
             <span style={{ color: 'var(--color-muted)', fontSize: 10 }}>·</span>
             <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.22em' }}>
@@ -154,6 +184,14 @@ export default function TrainHero() {
             <span style={{ color: 'var(--color-muted)', fontSize: 10 }}>·</span>
             <span className="eyebrow num-mono" style={{ color: 'var(--color-amber-2)', fontSize: 10, letterSpacing: '0.22em' }}>
               {daysToEvent}{t('days_to_event_suffix')}
+            </span>
+          </>
+        )}
+        {modelLabel && (
+          <>
+            <span style={{ color: 'var(--color-muted)', fontSize: 10 }}>·</span>
+            <span className="eyebrow num-mono" style={{ color: 'var(--color-forest-2)', fontSize: 10, letterSpacing: '0.18em' }}>
+              {modelLabel.toUpperCase()}
             </span>
           </>
         )}
