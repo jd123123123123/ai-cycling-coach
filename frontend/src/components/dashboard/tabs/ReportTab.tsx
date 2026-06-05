@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocale } from '../../../contexts/LocaleContext'
 import { usePeriodReport } from '../../../hooks/usePeriodReport'
 import WindowToggle from '../../report/WindowToggle'
 import GradeHero from '../../report/GradeHero'
@@ -12,6 +13,7 @@ import NextStepCard from '../../report/NextStepCard'
 /** Report tab — periodized verdict: pick a window, see grade + radar +
  * improvements/weaknesses + milestones. */
 export default function ReportTab() {
+  const { locale } = useLocale()
   const [days, setDays] = useState(7)
   const { data: report, isLoading, isError } = usePeriodReport(days)
 
@@ -24,7 +26,7 @@ export default function ReportTab() {
       )}
       {isError && (
         <p style={{ color: 'var(--color-bad)', fontSize: 14 }}>
-          Couldn't load your report. Try again in a moment.
+          {locale === 'de' ? 'Bericht konnte nicht geladen werden. Versuche es gleich erneut.' : "Couldn't load your report. Try again in a moment."}
         </p>
       )}
 
@@ -37,11 +39,13 @@ export default function ReportTab() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="flex flex-col gap-3">
               <span className="eyebrow num-mono" style={{ color: 'var(--color-good)', fontSize: 10, letterSpacing: '0.22em' }}>
-                IMPROVEMENTS
+                {locale === 'de' ? 'VERBESSERUNGEN' : 'IMPROVEMENTS'}
               </span>
               {report.improvements.length === 0 ? (
                 <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>
-                  {report.has_baseline ? 'Nothing moved enough to call a win this window.' : 'No previous window to compare against yet.'}
+                  {report.has_baseline
+                    ? (locale === 'de' ? 'In diesem Zeitraum hat sich nichts genug bewegt für einen Erfolg.' : 'Nothing moved enough to call a win this window.')
+                    : (locale === 'de' ? 'Noch kein vorheriger Zeitraum zum Vergleich.' : 'No previous window to compare against yet.')}
                 </p>
               ) : (
                 report.improvements.map((d) => <DeltaCard key={d.key} item={d} />)
@@ -49,11 +53,13 @@ export default function ReportTab() {
             </div>
             <div className="flex flex-col gap-3">
               <span className="eyebrow num-mono" style={{ color: 'var(--color-caution)', fontSize: 10, letterSpacing: '0.22em' }}>
-                WATCH-OUTS
+                {locale === 'de' ? 'ACHTUNG' : 'WATCH-OUTS'}
               </span>
               {report.weaknesses.length === 0 ? (
                 <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>
-                  {report.has_baseline ? 'No significant regressions — clean window.' : 'No previous window to compare against yet.'}
+                  {report.has_baseline
+                    ? (locale === 'de' ? 'Keine nennenswerten Rückschritte — sauberer Zeitraum.' : 'No significant regressions — clean window.')
+                    : (locale === 'de' ? 'Noch kein vorheriger Zeitraum zum Vergleich.' : 'No previous window to compare against yet.')}
                 </p>
               ) : (
                 report.weaknesses.map((d) => <DeltaCard key={d.key} item={d} />)

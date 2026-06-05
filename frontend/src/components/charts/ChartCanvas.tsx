@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAnalyticsQuery } from '../../hooks/useAnalyticsQuery'
 import { apiClient } from '../../api/client'
 import type { ChartSpec, MarkType, MeasureStyle, QueryResult } from '../../types/chartSpec'
+import { useLocale } from '../../contexts/LocaleContext'
 
 /**
  * ChartCanvas — renders any ChartSpec.
@@ -153,7 +154,8 @@ function resolveAxisIndices(
 
 function buildReferenceMarks(
   spec: ChartSpec,
-  profile?: { ftp?: number | null; lthr?: number | null },
+  profile: { ftp?: number | null; lthr?: number | null } | undefined,
+  avgLabel: string,
 ): { line: Record<number, unknown[]>; area: Record<number, unknown[]> } {
   const line: Record<number, unknown[]> = { 0: [], 1: [] }
   const area: Record<number, unknown[]> = { 0: [], 1: [] }
@@ -163,7 +165,7 @@ function buildReferenceMarks(
     if (ref.kind === 'value' && typeof ref.value === 'number') {
       line[ax].push({ yAxis: ref.value, name })
     } else if (ref.kind === 'average') {
-      line[ax].push({ type: 'average', name: name || 'avg' })
+      line[ax].push({ type: 'average', name: name || avgLabel })
     } else if (ref.kind === 'profile') {
       const v = ref.source === 'lthr' ? profile?.lthr : profile?.ftp
       if (typeof v === 'number' && v > 0) line[ax].push({ yAxis: v, name: name || (ref.source ?? 'ftp').toUpperCase() })
@@ -177,7 +179,8 @@ function buildReferenceMarks(
 function buildEChartsOption(
   spec: ChartSpec,
   result: QueryResult,
-  profile?: { ftp?: number | null; lthr?: number | null },
+  profile: { ftp?: number | null; lthr?: number | null } | undefined,
+  avgLabel: string,
 ): echarts.EChartsOption {
   const xType = inferXAxisType(result, spec.encoding.x)
   const palette = DEFAULT_PALETTE.map(resolveCssVar)
@@ -250,7 +253,7 @@ function buildEChartsOption(
       ]
     : yAxisBase
 
-  const refs = buildReferenceMarks(spec, profile)
+  const refs = buildReferenceMarks(spec, profile, avgLabel)
   const refLineColor = resolveCssVar('var(--color-ink-2)')
   const refBandColor = `${resolveCssVar('var(--color-good)')}22`
   for (const ax of [0, 1] as const) {
@@ -316,6 +319,7 @@ interface ChartCanvasProps {
 }
 
 export default function ChartCanvas({ spec, height = 280, className = '' }: ChartCanvasProps) {
+  const { locale } = useLocale()
   const containerRef = useRef<HTMLDivElement>(null)
   const instanceRef = useRef<echarts.ECharts | null>(null)
   const { data, isLoading, isError, error } = useAnalyticsQuery(spec.query)
@@ -342,8 +346,13 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
 
   const option = useMemo(() => {
     if (!data) return null
-    return buildEChartsOption(spec, data, { ftp: profile?.ftp_watts ?? null, lthr: profile?.lthr_cycling ?? null })
-  }, [data, spec, profile])
+    return buildEChartsOption(
+      spec,
+      data,
+      { ftp: profile?.ftp_watts ?? null, lthr: profile?.lthr_cycling ?? null },
+      locale === 'de' ? 'Durchschnitt' : 'avg',
+    )
+  }, [data, spec, profile, locale])
 
   // Init / dispose.
   useEffect(() => {
@@ -425,7 +434,7 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
             className="num-mono"
             style={{ fontSize: 10.5, letterSpacing: '0.32em', textTransform: 'uppercase' }}
           >
-            loading…
+            {locale === 'de' ? 'lädt…' : 'loading…'}
           </span>
         </div>
       )}
@@ -438,7 +447,8 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
         >
           <span className="text-[12px]">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {(error as any)?.response?.data?.detail ?? 'Could not load chart'}
+            {(error as any)?.response?.data?.detail ??
+              (locale === 'de' ? 'Diagramm konnte nicht geladen werden' : 'Could not load chart')}
           </span>
         </div>
       )}
@@ -452,9 +462,13 @@ export default function ChartCanvas({ spec, height = 280, className = '' }: Char
             color: 'var(--color-amber)',
             textTransform: 'uppercase',
           }}
-          title={`Showing first ${data.row_count} rows`}
+          title={
+            locale === 'de'
+              ? `Es werden die ersten ${data.row_count} Zeilen angezeigt`
+              : `Showing first ${data.row_count} rows`
+          }
         >
-          truncated
+          {locale === 'de' ? 'gekürzt' : 'truncated'}
         </span>
       )}
     </motion.div>

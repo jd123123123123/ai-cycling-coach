@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subDays, format } from 'date-fns'
+import { de } from 'date-fns/locale'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { hrvBaselineBand } from '../../utils/advanced-metrics'
 import { useCountUp } from '../../hooks/useCountUp'
+import { useLocale } from '../../contexts/LocaleContext'
+
+type Loc = 'en' | 'de'
 
 // HRV trend with ±1 SD baseline band, interactive cursor.
 // The chart measures its own container via ResizeObserver so it scales
@@ -65,10 +69,12 @@ function Chart({
   values,
   bands,
   dates,
+  locale,
 }: {
   values: Array<number | null>
   bands: BandPoint[]
   dates: string[]
+  locale: Loc
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState<number>(600)
@@ -303,7 +309,7 @@ function Chart({
         {xTicks.map((i) => {
           const d = dates[i]
           if (!d) return null
-          const label = format(new Date(d), 'd LLL')
+          const label = format(new Date(d), 'd LLL', locale === 'de' ? { locale: de } : undefined)
           return (
             <text
               key={`xt-${i}`}
@@ -335,7 +341,7 @@ function Chart({
           }}
         >
           <div style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.12em' }}>
-            {format(new Date(hoverDate), 'EEE · d LLL').toUpperCase()}
+            {format(new Date(hoverDate), 'EEE · d LLL', locale === 'de' ? { locale: de } : undefined).toUpperCase()}
           </div>
           <div className="flex items-baseline gap-1 mt-1">
             <span className="num-display leading-none" style={{ fontSize: 20, color: 'var(--color-ink)' }}>
@@ -345,7 +351,7 @@ function Chart({
           </div>
           {hoverBand?.upper != null && hoverBand.lower != null && (
             <div style={{ color: 'var(--color-muted)', marginTop: 4, fontSize: 10 }}>
-              band {Math.round(hoverBand.lower)}–{Math.round(hoverBand.upper)}
+              {locale === 'de' ? 'Band' : 'band'} {Math.round(hoverBand.lower)}–{Math.round(hoverBand.upper)}
             </div>
           )}
         </div>
@@ -355,6 +361,7 @@ function Chart({
 }
 
 export default function HRVTrend() {
+  const { locale } = useLocale()
   const today = new Date()
   const start = subDays(today, DAYS)
   const { data, isLoading } = useDailyMetrics(start, today)
@@ -397,12 +404,19 @@ export default function HRVTrend() {
     unknown: 'var(--color-muted)',
   }[status]
 
-  const statusLabel = {
-    above: 'Above baseline',
-    within: 'Within baseline',
-    below: 'Below baseline',
-    unknown: '—',
-  }[status]
+  const statusLabel = (locale === 'de'
+    ? {
+        above: 'Über Baseline',
+        within: 'Innerhalb Baseline',
+        below: 'Unter Baseline',
+        unknown: '—',
+      }
+    : {
+        above: 'Above baseline',
+        within: 'Within baseline',
+        below: 'Below baseline',
+        unknown: '—',
+      })[status]
 
   const isEmpty = values.filter((v) => v != null).length < 5
 
@@ -428,7 +442,7 @@ export default function HRVTrend() {
       <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
         <div>
           <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
-            HRV · last 30 days
+            {locale === 'de' ? 'HRV · letzte 30 Tage' : 'HRV · last 30 days'}
           </span>
           <div className="flex items-baseline gap-2 mt-0.5">
             <span
@@ -447,27 +461,27 @@ export default function HRVTrend() {
         <div className="flex items-center gap-4 flex-wrap">
           {baseline != null && (
             <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
-              baseline ~{baseline}
+              {locale === 'de' ? 'Baseline' : 'baseline'} ~{baseline}
             </span>
           )}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#30D158' }} />
-              <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>ABOVE</span>
+              <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{locale === 'de' ? 'ÜBER' : 'ABOVE'}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-amber)' }} />
-              <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>WITHIN</span>
+              <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{locale === 'de' ? 'INNEN' : 'WITHIN'}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-alert)' }} />
-              <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>BELOW</span>
+              <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{locale === 'de' ? 'UNTER' : 'BELOW'}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <Chart values={values} bands={bands} dates={dates} />
+      <Chart values={values} bands={bands} dates={dates} locale={locale} />
     </div>
   )
 }

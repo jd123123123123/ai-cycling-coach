@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocale } from '../../contexts/LocaleContext'
 
 const PRESETS = [7, 14, 30] as const
 
@@ -10,6 +11,7 @@ export default function WindowToggle({
   value: number
   onChange: (days: number) => void
 }) {
+  const { locale } = useLocale()
   const isPreset = (PRESETS as readonly number[]).includes(value)
   const [customOpen, setCustomOpen] = useState(!isPreset)
 
@@ -49,7 +51,7 @@ export default function WindowToggle({
         }}
         aria-pressed={customOpen}
       >
-        Custom
+        {locale === 'de' ? 'Benutzerdefiniert' : 'Custom'}
       </button>
       {customOpen && (
         <input
@@ -68,7 +70,7 @@ export default function WindowToggle({
             color: 'var(--color-ink)',
             border: '1px solid var(--color-rule)',
           }}
-          aria-label="Custom day count"
+          aria-label={locale === 'de' ? 'Benutzerdefinierte Tagesanzahl' : 'Custom day count'}
         />
       )}
     </div>

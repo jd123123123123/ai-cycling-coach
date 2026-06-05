@@ -4,6 +4,8 @@ import { X, Sparkles } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchDatasets, type DatasetIntrospection } from '../../api/analytics'
 import ChartCanvas from './ChartCanvas'
+import { useLocale } from '../../contexts/LocaleContext'
+import type { Locale } from '../../i18n/strings'
 import type {
   Aggregation,
   ChartSpec,
@@ -27,11 +29,11 @@ import type {
 
 const NUM_AGGS: Aggregation[] = ['sum', 'avg', 'min', 'max', 'p50', 'p95']
 const TIME_GRAINS: TimeGrain[] = ['day', 'week', 'month', 'year']
-const MARKS: { id: MarkType; label: string; emoji: string }[] = [
-  { id: 'line', label: 'Line', emoji: '➰' },
-  { id: 'area', label: 'Area', emoji: '🏔' },
-  { id: 'bar', label: 'Bar', emoji: '▮' },
-  { id: 'scatter', label: 'Scatter', emoji: '⊹' },
+const MARKS: { id: MarkType; label: string; labelDe: string; emoji: string }[] = [
+  { id: 'line', label: 'Line', labelDe: 'Linie', emoji: '➰' },
+  { id: 'area', label: 'Area', labelDe: 'Fläche', emoji: '🏔' },
+  { id: 'bar', label: 'Bar', labelDe: 'Balken', emoji: '▮' },
+  { id: 'scatter', label: 'Scatter', labelDe: 'Streuung', emoji: '⊹' },
 ]
 
 const FRIENDLY_LABEL: Record<string, string> = {
@@ -56,8 +58,42 @@ const FRIENDLY_LABEL: Record<string, string> = {
   weight_kg: 'Weight (kg)',
 }
 
-function pretty(col: string): string {
-  return FRIENDLY_LABEL[col] ?? col.replace(/_/g, ' ')
+const FRIENDLY_LABEL_DE: Record<string, string> = {
+  started_at: 'Datum',
+  date: 'Datum',
+  sport: 'Sportart',
+  duration_seconds: 'Dauer (s)',
+  distance_meters: 'Distanz (m)',
+  tss: 'TSS',
+  normalized_power: 'Normalisierte Leistung',
+  average_power: 'Durchschnittsleistung',
+  average_hr: 'Durchschnitts-HR',
+  max_hr: 'Max-HR',
+  calories: 'Kalorien',
+  source: 'Quelle',
+  sleep_score: 'Schlafwert',
+  hrv_status: 'HRV',
+  body_battery: 'Body Battery',
+  resting_hr: 'Ruhe-HR',
+  stress_level: 'Stress',
+  steps: 'Schritte',
+  weight_kg: 'Gewicht (kg)',
+}
+
+function pretty(col: string, locale: Locale = 'en'): string {
+  const map = locale === 'de' ? FRIENDLY_LABEL_DE : FRIENDLY_LABEL
+  return map[col] ?? FRIENDLY_LABEL[col] ?? col.replace(/_/g, ' ')
+}
+
+const GRAIN_LABEL_DE: Record<TimeGrain, string> = {
+  day: 'Tag',
+  week: 'Woche',
+  month: 'Monat',
+  year: 'Jahr',
+}
+
+function grainLabel(g: TimeGrain, locale: Locale): string {
+  return locale === 'de' ? GRAIN_LABEL_DE[g] : g
 }
 
 interface ChartBuilderProps {
@@ -111,7 +147,7 @@ function aliasFor(column: string, agg: Aggregation): string {
   return `${agg}_${column === '*' ? 'count' : column}`
 }
 
-function buildSpec(s: BuilderState, referenceLines: ReferenceLine[]): ChartSpec {
+function buildSpec(s: BuilderState, referenceLines: ReferenceLine[], locale: Locale): ChartSpec {
   const xAlias = s.xColumn === 'started_at' || s.xColumn === 'date' ? 'date' : s.xColumn
   const multi = s.extraMeasures.length > 0
 
@@ -129,10 +165,10 @@ function buildSpec(s: BuilderState, referenceLines: ReferenceLine[]): ChartSpec 
   const measureStyles: MeasureStyle[] | undefined =
     multi || s.yMark !== '' || s.yAxis !== ''
       ? [
-          { key: allMeasures[0].alias, label: pretty(s.yColumn), ...(s.yMark ? { mark: s.yMark } : {}), ...(s.yAxis ? { axis: s.yAxis } : {}) },
+          { key: allMeasures[0].alias, label: pretty(s.yColumn, locale), ...(s.yMark ? { mark: s.yMark } : {}), ...(s.yAxis ? { axis: s.yAxis } : {}) },
           ...s.extraMeasures.map((m) => ({
             key: aliasFor(m.column, m.agg),
-            label: pretty(m.column),
+            label: pretty(m.column, locale),
             ...(m.mark ? { mark: m.mark } : {}),
             ...(m.axis ? { axis: m.axis } : {}),
           })),
@@ -143,7 +179,11 @@ function buildSpec(s: BuilderState, referenceLines: ReferenceLine[]): ChartSpec 
   const useSplit = !multi && s.seriesColumn !== ''
 
   return {
-    title: s.title.trim() || (multi ? allMeasures.map((m) => pretty(m.column)).join(' & ') : `${pretty(s.yColumn)} by ${pretty(s.xColumn)}`),
+    title: s.title.trim() || (multi
+      ? allMeasures.map((m) => pretty(m.column, locale)).join(' & ')
+      : locale === 'de'
+        ? `${pretty(s.yColumn, locale)} nach ${pretty(s.xColumn, locale)}`
+        : `${pretty(s.yColumn, locale)} by ${pretty(s.xColumn, locale)}`),
     mark: s.mark,
     smooth: s.smooth,
     stacked: s.stacked && useSplit,
@@ -169,6 +209,7 @@ function buildSpec(s: BuilderState, referenceLines: ReferenceLine[]): ChartSpec 
 }
 
 export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBuilderProps) {
+  const { locale } = useLocale()
   const { data: datasets } = useQuery<DatasetIntrospection>({
     queryKey: ['analytics', 'datasets'],
     queryFn: fetchDatasets,
@@ -225,7 +266,7 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
   const stringCols = allCols.filter((c) => c.type === 'string')
 
   // Live spec for preview.
-  const spec = useMemo(() => buildSpec(state, referenceLines), [state, referenceLines])
+  const spec = useMemo(() => buildSpec(state, referenceLines, locale), [state, referenceLines, locale])
 
   if (!open) return null
 
@@ -264,13 +305,15 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                 className="eyebrow"
                 style={{ color: 'var(--color-ink)', letterSpacing: '0.28em', fontSize: 11, fontWeight: 600 }}
               >
-                {initial ? 'Edit chart' : 'New chart'}
+                {initial
+                  ? locale === 'de' ? 'Diagramm bearbeiten' : 'Edit chart'
+                  : locale === 'de' ? 'Neues Diagramm' : 'New chart'}
               </span>
             </div>
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={locale === 'de' ? 'Schließen' : 'Close'}
               className="rounded-full w-8 h-8 inline-flex items-center justify-center"
               style={{ color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)' }}
             >
@@ -285,22 +328,22 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
               className="flex flex-col gap-4 p-5"
               style={{ borderRight: '1px solid var(--color-rule)', backgroundColor: 'var(--color-paper-2)' }}
             >
-              <Field label="Dataset">
+              <Field label={locale === 'de' ? 'Datensatz' : 'Dataset'}>
                 <Select
                   value={state.dataset}
                   onChange={(v) => setState({ ...state, dataset: v as DatasetId })}
                   options={[
-                    { value: 'activities', label: 'Activities' },
-                    { value: 'daily_metrics', label: 'Daily metrics' },
+                    { value: 'activities', label: locale === 'de' ? 'Aktivitäten' : 'Activities' },
+                    { value: 'daily_metrics', label: locale === 'de' ? 'Tageswerte' : 'Daily metrics' },
                   ]}
                 />
               </Field>
 
-              <Field label="X axis (group by)">
+              <Field label={locale === 'de' ? 'X-Achse (gruppieren nach)' : 'X axis (group by)'}>
                 <Select
                   value={state.xColumn}
                   onChange={(v) => setState({ ...state, xColumn: v })}
-                  options={allCols.map((c) => ({ value: c.name, label: pretty(c.name) }))}
+                  options={allCols.map((c) => ({ value: c.name, label: pretty(c.name, locale) }))}
                 />
                 {dateCols.some((c) => c.name === state.xColumn) && (
                   <Select
@@ -308,16 +351,17 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                     value={state.xGrain}
                     onChange={(v) => setState({ ...state, xGrain: v as TimeGrain })}
                     options={[
-                      { value: '', label: 'No bucket' },
-                      ...TIME_GRAINS.map((g) => ({ value: g, label: g })),
+                      { value: '', label: locale === 'de' ? 'Kein Intervall' : 'No bucket' },
+                      ...TIME_GRAINS.map((g) => ({ value: g, label: grainLabel(g, locale) })),
                     ]}
                   />
                 )}
               </Field>
 
-              <Field label="Metrics">
+              <Field label={locale === 'de' ? 'Metriken' : 'Metrics'}>
                 <MetricRow
-                  columnOptions={[{ value: '*', label: 'Count rows' }, ...numericCols.map((c) => ({ value: c.name, label: pretty(c.name) }))]}
+                  locale={locale}
+                  columnOptions={[{ value: '*', label: locale === 'de' ? 'Zeilen zählen' : 'Count rows' }, ...numericCols.map((c) => ({ value: c.name, label: pretty(c.name, locale) }))]}
                   column={state.yColumn}
                   agg={state.yAgg}
                   mark={state.yMark}
@@ -328,7 +372,8 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                 {state.extraMeasures.map((m, i) => (
                   <MetricRow
                     key={i}
-                    columnOptions={[{ value: '*', label: 'Count rows' }, ...numericCols.map((c) => ({ value: c.name, label: pretty(c.name) }))]}
+                    locale={locale}
+                    columnOptions={[{ value: '*', label: locale === 'de' ? 'Zeilen zählen' : 'Count rows' }, ...numericCols.map((c) => ({ value: c.name, label: pretty(c.name, locale) }))]}
                     column={m.column}
                     agg={m.agg}
                     mark={m.mark}
@@ -348,23 +393,29 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                     className="mt-1 text-[12px] rounded-[10px] py-1.5"
                     style={{ color: 'var(--color-forest-2)', border: '1px dashed var(--color-rule)' }}
                   >
-                    + Add metric
+                    {locale === 'de' ? '+ Metrik hinzufügen' : '+ Add metric'}
                   </button>
                 )}
               </Field>
 
-              <Field label="Split into series (optional)">
+              <Field label={locale === 'de' ? 'In Serien aufteilen (optional)' : 'Split into series (optional)'}>
                 <Select
                   value={state.extraMeasures.length > 0 ? '' : state.seriesColumn}
                   onChange={(v) => setState({ ...state, seriesColumn: v })}
                   options={[
-                    { value: '', label: state.extraMeasures.length > 0 ? 'Disabled — using multiple metrics' : 'None — single series' },
-                    ...stringCols.map((c) => ({ value: c.name, label: pretty(c.name) })),
+                    {
+                      value: '',
+                      label:
+                        state.extraMeasures.length > 0
+                          ? locale === 'de' ? 'Deaktiviert — mehrere Metriken aktiv' : 'Disabled — using multiple metrics'
+                          : locale === 'de' ? 'Keine — einzelne Serie' : 'None — single series',
+                    },
+                    ...stringCols.map((c) => ({ value: c.name, label: pretty(c.name, locale) })),
                   ]}
                 />
               </Field>
 
-              <Field label="Chart type">
+              <Field label={locale === 'de' ? 'Diagrammtyp' : 'Chart type'}>
                 <div className="grid grid-cols-2 gap-2">
                   {MARKS.map((m) => {
                     const active = state.mark === m.id
@@ -382,19 +433,19 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                         }}
                       >
                         <span aria-hidden>{m.emoji}</span>
-                        {m.label}
+                        {locale === 'de' ? m.labelDe : m.label}
                       </button>
                     )
                   })}
                 </div>
               </Field>
 
-              <Field label="Title">
+              <Field label={locale === 'de' ? 'Titel' : 'Title'}>
                 <input
                   type="text"
                   value={state.title}
                   onChange={(e) => setState({ ...state, title: e.target.value })}
-                  placeholder="Auto from selection"
+                  placeholder={locale === 'de' ? 'Automatisch aus Auswahl' : 'Auto from selection'}
                   className="w-full rounded-[10px] px-3 py-2 text-[13px]"
                   style={{
                     backgroundColor: 'var(--color-paper)',
@@ -404,7 +455,7 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                 />
               </Field>
 
-              <Field label="Reference lines (optional)">
+              <Field label={locale === 'de' ? 'Referenzlinien (optional)' : 'Reference lines (optional)'}>
                 <div className="flex flex-col gap-2">
                   {referenceLines.map((r, i) => (
                     <div key={i} className="flex gap-1.5 items-center">
@@ -412,24 +463,24 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                         onChange={(e) => setReferenceLines(referenceLines.map((x, j) => j === i ? { ...x, kind: e.target.value as ReferenceLine['kind'] } : x))}
                         className="rounded-[10px] px-2 py-1.5 text-[12px]"
                         style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }}>
-                        <option value="value">value</option>
-                        <option value="average">average</option>
-                        <option value="profile">FTP/zone</option>
-                        <option value="band">band</option>
+                        <option value="value">{locale === 'de' ? 'Wert' : 'value'}</option>
+                        <option value="average">{locale === 'de' ? 'Durchschnitt' : 'average'}</option>
+                        <option value="profile">{locale === 'de' ? 'FTP/Zone' : 'FTP/zone'}</option>
+                        <option value="band">{locale === 'de' ? 'Band' : 'band'}</option>
                       </select>
                       {r.kind === 'value' && (
-                        <input type="number" value={r.value ?? ''} placeholder="value"
+                        <input type="number" value={r.value ?? ''} placeholder={locale === 'de' ? 'Wert' : 'value'}
                           onChange={(e) => setReferenceLines(referenceLines.map((x, j) => j === i ? { ...x, value: Number(e.target.value) } : x))}
                           className="w-20 rounded-[10px] px-2 py-1.5 text-[12px]"
                           style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }} />
                       )}
                       {r.kind === 'band' && (
                         <>
-                          <input type="number" value={r.value ?? ''} placeholder="min"
+                          <input type="number" value={r.value ?? ''} placeholder={locale === 'de' ? 'Min' : 'min'}
                             onChange={(e) => setReferenceLines(referenceLines.map((x, j) => j === i ? { ...x, value: Number(e.target.value) } : x))}
                             className="w-16 rounded-[10px] px-2 py-1.5 text-[12px]"
                             style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }} />
-                          <input type="number" value={r.valueMax ?? ''} placeholder="max"
+                          <input type="number" value={r.valueMax ?? ''} placeholder={locale === 'de' ? 'Max' : 'max'}
                             onChange={(e) => setReferenceLines(referenceLines.map((x, j) => j === i ? { ...x, valueMax: Number(e.target.value) } : x))}
                             className="w-16 rounded-[10px] px-2 py-1.5 text-[12px]"
                             style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }} />
@@ -444,7 +495,7 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                           <option value="lthr">LTHR</option>
                         </select>
                       )}
-                      <button type="button" aria-label="Remove reference line"
+                      <button type="button" aria-label={locale === 'de' ? 'Referenzlinie entfernen' : 'Remove reference line'}
                         onClick={() => setReferenceLines(referenceLines.filter((_, j) => j !== i))}
                         className="ml-auto px-2 rounded-[10px] text-[13px]"
                         style={{ color: 'var(--color-alert)', border: '1px solid var(--color-rule)' }}>×</button>
@@ -455,7 +506,7 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                       onClick={() => setReferenceLines([...referenceLines, { kind: 'average' }])}
                       className="text-[12px] rounded-[10px] py-1.5"
                       style={{ color: 'var(--color-forest-2)', border: '1px dashed var(--color-rule)' }}>
-                      + Add reference line
+                      {locale === 'de' ? '+ Referenzlinie hinzufügen' : '+ Add reference line'}
                     </button>
                   )}
                 </div>
@@ -464,14 +515,14 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
               <div className="flex flex-col gap-2">
                 {(state.mark === 'line' || state.mark === 'area') && (
                   <Toggle
-                    label="Smooth curve"
+                    label={locale === 'de' ? 'Kurve glätten' : 'Smooth curve'}
                     value={state.smooth}
                     onChange={(v) => setState({ ...state, smooth: v })}
                   />
                 )}
                 {state.seriesColumn !== '' && (
                   <Toggle
-                    label="Stack series"
+                    label={locale === 'de' ? 'Serien stapeln' : 'Stack series'}
                     value={state.stacked}
                     onChange={(v) => setState({ ...state, stacked: v })}
                   />
@@ -485,7 +536,7 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                 className="eyebrow"
                 style={{ color: 'var(--color-muted)', letterSpacing: '0.28em', fontSize: 10 }}
               >
-                Live preview
+                {locale === 'de' ? 'Live-Vorschau' : 'Live preview'}
               </span>
               <div
                 className="rounded-[14px] p-4"
@@ -506,7 +557,9 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
             style={{ borderTop: '1px solid var(--color-rule)', backgroundColor: 'var(--color-paper-2)' }}
           >
             <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-              Charts query your own data; nothing is shared.
+              {locale === 'de'
+                ? 'Diagramme greifen auf deine eigenen Daten zu; nichts wird geteilt.'
+                : 'Charts query your own data; nothing is shared.'}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -518,7 +571,7 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                   border: '1px solid var(--color-rule)',
                 }}
               >
-                Cancel
+                {locale === 'de' ? 'Abbrechen' : 'Cancel'}
               </button>
               <button
                 type="button"
@@ -529,7 +582,9 @@ export default function ChartBuilder({ open, onClose, onSave, initial }: ChartBu
                   backgroundColor: 'var(--color-ink)',
                 }}
               >
-                {initial ? 'Update chart' : 'Add to dashboard'}
+                {initial
+                  ? locale === 'de' ? 'Diagramm aktualisieren' : 'Update chart'
+                  : locale === 'de' ? 'Zum Dashboard hinzufügen' : 'Add to dashboard'}
               </button>
             </div>
           </footer>
@@ -627,7 +682,7 @@ function Toggle({
 }
 
 function MetricRow({
-  columnOptions, column, agg, mark, axis, showStyle, onChange, onRemove,
+  columnOptions, column, agg, mark, axis, showStyle, onChange, onRemove, locale,
 }: {
   columnOptions: { value: string; label: string }[]
   column: string
@@ -637,6 +692,7 @@ function MetricRow({
   showStyle: boolean
   onChange: (p: Partial<{ column: string; agg: Aggregation; mark: MarkType | ''; axis: '' | 'left' | 'right' }>) => void
   onRemove?: () => void
+  locale: Locale
 }) {
   return (
     <div className="flex flex-col gap-1.5 mb-2 pb-2" style={{ borderBottom: showStyle ? '1px solid var(--color-rule)' : 'none' }}>
@@ -652,7 +708,7 @@ function MetricRow({
           {(column === '*' ? (['count'] as string[]) : (NUM_AGGS as string[])).map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
         {onRemove && (
-          <button type="button" onClick={onRemove} aria-label="Remove metric"
+          <button type="button" onClick={onRemove} aria-label={locale === 'de' ? 'Metrik entfernen' : 'Remove metric'}
             className="px-2 rounded-[10px] text-[13px]" style={{ color: 'var(--color-alert)', border: '1px solid var(--color-rule)' }}>×</button>
         )}
       </div>
@@ -661,17 +717,17 @@ function MetricRow({
           <select value={mark} onChange={(e) => onChange({ mark: e.target.value as MarkType | '' })}
             className="flex-1 rounded-[10px] px-2 py-1.5 text-[12px]"
             style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)' }}>
-            <option value="">mark: auto</option>
-            <option value="line">line</option>
-            <option value="area">area</option>
-            <option value="bar">bar</option>
+            <option value="">{locale === 'de' ? 'Form: auto' : 'mark: auto'}</option>
+            <option value="line">{locale === 'de' ? 'Linie' : 'line'}</option>
+            <option value="area">{locale === 'de' ? 'Fläche' : 'area'}</option>
+            <option value="bar">{locale === 'de' ? 'Balken' : 'bar'}</option>
           </select>
           <select value={axis} onChange={(e) => onChange({ axis: e.target.value as '' | 'left' | 'right' })}
             className="rounded-[10px] px-2 py-1.5 text-[12px]"
             style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)' }}>
-            <option value="">axis: auto</option>
-            <option value="left">left</option>
-            <option value="right">right</option>
+            <option value="">{locale === 'de' ? 'Achse: auto' : 'axis: auto'}</option>
+            <option value="left">{locale === 'de' ? 'links' : 'left'}</option>
+            <option value="right">{locale === 'de' ? 'rechts' : 'right'}</option>
           </select>
         </div>
       )}

@@ -4,6 +4,7 @@ import { Flame, TrendingUp, Target, Sparkles } from 'lucide-react'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { usePMC } from '../../hooks/usePMC'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { DailyMetric } from '../../api/dashboard'
 
 /**
@@ -58,6 +59,7 @@ function minBy<T>(xs: T[], get: (x: T) => number | null | undefined): T | null {
 }
 
 export default function MomentumChips() {
+  const { locale } = useLocale()
   const today = useMemo(() => new Date(), [])
   const { data: brief } = useCoachBrief()
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 14), [today]), today)
@@ -86,7 +88,7 @@ export default function MomentumChips() {
         chips.push({
           key: 'sleep-best',
           icon: <Sparkles size={11} strokeWidth={2.2} />,
-          label: `Best sleep in 14 d · ${sleep}`,
+          label: locale === 'de' ? `Bester Schlaf in 14 T · ${sleep}` : `Best sleep in 14 d · ${sleep}`,
           tone: 'good',
         })
       }
@@ -97,7 +99,7 @@ export default function MomentumChips() {
         chips.push({
           key: 'hrv-best',
           icon: <TrendingUp size={11} strokeWidth={2.2} />,
-          label: `Top HRV in 14 d · ${hrv}`,
+          label: locale === 'de' ? `Top-HRV in 14 T · ${hrv}` : `Top HRV in 14 d · ${hrv}`,
           tone: 'good',
         })
       }
@@ -108,7 +110,7 @@ export default function MomentumChips() {
         chips.push({
           key: 'rhr-best',
           icon: <TrendingUp size={11} strokeWidth={2.2} />,
-          label: `Lowest RHR in 14 d · ${rhr}`,
+          label: locale === 'de' ? `Niedrigste RHR in 14 T · ${rhr}` : `Lowest RHR in 14 d · ${rhr}`,
           tone: 'good',
         })
       }
@@ -136,7 +138,7 @@ export default function MomentumChips() {
       chips.push({
         key: 'logged-streak',
         icon: <Flame size={11} strokeWidth={2.2} />,
-        label: `${streak}-day logged streak`,
+        label: locale === 'de' ? `${streak}-Tage-Serie erfasst` : `${streak}-day logged streak`,
         tone: streak >= 7 ? 'good' : 'neutral',
       })
     }
@@ -154,8 +156,12 @@ export default function MomentumChips() {
     // weekend countdown for races inside a month, else weeks-to-event.
     const text =
       daysToGoal <= 28
-        ? `${daysToGoal} d to ${goalName}`
-        : `${Math.ceil(daysToGoal / 7)} weeks to ${goalName}`
+        ? locale === 'de'
+          ? `${daysToGoal} T bis ${goalName}`
+          : `${daysToGoal} d to ${goalName}`
+        : locale === 'de'
+          ? `${Math.ceil(daysToGoal / 7)} Wochen bis ${goalName}`
+          : `${Math.ceil(daysToGoal / 7)} weeks to ${goalName}`
     chips.push({
       key: 'event-countdown',
       icon: <Target size={11} strokeWidth={2.2} />,
@@ -179,7 +185,7 @@ export default function MomentumChips() {
         chips.push({
           key: 'ctl-milestone',
           icon: <TrendingUp size={11} strokeWidth={2.2} />,
-          label: `~${daysToTarget} d to CTL ${nextRound}`,
+          label: locale === 'de' ? `~${daysToTarget} T bis CTL ${nextRound}` : `~${daysToTarget} d to CTL ${nextRound}`,
           tone: 'good',
         })
       }

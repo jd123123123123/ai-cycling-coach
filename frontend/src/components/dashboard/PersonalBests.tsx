@@ -3,7 +3,9 @@ import { subDays, format, isAfter } from 'date-fns'
 import { Trophy, Zap, Timer, Gauge, Route, Share2 } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useCountUp } from '../../hooks/useCountUp'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { ActivityRead } from '../../api/dashboard'
+import { de } from 'date-fns/locale'
 
 // Personal Records — the single most addictive feature in any sports app.
 // Every Strava KOM, every Whoop monthly best, every Garmin Personal Record
@@ -35,7 +37,7 @@ function fmtPace(minPerKm: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-function computePRs(activities: ActivityRead[], sevenDaysAgo: Date): PR[] {
+function computePRs(activities: ActivityRead[], sevenDaysAgo: Date, locale: 'en' | 'de'): PR[] {
   const prs: PR[] = []
 
   const cycling = activities.filter((a) => a.sport === 'cycling')
@@ -49,7 +51,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date): PR[] {
     const km = longestRide.distance_meters / 1000
     prs.push({
       key: 'longest-ride',
-      label: 'Longest ride',
+      label: locale === 'de' ? 'Längste Ausfahrt' : 'Longest ride',
       value: `${km.toFixed(1)} km`,
       rawValue: km,
       date: longestRide.started_at,
@@ -68,7 +70,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date): PR[] {
   if (peakNP?.normalized_power) {
     prs.push({
       key: 'peak-np',
-      label: 'Peak power',
+      label: locale === 'de' ? 'Spitzenleistung' : 'Peak power',
       value: `${Math.round(peakNP.normalized_power)} W`,
       rawValue: peakNP.normalized_power,
       date: peakNP.started_at,
@@ -87,7 +89,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date): PR[] {
   if (biggestTSS?.tss) {
     prs.push({
       key: 'biggest-tss',
-      label: 'Biggest session',
+      label: locale === 'de' ? 'Größte Einheit' : 'Biggest session',
       value: `${Math.round(biggestTSS.tss)} TSS`,
       rawValue: biggestTSS.tss,
       date: biggestTSS.started_at,
@@ -107,7 +109,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date): PR[] {
     const h = longestCyclingDur.duration_seconds / 3600
     prs.push({
       key: 'longest-ride-time',
-      label: 'Longest time',
+      label: locale === 'de' ? 'Längste Dauer' : 'Longest time',
       value: h >= 1 ? `${h.toFixed(1)} h` : `${Math.round(longestCyclingDur.duration_seconds / 60)} min`,
       rawValue: h,
       date: longestCyclingDur.started_at,
@@ -130,7 +132,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date): PR[] {
   if (fastestPace) {
     prs.push({
       key: 'fastest-pace',
-      label: 'Fastest pace',
+      label: locale === 'de' ? 'Schnellstes Tempo' : 'Fastest pace',
       value: `${fmtPace(fastestPace.pace)} /km`,
       rawValue: fastestPace.pace,
       date: fastestPace.a.started_at,
@@ -150,7 +152,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date): PR[] {
     const km = longestRun.distance_meters / 1000
     prs.push({
       key: 'longest-run',
-      label: 'Longest run',
+      label: locale === 'de' ? 'Längster Lauf' : 'Longest run',
       value: `${km.toFixed(1)} km`,
       rawValue: km,
       date: longestRun.started_at,
@@ -165,7 +167,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date): PR[] {
   return prs.filter((pr) => pr.rawValue > 0)
 }
 
-function PRCard({ pr }: { pr: PR }) {
+function PRCard({ pr, locale }: { pr: PR; locale: 'en' | 'de' }) {
   const animatedValue = useCountUp(pr.rawValue, {
     durationMs: 800,
     digits: pr.rawValue < 10 ? 1 : 0,
@@ -205,7 +207,7 @@ function PRCard({ pr }: { pr: PR }) {
             className="eyebrow"
             style={{ color: pr.accent, fontSize: 8, letterSpacing: '0.18em' }}
           >
-            NEW
+            {locale === 'de' ? 'NEU' : 'NEW'}
           </span>
         </div>
       )}
@@ -237,7 +239,7 @@ function PRCard({ pr }: { pr: PR }) {
         className="num-mono text-[10px]"
         style={{ color: 'var(--color-muted)' }}
       >
-        {format(new Date(pr.date), 'MMM d')}
+        {format(new Date(pr.date), 'MMM d', locale === 'de' ? { locale: de } : undefined)}
         {pr.activityTitle ? ` · ${pr.activityTitle.slice(0, 18)}${pr.activityTitle.length > 18 ? '…' : ''}` : ''}
       </span>
 
@@ -247,10 +249,12 @@ function PRCard({ pr }: { pr: PR }) {
         type="button"
         onClick={(e) => {
           e.stopPropagation()
-          const text = `Just set a new personal best — ${pr.label.toLowerCase()}: ${pr.value}. This is the fitness the last block earned. 🚴`
+          const text = locale === 'de'
+            ? `Gerade eine neue Bestleistung aufgestellt — ${pr.label.toLowerCase()}: ${pr.value}. Das ist die Fitness, die der letzte Block gebracht hat. 🚴`
+            : `Just set a new personal best — ${pr.label.toLowerCase()}: ${pr.value}. This is the fitness the last block earned. 🚴`
           const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> }
           if (nav.share) {
-            nav.share({ title: 'Personal best', text }).catch(() => {})
+            nav.share({ title: locale === 'de' ? 'Bestleistung' : 'Personal best', text }).catch(() => {})
           } else if (navigator.clipboard?.writeText) {
             navigator.clipboard.writeText(text).catch(() => {})
           }
@@ -263,8 +267,8 @@ function PRCard({ pr }: { pr: PR }) {
         }}
         onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
         onMouseLeave={(e) => { e.currentTarget.style.opacity = pr.isNew ? '0.9' : '0' }}
-        aria-label={`Share ${pr.label}`}
-        title="Share"
+        aria-label={locale === 'de' ? `${pr.label} teilen` : `Share ${pr.label}`}
+        title={locale === 'de' ? 'Teilen' : 'Share'}
       >
         <Share2 size={12} strokeWidth={2} />
       </button>
@@ -273,6 +277,7 @@ function PRCard({ pr }: { pr: PR }) {
 }
 
 export default function PersonalBests() {
+  const { locale } = useLocale()
   const today = new Date()
   const ninetyDaysAgo = subDays(today, 90)
   const sevenDaysAgo = subDays(today, 7)
@@ -280,9 +285,9 @@ export default function PersonalBests() {
   const { data, isLoading } = useActivitiesRange(ninetyDaysAgo, today)
 
   const prs = useMemo(
-    () => computePRs(data?.activities ?? [], sevenDaysAgo),
+    () => computePRs(data?.activities ?? [], sevenDaysAgo, locale),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data],
+    [data, locale],
   )
 
   if (isLoading) {
@@ -330,7 +335,9 @@ export default function PersonalBests() {
             letterSpacing: '0.22em',
           }}
         >
-          {hasNew ? 'Personal records · new this week' : 'Personal records · last 90 days'}
+          {hasNew
+            ? (locale === 'de' ? 'Bestleistungen · neu diese Woche' : 'Personal records · new this week')
+            : (locale === 'de' ? 'Bestleistungen · letzte 90 Tage' : 'Personal records · last 90 days')}
         </span>
       </div>
 
@@ -342,7 +349,7 @@ export default function PersonalBests() {
         {prs
           .sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0))
           .map((pr) => (
-            <PRCard key={pr.key} pr={pr} />
+            <PRCard key={pr.key} pr={pr} locale={locale} />
           ))}
       </div>
     </div>

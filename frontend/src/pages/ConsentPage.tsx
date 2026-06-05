@@ -3,17 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { Check, Shield } from 'lucide-react'
 import { CONSENT_TYPES } from '../types/consent'
 import { grantConsent } from '../api/consent'
+import { useLocale } from '../contexts/LocaleContext'
 
-// Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
-const steps = [
-  { label: 'Account' },
-  { label: 'Consent' },
-  { label: 'Goals' },
-]
 const ACTIVE_STEP = 1
 
 export default function ConsentPage() {
   const navigate = useNavigate()
+  const { locale } = useLocale()
+
+  // Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
+  const steps = [
+    { label: locale === 'de' ? 'Konto' : 'Account' },
+    { label: locale === 'de' ? 'Einwilligung' : 'Consent' },
+    { label: locale === 'de' ? 'Ziele' : 'Goals' },
+  ]
 
   // Track which consent types are checked
   const [checked, setChecked] = useState<Record<string, boolean>>(
@@ -34,7 +37,11 @@ export default function ConsentPage() {
     setError(null)
 
     if (!canSubmit) {
-      setError('You must grant the required consents to continue.')
+      setError(
+        locale === 'de'
+          ? 'Du musst die erforderlichen Einwilligungen erteilen, um fortzufahren.'
+          : 'You must grant the required consents to continue.',
+      )
       return
     }
 
@@ -56,7 +63,11 @@ export default function ConsentPage() {
       navigate('/profile-setup', { replace: true })
     } catch (err: unknown) {
       console.error('Consent submission failed:', err)
-      setError('Failed to save consents. Please try again.')
+      setError(
+        locale === 'de'
+          ? 'Einwilligungen konnten nicht gespeichert werden. Bitte versuche es erneut.'
+          : 'Failed to save consents. Please try again.',
+      )
     } finally {
       setSubmitting(false)
     }
@@ -82,7 +93,7 @@ export default function ConsentPage() {
               className="eyebrow"
               style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
             >
-              Consent
+              {locale === 'de' ? 'Einwilligung' : 'Consent'}
             </span>
           </div>
 
@@ -91,10 +102,12 @@ export default function ConsentPage() {
             className="num-display leading-[0.95]"
             style={{ fontSize: 'clamp(28px, 5vw, 36px)', color: 'var(--color-ink)' }}
           >
-            Your data, your call.
+            {locale === 'de' ? 'Deine Daten, deine Entscheidung.' : 'Your data, your call.'}
           </h1>
           <p className="mt-2 text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-            Under GDPR, you must grant each consent separately and deliberately.
+            {locale === 'de'
+              ? 'Gemäß DSGVO musst du jede Einwilligung einzeln und bewusst erteilen.'
+              : 'Under GDPR, you must grant each consent separately and deliberately.'}
           </p>
 
           {/* 3-dot progress strip */}
@@ -180,7 +193,7 @@ export default function ConsentPage() {
                               color: 'var(--color-forest-2)',
                             }}
                           >
-                            Required
+                            {locale === 'de' ? 'Erforderlich' : 'Required'}
                           </span>
                         ) : (
                           <span
@@ -202,7 +215,9 @@ export default function ConsentPage() {
                       </p>
                       {consent.required && (
                         <p className="mt-1.5 text-[12px]" style={{ color: 'var(--color-muted)' }}>
-                          This consent is required to use the service.
+                          {locale === 'de'
+                            ? 'Diese Einwilligung ist erforderlich, um den Dienst zu nutzen.'
+                            : 'This consent is required to use the service.'}
                         </p>
                       )}
                     </div>
@@ -239,12 +254,20 @@ export default function ConsentPage() {
                   minHeight: 44,
                 }}
               >
-                {submitting ? 'Saving your choices…' : 'Continue to profile setup'}
+                {submitting
+                  ? locale === 'de'
+                    ? 'Auswahl wird gespeichert…'
+                    : 'Saving your choices…'
+                  : locale === 'de'
+                    ? 'Weiter zur Profileinrichtung'
+                    : 'Continue to profile setup'}
               </button>
 
               {!canSubmit && (
                 <p className="mt-2 text-center text-[12px]" style={{ color: 'var(--color-muted)' }}>
-                  You must grant the required "Health Data Processing" consent to continue.
+                  {locale === 'de'
+                    ? 'Du musst die erforderliche Einwilligung "Health Data Processing" erteilen, um fortzufahren.'
+                    : 'You must grant the required "Health Data Processing" consent to continue.'}
                 </p>
               )}
             </div>

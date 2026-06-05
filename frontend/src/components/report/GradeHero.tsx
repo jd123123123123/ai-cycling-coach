@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocale } from '../../contexts/LocaleContext'
 import Sparkline from '../dashboard/Sparkline'
 import type { PeriodReport, EvidenceChip } from '../../api/report'
 
@@ -67,6 +68,7 @@ function GradeRing({ score, letter, color }: { score: number | null; letter: str
 }
 
 export default function GradeHero({ report }: { report: PeriodReport }) {
+  const { locale } = useLocale()
   const color = gradeColor(report.grade_letter)
   const delta = report.grade_delta
   return (
@@ -80,10 +82,12 @@ export default function GradeHero({ report }: { report: PeriodReport }) {
     >
       <div className="flex items-center gap-3 flex-wrap mb-3">
         <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
-          PERIOD REPORT · {report.days} DAYS
+          {locale === 'de' ? `ZEITRAUMBERICHT · ${report.days} TAGE` : `PERIOD REPORT · ${report.days} DAYS`}
         </span>
         <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 10 }}>
-          {report.has_baseline ? `vs previous ${report.days} days` : 'no baseline yet'}
+          {report.has_baseline
+            ? (locale === 'de' ? `vs. vorherige ${report.days} Tage` : `vs previous ${report.days} days`)
+            : (locale === 'de' ? 'noch keine Vergleichsbasis' : 'no baseline yet')}
         </span>
       </div>
 
@@ -97,7 +101,7 @@ export default function GradeHero({ report }: { report: PeriodReport }) {
               <span className="num-mono" style={{
                 fontSize: 11, color: delta > 0 ? 'var(--color-good)' : 'var(--color-bad)',
               }}>
-                {delta > 0 ? '▲' : '▼'}{Math.abs(delta)} vs last {report.days}d
+                {delta > 0 ? '▲' : '▼'}{Math.abs(delta)} {locale === 'de' ? `vs. letzte ${report.days}T` : `vs last ${report.days}d`}
               </span>
             )}
             {report.grade_percentile != null && (
@@ -105,7 +109,7 @@ export default function GradeHero({ report }: { report: PeriodReport }) {
                 fontSize: 10, color: 'var(--color-ink-2)',
                 backgroundColor: 'color-mix(in srgb, var(--color-ink) 6%, transparent)',
               }}>
-                Top {Math.max(1, 100 - report.grade_percentile)}% · your history
+                {locale === 'de' ? `Top ${Math.max(1, 100 - report.grade_percentile)}% · deine Historie` : `Top ${Math.max(1, 100 - report.grade_percentile)}% · your history`}
               </span>
             )}
             {report.composite_trend.length >= 3 && (

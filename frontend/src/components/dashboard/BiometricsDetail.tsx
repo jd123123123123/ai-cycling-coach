@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { format, subDays } from 'date-fns'
+import { de } from 'date-fns/locale'
 import { Heart, Moon, Zap, Waves, Activity, ArrowUpRight, Gauge, Wind, Mountain } from 'lucide-react'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
@@ -9,7 +10,9 @@ import type { DailyMetric } from '../../api/dashboard'
 import { efficiencyFactorSeries, movingAverage } from '../../utils/advanced-metrics'
 import Sparkline from './Sparkline'
 import IntradayModal, { type IntradayMetric } from './IntradayModal'
+import { useLocale } from '../../contexts/LocaleContext'
 
+type Loc = 'en' | 'de'
 type Range = 14 | 30 | 90
 
 const RANGES: { key: Range; label: string }[] = [
@@ -21,6 +24,7 @@ const RANGES: { key: Range; label: string }[] = [
 interface BiometricSpec {
   key: keyof DailyMetric
   label: string
+  labelDe: string
   unit: string
   color: string
   icon: React.ReactNode
@@ -30,6 +34,7 @@ interface BiometricSpec {
   warn?: number
   /** Descriptive copy under the title */
   copy: string
+  copyDe: string
   /** If set, clicking a point on this chart opens the IntradayModal with this metric.
    *  Sleep and resting HR have no per-minute granularity from Garmin — leave null. */
   intraday: IntradayMetric | null
@@ -39,6 +44,7 @@ const BIOMETRICS: BiometricSpec[] = [
   {
     key: 'hrv_status',
     label: 'Heart rate variability',
+    labelDe: 'Herzfrequenzvariabilit\u00e4t',
     unit: 'ms',
     color: '#1c4433',
     icon: <Heart size={14} strokeWidth={1.8} />,
@@ -46,11 +52,13 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 60,
     warn: 40,
     copy: 'Morning HRV. Trending up = parasympathetic recovery; down = stress load.',
+    copyDe: 'Morgendliche HRV. Steigend = parasympathische Erholung; fallend = Stressbelastung.',
     intraday: 'hrv',
   },
   {
     key: 'body_battery',
     label: 'Body battery',
+    labelDe: 'Body Battery',
     unit: '/100',
     color: '#2a6147',
     icon: <Zap size={14} strokeWidth={1.8} />,
@@ -58,11 +66,13 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 60,
     warn: 30,
     copy: 'Garmin\u2019s composite energy reserve from HRV + activity + sleep.',
+    copyDe: 'Garmins kombinierte Energiereserve aus HRV + Aktivit\u00e4t + Schlaf.',
     intraday: 'body_battery',
   },
   {
     key: 'sleep_score',
     label: 'Sleep score',
+    labelDe: 'Schlafwert',
     unit: '/100',
     color: '#143555',
     icon: <Moon size={14} strokeWidth={1.8} />,
@@ -70,11 +80,13 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 80,
     warn: 60,
     copy: 'Overall sleep quality. 80+ = restorative; under 60 = deficit accumulating.',
+    copyDe: 'Gesamte Schlafqualit\u00e4t. 80+ = erholsam; unter 60 = wachsendes Defizit.',
     intraday: null,
   },
   {
     key: 'stress_level',
     label: 'Stress',
+    labelDe: 'Stress',
     unit: 'avg',
     color: '#b04a0c',
     icon: <Waves size={14} strokeWidth={1.8} />,
@@ -82,11 +94,13 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 25,
     warn: 50,
     copy: 'Daily average sympathetic load (0\u2013100). Lower is better.',
+    copyDe: 'Tagesdurchschnittliche sympathische Belastung (0\u2013100). Niedriger ist besser.',
     intraday: 'stress',
   },
   {
     key: 'resting_hr',
     label: 'Resting heart rate',
+    labelDe: 'Ruheherzfrequenz',
     unit: 'bpm',
     color: '#8a1d1d',
     icon: <Activity size={14} strokeWidth={1.8} />,
@@ -94,6 +108,7 @@ const BIOMETRICS: BiometricSpec[] = [
     good: 55,
     warn: 68,
     copy: 'Morning resting HR. A sustained rise of 5+ bpm = hidden fatigue or illness.',
+    copyDe: 'Morgendliche Ruhe-HF. Ein anhaltender Anstieg von 5+ bpm = verdeckte Erm\u00fcdung oder Krankheit.',
     intraday: null,
   },
 ]
@@ -106,6 +121,7 @@ function DetailChart({
   values,
   heightPx,
   onPointClick,
+  locale,
 }: {
   spec: BiometricSpec
   dates: number[] // unix timestamps in seconds
@@ -113,6 +129,7 @@ function DetailChart({
   heightPx: number
   /** Called with ISO date (yyyy-mm-dd) when user clicks a point on the chart. */
   onPointClick?: (iso: string) => void
+  locale: Loc
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
@@ -170,7 +187,7 @@ function DetailChart({
       series: [
         {},
         {
-          label: spec.label,
+          label: locale === 'de' ? spec.labelDe : spec.label,
           stroke: color,
           width: 2,
           fill: color + '18',
@@ -186,7 +203,7 @@ function DetailChart({
           font: '11px Geist, sans-serif',
           size: 30,
           values: (_u, splits) =>
-            splits.map((ts) => format(new Date(ts * 1000), 'd MMM')),
+            splits.map((ts) => format(new Date(ts * 1000), 'd MMM', locale === 'de' ? { locale: de } : undefined)),
         },
         {
           stroke: '#757465',
@@ -241,11 +258,11 @@ function DetailChart({
             const val = u.data[1][idx]
             if (ts == null) { tip.style.opacity = '0'; return }
             const date = new Date((ts as number) * 1000)
-            const dateLabel = format(date, 'EEE, d MMM yyyy')
+            const dateLabel = format(date, 'EEE, d MMM yyyy', locale === 'de' ? { locale: de } : undefined)
             const valueLabel =
               val == null
-                ? 'no reading'
-                : `${Math.round(val as number).toLocaleString()} ${spec.unit}`
+                ? (locale === 'de' ? 'kein Wert' : 'no reading')
+                : `${Math.round(val as number).toLocaleString(locale === 'de' ? 'de-DE' : undefined)} ${spec.unit}`
             tip.innerHTML = `<div class="num-mono text-[10px]" style="color:var(--color-muted);letter-spacing:0.1em;text-transform:uppercase">${dateLabel}</div><div class="num-display text-[18px] leading-tight" style="color:var(--color-ink)">${valueLabel}</div>`
             // Position tooltip near the cursor, clamped to container bounds
             const el = containerRef.current
@@ -288,7 +305,7 @@ function DetailChart({
       plot.destroy()
       plotRef.current = null
     }
-  }, [dates, values, heightPx, spec, avg])
+  }, [dates, values, heightPx, spec, avg, locale])
 
   const handleClick = () => {
     if (!onPointClick) return
@@ -317,7 +334,7 @@ function DetailChart({
             <span style={{ color: spec.color }} className="opacity-80">
               {spec.icon}
             </span>
-            <span className="eyebrow truncate">{spec.label}</span>
+            <span className="eyebrow truncate">{locale === 'de' ? spec.labelDe : spec.label}</span>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
             {hasData && (
@@ -326,20 +343,20 @@ function DetailChart({
                 style={{ color: zoneColor }}
               >
                 {zone === 'good'
-                  ? 'on point'
+                  ? (locale === 'de' ? 'im Soll' : 'on point')
                   : zone === 'fair'
-                  ? 'watch'
+                  ? (locale === 'de' ? 'beobachten' : 'watch')
                   : zone === 'poor'
-                  ? 'below base'
+                  ? (locale === 'de' ? 'unter Basis' : 'below base')
                   : '—'}
               </span>
             )}
             {spec.intraday && hasData && (
               <span
                 className="eyebrow opacity-60 flex items-center gap-1 whitespace-nowrap"
-                title="Click any day on the chart to see the 24h curve"
+                title={locale === 'de' ? 'Klicke einen Tag im Diagramm an, um die 24-h-Kurve zu sehen' : 'Click any day on the chart to see the 24h curve'}
               >
-                tap to explore
+                {locale === 'de' ? 'antippen zum Erkunden' : 'tap to explore'}
                 <ArrowUpRight size={11} strokeWidth={2} />
               </span>
             )}
@@ -369,7 +386,7 @@ function DetailChart({
               className="num-mono text-[11px]"
               style={{ color: 'var(--color-muted)' }}
             >
-              avg {avg != null ? avg.toFixed(1) : '—'}
+              {locale === 'de' ? 'Ø' : 'avg'} {avg != null ? avg.toFixed(1) : '—'}
             </span>
             <span
               className="num-mono text-[11px]"
@@ -390,7 +407,7 @@ function DetailChart({
           className="mt-2 text-[12px] leading-snug"
           style={{ color: 'var(--color-ink-2)' }}
         >
-          {spec.copy}
+          {locale === 'de' ? spec.copyDe : spec.copy}
         </p>
       </div>
 
@@ -426,7 +443,9 @@ function DetailChart({
               className="text-[14px] max-w-xs"
               style={{ color: 'var(--color-muted)' }}
             >
-              Not enough data yet in this window. Check back after a few more sync cycles.
+              {locale === 'de'
+                ? 'Noch nicht genug Daten in diesem Zeitraum. Schau nach ein paar weiteren Sync-Zyklen wieder vorbei.'
+                : 'Not enough data yet in this window. Check back after a few more sync cycles.'}
             </p>
           </div>
         )}
@@ -438,6 +457,7 @@ function DetailChart({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function BiometricsDetail() {
+  const { locale } = useLocale()
   const [range, setRange] = useState<Range>(30)
   const today = useMemo(() => new Date(), [])
   const start = useMemo(() => subDays(today, range), [today, range])
@@ -487,7 +507,7 @@ export default function BiometricsDetail() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
-            Chapter II · Biometrics
+            {locale === 'de' ? 'Kapitel II · Biometrie' : 'Chapter II · Biometrics'}
           </span>
           <h2
             className="num-display mt-1 leading-none"
@@ -496,7 +516,7 @@ export default function BiometricsDetail() {
               color: 'var(--color-ink)',
             }}
           >
-            How the body is trending.
+            {locale === 'de' ? 'Wie der Körper sich entwickelt.' : 'How the body is trending.'}
           </h2>
         </div>
         {/* Range toggle */}
@@ -544,7 +564,7 @@ export default function BiometricsDetail() {
           }}
         >
           <span style={{ color: 'var(--color-alert)' }}>
-            Couldn&apos;t load biometrics.
+            {locale === 'de' ? 'Biometrie konnte nicht geladen werden.' : 'Couldn’t load biometrics.'}
           </span>
           <button
             onClick={() => refetch()}
@@ -554,7 +574,7 @@ export default function BiometricsDetail() {
               color: 'var(--color-paper)',
             }}
           >
-            Retry
+            {locale === 'de' ? 'Erneut versuchen' : 'Retry'}
           </button>
         </div>
       ) : (
@@ -567,13 +587,14 @@ export default function BiometricsDetail() {
               values={seriesByKey[spec.key as string] ?? []}
               heightPx={200}
               onPointClick={spec.intraday ? handlePointClick(spec.intraday) : undefined}
+              locale={locale}
             />
           ))}
         </div>
       )}
 
       {/* Advanced ride-science tiles — EF trend + decoupling + durability */}
-      {!isLoading && !isError && <AdvancedMetricsStrip range={range} />}
+      {!isLoading && !isError && <AdvancedMetricsStrip range={range} locale={locale} />}
 
       <IntradayModal
         open={openIso != null}
@@ -657,7 +678,7 @@ function AdvancedTile({
   )
 }
 
-function AdvancedMetricsStrip({ range }: { range: Range }) {
+function AdvancedMetricsStrip({ range, locale }: { range: Range; locale: Loc }) {
   const today = useMemo(() => new Date(), [])
   const start = useMemo(() => subDays(today, range), [today, range])
   const { data: activitiesData, isLoading } = useActivitiesRange(start, today)
@@ -680,7 +701,7 @@ function AdvancedMetricsStrip({ range }: { range: Range }) {
     : null
 
   const efEyebrow = efDelta != null
-    ? `${efDelta >= 0 ? '+' : ''}${efDelta.toFixed(1)}% vs 28d`
+    ? `${efDelta >= 0 ? '+' : ''}${efDelta.toFixed(1)}% ${locale === 'de' ? 'ggü. 28T' : 'vs 28d'}`
     : undefined
   const efEyebrowColor = efDelta == null
     ? 'var(--color-muted)'
@@ -693,9 +714,13 @@ function AdvancedMetricsStrip({ range }: { range: Range }) {
   // shape is in place for when a /coach/metrics-trend route ships.
   const hasCyclingRides = activities.some((a) => a.sport === 'cycling')
 
-  const placeholderCopy = hasCyclingRides
-    ? 'Requires per-ride power + heart-rate samples — a backend trend endpoint will light this up.'
-    : 'Ride cycling with a power meter and heart-rate strap to unlock this.'
+  const placeholderCopy = locale === 'de'
+    ? (hasCyclingRides
+        ? 'Benötigt Leistungs- + Herzfrequenz-Samples pro Fahrt — ein Backend-Trend-Endpunkt wird das freischalten.'
+        : 'Fahre Rad mit Leistungsmesser und Herzfrequenzgurt, um das freizuschalten.')
+    : (hasCyclingRides
+        ? 'Requires per-ride power + heart-rate samples — a backend trend endpoint will light this up.'
+        : 'Ride cycling with a power meter and heart-rate strap to unlock this.')
 
   if (isLoading) {
     return (
@@ -711,20 +736,22 @@ function AdvancedMetricsStrip({ range }: { range: Range }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
-          Chapter II · Advanced ride science
+          {locale === 'de' ? 'Kapitel II · Fortgeschrittene Fahrwissenschaft' : 'Chapter II · Advanced ride science'}
         </span>
         <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
-          {activities.filter((a) => a.sport === 'cycling').length} cycling rides · {range}d
+          {activities.filter((a) => a.sport === 'cycling').length} {locale === 'de' ? 'Radfahrten' : 'cycling rides'} · {range}{locale === 'de' ? 'T' : 'd'}
         </span>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <AdvancedTile
           icon={<Wind size={14} strokeWidth={1.8} />}
-          label="Efficiency Factor"
+          label={locale === 'de' ? 'Effizienzfaktor' : 'Efficiency Factor'}
           value={efLatest != null ? efLatest.toFixed(2) : null}
           unit="W/bpm"
-          copy="NP divided by average heart rate — rising week-over-week = deeper aerobic base."
-          copyMuted={efPoints.length > 0 ? `${efPoints.length} rides in window` : undefined}
+          copy={locale === 'de'
+            ? 'NP geteilt durch durchschnittliche Herzfrequenz — Woche für Woche steigend = tiefere aerobe Basis.'
+            : 'NP divided by average heart rate — rising week-over-week = deeper aerobic base.'}
+          copyMuted={efPoints.length > 0 ? `${efPoints.length} ${locale === 'de' ? 'Fahrten im Zeitraum' : 'rides in window'}` : undefined}
           color="#1c4433"
           trendValues={efTrend}
           eyebrow={efEyebrow}
@@ -732,23 +759,27 @@ function AdvancedMetricsStrip({ range }: { range: Range }) {
         />
         <AdvancedTile
           icon={<Gauge size={14} strokeWidth={1.8} />}
-          label="Aerobic decoupling"
+          label={locale === 'de' ? 'Aerobe Entkopplung' : 'Aerobic decoupling'}
           value={null}
           unit="%"
-          copy="HR drift second-half vs first-half at steady power. Friel's most important aerobic-base metric."
+          copy={locale === 'de'
+            ? 'HF-Drift zweite vs. erste Hälfte bei konstanter Leistung. Friels wichtigste Kennzahl für die aerobe Basis.'
+            : "HR drift second-half vs first-half at steady power. Friel's most important aerobic-base metric."}
           copyMuted={placeholderCopy}
           color="#b04a0c"
-          eyebrow="sample-stream only"
+          eyebrow={locale === 'de' ? 'nur Sample-Stream' : 'sample-stream only'}
           eyebrowColor="var(--color-muted)"
         />
         <AdvancedTile
           icon={<Mountain size={14} strokeWidth={1.8} />}
-          label="Durability index"
+          label={locale === 'de' ? 'Durability-Index' : 'Durability index'}
           value={null}
-          copy="Late-ride power as a fraction of fresh power after ~1000 kJ. The 2025 differentiator in endurance performance."
+          copy={locale === 'de'
+            ? 'Spätfahrt-Leistung als Anteil der frischen Leistung nach ~1000 kJ. Der Unterscheidungsfaktor 2025 in der Ausdauerleistung.'
+            : 'Late-ride power as a fraction of fresh power after ~1000 kJ. The 2025 differentiator in endurance performance.'}
           copyMuted={placeholderCopy}
           color="#143555"
-          eyebrow="sample-stream only"
+          eyebrow={locale === 'de' ? 'nur Sample-Stream' : 'sample-stream only'}
           eyebrowColor="var(--color-muted)"
         />
       </div>

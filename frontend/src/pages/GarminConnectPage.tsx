@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ArrowUpRight, Lock, Mail, ShieldCheck, Watch } from 'lucide-react'
 import { apiClient } from '../api/client'
 import { prefersReducedMotion } from '../utils/motion'
+import { useLocale } from '../contexts/LocaleContext'
 
 interface ConnectResponse {
   activities_synced: number
@@ -14,6 +15,7 @@ interface ConnectResponse {
 export default function GarminConnectPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { locale } = useLocale()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -68,17 +70,31 @@ export default function GarminConnectPage() {
     } catch (err: unknown) {
       const axiosError = err as { response?: { status?: number; data?: { detail?: string } } }
       if (axiosError.response?.status === 401) {
-        setError('Garmin authentication failed. Check your email and password.')
+        setError(
+          locale === 'de'
+            ? 'Garmin-Authentifizierung fehlgeschlagen. Prüfe deine E-Mail und dein Passwort.'
+            : 'Garmin authentication failed. Check your email and password.',
+        )
       } else if (axiosError.response?.status === 409) {
-        setError('Garmin account is already connected. Disconnect first.')
+        setError(
+          locale === 'de'
+            ? 'Das Garmin-Konto ist bereits verbunden. Trenne zuerst die Verbindung.'
+            : 'Garmin account is already connected. Disconnect first.',
+        )
       } else if (axiosError.response?.status === 429) {
         setError(
-          'Garmin is rate-limiting this server. Wait 15–30 minutes or switch networks (phone hotspot / VPN) and try again.',
+          locale === 'de'
+            ? 'Garmin drosselt diesen Server. Warte 15–30 Minuten oder wechsle das Netzwerk (Handy-Hotspot / VPN) und versuche es erneut.'
+            : 'Garmin is rate-limiting this server. Wait 15–30 minutes or switch networks (phone hotspot / VPN) and try again.',
         )
       } else if (axiosError.response?.data?.detail) {
         setError(axiosError.response.data.detail)
       } else {
-        setError('Something went wrong connecting Garmin. Please try again.')
+        setError(
+          locale === 'de'
+            ? 'Beim Verbinden mit Garmin ist etwas schiefgelaufen. Bitte versuche es erneut.'
+            : 'Something went wrong connecting Garmin. Please try again.',
+        )
       }
       setSubmitting(false)
     }
@@ -105,7 +121,7 @@ export default function GarminConnectPage() {
               className="eyebrow"
               style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
             >
-              Last step · Garmin
+              {locale === 'de' ? 'Letzter Schritt · Garmin' : 'Last step · Garmin'}
             </span>
           </div>
           <h1
@@ -115,20 +131,25 @@ export default function GarminConnectPage() {
               color: 'var(--color-ink)',
             }}
           >
-            Connect your Garmin.
+            {locale === 'de' ? 'Verbinde dein Garmin.' : 'Connect your Garmin.'}
           </h1>
           <p
             className="mt-2 text-[14px] leading-relaxed"
             style={{ color: 'var(--color-ink-2)' }}
           >
-            Sign in with your Garmin Connect credentials. Your coach needs sleep, HRV, body battery,
-            and activity history to build an accurate picture.
+            {locale === 'de'
+              ? 'Melde dich mit deinen Garmin-Connect-Zugangsdaten an. Dein Coach benötigt Schlaf, HRV, Body Battery und deine Aktivitätshistorie, um ein genaues Bild zu erstellen.'
+              : 'Sign in with your Garmin Connect credentials. Your coach needs sleep, HRV, body battery, and activity history to build an accurate picture.'}
           </p>
 
           {/* 3-dot progress strip — Garmin Connect is accessed post-onboarding (not part of the
               Account→Consent→Goals flow), so we show it as a standalone connection step */}
           <div className="flex items-center gap-3 my-4">
-            {[{ label: 'Account' }, { label: 'Consent' }, { label: 'Goals' }].map((step, i) => (
+            {[
+              { label: locale === 'de' ? 'Konto' : 'Account' },
+              { label: locale === 'de' ? 'Einwilligung' : 'Consent' },
+              { label: locale === 'de' ? 'Ziele' : 'Goals' },
+            ].map((step, i) => (
               <div key={step.label} className="flex flex-col items-center gap-1">
                 <span
                   style={{
@@ -160,8 +181,9 @@ export default function GarminConnectPage() {
               style={{ color: 'var(--color-forest-2)', marginTop: 2 }}
             />
             <p className="text-[12px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-              Credentials are encrypted with a key only your server holds. Initial sync pulls 90
-              days of activities and 30 days of daily metrics — up to a minute.
+              {locale === 'de'
+                ? 'Zugangsdaten werden mit einem Schlüssel verschlüsselt, den nur dein Server besitzt. Die erste Synchronisierung lädt 90 Tage Aktivitäten und 30 Tage tägliche Metriken — bis zu einer Minute.'
+                : 'Credentials are encrypted with a key only your server holds. Initial sync pulls 90 days of activities and 30 days of daily metrics — up to a minute.'}
             </p>
           </div>
 
@@ -188,7 +210,7 @@ export default function GarminConnectPage() {
               value={email}
               onChange={setEmail}
               placeholder="you@example.com"
-              label="Garmin email"
+              label={locale === 'de' ? 'Garmin-E-Mail' : 'Garmin email'}
               icon={<Mail size={14} strokeWidth={1.8} />}
               disabled={submitting}
             />
@@ -200,7 +222,7 @@ export default function GarminConnectPage() {
               value={password}
               onChange={setPassword}
               placeholder="••••••••"
-              label="Garmin password"
+              label={locale === 'de' ? 'Garmin-Passwort' : 'Garmin password'}
               icon={<Lock size={14} strokeWidth={1.8} />}
               disabled={submitting}
             />
@@ -230,9 +252,15 @@ export default function GarminConnectPage() {
               <span className="relative flex items-center gap-2">
                 {submitting
                   ? progress < 100
-                    ? `Syncing ${Math.round(progress)}%`
-                    : 'Done — redirecting…'
-                  : 'Connect Garmin'}
+                    ? locale === 'de'
+                      ? `Synchronisiere ${Math.round(progress)}%`
+                      : `Syncing ${Math.round(progress)}%`
+                    : locale === 'de'
+                      ? 'Fertig — Weiterleitung…'
+                      : 'Done — redirecting…'
+                  : locale === 'de'
+                    ? 'Garmin verbinden'
+                    : 'Connect Garmin'}
                 {!submitting && <ArrowUpRight size={14} strokeWidth={2} />}
               </span>
             </button>
@@ -244,15 +272,15 @@ export default function GarminConnectPage() {
               className="font-medium"
               style={{ color: 'var(--color-forest-2)' }}
             >
-              ← Back to dashboard
+              {locale === 'de' ? '← Zurück zum Dashboard' : '← Back to dashboard'}
             </Link>
           </p>
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
-          <ReassuranceChip text="Encrypted at rest" />
-          <ReassuranceChip text="Never shared" />
-          <ReassuranceChip text="Revoke anytime" />
+          <ReassuranceChip text={locale === 'de' ? 'Verschlüsselt gespeichert' : 'Encrypted at rest'} />
+          <ReassuranceChip text={locale === 'de' ? 'Nie geteilt' : 'Never shared'} />
+          <ReassuranceChip text={locale === 'de' ? 'Jederzeit widerrufbar' : 'Revoke anytime'} />
         </div>
       </div>
     </div>

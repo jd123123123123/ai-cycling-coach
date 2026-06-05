@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { ResolvedBlock } from '../../api/coach'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
+import type { Locale } from '../../i18n/strings'
 
 interface IntervalRibbonProps {
   blocks: ResolvedBlock[]
@@ -32,13 +34,28 @@ const ZONE_FEEL_SIMPLE: Record<number, string> = {
   7: 'sprint',
 }
 
+const ZONE_FEEL_SIMPLE_DE: Record<number, string> = {
+  1: 'sehr locker',
+  2: 'locker',
+  3: 'gleichmäßig',
+  4: 'hart',
+  5: 'sehr hart',
+  6: 'fast Vollgas',
+  7: 'Sprint',
+}
+
+function zoneFeel(zone: number, locale: Locale): string {
+  const map = locale === 'de' ? ZONE_FEEL_SIMPLE_DE : ZONE_FEEL_SIMPLE
+  return map[zone] ?? (locale === 'de' ? 'gleichmäßig' : 'steady')
+}
+
 /** Block-name soft-simplification — prettier "Warm-up" → "Warm up" etc. */
-function simpleBlockName(name: string): string {
+function simpleBlockName(name: string, locale: Locale): string {
   const lower = name.trim().toLowerCase()
-  if (lower.startsWith('warm')) return 'Warm up'
-  if (lower.startsWith('cool')) return 'Cool down'
-  if (lower.startsWith('recover')) return 'Rest'
-  if (lower.startsWith('main') || lower.startsWith('interval')) return 'Effort'
+  if (lower.startsWith('warm')) return locale === 'de' ? 'Aufwärmen' : 'Warm up'
+  if (lower.startsWith('cool')) return locale === 'de' ? 'Ausfahren' : 'Cool down'
+  if (lower.startsWith('recover')) return locale === 'de' ? 'Pause' : 'Rest'
+  if (lower.startsWith('main') || lower.startsWith('interval')) return locale === 'de' ? 'Belastung' : 'Effort'
   return name
 }
 
@@ -88,6 +105,7 @@ export default function IntervalRibbon({
   className = 'h-20',
   language = 'technical',
 }: IntervalRibbonProps) {
+  const { locale } = useLocale()
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const simpleMode = language === 'simple'
 
@@ -105,11 +123,11 @@ export default function IntervalRibbon({
           border: '1px dashed var(--color-rule)',
           backgroundColor: 'var(--color-paper)',
         }}
-        aria-label="Rest day — no intervals"
+        aria-label={locale === 'de' ? 'Ruhetag — keine Intervalle' : 'Rest day — no intervals'}
       >
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
-            Rest
+            {locale === 'de' ? 'Pause' : 'Rest'}
           </span>
         </div>
       </div>
@@ -122,7 +140,7 @@ export default function IntervalRibbon({
       <div
         className={`relative w-full ${className} flex items-end min-w-0`}
         role="img"
-        aria-label={`Workout ribbon — ${blocks.length} segments`}
+        aria-label={locale === 'de' ? `Workout-Verlauf — ${blocks.length} Segmente` : `Workout ribbon — ${blocks.length} segments`}
         style={{
           borderBottom: '1px solid var(--color-rule)',
         }}
@@ -133,8 +151,8 @@ export default function IntervalRibbon({
           const isHovered = hoverIdx === idx
           // Language-aware aria + tooltip: technical keeps the full watts/zone/RPE;
           // simple shows a block-name + duration + feel only.
-          const simpleName = simpleMode ? simpleBlockName(b.name) : b.name
-          const feel = ZONE_FEEL_SIMPLE[b.zone] ?? 'steady'
+          const simpleName = simpleMode ? simpleBlockName(b.name, locale) : b.name
+          const feel = zoneFeel(b.zone, locale)
           // Cadence appendix — only added when explicitly set (climbing blocks
           // override to 60-70rpm; otherwise the zone default still renders).
           const cadenceStr =
@@ -146,8 +164,12 @@ export default function IntervalRibbon({
               ? ` · ${b.target_hr_low}-${b.target_hr_high} bpm`
               : ''
           const ariaLabel = simpleMode
-            ? `${simpleName}: ${formatMinutes(b.duration_s)}, ${feel} pace`
-            : `${b.name}: ${formatMinutes(b.duration_s)} at ${b.target_watts_low}-${b.target_watts_high}W${hrStr}, zone ${b.zone}, RPE ${b.rpe}${cadenceStr ? ', ' + cadenceStr.slice(3) : ''}`
+            ? (locale === 'de'
+                ? `${simpleName}: ${formatMinutes(b.duration_s)}, Tempo ${feel}`
+                : `${simpleName}: ${formatMinutes(b.duration_s)}, ${feel} pace`)
+            : (locale === 'de'
+                ? `${b.name}: ${formatMinutes(b.duration_s)} bei ${b.target_watts_low}-${b.target_watts_high}W${hrStr}, Zone ${b.zone}, RPE ${b.rpe}${cadenceStr ? ', ' + cadenceStr.slice(3) : ''}`
+                : `${b.name}: ${formatMinutes(b.duration_s)} at ${b.target_watts_low}-${b.target_watts_high}W${hrStr}, zone ${b.zone}, RPE ${b.rpe}${cadenceStr ? ', ' + cadenceStr.slice(3) : ''}`)
           const titleAttr = simpleMode
             ? `${simpleName} · ${formatMinutes(b.duration_s)} · ${feel}`
             : `${b.name} · ${formatMinutes(b.duration_s)} · ${b.target_watts_low}–${b.target_watts_high}W${hrStr} · Z${b.zone} · RPE ${b.rpe}${cadenceStr}`
@@ -200,7 +222,7 @@ export default function IntervalRibbon({
             {simpleMode ? (
               <>
                 {formatMinutes(blocks[hoverIdx].duration_s)} ·{' '}
-                {ZONE_FEEL_SIMPLE[blocks[hoverIdx].zone] ?? 'steady'}
+                {zoneFeel(blocks[hoverIdx].zone, locale)}
               </>
             ) : (
               <>

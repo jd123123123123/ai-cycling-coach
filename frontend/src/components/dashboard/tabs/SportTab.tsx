@@ -17,6 +17,7 @@
 
 import { useMemo } from 'react'
 import { subDays, startOfDay, format, addDays } from 'date-fns'
+import { de } from 'date-fns/locale'
 import {
   Bike,
   Activity as RunIcon,
@@ -27,6 +28,8 @@ import {
   TrendingUp,
   CalendarDays,
 } from 'lucide-react'
+import { useLocale } from '../../../contexts/LocaleContext'
+import type { Locale } from '../../../i18n/strings'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useCountUp } from '../../../hooks/useCountUp'
@@ -47,6 +50,11 @@ interface SportMeta {
   icon: React.ReactNode
   targetLabel: string
   fmtDistance: (m: number) => string
+}
+
+function sportLabel(sport: Sport, locale: Locale): string {
+  if (locale !== 'de') return SPORT_META[sport].label
+  return sport === 'cycling' ? 'Radfahren' : 'Laufen'
 }
 
 const SPORT_META: Record<Sport, SportMeta> = {
@@ -181,6 +189,7 @@ function GoalCard({ sport, profile }: {
     goals?: { target_ftp?: number; target_event_name?: string; target_event_date?: string } | null
   } | null | undefined
 }) {
+  const { locale } = useLocale()
   const meta = SPORT_META[sport]
   const target = sport === 'cycling' ? profile?.goals?.target_ftp : null
   const current = sport === 'cycling' ? profile?.ftp_watts : null
@@ -210,7 +219,7 @@ function GoalCard({ sport, profile }: {
             fontWeight: 600,
           }}
         >
-          Your goal · {meta.label}
+          {locale === 'de' ? 'Dein Ziel' : 'Your goal'} · {sportLabel(sport, locale)}
         </span>
       </div>
       {sport === 'cycling' && target && current ? (
@@ -241,8 +250,12 @@ function GoalCard({ sport, profile }: {
           </div>
           <p className="text-[12px] mt-3" style={{ color: 'var(--color-ink-2)' }}>
             {pct >= 1
-              ? 'Target FTP achieved. Raise the bar in Profile when you\'re ready.'
-              : `${Math.round((target - current))} W to go — ${Math.round(pct * 100)}% there. Structured VO2 + sweet-spot blocks compound fast.`}
+              ? (locale === 'de'
+                  ? 'Ziel-FTP erreicht. Setz die Latte im Profil höher, wenn du bereit bist.'
+                  : 'Target FTP achieved. Raise the bar in Profile when you\'re ready.')
+              : (locale === 'de'
+                  ? `Noch ${Math.round((target - current))} W — ${Math.round(pct * 100)}% geschafft. Strukturierte VO2- + Sweet-Spot-Blöcke summieren sich schnell.`
+                  : `${Math.round((target - current))} W to go — ${Math.round(pct * 100)}% there. Structured VO2 + sweet-spot blocks compound fast.`)}
           </p>
         </>
       ) : (
@@ -252,8 +265,12 @@ function GoalCard({ sport, profile }: {
             style={{ color: 'var(--color-ink-2)', maxWidth: '46ch' }}
           >
             {sport === 'cycling'
-              ? 'Set an FTP target in your Profile to unlock goal tracking. The AI coach will program toward it.'
-              : 'Running goals coming soon — pace targets, longest-run goals, and race-specific build plans.'}
+              ? (locale === 'de'
+                  ? 'Lege im Profil ein FTP-Ziel fest, um die Zielverfolgung freizuschalten. Der KI-Coach plant darauf hin.'
+                  : 'Set an FTP target in your Profile to unlock goal tracking. The AI coach will program toward it.')
+              : (locale === 'de'
+                  ? 'Laufziele bald verfügbar — Pace-Ziele, Longrun-Ziele und wettkampfspezifische Aufbaupläne.'
+                  : 'Running goals coming soon — pace targets, longest-run goals, and race-specific build plans.')}
           </p>
         </>
       )}
@@ -278,6 +295,7 @@ function TrainingHeatmap({
   activities: ActivityRead[]
   color: string
 }) {
+  const { locale } = useLocale()
   const { cells, totalDays, weekLabels } = useMemo(() => {
     const today = startOfDay(new Date())
     // Anchor grid so today is the bottom-right cell (weekday-aware).
@@ -317,7 +335,7 @@ function TrainingHeatmap({
       const firstDay = list[w * 7]?.date
       if (!firstDay) continue
       if (firstDay.getMonth() !== lastMonth) {
-        labels.push({ col: w, label: format(firstDay, 'MMM') })
+        labels.push({ col: w, label: format(firstDay, 'MMM', locale === 'de' ? { locale: de } : undefined) })
         lastMonth = firstDay.getMonth()
       }
     }
@@ -325,7 +343,7 @@ function TrainingHeatmap({
     const trainedDays = list.filter((c) => c.tss > 0).length
 
     return { cells: list, totalDays: trainedDays, weekLabels: labels }
-  }, [activities, sport])
+  }, [activities, sport, locale])
 
   function intensity(tss: number): number {
     // 0 = empty, 1–4 = scaled buckets. Tuned for typical endurance loads.
@@ -375,14 +393,16 @@ function TrainingHeatmap({
               fontWeight: 600,
             }}
           >
-            Training streak · last 13 weeks
+            {locale === 'de' ? 'Trainingsserie · letzte 13 Wochen' : 'Training streak · last 13 weeks'}
           </span>
         </div>
         <span
           className="num-mono text-[11px]"
           style={{ color: 'var(--color-muted)' }}
         >
-          {totalDays} active {totalDays === 1 ? 'day' : 'days'}
+          {locale === 'de'
+            ? `${totalDays} aktive ${totalDays === 1 ? 'Tag' : 'Tage'}`
+            : `${totalDays} active ${totalDays === 1 ? 'day' : 'days'}`}
         </span>
       </div>
 
@@ -446,11 +466,12 @@ function TrainingHeatmap({
               }}
             >
               {cells.map((c) => {
+                const dfOpts = locale === 'de' ? { locale: de } : undefined
                 const title = c.future
-                  ? format(c.date, 'EEE, MMM d')
+                  ? format(c.date, 'EEE, MMM d', dfOpts)
                   : c.tss > 0
-                    ? `${format(c.date, 'EEE, MMM d')} — ${Math.round(c.tss)} TSS`
-                    : `${format(c.date, 'EEE, MMM d')} — rest`
+                    ? `${format(c.date, 'EEE, MMM d', dfOpts)} — ${Math.round(c.tss)} TSS`
+                    : `${format(c.date, 'EEE, MMM d', dfOpts)} — ${locale === 'de' ? 'Pause' : 'rest'}`
                 return (
                   <div
                     key={c.key}
@@ -473,7 +494,7 @@ function TrainingHeatmap({
             style={{ fontSize: 10, color: 'var(--color-muted)' }}
           >
             <span className="num-mono" style={{ letterSpacing: '0.08em' }}>
-              Less
+              {locale === 'de' ? 'Weniger' : 'Less'}
             </span>
             {[0, 1, 2, 3, 4].map((lvl) => {
               const opacity = lvl === 0 ? 0 : 0.25 + lvl * 0.18
@@ -493,7 +514,7 @@ function TrainingHeatmap({
               )
             })}
             <span className="num-mono" style={{ letterSpacing: '0.08em' }}>
-              More
+              {locale === 'de' ? 'Mehr' : 'More'}
             </span>
           </div>
         </div>
@@ -503,14 +524,23 @@ function TrainingHeatmap({
 }
 
 function AiCoachNote({ sport, hasData }: { sport: Sport; hasData: boolean }) {
+  const { locale } = useLocale()
   const meta = SPORT_META[sport]
   const note = hasData
     ? sport === 'cycling'
-      ? 'Ask The Coach for a VO2 max block (4×4 min at 110–115% FTP) — research shows 6–8 sessions drive the largest gains. ⌘K to chat.'
-      : 'Ask The Coach for a 4×4 VO2 run (hills or flat at 95% max HR). Norwegian sub-threshold doubles work well too. ⌘K to chat.'
+      ? (locale === 'de'
+          ? 'Bitte The Coach um einen VO2-max-Block (4×4 Min bei 110–115% FTP) — Studien zeigen, dass 6–8 Einheiten die größten Fortschritte bringen. ⌘K zum Chatten.'
+          : 'Ask The Coach for a VO2 max block (4×4 min at 110–115% FTP) — research shows 6–8 sessions drive the largest gains. ⌘K to chat.')
+      : (locale === 'de'
+          ? 'Bitte The Coach um einen 4×4-VO2-Lauf (Hügel oder flach bei 95% max. HF). Auch norwegische Sub-Threshold-Doubles funktionieren gut. ⌘K zum Chatten.'
+          : 'Ask The Coach for a 4×4 VO2 run (hills or flat at 95% max HR). Norwegian sub-threshold doubles work well too. ⌘K to chat.')
     : sport === 'cycling'
-      ? 'Connect Garmin and log a ride to unlock personalized VO2 coaching.'
-      : 'Connect Garmin and log a run to unlock personalized VO2 coaching.'
+      ? (locale === 'de'
+          ? 'Verbinde Garmin und logge eine Fahrt, um personalisiertes VO2-Coaching freizuschalten.'
+          : 'Connect Garmin and log a ride to unlock personalized VO2 coaching.')
+      : (locale === 'de'
+          ? 'Verbinde Garmin und logge einen Lauf, um personalisiertes VO2-Coaching freizuschalten.'
+          : 'Connect Garmin and log a run to unlock personalized VO2 coaching.')
   return (
     <div
       className="rounded-[16px] px-5 py-4"
@@ -533,6 +563,7 @@ function AiCoachNote({ sport, hasData }: { sport: Sport; hasData: boolean }) {
 }
 
 export default function SportTab({ sport }: { sport: Sport }) {
+  const { locale } = useLocale()
   const today = new Date()
   const start = subDays(today, 90)
   const { data: actsData } = useActivitiesRange(start, today)
@@ -565,8 +596,8 @@ export default function SportTab({ sport }: { sport: Sport }) {
       {/* ── BELOW THE FOLD: everything else, collapsed by default ── */}
       <DashboardSection
         id={`sport-${sport}-deep-dive`}
-        title={`${meta.label} deep-dive`}
-        subtitle="Stats, streak, recent activities, goals"
+        title={locale === 'de' ? `${sportLabel(sport, locale)} im Detail` : `${meta.label} deep-dive`}
+        subtitle={locale === 'de' ? 'Statistiken, Serie, letzte Aktivitäten, Ziele' : 'Stats, streak, recent activities, goals'}
         defaultExpanded={false}
       >
         <div className="flex flex-col gap-6 mt-2">
@@ -601,7 +632,7 @@ export default function SportTab({ sport }: { sport: Sport }) {
                   fontWeight: 600,
                 }}
               >
-                {meta.label} · last 90 days
+                {sportLabel(sport, locale)} · {locale === 'de' ? 'letzte 90 Tage' : 'last 90 days'}
               </span>
             </div>
 
@@ -617,43 +648,47 @@ export default function SportTab({ sport }: { sport: Sport }) {
                 maxWidth: '22ch',
               }}
             >
-              {meta.tagline}
+              {locale === 'de'
+                ? (sport === 'cycling'
+                    ? 'Jedes Watt ist verdient. Jede Fahrt summiert sich.'
+                    : 'Aerobe Ökonomie baut man in Monaten auf, verliert sie in Wochen.')
+                : meta.tagline}
             </h1>
           </div>
 
           {/* Stat grid — sport-specific */}
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
             <StatCard
-              label="DISTANCE · 90D"
+              label={locale === 'de' ? 'DISTANZ · 90T' : 'DISTANCE · 90D'}
               value={totalKm}
               unit="km"
-              subtitle={`${stats.totalSessions} sessions`}
+              subtitle={locale === 'de' ? `${stats.totalSessions} Einheiten` : `${stats.totalSessions} sessions`}
               icon={<TrendingUp size={13} strokeWidth={2} />}
               color={meta.color}
             />
             <StatCard
-              label="LOAD · 90D"
+              label={locale === 'de' ? 'BELASTUNG · 90T' : 'LOAD · 90D'}
               value={stats.totalTSS}
               unit="TSS"
-              subtitle="total stress"
+              subtitle={locale === 'de' ? 'Gesamtbelastung' : 'total stress'}
               icon={<Flame size={13} strokeWidth={2} />}
               color={meta.color}
             />
             {sport === 'cycling' ? (
               <>
                 <StatCard
-                  label="PEAK NP"
+                  label={locale === 'de' ? 'SPITZEN-NP' : 'PEAK NP'}
                   value={Math.round(cyc.peakNP) || '—'}
                   unit="W"
-                  subtitle="best effort"
+                  subtitle={locale === 'de' ? 'beste Leistung' : 'best effort'}
                   icon={<Zap size={13} strokeWidth={2} />}
                   color={meta.color}
                 />
                 <StatCard
-                  label="LONGEST RIDE"
+                  label={locale === 'de' ? 'LÄNGSTE FAHRT' : 'LONGEST RIDE'}
                   value={cyc.longestRide ? `${(cyc.longestRide / 1000).toFixed(0)}` : '—'}
                   unit="km"
-                  subtitle="your furthest"
+                  subtitle={locale === 'de' ? 'deine weiteste' : 'your furthest'}
                   icon={<Trophy size={13} strokeWidth={2} />}
                   color={meta.color}
                 />
@@ -661,18 +696,18 @@ export default function SportTab({ sport }: { sport: Sport }) {
             ) : (
               <>
                 <StatCard
-                  label="FASTEST PACE"
+                  label={locale === 'de' ? 'SCHNELLSTE PACE' : 'FASTEST PACE'}
                   value={run.fastestPace ? formatPaceMinPerKm(run.fastestPace) : '—'}
                   unit="/km"
-                  subtitle="≥ 3 km effort"
+                  subtitle={locale === 'de' ? '≥ 3 km Einheit' : '≥ 3 km effort'}
                   icon={<Zap size={13} strokeWidth={2} />}
                   color={meta.color}
                 />
                 <StatCard
-                  label="LONGEST RUN"
+                  label={locale === 'de' ? 'LÄNGSTER LAUF' : 'LONGEST RUN'}
                   value={run.longestRun ? `${(run.longestRun / 1000).toFixed(1)}` : '—'}
                   unit="km"
-                  subtitle="your furthest"
+                  subtitle={locale === 'de' ? 'deine weiteste' : 'your furthest'}
                   icon={<Trophy size={13} strokeWidth={2} />}
                   color={meta.color}
                 />
@@ -688,7 +723,9 @@ export default function SportTab({ sport }: { sport: Sport }) {
             sport={sport}
             windowDays={30}
             limit={8}
-            heading={sport === 'cycling' ? 'Recent rides' : 'Recent runs'}
+            heading={locale === 'de'
+              ? (sport === 'cycling' ? 'Letzte Fahrten' : 'Letzte Läufe')
+              : (sport === 'cycling' ? 'Recent rides' : 'Recent runs')}
           />
 
           {/* Goal */}

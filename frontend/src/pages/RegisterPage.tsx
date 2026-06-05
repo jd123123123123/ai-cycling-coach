@@ -2,18 +2,21 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, Navigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLocale } from '../contexts/LocaleContext'
 
-// Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
-const steps = [
-  { label: 'Account' },
-  { label: 'Consent' },
-  { label: 'Goals' },
-]
 const ACTIVE_STEP = 0
 
 export default function RegisterPage() {
   const { register, isAuthenticated, isLoading } = useAuth()
+  const { locale } = useLocale()
   const navigate = useNavigate()
+
+  // Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
+  const steps = [
+    { label: locale === 'de' ? 'Konto' : 'Account' },
+    { label: locale === 'de' ? 'Einwilligung' : 'Consent' },
+    { label: locale === 'de' ? 'Ziele' : 'Goals' },
+  ]
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -30,15 +33,19 @@ export default function RegisterPage() {
     // Email format
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailPattern.test(email)) {
-      return 'Please enter a valid email address.'
+      return locale === 'de'
+        ? 'Bitte gib eine gültige E-Mail-Adresse ein.'
+        : 'Please enter a valid email address.'
     }
     // Password length
     if (password.length < 8) {
-      return 'Password must be at least 8 characters.'
+      return locale === 'de'
+        ? 'Das Passwort muss mindestens 8 Zeichen lang sein.'
+        : 'Password must be at least 8 characters.'
     }
     // Password match
     if (password !== confirmPassword) {
-      return 'Passwords do not match.'
+      return locale === 'de' ? 'Die Passwörter stimmen nicht überein.' : 'Passwords do not match.'
     }
     return null
   }
@@ -64,14 +71,26 @@ export default function RegisterPage() {
       if (axiosError.response?.status === 400) {
         const detail = axiosError.response.data?.detail
         if (typeof detail === 'string' && detail.toLowerCase().includes('already registered')) {
-          setError('An account with this email already exists.')
+          setError(
+            locale === 'de'
+              ? 'Es existiert bereits ein Konto mit dieser E-Mail-Adresse.'
+              : 'An account with this email already exists.',
+          )
         } else if (typeof detail === 'string') {
           setError(detail)
         } else {
-          setError('Registration failed. Please try again.')
+          setError(
+            locale === 'de'
+              ? 'Registrierung fehlgeschlagen. Bitte versuche es erneut.'
+              : 'Registration failed. Please try again.',
+          )
         }
       } else {
-        setError('Something went wrong. Please try again.')
+        setError(
+          locale === 'de'
+            ? 'Etwas ist schiefgelaufen. Bitte versuche es erneut.'
+            : 'Something went wrong. Please try again.',
+        )
       }
     } finally {
       setSubmitting(false)
@@ -98,7 +117,7 @@ export default function RegisterPage() {
               className="eyebrow"
               style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
             >
-              Create account
+              {locale === 'de' ? 'Konto erstellen' : 'Create account'}
             </span>
           </div>
 
@@ -107,10 +126,12 @@ export default function RegisterPage() {
             className="num-display leading-[0.95]"
             style={{ fontSize: 'clamp(28px, 5vw, 36px)', color: 'var(--color-ink)' }}
           >
-            Create your account.
+            {locale === 'de' ? 'Erstelle dein Konto.' : 'Create your account.'}
           </h1>
           <p className="mt-2 text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-            Your personal AI cycling coach awaits.
+            {locale === 'de'
+              ? 'Dein persönlicher KI-Radsport-Coach wartet auf dich.'
+              : 'Your personal AI cycling coach awaits.'}
           </p>
 
           {/* 3-dot progress strip */}
@@ -155,7 +176,7 @@ export default function RegisterPage() {
             <FormField
               id="email"
               type="email"
-              label="Email"
+              label={locale === 'de' ? 'E-Mail' : 'Email'}
               autoComplete="email"
               value={email}
               onChange={setEmail}
@@ -166,11 +187,11 @@ export default function RegisterPage() {
             <FormField
               id="password"
               type="password"
-              label="Password"
+              label={locale === 'de' ? 'Passwort' : 'Password'}
               autoComplete="new-password"
               value={password}
               onChange={setPassword}
-              placeholder="Min. 8 characters"
+              placeholder={locale === 'de' ? 'Mind. 8 Zeichen' : 'Min. 8 characters'}
               disabled={submitting}
               minLength={8}
             />
@@ -178,11 +199,11 @@ export default function RegisterPage() {
             <FormField
               id="confirmPassword"
               type="password"
-              label="Confirm password"
+              label={locale === 'de' ? 'Passwort bestätigen' : 'Confirm password'}
               autoComplete="new-password"
               value={confirmPassword}
               onChange={setConfirmPassword}
-              placeholder="Repeat your password"
+              placeholder={locale === 'de' ? 'Passwort wiederholen' : 'Repeat your password'}
               disabled={submitting}
             />
 
@@ -197,19 +218,25 @@ export default function RegisterPage() {
                 marginTop: 4,
               }}
             >
-              {submitting ? 'Creating account…' : 'Create account'}
+              {submitting
+                ? locale === 'de'
+                  ? 'Konto wird erstellt…'
+                  : 'Creating account…'
+                : locale === 'de'
+                  ? 'Konto erstellen'
+                  : 'Create account'}
             </button>
           </form>
 
           {/* Footer */}
           <p className="text-[13px] mt-5 text-center" style={{ color: 'var(--color-muted)' }}>
-            Already have an account?{' '}
+            {locale === 'de' ? 'Du hast bereits ein Konto?' : 'Already have an account?'}{' '}
             <Link
               to="/login"
               className="underline underline-offset-2"
               style={{ color: 'var(--color-forest-2)' }}
             >
-              Sign in
+              {locale === 'de' ? 'Anmelden' : 'Sign in'}
             </Link>
           </p>
         </div>

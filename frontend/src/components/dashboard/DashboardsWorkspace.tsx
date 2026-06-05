@@ -14,6 +14,7 @@ import {
 import type { ChartSpec } from '../../types/chartSpec'
 import type { GridLayoutItem } from '../../api/dashboards'
 import { STARTER_DASHBOARDS, type StarterDashboard } from '../../data/starterDashboards'
+import { useLocale } from '../../contexts/LocaleContext'
 
 /**
  * DashboardsWorkspace — list + editor for the customizable analytics workspace.
@@ -61,10 +62,16 @@ function ListView({
   onOpen: (id: number) => void
 }) {
   const create = useCreateDashboard()
+  const { locale } = useLocale()
   const totalCharts = list.reduce((s, d) => s + d.chart_count, 0)
 
   const handleNew = async () => {
-    const name = window.prompt('Name your dashboard', 'Untitled dashboard')?.trim()
+    const name = window
+      .prompt(
+        locale === 'de' ? 'Benenne dein Dashboard' : 'Name your dashboard',
+        locale === 'de' ? 'Unbenanntes Dashboard' : 'Untitled dashboard',
+      )
+      ?.trim()
     if (!name) return
     const created = await create.mutateAsync({
       name,
@@ -97,7 +104,7 @@ function ListView({
             className="eyebrow"
             style={{ color: 'var(--color-forest-2)', letterSpacing: '0.32em', fontSize: 11, fontWeight: 600 }}
           >
-            Workspace
+            {locale === 'de' ? 'Arbeitsbereich' : 'Workspace'}
           </span>
           <h1
             style={{
@@ -109,11 +116,20 @@ function ListView({
               lineHeight: 1.04,
             }}
           >
-            Your dashboards
+            {locale === 'de' ? 'Deine Dashboards' : 'Your dashboards'}
           </h1>
           <p className="text-[13px]" style={{ color: 'var(--color-ink-2)', maxWidth: '52ch' }}>
-            Build any chart from your training, recovery, and biometrics — drag, resize, save.
-            Total charts: <strong>{totalCharts}</strong> / {MAX_CHARTS}.
+            {locale === 'de' ? (
+              <>
+                Erstelle jedes Diagramm aus deinem Training, deiner Erholung und deinen Biometriedaten —
+                ziehen, skalieren, speichern. Diagramme insgesamt: <strong>{totalCharts}</strong> / {MAX_CHARTS}.
+              </>
+            ) : (
+              <>
+                Build any chart from your training, recovery, and biometrics — drag, resize, save.
+                Total charts: <strong>{totalCharts}</strong> / {MAX_CHARTS}.
+              </>
+            )}
           </p>
         </div>
         <button
@@ -128,12 +144,12 @@ function ListView({
           }}
         >
           <Plus size={14} strokeWidth={2.4} />
-          New dashboard
+          {locale === 'de' ? 'Neues Dashboard' : 'New dashboard'}
         </button>
       </header>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-        {loading && <div style={{ color: 'var(--color-muted)' }}>Loading…</div>}
+        {loading && <div style={{ color: 'var(--color-muted)' }}>{locale === 'de' ? 'Lädt…' : 'Loading…'}</div>}
         {!loading && list.length === 0 && (
           <div
             className="col-span-full rounded-[18px] py-12 px-6 text-center flex flex-col items-center gap-3"
@@ -146,11 +162,12 @@ function ListView({
               className="eyebrow"
               style={{ color: 'var(--color-forest)', letterSpacing: '0.28em', fontSize: 11 }}
             >
-              An empty workshop
+              {locale === 'de' ? 'Eine leere Werkstatt' : 'An empty workshop'}
             </span>
             <p style={{ color: 'var(--color-ink-2)', maxWidth: '46ch' }}>
-              Create your first dashboard to start composing charts. Pick a name, add charts —
-              they save automatically.
+              {locale === 'de'
+                ? 'Erstelle dein erstes Dashboard, um Diagramme zu komponieren. Wähle einen Namen, füge Diagramme hinzu — sie werden automatisch gespeichert.'
+                : 'Create your first dashboard to start composing charts. Pick a name, add charts — they save automatically.'}
             </p>
             <button
               type="button"
@@ -159,14 +176,14 @@ function ListView({
               style={{ color: 'var(--color-paper)', backgroundColor: 'var(--color-ink)' }}
             >
               <Plus size={13} strokeWidth={2.4} />
-              Blank dashboard
+              {locale === 'de' ? 'Leeres Dashboard' : 'Blank dashboard'}
             </button>
             <div className="mt-4 w-full">
               <span
                 className="eyebrow block mb-3"
                 style={{ color: 'var(--color-muted)', letterSpacing: '0.28em', fontSize: 10 }}
               >
-                Or start from a preset
+                {locale === 'de' ? 'Oder mit einer Vorlage starten' : 'Or start from a preset'}
               </span>
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                 {STARTER_DASHBOARDS.map((s) => (
@@ -187,7 +204,10 @@ function ListView({
                       {s.name}
                     </div>
                     <div className="text-[12px]" style={{ color: 'var(--color-ink-2)' }}>
-                      {s.description} · {s.charts.length} chart{s.charts.length === 1 ? '' : 's'}
+                      {s.description} · {s.charts.length}{' '}
+                      {locale === 'de'
+                        ? s.charts.length === 1 ? 'Diagramm' : 'Diagramme'
+                        : s.charts.length === 1 ? 'chart' : 'charts'}
                     </div>
                   </button>
                 ))}
@@ -224,7 +244,10 @@ function ListView({
                 className="num-mono shrink-0"
                 style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.18em', textTransform: 'uppercase' }}
               >
-                {d.chart_count} chart{d.chart_count === 1 ? '' : 's'}
+                {d.chart_count}{' '}
+                {locale === 'de'
+                  ? d.chart_count === 1 ? 'Diagramm' : 'Diagramme'
+                  : d.chart_count === 1 ? 'chart' : 'charts'}
               </span>
             </div>
             {d.description && (
@@ -237,7 +260,8 @@ function ListView({
                 className="num-mono"
                 style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.04em' }}
               >
-                edited {new Date(d.updated_at).toLocaleDateString()}
+                {locale === 'de' ? 'bearbeitet ' : 'edited '}
+                {new Date(d.updated_at).toLocaleDateString(locale === 'de' ? 'de-DE' : 'en-US')}
               </span>
             )}
           </button>
@@ -253,6 +277,7 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
   const { data, isLoading } = useDashboard(id)
   const update = useUpdateDashboard()
   const del = useDeleteDashboard()
+  const { locale } = useLocale()
 
   // Local working copy. Hydrated from server `data`; saves push back.
   const [editing, setEditing] = useState(false)
@@ -292,7 +317,11 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
 
   const handleAddChart = (spec: ChartSpec) => {
     if (charts.length >= MAX_CHARTS) {
-      window.alert(`Chart cap reached (${MAX_CHARTS} max per account).`)
+      window.alert(
+        locale === 'de'
+          ? `Diagramm-Limit erreicht (max. ${MAX_CHARTS} pro Konto).`
+          : `Chart cap reached (${MAX_CHARTS} max per account).`,
+      )
       return
     }
     if (editingChartId) {
@@ -305,13 +334,20 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
   }
 
   const handleDeleteDashboard = async () => {
-    if (!window.confirm('Delete this dashboard? This cannot be undone.')) return
+    if (
+      !window.confirm(
+        locale === 'de'
+          ? 'Dieses Dashboard löschen? Das kann nicht rückgängig gemacht werden.'
+          : 'Delete this dashboard? This cannot be undone.',
+      )
+    )
+      return
     await del.mutateAsync(id)
     onBack()
   }
 
   if (isLoading || !data) {
-    return <div style={{ color: 'var(--color-muted)' }}>Loading dashboard…</div>
+    return <div style={{ color: 'var(--color-muted)' }}>{locale === 'de' ? 'Dashboard wird geladen…' : 'Loading dashboard…'}</div>
   }
 
   return (
@@ -324,7 +360,7 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
           style={{ color: 'var(--color-ink-2)' }}
         >
           <ArrowLeft size={14} strokeWidth={2} />
-          All dashboards
+          {locale === 'de' ? 'Alle Dashboards' : 'All dashboards'}
         </button>
         <div className="flex items-center gap-2 ml-auto flex-wrap">
           {editing ? (
@@ -349,7 +385,7 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
                 }}
               >
                 <Plus size={13} strokeWidth={2.4} />
-                Add chart
+                {locale === 'de' ? 'Diagramm hinzufügen' : 'Add chart'}
               </button>
               <button
                 type="button"
@@ -363,12 +399,12 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
                 }}
               >
                 <Save size={13} strokeWidth={2.4} />
-                Save
+                {locale === 'de' ? 'Speichern' : 'Save'}
               </button>
               <button
                 type="button"
                 onClick={handleDeleteDashboard}
-                aria-label="Delete dashboard"
+                aria-label={locale === 'de' ? 'Dashboard löschen' : 'Delete dashboard'}
                 className="inline-flex items-center justify-center rounded-full"
                 style={{
                   width: 34,
@@ -392,7 +428,7 @@ function DetailView({ id, onBack }: { id: number; onBack: () => void }) {
               }}
             >
               <Pencil size={13} strokeWidth={2} />
-              Edit
+              {locale === 'de' ? 'Bearbeiten' : 'Edit'}
             </button>
           )}
         </div>

@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // AI Greeting — synthesized from 4 data streams into a single personalized
 // one-liner above the hero. Specificity is what makes this feel like the app
@@ -12,12 +13,12 @@ import { useCoachBrief } from '../../hooks/useCoachBrief'
 // sees a greeting nobody else sees. Loss-aversion and identity-priming copy
 // are woven in based on the cards that matter today.
 
-function timeOfDayLabel(): { greeting: string; window: 'morning' | 'day' | 'evening' } {
+function timeOfDayLabel(locale: 'en' | 'de'): { greeting: string; window: 'morning' | 'day' | 'evening' } {
   const h = new Date().getHours()
-  if (h < 5) return { greeting: 'Still up', window: 'evening' }
-  if (h < 12) return { greeting: 'Morning', window: 'morning' }
-  if (h < 17) return { greeting: 'Afternoon', window: 'day' }
-  return { greeting: 'Evening', window: 'evening' }
+  if (h < 5) return { greeting: locale === 'de' ? 'Noch wach' : 'Still up', window: 'evening' }
+  if (h < 12) return { greeting: locale === 'de' ? 'Guten Morgen' : 'Morning', window: 'morning' }
+  if (h < 17) return { greeting: locale === 'de' ? 'Guten Tag' : 'Afternoon', window: 'day' }
+  return { greeting: locale === 'de' ? 'Guten Abend' : 'Evening', window: 'evening' }
 }
 
 function deriveFirstName(email: string | undefined): string | null {
@@ -29,6 +30,7 @@ function deriveFirstName(email: string | undefined): string | null {
 }
 
 export default function AIGreeting() {
+  const { locale } = useLocale()
   const { user } = useAuth()
   const today = new Date()
   const { data: acts } = useActivitiesRange(subDays(today, 14), today)
@@ -36,7 +38,7 @@ export default function AIGreeting() {
   const { data: brief } = useCoachBrief()
 
   const firstName = useMemo(() => deriveFirstName(user?.email), [user])
-  const { greeting, window } = timeOfDayLabel()
+  const { greeting, window } = timeOfDayLabel(locale)
 
   const insight = useMemo(() => {
     const activities = acts?.activities ?? []
@@ -67,30 +69,48 @@ export default function AIGreeting() {
 
     // Highest-signal line wins
     if (hardCue) {
-      return "today is a green light — your body's handing you a gift. Cash it in."
+      return locale === 'de'
+        ? 'heute ist grünes Licht — dein Körper schenkt dir etwas. Nutze es.'
+        : "today is a green light — your body's handing you a gift. Cash it in."
     }
     if (easyCue) {
-      return 'your system is asking for mercy. Honor it — forced rest is expensive.'
+      return locale === 'de'
+        ? 'dein System bittet um Schonung. Hör darauf — erzwungene Pausen sind teuer.'
+        : 'your system is asking for mercy. Honor it — forced rest is expensive.'
     }
     if (lastWeekTSS > 0 && thisWeekTSS > lastWeekTSS * 1.15) {
       const delta = Math.round(((thisWeekTSS - lastWeekTSS) / lastWeekTSS) * 100)
-      return `you're ${delta}% ahead of last week. This is what momentum feels like.`
+      return locale === 'de'
+        ? `du liegst ${delta}% vor der letzten Woche. So fühlt sich Momentum an.`
+        : `you're ${delta}% ahead of last week. This is what momentum feels like.`
     }
     if (hrv != null && hrv >= 75) {
-      return 'HRV is strong — the adaptation from last block is landing.'
+      return locale === 'de'
+        ? 'die HRV ist stark — die Anpassung aus dem letzten Block greift.'
+        : 'HRV is strong — the adaptation from last block is landing.'
     }
     if (thisWeekTSS > 200) {
-      return `${thisWeekTSS} TSS this week already. You're not messing around.`
+      return locale === 'de'
+        ? `${thisWeekTSS} TSS schon diese Woche. Du machst keine halben Sachen.`
+        : `${thisWeekTSS} TSS this week already. You're not messing around.`
     }
     if (activities.length === 0) {
-      return 'the best time to start was last week. The second-best is today.'
+      return locale === 'de'
+        ? 'die beste Zeit anzufangen war letzte Woche. Die zweitbeste ist heute.'
+        : 'the best time to start was last week. The second-best is today.'
     }
     return window === 'morning'
-      ? 'the engine is warm. What will you build today?'
+      ? locale === 'de'
+        ? 'der Motor ist warm. Was baust du heute auf?'
+        : 'the engine is warm. What will you build today?'
       : window === 'evening'
-        ? 'one more session before the day closes?'
-        : 'the afternoon is yours to use.'
-  }, [acts, metricsData, brief, today, window])
+        ? locale === 'de'
+          ? 'noch eine Einheit, bevor der Tag endet?'
+          : 'one more session before the day closes?'
+        : locale === 'de'
+          ? 'der Nachmittag gehört dir.'
+          : 'the afternoon is yours to use.'
+  }, [acts, metricsData, brief, today, window, locale])
 
   const headline = firstName ? `${greeting}, ${firstName}.` : `${greeting}.`
 

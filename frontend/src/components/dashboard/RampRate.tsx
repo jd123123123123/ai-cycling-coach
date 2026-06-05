@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { startOfWeek, subWeeks, endOfWeek, isWithinInterval } from 'date-fns'
 import { usePMC } from '../../hooks/usePMC'
 import { useCountUp } from '../../hooks/useCountUp'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // Ramp rate = week-over-week TSS change vs 4-week rolling average.
 // Coggan / Skiba safe-zone guidance:
@@ -27,6 +28,7 @@ function tssForWeek(
 }
 
 export default function RampRate() {
+  const { locale } = useLocale()
   const { data, isLoading } = usePMC(35)
 
   const { thisWeek, rampRate, label, zone } = useMemo(() => {
@@ -40,14 +42,14 @@ export default function RampRate() {
     const rr = avg > 0 ? Math.round(((w0 - avg) / avg) * 100) : null
 
     let z: 'green' | 'amber' | 'red' = 'green'
-    let lbl = 'Sustainable'
+    let lbl = locale === 'de' ? 'Nachhaltig' : 'Sustainable'
     if (rr != null) {
-      if (Math.abs(rr) > AMBER_MAX) { z = 'red'; lbl = 'Overreaching risk' }
-      else if (Math.abs(rr) > GREEN_MAX) { z = 'amber'; lbl = 'Watch recovery' }
+      if (Math.abs(rr) > AMBER_MAX) { z = 'red'; lbl = locale === 'de' ? 'Überlastungsrisiko' : 'Overreaching risk' }
+      else if (Math.abs(rr) > GREEN_MAX) { z = 'amber'; lbl = locale === 'de' ? 'Erholung beobachten' : 'Watch recovery' }
     }
 
     return { thisWeek: w0, rampRate: rr, label: lbl, zone: z }
-  }, [data])
+  }, [data, locale])
 
   const countedTSS = useCountUp(thisWeek, { duration: 700, enabled: !isLoading })
 
@@ -82,7 +84,7 @@ export default function RampRate() {
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
-            Ramp rate · this week
+            {locale === 'de' ? 'Anstiegsrate · diese Woche' : 'Ramp rate · this week'}
           </span>
           <div className="flex items-baseline gap-2 mt-0.5">
             <span
@@ -150,13 +152,13 @@ export default function RampRate() {
 
       <div className="flex items-center justify-between">
         <span className="num-mono text-[9px]" style={{ color: 'var(--color-alert)', opacity: 0.7 }}>
-          overdoing
+          {locale === 'de' ? 'übertreiben' : 'overdoing'}
         </span>
         <span className="num-mono text-[9px]" style={{ color: '#30D158', opacity: 0.7 }}>
-          safe zone
+          {locale === 'de' ? 'sichere Zone' : 'safe zone'}
         </span>
         <span className="num-mono text-[9px]" style={{ color: 'var(--color-alert)', opacity: 0.7 }}>
-          spiking
+          {locale === 'de' ? 'Spitze' : 'spiking'}
         </span>
       </div>
     </div>

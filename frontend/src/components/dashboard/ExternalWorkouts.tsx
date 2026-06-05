@@ -5,6 +5,7 @@
  * specific workout pages — those URLs rot constantly).
  */
 import { useExternalWorkouts } from '../../hooks/useExternalWorkouts'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { ExternalPlatform, ExternalWorkoutMatch } from '../../api/coach'
 
 const PLATFORM_LABEL: Record<ExternalPlatform, string> = {
@@ -102,6 +103,7 @@ function WorkoutRow({ w }: { w: ExternalWorkoutMatch }) {
 }
 
 export default function ExternalWorkouts() {
+  const { locale } = useLocale()
   const { data, isLoading, isError } = useExternalWorkouts({ limit: 5 })
 
   if (isLoading || isError || !data) return null
@@ -133,7 +135,7 @@ export default function ExternalWorkouts() {
             color: 'var(--color-ink-3)',
           }}
         >
-          Do this on your trainer
+          {locale === 'de' ? 'Auf dem Smarttrainer fahren' : 'Do this on your trainer'}
         </span>
         <span style={{ fontSize: 11, color: 'var(--color-ink-3)' }}>
           {data.session_type.replace('_', ' ')} · ~{data.target_minutes}min

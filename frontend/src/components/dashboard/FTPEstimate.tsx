@@ -4,6 +4,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useCountUp } from '../../hooks/useCountUp'
 import { TrendingUp, TrendingDown } from 'lucide-react'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // Auto-FTP estimate from recent cycling data.
 // Method: Coggan-adjacent — best NP from rides 40–90 min long × 0.97.
@@ -17,6 +18,7 @@ const MAX_DURATION_S = 90 * 60
 const FTP_FACTOR = 0.97
 
 export default function FTPEstimate() {
+  const { locale } = useLocale()
   const today = new Date()
   const start = useMemo(() => subDays(today, WINDOW_DAYS), [])
   const { data: activitiesData, isLoading: actsLoading } = useActivitiesRange(start, today)
@@ -83,7 +85,7 @@ export default function FTPEstimate() {
       }}
     >
       <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
-        FTP · auto-estimate
+        {locale === 'de' ? 'FTP · Auto-Schätzung' : 'FTP · auto-estimate'}
       </span>
 
       <div className="flex items-end gap-6 mt-2 flex-wrap">
@@ -91,7 +93,7 @@ export default function FTPEstimate() {
         {estimated != null && (
           <div>
             <span className="eyebrow" style={{ color: '#30D158', fontSize: 9, letterSpacing: '0.18em' }}>
-              DETECTED
+              {locale === 'de' ? 'ERKANNT' : 'DETECTED'}
             </span>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span
@@ -109,7 +111,7 @@ export default function FTPEstimate() {
         {stored != null && (
           <div>
             <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.18em' }}>
-              STORED
+              {locale === 'de' ? 'GESPEICHERT' : 'STORED'}
             </span>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span
@@ -150,13 +152,15 @@ export default function FTPEstimate() {
       <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-muted)', maxWidth: '26ch' }}>
           {estimated != null
-            ? `Best NP × 0.97 from 40–90 min rides in last ${WINDOW_DAYS}d.`
-            : 'No qualifying rides in last 90 days.'}
+            ? (locale === 'de'
+                ? `Beste NP × 0,97 aus 40–90-Min-Fahrten der letzten ${WINDOW_DAYS}T.`
+                : `Best NP × 0.97 from 40–90 min rides in last ${WINDOW_DAYS}d.`)
+            : (locale === 'de' ? 'Keine qualifizierenden Fahrten in den letzten 90 Tagen.' : 'No qualifying rides in last 90 days.')}
         </p>
         {/* Confidence dots */}
         {confidence > 0 && (
           <div className="flex items-center gap-1">
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>CONFIDENCE</span>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{locale === 'de' ? 'KONFIDENZ' : 'CONFIDENCE'}</span>
             <div className="flex gap-0.5">
               {Array.from({ length: 5 }, (_, i) => (
                 <span
@@ -177,7 +181,9 @@ export default function FTPEstimate() {
       {/* CTA if meaningful delta */}
       {hasDelta && delta! > 5 && (
         <p className="text-[11px] mt-2" style={{ color: '#30D158' }}>
-          Your fitness may have improved — consider updating your FTP in settings.
+          {locale === 'de'
+            ? 'Deine Fitness hat sich womöglich verbessert — erwäge, deine FTP in den Einstellungen zu aktualisieren.'
+            : 'Your fitness may have improved — consider updating your FTP in settings.'}
         </p>
       )}
     </div>

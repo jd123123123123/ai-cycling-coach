@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react'
 import { subDays, format } from 'date-fns'
+import { de } from 'date-fns/locale'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { usePMC } from '../../hooks/usePMC'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import Sparkline from './Sparkline'
+import { useLocale } from '../../contexts/LocaleContext'
+
+type Loc = 'en' | 'de'
 
 // ProgressPanel — 4-up progress strip with a window toggle.
 // Lives on the Today tab and gives the athlete a daily glance at four trend
@@ -25,16 +29,17 @@ const FTP_FACTOR = 0.97
 interface MetricMeta {
   key: 'load' | 'ftp' | 'hrv' | 'battery'
   label: string
+  labelDe: string
   unit: string
   color: string
   higherIsBetter: boolean
 }
 
 const METRICS: MetricMeta[] = [
-  { key: 'load',    label: 'Training load', unit: 'CTL', color: 'var(--color-forest-2)', higherIsBetter: true  },
-  { key: 'ftp',     label: 'FTP',           unit: 'W',   color: '#FF6430',                higherIsBetter: true  },
-  { key: 'hrv',     label: 'HRV',           unit: '',    color: '#0A84FF',                higherIsBetter: true  },
-  { key: 'battery', label: 'Body battery',  unit: '',    color: '#BF5AF2',                higherIsBetter: true  },
+  { key: 'load',    label: 'Training load', labelDe: 'Trainingslast', unit: 'CTL', color: 'var(--color-forest-2)', higherIsBetter: true  },
+  { key: 'ftp',     label: 'FTP',           labelDe: 'FTP',           unit: 'W',   color: '#FF6430',                higherIsBetter: true  },
+  { key: 'hrv',     label: 'HRV',           labelDe: 'HRV',           unit: '',    color: '#0A84FF',                higherIsBetter: true  },
+  { key: 'battery', label: 'Body battery',  labelDe: 'Body Battery',  unit: '',    color: '#BF5AF2',                higherIsBetter: true  },
 ]
 
 /**
@@ -78,10 +83,11 @@ function computeDelta(current: number | null, start: number | null): { abs: numb
   return { abs, pct }
 }
 
-function DeltaPill({ delta, higherIsBetter, color }: {
+function DeltaPill({ delta, higherIsBetter, color, locale }: {
   delta: { abs: number; pct: number } | null
   higherIsBetter: boolean
   color: string
+  locale: Loc
 }) {
   if (!delta || Math.abs(delta.pct) < 1) {
     return (
@@ -90,7 +96,7 @@ function DeltaPill({ delta, higherIsBetter, color }: {
         style={{ color: 'var(--color-muted)' }}
       >
         <Minus size={10} strokeWidth={2} />
-        flat
+        {locale === 'de' ? 'stabil' : 'flat'}
       </span>
     )
   }
@@ -115,12 +121,14 @@ function MetricTile({
   values,
   currentLabel,
   currentValue,
+  locale,
 }: {
   meta: MetricMeta
   windowDays: WindowDays
   values: Array<number | null>
   currentLabel: string
   currentValue: number | null
+  locale: Loc
 }) {
   // First defined value in the window as baseline for delta
   const firstDefined = values.find((v): v is number => v != null) ?? null
@@ -145,9 +153,9 @@ function MetricTile({
             fontSize: 10,
           }}
         >
-          {meta.label.toUpperCase()}
+          {(locale === 'de' ? meta.labelDe : meta.label).toUpperCase()}
         </span>
-        <DeltaPill delta={delta} higherIsBetter={meta.higherIsBetter} color={meta.color} />
+        <DeltaPill delta={delta} higherIsBetter={meta.higherIsBetter} color={meta.color} locale={locale} />
       </div>
 
       {/* Value */}
@@ -188,13 +196,14 @@ function MetricTile({
         className="num-mono text-[10px]"
         style={{ color: 'var(--color-muted)' }}
       >
-        {windowDays}d · first→last
+        {windowDays}{locale === 'de' ? 'T' : 'd'} · {locale === 'de' ? 'erster→letzter' : 'first→last'}
       </span>
     </div>
   )
 }
 
 export default function ProgressPanel() {
+  const { locale } = useLocale()
   const [windowDays, setWindowDays] = useState<WindowDays>(30)
   const today = new Date()
   const start = subDays(today, windowDays - 1)
@@ -295,7 +304,7 @@ export default function ProgressPanel() {
               fontSize: 10,
             }}
           >
-            Window
+            {locale === 'de' ? 'Zeitraum' : 'Window'}
           </span>
           <div
             className="flex rounded-full p-0.5"
@@ -321,7 +330,7 @@ export default function ProgressPanel() {
                     letterSpacing: '0.04em',
                   }}
                 >
-                  {w}d
+                  {w}{locale === 'de' ? 'T' : 'd'}
                 </button>
               )
             })}
@@ -336,7 +345,7 @@ export default function ProgressPanel() {
             letterSpacing: '0.08em',
           }}
         >
-          {format(start, 'dd MMM').toUpperCase()} → {format(today, 'dd MMM').toUpperCase()}
+          {format(start, 'dd MMM', locale === 'de' ? { locale: de } : undefined).toUpperCase()} → {format(today, 'dd MMM', locale === 'de' ? { locale: de } : undefined).toUpperCase()}
         </span>
       </div>
 
@@ -350,6 +359,7 @@ export default function ProgressPanel() {
             values={series[m.key]}
             currentLabel={valueLabel(m.key)}
             currentValue={current[m.key]}
+            locale={locale}
           />
         ))}
       </div>
@@ -363,9 +373,9 @@ export default function ProgressPanel() {
           fontVariationSettings: '"opsz" 14, "wght" 400',
         }}
       >
-        FTP estimates a rolling 14-day ceiling from your best NP on 40–90 min rides.
-        HRV and Body Battery are your latest daily readings. CTL is the chronic
-        training load — the fitness you carry with you.
+        {locale === 'de'
+          ? 'FTP schätzt eine rollierende 14-Tage-Obergrenze aus deiner besten NP auf 40–90-Min-Fahrten. HRV und Body Battery sind deine neuesten Tageswerte. CTL ist die chronische Trainingslast — die Fitness, die du mit dir trägst.'
+          : 'FTP estimates a rolling 14-day ceiling from your best NP on 40–90 min rides. HRV and Body Battery are your latest daily readings. CTL is the chronic training load — the fitness you carry with you.'}
       </p>
     </div>
   )

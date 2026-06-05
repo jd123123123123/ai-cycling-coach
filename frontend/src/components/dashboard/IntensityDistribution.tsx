@@ -5,6 +5,7 @@ import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { currentWeekTID, classifyPolarizedZone } from '../../utils/advanced-metrics'
 import type { PolarizedZone } from '../../utils/advanced-metrics'
 import { prefersReducedMotion } from '../../utils/motion'
+import { useLocale } from '../../contexts/LocaleContext'
 
 const ZONE_COLORS: Record<PolarizedZone, string> = {
   easy: '#2a6147',      // forest-2
@@ -12,15 +13,23 @@ const ZONE_COLORS: Record<PolarizedZone, string> = {
   hard: '#143555',      // ink-blue
 }
 
-const ZONE_LABELS: Record<PolarizedZone, string> = {
+const ZONE_LABELS_EN: Record<PolarizedZone, string> = {
   easy: 'Easy',
   moderate: 'Moderate',
   hard: 'Hard',
 }
 
+const ZONE_LABELS_DE: Record<PolarizedZone, string> = {
+  easy: 'Locker',
+  moderate: 'Moderat',
+  hard: 'Hart',
+}
+
 const ZONES: PolarizedZone[] = ['easy', 'moderate', 'hard']
 
 export default function IntensityDistribution() {
+  const { locale } = useLocale()
+  const ZONE_LABELS = locale === 'de' ? ZONE_LABELS_DE : ZONE_LABELS_EN
   const today = new Date()
   // Fetch last 7 days to cover the current week
   const startDate = subDays(today, 7)
@@ -62,11 +71,15 @@ export default function IntensityDistribution() {
     : 'var(--color-muted)'
 
   const interpretation = isPolarized
-    ? 'Polarized. Textbook Seiler distribution.'
+    ? (locale === 'de' ? 'Polarisiert. Lehrbuch-Seiler-Verteilung.' : 'Polarized. Textbook Seiler distribution.')
     : isGreyZone
-    ? `${moderatePct.toFixed(0)}% in the grey zone — shifts training stress without delivering top-end adaptation.`
+    ? (locale === 'de'
+        ? `${moderatePct.toFixed(0)}% in der Grauzone — verschiebt die Trainingsbelastung, ohne Spitzenanpassung zu liefern.`
+        : `${moderatePct.toFixed(0)}% in the grey zone — shifts training stress without delivering top-end adaptation.`)
     : total > 0
-    ? 'Aim for 80% easy / 20% hard to build without accumulating chronic fatigue.'
+    ? (locale === 'de'
+        ? 'Ziele auf 80 % locker / 20 % hart, um aufzubauen, ohne chronische Ermüdung anzuhäufen.'
+        : 'Aim for 80% easy / 20% hard to build without accumulating chronic fatigue.')
     : null
 
   return (
@@ -79,13 +92,13 @@ export default function IntensityDistribution() {
     >
       <div className="mb-4">
         <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
-          This week · Intensity
+          {locale === 'de' ? 'Diese Woche · Intensität' : 'This week · Intensity'}
         </span>
         <h2
           className="num-display mt-1 leading-none"
           style={{ fontSize: 'clamp(20px, 2.5vw, 26px)', color: 'var(--color-ink)' }}
         >
-          Training distribution
+          {locale === 'de' ? 'Trainingsverteilung' : 'Training distribution'}
         </h2>
       </div>
 
@@ -98,10 +111,12 @@ export default function IntensityDistribution() {
         // Has HR data but no LTHR set
         <div className="flex flex-col items-center justify-center text-center py-8 gap-2">
           <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
-            Set your threshold HR
+            {locale === 'de' ? 'Schwellen-HF festlegen' : 'Set your threshold HR'}
           </span>
           <p className="text-[13px] max-w-xs leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-            Add your lactate threshold HR in your profile to classify training zones.
+            {locale === 'de'
+              ? 'Trage deine Laktatschwellen-HF im Profil ein, um Trainingszonen zu klassifizieren.'
+              : 'Add your lactate threshold HR in your profile to classify training zones.'}
           </p>
           <span
             className="num-mono text-[11px] mt-1"
@@ -113,10 +128,10 @@ export default function IntensityDistribution() {
       ) : total === 0 ? (
         <div className="flex flex-col items-center justify-center text-center py-8 gap-2">
           <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
-            Rest week
+            {locale === 'de' ? 'Ruhewoche' : 'Rest week'}
           </span>
           <p className="text-[13px] max-w-xs leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-            No training logged this week yet.
+            {locale === 'de' ? 'Diese Woche noch kein Training aufgezeichnet.' : 'No training logged this week yet.'}
           </p>
         </div>
       ) : (
@@ -218,7 +233,7 @@ export default function IntensityDistribution() {
                 className="num-mono text-[10px] mt-1"
                 style={{ color: 'var(--color-muted)' }}
               >
-                Target: 80% easy · 20% hard · Seiler polarized model
+                {locale === 'de' ? 'Ziel: 80 % locker · 20 % hart · Seiler-Polarisationsmodell' : 'Target: 80% easy · 20% hard · Seiler polarized model'}
               </p>
             </div>
           )}

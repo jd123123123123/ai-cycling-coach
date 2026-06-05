@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Flame, Trophy } from 'lucide-react'
 import { subDays, format } from 'date-fns'
+import { de } from 'date-fns/locale'
+import { useLocale } from '../../contexts/LocaleContext'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { ActivityRead } from '../../api/dashboard'
 import { prefersReducedMotion } from '../../utils/motion'
@@ -65,6 +67,7 @@ function longestStreak(days: Set<string>, since: Date): number {
 }
 
 export default function StreakCard() {
+  const { locale } = useLocale()
   const today = new Date()
   const windowStart = subDays(today, 90)
   const { data, isLoading } = useActivitiesRange(windowStart, today)
@@ -170,21 +173,31 @@ export default function StreakCard() {
 
   const headline =
     current === 0
-      ? 'Start today · build a streak'
+      ? (locale === 'de' ? 'Heute starten · Serie aufbauen' : 'Start today · build a streak')
       : current === 1
-        ? 'Day 1 of a new streak'
-        : `${animatedStreak}-day streak`
+        ? (locale === 'de' ? 'Tag 1 einer neuen Serie' : 'Day 1 of a new streak')
+        : (locale === 'de' ? `${animatedStreak}-Tage-Serie` : `${animatedStreak}-day streak`)
 
   const subline =
     streakInDanger
-      ? `${hoursToMidnight}h until midnight. Train today or this chain snaps to zero.`
+      ? (locale === 'de'
+          ? `${hoursToMidnight}h bis Mitternacht. Trainiere heute, sonst fällt diese Kette auf null.`
+          : `${hoursToMidnight}h until midnight. Train today or this chain snaps to zero.`)
       : current === 0
-        ? "Any session starts the engine. Day 1 is harder than day 50."
+        ? (locale === 'de'
+            ? 'Jede Einheit startet den Motor. Tag 1 ist schwerer als Tag 50.'
+            : 'Any session starts the engine. Day 1 is harder than day 50.')
         : beatingBest
-          ? `You're writing your longest chapter. Don't stop now.`
+          ? (locale === 'de'
+              ? 'Du schreibst dein längstes Kapitel. Hör jetzt nicht auf.'
+              : `You're writing your longest chapter. Don't stop now.`)
           : best > current
-            ? `${best - current} to tie your best. Break ${best} and you've reshaped a quarter.`
-            : `This is who you are now — a rider who shows up.`
+            ? (locale === 'de'
+                ? `Noch ${best - current} bis zu deinem Rekord. Knack ${best} und du hast ein Quartal umgekrempelt.`
+                : `${best - current} to tie your best. Break ${best} and you've reshaped a quarter.`)
+            : (locale === 'de'
+                ? 'Das bist du jetzt — ein Fahrer, der auftaucht.'
+                : `This is who you are now — a rider who shows up.`)
 
   return (
     <div
@@ -224,7 +237,7 @@ export default function StreakCard() {
               className="eyebrow"
               style={{ color: 'var(--color-amber)', fontSize: 9, letterSpacing: '0.2em' }}
             >
-              {hoursToMidnight}H TO MIDNIGHT
+              {locale === 'de' ? `${hoursToMidnight}H BIS MITTERNACHT` : `${hoursToMidnight}H TO MIDNIGHT`}
             </span>
           </div>
           <style>{`
@@ -264,7 +277,7 @@ export default function StreakCard() {
               fontWeight: 600,
             }}
           >
-            {flash}-day milestone
+            {locale === 'de' ? `${flash}-Tage-Meilenstein` : `${flash}-day milestone`}
           </div>
           <style>{`
             @keyframes streak-flash {
@@ -313,7 +326,7 @@ export default function StreakCard() {
               letterSpacing: '0.22em',
             }}
           >
-            Consistency
+            {locale === 'de' ? 'Beständigkeit' : 'Consistency'}
           </span>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span
@@ -329,9 +342,9 @@ export default function StreakCard() {
               <span
                 className="num-mono text-[11px]"
                 style={{ color: 'var(--color-muted)' }}
-                title="Your longest streak in the last 90 days"
+                title={locale === 'de' ? 'Deine längste Serie der letzten 90 Tage' : 'Your longest streak in the last 90 days'}
               >
-                · best {best}
+                {locale === 'de' ? `· Rekord ${best}` : `· best ${best}`}
               </span>
             )}
           </div>
@@ -346,7 +359,7 @@ export default function StreakCard() {
              5 cols × 6 rows, grouped by week (Mon–Sun). Most recent is bottom-right.
              Consistency % shows the fraction of days with activity in 30d window. */}
           <div className="mt-3">
-            <div className="flex gap-1.5" aria-label="Last 30 days activity">
+            <div className="flex gap-1.5" aria-label={locale === 'de' ? 'Aktivität der letzten 30 Tage' : 'Last 30 days activity'}>
               {Array.from({ length: 5 }, (_, col) => (
                 <div key={col} className="flex flex-col gap-1.5">
                   {Array.from({ length: 6 }, (_, row) => {
@@ -357,7 +370,7 @@ export default function StreakCard() {
                     return (
                       <span
                         key={row}
-                        title={`${format(d, 'EEE d MMM')}${active ? ' · trained' : ''}`}
+                        title={`${format(d, 'EEE d MMM', locale === 'de' ? { locale: de } : undefined)}${active ? (locale === 'de' ? ' · trainiert' : ' · trained') : ''}`}
                         style={{
                           width: 9,
                           height: 9,
@@ -383,7 +396,7 @@ export default function StreakCard() {
               return (
                 <div className="flex items-center gap-2 mt-2">
                   <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>
-                    30-DAY CONSISTENCY
+                    {locale === 'de' ? '30-TAGE-BESTÄNDIGKEIT' : '30-DAY CONSISTENCY'}
                   </span>
                   <span
                     className="num-mono text-[11px]"
@@ -395,7 +408,7 @@ export default function StreakCard() {
                           : 'var(--color-muted)',
                     }}
                   >
-                    {activeDays} / 30 days · {consistencyPct}%
+                    {activeDays} / 30 {locale === 'de' ? 'Tage' : 'days'} · {consistencyPct}%
                   </span>
                 </div>
               )

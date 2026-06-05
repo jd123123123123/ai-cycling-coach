@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { RadarAxis } from '../../api/report'
 
 /** Collapsible per-axis breakdown — the report's "Why this score?" panel.
  * Renders each axis's score as a bar + the backend detail string. */
 export default function WhyThisGrade({ axes }: { axes: RadarAxis[] }) {
+  const { locale } = useLocale()
   const [open, setOpen] = useState(false)
   return (
     <div className="rounded-[18px]" style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
@@ -14,7 +16,7 @@ export default function WhyThisGrade({ axes }: { axes: RadarAxis[] }) {
         className="w-full flex items-center justify-between p-4"
       >
         <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
-          WHY THIS GRADE
+          {locale === 'de' ? 'WARUM DIESE NOTE' : 'WHY THIS GRADE'}
         </span>
         <ChevronDown size={16} style={{ color: 'var(--color-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }} />
       </button>

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { DailyMetric } from '../../api/dashboard'
 import { normalizeHrv } from '../../utils/metrics'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // The #1 Whoop complaint on Reddit/Twitter is black-boxed scores:
 //   "Recovery score has zero correlation with anything."
@@ -135,7 +136,7 @@ function DeltaChip({
   )
 }
 
-function explanation(contributors: Contributor[]): string {
+function explanation(contributors: Contributor[], locale: 'en' | 'de'): string {
   // Find the single biggest positive + biggest negative delta to build a
   // one-sentence narrative. Matches the "name the metric in a sentence" rule
   // we lifted from Oura's contributors drawer.
@@ -147,7 +148,11 @@ function explanation(contributors: Contributor[]): string {
     })
     .sort((a, b) => b.adj - a.adj)
 
-  if (scored.length === 0) return 'Your next sync will fill these in.'
+  if (scored.length === 0) {
+    return locale === 'de'
+      ? 'Deine nächste Synchronisierung füllt diese Werte.'
+      : 'Your next sync will fill these in.'
+  }
 
   const top = scored[0]
   const bottom = scored[scored.length - 1]
@@ -155,15 +160,23 @@ function explanation(contributors: Contributor[]): string {
   const dragging = bottom.adj < -1
 
   if (lifting && dragging) {
-    return `${top.c.label} is doing the heavy lifting; ${bottom.c.label.toLowerCase()} is pulling against it.`
+    return locale === 'de'
+      ? `${top.c.label} leistet die Hauptarbeit; ${bottom.c.label.toLowerCase()} zieht dagegen.`
+      : `${top.c.label} is doing the heavy lifting; ${bottom.c.label.toLowerCase()} is pulling against it.`
   }
   if (lifting) {
-    return `${top.c.label} is the strongest signal today.`
+    return locale === 'de'
+      ? `${top.c.label} ist heute das stärkste Signal.`
+      : `${top.c.label} is the strongest signal today.`
   }
   if (dragging) {
-    return `${bottom.c.label} is the biggest drag — worth planning around.`
+    return locale === 'de'
+      ? `${bottom.c.label} ist der größte Bremsklotz — lohnt sich einzuplanen.`
+      : `${bottom.c.label} is the biggest drag — worth planning around.`
   }
-  return 'Every contributor is within baseline — a typical day.'
+  return locale === 'de'
+    ? 'Jeder Faktor liegt im Normbereich — ein typischer Tag.'
+    : 'Every contributor is within baseline — a typical day.'
 }
 
 export default function ReadinessContributors({
@@ -173,6 +186,7 @@ export default function ReadinessContributors({
   metrics: DailyMetric[]
   latest: DailyMetric | null
 }) {
+  const { locale } = useLocale()
   const [open, setOpen] = useState(false)
 
   const contributors = useMemo<Contributor[]>(() => {
@@ -203,7 +217,7 @@ export default function ReadinessContributors({
       },
       {
         key: 'battery',
-        label: 'Body Battery',
+        label: locale === 'de' ? 'Body Battery' : 'Body Battery',
         value: battery,
         baseline: baseBattery,
         lowerIsBetter: false,
@@ -213,7 +227,7 @@ export default function ReadinessContributors({
       },
       {
         key: 'sleep',
-        label: 'Sleep',
+        label: locale === 'de' ? 'Schlaf' : 'Sleep',
         value: sleep,
         baseline: baseSleep,
         lowerIsBetter: false,
@@ -223,7 +237,7 @@ export default function ReadinessContributors({
       },
       {
         key: 'rhr',
-        label: 'Resting HR',
+        label: locale === 'de' ? 'Ruhepuls' : 'Resting HR',
         value: rhr,
         baseline: baseRhr,
         lowerIsBetter: true,
@@ -232,7 +246,7 @@ export default function ReadinessContributors({
         unit: ' bpm',
       },
     ]
-  }, [metrics, latest])
+  }, [metrics, latest, locale])
 
   if (!latest) return null
 
@@ -248,7 +262,7 @@ export default function ReadinessContributors({
         }}
         aria-expanded={open}
       >
-        <span>{open ? 'Hide the math' : 'Why this score?'}</span>
+        <span>{open ? (locale === 'de' ? 'Rechnung ausblenden' : 'Hide the math') : (locale === 'de' ? 'Warum dieser Wert?' : 'Why this score?')}</span>
         <ChevronDown
           size={12}
           strokeWidth={2}
@@ -327,9 +341,11 @@ export default function ReadinessContributors({
                 <span
                   className="num-mono text-[10px]"
                   style={{ color: 'var(--color-muted)' }}
-                  title={`30-day baseline: ${c.baseline ? c.baseline.toFixed(0) : '—'}${c.unit}`}
+                  title={locale === 'de'
+                    ? `30-Tage-Basislinie: ${c.baseline ? c.baseline.toFixed(0) : '—'}${c.unit}`
+                    : `30-day baseline: ${c.baseline ? c.baseline.toFixed(0) : '—'}${c.unit}`}
                 >
-                  vs {c.baseline ? Math.round(c.baseline) : '—'}{c.unit}
+                  {locale === 'de' ? 'vs.' : 'vs'} {c.baseline ? Math.round(c.baseline) : '—'}{c.unit}
                 </span>
                 <div className="flex justify-end">
                   <Sparkline
@@ -348,7 +364,7 @@ export default function ReadinessContributors({
               borderTop: '1px solid var(--color-rule)',
             }}
           >
-            {explanation(contributors)}
+            {explanation(contributors, locale)}
           </div>
         </div>
       )}

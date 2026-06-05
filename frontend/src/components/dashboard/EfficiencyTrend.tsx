@@ -4,6 +4,9 @@ import 'uplot/dist/uPlot.min.css'
 import { subDays } from 'date-fns'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { efficiencyFactorSeries, movingAverage } from '../../utils/advanced-metrics'
+import { useLocale } from '../../contexts/LocaleContext'
+
+type Loc = 'en' | 'de'
 
 const C_DOTS = '#b04a0c'    // amber — per-ride dots
 const C_MA   = '#1c4433'    // forest — moving average line
@@ -14,9 +17,10 @@ function getDotsPath(): uPlot.Series.PathBuilder {
   return () => null
 }
 
-function EfUPlot({ efPoints, maPoints }: {
+function EfUPlot({ efPoints, maPoints, locale }: {
   efPoints: Array<{ date: string; ef: number }>
   maPoints: Array<{ date: string; value: number | null }>
+  locale: Loc
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -70,7 +74,7 @@ function EfUPlot({ efPoints, maPoints }: {
           values: (_u, splits) =>
             splits.map((ts) => {
               const d = new Date(ts * 1000)
-              return `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`
+              return `${d.getDate()} ${d.toLocaleString(locale === 'de' ? 'de-DE' : 'default', { month: 'short' })}`
             }),
         },
         {
@@ -109,12 +113,13 @@ function EfUPlot({ efPoints, maPoints }: {
       ro.disconnect()
       plot.destroy()
     }
-  }, [efPoints, maPoints])
+  }, [efPoints, maPoints, locale])
 
   return <div ref={containerRef} className="w-full min-w-0" />
 }
 
 export default function EfficiencyTrend() {
+  const { locale } = useLocale()
   const today = new Date()
   const startDate = subDays(today, 84)
   const { data: activitiesData, isLoading } = useActivitiesRange(startDate, today)
@@ -135,18 +140,20 @@ export default function EfficiencyTrend() {
     >
       <div className="mb-1">
         <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
-          12 weeks · Aerobic engine
+          {locale === 'de' ? '12 Wochen · Aerober Motor' : '12 weeks · Aerobic engine'}
         </span>
         <h2
           className="num-display mt-1 leading-none"
           style={{ fontSize: 'clamp(20px, 2.5vw, 26px)', color: 'var(--color-ink)' }}
         >
-          Efficiency Factor
+          {locale === 'de' ? 'Effizienzfaktor' : 'Efficiency Factor'}
         </h2>
       </div>
 
       <p className="text-[12px] leading-relaxed mb-4" style={{ color: 'var(--color-muted)' }}>
-        EF = normalized power ÷ average heart rate. Rising over weeks = deeper aerobic base.
+        {locale === 'de'
+          ? 'EF = normalisierte Leistung ÷ durchschnittliche Herzfrequenz. Über Wochen steigend = tiefere aerobe Basis.'
+          : 'EF = normalized power ÷ average heart rate. Rising over weeks = deeper aerobic base.'}
       </p>
 
       {isLoading ? (
@@ -157,28 +164,30 @@ export default function EfficiencyTrend() {
       ) : isEmpty ? (
         <div className="w-full h-[200px] flex flex-col items-center justify-center text-center gap-2 px-4">
           <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
-            Not enough data
+            {locale === 'de' ? 'Nicht genug Daten' : 'Not enough data'}
           </span>
           <p className="text-[13px] leading-relaxed max-w-xs" style={{ color: 'var(--color-ink-2)' }}>
-            Needs at least 3 cycling rides with both power and heart rate.
+            {locale === 'de'
+              ? 'Benötigt mindestens 3 Radfahrten mit Leistung und Herzfrequenz.'
+              : 'Needs at least 3 cycling rides with both power and heart rate.'}
           </p>
         </div>
       ) : (
         <>
-          <EfUPlot efPoints={efPoints} maPoints={maPoints} />
+          <EfUPlot efPoints={efPoints} maPoints={maPoints} locale={locale} />
           <div className="flex items-center gap-5 mt-3">
             <div className="flex items-center gap-2">
               <span
                 className="inline-block w-2 h-2 rounded-full"
                 style={{ backgroundColor: C_DOTS }}
               />
-              <span className="eyebrow">Per ride</span>
+              <span className="eyebrow">{locale === 'de' ? 'Pro Fahrt' : 'Per ride'}</span>
             </div>
             <div className="flex items-center gap-2">
               <svg width="18" height="4" viewBox="0 0 18 4" aria-hidden>
                 <line x1="1" y1="2" x2="17" y2="2" stroke={C_MA} strokeWidth="2" strokeLinecap="round" />
               </svg>
-              <span className="eyebrow">28-day avg</span>
+              <span className="eyebrow">{locale === 'de' ? '28-Tage-Ø' : '28-day avg'}</span>
             </div>
           </div>
         </>

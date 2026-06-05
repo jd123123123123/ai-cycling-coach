@@ -4,6 +4,9 @@ import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { subDays } from 'date-fns'
 import type { PMCEntry } from '../../api/dashboard'
 import Sparkline from './Sparkline'
+import { useLocale } from '../../contexts/LocaleContext'
+
+type Loc = 'en' | 'de'
 
 /**
  * TrendsHero — the first card on the Trends tab. A 90-day summary that
@@ -20,22 +23,27 @@ function signed(n: number, digits = 0): string {
   return (n >= 0 ? '+' : '') + (digits === 0 ? Math.round(n) : n.toFixed(digits))
 }
 
-function formStatus(tsb: number | null): { label: string; color: string } {
-  if (tsb == null) return { label: 'Unknown', color: 'var(--color-muted)' }
-  if (tsb > 15) return { label: 'Fresh', color: 'var(--color-good)' }
-  if (tsb > 5) return { label: 'Race-ready', color: 'var(--color-good)' }
-  if (tsb >= -10) return { label: 'Optimal', color: 'var(--color-ink)' }
-  if (tsb >= -22) return { label: 'Productive', color: 'var(--color-caution)' }
-  return { label: 'Deep fatigue', color: 'var(--color-bad)' }
+function formStatus(tsb: number | null, locale: Loc): { label: string; color: string } {
+  if (tsb == null) return { label: locale === 'de' ? 'Unbekannt' : 'Unknown', color: 'var(--color-muted)' }
+  if (tsb > 15) return { label: locale === 'de' ? 'Frisch' : 'Fresh', color: 'var(--color-good)' }
+  if (tsb > 5) return { label: locale === 'de' ? 'Wettkampfbereit' : 'Race-ready', color: 'var(--color-good)' }
+  if (tsb >= -10) return { label: locale === 'de' ? 'Optimal' : 'Optimal', color: 'var(--color-ink)' }
+  if (tsb >= -22) return { label: locale === 'de' ? 'Produktiv' : 'Productive', color: 'var(--color-caution)' }
+  return { label: locale === 'de' ? 'Tiefe Ermüdung' : 'Deep fatigue', color: 'var(--color-bad)' }
 }
 
-function ctlTrendNarrative(series: PMCEntry[]): string | null {
+function ctlTrendNarrative(series: PMCEntry[], locale: Loc): string | null {
   if (series.length < 8) return null
   const latest = series[series.length - 1]
   const week = series[series.length - 8]
   const month = series.length >= 29 ? series[series.length - 29] : series[0]
   const dCtl7 = latest.ctl - week.ctl
   const dCtl28 = latest.ctl - month.ctl
+  if (locale === 'de') {
+    const verb = dCtl7 >= 1.5 ? 'steigt schnell' : dCtl7 >= 0.4 ? 'steigt stetig' : dCtl7 >= -0.4 ? 'bleibt stabil' : 'baut ab'
+    const monthLabel = dCtl28 >= 3 ? `hoch ${signed(dCtl28)} über 28T` : dCtl28 <= -3 ? `runter ${signed(dCtl28)} über 28T` : 'stabil über 28T'
+    return `Fitness ${verb} (${signed(dCtl7)} in 7T, ${monthLabel}).`
+  }
   const verb = dCtl7 >= 1.5 ? 'climbing fast' : dCtl7 >= 0.4 ? 'climbing steadily' : dCtl7 >= -0.4 ? 'holding flat' : 'detraining'
   const monthDir = dCtl28 >= 3 ? 'up' : dCtl28 <= -3 ? 'down' : 'flat'
   const monthLabel = monthDir === 'flat' ? 'flat over 28d' : `${monthDir} ${signed(dCtl28)} over 28d`
@@ -43,6 +51,7 @@ function ctlTrendNarrative(series: PMCEntry[]): string | null {
 }
 
 export default function TrendsHero() {
+  const { locale } = useLocale()
   const today = useMemo(() => new Date(), [])
   const { data: pmc, isLoading } = usePMC(90)
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 28), [today]), today)
@@ -58,7 +67,7 @@ export default function TrendsHero() {
   const ctl = latest.ctl
   const atl = latest.atl
   const tsb = latest.tsb
-  const form = formStatus(tsb)
+  const form = formStatus(tsb, locale)
 
   // 7-day deltas
   const priorWeek = series.length >= 8 ? series[series.length - 8] : series[0]
@@ -74,7 +83,7 @@ export default function TrendsHero() {
   const aiPerDay = [...series]
     .reverse()
     .find((e) => typeof e.narrative === 'string' && e.narrative!.trim().length > 0)?.narrative
-  const composedTrend = ctlTrendNarrative(series)
+  const composedTrend = ctlTrendNarrative(series, locale)
   const narrative = (aiPerDay && aiPerDay.trim()) || composedTrend
 
   // Volume summary — 28-day TSS total + HRV/RHR coverage
@@ -93,7 +102,7 @@ export default function TrendsHero() {
       {/* Eyebrow */}
       <div className="flex items-center gap-3 flex-wrap mb-3">
         <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
-          TRENDS · 90 DAYS
+          {locale === 'de' ? 'TRENDS · 90 TAGE' : 'TRENDS · 90 DAYS'}
         </span>
         <span style={{ color: 'var(--color-muted)', fontSize: 10 }}>·</span>
         <span className="eyebrow num-mono" style={{ color: form.color, fontSize: 10, letterSpacing: '0.22em' }}>
@@ -113,12 +122,12 @@ export default function TrendsHero() {
 
       {/* Triple stat row + CTL sparkline */}
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-x-6 gap-y-3 items-center">
-        <Stat label="FITNESS · CTL" value={String(Math.round(ctl))} sub={`${signed(dCtl)} · 7d`} subColor={dCtl >= 0.4 ? 'var(--color-good)' : dCtl <= -0.4 ? 'var(--color-bad)' : 'var(--color-muted)'} />
-        <Stat label="FATIGUE · ATL" value={String(Math.round(atl))} sub={`${signed(dAtl)} · 7d`} subColor={dAtl >= 2 ? 'var(--color-caution)' : 'var(--color-muted)'} />
-        <Stat label="FORM · TSB" value={signed(tsb)} valueColor={form.color} />
+        <Stat label={locale === 'de' ? 'FITNESS · CTL' : 'FITNESS · CTL'} value={String(Math.round(ctl))} sub={`${signed(dCtl)} · 7${locale === 'de' ? 'T' : 'd'}`} subColor={dCtl >= 0.4 ? 'var(--color-good)' : dCtl <= -0.4 ? 'var(--color-bad)' : 'var(--color-muted)'} />
+        <Stat label={locale === 'de' ? 'ERMÜDUNG · ATL' : 'FATIGUE · ATL'} value={String(Math.round(atl))} sub={`${signed(dAtl)} · 7${locale === 'de' ? 'T' : 'd'}`} subColor={dAtl >= 2 ? 'var(--color-caution)' : 'var(--color-muted)'} />
+        <Stat label={locale === 'de' ? 'FORM · TSB' : 'FORM · TSB'} value={signed(tsb)} valueColor={form.color} />
         <div className="hidden sm:block">
           <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
-            FITNESS · 90D
+            {locale === 'de' ? 'FITNESS · 90T' : 'FITNESS · 90D'}
           </span>
           <div className="mt-1">
             <Sparkline values={ctlSeries} width={180} height={36} stroke="var(--color-ink-2)" showDot={false} />
@@ -132,10 +141,10 @@ export default function TrendsHero() {
         style={{ borderTop: '1px solid var(--color-rule)' }}
       >
         <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
-          28-day TSS · <span style={{ color: 'var(--color-ink)' }}>{tss28}</span>
+          {locale === 'de' ? '28-Tage-TSS' : '28-day TSS'} · <span style={{ color: 'var(--color-ink)' }}>{tss28}</span>
         </span>
         <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
-          HRV days · <span style={{ color: 'var(--color-ink)' }}>{hrvDaysAvail}/28</span>
+          {locale === 'de' ? 'HRV-Tage' : 'HRV days'} · <span style={{ color: 'var(--color-ink)' }}>{hrvDaysAvail}/28</span>
         </span>
       </div>
     </div>

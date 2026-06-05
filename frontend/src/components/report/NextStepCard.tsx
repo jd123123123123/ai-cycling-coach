@@ -1,4 +1,5 @@
 import { ArrowRight } from 'lucide-react'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { NextStep } from '../../api/report'
 
 const TONE_COLOR: Record<string, string> = {
@@ -10,6 +11,7 @@ const TONE_COLOR: Record<string, string> = {
 
 /** Forward-looking recommendation — the report's actionable payoff. */
 export default function NextStepCard({ step }: { step: NextStep }) {
+  const { locale } = useLocale()
   const accent = TONE_COLOR[step.tone] ?? 'var(--color-ink)'
   return (
     <div
@@ -21,7 +23,7 @@ export default function NextStepCard({ step }: { step: NextStep }) {
       }}
     >
       <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
-        DO THIS NEXT
+        {locale === 'de' ? 'NÄCHSTER SCHRITT' : 'DO THIS NEXT'}
       </span>
       <div className="flex items-center gap-2 mt-2">
         <ArrowRight size={18} strokeWidth={2.2} style={{ color: accent }} />

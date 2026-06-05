@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as echarts from 'echarts'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { RadarAxis } from '../../api/report'
 
 /** Resolve a `var(--token)` string to its concrete computed value. ECharts
@@ -14,6 +15,7 @@ function resolveCssVar(value: string): string {
 /** Five-axis body-system radar. Insufficient axes render at 0 with a muted note
  * below the chart so a hollow spoke never reads as "you scored zero". */
 export default function BodySystemRadar({ axes }: { axes: RadarAxis[] }) {
+  const { locale } = useLocale()
   const ref = useRef<HTMLDivElement>(null)
 
   const { indicators, values } = useMemo(() => ({
@@ -62,12 +64,12 @@ export default function BodySystemRadar({ axes }: { axes: RadarAxis[] }) {
       style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
     >
       <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
-        BODY SYSTEMS
+        {locale === 'de' ? 'KÖRPERSYSTEME' : 'BODY SYSTEMS'}
       </span>
       <div ref={ref} style={{ width: '100%', height: 320 }} />
       {missing.length > 0 && (
         <p className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
-          Not enough data: {missing.join(', ')}
+          {locale === 'de' ? 'Nicht genug Daten' : 'Not enough data'}: {missing.join(', ')}
         </p>
       )}
     </div>

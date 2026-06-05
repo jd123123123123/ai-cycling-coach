@@ -1,7 +1,8 @@
 import { Calendar, dateFnsLocalizer, Views, type Event as RbcEvent, type EventProps, type DateCellWrapperProps } from 'react-big-calendar'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { format, parse, startOfWeek, getDay, addDays, startOfMonth, parseISO, addMinutes } from 'date-fns'
-import { enUS } from 'date-fns/locale'
+import { enUS, de } from 'date-fns/locale'
+import { useLocale } from '../../contexts/LocaleContext'
 import {
   DndContext,
   useDraggable,
@@ -88,6 +89,7 @@ function DroppableDateCell({ value, children }: DateCellWrapperProps) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TrainingCalendar() {
+  const { locale } = useLocale()
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches
   const [view, setView] = useState<'week' | 'month'>(isMobile ? 'week' : 'month')
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -120,7 +122,7 @@ export default function TrainingCalendar() {
       const start = new Date(a.started_at)
       const end = new Date(start.getTime() + (a.duration_seconds ?? 3600) * 1000)
       return {
-        title: a.title ?? `${a.sport} activity`,
+        title: a.title ?? (locale === 'de' ? `${a.sport}-Aktivität` : `${a.sport} activity`),
         start,
         end,
         resource: { type: 'completed', id: a.id, sport: a.sport },
@@ -138,7 +140,7 @@ export default function TrainingCalendar() {
       }
     })
     return [...completed, ...planned]
-  }, [activitiesQuery.data, plannedQuery.data])
+  }, [activitiesQuery.data, plannedQuery.data, locale])
 
   // Drag-drop handler
   function handleDragEnd(dragEvent: DragEndEvent) {
@@ -164,9 +166,10 @@ export default function TrainingCalendar() {
   }
 
   // Format header title
+  const dfOpts = locale === 'de' ? { locale: de } : undefined
   const headerTitle = view === 'month'
-    ? format(currentDate, 'MMMM yyyy')
-    : `${format(rangeStart, 'MMM d')} – ${format(addDays(rangeStart, 6), 'MMM d, yyyy')}`
+    ? format(currentDate, 'MMMM yyyy', dfOpts)
+    : `${format(rangeStart, 'MMM d', dfOpts)} – ${format(addDays(rangeStart, 6), 'MMM d, yyyy', dfOpts)}`
 
   const isLoading = activitiesQuery.isLoading || plannedQuery.isLoading
   const isError = activitiesQuery.isError || plannedQuery.isError
@@ -183,7 +186,7 @@ export default function TrainingCalendar() {
       <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
         <div>
           <span className="eyebrow" style={{ color: 'var(--color-amber)' }}>
-            Logbook
+            {locale === 'de' ? 'Logbuch' : 'Logbook'}
           </span>
           <h2
             className="num-display mt-1 leading-none"
@@ -192,7 +195,7 @@ export default function TrainingCalendar() {
               color: 'var(--color-ink)',
             }}
           >
-            Calendar
+            {locale === 'de' ? 'Kalender' : 'Calendar'}
           </h2>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -201,7 +204,7 @@ export default function TrainingCalendar() {
             <button
               onClick={() => navigate('prev')}
               className="py-2 px-3 text-sm text-gray-700 hover:bg-gray-50 min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label="Previous"
+              aria-label={locale === 'de' ? 'Zurück' : 'Previous'}
             >
               ‹
             </button>
@@ -209,12 +212,12 @@ export default function TrainingCalendar() {
               onClick={() => navigate('today')}
               className="py-2 px-3 text-sm text-gray-700 hover:bg-gray-50 border-x border-gray-200 min-h-[44px]"
             >
-              Today
+              {locale === 'de' ? 'Heute' : 'Today'}
             </button>
             <button
               onClick={() => navigate('next')}
               className="py-2 px-3 text-sm text-gray-700 hover:bg-gray-50 min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label="Next"
+              aria-label={locale === 'de' ? 'Weiter' : 'Next'}
             >
               ›
             </button>
@@ -228,7 +231,7 @@ export default function TrainingCalendar() {
                 view === 'week' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
-              Week
+              {locale === 'de' ? 'Woche' : 'Week'}
             </button>
             <button
               onClick={() => setView('month')}
@@ -236,7 +239,7 @@ export default function TrainingCalendar() {
                 view === 'month' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
-              Month
+              {locale === 'de' ? 'Monat' : 'Month'}
             </button>
           </div>
         </div>
@@ -247,12 +250,12 @@ export default function TrainingCalendar() {
         <div className="h-[520px] sm:h-[640px] rounded-xl bg-gray-100 animate-pulse" />
       ) : isError ? (
         <div className="h-[520px] sm:h-[640px] flex flex-col items-center justify-center gap-3 text-gray-500">
-          <p className="text-sm">Couldn't load calendar</p>
+          <p className="text-sm">{locale === 'de' ? 'Kalender konnte nicht geladen werden' : "Couldn't load calendar"}</p>
           <button
             onClick={() => { activitiesQuery.refetch(); plannedQuery.refetch() }}
             className="py-2 px-4 text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
           >
-            Retry
+            {locale === 'de' ? 'Erneut versuchen' : 'Retry'}
           </button>
         </div>
       ) : (

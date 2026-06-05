@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { subDays } from 'date-fns'
 import { usePMC } from '../../hooks/usePMC'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { PMCEntry, DailyMetric } from '../../api/dashboard'
 import Sparkline from './Sparkline'
 
@@ -89,6 +90,7 @@ function Row({
 }
 
 export default function PMCCompact() {
+  const { locale } = useLocale()
   const { data, isLoading, isError } = usePMC(90)
   const today = useMemo(() => new Date(), [])
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 28), [today]), today)
@@ -121,8 +123,12 @@ export default function PMCCompact() {
   const formVal = latest.tsb
   const formSub: string | undefined = undefined
   const formTitle = adj
-    ? `Form (TSB) ${signed(latest.tsb)} · HRV-adjusted TSB' ≈ ${signed(adj.value)} (HRV ${adj.factorPct >= 0 ? '+' : ''}${adj.factorPct}% vs 28d baseline)`
-    : `Form (TSB) — calendar load balance`
+    ? locale === 'de'
+      ? `Form (TSB) ${signed(latest.tsb)} · HRV-bereinigter TSB' ≈ ${signed(adj.value)} (HRV ${adj.factorPct >= 0 ? '+' : ''}${adj.factorPct}% vs. 28-Tage-Basislinie)`
+      : `Form (TSB) ${signed(latest.tsb)} · HRV-adjusted TSB' ≈ ${signed(adj.value)} (HRV ${adj.factorPct >= 0 ? '+' : ''}${adj.factorPct}% vs 28d baseline)`
+    : locale === 'de'
+      ? `Form (TSB) — kalendarische Lastbilanz`
+      : `Form (TSB) — calendar load balance`
 
   return (
     <div
@@ -131,7 +137,7 @@ export default function PMCCompact() {
     >
       <div className="flex items-center justify-between gap-3 mb-2">
         <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
-          Training state · 90 days
+          {locale === 'de' ? 'Trainingszustand · 90 Tage' : 'Training state · 90 days'}
         </span>
         <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
           CTL {signed(ctlDelta)} · 7d
@@ -140,15 +146,15 @@ export default function PMCCompact() {
 
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-x-5 gap-y-1 items-center">
         <div className="divide-y" style={{ borderColor: 'var(--color-rule)' }}>
-          <Row label="FITNESS" value={String(Math.round(latest.ctl))} />
-          <Row label="FATIGUE" value={String(Math.round(latest.atl))} />
-          <Row label="FORM" value={signed(formVal)} sub={formSub} title={formTitle} color={formColor(formVal)} />
+          <Row label={locale === 'de' ? 'FITNESS' : 'FITNESS'} value={String(Math.round(latest.ctl))} />
+          <Row label={locale === 'de' ? 'ERMÜDUNG' : 'FATIGUE'} value={String(Math.round(latest.atl))} />
+          <Row label={locale === 'de' ? 'FORM' : 'FORM'} value={signed(formVal)} sub={formSub} title={formTitle} color={formColor(formVal)} />
         </div>
 
         <div className="hidden sm:flex flex-col items-end gap-1 pl-4" style={{ borderLeft: '1px solid var(--color-rule)' }}>
-          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>FITNESS</span>
+          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{locale === 'de' ? 'FITNESS' : 'FITNESS'}</span>
           <Sparkline values={ctlValues} width={150} height={34} stroke="var(--color-ink-2)" showDot={false} />
-          <span className="eyebrow mt-1" style={{ color: 'var(--color-muted)', fontSize: 9 }}>FATIGUE</span>
+          <span className="eyebrow mt-1" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{locale === 'de' ? 'ERMÜDUNG' : 'FATIGUE'}</span>
           <Sparkline values={atlValues} width={150} height={34} stroke="var(--color-muted)" showDot={false} />
         </div>
       </div>

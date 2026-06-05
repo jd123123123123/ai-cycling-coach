@@ -5,6 +5,9 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useCountUp } from '../../hooks/useCountUp'
 import type { ActivityRead } from '../../api/dashboard'
+import { useLocale } from '../../contexts/LocaleContext'
+
+type Loc = 'en' | 'de'
 
 // VO2Max estimator — sport-aware, rolling 30-day window.
 //
@@ -74,26 +77,35 @@ function runningVO2(bestPaceMs: number | null): number | null {
   return (3.5 * vMin) / 210 + 7.5
 }
 
-function classifyVO2(vo2: number, sport: Sport): { label: string; color: string } {
+function classifyVO2(vo2: number, sport: Sport, locale: Loc): { label: string; color: string } {
   // Coarse generic adult-male endurance bands. Close enough for the
   // qualitative chip; proper age/sex adjustment is a future refinement.
-  if (sport === 'cycling') {
-    if (vo2 >= 60) return { label: 'ELITE', color: '#30D158' }
-    if (vo2 >= 52) return { label: 'EXCELLENT', color: '#30D158' }
-    if (vo2 >= 45) return { label: 'STRONG', color: 'var(--color-forest-2)' }
-    if (vo2 >= 38) return { label: 'FIT', color: 'var(--color-amber)' }
-    return { label: 'BUILDING', color: 'var(--color-muted)' }
+  const de = locale === 'de'
+  const L = {
+    elite: de ? 'ELITE' : 'ELITE',
+    excellent: de ? 'HERVORRAGEND' : 'EXCELLENT',
+    strong: de ? 'STARK' : 'STRONG',
+    fit: de ? 'FIT' : 'FIT',
+    building: de ? 'IM AUFBAU' : 'BUILDING',
   }
-  if (vo2 >= 65) return { label: 'ELITE', color: '#30D158' }
-  if (vo2 >= 55) return { label: 'EXCELLENT', color: '#30D158' }
-  if (vo2 >= 48) return { label: 'STRONG', color: 'var(--color-forest-2)' }
-  if (vo2 >= 40) return { label: 'FIT', color: 'var(--color-amber)' }
-  return { label: 'BUILDING', color: 'var(--color-muted)' }
+  if (sport === 'cycling') {
+    if (vo2 >= 60) return { label: L.elite, color: '#30D158' }
+    if (vo2 >= 52) return { label: L.excellent, color: '#30D158' }
+    if (vo2 >= 45) return { label: L.strong, color: 'var(--color-forest-2)' }
+    if (vo2 >= 38) return { label: L.fit, color: 'var(--color-amber)' }
+    return { label: L.building, color: 'var(--color-muted)' }
+  }
+  if (vo2 >= 65) return { label: L.elite, color: '#30D158' }
+  if (vo2 >= 55) return { label: L.excellent, color: '#30D158' }
+  if (vo2 >= 48) return { label: L.strong, color: 'var(--color-forest-2)' }
+  if (vo2 >= 40) return { label: L.fit, color: 'var(--color-amber)' }
+  return { label: L.building, color: 'var(--color-muted)' }
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
+  const { locale } = useLocale()
   const today = new Date()
   const start = subDays(today, WINDOW_DAYS_PRIOR)
   const { data: actsData } = useActivitiesRange(start, today)
@@ -129,7 +141,7 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
     }
 
     const d = current != null && prior != null ? current - prior : null
-    const t = current != null ? classifyVO2(current, sport) : null
+    const t = current != null ? classifyVO2(current, sport, locale) : null
 
     return {
       vo2: current,
@@ -139,7 +151,7 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
       supportNumber: support,
       supportUnit: unit,
     }
-  }, [actsData, profile, sport, today])
+  }, [actsData, profile, sport, today, locale])
 
   const countedVO2 = useCountUp(Math.round((vo2 ?? 0) * 10) / 10, {
     duration: 900,
@@ -161,15 +173,21 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
           style={{ color: 'var(--color-muted)' }}
         >
           {sport === 'cycling'
-            ? 'Log a 40–90 min ride with power to see your VO2 max estimate.'
-            : 'Log a run ≥ 3 km to see your VO2 max estimate.'}
+            ? (locale === 'de'
+                ? 'Zeichne eine 40–90-Min-Fahrt mit Leistung auf, um deine VO2-Max-Schätzung zu sehen.'
+                : 'Log a 40–90 min ride with power to see your VO2 max estimate.')
+            : (locale === 'de'
+                ? 'Zeichne einen Lauf ≥ 3 km auf, um deine VO2-Max-Schätzung zu sehen.'
+                : 'Log a run ≥ 3 km to see your VO2 max estimate.')}
         </p>
         {sport === 'cycling' && !profile?.weight_kg && (
           <p
             className="text-[11px] mt-1"
             style={{ color: 'var(--color-amber)' }}
           >
-            Body weight missing — add it in Profile for cycling VO2.
+            {locale === 'de'
+              ? 'Körpergewicht fehlt — trage es im Profil für die Rad-VO2 ein.'
+              : 'Body weight missing — add it in Profile for cycling VO2.'}
           </p>
         )}
       </div>
@@ -191,12 +209,16 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
 
   let supportLine = ''
   if (sport === 'cycling' && supportNumber != null) {
-    supportLine = `Best FTP window: ${supportNumber} W · weight ${profile?.weight_kg ?? '—'} kg`
+    supportLine = locale === 'de'
+      ? `Bestes FTP-Fenster: ${supportNumber} W · Gewicht ${profile?.weight_kg ?? '—'} kg`
+      : `Best FTP window: ${supportNumber} W · weight ${profile?.weight_kg ?? '—'} kg`
   } else if (sport === 'running' && supportNumber != null) {
     const paceMinPerKm = 1000 / supportNumber / 60
     const minutes = Math.floor(paceMinPerKm)
     const seconds = Math.round((paceMinPerKm - minutes) * 60)
-    supportLine = `Best pace window: ${minutes}:${String(seconds).padStart(2, '0')} min/km`
+    supportLine = locale === 'de'
+      ? `Bestes Pace-Fenster: ${minutes}:${String(seconds).padStart(2, '0')} min/km`
+      : `Best pace window: ${minutes}:${String(seconds).padStart(2, '0')} min/km`
   }
 
   return (
@@ -221,7 +243,7 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
             fontWeight: 600,
           }}
         >
-          VO2 max · {sport}
+          VO2 max · {locale === 'de' ? (sport === 'cycling' ? 'Radfahren' : 'Laufen') : sport}
         </span>
         {tier && (
           <span
@@ -262,7 +284,7 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
             style={{ color: deltaColor, fontSize: 12, fontWeight: 600 }}
           >
             <DeltaIcon size={11} strokeWidth={2.2} />
-            {delta > 0 ? '+' : ''}{delta.toFixed(1)} vs 30d prior
+            {delta > 0 ? '+' : ''}{delta.toFixed(1)} {locale === 'de' ? 'ggü. 30T zuvor' : 'vs 30d prior'}
           </span>
         )}
       </div>
@@ -283,8 +305,12 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
 
       <p className="text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
         {sport === 'cycling'
-          ? `Estimated from best NP × 0.97 ÷ weight (Storer). Lifetime change of +4–6 units typical across a season of structured Z2 + VO2 work.`
-          : `Estimated from fastest pace over ≥ 3 km (Daniels VDOT). +3–5 units is a strong seasonal gain.`}
+          ? (locale === 'de'
+              ? `Geschätzt aus bester NP × 0,97 ÷ Gewicht (Storer). Eine Veränderung von +4–6 Einheiten ist über eine Saison mit strukturierter Z2- + VO2-Arbeit typisch.`
+              : `Estimated from best NP × 0.97 ÷ weight (Storer). Lifetime change of +4–6 units typical across a season of structured Z2 + VO2 work.`)
+          : (locale === 'de'
+              ? `Geschätzt aus schnellster Pace über ≥ 3 km (Daniels VDOT). +3–5 Einheiten sind ein starker Saisongewinn.`
+              : `Estimated from fastest pace over ≥ 3 km (Daniels VDOT). +3–5 units is a strong seasonal gain.`)}
       </p>
     </div>
   )

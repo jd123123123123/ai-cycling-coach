@@ -3,27 +3,32 @@ import { createPortal } from 'react-dom'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { format, parseISO } from 'date-fns'
+import { de } from 'date-fns/locale'
 import { X, Heart, Waves, Zap } from 'lucide-react'
 import { useIntradayDay } from '../../hooks/useIntraday'
 import type { IntradayPoint } from '../../api/dashboard'
+import { useLocale } from '../../contexts/LocaleContext'
 
 export type IntradayMetric = 'body_battery' | 'stress' | 'hrv'
 
 interface MetricMeta {
   key: IntradayMetric
   label: string
+  labelDe: string
   unit: string
   color: string
   icon: React.ReactNode
   domain: [number, number] | null   // forced y-axis domain (null = auto)
   zones: Array<[number, number, string, string]>  // [y0, y1, fill, label]
   copy: string
+  copyDe: string
 }
 
 const META: Record<IntradayMetric, MetricMeta> = {
   body_battery: {
     key: 'body_battery',
     label: 'Body battery',
+    labelDe: 'Body Battery',
     unit: '/100',
     color: '#2a6147',
     icon: <Zap size={14} strokeWidth={1.8} />,
@@ -35,10 +40,12 @@ const META: Record<IntradayMetric, MetricMeta> = {
       [75, 100, 'rgba(28, 68, 51, 0.1)', 'Peak'],
     ],
     copy: 'Garmin\u2019s composite energy reserve. Drops during stress and exertion, charges during sleep and calm periods.',
+    copyDe: 'Garmins kombinierte Energiereserve. F\u00e4llt bei Stress und Anstrengung, l\u00e4dt bei Schlaf und ruhigen Phasen.',
   },
   stress: {
     key: 'stress',
     label: 'Stress',
+    labelDe: 'Stress',
     unit: '/100',
     color: '#b04a0c',
     icon: <Waves size={14} strokeWidth={1.8} />,
@@ -50,16 +57,19 @@ const META: Record<IntradayMetric, MetricMeta> = {
       [75, 100, 'rgba(138, 29, 29, 0.08)', 'High'],
     ],
     copy: 'Derived from HRV. Lower is better; sustained highs compound into accumulated fatigue.',
+    copyDe: 'Abgeleitet aus der HRV. Niedriger ist besser; anhaltende H\u00f6chstwerte summieren sich zu angesammelter Erm\u00fcdung.',
   },
   hrv: {
     key: 'hrv',
     label: 'Heart rate variability',
+    labelDe: 'Herzfrequenzvariabilit\u00e4t',
     unit: 'ms',
     color: '#1c4433',
     icon: <Heart size={14} strokeWidth={1.8} />,
     domain: null,
     zones: [],
     copy: 'Overnight rMSSD readings (every 5 min during sleep). Higher + more stable = deeper parasympathetic recovery.',
+    copyDe: 'N\u00e4chtliche rMSSD-Werte (alle 5 Min im Schlaf). H\u00f6her + stabiler = tiefere parasympathische Erholung.',
   },
 }
 
@@ -229,6 +239,7 @@ interface IntradayModalProps {
 export default function IntradayModal({
   open, onClose, iso, initialMetric,
 }: IntradayModalProps) {
+  const { locale } = useLocale()
   const [metric, setMetric] = useState<IntradayMetric>(initialMetric)
 
   useEffect(() => {
@@ -265,7 +276,7 @@ export default function IntradayModal({
 
   if (!open || !iso) return null
 
-  const title = format(parseISO(iso), 'EEEE · d MMMM yyyy')
+  const title = format(parseISO(iso), 'EEEE · d MMMM yyyy', locale === 'de' ? { locale: de } : undefined)
   const meta = META[metric]
 
   const content = (
@@ -288,7 +299,7 @@ export default function IntradayModal({
               className="eyebrow"
               style={{ color: 'var(--color-amber)' }}
             >
-              Intraday · throughout the day
+              {locale === 'de' ? 'Tagesverlauf · über den Tag' : 'Intraday · throughout the day'}
             </span>
             <h2
               id="intraday-modal-title"
@@ -309,7 +320,7 @@ export default function IntradayModal({
               border: '1px solid var(--color-rule)',
               backgroundColor: 'var(--color-paper)',
             }}
-            aria-label="Close"
+            aria-label={locale === 'de' ? 'Schließen' : 'Close'}
           >
             <X size={16} strokeWidth={2} />
           </button>
@@ -340,7 +351,7 @@ export default function IntradayModal({
                   }}
                 >
                   {META[m].icon}
-                  {META[m].label}
+                  {locale === 'de' ? META[m].labelDe : META[m].label}
                   {count > 0 && metric !== m && (
                     <span className="num-mono opacity-60 text-[10px]">
                       {count}
@@ -364,7 +375,7 @@ export default function IntradayModal({
           >
             {[
               ['min', min],
-              ['avg', avg],
+              [locale === 'de' ? 'Ø' : 'avg', avg],
               ['max', max],
             ].map(([label, v]) => (
               <div key={label as string} className="flex-1 px-4 py-3">
@@ -399,7 +410,9 @@ export default function IntradayModal({
                 className="text-[14px]"
                 style={{ color: 'var(--color-muted)' }}
               >
-                Fetching from Garmin — first-time loads can take ~10 seconds
+                {locale === 'de'
+                  ? 'Wird von Garmin geladen — erstmalige Ladevorgänge können ~10 Sekunden dauern'
+                  : 'Fetching from Garmin — first-time loads can take ~10 seconds'}
               </span>
             </div>
           ) : isError ? (
@@ -410,7 +423,9 @@ export default function IntradayModal({
                 className="text-[15px] max-w-sm"
                 style={{ color: 'var(--color-alert)' }}
               >
-                Couldn&apos;t fetch intraday data. Try again in a moment.
+                {locale === 'de'
+                  ? 'Tagesverlaufsdaten konnten nicht geladen werden. Versuche es gleich erneut.'
+                  : 'Couldn’t fetch intraday data. Try again in a moment.'}
               </p>
             </div>
           ) : points.length === 0 ? (
@@ -421,8 +436,9 @@ export default function IntradayModal({
                 className="text-[15px] max-w-sm"
                 style={{ color: 'var(--color-muted)' }}
               >
-                No {meta.label.toLowerCase()} readings for this day. Either
-                the watch wasn&apos;t worn or Garmin didn&apos;t record it.
+                {locale === 'de'
+                  ? `Keine ${meta.labelDe}-Werte für diesen Tag. Entweder wurde die Uhr nicht getragen oder Garmin hat nichts aufgezeichnet.`
+                  : `No ${meta.label.toLowerCase()} readings for this day. Either the watch wasn’t worn or Garmin didn’t record it.`}
               </p>
             </div>
           ) : (
@@ -436,7 +452,7 @@ export default function IntradayModal({
             className="text-[12px] leading-relaxed max-w-xl"
             style={{ color: 'var(--color-ink-2)' }}
           >
-            {meta.copy}
+            {locale === 'de' ? meta.copyDe : meta.copy}
           </p>
           {data?.fetched_live && (
             <span
@@ -447,7 +463,7 @@ export default function IntradayModal({
                 border: '1px solid rgba(28, 68, 51, 0.2)',
               }}
             >
-              freshly fetched
+              {locale === 'de' ? 'frisch geladen' : 'freshly fetched'}
             </span>
           )}
         </div>

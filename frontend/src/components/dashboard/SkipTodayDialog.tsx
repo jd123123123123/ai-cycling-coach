@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { usePMC } from '../../hooks/usePMC'
+import { useLocale } from '../../contexts/LocaleContext'
 
 /**
  * SkipTodayDialog — a "show me the implications" modal for marking today
@@ -31,6 +32,7 @@ function fmtSigned(n: number, digits = 1): string {
 }
 
 export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps) {
+  const { locale } = useLocale()
   const { data: brief } = useCoachBrief()
   const { data: pmc } = usePMC(14)
   const [acknowledged, setAcknowledged] = useState(false)
@@ -54,7 +56,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
 
   const pw = brief?.prescribed_workout
   const todayTss = Math.round(pw?.predicted_tss ?? 0)
-  const todayTitle = pw?.title ?? "Today's session"
+  const todayTitle = pw?.title ?? (locale === 'de' ? 'Heutige Einheit' : "Today's session")
   const todayMinutes = pw?.duration_minutes ?? null
 
   const entries = pmc?.entries ?? []
@@ -102,7 +104,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Skip today — implications"
+      aria-label={locale === 'de' ? 'Heute aussetzen — Auswirkungen' : 'Skip today — implications'}
       onClick={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{
@@ -131,7 +133,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
                 fontWeight: 600,
               }}
             >
-              IF YOU SKIP TODAY
+              {locale === 'de' ? 'WENN DU HEUTE AUSSETZT' : 'IF YOU SKIP TODAY'}
             </span>
             <h2
               className="leading-tight mt-1"
@@ -142,7 +144,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
                 color: 'var(--color-ink)',
               }}
             >
-              Here's what changes.
+              {locale === 'de' ? 'Das ändert sich.' : "Here's what changes."}
             </h2>
           </div>
           <button
@@ -150,7 +152,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
             onClick={onClose}
             className="p-1.5 rounded-md"
             style={{ color: 'var(--color-muted)' }}
-            aria-label="Close"
+            aria-label={locale === 'de' ? 'Schließen' : 'Close'}
           >
             <X size={16} strokeWidth={2} />
           </button>
@@ -166,7 +168,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
           }}
         >
           <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
-            TODAY
+            {locale === 'de' ? 'HEUTE' : 'TODAY'}
           </span>
           <span style={{ color: 'var(--color-ink)' }}>{todayTitle}</span>
           <span style={{ color: 'var(--color-muted)' }}>
@@ -192,7 +194,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
                 {fmtSigned(tsbDelta ?? 0, 1)}
               </span>
               <span className="num-mono block" style={{ color: 'var(--color-muted)', fontSize: 10 }}>
-                tomorrow
+                {locale === 'de' ? 'morgen' : 'tomorrow'}
               </span>
             </div>
             <div
@@ -209,7 +211,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
                 {fmtSigned(skipping.atl - withWorkout.atl, 1)}
               </span>
               <span className="num-mono block" style={{ color: 'var(--color-muted)', fontSize: 10 }}>
-                tomorrow
+                {locale === 'de' ? 'morgen' : 'tomorrow'}
               </span>
             </div>
             <div
@@ -226,7 +228,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
                 {fmtSigned(ctlDelta ?? 0, 2)}
               </span>
               <span className="num-mono block" style={{ color: 'var(--color-muted)', fontSize: 10 }}>
-                tomorrow
+                {locale === 'de' ? 'morgen' : 'tomorrow'}
               </span>
             </div>
           </div>
@@ -235,29 +237,36 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
         {/* Implications prose */}
         <div className="flex flex-col gap-2">
           <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-            ▸ <span style={{ color: 'var(--color-ink)' }}>This week:</span>{' '}
-            {tssWeekActual} of {tssWeekWithToday} planned TSS lands. The missing
-            session can slide to a later slot, or stay missed if you need the
-            recovery.
+            ▸ <span style={{ color: 'var(--color-ink)' }}>{locale === 'de' ? 'Diese Woche:' : 'This week:'}</span>{' '}
+            {locale === 'de'
+              ? `${tssWeekActual} von ${tssWeekWithToday} geplanten TSS landen. Die fehlende Einheit kann auf einen späteren Slot rutschen oder ausfallen, wenn du die Erholung brauchst.`
+              : `${tssWeekActual} of ${tssWeekWithToday} planned TSS lands. The missing session can slide to a later slot, or stay missed if you need the recovery.`}
           </p>
           {typeof daysToGoal === 'number' && daysToGoal > 0 && raceCtlImpact != null && goalName && (
             <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-              ▸ <span style={{ color: 'var(--color-ink)' }}>Race day ({daysToGoal} d to {goalName}):</span>{' '}
-              fitness at the event drops by{' '}
+              ▸ <span style={{ color: 'var(--color-ink)' }}>{locale === 'de' ? `Wettkampftag (${daysToGoal} T bis ${goalName}):` : `Race day (${daysToGoal} d to ${goalName}):`}</span>{' '}
+              {locale === 'de' ? 'die Fitness am Event sinkt um' : 'fitness at the event drops by'}{' '}
               <span className="num-mono" style={{ color: 'var(--color-ink)' }}>
                 {Math.abs(raceCtlImpact).toFixed(1)} CTL
               </span>
               {Math.abs(raceCtlImpact) < 0.6
-                ? ' — barely a rounding error against the trajectory.'
+                ? (locale === 'de'
+                    ? ' — kaum mehr als ein Rundungsfehler im Verlauf.'
+                    : ' — barely a rounding error against the trajectory.')
                 : Math.abs(raceCtlImpact) < 1.5
-                  ? " — small but real; worth a slightly bigger weekend if you can."
-                  : ' — meaningful; consider moving the session rather than dropping it.'}
+                  ? (locale === 'de'
+                      ? ' — klein, aber real; ein etwas größeres Wochenende lohnt sich, wenn möglich.'
+                      : " — small but real; worth a slightly bigger weekend if you can.")
+                  : (locale === 'de'
+                      ? ' — spürbar; verschiebe die Einheit lieber, statt sie zu streichen.'
+                      : ' — meaningful; consider moving the session rather than dropping it.')}
             </p>
           )}
           <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-            ▸ <span style={{ color: 'var(--color-ink)' }}>Tomorrow:</span>{' '}
-            the picker re-projects from current state each morning, so
-            tomorrow's call adjusts automatically to the lower fatigue.
+            ▸ <span style={{ color: 'var(--color-ink)' }}>{locale === 'de' ? 'Morgen:' : 'Tomorrow:'}</span>{' '}
+            {locale === 'de'
+              ? 'der Picker rechnet jeden Morgen neu aus dem aktuellen Zustand, sodass sich die Empfehlung für morgen automatisch an die geringere Ermüdung anpasst.'
+              : "the picker re-projects from current state each morning, so tomorrow's call adjusts automatically to the lower fatigue."}
           </p>
         </div>
 
@@ -269,7 +278,7 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
             className="inline-flex items-center gap-1 text-[13px] font-medium"
             style={{ color: 'var(--color-ink-2)' }}
           >
-            Never mind, I'm doing it
+            {locale === 'de' ? 'Vergiss es, ich mache es' : "Never mind, I'm doing it"}
           </button>
           <button
             type="button"
@@ -300,7 +309,9 @@ export default function SkipTodayDialog({ open, onClose }: SkipTodayDialogProps)
             }}
             disabled={acknowledged}
           >
-            {acknowledged ? 'Got it — easy day' : 'Skip today'}
+            {acknowledged
+              ? (locale === 'de' ? 'Verstanden — Ruhetag' : 'Got it — easy day')
+              : (locale === 'de' ? 'Heute aussetzen' : 'Skip today')}
           </button>
         </div>
       </div>

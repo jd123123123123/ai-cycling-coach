@@ -1,4 +1,6 @@
 import { format, parseISO } from 'date-fns'
+import { de } from 'date-fns/locale'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { MesoBlockContext } from '../../api/weeks'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
 
@@ -16,8 +18,15 @@ const PHASE_LABEL: Record<string, string> = {
   recovery: 'Recovery', taper: 'Taper',
 }
 
-function humanPhase(phase: string): string {
-  return PHASE_LABEL[phase] ?? phase
+const PHASE_LABEL_DE: Record<string, string> = {
+  base: 'Grundlage', build1: 'Aufbau', build2: 'Aufbau', build: 'Aufbau',
+  peak: 'Höhepunkt', race_prep: 'Wettkampfvorbereitung', maintenance: 'Erhaltung',
+  recovery: 'Erholung', taper: 'Tapering',
+}
+
+function humanPhase(phase: string, locale: 'en' | 'de'): string {
+  const map = locale === 'de' ? PHASE_LABEL_DE : PHASE_LABEL
+  return map[phase] ?? phase
 }
 
 /** Extract the first sentence from a paragraph (≤140 chars). */
@@ -41,17 +50,20 @@ export default function WeekPreface({
   weekEnd,
   language: _language,
 }: WeekPrefaceProps) {
+  const { locale } = useLocale()
+  const dfOpts = locale === 'de' ? { locale: de } : undefined
   let dateRange = ''
   try {
     const start = parseISO(weekStart)
     const end = parseISO(weekEnd)
-    dateRange = `${format(start, 'EEE d')} – ${format(end, 'EEE d')}`
+    dateRange = `${format(start, 'EEE d', dfOpts)} – ${format(end, 'EEE d', dfOpts)}`
   } catch {
     dateRange = `${weekStart} – ${weekEnd}`
   }
 
   const blockNum = mesoBlock.block_index_in_meso + 1
-  const eyebrow = `${humanPhase(mesoBlock.phase).toUpperCase()} · WEEK ${blockNum} · ${dateRange}`
+  const weekWord = locale === 'de' ? 'WOCHE' : 'WEEK'
+  const eyebrow = `${humanPhase(mesoBlock.phase, locale).toUpperCase()} · ${weekWord} ${blockNum} · ${dateRange}`
 
   const sentence = firstSentence(preface)
 
@@ -91,7 +103,9 @@ export default function WeekPreface({
       {/* Race chip */}
       {showRaceChip && (
         <p className="eyebrow mt-2" style={{ color: 'var(--color-coral)' }}>
-          {isRaceWeek ? 'RACE WEEK' : `${daysToEvent} days to ${eventType}`}
+          {isRaceWeek
+            ? (locale === 'de' ? 'WETTKAMPFWOCHE' : 'RACE WEEK')
+            : (locale === 'de' ? `${daysToEvent} Tage bis ${eventType}` : `${daysToEvent} days to ${eventType}`)}
         </p>
       )}
     </div>

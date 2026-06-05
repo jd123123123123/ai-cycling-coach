@@ -2,17 +2,20 @@ import { useState, type FormEvent, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UserCircle2 } from 'lucide-react'
 import { updateProfile, updateGoals } from '../api/athletes'
+import { useLocale } from '../contexts/LocaleContext'
 
-// Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
-const steps = [
-  { label: 'Account' },
-  { label: 'Consent' },
-  { label: 'Goals' },
-]
 const ACTIVE_STEP = 2
 
 export default function ProfileSetupPage() {
   const navigate = useNavigate()
+  const { locale } = useLocale()
+
+  // Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
+  const steps = [
+    { label: locale === 'de' ? 'Konto' : 'Account' },
+    { label: locale === 'de' ? 'Einwilligung' : 'Consent' },
+    { label: locale === 'de' ? 'Ziele' : 'Goals' },
+  ]
 
   // Profile fields
   const [ftp, setFtp] = useState('')
@@ -82,7 +85,11 @@ export default function ProfileSetupPage() {
       navigate('/dashboard', { replace: true })
     } catch (err: unknown) {
       console.error('Profile save failed:', err)
-      setError('Failed to save your profile. Please try again.')
+      setError(
+        locale === 'de'
+          ? 'Dein Profil konnte nicht gespeichert werden. Bitte versuche es erneut.'
+          : 'Failed to save your profile. Please try again.',
+      )
     } finally {
       setSubmitting(false)
     }
@@ -112,7 +119,7 @@ export default function ProfileSetupPage() {
               className="eyebrow"
               style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
             >
-              Profile
+              {locale === 'de' ? 'Profil' : 'Profile'}
             </span>
           </div>
 
@@ -121,11 +128,12 @@ export default function ProfileSetupPage() {
             className="num-display leading-[0.95]"
             style={{ fontSize: 'clamp(28px, 5vw, 36px)', color: 'var(--color-ink)' }}
           >
-            Tell us about you.
+            {locale === 'de' ? 'Erzähl uns von dir.' : 'Tell us about you.'}
           </h1>
           <p className="mt-2 text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-            Help us personalize your training. All fields are optional — fill them in later if you
-            prefer.
+            {locale === 'de'
+              ? 'Hilf uns, dein Training zu personalisieren. Alle Felder sind optional — du kannst sie auch später ausfüllen.'
+              : 'Help us personalize your training. All fields are optional — fill them in later if you prefer.'}
           </p>
 
           {/* 3-dot progress strip */}
@@ -167,50 +175,50 @@ export default function ProfileSetupPage() {
                 className="text-[13px] font-semibold mb-4 eyebrow"
                 style={{ color: 'var(--color-muted)', letterSpacing: '0.12em' }}
               >
-                Athlete Profile
+                {locale === 'de' ? 'Athletenprofil' : 'Athlete Profile'}
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <NumberField
-                  label="FTP (watts)"
+                  label={locale === 'de' ? 'FTP (Watt)' : 'FTP (watts)'}
                   min={0}
                   max={2000}
-                  placeholder="e.g. 250"
+                  placeholder={locale === 'de' ? 'z. B. 250' : 'e.g. 250'}
                   value={ftp}
                   onChange={setFtp}
-                  hint="Functional Threshold Power"
+                  hint={locale === 'de' ? 'Funktionelle Schwellenleistung' : 'Functional Threshold Power'}
                 />
                 <NumberField
-                  label="Weight (kg)"
+                  label={locale === 'de' ? 'Gewicht (kg)' : 'Weight (kg)'}
                   min={0}
                   max={500}
                   step={0.1}
-                  placeholder="e.g. 75"
+                  placeholder={locale === 'de' ? 'z. B. 75' : 'e.g. 75'}
                   value={weight}
                   onChange={setWeight}
                 />
                 <NumberField
-                  label="Max Heart Rate (bpm)"
+                  label={locale === 'de' ? 'Maximale Herzfrequenz (bpm)' : 'Max Heart Rate (bpm)'}
                   min={0}
                   max={300}
-                  placeholder="e.g. 185"
+                  placeholder={locale === 'de' ? 'z. B. 185' : 'e.g. 185'}
                   value={maxHr}
                   onChange={setMaxHr}
                 />
                 <NumberField
-                  label="Resting Heart Rate (bpm)"
+                  label={locale === 'de' ? 'Ruheherzfrequenz (bpm)' : 'Resting Heart Rate (bpm)'}
                   min={0}
                   max={200}
-                  placeholder="e.g. 55"
+                  placeholder={locale === 'de' ? 'z. B. 55' : 'e.g. 55'}
                   value={restingHr}
                   onChange={setRestingHr}
                 />
                 <NumberField
-                  label="Weekly Hours Available"
+                  label={locale === 'de' ? 'Verfügbare Wochenstunden' : 'Weekly Hours Available'}
                   min={0}
                   max={168}
                   step={0.5}
-                  placeholder="e.g. 8"
+                  placeholder={locale === 'de' ? 'z. B. 8' : 'e.g. 8'}
                   value={weeklyHours}
                   onChange={setWeeklyHours}
                 />
@@ -221,7 +229,7 @@ export default function ProfileSetupPage() {
                     className="eyebrow"
                     style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
                   >
-                    Primary Sport
+                    {locale === 'de' ? 'Hauptsportart' : 'Primary Sport'}
                   </span>
                   <select
                     value={primarySport}
@@ -234,13 +242,13 @@ export default function ProfileSetupPage() {
                     }}
                   >
                     <option value="" style={{ background: 'var(--color-paper-2)' }}>
-                      Select a sport...
+                      {locale === 'de' ? 'Sportart wählen...' : 'Select a sport...'}
                     </option>
                     <option value="cycling" style={{ background: 'var(--color-paper-2)' }}>
-                      Cycling
+                      {locale === 'de' ? 'Radsport' : 'Cycling'}
                     </option>
                     <option value="running" style={{ background: 'var(--color-paper-2)' }}>
-                      Running
+                      {locale === 'de' ? 'Laufen' : 'Running'}
                     </option>
                     <option value="triathlon" style={{ background: 'var(--color-paper-2)' }}>
                       Triathlon
@@ -262,24 +270,24 @@ export default function ProfileSetupPage() {
                 className="text-[13px] font-semibold mb-4 eyebrow"
                 style={{ color: 'var(--color-muted)', letterSpacing: '0.12em' }}
               >
-                Training Goals
+                {locale === 'de' ? 'Trainingsziele' : 'Training Goals'}
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <NumberField
-                  label="Target FTP (watts)"
+                  label={locale === 'de' ? 'Ziel-FTP (Watt)' : 'Target FTP (watts)'}
                   min={0}
                   max={2000}
-                  placeholder="e.g. 300"
+                  placeholder={locale === 'de' ? 'z. B. 300' : 'e.g. 300'}
                   value={targetFtp}
                   onChange={setTargetFtp}
                 />
                 <NumberField
-                  label="Weekly Training Hours Goal"
+                  label={locale === 'de' ? 'Ziel-Wochentrainingsstunden' : 'Weekly Training Hours Goal'}
                   min={0}
                   max={168}
                   step={0.5}
-                  placeholder="e.g. 10"
+                  placeholder={locale === 'de' ? 'z. B. 10' : 'e.g. 10'}
                   value={goalWeeklyHours}
                   onChange={setGoalWeeklyHours}
                 />
@@ -290,11 +298,11 @@ export default function ProfileSetupPage() {
                       className="eyebrow"
                       style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
                     >
-                      Target Event Name
+                      {locale === 'de' ? 'Name des Zielevents' : 'Target Event Name'}
                     </span>
                     <input
                       type="text"
-                      placeholder="e.g. L'Etape du Tour 2026"
+                      placeholder={locale === 'de' ? "z. B. L'Etape du Tour 2026" : "e.g. L'Etape du Tour 2026"}
                       value={targetEventName}
                       onChange={(e: ChangeEvent<HTMLInputElement>) =>
                         setTargetEventName(e.target.value)
@@ -316,7 +324,7 @@ export default function ProfileSetupPage() {
                       className="eyebrow"
                       style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
                     >
-                      Target Event Date
+                      {locale === 'de' ? 'Datum des Zielevents' : 'Target Event Date'}
                     </span>
                     <input
                       type="date"
@@ -349,7 +357,7 @@ export default function ProfileSetupPage() {
                 className="text-[13px] font-semibold mb-4 eyebrow"
                 style={{ color: 'var(--color-muted)', letterSpacing: '0.12em' }}
               >
-                Target Event
+                {locale === 'de' ? 'Zielevent' : 'Target Event'}
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -359,7 +367,7 @@ export default function ProfileSetupPage() {
                     className="eyebrow"
                     style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
                   >
-                    Event Type
+                    {locale === 'de' ? 'Eventtyp' : 'Event Type'}
                   </span>
                   <select
                     value={eventType}
@@ -374,10 +382,10 @@ export default function ProfileSetupPage() {
                     }}
                   >
                     <option value="" style={{ background: 'var(--color-paper-2)' }}>
-                      Select type...
+                      {locale === 'de' ? 'Typ wählen...' : 'Select type...'}
                     </option>
                     <option value="race" style={{ background: 'var(--color-paper-2)' }}>
-                      Race
+                      {locale === 'de' ? 'Rennen' : 'Race'}
                     </option>
                     <option value="fondo" style={{ background: 'var(--color-paper-2)' }}>
                       Fondo
@@ -386,12 +394,14 @@ export default function ProfileSetupPage() {
                       Audax
                     </option>
                     <option value="maintenance" style={{ background: 'var(--color-paper-2)' }}>
-                      Maintenance
+                      {locale === 'de' ? 'Erhaltung' : 'Maintenance'}
                     </option>
                   </select>
                   {eventType === 'maintenance' && (
                     <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-                      Maintenance mode — no specific event; we'll keep you fit.
+                      {locale === 'de'
+                        ? 'Erhaltungsmodus — kein bestimmtes Event; wir halten dich fit.'
+                        : "Maintenance mode — no specific event; we'll keep you fit."}
                     </span>
                   )}
                 </label>
@@ -402,7 +412,7 @@ export default function ProfileSetupPage() {
                     className="eyebrow"
                     style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
                   >
-                    Priority
+                    {locale === 'de' ? 'Priorität' : 'Priority'}
                   </span>
                   <select
                     value={eventPriority}
@@ -417,20 +427,22 @@ export default function ProfileSetupPage() {
                     }}
                   >
                     <option value="" style={{ background: 'var(--color-paper-2)' }}>
-                      Select priority...
+                      {locale === 'de' ? 'Priorität wählen...' : 'Select priority...'}
                     </option>
                     <option value="A" style={{ background: 'var(--color-paper-2)' }}>
-                      A — Peak race
+                      {locale === 'de' ? 'A — Saisonhöhepunkt' : 'A — Peak race'}
                     </option>
                     <option value="B" style={{ background: 'var(--color-paper-2)' }}>
-                      B — Important
+                      {locale === 'de' ? 'B — Wichtig' : 'B — Important'}
                     </option>
                     <option value="C" style={{ background: 'var(--color-paper-2)' }}>
-                      C — Tune-up
+                      {locale === 'de' ? 'C — Formtest' : 'C — Tune-up'}
                     </option>
                   </select>
                   <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-                    A = peak race · B = important · C = tune-up
+                    {locale === 'de'
+                      ? 'A = Saisonhöhepunkt · B = wichtig · C = Formtest'
+                      : 'A = peak race · B = important · C = tune-up'}
                   </span>
                 </label>
 
@@ -442,7 +454,7 @@ export default function ProfileSetupPage() {
                         className="eyebrow"
                         style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
                       >
-                        Event Date
+                        {locale === 'de' ? 'Eventdatum' : 'Event Date'}
                       </span>
                       <input
                         type="date"
@@ -493,7 +505,13 @@ export default function ProfileSetupPage() {
                   minHeight: 44,
                 }}
               >
-                {submitting ? 'Saving…' : 'Save and continue'}
+                {submitting
+                  ? locale === 'de'
+                    ? 'Speichern…'
+                    : 'Saving…'
+                  : locale === 'de'
+                    ? 'Speichern und fortfahren'
+                    : 'Save and continue'}
               </button>
               <button
                 type="button"
@@ -507,7 +525,7 @@ export default function ProfileSetupPage() {
                   minHeight: 44,
                 }}
               >
-                Skip for now
+                {locale === 'de' ? 'Vorerst überspringen' : 'Skip for now'}
               </button>
             </div>
           </form>

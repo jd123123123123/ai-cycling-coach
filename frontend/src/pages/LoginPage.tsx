@@ -2,12 +2,14 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, Navigate } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-
-const steps = [{ label: 'Account' }]
+import { useLocale } from '../contexts/LocaleContext'
 
 export default function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth()
+  const { locale } = useLocale()
   const navigate = useNavigate()
+
+  const steps = [{ label: locale === 'de' ? 'Konto' : 'Account' }]
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -30,11 +32,19 @@ export default function LoginPage() {
     } catch (err: unknown) {
       const axiosError = err as { response?: { status?: number; data?: { detail?: string } } }
       if (axiosError.response?.status === 401) {
-        setError('Invalid email or password.')
+        setError(
+          locale === 'de'
+            ? 'Ungültige E-Mail oder ungültiges Passwort.'
+            : 'Invalid email or password.',
+        )
       } else if (axiosError.response?.data?.detail) {
         setError(axiosError.response.data.detail)
       } else {
-        setError('Something went wrong. Please try again.')
+        setError(
+          locale === 'de'
+            ? 'Etwas ist schiefgelaufen. Bitte versuche es erneut.'
+            : 'Something went wrong. Please try again.',
+        )
       }
     } finally {
       setSubmitting(false)
@@ -61,7 +71,7 @@ export default function LoginPage() {
               className="eyebrow"
               style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
             >
-              Sign in
+              {locale === 'de' ? 'Anmelden' : 'Sign in'}
             </span>
           </div>
 
@@ -70,10 +80,12 @@ export default function LoginPage() {
             className="num-display leading-[0.95]"
             style={{ fontSize: 'clamp(28px, 5vw, 36px)', color: 'var(--color-ink)' }}
           >
-            Welcome back.
+            {locale === 'de' ? 'Willkommen zurück.' : 'Welcome back.'}
           </h1>
           <p className="mt-2 text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-            Sign in to your AI cycling coach.
+            {locale === 'de'
+              ? 'Melde dich bei deinem KI-Radsport-Coach an.'
+              : 'Sign in to your AI cycling coach.'}
           </p>
 
           {/* 3-dot progress strip */}
@@ -118,7 +130,7 @@ export default function LoginPage() {
             <FormField
               id="email"
               type="email"
-              label="Email"
+              label={locale === 'de' ? 'E-Mail' : 'Email'}
               autoComplete="email"
               value={email}
               onChange={setEmail}
@@ -129,7 +141,7 @@ export default function LoginPage() {
             <FormField
               id="password"
               type="password"
-              label="Password"
+              label={locale === 'de' ? 'Passwort' : 'Password'}
               autoComplete="current-password"
               value={password}
               onChange={setPassword}
@@ -148,19 +160,25 @@ export default function LoginPage() {
                 marginTop: 4,
               }}
             >
-              {submitting ? 'Signing in…' : 'Sign in'}
+              {submitting
+                ? locale === 'de'
+                  ? 'Anmelden…'
+                  : 'Signing in…'
+                : locale === 'de'
+                  ? 'Anmelden'
+                  : 'Sign in'}
             </button>
           </form>
 
           {/* Footer */}
           <p className="text-[13px] mt-5 text-center" style={{ color: 'var(--color-muted)' }}>
-            Don't have an account?{' '}
+            {locale === 'de' ? 'Noch kein Konto?' : "Don't have an account?"}{' '}
             <Link
               to="/register"
               className="underline underline-offset-2"
               style={{ color: 'var(--color-forest-2)' }}
             >
-              Create one
+              {locale === 'de' ? 'Erstelle eins' : 'Create one'}
             </Link>
           </p>
         </div>

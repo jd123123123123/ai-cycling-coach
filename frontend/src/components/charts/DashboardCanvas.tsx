@@ -9,6 +9,7 @@ import { useAnalyticsQuery } from '../../hooks/useAnalyticsQuery'
 import { summarizeChart } from '../../api/analytics'
 import type { ChartSpec } from '../../types/chartSpec'
 import type { GridLayoutItem } from '../../api/dashboards'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // react-grid-layout v2 dropped the WidthProvider HOC in favor of useContainerWidth.
 function ResponsiveGrid({ children, ...props }: React.ComponentProps<typeof Responsive>) {
@@ -72,6 +73,7 @@ export default function DashboardCanvas({
   onEditChart,
   onDeleteChart,
 }: DashboardCanvasProps) {
+  const { locale } = useLocale()
   const safeLayout = useMemo(() => ensureLayout(charts, layout), [charts, layout])
 
   const handleLayoutChange = (newLayout: Layout[]) => {
@@ -102,14 +104,23 @@ export default function DashboardCanvas({
           className="eyebrow"
           style={{ color: 'var(--color-forest)', letterSpacing: '0.28em', fontSize: 11 }}
         >
-          A blank canvas
+          {locale === 'de' ? 'Eine leere Leinwand' : 'A blank canvas'}
         </span>
         <p
           className="text-[14px] max-w-[42ch] leading-relaxed"
           style={{ color: 'var(--color-ink-2)' }}
         >
-          Click <strong style={{ color: 'var(--color-ink)' }}>+ Add chart</strong> to drop your
-          first card. Drag the corners to resize, drag the header to move.
+          {locale === 'de' ? (
+            <>
+              Klicke auf <strong style={{ color: 'var(--color-ink)' }}>+ Diagramm hinzufügen</strong>, um
+              deine erste Karte abzulegen. Ziehe an den Ecken zum Skalieren, an der Kopfzeile zum Verschieben.
+            </>
+          ) : (
+            <>
+              Click <strong style={{ color: 'var(--color-ink)' }}>+ Add chart</strong> to drop your
+              first card. Drag the corners to resize, drag the header to move.
+            </>
+          )}
         </p>
       </div>
     )
@@ -150,6 +161,7 @@ interface CellInnerProps {
 }
 
 function Cell({ chart, editable, onEdit, onDelete }: CellInnerProps) {
+  const { locale } = useLocale()
   // Read the same query the chart renders from, so the summarise call gets
   // the exact rows the user is looking at without a re-fetch.
   const { data } = useAnalyticsQuery(chart.query)
@@ -170,7 +182,11 @@ function Cell({ chart, editable, onEdit, onDelete }: CellInnerProps) {
       })
       setSummary(res.narrative)
     } catch {
-      setSummary('Could not generate summary right now.')
+      setSummary(
+        locale === 'de'
+          ? 'Zusammenfassung konnte gerade nicht erstellt werden.'
+          : 'Could not generate summary right now.',
+      )
     } finally {
       setLoadingSummary(false)
     }
@@ -213,13 +229,17 @@ function Cell({ chart, editable, onEdit, onDelete }: CellInnerProps) {
               letterSpacing: '-0.01em',
             }}
           >
-            {chart.title ?? 'Untitled chart'}
+            {chart.title ?? (locale === 'de' ? 'Unbenanntes Diagramm' : 'Untitled chart')}
           </h3>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {!editable && (
             <IconButton
-              label={loadingSummary ? 'Summarising…' : 'AI summary'}
+              label={
+                loadingSummary
+                  ? locale === 'de' ? 'Zusammenfassen…' : 'Summarising…'
+                  : locale === 'de' ? 'KI-Zusammenfassung' : 'AI summary'
+              }
               onClick={handleSummarize}
               disabled={loadingSummary || !data}
             >
@@ -232,10 +252,10 @@ function Cell({ chart, editable, onEdit, onDelete }: CellInnerProps) {
           )}
           {editable && (
             <>
-              <IconButton label="Edit" onClick={onEdit}>
+              <IconButton label={locale === 'de' ? 'Bearbeiten' : 'Edit'} onClick={onEdit}>
                 <Pencil size={12} strokeWidth={2} />
               </IconButton>
-              <IconButton label="Delete" onClick={onDelete} danger>
+              <IconButton label={locale === 'de' ? 'Löschen' : 'Delete'} onClick={onDelete} danger>
                 <Trash2 size={12} strokeWidth={2} />
               </IconButton>
             </>
@@ -271,7 +291,7 @@ function Cell({ chart, editable, onEdit, onDelete }: CellInnerProps) {
               <button
                 type="button"
                 onClick={() => setSummary(null)}
-                aria-label="Dismiss summary"
+                aria-label={locale === 'de' ? 'Zusammenfassung schließen' : 'Dismiss summary'}
                 className="text-[10px] num-mono"
                 style={{ color: 'var(--color-muted)', letterSpacing: '0.18em' }}
               >
