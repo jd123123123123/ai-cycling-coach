@@ -258,6 +258,38 @@ export const STRINGS = {
   metric_effort: { en: 'EFFORT', de: 'AUFWAND' },
   steady_default: { en: 'Steady', de: 'Stetig' },
 
+  // TrainHero — periodization phase + block labels
+  phase_build1: { en: 'Build 1', de: 'Aufbau 1' },
+  phase_build2: { en: 'Build 2', de: 'Aufbau 2' },
+  phase_base1: { en: 'Base 1', de: 'Grundlage 1' },
+  phase_base2: { en: 'Base 2', de: 'Grundlage 2' },
+  phase_peak: { en: 'Peak', de: 'Peak' },
+  phase_taper: { en: 'Taper', de: 'Taper' },
+  phase_race: { en: 'Race week', de: 'Rennwoche' },
+  pos_accumulation: { en: 'Accumulation', de: 'Akkumulation' },
+  pos_transmutation: { en: 'Transmutation', de: 'Transmutation' },
+  pos_realization: { en: 'Realization', de: 'Realisation' },
+  pos_recovery: { en: 'Recovery week', de: 'Erholungswoche' },
+  days_to_event_suffix: { en: 'D TO EVENT', de: 'T BIS EVENT' },
+  tss_week: { en: 'TSS · WEEK', de: 'TSS · WOCHE' },
+  plan_completion: { en: 'PLAN COMPLETION', de: 'PLANERFÜLLUNG' },
+  quota_plan: { en: 'plan', de: 'Plan' },
+  quota_threshold: { en: 'threshold', de: 'Schwelle' },
+  quota_rest: { en: 'rest', de: 'Ruhe' },
+
+  // SeasonStats
+  stat_hours: { en: 'HOURS', de: 'STUNDEN' },
+  stat_distance: { en: 'DISTANCE', de: 'DISTANZ' },
+  stat_tss: { en: 'TSS', de: 'TSS' },
+  yoy_tooltip: { en: 'vs. same day last year', de: 'vs. gleicher Tag im Vorjahr' },
+
+  // TrainingLogStrip
+  training_log_90d: { en: 'Training log · last 90 days', de: 'Trainingslog · letzte 90 Tage' },
+  log_active: { en: 'active', de: 'aktiv' },
+  log_rest: { en: 'rest', de: 'Ruhe' },
+  log_biggest_day: { en: 'Biggest day', de: 'Stärkster Tag' },
+  log_streak_suffix: { en: '-day streak', de: '-Tage-Serie' },
+
   // Generic
   loading: { en: 'Loading…', de: 'Wird geladen…' },
 } as const satisfies Record<string, StringSet>
@@ -265,5 +297,8 @@ export const STRINGS = {
 export type StringKey = keyof typeof STRINGS
 
 export function tFor(locale: Locale, key: StringKey): string {
-  return STRINGS[key][locale] ?? STRINGS[key].en
+  // Resilient lookup: a missing key falls back to English, then to the key
+  // name itself, so an un-added translation never throws at runtime.
+  const entry = STRINGS[key] as StringSet | undefined
+  return entry?.[locale] ?? entry?.en ?? key
 }

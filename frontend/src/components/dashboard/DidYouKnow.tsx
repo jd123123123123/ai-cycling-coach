@@ -4,7 +4,8 @@ import { Lightbulb } from 'lucide-react'
 import { prefersReducedMotion } from '../../utils/motion'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
+import type { Locale } from '../../i18n/strings'
 import type { ActivityRead } from '../../api/dashboard'
 
 /**
@@ -20,24 +21,24 @@ import type { ActivityRead } from '../../api/dashboard'
  * year) so brand-new accounts don't see thin numbers framed as triumphs.
  */
 
-const KM_BETWEEN: Array<{ km: number; label: string }> = [
-  { km: 200, label: 'Berlin to Hamburg' },
-  { km: 500, label: 'Munich to Hamburg' },
-  { km: 580, label: 'Berlin to Munich' },
-  { km: 870, label: 'a full Paris-Brest-Paris loop' },
-  { km: 1200, label: 'a London Edinburgh London' },
-  { km: 1800, label: 'Berlin to Lisbon' },
-  { km: 3500, label: 'a Tour de France in distance' },
-  { km: 5000, label: 'the Tour Divide in distance' },
-  { km: 7000, label: 'Berlin to Beijing' },
+const KM_BETWEEN: Array<{ km: number; en: string; de: string }> = [
+  { km: 200, en: 'Berlin to Hamburg', de: 'Berlin–Hamburg' },
+  { km: 500, en: 'Munich to Hamburg', de: 'München–Hamburg' },
+  { km: 580, en: 'Berlin to Munich', de: 'Berlin–München' },
+  { km: 870, en: 'a full Paris-Brest-Paris loop', de: 'eine ganze Paris–Brest–Paris-Runde' },
+  { km: 1200, en: 'a London Edinburgh London', de: 'ein London–Edinburgh–London' },
+  { km: 1800, en: 'Berlin to Lisbon', de: 'Berlin–Lissabon' },
+  { km: 3500, en: 'a Tour de France in distance', de: 'eine Tour de France an Distanz' },
+  { km: 5000, en: 'the Tour Divide in distance', de: 'die Tour Divide an Distanz' },
+  { km: 7000, en: 'Berlin to Beijing', de: 'Berlin–Peking' },
 ]
 
-function kmComparison(km: number): string | null {
+function kmComparison(km: number, locale: Locale): string | null {
   const best = [...KM_BETWEEN].reverse().find((c) => km >= c.km)
   if (!best) return null
   const ratio = km / best.km
   if (ratio < 0.95) return null
-  return best.label
+  return locale === 'de' ? best.de : best.en
 }
 
 interface Fact {
@@ -48,7 +49,11 @@ function buildPool(
   acts: ActivityRead[],
   yearStartActs: ActivityRead[],
   today: Date,
+  locale: Locale,
 ): Fact[] {
+  const de = locale === 'de'
+  const nf = de ? 'de-DE' : 'en-US'
+  const num = (n: number) => Math.round(n).toLocaleString(nf)
   const pool: Fact[] = []
 
   // YTD totals
@@ -65,22 +70,36 @@ function buildPool(
   }
 
   if (kmYtd >= 50) {
-    const cmp = kmComparison(kmYtd)
-    pool.push({
-      text: cmp
-        ? `You've ridden ${Math.round(kmYtd).toLocaleString()} km this year — about ${cmp}.`
-        : `You've ridden ${Math.round(kmYtd).toLocaleString()} km this year.`,
-    })
+    const cmp = kmComparison(kmYtd, locale)
+    if (de) {
+      pool.push({
+        text: cmp
+          ? `Du bist dieses Jahr ${num(kmYtd)} km gefahren — etwa ${cmp}.`
+          : `Du bist dieses Jahr ${num(kmYtd)} km gefahren.`,
+      })
+    } else {
+      pool.push({
+        text: cmp
+          ? `You've ridden ${num(kmYtd)} km this year — about ${cmp}.`
+          : `You've ridden ${num(kmYtd)} km this year.`,
+      })
+    }
   }
 
   if (hoursYtd >= 5) {
     const fullDays = Math.floor(hoursYtd / 24)
-    if (fullDays >= 1) {
+    if (de) {
       pool.push({
-        text: `${hoursYtd.toFixed(1)} hours in the saddle this year — that's ${fullDays} full ${fullDays === 1 ? 'day' : 'days'} of riding.`,
+        text: fullDays >= 1
+          ? `${hoursYtd.toFixed(1)} Stunden im Sattel dieses Jahr — das sind ${fullDays} volle ${fullDays === 1 ? 'Tag' : 'Tage'} Fahrzeit.`
+          : `${hoursYtd.toFixed(1)} Stunden im Sattel dieses Jahr.`,
       })
     } else {
-      pool.push({ text: `${hoursYtd.toFixed(1)} hours in the saddle this year.` })
+      pool.push({
+        text: fullDays >= 1
+          ? `${hoursYtd.toFixed(1)} hours in the saddle this year — that's ${fullDays} full ${fullDays === 1 ? 'day' : 'days'} of riding.`
+          : `${hoursYtd.toFixed(1)} hours in the saddle this year.`,
+      })
     }
   }
 
@@ -88,7 +107,9 @@ function buildPool(
     const daysSoFar = differenceInCalendarDays(today, startOfYear(today)) + 1
     const perWeek = (sessionsYtd / daysSoFar) * 7
     pool.push({
-      text: `${sessionsYtd} sessions logged this year — averaging ${perWeek.toFixed(1)} per week.`,
+      text: de
+        ? `${sessionsYtd} Einheiten dieses Jahr — im Schnitt ${perWeek.toFixed(1)} pro Woche.`
+        : `${sessionsYtd} sessions logged this year — averaging ${perWeek.toFixed(1)} per week.`,
     })
   }
 
@@ -100,11 +121,19 @@ function buildPool(
     const h = (longest.duration_seconds ?? 0) / 3600
     const km = (longest.distance_meters ?? 0) / 1000
     if (h >= 1.5) {
-      pool.push({
-        text: km > 5
-          ? `Your longest ride this year was ${h.toFixed(1)} h and ${Math.round(km)} km — that one earned its post-ride coffee.`
-          : `Your longest ride this year clocked ${h.toFixed(1)} hours.`,
-      })
+      if (de) {
+        pool.push({
+          text: km > 5
+            ? `Deine längste Ausfahrt dieses Jahr war ${h.toFixed(1)} h und ${Math.round(km)} km — die hat sich den Kaffee danach verdient.`
+            : `Deine längste Ausfahrt dieses Jahr dauerte ${h.toFixed(1)} Stunden.`,
+        })
+      } else {
+        pool.push({
+          text: km > 5
+            ? `Your longest ride this year was ${h.toFixed(1)} h and ${Math.round(km)} km — that one earned its post-ride coffee.`
+            : `Your longest ride this year clocked ${h.toFixed(1)} hours.`,
+        })
+      }
     }
   }
 
@@ -119,12 +148,16 @@ function buildPool(
         /* ignore */
       }
     }
-    const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    const dayLabels = de
+      ? ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
+      : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
     let maxIdx = 0
     for (let i = 1; i < 7; i++) if (counts[i] > counts[maxIdx]) maxIdx = i
     if (counts[maxIdx] >= 3) {
       pool.push({
-        text: `Your most-ridden day this quarter is ${dayLabels[maxIdx]} — ${counts[maxIdx]} sessions on the books.`,
+        text: de
+          ? `Dein meistgefahrener Tag dieses Quartal ist ${dayLabels[maxIdx]} — ${counts[maxIdx]} Einheiten im Logbuch.`
+          : `Your most-ridden day this quarter is ${dayLabels[maxIdx]} — ${counts[maxIdx]} sessions on the books.`,
       })
     }
   }
@@ -138,7 +171,9 @@ function buildPool(
     if (calories >= 10_000) {
       const pizzas = Math.round(calories / 2500)
       pool.push({
-        text: `Roughly ${kJ.toLocaleString()} kJ of work this year — that's about ${pizzas} large pizzas worth of dinner.`,
+        text: de
+          ? `Rund ${num(kJ)} kJ Arbeit dieses Jahr — das entspricht etwa ${pizzas} großen Pizzen zum Abendessen.`
+          : `Roughly ${num(kJ)} kJ of work this year — that's about ${pizzas} large pizzas worth of dinner.`,
       })
     }
   }
@@ -148,6 +183,7 @@ function buildPool(
 
 export default function DidYouKnow() {
   const t = useT()
+  const { locale } = useLocale()
   const today = useMemo(() => new Date(), [])
   const yearStart = useMemo(() => startOfYear(today), [today])
   const ninetyAgo = useMemo(() => subDays(today, 90), [today])
@@ -164,8 +200,8 @@ export default function DidYouKnow() {
   const pool = useMemo(() => {
     const acts = ninetyData?.activities ?? []
     const ytdActs = ytdData?.activities ?? []
-    return buildPool(acts, ytdActs, today)
-  }, [ninetyData, ytdData, today])
+    return buildPool(acts, ytdActs, today, locale)
+  }, [ninetyData, ytdData, today, locale])
 
   // `step` advances; the displayed index is derived from a day-of-year seed so
   // the opening fact still shifts each morning — no seeding effect (and no

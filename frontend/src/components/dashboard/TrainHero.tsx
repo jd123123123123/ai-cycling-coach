@@ -1,8 +1,11 @@
 import { useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
+import { de as deLocale } from 'date-fns/locale'
 import { useCurrentWeek } from '../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useT, useLocale } from '../../contexts/LocaleContext'
+import type { StringKey } from '../../i18n/strings'
 
 /**
  * TrainHero — the first card on the Train tab.
@@ -15,26 +18,29 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
  * with this prominence.
  */
 
-const PHASE_LABEL: Record<string, string> = {
-  build1: 'Build 1',
-  build2: 'Build 2',
-  base1: 'Base 1',
-  base2: 'Base 2',
-  peak: 'Peak',
-  taper: 'Taper',
-  race: 'Race week',
+const PHASE_KEY: Record<string, StringKey> = {
+  build1: 'phase_build1',
+  build2: 'phase_build2',
+  base1: 'phase_base1',
+  base2: 'phase_base2',
+  peak: 'phase_peak',
+  taper: 'phase_taper',
+  race: 'phase_race',
 }
 
-const POSITION_LABEL: Record<string, string> = {
-  accumulation: 'Accumulation',
-  transmutation: 'Transmutation',
-  realization: 'Realization',
-  recovery: 'Recovery week',
+const POSITION_KEY: Record<string, StringKey> = {
+  accumulation: 'pos_accumulation',
+  transmutation: 'pos_transmutation',
+  realization: 'pos_realization',
+  recovery: 'pos_recovery',
 }
 
 export default function TrainHero() {
   const { data: week } = useCurrentWeek()
   const { data: brief } = useCoachBrief()
+  const t = useT()
+  const { locale } = useLocale()
+  const dfnsOpts = locale === 'de' ? { locale: deLocale } : undefined
 
   // All hooks above the conditional return — Rules of Hooks.
   const weekStart = week?.week_start ? parseISO(week.week_start) : null
@@ -75,8 +81,12 @@ export default function TrainHero() {
 
   const meso = week.meso_block
   const phase = meso?.phase ?? null
-  const phaseLabel = phase ? PHASE_LABEL[phase] ?? phase.replace(/([a-z])(\d)/i, '$1 $2') : null
-  const positionLabel = meso?.block_position ? POSITION_LABEL[meso.block_position] : null
+  const phaseLabel = phase
+    ? (PHASE_KEY[phase] ? t(PHASE_KEY[phase]) : phase.replace(/([a-z])(\d)/i, '$1 $2'))
+    : null
+  const positionLabel = meso?.block_position && POSITION_KEY[meso.block_position]
+    ? t(POSITION_KEY[meso.block_position])
+    : null
   const targetTss = meso?.weekly_tss_target ?? 0
   const pct = targetTss > 0 ? Math.min(150, Math.round((actualTss / targetTss) * 100)) : 0
   const daysToEvent = meso?.days_to_event ?? null
@@ -100,11 +110,13 @@ export default function TrainHero() {
   const totalHours = (quota?.total_hours as number | undefined) ?? null
   const quotaLine =
     vo2Sessions != null && thresholdSessions != null && totalHours != null
-      ? `${totalHours}h plan · ${vo2Sessions} VO2 · ${thresholdSessions} threshold · ${restDays ?? '?'} rest`
+      ? `${totalHours}h ${t('quota_plan')} · ${vo2Sessions} VO2 · ${thresholdSessions} ${t('quota_threshold')} · ${restDays ?? '?'} ${t('quota_rest')}`
       : null
 
   const dateRange =
-    weekStart && weekEnd ? `${format(weekStart, 'd MMM')} – ${format(weekEnd, 'd MMM')}` : null
+    weekStart && weekEnd
+      ? `${format(weekStart, 'd MMM', dfnsOpts)} – ${format(weekEnd, 'd MMM', dfnsOpts)}`
+      : null
 
   return (
     <div
@@ -141,7 +153,7 @@ export default function TrainHero() {
           <>
             <span style={{ color: 'var(--color-muted)', fontSize: 10 }}>·</span>
             <span className="eyebrow num-mono" style={{ color: 'var(--color-amber-2)', fontSize: 10, letterSpacing: '0.22em' }}>
-              {daysToEvent}D TO EVENT
+              {daysToEvent}{t('days_to_event_suffix')}
             </span>
           </>
         )}
@@ -164,7 +176,7 @@ export default function TrainHero() {
       <div className="flex items-end gap-6 flex-wrap mb-3">
         <div className="flex flex-col">
           <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
-            TSS · WEEK
+            {t('tss_week')}
           </span>
           <span className="num-mono leading-none" style={{ color: 'var(--color-ink)', fontSize: 28, fontWeight: 500 }}>
             {actualTss}
@@ -175,7 +187,7 @@ export default function TrainHero() {
         </div>
         <div className="flex flex-col">
           <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
-            SESSIONS
+            {t('sessions_label')}
           </span>
           <span className="num-mono leading-none" style={{ color: 'var(--color-ink)', fontSize: 28, fontWeight: 500 }}>
             {completedDays}
@@ -186,7 +198,7 @@ export default function TrainHero() {
         </div>
         <div className="flex-1 min-w-[180px]">
           <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
-            PLAN COMPLETION
+            {t('plan_completion')}
           </span>
           <div className="flex items-center gap-2 mt-1">
             <div

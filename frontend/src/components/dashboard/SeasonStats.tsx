@@ -11,6 +11,7 @@ import {
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import Sparkline from './Sparkline'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 import type { ActivityRead } from '../../api/dashboard'
 
 /**
@@ -101,6 +102,7 @@ interface StatProps {
 }
 
 function Stat({ label, value, spark, yoy, color }: StatProps) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-1.5">
       <span
@@ -124,7 +126,7 @@ function Stat({ label, value, spark, yoy, color }: StatProps) {
               fontSize: 10,
               letterSpacing: '0.02em',
             }}
-            title="vs. same day last year"
+            title={t('yoy_tooltip')}
           >
             {yoy >= 0 ? <TrendingUp size={10} strokeWidth={2.4} /> : <TrendingDown size={10} strokeWidth={2.4} />}
             {yoy >= 0 ? '+' : ''}{Math.round(yoy)}%
@@ -139,6 +141,8 @@ function Stat({ label, value, spark, yoy, color }: StatProps) {
 }
 
 export default function SeasonStats() {
+  const t = useT()
+  const { locale } = useLocale()
   const today = useMemo(() => new Date(), [])
   const yearStart = useMemo(() => startOfYear(today), [today])
   const monthStart = useMemo(() => startOfMonth(today), [today])
@@ -200,7 +204,7 @@ export default function SeasonStats() {
 
   if (model.ytd.sessions === 0) return null
 
-  const monthLabel = today.toLocaleString('default', { month: 'long' })
+  const monthLabel = today.toLocaleString(locale === 'de' ? 'de-DE' : 'en-US', { month: 'long' })
 
   return (
     <div
@@ -212,40 +216,40 @@ export default function SeasonStats() {
           className="eyebrow"
           style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.22em' }}
         >
-          {today.getFullYear()} · YEAR TO DATE
+          {today.getFullYear()} · {t('year_to_date')}
         </span>
         <span
           className="eyebrow num-mono"
           style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.12em' }}
         >
-          {monthLabel.toUpperCase()} · +{model.mtd.sessions} SESSIONS
+          {monthLabel.toUpperCase()} · +{model.mtd.sessions} {t('sessions_label')}
         </span>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4">
         <Stat
-          label="HOURS"
+          label={t('stat_hours')}
           value={fmtHours(model.ytd.hours)}
           spark={model.sparks.hours}
           yoy={model.yoy.hours}
           color="var(--color-forest-2)"
         />
         <Stat
-          label="DISTANCE"
+          label={t('stat_distance')}
           value={fmtKm(model.ytd.km)}
           spark={model.sparks.km}
           yoy={model.yoy.km}
           color="var(--color-good)"
         />
         <Stat
-          label="SESSIONS"
+          label={t('sessions_label')}
           value={fmtInt(model.ytd.sessions)}
           spark={model.sparks.sessions}
           yoy={model.yoy.sessions}
           color="var(--color-amber-2)"
         />
         <Stat
-          label="TSS"
+          label={t('stat_tss')}
           value={fmtInt(model.ytd.tss)}
           spark={model.sparks.tss}
           yoy={model.yoy.tss}
@@ -261,17 +265,31 @@ export default function SeasonStats() {
           style={{ borderTop: '1px solid var(--color-rule)', color: 'var(--color-ink-2)' }}
         >
           <TrendingUp size={12} strokeWidth={2} style={{ color: 'var(--color-good)', flexShrink: 0 }} />
-          <span>
-            On this pace you’ll finish {today.getFullYear()} around{' '}
-            <strong style={{ color: 'var(--color-ink)' }}>{fmtKm(model.projection.km)}</strong>
-            {' '}and{' '}
-            <strong style={{ color: 'var(--color-ink)' }}>{fmtHours(model.projection.hours)}</strong>
-            {' '}in the saddle
-            {model.hasPrior && model.yoy.km != null && (
-              <> — {model.yoy.km >= 0 ? 'ahead of' : 'behind'} last year by {Math.abs(Math.round(model.yoy.km))}%</>
-            )}
-            .
-          </span>
+          {locale === 'de' ? (
+            <span>
+              Bei diesem Tempo erreichst du {today.getFullYear()} rund{' '}
+              <strong style={{ color: 'var(--color-ink)' }}>{fmtKm(model.projection.km)}</strong>
+              {' '}und{' '}
+              <strong style={{ color: 'var(--color-ink)' }}>{fmtHours(model.projection.hours)}</strong>
+              {' '}im Sattel
+              {model.hasPrior && model.yoy.km != null && (
+                <> — {Math.abs(Math.round(model.yoy.km))}% {model.yoy.km >= 0 ? 'vor dem Vorjahr' : 'hinter dem Vorjahr'}</>
+              )}
+              .
+            </span>
+          ) : (
+            <span>
+              On this pace you’ll finish {today.getFullYear()} around{' '}
+              <strong style={{ color: 'var(--color-ink)' }}>{fmtKm(model.projection.km)}</strong>
+              {' '}and{' '}
+              <strong style={{ color: 'var(--color-ink)' }}>{fmtHours(model.projection.hours)}</strong>
+              {' '}in the saddle
+              {model.hasPrior && model.yoy.km != null && (
+                <> — {model.yoy.km >= 0 ? 'ahead of' : 'behind'} last year by {Math.abs(Math.round(model.yoy.km))}%</>
+              )}
+              .
+            </span>
+          )}
         </div>
       )}
     </div>

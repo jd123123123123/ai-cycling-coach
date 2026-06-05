@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { subDays, format, parseISO } from 'date-fns'
+import { de as deLocale } from 'date-fns/locale'
 import { usePMC } from '../../hooks/usePMC'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { focusFor } from '../../utils/focusBadge'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 import type { ActivityRead } from '../../api/dashboard'
 
 /**
@@ -30,6 +32,9 @@ interface DayCell {
 }
 
 export default function TrainingLogStrip() {
+  const t = useT()
+  const { locale } = useLocale()
+  const dfnsOpts = locale === 'de' ? { locale: deLocale } : undefined
   const today = useMemo(() => new Date(), [])
   const start = useMemo(() => subDays(today, DAYS - 1), [today])
   const { data: pmc, isLoading: pmcLoading } = usePMC(DAYS)
@@ -64,12 +69,12 @@ export default function TrainingLogStrip() {
         date: key,
         tss,
         color: focus?.color ?? (tss > 0 ? 'var(--color-forest-2)' : 'var(--color-rule)'),
-        label: focus?.label ?? (tss > 0 ? 'Training' : 'Rest'),
+        label: focus?.label ?? (tss > 0 ? 'Training' : t('log_rest')),
         activityTitle: act?.title ?? null,
       })
     }
     return out
-  }, [pmc, acts, profile, today])
+  }, [pmc, acts, profile, today, t])
 
   const summary = useMemo(() => {
     let active = 0
@@ -122,9 +127,9 @@ export default function TrainingLogStrip() {
       style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
     >
       <div className="flex items-center justify-between gap-3 mb-3">
-        <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>Training log · last 90 days</span>
+        <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>{t('training_log_90d')}</span>
         <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
-          {summary.active} active · {summary.rest} rest
+          {summary.active} {t('log_active')} · {summary.rest} {t('log_rest')}
         </span>
       </div>
 
@@ -148,7 +153,7 @@ export default function TrainingLogStrip() {
             <div className="flex items-center gap-1.5">
               <span style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: hover.color, display: 'inline-block' }} />
               <span className="num-mono" style={{ fontSize: 11, fontWeight: 600 }}>
-                {format(parseISO(hover.date), 'EEE MMM d')}
+                {format(parseISO(hover.date), 'EEE d MMM', dfnsOpts)}
               </span>
             </div>
             <div className="num-mono" style={{ fontSize: 10, opacity: 0.85, marginTop: 1 }}>
@@ -214,12 +219,12 @@ export default function TrainingLogStrip() {
         style={{ borderTop: '1px solid var(--color-rule)', fontSize: 11, color: 'var(--color-ink-2)' }}
       >
         <span>
-          Biggest day{' '}
+          {t('log_biggest_day')}{' '}
           <strong style={{ color: 'var(--color-ink)' }}>{Math.round(summary.big?.tss ?? 0)} TSS</strong>
-          {summary.big?.tss ? <> · {format(parseISO(summary.big.date), 'MMM d')}</> : null}
+          {summary.big?.tss ? <> · {format(parseISO(summary.big.date), 'd MMM', dfnsOpts)}</> : null}
         </span>
         {summary.streak > 1 && (
-          <span style={{ color: 'var(--color-good)' }}>{summary.streak}-day streak</span>
+          <span style={{ color: 'var(--color-good)' }}>{summary.streak}{t('log_streak_suffix')}</span>
         )}
       </div>
     </div>
