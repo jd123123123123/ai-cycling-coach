@@ -49,11 +49,10 @@ export default function ProtectedRoute({ children, checkOnboarding = false }: Pr
     if (onboardingStatus === 'loading') {
       return <Spinner />
     }
-    if (onboardingStatus === 'needs-consent') {
-      return <Navigate to="/consent" replace />
-    }
-    if (onboardingStatus === 'needs-profile') {
-      return <Navigate to="/profile-setup" replace />
+    // Both incomplete-onboarding states route to the unified science-based
+    // wizard (which folds consent + Garmin + profile into one flow).
+    if (onboardingStatus === 'needs-consent' || onboardingStatus === 'needs-profile') {
+      return <Navigate to="/onboarding" replace />
     }
   }
 

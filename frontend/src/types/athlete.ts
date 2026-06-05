@@ -27,6 +27,10 @@ export interface TrainingGoals {
   target_event_name?: string
   target_event_date?: string
   weekly_hours?: number
+  // Weekly-intensity preferences captured during onboarding (free-form JSON on
+  // the backend, so extra keys are persisted as-is).
+  training_model?: 'polarized' | 'sweetspot' | 'pyramidal'
+  days_per_week?: number
 }
 
 export interface AthleteProfileUpdate {

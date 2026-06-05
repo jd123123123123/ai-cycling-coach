@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import ConsentPage from './pages/ConsentPage'
 import ProfileSetupPage from './pages/ProfileSetupPage'
+import OnboardingWizard from './components/onboarding/OnboardingWizard'
 import GarminConnectPage from './pages/GarminConnectPage'
 import CalendarPage from './pages/CalendarPage'
 import ActivitiesPage from './pages/ActivitiesPage'
@@ -38,6 +39,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <ProfileSetupPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/onboarding"
+            element={
+              <ProtectedRoute>
+                <OnboardingWizard />
               </ProtectedRoute>
             }
           />
