@@ -137,6 +137,31 @@ class TestWeeklyQuotaTrainingModel:
         assert pick == "sweet_spot"
 
 
+class TestRecoveryWeekDeload:
+    def test_recovery_quota_drops_hard_sessions(self):
+        loading = weekly_intensity_quota("build2", 10.0, block_position="realization")
+        deload = weekly_intensity_quota("build2", 10.0, block_position="recovery")
+        assert deload["vo2_sessions"] == 0
+        assert deload["threshold_sessions"] == 0
+        assert deload["hard_hours"] < loading["hard_hours"]
+        assert deload["rest_days"] >= loading["rest_days"] + 1
+
+    def test_recovery_overrides_model(self):
+        # Even a sweet-spot athlete deloads on the recovery week.
+        q = weekly_intensity_quota("build2", 10.0, training_model="sweetspot", block_position="recovery")
+        assert q["vo2_sessions"] == 0 and q["threshold_sessions"] == 0
+
+    def test_recovery_week_wednesday_is_easy(self):
+        prog = {"hard_sessions_done": 0, "vo2_sessions_done": 0, "last_72h_quality_count": 0}
+        pick = session_type_for_today("build2", prog, tsb=0.0, intensity_ceiling="push", day_of_week=2, is_recovery_week=True)
+        assert pick == "endurance"
+
+    def test_loading_week_wednesday_still_hard(self):
+        prog = {"hard_sessions_done": 0, "vo2_sessions_done": 0, "last_72h_quality_count": 0}
+        pick = session_type_for_today("build2", prog, tsb=0.0, intensity_ceiling="push", day_of_week=2, is_recovery_week=False)
+        assert pick in ("vo2", "threshold", "sweet_spot")
+
+
 class TestSessionTypeForToday:
     def test_rest_ceiling_returns_rest(self):
         assert session_type_for_today(

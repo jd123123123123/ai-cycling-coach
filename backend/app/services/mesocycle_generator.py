@@ -218,6 +218,7 @@ def build_week_drafts(
             intensity_ceiling="push",  # no readiness ceiling at generation time
             day_of_week=dow,
             training_model=training_model,
+            is_recovery_week=(block_position == "recovery"),
         )
 
         # Estimate available minutes from athlete schedule or default

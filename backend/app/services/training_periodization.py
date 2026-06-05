@@ -128,6 +128,7 @@ def weekly_intensity_quota(
     weekly_hours: float,
     training_model: str | None = None,
     days_per_week: int | None = None,
+    block_position: str | None = None,
 ) -> dict:
     """Return the target weekly split for the phase.
 
@@ -173,6 +174,16 @@ def weekly_intensity_quota(
             vo2_sessions = max(0, min(2, vo2_sessions + int(adj["vo2_delta"])))
             threshold_sessions = max(0, min(3, threshold_sessions + int(adj["threshold_delta"])))
 
+    # Recovery (deload) week overrides the model: drop the hard sessions and
+    # pull the hard-hour share down to a token amount. Volume is cut separately
+    # by the mesocycle TSS target (~−35%); this is the intensity side of the
+    # break week, so a deload isn't just a shorter hard week.
+    is_recovery = block_position == "recovery"
+    if is_recovery:
+        vo2_sessions = 0
+        threshold_sessions = 0
+        hard_ratio = round(base_hard_ratio * 0.3, 4)
+
     # Conserve total load: easy absorbs whatever the hard ratio gained/lost, so
     # the no-model path keeps the exact phase easy_ratio.
     easy_ratio = max(0.0, mix["easy_ratio"] + (base_hard_ratio - hard_ratio))
@@ -180,6 +191,8 @@ def weekly_intensity_quota(
     hard = round(weekly_hours * hard_ratio, 1)
 
     rest_days = int(round(mix["rest_days"]))
+    if is_recovery:
+        rest_days = min(6, rest_days + 1)
     if days_per_week is not None and days_per_week > 0:
         # Honor real availability: at least (7 − training days) rest, and never
         # more quality sessions than (training days − 1 easy day), trimming
@@ -201,6 +214,7 @@ def weekly_intensity_quota(
         "rest_days": rest_days,
         "total_hours": weekly_hours,
         "training_model": training_model,
+        "block_position": block_position,
     }
 
 
@@ -261,6 +275,7 @@ def session_type_for_today(
     intensity_ceiling: str,
     day_of_week: int,
     training_model: str | None = None,
+    is_recovery_week: bool = False,
 ) -> SessionType:
     """Pick today's session category.
 
@@ -351,6 +366,11 @@ def session_type_for_today(
 
     # Mid-week quality — the "workout day" in Friel periodization
     if day_of_week in (1, 2, 3):
+        # Recovery (deload) week — strip mid-week intensity. The Issurin 3:1
+        # block already cut volume ~35%; pulling the quality days down to easy
+        # endurance makes it a true break week, not just a shorter hard week.
+        if is_recovery_week:
+            return _downgrade_to_ceiling("endurance", intensity_ceiling)
         # 72h hard/easy guard on Tue (1) / Thu (3) — Wednesday's VO2 has its
         # own quota guard and is the planned keystone, so we don't block it.
         if day_of_week in (1, 3) and recent_quality >= 1:
