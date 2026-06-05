@@ -111,7 +111,24 @@ _PHASE_MIX: dict[Phase, dict[str, float]] = {
 }
 
 
-def weekly_intensity_quota(phase: Phase, weekly_hours: float) -> dict:
+# How the athlete's chosen weekly-intensity philosophy bends the phase default.
+#   hard_mult  — scales the hard/easy hour split (polarized trims the grey
+#                zone, sweet-spot pushes more time near threshold).
+#   vo2_delta / threshold_delta — reshape the quality-session mix toward each
+#                model's signature (polarized → VO2 pole, sweet-spot → threshold).
+_MODEL_ADJ: dict[str, dict[str, float]] = {
+    "polarized": {"hard_mult": 0.90, "vo2_delta": 0, "threshold_delta": -1},
+    "sweetspot": {"hard_mult": 1.25, "vo2_delta": -1, "threshold_delta": 1},
+    "pyramidal": {"hard_mult": 1.00, "vo2_delta": 0, "threshold_delta": 0},
+}
+
+
+def weekly_intensity_quota(
+    phase: Phase,
+    weekly_hours: float,
+    training_model: str | None = None,
+    days_per_week: int | None = None,
+) -> dict:
     """Return the target weekly split for the phase.
 
     Returns:
@@ -123,23 +140,57 @@ def weekly_intensity_quota(phase: Phase, weekly_hours: float) -> dict:
           "threshold_sessions": int,
           "rest_days": int,
           "total_hours": weekly_hours,
+          "training_model": str | None,
         }
 
     The easy/hard split follows Seiler 80/20, bent by phase: base goes 90/10,
-    build goes 75/25, taper goes 85/15.
+    build goes 75/25, taper goes 85/15. When the athlete has chosen a weekly
+    intensity philosophy in onboarding (`training_model`), the split + quality
+    mix are further bent toward it, and `days_per_week` caps quality sessions
+    and sets the rest-day floor so we never plan more days than they have.
+
+    With `training_model=None` the result is identical to the phase baseline
+    (so existing callers/tests are unaffected).
     """
     mix = _PHASE_MIX[phase]
-    easy = round(weekly_hours * mix["easy_ratio"], 1)
-    hard = round(weekly_hours * mix["hard_ratio"], 1)
+    base_hard_ratio = mix["hard_ratio"]
+    hard_ratio = base_hard_ratio
 
     # Derive VO2 vs threshold session counts — VO2 is higher-stress so fewer reps
     vo2_sessions = 0
     threshold_sessions = 0
     if phase in ("build1", "build2", "peak"):
-        vo2_sessions = 1 if phase == "build1" else 1
+        vo2_sessions = 1
         threshold_sessions = 1 if phase == "build1" else 2
     elif phase == "base2":
         threshold_sessions = 1
+
+    adj = _MODEL_ADJ.get(training_model or "")
+    if adj is not None:
+        hard_ratio = round(base_hard_ratio * adj["hard_mult"], 4)
+        # Only reshape the quality mix when the phase actually prescribes it.
+        if vo2_sessions + threshold_sessions > 0:
+            vo2_sessions = max(0, min(2, vo2_sessions + int(adj["vo2_delta"])))
+            threshold_sessions = max(0, min(3, threshold_sessions + int(adj["threshold_delta"])))
+
+    # Conserve total load: easy absorbs whatever the hard ratio gained/lost, so
+    # the no-model path keeps the exact phase easy_ratio.
+    easy_ratio = max(0.0, mix["easy_ratio"] + (base_hard_ratio - hard_ratio))
+    easy = round(weekly_hours * easy_ratio, 1)
+    hard = round(weekly_hours * hard_ratio, 1)
+
+    rest_days = int(round(mix["rest_days"]))
+    if days_per_week is not None and days_per_week > 0:
+        # Honor real availability: at least (7 − training days) rest, and never
+        # more quality sessions than (training days − 1 easy day), trimming
+        # threshold before VO2.
+        rest_days = max(rest_days, 7 - int(days_per_week))
+        rest_days = min(6, rest_days)
+        max_hard = max(0, min(3, int(days_per_week) - 1))
+        while vo2_sessions + threshold_sessions > max_hard and threshold_sessions > 0:
+            threshold_sessions -= 1
+        while vo2_sessions + threshold_sessions > max_hard and vo2_sessions > 0:
+            vo2_sessions -= 1
 
     return {
         "phase": phase,
@@ -147,8 +198,9 @@ def weekly_intensity_quota(phase: Phase, weekly_hours: float) -> dict:
         "hard_hours": hard,
         "vo2_sessions": vo2_sessions,
         "threshold_sessions": threshold_sessions,
-        "rest_days": int(round(mix["rest_days"])),
+        "rest_days": rest_days,
         "total_hours": weekly_hours,
+        "training_model": training_model,
     }
 
 
@@ -187,12 +239,28 @@ def _downgrade_to_ceiling(pick: SessionType, ceiling: str) -> SessionType:
     return pick
 
 
+def _apply_model_bias(pick: SessionType, training_model: str | None) -> SessionType:
+    """Bend a quality-day pick toward the athlete's chosen weekly model.
+
+    Polarized avoids the grey zone — tempo/sweet-spot "middle" work becomes easy
+    endurance, keeping only the true hard poles (VO2/threshold). Sweet-spot
+    trades VO2 sharpness for sustained near-threshold work. None/pyramidal leave
+    the pick untouched.
+    """
+    if training_model == "polarized":
+        return "endurance" if pick in ("tempo", "sweet_spot") else pick
+    if training_model == "sweetspot":
+        return "sweet_spot" if pick in ("vo2", "threshold") else pick
+    return pick
+
+
 def session_type_for_today(
     phase: Phase,
     weekly_progress: dict | None,
     tsb: float,
     intensity_ceiling: str,
     day_of_week: int,
+    training_model: str | None = None,
 ) -> SessionType:
     """Pick today's session category.
 
@@ -292,8 +360,10 @@ def session_type_for_today(
             if day_of_week == 2:
                 # VO2 only if we haven't blown our weekly quota AND TSB not crushed
                 if vo2_done < 1 and tsb > -15:
-                    return _downgrade_to_ceiling("vo2", intensity_ceiling)
-                return _downgrade_to_ceiling("sweet_spot", intensity_ceiling)
+                    pick = "vo2"
+                else:
+                    pick = "sweet_spot"
+                return _downgrade_to_ceiling(_apply_model_bias(pick, training_model), intensity_ceiling)
             # Tue/Thu quality. build2/peak run two threshold days. build1
             # progresses *within* the week: first quality day = sweet spot,
             # second quality day = threshold (real periodization isn't a flat
@@ -305,12 +375,12 @@ def session_type_for_today(
                     pick = "threshold"
                 else:  # build1
                     pick = "threshold" if hard_done >= 1 else "sweet_spot"
-                return _downgrade_to_ceiling(pick, intensity_ceiling)
+                return _downgrade_to_ceiling(_apply_model_bias(pick, training_model), intensity_ceiling)
             return _downgrade_to_ceiling("endurance", intensity_ceiling)
         if phase == "base2":
             # One sweet_spot mid-week in late base
             if hard_done < 1 and day_of_week == 2:
-                return _downgrade_to_ceiling("sweet_spot", intensity_ceiling)
+                return _downgrade_to_ceiling(_apply_model_bias("sweet_spot", training_model), intensity_ceiling)
             return _downgrade_to_ceiling("endurance", intensity_ceiling)
         # base1 / offseason / maintenance — all endurance mid-week
         return _downgrade_to_ceiling("endurance", intensity_ceiling)

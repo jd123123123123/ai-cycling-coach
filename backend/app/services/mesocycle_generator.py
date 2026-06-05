@@ -185,6 +185,9 @@ def build_week_drafts(
         List of 7 PlannedWorkoutDraft objects (Mon..Sun), NOT persisted.
     """
     sport = athlete.primary_sport or "cycling"
+    # Weekly-intensity philosophy from onboarding (goals JSON) biases the
+    # quality-day picks so the generated week reflects 80/20 vs sweet-spot.
+    training_model = (getattr(athlete, "goals", None) or {}).get("training_model")
     drafts: list[PlannedWorkoutDraft] = []
 
     # Synthetic TSB for generation — no readiness signals at plan time
@@ -214,6 +217,7 @@ def build_week_drafts(
             tsb=synthetic_tsb,
             intensity_ceiling="push",  # no readiness ceiling at generation time
             day_of_week=dow,
+            training_model=training_model,
         )
 
         # Estimate available minutes from athlete schedule or default

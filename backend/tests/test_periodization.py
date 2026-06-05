@@ -98,6 +98,45 @@ class TestWeeklyQuota:
         assert q["hard_hours"] == 0.0
 
 
+class TestWeeklyQuotaTrainingModel:
+    def test_none_model_matches_baseline(self):
+        base = weekly_intensity_quota("build2", 10.0)
+        explicit = weekly_intensity_quota("build2", 10.0, training_model=None)
+        for k in ("z1_z2_hours", "hard_hours", "vo2_sessions", "threshold_sessions", "rest_days"):
+            assert base[k] == explicit[k]
+
+    def test_polarized_trims_threshold_and_hard_hours(self):
+        base = weekly_intensity_quota("build2", 10.0)
+        pol = weekly_intensity_quota("build2", 10.0, training_model="polarized")
+        # Polarized keeps the VO2 pole but trims the threshold middle + grey-zone hours.
+        assert pol["vo2_sessions"] == base["vo2_sessions"]
+        assert pol["threshold_sessions"] == base["threshold_sessions"] - 1
+        assert pol["hard_hours"] < base["hard_hours"]
+
+    def test_sweetspot_adds_threshold_and_hard_hours(self):
+        base = weekly_intensity_quota("build2", 10.0)
+        ss = weekly_intensity_quota("build2", 10.0, training_model="sweetspot")
+        assert ss["threshold_sessions"] == base["threshold_sessions"] + 1
+        assert ss["vo2_sessions"] == max(0, base["vo2_sessions"] - 1)
+        assert ss["hard_hours"] > base["hard_hours"]
+
+    def test_days_per_week_sets_rest_floor_and_caps_hard(self):
+        q = weekly_intensity_quota("build2", 10.0, training_model="sweetspot", days_per_week=3)
+        assert q["rest_days"] >= 4  # 7 − 3 training days
+        assert q["vo2_sessions"] + q["threshold_sessions"] <= 2  # days − 1
+
+    def test_polarized_quality_day_avoids_grey_zone(self):
+        # build1 second quality day would normally be sweet_spot; polarized → easy.
+        prog = {"hard_done": 0, "hard_sessions_done": 0, "vo2_sessions_done": 1, "last_72h_quality_count": 0}
+        pick = session_type_for_today("build1", prog, tsb=0.0, intensity_ceiling="push", day_of_week=1, training_model="polarized")
+        assert pick == "endurance"
+
+    def test_sweetspot_wednesday_swaps_vo2_for_sweet_spot(self):
+        prog = {"hard_sessions_done": 0, "vo2_sessions_done": 0, "last_72h_quality_count": 0}
+        pick = session_type_for_today("build2", prog, tsb=0.0, intensity_ceiling="push", day_of_week=2, training_model="sweetspot")
+        assert pick == "sweet_spot"
+
+
 class TestSessionTypeForToday:
     def test_rest_ceiling_returns_rest(self):
         assert session_type_for_today(

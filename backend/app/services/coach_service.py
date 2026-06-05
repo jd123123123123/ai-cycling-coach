@@ -576,8 +576,16 @@ async def build_snapshot(
     if weekly_hours is None or weekly_hours <= 0:
         weekly_hours = 8.0
 
+    # Athlete's weekly-intensity philosophy from onboarding (stored in the
+    # free-form goals JSON). Shapes the quota + each day's session pick.
+    goals_json = (profile.goals or {}) if profile else {}
+    training_model = goals_json.get("training_model")
+    days_per_week = goals_json.get("days_per_week")
+
     phase = detect_training_phase(goal_date_obj, float(pmc.get("ctl", 0.0)))
-    quota = weekly_intensity_quota(phase, float(weekly_hours))
+    quota = weekly_intensity_quota(
+        phase, float(weekly_hours), training_model=training_model, days_per_week=days_per_week
+    )
 
     # ---------------------------------------------------------
     # Multi-factor readiness + new safety signals
@@ -672,6 +680,7 @@ async def build_snapshot(
         tsb=float(pmc.get("tsb", 0.0)),
         intensity_ceiling=ceiling,
         day_of_week=_today_local().weekday(),
+        training_model=training_model,
     )
 
     # Today's available minutes — weekly_hours/7 rounded up, capped at 180 min
@@ -1060,6 +1069,7 @@ async def build_snapshot(
                 tsb=float(pmc.get("tsb", 0.0)),
                 intensity_ceiling=ceiling,
                 day_of_week=tomorrow_local_date.weekday(),
+                training_model=training_model,
             )
             # Use the same per-day-minutes the today flow already computed
             # — close enough for a one-day projection; the picker only
