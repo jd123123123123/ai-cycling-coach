@@ -7,6 +7,9 @@
 import CoachBrief from '../CoachBrief'
 import MorningCheckin from '../MorningCheckin'
 import MorningRecap from '../MorningRecap'
+import WeekStrip from '../WeekStrip'
+import WeekVsLast from '../WeekVsLast'
+import { BentoCell, BentoGrid } from '../../ui/BentoGrid'
 import { useT } from '../../../contexts/LocaleContext'
 import AchievementBadges from '../AchievementBadges'
 import DidYouKnow from '../DidYouKnow'
@@ -26,6 +29,15 @@ export default function TodayTab() {
   const t = useT()
   return (
     <div className="flex flex-col gap-4 sm:gap-5 min-w-0">
+      {/* Weekly summary — moved up from the Train tab so "what have I done this
+         week" answers at a glance on the home surface. */}
+      <DashboardSection title={t('this_week')} id="today-week-summary" defaultExpanded>
+        <BentoGrid>
+          <BentoCell span={2}><WeekStrip /></BentoCell>
+          <BentoCell span={1}><WeekVsLast /></BentoCell>
+        </BentoGrid>
+      </DashboardSection>
+
       {/* Subjective check-in — disappears once logged today. */}
       <MorningCheckin />
       {/* Morning recap — picks the right yesterday-card automatically:
