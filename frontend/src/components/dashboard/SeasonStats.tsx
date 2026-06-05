@@ -2,39 +2,79 @@ import { useMemo } from 'react'
 import {
   startOfYear,
   startOfMonth,
-  subDays,
+  subYears,
+  getDayOfYear,
+  getMonth,
   parseISO,
   isAfter,
 } from 'date-fns'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import Sparkline from './Sparkline'
 import type { ActivityRead } from '../../api/dashboard'
 
 /**
- * SeasonStats — year-to-date training totals with a this-month delta.
+ * SeasonStats — year-to-date training totals with depth.
  *
- * Strava's "Your Year in Sport" mechanic works because seeing a four-digit
- * number you put up yourself is genuinely motivating. We do the lite version
- * always-on: a one-row strip showing hours · km · sessions · TSS for the
- * calendar year, with a small "+N this month" delta in the same units.
+ * Beyond the four big numbers, each metric now carries the context that makes
+ * a season feel like a story rather than a scoreboard:
+ *   · a cumulative sparkline of the year so far (the climbing line)
+ *   · a year-over-year delta vs the same calendar day last year (am I ahead?)
+ *   · a footer projection — where this pace lands by Dec 31
  *
  * Renders nothing when no activities have logged this year (a brand-new
  * account doesn't need to see four zeros).
  */
 
-function sumSessionsTss(acts: ActivityRead[]) {
-  let hours = 0
-  let km = 0
-  let tss = 0
-  let sessions = 0
+interface Totals {
+  hours: number
+  km: number
+  tss: number
+  sessions: number
+}
+
+function emptyTotals(): Totals {
+  return { hours: 0, km: 0, tss: 0, sessions: 0 }
+}
+
+function isReal(a: ActivityRead): boolean {
+  return (a.duration_seconds ?? 0) >= 600 // skip <10-min activities (junk pairings)
+}
+
+function addActivity(t: Totals, a: ActivityRead) {
+  t.sessions += 1
+  t.hours += (a.duration_seconds ?? 0) / 3600
+  t.km += (a.distance_meters ?? 0) / 1000
+  t.tss += a.tss ?? 0
+}
+
+function sumTotals(acts: ActivityRead[]): Totals {
+  const t = emptyTotals()
+  for (const a of acts) if (isReal(a)) addActivity(t, a)
+  return t
+}
+
+/** Cumulative month-end totals Jan..currentMonth — one point per elapsed month. */
+function monthlyCumulative(acts: ActivityRead[], currentMonth: number, pick: (t: Totals) => number): number[] {
+  const perMonth: Totals[] = Array.from({ length: currentMonth + 1 }, emptyTotals)
   for (const a of acts) {
-    const dur = a.duration_seconds ?? 0
-    if (dur < 600) continue  // skip <10-min activities (junk pairings)
-    sessions += 1
-    hours += dur / 3600
-    km += (a.distance_meters ?? 0) / 1000
-    tss += a.tss ?? 0
+    if (!isReal(a)) continue
+    let m: number
+    try {
+      m = getMonth(parseISO(a.started_at))
+    } catch {
+      continue
+    }
+    if (m < 0 || m > currentMonth) continue
+    addActivity(perMonth[m], a)
   }
-  return { hours, km, tss, sessions }
+  const out: number[] = []
+  let running = 0
+  for (let m = 0; m <= currentMonth; m++) {
+    running += pick(perMonth[m])
+    out.push(running)
+  }
+  return out
 }
 
 function fmtHours(h: number): string {
@@ -47,35 +87,53 @@ function fmtKm(km: number): string {
   return `${Math.round(km)} km`
 }
 
+function fmtInt(n: number): string {
+  return Math.round(n).toLocaleString()
+}
+
 interface StatProps {
   label: string
   value: string
-  delta?: string
+  spark: number[]
+  /** % change vs same day last year; null when there's no prior-year baseline. */
+  yoy: number | null
+  color: string
 }
 
-function Stat({ label, value, delta }: StatProps) {
+function Stat({ label, value, spark, yoy, color }: StatProps) {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-1.5">
       <span
         className="eyebrow"
         style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}
       >
         {label}
       </span>
-      <span
-        className="num-mono leading-none mt-1"
-        style={{ color: 'var(--color-ink)', fontSize: 20, fontWeight: 500 }}
-      >
-        {value}
-      </span>
-      {delta && (
+      <div className="flex items-baseline gap-2 flex-wrap">
         <span
-          className="num-mono mt-1"
-          style={{ color: 'var(--color-good)', fontSize: 10, letterSpacing: '0.02em' }}
+          className="num-mono leading-none"
+          style={{ color: 'var(--color-ink)', fontSize: 22, fontWeight: 500 }}
         >
-          {delta}
+          {value}
         </span>
-      )}
+        {yoy != null && Number.isFinite(yoy) && (
+          <span
+            className="num-mono inline-flex items-center gap-0.5"
+            style={{
+              color: yoy >= 0 ? 'var(--color-good)' : 'var(--color-muted)',
+              fontSize: 10,
+              letterSpacing: '0.02em',
+            }}
+            title="vs. same day last year"
+          >
+            {yoy >= 0 ? <TrendingUp size={10} strokeWidth={2.4} /> : <TrendingDown size={10} strokeWidth={2.4} />}
+            {yoy >= 0 ? '+' : ''}{Math.round(yoy)}%
+          </span>
+        )}
+      </div>
+      <div style={{ color }}>
+        <Sparkline values={spark} width={96} height={22} stroke={color} fill={color} showDot={false} />
+      </div>
     </div>
   )
 }
@@ -84,28 +142,63 @@ export default function SeasonStats() {
   const today = useMemo(() => new Date(), [])
   const yearStart = useMemo(() => startOfYear(today), [today])
   const monthStart = useMemo(() => startOfMonth(today), [today])
+  // Same calendar window one year ago (Jan 1 → today-1y) for a fair YoY compare.
+  const lastYearStart = useMemo(() => subYears(yearStart, 1), [yearStart])
+  const lastYearToday = useMemo(() => subYears(today, 1), [today])
 
   const { data: ytdData, isLoading } = useActivitiesRange(yearStart, today)
+  const { data: lastYearData } = useActivitiesRange(lastYearStart, lastYearToday)
 
-  const result = useMemo(() => {
+  const model = useMemo(() => {
     const acts = ytdData?.activities ?? []
-    const ytd = sumSessionsTss(acts)
+    const ytd = sumTotals(acts)
+
     const thisMonthActs = acts.filter((a) => {
       try {
-        return isAfter(parseISO(a.started_at), subDays(monthStart, 0))
+        return isAfter(parseISO(a.started_at), monthStart)
       } catch {
         return false
       }
     })
-    const mtd = sumSessionsTss(thisMonthActs)
-    return { ytd, mtd }
-  }, [ytdData, monthStart])
+    const mtd = sumTotals(thisMonthActs)
+
+    const prior = sumTotals(lastYearData?.activities ?? [])
+    const currentMonth = getMonth(today)
+    const dayOfYear = getDayOfYear(today)
+    const yearFraction = dayOfYear / 365
+
+    const yoy = (cur: number, prev: number): number | null =>
+      prev > 0 ? ((cur - prev) / prev) * 100 : null
+    const project = (cur: number): number => (yearFraction > 0 ? cur / yearFraction : cur)
+
+    return {
+      ytd,
+      mtd,
+      sparks: {
+        hours: monthlyCumulative(acts, currentMonth, (t) => t.hours),
+        km: monthlyCumulative(acts, currentMonth, (t) => t.km),
+        sessions: monthlyCumulative(acts, currentMonth, (t) => t.sessions),
+        tss: monthlyCumulative(acts, currentMonth, (t) => t.tss),
+      },
+      yoy: {
+        hours: yoy(ytd.hours, prior.hours),
+        km: yoy(ytd.km, prior.km),
+        sessions: yoy(ytd.sessions, prior.sessions),
+        tss: yoy(ytd.tss, prior.tss),
+      },
+      projection: {
+        km: project(ytd.km),
+        hours: project(ytd.hours),
+      },
+      hasPrior: prior.sessions > 0,
+    }
+  }, [ytdData, lastYearData, monthStart, today])
 
   if (isLoading) {
-    return <div className="h-20 rounded-[12px] animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+    return <div className="h-36 rounded-[12px] animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
   }
 
-  if (result.ytd.sessions === 0) return null
+  if (model.ytd.sessions === 0) return null
 
   const monthLabel = today.toLocaleString('default', { month: 'long' })
 
@@ -125,31 +218,62 @@ export default function SeasonStats() {
           className="eyebrow num-mono"
           style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.12em' }}
         >
-          {monthLabel.toUpperCase()} · +{result.mtd.sessions} SESSIONS
+          {monthLabel.toUpperCase()} · +{model.mtd.sessions} SESSIONS
         </span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4">
         <Stat
           label="HOURS"
-          value={fmtHours(result.ytd.hours)}
-          delta={result.mtd.hours > 0 ? `+${fmtHours(result.mtd.hours)} this month` : undefined}
+          value={fmtHours(model.ytd.hours)}
+          spark={model.sparks.hours}
+          yoy={model.yoy.hours}
+          color="var(--color-forest-2)"
         />
         <Stat
           label="DISTANCE"
-          value={fmtKm(result.ytd.km)}
-          delta={result.mtd.km > 0 ? `+${fmtKm(result.mtd.km)} this month` : undefined}
+          value={fmtKm(model.ytd.km)}
+          spark={model.sparks.km}
+          yoy={model.yoy.km}
+          color="var(--color-good)"
         />
         <Stat
           label="SESSIONS"
-          value={String(result.ytd.sessions)}
-          delta={result.mtd.sessions > 0 ? `+${result.mtd.sessions} this month` : undefined}
+          value={fmtInt(model.ytd.sessions)}
+          spark={model.sparks.sessions}
+          yoy={model.yoy.sessions}
+          color="var(--color-amber-2)"
         />
         <Stat
           label="TSS"
-          value={String(Math.round(result.ytd.tss))}
-          delta={result.mtd.tss > 0 ? `+${Math.round(result.mtd.tss)} this month` : undefined}
+          value={fmtInt(model.ytd.tss)}
+          spark={model.sparks.tss}
+          yoy={model.yoy.tss}
+          color="var(--color-ink-2)"
         />
       </div>
+
+      {/* Projection — where today's pace lands by Dec 31. The forward-looking
+          close that turns a tally into a target. */}
+      {model.ytd.km > 50 && (
+        <div
+          className="mt-4 pt-3 flex items-center gap-2 text-[12px]"
+          style={{ borderTop: '1px solid var(--color-rule)', color: 'var(--color-ink-2)' }}
+        >
+          <TrendingUp size={12} strokeWidth={2} style={{ color: 'var(--color-good)', flexShrink: 0 }} />
+          <span>
+            On this pace you’ll finish {today.getFullYear()} around{' '}
+            <strong style={{ color: 'var(--color-ink)' }}>{fmtKm(model.projection.km)}</strong>
+            {' '}and{' '}
+            <strong style={{ color: 'var(--color-ink)' }}>{fmtHours(model.projection.hours)}</strong>
+            {' '}in the saddle
+            {model.hasPrior && model.yoy.km != null && (
+              <> — {model.yoy.km >= 0 ? 'ahead of' : 'behind'} last year by {Math.abs(Math.round(model.yoy.km))}%</>
+            )}
+            .
+          </span>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { differenceInCalendarDays, getDayOfYear, startOfYear, subDays } from 'date-fns'
 import { Lightbulb } from 'lucide-react'
+import { prefersReducedMotion } from '../../utils/motion'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useT } from '../../contexts/LocaleContext'
@@ -157,17 +158,36 @@ export default function DidYouKnow() {
   // — keeps React Query cache hits warm even though we don't read it directly.
   useDailyMetrics(useMemo(() => subDays(today, 14), [today]), today)
 
-  const fact = useMemo(() => {
+  // Rotate the whole pool rather than pinning one fact per day — the season has
+  // more than one story to tell. Start on a day-seeded offset so the opening
+  // fact still shifts each morning.
+  const pool = useMemo(() => {
     const acts = ninetyData?.activities ?? []
     const ytdActs = ytdData?.activities ?? []
-    const pool = buildPool(acts, ytdActs, today)
-    if (pool.length === 0) return null
-    const seed = getDayOfYear(today)
-    return pool[seed % pool.length]
+    return buildPool(acts, ytdActs, today)
   }, [ninetyData, ytdData, today])
 
+  // `step` advances; the displayed index is derived from a day-of-year seed so
+  // the opening fact still shifts each morning — no seeding effect (and no
+  // synchronous setState in render) required.
+  const [step, setStep] = useState(0)
+  const reduceMotion = prefersReducedMotion()
+
+  const len = pool.length
+  const seed = len > 0 ? getDayOfYear(today) % len : 0
+  const index = len > 0 ? (seed + step) % len : 0
+
+  // Auto-advance every 7s. Pauses for reduced-motion users and single-fact pools.
+  useEffect(() => {
+    if (reduceMotion || len < 2) return
+    const id = window.setInterval(() => setStep((s) => s + 1), 7000)
+    return () => window.clearInterval(id)
+  }, [reduceMotion, len])
+
   if (isLoading) return null
-  if (!fact) return null
+  if (len === 0) return null
+
+  const fact = pool[index]
 
   return (
     <div
@@ -182,7 +202,7 @@ export default function DidYouKnow() {
         strokeWidth={2}
         style={{ color: 'var(--color-amber-2)', marginTop: 2, flexShrink: 0 }}
       />
-      <div className="flex flex-col gap-1 min-w-0">
+      <div className="flex flex-col gap-1.5 min-w-0 flex-1">
         <span
           className="eyebrow num-mono"
           style={{
@@ -194,9 +214,47 @@ export default function DidYouKnow() {
         >
           {t('did_you_know')}
         </span>
-        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink)', maxWidth: '60ch' }}>
+        <p
+          key={index}
+          className="text-[13px] leading-relaxed"
+          style={{
+            color: 'var(--color-ink)',
+            maxWidth: '60ch',
+            animation: reduceMotion ? undefined : 'fade-in 320ms ease-out both',
+          }}
+        >
           {fact.text}
         </p>
+
+        {/* Pager dots — clickable; also a quiet hint there's more than one fact. */}
+        {pool.length > 1 && (
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {pool.map((_, i) => {
+              const active = i === index
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setStep(((i - seed) % len + len) % len)}
+                  aria-label={`Fact ${i + 1} of ${len}`}
+                  aria-current={active ? 'true' : undefined}
+                  style={{
+                    width: active ? 16 : 6,
+                    height: 6,
+                    borderRadius: 3,
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    backgroundColor: active
+                      ? 'var(--color-amber-2)'
+                      : 'color-mix(in srgb, var(--color-amber-2) 30%, transparent)',
+                    transition: 'width 240ms ease, background-color 240ms ease',
+                  }}
+                />
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

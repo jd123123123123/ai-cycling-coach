@@ -12,12 +12,13 @@ import type { ActivityRead } from '../../api/dashboard'
  * Each day = a vertical bar: height ∝ daily TSS (from the PMC series, which is
  * the authoritative load number), color = the day's dominant intensity (Xert
  * "Focus" classifier applied to the logged activity; rest days are dim). Hover
- * shows the day detail. Replaces the plain "Recent training" list as the Today
- * default — the full list lives in the Deep-dive accordion as the drilldown.
+ * raises a floating tooltip card with the day detail; a footer summarizes the
+ * window (active days, biggest day, current streak) so the strip closes with a
+ * takeaway instead of trailing off.
  */
 
 const DAYS = 90
-const MAX_BAR_PX = 44
+const MAX_BAR_PX = 48
 const MIN_BAR_PX = 2
 
 interface DayCell {
@@ -34,7 +35,7 @@ export default function TrainingLogStrip() {
   const { data: pmc, isLoading: pmcLoading } = usePMC(DAYS)
   const { data: acts } = useActivitiesRange(start, today)
   const { data: profile } = useAthleteProfile()
-  const [hover, setHover] = useState<DayCell | null>(null)
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
 
   const cells = useMemo<DayCell[]>(() => {
     const tssByDate = new Map<string, number>()
@@ -53,8 +54,11 @@ export default function TrainingLogStrip() {
     for (let i = DAYS - 1; i >= 0; i--) {
       const d = subDays(today, i)
       const key = format(d, 'yyyy-MM-dd')
-      const tss = tssByDate.get(key) ?? 0
       const act = actByDate.get(key)
+      // Prefer the PMC daily TSS, but fall back to the logged activity's TSS —
+      // the PMC series can lag or zero-out recent days while the activity row
+      // already carries the load.
+      const tss = Math.max(tssByDate.get(key) ?? 0, act?.tss ?? 0)
       const focus = act ? focusFor(act, profile ?? null) : null
       out.push({
         date: key,
@@ -67,11 +71,50 @@ export default function TrainingLogStrip() {
     return out
   }, [pmc, acts, profile, today])
 
+  const summary = useMemo(() => {
+    let active = 0
+    let big = cells[0]
+    for (const c of cells) {
+      if (c.tss > 0) {
+        active += 1
+        if (c.tss > (big?.tss ?? 0)) big = c
+      }
+    }
+
+    // Current streak: walk back from today. A still-untrained today (the very
+    // last cell) doesn't break a run that reached yesterday — skip it, then
+    // count consecutive trained days until the first rest.
+    let streak = 0
+    for (let i = cells.length - 1; i >= 0; i--) {
+      if (cells[i].tss > 0) streak += 1
+      else if (i === cells.length - 1) continue
+      else break
+    }
+
+    return { active, rest: cells.length - active, big, streak }
+  }, [cells])
+
   const maxTss = Math.max(1, ...cells.map((c) => c.tss))
 
+  // Month boundary labels — first cell of each month gets a tick label below.
+  const monthTicks = useMemo(() => {
+    const ticks: Array<{ idx: number; label: string }> = []
+    let lastMonth = ''
+    cells.forEach((c, idx) => {
+      const m = c.date.slice(0, 7)
+      if (m !== lastMonth) {
+        lastMonth = m
+        ticks.push({ idx, label: format(parseISO(c.date), 'MMM') })
+      }
+    })
+    return ticks
+  }, [cells])
+
   if (pmcLoading) {
-    return <div className="h-20 rounded-[12px] animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+    return <div className="h-28 rounded-[12px] animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
   }
+
+  const hover = hoverIdx != null ? cells[hoverIdx] : null
 
   return (
     <div
@@ -80,36 +123,104 @@ export default function TrainingLogStrip() {
     >
       <div className="flex items-center justify-between gap-3 mb-3">
         <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>Training log · last 90 days</span>
-        <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11, minHeight: 14 }}>
-          {hover
-            ? `${format(parseISO(hover.date), 'EEE MMM d')} · ${Math.round(hover.tss)} TSS · ${hover.label}${hover.activityTitle ? ` · ${hover.activityTitle}` : ''}`
-            : ' '}
+        <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
+          {summary.active} active · {summary.rest} rest
         </span>
       </div>
 
-      <div className="flex items-end gap-[2px]" style={{ height: MAX_BAR_PX }}>
-        {cells.map((c) => {
-          const h = c.tss > 0 ? Math.max(MIN_BAR_PX, (c.tss / maxTss) * MAX_BAR_PX) : MIN_BAR_PX
-          const isToday = c.date === format(today, 'yyyy-MM-dd')
-          return (
-            <div
-              key={c.date}
-              onMouseEnter={() => setHover(c)}
-              onMouseLeave={() => setHover((cur) => (cur?.date === c.date ? null : cur))}
-              className="flex-1 rounded-[1px] transition-opacity"
+      {/* Bars + floating tooltip share a relative container so the card can be
+          anchored above the hovered day. */}
+      <div className="relative" onMouseLeave={() => setHoverIdx(null)}>
+        {hover && (
+          <div
+            className="absolute z-20 pointer-events-none rounded-[8px] px-2.5 py-1.5"
+            style={{
+              left: `${((hoverIdx! + 0.5) / cells.length) * 100}%`,
+              bottom: MAX_BAR_PX + 10,
+              transform: 'translateX(-50%)',
+              backgroundColor: 'var(--color-ink)',
+              color: 'var(--color-paper)',
+              border: '1px solid var(--color-rule)',
+              boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <span style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: hover.color, display: 'inline-block' }} />
+              <span className="num-mono" style={{ fontSize: 11, fontWeight: 600 }}>
+                {format(parseISO(hover.date), 'EEE MMM d')}
+              </span>
+            </div>
+            <div className="num-mono" style={{ fontSize: 10, opacity: 0.85, marginTop: 1 }}>
+              {Math.round(hover.tss)} TSS · {hover.label}
+            </div>
+            {hover.activityTitle && (
+              <div style={{ fontSize: 10, opacity: 0.7, marginTop: 1, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {hover.activityTitle}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-end gap-[2px]" style={{ height: MAX_BAR_PX }}>
+          {cells.map((c, idx) => {
+            const h = c.tss > 0 ? Math.max(MIN_BAR_PX, (c.tss / maxTss) * MAX_BAR_PX) : MIN_BAR_PX
+            const isToday = idx === cells.length - 1
+            const dim = hoverIdx != null && hoverIdx !== idx
+            return (
+              <div
+                key={c.date}
+                onMouseEnter={() => setHoverIdx(idx)}
+                className="flex-1 rounded-[1px]"
+                style={{
+                  height: h,
+                  minWidth: 2,
+                  backgroundColor: c.color,
+                  opacity: c.tss > 0 ? (dim ? 0.5 : 1) : dim ? 0.25 : 0.45,
+                  outline: isToday ? '1px solid var(--color-ink)' : undefined,
+                  outlineOffset: 1,
+                  cursor: 'pointer',
+                  transition: 'opacity 140ms ease',
+                }}
+                aria-label={`${c.date}: ${Math.round(c.tss)} TSS, ${c.label}`}
+              />
+            )
+          })}
+        </div>
+
+        {/* Month ticks */}
+        <div className="relative mt-1" style={{ height: 12 }}>
+          {monthTicks.map((t) => (
+            <span
+              key={t.idx}
+              className="num-mono absolute"
               style={{
-                height: h,
-                minWidth: 2,
-                backgroundColor: c.color,
-                opacity: c.tss > 0 ? 1 : 0.45,
-                outline: isToday ? '1px solid var(--color-ink)' : undefined,
-                outlineOffset: 1,
-                cursor: 'default',
+                left: `${(t.idx / cells.length) * 100}%`,
+                fontSize: 9,
+                letterSpacing: '0.1em',
+                color: 'var(--color-muted)',
+                textTransform: 'uppercase',
               }}
-              aria-label={`${c.date}: ${Math.round(c.tss)} TSS, ${c.label}`}
-            />
-          )
-        })}
+            >
+              {t.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer takeaway */}
+      <div
+        className="flex items-center justify-between gap-3 mt-3 pt-3 num-mono"
+        style={{ borderTop: '1px solid var(--color-rule)', fontSize: 11, color: 'var(--color-ink-2)' }}
+      >
+        <span>
+          Biggest day{' '}
+          <strong style={{ color: 'var(--color-ink)' }}>{Math.round(summary.big?.tss ?? 0)} TSS</strong>
+          {summary.big?.tss ? <> · {format(parseISO(summary.big.date), 'MMM d')}</> : null}
+        </span>
+        {summary.streak > 1 && (
+          <span style={{ color: 'var(--color-good)' }}>{summary.streak}-day streak</span>
+        )}
       </div>
     </div>
   )
