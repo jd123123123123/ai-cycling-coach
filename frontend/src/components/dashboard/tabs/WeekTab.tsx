@@ -12,11 +12,13 @@
  */
 import { Link } from 'react-router-dom'
 import { parseISO } from 'date-fns'
+import { BentoCell, BentoGrid } from '../../ui/BentoGrid'
 import ComplianceStrip from '../ComplianceStrip'
 import RampRate from '../RampRate'
+import WeekStrip from '../WeekStrip'
+import WeekVsLast from '../WeekVsLast'
 import DayPlanCard from '../DayPlanCard'
 import TrainingCalendar from '../TrainingCalendar'
-import TrainHero from '../TrainHero'
 import DashboardSection from '../DashboardSection'
 import { useT } from '../../../contexts/LocaleContext'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
@@ -160,9 +162,6 @@ export default function WeekTab() {
   const t = useT()
   return (
     <div className="flex flex-col gap-6">
-      {/* Hero — phase, week framing (AI preface), TSS plan-vs-actual, quota */}
-      <TrainHero />
-
       {/* 7 day pills */}
       <WeekPlanPrimary />
 
@@ -171,6 +170,14 @@ export default function WeekTab() {
         <div className="flex-1 min-w-0"><ComplianceStrip /></div>
         <div className="flex-1 min-w-0"><RampRate /></div>
       </div>
+
+      {/* This week at a glance */}
+      <DashboardSection title={t('this_week')} id="week-summary" defaultExpanded>
+        <BentoGrid>
+          <BentoCell span={2}><WeekStrip /></BentoCell>
+          <BentoCell span={1}><WeekVsLast /></BentoCell>
+        </BentoGrid>
+      </DashboardSection>
 
       {/* The whole training plan — month calendar with drag-to-reschedule */}
       <DashboardSection title={t('full_plan')} id="week-calendar" defaultExpanded={false}>
