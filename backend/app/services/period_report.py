@@ -16,6 +16,7 @@ import logging
 import statistics
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +37,25 @@ from app.services.analytical_aggregates import (
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+MORNING_HOUR = 9
+
+
+def should_precompute_daily(now_utc, tz_name, last_generated_at) -> bool:
+    """True when it's at/after MORNING_HOUR in the athlete's local time AND the
+    presets weren't already (re)generated at/after this morning's hour today.
+    tz_name None or invalid → UTC."""
+    try:
+        tz = ZoneInfo(tz_name) if tz_name else timezone.utc
+    except Exception:  # noqa: BLE001 — unknown IANA name → UTC
+        tz = timezone.utc
+    local_now = now_utc.astimezone(tz)
+    if local_now.hour < MORNING_HOUR:
+        return False
+    if last_generated_at is None:
+        return True
+    morning_today = local_now.replace(hour=MORNING_HOUR, minute=0, second=0, microsecond=0)
+    return last_generated_at.astimezone(tz) < morning_today
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:

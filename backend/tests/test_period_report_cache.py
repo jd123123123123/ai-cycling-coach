@@ -99,3 +99,36 @@ async def test_precompute_continues_when_one_window_fails(monkeypatch):
     db = _db_returning(None)
     await pr.precompute_preset_reports(db, user_id=1)  # must not raise
     assert calls["n"] == len(pr.PRESET_WINDOWS)  # tried all three
+
+
+def test_morning_gate_false_before_morning():
+    now = datetime(2026, 6, 24, 6, 0, tzinfo=timezone.utc)  # 06:00 UTC
+    assert pr.should_precompute_daily(now, None, None) is False
+
+
+def test_morning_gate_true_first_time_after_morning():
+    now = datetime(2026, 6, 24, 10, 0, tzinfo=timezone.utc)  # 10:00 UTC
+    assert pr.should_precompute_daily(now, None, None) is True
+
+
+def test_morning_gate_false_when_already_done_today():
+    now = datetime(2026, 6, 24, 14, 0, tzinfo=timezone.utc)
+    last = datetime(2026, 6, 24, 9, 30, tzinfo=timezone.utc)  # generated at 09:30 today
+    assert pr.should_precompute_daily(now, None, last) is False
+
+
+def test_morning_gate_true_when_last_was_yesterday():
+    now = datetime(2026, 6, 24, 9, 5, tzinfo=timezone.utc)
+    last = datetime(2026, 6, 23, 12, 0, tzinfo=timezone.utc)
+    assert pr.should_precompute_daily(now, None, last) is True
+
+
+def test_morning_gate_respects_athlete_timezone():
+    # 08:00 UTC == 10:00 in Europe/Berlin (UTC+2 in June) → past the 09:00 local gate
+    now = datetime(2026, 6, 24, 8, 0, tzinfo=timezone.utc)
+    assert pr.should_precompute_daily(now, "Europe/Berlin", None) is True
+
+
+def test_morning_gate_bad_timezone_falls_back_to_utc():
+    now = datetime(2026, 6, 24, 6, 0, tzinfo=timezone.utc)  # before 09:00 UTC
+    assert pr.should_precompute_daily(now, "Not/AZone", None) is False
