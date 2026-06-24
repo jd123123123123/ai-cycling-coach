@@ -19,6 +19,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import ValidationError
 
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 MORNING_HOUR = 9
 
 
-def should_precompute_daily(now_utc, tz_name, last_generated_at) -> bool:
+def should_precompute_daily(now_utc: datetime, tz_name: str | None, last_generated_at: datetime | None) -> bool:
     """True when it's at/after MORNING_HOUR in the athlete's local time AND the
     presets weren't already (re)generated at/after this morning's hour today.
     tz_name None or invalid → UTC."""
@@ -859,24 +860,19 @@ PRESET_WINDOWS = (7, 14, 30)
 
 
 async def _upsert_report(db: AsyncSession, user_id: int, days: int, report) -> None:
-    """Insert or replace the cached row for (user, days), stamping generated_at."""
-    from app.schemas.period_report import PeriodReport  # local import: avoid cycle
-
-    assert isinstance(report, PeriodReport)
+    """Insert or replace the cached row for (user, days) atomically, stamping
+    generated_at. ON CONFLICT avoids a select-then-insert race when two callers
+    miss the same window concurrently."""
     now = datetime.now(timezone.utc)
     payload = report.model_dump(mode="json")
-    result = await db.execute(
-        select(PeriodReportCache).where(
-            PeriodReportCache.user_id == user_id,
-            PeriodReportCache.days == days,
-        )
+    stmt = pg_insert(PeriodReportCache).values(
+        user_id=user_id, days=days, report=payload, generated_at=now,
     )
-    row = result.scalar_one_or_none()
-    if row is None:
-        db.add(PeriodReportCache(user_id=user_id, days=days, report=payload, generated_at=now))
-    else:
-        row.report = payload
-        row.generated_at = now
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["user_id", "days"],
+        set_={"report": payload, "generated_at": now},
+    )
+    await db.execute(stmt)
     await db.commit()
     report.generated_at = now
 

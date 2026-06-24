@@ -1,10 +1,10 @@
 """Tests for the period-report cache: schema field + model import."""
-import types
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+import app.services.garmin_sync_service as sync_mod
 import app.services.period_report as pr
 from app.schemas.period_report import PeriodReport
 
@@ -72,8 +72,7 @@ async def test_get_or_build_builds_and_upserts_on_miss(monkeypatch):
     db = _db_returning(None)  # no fresh row, no existing row
     out = await pr.get_or_build_report(db, user_id=1, days=7)
     build.assert_awaited_once()
-    assert out.generated_at is not None  # stamped on build
-    db.add.assert_called_once()          # inserted a new cache row
+    assert out.generated_at is not None  # stamped by atomic upsert
 
 
 @pytest.mark.asyncio
@@ -132,9 +131,6 @@ def test_morning_gate_respects_athlete_timezone():
 def test_morning_gate_bad_timezone_falls_back_to_utc():
     now = datetime(2026, 6, 24, 6, 0, tzinfo=timezone.utc)  # before 09:00 UTC
     assert pr.should_precompute_daily(now, "Not/AZone", None) is False
-
-
-import app.services.garmin_sync_service as sync_mod
 
 
 @pytest.mark.asyncio
