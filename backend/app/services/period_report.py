@@ -19,9 +19,11 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import ValidationError
 
 from app.models.activity import Activity
 from app.models.daily_metric import DailyMetric
+from app.models.period_report_cache import PeriodReportCache
 from app.services.advanced_metrics import compute_activity_metrics, why_am_i_tired
 from app.services.analytical_aggregates import (
     _activity_if,
@@ -830,6 +832,67 @@ async def _ai_verdict(
     except Exception as exc:  # noqa: BLE001
         logger.exception("Period-report verdict failed: %s", exc)
         return fallback, "rule-based-fallback"
+
+
+PERIOD_REPORT_TTL_HOURS = 18
+PRESET_WINDOWS = (7, 14, 30)
+
+
+async def _upsert_report(db: AsyncSession, user_id: int, days: int, report) -> None:
+    """Insert or replace the cached row for (user, days), stamping generated_at."""
+    from app.schemas.period_report import PeriodReport  # local import: avoid cycle
+
+    assert isinstance(report, PeriodReport)
+    now = datetime.now(timezone.utc)
+    payload = report.model_dump(mode="json")
+    result = await db.execute(
+        select(PeriodReportCache).where(
+            PeriodReportCache.user_id == user_id,
+            PeriodReportCache.days == days,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        db.add(PeriodReportCache(user_id=user_id, days=days, report=payload, generated_at=now))
+    else:
+        row.report = payload
+        row.generated_at = now
+    await db.commit()
+    report.generated_at = now
+
+
+async def get_or_build_report(db: AsyncSession, user_id: int, days: int):
+    """Read-through cache around build_report. Returns a fresh cached PeriodReport
+    when one exists within the TTL, else builds, upserts, and returns it."""
+    from app.schemas.period_report import PeriodReport
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=PERIOD_REPORT_TTL_HOURS)
+    result = await db.execute(
+        select(PeriodReportCache).where(
+            PeriodReportCache.user_id == user_id,
+            PeriodReportCache.days == days,
+            PeriodReportCache.generated_at >= cutoff,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is not None:
+        try:
+            return PeriodReport.model_validate({**row.report, "generated_at": row.generated_at})
+        except ValidationError:
+            logger.warning("Discarding malformed cached report user=%s days=%s", user_id, days)
+    report = await build_report(db, user_id, days)
+    await _upsert_report(db, user_id, days, report)
+    return report
+
+
+async def precompute_preset_reports(db: AsyncSession, user_id: int) -> None:
+    """Build + cache the preset windows. One window failing logs and continues."""
+    for days in PRESET_WINDOWS:
+        try:
+            report = await build_report(db, user_id, days)
+            await _upsert_report(db, user_id, days, report)
+        except Exception as exc:  # noqa: BLE001 — best-effort cache warming
+            logger.warning("precompute_preset_reports failed user=%s days=%s: %s", user_id, days, exc)
 
 
 async def build_report(db: AsyncSession, user_id: int, days: int):
