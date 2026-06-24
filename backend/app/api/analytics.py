@@ -27,7 +27,7 @@ from app.services.analytics_query import (
     execute_query,
     list_datasets,
 )
-from app.services.period_report import build_report
+from app.services.period_report import get_or_build_report
 from app.services.detailed_power_profile import compute_detailed_power_profile
 from app.services.tid_assessment import compute_training_distribution
 from app.services.wbal_trace import compute_wbal_trace
@@ -240,7 +240,7 @@ async def get_period_report(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="days must be between 3 and 365",
         )
-    return await build_report(db, _user.id, days)
+    return await get_or_build_report(db, _user.id, days)
 
 
 class InterpretRequest(BaseModel):
