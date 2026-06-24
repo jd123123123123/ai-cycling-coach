@@ -13,6 +13,11 @@ type StringSet = Record<Locale, string>
 
 export const STRINGS = {
   // Generic
+  customize: { en: 'Customize', de: 'Anpassen' },
+  customize_done: { en: 'Done', de: 'Fertig' },
+  customize_reset: { en: 'Reset to default', de: 'Zurücksetzen' },
+  customize_hint: { en: 'Drag to reorder · tap the eye to hide', de: 'Ziehen zum Sortieren · Auge zum Ausblenden' },
+  card_hidden: { en: 'Hidden', de: 'Ausgeblendet' },
   start_ride: { en: 'Start ride', de: 'Training starten' },
   preparing_zwo: { en: 'Preparing .zwo…', de: '.zwo wird vorbereitet…' },
   cant_train_today: { en: "Can't train today?", de: 'Heute kein Training?' },
