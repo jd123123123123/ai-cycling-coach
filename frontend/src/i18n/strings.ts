@@ -297,6 +297,21 @@ export const STRINGS = {
 
   // Generic
   loading: { en: 'Loading…', de: 'Wird geladen…' },
+
+  // Today tab card labels (used by TodayTab card registry)
+  card_train_hero: { en: 'Week framing', de: 'Wochenrahmen' },
+  card_checkin: { en: 'Morning check-in', de: 'Morgen-Check-in' },
+  card_recap: { en: 'Yesterday recap', de: 'Rückblick gestern' },
+  card_today_hero: { en: "Today's verdict", de: 'Heutiges Urteil' },
+  card_momentum: { en: 'Momentum chips', de: 'Momentum-Chips' },
+  card_coach_brief: { en: 'Coach brief', de: 'Coach-Briefing' },
+  card_streak: { en: 'Streak & challenge', de: 'Serie & Challenge' },
+  card_pmc: { en: 'Training state (PMC)', de: 'Trainingszustand (PMC)' },
+  card_season: { en: 'Season stats', de: 'Saison-Statistik' },
+  card_badges: { en: 'Achievements', de: 'Erfolge' },
+  card_dyk: { en: 'Did you know', de: 'Wusstest du' },
+  card_log: { en: 'Training log', de: 'Trainings-Log' },
+  card_deep_dive: { en: 'Deep dive', de: 'Details' },
 } as const satisfies Record<string, StringSet>
 
 export type StringKey = keyof typeof STRINGS
