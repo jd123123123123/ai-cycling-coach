@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { format, subDays } from 'date-fns'
-import { ArrowRight, Loader2 } from 'lucide-react'
-import SkipTodayDialog from './SkipTodayDialog'
 import { useT } from '../../contexts/LocaleContext'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
 import { useGoalTrajectory } from '../../hooks/useGoalTrajectory'
 import { useCountUp } from '../../hooks/useCountUp'
-import { downloadWorkoutExport, type WorkoutFormat } from '../../api/coach'
 import {
   computeReadiness,
   latestWithData,
@@ -161,9 +158,6 @@ export default function TodayHero() {
   const isMobile = useViewportIsMobile(640)
   const ringSize = isMobile ? 108 : 140
   const t = useT()
-  const [exporting, setExporting] = useState<WorkoutFormat | null>(null)
-  const [exportError, setExportError] = useState<string | null>(null)
-  const [skipOpen, setSkipOpen] = useState(false)
 
   const metrics = metricsResp?.metrics ?? []
   const latest = latestWithData(metrics, 'hrv_status') ?? latestWithData(metrics, 'body_battery') ?? latestWithData(metrics, 'sleep_score')
@@ -187,12 +181,6 @@ export default function TodayHero() {
 
   // Verdict — prefer the AI brief's headline; fall back to the tier verb.
   const verdict = brief?.verdict || (meta ? `${meta.verb}.` : 'Loading today…')
-
-  // Workout headline
-  const pw = brief?.prescribed_workout ?? null
-  const workoutLine = pw
-    ? `${pw.title} · ${pw.duration_minutes} min · ${Math.round(pw.predicted_tss)} TSS`
-    : null
 
   // Periodization eyebrow bits
   const athlete = (brief?.evidence as Record<string, unknown> | undefined)?.athlete as Record<string, unknown> | undefined
@@ -226,28 +214,6 @@ export default function TodayHero() {
   const strainPct = Math.min(100, Math.round((tssWeek / tssTarget) * 100))
   const sleepScore = latest?.sleep_score ?? null
 
-  // "Start ride" — downloads today's prescribed workout as a .zwo file (Zwift
-  // / MyWhoosh / indieVelo compatible — broadest player support). The full
-  // multi-format export row is still in the deep-dive for power users who
-  // want .erg/.mrc/.fit. After the download fires we *also* scroll to the
-  // workout card so the structure is visible while the file lands.
-  const DEFAULT_FORMAT: WorkoutFormat = 'zwo'
-  const onStart = async () => {
-    setExportError(null)
-    setExporting(DEFAULT_FORMAT)
-    try {
-      await downloadWorkoutExport(DEFAULT_FORMAT)
-      const el = document.querySelector('[data-prescribed-workout-card]')
-      if (el && 'scrollIntoView' in el) {
-        (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Export failed')
-    } finally {
-      setExporting(null)
-    }
-  }
-
   // Trajectory micro-line. Prefer the AI-generated `narrative_hook` from the
   // trajectory endpoint — it carries phase/event context and an actionable
   // delta ("add ~23 TSS/week to close the gap") that a templated state-label
@@ -276,8 +242,6 @@ export default function TodayHero() {
   const trajLine = trajectoryLine()
 
   return (
-    <>
-    <SkipTodayDialog open={skipOpen} onClose={() => setSkipOpen(false)} />
     <div
       className="rounded-[18px] p-5 sm:p-6"
       style={{
@@ -315,7 +279,9 @@ export default function TodayHero() {
         )}
       </div>
 
-      {/* Main row: ring + verdict + workout + CTA */}
+      {/* Main row: ring + verdict + why chips. The workout + Start-ride CTA live
+         once, in the CoachBrief's prescribed-workout card below — this hero is
+         the verdict, not the prescription. */}
       <div className="flex gap-5 sm:gap-7 items-center flex-wrap">
         <StateRing score={score ?? 0} color={color} size={ringSize} recoveryLabel={t('recovery_label')} />
 
@@ -333,15 +299,6 @@ export default function TodayHero() {
             {verdict}
           </h1>
 
-          {workoutLine && (
-            <p
-              className="num-mono"
-              style={{ color: 'var(--color-ink-2)', fontSize: 14, letterSpacing: '0.01em' }}
-            >
-              {workoutLine}
-            </p>
-          )}
-
           {why.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap mt-1">
               <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{t('why_label')}</span>
@@ -357,50 +314,6 @@ export default function TodayHero() {
                   {c.text}
                 </span>
               ))}
-            </div>
-          )}
-
-          {pw && (
-            <div className="self-start mt-3 flex items-center gap-3 flex-wrap">
-              <button
-                type="button"
-                onClick={onStart}
-                disabled={exporting != null}
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium min-h-[40px] disabled:opacity-70"
-                style={{
-                  backgroundColor: color,
-                  color: 'var(--color-paper)',
-                  boxShadow: `0 1px 8px color-mix(in srgb, ${color} 35%, transparent)`,
-                }}
-                aria-label="Download today's workout as .zwo and open it"
-              >
-                {exporting ? (
-                  <>
-                    <Loader2 size={14} strokeWidth={2.2} className="animate-spin" />
-                    {t('preparing_zwo')}
-                  </>
-                ) : (
-                  <>
-                    {t('start_ride')}
-                    <ArrowRight size={14} strokeWidth={2.2} />
-                  </>
-                )}
-              </button>
-              {exportError && (
-                <span className="num-mono text-[11px]" style={{ color: 'var(--color-bad)' }}>
-                  {exportError}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => setSkipOpen(true)}
-                className="text-[12px] font-medium"
-                style={{ color: 'var(--color-muted)' }}
-              >
-                <span className="underline underline-offset-2 decoration-[var(--color-rule)]">
-                  {t('cant_train_today')}
-                </span>
-              </button>
             </div>
           )}
         </div>
@@ -456,6 +369,5 @@ export default function TodayHero() {
         </div>
       )}
     </div>
-    </>
   )
 }

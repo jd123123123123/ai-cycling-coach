@@ -46,7 +46,10 @@ from app.services.coach_prompt import SYSTEM_PROMPT
 from app.services.external_workouts import match_workouts, predict_tss
 from app.services.goal_trajectory import project as project_trajectory, trajectory_to_dict
 from app.services.pmc_service import compute_user_pmc
-from app.services.training_periodization import detect_training_phase
+from app.services.training_periodization import (
+    default_target_ctl,
+    detect_training_phase,
+)
 from app.services.workout_export import blocks_from_dicts, to_erg, to_fit, to_mrc, to_zwo
 
 router = APIRouter(prefix="/coach", tags=["coach"])
@@ -314,29 +317,11 @@ async def transparency(
 # A coach-grade view: days to event, projected race-day CTL/TSB, Mujika
 # taper window, on-track gap, and a one-line narrative the UI drops in.
 #
-# Default `target_ctl` is derived from event_type + priority when goals.target_ctl
-# isn't set explicitly. The defaults are conservative coaching floors taken from
-# Friel's Cyclist's Training Bible Ch.5 (training-stress thresholds for event
-# success). They're intentionally low-end so the gap reads "behind" rather than
-# "way behind" for athletes still in early base.
+# Default `target_ctl` is derived from event_type + priority (via
+# training_periodization.default_target_ctl) when goals.target_ctl isn't set
+# explicitly. The defaults are conservative coaching floors from Friel's
+# Cyclist's Training Bible Ch.5 — shared with the under-built taper override.
 # ----------------------------------------------------------------------
-
-# event_type → priority → CTL floor for "race-ready"
-_DEFAULT_TARGET_CTL: dict[str, dict[str, float]] = {
-    "fondo":       {"A": 70.0, "B": 60.0, "C": 50.0},
-    "race":        {"A": 75.0, "B": 65.0, "C": 55.0},
-    "audax":       {"A": 65.0, "B": 55.0, "C": 50.0},
-    "maintenance": {"A": 50.0, "B": 45.0, "C": 40.0},
-}
-
-
-def _default_target_ctl(event_type: str | None, priority: str | None) -> float | None:
-    if not event_type:
-        return None
-    by_priority = _DEFAULT_TARGET_CTL.get(event_type.lower())
-    if not by_priority:
-        return None
-    return by_priority.get((priority or "B").upper())
 
 
 @router.get("/trajectory", response_model=GoalTrajectoryRead)
@@ -385,7 +370,7 @@ async def goal_trajectory(
             },
         )
     if "target_ctl" not in goals and profile:
-        derived = _default_target_ctl(profile.target_event_type, profile.target_priority)
+        derived = default_target_ctl(profile.target_event_type, profile.target_priority)
         if derived is not None:
             goals["target_ctl"] = derived
 

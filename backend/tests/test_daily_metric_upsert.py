@@ -1,7 +1,7 @@
 """Regression tests for upsert_daily_metric — Garmin's daily summary fills
 in progressively through the day, so the function must update existing rows
 when fresh values arrive, not lock in whichever stub was first written."""
-from datetime import date
+from datetime import date, datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -120,6 +120,34 @@ async def test_partial_sync_does_not_clobber_real_data():
     assert existing.body_battery == 50
     # steps was non-null; do not overwrite even with newer value
     assert existing.steps == 1959
+
+
+@pytest.mark.asyncio
+async def test_update_preserves_recorded_at_partition_key():
+    """Regression: daily_metrics is a TimescaleDB hypertable partitioned by
+    recorded_at. Bumping recorded_at to now() on an in-place update moves the
+    row across chunk boundaries whenever a previously-synced *past* day is
+    re-synced after the weekly chunk boundary has advanced — TimescaleDB
+    rejects the cross-chunk UPDATE (CheckViolationError) and aborts the whole
+    sync. The upsert must NOT mutate recorded_at on an existing row."""
+    original = datetime(2026, 6, 5, 23, 3, 12, tzinfo=timezone.utc)
+    existing = DailyMetric(
+        user_id=1, date=date(2026, 6, 5),
+        recorded_at=original,
+        sleep_score=None, hrv_status=None, body_battery=None,
+        resting_hr=None, stress_level=None, steps=200,
+        source="garmin", raw_data={"v": 1},
+    )
+    db = _FakeDB(existing=existing)
+    await upsert_daily_metric(
+        db, user_id=1, for_date=date(2026, 6, 5),
+        data={"sleep_score": 81, "raw_data": {"v": 2}},
+    )
+    # Real data updated...
+    assert existing.sleep_score == 81
+    assert existing.raw_data == {"v": 2}
+    # ...but the partition key stays put so the row never crosses chunks.
+    assert existing.recorded_at == original
 
 
 @pytest.mark.asyncio

@@ -47,6 +47,34 @@ class TestReadinessOverall:
         assert "sleep" in flag_names
 
 
+class TestMenstrualDelta:
+    """The optional menstrual-phase delta nudges the final score within bounds
+    and is a no-op when absent (so existing behaviour is unchanged)."""
+
+    def _green(self, **extra):
+        return ReadinessInputs(
+            hrv_7d_mean=70.0, hrv_28d_baseline=68.0, hrv_cv_pct=4.5,
+            rhr_7d_mean=49.0, rhr_28d_baseline=50.0,
+            sleep_score_last_night=90, avg_nightly_debt_h=0.2,
+            tsb=8.0, ctl=60.0, atl=52.0, body_battery_wake=70,
+            **extra,
+        )
+
+    def test_absent_delta_is_no_op(self):
+        base = compute_readiness(self._green())
+        same = compute_readiness(self._green(menstrual_readiness_delta=None))
+        assert base.overall == same.overall
+
+    def test_negative_delta_lowers_score(self):
+        base = compute_readiness(self._green())
+        lowered = compute_readiness(self._green(menstrual_readiness_delta=-8))
+        assert lowered.overall == base.overall - 8
+
+    def test_score_stays_clamped_0_100(self):
+        r = compute_readiness(self._green(menstrual_readiness_delta=50))
+        assert r.overall <= 100
+
+
 class TestAcwrComponent:
     """Bourdon 2017 thresholds: sweet-spot 0.8-1.3 = high score; >1.5 = penalty
     band; >2.0 = severe red flag."""

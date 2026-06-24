@@ -79,6 +79,11 @@ class ReadinessInputs:
     # Garmin wake-time body battery (0-100)
     body_battery_wake: int | None = None
 
+    # Optional bounded menstrual-cycle-phase nudge (points added to the final
+    # score), from menstrual_adjustment.py. None when the athlete doesn't track
+    # a cycle — applied post-hoc so it never perturbs the weighted components.
+    menstrual_readiness_delta: int | None = None
+
 
 @dataclass
 class ComponentScore:
@@ -319,6 +324,13 @@ def compute_readiness(inputs: ReadinessInputs) -> ReadinessReport:
             flags.append(f"HRV suppressed: {c.note}")
         if c.name == "sleep" and c.score <= 35:
             flags.append(f"Sleep deficit: {c.note}")
+
+    # Apply the optional menstrual-phase nudge after the weighted blend, then
+    # clamp. Kept out of the weighted components so its presence/absence never
+    # changes how the evidence-backed signals are normalized.
+    if inputs.menstrual_readiness_delta:
+        overall += inputs.menstrual_readiness_delta
+    overall = max(0.0, min(100.0, overall))
 
     overall_int = int(round(overall))
     return ReadinessReport(

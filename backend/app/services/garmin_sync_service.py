@@ -41,6 +41,9 @@ from app.models.coach_brief import CoachBrief
 from app.models.garmin_credential import GarminCredential
 from app.services.activity_service import create_activity
 from app.services.daily_metric_service import upsert_daily_metric
+from app.services.garmin_details_parser import garmin_details_to_records
+from app.services.stream_extraction import records_to_streams
+from app.services.stream_ingestion import ingest_activity_streams
 from app.services.garmin_client import GarminAuthError, GarminProvider
 from app.services.garmin_mapper import map_daily_metrics, map_garmin_activity
 from app.services.intraday_sync_service import sync_intraday_samples_for_day
@@ -191,7 +194,10 @@ async def sync_activities(
 
         # create_activity auto-calculates TSS. It flushes (no commit) so the
         # RLS session var (SET LOCAL app.current_user_id) survives the loop.
-        await create_activity(db, user_id, mapped, profile)
+        activity = await create_activity(db, user_id, mapped, profile)
+        # Phase 0: fetch + store the per-second stream so CP/W′bal/durability
+        # have real data. Best-effort and cycling-only; never breaks the sync.
+        await _sync_activity_streams(db, user_id, client, activity, raw, profile)
         synced += 1
         logger.debug(
             "Synced activity external_id=%s sport=%s for user_id=%s",
@@ -207,6 +213,54 @@ async def sync_activities(
         len(raw_activities),
     )
     return synced
+
+
+async def _sync_activity_streams(
+    db: AsyncSession,
+    user_id: int,
+    client,
+    activity,
+    raw: dict,
+    profile,
+) -> None:
+    """Best-effort: fetch the per-second stream for a freshly-synced cycling
+    activity and persist it + derived science metrics (CP/W′/durability).
+
+    Cycling-only (power streams) and fully defensive — any failure (no power
+    data, Garmin hiccup, parse error) is logged and swallowed so a stream
+    problem can never break the core activity sync. Uses commit=False to stay
+    inside the sync's single transaction (preserves the RLS SET LOCAL).
+    """
+    if activity is None or getattr(activity, "sport", None) != "cycling":
+        return
+    garmin_id = raw.get("activityId")
+    if garmin_id is None:
+        return
+    try:
+        detail = await client.get_activity_details(int(garmin_id))
+        records = garmin_details_to_records(detail)
+        if not records or not any(r.get("power") is not None for r in records):
+            return  # no power stream → nothing for the power-duration model
+        streams = records_to_streams(records)
+        ftp = float(profile.ftp_watts) if profile and profile.ftp_watts else None
+        analysis = await ingest_activity_streams(
+            db,
+            user_id=user_id,
+            activity_id=activity.id,
+            streams=streams,
+            ftp=ftp,
+            commit=False,
+        )
+        logger.info(
+            "Ingested streams for activity id=%s (garmin %s): NP=%.0f, CP=%s",
+            activity.id, garmin_id, analysis.np_watts,
+            analysis.cp.cp_watts if analysis.cp else "n/a",
+        )
+    except Exception as exc:
+        logger.warning(
+            "Stream ingest failed for garmin activity %s (non-fatal): %s",
+            garmin_id, exc,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -467,6 +521,10 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         return result
 
     except GarminAuthError:
+        # A failed flush/commit leaves the session in a pending-rollback state;
+        # roll back first or the status-reset commit itself raises
+        # PendingRollbackError and the credential stays stuck at "syncing".
+        await db.rollback()
         credential.sync_status = "auth_error"
         credential.sync_enabled = False
         await db.commit()
@@ -476,6 +534,8 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         logger.exception(
             "Unexpected error during Garmin sync for user_id=%s: %s", user_id, exc
         )
+        # See note above: roll the poisoned session back before resetting status.
+        await db.rollback()
         credential.sync_status = "error"
         await db.commit()
         raise

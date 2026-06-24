@@ -28,9 +28,57 @@ from app.services.analytics_query import (
     list_datasets,
 )
 from app.services.period_report import build_report
+from app.services.detailed_power_profile import compute_detailed_power_profile
+from app.services.tid_assessment import compute_training_distribution
+from app.services.wbal_trace import compute_wbal_trace
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+
+@router.get(
+    "/power-profile",
+    summary="Athlete power profile — dense power-duration curve, CP/W′/eFTP, W/kg, durability",
+)
+async def get_power_profile(
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Rich stream-derived power profile (dense MMP curve, peak powers, W/kg,
+    durability, decoupling). `{available: false}` when no power streams exist yet
+    so the UI can render an empty state."""
+    profile = await compute_detailed_power_profile(db, _user.id)
+    if profile is None:
+        return {"available": False}
+    return profile
+
+
+@router.get(
+    "/training-distribution",
+    summary="Polarized↔pyramidal TID classification vs the phase-appropriate target",
+)
+async def get_training_distribution(
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    tid = await compute_training_distribution(db, _user.id)
+    if tid is None:
+        return {"available": False}
+    return tid
+
+
+@router.get(
+    "/wbal-trace",
+    summary="W′-balance trajectory of the most-depleting recent ride (anaerobic battery)",
+)
+async def get_wbal_trace(
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    trace = await compute_wbal_trace(db, _user.id)
+    if trace is None:
+        return {"available": False}
+    return trace
 
 
 @router.get("/datasets", summary="List available datasets and their columns")

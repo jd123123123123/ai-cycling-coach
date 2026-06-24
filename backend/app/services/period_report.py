@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
@@ -89,6 +89,13 @@ class WindowMetrics:
     avg_sleep_hours: float | None
     sleep_debt_hours: float | None
     biometric_days: int
+    # Intensity distribution (Seiler 3-zone) by ride count, and the daily TSS
+    # series — both feed the new insight blocks. Defaulted so older callers and
+    # tests that build WindowMetrics positionally/by-name keep working.
+    z1_count: int = 0
+    z2_count: int = 0
+    z3_count: int = 0
+    daily_tss: list[float] = field(default_factory=list)
 
 
 # Axis composite weights (re-normalized over available axes).
@@ -370,13 +377,20 @@ async def _fetch_window_metrics(
     dec_values: list[float] = []
     grey = 0
     classified = 0
+    z1_count = z2_count = z3_count = 0
     for a in activities:
         if_val = _activity_if(a, ftp)
         if if_val is not None:
             if_values.append(if_val)
             classified += 1
-            if _zone_from_if(if_val) == "z2":
+            zone = _zone_from_if(if_val)
+            if zone == "z1":
+                z1_count += 1
+            elif zone == "z2":
+                z2_count += 1
                 grey += 1
+            elif zone == "z3":
+                z3_count += 1
         m = compute_activity_metrics(a)
         if m["ef"] is not None:
             ef_values.append(m["ef"])
@@ -423,6 +437,10 @@ async def _fetch_window_metrics(
         avg_sleep_hours=round(avg_sleep, 2) if avg_sleep is not None else None,
         sleep_debt_hours=round(sleep_debt, 1) if sleep_debt is not None else None,
         biometric_days=len(metrics),
+        z1_count=z1_count,
+        z2_count=z2_count,
+        z3_count=z3_count,
+        daily_tss=[float(d.get("daily_tss", 0.0)) for d in pmc["days"]],
     )
 
 
@@ -482,51 +500,240 @@ def build_evidence(cur: WindowMetrics, prev: WindowMetrics | None) -> list:
     return chips
 
 
-def build_next_step(grade_score: float | None, cur: WindowMetrics, causes: list) -> object:
-    """Rule-based forward recommendation, safety-leaning. A high-severity cause
-    or deep-negative form always wins (back off); else build/hold/consistency."""
-    from app.schemas.period_report import NextStep
+def build_intensity(cur: WindowMetrics, phase: str | None):
+    """Seiler 3-zone intensity distribution vs the phase target. Returns None
+    when no ride could be classified into a zone."""
+    from app.schemas.period_report import IntensityMix
+    from app.services.tid_optimizer import assess_tid
+
+    sample = cur.z1_count + cur.z2_count + cur.z3_count
+    if sample == 0:
+        return None
+
+    a = assess_tid(cur.z1_count, cur.z2_count, cur.z3_count, phase)
+    verdict = (
+        f"{a.z1_pct:.0f}% easy / {a.z2_pct:.0f}% moderate / {a.z3_pct:.0f}% hard — "
+        f"a {a.model.replace('_', ' ')} shape."
+    )
+    return IntensityMix(
+        z1_pct=a.z1_pct, z2_pct=a.z2_pct, z3_pct=a.z3_pct,
+        model=a.model, target_model=a.target, aligned=a.aligned,
+        verdict=verdict,
+        fix=None if a.aligned else a.recommendation,
+        sample_rides=sample,
+    )
+
+
+def build_load_dynamics(cur: WindowMetrics):
+    """Foster monotony/strain + weekly CTL ramp over the window. Returns None
+    when there are too few training days to read a pattern."""
+    from app.schemas.period_report import LoadDynamics
+
+    if cur.training_days < 4 or not cur.daily_tss:
+        return None
+
+    daily = cur.daily_tss
+    weeks = cur.days / 7.0 if cur.days else 1.0
+    ramp = round(cur.ctl_delta / weeks, 1) if cur.ctl_delta is not None and weeks else None
+
+    mean = statistics.mean(daily)
+    sd = statistics.pstdev(daily) if len(daily) > 1 else 0.0
+    # Foster: monotony = mean/SD (high = every day alike → poor recovery contrast).
+    monotony = round(mean / sd, 2) if sd > 0 else None
+    weekly_load = mean * 7.0
+    strain = round(weekly_load * monotony) if monotony is not None else None
+
+    flag = "ok"
+    if ramp is not None and ramp >= 6.0:
+        flag = "ramping"
+        note = (f"Fitness is ramping fast (+{ramp:g} CTL/week). Keep the weekly load "
+                "rise under ~8% and bank a recovery week soon to lock it in.")
+    elif monotony is not None and monotony >= 2.0:
+        flag = "monotonous"
+        note = (f"Every day looks alike (monotony {monotony:g}). Add true easy days and "
+                "one genuinely hard day — contrast is what drives adaptation and recovery.")
+    elif sd == 0 or (ramp is not None and ramp <= 0.3 and mean < 40):
+        flag = "flat"
+        note = "Load is flat — add a session or a longer ride to keep adapting."
+    else:
+        bits = []
+        if ramp is not None:
+            bits.append(f"ramp +{ramp:g} CTL/week")
+        if monotony is not None:
+            bits.append(f"monotony {monotony:g}")
+        note = "Healthy load" + (" — " + ", ".join(bits) + "." if bits else ".")
+
+    return LoadDynamics(
+        ramp_per_week=ramp, monotony=monotony, strain=strain, flag=flag, note=note,
+    )
+
+
+async def build_trajectory(db: AsyncSession, user_id: int, phase: str | None):
+    """Banister projection toward the goal event — the same PMC + athlete goals
+    the live coach uses. Returns None only on hard failure; the underlying
+    projection degrades gracefully to a no-goal CTL-trend observation."""
+    from app.models.athlete_profile import AthleteProfile
+    from app.schemas.period_report import Trajectory
+    from app.services.goal_trajectory import project as project_trajectory
+    from app.services.pmc_service import compute_user_pmc
+
+    try:
+        pmc_full = await compute_user_pmc(db, user_id, days=90)
+        profile = (
+            await db.execute(
+                select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+            )
+        ).scalar_one_or_none()
+        goals = profile.goals if profile and isinstance(profile.goals, dict) else None
+
+        tp = project_trajectory(
+            user_pmc=pmc_full.get("total") or [],
+            athlete_goals=goals,
+            phase=phase or "maintenance",
+        )
+        return Trajectory(
+            days_to_goal=tp.days_to_goal,
+            ctl_now=tp.ctl_now,
+            ctl_7d_delta=tp.ctl_7d_delta,
+            ctl_projected_at_goal=tp.ctl_projected_at_goal,
+            ctl_target=tp.ctl_target,
+            tsb_projected_at_goal=tp.tsb_projected_at_goal,
+            taper_window=tp.taper_window,
+            on_track=tp.on_track,
+            weekly_tss_required=tp.weekly_tss_required,
+            weekly_tss_actual=tp.weekly_tss_actual,
+            narrative=tp.narrative_hook,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("build_trajectory failed for user %s", user_id)
+        return None
+
+
+def build_prescriptions(
+    grade_score: float | None,
+    cur: WindowMetrics,
+    causes: list,
+    intensity=None,
+    load_dynamics=None,
+    trajectory=None,
+) -> list:
+    """Ranked, concrete actions for the coming window. Safety always leads: a
+    high-severity cause or deep-negative form means back off, and while
+    recovering we never prescribe adding load. Otherwise we surface the most
+    valuable changes — trajectory gap, intensity mix, consistency, ramp, sleep —
+    capped at four, each with the expected effect."""
+    from app.schemas.period_report import Prescription
 
     high = any(getattr(c, "severity", None) == "high" for c in causes)
     deep_neg_form = cur.avg_tsb is not None and cur.avg_tsb < -20
+    recovering = high or deep_neg_form
     ratio = cur.training_days / cur.days if cur.days else 0.0
     ramp = cur.ctl_delta if cur.ctl_delta is not None else 0.0
 
-    if high or deep_neg_form:
-        return NextStep(
-            headline="Back off and recover",
+    out: list = []
+
+    if recovering:
+        out.append(Prescription(
+            priority=0, headline="Back off and recover", icon_key="rest", tone="bad",
             detail=("Your recovery signals are flashing. Take 2-3 easy days or a rest day "
-                    "before any hard efforts — adaptation happens when you absorb load, not "
-                    "when you pile more on."),
-            tone="bad",
-        )
+                    "before any hard efforts."),
+            effect="Lets adaptation catch up — you grow when you absorb load, not when you pile it on.",
+        ))
+
+    # Trajectory gap — only when we're not actively recovering.
+    if not recovering and trajectory is not None:
+        gap = trajectory.weekly_tss_required - trajectory.weekly_tss_actual
+        if trajectory.on_track in {"behind", "at_risk"} and gap > max(20.0, 0.05 * trajectory.weekly_tss_actual):
+            out.append(Prescription(
+                priority=0, headline="Lift weekly load to stay on track", icon_key="build", tone="caution",
+                detail=(f"Add ~{round(gap)} TSS/week to reach your target by event day "
+                        f"(now ~{round(trajectory.weekly_tss_actual)}, need ~{round(trajectory.weekly_tss_required)})."),
+                effect=f"Closes the fitness gap toward CTL {round(trajectory.ctl_target)}." if trajectory.ctl_target else "Keeps your fitness pointed at race day.",
+            ))
+
+    # Consistency.
     if ratio < 0.3:
-        return NextStep(
-            headline="Build the habit first",
-            detail=(f"You trained {cur.training_days} of {cur.days} days. Consistency beats "
-                    "intensity — aim for one more short session next week before chasing big days."),
-            tone="caution",
-        )
-    if ramp >= 4.0:
-        return NextStep(
-            headline="Strong build — watch the ramp",
-            detail=("Fitness is climbing fast. Keep the stimulus but hold the weekly load "
-                    "increase under ~8% (Friel's cap) and bank a recovery week soon to lock it in."),
-            tone="good",
-        )
-    if grade_score is not None and grade_score >= 80:
-        return NextStep(
-            headline="Keep doing what works",
-            detail=("Balanced, productive window. Repeat the structure — maybe nudge one "
-                    "session's quality up — and protect your sleep and easy days."),
-            tone="good",
-        )
-    return NextStep(
-        headline="Hold steady and sharpen",
-        detail=("Solid base. Add a touch more polarized intensity (hard days hard, easy days "
-                "easy) and keep the grey-zone tempo work in check to move the needle."),
-        tone="neutral",
-    )
+        out.append(Prescription(
+            priority=0, headline="Build the habit first", icon_key="build", tone="caution",
+            detail=(f"You trained {cur.training_days} of {cur.days} days. Consistency comes "
+                    "first — aim for one more short session before chasing big days."),
+            effect="Consistency beats intensity — frequency is what builds the aerobic base.",
+        ))
+
+    # Intensity mix.
+    if intensity is not None and not intensity.aligned and intensity.fix:
+        out.append(Prescription(
+            priority=0, headline="Fix your intensity mix", icon_key="balance", tone="caution",
+            detail=intensity.fix,
+            effect="More of the right adaptation per hour — fewer junk-tempo miles.",
+        ))
+
+    # Load shape.
+    if not recovering and load_dynamics is not None:
+        if load_dynamics.flag == "monotonous":
+            out.append(Prescription(
+                priority=0, headline="Vary easy and hard days", icon_key="balance", tone="neutral",
+                detail=load_dynamics.note,
+                effect="Day-to-day contrast lowers monotony and unlocks better recovery.",
+            ))
+        elif load_dynamics.flag == "ramping" or (not recovering and ramp >= 4.0):
+            out.append(Prescription(
+                priority=0, headline="Hold the ramp, then recover", icon_key="build", tone="good",
+                detail=("Fitness is climbing fast. Keep the stimulus but cap the weekly load "
+                        "rise near 8% (Friel) and plan a recovery week."),
+                effect="Locks in the gains instead of digging a fatigue hole.",
+            ))
+
+    # Sleep debt.
+    if cur.sleep_debt_hours is not None and cur.sleep_debt_hours >= 4.0:
+        out.append(Prescription(
+            priority=0, headline="Pay down sleep debt", icon_key="sleep", tone="caution",
+            detail=(f"You're carrying {cur.sleep_debt_hours:.0f}h of sleep debt. Protect "
+                    "7.5h+ for the next few nights."),
+            effect="Sleep is where HRV and adaptation rebound — the cheapest gains you'll get.",
+        ))
+
+    # Closers — always have at least one forward action.
+    if not out or (not recovering and len(out) < 2):
+        if grade_score is not None and grade_score >= 80:
+            out.append(Prescription(
+                priority=0, headline="Keep doing what works", icon_key="arrow", tone="good",
+                detail="Balanced, productive window. Repeat the structure and nudge one session's quality up.",
+                effect="Steady, repeatable progression — protect your sleep and easy days.",
+            ))
+        else:
+            out.append(Prescription(
+                priority=0, headline="Hold steady and sharpen", icon_key="arrow", tone="neutral",
+                detail=("Solid base. Add a touch more polarized intensity — hard days hard, "
+                        "easy days easy — and keep grey-zone tempo in check."),
+                effect="Moves the needle without adding fatigue.",
+            ))
+
+    # Dedupe by headline, cap at 4, assign 1-based priority.
+    seen: set[str] = set()
+    ranked: list = []
+    for p in out:
+        if p.headline in seen:
+            continue
+        seen.add(p.headline)
+        ranked.append(p)
+        if len(ranked) == 4:
+            break
+    for i, p in enumerate(ranked):
+        p.priority = i + 1
+    return ranked
+
+
+def _next_step_from(prescriptions: list) -> object:
+    """Mirror the top prescription into a NextStep for back-compat consumers."""
+    from app.schemas.period_report import NextStep
+    top = prescriptions[0]
+    return NextStep(headline=top.headline, detail=top.detail, tone=top.tone)
+
+
+def build_next_step(grade_score: float | None, cur: WindowMetrics, causes: list) -> object:
+    """Back-compat single recommendation — the top of the ranked prescriptions."""
+    return _next_step_from(build_prescriptions(grade_score, cur, causes))
 
 
 async def _historical_composites(
@@ -675,7 +882,62 @@ async def build_report(db: AsyncSession, user_id: int, days: int):
     except Exception:  # noqa: BLE001
         logger.exception("why_am_i_tired failed in period report")
 
-    next_step = build_next_step(grade_score, cur, causes)
+    # --- Richer insight blocks (each isolated so one failure can't sink the
+    # report). Phase drives both the intensity target and the trajectory. ---
+    intensity = load_dynamics = trajectory = None
+    prescriptions: list = []
+    try:
+        from app.models.athlete_profile import AthleteProfile
+        from app.services.training_periodization import (
+            default_target_ctl,
+            detect_training_phase,
+        )
+
+        profile = (
+            await db.execute(
+                select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+            )
+        ).scalar_one_or_none()
+
+        goal_date_obj: date | None = None
+        target_ctl: float | None = None
+        if profile is not None:
+            goals_dict = profile.goals if isinstance(profile.goals, dict) else {}
+            te = goals_dict.get("target_event")
+            if isinstance(te, dict) and te.get("date"):
+                try:
+                    goal_date_obj = date.fromisoformat(te["date"])
+                except (ValueError, TypeError):
+                    goal_date_obj = None
+            raw_target = goals_dict.get("target_ctl")
+            if isinstance(raw_target, (int, float)):
+                target_ctl = float(raw_target)
+            elif profile.target_event_type is not None:
+                target_ctl = default_target_ctl(
+                    profile.target_event_type, profile.target_priority
+                )
+
+        phase = detect_training_phase(
+            goal_date_obj, float(cur.avg_ctl or 0.0), target_ctl=target_ctl
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("period report: phase detection failed")
+        phase = None
+
+    try:
+        intensity = build_intensity(cur, phase)
+    except Exception:  # noqa: BLE001
+        logger.exception("period report: build_intensity failed")
+    try:
+        load_dynamics = build_load_dynamics(cur)
+    except Exception:  # noqa: BLE001
+        logger.exception("period report: build_load_dynamics failed")
+    trajectory = await build_trajectory(db, user_id, phase)
+
+    prescriptions = build_prescriptions(
+        grade_score, cur, causes, intensity, load_dynamics, trajectory
+    )
+    next_step = _next_step_from(prescriptions)
 
     verdict, model = await _ai_verdict(
         days, grade_letter, grade_score, improvements, weaknesses,
@@ -701,6 +963,10 @@ async def build_report(db: AsyncSession, user_id: int, days: int):
         evidence=evidence,
         causes=causes,
         next_step=next_step,
+        prescriptions=prescriptions,
+        intensity=intensity,
+        load_dynamics=load_dynamics,
+        trajectory=trajectory,
         ai_verdict=verdict,
         ai_model=model,
     )

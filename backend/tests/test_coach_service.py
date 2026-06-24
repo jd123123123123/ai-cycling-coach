@@ -1018,6 +1018,37 @@ class TestTodaysActivities:
         # IF = 180 / 260 ≈ 0.692
         assert only["intensity_factor"] == pytest.approx(0.692, abs=0.01)
 
+    async def test_rolling_7d_tss_spans_week_boundary(self):
+        """`_weekly_progress` must expose a rolling trailing-7-day TSS so the
+        brief/LLM still 'sees' the prior week's rides after Monday resets the
+        calendar-week counters. A ride 5 days ago belongs to the rolling window
+        regardless of which calendar week it fell in; a ride 10 days ago does
+        not."""
+        from app.services.coach_service import _weekly_progress
+
+        now = datetime.now(timezone.utc)
+        yesterday = _make_activity(
+            started_at=now - timedelta(days=1),
+            duration_seconds=4 * 3600,        # 4h ride
+            tss=250.0, title="Long endurance",
+        )
+        five_days = _make_activity(
+            started_at=now - timedelta(days=5),
+            duration_seconds=3600,
+            tss=100.0, title="Midweek tempo",
+        )
+        ten_days = _make_activity(
+            started_at=now - timedelta(days=10),
+            duration_seconds=3600,
+            tss=500.0, title="Last week (out of window)",
+        )
+        db = _ActivitiesMockDB([yesterday, five_days, ten_days], profile=None)
+
+        prog = await _weekly_progress(db, user_id=1)
+
+        # Rolling 7d sums yesterday (250) + 5-days-ago (100), excludes 10-days-ago.
+        assert prog["rolling_7d_tss"] == pytest.approx(350.0)
+
     async def test_missing_metrics_return_none_not_crash(self):
         """HR-only ride (no NP, no avg_p) must not crash — IF/EF/VI = None."""
         from app.services.coach_service import _todays_activities

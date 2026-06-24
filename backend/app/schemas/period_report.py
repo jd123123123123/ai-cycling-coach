@@ -58,6 +58,53 @@ class NextStep(BaseModel):
     tone: str = Field(default="neutral", description="'good' | 'caution' | 'bad' | 'neutral'")
 
 
+class Prescription(BaseModel):
+    """One ranked, concrete action for the coming window — the 'what to change'."""
+    priority: int = Field(description="1 = most important")
+    headline: str
+    detail: str = Field(description="what to do")
+    effect: str = Field(default="", description="expected outcome")
+    tone: str = Field(default="neutral", description="'good' | 'caution' | 'bad' | 'neutral'")
+    icon_key: str = Field(default="arrow", description="UI hint: arrow | rest | build | balance | sleep")
+
+
+class IntensityMix(BaseModel):
+    """Training intensity distribution vs the phase-appropriate target (Seiler)."""
+    z1_pct: float = Field(description="easy share, 0-100")
+    z2_pct: float = Field(description="moderate / grey-zone share")
+    z3_pct: float = Field(description="hard share")
+    model: str = Field(description="detected: polarized | pyramidal | threshold | high_intensity")
+    target_model: str = Field(description="ideal model for the current phase")
+    aligned: bool = Field(description="true when detected model matches the target")
+    verdict: str = Field(description="one-line plain read")
+    fix: str | None = Field(default=None, description="one-line change; null when on-model")
+    sample_rides: int = Field(description="rides classified into a zone")
+
+
+class LoadDynamics(BaseModel):
+    """Load health — ramp + Foster monotony/strain over the window."""
+    ramp_per_week: float | None = Field(default=None, description="CTL change per week")
+    monotony: float | None = Field(default=None, description="Foster: mean / SD of daily TSS")
+    strain: float | None = Field(default=None, description="Foster: weekly load * monotony")
+    flag: str = Field(default="ok", description="'ok' | 'bouncy' | 'spiky' | 'flat'")
+    note: str = Field(default="", description="plain-language read")
+
+
+class Trajectory(BaseModel):
+    """Adaptation toward the goal event (Banister projection)."""
+    days_to_goal: int | None = None
+    ctl_now: float
+    ctl_7d_delta: float
+    ctl_projected_at_goal: float
+    ctl_target: float | None = None
+    tsb_projected_at_goal: float
+    taper_window: str = Field(description="'ideal' | 'too_fresh' | 'overreached' | 'unknown'")
+    on_track: str = Field(description="'yes' | 'behind' | 'ahead' | 'no_goal' | ...")
+    weekly_tss_required: float
+    weekly_tss_actual: float
+    narrative: str
+
+
 class PeriodReport(BaseModel):
     days: int
     start_date: str
@@ -73,6 +120,10 @@ class PeriodReport(BaseModel):
     evidence: list[EvidenceChip] = Field(default_factory=list)
     causes: list[Cause] = Field(default_factory=list)
     next_step: NextStep | None = None
+    prescriptions: list[Prescription] = Field(default_factory=list)
+    intensity: IntensityMix | None = None
+    load_dynamics: LoadDynamics | None = None
+    trajectory: Trajectory | None = None
     radar: list[RadarAxis]
     improvements: list[DeltaItem]
     weaknesses: list[DeltaItem]

@@ -267,6 +267,67 @@ class TestSeilerTidBuild2:
         )
 
 
+class TestMountainSpecificity:
+    """For a fondo A-event inside the transmutation window, the generated week
+    routes quality days to climbing variants (not flat threshold/VO2 reps)."""
+
+    _CLIMBING_IDS = {
+        "z2_climbing_long",
+        "cadence_low_lcf_4x6",
+        "threshold_hill_4x10",
+        "vo2_hill_6x3",
+    }
+
+    def test_quality_days_use_climbing_variants_for_fondo(self):
+        from app.services.workout_templates import TEMPLATES
+
+        week_start = _next_monday()
+        # Event ~30 days past the week's Wednesday → inside the 14-56d window.
+        event_date = week_start + timedelta(days=33)
+        athlete = _athlete(
+            ftp_watts=280,
+            target_event_date=event_date,
+            target_event_type="fondo",
+        )
+        drafts = build_week_drafts(
+            athlete=athlete,
+            week_start=week_start,
+            phase="build2",
+            weekly_tss_target_val=450,
+            block_position="transmutation",
+            ftp_w=280,
+        )
+        quality = [
+            d for d in drafts
+            if TEMPLATES.get(d.template_id)
+            and TEMPLATES[d.template_id].category in {"tempo", "threshold", "vo2"}
+        ]
+        assert quality, "expected at least one quality day"
+        # Every quality day in-window should be a climbing variant.
+        for d in quality:
+            assert d.template_id in self._CLIMBING_IDS, (
+                f"{d.date} quality day used non-climbing {d.template_id}"
+            )
+
+    def test_non_fondo_athlete_keeps_flat_templates(self):
+        """Sanity: a non-mountain athlete is unaffected by the routing."""
+        week_start = _next_monday()
+        athlete = _athlete(
+            ftp_watts=280,
+            target_event_date=week_start + timedelta(days=33),
+            target_event_type="maintenance",
+        )
+        drafts = build_week_drafts(
+            athlete=athlete,
+            week_start=week_start,
+            phase="build2",
+            weekly_tss_target_val=450,
+            block_position="transmutation",
+            ftp_w=280,
+        )
+        assert not any(d.template_id in self._CLIMBING_IDS for d in drafts)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  Test 4: Friel 8% ramp cap
 # ──────────────────────────────────────────────────────────────────────────────
@@ -381,6 +442,44 @@ class TestConflictSkip:
         # All other 27 days should have been added
         assert len(added_dates) == 27, (
             f"Expected 27 inserts (28 - 1 skipped), got {len(added_dates)}"
+        )
+
+
+class TestUnderbuiltKeepsBuilding:
+    """An under-built fondo athlete in the would-be taper window keeps peaking,
+    so the generated plan carries climbing quality days instead of a taper."""
+
+    _CLIMBING_IDS = {
+        "z2_climbing_long",
+        "cadence_low_lcf_4x6",
+        "threshold_hill_4x10",
+        "vo2_hill_6x3",
+    }
+
+    @pytest.mark.asyncio
+    async def test_live_ctl_drives_peak_and_climbing(self):
+        anchor = _next_monday()
+        event_date = anchor + timedelta(days=20)  # taper window by calendar
+        athlete = _athlete(
+            ftp_watts=280,
+            target_event_date=event_date,
+            target_event_type="fondo",
+        )
+        athlete.target_priority = "A"  # fondo/A → target CTL 70
+        db = _mock_db(athlete)
+
+        # current_ctl=23 is far below 0.85*70 → under-built → peak, not taper.
+        await generate_mesocycle(
+            db, user_id=5, plan_start_date=anchor, current_ctl=23.0
+        )
+
+        added_ids = {
+            c.args[0].template_id
+            for c in db.add.call_args_list
+            if c.args and hasattr(c.args[0], "template_id")
+        }
+        assert added_ids & self._CLIMBING_IDS, (
+            f"under-built fondo plan should carry climbing days, got {added_ids}"
         )
 
 

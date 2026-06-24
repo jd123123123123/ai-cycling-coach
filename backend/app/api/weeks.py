@@ -250,8 +250,22 @@ async def get_current_week(
         )
 
     # ── 3. Generate mesocycle (idempotent) ────────────────────────────────
+    # Live CTL so the planner can tell a built athlete (→ taper near the event)
+    # from an under-built one (→ keep peaking through the would-be taper).
+    live_ctl: float | None = None
     try:
-        meso = await generate_mesocycle(db, current_user.id, plan_start_date=week_start)
+        from app.services.pmc_service import compute_user_pmc
+        _pmc = await compute_user_pmc(db, current_user.id, days=90)
+        _rows = _pmc.get("total") or []
+        if _rows:
+            live_ctl = float(_rows[-1].get("ctl") or 0.0)
+    except Exception:  # pragma: no cover — degrade to proximity-only phase
+        logger.exception("failed to load live CTL for mesocycle (user_id=%s)", current_user.id)
+
+    try:
+        meso = await generate_mesocycle(
+            db, current_user.id, plan_start_date=week_start, current_ctl=live_ctl
+        )
     except ValueError as exc:
         err = str(exc)
         if "ftp_watts" in err.lower() or "ftp" in err.lower():

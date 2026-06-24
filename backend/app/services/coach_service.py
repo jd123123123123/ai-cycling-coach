@@ -74,7 +74,9 @@ from app.services.safety_rails import (
 from app.services.mesocycle_generator import current_block_position
 from app.services.training_periodization import (
     SessionType,
+    default_target_ctl,
     detect_training_phase,
+    mountain_event_template,
     pick_template,
     session_type_for_today,
     weekly_intensity_quota,
@@ -446,14 +448,19 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     # Yesterday's window (athlete-local calendar day)
     since_yesterday = since_today - timedelta(days=1)
     end_yesterday = since_today
-    # Rolling 48h / 72h windows — independent of week boundary so Monday can see Sunday's load
+    # Rolling 48h / 72h / 7d windows — independent of the week boundary so
+    # Monday can still see the weekend's load. The rolling 7d sum is the
+    # "did you train recently" signal the calendar-week total can't give: after
+    # Monday resets total_tss_this_week to 0, rolling_7d_tss still carries the
+    # prior week so the brief never frames a freshly-loaded athlete as "fresh".
     now_utc = datetime.now(timezone.utc)
     since_48h = now_utc - timedelta(hours=48)
     since_72h = now_utc - timedelta(hours=72)
+    since_7d = now_utc - timedelta(days=7)
 
     stmt = (
         select(Activity)
-        .where(Activity.user_id == user_id, Activity.started_at >= min(since_week, since_72h))
+        .where(Activity.user_id == user_id, Activity.started_at >= min(since_week, since_7d))
     )
     result = await db.execute(stmt)
     activities = list(result.scalars().all())
@@ -467,6 +474,7 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     today_max_tss_per_hour = 0.0
     yesterday_tss = 0.0
     last_48h_tss = 0.0
+    rolling_7d_tss = 0.0
     # Count of "quality" sessions in the prior 72h. Quality = sustained intensity
     # at or near tempo: TSS/hour >= 60 (≈ IF 0.78+) over a session of 25min+.
     # Used by session_type_for_today to avoid stacking back-to-back hard days
@@ -499,6 +507,9 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
         # Rolling 48h
         if started >= since_48h:
             last_48h_tss += tss
+        # Rolling trailing 7 days — survives the Monday calendar-week reset
+        if started >= since_7d:
+            rolling_7d_tss += tss
         # Rolling 72h — flag prior quality sessions so today's picker doesn't
         # stack a second hard session without an easy day in between. We count
         # the session itself; whether it was today is filtered by the picker.
@@ -517,6 +528,7 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
         "today_max_tss_per_hour": round(today_max_tss_per_hour, 1),
         "yesterday_tss": round(yesterday_tss, 1),
         "last_48h_tss": round(last_48h_tss, 1),
+        "rolling_7d_tss": round(rolling_7d_tss, 1),
         "last_72h_quality_count": last_72h_quality_count,
     }
 
@@ -568,6 +580,11 @@ async def build_snapshot(
     days_since_rest = await _days_since_rest(db, user_id)
     recent_daily = await _recent_daily_tss(db, user_id, days=7)
     weekly_prog = await _weekly_progress(db, user_id)
+    # Athlete-level Critical Power from the cross-ride power-duration envelope
+    # (stream-derived). None until enough rides with power streams exist — the
+    # brief falls back to the stored FTP in that case.
+    from app.services.athlete_power_profile import compute_athlete_power_profile
+    power_profile = await compute_athlete_power_profile(db, user_id)
 
     # ---------------------------------------------------------
     # Periodization — detect phase + pick today's session
@@ -589,7 +606,25 @@ async def build_snapshot(
     today_block = await current_block_position(db, user_id, _today_local())
     today_is_recovery = today_block == "recovery"
 
-    phase = detect_training_phase(goal_date_obj, float(pmc.get("ctl", 0.0)))
+    # Race-ready CTL target — explicit goals.target_ctl wins, else derive from
+    # event type + priority. Feeds the under-built taper override so we don't
+    # taper an athlete who never built the base their event demands.
+    target_ctl_for_phase: float | None = None
+    if profile is not None:
+        goals_dict = profile.goals if isinstance(profile.goals, dict) else {}
+        raw_target = goals_dict.get("target_ctl")
+        if isinstance(raw_target, (int, float)):
+            target_ctl_for_phase = float(raw_target)
+        else:
+            target_ctl_for_phase = default_target_ctl(
+                profile.target_event_type, profile.target_priority
+            )
+
+    phase = detect_training_phase(
+        goal_date_obj,
+        float(pmc.get("ctl", 0.0)),
+        target_ctl=target_ctl_for_phase,
+    )
     quota = weekly_intensity_quota(
         phase,
         float(weekly_hours),
@@ -699,22 +734,23 @@ async def build_snapshot(
     # so we don't auto-pick a 3h long ride on a Tuesday.
     today_available_minutes = min(180, max(30, int(round((weekly_hours * 60) / 7))))
 
-    # Event-specific keystone override — when the athlete has a fondo / race
-    # A-event inside 8 weeks and today is Saturday, pin the climbing-emphasis
-    # Z2 template. Maratona dles Dolomites and similar grand fondos are
-    # bottlenecked by sustained sub-threshold climbing endurance, not by
-    # generic Z2 hours. Saving climbing-specific blocks for closer to the
-    # event is Issurin block-periodization (Transmutation phase).
+    # Event-specificity override — for a fondo / hilly-race A-event inside the
+    # transmutation window, route every quality day to its climbing variant
+    # (low-cadence force tempo, hill threshold, hill VO2) plus the Saturday
+    # climbing long ride. Maratona dles Dolomites and similar grand fondos are
+    # bottlenecked by sustained low-cadence climbing endurance, not by generic
+    # Z2 hours — so the specificity belongs on the hard days, not just the
+    # weekend. Saving these blocks for closer to the event is Issurin block
+    # periodization (Transmutation phase).
     preferred_template_id: str | None = None
     today_local_date = _today_local()
-    if (
-        today_local_date.weekday() == 5  # Saturday
-        and profile is not None
-        and profile.target_event_type in ("fondo", "race")
-        and profile.target_event_date is not None
-        and 14 <= (profile.target_event_date - today_local_date).days <= 56
-    ):
-        preferred_template_id = "z2_climbing_long"
+    if profile is not None and profile.target_event_date is not None:
+        preferred_template_id = mountain_event_template(
+            session_type=today_session,
+            event_type=profile.target_event_type,
+            days_to_event=(profile.target_event_date - today_local_date).days,
+            day_of_week=today_local_date.weekday(),
+        )
 
     # Race-week Wednesday gets a single race-pace tune-up — the Mujika
     # taper's "confidence ride": one sustained sub-threshold effort that
@@ -1089,10 +1125,23 @@ async def build_snapshot(
             # Use the same per-day-minutes the today flow already computed
             # — close enough for a one-day projection; the picker only
             # needs a window, not a calendar.
+            # Same climbing-specificity routing as today's prescription so the
+            # tomorrow card rehearses the event demand on quality days too.
+            tomorrow_preferred_id = (
+                mountain_event_template(
+                    session_type=tomorrow_session,
+                    event_type=profile.target_event_type,
+                    days_to_event=(profile.target_event_date - tomorrow_local_date).days,
+                    day_of_week=tomorrow_local_date.weekday(),
+                )
+                if profile is not None and profile.target_event_date is not None
+                else None
+            )
             tomorrow_template = pick_template(
                 session_type=tomorrow_session,
                 athlete_ftp=ftp,
                 available_minutes=today_available_minutes,
+                preferred_template_id=tomorrow_preferred_id,
             )
             tomorrow_planned_payload = {
                 "title": tomorrow_template.name,
@@ -1159,6 +1208,7 @@ async def build_snapshot(
         "distribution": zones,
         "activities_14d": activities,
         "why_tired": tired,
+        "power_profile": power_profile,
         "recent_trend": recent_daily,
         "weekly_intensity_quota": quota,
         "weekly_progress": weekly_prog,

@@ -12,10 +12,11 @@ from app.models.user_tab_layout import UserTabLayout  # noqa: F401
 from app.models.coach_recommendation import CoachRecommendation  # noqa: F401
 from app.models.mesocycle_plan import MesocyclePlan  # noqa: F401
 from app.models.crew import Crew, CrewInvite, CrewMembership  # noqa: F401
+from app.models.activity_stream import ActivityStream  # noqa: F401
 
 __all__ = [
     "User", "AthleteProfile", "ConsentRecord", "Activity", "GarminCredential",
     "DailyMetric", "PlannedWorkout", "DailyMetricSample", "CoachBrief",
     "UserDashboard", "UserTabLayout", "CoachRecommendation", "MesocyclePlan",
-    "Crew", "CrewMembership", "CrewInvite",
+    "Crew", "CrewMembership", "CrewInvite", "ActivityStream",
 ]

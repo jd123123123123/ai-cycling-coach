@@ -38,7 +38,9 @@ from app.services.training_periodization import (
     Phase,
     SessionType,
     _PHASE_MIX,
+    default_target_ctl,
     detect_training_phase,
+    mountain_event_template,
     pick_template,
     session_type_for_today,
 )
@@ -263,7 +265,20 @@ def build_week_drafts(
         elif session_type in _HARD_TYPES and dow == 2:  # Wed key session
             available_min = max(available_min, 75)
 
-        template = pick_template(session_type, ftp_w, available_min)
+        # Mountain-event specificity — route quality days (and the Saturday
+        # long ride) to climbing / low-cadence variants when the athlete
+        # targets a fondo / hilly race inside the specificity window.
+        preferred_id = None
+        if athlete.target_event_date is not None:
+            preferred_id = mountain_event_template(
+                session_type=session_type,
+                event_type=athlete.target_event_type,
+                days_to_event=(athlete.target_event_date - day_date).days,
+                day_of_week=dow,
+            )
+        template = pick_template(
+            session_type, ftp_w, available_min, preferred_template_id=preferred_id
+        )
 
         # Build interval_structure from template blocks
         intervals = [
@@ -316,6 +331,7 @@ async def generate_mesocycle(
     db: AsyncSession,
     user_id: int,
     plan_start_date: date | None = None,
+    current_ctl: float | None = None,
 ) -> MesocyclePlan:
     """Generate or return existing MesocyclePlan for (user_id, plan_start_date).
 
@@ -405,13 +421,23 @@ async def generate_mesocycle(
     else:
         if not isinstance(goal_date, date):
             raise ValueError(f"target_event_date must be a date, got {type(goal_date)}")
-        # Estimate CTL from an approximation (no live PMC at generation time)
-        # Use a default CTL guess; if the caller has better data they can pass it.
-        # For now we use 0.0 so detect_training_phase applies proximity-only logic
-        # (CTL thresholds in base1/base2/build1/build2 boundaries).
-        # TODO(7.1): pass actual CTL from daily_metrics aggregation.
-        estimated_ctl = 40.0  # neutral default that routes to base2/build1 boundary
-        phase = detect_training_phase(goal_date, estimated_ctl)
+        # Use the caller-supplied live CTL when available; else a neutral default
+        # that routes to the base2/build1 boundary on proximity alone.
+        effective_ctl = current_ctl if current_ctl is not None else 40.0
+        # Race-ready CTL target (from goals or event type + priority) feeds the
+        # under-built taper override — we don't taper fitness the athlete never
+        # built. Only meaningful when we have a live CTL to compare against.
+        target_ctl = None
+        if current_ctl is not None:
+            goals_dict = getattr(athlete, "goals", None) or {}
+            raw_target = goals_dict.get("target_ctl") if isinstance(goals_dict, dict) else None
+            if isinstance(raw_target, (int, float)):
+                target_ctl = float(raw_target)
+            else:
+                target_ctl = default_target_ctl(
+                    event_type, getattr(athlete, "target_priority", None)
+                )
+        phase = detect_training_phase(goal_date, effective_ctl, target_ctl=target_ctl)
 
     # ── 5. Build Issurin 3:1 weekly TSS targets ───────────────────────────
     # Use athlete's CTL approximation for ramp calculation

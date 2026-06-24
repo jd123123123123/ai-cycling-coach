@@ -12,104 +12,9 @@ import DashboardSection from './DashboardSection'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useT } from '../../contexts/LocaleContext'
 import { translateCoach } from '../../utils/coachLanguage'
-import { formatSigned } from '../../utils/format'
 
 function isRuleBased(model: string): boolean {
   return model === 'rule-based-fallback'
-}
-
-// ─── Evidence chip — compact inline ──────────────────────────────────────────
-
-interface EvidenceChipProps {
-  children: React.ReactNode
-  tone?: 'default' | 'alert'
-}
-
-function EvidenceChip({ children, tone = 'default' }: EvidenceChipProps) {
-  const fg = tone === 'alert' ? 'var(--color-alert)' : 'var(--color-ink-2)'
-  const border = tone === 'alert' ? 'rgba(138, 29, 29, 0.25)' : 'var(--color-rule)'
-  return (
-    <span
-      className="num-mono text-[11px] px-1.5 py-0.5 rounded-sm whitespace-nowrap"
-      style={{ color: fg, border: `1px solid ${border}` }}
-    >
-      {children}
-    </span>
-  )
-}
-
-/**
- * Derive a single inline evidence row: TSB · HRV · CTL · Sleep · Last VO2.
- * Compact on purpose — fold 1 has one hero (the workout card); chips are support.
- */
-function buildEvidenceChips(evidence: Record<string, unknown>): React.ReactNode[] {
-  const chips: React.ReactNode[] = []
-  const pmc = evidence.pmc as Record<string, unknown> | undefined
-  const biometrics = evidence.biometrics as Record<string, unknown> | undefined
-  const hrv = biometrics?.hrv as Record<string, unknown> | undefined
-  const sleep = biometrics?.sleep as Record<string, unknown> | undefined
-
-  const tsb = (pmc?.tsb ?? evidence.tsb) as number | null | undefined
-  if (typeof tsb === 'number') {
-    const tone = tsb < -20 ? 'alert' : 'default'
-    chips.push(
-      <EvidenceChip key="tsb" tone={tone}>
-        TSB {formatSigned(tsb, 0)}
-      </EvidenceChip>,
-    )
-  }
-
-  const ctl = (pmc?.ctl ?? evidence.ctl) as number | null | undefined
-  if (typeof ctl === 'number') {
-    chips.push(<EvidenceChip key="ctl">CTL {ctl.toFixed(0)}</EvidenceChip>)
-  }
-
-  const hrvDelta = hrv?.delta_pct as number | null | undefined
-  if (typeof hrvDelta === 'number') {
-    const tone = hrvDelta < -8 ? 'alert' : 'default'
-    chips.push(
-      <EvidenceChip key="hrv" tone={tone}>
-        HRV {formatSigned(hrvDelta, 0)}%
-      </EvidenceChip>,
-    )
-  }
-
-  const sleepDebt = sleep?.total_debt_hours as number | null | undefined
-  if (typeof sleepDebt === 'number' && sleepDebt > 0.2) {
-    const tone = sleepDebt > 3 ? 'alert' : 'default'
-    chips.push(
-      <EvidenceChip key="sleep" tone={tone}>
-        Sleep debt {sleepDebt.toFixed(1)}h
-      </EvidenceChip>,
-    )
-  }
-
-  const zones = evidence.distribution as Record<string, unknown> | undefined
-  const zoneCreep = zones?.grey_zone_flag as boolean | undefined
-  if (zoneCreep === true) {
-    chips.push(
-      <EvidenceChip key="zone" tone="alert">
-        Grey-zone creep
-      </EvidenceChip>,
-    )
-  }
-
-  const athlete = evidence.athlete as Record<string, unknown> | undefined
-  const phase = athlete?.goal_phase as string | undefined
-  if (typeof phase === 'string' && phase !== 'unknown') {
-    chips.push(<EvidenceChip key="phase">Phase: {phase}</EvidenceChip>)
-  }
-
-  const injury = athlete?.injury_flag as boolean | undefined
-  if (injury === true) {
-    chips.push(
-      <EvidenceChip key="injury" tone="alert">
-        Injury flagged
-      </EvidenceChip>,
-    )
-  }
-
-  return chips
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -206,11 +111,6 @@ function BriefBody({
   const t = useT()
   const simpleMode = language === 'simple'
 
-  const evidenceChips = useMemo(
-    () => buildEvidenceChips(brief.evidence || {}),
-    [brief.evidence],
-  )
-
   const generatedAgo = useMemo(() => {
     try {
       return formatDistanceToNow(new Date(brief.generated_at), { addSuffix: true })
@@ -296,12 +196,10 @@ function BriefBody({
         {brief.rationale}
       </p>
 
-      {/* Evidence chips — single compact row. Hidden in simple mode because
-         these chips ARE the jargon (TSB/CTL/HRV numbers). The same signals
-         drive the simple-mode rationale, phrased in plain English above. */}
-      {!simpleMode && evidenceChips.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap">{evidenceChips}</div>
-      )}
+      {/* Evidence chips removed — TSB/CTL/HRV/Sleep are already surfaced as the
+         "why" chips on TodayHero above (the verdict card owns the recovery
+         evidence). The rationale prose carries the same signals in words, so a
+         second chip row here was pure duplication. */}
 
       {/* Fold-1 hero — the prescribed workout for today. The post-ride review
          card is owned by TodayPostRideReview at the top of the tab, so we do

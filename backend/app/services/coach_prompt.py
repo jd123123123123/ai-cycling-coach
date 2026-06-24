@@ -865,6 +865,47 @@ def build_user_message(snapshot: dict) -> str:
         f"TSB delta: {pmc.get('tsb_7d_delta', 0):+.1f}"
     )
 
+    # Athlete-level Critical Power — stream-derived, fit from the cross-ride
+    # power-duration envelope. Supplements the stored FTP with a model-based
+    # threshold (eFTP) + anaerobic capacity (W'). Omitted when no power streams
+    # exist yet (the brief then reasons from stored FTP alone).
+    pp = snapshot.get("power_profile")
+    if isinstance(pp, dict) and pp.get("cp_watts"):
+        lines.append("\n## Critical Power (stream-derived, cross-ride)")
+        lines.append(
+            f"- CP: {pp.get('cp_watts')} W, W': {pp.get('w_prime_j')} J, "
+            f"eFTP: {pp.get('eftp_watts')} W "
+            f"(fit over {pp.get('n_rides')} rides, R²={pp.get('r_squared')})"
+        )
+        lines.append(
+            "- eFTP is the model's threshold estimate; if it diverges materially "
+            "from the stored FTP, trust the trend and consider an FTP update."
+        )
+
+    # Recent training load — ROLLING windows that survive the Monday calendar
+    # reset. `total_tss_this_week` zeroes every Monday, which on its own makes a
+    # hard-trained athlete look "fresh" at the start of a new week. These rolling
+    # figures carry the prior week's load across that boundary so the verdict
+    # reflects the legs, not the calendar.
+    wp = snapshot.get("weekly_progress") or {}
+    if wp:
+        lines.append("\n## Recent training load (rolling — crosses the week boundary)")
+        lines.append(
+            f"- Yesterday: {wp.get('yesterday_tss', 0):.0f} TSS; "
+            f"last 48h: {wp.get('last_48h_tss', 0):.0f} TSS; "
+            f"last 7 days (rolling): {wp.get('rolling_7d_tss', 0):.0f} TSS"
+        )
+        lines.append(
+            f"- This calendar week so far (resets Monday — do NOT read as freshness): "
+            f"{wp.get('total_tss_this_week', 0):.0f} TSS over "
+            f"{wp.get('hard_sessions_done', 0)} hard session(s)"
+        )
+        lines.append(
+            "→ If the rolling 48h / 7d load is high but the calendar-week total is "
+            "low (e.g. a long weekend ride), the athlete is NOT fresh — weigh the "
+            "rolling load and TSB, not the week-to-date counter."
+        )
+
     lines.append("\n## Biometrics")
     lines.append(
         f"- HRV 7d vs 28d: {hrv.get('delta_pct', 'n/a')}% "

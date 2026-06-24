@@ -73,6 +73,32 @@ class TestPhaseDetection:
         d = date.today() + timedelta(days=7)
         assert detect_training_phase(d, current_ctl=60.0) == "race"
 
+    # --- Under-built override: you can't taper fitness you haven't built ---
+
+    def test_underbuilt_in_taper_window_keeps_building(self):
+        """18 days out but CTL far below target → keep peaking, don't taper.
+
+        Tapering sheds the little fitness an under-built athlete has; the last
+        building window is worth more than freshness when CTL is well short of
+        the event demand (Friel: taper only what you've built)."""
+        d = date.today() + timedelta(days=18)
+        assert detect_training_phase(d, current_ctl=23.0, target_ctl=70.0) == "peak"
+
+    def test_built_in_taper_window_still_tapers(self):
+        """18 days out and CTL near target → normal taper."""
+        d = date.today() + timedelta(days=18)
+        assert detect_training_phase(d, current_ctl=65.0, target_ctl=70.0) == "taper"
+
+    def test_taper_window_without_target_is_unchanged(self):
+        """No target_ctl → calendar-based behaviour preserved (taper)."""
+        d = date.today() + timedelta(days=18)
+        assert detect_training_phase(d, current_ctl=23.0) == "taper"
+
+    def test_race_week_tapers_even_when_underbuilt(self):
+        """Inside the final 7 days you can't build — freshen regardless."""
+        d = date.today() + timedelta(days=5)
+        assert detect_training_phase(d, current_ctl=20.0, target_ctl=70.0) == "race"
+
 
 class TestWeeklyQuota:
     def test_base2_is_85_15(self):
@@ -159,6 +185,60 @@ class TestRecoveryWeekDeload:
     def test_loading_week_wednesday_still_hard(self):
         prog = {"hard_sessions_done": 0, "vo2_sessions_done": 0, "last_72h_quality_count": 0}
         pick = session_type_for_today("build2", prog, tsb=0.0, intensity_ceiling="push", day_of_week=2, is_recovery_week=False)
+        assert pick in ("vo2", "threshold", "sweet_spot")
+
+
+class TestRecentLoadGuard:
+    """Regression guard: a big *volume* day yesterday must block a hard session
+    today, even when its intensity was low enough that it never tripped the
+    intensity-only quality flag (last_72h_quality_count).
+
+    Bug: a 4h Z2 ride (~250 TSS, but ~55-65 TSS/h) left recent_quality=0, so the
+    mid-week picker prescribed VO2/threshold the next day and the athlete was
+    told they were 'fresh'. Long rides carry the largest acute load of the week;
+    the alternation guard must be volume-aware, not intensity-only, and must
+    apply mid-week (Tue/Wed/Thu), not only on Monday.
+    """
+
+    def _long_ride_yesterday(self) -> dict:
+        # High volume, low intensity → NOT flagged as a quality session.
+        return {
+            "hard_sessions_done": 0,
+            "vo2_sessions_done": 0,
+            "last_72h_quality_count": 0,
+            "yesterday_tss": 250.0,
+            "last_48h_tss": 250.0,
+            "today_tss": 0.0,
+        }
+
+    def test_long_ride_yesterday_blocks_wednesday_vo2(self):
+        pick = session_type_for_today(
+            "build2", self._long_ride_yesterday(), tsb=-12.0,
+            intensity_ceiling="push", day_of_week=2,
+        )
+        assert pick in ("endurance", "recovery"), (
+            f"expected easy day after a 4h ride, got {pick}"
+        )
+
+    def test_long_ride_yesterday_blocks_tuesday_quality(self):
+        pick = session_type_for_today(
+            "build2", self._long_ride_yesterday(), tsb=-12.0,
+            intensity_ceiling="push", day_of_week=1,
+        )
+        assert pick in ("endurance", "recovery"), (
+            f"expected easy day after a 4h ride, got {pick}"
+        )
+
+    def test_light_yesterday_still_allows_wednesday_quality(self):
+        # A genuinely light day before must NOT block the keystone session.
+        prog = {
+            "hard_sessions_done": 0, "vo2_sessions_done": 0,
+            "last_72h_quality_count": 0,
+            "yesterday_tss": 20.0, "last_48h_tss": 20.0, "today_tss": 0.0,
+        }
+        pick = session_type_for_today(
+            "build2", prog, tsb=0.0, intensity_ceiling="push", day_of_week=2,
+        )
         assert pick in ("vo2", "threshold", "sweet_spot")
 
 

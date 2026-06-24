@@ -53,10 +53,18 @@ SessionType = Literal[
 #  Phase detector — from goal date + CTL trajectory
 # ======================================================================
 
+# An athlete this far below their event's CTL demand has nothing worth
+# preserving — tapering would shed the little fitness they have. The last
+# building window is worth more than freshness until CTL clears this fraction
+# of target (Friel: you can only taper what you've built).
+_UNDERBUILT_TAPER_FRACTION = 0.85
+
+
 def detect_training_phase(
     goal_date: date | None,
     current_ctl: float,
     weeks_of_history: int = 12,
+    target_ctl: float | None = None,
 ) -> Phase:
     """Pick the Friel phase based on goal proximity and fitness trajectory.
 
@@ -66,8 +74,15 @@ def detect_training_phase(
         - >16 weeks to goal                  → base1 (CTL < 40) / base2 (CTL ≥ 40)
         - 8–16 weeks                         → build1 (CTL < 55) / build2 (CTL ≥ 55)
         - 4–7 weeks                          → peak
-        - 1–3 weeks                          → taper
+        - 1–3 weeks                          → taper*
         - race week (0–7 days)               → race
+
+    *Under-built override: in the taper window, if `target_ctl` is known and
+    `current_ctl` is below `_UNDERBUILT_TAPER_FRACTION` of it, we keep the
+    athlete in `peak` (keep loading) rather than tapering fitness they never
+    built. Inside the final 7 days we always freshen — you can't build a base
+    in race week. With `target_ctl=None` the decision is purely calendar-based
+    (unchanged behaviour for callers that don't pass a target).
 
     `weeks_of_history` is not currently used but is reserved for future
     "second-year base" detection when we have multi-year CTL.
@@ -84,6 +99,12 @@ def detect_training_phase(
     if days_to_goal <= 7:
         return "race"
     if days_to_goal <= 21:
+        if (
+            target_ctl is not None
+            and current_ctl < _UNDERBUILT_TAPER_FRACTION * target_ctl
+        ):
+            # Under-built — keep peaking through the would-be taper window.
+            return "peak"
         return "taper"
     if days_to_goal <= 49:  # ~7 weeks
         return "peak"
@@ -371,8 +392,24 @@ def session_type_for_today(
         # endurance makes it a true break week, not just a shorter hard week.
         if is_recovery_week:
             return _downgrade_to_ceiling("endurance", intensity_ceiling)
-        # 72h hard/easy guard on Tue (1) / Thu (3) — Wednesday's VO2 has its
-        # own quota guard and is the planned keystone, so we don't block it.
+        # Volume-based alternation guard — applies to ALL mid-week quality days,
+        # Wednesday included. A big rolling 48h load is typically a long
+        # endurance ride whose intensity was too low to register as a 'quality'
+        # session (TSS/h < 60) yet which still dumped the week's largest acute
+        # load into the legs. Wednesday's keystone-VO2 guards (vo2_done, tsb)
+        # miss this: vo2_done resets every Monday and tsb > -15 can persist
+        # after a single long day — so "4h ride yesterday -> VO2 today, you're
+        # fresh" slips through. These windows are rolling (48h), so they see the
+        # weekend across the Monday calendar boundary.
+        yesterday_tss = float(progress.get("yesterday_tss", 0.0))
+        last_48h_tss = float(progress.get("last_48h_tss", 0.0))
+        recent_big_volume = yesterday_tss >= 90.0 or last_48h_tss >= 120.0
+        if recent_big_volume:
+            return _downgrade_to_ceiling("endurance", intensity_ceiling)
+        # Intensity-based 72h hard/easy guard on Tue (1) / Thu (3) — Wednesday's
+        # VO2 has its own quota guard and is the planned keystone, so a recent
+        # *quality* session alone doesn't block it (the volume guard above still
+        # does when the prior load was genuinely large).
         if day_of_week in (1, 3) and recent_quality >= 1:
             return _downgrade_to_ceiling("endurance", intensity_ceiling)
         if phase in ("build1", "build2", "peak"):
@@ -411,6 +448,81 @@ def session_type_for_today(
 
     # Default catch-all
     return _downgrade_to_ceiling("endurance", intensity_ceiling)
+
+
+# ======================================================================
+#  Event specificity — climbing / low-cadence routing for mountain events
+# ======================================================================
+
+# event_type → priority → CTL floor for "race-ready". Conservative coaching
+# floors from Friel's Cyclist's Training Bible Ch.5 (training-stress thresholds
+# for event success), intentionally low-end so the gap reads "behind" rather
+# than "way behind" for athletes still in early base. Shared by the goal
+# trajectory narrative and the under-built taper override.
+_DEFAULT_TARGET_CTL: dict[str, dict[str, float]] = {
+    "fondo":       {"A": 70.0, "B": 60.0, "C": 50.0},
+    "race":        {"A": 75.0, "B": 65.0, "C": 55.0},
+    "audax":       {"A": 65.0, "B": 55.0, "C": 50.0},
+    "maintenance": {"A": 50.0, "B": 45.0, "C": 40.0},
+}
+
+
+def default_target_ctl(event_type: str | None, priority: str | None) -> float | None:
+    """Derive a race-ready CTL floor from event type + priority.
+
+    Returns None when the event type is unknown so callers degrade gracefully
+    (no synthetic target). Priority defaults to "B" when unset.
+    """
+    if not event_type:
+        return None
+    by_priority = _DEFAULT_TARGET_CTL.get(event_type.lower())
+    if not by_priority:
+        return None
+    return by_priority.get((priority or "B").upper())
+
+
+# Mountain events (fondo / hilly road race) are limited by sustained
+# low-cadence climbing endurance. During the specificity window we route each
+# quality session to its climbing variant so every hard day rehearses the
+# event demand — not just the Saturday long ride.
+_MOUNTAIN_EVENT_TYPES = frozenset({"fondo", "race"})
+_MOUNTAIN_QUALITY_TEMPLATE: dict[SessionType, str] = {
+    "tempo": "cadence_low_lcf_4x6",     # low-cadence force tempo
+    "threshold": "threshold_hill_4x10",  # sustained climbing-threshold reps
+    "vo2": "vo2_hill_6x3",               # hill VO2 — climbing power ceiling
+}
+# Issurin transmutation window — climbing specificity belongs close to the
+# event, after generic capacity is built (>56d) and before the final freshen
+# (<14d).
+_SPECIFICITY_WINDOW_DAYS = (14, 56)
+
+
+def mountain_event_template(
+    session_type: SessionType,
+    event_type: str | None,
+    days_to_event: int | None,
+    day_of_week: int,
+) -> str | None:
+    """Climbing-emphasis template id for a mountain-event athlete, else None.
+
+    Returns the climbing/low-cadence variant for the session type when the
+    athlete targets a fondo/race inside the specificity window:
+        - endurance + Saturday → z2_climbing_long (weekend keystone)
+        - tempo                → cadence_low_lcf_4x6
+        - threshold            → threshold_hill_4x10
+        - vo2                  → vo2_hill_6x3
+    Easy/recovery days and mid-week endurance are never overridden.
+    """
+    if event_type is None or event_type.lower() not in _MOUNTAIN_EVENT_TYPES:
+        return None
+    if days_to_event is None:
+        return None
+    lo, hi = _SPECIFICITY_WINDOW_DAYS
+    if not (lo <= days_to_event <= hi):
+        return None
+    if session_type == "endurance" and day_of_week == 5:  # Saturday long ride
+        return "z2_climbing_long"
+    return _MOUNTAIN_QUALITY_TEMPLATE.get(session_type)
 
 
 # ======================================================================

@@ -8,6 +8,8 @@ export default function DeltaCard({ item }: { item: DeltaItem }) {
   const [open, setOpen] = useState(false)
   const accent = item.is_improvement ? 'var(--color-good)' : 'var(--color-caution)'
   const Arrow = item.direction === 'up' ? ArrowUp : ArrowDown
+  // Signed magnitude, e.g. "+0.3 W/kg" — visible without expanding.
+  const magnitude = `${item.delta > 0 ? '+' : ''}${item.delta}${item.unit ? ` ${item.unit}` : ''}`
 
   return (
     <button
@@ -23,8 +25,14 @@ export default function DeltaCard({ item }: { item: DeltaItem }) {
         >
           <Arrow size={15} strokeWidth={2.2} />
         </span>
-        <span className="flex-1" style={{ color: 'var(--color-ink)', fontSize: 14 }}>
+        <span className="flex-1 min-w-0" style={{ color: 'var(--color-ink)', fontSize: 14 }}>
           {item.label}
+        </span>
+        <span
+          className="num-mono shrink-0 px-2 py-0.5 rounded-full"
+          style={{ fontSize: 11, color: accent, backgroundColor: `color-mix(in srgb, ${accent} 12%, transparent)` }}
+        >
+          {magnitude}
         </span>
         <ChevronDown
           size={16}

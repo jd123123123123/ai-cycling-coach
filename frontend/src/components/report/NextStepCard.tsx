@@ -17,19 +17,28 @@ export default function NextStepCard({ step }: { step: NextStep }) {
     <div
       className="rounded-[18px] p-5 sm:p-6"
       style={{
-        backgroundColor: 'var(--color-paper-2)',
-        border: '1px solid var(--color-rule)',
-        borderLeft: `3px solid ${accent}`,
+        border: `1px solid color-mix(in srgb, ${accent} 30%, var(--color-rule))`,
+        backgroundColor: `color-mix(in srgb, ${accent} 9%, var(--color-paper-2))`,
+        backgroundImage: `radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, ${accent} 14%, transparent), transparent 62%)`,
       }}
     >
-      <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
+      <span className="eyebrow num-mono" style={{ color: accent, fontSize: 10, letterSpacing: '0.22em' }}>
         {locale === 'de' ? 'NÄCHSTER SCHRITT' : 'DO THIS NEXT'}
       </span>
-      <div className="flex items-center gap-2 mt-2">
-        <ArrowRight size={18} strokeWidth={2.2} style={{ color: accent }} />
-        <span style={{ color: 'var(--color-ink)', fontSize: 16, fontWeight: 600 }}>{step.headline}</span>
+      <div className="flex items-center gap-2.5 mt-2.5">
+        <span
+          className="flex items-center justify-center rounded-full shrink-0"
+          style={{ width: 30, height: 30, backgroundColor: `color-mix(in srgb, ${accent} 20%, transparent)`, color: accent }}
+        >
+          <ArrowRight size={17} strokeWidth={2.4} />
+        </span>
+        <span
+          style={{ fontFamily: 'var(--font-serif, serif)', color: 'var(--color-ink)', fontSize: 20, fontWeight: 500, lineHeight: 1.2 }}
+        >
+          {step.headline}
+        </span>
       </div>
-      <p className="mt-2 leading-relaxed" style={{ color: 'var(--color-ink-2)', fontSize: 14, maxWidth: '64ch' }}>
+      <p className="mt-2.5 leading-relaxed" style={{ color: 'var(--color-ink-2)', fontSize: 14, maxWidth: '64ch' }}>
         {step.detail}
       </p>
     </div>

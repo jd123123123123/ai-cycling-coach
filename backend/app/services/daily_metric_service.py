@@ -40,8 +40,9 @@ async def upsert_daily_metric(
         endpoint. raw_data is always overwritten because it's an opaque
         snapshot of the latest API response (callers want the freshest copy).
       - TimescaleDB hypertable: still single-row per (user_id, date) at the
-        application layer; the partition column `recorded_at` is updated to
-        the latest write timestamp.
+        application layer. The partition column `recorded_at` is set once at
+        insert and never updated — mutating it would move a re-synced past day
+        across a chunk boundary, which TimescaleDB forbids.
 
     Caller controls the transaction — flushes only.
 
@@ -100,7 +101,12 @@ async def upsert_daily_metric(
         updated_fields.append("raw_data")
 
     if updated_fields:
-        existing.recorded_at = datetime.now(timezone.utc)
+        # NB: recorded_at is the TimescaleDB partition column. It is left
+        # untouched on update — moving it to now() shoves a re-synced past day
+        # across a chunk boundary, which TimescaleDB rejects (CheckViolationError),
+        # aborting the whole sync. Keeping it anchored at first-write time also
+        # matches the analytics that filter DailyMetric by recorded_at as the
+        # metric's day (period_report, analytical_aggregates, advanced_metrics).
         await db.flush()
         logger.info(
             "Updated DailyMetric for user_id=%s date=%s fields=%s",

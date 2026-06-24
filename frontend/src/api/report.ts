@@ -43,6 +43,49 @@ export interface NextStep {
   tone: string
 }
 
+export interface Prescription {
+  priority: number
+  headline: string
+  detail: string
+  effect: string
+  tone: string
+  icon_key: string
+}
+
+export interface IntensityMix {
+  z1_pct: number
+  z2_pct: number
+  z3_pct: number
+  model: string
+  target_model: string
+  aligned: boolean
+  verdict: string
+  fix: string | null
+  sample_rides: number
+}
+
+export interface LoadDynamics {
+  ramp_per_week: number | null
+  monotony: number | null
+  strain: number | null
+  flag: string
+  note: string
+}
+
+export interface Trajectory {
+  days_to_goal: number | null
+  ctl_now: number
+  ctl_7d_delta: number
+  ctl_projected_at_goal: number
+  ctl_target: number | null
+  tsb_projected_at_goal: number
+  taper_window: string
+  on_track: string
+  weekly_tss_required: number
+  weekly_tss_actual: number
+  narrative: string
+}
+
 export interface PeriodReport {
   days: number
   start_date: string
@@ -58,6 +101,10 @@ export interface PeriodReport {
   evidence: EvidenceChip[]
   causes: Cause[]
   next_step: NextStep | null
+  prescriptions: Prescription[]
+  intensity: IntensityMix | null
+  load_dynamics: LoadDynamics | null
+  trajectory: Trajectory | null
   radar: RadarAxis[]
   improvements: DeltaItem[]
   weaknesses: DeltaItem[]

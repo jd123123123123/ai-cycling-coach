@@ -44,6 +44,7 @@ class GarminProvider(Protocol):
     async def get_user_summary(self, for_date: date) -> dict | None: ...
     async def get_intraday_stress(self, for_date: date) -> dict | None: ...
     async def get_training_readiness(self, for_date: date) -> dict | None: ...
+    async def get_activity_details(self, activity_id: int, max_chart_size: int = ...) -> dict | None: ...
 
 
 class GarminHealthDataClient:
@@ -216,4 +217,24 @@ class GarminHealthDataClient:
             self._wrap,
             self._api._connectapi,
             f"/metrics-service/metrics/trainingreadiness/{for_date.isoformat()}",
+        )
+
+    async def get_activity_details(
+        self, activity_id: int, max_chart_size: int = 10000
+    ) -> dict | None:
+        """Per-second activity sample stream (power/HR/cadence/elevation/timestamp).
+
+        Hits /activity-service/activity/{id}/details via _connectapi (same
+        token-grants-full-access pattern as get_hrv / get_body_battery —
+        garmin-health-data ships no typed wrapper for it). `max_chart_size`
+        caps the number of returned sample rows; Garmin downsamples longer
+        rides to fit, so we request a high ceiling for ~1 Hz fidelity. The raw
+        payload is parsed by garmin_details_parser.garmin_details_to_records.
+        """
+        await self._ensure_auth()
+        return await asyncio.to_thread(
+            self._wrap,
+            self._api._connectapi,
+            f"/activity-service/activity/{activity_id}/details",
+            params={"maxChartSize": max_chart_size, "maxPolylineSize": 0},
         )
