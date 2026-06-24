@@ -132,3 +132,45 @@ def test_morning_gate_respects_athlete_timezone():
 def test_morning_gate_bad_timezone_falls_back_to_utc():
     now = datetime(2026, 6, 24, 6, 0, tzinfo=timezone.utc)  # before 09:00 UTC
     assert pr.should_precompute_daily(now, "Not/AZone", None) is False
+
+
+import app.services.garmin_sync_service as sync_mod
+
+
+@pytest.mark.asyncio
+async def test_refresh_cache_warms_on_new_activity(monkeypatch):
+    precompute = AsyncMock()
+    monkeypatch.setattr(sync_mod, "precompute_preset_reports", precompute)
+    monkeypatch.setattr(sync_mod, "should_precompute_daily", lambda *a, **k: False)
+    db = _db_returning(None)
+    await sync_mod._refresh_period_report_cache(
+        db, user_id=1, today=datetime.now(timezone.utc).date(),
+        new_activities=3, tz_name=None,
+    )
+    precompute.assert_awaited_once()  # a workout landed → warm presets
+
+
+@pytest.mark.asyncio
+async def test_refresh_cache_warms_on_daily_gate_without_activity(monkeypatch):
+    precompute = AsyncMock()
+    monkeypatch.setattr(sync_mod, "precompute_preset_reports", precompute)
+    monkeypatch.setattr(sync_mod, "should_precompute_daily", lambda *a, **k: True)
+    db = _db_returning(None)
+    await sync_mod._refresh_period_report_cache(
+        db, user_id=1, today=datetime.now(timezone.utc).date(),
+        new_activities=0, tz_name="Europe/Berlin",
+    )
+    precompute.assert_awaited_once()  # daily morning refresh
+
+
+@pytest.mark.asyncio
+async def test_refresh_cache_skips_when_nothing_due(monkeypatch):
+    precompute = AsyncMock()
+    monkeypatch.setattr(sync_mod, "precompute_preset_reports", precompute)
+    monkeypatch.setattr(sync_mod, "should_precompute_daily", lambda *a, **k: False)
+    db = _db_returning(None)
+    await sync_mod._refresh_period_report_cache(
+        db, user_id=1, today=datetime.now(timezone.utc).date(),
+        new_activities=0, tz_name=None,
+    )
+    precompute.assert_not_called()  # no workout + not morning-due → no warm

@@ -39,6 +39,8 @@ from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
 from app.models.coach_brief import CoachBrief
 from app.models.garmin_credential import GarminCredential
+from app.models.period_report_cache import PeriodReportCache
+from app.services.period_report import precompute_preset_reports, should_precompute_daily
 from app.services.activity_service import create_activity
 from app.services.daily_metric_service import upsert_daily_metric
 from app.services.garmin_details_parser import garmin_details_to_records
@@ -383,6 +385,43 @@ async def _safe_fetch(fetch_fn, day: date, name: str, user_id: int):
         return None
 
 
+async def _refresh_period_report_cache(db, user_id, today, new_activities, tz_name) -> None:
+    """Keep the period_reports cache fresh after a sync. Best-effort: never raises.
+
+    - A workout landed (new_activities > 0): invalidate today's cached reports
+      (all windows, incl. custom) and warm the presets.
+    - Else, on the first sync past the morning hour today: warm the presets.
+    """
+    try:
+        last = (
+            await db.execute(
+                select(PeriodReportCache.generated_at)
+                .where(PeriodReportCache.user_id == user_id)
+                .order_by(PeriodReportCache.generated_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        daily_due = should_precompute_daily(datetime.now(timezone.utc), tz_name, last)
+
+        if new_activities > 0:
+            await db.execute(
+                delete(PeriodReportCache).where(
+                    PeriodReportCache.user_id == user_id,
+                    PeriodReportCache.generated_at
+                    >= datetime.combine(today, datetime.min.time(), tzinfo=UTC),
+                )
+            )
+            await db.commit()
+            await precompute_preset_reports(db, user_id)
+        elif daily_due:
+            await precompute_preset_reports(db, user_id)
+    except Exception as exc:  # noqa: BLE001 — cache refresh must not break sync
+        logger.warning(
+            "period-report cache refresh failed for user_id=%s (non-fatal): %s", user_id, exc
+        )
+        await db.rollback()
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -509,6 +548,17 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
                 exc,
             )
             await db.rollback()
+
+        # Keep the period-report cache fresh (mirror coach_briefs). Reads the
+        # athlete's timezone for the once-a-day morning gate.
+        prof = (
+            await db.execute(
+                select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+            )
+        ).scalar_one_or_none()
+        await _refresh_period_report_cache(
+            db, user_id, today, total_activities, prof.timezone if prof else None,
+        )
 
         result = {
             "activities_synced": total_activities,
