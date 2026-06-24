@@ -322,6 +322,12 @@ export const STRINGS = {
   card_estimates: { en: 'Estimates', de: 'Schätzwerte' },
   card_history_records: { en: 'History & records', de: 'Verlauf & Rekorde' },
 
+  // Week tab card labels (used by WeekTab card registry)
+  card_week_plan: { en: 'Weekly plan', de: 'Wochenplan' },
+  card_week_compliance: { en: 'Compliance & ramp', de: 'Einhaltung & Rampe' },
+  card_week_summary: { en: 'This week', de: 'Diese Woche' },
+  card_week_calendar: { en: 'Full plan calendar', de: 'Gesamtplan-Kalender' },
+
   // Plan tab card labels (used by PlanTab card registry)
   card_calendar: { en: 'Training calendar', de: 'Trainingskalender' },
 

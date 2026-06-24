@@ -25,6 +25,8 @@ import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLanguage } from '../../../hooks/useLanguage'
 import type { ActivityRead } from '../../../api/dashboard'
+import ReorderableTab from '../ReorderableTab'
+import type { CardDef } from '../cardRegistry'
 
 // ─── Skeleton — minimal to match new pill shape ────────────────────────────────
 
@@ -156,35 +158,49 @@ function WeekPlanPrimary() {
   )
 }
 
+// ─── Local wrapper components ─────────────────────────────────────────────────
+
+function ComplianceRampRow() {
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
+      <div className="flex-1 min-w-0"><ComplianceStrip /></div>
+      <div className="flex-1 min-w-0"><RampRate /></div>
+    </div>
+  )
+}
+
+function WeekSummarySection() {
+  const t = useT()
+  return (
+    <DashboardSection title={t('this_week')} id="week-summary" defaultExpanded>
+      <BentoGrid>
+        <BentoCell span={2}><WeekStrip /></BentoCell>
+        <BentoCell span={1}><WeekVsLast /></BentoCell>
+      </BentoGrid>
+    </DashboardSection>
+  )
+}
+
+function WeekCalendarSection() {
+  const t = useT()
+  return (
+    <DashboardSection title={t('full_plan')} id="week-calendar" defaultExpanded={false}>
+      <div className="min-w-0">
+        <TrainingCalendar />
+      </div>
+    </DashboardSection>
+  )
+}
+
 // ─── WeekTab ──────────────────────────────────────────────────────────────────
 
 export default function WeekTab() {
   const t = useT()
-  return (
-    <div className="flex flex-col gap-6">
-      {/* 7 day pills */}
-      <WeekPlanPrimary />
-
-      {/* Plan-vs-actual + build ramp */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
-        <div className="flex-1 min-w-0"><ComplianceStrip /></div>
-        <div className="flex-1 min-w-0"><RampRate /></div>
-      </div>
-
-      {/* This week at a glance */}
-      <DashboardSection title={t('this_week')} id="week-summary" defaultExpanded>
-        <BentoGrid>
-          <BentoCell span={2}><WeekStrip /></BentoCell>
-          <BentoCell span={1}><WeekVsLast /></BentoCell>
-        </BentoGrid>
-      </DashboardSection>
-
-      {/* The whole training plan — month calendar with drag-to-reschedule */}
-      <DashboardSection title={t('full_plan')} id="week-calendar" defaultExpanded={false}>
-        <div className="min-w-0">
-          <TrainingCalendar />
-        </div>
-      </DashboardSection>
-    </div>
-  )
+  const cards: CardDef[] = [
+    { id: 'week-plan', label: t('card_week_plan'), render: () => <WeekPlanPrimary /> },
+    { id: 'week-compliance-ramp', label: t('card_week_compliance'), render: () => <ComplianceRampRow /> },
+    { id: 'week-summary', label: t('card_week_summary'), render: () => <WeekSummarySection /> },
+    { id: 'week-calendar', label: t('card_week_calendar'), render: () => <WeekCalendarSection /> },
+  ]
+  return <ReorderableTab tabId="week" cards={cards} />
 }
