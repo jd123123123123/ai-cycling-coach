@@ -6,6 +6,8 @@ alongside so the UI can show "science on tap".
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -130,3 +132,6 @@ class PeriodReport(BaseModel):
     milestones: list[Milestone]
     ai_verdict: str
     ai_model: str
+    # Cache freshness stamp — None on a live build; set to the row's
+    # generated_at when served from the period_reports cache.
+    generated_at: datetime | None = None
