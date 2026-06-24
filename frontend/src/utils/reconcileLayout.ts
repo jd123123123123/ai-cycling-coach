@@ -8,6 +8,8 @@ import type { CardDef, CardPref, ResolvedCard } from '../components/dashboard/ca
  *   (relative to already-placed cards), so a newly-shipped card lands near
  *   where the code placed it rather than at the bottom.
  * - Saved ids no longer in the registry are dropped.
+ * - Duplicate saved ids are collapsed to the first occurrence (a malformed or
+ *   hand-edited blob can't produce duplicate-key collisions downstream).
  *
  * `saved` undefined/empty → the registry's default order, all visible.
  */
@@ -17,11 +19,13 @@ export function reconcileLayout(
 ): ResolvedCard[] {
   const byId = new Map(registry.map((def, defaultIndex) => [def.id, { def, defaultIndex }]))
 
-  const order: { id: string; hidden: boolean }[] = (saved ?? [])
-    .filter((p) => byId.has(p.id))
-    .map((p) => ({ id: p.id, hidden: p.hidden }))
-
-  const present = new Set(order.map((o) => o.id))
+  const present = new Set<string>()
+  const order: { id: string; hidden: boolean }[] = []
+  for (const p of saved ?? []) {
+    if (!byId.has(p.id) || present.has(p.id)) continue
+    present.add(p.id)
+    order.push({ id: p.id, hidden: p.hidden })
+  }
 
   registry.forEach((def, defaultIndex) => {
     if (present.has(def.id)) return
