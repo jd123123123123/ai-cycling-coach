@@ -312,6 +312,24 @@ export const STRINGS = {
   card_dyk: { en: 'Did you know', de: 'Wusstest du' },
   card_log: { en: 'Training log', de: 'Trainings-Log' },
   card_deep_dive: { en: 'Deep dive', de: 'Details' },
+
+  // Trends tab card labels (used by TrendsTab card registry)
+  card_trends_hero: { en: 'Trends overview', de: 'Trends-Überblick' },
+  card_pmc_chart: { en: 'Fitness & form (PMC)', de: 'Fitness & Form (PMC)' },
+  card_ramp_efficiency: { en: 'Ramp rate & efficiency', de: 'Rampe & Effizienz' },
+  card_intensity_distribution: { en: 'Intensity & distribution', de: 'Intensität & Verteilung' },
+  card_biometrics: { en: 'Biometrics', de: 'Biometrie' },
+  card_estimates: { en: 'Estimates', de: 'Schätzwerte' },
+  card_history_records: { en: 'History & records', de: 'Verlauf & Rekorde' },
+
+  // Plan tab card labels (used by PlanTab card registry)
+  card_calendar: { en: 'Training calendar', de: 'Trainingskalender' },
+
+  // DashboardSection titles for Trends sections (used by local wrapper components)
+  section_intensity: { en: 'Intensity & distribution', de: 'Intensität & Verteilung' },
+  section_biometrics: { en: 'Biometrics', de: 'Biometrie' },
+  section_estimates: { en: 'Estimates', de: 'Schätzwerte' },
+  section_history: { en: 'History & records', de: 'Verlauf & Rekorde' },
 } as const satisfies Record<string, StringSet>
 
 export type StringKey = keyof typeof STRINGS
