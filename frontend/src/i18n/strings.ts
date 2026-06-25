@@ -336,6 +336,20 @@ export const STRINGS = {
   section_biometrics: { en: 'Biometrics', de: 'Biometrie' },
   section_estimates: { en: 'Estimates', de: 'Schätzwerte' },
   section_history: { en: 'History & records', de: 'Verlauf & Rekorde' },
+
+  // Workouts tab
+  tab_workouts: { en: 'Workouts', de: 'Workouts' },
+  workouts_title: { en: 'Repeated workouts', de: 'Wiederholte Workouts' },
+  workouts_empty: { en: 'No repeated workouts yet — do a named workout more than once to compare.', de: 'Noch keine Wiederholungen — absolviere ein benanntes Workout mehrfach zum Vergleich.' },
+  workouts_times: { en: '× done', de: '× gemacht' },
+  workouts_back: { en: 'All workouts', de: 'Alle Workouts' },
+  workouts_not_found: { en: 'Workout not found', de: 'Workout nicht gefunden' },
+  workouts_metric_efficiency: { en: 'Efficiency (W/bpm)', de: 'Effizienz (W/bpm)' },
+  workouts_metric_avg_power: { en: 'Avg power (W)', de: 'Ø Leistung (W)' },
+  workouts_metric_np: { en: 'Normalized power (W)', de: 'Normalisierte Leistung (W)' },
+  workouts_metric_avg_hr: { en: 'Avg HR (bpm)', de: 'Ø HF (bpm)' },
+  workouts_metric_pace: { en: 'Pace (/km)', de: 'Pace (/km)' },
+  workouts_metric_tss: { en: 'TSS', de: 'TSS' },
 } as const satisfies Record<string, StringSet>
 
 export type StringKey = keyof typeof STRINGS
