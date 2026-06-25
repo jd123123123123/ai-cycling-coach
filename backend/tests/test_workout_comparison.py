@@ -84,3 +84,8 @@ def test_headline_falls_back_to_count_when_no_metrics():
     a2 = _act(id=2, average_power=None, normalized_power=None, average_hr=None, distance_meters=None)
     s = build_group_summary("x", [a1, a2])
     assert s.headline.text == "2× logged" and s.headline.tone == "neutral"
+
+
+def test_rep_zero_hr_yields_none_efficiency():
+    rep = rep_from_activity(_act(average_hr=0))
+    assert rep.efficiency_factor is None

@@ -10,10 +10,6 @@ from __future__ import annotations
 import re
 from collections import Counter
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.activity import Activity
 from app.schemas.workout_progression import (
     Headline, WorkoutGroupDetail, WorkoutGroupSummary, WorkoutRep, WorkoutTrend,
 )
@@ -124,8 +120,10 @@ def group_activities(acts: list) -> dict[str, list]:
 
 
 def _title_and_sport(acts: list) -> tuple[str, str]:
-    title = Counter(a.title for a in acts if a.title).most_common(1)[0][0]
-    sport = Counter(a.sport for a in acts if a.sport).most_common(1)[0][0]
+    titles = Counter(a.title for a in acts if a.title)
+    sports = Counter(a.sport for a in acts if a.sport)
+    title = titles.most_common(1)[0][0] if titles else "untitled"
+    sport = sports.most_common(1)[0][0] if sports else "unknown"
     return title, sport
 
 
@@ -152,7 +150,10 @@ def build_group_detail(key: str, acts: list) -> WorkoutGroupDetail:
 
 # ── DB entry points (Task 2 adds the API that calls these) ────────────────────
 
-async def list_workout_groups(db: AsyncSession, user_id: int) -> list[WorkoutGroupSummary]:
+async def list_workout_groups(db, user_id: int) -> list[WorkoutGroupSummary]:
+    from sqlalchemy import select
+    from app.models.activity import Activity
+
     result = await db.execute(
         select(Activity).where(Activity.user_id == user_id).order_by(Activity.started_at)
     )
@@ -162,7 +163,10 @@ async def list_workout_groups(db: AsyncSession, user_id: int) -> list[WorkoutGro
     return summaries
 
 
-async def get_workout_group(db: AsyncSession, user_id: int, key: str) -> WorkoutGroupDetail | None:
+async def get_workout_group(db, user_id: int, key: str) -> WorkoutGroupDetail | None:
+    from sqlalchemy import select
+    from app.models.activity import Activity
+
     result = await db.execute(
         select(Activity).where(Activity.user_id == user_id).order_by(Activity.started_at)
     )
