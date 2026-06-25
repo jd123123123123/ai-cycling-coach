@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
-import { Sun, CalendarDays, BarChart3, Users } from 'lucide-react'
+import { Sun, CalendarDays, BarChart3, Repeat, Users } from 'lucide-react'
 import { useT } from '../../contexts/LocaleContext'
 
 // Mobile bottom navigation — your thumb can't reach a top tab strip on a
@@ -7,18 +7,20 @@ import { useT } from '../../contexts/LocaleContext'
 // mobile. Appears only below 'lg'. Mirrors the four desktop surfaces:
 // Today (verdict) · Train (plan) · Analyze (evidence/report/workspace) · Crew.
 
-type TabId = 'today' | 'train' | 'analyze' | 'crew'
+type TabId = 'today' | 'train' | 'analyze' | 'workouts' | 'crew'
 
-const TABS: Array<{ id: TabId; labelKey: 'tab_today' | 'tab_train' | 'tab_analyze' | 'tab_crew'; icon: React.ReactNode }> = [
+const TABS: Array<{ id: TabId; labelKey: 'tab_today' | 'tab_train' | 'tab_analyze' | 'tab_workouts' | 'tab_crew'; icon: React.ReactNode }> = [
   { id: 'today',   labelKey: 'tab_today',   icon: <Sun size={20} strokeWidth={1.8} /> },
   { id: 'train',   labelKey: 'tab_train',   icon: <CalendarDays size={20} strokeWidth={1.8} /> },
   { id: 'analyze', labelKey: 'tab_analyze', icon: <BarChart3 size={20} strokeWidth={1.8} /> },
+  { id: 'workouts', labelKey: 'tab_workouts', icon: <Repeat size={20} strokeWidth={1.8} /> },
   { id: 'crew',    labelKey: 'tab_crew',    icon: <Users size={20} strokeWidth={1.8} /> },
 ]
 
 function resolveActive(raw: string | null): TabId {
   if (raw === 'train' || raw === 'week') return 'train'
   if (raw === 'analyze' || raw === 'trends' || raw === 'report') return 'analyze'
+  if (raw === 'workouts') return 'workouts'
   if (raw === 'crew') return 'crew'
   return 'today'
 }

@@ -20,11 +20,12 @@ import StickyReadinessBar from '../components/dashboard/StickyReadinessBar'
 import TodayTab from '../components/dashboard/tabs/TodayTab'
 import WeekTab from '../components/dashboard/tabs/WeekTab'
 import AnalyzeTab from '../components/dashboard/tabs/AnalyzeTab'
+import WorkoutsTab from '../components/dashboard/tabs/WorkoutsTab'
 import CrewTab from '../components/dashboard/tabs/CrewTab'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { useT } from '../contexts/LocaleContext'
 
-type TabId = 'today' | 'train' | 'analyze' | 'crew'
+type TabId = 'today' | 'train' | 'analyze' | 'workouts' | 'crew'
 
 function resolveTab(raw: string | null): TabId {
   switch (raw) {
@@ -32,6 +33,7 @@ function resolveTab(raw: string | null): TabId {
     case 'train':
     case 'week': return 'train'
     case 'analyze': return 'analyze'
+    case 'workouts': return 'workouts'
     case 'crew': return 'crew'
     // analytics surfaces folded into the Analyze hub
     case 'trends':
@@ -62,6 +64,7 @@ export default function DashboardPage() {
     { id: 'today',   label: t('tab_today') },
     { id: 'train',   label: t('tab_train') },
     { id: 'analyze', label: t('tab_analyze') },
+    { id: 'workouts', label: t('tab_workouts') },
     { id: 'crew',    label: t('tab_crew') },
   ]
 
@@ -70,6 +73,7 @@ export default function DashboardPage() {
       case 'today':   return <TodayTab />
       case 'train':   return <WeekTab />
       case 'analyze': return <AnalyzeTab />
+      case 'workouts': return <WorkoutsTab />
       case 'crew':    return <CrewTab />
     }
   })()
