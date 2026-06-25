@@ -59,6 +59,7 @@ from app.api.dashboards import router as dashboards_router  # noqa: E402
 from app.api.weeks import router as weeks_router  # noqa: E402
 from app.api.crews import router as crews_router  # noqa: E402
 from app.api.tab_layouts import router as tab_layouts_router  # noqa: E402
+from app.api.workouts import router as workouts_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(athletes_router)
@@ -77,6 +78,7 @@ app.include_router(dashboards_router)
 app.include_router(weeks_router)
 app.include_router(crews_router)
 app.include_router(tab_layouts_router)
+app.include_router(workouts_router)
 
 
 @app.get("/", tags=["health"])
