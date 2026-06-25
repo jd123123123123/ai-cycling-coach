@@ -97,3 +97,4 @@ def test_detail_returns_reps_and_trends(client):
 def test_detail_unknown_key_404(client):
     _override(_db_with_activities([_act(id=1, title="Zwift - Forge"), _act(id=2, title="Forge")]))
     assert client.get("/workouts/nope").status_code == 404
+

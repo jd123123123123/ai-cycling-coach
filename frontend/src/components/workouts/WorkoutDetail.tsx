@@ -71,12 +71,12 @@ export default function WorkoutDetail({ workoutKey, onBack }: { workoutKey: stri
                 {data.reps.map((r) => (
                   <tr key={r.activity_id} style={{ borderTop: '1px solid var(--color-rule)' }}>
                     <td className="px-3 py-2">{r.date}</td>
-                    <td className="px-3 py-2">{r.avg_power ?? '—'}</td>
-                    <td className="px-3 py-2">{r.normalized_power ?? '—'}</td>
+                    <td className="px-3 py-2">{r.avg_power != null ? Math.round(r.avg_power) : '—'}</td>
+                    <td className="px-3 py-2">{r.normalized_power != null ? Math.round(r.normalized_power) : '—'}</td>
                     <td className="px-3 py-2">{r.avg_hr ?? '—'}</td>
                     <td className="px-3 py-2">{r.efficiency_factor ?? '—'}</td>
                     <td className="px-3 py-2">{r.pace_s_per_km ? `${Math.floor(r.pace_s_per_km / 60)}:${String(Math.round(r.pace_s_per_km % 60)).padStart(2, '0')}` : '—'}</td>
-                    <td className="px-3 py-2">{r.tss ?? '—'}</td>
+                    <td className="px-3 py-2">{r.tss != null ? Math.round(r.tss) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

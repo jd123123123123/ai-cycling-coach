@@ -27,7 +27,6 @@ export default function WorkoutsList({ onOpen }: { onOpen: (key: string) => void
         {t('workouts_title')}
       </h1>
       {data.map((w) => {
-        // sparkline of the first trend that has ≥2 points (efficiency preferred)
         return (
           <button
             key={w.key}
