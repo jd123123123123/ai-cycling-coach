@@ -20,6 +20,7 @@ from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.user import User
 from app.schemas.analytics import QueryResult, QuerySpec
 from app.schemas.period_report import PeriodReport
+from app.schemas.race_debrief import RaceDebrief
 from app.schemas.user_dashboard import ChartSpec
 from app.services.chart_interpreter import ChartInterpretError, interpret_chart
 from app.services.analytics_query import (
@@ -28,6 +29,7 @@ from app.services.analytics_query import (
     list_datasets,
 )
 from app.services.period_report import get_or_build_report
+from app.services.race_debrief import get_or_build_debrief
 from app.services.detailed_power_profile import compute_detailed_power_profile
 from app.services.tid_assessment import compute_training_distribution
 from app.services.wbal_trace import compute_wbal_trace
@@ -241,6 +243,25 @@ async def get_period_report(
             detail="days must be between 3 and 365",
         )
     return await get_or_build_report(db, _user.id, days)
+
+
+@router.get(
+    "/activity-debrief/{activity_id}",
+    response_model=RaceDebrief,
+    summary="Pro-grade deep analysis of a single ride",
+)
+async def get_activity_debrief(
+    activity_id: int,
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> RaceDebrief:
+    report = await get_or_build_debrief(db, _user.id, activity_id)
+    if report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No analyzable ride (with power streams) found for this activity.",
+        )
+    return report
 
 
 class InterpretRequest(BaseModel):

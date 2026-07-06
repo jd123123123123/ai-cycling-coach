@@ -37,6 +37,43 @@ logger = logging.getLogger(__name__)
 DEBRIEF_TTL_HOURS = 24 * 30  # a ride's analysis is stable; long TTL
 _STORY_MAX_POINTS = 600
 
+_VERDICT_SYSTEM = (
+    "You are a pro cycling coach writing a race debrief. In 2–3 sentences, give a "
+    "candid verdict on how the ride was executed, referencing the athlete's real "
+    "numbers. Be specific and encouraging but honest. Do not invent numbers."
+)
+
+
+async def _ai_verdict(report: RaceDebrief) -> tuple[str, str]:
+    fallback = report.verdict.ai_verdict
+    if not settings.ANTHROPIC_API_KEY:
+        return fallback, "rule-based-fallback"
+    p = report.pacing
+    msg = (
+        f"Grade: {report.verdict.grade_letter} ({report.verdict.grade_score}/100)\n"
+        f"Distance {report.header.distance_km} km, {report.header.elevation_m} m climbing, "
+        f"NP {report.header.np_watts} W, IF {report.header.if_}, {report.header.total_kj} kJ\n"
+        f"Went well: {report.verdict.went_well}\n"
+        f"Watch out: {report.verdict.watch_out}\n"
+        f"Split {p.split_pct if p else 'n/a'}%, surges {p.surge_count if p else 'n/a'}\n"
+    )
+    try:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        resp = await client.messages.create(
+            model=settings.COACH_MODEL, max_tokens=320, temperature=0,
+            system=[{"type": "text", "text": _VERDICT_SYSTEM,
+                     "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": msg}],
+        )
+        text = "".join(getattr(b, "text", "") or "" for b in (getattr(resp, "content", None) or [])).strip()
+        if not text:
+            raise RuntimeError("empty Claude response")
+        return text[:600], settings.COACH_MODEL
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Race-debrief verdict failed: %s", exc)
+        return fallback, "rule-based-fallback"
+
 
 def _try(label: str, fn, default=None):
     try:
@@ -266,7 +303,9 @@ async def build_debrief(db: AsyncSession, user_id: int, activity_id: int) -> Rac
             ActivityStream.user_id == user_id, ActivityStream.mmp_curve.isnot(None)))
     envelope = aggregate_mmp_curves([row[0] for row in env_res.all() if row[0]])
     report = assemble_debrief(activity, stream, profile, envelope)
-    # Task 4 overlays the AI verdict here.
+    text, model = await _ai_verdict(report)
+    report.verdict.ai_verdict = text
+    report.verdict.ai_model = model
     return report
 
 
