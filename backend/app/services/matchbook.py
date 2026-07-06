@@ -49,8 +49,8 @@ def analyze_matchbook(
     trough_idx = 0
     descending = False
     for i, v in enumerate(bal):
-        if v > peak_val and not descending:
-            peak_val, peak_idx = v, i          # still topping up
+        if v >= peak_val and not descending:
+            peak_val, peak_idx = v, i          # top of reserve, up to the drawdown
             trough_val, trough_idx = v, i
         if v < trough_val:                     # drawing down
             trough_val, trough_idx = v, i

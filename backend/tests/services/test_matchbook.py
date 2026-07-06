@@ -28,6 +28,8 @@ class TestAnalyzeMatchbook:
         mb = analyze_matchbook(power, cp=250.0, w_prime=20000.0, match_depth_frac=0.3)
         assert mb.match_count >= 1
         assert mb.matches[0].depth_j > 0.3 * 20000.0
+        assert 100 <= mb.matches[0].start_s <= 120
+        assert mb.matches[0].end_s > mb.matches[0].start_s
 
     def test_full_depletion_flagged(self):
         # Sustained way over CP with small W′ → balance goes to/below 0.
