@@ -14,6 +14,7 @@ import ActivitiesPage from './pages/ActivitiesPage'
 import CoachPage from './pages/CoachPage'
 import SettingsPage from './pages/SettingsPage'
 import DashboardsPage from './pages/DashboardsPage'
+import DebriefView from './pages/DebriefView'
 
 function App() {
   return (
@@ -107,6 +108,15 @@ function App() {
             element={
               <ProtectedRoute checkOnboarding>
                 <DashboardsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/activities/:id/debrief"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <DebriefView />
               </ProtectedRoute>
             }
           />
