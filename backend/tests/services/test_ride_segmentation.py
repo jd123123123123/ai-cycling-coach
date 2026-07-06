@@ -21,6 +21,12 @@ class TestSegmentRide:
         assert segment_ride([None, None], [0.0, 10.0]) == []
         assert segment_ride([], []) == []
 
+    def test_long_all_none_altitude_returns_empty(self):
+        # A sufficiently long ride whose altitude never has a reading → _clean
+        # returns None → []. (Length guard alone wouldn't catch this.)
+        n = 60
+        assert segment_ride([None] * n, [10.0 * i for i in range(n)]) == []
+
     def test_detects_a_sustained_climb(self):
         # 300 s climbing at 6% grade (0.6 m/s vertical at 10 m/s → ~179 m gained).
         alt, dist = _ramp(100.0, 0.06, 300)
@@ -45,13 +51,27 @@ class TestSegmentRide:
         kinds = [s.kind for s in segs]
         assert "climb" in kinds and "descent" in kinds
 
-    def test_short_noise_bump_is_merged_not_its_own_segment(self):
-        # Mostly flat with a 5 s tiny bump — below min_segment_s, must not split out.
-        alt = [100.0] * 60 + [100.5] * 5 + [100.0] * 60
-        dist = [10.0 * i for i in range(125)]
-        segs = segment_ride(alt, dist, min_segment_s=30)
-        assert len(segs) == 1
-        assert segs[0].kind == "flat"
+    def test_short_climb_run_below_min_segment_is_merged(self):
+        # 60 s flat, a genuine 20 s @ 8% climb (classified climb per-second, but
+        # < min_segment_s=30), then 60 s flat. Use a small smoothing window so the
+        # short ramp does read as a climb; it must then be merged into its flat
+        # neighbours, not survive as its own sub-threshold climb segment.
+        flat1_alt = [100.0] * 60
+        flat1_dist = [10.0 * i for i in range(60)]
+        climb_alt, climb_dist = _ramp(100.0, 0.08, 20, start_dist=flat1_dist[-1] + 10)
+        f2_start = climb_dist[-1] + 10
+        flat2_alt = [climb_alt[-1]] * 60
+        flat2_dist = [f2_start + 10.0 * i for i in range(60)]
+        segs = segment_ride(
+            flat1_alt + climb_alt + flat2_alt,
+            flat1_dist + climb_dist + flat2_dist,
+            min_segment_s=30, smooth_window_s=5,
+        )
+        # The 20 s climb must not spawn its own sub-threshold climb segment.
+        assert not any(s.kind == "climb" and s.duration_s < 30 for s in segs)
+        # Segments remain contiguous and cover the whole ride.
+        assert segs[0].start_s == 0
+        assert segs[-1].end_s == len(flat1_alt) + len(climb_alt) + len(flat2_alt)
 
     def test_averages_power_and_speed_over_segment(self):
         alt, dist = _ramp(100.0, 0.08, 60)

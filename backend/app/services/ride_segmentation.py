@@ -84,13 +84,16 @@ def segment_ride(
         return []
 
     smooth_alt = _smooth(alt, smooth_window_s)
-    # Per-second grade from smoothed altitude over the distance travelled.
+    # Per-second grade from smoothed altitude over the distance travelled. The
+    # last sample has no forward pair, so it inherits the previous second's kind
+    # (avoids a spurious flat second at n-1).
     kinds: list[str] = []
-    for i in range(n):
-        d_alt = smooth_alt[min(i + 1, n - 1)] - smooth_alt[i]
-        d_dist = dist[min(i + 1, n - 1)] - dist[i]
+    for i in range(n - 1):
+        d_alt = smooth_alt[i + 1] - smooth_alt[i]
+        d_dist = dist[i + 1] - dist[i]
         grade = (d_alt / d_dist * 100.0) if d_dist > 0.1 else 0.0
         kinds.append(_classify(grade, min_climb_grade))
+    kinds.append(kinds[-1] if kinds else "flat")
 
     # Contiguous runs of the same kind.
     runs: list[list[int]] = []  # [start, end)
