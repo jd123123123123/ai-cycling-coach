@@ -72,20 +72,29 @@ def detect_key_moments(
                 label="Strong finish", value=round(finish_avg, 1), tone="good",
             ))
 
-    # Crack point — biggest drop between the strongest and a later weaker 5-min block.
+    # Crack point — the biggest sustained block-to-block power drop whose trough
+    # falls in the SECOND HALF (a genuine late fade, not settling from a hot
+    # start). Compares each 5-min block to the immediately preceding block.
     if n >= 2 * _FINISH_WINDOW_S:
+        starts = list(range(0, n - _FINISH_WINDOW_S + 1, _FINISH_WINDOW_S))
         blocks = [
-            (i, sum(power_series[i:i + _FINISH_WINDOW_S]) / _FINISH_WINDOW_S)
-            for i in range(0, n - _FINISH_WINDOW_S + 1, _FINISH_WINDOW_S)
+            sum(power_series[s:s + _FINISH_WINDOW_S]) / _FINISH_WINDOW_S
+            for s in starts
         ]
-        peak_i, peak_v = max(enumerate(blocks), key=lambda t: t[1][1])[1]
-        after = [b for b in blocks if b[0] > peak_i]
-        if after:
-            trough_i, trough_v = min(after, key=lambda b: b[1])
-            if peak_v > 0 and (peak_v - trough_v) / peak_v >= 0.15:
-                moments.append(KeyMoment(
-                    kind="crack_point", at_s=trough_i,
-                    label="Power dropped off here",
-                    value=round((peak_v - trough_v) / peak_v * 100.0, 1), tone="bad",
-                ))
+        half = n // 2
+        best_drop = 0.0
+        best_at: int | None = None
+        for k in range(1, len(blocks)):
+            if starts[k] < half:          # trough must land in the second half
+                continue
+            prev, cur = blocks[k - 1], blocks[k]
+            if prev > 0 and (prev - cur) / prev >= 0.15 and (prev - cur) / prev > best_drop:
+                best_drop = (prev - cur) / prev
+                best_at = starts[k]
+        if best_at is not None:
+            moments.append(KeyMoment(
+                kind="crack_point", at_s=best_at,
+                label="Power dropped off here",
+                value=round(best_drop * 100.0, 1), tone="bad",
+            ))
     return moments

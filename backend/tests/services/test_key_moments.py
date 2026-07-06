@@ -32,3 +32,22 @@ class TestDetectKeyMoments:
         power = [300.0] * 600 + [150.0] * 300  # finishes below average
         moments = {m.kind: m for m in detect_key_moments(power)}
         assert "strongest_finish" not in moments
+
+    def test_crack_point_on_late_collapse(self):
+        # Steady, then a sharp sustained drop in the second half → crack at 900 s.
+        power = [300.0] * 600 + [300.0] * 300 + [150.0] * 300
+        moments = {m.kind: m for m in detect_key_moments(power)}
+        assert "crack_point" in moments
+        assert moments["crack_point"].at_s == 900
+        assert moments["crack_point"].tone == "bad"
+
+    def test_no_crack_on_hot_start_then_settle(self):
+        # Big opening block then settling UP in the second half — not a crack.
+        power = [400.0] * 300 + [200.0] * 300 + [250.0] * 300 + [260.0] * 300
+        moments = {m.kind: m for m in detect_key_moments(power)}
+        assert "crack_point" not in moments
+
+    def test_no_crack_on_steady_ride(self):
+        power = [250.0] * 1200
+        moments = {m.kind: m for m in detect_key_moments(power)}
+        assert "crack_point" not in moments
