@@ -154,7 +154,7 @@ function RideStoryChart({ story }: { story: DebriefStory }) {
               wrap.appendChild(label)
 
               u.over.appendChild(wrap)
-              const tValue = story.t[moment.at_s] ?? moment.at_s
+              const tValue = moment.at_s
               markerEls.push({ el: wrap, x: tValue })
             })
           },
@@ -171,7 +171,7 @@ function RideStoryChart({ story }: { story: DebriefStory }) {
       },
     }
 
-    const plot = new uPlot(opts, data as unknown as uPlot.AlignedData, el)
+    const plot = new uPlot(opts, data as uPlot.AlignedData, el)
 
     const ro = new ResizeObserver(() => {
       if (el) plot.setSize({ width: el.clientWidth, height })
