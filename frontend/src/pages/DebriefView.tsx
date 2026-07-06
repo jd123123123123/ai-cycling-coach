@@ -3,8 +3,8 @@ import { useLocale } from '../contexts/LocaleContext'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import DebriefHero from '../components/debrief/DebriefHero'
 import RideStory from '../components/debrief/RideStory'
-// Acts 3–4 imported in later tasks:
-// import BreakdownPanels from '../components/debrief/BreakdownPanels'
+import BreakdownPanels from '../components/debrief/BreakdownPanels'
+// Act 4 imported in a later task:
 // import DebriefPlan from '../components/debrief/DebriefPlan'
 
 export default function DebriefView() {
@@ -40,9 +40,11 @@ export default function DebriefView() {
             <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '80ms' }}>
               <RideStory story={data.story} />
             </section>
-            {/* Act 3 (BreakdownPanels), Act 4 (DebriefPlan)
-                are added in Tasks 4–5, each in its own <section> with a staggered
-                card-enter animationDelay, mirroring ReportTab. */}
+            <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '160ms' }}>
+              <BreakdownPanels report={data} />
+            </section>
+            {/* Act 4 (DebriefPlan) is added in Task 5, in its own <section>
+                with a staggered card-enter animationDelay, mirroring ReportTab. */}
           </>
         )}
       </div>
