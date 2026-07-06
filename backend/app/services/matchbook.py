@@ -34,7 +34,7 @@ def analyze_matchbook(
     cp: float,
     w_prime: float,
     *,
-    match_depth_frac: float = 0.5,
+    match_depth_frac: float = 0.3,
 ) -> Matchbook | None:
     """Detect anaerobic matches from the W′-balance trace. See module docstring."""
     if cp <= 0 or w_prime <= 0 or not power_series:

@@ -7,6 +7,9 @@ Pure module. DOCUMENTED APPROXIMATIONS (labeled estimates, not measurements):
   piecewise on IF (fat-dominant easy → carb-dominant near/above threshold).
 - Underfueling: a long ride with both high durability drop and elevated
   decoupling is the classic glycogen-depletion ("bonk") signature.
+
+Energy and duration assume power is sampled at 1 Hz (one element = one
+second), consistent with the app's stored streams.
 """
 from __future__ import annotations
 

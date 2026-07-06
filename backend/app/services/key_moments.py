@@ -4,6 +4,9 @@ Pure module. Each beat is emitted at most once and only when detectable:
 best effort (peak 60 s power), biggest match (global W′-balance trough),
 strongest finish (final 5 min above ride average), crack point (largest
 sustained second-half power drop).
+
+Window constants (60 s / 300 s) are sample counts assuming 1 Hz power
+sampling.
 """
 from __future__ import annotations
 
@@ -58,7 +61,7 @@ def detect_key_moments(
         min_idx = min(range(len(wbal_series)), key=lambda i: wbal_series[i])
         moments.append(KeyMoment(
             kind="biggest_match", at_s=min_idx,
-            label="Deepest anaerobic drawdown",
+            label="Lowest anaerobic reserve",
             value=round(wbal_series[min_idx], 1), tone="bad",
         ))
 
