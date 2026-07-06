@@ -107,22 +107,35 @@ function PacingCard({ pacing }: { pacing: Pacing | null }) {
 function ClimbsCard({ climbs }: { climbs: Climb[] }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!climbs || climbs.length === 0) return null
-  const steepest = Math.max(...climbs.map((c) => c.avg_grade_pct))
-  const read = de ? `${climbs.length} Anstieg${climbs.length > 1 ? 'e' : ''}, steilster ${steepest.toFixed(1)} %.` : `${climbs.length} climb${climbs.length > 1 ? 's' : ''}, steepest at ${steepest.toFixed(1)}%.`
+  // Real GPS altitude over-segments into many tiny rises — surface only the
+  // meaningful climbs (≥25 m gain), biggest first, and summarise the rest.
+  const notable = climbs.filter((c) => c.elev_gain_m >= 25).sort((a, b) => b.elev_gain_m - a.elev_gain_m)
+  const totalAscent = climbs.reduce((s, c) => s + c.elev_gain_m, 0)
+  const shown = notable.slice(0, 6)
+  if (shown.length === 0) return null
+  const extra = notable.length - shown.length
+  const read = de
+    ? `${notable.length} nennenswerte Anstiege · ${Math.round(totalAscent).toLocaleString('de')} m gesamt.`
+    : `${notable.length} notable climb${notable.length > 1 ? 's' : ''} · ${Math.round(totalAscent).toLocaleString()} m total ascent.`
   return (
     <Card label={de ? 'ANSTIEGE' : 'CLIMBS'} accent="var(--color-good)" read={read}>
       <div className="flex flex-col gap-1.5">
-        {climbs.map((c, i) => (
+        {shown.map((c, i) => (
           <div key={i} className="flex items-center gap-2 flex-wrap" style={{ fontSize: 12, borderTop: i > 0 ? '1px solid var(--color-rule)' : undefined, paddingTop: i > 0 ? 6 : 0 }}>
             <span className="num-mono" style={{ color: 'var(--color-ink-2)', width: 16 }}>{i + 1}</span>
-            <span className="rounded-full px-1.5 py-0.5 num-mono" style={{ fontSize: 9.5, border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)' }}>{c.category}</span>
-            <span className="num-mono" style={{ color: 'var(--color-ink)', fontWeight: 600 }}>{Math.round(c.vam_m_per_h)} <span style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>m/h</span></span>
-            <span className="num-mono" style={{ color: 'var(--color-ink-2)' }}>{c.w_per_kg != null ? `${c.w_per_kg.toFixed(1)} W/kg` : '—'}</span>
-            <span className="num-mono" style={{ color: 'var(--color-muted)' }}>{c.avg_grade_pct.toFixed(1)}%</span>
+            <span className="num-mono" style={{ color: 'var(--color-ink)', fontWeight: 600, width: 52 }}>{Math.round(c.elev_gain_m)} <span style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>m↑</span></span>
+            <span className="num-mono" style={{ color: 'var(--color-ink-2)' }}>{c.avg_grade_pct.toFixed(1)}%</span>
+            <span className="num-mono" style={{ color: 'var(--color-muted)' }}>{Math.round(c.vam_m_per_h)} <span style={{ fontSize: 9.5 }}>VAM</span></span>
+            {c.w_per_kg != null && <span className="num-mono" style={{ color: 'var(--color-ink-2)' }}>{c.w_per_kg.toFixed(1)} W/kg</span>}
             <span className="num-mono ml-auto" style={{ color: 'var(--color-muted)' }}>{fmtMmSs(c.duration_s)}</span>
           </div>
         ))}
       </div>
+      {extra > 0 && (
+        <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>
+          {de ? `+ ${extra} kleinere Anstiege` : `+ ${extra} smaller climbs`}
+        </span>
+      )}
     </Card>
   )
 }
@@ -276,6 +289,9 @@ function WkoCard({ wko }: { wko: WkoModel | null }) {
 function CdaCard({ cda }: { cda: Cda | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!cda) return null
+  // Without a wind sensor the estimate is only trustworthy in a physical range;
+  // outside ~0.18–0.55 m² it's noise (indoor, stop-start, or bad GPS) — hide it.
+  if (cda.cda_m2 < 0.18 || cda.cda_m2 > 0.55) return null
   return (
     <Card label={de ? 'AERODYNAMIK' : 'AERODYNAMICS'} accent="var(--color-ink-blue)"
       read={de ? 'Schätzung aus Geschwindigkeit, Leistung und Steigung — Richtwert, kein Windkanal.' : 'Estimate from speed, power, and grade — directional, not a wind-tunnel figure.'}>
