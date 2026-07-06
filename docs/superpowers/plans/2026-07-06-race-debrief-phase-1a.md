@@ -54,8 +54,13 @@ from __future__ import annotations
 from app.services.ride_segmentation import Segment, segment_ride
 
 
-def _ramp(start_alt, per_s_gain, seconds, start_dist=0.0, speed_ms=10.0):
-    """Build altitude+distance arrays for a constant-gradient section."""
+def _ramp(start_alt, grade_frac, seconds, start_dist=0.0, speed_ms=10.0):
+    """Altitude+distance for a constant-gradient section.
+
+    grade_frac is the slope as a fraction (0.06 = 6%). Vertical gain per second
+    is grade_frac * speed_ms, so grade = d_alt/d_dist = grade_frac exactly.
+    """
+    per_s_gain = grade_frac * speed_ms
     alt = [start_alt + per_s_gain * i for i in range(seconds)]
     dist = [start_dist + speed_ms * i for i in range(seconds)]
     return alt, dist
@@ -67,14 +72,14 @@ class TestSegmentRide:
         assert segment_ride([], []) == []
 
     def test_detects_a_sustained_climb(self):
-        # 300 s climbing ~6% (0.6 m up per 10 m along = 0.06 m/s vertical at 10 m/s).
-        alt, dist = _ramp(100.0, 0.06 * 10 / 10, 300)  # 0.06 m vertical per second
+        # 300 s climbing at 6% grade (0.6 m/s vertical at 10 m/s → ~179 m gained).
+        alt, dist = _ramp(100.0, 0.06, 300)
         segs = segment_ride(alt, dist, min_segment_s=30)
         climbs = [s for s in segs if s.kind == "climb"]
         assert len(climbs) == 1
         c = climbs[0]
         assert c.duration_s == 300
-        assert c.elev_gain_m > 15  # ~18 m gained
+        assert c.elev_gain_m > 100  # ~179 m gained
         assert c.avg_grade_pct > 3.0
 
     def test_flat_section_is_flat(self):
@@ -528,21 +533,26 @@ def _count_surges(power: list[float], threshold: float, min_s: int) -> int:
 
 
 def _zone_time_pct(power: list[float], ftp: float) -> dict[str, float]:
-    zones = coggan_power_zones(ftp)  # {label: {"min":..,"max":..}} or similar
-    # Build ordered (label, lo, hi) from the helper's dict; tolerate hi=None (open).
-    bands: list[tuple[str, float, float | None]] = []
-    for label, z in zones.items():
-        lo = z.get("min_watts", z.get("min"))
-        hi = z.get("max_watts", z.get("max"))
-        bands.append((label, float(lo), None if hi is None else float(hi)))
-    counts = {label: 0 for label, _, _ in bands}
+    # coggan_power_zones(ftp) -> {zone_key: {"name":.., "min": int, "max": int|None}}.
+    # Coggan's integer-truncated boundaries leave a 1 W gap between each zone's
+    # `max` and the next zone's `min` (e.g. zone5 max 300, zone6 min 302), so an
+    # upper-bound test would drop samples in the gap. Assign each sample to the
+    # HIGHEST zone whose `min` it meets — gap-free, always sums to 100%.
+    zones = coggan_power_zones(ftp)
+    bands = sorted(
+        ((int(z["min"]), label) for label, z in zones.items()), key=lambda b: b[0]
+    )
+    counts = {label: 0 for _, label in bands}
     for p in power:
-        for label, lo, hi in bands:
-            if p >= lo and (hi is None or p < hi):
-                counts[label] += 1
+        chosen = bands[0][1]
+        for lo, label in bands:
+            if p >= lo:
+                chosen = label
+            else:
                 break
+        counts[chosen] += 1
     n = len(power)
-    return {label: round(counts[label] / n * 100.0, 1) for label, _, _ in bands}
+    return {label: round(counts[label] / n * 100.0, 1) for _, label in bands}
 
 
 def analyze_pacing(
@@ -591,7 +601,7 @@ def analyze_pacing(
     )
 ```
 
-> **Note on `coggan_power_zones` shape:** the helper returns a dict of zones; the exact per-zone key names (`min`/`max` vs `min_watts`/`max_watts`) must be confirmed against `backend/app/services/training_load.py:216`. The implementation above tolerates both via `z.get(...)`. Before implementing, read that function and, if it returns a different shape (e.g. a list, or tuples), adapt `_zone_time_pct` to the real shape — do not guess. Keep the `zone_time_pct` output contract (label → %) unchanged.
+> **Confirmed `coggan_power_zones` shape** (`backend/app/services/training_load.py:216`): returns `{zone_key: {"name": str, "min": int, "max": int|None}}` with zone_key `"zone1".."zone7"`. `_zone_time_pct` above uses `z["min"]` and the highest-min-met assignment so it is gap-proof (Coggan's truncated boundaries are non-contiguous). Output contract: `{zone_key: percent}` summing to ~100. If you read the function and the shape differs from the above, adapt `_zone_time_pct` and report it — but it has been verified to match.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
