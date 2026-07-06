@@ -314,6 +314,7 @@ function ActivityRow({
                 <Link
                   to={`/activities/${a.id}/debrief`}
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
                   className="ml-auto text-[11px] font-medium hover:underline"
                   style={{ color: 'var(--color-ink-2)' }}
                 >
