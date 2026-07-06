@@ -2,8 +2,8 @@ import { useParams, Link } from 'react-router-dom'
 import { useLocale } from '../contexts/LocaleContext'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import DebriefHero from '../components/debrief/DebriefHero'
-// Acts 2–4 imported in later tasks:
-// import RideStory from '../components/debrief/RideStory'
+import RideStory from '../components/debrief/RideStory'
+// Acts 3–4 imported in later tasks:
 // import BreakdownPanels from '../components/debrief/BreakdownPanels'
 // import DebriefPlan from '../components/debrief/DebriefPlan'
 
@@ -37,8 +37,11 @@ export default function DebriefView() {
             <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both' }}>
               <DebriefHero report={data} />
             </section>
-            {/* Act 2 (RideStory), Act 3 (BreakdownPanels), Act 4 (DebriefPlan)
-                are added in Tasks 3–5, each in its own <section> with a staggered
+            <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '80ms' }}>
+              <RideStory story={data.story} />
+            </section>
+            {/* Act 3 (BreakdownPanels), Act 4 (DebriefPlan)
+                are added in Tasks 4–5, each in its own <section> with a staggered
                 card-enter animationDelay, mirroring ReportTab. */}
           </>
         )}
