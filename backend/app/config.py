@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     COACH_CHAT_MODEL: str = "claude-sonnet-4-6"   # chat uses same model
     COACH_BRIEF_CACHE_HOURS: int = 1              # short TTL — briefs stay fresh
 
+    # Race Debrief uses the strongest model for the analytical verdict, independent
+    # of the coach brief model. Opus 4.8: adaptive thinking, no sampling params.
+    RACE_DEBRIEF_MODEL: str = "claude-opus-4-8"
+
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:

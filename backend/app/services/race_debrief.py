@@ -66,7 +66,8 @@ async def _ai_verdict(report: RaceDebrief) -> tuple[str, str]:
         import anthropic
         client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         resp = await client.messages.create(
-            model=settings.COACH_MODEL, max_tokens=320, temperature=0,
+            model=settings.RACE_DEBRIEF_MODEL, max_tokens=1200,
+            thinking={"type": "adaptive"},
             system=[{"type": "text", "text": _VERDICT_SYSTEM,
                      "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": msg}],
@@ -74,7 +75,7 @@ async def _ai_verdict(report: RaceDebrief) -> tuple[str, str]:
         text = "".join(getattr(b, "text", "") or "" for b in (getattr(resp, "content", None) or [])).strip()
         if not text:
             raise RuntimeError("empty Claude response")
-        return text[:600], settings.COACH_MODEL
+        return text[:600], settings.RACE_DEBRIEF_MODEL
     except Exception as exc:  # noqa: BLE001
         logger.exception("Race-debrief verdict failed: %s", exc)
         return fallback, "rule-based-fallback"
