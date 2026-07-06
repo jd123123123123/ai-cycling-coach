@@ -45,10 +45,11 @@ from app.services.activity_service import create_activity
 from app.services.daily_metric_service import upsert_daily_metric
 from app.services.garmin_details_parser import garmin_details_to_records
 from app.services.stream_extraction import records_to_streams
-from app.services.stream_ingestion import ingest_activity_streams
+from app.services.stream_ingestion import has_gps, ingest_activity_streams
 from app.services.garmin_client import GarminAuthError, GarminProvider
 from app.services.garmin_mapper import map_daily_metrics, map_garmin_activity
 from app.services.intraday_sync_service import sync_intraday_samples_for_day
+from app.services.weather_client import fetch_ride_weather
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +245,15 @@ async def _sync_activity_streams(
         if not records or not any(r.get("power") is not None for r in records):
             return  # no power stream → nothing for the power-duration model
         streams = records_to_streams(records)
+        weather = None
+        if has_gps(streams) and activity.started_at is not None:
+            first_lat = next((v for v in streams.latitude if v is not None), None)
+            first_lng = next((v for v in streams.longitude if v is not None), None)
+            if first_lat is not None and first_lng is not None:
+                end = activity.started_at + timedelta(seconds=streams.duration_s)
+                weather = await fetch_ride_weather(
+                    first_lat, first_lng, activity.started_at, end
+                )
         ftp = float(profile.ftp_watts) if profile and profile.ftp_watts else None
         analysis = await ingest_activity_streams(
             db,
@@ -251,6 +261,7 @@ async def _sync_activity_streams(
             activity_id=activity.id,
             streams=streams,
             ftp=ftp,
+            weather=weather,
             commit=False,
         )
         logger.info(
