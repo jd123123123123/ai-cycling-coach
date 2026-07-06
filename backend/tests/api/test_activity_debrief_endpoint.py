@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.dependencies import get_current_active_user, get_db_for_user, get_current_user
+from app.services.race_debrief import assemble_debrief
 
 
 def _synthetic_power(n=1200):
@@ -145,6 +146,53 @@ def test_activity_debrief_200_builds_from_db_cache_miss(client, monkeypatch):
     assert body["verdict"]["ai_model"] == "rule-based-fallback"
     assert body["matchbook"] is not None
     assert body["wko"] is not None
+
+
+def _db_with_cache_hit(cached_report_payload, generated_at):
+    """A cache-HIT variant: the race_debriefs lookup returns a row, and the
+    activities/streams lookups blow up if touched — proving the endpoint
+    short-circuits on the cached row instead of rebuilding via build_debrief.
+    """
+    db = AsyncMock()
+    cached_row = SimpleNamespace(report=cached_report_payload, generated_at=generated_at)
+
+    async def _execute(stmt, *a, **k):
+        sql = str(stmt)
+        if "FROM race_debriefs" in sql:
+            return _FakeResult(scalar=cached_row)  # cache hit
+        raise AssertionError(f"unexpected query on cache-hit path: {sql}")
+
+    db.execute = _execute
+
+    async def _get(model, pk):
+        raise AssertionError("build_debrief should not run on a cache hit")
+
+    db.get = _get
+    db.commit = AsyncMock()
+    return db
+
+
+def test_activity_debrief_200_from_cache_hit_skips_rebuild(client, monkeypatch):
+    # Build a real RaceDebrief via the pure assembler (no DB/AI involved), the
+    # same way _upsert_debrief's payload is produced, then hand it back as the
+    # cached row's `.report` to exercise the model_validate re-hydration path.
+    monkeypatch.setattr("app.services.race_debrief.settings.ANTHROPIC_API_KEY", None)
+    activity = _activity(activity_id=2)
+    stream = _stream(_synthetic_power())
+    cached = assemble_debrief(activity, stream, None, {})
+    cached.verdict.ai_verdict = "Cached verdict from a prior build."
+    cached.verdict.ai_model = "rule-based-fallback"
+    payload = cached.model_dump(mode="json")
+    generated_at = datetime.now(timezone.utc)
+
+    _override(_db_with_cache_hit(payload, generated_at))
+
+    resp = client.get("/analytics/activity-debrief/2")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["verdict"]["grade_letter"] == payload["verdict"]["grade_letter"]
+    assert body["verdict"]["ai_verdict"] == "Cached verdict from a prior build."
 
 
 def test_activity_debrief_404_for_missing_activity(client):

@@ -35,6 +35,11 @@ from app.services.w_balance import w_prime_balance
 logger = logging.getLogger(__name__)
 
 DEBRIEF_TTL_HOURS = 24 * 30  # a ride's analysis is stable; long TTL
+# Note: efforts[].is_pr is computed by comparing this ride's efforts against the
+# athlete's whole-history MMP envelope as of generation time, not recomputed on
+# read. So a PR flag reflects the athlete's best known at build time; it can go
+# stale (a later ride superseding it, or reclassifying it as no longer a PR)
+# for up to DEBRIEF_TTL_HOURS until the cached report expires and rebuilds.
 _STORY_MAX_POINTS = 600
 
 _VERDICT_SYSTEM = (
@@ -170,7 +175,7 @@ def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop):
 def assemble_debrief(activity, stream, profile, athlete_envelope: dict) -> RaceDebrief:
     """Pure assembler: analyzers → RaceDebrief with a rule-based verdict. See docstring."""
     s = stream.streams or {}
-    power = [float(p) for p in (s.get("power") or [])]
+    power = [float(p) for p in (s.get("power") or []) if p is not None]
     hr = s.get("heart_rate") or []
     cadence = s.get("cadence") or []
     altitude = s.get("altitude") or []
