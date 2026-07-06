@@ -20,12 +20,25 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-# Garmin descriptor key → our record field. Cadence covers both bike and run.
+# Garmin descriptor key → our record field. Tuples list candidate keys in
+# priority order; the first present wins (device/firmware vary).
 _FIELD_KEYS = {
     "power": ("directPower",),
     "heart_rate": ("directHeartRate",),
     "cadence": ("directBikeCadence", "directRunCadence", "directDoubleCadence"),
     "altitude": ("directElevation",),
+    "latitude": ("directLatitude",),
+    "longitude": ("directLongitude",),
+    "speed": ("directSpeed", "directEnhancedSpeed"),
+    "distance": ("sumDistance",),
+    "temperature": ("directAirTemperature", "directOutsideTemperature"),
+    "left_right_balance": ("directLeftRightBalance",),
+    "torque_effectiveness": (
+        "directLeftTorqueEffectiveness", "directRightTorqueEffectiveness",
+    ),
+    "pedal_smoothness": (
+        "directLeftPedalSmoothness", "directRightPedalSmoothness",
+    ),
 }
 _TIMESTAMP_KEY = "directTimestamp"
 
@@ -73,13 +86,8 @@ def garmin_details_to_records(detail: dict | None) -> list[dict]:
         ts_ms = _val(metrics, ts_idx)
         if ts_ms is None:
             continue
-        records.append(
-            {
-                "timestamp": datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc),
-                "power": _val(metrics, field_idx["power"]),
-                "heart_rate": _val(metrics, field_idx["heart_rate"]),
-                "cadence": _val(metrics, field_idx["cadence"]),
-                "altitude": _val(metrics, field_idx["altitude"]),
-            }
-        )
+        record = {"timestamp": datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)}
+        for fld in _FIELD_KEYS:
+            record[fld] = _val(metrics, field_idx[fld])
+        records.append(record)
     return records

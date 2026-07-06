@@ -69,3 +69,49 @@ class TestGarminDetailsToRecords:
         assert garmin_details_to_records({}) == []
         assert garmin_details_to_records({"metricDescriptors": []}) == []
         assert garmin_details_to_records(None) == []
+
+
+class TestGarminDetailsExtraChannels:
+    def test_captures_gps_speed_distance_temperature(self):
+        detail = {
+            "metricDescriptors": [
+                {"key": "directTimestamp", "metricsIndex": 0},
+                {"key": "directLatitude", "metricsIndex": 1},
+                {"key": "directLongitude", "metricsIndex": 2},
+                {"key": "directSpeed", "metricsIndex": 3},
+                {"key": "sumDistance", "metricsIndex": 4},
+                {"key": "directAirTemperature", "metricsIndex": 5},
+            ],
+            "activityDetailMetrics": [
+                {"metrics": [1_782_024_082_000.0, 47.1, 8.5, 9.7, 1234.0, 21.0]},
+            ],
+        }
+        rec = garmin_details_to_records(detail)[0]
+        assert rec["latitude"] == 47.1
+        assert rec["longitude"] == 8.5
+        assert rec["speed"] == 9.7
+        assert rec["distance"] == 1234.0
+        assert rec["temperature"] == 21.0
+
+    def test_captures_biomechanics_when_present(self):
+        detail = {
+            "metricDescriptors": [
+                {"key": "directTimestamp", "metricsIndex": 0},
+                {"key": "directLeftRightBalance", "metricsIndex": 1},
+                {"key": "directLeftTorqueEffectiveness", "metricsIndex": 2},
+                {"key": "directLeftPedalSmoothness", "metricsIndex": 3},
+            ],
+            "activityDetailMetrics": [{"metrics": [1_782_024_082_000.0, 48.0, 78.0, 24.0]}],
+        }
+        rec = garmin_details_to_records(detail)[0]
+        assert rec["left_right_balance"] == 48.0
+        assert rec["torque_effectiveness"] == 78.0
+        assert rec["pedal_smoothness"] == 24.0
+
+    def test_absent_extra_channels_are_none(self):
+        # The existing minimal payload (cadence/elev/hr/ts/power) → new keys None.
+        rows = [[90.0, 100.0, 130.0, 1_782_024_082_000.0, 200.0]]
+        rec = garmin_details_to_records(_detail(rows))[0]
+        for k in ("latitude", "longitude", "speed", "distance", "temperature",
+                  "left_right_balance", "torque_effectiveness", "pedal_smoothness"):
+            assert rec[k] is None
