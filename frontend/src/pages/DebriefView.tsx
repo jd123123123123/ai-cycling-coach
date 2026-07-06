@@ -4,8 +4,7 @@ import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import DebriefHero from '../components/debrief/DebriefHero'
 import RideStory from '../components/debrief/RideStory'
 import BreakdownPanels from '../components/debrief/BreakdownPanels'
-// Act 4 imported in a later task:
-// import DebriefPlan from '../components/debrief/DebriefPlan'
+import DebriefPlan from '../components/debrief/DebriefPlan'
 
 export default function DebriefView() {
   const { id } = useParams()
@@ -43,8 +42,9 @@ export default function DebriefView() {
             <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '160ms' }}>
               <BreakdownPanels report={data} />
             </section>
-            {/* Act 4 (DebriefPlan) is added in Task 5, in its own <section>
-                with a staggered card-enter animationDelay, mirroring ReportTab. */}
+            <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '240ms' }}>
+              <DebriefPlan plan={data.plan} />
+            </section>
           </>
         )}
       </div>

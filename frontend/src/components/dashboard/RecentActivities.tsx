@@ -23,6 +23,7 @@ import { focusFor } from '../../utils/focusBadge'
 import { useAthleteProfile, type AthleteProfile } from '../../hooks/useAthleteProfile'
 import { SideSheet } from '../ui/SideSheet'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useLocale } from '../../contexts/LocaleContext'
 
 /** Format a UTC/local ISO timestamp to HH:MM. Falls back to UTC if no TZ info. */
 function formatTime(iso: string): string {
@@ -199,16 +200,24 @@ function ActivityRow({
   if (a.distance_meters) parts.push(formatDistanceKm(a.distance_meters))
 
   const timeStr = formatTime(a.started_at)
+  const { locale } = useLocale()
 
   return (
     <li
       className="relative group"
       style={{ borderBottom: '1px solid var(--color-rule)' }}
     >
-      <button
-        type="button"
-        className="w-full text-left"
+      <div
+        role="button"
+        tabIndex={0}
+        className="w-full text-left cursor-pointer"
         onClick={() => onClick(a.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onClick(a.id)
+          }
+        }}
         aria-label={`View details for ${title}`}
       >
         <div className="flex items-stretch gap-4 py-4 hover:opacity-80 transition-opacity relative">
@@ -301,10 +310,20 @@ function ActivityRow({
                   </span>
                 )
               })()}
+              {a.sport === 'cycling' && (
+                <Link
+                  to={`/activities/${a.id}/debrief`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="ml-auto text-[11px] font-medium hover:underline"
+                  style={{ color: 'var(--color-ink-2)' }}
+                >
+                  {locale === 'de' ? 'Analyse →' : 'Debrief →'}
+                </Link>
+              )}
             </div>
           </div>
         </div>
-      </button>
+      </div>
     </li>
   )
 }
