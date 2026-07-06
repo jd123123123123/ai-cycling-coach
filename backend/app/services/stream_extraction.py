@@ -29,12 +29,29 @@ from datetime import datetime
 DEFAULT_MAX_GAP_S = 10
 
 
+# Channels that forward-fill ("carry last seen"): decay slowly or are positional,
+# None until the first reading. Power is handled separately (never None).
+_CARRY_CHANNELS = (
+    "heart_rate", "cadence", "altitude", "latitude", "longitude",
+    "speed", "distance", "temperature",
+    "left_right_balance", "torque_effectiveness", "pedal_smoothness",
+)
+
+
 @dataclass(frozen=True)
 class ActivityStreams:
     power: list[float] = field(default_factory=list)
     heart_rate: list[float | None] = field(default_factory=list)
     cadence: list[float | None] = field(default_factory=list)
     altitude: list[float | None] = field(default_factory=list)
+    latitude: list[float | None] = field(default_factory=list)
+    longitude: list[float | None] = field(default_factory=list)
+    speed: list[float | None] = field(default_factory=list)
+    distance: list[float | None] = field(default_factory=list)
+    temperature: list[float | None] = field(default_factory=list)
+    left_right_balance: list[float | None] = field(default_factory=list)
+    torque_effectiveness: list[float | None] = field(default_factory=list)
+    pedal_smoothness: list[float | None] = field(default_factory=list)
 
     @property
     def duration_s(self) -> int:
@@ -54,49 +71,36 @@ def records_to_streams(
 
     ordered = sorted(records, key=_ts)
     power: list[float] = []
-    hr: list[float | None] = []
-    cad: list[float | None] = []
-    alt: list[float | None] = []
+    carry: dict[str, list[float | None]] = {c: [] for c in _CARRY_CHANNELS}
+    last: dict[str, float | None] = {c: None for c in _CARRY_CHANNELS}
 
-    last_hr: float | None = None
-    last_cad: float | None = None
-    last_alt: float | None = None
     prev_ts: datetime | None = None
     prev_power = 0.0
-    prev_hr = prev_cad = prev_alt = None
+    prev_carry: dict[str, float | None] = {c: None for c in _CARRY_CHANNELS}
 
     for r in ordered:
         p = r.get("power")
         power_v = float(p) if p is not None else 0.0
-        # HR/cadence/altitude forward-fill at the record level (carry last seen).
-        h = r.get("heart_rate")
-        if h is not None:
-            last_hr = float(h)
-        c = r.get("cadence")
-        if c is not None:
-            last_cad = float(c)
-        a = r.get("altitude")
-        if a is not None:
-            last_alt = float(a)
+        for c in _CARRY_CHANNELS:
+            v = r.get(c)
+            if v is not None:
+                last[c] = float(v)
 
         ts = _ts(r)
         if prev_ts is not None:
             gap = int(round((ts - prev_ts).total_seconds()))
             if 1 < gap <= max_gap_s:
-                # Bridge a short gap by forward-filling the previous sample.
                 for _ in range(gap - 1):
                     power.append(prev_power)
-                    hr.append(prev_hr)
-                    cad.append(prev_cad)
-                    alt.append(prev_alt)
-            # gap > max_gap_s → stop: emit nothing for the gap (compress time).
-            # gap <= 1 → adjacent samples, nothing to bridge.
+                    for c in _CARRY_CHANNELS:
+                        carry[c].append(prev_carry[c])
+            # gap > max_gap_s → stop: emit nothing. gap <= 1 → nothing to bridge.
 
         power.append(power_v)
-        hr.append(last_hr)
-        cad.append(last_cad)
-        alt.append(last_alt)
+        for c in _CARRY_CHANNELS:
+            carry[c].append(last[c])
         prev_ts = ts
-        prev_power, prev_hr, prev_cad, prev_alt = power_v, last_hr, last_cad, last_alt
+        prev_power = power_v
+        prev_carry = dict(last)
 
-    return ActivityStreams(power=power, heart_rate=hr, cadence=cad, altitude=alt)
+    return ActivityStreams(power=power, **carry)

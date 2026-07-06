@@ -62,3 +62,35 @@ class TestRecordsToStreams:
         recs = [_rec(0, hr=130), _rec(1, power=200, hr=131)]
         s = records_to_streams(recs)
         assert s.power == [0.0, 200.0]
+
+
+def _rec2(offset_s, **kw):
+    rec = {"timestamp": T0 + timedelta(seconds=offset_s)}
+    for k in ("power", "heart_rate", "cadence", "altitude", "latitude",
+              "longitude", "speed", "distance", "temperature",
+              "left_right_balance", "torque_effectiveness", "pedal_smoothness"):
+        rec[k] = kw.get(k)
+    return rec
+
+
+class TestExtraChannels:
+    def test_gps_speed_align_and_forward_fill(self):
+        recs = [
+            _rec2(0, power=200, latitude=47.0, longitude=8.0, speed=10.0),
+            _rec2(2, power=210, latitude=47.1, longitude=8.1, speed=11.0),  # gap bridged
+        ]
+        s = records_to_streams(recs)
+        assert s.latitude == [47.0, 47.0, 47.1]
+        assert s.longitude == [8.0, 8.0, 8.1]
+        assert s.speed == [10.0, 10.0, 11.0]
+
+    def test_extra_channels_none_until_first_reading(self):
+        recs = [_rec2(0, power=200), _rec2(1, power=205, temperature=20.0)]
+        s = records_to_streams(recs)
+        assert s.temperature == [None, 20.0]
+
+    def test_large_gap_excluded_for_extra_channels_too(self):
+        recs = [_rec2(0, power=200, speed=10.0), _rec2(100, power=210, speed=12.0)]
+        s = records_to_streams(recs, max_gap_s=10)
+        assert s.speed == [10.0, 12.0]
+        assert len(s.speed) == len(s.power) == 2
