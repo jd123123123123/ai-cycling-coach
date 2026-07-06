@@ -71,7 +71,7 @@ async def backfill_user(user_id: int, limit: int | None) -> None:
             q = select(Activity).where(
                 Activity.sport == "cycling", Activity.external_id.isnot(None)
             ).order_by(Activity.started_at.desc())
-            if limit:
+            if limit is not None:
                 q = q.limit(limit)
             activities = (await db.execute(q)).scalars().all()
             logger.info(

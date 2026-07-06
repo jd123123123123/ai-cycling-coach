@@ -17,7 +17,14 @@ class ActivityStream(Base):
 
     `streams` holds the aligned 1 Hz arrays:
         {"power": [...], "heart_rate": [...], "cadence": [...], "altitude": [...]}
+    plus, when the ride recorded them, the optional channels `latitude`,
+    `longitude`, `speed`, `distance`, `temperature`, `left_right_balance`,
+    `torque_effectiveness`, and `pedal_smoothness`.
     Stored as JSON for portability; downsample before persisting very long rides.
+
+    `weather` is the Open-Meteo hourly JSON fetched for the ride's start
+    location/time (best-effort; null when GPS or the fetch is unavailable).
+    `has_gps` flags whether the ride carries a usable lat/lng track.
     """
 
     __tablename__ = "activity_streams"

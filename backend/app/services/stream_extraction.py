@@ -13,8 +13,10 @@ stopped. The science layer (`analyze_streams`) assumes a clean moving-time
   * Large gap (> `max_gap_s`) — auto-pause / a stop. That time is *excluded*
     (the timeline compresses), so stopped time never dilutes NP / CP.
 
-A *recorded* 0 W sample (genuine coasting) is preserved. HR/cadence/altitude
-forward-fill from the last reading (they decay slowly); they stay None until the
+A *recorded* 0 W sample (genuine coasting) is preserved. HR/cadence/altitude —
+and the other carry-fill channels: GPS lat/lng, speed, distance, temperature,
+and the pedal-biomechanics channels (`_CARRY_CHANNELS`) — forward-fill from the
+last reading (they decay slowly or are positional); they stay None until the
 first reading.
 
 Pure module: no DB, no Garmin, no file IO. The FIT/Garmin adapters parse bytes

@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 # Always-persisted core channels; optional channels are stored only when they
 # carry at least one real reading (keeps blobs small for rides without them).
 _CORE_CHANNELS = ("power", "heart_rate", "cadence", "altitude")
+# Must stay in sync with `_CARRY_CHANNELS` in stream_extraction.py: this is
+# exactly that set minus the core carried channels (heart_rate/cadence/altitude).
 _OPTIONAL_CHANNELS = (
     "latitude", "longitude", "speed", "distance", "temperature",
     "left_right_balance", "torque_effectiveness", "pedal_smoothness",
