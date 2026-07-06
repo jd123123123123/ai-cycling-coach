@@ -22,6 +22,30 @@ from app.services.stream_extraction import ActivityStreams
 
 logger = logging.getLogger(__name__)
 
+# Always-persisted core channels; optional channels are stored only when they
+# carry at least one real reading (keeps blobs small for rides without them).
+_CORE_CHANNELS = ("power", "heart_rate", "cadence", "altitude")
+_OPTIONAL_CHANNELS = (
+    "latitude", "longitude", "speed", "distance", "temperature",
+    "left_right_balance", "torque_effectiveness", "pedal_smoothness",
+)
+
+
+def build_streams_blob(streams: ActivityStreams) -> dict:
+    """Serialize an ActivityStreams to the stored JSON blob (drop empty channels)."""
+    blob: dict = {c: getattr(streams, c) for c in _CORE_CHANNELS}
+    for c in _OPTIONAL_CHANNELS:
+        series = getattr(streams, c)
+        if any(v is not None for v in series):
+            blob[c] = series
+    return blob
+
+
+def has_gps(streams: ActivityStreams) -> bool:
+    return any(v is not None for v in streams.latitude) and any(
+        v is not None for v in streams.longitude
+    )
+
 
 def _hr_for_analysis(streams: ActivityStreams) -> list[float] | None:
     """Decoupling needs a clean numeric HR array; skip it if any sample is None."""
@@ -38,6 +62,7 @@ async def ingest_activity_streams(
     activity_id: int,
     streams: ActivityStreams,
     ftp: float | None,
+    weather: dict | None = None,
     commit: bool = True,
 ) -> RideAnalysis:
     """Analyze + persist streams for one activity. Returns the analysis bundle.
@@ -51,12 +76,9 @@ async def ingest_activity_streams(
     row = await db.get(ActivityStream, activity_id)
     payload = {
         "user_id": user_id,
-        "streams": {
-            "power": streams.power,
-            "heart_rate": streams.heart_rate,
-            "cadence": streams.cadence,
-            "altitude": streams.altitude,
-        },
+        "streams": build_streams_blob(streams),
+        "weather": weather,
+        "has_gps": has_gps(streams),
         "mmp_curve": {str(k): v for k, v in analysis.mmp_curve.items()},
         "normalized_power": analysis.np_watts,
         "decoupling_pct": analysis.decoupling_pct,
