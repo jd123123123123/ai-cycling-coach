@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useLocale } from '../contexts/LocaleContext'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import DebriefHero from '../components/debrief/DebriefHero'
+import KeyReads from '../components/debrief/KeyReads'
 import RideStory from '../components/debrief/RideStory'
 import BreakdownPanels from '../components/debrief/BreakdownPanels'
 import DebriefPlan from '../components/debrief/DebriefPlan'
@@ -13,7 +14,7 @@ export default function DebriefView() {
   const { data, isLoading, isError } = useRaceDebrief(activityId)
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-paper, #f6f1e7)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
       <div className="mx-auto w-full max-w-3xl px-4 py-6 flex flex-col gap-8">
         <Link to="/dashboard?tab=analyze" style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>
           {locale === 'de' ? '← Zurück' : '← Back'}
@@ -37,12 +38,15 @@ export default function DebriefView() {
               <DebriefHero report={data} />
             </section>
             <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '80ms' }}>
-              <RideStory story={data.story} />
+              <KeyReads report={data} />
             </section>
             <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '160ms' }}>
-              <BreakdownPanels report={data} />
+              <RideStory story={data.story} />
             </section>
             <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '240ms' }}>
+              <BreakdownPanels report={data} />
+            </section>
+            <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '320ms' }}>
               <DebriefPlan plan={data.plan} />
             </section>
           </>

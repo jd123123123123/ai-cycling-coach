@@ -116,7 +116,7 @@ function RideStoryChart({ story }: { story: DebriefStory }) {
       hooks: {
         ready: [
           (u) => {
-            story.moments.forEach((moment) => {
+            story.moments.forEach((moment, i) => {
               const wrap = document.createElement('div')
               wrap.style.position = 'absolute'
               wrap.style.top = '0'
@@ -139,9 +139,11 @@ function RideStoryChart({ story }: { story: DebriefStory }) {
               const label = document.createElement('div')
               label.textContent = moment.label
               label.style.position = 'absolute'
-              label.style.top = '-2px'
+              // Stagger into two rows inside the top of the plot so adjacent
+              // moments don't overlap each other's pills.
+              label.style.top = i % 2 === 0 ? '4px' : '22px'
               label.style.left = '50%'
-              label.style.transform = 'translate(-50%, -100%)'
+              label.style.transform = 'translateX(-50%)'
               label.style.whiteSpace = 'nowrap'
               label.style.fontSize = '10px'
               label.style.fontFamily = 'Geist, sans-serif'
