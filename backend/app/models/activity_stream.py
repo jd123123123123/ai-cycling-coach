@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Integer, JSON, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -29,6 +29,8 @@ class ActivityStream(Base):
 
     streams: Mapped[dict] = mapped_column(JSON, nullable=False)
     mmp_curve: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    weather: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    has_gps: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Stream-derived scalars (mirrored here so queries don't re-parse the arrays).
     normalized_power: Mapped[float | None] = mapped_column(Float, nullable=True)
