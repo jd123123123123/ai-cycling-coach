@@ -54,10 +54,6 @@ def _downsample(series: list, max_points: int) -> list:
     return [series[int(i * step)] for i in range(max_points)]
 
 
-def _mps_to_kmh(v: float | None) -> float:
-    return round((v or 0.0) * 3.6, 1)
-
-
 def _grade_from_score(score: float) -> str:
     if score >= 90:
         return "A"
@@ -151,7 +147,7 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict) -> RaceD
     mass = float(profile.weight_kg) if profile and getattr(profile, "weight_kg", None) else None
     cp = float(getattr(stream, "cp_watts", None) or 0.0)
     w_prime = float(getattr(stream, "w_prime_j", None) or 0.0)
-    mmp = {int(k): float(v) for k, v in (stream.mmp_curve or {}).items()}
+    mmp = _try("mmp_curve", lambda: {int(k): float(v) for k, v in (stream.mmp_curve or {}).items()}, {}) or {}
 
     # --- analyzer blocks (each defensive) ---
     hr_clean = [float(h) for h in hr] if hr and all(h is not None for h in hr) else None
@@ -256,11 +252,8 @@ async def _upsert_debrief(db: AsyncSession, user_id: int, activity_id: int, repo
 
 
 async def build_debrief(db: AsyncSession, user_id: int, activity_id: int) -> RaceDebrief | None:
-    activity = await db.get(Activity, activity_id)
-    if activity is None:
-        # composite-PK hypertable: fall back to a scalar-id lookup
-        activity = (await db.execute(
-            select(Activity).where(Activity.id == activity_id))).scalars().first()
+    activity = (await db.execute(
+        select(Activity).where(Activity.id == activity_id))).scalars().first()
     if activity is None:
         return None
     stream = await db.get(ActivityStream, activity_id)
