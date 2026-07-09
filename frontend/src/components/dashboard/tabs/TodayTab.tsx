@@ -1,14 +1,14 @@
 /**
- * TodayTab — the verdict surface, now user-reorderable. The fixed sequence is
- * declared as a registry of cards; <ReorderableTab> renders them in the user's
- * saved order (hidden cards omitted) and hosts the Customize editor.
+ * TodayTab — executive-brief layout. Leads with the answer (today's call), then
+ * four MECE pillars, each resolving exactly one question with no overlap:
+ *   ① Heute (the call)  ② Fortschritt  ③ Belastung  ④ Konstanz
+ * Context (season stats, badges, trivia, tools) is demoted to a collapsed "Mehr".
  */
 import CoachBrief from '../CoachBrief'
 import FormProgressPanel from '../FormProgressPanel'
 import MorningCheckin from '../MorningCheckin'
 import MorningRecap from '../MorningRecap'
-import TrainHero from '../TrainHero'
-import { useT } from '../../../contexts/LocaleContext'
+import { useLocale } from '../../../contexts/LocaleContext'
 import AchievementBadges from '../AchievementBadges'
 import DidYouKnow from '../DidYouKnow'
 import MomentumChips from '../MomentumChips'
@@ -22,48 +22,72 @@ import WorkoutExportRow from '../WorkoutExportRow'
 import StreakStrip from '../StreakStrip'
 import WeeklyChallenge from '../WeeklyChallenge'
 import DashboardSection from '../DashboardSection'
-import ReorderableTab from '../ReorderableTab'
-import type { CardDef } from '../cardRegistry'
-
-function StreakChallengeRow() {
-  return (
-    <div className="grid gap-4 md:grid-cols-[1fr_auto] items-stretch">
-      <StreakStrip />
-      <WeeklyChallenge />
-    </div>
-  )
-}
-
-function TodayDeepDive() {
-  const t = useT()
-  return (
-    <DashboardSection id="today-deep-dive" title={t('deep_dive')} defaultExpanded={false}>
-      <div className="flex flex-col gap-6">
-        <ExternalWorkouts />
-        <WorkoutExportRow />
-      </div>
-    </DashboardSection>
-  )
-}
+import PillarSection from '../PillarSection'
 
 export default function TodayTab() {
-  const t = useT()
-  const cards: CardDef[] = [
-    { id: 'train-hero', label: t('card_train_hero'), render: () => <TrainHero /> },
-    { id: 'morning-checkin', label: t('card_checkin'), render: () => <MorningCheckin /> },
-    { id: 'morning-recap', label: t('card_recap'), render: () => <MorningRecap /> },
-    { id: 'today-hero', label: t('card_today_hero'), render: () => <TodayHero /> },
-    { id: 'momentum', label: t('card_momentum'), render: () => <MomentumChips /> },
-    { id: 'coach-brief', label: t('card_coach_brief'), render: () => <CoachBrief /> },
-    { id: 'form-progress', label: t('card_form_progress'), render: () => <FormProgressPanel /> },
-    { id: 'streak', label: t('card_streak'), render: () => <StreakChallengeRow /> },
-    { id: 'pmc', label: t('card_pmc'), render: () => <PMCCompact /> },
-    { id: 'season-stats', label: t('card_season'), render: () => <SeasonStats /> },
-    { id: 'achievements', label: t('card_badges'), render: () => <AchievementBadges /> },
-    { id: 'did-you-know', label: t('card_dyk'), render: () => <DidYouKnow /> },
-    { id: 'log-strip', label: t('card_log'), render: () => <TrainingLogStrip /> },
-    { id: 'recent-rides', label: t('card_recent'), render: () => <RecentActivities limit={10} /> },
-    { id: 'deep-dive', label: t('card_deep_dive'), render: () => <TodayDeepDive /> },
-  ]
-  return <ReorderableTab tabId="today" cards={cards} />
+  const { locale } = useLocale()
+  const de = locale === 'de'
+  const copy = de
+    ? {
+        heroQ: 'Was mache ich heute — und bin ich bereit dafür?',
+        progress: 'Fortschritt', progressQ: 'Werde ich fitter oder ermüde ich?',
+        load: 'Belastung', loadQ: 'Ist mein Trainingspensum nachhaltig?',
+        consistency: 'Konstanz', consistencyQ: 'Bleibe ich dran?',
+        history: 'Verlauf', historyQ: 'Was habe ich zuletzt gemacht?',
+        more: 'Mehr',
+      }
+    : {
+        heroQ: "What do I do today — and am I ready for it?",
+        progress: 'Progress', progressQ: 'Am I getting fitter, or fatiguing?',
+        load: 'Load', loadQ: 'Is my training volume sustainable?',
+        consistency: 'Consistency', consistencyQ: 'Am I staying on it?',
+        history: 'History', historyQ: 'What have I done recently?',
+        more: 'More',
+      }
+
+  return (
+    <div className="flex flex-col gap-9 sm:gap-11">
+      {/* ── ① Today's call: the readiness verdict, the session, the check-in ── */}
+      <PillarSection index="1" title={de ? 'Heute' : 'Today'} question={copy.heroQ}>
+        <TodayHero />
+        <CoachBrief />
+        <MorningCheckin />
+      </PillarSection>
+
+      {/* ── ② Progress: am I adapting? ── */}
+      <PillarSection index="2" title={copy.progress} question={copy.progressQ}>
+        <FormProgressPanel />
+        <MorningRecap />
+        <PMCCompact />
+        <MomentumChips />
+      </PillarSection>
+
+      {/* ── ③ Load balance: is the input sustainable? ── */}
+      <PillarSection index="3" title={copy.load} question={copy.loadQ}>
+        <WeeklyChallenge />
+        <TrainingLogStrip />
+      </PillarSection>
+
+      {/* ── ④ Consistency: am I showing up? ── */}
+      <PillarSection index="4" title={copy.consistency} question={copy.consistencyQ}>
+        <StreakStrip />
+      </PillarSection>
+
+      {/* ── ⑤ History: the record ── */}
+      <PillarSection index="5" title={copy.history} question={copy.historyQ}>
+        <RecentActivities limit={8} />
+      </PillarSection>
+
+      {/* ── Context, demoted ── */}
+      <DashboardSection id="today-more" title={copy.more} defaultExpanded={false}>
+        <div className="flex flex-col gap-6">
+          <SeasonStats />
+          <AchievementBadges />
+          <DidYouKnow />
+          <ExternalWorkouts />
+          <WorkoutExportRow />
+        </div>
+      </DashboardSection>
+    </div>
+  )
 }
