@@ -17,6 +17,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useReducedMotion } from 'motion/react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import StickyReadinessBar from '../components/dashboard/StickyReadinessBar'
+import GarminSyncedBanner from '../components/dashboard/GarminSyncedBanner'
 import TodayTab from '../components/dashboard/tabs/TodayTab'
 import PlanTab from '../components/dashboard/tabs/PlanTab'
 import AnalyzeTab from '../components/dashboard/tabs/AnalyzeTab'
@@ -96,6 +97,7 @@ export default function DashboardPage() {
         </div>
       }
     >
+      <GarminSyncedBanner />
       <div
         key={activeTab}
         style={reducedMotion ? undefined : { animation: 'tabpanel-in 250ms var(--ease-apple-default) both' }}

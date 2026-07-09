@@ -251,13 +251,13 @@ export default function GarminConnectPage() {
               )}
               <span className="relative flex items-center gap-2">
                 {submitting
-                  ? progress < 100
-                    ? locale === 'de'
-                      ? `Synchronisiere ${Math.round(progress)}%`
-                      : `Syncing ${Math.round(progress)}%`
-                    : locale === 'de'
-                      ? 'Fertig — Weiterleitung…'
-                      : 'Done — redirecting…'
+                  ? progress >= 100
+                    ? locale === 'de' ? 'Fertig — Weiterleitung…' : 'Done — redirecting…'
+                    : progress < 30
+                      ? locale === 'de' ? 'Verbinde mit Garmin…' : 'Connecting to Garmin…'
+                      : progress < 70
+                        ? locale === 'de' ? 'Aktivitäten laden…' : 'Pulling activities…'
+                        : locale === 'de' ? 'Werte verarbeiten…' : 'Processing metrics…'
                   : locale === 'de'
                     ? 'Garmin verbinden'
                     : 'Connect Garmin'}

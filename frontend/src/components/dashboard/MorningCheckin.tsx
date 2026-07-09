@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { useT, useLocale } from '../../contexts/LocaleContext'
+import Confetti from '../ui/Confetti'
 
 // Morning check-in — the single highest-retention interaction in fitness apps.
 // Whoop built their daily habit around this exact mechanic: a 3-tap subjective
@@ -102,9 +103,10 @@ export default function MorningCheckin() {
       {justSelected && meta ? (
         // Celebration state — shown briefly before dismissing
         <div
-          className="flex items-center gap-3"
+          className="relative flex items-center gap-3"
           style={{ animation: 'score-enter 400ms cubic-bezier(.22,1,.36,1) both' }}
         >
+          {meta.key === 'great' && <Confetti />}
           <motion.span
             style={{ fontSize: 28, display: 'inline-block' }}
             initial={reduce ? false : { scale: 0, rotate: -20 }}

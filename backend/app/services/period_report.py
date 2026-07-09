@@ -1146,7 +1146,7 @@ async def build_report(db: AsyncSession, user_id: int, days: int, lang: str = "e
     causes: list = []
     try:
         from app.schemas.period_report import Cause
-        wt = await why_am_i_tired(db, user_id)
+        wt = await why_am_i_tired(db, user_id, lang=lang)
         for c in (wt.get("causes") or [])[:4]:
             causes.append(Cause(label=c["label"], severity=c["severity"], evidence=c["evidence"]))
     except Exception:  # noqa: BLE001

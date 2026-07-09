@@ -489,7 +489,7 @@ async def ctl_atl_tsb_snapshot(db: AsyncSession, user_id: int) -> dict:
     }
 
 
-async def why_am_i_tired(db: AsyncSession, user_id: int) -> dict:
+async def why_am_i_tired(db: AsyncSession, user_id: int, lang: str = "en") -> dict:
     """Cross-reference causal synthesizer: WHY does the athlete feel tired today?
 
     Closes pain-point #1 from .planning/research/athlete-pain-points.md (Section 4):
@@ -498,7 +498,12 @@ async def why_am_i_tired(db: AsyncSession, user_id: int) -> dict:
 
     Returns ordered list of suspected causes, highest severity first:
         {"causes": [{"label": str, "severity": 'low'|'med'|'high', "evidence": str}, ...]}
+
+    ``lang`` localizes the label/evidence text ("de" → German). Defaults to
+    English so existing callers (Today/coach paths) are unaffected — only the
+    period report opts into localization.
     """
+    de = str(lang).lower().startswith("de")
     hrv = await hrv_trend(db, user_id, days=7)
     rhr = await rhr_trend(db, user_id, days=7)
     sleep = await sleep_debt(db, user_id, days=14)
@@ -511,11 +516,16 @@ async def why_am_i_tired(db: AsyncSession, user_id: int) -> dict:
     if hrv["delta_pct"] is not None and hrv["delta_pct"] <= -10:
         severity = "high" if hrv["delta_pct"] <= -15 else "med"
         causes.append({
-            "label": "HRV suppressed",
+            "label": "HRV unterdrückt" if de else "HRV suppressed",
             "severity": severity,
             "evidence": (
-                f"HRV is {abs(hrv['delta_pct'])}% below your 28-day baseline "
-                f"({hrv['current_mean']} vs {hrv['baseline_28d_mean']} ms)."
+                (
+                    f"HRV liegt {abs(hrv['delta_pct'])}% unter deiner 28-Tage-Basislinie "
+                    f"({hrv['current_mean']} vs. {hrv['baseline_28d_mean']} ms)."
+                ) if de else (
+                    f"HRV is {abs(hrv['delta_pct'])}% below your 28-day baseline "
+                    f"({hrv['current_mean']} vs {hrv['baseline_28d_mean']} ms)."
+                )
             ),
         })
 
@@ -523,11 +533,16 @@ async def why_am_i_tired(db: AsyncSession, user_id: int) -> dict:
     if rhr["delta_pct"] is not None and rhr["delta_pct"] >= 5:
         severity = "high" if rhr["delta_pct"] >= 10 else "med"
         causes.append({
-            "label": "Resting HR elevated",
+            "label": "Ruhepuls erhöht" if de else "Resting HR elevated",
             "severity": severity,
             "evidence": (
-                f"Resting HR is {rhr['delta_pct']}% above baseline "
-                f"({rhr['current_mean']} vs {rhr['baseline_28d_mean']} bpm)."
+                (
+                    f"Ruhepuls liegt {rhr['delta_pct']}% über der Basislinie "
+                    f"({rhr['current_mean']} vs. {rhr['baseline_28d_mean']} bpm)."
+                ) if de else (
+                    f"Resting HR is {rhr['delta_pct']}% above baseline "
+                    f"({rhr['current_mean']} vs {rhr['baseline_28d_mean']} bpm)."
+                )
             ),
         })
 
@@ -546,40 +561,60 @@ async def why_am_i_tired(db: AsyncSession, user_id: int) -> dict:
     if avg_debt >= 0.75 and sustained:
         severity = "high" if avg_debt >= 1.5 else "med"
         causes.append({
-            "label": "Sleep debt accumulated",
+            "label": "Schlafdefizit aufgebaut" if de else "Sleep debt accumulated",
             "severity": severity,
             "evidence": (
-                f"Averaging {sleep.get('target_hours', SLEEP_TARGET_HOURS) - avg_debt:.1f}h "
-                f"across {samples_n} logged nights ({nights_short} under target). "
-                f"Target {sleep.get('target_hours', SLEEP_TARGET_HOURS)}h."
+                (
+                    f"Im Schnitt {sleep.get('target_hours', SLEEP_TARGET_HOURS) - avg_debt:.1f}h "
+                    f"über {samples_n} erfasste Nächte ({nights_short} unter dem Ziel). "
+                    f"Ziel {sleep.get('target_hours', SLEEP_TARGET_HOURS)}h."
+                ) if de else (
+                    f"Averaging {sleep.get('target_hours', SLEEP_TARGET_HOURS) - avg_debt:.1f}h "
+                    f"across {samples_n} logged nights ({nights_short} under target). "
+                    f"Target {sleep.get('target_hours', SLEEP_TARGET_HOURS)}h."
+                )
             ),
         })
 
     # Overreach (TSB deep-negative) — this is the strongest overtraining predictor
     if pmc["tsb"] <= TSB_RISK_THRESHOLD:
         causes.append({
-            "label": "Overreach (TSB deep-negative)",
+            "label": "Überlastung (TSB stark negativ)" if de else "Overreach (TSB deep-negative)",
             "severity": "high",
             "evidence": (
-                f"TSB is {pmc['tsb']} (below -30 = overreach territory). "
-                f"CTL {pmc['ctl']:.1f}, ATL {pmc['atl']:.1f}."
+                (
+                    f"TSB liegt bei {pmc['tsb']} (unter -30 = Überlastungsbereich). "
+                    f"CTL {pmc['ctl']:.1f}, ATL {pmc['atl']:.1f}."
+                ) if de else (
+                    f"TSB is {pmc['tsb']} (below -30 = overreach territory). "
+                    f"CTL {pmc['ctl']:.1f}, ATL {pmc['atl']:.1f}."
+                )
             ),
         })
     elif pmc["tsb"] < -10:
         causes.append({
-            "label": "Carrying productive fatigue",
+            "label": "Produktive Ermüdung" if de else "Carrying productive fatigue",
             "severity": "low",
-            "evidence": f"TSB is {pmc['tsb']} — normal for a hard block, not a red flag on its own.",
+            "evidence": (
+                f"TSB liegt bei {pmc['tsb']} — normal für einen harten Block, für sich genommen kein Warnsignal."
+                if de else
+                f"TSB is {pmc['tsb']} — normal for a hard block, not a red flag on its own."
+            ),
         })
 
     # Grey-zone creep — suggests quality of recent training is poor
     if zones["grey_zone_flag"] and zones["samples_n"] >= 5:
         causes.append({
-            "label": "Grey-zone creep",
+            "label": "Grauzonen-Drift" if de else "Grey-zone creep",
             "severity": "med",
             "evidence": (
-                f"{zones['z2_pct']}% of recent cycling time is in the moderate "
-                f"(Seiler Z2) band — above the 20% junk-miles threshold."
+                (
+                    f"{zones['z2_pct']}% der jüngsten Radzeit liegt im moderaten "
+                    f"(Seiler-Z2-)Bereich — über der 20%-Junk-Miles-Schwelle."
+                ) if de else (
+                    f"{zones['z2_pct']}% of recent cycling time is in the moderate "
+                    f"(Seiler Z2) band — above the 20% junk-miles threshold."
+                )
             ),
         })
 
