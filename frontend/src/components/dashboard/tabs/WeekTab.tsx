@@ -20,13 +20,12 @@ import WeekVsLast from '../WeekVsLast'
 import DayPlanCard from '../DayPlanCard'
 import TrainingCalendar from '../TrainingCalendar'
 import DashboardSection from '../DashboardSection'
+import PillarSection from '../PillarSection'
 import { useT, useLocale } from '../../../contexts/LocaleContext'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLanguage } from '../../../hooks/useLanguage'
 import type { ActivityRead } from '../../../api/dashboard'
-import ReorderableTab from '../ReorderableTab'
-import type { CardDef } from '../cardRegistry'
 
 // ─── Skeleton — minimal to match new pill shape ────────────────────────────────
 
@@ -175,38 +174,37 @@ function ComplianceRampRow() {
   )
 }
 
-function WeekSummarySection() {
-  const t = useT()
-  return (
-    <DashboardSection title={t('this_week')} id="week-summary" defaultExpanded>
-      <BentoGrid>
-        <BentoCell span={2}><WeekStrip /></BentoCell>
-        <BentoCell span={1}><WeekVsLast /></BentoCell>
-      </BentoGrid>
-    </DashboardSection>
-  )
-}
-
-function WeekCalendarSection() {
-  const t = useT()
-  return (
-    <DashboardSection title={t('full_plan')} id="week-calendar" defaultExpanded={false}>
-      <div className="min-w-0">
-        <TrainingCalendar />
-      </div>
-    </DashboardSection>
-  )
-}
-
-// ─── WeekTab ──────────────────────────────────────────────────────────────────
+// ─── WeekTab — MECE pillars, matching Today ───────────────────────────────────
 
 export default function WeekTab() {
   const t = useT()
-  const cards: CardDef[] = [
-    { id: 'week-plan', label: t('card_week_plan'), render: () => <WeekPlanPrimary /> },
-    { id: 'week-compliance-ramp', label: t('card_week_compliance'), render: () => <ComplianceRampRow /> },
-    { id: 'week-summary', label: t('card_week_summary'), render: () => <WeekSummarySection /> },
-    { id: 'week-calendar', label: t('card_week_calendar'), render: () => <WeekCalendarSection /> },
-  ]
-  return <ReorderableTab tabId="week" cards={cards} />
+  const { locale } = useLocale()
+  const de = locale === 'de'
+  return (
+    <div className="flex flex-col gap-9 sm:gap-11">
+      <PillarSection index="1" title={de ? 'Diese Woche' : 'This week'}
+        question={de ? 'Was steht diese Woche an?' : "What's on this week?"}>
+        <WeekPlanPrimary />
+      </PillarSection>
+
+      <PillarSection index="2" title={de ? 'Umsetzung' : 'Execution'}
+        question={de ? 'Halte ich mich an den Plan — und ist die Steigerung sicher?' : 'Am I on plan — and is the ramp safe?'}>
+        <ComplianceRampRow />
+      </PillarSection>
+
+      <PillarSection index="3" title={de ? 'Vergleich' : 'Trend'}
+        question={de ? 'Wie schlägt sich diese Woche gegen die letzte?' : 'How does this week stack up vs last?'}>
+        <BentoGrid>
+          <BentoCell span={2}><WeekStrip /></BentoCell>
+          <BentoCell span={1}><WeekVsLast /></BentoCell>
+        </BentoGrid>
+      </PillarSection>
+
+      <DashboardSection title={t('full_plan')} id="week-calendar" defaultExpanded={false}>
+        <div className="min-w-0">
+          <TrainingCalendar />
+        </div>
+      </DashboardSection>
+    </div>
+  )
 }
