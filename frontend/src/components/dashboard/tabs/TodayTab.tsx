@@ -4,6 +4,7 @@
  * saved order (hidden cards omitted) and hosts the Customize editor.
  */
 import CoachBrief from '../CoachBrief'
+import FormProgressPanel from '../FormProgressPanel'
 import MorningCheckin from '../MorningCheckin'
 import MorningRecap from '../MorningRecap'
 import TrainHero from '../TrainHero'
@@ -54,6 +55,7 @@ export default function TodayTab() {
     { id: 'today-hero', label: t('card_today_hero'), render: () => <TodayHero /> },
     { id: 'momentum', label: t('card_momentum'), render: () => <MomentumChips /> },
     { id: 'coach-brief', label: t('card_coach_brief'), render: () => <CoachBrief /> },
+    { id: 'form-progress', label: t('card_form_progress'), render: () => <FormProgressPanel /> },
     { id: 'streak', label: t('card_streak'), render: () => <StreakChallengeRow /> },
     { id: 'pmc', label: t('card_pmc'), render: () => <PMCCompact /> },
     { id: 'season-stats', label: t('card_season'), render: () => <SeasonStats /> },

@@ -22,6 +22,8 @@ from app.schemas.analytics import QueryResult, QuerySpec
 from app.schemas.period_report import PeriodReport
 from app.schemas.race_debrief import RaceDebrief
 from app.schemas.ride_compare import RideComparison
+from app.schemas.form_progress import FormProgress
+from app.services.form_progress import build_form_progress
 from app.schemas.user_dashboard import ChartSpec
 from app.services.chart_interpreter import ChartInterpretError, interpret_chart
 from app.services.analytics_query import (
@@ -284,6 +286,23 @@ async def get_activity_compare(
     if comparison is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     return comparison
+
+
+@router.get(
+    "/form-progress",
+    response_model=FormProgress,
+    summary="Latest ride judged against the athlete's fitness baseline (progress vs fatigue)",
+)
+async def get_form_progress(
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    lang: str = "en",
+):
+    lang = "de" if lang.lower().startswith("de") else "en"
+    fp = await build_form_progress(db, _user.id, lang)
+    if fp is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return fp
 
 
 class InterpretRequest(BaseModel):

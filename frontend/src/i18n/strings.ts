@@ -305,6 +305,7 @@ export const STRINGS = {
   card_today_hero: { en: "Today's verdict", de: 'Heutiges Urteil' },
   card_momentum: { en: 'Momentum chips', de: 'Momentum-Chips' },
   card_coach_brief: { en: 'Coach brief', de: 'Coach-Briefing' },
+  card_form_progress: { en: 'Form & progress', de: 'Form & Fortschritt' },
   card_streak: { en: 'Streak & challenge', de: 'Serie & Challenge' },
   card_pmc: { en: 'Training state (PMC)', de: 'Trainingszustand (PMC)' },
   card_season: { en: 'Season stats', de: 'Saison-Statistik' },
