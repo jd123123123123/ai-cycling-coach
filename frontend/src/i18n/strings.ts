@@ -311,6 +311,7 @@ export const STRINGS = {
   card_badges: { en: 'Achievements', de: 'Erfolge' },
   card_dyk: { en: 'Did you know', de: 'Wusstest du' },
   card_log: { en: 'Training log', de: 'Trainings-Log' },
+  card_recent: { en: 'Recent rides', de: 'Letzte Fahrten' },
   card_deep_dive: { en: 'Deep dive', de: 'Details' },
 
   // Trends tab card labels (used by TrendsTab card registry)

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { usePMC } from '../../hooks/usePMC'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 import type { ActivityRead, PMCEntry } from '../../api/dashboard'
 
 /**
@@ -150,7 +150,9 @@ function firstCtlAtLeast(entries: PMCEntry[], target: number): string | null {
 const ACHIEVEMENT_DEFS: Array<{
   id: string
   label: string
+  labelDe: string
   hint: string
+  hintDe: string
   icon: React.ReactNode
   // Compute unlock date; takes the inputs we have on hand.
   resolve: (acts: ActivityRead[], pmc: PMCEntry[]) => string | null
@@ -158,7 +160,9 @@ const ACHIEVEMENT_DEFS: Array<{
   {
     id: 'first-ride',
     label: 'First ride',
+    labelDe: 'Erste Fahrt',
     hint: 'Your first logged activity. The streak starts here.',
+    hintDe: 'Deine erste erfasste Aktivität. Hier beginnt die Serie.',
     icon: <Sparkles size={11} strokeWidth={2.2} />,
     resolve: (acts) =>
       firstActivityMatching(acts, (a) => (a.duration_seconds ?? 0) >= 600),
@@ -166,7 +170,9 @@ const ACHIEVEMENT_DEFS: Array<{
   {
     id: 'first-hour',
     label: '1 hour',
+    labelDe: '1 Stunde',
     hint: 'First ride of 60 minutes or more.',
+    hintDe: 'Erste Fahrt ab 60 Minuten.',
     icon: <Clock size={11} strokeWidth={2.2} />,
     resolve: (acts) =>
       firstActivityMatching(acts, (a) => (a.duration_seconds ?? 0) >= 3600),
@@ -174,7 +180,9 @@ const ACHIEVEMENT_DEFS: Array<{
   {
     id: 'first-2h',
     label: '2-hour ride',
+    labelDe: '2-Stunden-Fahrt',
     hint: 'First single ride that broke two hours.',
+    hintDe: 'Erste Einzelfahrt über zwei Stunden.',
     icon: <Clock size={11} strokeWidth={2.2} />,
     resolve: (acts) =>
       firstActivityMatching(acts, (a) => (a.duration_seconds ?? 0) >= 2 * 3600),
@@ -182,7 +190,9 @@ const ACHIEVEMENT_DEFS: Array<{
   {
     id: 'first-3h',
     label: 'Big day · 3h',
+    labelDe: 'Großer Tag · 3h',
     hint: 'First ride at or past three hours — durability begins here.',
+    hintDe: 'Erste Fahrt ab drei Stunden — hier beginnt die Durability.',
     icon: <Mountain size={11} strokeWidth={2.2} />,
     resolve: (acts) =>
       firstActivityMatching(acts, (a) => (a.duration_seconds ?? 0) >= 3 * 3600),
@@ -190,7 +200,9 @@ const ACHIEVEMENT_DEFS: Array<{
   {
     id: 'first-50km',
     label: '50 km',
+    labelDe: '50 km',
     hint: 'First ride at 50 km or more.',
+    hintDe: 'Erste Fahrt ab 50 km.',
     icon: <Mountain size={11} strokeWidth={2.2} />,
     resolve: (acts) =>
       firstActivityMatching(acts, (a) => (a.distance_meters ?? 0) >= 50_000),
@@ -198,7 +210,9 @@ const ACHIEVEMENT_DEFS: Array<{
   {
     id: 'first-century',
     label: 'Century · 100 km',
+    labelDe: 'Century · 100 km',
     hint: 'First century ride. A real one.',
+    hintDe: 'Erste Century-Fahrt. Eine echte.',
     icon: <Trophy size={11} strokeWidth={2.2} />,
     resolve: (acts) =>
       firstActivityMatching(acts, (a) => (a.distance_meters ?? 0) >= 100_000),
@@ -206,56 +220,72 @@ const ACHIEVEMENT_DEFS: Array<{
   {
     id: 'first-100tss',
     label: '100 TSS day',
+    labelDe: '100-TSS-Tag',
     hint: 'First day with 100+ TSS — meaningful daily load.',
+    hintDe: 'Erster Tag mit 100+ TSS — spürbare Tagesbelastung.',
     icon: <Rocket size={11} strokeWidth={2.2} />,
     resolve: (acts) => firstDailyTssAtLeast(acts, 100),
   },
   {
     id: 'first-150tss',
     label: '150 TSS day',
+    labelDe: '150-TSS-Tag',
     hint: 'First day with 150+ TSS — a proper big day.',
+    hintDe: 'Erster Tag mit 150+ TSS — ein richtig großer Tag.',
     icon: <Rocket size={11} strokeWidth={2.2} />,
     resolve: (acts) => firstDailyTssAtLeast(acts, 150),
   },
   {
     id: 'week-10h',
     label: '10-hour week',
+    labelDe: '10-Stunden-Woche',
     hint: 'First training week that crossed 10 hours.',
+    hintDe: 'Erste Trainingswoche über 10 Stunden.',
     icon: <Calendar size={11} strokeWidth={2.2} />,
     resolve: (acts) => firstWeeklyHoursAtLeast(acts, 10),
   },
   {
     id: 'week-15h',
     label: '15-hour week',
+    labelDe: '15-Stunden-Woche',
     hint: 'First training week at 15+ hours.',
+    hintDe: 'Erste Trainingswoche mit 15+ Stunden.',
     icon: <Calendar size={11} strokeWidth={2.2} />,
     resolve: (acts) => firstWeeklyHoursAtLeast(acts, 15),
   },
   {
     id: 'ctl-30',
     label: 'CTL 30',
+    labelDe: 'CTL 30',
     hint: 'Fitness climbed past 30 for the first time.',
+    hintDe: 'Die Fitness ist erstmals über 30 gestiegen.',
     icon: <Award size={11} strokeWidth={2.2} />,
     resolve: (_acts, pmc) => firstCtlAtLeast(pmc, 30),
   },
   {
     id: 'ctl-50',
     label: 'CTL 50',
+    labelDe: 'CTL 50',
     hint: 'Fitness climbed past 50 for the first time — solid amateur base.',
+    hintDe: 'Die Fitness ist erstmals über 50 gestiegen — solide Amateur-Basis.',
     icon: <Award size={11} strokeWidth={2.2} />,
     resolve: (_acts, pmc) => firstCtlAtLeast(pmc, 50),
   },
   {
     id: 'ctl-70',
     label: 'CTL 70',
+    labelDe: 'CTL 70',
     hint: 'Fitness climbed past 70 — race-ready territory.',
+    hintDe: 'Die Fitness über 70 — Rennform-Bereich.',
     icon: <Trophy size={11} strokeWidth={2.2} />,
     resolve: (_acts, pmc) => firstCtlAtLeast(pmc, 70),
   },
   {
     id: 'streak-7',
     label: '7-day streak',
+    labelDe: '7-Tage-Serie',
     hint: 'Seven straight logged days.',
+    hintDe: 'Sieben Tage am Stück erfasst.',
     icon: <Flame size={11} strokeWidth={2.2} />,
     resolve: (acts) => {
       if (acts.length === 0) return null
@@ -286,6 +316,7 @@ const ACHIEVEMENT_DEFS: Array<{
 
 export default function AchievementBadges() {
   const t = useT()
+  const { locale } = useLocale()
   const today = useMemo(() => new Date(), [])
   const yearStart = useMemo(() => startOfYear(today), [today])
   const { data: actsData, isLoading } = useActivitiesRange(yearStart, today)
@@ -309,8 +340,8 @@ export default function AchievementBadges() {
       next[def.id] = unlockedAt
       result.push({
         id: def.id,
-        label: def.label,
-        hint: def.hint,
+        label: locale === 'de' ? def.labelDe : def.label,
+        hint: locale === 'de' ? def.hintDe : def.hint,
         icon: def.icon,
         unlockedAt,
       })
@@ -320,7 +351,7 @@ export default function AchievementBadges() {
       // Defer the write so render is pure. useEffect below picks it up.
     }
     return result
-  }, [actsData, pmc, stored])
+  }, [actsData, pmc, stored, locale])
 
   useEffect(() => {
     if (unlocked.length === 0) return
@@ -402,7 +433,7 @@ export default function AchievementBadges() {
       <div
         role="dialog"
         aria-modal="false"
-        aria-label={`New badge unlocked: ${toast.label}`}
+        aria-label={`${locale === 'de' ? 'Neues Abzeichen freigeschaltet' : 'New badge unlocked'}: ${toast.label}`}
         onClick={dismissToast}
         className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-auto"
         style={{
@@ -469,7 +500,7 @@ export default function AchievementBadges() {
               color: 'var(--color-paper)',
             }}
           >
-            Nice
+            {locale === 'de' ? 'Stark' : 'Nice'}
           </button>
         </div>
       </div>

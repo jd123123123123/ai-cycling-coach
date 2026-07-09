@@ -42,6 +42,7 @@ def detect_key_moments(
     power_series: list[float],
     wbal_series: list[float] | None = None,
     hr_series: list[float] | None = None,
+    de: bool = False,
 ) -> list[KeyMoment]:
     """Narrative beats for the debrief. See module docstring. [] on empty power."""
     n = len(power_series)
@@ -53,7 +54,8 @@ def detect_key_moments(
     eff_i, eff_avg = _rolling_max_window(power_series, _EFFORT_WINDOW_S)
     moments.append(KeyMoment(
         kind="best_effort", at_s=eff_i,
-        label="Best 60-second effort", value=round(eff_avg, 1), tone="good",
+        label="Beste 60-Sekunden-Leistung" if de else "Best 60-second effort",
+        value=round(eff_avg, 1), tone="good",
     ))
 
     # Biggest match — global W′-balance trough.
@@ -61,7 +63,7 @@ def detect_key_moments(
         min_idx = min(range(len(wbal_series)), key=lambda i: wbal_series[i])
         moments.append(KeyMoment(
             kind="biggest_match", at_s=min_idx,
-            label="Lowest anaerobic reserve",
+            label="Tiefste anaerobe Reserve" if de else "Lowest anaerobic reserve",
             value=round(wbal_series[min_idx], 1), tone="bad",
         ))
 
@@ -72,7 +74,8 @@ def detect_key_moments(
         if finish_avg > ride_avg:
             moments.append(KeyMoment(
                 kind="strongest_finish", at_s=n - _FINISH_WINDOW_S,
-                label="Strong finish", value=round(finish_avg, 1), tone="good",
+                label="Starkes Finale" if de else "Strong finish",
+                value=round(finish_avg, 1), tone="good",
             ))
 
     # Crack point — the biggest sustained block-to-block power drop whose trough
@@ -97,7 +100,7 @@ def detect_key_moments(
         if best_at is not None:
             moments.append(KeyMoment(
                 kind="crack_point", at_s=best_at,
-                label="Power dropped off here",
+                label="Hier ließ die Leistung nach" if de else "Power dropped off here",
                 value=round(best_drop * 100.0, 1), tone="bad",
             ))
     return moments

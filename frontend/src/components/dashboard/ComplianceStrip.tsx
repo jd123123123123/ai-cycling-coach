@@ -10,7 +10,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { usePlannedWorkouts } from '../../hooks/usePlannedWorkouts'
 import type { ActivityRead, PlannedWorkout } from '../../api/dashboard'
 import { useCountUp } from '../../hooks/useCountUp'
-import { useT } from '../../contexts/LocaleContext'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // Planned-vs-actual dumbbell strip — the pattern no consumer app gets right.
 // Each day is a short track with two markers: the planned duration and the
@@ -89,6 +89,8 @@ function grade(rows: DayRow[]): {
 }
 
 function DayBar({ row, maxMin }: { row: DayRow; maxMin: number }) {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   const plannedPct = maxMin > 0 ? (row.plannedMin / maxMin) * 100 : 0
   const actualPct = maxMin > 0 ? Math.min(100, (row.actualMin / maxMin) * 100) : 0
   const accent = statusColor[row.status]
@@ -99,8 +101,12 @@ function DayBar({ row, maxMin }: { row: DayRow; maxMin: number }) {
       style={{ gridTemplateColumns: '32px 1fr auto' }}
       title={
         row.plannedMin === 0 && row.actualMin === 0
-          ? `${format(row.date, 'EEE MMM d')} · nothing planned or logged`
-          : `${format(row.date, 'EEE MMM d')} · planned ${Math.round(row.plannedMin)} min · actual ${Math.round(row.actualMin)} min${row.plannedTitle ? ' · ' + row.plannedTitle : ''}`
+          ? (de
+              ? `${format(row.date, 'EEE MMM d')} · nichts geplant oder erfasst`
+              : `${format(row.date, 'EEE MMM d')} · nothing planned or logged`)
+          : (de
+              ? `${format(row.date, 'EEE MMM d')} · geplant ${Math.round(row.plannedMin)} min · tatsächlich ${Math.round(row.actualMin)} min${row.plannedTitle ? ' · ' + row.plannedTitle : ''}`
+              : `${format(row.date, 'EEE MMM d')} · planned ${Math.round(row.plannedMin)} min · actual ${Math.round(row.actualMin)} min${row.plannedTitle ? ' · ' + row.plannedTitle : ''}`)
       }
     >
       <span
@@ -163,7 +169,7 @@ function DayBar({ row, maxMin }: { row: DayRow; maxMin: number }) {
             className="absolute inset-0 flex items-center justify-center eyebrow opacity-40"
             style={{ color: 'var(--color-muted)', fontSize: 9 }}
           >
-            {row.isFuture ? 'planned' : '—'}
+            {row.isFuture ? (de ? 'geplant' : 'planned') : '—'}
           </span>
         )}
       </div>
@@ -180,7 +186,8 @@ function DayBar({ row, maxMin }: { row: DayRow; maxMin: number }) {
 }
 
 export default function ComplianceStrip() {
-  const t = useT()
+  const { locale, t } = useLocale()
+  const de = locale === 'de'
   const today = new Date()
   const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 })
@@ -274,7 +281,7 @@ export default function ComplianceStrip() {
               {gradeInfo.letter}
             </span>
             <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 8, letterSpacing: '0.2em', marginTop: 2 }}>
-              GRADE
+              {de ? 'NOTE' : 'GRADE'}
             </span>
           </div>
         ) : (
@@ -283,7 +290,7 @@ export default function ComplianceStrip() {
 
         <div className="flex flex-col gap-1 min-w-0 flex-1 pt-1">
           <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
-            Plan vs actual · this week
+            {de ? 'Plan vs. tatsächlich · diese Woche' : 'Plan vs actual · this week'}
           </span>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span
@@ -296,12 +303,12 @@ export default function ComplianceStrip() {
               {gradeInfo
                 ? `${animatedPct}%`
                 : hasPlan
-                  ? 'Awaiting work'
-                  : 'No plan set'}
+                  ? (de ? 'Warten auf Einheit' : 'Awaiting work')
+                  : (de ? 'Kein Plan' : 'No plan set')}
             </span>
             {gradeInfo && (
               <span className="text-[13px]" style={{ color: 'var(--color-ink-2)' }}>
-                compliance
+                {de ? 'Umsetzung' : 'compliance'}
               </span>
             )}
           </div>
@@ -309,11 +316,11 @@ export default function ComplianceStrip() {
           <div className="flex items-center gap-3 mt-1 text-[10px]" style={{ color: 'var(--color-muted)' }}>
             <span className="inline-flex items-center gap-1">
               <span className="inline-block w-2 h-2 rounded-full border" style={{ borderColor: 'var(--color-ink-2)' }} aria-hidden />
-              planned
+              {de ? 'geplant' : 'planned'}
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-ink)' }} aria-hidden />
-              actual
+              {de ? 'tatsächlich' : 'actual'}
             </span>
           </div>
         </div>

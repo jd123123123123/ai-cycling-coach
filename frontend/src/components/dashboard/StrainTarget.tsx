@@ -6,6 +6,7 @@ import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useCountUp } from '../../hooks/useCountUp'
 import { computeReadiness, readinessTier, TIER_META } from '../../utils/metrics'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // StrainTarget — Whoop's "Strain Coach" translated for cyclists.
 // Recovery score × daily-baseline load = today's optimal TSS target.
@@ -33,6 +34,8 @@ function recoveryToMultiplier(score: number | null): number {
 }
 
 export default function StrainTarget() {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   const today = new Date()
   const { data: actsData } = useActivitiesRange(today, today)
   const { data: profile } = useAthleteProfile()
@@ -72,18 +75,28 @@ export default function StrainTarget() {
     let msg = ''
     let msgColor = tierColor
     if (target === 0) {
-      msg = "Rest day — your body is asking for zero. Honor it."
+      msg = de
+        ? 'Ruhetag — dein Körper will null. Respektiere das.'
+        : "Rest day — your body is asking for zero. Honor it."
       msgColor = 'var(--color-muted)'
     } else if (tss === 0) {
-      msg = `${target} TSS ahead of you. The ride that fits is out there.`
+      msg = de
+        ? `${target} TSS liegen vor dir. Die passende Fahrt wartet.`
+        : `${target} TSS ahead of you. The ride that fits is out there.`
     } else if (tss < low) {
-      msg = `You're ${target - tss} TSS below target. One more session fits the day.`
+      msg = de
+        ? `Dir fehlen ${target - tss} TSS zum Ziel. Eine weitere Einheit passt noch.`
+        : `You're ${target - tss} TSS below target. One more session fits the day.`
       msgColor = 'var(--color-amber)'
     } else if (tss > high) {
-      msg = `${tss - target} TSS past target. Today's bank is closed — absorb.`
+      msg = de
+        ? `${tss - target} TSS über dem Ziel. Für heute ist Schluss — erhole dich.`
+        : `${tss - target} TSS past target. Today's bank is closed — absorb.`
       msgColor = 'var(--color-alert)'
     } else {
-      msg = `In the zone. ${tss}/${target} TSS — the dose fits the day.`
+      msg = de
+        ? `Voll im Fenster. ${tss}/${target} TSS — die Dosis passt.`
+        : `In the zone. ${tss}/${target} TSS — the dose fits the day.`
       msgColor = '#30D158'
     }
 
@@ -96,7 +109,7 @@ export default function StrainTarget() {
       bandLow: low,
       bandHigh: high,
     }
-  }, [actsData, profile, metricsData, today])
+  }, [actsData, profile, metricsData, today, de])
 
   const countedTarget = useCountUp(targetTSS, { duration: 900, enabled: true })
   const countedToday = useCountUp(todayTSS, { duration: 700, enabled: true })
@@ -135,7 +148,7 @@ export default function StrainTarget() {
             fontWeight: 600,
           }}
         >
-          Strain target · today
+          {de ? 'Belastungsziel · heute' : 'Strain target · today'}
         </span>
       </div>
 
@@ -233,7 +246,7 @@ export default function StrainTarget() {
                   className="num-mono"
                   style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.1em' }}
                 >
-                  RECOVERY-ADJUSTED
+                  {de ? 'ERHOLUNGS-ANGEPASST' : 'RECOVERY-ADJUSTED'}
                 </span>
               </div>
             </div>

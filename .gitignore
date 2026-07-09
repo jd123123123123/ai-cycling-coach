@@ -3,3 +3,39 @@
 
 # Brainstorming visual-companion mockups
 .superpowers/
+
+# Secrets / env
+**/.env
+**/.env.local
+**/.env.*.local
+backend/.env
+frontend/.env.local
+
+# Python
+**/__pycache__/
+*.py[cod]
+backend/.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend build
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# Vercel
+.vercel/
+
+# Editor / tooling
+.claude/
+.playwright-mcp/
+
+# Screenshot clutter (dev artifacts)
+*.png
+docs/**/*.png
+
+# Local data
+*.log

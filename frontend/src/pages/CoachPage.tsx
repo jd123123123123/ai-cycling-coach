@@ -8,9 +8,11 @@
  */
 import DashboardShell from '../components/dashboard/DashboardShell'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useLocale } from '../contexts/LocaleContext'
 
 export default function CoachPage() {
   const { language } = useLanguage()
+  const { locale } = useLocale()
 
   return (
     <DashboardShell>
@@ -19,15 +21,21 @@ export default function CoachPage() {
           className="num-display leading-tight"
           style={{ fontSize: 'clamp(28px, 4vw, 40px)', color: 'var(--color-ink)' }}
         >
-          {language === 'simple' ? 'Coach' : 'Ask the coach'}
+          {locale === 'de'
+            ? (language === 'simple' ? 'Coach' : 'Frag den Coach')
+            : (language === 'simple' ? 'Coach' : 'Ask the coach')}
         </h1>
         <p
           className="mt-4 text-[15px] leading-relaxed"
           style={{ color: 'var(--color-muted)' }}
         >
-          {language === 'simple'
-            ? 'Use the "Ask coach" button in the top bar to open the chat.'
-            : 'Chat surface — open via the masthead "Ask coach" drawer. A full inline chat view arrives in Wave 3.'}
+          {locale === 'de'
+            ? (language === 'simple'
+                ? 'Nutze den „Frag Coach“-Button in der oberen Leiste, um den Chat zu öffnen.'
+                : 'Chat-Oberfläche — öffne sie über den „Frag Coach“-Bereich in der Kopfzeile. Eine vollständige Inline-Chat-Ansicht kommt in Wave 3.')
+            : (language === 'simple'
+                ? 'Use the "Ask coach" button in the top bar to open the chat.'
+                : 'Chat surface — open via the masthead "Ask coach" drawer. A full inline chat view arrives in Wave 3.')}
         </p>
         {/* TODO(06.1 Wave 3): inline full-screen chat view lives here. */}
       </div>

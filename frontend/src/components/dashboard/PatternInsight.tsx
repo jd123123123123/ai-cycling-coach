@@ -4,7 +4,7 @@ import { Eye } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { usePMC } from '../../hooks/usePMC'
-import { useT } from '../../contexts/LocaleContext'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { ActivityRead, DailyMetric, PMCEntry } from '../../api/dashboard'
 
 /**
@@ -46,7 +46,7 @@ function lastN<T>(xs: T[], n: number): T[] {
 }
 
 // ── HRV consecutive-down detector ───────────────────────────────────
-function hrvStreak(metrics: DailyMetric[]): Pattern | null {
+function hrvStreak(metrics: DailyMetric[], de: boolean): Pattern | null {
   const last14 = lastN(metrics, 14).filter((m) => m.hrv_status != null)
   if (last14.length < 7) return null
   const recent = lastN(last14, 4)
@@ -60,16 +60,22 @@ function hrvStreak(metrics: DailyMetric[]): Pattern | null {
   return {
     priority: dropPct < -8 ? 90 : 75,
     tone: dropPct < -8 ? 'bad' : 'caution',
-    headline: `HRV has been below baseline ${recent.length} nights in a row — averaging ${dropPct.toFixed(1)}% under.`,
+    headline: de
+      ? `HRV liegt ${recent.length} Nächte in Folge unter der Baseline — im Schnitt ${dropPct.toFixed(1)}% darunter.`
+      : `HRV has been below baseline ${recent.length} nights in a row — averaging ${dropPct.toFixed(1)}% under.`,
     followup:
       dropPct < -8
-        ? 'A real rest day or a deep-sleep night usually resets it. Skip the next quality session if it persists tomorrow.'
-        : 'Worth a closer look at evening stress, late caffeine, or alcohol over the last few days.',
+        ? (de
+            ? 'Ein echter Ruhetag oder eine Nacht mit Tiefschlaf setzt sie meist zurück. Lass die nächste harte Einheit aus, wenn es morgen anhält.'
+            : 'A real rest day or a deep-sleep night usually resets it. Skip the next quality session if it persists tomorrow.')
+        : (de
+            ? 'Ein genauerer Blick auf Abendstress, spätes Koffein oder Alkohol der letzten Tage lohnt sich.'
+            : 'Worth a closer look at evening stress, late caffeine, or alcohol over the last few days.'),
   }
 }
 
 // ── Sleep 7-day average vs target ───────────────────────────────────
-function sleepShortfall(metrics: DailyMetric[]): Pattern | null {
+function sleepShortfall(metrics: DailyMetric[], de: boolean): Pattern | null {
   const last7 = lastN(metrics, 7).filter((m) => m.sleep_score != null)
   if (last7.length < 5) return null
   // The brief tracks debt directly; here we use the score as the proxy.
@@ -80,14 +86,17 @@ function sleepShortfall(metrics: DailyMetric[]): Pattern | null {
   return {
     priority: shortNights >= 5 ? 80 : 60,
     tone: shortNights >= 5 ? 'bad' : 'caution',
-    headline: `Sleep score averaged ${Math.round(mean)} over ${last7.length} nights — ${shortNights} of them under 60.`,
-    followup:
-      'A 30-minute earlier bedtime tonight is the highest-leverage move on the dashboard right now.',
+    headline: de
+      ? `Schlaf-Score im Schnitt ${Math.round(mean)} über ${last7.length} Nächte — ${shortNights} davon unter 60.`
+      : `Sleep score averaged ${Math.round(mean)} over ${last7.length} nights — ${shortNights} of them under 60.`,
+    followup: de
+      ? 'Heute 30 Minuten früher ins Bett ist gerade der wirkungsvollste Hebel auf dem Dashboard.'
+      : 'A 30-minute earlier bedtime tonight is the highest-leverage move on the dashboard right now.',
   }
 }
 
 // ── CTL ramp inside / outside the safe band ─────────────────────────
-function ctlRamp(pmc: PMCEntry[]): Pattern | null {
+function ctlRamp(pmc: PMCEntry[], de: boolean): Pattern | null {
   if (pmc.length < 8) return null
   const latest = pmc[pmc.length - 1]
   const weekAgo = pmc[pmc.length - 8]
@@ -96,32 +105,43 @@ function ctlRamp(pmc: PMCEntry[]): Pattern | null {
     return {
       priority: 70,
       tone: 'caution',
-      headline: `Fitness has climbed +${delta.toFixed(1)} in 7 days — above the 5–7/week safe ramp.`,
-      followup:
-        "Two more days at this rate and the next quality session is a coin-flip. An easy week within the next 10 days keeps you out of overreach.",
+      headline: de
+        ? `Die Fitness ist in 7 Tagen um +${delta.toFixed(1)} gestiegen — über der sicheren Rampe von 5–7/Woche.`
+        : `Fitness has climbed +${delta.toFixed(1)} in 7 days — above the 5–7/week safe ramp.`,
+      followup: de
+        ? 'Noch zwei Tage in diesem Tempo und die nächste harte Einheit wird zum Glücksspiel. Eine ruhige Woche in den nächsten 10 Tagen hält dich aus dem Overreaching.'
+        : "Two more days at this rate and the next quality session is a coin-flip. An easy week within the next 10 days keeps you out of overreach.",
     }
   }
   if (delta >= 5) {
     return {
       priority: 50,
       tone: 'good',
-      headline: `Fitness up +${delta.toFixed(1)} in 7 days — hugging the upper end of safe progression.`,
-      followup: 'Hold the load steady this week and the adaptations will land.',
+      headline: de
+        ? `Fitness +${delta.toFixed(1)} in 7 Tagen — am oberen Rand der sicheren Steigerung.`
+        : `Fitness up +${delta.toFixed(1)} in 7 days — hugging the upper end of safe progression.`,
+      followup: de
+        ? 'Halte die Belastung diese Woche stabil, dann greifen die Anpassungen.'
+        : 'Hold the load steady this week and the adaptations will land.',
     }
   }
   if (delta <= -2 && latest.ctl > 5) {
     return {
       priority: 55,
       tone: 'caution',
-      headline: `Fitness has slipped ${delta.toFixed(1)} in 7 days — detraining if it continues.`,
-      followup: 'A 60–90-min Z2 ride twice this week stops the bleed.',
+      headline: de
+        ? `Fitness ist in 7 Tagen um ${delta.toFixed(1)} gefallen — Detraining, wenn es so weitergeht.`
+        : `Fitness has slipped ${delta.toFixed(1)} in 7 days — detraining if it continues.`,
+      followup: de
+        ? 'Zweimal diese Woche 60–90 min Z2 stoppt den Abfall.'
+        : 'A 60–90-min Z2 ride twice this week stops the bleed.',
     }
   }
   return null
 }
 
 // ── TSB volatility — wide swings in a short window ──────────────────
-function tsbVolatility(pmc: PMCEntry[]): Pattern | null {
+function tsbVolatility(pmc: PMCEntry[], de: boolean): Pattern | null {
   if (pmc.length < 8) return null
   const last7 = lastN(pmc, 7)
   const values = last7.map((e) => e.tsb)
@@ -132,13 +152,17 @@ function tsbVolatility(pmc: PMCEntry[]): Pattern | null {
   return {
     priority: 45,
     tone: 'neutral',
-    headline: `TSB has swung ${range.toFixed(0)} points in 7 days — load is bouncy.`,
-    followup: 'Smoother daily TSS (fewer extreme spikes) lets the form curve catch up.',
+    headline: de
+      ? `TSB schwankt in 7 Tagen um ${range.toFixed(0)} Punkte — die Belastung ist unruhig.`
+      : `TSB has swung ${range.toFixed(0)} points in 7 days — load is bouncy.`,
+    followup: de
+      ? 'Gleichmäßigere tägliche TSS (weniger extreme Spitzen) lässt die Formkurve aufholen.'
+      : 'Smoother daily TSS (fewer extreme spikes) lets the form curve catch up.',
   }
 }
 
 // ── RHR adaptation — sustained drop below 14-day baseline ──────────
-function rhrAdaptation(metrics: DailyMetric[]): Pattern | null {
+function rhrAdaptation(metrics: DailyMetric[], de: boolean): Pattern | null {
   const last14 = lastN(metrics, 14).filter((m) => m.resting_hr != null)
   if (last14.length < 9) return null
   const recent = lastN(last14, 5)
@@ -152,14 +176,17 @@ function rhrAdaptation(metrics: DailyMetric[]): Pattern | null {
   return {
     priority: 60,
     tone: 'good',
-    headline: `RHR has been below baseline ${belowBase} of the last 5 nights — averaging ${dropPct.toFixed(1)}% lower.`,
-    followup:
-      'Classic adaptation signature. The body is banking the work — keep the load steady this week.',
+    headline: de
+      ? `RHR lag in ${belowBase} der letzten 5 Nächte unter der Baseline — im Schnitt ${dropPct.toFixed(1)}% niedriger.`
+      : `RHR has been below baseline ${belowBase} of the last 5 nights — averaging ${dropPct.toFixed(1)}% lower.`,
+    followup: de
+      ? 'Klassisches Zeichen für Anpassung. Der Körper verbucht die Arbeit — halte die Belastung diese Woche stabil.'
+      : 'Classic adaptation signature. The body is banking the work — keep the load steady this week.',
   }
 }
 
 // ── Sleep consistency win — 5+ straight strong nights ──────────────
-function sleepConsistency(metrics: DailyMetric[]): Pattern | null {
+function sleepConsistency(metrics: DailyMetric[], de: boolean): Pattern | null {
   const recent = lastN(metrics, 7).filter((m) => m.sleep_score != null)
   if (recent.length < 5) return null
   const tail = lastN(recent, 5)
@@ -169,9 +196,12 @@ function sleepConsistency(metrics: DailyMetric[]): Pattern | null {
   return {
     priority: 50,
     tone: 'good',
-    headline: `Sleep has scored 70+ for ${tail.length} straight nights — averaging ${Math.round(mean)}.`,
-    followup:
-      'This is the recovery-stack adaptations actually use. Treat today as a green-light day if everything else agrees.',
+    headline: de
+      ? `Schlaf-Score 70+ in ${tail.length} Nächten in Folge — im Schnitt ${Math.round(mean)}.`
+      : `Sleep has scored 70+ for ${tail.length} straight nights — averaging ${Math.round(mean)}.`,
+    followup: de
+      ? 'Genau diese Erholung nutzen die Anpassungen wirklich. Behandle heute als grünes Licht, wenn alles andere passt.'
+      : 'This is the recovery-stack adaptations actually use. Treat today as a green-light day if everything else agrees.',
   }
 }
 
@@ -180,9 +210,11 @@ function sleepConsistency(metrics: DailyMetric[]): Pattern | null {
 // but-empty slots. Only flags when the same weekday has gone empty 3+ of
 // the last 4 occurrences AND the athlete's overall weekly cadence is ≥4
 // sessions (so this isn't false-flagged on a 2-rides-a-week athlete).
-function dayOfWeekMiss(acts: ActivityRead[]): Pattern | null {
+function dayOfWeekMiss(acts: ActivityRead[], de: boolean): Pattern | null {
   if (acts.length < 8) return null
   const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  // German plural weekday names for display (indexed by getDay(), 0=Sun).
+  const dayLabelsDe = ['Sonntage', 'Montage', 'Dienstage', 'Mittwoche', 'Donnerstage', 'Freitage', 'Samstage']
 
   // Bucket activity dates by ISO date.
   const dateSet = new Set<string>()
@@ -231,14 +263,18 @@ function dayOfWeekMiss(acts: ActivityRead[]): Pattern | null {
   return {
     priority: 40,
     tone: 'neutral',
-    headline: `You've skipped ${missed} of the last ${c.total} ${dayLabels[worstDow]}s.`,
-    followup:
-      "Move the day to a different slot or commit to a short Z2 spin — even 30 min keeps the chain unbroken.",
+    headline: de
+      ? `Du hast ${missed} der letzten ${c.total} ${dayLabelsDe[worstDow]} ausgelassen.`
+      : `You've skipped ${missed} of the last ${c.total} ${dayLabels[worstDow]}s.`,
+    followup: de
+      ? 'Verschiebe den Tag oder mach eine kurze Z2-Runde — schon 30 min halten die Kette ungebrochen.'
+      : "Move the day to a different slot or commit to a short Z2 spin — even 30 min keeps the chain unbroken.",
   }
 }
 
 export default function PatternInsight() {
-  const t = useT()
+  const { locale, t } = useLocale()
+  const de = locale === 'de'
   const today = useMemo(() => new Date(), [])
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 28), [today]), today)
   const { data: pmc } = usePMC(28)
@@ -249,17 +285,17 @@ export default function PatternInsight() {
     const entries = pmc?.entries ?? []
     const acts = actsResp?.activities ?? []
     const candidates: Pattern[] = []
-    const a = hrvStreak(metrics); if (a) candidates.push(a)
-    const b = sleepShortfall(metrics); if (b) candidates.push(b)
-    const c = ctlRamp(entries); if (c) candidates.push(c)
-    const d = tsbVolatility(entries); if (d) candidates.push(d)
-    const e = rhrAdaptation(metrics); if (e) candidates.push(e)
-    const f = sleepConsistency(metrics); if (f) candidates.push(f)
-    const g = dayOfWeekMiss(acts); if (g) candidates.push(g)
+    const a = hrvStreak(metrics, de); if (a) candidates.push(a)
+    const b = sleepShortfall(metrics, de); if (b) candidates.push(b)
+    const c = ctlRamp(entries, de); if (c) candidates.push(c)
+    const d = tsbVolatility(entries, de); if (d) candidates.push(d)
+    const e = rhrAdaptation(metrics, de); if (e) candidates.push(e)
+    const f = sleepConsistency(metrics, de); if (f) candidates.push(f)
+    const g = dayOfWeekMiss(acts, de); if (g) candidates.push(g)
     if (candidates.length === 0) return null
     candidates.sort((x, y) => y.priority - x.priority)
     return candidates[0]
-  }, [metricsResp, pmc, actsResp])
+  }, [metricsResp, pmc, actsResp, de])
 
   if (!pattern) return null
 

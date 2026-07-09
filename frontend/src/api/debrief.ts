@@ -80,7 +80,9 @@ export interface RaceDebrief {
   generated_at: string | null
 }
 
-export async function fetchActivityDebrief(activityId: number): Promise<RaceDebrief> {
-  const res = await apiClient.get<RaceDebrief>(`/analytics/activity-debrief/${activityId}`)
+export async function fetchActivityDebrief(activityId: number, lang = 'en'): Promise<RaceDebrief> {
+  const res = await apiClient.get<RaceDebrief>(`/analytics/activity-debrief/${activityId}`, {
+    params: { lang },
+  })
   return res.data
 }

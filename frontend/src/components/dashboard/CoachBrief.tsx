@@ -10,7 +10,7 @@ import TomorrowCard from './TomorrowCard'
 import RegenerationCard from './RegenerationCard'
 import DashboardSection from './DashboardSection'
 import { useLanguage } from '../../contexts/LanguageContext'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 import { translateCoach } from '../../utils/coachLanguage'
 
 function isRuleBased(model: string): boolean {
@@ -50,6 +50,7 @@ function BriefSkeleton() {
 export default function CoachBrief() {
   const { data, isLoading, isError, refetch } = useCoachBrief()
   const refresh = useRefreshBrief()
+  const { locale } = useLocale()
 
   const [whyOpen, setWhyOpen] = useState(false)
   const [transparencyOpen, setTransparencyOpen] = useState(false)
@@ -63,14 +64,14 @@ export default function CoachBrief() {
         style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
       >
         <span className="eyebrow" style={{ color: 'var(--color-alert)' }}>
-          Couldn&apos;t load today&apos;s brief
+          {locale === 'de' ? 'Konnte den heutigen Brief nicht laden' : "Couldn't load today's brief"}
         </span>
         <button
           onClick={() => void refetch()}
           className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium min-h-[40px]"
           style={{ backgroundColor: 'var(--color-ink)', color: 'var(--color-paper)' }}
         >
-          Retry
+          {locale === 'de' ? 'Erneut versuchen' : 'Retry'}
         </button>
       </div>
     )
@@ -109,6 +110,7 @@ function BriefBody({
   const ruleBased = isRuleBased(brief.model_used)
   const { language } = useLanguage()
   const t = useT()
+  const { locale } = useLocale()
   const simpleMode = language === 'simple'
 
   const generatedAgo = useMemo(() => {
@@ -154,7 +156,7 @@ function BriefBody({
                 backgroundColor: 'rgba(20,24,17,0.04)',
                 border: '1px solid var(--color-rule)',
               }}
-              title="Served from the 6h read-through cache"
+              title={locale === 'de' ? 'Aus dem 6h-Read-through-Cache geladen' : 'Served from the 6h read-through cache'}
             >
               {t('cached_chip')}
             </span>
@@ -258,8 +260,8 @@ function BriefBody({
             style={{ color: 'var(--color-muted)' }}
             title={
               simpleMode
-                ? translateCoach('brief.frameworksHeading', 'simple')
-                : `${translateCoach('brief.frameworksHeading', 'technical')}: ${brief.frameworks_cited.join(' · ')}`
+                ? translateCoach('brief.frameworksHeading', 'simple', locale)
+                : `${translateCoach('brief.frameworksHeading', 'technical', locale)}: ${brief.frameworks_cited.join(' · ')}`
             }
           >
             <ChevronRight size={11} strokeWidth={2} />
@@ -283,8 +285,8 @@ function BriefBody({
           disabled={isRefreshing}
           className="inline-flex items-center gap-1 text-[11px] font-medium disabled:opacity-50"
           style={{ color: 'var(--color-muted)' }}
-          aria-label="Regenerate brief"
-          title="Force a fresh generation"
+          aria-label={locale === 'de' ? 'Neu erzeugen' : 'Regenerate brief'}
+          title={locale === 'de' ? 'Neue Generierung erzwingen' : 'Force a fresh generation'}
         >
           <RefreshCw size={11} strokeWidth={1.8} className={isRefreshing ? 'animate-spin' : ''} />
           <span className="underline underline-offset-2 decoration-[var(--color-rule)]">

@@ -74,7 +74,27 @@ export default function RampRate() {
     )
   }
 
-  if (rampRate === null) return null
+  // Not enough training history for a week-over-week comparison (prior weeks
+  // averaged zero TSS). Render an empty-state card rather than returning null —
+  // a bare null would orphan the sibling card in the 2-up grid, leaving a
+  // half-width card floating beside an empty gutter.
+  if (rampRate === null) {
+    return (
+      <div
+        className="paper-grain rounded-[20px] px-5 py-4 sm:px-6 sm:py-5"
+        style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
+      >
+        <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
+          {locale === 'de' ? 'Anstiegsrate · diese Woche' : 'Ramp rate · this week'}
+        </span>
+        <p className="mt-2 text-[13px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+          {locale === 'de'
+            ? 'Noch nicht genug Trainingsverlauf — logge ein paar Wochen, um deinen Belastungstrend von Woche zu Woche zu sehen.'
+            : 'Not enough training history yet — log a few weeks to see your week-over-week load trend.'}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div

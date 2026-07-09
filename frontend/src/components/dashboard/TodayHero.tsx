@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { format, subDays } from 'date-fns'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
@@ -52,7 +52,7 @@ function StateRing({ score, color, size, recoveryLabel }: { score: number; color
     <div
       className="relative shrink-0 flex items-center justify-center"
       style={{ width: size, height: size }}
-      aria-label={`Recovery ${score}`}
+      aria-label={`${recoveryLabel} ${score}`}
     >
       {/* Ambient color glow — the state tint, soft */}
       <div
@@ -117,7 +117,7 @@ function EyebrowChip({ children, color = 'var(--color-muted)' }: { children: Rea
   )
 }
 
-function whyChips(evidence: Record<string, unknown>): Array<{ key: string; text: string; tone: 'good' | 'caution' | 'bad' | 'neutral' }> {
+function whyChips(evidence: Record<string, unknown>, locale: 'en' | 'de'): Array<{ key: string; text: string; tone: 'good' | 'caution' | 'bad' | 'neutral' }> {
   const out: Array<{ key: string; text: string; tone: 'good' | 'caution' | 'bad' | 'neutral' }> = []
   const pmc = evidence.pmc as Record<string, unknown> | undefined
   const bio = evidence.biometrics as Record<string, unknown> | undefined
@@ -132,12 +132,12 @@ function whyChips(evidence: Record<string, unknown>): Array<{ key: string; text:
   const tsb = pmc?.tsb as number | null | undefined
   if (typeof tsb === 'number') {
     const tone = tsb < -25 ? 'bad' : tsb < -10 ? 'neutral' : 'good'
-    out.push({ key: 'tsb', text: `TSB ${tsb >= 0 ? '+' : ''}${Math.round(tsb)}${tsb < -10 && tsb > -25 ? ' (productive)' : ''}`, tone })
+    out.push({ key: 'tsb', text: `TSB ${tsb >= 0 ? '+' : ''}${Math.round(tsb)}${tsb < -10 && tsb > -25 ? (locale === 'de' ? ' (produktiv)' : ' (productive)') : ''}`, tone })
   }
   const sleepDebt = sleep?.avg_nightly_debt_h as number | null | undefined
   if (typeof sleepDebt === 'number' && sleepDebt > 0.2) {
     const tone = sleepDebt > 1.5 ? 'bad' : sleepDebt > 0.6 ? 'caution' : 'neutral'
-    out.push({ key: 'sleep', text: `Sleep debt ${sleepDebt.toFixed(1)} h`, tone })
+    out.push({ key: 'sleep', text: `${locale === 'de' ? 'Schlafdefizit' : 'Sleep debt'} ${sleepDebt.toFixed(1)} h`, tone })
   }
   return out.slice(0, 4)
 }
@@ -158,6 +158,7 @@ export default function TodayHero() {
   const isMobile = useViewportIsMobile(640)
   const ringSize = isMobile ? 108 : 140
   const t = useT()
+  const { locale } = useLocale()
 
   const metrics = metricsResp?.metrics ?? []
   const latest = latestWithData(metrics, 'hrv_status') ?? latestWithData(metrics, 'body_battery') ?? latestWithData(metrics, 'sleep_score')
@@ -180,7 +181,7 @@ export default function TodayHero() {
   const color = meta?.color ?? 'var(--color-muted)'
 
   // Verdict — prefer the AI brief's headline; fall back to the tier verb.
-  const verdict = brief?.verdict || (meta ? `${meta.verb}.` : 'Loading today…')
+  const verdict = brief?.verdict || (meta ? `${locale === 'de' ? meta.verbDe : meta.verb}.` : (locale === 'de' ? 'Lade heute…' : 'Loading today…'))
 
   // Periodization eyebrow bits
   const athlete = (brief?.evidence as Record<string, unknown> | undefined)?.athlete as Record<string, unknown> | undefined
@@ -199,7 +200,7 @@ export default function TodayHero() {
   const asOf = nowAt ? format(new Date(nowAt), 'HH:mm') : null
 
   // "Why" chips
-  const why = whyChips((brief?.evidence as Record<string, unknown> | undefined) ?? {})
+  const why = whyChips((brief?.evidence as Record<string, unknown> | undefined) ?? {}, locale)
 
   // Footer micro-stats: sleep score · weekly strain · streak (approximation —
   // strain pulls from weekly_progress.total_tss / weekly_intensity_quota TSS
@@ -231,13 +232,30 @@ export default function TodayHero() {
     // Fallback composition (rare — backend almost always provides a hook)
     const ctlProj = Math.round(trajectory.ctl_projected_at_goal)
     const ctlTarget = trajectory.ctl_target ? Math.round(trajectory.ctl_target) : null
-    const stateLabel: Record<'ahead' | 'on_track' | 'behind', string> = {
-      ahead: 'Ahead of plan',
-      on_track: 'On track',
-      behind: 'Behind plan',
+    const stateLabel: Record<'ahead' | 'on_track' | 'behind', string> =
+      locale === 'de'
+        ? {
+            ahead: 'Vor dem Plan',
+            on_track: 'Im Plan',
+            behind: 'Hinter dem Plan',
+          }
+        : {
+            ahead: 'Ahead of plan',
+            on_track: 'On track',
+            behind: 'Behind plan',
+          }
+    const targetPart = ctlTarget
+      ? locale === 'de'
+        ? ` von ${ctlTarget} Ziel`
+        : ` of ${ctlTarget} target`
+      : ''
+    return {
+      tone,
+      text:
+        locale === 'de'
+          ? `${stateLabel[trajectory.on_track]} · CTL projiziert ${ctlProj}${targetPart} am Renntag`
+          : `${stateLabel[trajectory.on_track]} · CTL projected ${ctlProj}${targetPart} at race day`,
     }
-    const targetPart = ctlTarget ? ` of ${ctlTarget} target` : ''
-    return { tone, text: `${stateLabel[trajectory.on_track]} · CTL projected ${ctlProj}${targetPart} at race day` }
   }
   const trajLine = trajectoryLine()
 
@@ -263,7 +281,7 @@ export default function TodayHero() {
           <>
             <span style={{ color: 'var(--color-muted)', fontSize: 10 }}>·</span>
             <EyebrowChip color="var(--color-amber-2)">
-              {daysToGoal}{t('days_to')} {(goalName ?? 'GOAL').toUpperCase()}
+              {daysToGoal}{t('days_to')} {(goalName ?? (locale === 'de' ? 'ZIEL' : 'GOAL')).toUpperCase()}
             </EyebrowChip>
           </>
         )}
@@ -334,7 +352,7 @@ export default function TodayHero() {
           <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{t('strain_week_label')}</span>
           <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}>{strainPct}%</span>
           <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
-            of {tssTarget}
+            {locale === 'de' ? 'von' : 'of'} {tssTarget}
           </span>
         </div>
         {meta && (

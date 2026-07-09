@@ -24,6 +24,7 @@ import BiometricsDetail from './BiometricsDetail'
 import { useWhyTired } from '../../hooks/useWhyTired'
 import type { CauseEntry } from '../../api/coach'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useLocale } from '../../contexts/LocaleContext'
 import { translateCoach } from '../../utils/coachLanguage'
 import {
   getToolUseLogSnapshot,
@@ -63,8 +64,38 @@ const SEVERITY_META: Record<CauseEntry['severity'], {
   low:  { dot: 'var(--color-muted)',   label: 'low',  order: 2 },
 }
 
+function severityLabel(sev: CauseEntry['severity'], locale: 'en' | 'de'): string {
+  if (locale === 'de') {
+    return sev === 'high' ? 'hoch' : sev === 'med' ? 'mittel' : 'niedrig'
+  }
+  return SEVERITY_META[sev].label
+}
+
 // Plain-English rewrites (from WhyAmITired)
-function simpleEvidenceFor(cause: CauseEntry): string {
+function simpleEvidenceFor(cause: CauseEntry, locale: 'en' | 'de'): string {
+  if (locale === 'de') {
+    switch (cause.label) {
+      case 'HRV suppressed':
+        return 'Dein Körper zeigt Anzeichen, dass er sich noch nicht ganz erholt hat.'
+      case 'Resting HR elevated':
+        return 'Dein Ruhepuls ist etwas höher als normal.'
+      case 'Sleep debt accumulated':
+        return 'Du hast weniger geschlafen, als dein Körper braucht.'
+      case 'Overreach (TSB deep-negative)':
+        return 'Du hast zuletzt viel trainiert — dein Körper steckt tief im Minus.'
+      case 'Carrying productive fatigue':
+        return 'Normale Trainingsmüdigkeit — kein Grund zur Sorge.'
+      case 'Grey-zone creep':
+        return 'Deine letzten Fahrten sind in die Zone "zu hart, um leicht zu sein, zu leicht, um hart zu sein" gerutscht.'
+      default:
+        return cause.evidence
+          .replace(/HRV/g, 'Erholung')
+          .replace(/TSB/g, 'Fitness-Balance')
+          .replace(/CTL/g, 'Fitness')
+          .replace(/ATL/g, 'Ermüdung')
+          .replace(/Z\d/g, 'Tempozone')
+    }
+  }
   switch (cause.label) {
     case 'HRV suppressed':
       return "Your body's showing signs of not fully recovering yet."
@@ -99,8 +130,17 @@ const TOOL_HUMAN_NAMES: Record<string, string> = {
   modify_planned_workout: 'Modify Planned Workout',
 }
 
-function humanizeTool(name: string): string {
-  const label = TOOL_HUMAN_NAMES[name]
+const TOOL_HUMAN_NAMES_DE: Record<string, string> = {
+  fetch_pmc_window: 'Trainingsbelastung',
+  fetch_recovery_trend: 'Erholungstrend',
+  fetch_recent_activities: 'Letzte Aktivitäten',
+  fetch_ftp_history: 'FTP-Verlauf',
+  fetch_planned_workout: 'Geplantes Workout',
+  modify_planned_workout: 'Geplantes Workout anpassen',
+}
+
+function humanizeTool(name: string, locale: 'en' | 'de'): string {
+  const label = (locale === 'de' ? TOOL_HUMAN_NAMES_DE : TOOL_HUMAN_NAMES)[name]
   if (label) return label
   return name
     .replace(/_/g, ' ')
@@ -110,6 +150,7 @@ function humanizeTool(name: string): string {
 // ─── Tool entry (from TransparencyDrawer) ────────────────────────────────────
 
 function ToolUseEntry({ entry }: { entry: ToolUseLogEntry }) {
+  const { locale } = useLocale()
   const [open, setOpen] = useState(false)
   const inputJson = JSON.stringify(entry.input, null, 2)
   const resultJson = entry.result ? JSON.stringify(entry.result, null, 2) : null
@@ -142,7 +183,7 @@ function ToolUseEntry({ entry }: { entry: ToolUseLogEntry }) {
             <CheckCircle2 size={12} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)', flexShrink: 0 }} aria-hidden />
           )}
           <span className="text-[13px] font-medium" style={{ color: 'var(--color-ink)' }}>
-            {humanizeTool(entry.name)}
+            {humanizeTool(entry.name, locale)}
           </span>
           <span className="num-mono text-[10px]" style={{ color: 'var(--color-muted)' }}>
             {entry.name}
@@ -156,7 +197,7 @@ function ToolUseEntry({ entry }: { entry: ToolUseLogEntry }) {
       {open && (
         <div className="px-3 pb-3 pt-1 flex flex-col gap-2" style={{ borderTop: '1px solid var(--color-rule)' }}>
           <div>
-            <div className="eyebrow mb-1" style={{ color: 'var(--color-muted)' }}>Input</div>
+            <div className="eyebrow mb-1" style={{ color: 'var(--color-muted)' }}>{locale === 'de' ? 'Eingabe' : 'Input'}</div>
             <pre
               className="num-mono text-[11px] leading-[1.5] rounded-sm px-2 py-1.5 m-0 overflow-x-auto dashboard-break-words"
               style={{
@@ -174,7 +215,7 @@ function ToolUseEntry({ entry }: { entry: ToolUseLogEntry }) {
           {resultJson && (
             <div>
               <div className="eyebrow mb-1" style={{ color: isError ? 'var(--color-alert)' : 'var(--color-muted)' }}>
-                {isError ? 'Result (error)' : 'Result'}
+                {isError ? (locale === 'de' ? 'Ergebnis (Fehler)' : 'Result (error)') : (locale === 'de' ? 'Ergebnis' : 'Result')}
               </div>
               <pre
                 className="num-mono text-[11px] leading-[1.5] rounded-sm px-2 py-1.5 m-0 overflow-x-auto dashboard-break-words"
@@ -200,12 +241,23 @@ function ToolUseEntry({ entry }: { entry: ToolUseLogEntry }) {
 // ─── Tools Used section ───────────────────────────────────────────────────────
 
 function ToolsUsedSection({ entries }: { entries: ToolUseLogEntry[] }) {
+  const { locale } = useLocale()
   if (entries.length === 0) {
     return (
       <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-        No tools used in this chat session yet. Ask the coach a question like
-        &ldquo;why am I tired?&rdquo; or &ldquo;review my last 2 weeks&rdquo; to see the
-        analytical tools fire.
+        {locale === 'de' ? (
+          <>
+            In dieser Chat-Sitzung wurden noch keine Tools verwendet. Stell dem Coach
+            eine Frage wie &ldquo;Warum bin ich müde?&rdquo; oder &ldquo;Analysiere meine
+            letzten 2 Wochen&rdquo;, um die analytischen Tools zu sehen.
+          </>
+        ) : (
+          <>
+            No tools used in this chat session yet. Ask the coach a question like
+            &ldquo;why am I tired?&rdquo; or &ldquo;review my last 2 weeks&rdquo; to see the
+            analytical tools fire.
+          </>
+        )}
       </p>
     )
   }
@@ -222,6 +274,7 @@ function ToolsUsedSection({ entries }: { entries: ToolUseLogEntry[] }) {
 
 function RationaleSection() {
   const { language } = useLanguage()
+  const { locale } = useLocale()
   // Fetch unconditionally; data is cached by React Query after first load.
   const { data, isLoading, isError, refetch } = useWhyTired(true)
   const simpleMode = language === 'simple'
@@ -247,7 +300,7 @@ function RationaleSection() {
         <div className="flex items-center gap-2">
           <AlertTriangle size={14} strokeWidth={1.8} style={{ color: 'var(--color-alert)' }} />
           <span className="text-[13px]" style={{ color: 'var(--color-alert)' }}>
-            Couldn&apos;t load the diagnostic.
+            {locale === 'de' ? 'Diagnose konnte nicht geladen werden.' : "Couldn't load the diagnostic."}
           </span>
         </div>
         <button
@@ -255,7 +308,7 @@ function RationaleSection() {
           className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-medium"
           style={{ backgroundColor: 'var(--color-ink)', color: 'var(--color-paper)' }}
         >
-          Retry
+          {locale === 'de' ? 'Erneut versuchen' : 'Retry'}
         </button>
       </div>
     )
@@ -264,8 +317,9 @@ function RationaleSection() {
   if (!hasCauses) {
     return (
       <p className="text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-        Nothing is flagging today — your recent HRV, sleep, and load all sit inside normal bands.
-        If you still feel off, check for non-tracked stressors (travel, illness, fueling).
+        {locale === 'de'
+          ? 'Heute ist nichts auffällig — deine HRV, dein Schlaf und deine Belastung liegen alle im normalen Bereich. Wenn du dich trotzdem nicht gut fühlst, prüfe nicht erfasste Stressoren (Reisen, Krankheit, Ernährung).'
+          : 'Nothing is flagging today — your recent HRV, sleep, and load all sit inside normal bands. If you still feel off, check for non-tracked stressors (travel, illness, fueling).'}
       </p>
     )
   }
@@ -273,14 +327,16 @@ function RationaleSection() {
   return (
     <div className="flex flex-col gap-5">
       <p className="text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-        Your recent fatigue tracks {sortedCauses.length === 1 ? '1 signal' : `${sortedCauses.length} signals`}, ordered by strength:
+        {locale === 'de'
+          ? `Deine aktuelle Müdigkeit geht auf ${sortedCauses.length === 1 ? '1 Signal' : `${sortedCauses.length} Signale`} zurück, nach Stärke geordnet:`
+          : `Your recent fatigue tracks ${sortedCauses.length === 1 ? '1 signal' : `${sortedCauses.length} signals`}, ordered by strength:`}
       </p>
       <ul className="flex flex-col gap-4">
         {sortedCauses.map((c, i) => {
           const displayLabel = simpleMode
-            ? translateCoach(`cause.label.${c.label}`, 'simple')
+            ? translateCoach(`cause.label.${c.label}`, 'simple', locale)
             : c.label
-          const displayEvidence = simpleMode ? simpleEvidenceFor(c) : c.evidence
+          const displayEvidence = simpleMode ? simpleEvidenceFor(c, locale) : c.evidence
           return (
             <li key={i} className="flex gap-3 min-w-0">
               <span
@@ -294,7 +350,7 @@ function RationaleSection() {
                     className="eyebrow"
                     style={{ color: SEVERITY_META[c.severity].dot, letterSpacing: '0.22em' }}
                   >
-                    {SEVERITY_META[c.severity].label}
+                    {severityLabel(c.severity, locale)}
                   </span>
                   <span className="text-[15px] font-medium" style={{ color: 'var(--color-ink)' }}>
                     {displayLabel}
@@ -323,6 +379,7 @@ export default function ContributorsSheet({
   initialSection = 'contributors',
 }: ContributorsSheetProps) {
   const { language } = useLanguage()
+  const { locale } = useLocale()
   const [currentSection, setCurrentSection] = useState<Section>(initialSection)
   const [toolUseLog, setToolUseLog] = useState<ToolUseLogEntry[]>(getToolUseLogSnapshot)
 
@@ -368,26 +425,32 @@ export default function ContributorsSheet({
   const tabs: Array<{ id: Section; label: string }> = [
     {
       id: 'contributors',
-      label: language === 'simple' ? 'Body signals' : 'Contributors',
+      label: locale === 'de'
+        ? (language === 'simple' ? 'Körpersignale' : 'Faktoren')
+        : (language === 'simple' ? 'Body signals' : 'Contributors'),
     },
     {
       id: 'rationale',
-      label: language === 'simple' ? 'Why tired?' : 'Rationale',
+      label: locale === 'de'
+        ? (language === 'simple' ? 'Warum müde?' : 'Begründung')
+        : (language === 'simple' ? 'Why tired?' : 'Rationale'),
     },
     {
       id: 'tools',
-      label: language === 'simple' ? 'Tools used' : 'Tools used',
+      label: locale === 'de' ? 'Verwendete Tools' : 'Tools used',
     },
   ]
 
   const sheetTitle =
-    language === 'simple' ? "What's driving it" : 'Readiness contributors & rationale'
+    locale === 'de'
+      ? (language === 'simple' ? 'Was dahintersteckt' : 'Readiness-Faktoren & Begründung')
+      : (language === 'simple' ? "What's driving it" : 'Readiness contributors & rationale')
 
   return (
     <SideSheet
       open={open}
       onClose={onClose}
-      eyebrow="Why this?"
+      eyebrow={locale === 'de' ? 'Warum das?' : 'Why this?'}
       title={sheetTitle}
       width={640}
     >
@@ -397,7 +460,7 @@ export default function ContributorsSheet({
           tabs={tabs}
           value={currentSection}
           onChange={setCurrentSection}
-          ariaLabel="Contributors section"
+          ariaLabel={locale === 'de' ? 'Faktoren-Bereich' : 'Contributors section'}
         />
 
         {/* Tab content */}

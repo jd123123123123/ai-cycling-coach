@@ -293,3 +293,35 @@
   .shimmer-bg { animation: none !important; background: rgba(255,255,255,0.05); }
   .ai-gradient { animation: none !important; background-position: 0% 50%; }
 }
+
+/* ── Debrief slide: message | evidence divider (desktop only) ─────────── */
+@media (min-width: 768px) {
+  .debrief-slide-ev { border-left: 1px solid var(--color-rule); }
+}
+
+/* ── Dark scrollbars ─────────────────────────────────────────────────────
+   Some OS/browser combos (Windows, Linux, macOS "always show scrollbars")
+   render a light scrollbar track even under color-scheme: dark — it reads as
+   a white strip cut into the right edge. Force it dark to match the app. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-paper, #0C0C0E);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  border: 2px solid var(--color-paper, #0C0C0E);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+::-webkit-scrollbar-corner {
+  background: var(--color-paper, #0C0C0E);
+}

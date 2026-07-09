@@ -242,8 +242,8 @@ export interface GoalTrajectoryResponse {
   target_priority: string | null
 }
 
-export async function fetchGoalTrajectory(): Promise<GoalTrajectoryResponse> {
-  const res = await apiClient.get<GoalTrajectoryResponse>('/coach/trajectory')
+export async function fetchGoalTrajectory(locale = 'en'): Promise<GoalTrajectoryResponse> {
+  const res = await apiClient.get<GoalTrajectoryResponse>('/coach/trajectory', { params: { lang: locale } })
   return res.data
 }
 

@@ -45,6 +45,9 @@ export interface TierMeta {
   label: string        // 2-3 word
   verb: string         // action-oriented coach word
   sentiment: string    // short interpretation
+  labelDe: string
+  verbDe: string
+  sentimentDe: string
   color: string        // css token
   bg: string           // subtle bg
 }
@@ -54,6 +57,9 @@ export const TIER_META: Record<ReadinessTier, TierMeta> = {
     label: 'Primed',
     verb: 'Push it',
     sentiment: 'Every system green — a rare window to go deep.',
+    labelDe: 'Topform',
+    verbDe: 'Voll angreifen',
+    sentimentDe: 'Alle Systeme grün — ein seltenes Fenster, um tief zu gehen.',
     color: 'var(--color-forest-2)',
     bg: 'rgba(48, 209, 88, 0.10)',
   },
@@ -61,6 +67,9 @@ export const TIER_META: Record<ReadinessTier, TierMeta> = {
     label: 'Ready',
     verb: 'Train hard',
     sentiment: 'Recovery is complete. Today can be a quality day.',
+    labelDe: 'Bereit',
+    verbDe: 'Hart trainieren',
+    sentimentDe: 'Die Erholung ist komplett. Heute darf ein Qualitätstag sein.',
     color: 'var(--color-forest)',
     bg: 'rgba(52, 199, 89, 0.08)',
   },
@@ -68,6 +77,9 @@ export const TIER_META: Record<ReadinessTier, TierMeta> = {
     label: 'Middling',
     verb: 'Keep it easy',
     sentiment: 'Body is muddled. Hold intensity down until trends turn.',
+    labelDe: 'Durchwachsen',
+    verbDe: 'Locker bleiben',
+    sentimentDe: 'Der Körper ist unklar. Halte die Intensität unten, bis die Trends drehen.',
     color: 'var(--color-amber-2)',
     bg: 'rgba(255, 159, 10, 0.10)',
   },
@@ -75,9 +87,22 @@ export const TIER_META: Record<ReadinessTier, TierMeta> = {
     label: 'Drained',
     verb: 'Rest',
     sentiment: 'Too much fatigue in the tank. A true rest day compounds later.',
+    labelDe: 'Ausgelaugt',
+    verbDe: 'Ruhen',
+    sentimentDe: 'Zu viel Ermüdung im Tank. Ein echter Ruhetag zahlt sich später aus.',
     color: 'var(--color-alert)',
     bg: 'rgba(255, 69, 58, 0.10)',
   },
+}
+
+/** Localized tier words. `locale === 'de'` swaps in the German label/verb/sentiment. */
+export function tierText(meta: TierMeta, locale: string) {
+  const de = locale === 'de'
+  return {
+    label: de ? meta.labelDe : meta.label,
+    verb: de ? meta.verbDe : meta.verb,
+    sentiment: de ? meta.sentimentDe : meta.sentiment,
+  }
 }
 
 // ─── Zone classification for individual KPIs ──────────────────────────────────

@@ -4,7 +4,7 @@ import { de as deLocale } from 'date-fns/locale'
 import { usePMC } from '../../hooks/usePMC'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
-import { focusFor } from '../../utils/focusBadge'
+import { focusFor, focusLabelDe } from '../../utils/focusBadge'
 import { useT, useLocale } from '../../contexts/LocaleContext'
 import type { ActivityRead } from '../../api/dashboard'
 
@@ -69,12 +69,16 @@ export default function TrainingLogStrip() {
         date: key,
         tss,
         color: focus?.color ?? (tss > 0 ? 'var(--color-forest-2)' : 'var(--color-rule)'),
-        label: focus?.label ?? (tss > 0 ? 'Training' : t('log_rest')),
+        label: focus
+          ? (locale === 'de' ? focusLabelDe(focus.label) : focus.label)
+          : tss > 0
+            ? 'Training'
+            : t('log_rest'),
         activityTitle: act?.title ?? null,
       })
     }
     return out
-  }, [pmc, acts, profile, today, t])
+  }, [pmc, acts, profile, today, t, locale])
 
   const summary = useMemo(() => {
     let active = 0

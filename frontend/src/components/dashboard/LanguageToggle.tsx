@@ -25,14 +25,26 @@
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useLanguage, type CoachLanguage } from '../../contexts/LanguageContext'
+import { useLocale } from '../../contexts/LocaleContext'
+import type { Locale } from '../../i18n/strings'
 
-const OPTIONS: Array<{ value: CoachLanguage; label: string; hint: string }> = [
-  { value: 'simple',    label: 'Simple',    hint: 'Plain-English coach output' },
-  { value: 'technical', label: 'Technical', hint: 'Full vocabulary with inline explanations' },
-]
+function optionsFor(locale: Locale): Array<{ value: CoachLanguage; label: string; hint: string }> {
+  if (locale === 'de') {
+    return [
+      { value: 'simple',    label: 'Einfach',   hint: 'Einfache Coach-Ausgabe' },
+      { value: 'technical', label: 'Technisch', hint: 'Volles Vokabular mit Erklärungen' },
+    ]
+  }
+  return [
+    { value: 'simple',    label: 'Simple',    hint: 'Plain-English coach output' },
+    { value: 'technical', label: 'Technical', hint: 'Full vocabulary with inline explanations' },
+  ]
+}
 
 export default function LanguageToggle() {
   const { language, setLanguage } = useLanguage()
+  const { locale } = useLocale()
+  const OPTIONS = optionsFor(locale)
   const qc = useQueryClient()
 
   const handleChange = useCallback(
@@ -57,7 +69,7 @@ export default function LanguageToggle() {
   return (
     <div
       role="radiogroup"
-      aria-label="Coach language mode"
+      aria-label={locale === 'de' ? 'Coach-Sprachmodus' : 'Coach language mode'}
       className="inline-flex items-stretch rounded-full p-0.5 h-[28px]"
       style={{
         backgroundColor: 'var(--color-paper-2)',

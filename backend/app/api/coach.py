@@ -328,6 +328,7 @@ async def transparency(
 async def goal_trajectory(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    lang: str = "en",
 ) -> GoalTrajectoryRead:
     """Forward-looking projection of fitness toward the athlete's target event.
 
@@ -378,6 +379,7 @@ async def goal_trajectory(
         user_pmc=pmc_full.get("total") or [],
         athlete_goals=goals,
         phase=phase,
+        lang="de" if lang.lower().startswith("de") else "en",
     )
     payload = trajectory_to_dict(projection)
 

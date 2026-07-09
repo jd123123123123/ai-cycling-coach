@@ -22,6 +22,7 @@ import { usePMC } from '../../hooks/usePMC'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useGoalTrajectory } from '../../hooks/useGoalTrajectory'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // Mujika taper-window → display tone. Drives the chip color so an
 // "overreached" projection reads as alert and "ideal" reads as good.
@@ -57,12 +58,20 @@ const SPORT_LABEL: Record<string, string> = {
   gym: 'Gym',
 }
 
+// Short German prefixes for the sport-filtered trajectory copy ("Rad-Fitness").
+const SPORT_LABEL_DE: Record<string, string> = {
+  cycling: 'Rad',
+  running: 'Lauf',
+  gym: 'Kraft',
+}
+
 /**
  * Returns direction word for the simple-language copy.
  * |Δ%| < 3 → "holding steady"; positive → "climbing"; negative → "drifting down"
  */
-function directionWord(deltaPct: number): string {
-  if (Math.abs(deltaPct) < 3) return 'holding steady'
+function directionWord(deltaPct: number, de: boolean): string {
+  if (Math.abs(deltaPct) < 3) return de ? 'bleibt stabil' : 'holding steady'
+  if (de) return deltaPct > 0 ? 'steigt' : 'sinkt'
   return deltaPct > 0 ? 'climbing' : 'drifting down'
 }
 
@@ -71,6 +80,8 @@ export default function TrajectorySentence({ sport, className }: TrajectorySente
   const { data: profile } = useAthleteProfile()
   const { data: trajectory } = useGoalTrajectory()
   const { language } = useLanguage()
+  const { locale } = useLocale()
+  const de = locale === 'de'
 
   // Event-aware path: when the athlete has a target event, the trajectory
   // narrative replaces the generic CTL-trend copy. The total-series CTL trend
@@ -122,21 +133,21 @@ export default function TrajectorySentence({ sport, className }: TrajectorySente
 
   // Language-aware sentence copy for the numeric portion.
   // When sport is set, prefix with the sport label for clarity.
-  const sportLabel = sport ? SPORT_LABEL[sport] : null
+  const sportLabel = sport ? (de ? SPORT_LABEL_DE[sport] : SPORT_LABEL[sport]) : null
   const numericNode =
     deltaCTL != null && deltaPct != null ? (
       language === 'technical' ? (
         <span className="num-mono" style={{ color: toneColor }}>
           {/* U+2212 typographic minus on negative */}
-          {sportLabel ? `${sportLabel} CTL` : 'CTL'} {formatSigned(deltaCTL, 0)} over 14d.
+          {sportLabel ? `${sportLabel}${de ? '-CTL' : ' CTL'}` : 'CTL'} {formatSigned(deltaCTL, 0)} {de ? 'über 14 T.' : 'over 14d.'}
         </span>
       ) : (
         <span>
-          {sportLabel ? `${sportLabel} fitness` : 'Fitness'}{' '}
+          {sportLabel ? `${sportLabel}${de ? '-Fitness' : ' fitness'}` : 'Fitness'}{' '}
           <span style={{ color: toneColor }}>
-            {directionWord(deltaPct)} {deltaCTL !== 0 ? Math.abs(deltaCTL) : ''}
+            {directionWord(deltaPct, de)} {deltaCTL !== 0 ? Math.abs(deltaCTL) : ''}
           </span>{' '}
-          over 14 days.
+          {de ? 'über 14 Tage.' : 'over 14 days.'}
         </span>
       )
     ) : null
@@ -144,8 +155,10 @@ export default function TrajectorySentence({ sport, className }: TrajectorySente
   // Low-confidence copy branches
   const needDays = Math.max(1, MIN_DAYS_CTL_TREND - usableSeries.length)
   const lowCopy = !hasFtp
-    ? 'Set your FTP to unlock the trend.'
-    : `Need ${needDays} more day${needDays === 1 ? '' : 's'} of training data.`
+    ? (de ? 'Lege deine FTP fest, um den Trend zu sehen.' : 'Set your FTP to unlock the trend.')
+    : de
+      ? `Noch ${needDays} Tag${needDays === 1 ? '' : 'e'} Trainingsdaten nötig.`
+      : `Need ${needDays} more day${needDays === 1 ? '' : 's'} of training data.`
 
   if (isLoading) {
     // Render the low-confidence state while data loads
@@ -202,6 +215,8 @@ interface EventAwareTrajectoryProps {
 }
 
 function EventAwareTrajectory({ trajectory, className }: EventAwareTrajectoryProps) {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   const {
     days_to_goal,
     ctl_now,
@@ -268,7 +283,7 @@ function EventAwareTrajectory({ trajectory, className }: EventAwareTrajectoryPro
             fontWeight: 500,
           }}
         >
-          {days_to_goal}d to {event_name ?? 'goal'}
+          {de ? `${days_to_goal} T bis ${event_name ?? 'Ziel'}` : `${days_to_goal}d to ${event_name ?? 'goal'}`}
         </span>
         {' — '}
         <span style={{ color: trackColor }}>{narrative_hook}</span>
@@ -284,22 +299,22 @@ function EventAwareTrajectory({ trajectory, className }: EventAwareTrajectoryPro
         }}
         className="num-mono"
       >
-        <span title="Current chronic training load (Banister CTL)">
+        <span title={de ? 'Aktuelle chronische Trainingslast (Banister CTL)' : 'Current chronic training load (Banister CTL)'}>
           <span style={{ color: 'var(--color-ink-3)' }}>CTL</span>{' '}
           {Math.round(ctl_now)}
         </span>
 
-        <span title="Projected CTL at race day, linear extrapolation of 7d trend">
-          <span style={{ color: 'var(--color-ink-3)' }}>→ race</span>{' '}
+        <span title={de ? 'Projizierte CTL am Renntag, lineare Extrapolation des 7-Tage-Trends' : 'Projected CTL at race day, linear extrapolation of 7d trend'}>
+          <span style={{ color: 'var(--color-ink-3)' }}>{de ? '→ Rennen' : '→ race'}</span>{' '}
           <span style={{ color: trackColor }}>{Math.round(ctl_projected_at_goal)}</span>
           {ctl_target != null && (
             <span style={{ color: 'var(--color-ink-3)' }}>
-              {' '}/ target {Math.round(ctl_target)}
+              {' '}/ {de ? 'Ziel' : 'target'} {Math.round(ctl_target)}
             </span>
           )}
         </span>
 
-        <span title="Projected race-day TSB (Mujika taper window)">
+        <span title={de ? 'Projiziertes TSB am Renntag (Mujika-Taper-Fenster)' : 'Projected race-day TSB (Mujika taper window)'}>
           <span style={{ color: 'var(--color-ink-3)' }}>TSB</span>{' '}
           <span style={{ color: taperColor }}>
             {formatSigned(Math.round(tsb_projected_at_goal), 0)}
@@ -313,27 +328,31 @@ function EventAwareTrajectory({ trajectory, className }: EventAwareTrajectoryPro
           <span
             title={
               rampGuard.capped
-                ? 'Required CTL ramp exceeds the +8/wk overreach ceiling — re-anchor goals or accept a finish-the-event-only target.'
-                : 'CTL ramp rate: actual +/wk vs what you need to reach the target safely.'
+                ? (de
+                    ? 'Die nötige CTL-Steigerung übersteigt die Obergrenze von +8/Wo. — Ziele neu setzen oder ein reines Finisher-Ziel akzeptieren.'
+                    : 'Required CTL ramp exceeds the +8/wk overreach ceiling — re-anchor goals or accept a finish-the-event-only target.')
+                : (de
+                    ? 'CTL-Steigerungsrate: tatsächlich +/Wo. vs. was du brauchst, um das Ziel sicher zu erreichen.'
+                    : 'CTL ramp rate: actual +/wk vs what you need to reach the target safely.')
             }
           >
-            <span style={{ color: 'var(--color-ink-3)' }}>ramp</span>{' '}
+            <span style={{ color: 'var(--color-ink-3)' }}>{de ? 'Anstieg' : 'ramp'}</span>{' '}
             <span style={{ color: tokenForLabelTone(rampGuard.tone) }}>
               {formatSigned(rampGuard.actual, 1)}
             </span>
-            <span style={{ color: 'var(--color-ink-3)' }}> / need </span>
+            <span style={{ color: 'var(--color-ink-3)' }}> / {de ? 'nötig' : 'need'} </span>
             <span style={{ color: tokenForLabelTone(rampGuard.tone) }}>
               {formatSigned(rampGuard.needed, 1)}
               {rampGuard.capped ? '+' : ''}
             </span>
-            <span style={{ color: 'var(--color-ink-3)' }}> CTL/wk</span>
+            <span style={{ color: 'var(--color-ink-3)' }}> {de ? 'CTL/Wo.' : 'CTL/wk'}</span>
           </span>
         )}
 
         {showGapChip && (
-          <span title="Extra weekly TSS needed to close the CTL gap">
+          <span title={de ? 'Zusätzliche wöchentliche TSS, um die CTL-Lücke zu schließen' : 'Extra weekly TSS needed to close the CTL gap'}>
             <span style={{ color: 'var(--color-alert, #b1412c)' }}>
-              +{tssGap} TSS/wk to close gap
+              {de ? `+${tssGap} TSS/Wo. um Lücke zu schließen` : `+${tssGap} TSS/wk to close gap`}
             </span>
           </span>
         )}

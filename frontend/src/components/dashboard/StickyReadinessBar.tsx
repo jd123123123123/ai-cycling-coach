@@ -16,6 +16,7 @@ import { subDays } from 'date-fns'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useLocale } from '../../contexts/LocaleContext'
 import { computeReadiness, latestWithData, readinessTier, TIER_META } from '../../utils/metrics'
 import { springs, prefersReducedMotion } from '../../utils/motion'
 
@@ -28,6 +29,7 @@ function scrollToTop() {
 
 export default function StickyReadinessBar() {
   const { language } = useLanguage()
+  const { locale } = useLocale()
   const [heroVisible, setHeroVisible] = useState(true)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const reducedMotion = prefersReducedMotion()
@@ -159,9 +161,13 @@ export default function StickyReadinessBar() {
           border: '1px solid var(--color-rule)',
           flexShrink: 0,
         }}
-        aria-label={language === 'simple' ? 'Back to top' : 'Jump to today'}
+        aria-label={locale === 'de'
+          ? (language === 'simple' ? 'Nach oben' : 'Zu heute springen')
+          : (language === 'simple' ? 'Back to top' : 'Jump to today')}
       >
-        {language === 'simple' ? 'Back to top' : 'Jump to today'}
+        {locale === 'de'
+          ? (language === 'simple' ? 'Nach oben' : 'Zu heute springen')
+          : (language === 'simple' ? 'Back to top' : 'Jump to today')}
       </button>
     </div>
   )

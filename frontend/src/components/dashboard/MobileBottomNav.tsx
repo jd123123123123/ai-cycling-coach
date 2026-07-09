@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
 import { Sun, CalendarDays, BarChart3, Repeat, Users } from 'lucide-react'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 
 // Mobile bottom navigation — your thumb can't reach a top tab strip on a
 // phone. Apple HIG / Strava / Whoop / Garmin Connect all use bottom nav on
@@ -28,6 +28,7 @@ function resolveActive(raw: string | null): TabId {
 export default function MobileBottomNav() {
   const [searchParams, setSearchParams] = useSearchParams()
   const t = useT()
+  const { locale } = useLocale()
   const active = resolveActive(searchParams.get('tab'))
 
   function handleTab(id: TabId) {
@@ -45,7 +46,7 @@ export default function MobileBottomNav() {
         borderTop: '1px solid var(--color-rule)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
-      aria-label="Main navigation"
+      aria-label={locale === 'de' ? 'Hauptnavigation' : 'Main navigation'}
     >
       {TABS.map(({ id, labelKey, icon }) => {
         const isActive = id === active

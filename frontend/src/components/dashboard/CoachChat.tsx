@@ -29,6 +29,7 @@ import { MessageSquare, X, Sparkles, CheckCircle2 } from 'lucide-react'
 import { useChatStream, type ChatMessage, type ToolName } from '../../hooks/useChatStream'
 import { setToolUseLogSnapshot } from '../../lib/chatToolUseLog'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useLocale } from '../../contexts/LocaleContext'
 import WorkoutModifiedCard from '../coach/WorkoutModifiedCard'
 import AnalyticalAnswerCard from '../coach/AnalyticalAnswerCard'
 
@@ -90,12 +91,48 @@ const TOOL_INDICATOR_COPY: Record<
   },
 }
 
+const TOOL_INDICATOR_COPY_DE: Record<
+  ToolName,
+  { simple: string; technical: string }
+> = {
+  fetch_pmc_window: {
+    simple: 'Prüfe deinen Fitnessverlauf',
+    technical: 'Analysiere deine Trainingsbelastung',
+  },
+  fetch_recovery_trend: {
+    simple: 'Schaue mir deine Erholung an',
+    technical: 'Prüfe Erholungsmuster',
+  },
+  fetch_recent_activities: {
+    simple: 'Lese deine letzten Fahrten',
+    technical: 'Rufe letzte Aktivitäten ab',
+  },
+  fetch_ftp_history: {
+    simple: 'Prüfe deinen Testverlauf',
+    technical: 'Lade FTP-Verlauf',
+  },
+  fetch_planned_workout: {
+    simple: 'Lese dein anstehendes Workout',
+    technical: 'Rufe geplantes Workout ab',
+  },
+  modify_planned_workout: {
+    simple: 'Aktualisiere dein Workout',
+    technical: 'Passe geplantes Workout an',
+  },
+}
+
 function toolIndicatorCopy(
   name: ToolName,
   language: 'simple' | 'technical',
+  locale: 'en' | 'de',
 ): string {
-  const pair = TOOL_INDICATOR_COPY[name]
+  const pair = (locale === 'de' ? TOOL_INDICATOR_COPY_DE : TOOL_INDICATOR_COPY)[name]
   if (pair) return language === 'simple' ? pair.simple : pair.technical
+  if (locale === 'de') {
+    return language === 'simple'
+      ? 'Analysiere deine Trainingsdaten'
+      : `Führe ${name} aus`
+  }
   return language === 'simple'
     ? 'Analyzing your training data'
     : `Running ${name}`
@@ -153,6 +190,7 @@ function StreamingBubble({
   text: string
   indicatorCopy: string | null
 }) {
+  const { locale } = useLocale()
   return (
     <div className="flex gap-2.5 items-start">
       <div
@@ -184,7 +222,7 @@ function StreamingBubble({
         ) : text ? (
           highlightData(text)
         ) : (
-          <span className="opacity-60">Thinking…</span>
+          <span className="opacity-60">{locale === 'de' ? 'Denke nach…' : 'Thinking…'}</span>
         )}
         {!indicatorCopy && <span className="streaming-caret" aria-hidden />}
         <style>{`
@@ -232,6 +270,7 @@ function ToolBubble({
   onUndo: () => void | Promise<void>
   undoDisabled: boolean
 }) {
+  const { locale } = useLocale()
   if (isError) {
     return (
       <div
@@ -242,8 +281,8 @@ function ToolBubble({
           border: '1px solid rgba(138, 29, 29, 0.25)',
         }}
       >
-        <span className="eyebrow">Tool error</span> · {toolName} ·{' '}
-        {typeof result?.error === 'string' ? result.error : 'see transparency drawer'}
+        <span className="eyebrow">{locale === 'de' ? 'Tool-Fehler' : 'Tool error'}</span> · {toolName} ·{' '}
+        {typeof result?.error === 'string' ? result.error : (locale === 'de' ? 'siehe Transparenz-Drawer' : 'see transparency drawer')}
       </div>
     )
   }
@@ -267,7 +306,7 @@ function ToolBubble({
     // Already-trained-today / guard-rejected modification → friendly ack
     const reason =
       (result as { reason?: string }).reason ||
-      'Workout could not be modified.'
+      (locale === 'de' ? 'Workout konnte nicht angepasst werden.' : 'Workout could not be modified.')
     return (
       <div
         className="rounded-[12px] px-3 py-2.5 text-[13px] leading-snug flex items-start gap-2"
@@ -304,7 +343,7 @@ function ToolBubble({
       }}
     >
       <CheckCircle2 size={10} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)' }} />
-      <span className="eyebrow">Retrieved</span>
+      <span className="eyebrow">{locale === 'de' ? 'Abgerufen' : 'Retrieved'}</span>
       <span className="num-mono">{toolName}</span>
     </div>
   )
@@ -354,6 +393,20 @@ const SUGGESTIONS_TECHNICAL: string[] = [
   'Review my last 2 weeks',
 ]
 
+const SUGGESTIONS_SIMPLE_DE: string[] = [
+  'Warum bin ich diese Woche müde?',
+  'Bin ich bereit für harte Intervalle?',
+  'Ich habe morgen nur 45 Minuten',
+  'Analysiere meine letzten 2 Wochen',
+]
+
+const SUGGESTIONS_TECHNICAL_DE: string[] = [
+  'Warum bin ich diese Woche müde?',
+  'Bin ich bereit für einen VO2-Satz?',
+  'Kürze morgen auf 45 Minuten',
+  'Analysiere meine letzten 2 Wochen',
+]
+
 // ─── Drawer ──────────────────────────────────────────────────────────────────
 
 interface CoachChatProps {
@@ -383,7 +436,7 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
     onModification: () => {
       // Transient "Workout updated" acknowledgement — kept inline rather
       // than a toast library to avoid pulling a new dependency.
-      setFlash('Workout updated')
+      setFlash(locale === 'de' ? 'Workout aktualisiert' : 'Workout updated')
     },
   })
   const [input, setInput] = useState('')
@@ -391,8 +444,16 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const { language } = useLanguage()
+  const { locale } = useLocale()
   const simpleMode = language === 'simple'
-  const suggestions = simpleMode ? SUGGESTIONS_SIMPLE : SUGGESTIONS_TECHNICAL
+  const suggestions =
+    locale === 'de'
+      ? simpleMode
+        ? SUGGESTIONS_SIMPLE_DE
+        : SUGGESTIONS_TECHNICAL_DE
+      : simpleMode
+        ? SUGGESTIONS_SIMPLE
+        : SUGGESTIONS_TECHNICAL
   // Track the last seeded initialDraft value so we don't re-seed on subsequent
   // opens with the same draft string (prevents clobbering in-progress user typing).
   const lastSeededDraftRef = useRef<string | undefined>(undefined)
@@ -494,7 +555,7 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
   if (!open) return null
 
   const indicatorCopy = currentToolUse
-    ? toolIndicatorCopy(currentToolUse.name, language)
+    ? toolIndicatorCopy(currentToolUse.name, language, locale)
     : null
 
   const content = (
@@ -526,15 +587,15 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
               className="eyebrow"
               style={{ color: 'var(--color-amber)' }}
             >
-              Coach · chat
+              {locale === 'de' ? 'Coach · Chat' : 'Coach · chat'}
             </span>
             {messages.length > 0 && !disabled && (
               <button
                 onClick={reset}
                 className="eyebrow opacity-60 hover:opacity-100 transition-opacity ml-1"
-                aria-label="Clear conversation"
+                aria-label={locale === 'de' ? 'Unterhaltung löschen' : 'Clear conversation'}
               >
-                clear
+                {locale === 'de' ? 'löschen' : 'clear'}
               </button>
             )}
           </div>
@@ -546,7 +607,7 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
               border: '1px solid var(--color-rule)',
               backgroundColor: 'var(--color-paper)',
             }}
-            aria-label="Close coach chat"
+            aria-label={locale === 'de' ? 'Coach-Chat schließen' : 'Close coach chat'}
           >
             <X size={15} strokeWidth={2} />
           </button>
@@ -583,19 +644,25 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
                     fontStyle: 'italic',
                   }}
                 >
-                  Ask about your training, recovery, or what to do today.
+                  {locale === 'de'
+                    ? 'Frag nach deinem Training, deiner Erholung oder was du heute tun solltest.'
+                    : 'Ask about your training, recovery, or what to do today.'}
                 </h3>
                 <p
                   className="mt-3 text-[13px] leading-relaxed"
                   style={{ color: 'var(--color-ink-2)' }}
                 >
-                  {simpleMode
-                    ? "The coach reads your recent rides, recovery, and planned workouts — and can even update tomorrow's workout if life changes your plans."
-                    : "The coach can cite your HRV, TSB, recent rides, sleep debt, and zone mix — and can modify tomorrow's planned workout in-chat (shorten, harder, easier, indoor)."}
+                  {locale === 'de'
+                    ? (simpleMode
+                        ? 'Der Coach liest deine letzten Fahrten, deine Erholung und deine geplanten Workouts — und kann sogar das morgige Workout anpassen, wenn sich deine Pläne ändern.'
+                        : 'Der Coach kann deine HRV, TSB, letzten Fahrten, dein Schlafdefizit und deinen Zonen-Mix zitieren — und das morgige geplante Workout direkt im Chat anpassen (kürzen, härter, leichter, drinnen).')
+                    : (simpleMode
+                        ? "The coach reads your recent rides, recovery, and planned workouts — and can even update tomorrow's workout if life changes your plans."
+                        : "The coach can cite your HRV, TSB, recent rides, sleep debt, and zone mix — and can modify tomorrow's planned workout in-chat (shorten, harder, easier, indoor).")}
                 </p>
               </div>
               <div className="flex flex-col gap-2">
-                <span className="eyebrow">Try</span>
+                <span className="eyebrow">{locale === 'de' ? 'Versuche' : 'Try'}</span>
                 {suggestions.map((s) => (
                   <button
                     key={s}
@@ -682,7 +749,7 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
               border: isStreaming ? 'none' : '1px solid var(--color-rule)',
               opacity: disabled ? 0.55 : 1,
             }}
-            title={disabled ? 'Set ANTHROPIC_API_KEY in backend/.env to enable chat' : undefined}
+            title={disabled ? (locale === 'de' ? 'Setze ANTHROPIC_API_KEY in backend/.env, um den Chat zu aktivieren' : 'Set ANTHROPIC_API_KEY in backend/.env to enable chat') : undefined}
           >
             <textarea
               ref={textareaRef}
@@ -691,9 +758,13 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
               onKeyDown={handleKey}
               disabled={disabled || isStreaming}
               placeholder={
-                disabled
-                  ? 'Chat disabled — set ANTHROPIC_API_KEY in backend/.env'
-                  : 'Ask the coach… ⌘/Ctrl+Enter to send'
+                locale === 'de'
+                  ? (disabled
+                      ? 'Chat deaktiviert — setze ANTHROPIC_API_KEY in backend/.env'
+                      : 'Frag den Coach… ⌘/Strg+Enter zum Senden')
+                  : (disabled
+                      ? 'Chat disabled — set ANTHROPIC_API_KEY in backend/.env'
+                      : 'Ask the coach… ⌘/Ctrl+Enter to send')
               }
               rows={1}
               className="flex-1 bg-transparent outline-none resize-none text-[14px] leading-relaxed min-w-0 disabled:cursor-not-allowed"
@@ -711,7 +782,7 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
                 backgroundColor: 'var(--color-ink)',
                 color: 'var(--color-paper)',
               }}
-              aria-label="Send"
+              aria-label={locale === 'de' ? 'Senden' : 'Send'}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -724,7 +795,9 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
               className="mt-2 num-mono text-[11px] leading-relaxed"
               style={{ color: 'var(--color-muted)' }}
             >
-              AI chat requires an Anthropic API key. The rule-based brief above still works.
+              {locale === 'de'
+                ? 'Der KI-Chat benötigt einen Anthropic-API-Schlüssel. Das regelbasierte Briefing oben funktioniert weiterhin.'
+                : 'AI chat requires an Anthropic API key. The rule-based brief above still works.'}
             </p>
           )}
         </div>

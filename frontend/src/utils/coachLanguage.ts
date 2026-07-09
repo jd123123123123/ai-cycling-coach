@@ -12,15 +12,24 @@
  *   - WhyAmITired cause labels (simple: "Your sleep's been short" vs technical: "Sleep debt accumulated")
  *   - Section headings in the brief ("Grounded in sports science" vs framework list)
  *
- * Keep the map flat (string keys) so adding a new surface is a single entry;
- * callers pass `(key, language)` and get the copy. Unknown keys return the
- * key itself so missing entries fall back safely rather than rendering blank.
+ * Two orthogonal axes:
+ *   - `language: 'simple' | 'technical'` — the coach VOICE (jargon vs plain).
+ *   - `locale: 'en' | 'de'`             — the UI LANGUAGE (English vs German).
+ *
+ * Every exported function takes `locale` last (default `'en'`) so callers that
+ * predate localisation keep compiling. When `locale === 'de'` we return the
+ * German phrase, preserving the simple/technical distinction.
+ *
+ * Keep the maps flat (string keys) so adding a new surface is a single entry;
+ * callers pass `(key, language, locale)` and get the copy. Unknown keys return
+ * the key itself so missing entries fall back safely rather than rendering blank.
  */
 import type { CoachLanguage } from '../contexts/LanguageContext'
+import type { Locale } from '../i18n/strings'
 
 type Pair = Record<CoachLanguage, string>
 
-const PHRASES: Record<string, Pair> = {
+const PHRASES_EN: Record<string, Pair> = {
   // ─── CoachBrief footers ──────────────────────────────────────────────
   'brief.frameworksHeading': {
     simple:    'Grounded in sports science',
@@ -132,14 +141,134 @@ const PHRASES: Record<string, Pair> = {
   },
 }
 
+const PHRASES_DE: Record<string, Pair> = {
+  // ─── CoachBrief footers ──────────────────────────────────────────────
+  'brief.frameworksHeading': {
+    simple:    'Auf Sportwissenschaft gestützt',
+    technical: 'Gestützt auf',
+  },
+  'brief.whyThisWorkoutHeading': {
+    simple:    'Warum heute',
+    technical: 'Warum dieses Training',
+  },
+
+  // ─── PrescribedWorkoutCard eyebrows ──────────────────────────────────
+  'workoutCard.todayEyebrow': {
+    simple:    'Heute · das machen',
+    technical: 'Heute · verordnet',
+  },
+  'workoutCard.alternateEyebrow': {
+    simple:    'Andere Option',
+    technical: 'Alternative',
+  },
+  'workoutCard.alternatesHeading': {
+    simple:    'Kein Bock?',
+    technical: 'Wenn heute nicht dein Tag ist',
+  },
+  'workoutCard.startCta': {
+    simple:    'Training starten',
+    technical: 'Training starten',
+  },
+
+  // ─── Interval block names (simple adds a feel hint) ─────────────────
+  'block.warmup': {
+    simple:    'Aufwärmen · Locker bleiben',
+    technical: 'Aufwärmen',
+  },
+  'block.cooldown': {
+    simple:    'Ausfahren · Locker drehen',
+    technical: 'Ausfahren',
+  },
+  'block.main': {
+    simple:    'Hauptteil · Der Aufwand',
+    technical: 'Hauptteil',
+  },
+  'block.recovery': {
+    simple:    'Pause · Durchatmen',
+    technical: 'Erholung',
+  },
+
+  // ─── KPI strip tooltips ──────────────────────────────────────────────
+  'kpi.hrv.tooltip': {
+    simple:    'Wie erholt du dich fühlst (höher = besser)',
+    technical: 'HRV 7-Tage-Mittel vs. 28-Tage-Basis',
+  },
+  'kpi.bodyBatt.tooltip': {
+    simple:    'Wie viel Energie dein Körper hat (höher = besser)',
+    technical: 'Body Battery 7-Tage-Mittel vs. 28-Tage-Basis',
+  },
+  'kpi.sleep.tooltip': {
+    simple:    'Wie gut du geschlafen hast (höher = besser)',
+    technical: 'Schlaf-Score 7-Tage-Mittel vs. 28-Tage-Basis',
+  },
+  'kpi.tsb.tooltip': {
+    simple:    'Wie frisch deine Beine sind (+ frisch, − müde)',
+    technical: 'TSB = CTL − ATL · Banister-Form',
+  },
+  'kpi.ctl.tooltip': {
+    simple:    'Deine Gesamtfitness (höher = fitter)',
+    technical: 'CTL · 42-Tage-Fitness-EWMA',
+  },
+  'kpi.rhr.tooltip': {
+    simple:    'Ruhepuls (niedriger = erholter)',
+    technical: 'Ruhepuls 7-Tage-Mittel vs. 28-Tage-Basis',
+  },
+
+  // ─── WhyAmITired cause-label overrides ──────────────────────────────
+  'cause.label.HRV suppressed': {
+    simple:    'Dein Körper erholt sich langsamer',
+    technical: 'HRV unterdrückt',
+  },
+  'cause.label.Resting HR elevated': {
+    simple:    'Dein Ruhepuls ist erhöht',
+    technical: 'Ruhepuls erhöht',
+  },
+  'cause.label.Sleep debt accumulated': {
+    simple:    'Dein Schlaf war zu kurz',
+    technical: 'Schlafdefizit angesammelt',
+  },
+  'cause.label.Overreach (TSB deep-negative)': {
+    simple:    'Du steckst im Loch — zu viel Training',
+    technical: 'Überlastung (TSB stark negativ)',
+  },
+  'cause.label.Carrying productive fatigue': {
+    simple:    'Du trainierst hart — müde ist normal',
+    technical: 'Produktive Ermüdung',
+  },
+  'cause.label.Grey-zone creep': {
+    simple:    'Du fährst zu oft im Mittelbereich',
+    technical: 'Grauzonen-Schleichgang',
+  },
+
+  // ─── TransparencyDrawer intro line ──────────────────────────────────
+  'transparency.intro': {
+    simple:    'Das ist der Kram, den der Coach angeschaut hat. Zahlen und Nerd-Details.',
+    technical: (
+      'Jede Empfehlung oben stützt sich auf die Daten unten. Das ist genau der ' +
+      'Snapshot und der System-Prompt, den der Coach genutzt hat — du kannst ihn ' +
+      'prüfen, kopieren oder eine Empfehlung damit hinterfragen.'
+    ),
+  },
+}
+
+const PHRASES_BY_LOCALE: Record<Locale, Record<string, Pair>> = {
+  en: PHRASES_EN,
+  de: PHRASES_DE,
+}
+
 /**
- * Returns the string for `key` in the requested `language`. If the key isn't
- * in the map (programmer error or a newly-added surface that hasn't been
- * translated yet), we fall back to the key itself so the user sees *some*
+ * Returns the string for `key` in the requested `language` and `locale`. If the
+ * key isn't in the map (programmer error or a newly-added surface that hasn't
+ * been translated yet), we fall back to the key itself so the user sees *some*
  * signal instead of a blank label.
  */
-export function translateCoach(key: string, language: CoachLanguage): string {
-  const pair = PHRASES[key]
+export function translateCoach(
+  key: string,
+  language: CoachLanguage,
+  locale: Locale = 'en',
+): string {
+  const map = PHRASES_BY_LOCALE[locale] ?? PHRASES_EN
+  const pair = map[key] ?? PHRASES_EN[key]
   if (!pair) return key
   return pair[language]
 }
@@ -166,7 +295,7 @@ type TemplateCategory =
   | 'rest'
   | string   // backend may add new categories over time — stay forgiving
 
-const SIMPLE_TITLE_BY_CATEGORY: Record<string, string> = {
+const SIMPLE_TITLE_BY_CATEGORY_EN: Record<string, string> = {
   recovery:   'Easy spin',
   endurance:  'Chill ride',
   tempo:      'Steady push',
@@ -177,6 +306,22 @@ const SIMPLE_TITLE_BY_CATEGORY: Record<string, string> = {
   rest:       'Rest day',
 }
 
+const SIMPLE_TITLE_BY_CATEGORY_DE: Record<string, string> = {
+  recovery:   'Locker drehen',
+  endurance:  'Lockere Fahrt',
+  tempo:      'Gleichmäßig drücken',
+  sweet_spot: 'Fokussierter Aufwand',
+  threshold:  'Harte Fahrt',
+  vo2:        'Harte Intervalle',
+  anaerobic:  'Sprint-Tag',
+  rest:       'Ruhetag',
+}
+
+const SIMPLE_TITLE_BY_LOCALE: Record<Locale, Record<string, string>> = {
+  en: SIMPLE_TITLE_BY_CATEGORY_EN,
+  de: SIMPLE_TITLE_BY_CATEGORY_DE,
+}
+
 /**
  * For a given template category, return the simple-mode title. Falls back to
  * the provided `fallback` (the backend-supplied title) if the category is
@@ -185,9 +330,11 @@ const SIMPLE_TITLE_BY_CATEGORY: Record<string, string> = {
 export function simpleTitleFor(
   category: TemplateCategory | null | undefined,
   fallback: string,
+  locale: Locale = 'en',
 ): string {
   if (!category) return fallback
-  return SIMPLE_TITLE_BY_CATEGORY[category] ?? fallback
+  const map = SIMPLE_TITLE_BY_LOCALE[locale] ?? SIMPLE_TITLE_BY_CATEGORY_EN
+  return map[category] ?? fallback
 }
 
 
@@ -199,7 +346,7 @@ export function simpleTitleFor(
 
 type Grade = 'perfect' | 'strong' | 'okay' | 'overcooked' | 'undercooked'
 
-const GRADE_LABEL_SIMPLE: Record<Grade, string> = {
+const GRADE_LABEL_SIMPLE_EN: Record<Grade, string> = {
   perfect:     'Perfect',
   strong:      'Strong',
   okay:        'Good effort',
@@ -207,7 +354,7 @@ const GRADE_LABEL_SIMPLE: Record<Grade, string> = {
   undercooked: 'A bit short',
 }
 
-const GRADE_LABEL_TECHNICAL: Record<Grade, string> = {
+const GRADE_LABEL_TECHNICAL_EN: Record<Grade, string> = {
   perfect:     'Perfect',
   strong:      'Strong',
   okay:        'Okay',
@@ -215,14 +362,39 @@ const GRADE_LABEL_TECHNICAL: Record<Grade, string> = {
   undercooked: 'Undercooked',
 }
 
+const GRADE_LABEL_SIMPLE_DE: Record<Grade, string> = {
+  perfect:     'Perfekt',
+  strong:      'Stark',
+  okay:        'Guter Einsatz',
+  overcooked:  'Zu viel',
+  undercooked: 'Etwas kurz',
+}
+
+const GRADE_LABEL_TECHNICAL_DE: Record<Grade, string> = {
+  perfect:     'Perfekt',
+  strong:      'Stark',
+  okay:        'Okay',
+  overcooked:  'Übertrieben',
+  undercooked: 'Zu wenig',
+}
+
 /**
  * Grade pill display label — simple-mode softens okay / overcooked /
  * undercooked; technical preserves the raw grade.
  */
-export function gradeLabel(grade: Grade, language: CoachLanguage): string {
+export function gradeLabel(
+  grade: Grade,
+  language: CoachLanguage,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'de') {
+    return language === 'simple'
+      ? GRADE_LABEL_SIMPLE_DE[grade]
+      : GRADE_LABEL_TECHNICAL_DE[grade]
+  }
   return language === 'simple'
-    ? GRADE_LABEL_SIMPLE[grade]
-    : GRADE_LABEL_TECHNICAL[grade]
+    ? GRADE_LABEL_SIMPLE_EN[grade]
+    : GRADE_LABEL_TECHNICAL_EN[grade]
 }
 
 
@@ -233,12 +405,19 @@ type ComplianceBand = 'match' | 'over' | 'under'
 /**
  * Simple-mode phrase for one compliance axis. `overLabel` customises the
  * "what went over" — e.g. "longer than planned" for duration, "harder than
- * planned" for TSS. Match + under have stable phrasings.
+ * planned" for TSS. The caller passes an already-localised `overLabel`.
+ * Match + under have stable phrasings per locale.
  */
 export function complianceDirectionText(
   band: ComplianceBand,
   overLabel: string,
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'de') {
+    if (band === 'match') return 'Genau im Ziel'
+    if (band === 'over') return `Etwas ${overLabel}`
+    return 'Etwas leichter als geplant'
+  }
   if (band === 'match') return 'Right on target'
   if (band === 'over') return `A bit ${overLabel}`
   return 'A bit lighter than planned'

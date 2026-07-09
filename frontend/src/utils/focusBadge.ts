@@ -128,3 +128,41 @@ function styleFor(label: FocusLabel): FocusBadge {
     note: m.note,
   }
 }
+
+// ── German localization helpers ──────────────────────────────────────────
+// The FocusLabel enum values stay English (used as keys + color mapping);
+// these helpers translate the display word and tooltip note for German.
+
+const LABEL_DE: Record<FocusLabel, string> = {
+  Recovery:    'Erholung',
+  Endurance:   'Ausdauer',
+  Tempo:       'Tempo',
+  'Sweet Spot':'Sweet Spot',
+  Threshold:   'Schwelle',
+  'VO₂':       'VO₂',
+  'Big Day':   'Großer Tag',
+  Brick:       'Brick',
+  Mixed:       'Gemischt',
+}
+
+const NOTE_DE: Record<FocusLabel, string> = {
+  Recovery:    'Aktive Erholung — parasympathischer Reset.',
+  Endurance:   'Z2-Grundlage — der aerobe Motor.',
+  Tempo:       'Tempo — Effizienz in der Mittelzone.',
+  'Sweet Spot':'Sweet Spot — kosteneffizienter Schwellen-Reiz.',
+  Threshold:   'An der Schwelle — Laktattoleranz-Reiz.',
+  'VO₂':       'VO₂max — Arbeit an der Obergrenze.',
+  'Big Day':   'Einheit über 3h — Durability- und Fueling-Test.',
+  Brick:       'Rad + Lauf kombiniert — triathlon-spezifisch.',
+  Mixed:       'Einheit mit gemischten Zonen.',
+}
+
+/** German display word for a focus label (enum stays English). */
+export function focusLabelDe(label: FocusLabel): string {
+  return LABEL_DE[label]
+}
+
+/** German tooltip note for a focus label. */
+export function focusNoteDe(label: FocusLabel): string {
+  return NOTE_DE[label]
+}

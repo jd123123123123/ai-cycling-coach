@@ -57,6 +57,7 @@ def analyze_fueling(
     if_: float | None = None,
     durability_drop_pct: float | None = None,
     decoupling_pct: float | None = None,
+    de: bool = False,
 ) -> FuelingResult | None:
     """Energy + fueling estimates for a ride. None on empty power. See docstring."""
     if not power_series:
@@ -78,11 +79,14 @@ def analyze_fueling(
         underfueled = None
 
     if underfueled:
-        note = "High late-ride fade with cardiac drift — likely ran low on carbs."
+        note = ("Starker Einbruch spät im Rennen mit HF-Drift — wahrscheinlich zu wenig Kohlenhydrate."
+                if de else "High late-ride fade with cardiac drift — likely ran low on carbs.")
     elif underfueled is False:
-        note = "No strong under-fueling signature."
+        note = ("Kein klares Zeichen für Unterversorgung."
+                if de else "No strong under-fueling signature.")
     else:
-        note = "Fueling estimate only; connect fatigue signals for a deficit read."
+        note = ("Nur eine Schätzung; für ein Defizit-Bild Ermüdungssignale verknüpfen."
+                if de else "Fueling estimate only; connect fatigue signals for a deficit read.")
 
     return FuelingResult(
         total_kj=round(total_kj, 1),

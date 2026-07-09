@@ -1,18 +1,29 @@
 import { addDays, format } from 'date-fns'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 import type { TomorrowPlan, IntensityChip } from '../../api/coach'
 
 // Intensity → human label + state color. Same vocabulary as the
 // prescribed-workout card; ties tomorrow's tint to the same tone system
 // the rest of the new cards use.
-const CHIP_LABEL: Record<IntensityChip, string> = {
-  recovery: 'Recovery',
-  endurance: 'Endurance',
-  tempo: 'Tempo',
-  threshold: 'Threshold',
-  vo2: 'VO₂max',
-  race: 'Race',
+function chipLabel(chip: IntensityChip, locale: 'en' | 'de'): string {
+  const en: Record<IntensityChip, string> = {
+    recovery: 'Recovery',
+    endurance: 'Endurance',
+    tempo: 'Tempo',
+    threshold: 'Threshold',
+    vo2: 'VO₂max',
+    race: 'Race',
+  }
+  const de: Record<IntensityChip, string> = {
+    recovery: 'Erholung',
+    endurance: 'Ausdauer',
+    tempo: 'Tempo',
+    threshold: 'Schwelle',
+    vo2: 'VO₂max',
+    race: 'Rennen',
+  }
+  return (locale === 'de' ? de : en)[chip]
 }
 
 const CHIP_TONE: Record<IntensityChip, 'good' | 'caution' | 'bad' | 'neutral'> = {
@@ -54,6 +65,7 @@ interface TomorrowCardProps {
 export default function TomorrowCard({ data }: TomorrowCardProps) {
   const { data: brief } = useCoachBrief()
   const t = useT()
+  const { locale } = useLocale()
   if (!data) return null
 
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
@@ -67,7 +79,11 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
   const chip = (data.intensity_chip as IntensityChip) ?? 'endurance'
   const tone = CHIP_TONE[chip] ?? 'neutral'
   const color = TONE_COLOR[tone]
-  const title = planned?.title || `${CHIP_LABEL[chip] ?? 'Endurance'} day`
+  const title =
+    planned?.title ||
+    (locale === 'de'
+      ? `${chipLabel(chip, 'de') ?? 'Ausdauer'}-Tag`
+      : `${chipLabel(chip, 'en') ?? 'Endurance'} day`)
   const duration = planned?.duration_minutes ?? null
   const tomorrow = addDays(new Date(), 1)
   const isProjected = planned?.projected === true
@@ -101,13 +117,13 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
             border: `1px solid color-mix(in srgb, ${color} 35%, var(--color-rule))`,
           }}
         >
-          {CHIP_LABEL[chip] ?? chip}
+          {chipLabel(chip, locale) ?? chip}
         </span>
         {isProjected && (
           <span
             className="num-mono"
             style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.12em' }}
-            title="Projected from the periodization picker — no scheduled session yet for tomorrow."
+            title={locale === 'de' ? 'Projiziert aus dem Periodisierungs-Picker — noch keine geplante Einheit für morgen.' : 'Projected from the periodization picker — no scheduled session yet for tomorrow.'}
           >
             · {t('projected')}
           </span>

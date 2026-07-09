@@ -9,6 +9,7 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { ActivityRead } from '../../api/dashboard'
 import { useCountUp } from '../../hooks/useCountUp'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // This-week vs last-week comparison. Reddit's #1 complaint about fitness apps:
 // "I can't tell at a glance if I'm training more or less than usual."
@@ -49,6 +50,7 @@ interface StatCellProps {
 }
 
 function StatCell({ label, current, prev, format, rawValue, digits = 0, higherIsBetter = true }: StatCellProps) {
+  const { locale } = useLocale()
   const pct = pctChange(current, prev)
   const animated = useCountUp(rawValue, { durationMs: 700, digits, skipZero: false })
 
@@ -80,12 +82,12 @@ function StatCell({ label, current, prev, format, rawValue, digits = 0, higherIs
           style={{ color: toneColor }}
         >
           <DeltaIcon size={10} strokeWidth={2} />
-          <span>{pct >= 0 ? '+' : ''}{Math.round(pct)}% vs last week</span>
+          <span>{pct >= 0 ? '+' : ''}{Math.round(pct)}% {locale === 'de' ? 'vs. letzte Woche' : 'vs last week'}</span>
         </div>
       )}
       {pct === null && prev === 0 && current === 0 && (
         <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
-          no data
+          {locale === 'de' ? 'keine Daten' : 'no data'}
         </span>
       )}
     </div>
@@ -93,6 +95,8 @@ function StatCell({ label, current, prev, format, rawValue, digits = 0, higherIs
 }
 
 export default function WeekVsLast() {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   const today = new Date()
   const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 })
   const lastWeekStart = subWeeks(thisWeekStart, 1)
@@ -148,11 +152,11 @@ export default function WeekVsLast() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
-          This week vs last
+          {de ? 'Diese Woche vs. letzte' : 'This week vs last'}
         </span>
         {thisWeek.sessions > 0 && (
           <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
-            {thisWeek.sessions} session{thisWeek.sessions !== 1 ? 's' : ''}
+            {thisWeek.sessions} {de ? (thisWeek.sessions !== 1 ? 'Einheiten' : 'Einheit') : `session${thisWeek.sessions !== 1 ? 's' : ''}`}
           </span>
         )}
       </div>
@@ -167,7 +171,7 @@ export default function WeekVsLast() {
       >
         <div className="px-4 py-3" style={{ borderRight: '1px solid var(--color-rule)' }}>
           <StatCell
-            label="Load"
+            label={de ? 'Belastung' : 'Load'}
             current={thisWeek.totalTSS}
             prev={lastWeek.totalTSS}
             rawValue={thisWeek.totalTSS}
@@ -177,7 +181,7 @@ export default function WeekVsLast() {
         </div>
         <div className="px-4 py-3" style={{ borderRight: '1px solid var(--color-rule)' }}>
           <StatCell
-            label="Time"
+            label={de ? 'Zeit' : 'Time'}
             current={thisWeek.totalHours}
             prev={lastWeek.totalHours}
             rawValue={thisWeek.totalHours}
@@ -187,7 +191,7 @@ export default function WeekVsLast() {
         </div>
         <div className="px-4 py-3">
           <StatCell
-            label="Sessions"
+            label={de ? 'Einheiten' : 'Sessions'}
             current={thisWeek.sessions}
             prev={lastWeek.sessions}
             rawValue={thisWeek.sessions}
@@ -202,7 +206,7 @@ export default function WeekVsLast() {
         <div className="mt-3 flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <span className="num-mono text-[10px]" style={{ color: 'var(--color-muted)' }}>
-              Last week: {lastWeek.totalTSS > 0 ? `${Math.round(lastWeek.totalTSS)} TSS` : `${lastWeek.totalHours.toFixed(1)} h`} · {lastWeek.sessions} session{lastWeek.sessions !== 1 ? 's' : ''}
+              {de ? 'Letzte Woche' : 'Last week'}: {lastWeek.totalTSS > 0 ? `${Math.round(lastWeek.totalTSS)} TSS` : `${lastWeek.totalHours.toFixed(1)} h`} · {lastWeek.sessions} {de ? (lastWeek.sessions !== 1 ? 'Einheiten' : 'Einheit') : `session${lastWeek.sessions !== 1 ? 's' : ''}`}
             </span>
           </div>
           {/* Comparison bars: this week (filled) vs last week (outline only) */}

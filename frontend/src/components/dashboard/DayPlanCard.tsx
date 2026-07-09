@@ -7,7 +7,7 @@ import type { ResolvedBlock } from '../../api/coach'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
 import type { ActivityRead } from '../../api/dashboard'
 import { formatHours } from '../../utils/format'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 
 interface DayPlanCardProps {
   day: DayPlan
@@ -54,12 +54,13 @@ function fullDateLabel(dateStr: string): string { return parsedDate(dateStr) ? f
 export default function DayPlanCard({ day, language, activity = null }: DayPlanCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const t = useT()
+  const { locale } = useLocale()
 
   const dateObj = parsedDate(day.date)
   const isFutureDay = dateObj ? isFuture(dateObj) && !isToday(dateObj) : false
   const isTodayDay = day.is_today
   const dotColor = CATEGORY_DOT_COLOR[day.category] ?? 'var(--color-zone-2)'
-  const duration = day.duration_seconds_target ? formatHours(day.duration_seconds_target) : day.category === 'rest' ? 'Rest' : '—'
+  const duration = day.duration_seconds_target ? formatHours(day.duration_seconds_target) : day.category === 'rest' ? (locale === 'de' ? 'Ruhe' : 'Rest') : '—'
   const adaptedBlocks = adaptIntervals(day.intervals)
 
   return (

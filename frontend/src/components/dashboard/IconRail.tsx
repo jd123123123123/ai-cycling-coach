@@ -11,11 +11,13 @@
 import { Home, Calendar, Activity, MessageCircle, Settings } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useLocale } from '../../contexts/LocaleContext'
 
 interface NavItem {
   path: string
   icon: React.ReactNode
   label: string
+  labelDe: string
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -23,37 +25,43 @@ const NAV_ITEMS: NavItem[] = [
     path: '/dashboard',
     icon: <Home size={20} strokeWidth={1.6} />,
     label: 'Today',
+    labelDe: 'Heute',
   },
   {
     path: '/calendar',
     icon: <Calendar size={20} strokeWidth={1.6} />,
     label: 'Calendar',
+    labelDe: 'Kalender',
   },
   {
     path: '/activities',
     icon: <Activity size={20} strokeWidth={1.6} />,
     label: 'Activities',
+    labelDe: 'Aktivitäten',
   },
   {
     path: '/coach',
     icon: <MessageCircle size={20} strokeWidth={1.6} />,
     label: 'Coach',
+    labelDe: 'Coach',
   },
   {
     path: '/settings',
     icon: <Settings size={20} strokeWidth={1.6} />,
     label: 'Settings',
+    labelDe: 'Einstellungen',
   },
 ]
 
 export default function IconRail() {
   useLanguage() // keep context subscription so language toggle re-renders nav
+  const { locale } = useLocale()
   const location = useLocation()
 
   return (
     // Hidden below lg breakpoint — masthead navigation handles mobile.
     <nav
-      aria-label="Main navigation"
+      aria-label={locale === 'de' ? 'Hauptnavigation' : 'Main navigation'}
       className="hidden lg:flex flex-col"
       style={{
         position: 'fixed',
@@ -73,7 +81,7 @@ export default function IconRail() {
       >
         {NAV_ITEMS.map((item) => {
           const isActive = location.pathname === item.path
-          const label = item.label
+          const label = locale === 'de' ? item.labelDe : item.label
           return (
             <li key={item.path} style={{ width: '100%' }}>
               <Link

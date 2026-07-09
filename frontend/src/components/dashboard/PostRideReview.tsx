@@ -35,7 +35,7 @@ import type {
 import type { CoachLanguage } from '../../contexts/LanguageContext'
 import { complianceDirectionText, gradeLabel } from '../../utils/coachLanguage'
 import { formatSigned } from '../../utils/format'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 
 type Grade = NonNullable<PostRideReviewType['grade']>
 
@@ -83,6 +83,7 @@ function BandChip({
   simpleMode: boolean
   overLabel: string
 }) {
+  const { locale } = useLocale()
   if (!pair) return null
   const symbol = pair.band === 'match' ? '✓' : pair.band === 'over' ? '↑' : '↓'
   const tone =
@@ -92,8 +93,8 @@ function BandChip({
         ? '#c4614c'
         : '#9b8a6b'
   const copy = simpleMode
-    ? complianceDirectionText(pair.band, overLabel)
-    : `${symbol} ${formatSigned(pair.delta_pct, 0)}% vs target`
+    ? complianceDirectionText(pair.band, overLabel, locale)
+    : `${symbol} ${formatSigned(pair.delta_pct, 0)}% ${locale === 'de' ? 'vs. Ziel' : 'vs target'}`
   return (
     <span
       className="num-mono text-[11px] leading-tight"
@@ -200,8 +201,9 @@ function ActivityRow({
   index: number
   language: CoachLanguage
 }) {
+  const { locale } = useLocale()
   const icon = SPORT_ICON[activity.sport] ?? SPORT_ICON.cycling
-  const tssLabel = language === 'simple' ? 'pts' : 'TSS'
+  const tssLabel = language === 'simple' ? (locale === 'de' ? 'Pkt' : 'pts') : 'TSS'
   const tssDisp =
     typeof activity.tss === 'number' ? Math.round(activity.tss) : null
   const durDisp =
@@ -279,7 +281,7 @@ function ActivityRow({
             fontWeight: 500,
           }}
         >
-          {gradeLabel(grade, language)}
+          {gradeLabel(grade, language, locale)}
         </span>
       )}
     </motion.div>
@@ -294,6 +296,7 @@ function MultiActivityReview({
   language: CoachLanguage
 }) {
   const t = useT()
+  const { locale } = useLocale()
   const totals = review.totals ?? {
     tss: review.tss?.actual ?? 0,
     duration_minutes:
@@ -337,11 +340,11 @@ function MultiActivityReview({
           <span className="num-mono" style={{ fontStyle: 'normal' }}>
             {totals.count}
           </span>{' '}
-          sessions ·{' '}
+          {locale === 'de' ? 'Einheiten' : 'sessions'} ·{' '}
           <span className="num-mono" style={{ fontStyle: 'normal' }}>
             {tssDisp}
           </span>{' '}
-          {language === 'simple' ? 'pts' : 'TSS'} ·{' '}
+          {language === 'simple' ? (locale === 'de' ? 'Pkt' : 'pts') : 'TSS'} ·{' '}
           <span className="num-mono" style={{ fontStyle: 'normal' }}>
             {durDisp}
           </span>
@@ -432,35 +435,38 @@ export default function PostRideReview({ review, language }: Props) {
 
   const simpleMode = language === 'simple'
   const t = useT()
+  const { locale } = useLocale()
+  const de = locale === 'de'
+  const targetWord = de ? 'Ziel' : 'target'
   const palette = GRADE_PALETTE[review.grade]
 
   // Duration — always shown
   const durationValue = `${Math.round(review.duration.actual)}`
-  const durationTarget = `target ${Math.round(review.duration.target)}`
+  const durationTarget = `${targetWord} ${Math.round(review.duration.target)}`
 
   // TSS / Effort points — always shown
   const tssValue = `${Math.round(review.tss.actual)}`
-  const tssTarget = `target ${Math.round(review.tss.target)}`
+  const tssTarget = `${targetWord} ${Math.round(review.tss.target)}`
 
   // Third slot — EF (preferred) or IF, with simple-mode label swap
   const hasEf = typeof review.ef === 'number'
   const hasIf = review.intensity_factor != null
   const thirdSlot = hasEf
     ? {
-        label: simpleMode ? 'Heart-to-power ratio' : 'EF',
+        label: simpleMode ? (de ? 'Herz-zu-Leistung' : 'Heart-to-power ratio') : 'EF',
         value: (review.ef as number).toFixed(2),
         unit: undefined,
         target: typeof review.variability_index === 'number'
-          ? `pace ${review.variability_index.toFixed(2)}`
+          ? `${de ? 'Tempo' : 'pace'} ${review.variability_index.toFixed(2)}`
           : undefined,
         band: null as CompliancePair | null,
       }
     : hasIf && review.intensity_factor
       ? {
-          label: simpleMode ? 'Effort intensity' : 'IF',
+          label: simpleMode ? (de ? 'Aufwandsintensität' : 'Effort intensity') : 'IF',
           value: review.intensity_factor.actual.toFixed(2),
           unit: undefined,
-          target: `target ${review.intensity_factor.target.toFixed(2)}`,
+          target: `${targetWord} ${review.intensity_factor.target.toFixed(2)}`,
           band: review.intensity_factor,
         }
       : null
@@ -538,9 +544,9 @@ export default function PostRideReview({ review, language }: Props) {
           }
         >
           <span className="eyebrow" style={{ color: palette.fg, opacity: 0.85 }}>
-            Grade
+            {de ? 'Note' : 'Grade'}
           </span>
-          <span>{gradeLabel(review.grade, language)}</span>
+          <span>{gradeLabel(review.grade, language, locale)}</span>
         </motion.div>
       </div>
 
@@ -553,22 +559,22 @@ export default function PostRideReview({ review, language }: Props) {
         }}
       >
         <MetricCell
-          label={simpleMode ? 'Time' : 'Duration'}
+          label={simpleMode ? (de ? 'Zeit' : 'Time') : (de ? 'Dauer' : 'Duration')}
           value={durationValue}
           unit="min"
           target={durationTarget}
           band={review.duration}
           simpleMode={simpleMode}
-          overLabel={simpleMode ? 'longer than planned' : 'over target'}
+          overLabel={simpleMode ? (de ? 'länger als geplant' : 'longer than planned') : (de ? 'über dem Ziel' : 'over target')}
           delay={0.0}
         />
         <MetricCell
-          label={simpleMode ? 'Effort points' : 'TSS'}
+          label={simpleMode ? (de ? 'Aufwandspunkte' : 'Effort points') : 'TSS'}
           value={tssValue}
           target={tssTarget}
           band={review.tss}
           simpleMode={simpleMode}
-          overLabel={simpleMode ? 'harder than planned' : 'over target'}
+          overLabel={simpleMode ? (de ? 'härter als geplant' : 'harder than planned') : (de ? 'über dem Ziel' : 'over target')}
           delay={0.12}
         />
         {thirdSlot && (
@@ -579,7 +585,7 @@ export default function PostRideReview({ review, language }: Props) {
             target={thirdSlot.target}
             band={thirdSlot.band}
             simpleMode={simpleMode}
-            overLabel={simpleMode ? 'above target' : 'over target'}
+            overLabel={simpleMode ? (de ? 'über dem Ziel' : 'above target') : (de ? 'über dem Ziel' : 'over target')}
             delay={0.24}
           />
         )}

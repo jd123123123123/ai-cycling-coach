@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 
 // Morning check-in — the single highest-retention interaction in fitness apps.
 // Whoop built their daily habit around this exact mechanic: a 3-tap subjective
@@ -16,6 +16,13 @@ const FEELINGS: Array<{ key: Feeling; emoji: string; label: string; color: strin
   { key: 'ok',    emoji: '😐', label: 'OK',     color: 'var(--color-amber)',    bg: 'rgba(255, 159, 10, 0.10)' },
   { key: 'tired', emoji: '😴', label: 'Tired',  color: 'var(--color-alert)',    bg: 'rgba(255, 69, 58, 0.10)' },
 ]
+
+function feelingLabel(key: Feeling, locale: 'en' | 'de'): string {
+  if (locale === 'de') {
+    return key === 'great' ? 'Super' : key === 'ok' ? 'OK' : 'Müde'
+  }
+  return key === 'great' ? 'Great' : key === 'ok' ? 'OK' : 'Tired'
+}
 
 const STORAGE_KEY = 'morning_checkin'
 
@@ -45,6 +52,7 @@ function saveFeeling(feeling: Feeling) {
 
 export default function MorningCheckin() {
   const t = useT()
+  const { locale } = useLocale()
   const [feeling, setFeeling] = useState<Feeling | null>(null)
   const [justSelected, setJustSelected] = useState(false)
   const [dismissed, setDismissed] = useState(false)
@@ -114,7 +122,7 @@ export default function MorningCheckin() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
-              Your body · 2-second check-in
+              {locale === 'de' ? 'Dein Körper · 2-Sekunden-Check-in' : 'Your body · 2-second check-in'}
             </span>
             <p className="text-[15px] font-medium mt-1" style={{ color: 'var(--color-ink)' }}>
               {t('morning_checkin_prompt')}
@@ -150,7 +158,7 @@ export default function MorningCheckin() {
                   className="eyebrow"
                   style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.16em' }}
                 >
-                  {f.label.toUpperCase()}
+                  {feelingLabel(f.key, locale).toUpperCase()}
                 </span>
               </button>
             ))}

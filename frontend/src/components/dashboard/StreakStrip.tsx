@@ -4,7 +4,7 @@ import { Flame, CheckCircle2, Circle, Target } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useCountUp } from '../../hooks/useCountUp'
-import { useT } from '../../contexts/LocaleContext'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // StreakStrip — compact, addictive replacement for the big StreakCard.
 // Designed to sit HIGH on the page. Three daily goals surface today's
@@ -151,7 +151,7 @@ function GoalPill({
 }
 
 export default function StreakStrip() {
-  const t = useT()
+  const { locale, t } = useLocale()
   const today = new Date()
   const windowStart = subDays(today, 90)
   const metricsStart = subDays(today, 14)
@@ -296,15 +296,15 @@ export default function StreakStrip() {
               {countedStreak}
             </span>
             <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}>
-              DAY{currentStreak === 1 ? '' : 'S'}
+              {locale === 'de' ? (currentStreak === 1 ? 'TAG' : 'TAGE') : `DAY${currentStreak === 1 ? '' : 'S'}`}
             </span>
             {bestStreak > currentStreak && (
               <span
                 className="num-mono text-[11px] shrink-0"
                 style={{ color: 'var(--color-muted)' }}
-                title={`Best ${bestStreak} days in last 90d`}
+                title={locale === 'de' ? `Bestwert ${bestStreak} Tage in den letzten 90 T` : `Best ${bestStreak} days in last 90d`}
               >
-                · best {bestStreak}
+                · {locale === 'de' ? 'Best' : 'best'} {bestStreak}
               </span>
             )}
           </div>
@@ -333,7 +333,7 @@ export default function StreakStrip() {
       {/* 14-day chain — each day is a tiny stacked indicator */}
       <div className="flex items-center justify-between gap-2 pt-1">
         <span className="eyebrow shrink-0" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
-          LAST 14 DAYS
+          {locale === 'de' ? 'LETZTE 14 TAGE' : 'LAST 14 DAYS'}
         </span>
         <div className="flex items-center gap-1 flex-1 justify-center">
           {days14.map((d, i) => {
@@ -349,7 +349,9 @@ export default function StreakStrip() {
               <div
                 key={i}
                 className="relative group shrink-0"
-                title={`${format(d.date, 'EEE d LLL')} · ${d.trained ? '✓' : '·'} train · ${d.checkedIn ? '✓' : '·'} check · ${d.recovered ? '✓' : '·'} recover`}
+                title={locale === 'de'
+                  ? `${format(d.date, 'EEE d LLL')} · ${d.trained ? '✓' : '·'} Einheit · ${d.checkedIn ? '✓' : '·'} Check-in · ${d.recovered ? '✓' : '·'} Erholung`
+                  : `${format(d.date, 'EEE d LLL')} · ${d.trained ? '✓' : '·'} train · ${d.checkedIn ? '✓' : '·'} check · ${d.recovered ? '✓' : '·'} recover`}
               >
                 <span
                   className="block rounded-full"
@@ -367,7 +369,7 @@ export default function StreakStrip() {
           })}
         </div>
         <span className="eyebrow shrink-0 hidden sm:inline" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
-          TODAY
+          {locale === 'de' ? 'HEUTE' : 'TODAY'}
         </span>
       </div>
 
@@ -380,10 +382,16 @@ export default function StreakStrip() {
             style={{ color: todayDone ? 'var(--color-ink)' : 'var(--color-ink-2)' }}
           >
             {todayDone
-              ? 'Today closed. Chain grows to ' + (currentStreak + (todayStatus.completion === 1 ? 0 : 1)) + '.'
+              ? (locale === 'de'
+                  ? 'Heute abgeschlossen. Die Kette wächst auf ' + (currentStreak + (todayStatus.completion === 1 ? 0 : 1)) + '.'
+                  : 'Today closed. Chain grows to ' + (currentStreak + (todayStatus.completion === 1 ? 0 : 1)) + '.')
               : todayStatus.completion === 0
-                ? 'Zero of three. One session or one check-in starts it.'
-                : `${Math.round(todayStatus.completion * 3)} of 3 — ${3 - Math.round(todayStatus.completion * 3)} to close today.`}
+                ? (locale === 'de'
+                    ? 'Null von drei. Eine Einheit oder ein Check-in startet sie.'
+                    : 'Zero of three. One session or one check-in starts it.')
+                : (locale === 'de'
+                    ? `${Math.round(todayStatus.completion * 3)} von 3 — noch ${3 - Math.round(todayStatus.completion * 3)}, um heute abzuschließen.`
+                    : `${Math.round(todayStatus.completion * 3)} of 3 — ${3 - Math.round(todayStatus.completion * 3)} to close today.`)}
           </span>
         </div>
       </div>

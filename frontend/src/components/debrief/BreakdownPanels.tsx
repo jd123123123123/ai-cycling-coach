@@ -1,11 +1,15 @@
 import { useLocale } from '../../contexts/LocaleContext'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import type {
   RaceDebrief, Pacing, Climb, EffortMatch, Efficiency, Matchbook, Quadrant, Fueling, WkoModel, Cda,
 } from '../../api/debrief'
 
-// Act 3 — the breakdown. A grid of analytical cards, one per analyzer block.
-// Every card carries a status accent + a plain-language read line so no number
-// sits without meaning. Each returns null when its data is absent.
+// Act 3 — the breakdown, read as a consulting storyline rather than a wall of
+// cards. Each analyzer is a "slide": a message (eyebrow + serif headline +
+// so-what) on the left, the evidence (numbers / viz) on the right. Big vertical
+// rhythm, one insight per row, never three graphics crammed across. Compact
+// stat-only blocks pair up two-across at the end. Each piece returns null when
+// its data is absent.
 
 function fmtMmSs(seconds: number | null | undefined): string {
   if (seconds == null || !isFinite(seconds)) return '—'
@@ -18,22 +22,111 @@ function durationLabel(seconds: number, de: boolean): string {
   return de ? `${m}min` : `${m}m`
 }
 
-function Card({ label, accent, read, children }: { label: string; accent?: string; read?: string; children: React.ReactNode }) {
+/** The segmenter splits a climb every time the grade dips below its threshold,
+ * so one long climb with varying steepness comes back as many fragments. Bridge
+ * consecutive climb segments separated by only a short non-climb gap back into
+ * a single climb — a real descent/valley (long gap) still keeps them apart. */
+function mergeClimbs(climbs: Climb[]): Climb[] {
+  if (climbs.length <= 1) return climbs.slice()
+  const sorted = [...climbs].sort((a, b) => a.start_s - b.start_s)
+  const out: Climb[] = []
+  let cur: Climb = { ...sorted[0] }
+  for (let k = 1; k < sorted.length; k++) {
+    const nx = sorted[k]
+    const gap = nx.start_s - (cur.start_s + cur.duration_s)
+    // Bridge only across a SHORT non-climb gap — a false-flat inside one climb
+    // is seconds long; a real descent/valley between two passes runs minutes,
+    // so an absolute cap keeps distinct climbs apart instead of snowballing the
+    // whole ride into one giant "climb".
+    const bridge = gap <= 90
+    if (bridge) {
+      const gain = cur.elev_gain_m + nx.elev_gain_m
+      const dist = cur.distance_m + nx.distance_m
+      const dur = nx.start_s + nx.duration_s - cur.start_s
+      const wDur = (cur.w_per_kg != null ? cur.duration_s : 0) + (nx.w_per_kg != null ? nx.duration_s : 0)
+      const wSum = (cur.w_per_kg != null ? cur.w_per_kg * cur.duration_s : 0) + (nx.w_per_kg != null ? nx.w_per_kg * nx.duration_s : 0)
+      cur = {
+        ...cur,
+        duration_s: dur,
+        distance_m: dist,
+        elev_gain_m: gain,
+        avg_grade_pct: dist > 0 ? (gain / dist) * 100 : cur.avg_grade_pct,
+        vam_m_per_h: dur > 0 ? gain / (dur / 3600) : cur.vam_m_per_h,
+        w_per_kg: wDur > 0 ? wSum / wDur : null,
+      }
+    } else {
+      out.push(cur)
+      cur = { ...nx }
+    }
+  }
+  out.push(cur)
+  return out
+}
+
+// ─── Shared primitives ────────────────────────────────────────────────────────
+
+const CARD_STYLE: React.CSSProperties = {
+  background:
+    'linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0) 120px), var(--color-paper-2)',
+  border: '1px solid var(--color-rule)',
+  boxShadow: '0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 40px -24px rgba(0,0,0,0.85)',
+}
+
+function Eyebrow({ label, accent }: { label: string; accent?: string }) {
   return (
-    <div
-      className="relative rounded-[18px] p-4 sm:p-5 flex flex-col gap-2.5 overflow-hidden"
-      style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
-    >
-      {accent && <div className="absolute left-0 top-0 bottom-0" style={{ width: 3, background: accent }} />}
-      <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em', paddingLeft: accent ? 4 : 0 }}>
+    <div className="flex items-center gap-2">
+      <span
+        className="shrink-0"
+        style={{ width: 6, height: 6, borderRadius: '50%', background: accent ?? 'var(--color-muted)', boxShadow: accent ? `0 0 8px ${accent}` : undefined }}
+      />
+      <span className="num-mono" style={{ color: accent ?? 'var(--color-ink-2)', fontSize: 10.5, letterSpacing: '0.24em', fontWeight: 600 }}>
         {label}
       </span>
-      <div className="flex flex-col gap-2.5" style={{ paddingLeft: accent ? 4 : 0 }}>
-        {children}
+    </div>
+  )
+}
+
+/** Full-width "slide": message column (eyebrow + serif headline + so-what) on
+ * the left, evidence on the right. This is the McKinsey slide shape. */
+function Slide({ eyebrow, headline, explain, accent, children }: {
+  eyebrow: string; headline: string; explain?: string; accent?: string; children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-2xl overflow-hidden" style={CARD_STYLE}>
+      <div className="grid md:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+        <div className="flex flex-col gap-3 p-6 sm:p-7 debrief-slide-msg">
+          <Eyebrow label={eyebrow} accent={accent} />
+          <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(21px, 2.4vw, 26px)', fontWeight: 500, lineHeight: 1.12, letterSpacing: '-0.015em', color: 'var(--color-ink)' }}>
+            {headline}
+          </h3>
+          {explain && (
+            <p className="leading-relaxed" style={{ color: 'var(--color-ink-2)', fontSize: 13.5 }}>{explain}</p>
+          )}
+        </div>
+        <div className="flex flex-col justify-center gap-4 p-6 sm:p-7 debrief-slide-ev">
+          {children}
+        </div>
       </div>
-      {read && (
-        <p className="leading-relaxed mt-0.5" style={{ color: 'var(--color-ink-2)', fontSize: 12.5, paddingLeft: accent ? 4 : 0 }}>{read}</p>
-      )}
+    </div>
+  )
+}
+
+/** Compact card for stat-only blocks that pair two-across. */
+function Card({ label, accent, headline, read, children }: {
+  label: string; accent?: string; headline?: string; read?: string; children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-2xl overflow-hidden h-full flex flex-col" style={CARD_STYLE}>
+      <div className="px-5 pt-4 pb-3" style={{ borderBottom: '1px solid var(--color-rule)' }}>
+        <Eyebrow label={label} accent={accent} />
+      </div>
+      <div className="flex flex-col gap-3 px-5 py-4 flex-1">
+        {headline && (
+          <h4 style={{ fontFamily: 'var(--font-serif)', fontSize: 18, fontWeight: 500, lineHeight: 1.15, color: 'var(--color-ink)' }}>{headline}</h4>
+        )}
+        {children}
+        {read && <p className="leading-relaxed mt-auto" style={{ color: 'var(--color-ink-2)', fontSize: 12.5 }}>{read}</p>}
+      </div>
     </div>
   )
 }
@@ -42,56 +135,71 @@ function StatBlock({ value, unit, label, color }: { value: string; unit?: string
   return (
     <div>
       <div className="flex items-baseline gap-1">
-        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 500, color: color ?? 'var(--color-ink)', lineHeight: 1.05 }}>
+        <span style={{ fontFamily: 'var(--font-serif)', fontSize: 30, fontWeight: 500, color: color ?? 'var(--color-ink)', lineHeight: 1 }}>
           {value}
         </span>
         {unit && <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{unit}</span>}
       </div>
-      <div style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.04em' }}>{label}</div>
+      <div className="num-mono mt-1" style={{ color: 'var(--color-muted)', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{label}</div>
     </div>
   )
 }
 
-// ─── Pacing ─────────────────────────────────────────────────────────────────
-function PacingCard({ pacing }: { pacing: Pacing | null }) {
+function StatRow({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-wrap gap-x-7 gap-y-4">{children}</div>
+}
+
+// ─── Act header ────────────────────────────────────────────────────────────────
+function ActHeader({ kicker, title }: { kicker: string; title: string }) {
+  return (
+    <div className="flex items-baseline gap-3 mb-1">
+      <div className="flex flex-col gap-1">
+        <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.24em' }}>{kicker}</span>
+        <h2 style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-serif)', fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: 500, letterSpacing: '-0.015em', lineHeight: 1 }}>{title}</h2>
+      </div>
+      <div className="flex-1 self-center" style={{ height: 1, background: 'var(--color-rule)' }} />
+    </div>
+  )
+}
+
+// ─── Pacing (won & lost) ────────────────────────────────────────────────────────
+function PacingSlide({ pacing }: { pacing: Pacing | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!pacing) return null
   const split = pacing.split_pct
   const tone = split < -8 ? 'var(--color-bad)' : split < -3 ? 'var(--color-caution)' : 'var(--color-good)'
   const firstHalf = pacing.first_half_np, secondHalf = pacing.second_half_np, maxHalf = Math.max(firstHalf, secondHalf, 1)
   const zoneEntries = Object.entries(pacing.zone_time_pct ?? {}).filter(([, v]) => v > 0)
-  const read = split < -8 ? (de ? `Zweite Hälfte ${Math.abs(split).toFixed(0)} % schwächer — du bist eingebrochen.` : `Second half faded ${Math.abs(split).toFixed(0)}% — you cracked.`)
-    : split < -3 ? (de ? 'Etwas nachgelassen zum Ende.' : 'Eased off a little late.')
-    : (de ? 'Sehr gleichmäßige Pace über die ganze Fahrt.' : 'Very even effort the whole way.')
+  const headline = split < -8 ? (de ? 'Du bist in der zweiten Hälfte eingebrochen' : 'You cracked in the back half')
+    : split < -3 ? (de ? 'Zum Ende etwas nachgelassen' : 'Eased off a little late')
+    : (de ? 'Bis zur Linie gleichmäßig gefahren' : 'Even effort all the way to the line')
+  const explain = split < -8 ? (de ? `Die zweite Hälfte lag ${Math.abs(split).toFixed(0)} % unter der ersten. Nächstes Rennen: früher rationieren, damit du tiefer in die entscheidenden Kilometer kommst.` : `Your second half ran ${Math.abs(split).toFixed(0)}% below the first — the day was lost on pacing, not fitness. Next race, ration earlier and hold form into the decisive kilometres.`)
+    : split < -3 ? (de ? 'Leichter Abfall zum Ende — im Rahmen, aber Luft nach oben bei der Einteilung.' : 'A slight taper at the end — within reason, but there is room to pace it flatter.')
+    : (de ? 'Sehr saubere Einteilung — Leistung über die volle Distanz gehalten.' : 'Textbook distribution — you held power across the whole distance.')
   return (
-    <Card label={de ? 'PACING' : 'PACING'} accent={tone} read={read}>
-      <div className="flex flex-wrap gap-4">
-        <StatBlock value={`${split > 0 ? '+' : ''}${split.toFixed(1)}`} unit="%" label="Split" color={tone} />
+    <Slide eyebrow={de ? 'PACING · GEWONNEN & VERLOREN' : 'PACING · WON & LOST'} headline={headline} explain={explain} accent={tone}>
+      <StatRow>
+        <StatBlock value={`${split > 0 ? '+' : ''}${split.toFixed(1)}`} unit="%" label={de ? 'Split' : 'Split'} color={tone} />
         {pacing.variability_index != null && <StatBlock value={pacing.variability_index.toFixed(2)} label="VI" />}
         <StatBlock value={`${pacing.surge_count}`} label={de ? 'Angriffe' : 'Surges'} />
-      </div>
+      </StatRow>
       <div className="mt-1">
-        <div className="flex items-center gap-2">
-          <span style={{ fontSize: 10.5, color: 'var(--color-muted)', width: 20 }}>1st</span>
-          <div className="flex-1 rounded-full overflow-hidden" style={{ height: 6, backgroundColor: 'var(--color-rule)' }}>
-            <div style={{ width: `${(firstHalf / maxHalf) * 100}%`, height: '100%', backgroundColor: 'var(--color-ink-2)' }} />
+        {[[de ? '1.' : '1st', firstHalf, 'var(--color-ink-2)'], [de ? '2.' : '2nd', secondHalf, tone]].map(([lbl, val, col], i) => (
+          <div key={i} className={`flex items-center gap-3 ${i ? 'mt-2' : ''}`}>
+            <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)', width: 26 }}>{lbl as string}</span>
+            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 8, backgroundColor: 'var(--color-rule)' }}>
+              <div style={{ width: `${((val as number) / maxHalf) * 100}%`, height: '100%', backgroundColor: col as string, transition: 'width 600ms var(--ease-apple-default)' }} />
+            </div>
+            <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-ink)', width: 44, textAlign: 'right' }}>{Math.round(val as number)}W</span>
           </div>
-          <span className="num-mono" style={{ fontSize: 10.5, color: 'var(--color-ink-2)', width: 32, textAlign: 'right' }}>{Math.round(firstHalf)}W</span>
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          <span style={{ fontSize: 10.5, color: 'var(--color-muted)', width: 20 }}>2nd</span>
-          <div className="flex-1 rounded-full overflow-hidden" style={{ height: 6, backgroundColor: 'var(--color-rule)' }}>
-            <div style={{ width: `${(secondHalf / maxHalf) * 100}%`, height: '100%', backgroundColor: tone }} />
-          </div>
-          <span className="num-mono" style={{ fontSize: 10.5, color: 'var(--color-ink-2)', width: 32, textAlign: 'right' }}>{Math.round(secondHalf)}W</span>
-        </div>
+        ))}
       </div>
       {zoneEntries.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-1">
           {zoneEntries.map(([zone, pct]) => (
             <div key={zone} className="flex items-center gap-1.5">
-              <span style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>{zone.replace('zone', 'Z')}</span>
-              <div className="rounded-full overflow-hidden" style={{ width: 36, height: 5, backgroundColor: 'var(--color-rule)' }}>
+              <span className="num-mono" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>{zone.replace('zone', 'Z')}</span>
+              <div className="rounded-full overflow-hidden" style={{ width: 40, height: 5, backgroundColor: 'var(--color-rule)' }}>
                 <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', backgroundColor: 'var(--color-forest-2)' }} />
               </div>
               <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-ink-2)' }}>{Math.round(pct)}%</span>
@@ -99,115 +207,147 @@ function PacingCard({ pacing }: { pacing: Pacing | null }) {
           ))}
         </div>
       )}
-    </Card>
+    </Slide>
   )
 }
 
-// ─── Climbs ─────────────────────────────────────────────────────────────────
-function ClimbsCard({ climbs }: { climbs: Climb[] }) {
+// ─── Peak efforts (the engine) ───────────────────────────────────────────────────
+function EffortsSlide({ efforts, weightKg }: { efforts: EffortMatch[]; weightKg: number | null }) {
+  const { locale } = useLocale(); const de = locale === 'de'
+  if (!efforts || efforts.length === 0) return null
+  const wkg = weightKg && weightKg > 0
+  const prs = efforts.filter((e) => e.is_pr).length
+  const KEY_DURATIONS = new Set([5, 30, 60, 300, 1200, 3600])
+  const shown = efforts.filter((e) => KEY_DURATIONS.has(e.duration_s) || e.is_pr)
+  const rows = shown.length > 0 ? shown : efforts
+  const headline = prs
+    ? (de ? `${prs} neue Leistungs­rekorde` : `${prs} new power record${prs > 1 ? 's' : ''}`)
+    : (de ? 'Deine Leistung über die Dauer' : 'Your power across every duration')
+  const explain = prs
+    ? (de ? 'Die Beine hatten echten Punch, als es zählte — die Rekorde beweisen, dass die Form da ist.' : 'The legs had real punch when it counted — these records show the fitness is there to build on.')
+    : (de ? 'Balken zeigen % deiner 90-Tage-Bestleistung je Dauer. Grün = neuer Rekord.' : 'Each bar is % of your 90-day best at that duration. Green marks a new record.')
+  return (
+    <Slide eyebrow={de ? 'SPITZENLEISTUNGEN · DER MOTOR' : 'PEAK EFFORTS · THE ENGINE'} headline={headline} explain={explain} accent={prs ? 'var(--color-good)' : undefined}>
+      <div className="flex flex-col gap-2.5">
+        {rows.map((e, i) => (
+          <div key={i} className="flex items-center gap-3" style={{ fontSize: 12 }}>
+            <span className="num-mono" style={{ color: 'var(--color-muted)', width: 34 }}>{durationLabel(e.duration_s, de)}</span>
+            <span className="num-mono" style={{ color: 'var(--color-ink)', width: 48 }}>{Math.round(e.ride_watts)}W</span>
+            {wkg && <span className="num-mono" style={{ color: 'var(--color-muted)', width: 54 }}>{(e.ride_watts / (weightKg as number)).toFixed(1)} W/kg</span>}
+            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 7, backgroundColor: 'var(--color-rule)' }}>
+              <div style={{ width: `${Math.min(100, e.pct_of_best ?? 0)}%`, height: '100%', backgroundColor: e.is_pr ? 'var(--color-good)' : 'var(--color-forest-2)', transition: 'width 600ms var(--ease-apple-default)' }} />
+            </div>
+            <span className="num-mono" style={{ color: 'var(--color-muted)', width: 34, textAlign: 'right' }}>{e.pct_of_best != null ? `${Math.round(e.pct_of_best)}%` : '—'}</span>
+            {e.is_pr
+              ? <span className="rounded-full px-1.5 py-0.5 num-mono" style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-good)', border: '1px solid color-mix(in srgb, var(--color-good) 35%, var(--color-rule))' }}>PR</span>
+              : <span style={{ width: 22 }} />}
+          </div>
+        ))}
+      </div>
+    </Slide>
+  )
+}
+
+// ─── Climbs (the terrain) ────────────────────────────────────────────────────────
+function ClimbsSlide({ climbs }: { climbs: Climb[] }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!climbs || climbs.length === 0) return null
-  // Real GPS altitude over-segments into many tiny rises — surface only the
-  // meaningful climbs (≥25 m gain), biggest first, and summarise the rest.
-  const notable = climbs.filter((c) => c.elev_gain_m >= 25).sort((a, b) => b.elev_gain_m - a.elev_gain_m)
+  // Bridge over-segmented fragments into whole climbs, then keep the ones worth
+  // naming (≥ 300 m distance or ≥ 30 m gain), biggest first.
+  const merged = mergeClimbs(climbs)
+  const notable = merged
+    .filter((c) => c.distance_m >= 300 || c.elev_gain_m >= 30)
+    .sort((a, b) => b.elev_gain_m - a.elev_gain_m)
   const totalAscent = climbs.reduce((s, c) => s + c.elev_gain_m, 0)
   const shown = notable.slice(0, 6)
   if (shown.length === 0) return null
   const extra = notable.length - shown.length
-  const read = de
-    ? `${notable.length} nennenswerte Anstiege · ${Math.round(totalAscent).toLocaleString('de')} m gesamt.`
-    : `${notable.length} notable climb${notable.length > 1 ? 's' : ''} · ${Math.round(totalAscent).toLocaleString()} m total ascent.`
+  const km = (m: number) => (m / 1000).toFixed(m >= 9500 ? 0 : 1)
+  const headline = de
+    ? `${notable.length} Anstiege, ${Math.round(totalAscent).toLocaleString('de')} Hm`
+    : `${notable.length} climbs, ${Math.round(totalAscent).toLocaleString()} m of climbing`
+  const explain = de
+    ? 'Zusammenhängende Anstiege des Tages, sortiert nach Höhenmetern — je mit Länge, Ø-Steigung, Klettertempo (VAM) und deiner Leistung.'
+    : 'The day’s climbs as whole ascents, ordered by elevation — each with length, average gradient, climb rate (VAM) and your power.'
   return (
-    <Card label={de ? 'ANSTIEGE' : 'CLIMBS'} accent="var(--color-good)" read={read}>
-      <div className="flex flex-col gap-1.5">
+    <Slide eyebrow={de ? 'ANSTIEGE · DAS TERRAIN' : 'CLIMBS · THE TERRAIN'} headline={headline} explain={explain} accent="var(--color-good)">
+      <div className="flex flex-col">
+        {/* header row */}
+        <div className="num-mono flex items-center gap-2 pb-2" style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.1em', borderBottom: '1px solid var(--color-rule)' }}>
+          <span style={{ width: 14 }}>#</span>
+          <span style={{ width: 58 }}>{de ? 'LÄNGE' : 'LENGTH'}</span>
+          <span style={{ width: 46 }}>{de ? 'STG.' : 'GRADE'}</span>
+          <span style={{ width: 56 }}>{de ? 'HM' : 'GAIN'}</span>
+          <span style={{ width: 52 }}>VAM</span>
+          {shown.some((c) => c.w_per_kg != null) && <span style={{ width: 52 }}>W/KG</span>}
+          <span className="ml-auto">{de ? 'ZEIT' : 'TIME'}</span>
+        </div>
         {shown.map((c, i) => (
-          <div key={i} className="flex items-center gap-2 flex-wrap" style={{ fontSize: 12, borderTop: i > 0 ? '1px solid var(--color-rule)' : undefined, paddingTop: i > 0 ? 6 : 0 }}>
-            <span className="num-mono" style={{ color: 'var(--color-ink-2)', width: 16 }}>{i + 1}</span>
-            <span className="num-mono" style={{ color: 'var(--color-ink)', fontWeight: 600, width: 52 }}>{Math.round(c.elev_gain_m)} <span style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>m↑</span></span>
-            <span className="num-mono" style={{ color: 'var(--color-ink-2)' }}>{c.avg_grade_pct.toFixed(1)}%</span>
-            <span className="num-mono" style={{ color: 'var(--color-muted)' }}>{Math.round(c.vam_m_per_h)} <span style={{ fontSize: 9.5 }}>VAM</span></span>
-            {c.w_per_kg != null && <span className="num-mono" style={{ color: 'var(--color-ink-2)' }}>{c.w_per_kg.toFixed(1)} W/kg</span>}
+          <div key={i} className="flex items-center gap-2" style={{ fontSize: 12.5, borderTop: i > 0 ? '1px solid var(--color-rule)' : undefined, paddingTop: 8, paddingBottom: 8 }}>
+            <span className="num-mono" style={{ color: 'var(--color-muted)', width: 14 }}>{i + 1}</span>
+            <span className="num-mono" style={{ color: 'var(--color-ink)', fontWeight: 600, width: 58 }}>{km(c.distance_m)} <span style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>km</span></span>
+            <span className="num-mono" style={{ color: 'var(--color-ink)', width: 46 }}>{c.avg_grade_pct.toFixed(1)}%</span>
+            <span className="num-mono" style={{ color: 'var(--color-ink-2)', width: 56 }}>{Math.round(c.elev_gain_m)} <span style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>m↑</span></span>
+            <span className="num-mono" style={{ color: 'var(--color-muted)', width: 52 }}>{Math.round(c.vam_m_per_h)}</span>
+            {shown.some((x) => x.w_per_kg != null) && <span className="num-mono" style={{ color: 'var(--color-ink-2)', width: 52 }}>{c.w_per_kg != null ? c.w_per_kg.toFixed(1) : '—'}</span>}
             <span className="num-mono ml-auto" style={{ color: 'var(--color-muted)' }}>{fmtMmSs(c.duration_s)}</span>
           </div>
         ))}
       </div>
       {extra > 0 && (
-        <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>
+        <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>
           {de ? `+ ${extra} kleinere Anstiege` : `+ ${extra} smaller climbs`}
         </span>
       )}
-    </Card>
+    </Slide>
   )
 }
 
-// ─── Peak efforts ────────────────────────────────────────────────────────────
-function EffortsCard({ efforts }: { efforts: EffortMatch[] }) {
-  const { locale } = useLocale(); const de = locale === 'de'
-  if (!efforts || efforts.length === 0) return null
-  const prs = efforts.filter((e) => e.is_pr).length
-  const read = prs ? (de ? `${prs} neue${prs > 1 ? '' : 'r'} Leistungs-Rekord${prs > 1 ? 'e' : ''} in dieser Fahrt.` : `${prs} new power record${prs > 1 ? 's' : ''} set this ride.`)
-    : (de ? 'Balken zeigen % deiner 90-Tage-Bestleistung je Dauer.' : 'Bars show % of your 90-day best at each duration.')
-  return (
-    <Card label={de ? 'SPITZENLEISTUNGEN' : 'PEAK EFFORTS'} accent={prs ? 'var(--color-good)' : undefined} read={read}>
-      <div className="flex flex-col gap-1.5">
-        {efforts.map((e, i) => (
-          <div key={i} className="flex items-center gap-2" style={{ fontSize: 12 }}>
-            <span className="num-mono" style={{ color: 'var(--color-muted)', width: 32 }}>{durationLabel(e.duration_s, de)}</span>
-            <span className="num-mono" style={{ color: 'var(--color-ink)', width: 44 }}>{Math.round(e.ride_watts)}W</span>
-            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 6, backgroundColor: 'var(--color-rule)' }}>
-              <div style={{ width: `${Math.min(100, e.pct_of_best ?? 0)}%`, height: '100%', backgroundColor: e.is_pr ? 'var(--color-good)' : 'var(--color-forest-2)' }} />
-            </div>
-            <span className="num-mono" style={{ color: 'var(--color-muted)', width: 30, textAlign: 'right' }}>{e.pct_of_best != null ? `${Math.round(e.pct_of_best)}%` : '—'}</span>
-            {e.is_pr && <span className="rounded-full px-1.5 py-0.5 num-mono" style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-good)', border: '1px solid color-mix(in srgb, var(--color-good) 35%, var(--color-rule))' }}>PR</span>}
-          </div>
-        ))}
-      </div>
-    </Card>
-  )
-}
-
-// ─── Efficiency ──────────────────────────────────────────────────────────────
+// ─── Compact stat cards (by the numbers) ─────────────────────────────────────────
 function EfficiencyCard({ efficiency }: { efficiency: Efficiency | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!efficiency) return null
   const { efficiency_factor: ef, decoupling_pct: dc, avg_hr: hr } = efficiency
-  if (ef == null && dc == null && hr == null) return null   // no HR on this ride → hide
+  if (ef == null && dc == null && hr == null) return null
   const tone = dc == null ? undefined : dc < 5 ? 'var(--color-good)' : dc > 10 ? 'var(--color-bad)' : 'var(--color-caution)'
+  const headline = dc == null ? (de ? 'Effizienz' : 'Efficiency')
+    : dc < 5 ? (de ? 'Form gehalten' : 'Held your form')
+    : dc > 10 ? (de ? 'Deutlicher HF-Drift' : 'Notable cardiac drift')
+    : (de ? 'Etwas Drift zum Ende' : 'Some drift late on')
   const read = dc == null ? undefined
-    : dc < 5 ? (de ? 'Kaum HF-Drift — Form über die Distanz gehalten.' : 'Barely any drift — held form over the distance.')
-    : dc > 10 ? (de ? 'Deutlicher HF-Drift — Verpflegung oder Pace prüfen.' : 'Notable cardiac drift — check fuelling or pacing.')
-    : (de ? 'Etwas HF-Drift zum Ende.' : 'Some cardiac drift toward the end.')
+    : dc < 5 ? (de ? 'Kaum HF-Drift — Aerobsystem hat die Distanz getragen.' : 'Barely any drift — your aerobic system carried the distance.')
+    : dc > 10 ? (de ? 'HF stieg für dieselbe Leistung — Verpflegung oder Pace prüfen.' : 'HR climbed for the same power — check fuelling or pacing.')
+    : (de ? 'Leichte Entkopplung zum Ende hin.' : 'A little decoupling toward the finish.')
   return (
-    <Card label={de ? 'EFFIZIENZ' : 'EFFICIENCY'} accent={tone} read={read}>
-      <div className="flex flex-wrap gap-4">
+    <Card label={de ? 'EFFIZIENZ' : 'EFFICIENCY'} accent={tone} headline={headline} read={read}>
+      <StatRow>
         {ef != null && <StatBlock value={ef.toFixed(2)} label="EF" />}
         {dc != null && <StatBlock value={`${dc.toFixed(1)}`} unit="%" label={de ? 'HF-Drift' : 'Decoupling'} color={tone} />}
         {hr != null && <StatBlock value={`${Math.round(hr)}`} unit="bpm" label={de ? 'Ø HF' : 'Avg HR'} />}
-      </div>
+      </StatRow>
     </Card>
   )
 }
 
-// ─── Matchbook ───────────────────────────────────────────────────────────────
 function MatchbookCard({ matchbook }: { matchbook: Matchbook | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!matchbook) return null
   const tone = matchbook.fully_depleted ? 'var(--color-bad)' : 'var(--color-good)'
+  const headline = matchbook.fully_depleted ? (de ? 'Tank komplett geleert' : 'Emptied the tank') : (de ? 'Reserve klug eingeteilt' : 'Matches well spent')
   const read = matchbook.fully_depleted
-    ? (de ? 'Anaerobe Reserve komplett geleert — nichts blieb fürs Finale.' : 'Anaerobic reserve fully emptied — nothing left for the finale.')
-    : (de ? 'Reserve gehalten — Antritte klug eingeteilt.' : 'Reserve held — you spent your matches wisely.')
+    ? (de ? 'Anaerobe Reserve auf null — nichts blieb fürs Finale.' : 'Anaerobic reserve drained to zero — nothing left for the finale.')
+    : (de ? 'Reserve gehalten — Antritte klug dosiert.' : 'Reserve held — you spent your matches wisely.')
   return (
-    <Card label={de ? 'STREICHHOLZHEFT' : 'MATCHBOOK'} accent={tone} read={read}>
-      <div className="flex flex-wrap gap-4">
+    <Card label={de ? 'STREICHHOLZHEFT' : 'MATCHBOOK'} accent={tone} headline={headline} read={read}>
+      <StatRow>
         <StatBlock value={`${matchbook.match_count}`} label={de ? 'Streichhölzer' : 'Matches'} />
         <StatBlock value={fmtMmSs(matchbook.time_above_cp_s)} label={de ? 'Über CP' : 'Above CP'} />
-        <StatBlock value={(matchbook.min_bal_j / 1000).toFixed(1)} unit="kJ" label={de ? 'Min. W-Bal' : 'Min W-bal'} color={tone} />
-      </div>
+        <StatBlock value={Math.max(0, matchbook.min_bal_j / 1000).toFixed(1)} unit="kJ" label={de ? 'Min. W-Bal' : 'Min W-bal'} color={tone} />
+      </StatRow>
     </Card>
   )
 }
 
-// ─── Quadrant ────────────────────────────────────────────────────────────────
 function QuadrantCard({ quadrant }: { quadrant: Quadrant | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!quadrant) return null
@@ -218,22 +358,28 @@ function QuadrantCard({ quadrant }: { quadrant: Quadrant | null }) {
     { label: de ? 'Kraft ↓ / Kadenz ↑' : 'lo force / hi cad', pct: quadrant.q4_pct, tag: 'Q4' },
   ]
   const dom = cells.reduce((a, b) => (b.pct > a.pct ? b : a))
-  const domRead: Record<string, string> = {
-    Q1: de ? 'Viel Zeit im Angriff (hohe Kraft & Kadenz).' : 'A lot of time attacking (high force & cadence).',
-    Q2: de ? 'Oft mit hoher Kraft bei niedriger Kadenz gedrückt.' : 'Often grinding — high force at low cadence.',
-    Q3: de ? 'Überwiegend im lockeren Bereich gefahren.' : 'Mostly ridden in the easy quadrant.',
-    Q4: de ? 'Meist rund getreten (hohe Kadenz, wenig Kraft).' : 'Mostly spinning — high cadence, low force.',
+  const headlineByTag: Record<string, string> = {
+    Q1: de ? 'Viel im Angriff' : 'A lot of time attacking',
+    Q2: de ? 'Oft im schweren Gang' : 'Often grinding a big gear',
+    Q3: de ? 'Meist im lockeren Bereich' : 'Mostly ridden easy',
+    Q4: de ? 'Überwiegend rund getreten' : 'Mostly spinning it out',
+  }
+  const readByTag: Record<string, string> = {
+    Q1: de ? 'Kraft & Kadenz beide hoch — das kostet W′. Für lange Bergtage sparsamer einsetzen.' : 'High force and cadence both — this spends W′. Use it sparingly on long mountain days.',
+    Q2: de ? 'Schwerer Gang bei niedriger Kadenz belastet die Muskulatur. Für Anstiege leichter übersetzen und Kadenz halten.' : 'Big gear at low cadence loads the muscles. Gear down on climbs and keep the cadence up.',
+    Q3: de ? 'Überwiegend locker gefahren — gut fürs Sparen, aber am Berg brauchst du auch Drehmoment.' : 'Mostly easy pedalling — good for saving energy, but climbs still demand torque.',
+    Q4: de ? 'Hohe Kadenz, wenig Kraft — effizient. Für steile Rampen etwas mehr Kraftausdauer trainieren.' : 'High cadence, low force — efficient. Add strength-endurance for the steep ramps.',
   }
   return (
-    <Card label={de ? 'QUADRANTEN' : 'QUADRANT ANALYSIS'} read={domRead[dom.tag]}>
-      <div className="grid grid-cols-2 gap-1.5">
+    <Card label={de ? 'QUADRANTEN' : 'PEDALLING STYLE'} headline={headlineByTag[dom.tag]} read={readByTag[dom.tag]}>
+      <div className="grid grid-cols-2 gap-2">
         {cells.map((c) => {
           const isDom = c.tag === dom.tag
           return (
-            <div key={c.tag} className="rounded-[10px] px-2.5 py-2" style={{ backgroundColor: 'var(--color-paper)', border: `1px solid ${isDom ? 'color-mix(in srgb, var(--color-forest-2) 40%, var(--color-rule))' : 'var(--color-rule)'}` }}>
+            <div key={c.tag} className="rounded-xl px-3 py-2.5" style={{ backgroundColor: 'var(--color-paper)', border: `1px solid ${isDom ? 'color-mix(in srgb, var(--color-forest-2) 45%, var(--color-rule))' : 'var(--color-rule)'}` }}>
               <div className="flex items-baseline justify-between">
                 <span className="num-mono" style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.1em' }}>{c.tag}</span>
-                <span style={{ fontFamily: 'var(--font-serif)', fontSize: 18, fontWeight: 500, color: isDom ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>{Math.round(c.pct)}%</span>
+                <span style={{ fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, color: isDom ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>{Math.round(c.pct)}%</span>
               </div>
               <div style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>{c.label}</div>
             </div>
@@ -244,62 +390,68 @@ function QuadrantCard({ quadrant }: { quadrant: Quadrant | null }) {
   )
 }
 
-// ─── Fueling ─────────────────────────────────────────────────────────────────
 function FuelingCard({ fueling }: { fueling: Fueling | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!fueling) return null
   const tone = fueling.likely_underfueled === true ? 'var(--color-bad)' : fueling.likely_underfueled === false ? 'var(--color-good)' : undefined
+  const headline = fueling.likely_underfueled === true ? (de ? 'Wahrscheinlich unterversorgt' : 'Likely under-fuelled')
+    : (de ? `${Math.round(fueling.total_kj).toLocaleString()} kJ verbrannt` : `${Math.round(fueling.total_kj).toLocaleString()} kJ burned`)
   return (
-    <Card label={de ? 'VERPFLEGUNG' : 'FUELING'} accent={tone} read={fueling.note || undefined}>
-      <div className="flex flex-wrap gap-4">
-        <StatBlock value={`${Math.round(fueling.total_kj)}`} unit="kJ" label={de ? 'Gesamt' : 'Total'} />
-        <StatBlock value={`${fueling.carb_target_g_per_h[0]}–${fueling.carb_target_g_per_h[1]}`} unit="g/h" label={de ? 'Kohlenhydratziel' : 'Carb target'} color={tone} />
+    <Card label={de ? 'VERPFLEGUNG' : 'FUELLING'} accent={tone} headline={headline} read={fueling.note || undefined}>
+      <StatRow>
+        <StatBlock value={`${fueling.carb_target_g_per_h[0]}–${fueling.carb_target_g_per_h[1]}`} unit="g/h" label={de ? 'KH-Ziel' : 'Carb target'} color={tone} />
         <StatBlock value={`${Math.round(fueling.cho_g_estimate)}`} unit="g" label={de ? 'KH' : 'CHO'} />
         <StatBlock value={`${Math.round(fueling.fat_g_estimate)}`} unit="g" label={de ? 'Fett' : 'Fat'} />
-      </div>
-      {fueling.likely_underfueled && (
-        <span className="rounded-full px-2 py-0.5 num-mono self-start" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-bad)', border: '1px solid color-mix(in srgb, var(--color-bad) 35%, var(--color-rule))' }}>
-          {de ? 'Unterversorgt' : 'Under-fuelled'}
-        </span>
-      )}
+      </StatRow>
     </Card>
   )
 }
 
-// ─── Power model ─────────────────────────────────────────────────────────────
-function WkoCard({ wko }: { wko: WkoModel | null }) {
+function WkoCard({ wko, weightKg }: { wko: WkoModel | null; weightKg: number | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!wko) return null
-  const read = de ? `Aus dieser Fahrt modelliert (R² ${wko.r_squared.toFixed(2)}).` : `Modelled from this ride's power-duration curve (R² ${wko.r_squared.toFixed(2)}).`
+  // Confidence is driven by the power–duration fit quality. A steady mountain
+  // ride is not a CP test, so an R² of ~0.74 is a rough estimate, not a measured
+  // value — surface that plainly instead of implying false precision.
+  const r2 = wko.r_squared
+  const conf = r2 >= 0.9
+    ? { c: 'var(--color-good)', t: de ? 'hohe Konfidenz' : 'high confidence' }
+    : r2 >= 0.8
+      ? { c: 'var(--color-caution)', t: de ? 'mittlere Konfidenz' : 'moderate confidence' }
+      : { c: 'var(--color-muted)', t: de ? 'grobe Schätzung' : 'rough estimate' }
+  const wkg = weightKg && weightKg > 0
+  const read = de
+    ? `Aus der Leistungs-Dauer-Kurve dieser Fahrt geschätzt — kein CP-Test. W′ ist dein anaerober „Akku“ für kurze Attacken.`
+    : `Estimated from this ride's power–duration curve — not a CP test. W′ is your anaerobic "battery" for short attacks.`
   return (
-    <Card label={de ? 'LEISTUNGSMODELL' : 'POWER MODEL'} accent="var(--color-ink-blue)" read={read}>
-      <div className="flex flex-wrap gap-4">
-        <StatBlock value={`${Math.round(wko.mftp_watts)}`} unit="W" label="mFTP" />
-        <StatBlock value={`${Math.round(wko.cp_watts)}`} unit="W" label="CP" />
-        <StatBlock value={(wko.w_prime_j / 1000).toFixed(1)} unit="kJ" label="W′/FRC" />
-        <StatBlock value={`${Math.round(wko.pmax_watts)}`} unit="W" label="Pmax" />
+    <Card label={de ? 'LEISTUNGSMODELL' : 'POWER MODEL'} accent="var(--color-ink-blue)" headline={de ? 'Dein aktueller Motor' : 'Your engine, modelled'} read={read}>
+      <span className="num-mono self-start rounded-full px-2 py-0.5" style={{ fontSize: 9.5, fontWeight: 600, color: conf.c, border: `1px solid color-mix(in srgb, ${conf.c} 35%, var(--color-rule))` }}>
+        {conf.t} · R² {r2.toFixed(2)}
+      </span>
+      <StatRow>
+        <StatBlock value={`${Math.round(wko.cp_watts)}`} unit={wkg ? `W · ${(wko.cp_watts / (weightKg as number)).toFixed(1)} W/kg` : 'W'} label="CP" />
+        <StatBlock value={(wko.w_prime_j / 1000).toFixed(1)} unit="kJ" label="W′" />
+        <StatBlock value={`${Math.round(wko.pmax_watts)}`} unit={wkg ? `W · ${(wko.pmax_watts / (weightKg as number)).toFixed(1)} W/kg` : 'W'} label="Pmax" />
         <StatBlock value={fmtMmSs(wko.tte_s)} label="TTE" />
         <StatBlock value={wko.vo2max_estimate != null ? wko.vo2max_estimate.toFixed(1) : '—'} label={de ? 'VO₂max (gesch.)' : 'VO₂max (est.)'} />
-      </div>
+      </StatRow>
     </Card>
   )
 }
 
-// ─── CdA ─────────────────────────────────────────────────────────────────────
 function CdaCard({ cda }: { cda: Cda | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!cda) return null
-  // Without a wind sensor the estimate is only trustworthy in a physical range;
-  // outside ~0.18–0.55 m² it's noise (indoor, stop-start, or bad GPS) — hide it.
   if (cda.cda_m2 < 0.18 || cda.cda_m2 > 0.55) return null
   return (
     <Card label={de ? 'AERODYNAMIK' : 'AERODYNAMICS'} accent="var(--color-ink-blue)"
-      read={de ? 'Schätzung aus Geschwindigkeit, Leistung und Steigung — Richtwert, kein Windkanal.' : 'Estimate from speed, power, and grade — directional, not a wind-tunnel figure.'}>
-      <div className="flex flex-wrap gap-4">
+      headline={`CdA ${cda.cda_m2.toFixed(3)} m²`}
+      read={de ? 'Schätzung aus Geschwindigkeit, Leistung und Steigung — Richtwert, kein Windkanal.' : 'Estimated from speed, power and grade — directional, not a wind-tunnel figure.'}>
+      <StatRow>
         <StatBlock value={cda.cda_m2.toFixed(3)} unit="m²" label="CdA" />
-        <StatBlock value={`${cda.sample_count}`} label={de ? 'Proben' : 'Samples'} />
         <StatBlock value={(cda.avg_speed_ms * 3.6).toFixed(1)} unit="km/h" label={de ? 'Ø Geschw.' : 'Avg speed'} />
-      </div>
+        <StatBlock value={`${cda.sample_count}`} label={de ? 'Proben' : 'Samples'} />
+      </StatRow>
     </Card>
   )
 }
@@ -307,26 +459,33 @@ function CdaCard({ cda }: { cda: Cda | null }) {
 // ─── BreakdownPanels (Act 3) ─────────────────────────────────────────────────
 export default function BreakdownPanels({ report }: { report: RaceDebrief }) {
   const { locale } = useLocale(); const de = locale === 'de'
-  const hasAny =
-    report.pacing || (report.climbs && report.climbs.length > 0) || (report.efforts && report.efforts.length > 0) ||
-    report.efficiency || report.matchbook || report.quadrant || report.fueling || report.wko || report.cda
+  const { data: profile } = useAthleteProfile()
+  const weightKg = profile?.weight_kg ?? null
+  const hasEfficiency = !!report.efficiency && (report.efficiency.efficiency_factor != null || report.efficiency.decoupling_pct != null || report.efficiency.avg_hr != null)
+  const cdaShown = !!report.cda && report.cda.cda_m2 >= 0.18 && report.cda.cda_m2 <= 0.55
+  const hasCompact = !!report.matchbook || hasEfficiency || !!report.wko || !!report.fueling || !!report.quadrant || cdaShown
+  const hasAny = report.pacing || (report.efforts && report.efforts.length > 0) || (report.climbs && report.climbs.length > 0) || hasCompact
   if (!hasAny) return null
+
   return (
-    <div>
-      <h2 className="mb-3" style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, letterSpacing: '-0.01em' }}>
-        {de ? 'Die Details' : 'The breakdown'}
-      </h2>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start [grid-auto-rows:min-content]">
-        <PacingCard pacing={report.pacing} />
-        <MatchbookCard matchbook={report.matchbook} />
-        <EfficiencyCard efficiency={report.efficiency} />
-        <EffortsCard efforts={report.efforts} />
-        <FuelingCard fueling={report.fueling} />
-        <QuadrantCard quadrant={report.quadrant} />
-        <WkoCard wko={report.wko} />
-        <ClimbsCard climbs={report.climbs} />
-        <CdaCard cda={report.cda} />
-      </div>
+    <div className="flex flex-col gap-8 sm:gap-10">
+      <PacingSlide pacing={report.pacing} />
+      <EffortsSlide efforts={report.efforts} weightKg={weightKg} />
+      <ClimbsSlide climbs={report.climbs} />
+
+      {hasCompact && (
+        <div className="flex flex-col gap-5">
+          <ActHeader kicker={de ? 'IM DETAIL' : 'BY THE NUMBERS'} title={de ? 'Das Kleingedruckte' : 'The finer detail'} />
+          <div className="grid gap-4 md:grid-cols-2 items-stretch">
+            <MatchbookCard matchbook={report.matchbook} />
+            <EfficiencyCard efficiency={report.efficiency} />
+            <WkoCard wko={report.wko} weightKg={weightKg} />
+            <FuelingCard fueling={report.fueling} />
+            <QuadrantCard quadrant={report.quadrant} />
+            <CdaCard cda={report.cda} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -11,7 +11,7 @@ the current user's data.
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from app.models.user import User
 from app.schemas.analytics import QueryResult, QuerySpec
 from app.schemas.period_report import PeriodReport
 from app.schemas.race_debrief import RaceDebrief
+from app.schemas.ride_compare import RideComparison
 from app.schemas.user_dashboard import ChartSpec
 from app.services.chart_interpreter import ChartInterpretError, interpret_chart
 from app.services.analytics_query import (
@@ -30,6 +31,7 @@ from app.services.analytics_query import (
 )
 from app.services.period_report import get_or_build_report
 from app.services.race_debrief import get_or_build_debrief
+from app.services.ride_compare import build_comparison
 from app.services.detailed_power_profile import compute_detailed_power_profile
 from app.services.tid_assessment import compute_training_distribution
 from app.services.wbal_trace import compute_wbal_trace
@@ -254,14 +256,34 @@ async def get_activity_debrief(
     activity_id: int,
     _user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    lang: str = "en",
 ) -> RaceDebrief:
-    report = await get_or_build_debrief(db, _user.id, activity_id)
+    lang = "de" if lang.lower().startswith("de") else "en"
+    report = await get_or_build_debrief(db, _user.id, activity_id, lang)
     if report is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No analyzable ride (with power streams) found for this activity.",
         )
     return report
+
+
+@router.get(
+    "/activity-debrief/{activity_id}/compare",
+    response_model=RideComparison,
+    summary="Head-to-head comparison against a crew-mate who rode the same ride",
+)
+async def get_activity_compare(
+    activity_id: int,
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    lang: str = "en",
+):
+    lang = "de" if lang.lower().startswith("de") else "en"
+    comparison = await build_comparison(db, _user.id, activity_id, lang)
+    if comparison is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return comparison
 
 
 class InterpretRequest(BaseModel):

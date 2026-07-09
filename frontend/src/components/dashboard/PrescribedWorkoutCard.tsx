@@ -4,7 +4,7 @@ import type { AlternateWorkout, PrescribedWorkout } from '../../api/coach'
 import IntervalRibbon from './IntervalRibbon'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { simpleTitleFor, translateCoach } from '../../utils/coachLanguage'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 import type { StringKey } from '../../i18n/strings'
 
 // Category → intensity label mapping. Paired pairs of %FTP ranges come from
@@ -97,12 +97,21 @@ function efText(pw: PrescribedWorkout): string | null {
   return `est. ${range[0].toFixed(2)}–${range[1].toFixed(2)} EF`
 }
 
-function summaryLine(pw: PrescribedWorkout, simpleMode: boolean): string {
+function summaryLine(pw: PrescribedWorkout, simpleMode: boolean, de = false): string {
   if (simpleMode) {
-    // Plain-English summary: "About 60 min · easy pace" style.
+    // Plain-language summary: "About 60 min · easy pace" style.
     // "Effort phrase" maps category → feel instead of wattage.
     const category = pw.category || ''
-    const feelByCategory: Record<string, string> = {
+    const feelByCategory: Record<string, string> = de ? {
+      recovery:   'lockeres Tempo',
+      endurance:  'ruhiges Tempo',
+      tempo:      'gleichmäßiger Druck',
+      sweet_spot: 'fokussierter Einsatz',
+      threshold:  'hartes Tempo',
+      vo2:        'harte Intervalle',
+      anaerobic:  'volle Sprints',
+      rest:       'erholen',
+    } : {
       recovery:   'chill pace',
       endurance:  'easy pace',
       tempo:      'steady push',
@@ -112,8 +121,8 @@ function summaryLine(pw: PrescribedWorkout, simpleMode: boolean): string {
       anaerobic:  'all-out sprints',
       rest:       'rest up',
     }
-    const feel = feelByCategory[category] ?? 'steady pace'
-    return `About ${pw.duration_minutes} min · ${feel}`
+    const feel = feelByCategory[category] ?? (de ? 'gleichmäßiges Tempo' : 'steady pace')
+    return `${de ? 'Etwa' : 'About'} ${pw.duration_minutes} min · ${feel}`
   }
   const parts: string[] = [`${pw.duration_minutes} min`]
   parts.push(`${Math.round(pw.predicted_tss)} TSS`)
@@ -131,6 +140,7 @@ export default function PrescribedWorkoutCard({
   // We only render the alternates' templates as compact previews for now.
   const [activeAlt, setActiveAlt] = useState<string | null>(null)
   const { language } = useLanguage()
+  const { locale } = useLocale()
   const t = useT()
   const simpleMode = language === 'simple'
 
@@ -149,7 +159,7 @@ export default function PrescribedWorkoutCard({
   // category map. The backend's rule-based fallback already does this, but
   // the LLM path may slip jargon through — this is the belt-and-braces.
   const titleToRender = simpleMode
-    ? simpleTitleFor(displayed.category, displayed.title)
+    ? simpleTitleFor(displayed.category, displayed.title, locale)
     : displayed.title
 
   return (
@@ -170,8 +180,8 @@ export default function PrescribedWorkoutCard({
             style={{ color: 'var(--color-forest)' }}
           >
             {isAlternate
-              ? translateCoach('workoutCard.alternateEyebrow', language)
-              : translateCoach('workoutCard.todayEyebrow', language)}
+              ? translateCoach('workoutCard.alternateEyebrow', language, locale)
+              : translateCoach('workoutCard.todayEyebrow', language, locale)}
           </span>
           <h3
             className="num-display leading-tight dashboard-break-words"
@@ -232,7 +242,7 @@ export default function PrescribedWorkoutCard({
       {/* Interval ribbon */}
       <IntervalRibbon
         blocks={displayed.blocks}
-        summary={summaryLine(displayed, simpleMode)}
+        summary={summaryLine(displayed, simpleMode, locale === 'de')}
         language={language}
       />
 
@@ -252,7 +262,7 @@ export default function PrescribedWorkoutCard({
               className="eyebrow"
               style={{ color: 'var(--color-forest)' }}
             >
-              {translateCoach('brief.whyThisWorkoutHeading', language)}
+              {translateCoach('brief.whyThisWorkoutHeading', language, locale)}
             </span>
             <p
               className="text-[14px] leading-relaxed dashboard-break-words"
@@ -271,7 +281,7 @@ export default function PrescribedWorkoutCard({
           style={{ borderTop: '1px solid var(--color-rule)' }}
         >
           <span className="eyebrow" style={{ color: 'var(--color-muted)' }}>
-            {translateCoach('workoutCard.alternatesHeading', language)}
+            {translateCoach('workoutCard.alternatesHeading', language, locale)}
           </span>
           <div className="flex flex-wrap gap-2">
             {alternates.map((alt) => {
@@ -332,7 +342,7 @@ export default function PrescribedWorkoutCard({
           title={t('push_to_garmin_soon')}
         >
           <Zap size={13} strokeWidth={2} />
-          <span>{translateCoach('workoutCard.startCta', language)}</span>
+          <span>{translateCoach('workoutCard.startCta', language, locale)}</span>
           <ChevronRight size={13} strokeWidth={2} />
         </button>
         <button

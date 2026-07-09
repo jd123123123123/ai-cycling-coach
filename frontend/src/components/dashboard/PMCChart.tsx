@@ -6,15 +6,15 @@ import { usePMC } from '../../hooks/usePMC'
 import type { PMCEntry } from '../../api/dashboard'
 import { prefersReducedMotion } from '../../utils/motion'
 import Sparkline from './Sparkline'
-import { useT } from '../../contexts/LocaleContext'
+import { useLocale } from '../../contexts/LocaleContext'
 
 type Sport = 'total' | 'cycling' | 'running' | 'gym'
 
-const SPORTS: { key: Sport; label: string }[] = [
-  { key: 'total', label: 'All' },
-  { key: 'cycling', label: 'Ride' },
-  { key: 'running', label: 'Run' },
-  { key: 'gym', label: 'Strength' },
+const SPORTS: { key: Sport; label: string; labelDe: string }[] = [
+  { key: 'total', label: 'All', labelDe: 'Alle' },
+  { key: 'cycling', label: 'Ride', labelDe: 'Rad' },
+  { key: 'running', label: 'Run', labelDe: 'Lauf' },
+  { key: 'gym', label: 'Strength', labelDe: 'Kraft' },
 ]
 
 const C_CTL = '#30D158'    // bright green (fitness)
@@ -22,13 +22,13 @@ const C_ATL = '#FF9F0A'    // amber (fatigue — caution semantic, legitimate am
 const C_TSB = '#0A84FF'    // blue (form)
 
 // Interpret TSB (form): >5 fresh, -10..+5 optimal window, <-10 at-risk of overreaching
-function formStatus(tsb: number | null): { label: string; color: string; tone: string } {
-  if (tsb == null) return { label: '—', color: 'var(--color-muted)', tone: 'unknown' }
-  if (tsb > 15) return { label: 'Over-fresh', color: C_CTL, tone: 'Detraining risk. Load up.' }
-  if (tsb > 5) return { label: 'Fresh', color: C_CTL, tone: 'Peak window. Race or push.' }
-  if (tsb >= -10) return { label: 'Optimal', color: C_TSB, tone: 'Productive training zone.' }
-  if (tsb >= -20) return { label: 'Loading', color: C_ATL, tone: 'Deep training block.' }
-  return { label: 'At-risk', color: 'var(--color-alert)', tone: 'Overreach. Dial back.' }
+function formStatus(tsb: number | null, de: boolean): { label: string; color: string; tone: string } {
+  if (tsb == null) return { label: '—', color: 'var(--color-muted)', tone: de ? 'unbekannt' : 'unknown' }
+  if (tsb > 15) return { label: de ? 'Überfrisch' : 'Over-fresh', color: C_CTL, tone: de ? 'Detraining-Risiko. Belastung hoch.' : 'Detraining risk. Load up.' }
+  if (tsb > 5) return { label: de ? 'Frisch' : 'Fresh', color: C_CTL, tone: de ? 'Peak-Fenster. Rennen oder pushen.' : 'Peak window. Race or push.' }
+  if (tsb >= -10) return { label: 'Optimal', color: C_TSB, tone: de ? 'Produktive Trainingszone.' : 'Productive training zone.' }
+  if (tsb >= -20) return { label: de ? 'Aufbau' : 'Loading', color: C_ATL, tone: de ? 'Tiefer Trainingsblock.' : 'Deep training block.' }
+  return { label: de ? 'Risiko' : 'At-risk', color: 'var(--color-alert)', tone: de ? 'Überlastung. Zurückfahren.' : 'Overreach. Dial back.' }
 }
 
 function SummaryStat({
@@ -96,6 +96,8 @@ interface HoverInfo {
 function PmcUPlot({ series }: { series: PMCEntry[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
+  const { locale } = useLocale()
+  const de = locale === 'de'
 
   useEffect(() => {
     if (!containerRef.current || series.length === 0) return
@@ -130,7 +132,7 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
           },
         },
         {
-          label: 'Fatigue (ATL)',
+          label: de ? 'Ermüdung (ATL)' : 'Fatigue (ATL)',
           stroke: C_ATL,
           width: 1.5,
           dash: [5, 3],
@@ -282,7 +284,7 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
             ctx.fillStyle = 'var(--color-muted)'
             ctx.font = '9px Geist, sans-serif'
             ctx.textAlign = 'center'
-            ctx.fillText('rest →', labelX, labelY)
+            ctx.fillText(de ? 'Ruhe →' : 'rest →', labelX, labelY)
 
             ctx.restore()
           },
@@ -317,7 +319,7 @@ function PmcUPlot({ series }: { series: PMCEntry[] }) {
       el.removeEventListener('mouseleave', onLeave)
       plot.destroy()
     }
-  }, [series])
+  }, [series, de])
 
   const hoveredEntry =
     hover && hover.idx >= 0 && hover.idx < series.length ? series[hover.idx] : null
@@ -393,7 +395,8 @@ function HoverTooltip({
 // ─── Main component ─────────────────────────────────────────────────────────────
 
 export default function PMCChart() {
-  const t = useT()
+  const { t, locale } = useLocale()
+  const de = locale === 'de'
   const [sport, setSport] = useState<Sport>('total')
   const { data, isLoading, isError, refetch } = usePMC(90)
 
@@ -410,7 +413,7 @@ export default function PMCChart() {
     series.length >= 8 ? series[series.length - 8] : series[0] ?? null
 
   const ctlDelta = latest && priorWeek ? latest.ctl - priorWeek.ctl : null
-  const form = formStatus(latest?.tsb ?? null)
+  const form = formStatus(latest?.tsb ?? null, de)
 
   // 12-day sparkline slices for each summary stat
   const last12 = series.length >= 2 ? series.slice(-12) : []
@@ -450,7 +453,7 @@ export default function PMCChart() {
             border: '1px solid var(--color-rule)',
           }}
         >
-          {SPORTS.map(({ key, label }) => (
+          {SPORTS.map(({ key, label, labelDe }) => (
             <button
               key={key}
               onClick={() => setSport(key)}
@@ -461,7 +464,7 @@ export default function PMCChart() {
                 letterSpacing: '0.02em',
               }}
             >
-              {label}
+              {de ? labelDe : label}
             </button>
           ))}
         </div>
@@ -536,14 +539,14 @@ export default function PMCChart() {
             className="w-full h-64 sm:h-80 min-w-0 flex flex-col items-center justify-center gap-3"
           >
             <span className="text-[13px]" style={{ color: 'var(--color-alert)' }}>
-              Couldn&apos;t load training load
+              {de ? 'Trainingslast konnte nicht geladen werden' : "Couldn't load training load"}
             </span>
             <button
               onClick={() => refetch()}
               className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-medium"
               style={{ backgroundColor: 'var(--color-ink)', color: 'var(--color-paper)' }}
             >
-              Retry
+              {de ? 'Erneut' : 'Retry'}
             </button>
           </div>
         ) : series.length === 0 ? (
@@ -551,13 +554,15 @@ export default function PMCChart() {
             className="w-full h-64 sm:h-80 min-w-0 flex flex-col items-center justify-center text-center px-6 gap-2"
           >
             <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
-              Nothing plotted yet
+              {de ? 'Noch nichts geplottet' : 'Nothing plotted yet'}
             </span>
             <p
               className="text-[15px] max-w-sm"
               style={{ color: 'var(--color-ink-2)' }}
             >
-              The curves paint themselves once a few sessions are in the logbook.
+              {de
+                ? 'Die Kurven zeichnen sich selbst, sobald ein paar Einheiten im Logbuch sind.'
+                : 'The curves paint themselves once a few sessions are in the logbook.'}
             </p>
           </div>
         ) : (
@@ -581,8 +586,8 @@ export default function PMCChart() {
           className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 pb-5 pt-2 sm:px-6"
           style={{ borderTop: '1px solid var(--color-rule)' }}
         >
-          <LegendPip label="Fitness" sub="CTL · 42-day load" color={C_CTL} />
-          <LegendPip label="Fatigue" sub="ATL · 7-day load" color={C_ATL} dashed />
+          <LegendPip label="Fitness" sub={de ? 'CTL · 42-Tage-Last' : 'CTL · 42-day load'} color={C_CTL} />
+          <LegendPip label={de ? 'Ermüdung' : 'Fatigue'} sub={de ? 'ATL · 7-Tage-Last' : 'ATL · 7-day load'} color={C_ATL} dashed />
           <LegendPip label="Form" sub="TSB · CTL − ATL" color={C_TSB} />
         </div>
       )}

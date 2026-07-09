@@ -145,6 +145,7 @@ def project(
     user_pmc: list[dict] | list[PMCEntry],
     athlete_goals: dict | None,
     phase: str,
+    lang: str = "en",
 ) -> TrajectoryProjection:
     """Build a forward-looking projection of fitness and form to goal date.
 
@@ -155,6 +156,7 @@ def project(
         - No target_ctl           → ctl_target=None, weekly_tss_required is the
                                      current trajectory (0 gap to close)
     """
+    de = lang == "de"
     pmc = [_as_pmc_row(e) for e in user_pmc] if user_pmc else []
 
     if not pmc:
@@ -170,6 +172,9 @@ def project(
             weekly_tss_required=0.0,
             weekly_tss_actual=0.0,
             narrative_hook=(
+                "Noch nicht genug Trainingshistorie für eine Prognose — "
+                "log ein paar Wochen und wir zeigen dir, wohin es geht."
+            ) if de else (
                 "Not enough training history yet to project a trajectory — "
                 "log a few weeks and we'll show where you're pointed."
             ),
@@ -205,16 +210,24 @@ def project(
     if goal_date is None:
         if ctl_7d > 0.5:
             hook = (
+                f"Konstanz ist das Ziel — deine Fitness steigt um +{ctl_7d:.1f}/Woche, "
+                "eine gesunde Aufbaurate."
+            ) if de else (
                 f"Consistency is the goal — your fitness is trending +{ctl_7d:.1f}/week, "
                 "a healthy build rate."
             )
         elif ctl_7d < -0.5:
             hook = (
+                f"Deine Fitness ist diese Woche um {ctl_7d:+.1f} gesunken — entweder ein "
+                "geplanter Deload oder ein Zeichen, etwas Umfang draufzulegen."
+            ) if de else (
                 f"Your fitness has dipped {ctl_7d:+.1f} this week — either a planned "
                 "deload or a sign to add a little volume."
             )
         else:
-            hook = "You're holding steady — consistent volume is the base."
+            hook = (
+                "Du hältst das Niveau — konstanter Umfang ist die Basis."
+            ) if de else "You're holding steady — consistent volume is the base."
         return TrajectoryProjection(
             days_to_goal=None,
             ctl_now=round(ctl_now, 1),
@@ -292,6 +305,7 @@ def project(
         on_track=on_track,
         weekly_actual=weekly_actual,
         weekly_required=weekly_tss_required,
+        lang=lang,
     )
 
     return TrajectoryProjection(
@@ -320,20 +334,31 @@ def _narrative_hook(
     on_track: OnTrack,
     weekly_actual: float,
     weekly_required: float,
+    lang: str = "en",
 ) -> str:
     """One-line narrative the UI can drop into the trajectory card."""
+    de = lang == "de"
     if days_to_goal <= 7 and taper_win == "ideal":
         return (
+            "Rennwoche — deine prognostizierte Frische liegt im idealen Fenster. "
+            "Vertrau dem Taper."
+        ) if de else (
             f"Race week — projected freshness lands in the ideal window. "
             "Trust the taper."
         )
     if days_to_goal <= 14 and taper_win == "overreached":
         return (
+            f"Du steckst mit {days_to_goal} Tagen noch tief in der Ermüdung — "
+            "der Umfang muss diese Woche deutlicher runter."
+        ) if de else (
             f"You're still heavy in fatigue with {days_to_goal}d to go — "
             "volume cut needs to be sharper this week."
         )
     if days_to_goal <= 14 and taper_win == "too_fresh":
         return (
+            "Du bist vielleicht über-getapert — ein paar kurze Öffner bringen "
+            "dich zurück ins Renn-Fenster."
+        ) if de else (
             f"You may be over-tapered — a couple of short openers will sharpen "
             f"you back into the race window."
         )
@@ -341,34 +366,53 @@ def _narrative_hook(
     if target_ctl is not None:
         if on_track == "on_track":
             return (
+                f"Im Plan: Fitness steuert auf {ctl_proj:.0f} zum Renntag zu "
+                f"(Ziel {target_ctl:.0f})."
+            ) if de else (
                 f"On track: fitness projecting to {ctl_proj:.0f} by race day "
                 f"(target {target_ctl:.0f})."
             )
         if on_track == "ahead":
             return (
+                f"Vor dem Plan — Prognose {ctl_proj:.0f} bei Ziel {target_ctl:.0f}. "
+                "Raum zum Schärfen."
+            ) if de else (
                 f"Ahead of plan — projecting {ctl_proj:.0f} vs target {target_ctl:.0f}. "
                 "Room to sharpen."
             )
         # behind
         gap = target_ctl - ctl_proj
+        add = max(0, weekly_required - weekly_actual)
         return (
+            f"Prognose {ctl_proj:.0f} zum Renntag — Ziel {target_ctl:.0f}. "
+            f"Rund {add:.0f} TSS/Woche mehr, um die Lücke von {gap:.0f} Punkten zu schließen."
+        ) if de else (
             f"Projecting {ctl_proj:.0f} by race day — target {target_ctl:.0f}. "
-            f"Add ~{max(0, weekly_required - weekly_actual):.0f} TSS/week "
+            f"Add ~{add:.0f} TSS/week "
             f"to close the {gap:.0f}-point gap."
         )
 
     # No explicit CTL target — talk about trajectory quality
     if ctl_7d > 0.5:
         return (
+            f"Fitness steigt um +{ctl_7d:.1f}/Woche — gesunde Aufbaurate "
+            f"Richtung Renntag in {days_to_goal} Tagen."
+        ) if de else (
             f"Fitness trending +{ctl_7d:.1f}/week — healthy build rate "
             f"toward race day in {days_to_goal}d."
         )
     if ctl_7d < -0.5:
         return (
+            f"Fitness sinkt um {ctl_7d:+.1f}/Woche bei {days_to_goal} Tagen bis zum Ziel — "
+            "entweder Deload oder mehr Umfang, je nach Gefühl."
+        ) if de else (
             f"Fitness dipping {ctl_7d:+.1f}/week with {days_to_goal}d to goal — "
             "either deload or add volume, depending on how you feel."
         )
     return (
+        f"Stabil bei CTL {ctl_now:.0f} mit {days_to_goal} Tagen zu gehen — "
+        "konstanter Umfang ist die Basis."
+    ) if de else (
         f"Holding steady at CTL {ctl_now:.0f} with {days_to_goal}d to go — "
         "consistent volume is the base."
     )

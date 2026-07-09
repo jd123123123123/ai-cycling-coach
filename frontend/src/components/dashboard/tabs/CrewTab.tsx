@@ -21,7 +21,8 @@ import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useCountUp } from '../../../hooks/useCountUp'
 import { useCrew, useCreateCrew, useMyCrew } from '../../../hooks/useCrew'
 import type { CrewMember } from '../../../hooks/useCrew'
-import { useT } from '../../../contexts/LocaleContext'
+import { useT, useLocale } from '../../../contexts/LocaleContext'
+import type { Locale } from '../../../i18n/strings'
 
 // CrewTab — Apple-Fitness-inspired "Squad Cup" weekly competition.
 // Mechanic: 7-day race (resets Monday 00:00). Each day, each rider earns
@@ -59,12 +60,15 @@ function copyInviteLink(): Promise<boolean> {
   return Promise.resolve(false)
 }
 
-function shareInvite(weeklyScore: number): Promise<boolean> {
+function shareInvite(weeklyScore: number, locale: Locale): Promise<boolean> {
   const url = `${window.location.origin}/invite?ref=squad`
-  const text = `Join my cycling squad — I'm at ${Math.round(weeklyScore)} pts this week. Catch me if you can.`
+  const text = locale === 'de'
+    ? `Tritt meiner Crew bei — ich stehe diese Woche bei ${Math.round(weeklyScore)} Punkten. Hol mich ein, wenn du kannst.`
+    : `Join my cycling squad — I'm at ${Math.round(weeklyScore)} pts this week. Catch me if you can.`
+  const title = locale === 'de' ? 'Tritt meiner Crew bei' : 'Join my squad'
   const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> }
   if (nav.share) {
-    return nav.share({ title: 'Join my squad', text, url }).then(() => true).catch(() => false)
+    return nav.share({ title, text, url }).then(() => true).catch(() => false)
   }
   return copyInviteLink()
 }
@@ -126,6 +130,7 @@ function WeekBars({ dailyPct, isYou }: { dailyPct: number[]; isYou: boolean }) {
 }
 
 function Countdown({ weekEnd }: { weekEnd: Date }) {
+  const { locale } = useLocale()
   const secs = Math.max(0, differenceInSeconds(weekEnd, new Date()))
   const days = Math.floor(secs / 86_400)
   const hrs = Math.floor((secs % 86_400) / 3600)
@@ -138,12 +143,13 @@ function Countdown({ weekEnd }: { weekEnd: Date }) {
   return (
     <span className="inline-flex items-center gap-1.5 num-mono" style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.14em' }}>
       <Timer size={10} strokeWidth={2} />
-      {parts} LEFT
+      {parts} {locale === 'de' ? 'ÜBRIG' : 'LEFT'}
     </span>
   )
 }
 
 function StandingRow({ standing, rank }: { standing: Standing; rank: number }) {
+  const { locale } = useLocale()
   const s = useCountUp(Math.round(standing.weeklyScore), { duration: 800, enabled: standing.status === 'live' })
   const first = rank === 1
   return (
@@ -176,7 +182,7 @@ function StandingRow({ standing, rank }: { standing: Standing; rank: number }) {
           className="num-mono text-[12px] font-semibold"
           style={{ color: standing.isYou ? 'var(--color-forest-2)' : 'var(--color-muted)' }}
         >
-          {standing.isYou ? 'YOU' : standing.handle.slice(0, 2).toUpperCase()}
+          {standing.isYou ? (locale === 'de' ? 'DU' : 'YOU') : standing.handle.slice(0, 2).toUpperCase()}
         </span>
       </div>
 
@@ -186,14 +192,14 @@ function StandingRow({ standing, rank }: { standing: Standing; rank: number }) {
             className="text-[14px] font-medium truncate"
             style={{ color: 'var(--color-ink)' }}
           >
-            {standing.isYou ? 'You' : standing.handle}
+            {standing.isYou ? (locale === 'de' ? 'Du' : 'You') : standing.handle}
           </p>
           {standing.status === 'pending' && (
             <span
               className="eyebrow shrink-0"
               style={{ fontSize: 9, color: 'var(--color-amber)', letterSpacing: '0.18em' }}
             >
-              PENDING
+              {locale === 'de' ? 'AUSSTEHEND' : 'PENDING'}
             </span>
           )}
         </div>
@@ -229,6 +235,7 @@ function StandingRow({ standing, rank }: { standing: Standing; rank: number }) {
 
 export default function CrewTab() {
   const t = useT()
+  const { locale } = useLocale()
   const today = new Date()
   const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
@@ -298,7 +305,7 @@ export default function CrewTab() {
   }
 
   async function handleShare() {
-    const ok = await shareInvite(yourScore)
+    const ok = await shareInvite(yourScore, locale)
     if (ok) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1600)
@@ -362,7 +369,7 @@ export default function CrewTab() {
                 color: 'var(--color-ink)',
                 border: '1px solid var(--color-rule)',
               }}
-              aria-label="Crew name"
+              aria-label={locale === 'de' ? 'Crew-Name' : 'Crew name'}
             />
             <button
               type="submit"
@@ -470,16 +477,24 @@ export default function CrewTab() {
             }}
           >
             {onTop
-              ? "You're leading the pack. Defend the throne — every daily TSS matters until Sunday."
+              ? (locale === 'de'
+                  ? 'Du führst das Feld an. Verteidige die Spitze — jeder TSS zählt bis Sonntag.'
+                  : "You're leading the pack. Defend the throne — every daily TSS matters until Sunday.")
               : behindLeader > 0 && standings.length > 1
-                ? `${behindLeader} points behind the leader. A ${Math.ceil((behindLeader / 100) * dailyTarget)}-TSS session closes the gap.`
-                : 'Earn points each day — hit your daily TSS target and you bank 100. Cap is 150% per day.'}
+                ? (locale === 'de'
+                    ? `${behindLeader} Punkte hinter der Spitze. Eine ${Math.ceil((behindLeader / 100) * dailyTarget)}-TSS-Einheit schließt die Lücke.`
+                    : `${behindLeader} points behind the leader. A ${Math.ceil((behindLeader / 100) * dailyTarget)}-TSS session closes the gap.`)
+                : (locale === 'de'
+                    ? 'Sammle jeden Tag Punkte — erreiche dein tägliches TSS-Ziel und du bekommst 100. Maximum sind 150% pro Tag.'
+                    : 'Earn points each day — hit your daily TSS target and you bank 100. Cap is 150% per day.')}
           </p>
 
           {/* Points calc legend */}
           <div className="flex items-center gap-3 flex-wrap pt-1">
             <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.12em' }}>
-              DAILY TARGET {dailyTarget} TSS · 150% CAP · 7 DAYS
+              {locale === 'de'
+                ? `TAGESZIEL ${dailyTarget} TSS · 150% MAX · 7 TAGE`
+                : `DAILY TARGET ${dailyTarget} TSS · 150% CAP · 7 DAYS`}
             </span>
           </div>
         </div>
@@ -492,13 +507,13 @@ export default function CrewTab() {
             className="eyebrow"
             style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}
           >
-            Standings · {standings.length}
+            {locale === 'de' ? 'Rangliste' : 'Standings'} · {standings.length}
           </span>
           <span
             className="eyebrow hidden sm:inline"
             style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}
           >
-            MON → SUN · PTS
+            {locale === 'de' ? 'MO → SO · PKT' : 'MON → SUN · PTS'}
           </span>
         </div>
         {standings.map((s, i) => (
@@ -526,7 +541,9 @@ export default function CrewTab() {
               {t('riders_go_further')}
             </p>
             <p className="text-[12px] leading-relaxed mt-1" style={{ color: 'var(--color-muted)' }}>
-              Up to 8 riders. Only training outputs (streak, weekly TSS, points) are shared — never body data.
+              {locale === 'de'
+                ? 'Bis zu 8 Fahrer. Nur Trainingsdaten (Serie, Wochen-TSS, Punkte) werden geteilt — niemals Körperdaten.'
+                : 'Up to 8 riders. Only training outputs (streak, weekly TSS, points) are shared — never body data.'}
             </p>
           </div>
         </div>
@@ -536,7 +553,7 @@ export default function CrewTab() {
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Name or handle"
+            placeholder={locale === 'de' ? 'Name oder Handle' : 'Name or handle'}
             className="flex-1 px-3 py-2.5 rounded-[12px] text-[14px]"
             style={{
               backgroundColor: 'var(--color-paper)',
@@ -555,7 +572,7 @@ export default function CrewTab() {
               opacity: draft.trim() ? 1 : 0.5,
             }}
           >
-            Add
+            {locale === 'de' ? 'Hinzufügen' : 'Add'}
           </button>
         </form>
 
@@ -572,7 +589,7 @@ export default function CrewTab() {
           {copied ? (
             <>
               <CheckCircle2 size={14} strokeWidth={2} />
-              Invite link copied
+              {locale === 'de' ? 'Einladungslink kopiert' : 'Invite link copied'}
             </>
           ) : (
             <>
@@ -590,7 +607,7 @@ export default function CrewTab() {
             className="eyebrow px-1"
             style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}
           >
-            Manage crew · {crew.length}
+            {locale === 'de' ? 'Crew verwalten' : 'Manage crew'} · {crew.length}
           </span>
           {crew.map((m: CrewMember) => (
             <div
@@ -607,7 +624,7 @@ export default function CrewTab() {
                 onClick={() => remove(m.id)}
                 className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
                 style={{ color: 'var(--color-muted)' }}
-                aria-label={`Remove ${m.handle}`}
+                aria-label={locale === 'de' ? `${m.handle} entfernen` : `Remove ${m.handle}`}
               >
                 <X size={13} strokeWidth={2} />
               </button>

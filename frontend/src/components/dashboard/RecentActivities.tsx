@@ -19,7 +19,7 @@ import {
   formatDuration,
   formatRelativeDay,
 } from '../../utils/metrics'
-import { focusFor } from '../../utils/focusBadge'
+import { focusFor, focusLabelDe, focusNoteDe } from '../../utils/focusBadge'
 import { useAthleteProfile, type AthleteProfile } from '../../hooks/useAthleteProfile'
 import { SideSheet } from '../ui/SideSheet'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -56,6 +56,17 @@ const SPORT_META: Record<
   },
 }
 
+const SPORT_LABEL_DE: Record<ActivityRead['sport'], string> = {
+  cycling: 'Fahrt',
+  running: 'Lauf',
+  gym: 'Kraft',
+}
+
+/** Localized sport label — enum-backed SPORT_META.label stays English. */
+function sportLabel(sport: ActivityRead['sport'], locale: 'en' | 'de'): string {
+  return locale === 'de' ? SPORT_LABEL_DE[sport] : SPORT_META[sport].label
+}
+
 // ─── Activity detail view ─────────────────────────────────────────────────────
 // Rendered inside the SideSheet. Minimal summary view — no dedicated detail
 // route was built for Phase 1-5.x, so this is purpose-built here.
@@ -67,53 +78,61 @@ function ActivityDetail({
   activity: ActivityRead
   language: string
 }) {
+  const { locale } = useLocale()
   const meta = SPORT_META[activity.sport]
+  const isDe = locale === 'de'
   const title =
     activity.title?.trim() ||
-    `${meta.label} · ${formatRelativeDay(activity.started_at)}`
+    `${sportLabel(activity.sport, locale)} · ${formatRelativeDay(activity.started_at)}`
 
   const isSimple = language === 'simple'
 
   const rows: Array<{ label: string; value: string | null }> = [
     {
-      label: 'Date',
+      label: isDe ? 'Datum' : 'Date',
       value: format(new Date(activity.started_at), 'EEEE, MMM d yyyy · HH:mm'),
     },
     {
-      label: 'Duration',
+      label: isDe ? 'Dauer' : 'Duration',
       value: activity.duration_seconds
         ? formatDuration(activity.duration_seconds)
         : null,
     },
     {
-      label: 'Distance',
+      label: isDe ? 'Distanz' : 'Distance',
       value: activity.distance_meters
         ? formatDistanceKm(activity.distance_meters)
         : null,
     },
     {
-      label: isSimple ? 'Effort' : 'TSS',
+      label: isDe ? (isSimple ? 'Aufwand' : 'TSS') : isSimple ? 'Effort' : 'TSS',
       value:
         activity.tss != null
-          ? `${Math.round(activity.tss)}${isSimple ? ' pts' : ''}`
+          ? `${Math.round(activity.tss)}${isSimple ? (isDe ? ' Pkt' : ' pts') : ''}`
           : null,
     },
     {
-      label: isSimple ? 'Heart rate' : 'Avg HR',
+      label: isDe ? (isSimple ? 'Herzfrequenz' : 'Ø HF') : isSimple ? 'Heart rate' : 'Avg HR',
       value:
         activity.average_hr != null
           ? `${Math.round(activity.average_hr)} bpm`
           : null,
     },
     {
-      label: isSimple ? 'Power' : 'Normalised power',
+      label: isDe
+        ? isSimple
+          ? 'Leistung'
+          : 'Normalisierte Leistung'
+        : isSimple
+          ? 'Power'
+          : 'Normalised power',
       value:
         activity.normalized_power != null
           ? `${Math.round(activity.normalized_power)} W`
           : null,
     },
     {
-      label: 'Source',
+      label: isDe ? 'Quelle' : 'Source',
       value: activity.source ?? null,
     },
   ]
@@ -136,7 +155,7 @@ function ActivityDetail({
         </div>
         <div>
           <span className="eyebrow" style={{ color: meta.accent }}>
-            {meta.label}
+            {sportLabel(activity.sport, locale)}
           </span>
           <p
             className="num-display mt-0.5 leading-tight"
@@ -193,14 +212,14 @@ function ActivityRow({
   onClick: (id: number) => void
   profile: AthleteProfile | null | undefined
 }) {
+  const { locale } = useLocale()
   const meta = SPORT_META[a.sport]
-  const title = a.title?.trim() || `${meta.label} · ${formatRelativeDay(a.started_at)}`
+  const title = a.title?.trim() || `${sportLabel(a.sport, locale)} · ${formatRelativeDay(a.started_at)}`
   const parts: string[] = []
   if (a.duration_seconds) parts.push(formatDuration(a.duration_seconds))
   if (a.distance_meters) parts.push(formatDistanceKm(a.distance_meters))
 
   const timeStr = formatTime(a.started_at)
-  const { locale } = useLocale()
 
   return (
     <li
@@ -218,7 +237,7 @@ function ActivityRow({
             onClick(a.id)
           }
         }}
-        aria-label={`View details for ${title}`}
+        aria-label={`${locale === 'de' ? 'Details anzeigen für' : 'View details for'} ${title}`}
       >
         <div className="flex items-stretch gap-4 py-4 hover:opacity-80 transition-opacity relative">
           {/* Sport-color left accent */}
@@ -269,7 +288,7 @@ function ActivityRow({
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="eyebrow" style={{ color: meta.accent }}>
-                {meta.label}
+                {sportLabel(a.sport, locale)}
               </span>
               {parts.map((p) => (
                 <span
@@ -304,9 +323,9 @@ function ActivityRow({
                       border: `1px solid color-mix(in srgb, ${focus.color} 22%, transparent)`,
                       fontWeight: 500,
                     }}
-                    title={focus.note}
+                    title={locale === 'de' ? focusNoteDe(focus.label) : focus.note}
                   >
-                    {focus.label}
+                    {locale === 'de' ? focusLabelDe(focus.label) : focus.label}
                   </span>
                 )
               })()}
@@ -353,6 +372,7 @@ export default function RecentActivities({
     today,
   )
   const { language } = useLanguage()
+  const { locale } = useLocale()
   const { data: profile } = useAthleteProfile()
 
   // Selected activity for SideSheet detail view. URL stays at /dashboard?tab=today.
@@ -384,7 +404,7 @@ export default function RecentActivities({
         <div className="flex items-baseline justify-between px-5 pt-5 pb-3 sm:px-6 sm:pt-6 gap-2 flex-wrap">
           <div>
             <span className="eyebrow" style={{ letterSpacing: '0.18em' }}>
-              Recent · last 14 days
+              {locale === 'de' ? 'Zuletzt · letzte 14 Tage' : 'Recent · last 14 days'}
             </span>
             <h2
               className="num-display mt-1 leading-none"
@@ -393,7 +413,7 @@ export default function RecentActivities({
                 color: 'var(--color-ink)',
               }}
             >
-              {heading ?? 'Recent training'}
+              {heading ?? (locale === 'de' ? 'Zuletzt trainiert' : 'Recent training')}
             </h2>
           </div>
           {!isLoading && !isError && activities.length > 0 && (
@@ -401,7 +421,7 @@ export default function RecentActivities({
               className="num-mono text-[11px]"
               style={{ color: 'var(--color-muted)' }}
             >
-              last {activities.length}
+              {locale === 'de' ? 'letzte' : 'last'} {activities.length}
             </span>
           )}
         </div>
@@ -421,7 +441,9 @@ export default function RecentActivities({
           ) : isError ? (
             <div className="py-6 flex flex-col items-start gap-3">
               <span className="text-sm" style={{ color: 'var(--color-alert)' }}>
-                Couldn&apos;t load activities
+                {locale === 'de'
+                  ? 'Aktivitäten konnten nicht geladen werden'
+                  : "Couldn't load activities"}
               </span>
               <button
                 onClick={() => void refetch()}
@@ -431,7 +453,7 @@ export default function RecentActivities({
                   color: 'var(--color-paper)',
                 }}
               >
-                Retry
+                {locale === 'de' ? 'Erneut versuchen' : 'Retry'}
               </button>
             </div>
           ) : activities.length === 0 ? (
@@ -443,20 +465,22 @@ export default function RecentActivities({
               }}
             >
               <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
-                A blank page
+                {locale === 'de' ? 'Ein leeres Blatt' : 'A blank page'}
               </span>
               <p
                 className="text-[16px] font-medium max-w-xs"
                 style={{ color: 'var(--color-ink)' }}
               >
-                Every logbook starts empty. Connect Garmin or log a ride to begin.
+                {locale === 'de'
+                  ? 'Jedes Logbuch beginnt leer. Verbinde Garmin oder erfasse eine Fahrt, um zu starten.'
+                  : 'Every logbook starts empty. Connect Garmin or log a ride to begin.'}
               </p>
               <Link
                 to="/garmin/connect"
                 className="mt-1 inline-flex items-center gap-1.5 text-[13px] font-medium"
                 style={{ color: 'var(--color-forest)' }}
               >
-                Connect Garmin
+                {locale === 'de' ? 'Garmin verbinden' : 'Connect Garmin'}
                 <ArrowUpRight size={14} strokeWidth={2} />
               </Link>
             </div>
@@ -480,10 +504,18 @@ export default function RecentActivities({
         <SideSheet
           open={selectedId != null}
           onClose={() => setSelectedId(null)}
-          eyebrow={language === 'simple' ? 'Activity details' : 'Activity'}
+          eyebrow={
+            locale === 'de'
+              ? language === 'simple'
+                ? 'Aktivitätsdetails'
+                : 'Aktivität'
+              : language === 'simple'
+                ? 'Activity details'
+                : 'Activity'
+          }
           title={
             selectedActivity.title?.trim() ||
-            `${SPORT_META[selectedActivity.sport].label} · ${formatRelativeDay(selectedActivity.started_at)}`
+            `${sportLabel(selectedActivity.sport, locale)} · ${formatRelativeDay(selectedActivity.started_at)}`
           }
         >
           <ActivityDetail activity={selectedActivity} language={language} />

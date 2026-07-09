@@ -191,4 +191,5 @@ class RaceDebrief(BaseModel):
     wko: WkoModelOut | None = None
     cda: CdaOut | None = None
     plan: list[PrescriptionOut] = []
+    lang: str = "en"
     generated_at: datetime | None = None

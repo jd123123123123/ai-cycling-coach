@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 
 interface DashboardSectionProps {
@@ -9,7 +9,11 @@ interface DashboardSectionProps {
   children: ReactNode
 }
 
-const STORAGE_PREFIX = 'dashboard-section:'
+// v2: prior versions eagerly persisted the default on mount, which pinned every
+// section to whatever its default was at first load and made later changes to
+// `defaultExpanded` inert. v2 only writes on an explicit user toggle; bumping
+// the prefix lets the corrected defaults take effect once.
+const STORAGE_PREFIX = 'dashboard-section:v2:'
 
 /**
  * A collapsible section for fold-4 of the dashboard hierarchy.
@@ -40,16 +44,19 @@ export default function DashboardSection({
     }
   })
 
-  const contentRef = useRef<HTMLDivElement>(null)
-
-  // Persist on change
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(storageKey, String(expanded))
-    } catch {
-      // localStorage disabled — soft fail, state stays session-local
-    }
-  }, [expanded, storageKey])
+  // Persist only on an explicit user toggle — never on mount — so `defaultExpanded`
+  // stays authoritative until the user actually expresses a preference.
+  const toggle = () => {
+    setExpanded((e) => {
+      const next = !e
+      try {
+        window.localStorage.setItem(storageKey, String(next))
+      } catch {
+        // localStorage disabled — soft fail, state stays session-local
+      }
+      return next
+    })
+  }
 
   return (
     <section
@@ -59,7 +66,7 @@ export default function DashboardSection({
     >
       <button
         type="button"
-        onClick={() => setExpanded((e) => !e)}
+        onClick={toggle}
         className="flex items-center justify-between gap-3 py-4 w-full text-left min-h-[44px]"
         aria-expanded={expanded}
         aria-controls={`section-${id}-content`}
@@ -90,7 +97,6 @@ export default function DashboardSection({
       </button>
 
       <div
-        ref={contentRef}
         id={`section-${id}-content`}
         role="region"
         aria-hidden={!expanded}

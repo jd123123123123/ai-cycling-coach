@@ -9,22 +9,26 @@ import { Link } from 'react-router-dom'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import LanguageToggle from '../components/dashboard/LanguageToggle'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useLocale } from '../contexts/LocaleContext'
 
 export default function SettingsPage() {
   const { language } = useLanguage()
+  const { locale } = useLocale()
 
   return (
     <DashboardShell>
       <div className="p-6 max-w-2xl mx-auto flex flex-col gap-8">
         <div>
           <span className="eyebrow" style={{ color: 'var(--color-amber)', letterSpacing: '0.2em' }}>
-            Settings
+            {locale === 'de' ? 'Einstellungen' : 'Settings'}
           </span>
           <h1
             className="num-display mt-2 leading-tight"
             style={{ fontSize: 'clamp(28px, 4vw, 40px)', color: 'var(--color-ink)' }}
           >
-            {language === 'simple' ? 'Preferences' : 'Settings'}
+            {locale === 'de'
+              ? 'Einstellungen'
+              : (language === 'simple' ? 'Preferences' : 'Settings')}
           </h1>
         </div>
 
@@ -38,12 +42,18 @@ export default function SettingsPage() {
         >
           <div className="flex flex-col gap-1">
             <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}>
-              {language === 'simple' ? 'COACH VOICE' : 'COACH LANGUAGE'}
+              {locale === 'de'
+                ? (language === 'simple' ? 'COACH-STIL' : 'COACH-SPRACHE')
+                : (language === 'simple' ? 'COACH VOICE' : 'COACH LANGUAGE')}
             </span>
             <p className="text-[14px]" style={{ color: 'var(--color-ink-2)' }}>
-              {language === 'simple'
-                ? 'Switch between plain English and technical training terms.'
-                : 'Switch between plain-English and full Coggan/Seiler vocabulary.'}
+              {locale === 'de'
+                ? (language === 'simple'
+                    ? 'Wechsle zwischen einfachem Deutsch und technischen Trainingsbegriffen.'
+                    : 'Wechsle zwischen einfachem Deutsch und vollem Coggan/Seiler-Vokabular.')
+                : (language === 'simple'
+                    ? 'Switch between plain English and technical training terms.'
+                    : 'Switch between plain-English and full Coggan/Seiler vocabulary.')}
             </p>
           </div>
           <LanguageToggle />
@@ -62,9 +72,13 @@ export default function SettingsPage() {
               GARMIN
             </span>
             <p className="text-[14px]" style={{ color: 'var(--color-ink-2)' }}>
-              {language === 'simple'
-                ? 'Manage your Garmin connection for syncing workouts and body data.'
-                : 'Garmin Connect integration — syncs HRV, body battery, sleep, and activities.'}
+              {locale === 'de'
+                ? (language === 'simple'
+                    ? 'Verwalte deine Garmin-Verbindung, um Workouts und Körperdaten zu synchronisieren.'
+                    : 'Garmin-Connect-Integration — synchronisiert HRV, Body Battery, Schlaf und Aktivitäten.')
+                : (language === 'simple'
+                    ? 'Manage your Garmin connection for syncing workouts and body data.'
+                    : 'Garmin Connect integration — syncs HRV, body battery, sleep, and activities.')}
             </p>
           </div>
           <Link
@@ -75,7 +89,9 @@ export default function SettingsPage() {
               color: 'var(--color-paper)',
             }}
           >
-            {language === 'simple' ? 'Garmin settings' : 'Manage Garmin connection'}
+            {locale === 'de'
+              ? (language === 'simple' ? 'Garmin-Einstellungen' : 'Garmin-Verbindung verwalten')
+              : (language === 'simple' ? 'Garmin settings' : 'Manage Garmin connection')}
           </Link>
         </section>
 

@@ -14,6 +14,7 @@ import MomentumChips from '../MomentumChips'
 import PMCCompact from '../PMCCompact'
 import SeasonStats from '../SeasonStats'
 import TrainingLogStrip from '../TrainingLogStrip'
+import RecentActivities from '../RecentActivities'
 import ExternalWorkouts from '../ExternalWorkouts'
 import TodayHero from '../TodayHero'
 import WorkoutExportRow from '../WorkoutExportRow'
@@ -59,6 +60,7 @@ export default function TodayTab() {
     { id: 'achievements', label: t('card_badges'), render: () => <AchievementBadges /> },
     { id: 'did-you-know', label: t('card_dyk'), render: () => <DidYouKnow /> },
     { id: 'log-strip', label: t('card_log'), render: () => <TrainingLogStrip /> },
+    { id: 'recent-rides', label: t('card_recent'), render: () => <RecentActivities limit={10} /> },
     { id: 'deep-dive', label: t('card_deep_dive'), render: () => <TodayDeepDive /> },
   ]
   return <ReorderableTab tabId="today" cards={cards} />

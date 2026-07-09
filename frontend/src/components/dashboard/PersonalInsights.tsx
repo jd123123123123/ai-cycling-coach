@@ -4,6 +4,10 @@ import { TrendingUp, TrendingDown, Moon, Calendar, Activity, Sparkles } from 'lu
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import type { DailyMetric, ActivityRead } from '../../api/dashboard'
+import { useLocale } from '../../contexts/LocaleContext'
+
+// German plural weekday names, indexed by getDay() (0=Sun..6=Sat).
+const WEEKDAY_PLURAL_DE = ['Sonntage', 'Montage', 'Dienstage', 'Mittwoche', 'Donnerstage', 'Freitage', 'Samstage']
 
 // PersonalInsights — Whoop's secret weapon, translated for cyclists.
 // Auto-derives correlations from the user's own 60-day history. Each insight
@@ -65,6 +69,7 @@ function pctDelta(a: number, b: number): number {
 function computeInsights(
   metrics: DailyMetric[],
   activities: ActivityRead[],
+  de: boolean,
 ): Insight[] {
   const out: Insight[] = []
   const mDay = metricByDay(metrics)
@@ -89,10 +94,14 @@ function computeInsights(
       out.push({
         id: 'hard-ride-hrv',
         headline: `${delta > 0 ? '+' : ''}${delta.toFixed(0)}%`,
-        supportLabel: 'HRV AFTER RIDES > 100 TSS',
+        supportLabel: de ? 'HRV NACH FAHRTEN > 100 TSS' : 'HRV AFTER RIDES > 100 TSS',
         body: delta < 0
-          ? `Your HRV drops ${Math.abs(delta).toFixed(0)}% the day after hard sessions. Plan Z1 the morning after — your body is telling you.`
-          : `Your HRV rises ${delta.toFixed(0)}% after hard rides — you're absorbing load well. This is a green-light week.`,
+          ? (de
+              ? `Deine HRV fällt ${Math.abs(delta).toFixed(0)}% am Tag nach harten Einheiten. Plane Z1 am Morgen danach — dein Körper sagt es dir.`
+              : `Your HRV drops ${Math.abs(delta).toFixed(0)}% the day after hard sessions. Plan Z1 the morning after — your body is telling you.`)
+          : (de
+              ? `Deine HRV steigt ${delta.toFixed(0)}% nach harten Fahrten — du verkraftest die Belastung gut. Das ist eine grüne Woche.`
+              : `Your HRV rises ${delta.toFixed(0)}% after hard rides — you're absorbing load well. This is a green-light week.`),
         icon: <Activity size={13} strokeWidth={2} />,
         tone: delta < 0 ? 'caution' : 'positive',
       })
@@ -122,8 +131,10 @@ function computeInsights(
       out.push({
         id: 'sleep-hrv',
         headline: `+${delta.toFixed(0)}%`,
-        supportLabel: 'HRV AFTER GOOD SLEEP',
-        body: `Nights with sleep score ≥ 70 leave you ${delta.toFixed(0)}% higher HRV the next day. The bed is free training.`,
+        supportLabel: de ? 'HRV NACH GUTEM SCHLAF' : 'HRV AFTER GOOD SLEEP',
+        body: de
+          ? `Nächte mit Schlaf-Score ≥ 70 geben dir ${delta.toFixed(0)}% höhere HRV am nächsten Tag. Das Bett ist kostenloses Training.`
+          : `Nights with sleep score ≥ 70 leave you ${delta.toFixed(0)}% higher HRV the next day. The bed is free training.`,
         icon: <Moon size={13} strokeWidth={2} />,
         tone: 'positive',
       })
@@ -145,12 +156,16 @@ function computeInsights(
     const overall = mean(eligible.map((d) => d.mean))
     const delta = pctDelta(peak.mean, overall)
     if (delta >= 3) {
-      const dayName = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][peak.dow]
+      const dayName = de
+        ? WEEKDAY_PLURAL_DE[peak.dow]
+        : ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][peak.dow]
       out.push({
         id: 'peak-dow',
         headline: dayName,
-        supportLabel: 'YOUR BIOLOGICAL PRIME',
-        body: `HRV peaks ${delta.toFixed(0)}% on ${dayName}. Schedule your hardest session here when the week allows.`,
+        supportLabel: de ? 'DEINE BIOLOGISCHE BESTZEIT' : 'YOUR BIOLOGICAL PRIME',
+        body: de
+          ? `HRV erreicht ${delta.toFixed(0)}% Spitze an ${dayName}. Lege deine härteste Einheit hierher, wenn die Woche es zulässt.`
+          : `HRV peaks ${delta.toFixed(0)}% on ${dayName}. Schedule your hardest session here when the week allows.`,
         icon: <Calendar size={13} strokeWidth={2} />,
         tone: 'positive',
       })
@@ -175,10 +190,14 @@ function computeInsights(
       out.push({
         id: 'load-trend',
         headline: `${delta > 0 ? '+' : ''}${delta.toFixed(0)}%`,
-        supportLabel: '30D LOAD VS PRIOR 30',
+        supportLabel: de ? '30T BELASTUNG VS 30 ZUVOR' : '30D LOAD VS PRIOR 30',
         body: delta > 0
-          ? `Training load is ${delta.toFixed(0)}% higher than last month. Fitness is being built — keep the ramp under 8%/week.`
-          : `You're ${Math.abs(delta).toFixed(0)}% lighter than last month. Deloads build too — but watch for deconditioning past 14 days.`,
+          ? (de
+              ? `Die Trainingsbelastung ist ${delta.toFixed(0)}% höher als letzten Monat. Fitness wird aufgebaut — halte die Rampe unter 8%/Woche.`
+              : `Training load is ${delta.toFixed(0)}% higher than last month. Fitness is being built — keep the ramp under 8%/week.`)
+          : (de
+              ? `Du bist ${Math.abs(delta).toFixed(0)}% leichter als letzten Monat. Deloads bringen auch was — aber achte nach 14 Tagen auf Formverlust.`
+              : `You're ${Math.abs(delta).toFixed(0)}% lighter than last month. Deloads build too — but watch for deconditioning past 14 days.`),
         icon: delta > 0 ? <TrendingUp size={13} strokeWidth={2} /> : <TrendingDown size={13} strokeWidth={2} />,
         tone: delta > 0 ? 'positive' : 'caution',
       })
@@ -256,14 +275,16 @@ function InsightCard({ insight }: { insight: Insight }) {
 }
 
 export default function PersonalInsights() {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   const today = new Date()
   const start = subDays(today, 60)
   const { data: metricsData } = useDailyMetrics(start, today)
   const { data: actsData } = useActivitiesRange(start, today)
 
   const insights = useMemo(
-    () => computeInsights(metricsData?.metrics ?? [], actsData?.activities ?? []),
-    [metricsData, actsData],
+    () => computeInsights(metricsData?.metrics ?? [], actsData?.activities ?? [], de),
+    [metricsData, actsData, de],
   )
 
   if (insights.length === 0) return null
@@ -287,7 +308,7 @@ export default function PersonalInsights() {
             fontWeight: 600,
           }}
         >
-          What your body is telling you
+          {de ? 'Was dir dein Körper sagt' : 'What your body is telling you'}
         </span>
         <span
           className="num-mono"
@@ -297,7 +318,7 @@ export default function PersonalInsights() {
             letterSpacing: '0.12em',
           }}
         >
-          · {insights.length} INSIGHT{insights.length === 1 ? '' : 'S'}
+          · {insights.length} {de ? (insights.length === 1 ? 'ERKENNTNIS' : 'ERKENNTNISSE') : `INSIGHT${insights.length === 1 ? '' : 'S'}`}
         </span>
       </div>
 
@@ -310,7 +331,9 @@ export default function PersonalInsights() {
           maxWidth: '60ch',
         }}
       >
-        Patterns derived from the last 60 days of your own data. Updates as you train.
+        {de
+          ? 'Muster aus den letzten 60 Tagen deiner eigenen Daten. Aktualisiert sich, während du trainierst.'
+          : 'Patterns derived from the last 60 days of your own data. Updates as you train.'}
       </p>
 
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -323,7 +346,7 @@ export default function PersonalInsights() {
         className="text-[11px] mt-4"
         style={{ color: 'var(--color-muted)' }}
       >
-        Last updated {format(today, 'EEE d LLL · HH:mm')}
+        {de ? 'Zuletzt aktualisiert' : 'Last updated'} {format(today, 'EEE d LLL · HH:mm')}
       </p>
     </div>
   )

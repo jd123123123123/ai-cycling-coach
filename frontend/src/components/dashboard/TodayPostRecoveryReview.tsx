@@ -1,6 +1,6 @@
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
-import { useT } from '../../contexts/LocaleContext'
+import { useT, useLocale } from '../../contexts/LocaleContext'
 
 /**
  * TodayPostRecoveryReview — the rest-day twin of TodayPostRideReview.
@@ -26,6 +26,7 @@ export default function TodayPostRecoveryReview() {
   const { data: brief } = useCoachBrief()
   const { data: snapshot } = useTodaySnapshot()
   const t = useT()
+  const { locale } = useLocale()
   if (!brief) return null
 
   // If a ride review exists, the ride card takes precedence — bail.
@@ -83,11 +84,18 @@ export default function TodayPostRecoveryReview() {
   //   - `regeneration.bullets[]` — AI-generated recovery actions
   //   - `brief.rationale` / `verdict` — the model's read on today
   // We DON'T templete a "Recovery — mixed" two-liner anymore.
-  const headline: Record<typeof tone, string> = {
-    good: 'Recovery landed.',
-    caution: 'Recovery — mixed.',
-    bad: 'Recovery fell short.',
-  }
+  const headline: Record<typeof tone, string> =
+    locale === 'de'
+      ? {
+          good: 'Erholung ist geglückt.',
+          caution: 'Erholung — gemischt.',
+          bad: 'Erholung blieb aus.',
+        }
+      : {
+          good: 'Recovery landed.',
+          caution: 'Recovery — mixed.',
+          bad: 'Recovery fell short.',
+        }
 
   // AI-driven body. Priority order:
   //   1. brief.rationale — the model's own paragraph for today, which already
@@ -155,32 +163,32 @@ export default function TodayPostRecoveryReview() {
       {/* Metric chips — only render the ones we have data for. */}
       <div className="flex items-center gap-2 flex-wrap mt-1">
         {typeof hrvDelta === 'number' && (
-          <Chip label="HRV vs 28d" value={`${signed(hrvDelta)}%`} tone={hrvDelta < -3 ? 'caution' : hrvDelta < -8 ? 'bad' : 'good'} />
+          <Chip label={locale === 'de' ? 'HRV vs 28T' : 'HRV vs 28d'} value={`${signed(hrvDelta)}%`} tone={hrvDelta < -3 ? 'caution' : hrvDelta < -8 ? 'bad' : 'good'} />
         )}
         {typeof rhrDelta === 'number' && (
           <Chip
-            label="RHR vs 28d"
+            label={locale === 'de' ? 'RHR vs 28T' : 'RHR vs 28d'}
             value={`${signed(rhrDelta)}%`}
             tone={rhrDelta > 5 ? 'bad' : rhrDelta > 2 ? 'caution' : 'good'}
           />
         )}
         {typeof sleepLast === 'number' && (
           <Chip
-            label="Sleep last night"
+            label={locale === 'de' ? 'Schlaf letzte Nacht' : 'Sleep last night'}
             value={String(Math.round(sleepLast))}
             tone={sleepLast >= 75 ? 'good' : sleepLast >= 55 ? 'caution' : 'bad'}
           />
         )}
         {typeof avgDebt === 'number' && avgDebt > 0.2 && (
           <Chip
-            label="Sleep debt"
+            label={locale === 'de' ? 'Schlafdefizit' : 'Sleep debt'}
             value={`${avgDebt.toFixed(1)} h`}
             tone={avgDebt > 1.5 ? 'bad' : avgDebt > 0.6 ? 'caution' : 'good'}
           />
         )}
         {typeof bbWake === 'number' && (
           <Chip
-            label="Body battery — wake"
+            label={locale === 'de' ? 'Body Battery — Aufwachen' : 'Body battery — wake'}
             value={String(bbWake)}
             tone={bbWake >= 80 ? 'good' : bbWake >= 50 ? 'caution' : 'bad'}
           />

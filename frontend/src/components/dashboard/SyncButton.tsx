@@ -48,14 +48,14 @@ function relativeAge(iso: string | null, now: number, locale: 'en' | 'de' = 'en'
   return `${diffD} ${tFor(locale, 'sync_d_ago')}`
 }
 
-function extractAxiosMessage(err: unknown): string {
+function extractAxiosMessage(err: unknown, locale: 'en' | 'de' = 'en'): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyErr = err as any
   const detail = anyErr?.response?.data?.detail
   if (typeof detail === 'string' && detail.trim().length > 0) return detail
   const msg = anyErr?.message
   if (typeof msg === 'string' && msg.trim().length > 0) return msg
-  return 'Sync failed'
+  return locale === 'de' ? 'Synchronisierung fehlgeschlagen' : 'Sync failed'
 }
 
 interface SyncButtonProps {
@@ -81,11 +81,11 @@ export default function SyncButton({ compact = false, className = '' }: SyncButt
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   useEffect(() => {
     if (sync.isError) {
-      setErrorMsg(extractAxiosMessage(sync.error))
+      setErrorMsg(extractAxiosMessage(sync.error, locale))
       const t = window.setTimeout(() => setErrorMsg(null), ERROR_HOLD_MS)
       return () => window.clearTimeout(t)
     }
-  }, [sync.isError, sync.error])
+  }, [sync.isError, sync.error, locale])
 
   // Tone selection — the click handler also keys off this.
   const isSyncing = sync.isPending || status?.sync_status === 'syncing'
@@ -125,14 +125,24 @@ export default function SyncButton({ compact = false, className = '' }: SyncButt
 
   const title =
     tone === 'disconnected'
-      ? 'Connect Garmin in Settings to start syncing'
+      ? locale === 'de'
+        ? 'Garmin in den Einstellungen verbinden, um zu synchronisieren'
+        : 'Connect Garmin in Settings to start syncing'
       : tone === 'error'
-        ? `Last sync failed${status?.sync_status ? ` (${status.sync_status})` : ''}. Click to retry.`
+        ? locale === 'de'
+          ? `Letzte Synchronisierung fehlgeschlagen${status?.sync_status ? ` (${status.sync_status})` : ''}. Zum Wiederholen klicken.`
+          : `Last sync failed${status?.sync_status ? ` (${status.sync_status})` : ''}. Click to retry.`
         : tone === 'syncing'
-          ? 'Sync in progress'
+          ? locale === 'de'
+            ? 'Synchronisierung läuft'
+            : 'Sync in progress'
           : status?.last_sync_at
-            ? `Last sync: ${new Date(status.last_sync_at).toLocaleString()}`
-            : 'Pull latest activities and metrics from Garmin'
+            ? locale === 'de'
+              ? `Letzte Synchronisierung: ${new Date(status.last_sync_at).toLocaleString('de-DE')}`
+              : `Last sync: ${new Date(status.last_sync_at).toLocaleString()}`
+            : locale === 'de'
+              ? 'Neueste Aktivitäten und Werte von Garmin laden'
+              : 'Pull latest activities and metrics from Garmin'
 
   return (
     <div className={`relative inline-flex items-center ${className}`}>
@@ -235,7 +245,7 @@ export default function SyncButton({ compact = false, className = '' }: SyncButt
             maxWidth: 280,
           }}
         >
-          Sync failed — {errorMsg}
+          {locale === 'de' ? 'Synchronisierung fehlgeschlagen' : 'Sync failed'} — {errorMsg}
           <button
             type="button"
             onClick={(e) => {
@@ -246,7 +256,7 @@ export default function SyncButton({ compact = false, className = '' }: SyncButt
             className="underline underline-offset-2 ml-2 hover:text-[var(--color-ink)]"
             style={{ color: 'var(--color-ink-2)' }}
           >
-            Retry
+            {locale === 'de' ? 'Erneut versuchen' : 'Retry'}
           </button>
         </div>
       )}

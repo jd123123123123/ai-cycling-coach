@@ -80,7 +80,7 @@ function EstimatesSection() {
 function HistorySection() {
   const t = useT()
   return (
-    <DashboardSection id="trends-history" title={t('section_history')} defaultExpanded={false}>
+    <DashboardSection id="trends-history" title={t('section_history')} defaultExpanded>
       <div className="flex flex-col gap-5">
         <TrainingLogStrip />
         <div className="grid gap-4 md:grid-cols-2">

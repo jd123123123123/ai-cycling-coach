@@ -4,7 +4,7 @@ import { Target } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useCountUp } from '../../hooks/useCountUp'
-import { useT } from '../../contexts/LocaleContext'
+import { useLocale } from '../../contexts/LocaleContext'
 
 // Weekly Challenge Ring — Apple Fitness's core mechanic translated for cyclists.
 // The ring closes as the athlete accumulates TSS toward their weekly commitment.
@@ -18,7 +18,8 @@ const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRC = 2 * Math.PI * RING_RADIUS
 
 export default function WeeklyChallenge() {
-  const t = useT()
+  const { locale, t } = useLocale()
+  const de = locale === 'de'
   const today = new Date()
   const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
@@ -57,14 +58,20 @@ export default function WeeklyChallenge() {
   let headline = t('week_in_motion')
   let subline = `${Math.max(0, goal - thisWeekTSS)} ${t('tss_to_close_ring')}`
   if (closed) {
-    headline = 'Ring closed. You showed up.'
-    subline = `${thisWeekTSS} TSS across ${sessions} ${sessions === 1 ? 'session' : 'sessions'} — this is who you are now.`
+    headline = de ? 'Ring geschlossen. Du warst da.' : 'Ring closed. You showed up.'
+    subline = de
+      ? `${thisWeekTSS} TSS in ${sessions} ${sessions === 1 ? 'Einheit' : 'Einheiten'} — das bist du jetzt.`
+      : `${thisWeekTSS} TSS across ${sessions} ${sessions === 1 ? 'session' : 'sessions'} — this is who you are now.`
   } else if (close) {
-    headline = "You're within striking distance."
-    subline = `${goal - thisWeekTSS} TSS left · ${hoursLeft}h on the clock`
+    headline = de ? 'Du bist in Schlagdistanz.' : "You're within striking distance."
+    subline = de
+      ? `${goal - thisWeekTSS} TSS übrig · ${hoursLeft}h auf der Uhr`
+      : `${goal - thisWeekTSS} TSS left · ${hoursLeft}h on the clock`
   } else if (behind) {
-    headline = 'The week is asking.'
-    subline = `${hoursLeft}h left to protect the ring. One session answers it.`
+    headline = de ? 'Die Woche ruft.' : 'The week is asking.'
+    subline = de
+      ? `${hoursLeft}h, um den Ring zu schützen. Eine Einheit reicht.`
+      : `${hoursLeft}h left to protect the ring. One session answers it.`
   }
 
   const dashOffset = RING_CIRC * (1 - pct)
@@ -150,7 +157,7 @@ export default function WeeklyChallenge() {
         {/* Content */}
         <div className="flex flex-col gap-1 min-w-0 flex-1">
           <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
-            Weekly ring · {sessions} / {Math.ceil(goal / 80)} sessions
+            {de ? 'Wochen-Ring' : 'Weekly ring'} · {sessions} / {Math.ceil(goal / 80)} {de ? 'Einheiten' : 'sessions'}
           </span>
           <p
             className="text-[15px] font-medium leading-snug"

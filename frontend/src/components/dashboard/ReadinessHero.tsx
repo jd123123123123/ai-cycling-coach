@@ -17,6 +17,7 @@ import ContributorsSheet from './ContributorsSheet'
 import UncertainValue from './UncertainValue'
 import Sparkline from './Sparkline'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useLocale } from '../../contexts/LocaleContext'
 import { confidence, MIN_DAYS_HRV } from '../../utils/confidence'
 import {
   TIER_META,
@@ -68,6 +69,8 @@ function ActivityRings({
   sleepScore: number | null
   loadPct: number
 }) {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   const tier = readinessTier(score) ?? 'rest'
   const meta = TIER_META[tier]
 
@@ -95,7 +98,9 @@ function ActivityRings({
       <div
         className="relative flex items-center justify-center"
         style={{ width: size, height: size }}
-        aria-label={`Recovery ${score}, Sleep ${sleepScore ?? 0}, Weekly load ${Math.round(loadPct)}%`}
+        aria-label={de
+          ? `Erholung ${score}, Schlaf ${sleepScore ?? 0}, Wochenbelastung ${Math.round(loadPct)}%`
+          : `Recovery ${score}, Sleep ${sleepScore ?? 0}, Weekly load ${Math.round(loadPct)}%`}
       >
         {/* Ambient glow — recovery tier color bleeds through center */}
         <div
@@ -178,7 +183,7 @@ function ActivityRings({
             className="eyebrow mt-1"
             style={{ color: 'var(--color-muted)', fontSize: 8, letterSpacing: '0.3em' }}
           >
-            YOUR RECOVERY
+            {de ? 'DEINE ERHOLUNG' : 'YOUR RECOVERY'}
           </span>
         </div>
       </div>
@@ -189,9 +194,9 @@ function ActivityRings({
         style={{ animation: 'fade-in 400ms ease-out 900ms both' }}
       >
         {[
-          { color: RING_SLEEP_COLOR, label: 'Sleep', value: animSleep },
-          { color: meta.color,       label: 'Recovery', value: animRecovery },
-          { color: RING_LOAD_COLOR,  label: 'Load', value: animLoad, suffix: '%' },
+          { color: RING_SLEEP_COLOR, label: de ? 'Schlaf' : 'Sleep', value: animSleep },
+          { color: meta.color,       label: de ? 'Erholung' : 'Recovery', value: animRecovery },
+          { color: RING_LOAD_COLOR,  label: de ? 'Belastung' : 'Load', value: animLoad, suffix: '%' },
         ].map((s) => (
           <div key={s.label} className="flex items-center gap-1.5">
             <span
@@ -229,6 +234,8 @@ function HeroSkeleton() {
 // ─── Insight chips ───────────────────────────────────────────────────────────
 
 function DeltaChip({ delta }: { delta: number }) {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   const rounded = Math.round(delta)
   const isUp = rounded > 0
   const isDown = rounded < 0
@@ -248,10 +255,10 @@ function DeltaChip({ delta }: { delta: number }) {
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 num-mono text-[12px]"
       style={{ color, backgroundColor: bg }}
-      aria-label={`${signedStr} vs yesterday`}
+      aria-label={`${signedStr} ${de ? 'ggü. gestern' : 'vs yesterday'}`}
     >
       <Icon size={12} strokeWidth={2.2} />
-      {signedStr} <span className="opacity-70">vs yesterday</span>
+      {signedStr} <span className="opacity-70">{de ? 'ggü. gestern' : 'vs yesterday'}</span>
     </span>
   )
 }
@@ -283,12 +290,14 @@ function EnterGroup({
 }
 
 function PercentileChip({ percentile, color }: { percentile: number; color: string }) {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   // Flip the framing above 50 so the message always reads as a positive
   // reinforcement ("Top 27%") or an honest mirror ("Bottom 18%"). Whoop does
   // the same inversion in its summaries.
   const label = percentile >= 50
     ? `Top ${100 - percentile}%`
-    : `Bottom ${percentile}%`
+    : `${de ? 'Untere' : 'Bottom'} ${percentile}%`
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px]"
@@ -297,7 +306,9 @@ function PercentileChip({ percentile, color }: { percentile: number; color: stri
         backgroundColor: 'rgba(255, 255, 255, 0.06)',
         border: '1px solid rgba(255, 255, 255, 0.09)',
       }}
-      title={`Your readiness today ranks against the last 30 days`}
+      title={de
+        ? `Deine Erholung heute im Vergleich zu den letzten 30 Tagen`
+        : `Your readiness today ranks against the last 30 days`}
     >
       <span className="num-mono">{label}</span>
       <span className="opacity-60" style={{ color: 'var(--color-muted)' }}>· 30d</span>
@@ -450,6 +461,8 @@ export default function ReadinessHero() {
   // All hooks MUST be called before any early returns (Rules of Hooks).
   const [contributorsOpen, setContributorsOpen] = useState(false)
   const { language } = useLanguage()
+  const { locale } = useLocale()
+  const de = locale === 'de'
 
   // Step 6: wake → now snapshot. Hook stays unconditional at the top per the
   // 06.1-03 ContributorsSheet hoist precedent; downstream we tolerate undefined.
@@ -501,20 +514,21 @@ export default function ReadinessHero() {
         </span>
         <div className="relative">
           <span className="eyebrow" style={{ color: 'var(--color-forest)' }}>
-            New rider · {format(today, 'EEEE · dd MMM')}
+            {de ? 'Neuer Fahrer' : 'New rider'} · {format(today, 'EEEE · dd MMM')}
           </span>
           <h1
             className="num-display mt-3 leading-[0.95]"
             style={{ fontSize: 'clamp(42px, 7vw, 72px)', color: 'var(--color-ink)' }}
           >
-            Let&apos;s map your body.
+            {de ? 'Lass uns deinen Körper vermessen.' : "Let's map your body."}
           </h1>
           <p
             className="mt-4 max-w-xl text-[15px] leading-relaxed"
             style={{ color: 'var(--color-ink-2)' }}
           >
-            Connect your Garmin to start tracking sleep, HRV, body battery, stress,
-            and training readiness — the raw material your coach uses to shape each day.
+            {de
+              ? 'Verbinde dein Garmin, um Schlaf, HRV, Body Battery, Stress und Trainingsbereitschaft zu erfassen — das Rohmaterial, aus dem dein Coach jeden Tag formt.'
+              : 'Connect your Garmin to start tracking sleep, HRV, body battery, stress, and training readiness — the raw material your coach uses to shape each day.'}
           </p>
           <Link
             to="/garmin/connect"
@@ -524,7 +538,7 @@ export default function ReadinessHero() {
               color: 'var(--color-paper)',
             }}
           >
-            Connect Garmin
+            {de ? 'Garmin verbinden' : 'Connect Garmin'}
             <ArrowUpRight size={16} strokeWidth={2} />
           </Link>
         </div>
@@ -539,7 +553,7 @@ export default function ReadinessHero() {
         style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
       >
         <span className="eyebrow" style={{ color: 'var(--color-alert)' }}>
-          Couldn&apos;t load body status
+          {de ? 'Körperstatus konnte nicht geladen werden' : "Couldn't load body status"}
         </span>
         <button
           onClick={() => void refetch()}
@@ -549,7 +563,7 @@ export default function ReadinessHero() {
             color: 'var(--color-paper)',
           }}
         >
-          Retry
+          {de ? 'Erneut' : 'Retry'}
         </button>
       </div>
     )
@@ -613,7 +627,10 @@ export default function ReadinessHero() {
   // Thin data shows muted skeleton + "Need N more days of HRV." via <UncertainValue>.
   const hrvDays = metrics.filter((m) => m.hrv_status != null).length
   const hrvConfidence = confidence({ n_days: hrvDays, min_days: MIN_DAYS_HRV })
-  const hrvLowCopy = `Need ${Math.max(1, MIN_DAYS_HRV - hrvDays)} more day${Math.max(1, MIN_DAYS_HRV - hrvDays) === 1 ? '' : 's'} of HRV.`
+  const hrvDaysNeeded = Math.max(1, MIN_DAYS_HRV - hrvDays)
+  const hrvLowCopy = de
+    ? `Noch ${hrvDaysNeeded} Tag${hrvDaysNeeded === 1 ? '' : 'e'} HRV nötig.`
+    : `Need ${hrvDaysNeeded} more day${hrvDaysNeeded === 1 ? '' : 's'} of HRV.`
 
   // "as of HH:MM" — tied to body_battery.now_at so the user knows when the
   // hero last reflected reality. Garmin publishes body battery on a ~5–10min
@@ -624,7 +641,7 @@ export default function ReadinessHero() {
 
   // Sleep chip retained — it's a once-per-day reading, not drifting.
   const sleepChip: { label: string; value: number | null | undefined; suffix?: string } | null = latest
-    ? { label: 'Sleep', value: latest.sleep_score }
+    ? { label: de ? 'Schlaf' : 'Sleep', value: latest.sleep_score }
     : null
 
   // Wave 3: ContributorsSheet replaces the temporary SideSheet→BiometricsDetail wiring.
@@ -681,14 +698,16 @@ export default function ReadinessHero() {
                     ? `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`
                     : '1px solid rgba(48, 209, 88, 0.25)',
                 }}
-                title={`Recovery is in the top ${100 - Math.round(percentile)}% of your last 30 days`}
+                title={de
+                  ? `Erholung liegt in den oberen ${100 - Math.round(percentile)}% deiner letzten 30 Tage`
+                  : `Recovery is in the top ${100 - Math.round(percentile)}% of your last 30 days`}
               >
                 Top {Math.max(1, 100 - Math.round(percentile))}% · 30d
               </span>
             )}
             {lastSync && (
               <span className="eyebrow opacity-70 num-mono hidden sm:inline">
-                synced {lastSync}
+                {de ? 'synchr.' : 'synced'} {lastSync}
               </span>
             )}
             {/* "Why this?" button — opens ContributorsSheet (Wave 3 unified drawer). */}
@@ -702,10 +721,14 @@ export default function ReadinessHero() {
                   backgroundColor: 'var(--color-paper)',
                   border: '1px solid var(--color-rule)',
                 }}
-                title={language === 'simple' ? 'Why this score?' : 'Why this?'}
+                title={language === 'simple'
+                  ? (de ? 'Warum dieser Wert?' : 'Why this score?')
+                  : (de ? 'Warum das?' : 'Why this?')}
               >
                 <Info size={11} strokeWidth={1.8} />
-                {language === 'simple' ? 'Why?' : 'Why this?'}
+                {language === 'simple'
+                  ? (de ? 'Warum?' : 'Why?')
+                  : (de ? 'Warum das?' : 'Why this?')}
               </button>
             )}
           </div>
@@ -734,7 +757,7 @@ export default function ReadinessHero() {
                     className="num-mono text-[11px]"
                     style={{ color: 'var(--color-muted)' }}
                   >
-                    verdict
+                    {de ? 'urteil' : 'verdict'}
                   </span>
                 </div>
                 <h1
@@ -744,13 +767,13 @@ export default function ReadinessHero() {
                     color: 'var(--color-ink)',
                   }}
                 >
-                  {meta.verb} today.
+                  {de ? meta.verbDe : meta.verb} {de ? 'heute' : 'today'}.
                 </h1>
                 <p
                   className="text-[15px] leading-relaxed max-w-lg"
                   style={{ color: 'var(--color-ink-2)' }}
                 >
-                  {meta.sentiment}
+                  {de ? meta.sentimentDe : meta.sentiment}
                 </p>
 
                 {/* Insight strip — delta vs yesterday · percentile vs last 30 days.
@@ -780,7 +803,7 @@ export default function ReadinessHero() {
                   className="flex flex-col gap-1.5 pt-1"
                 >
                   <WakeNowRow
-                    label="Battery"
+                    label={de ? 'Akku' : 'Battery'}
                     pair={battery}
                     sparkline={sixHourSparkline}
                   />
@@ -807,9 +830,11 @@ export default function ReadinessHero() {
                           fontSize: 10,
                           letterSpacing: '0.16em',
                         }}
-                        title="Garmin publishes body battery on a ~5–10 minute lag"
+                        title={de
+                          ? 'Garmin liefert die Body Battery mit ~5–10 Minuten Verzögerung'
+                          : 'Garmin publishes body battery on a ~5–10 minute lag'}
                       >
-                        AS OF {asOfLabel}
+                        {de ? 'STAND' : 'AS OF'} {asOfLabel}
                       </span>
                     )}
                   </div>
@@ -823,7 +848,7 @@ export default function ReadinessHero() {
             </>
           ) : (
             <div className="col-span-full">
-              <span className="eyebrow">Awaiting metrics</span>
+              <span className="eyebrow">{de ? 'Warte auf Messwerte' : 'Awaiting metrics'}</span>
               <p
                 className="num-display mt-3 leading-[0.95]"
                 style={{
@@ -831,14 +856,15 @@ export default function ReadinessHero() {
                   color: 'var(--color-ink)',
                 }}
               >
-                Your next sync will paint this in.
+                {de ? 'Dein nächster Sync füllt das hier.' : 'Your next sync will paint this in.'}
               </p>
               <p
                 className="mt-3 text-[14px] max-w-md"
                 style={{ color: 'var(--color-ink-2)' }}
               >
-                Garmin is connected but hasn&apos;t delivered biometrics yet — usually
-                an overnight wait.
+                {de
+                  ? 'Garmin ist verbunden, hat aber noch keine Biometrie geliefert — meist eine Sache über Nacht.'
+                  : "Garmin is connected but hasn't delivered biometrics yet — usually an overnight wait."}
               </p>
             </div>
           )}

@@ -7,7 +7,18 @@ import {
   startOfWeek,
 } from 'date-fns'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useLocale } from '../../contexts/LocaleContext'
 import type { ActivityRead } from '../../api/dashboard'
+
+// German labels for the metric tiles, keyed by metric. Units (km/h/W/bpm) stay
+// as-is; only the descriptive label localizes.
+const METRIC_LABEL_DE: Record<MetricKey, string> = {
+  distance: 'Distanz',
+  duration: 'Dauer',
+  power: 'Ø Leistung',
+  heartRate: 'Ø HF',
+  pace: 'Ø Pace',
+}
 
 // Small-multiples layout — Whoop/Apple's weekly breakdown pattern. The win
 // isn't any single chart; it's that the user can sweep across four tiles in
@@ -200,12 +211,14 @@ function MetricTile({
   labels,
   todayIdx,
   totalLabel,
+  de,
 }: {
   metric: MetricConfig & { key: MetricKey }
   values: number[]
   labels: string[]
   todayIdx: number
   totalLabel: string
+  de: boolean
 }) {
   return (
     <div
@@ -224,7 +237,7 @@ function MetricTile({
             letterSpacing: '0.22em',
           }}
         >
-          {metric.label.toUpperCase()}
+          {(de ? METRIC_LABEL_DE[metric.key] : metric.label).toUpperCase()}
         </span>
         <span
           className="num-mono"
@@ -245,6 +258,8 @@ function MetricTile({
 }
 
 export default function WeeklySportMetrics() {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   const [sport, setSport] = useState<Sport>('cycling')
   const now = new Date()
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
@@ -288,7 +303,7 @@ export default function WeeklySportMetrics() {
           className="eyebrow"
           style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
         >
-          Weekly breakdown · {format(weekStart, 'MMM d')}–{format(weekEnd, 'd')}
+          {de ? 'Wochenübersicht' : 'Weekly breakdown'} · {format(weekStart, 'MMM d')}–{format(weekEnd, 'd')}
         </span>
         <div
           className="inline-flex items-center rounded-full p-[3px]"
@@ -315,7 +330,9 @@ export default function WeeklySportMetrics() {
                   fontWeight: active ? 500 : 400,
                 }}
               >
-                {s === 'cycling' ? 'Cycling' : 'Running'}
+                {s === 'cycling'
+                  ? de ? 'Radfahren' : 'Cycling'
+                  : de ? 'Laufen' : 'Running'}
               </button>
             )
           })}
@@ -333,11 +350,16 @@ export default function WeeklySportMetrics() {
             className="text-[14px]"
             style={{ color: 'var(--color-ink-2)' }}
           >
-            No {sport} sessions this week yet.
+            {de
+              ? `Noch keine ${sport === 'cycling' ? 'Rad' : 'Lauf'}-Einheiten diese Woche.`
+              : `No ${sport} sessions this week yet.`}
           </p>
           <p className="text-[12px]" style={{ color: 'var(--color-muted)' }}>
-            Your first {sport === 'cycling' ? 'ride' : 'run'} this week will
-            paint these charts in.
+            {de
+              ? sport === 'cycling'
+                ? 'Deine erste Fahrt diese Woche füllt diese Charts.'
+                : 'Dein erster Lauf diese Woche füllt diese Charts.'
+              : `Your first ${sport === 'cycling' ? 'ride' : 'run'} this week will paint these charts in.`}
           </p>
         </div>
       ) : (
@@ -349,6 +371,7 @@ export default function WeeklySportMetrics() {
               values={values}
               labels={labels}
               todayIdx={todayIdx}
+              de={de}
               totalLabel={
                 metric.key === 'distance'
                   ? metric.format(total)

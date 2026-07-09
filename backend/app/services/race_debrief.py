@@ -47,9 +47,16 @@ _VERDICT_SYSTEM = (
     "candid verdict on how the ride was executed, referencing the athlete's real "
     "numbers. Be specific and encouraging but honest. Do not invent numbers."
 )
+_VERDICT_SYSTEM_DE = (
+    "Du bist ein Profi-Radsport-Coach und schreibst ein Renn-Debrief. Gib in 2–3 "
+    "Sätzen ein ehrliches Urteil dazu ab, wie die Fahrt umgesetzt wurde, und beziehe "
+    "dich auf die echten Zahlen des Athleten. Sei konkret, ermutigend, aber ehrlich. "
+    "Erfinde keine Zahlen. Antworte auf Deutsch, in der Du-Form."
+)
 
 
-async def _ai_verdict(report: RaceDebrief) -> tuple[str, str]:
+async def _ai_verdict(report: RaceDebrief, lang: str = "en") -> tuple[str, str]:
+    de = lang == "de"
     fallback = report.verdict.ai_verdict
     if not settings.ANTHROPIC_API_KEY:
         return fallback, "rule-based-fallback"
@@ -68,7 +75,7 @@ async def _ai_verdict(report: RaceDebrief) -> tuple[str, str]:
         resp = await client.messages.create(
             model=settings.RACE_DEBRIEF_MODEL, max_tokens=1200,
             thinking={"type": "adaptive"},
-            system=[{"type": "text", "text": _VERDICT_SYSTEM,
+            system=[{"type": "text", "text": _VERDICT_SYSTEM_DE if de else _VERDICT_SYSTEM,
                      "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": msg}],
         )
@@ -109,72 +116,114 @@ def _grade_from_score(score: float) -> str:
     return "F"
 
 
-def _rule_based_grade(pacing, efficiency, matchbook_, efforts, durability_drop):
+def _rule_based_grade(pacing, efficiency, matchbook_, efforts, durability_drop, de: bool = False):
     """Deterministic 0–100 ride-execution score from the analyzer blocks."""
     score = 80.0
     good: list[str] = []
     bad: list[str] = []
     if pacing is not None:
         if pacing.split_pct < -8:
-            score -= 10; bad.append("Positive split — faded in the second half")
+            score -= 10; bad.append("Positiver Split — in der zweiten Hälfte eingebrochen" if de else "Positive split — faded in the second half")
         elif pacing.split_pct > -3:
-            score += 4; good.append("Evenly paced")
+            score += 4; good.append("Gleichmäßig eingeteilt" if de else "Evenly paced")
         if pacing.variability_index and pacing.variability_index > 1.25:
-            score -= 4; bad.append("Very surgy (high variability)")
+            score -= 4; bad.append("Sehr antrittslastig (hohe Variabilität)" if de else "Very surgy (high variability)")
     if efficiency is not None and efficiency.decoupling_pct is not None:
         if efficiency.decoupling_pct < 5:
-            score += 5; good.append("Low aerobic decoupling — well fuelled/paced")
+            score += 5; good.append("Geringe aerobe Entkopplung — gut verpflegt/eingeteilt" if de else "Low aerobic decoupling — well fuelled/paced")
         elif efficiency.decoupling_pct > 10:
-            score -= 8; bad.append("High cardiac drift late in the ride")
+            score -= 8; bad.append("Deutlicher HF-Drift spät in der Fahrt" if de else "High cardiac drift late in the ride")
     if matchbook_ is not None and matchbook_.fully_depleted:
-        score -= 6; bad.append("Emptied the anaerobic tank")
+        score -= 6; bad.append("Anaerobe Reserve komplett geleert" if de else "Emptied the anaerobic tank")
     prs = [e for e in (efforts or []) if e.is_pr]
     if prs:
-        score += 6; good.append(f"Set {len(prs)} power PR(s)")
+        score += 6; good.append((f"{len(prs)} neue Leistungs-Rekorde" if de else f"Set {len(prs)} power PR(s)"))
     if durability_drop is not None and durability_drop > 15:
-        score -= 6; bad.append("Power faded badly under fatigue")
+        score -= 6; bad.append("Leistung unter Ermüdung stark abgefallen" if de else "Power faded badly under fatigue")
     score = max(0.0, min(100.0, score))
     return score, good[:3], bad[:3]
 
 
-def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop):
-    """Deterministic ranked prescriptions with a race tactic + training fix each."""
+def _merge_climb_gain(climbs):
+    """Bridge climb fragments split by short false-flats into whole climbs, so the
+    'hardest climb' the plan cites is the real pass, not a sub-segment. Returns a
+    list of (elev_gain_m, avg_grade_pct); short non-climb gaps (≤90 s) are merged."""
+    if not climbs:
+        return []
+    ordered = sorted(climbs, key=lambda c: c.start_s)
+    merged = []  # each: [start_s, end_s, gain, dist]
+    for c in ordered:
+        end = c.start_s + c.duration_s
+        if merged and c.start_s - merged[-1][1] <= 90:
+            merged[-1][1] = end
+            merged[-1][2] += c.elev_gain_m
+            merged[-1][3] += c.distance_m
+        else:
+            merged.append([c.start_s, end, c.elev_gain_m, c.distance_m])
+    return [(g, (g / d * 100.0) if d > 0 else 0.0) for _, _, g, d in merged]
+
+
+def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop, climbs=None, de: bool = False):
+    """Deterministic ranked prescriptions — one per detected problem, each with a
+    concrete race tactic + training fix. Tactics reference THIS ride's own hardest
+    climb so the advice is course-specific, not generic."""
     plan = []
+    # Hardest climb of the day (after merging fragments) → point tactics at a real
+    # place on the course.
+    merged = _merge_climb_gain(climbs)
+    hardest = max(merged, key=lambda m: m[0]) if merged else None
+    if hardest is not None:
+        h_gain, h_grade = hardest
+        climb_ref = (f"am härtesten Anstieg ({round(h_grade)} %, {round(h_gain)} Hm)"
+                     if de else f"on the day's hardest climb ({round(h_grade)}%, {round(h_gain)} m)")
+    else:
+        climb_ref = "am ersten großen Anstieg" if de else "on the first major climb"
+
     if matchbook_ is not None and matchbook_.fully_depleted:
         plan.append(dict(priority=len(plan) + 1,
-            headline="Ration your matches early",
-            race_tactic="Sit in on the first climb; hold 20–25 W under threshold.",
-            training_fix="VO2 40/20s ×2/wk to raise W′ (anaerobic capacity).",
+            headline="Teile deine Körner früher ein" if de else "Ration your matches early",
+            race_tactic=(f"{climb_ref[0].upper()}{climb_ref[1:]} im Windschatten bleiben; 20–25 W unter Schwelle halten statt anzutreten." if de else f"Sit in {climb_ref}; hold 20–25 W under threshold rather than attacking."),
+            training_fix="VO2 40/20er ×2/Woche, um W′ (anaerobe Kapazität) zu heben." if de else "VO2 40/20s ×2/wk to raise W′ (anaerobic capacity).",
             tone="caution"))
     if fueling is not None and fueling.likely_underfueled:
         lo, hi = fueling.carb_target_g_per_h
         plan.append(dict(priority=len(plan) + 1,
-            headline="Fuel earlier and more",
-            race_tactic=f"Target {int(lo)}–{int(hi)} g carbs/h from the gun.",
-            training_fix="Gut-training long rides at race carb intake.",
+            headline="Früher und mehr verpflegen" if de else "Fuel earlier and more",
+            race_tactic=(f"Ab km 0 {int(lo)}–{int(hi)} g KH/h — ein Gel alle 25–30 min, nicht erst wenn der Hunger kommt." if de else f"From km 0, take {int(lo)}–{int(hi)} g carbs/h — a gel every 25–30 min, not once you feel empty."),
+            training_fix="Magen-Training auf langen Fahrten mit Renn-KH-Zufuhr." if de else "Gut-training long rides at race carb intake.",
             tone="bad"))
-    if pacing is not None and pacing.split_pct < -8:
+    # HR drift late in the ride — separate, actionable item (was previously silent).
+    if efficiency is not None and efficiency.decoupling_pct is not None and efficiency.decoupling_pct > 8:
         plan.append(dict(priority=len(plan) + 1,
-            headline="Pace the first half more conservatively",
-            race_tactic="Negative-split it: start ~5% easier than felt right.",
-            training_fix="Threshold work at the end of long rides for durability.",
+            headline="Späten HF-Drift eindämmen" if de else "Rein in the late HR drift",
+            race_tactic=(f"Erste 2 h bewusst 5–8 W unter Wohlfühl-Pace; trinken + kühlen ab der ersten Verpflegung." if de else "Ride the first 2 h a deliberate 5–8 W under comfortable pace; drink + cool from the first feed."),
+            training_fix="Lange Zone-2-Fahrten (3–4 h) für aerobe Ausdauer und Fettstoffwechsel." if de else "Long Zone-2 rides (3–4 h) to build aerobic durability and fat metabolism.",
             tone="caution"))
+    if pacing is not None and pacing.split_pct < -3:
+        hard = pacing.split_pct < -8
+        plan.append(dict(priority=len(plan) + 1,
+            headline=("Erste Hälfte konservativer angehen" if hard else "Gleichmäßiger einteilen") if de else ("Pace the first half more conservatively" if hard else "Flatten out your pacing"),
+            race_tactic=("Negativ splitten: ~5 % leichter starten, als es sich richtig anfühlt." if de else "Negative-split it: start ~5% easier than it feels right."),
+            training_fix="Schwellenarbeit am Ende langer Fahrten für Ermüdungsresistenz." if de else "Threshold work at the end of long rides for durability.",
+            tone="caution" if hard else "neutral"))
     if durability_drop is not None and durability_drop > 15:
         plan.append(dict(priority=len(plan) + 1,
-            headline="Build fatigue resistance",
-            race_tactic="Practice key efforts late, on tired legs.",
-            training_fix="Add tempo/threshold blocks after 2+ h of endurance.",
+            headline="Ermüdungsresistenz aufbauen" if de else "Build fatigue resistance",
+            race_tactic="Schlüssel-Efforts spät üben, auf müden Beinen." if de else "Practice key efforts late, on tired legs.",
+            training_fix="Tempo-/Schwellenblöcke nach 2+ h Grundlage einbauen." if de else "Add tempo/threshold blocks after 2+ h of endurance.",
             tone="neutral"))
     if not plan:
-        plan.append(dict(priority=1, headline="Keep doing what works",
-            race_tactic="Repeat this pacing and fuelling.",
-            training_fix="Progress load gradually; protect recovery.",
+        plan.append(dict(priority=1,
+            headline="Weiter so" if de else "Keep doing what works",
+            race_tactic="Diese Einteilung und Verpflegung wiederholen." if de else "Repeat this pacing and fuelling.",
+            training_fix="Belastung schrittweise steigern; Erholung schützen." if de else "Progress load gradually; protect recovery.",
             tone="good"))
     return plan
 
 
-def assemble_debrief(activity, stream, profile, athlete_envelope: dict) -> RaceDebrief:
+def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: str = "en") -> RaceDebrief:
     """Pure assembler: analyzers → RaceDebrief with a rule-based verdict. See docstring."""
+    de = lang == "de"
     s = stream.streams or {}
     power = [float(p) for p in (s.get("power") or []) if p is not None]
     hr = s.get("heart_rate") or []
@@ -206,7 +255,7 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict) -> RaceD
     fueling = _try("fueling", lambda: fueling_analysis.analyze_fueling(
         power, if_=(round(np_watts / ftp, 3) if ftp else None),
         durability_drop_pct=getattr(stream, "durability_drop_pct", None),
-        decoupling_pct=(efficiency.decoupling_pct if efficiency else None)))
+        decoupling_pct=(efficiency.decoupling_pct if efficiency else None), de=de))
     efforts = _try("efforts", lambda: effort_matching.match_efforts(mmp, athlete_envelope), []) or []
     wko = _try("wko", lambda: wko_power_model.fit_wko_model(mmp, mass))
     rho = _try("air_density", lambda: air_density(
@@ -214,7 +263,7 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict) -> RaceD
     cda = _try("cda", lambda: cda_estimate.estimate_cda(
         power, speed, altitude, mass, air_density=rho)) if mass else None
     wbal = _try("wbal", lambda: w_prime_balance(power, cp, w_prime)) if cp > 0 and w_prime > 0 else None
-    moments = _try("moments", lambda: key_moments.detect_key_moments(power, wbal, hr_clean), []) or []
+    moments = _try("moments", lambda: key_moments.detect_key_moments(power, wbal, hr_clean, de=de), []) or []
 
     # --- header ---
     total_kj = round(sum(power) / 1000.0, 1) if power else 0.0
@@ -239,24 +288,29 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict) -> RaceD
         altitude=_downsample(altitude, _STORY_MAX_POINTS) if altitude else [],
         speed=_downsample(speed, _STORY_MAX_POINTS) if speed else [],
         moments=[m.__dict__ for m in moments],
-        route=[{"lat": la, "lng": lo, "power": power[i] if i < n else None,
-                "grade": None}
-               for i, (la, lo) in enumerate(zip(latitude, longitude))
-               if la is not None and lo is not None][:_STORY_MAX_POINTS],
+        # Downsample across the WHOLE course, not the first 600 fixes (which for
+        # a long ride drew only the opening minutes). Keep power per point so the
+        # map can be coloured by effort.
+        route=_downsample(
+            [{"lat": la, "lng": lo, "power": power[i] if i < n else None, "grade": None}
+             for i, (la, lo) in enumerate(zip(latitude, longitude))
+             if la is not None and lo is not None],
+            _STORY_MAX_POINTS,
+        ),
     )
 
     # --- verdict + plan ---
     durability_drop = getattr(stream, "durability_drop_pct", None)
-    score, good, bad = _rule_based_grade(pacing, efficiency, mb, efforts, durability_drop)
+    score, good, bad = _rule_based_grade(pacing, efficiency, mb, efforts, durability_drop, de)
     verdict = dict(
         grade_letter=_grade_from_score(score), grade_score=round(score, 0),
-        ai_verdict=_rule_based_verdict(activity, score, good, bad),
+        ai_verdict=_rule_based_verdict(activity, score, good, bad, de),
         ai_model="rule-based-fallback", went_well=good, watch_out=bad,
     )
-    plan = _build_plan(pacing, mb, efficiency, fueling, durability_drop)
+    plan = _build_plan(pacing, mb, efficiency, fueling, durability_drop, climbs, de)
 
     return RaceDebrief(
-        activity_id=activity.id, header=header, verdict=verdict, story=story,
+        activity_id=activity.id, header=header, verdict=verdict, story=story, lang=lang,
         segments=[seg.__dict__ for seg in segments],
         climbs=[c.__dict__ for c in climbs],
         pacing=pacing.__dict__ if pacing else None,
@@ -271,8 +325,14 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict) -> RaceD
     )
 
 
-def _rule_based_verdict(activity, score: float, good: list[str], bad: list[str]) -> str:
+def _rule_based_verdict(activity, score: float, good: list[str], bad: list[str], de: bool = False) -> str:
     grade = _grade_from_score(score)
+    if de:
+        lead = {"A": "Eine herausragende Fahrt.", "B": "Eine starke Fahrt.", "C": "Eine solide Fahrt.",
+                "D": "Ein harter Tag.", "F": "Ein Tag zum Lernen."}[grade]
+        win = f" Das lief gut: {good[0].lower()}." if good else ""
+        fix = f" Verbesserungspotenzial: {bad[0].lower()}." if bad else ""
+        return (lead + win + fix)[:600]
     lead = {"A": "A standout ride.", "B": "A strong ride.", "C": "A solid ride.",
             "D": "A tough day.", "F": "A day to learn from."}[grade]
     win = f" What worked: {good[0].lower()}." if good else ""
@@ -294,7 +354,7 @@ async def _upsert_debrief(db: AsyncSession, user_id: int, activity_id: int, repo
     report.generated_at = now
 
 
-async def build_debrief(db: AsyncSession, user_id: int, activity_id: int) -> RaceDebrief | None:
+async def build_debrief(db: AsyncSession, user_id: int, activity_id: int, lang: str = "en") -> RaceDebrief | None:
     activity = (await db.execute(
         select(Activity).where(Activity.id == activity_id))).scalars().first()
     if activity is None:
@@ -308,26 +368,28 @@ async def build_debrief(db: AsyncSession, user_id: int, activity_id: int) -> Rac
         select(ActivityStream.mmp_curve).where(
             ActivityStream.user_id == user_id, ActivityStream.mmp_curve.isnot(None)))
     envelope = aggregate_mmp_curves([row[0] for row in env_res.all() if row[0]])
-    report = assemble_debrief(activity, stream, profile, envelope)
-    text, model = await _ai_verdict(report)
+    report = assemble_debrief(activity, stream, profile, envelope, lang)
+    text, model = await _ai_verdict(report, lang)
     report.verdict.ai_verdict = text
     report.verdict.ai_model = model
     return report
 
 
-async def get_or_build_debrief(db: AsyncSession, user_id: int, activity_id: int) -> RaceDebrief | None:
+async def get_or_build_debrief(db: AsyncSession, user_id: int, activity_id: int, lang: str = "en") -> RaceDebrief | None:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=DEBRIEF_TTL_HOURS)
     row = (await db.execute(
         select(RaceDebriefCache).where(
             RaceDebriefCache.user_id == user_id,
             RaceDebriefCache.activity_id == activity_id,
             RaceDebriefCache.generated_at >= cutoff))).scalar_one_or_none()
-    if row is not None:
+    # Cache is keyed per (user, activity); the report carries its language so a
+    # locale switch rebuilds instead of serving stale English (or vice-versa).
+    if row is not None and (row.report or {}).get("lang", "en") == lang:
         try:
             return RaceDebrief.model_validate({**row.report, "generated_at": row.generated_at})
         except ValidationError:
             logger.warning("Discarding malformed cached debrief user=%s act=%s", user_id, activity_id)
-    report = await build_debrief(db, user_id, activity_id)
+    report = await build_debrief(db, user_id, activity_id, lang)
     if report is None:
         return None
     await _upsert_debrief(db, user_id, activity_id, report)

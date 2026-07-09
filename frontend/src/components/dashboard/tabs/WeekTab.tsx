@@ -20,7 +20,7 @@ import WeekVsLast from '../WeekVsLast'
 import DayPlanCard from '../DayPlanCard'
 import TrainingCalendar from '../TrainingCalendar'
 import DashboardSection from '../DashboardSection'
-import { useT } from '../../../contexts/LocaleContext'
+import { useT, useLocale } from '../../../contexts/LocaleContext'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLanguage } from '../../../hooks/useLanguage'
@@ -69,41 +69,47 @@ function WeekPlanSkeleton() {
 // ─── Error / CTA states ────────────────────────────────────────────────────────
 
 function ProfileSetupCTA({ language }: { language: 'simple' | 'technical' }) {
-  const headline = language === 'simple'
-    ? 'We need your FTP to plan your week'
-    : 'FTP required to generate a training plan'
+  const { locale } = useLocale()
+  const headline = locale === 'de'
+    ? (language === 'simple'
+        ? 'Wir brauchen deine FTP, um deine Woche zu planen'
+        : 'FTP erforderlich, um einen Trainingsplan zu erstellen')
+    : (language === 'simple'
+        ? 'We need your FTP to plan your week'
+        : 'FTP required to generate a training plan')
 
   return (
     <div
       className="rounded-xl p-8 border text-center"
       style={{ backgroundColor: 'var(--color-paper-2)', borderColor: 'var(--color-rule)' }}
     >
-      <p className="eyebrow mb-3" style={{ color: 'var(--color-muted)' }}>Set up first</p>
+      <p className="eyebrow mb-3" style={{ color: 'var(--color-muted)' }}>{locale === 'de' ? 'Zuerst einrichten' : 'Set up first'}</p>
       <h3 className="text-[18px] font-medium mb-4" style={{ color: 'var(--color-ink)' }}>{headline}</h3>
       <Link
         to="/profile-setup"
         className="inline-flex items-center justify-center rounded-full px-5 py-2.5 text-[13px] font-medium min-h-[40px]"
         style={{ backgroundColor: 'var(--color-ink)', color: 'var(--color-paper)' }}
       >
-        Finish profile
+        {locale === 'de' ? 'Profil abschließen' : 'Finish profile'}
       </Link>
     </div>
   )
 }
 
 function WeekErrorBanner({ onRetry }: { onRetry: () => void }) {
+  const { locale } = useLocale()
   return (
     <div
       className="rounded-xl p-5 border flex items-center justify-between gap-3 flex-wrap"
       style={{ backgroundColor: 'var(--color-paper-2)', borderColor: 'var(--color-rule)' }}
     >
-      <span className="eyebrow" style={{ color: 'var(--color-alert)' }}>Couldn&apos;t load this week</span>
+      <span className="eyebrow" style={{ color: 'var(--color-alert)' }}>{locale === 'de' ? 'Diese Woche konnte nicht geladen werden' : 'Couldn’t load this week'}</span>
       <button
         onClick={onRetry}
         className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium min-h-[40px]"
         style={{ backgroundColor: 'var(--color-ink)', color: 'var(--color-paper)' }}
       >
-        Retry
+        {locale === 'de' ? 'Erneut versuchen' : 'Retry'}
       </button>
     </div>
   )
