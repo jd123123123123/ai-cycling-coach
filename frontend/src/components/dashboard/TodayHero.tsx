@@ -319,7 +319,7 @@ export default function TodayHero() {
 
           {why.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap mt-1">
-              <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{t('why_label')}</span>
+              <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>{t('why_label')}</span>
               {why.map((c) => (
                 <span
                   key={c.key}
@@ -344,12 +344,12 @@ export default function TodayHero() {
       >
         {sleepScore != null && (
           <div className="flex items-baseline gap-1.5">
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{t('sleep_label')}</span>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>{t('sleep_label')}</span>
             <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}>{Math.round(sleepScore)}</span>
           </div>
         )}
         <div className="flex items-baseline gap-1.5">
-          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{t('strain_week_label')}</span>
+          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>{t('strain_week_label')}</span>
           <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}>{strainPct}%</span>
           <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
             {locale === 'de' ? 'von' : 'of'} {tssTarget}

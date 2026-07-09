@@ -128,7 +128,7 @@ export default function CriticalPowerCard() {
               ))}
             </div>
           )}
-          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>
+          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>
             {data.n_rides} {de ? 'FAHRTEN' : 'RIDES'} · R²&nbsp;{data.r_squared?.toFixed(2)}
           </span>
         </div>
@@ -137,7 +137,7 @@ export default function CriticalPowerCard() {
       {/* Stat trio */}
       <div className="flex items-end gap-6 mt-2 flex-wrap">
         <div>
-          <span className="eyebrow" style={{ color: 'var(--color-forest-2)', fontSize: 9, letterSpacing: '0.18em' }}>CP</span>
+          <span className="eyebrow" style={{ color: 'var(--color-forest-2)', fontSize: 10.5, letterSpacing: '0.18em' }}>CP</span>
           <div className="flex items-baseline gap-1 mt-0.5">
             <span className="num-display leading-none" style={{ fontSize: 'clamp(26px, 3.2vw, 34px)', color: 'var(--color-ink)' }}>
               {wkg ? data.cp_wkg!.toFixed(2) : countedCp}
@@ -150,7 +150,7 @@ export default function CriticalPowerCard() {
         </div>
         {eftp != null && (
           <div>
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.18em' }}>eFTP</span>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.18em' }}>eFTP</span>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span className="num-display leading-none" style={{ fontSize: 'clamp(18px, 2.2vw, 24px)', color: 'var(--color-ink-2)' }}>{Math.round(eftp)}</span>
               <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>W</span>
@@ -159,7 +159,7 @@ export default function CriticalPowerCard() {
         )}
         {wPrime != null && (
           <div>
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.18em' }}>W′</span>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.18em' }}>W′</span>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span className="num-display leading-none" style={{ fontSize: 'clamp(18px, 2.2vw, 24px)', color: 'var(--color-ink-2)' }}>{(wPrime / 1000).toFixed(1)}</span>
               <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>kJ</span>
@@ -184,7 +184,7 @@ export default function CriticalPowerCard() {
             </linearGradient>
           </defs>
           <line x1={PAD_L} y1={curve.cpY} x2={VB_W - PAD_R} y2={curve.cpY} stroke="var(--color-amber)" strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
-          <text x={VB_W - PAD_R} y={curve.cpY - 4} textAnchor="end" className="num-mono" style={{ fontSize: 9, fill: 'var(--color-amber)' }}>
+          <text x={VB_W - PAD_R} y={curve.cpY - 4} textAnchor="end" className="num-mono" style={{ fontSize: 10.5, fill: 'var(--color-amber)' }}>
             CP {fmtV(cpVal!)}{unit}
           </text>
           <polygon points={curve.area} fill="url(#cp-area)" />
@@ -193,7 +193,7 @@ export default function CriticalPowerCard() {
           {curve.ticks.map((tk) => {
             const anchor = tk.x > VB_W - 24 ? 'end' : tk.x < 24 ? 'start' : 'middle'
             return (
-              <text key={tk.t} x={tk.x} y={VB_H - 5} textAnchor={anchor} className="num-mono" style={{ fontSize: 8, fill: 'var(--color-muted)' }}>{fmtDuration(tk.t, de)}</text>
+              <text key={tk.t} x={tk.x} y={VB_H - 5} textAnchor={anchor} className="num-mono" style={{ fontSize: 10.5, fill: 'var(--color-muted)' }}>{fmtDuration(tk.t, de)}</text>
             )
           })}
         </svg>
@@ -201,7 +201,7 @@ export default function CriticalPowerCard() {
 
       {/* Peak power strip — 8 durations, W or W/kg per toggle. */}
       {data.peaks && (
-        <div className="grid grid-cols-4 gap-2 mt-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
           {PEAK_ORDER.map((key) => {
             const w = data.peaks?.[key]
             if (w == null) return null
@@ -209,10 +209,10 @@ export default function CriticalPowerCard() {
             if (shown == null) return null
             return (
               <div key={key} className="rounded-[10px] px-2.5 py-2" style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)' }}>
-                <div className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 8.5, letterSpacing: '0.12em' }}>{PEAK_LABELS[key]}</div>
+                <div className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.12em' }}>{PEAK_LABELS[key]}</div>
                 <div className="flex items-baseline gap-0.5 mt-0.5">
                   <span className="num-mono" style={{ fontSize: 14, color: 'var(--color-ink)' }}>{wkg ? shown.toFixed(1) : Math.round(shown)}</span>
-                  <span className="num-mono text-[8px]" style={{ color: 'var(--color-muted)' }}>{unit}</span>
+                  <span className="num-mono text-[10.5px]" style={{ color: 'var(--color-muted)' }}>{unit}</span>
                 </div>
               </div>
             )
@@ -229,7 +229,7 @@ export default function CriticalPowerCard() {
               <span className="num-mono text-[12px] font-semibold" style={{ color: 'var(--color-ink)' }}>
                 {de ? 'FAHRERTYP' : 'RIDER TYPE'}: {data.phenotype.type}
               </span>
-              <span className="num-mono text-[9px]" style={{ color: 'var(--color-muted)' }}>
+              <span className="num-mono text-[10.5px]" style={{ color: 'var(--color-muted)' }}>
                 {data.phenotype.reserves.neuromuscular_x}× · {data.phenotype.reserves.anaerobic_x}× · {data.phenotype.reserves.vo2_x}× CP
               </span>
             </div>
@@ -243,14 +243,14 @@ export default function CriticalPowerCard() {
         <div className="flex items-center gap-5 mt-3 flex-wrap">
           {data.durability_avg_pct != null && (
             <div className="flex items-baseline gap-1.5">
-              <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.16em' }}>{de ? 'DURABILITÄT' : 'DURABILITY'}</span>
+              <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.16em' }}>{de ? 'DURABILITÄT' : 'DURABILITY'}</span>
               <span className="num-mono text-[13px]" style={{ color: 'var(--color-ink)' }}>−{data.durability_avg_pct}%</span>
               <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{de ? 'Abfall n. 1500 kJ' : 'drop after 1500 kJ'}</span>
             </div>
           )}
           {data.avg_decoupling_pct != null && (
             <div className="flex items-baseline gap-1.5">
-              <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.16em' }}>{de ? 'HF-DRIFT' : 'DECOUPLING'}</span>
+              <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.16em' }}>{de ? 'HF-DRIFT' : 'DECOUPLING'}</span>
               <span className="num-mono text-[13px]" style={{ color: 'var(--color-ink)' }}>{data.avg_decoupling_pct}%</span>
             </div>
           )}
@@ -280,7 +280,7 @@ export default function CriticalPowerCard() {
                 <thead>
                   <tr style={{ color: 'var(--color-muted)' }}>
                     {['', 'NP', 'kJ', de ? 'Drift' : 'Decpl', 'CP', "W′↓"].map((h, i) => (
-                      <th key={i} className="num-mono text-[8.5px] font-normal text-left py-1" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>{h}</th>
+                      <th key={i} className="num-mono text-[10.5px] font-normal text-left py-1" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>

@@ -171,13 +171,13 @@ export default function RampRate() {
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="num-mono text-[9px]" style={{ color: 'var(--color-alert)', opacity: 0.7 }}>
+        <span className="num-mono text-[10.5px]" style={{ color: 'var(--color-alert)', opacity: 0.7 }}>
           {locale === 'de' ? 'übertreiben' : 'overdoing'}
         </span>
-        <span className="num-mono text-[9px]" style={{ color: '#30D158', opacity: 0.7 }}>
+        <span className="num-mono text-[10.5px]" style={{ color: '#30D158', opacity: 0.7 }}>
           {locale === 'de' ? 'sichere Zone' : 'safe zone'}
         </span>
-        <span className="num-mono text-[9px]" style={{ color: 'var(--color-alert)', opacity: 0.7 }}>
+        <span className="num-mono text-[10.5px]" style={{ color: 'var(--color-alert)', opacity: 0.7 }}>
           {locale === 'de' ? 'Spitze' : 'spiking'}
         </span>
       </div>

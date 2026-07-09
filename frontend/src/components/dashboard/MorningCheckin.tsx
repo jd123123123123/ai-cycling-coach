@@ -156,7 +156,7 @@ export default function MorningCheckin() {
                 <span style={{ fontSize: 22, lineHeight: 1 }}>{f.emoji}</span>
                 <span
                   className="eyebrow"
-                  style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.16em' }}
+                  style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.16em' }}
                 >
                   {feelingLabel(f.key, locale).toUpperCase()}
                 </span>

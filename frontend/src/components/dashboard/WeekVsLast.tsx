@@ -67,7 +67,7 @@ function StatCell({ label, current, prev, format, rawValue, digits = 0, higherIs
 
   return (
     <div className="flex flex-col gap-1 min-w-0 flex-1">
-      <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+      <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
         {label.toUpperCase()}
       </span>
       <span
@@ -129,7 +129,7 @@ export default function WeekVsLast() {
         style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
       >
         <div className="h-3 w-32 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-        <div className="grid grid-cols-3 gap-4 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-16 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
           ))}
@@ -163,7 +163,7 @@ export default function WeekVsLast() {
 
       {/* 3-column stat grid */}
       <div
-        className="grid grid-cols-3 gap-0 rounded-[12px] overflow-hidden"
+        className="grid grid-cols-2 sm:grid-cols-3 gap-0 rounded-[12px] overflow-hidden"
         style={{
           border: '1px solid var(--color-rule)',
           backgroundColor: 'var(--color-paper)',

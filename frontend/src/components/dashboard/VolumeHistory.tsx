@@ -133,13 +133,13 @@ export default function VolumeHistory() {
 
       {/* Average baseline label */}
       <div className="flex items-center justify-between mt-2">
-        <span className="num-mono text-[9px]" style={{ color: 'var(--color-muted)' }}>
+        <span className="num-mono text-[10.5px]" style={{ color: 'var(--color-muted)' }}>
           {weekBars[0]?.label}
         </span>
-        <span className="num-mono text-[9px]" style={{ color: 'rgba(48, 209, 88, 0.6)' }}>
+        <span className="num-mono text-[10.5px]" style={{ color: 'rgba(48, 209, 88, 0.6)' }}>
           ▌ this week
         </span>
-        <span className="num-mono text-[9px]" style={{ color: 'var(--color-muted)' }}>
+        <span className="num-mono text-[10.5px]" style={{ color: 'var(--color-muted)' }}>
           now
         </span>
       </div>

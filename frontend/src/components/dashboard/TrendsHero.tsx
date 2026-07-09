@@ -126,7 +126,7 @@ export default function TrendsHero() {
         <Stat label={locale === 'de' ? 'ERMÜDUNG · ATL' : 'FATIGUE · ATL'} value={String(Math.round(atl))} sub={`${signed(dAtl)} · 7${locale === 'de' ? 'T' : 'd'}`} subColor={dAtl >= 2 ? 'var(--color-caution)' : 'var(--color-muted)'} />
         <Stat label={locale === 'de' ? 'FORM · TSB' : 'FORM · TSB'} value={signed(tsb)} valueColor={form.color} />
         <div className="hidden sm:block">
-          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
             {locale === 'de' ? 'FITNESS · 90T' : 'FITNESS · 90D'}
           </span>
           <div className="mt-1">
@@ -166,7 +166,7 @@ function Stat({
 }) {
   return (
     <div className="flex flex-col">
-      <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+      <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
         {label}
       </span>
       <span className="num-mono leading-none mt-0.5" style={{ color: valueColor, fontSize: 28, fontWeight: 500 }}>

@@ -205,7 +205,7 @@ export default function TrainingLogStrip() {
               className="num-mono absolute"
               style={{
                 left: `${(t.idx / cells.length) * 100}%`,
-                fontSize: 9,
+                fontSize: 10.5,
                 letterSpacing: '0.1em',
                 color: 'var(--color-muted)',
                 textTransform: 'uppercase',

@@ -147,7 +147,7 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
       <div className="flex items-baseline gap-5 flex-wrap">
         {duration != null && (
           <div className="flex flex-col">
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
               {t('duration').toUpperCase()}
             </span>
             <span className="num-mono leading-none mt-1" style={{ color: 'var(--color-ink)', fontSize: 18, fontWeight: 500 }}>
@@ -157,7 +157,7 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
         )}
         {tss > 0 && (
           <div className="flex flex-col">
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
               {t('target_tss').toUpperCase()}
             </span>
             <span className="num-mono leading-none mt-1" style={{ color, fontSize: 18, fontWeight: 500 }}>

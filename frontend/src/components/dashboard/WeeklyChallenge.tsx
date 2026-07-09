@@ -145,7 +145,7 @@ export default function WeeklyChallenge() {
                 </span>
                 <span
                   className="num-mono leading-none"
-                  style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.15em' }}
+                  style={{ fontSize: 10.5, color: 'var(--color-muted)', letterSpacing: '0.15em' }}
                 >
                   %
                 </span>

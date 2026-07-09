@@ -92,7 +92,7 @@ export default function FTPEstimate() {
         {/* Estimated FTP */}
         {estimated != null && (
           <div>
-            <span className="eyebrow" style={{ color: '#30D158', fontSize: 9, letterSpacing: '0.18em' }}>
+            <span className="eyebrow" style={{ color: '#30D158', fontSize: 10.5, letterSpacing: '0.18em' }}>
               {locale === 'de' ? 'ERKANNT' : 'DETECTED'}
             </span>
             <div className="flex items-baseline gap-1 mt-0.5">
@@ -110,7 +110,7 @@ export default function FTPEstimate() {
         {/* Stored FTP */}
         {stored != null && (
           <div>
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.18em' }}>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.18em' }}>
               {locale === 'de' ? 'GESPEICHERT' : 'STORED'}
             </span>
             <div className="flex items-baseline gap-1 mt-0.5">
@@ -160,7 +160,7 @@ export default function FTPEstimate() {
         {/* Confidence dots */}
         {confidence > 0 && (
           <div className="flex items-center gap-1">
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{locale === 'de' ? 'KONFIDENZ' : 'CONFIDENCE'}</span>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>{locale === 'de' ? 'KONFIDENZ' : 'CONFIDENCE'}</span>
             <div className="flex gap-0.5">
               {Array.from({ length: 5 }, (_, i) => (
                 <span

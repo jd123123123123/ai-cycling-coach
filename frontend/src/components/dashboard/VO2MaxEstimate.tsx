@@ -249,7 +249,7 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
           <span
             className="inline-flex items-center px-2 py-0.5 rounded-full num-mono"
             style={{
-              fontSize: 9,
+              fontSize: 10.5,
               letterSpacing: '0.16em',
               color: tier.color,
               backgroundColor: `color-mix(in srgb, ${tier.color} 10%, transparent)`,

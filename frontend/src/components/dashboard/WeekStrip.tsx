@@ -178,11 +178,11 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
         }}
       >
         <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
             {format(weekStart, 'MMM d')}–{format(weekEnd, 'd')}
           </span>
           {!isLoading && totals.tssTotal > 0 && (
-            <span className="num-mono text-[9px]" style={{ color: 'var(--color-muted)' }}>
+            <span className="num-mono text-[10.5px]" style={{ color: 'var(--color-muted)' }}>
               {Math.round(totals.tssTotal)} TSS · {formatHours(totals.hoursTotal)}
             </span>
           )}
@@ -234,7 +234,7 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
                 <span
                   className="eyebrow"
                   style={{
-                    fontSize: 9,
+                    fontSize: 10.5,
                     color: cell.isToday ? 'var(--color-ink)' : 'var(--color-muted)',
                     letterSpacing: '0.05em',
                     fontWeight: cell.isToday ? 600 : 400,
@@ -340,7 +340,7 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
               }
             >
               <span
-                className="eyebrow text-[9px]"
+                className="eyebrow text-[10.5px]"
                 style={{
                   color: cell.isToday
                     ? 'var(--color-ink)'

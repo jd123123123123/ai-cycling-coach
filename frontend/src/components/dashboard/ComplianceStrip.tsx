@@ -167,7 +167,7 @@ function DayBar({ row, maxMin }: { row: DayRow; maxMin: number }) {
         ) : (
           <span
             className="absolute inset-0 flex items-center justify-center eyebrow opacity-40"
-            style={{ color: 'var(--color-muted)', fontSize: 9 }}
+            style={{ color: 'var(--color-muted)', fontSize: 10.5 }}
           >
             {row.isFuture ? (de ? 'geplant' : 'planned') : '—'}
           </span>
@@ -280,7 +280,7 @@ export default function ComplianceStrip() {
             >
               {gradeInfo.letter}
             </span>
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 8, letterSpacing: '0.2em', marginTop: 2 }}>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.2em', marginTop: 2 }}>
               {de ? 'NOTE' : 'GRADE'}
             </span>
           </div>

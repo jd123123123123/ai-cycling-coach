@@ -53,7 +53,7 @@ export default function WBalanceTraceCard() {
           {depleted ? <BatteryLow size={12} color="var(--color-amber)" /> : <Battery size={12} color="var(--color-forest-2)" />}
           {de ? 'ANAEROBE BATTERIE' : 'ANAEROBIC BATTERY'}
         </span>
-        <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', fontSize: 9 }}>
+        <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>
           W′ {kj} kJ · CP {Math.round(data.cp_watts ?? 0)}W
         </span>
       </div>
@@ -71,7 +71,7 @@ export default function WBalanceTraceCard() {
         </defs>
         {/* Empty line (0 % reserve) */}
         <line x1={PAD_L} y1={geo.zeroY} x2={VB_W - PAD_R} y2={geo.zeroY} stroke="#FF453A" strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
-        <text x={PAD_L} y={geo.zeroY - 3} className="num-mono" style={{ fontSize: 8, fill: '#FF453A' }}>{de ? 'leer' : 'empty'}</text>
+        <text x={PAD_L} y={geo.zeroY - 3} className="num-mono" style={{ fontSize: 10.5, fill: '#FF453A' }}>{de ? 'leer' : 'empty'}</text>
         <polygon points={geo.area} fill="url(#wbal-area)" />
         <polyline points={geo.line} fill="none" stroke="var(--color-forest-2)" strokeWidth="2" strokeLinejoin="round" />
       </svg>

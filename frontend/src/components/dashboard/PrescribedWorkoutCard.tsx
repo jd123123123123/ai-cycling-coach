@@ -57,7 +57,7 @@ function MetricTile({
           className="eyebrow"
           style={{
             color: 'var(--color-muted)',
-            fontSize: 9,
+            fontSize: 10.5,
             letterSpacing: '0.22em',
           }}
         >

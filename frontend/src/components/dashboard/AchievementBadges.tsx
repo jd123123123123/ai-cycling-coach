@@ -546,7 +546,7 @@ export default function AchievementBadges() {
                   className="eyebrow ml-0.5"
                   style={{
                     color: 'var(--color-good)',
-                    fontSize: 8,
+                    fontSize: 10.5,
                     letterSpacing: '0.18em',
                     fontWeight: 700,
                   }}

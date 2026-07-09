@@ -205,7 +205,7 @@ function PRCard({ pr, locale }: { pr: PR; locale: 'en' | 'de' }) {
           />
           <span
             className="eyebrow"
-            style={{ color: pr.accent, fontSize: 8, letterSpacing: '0.18em' }}
+            style={{ color: pr.accent, fontSize: 10.5, letterSpacing: '0.18em' }}
           >
             {locale === 'de' ? 'NEU' : 'NEW'}
           </span>
@@ -217,7 +217,7 @@ function PRCard({ pr, locale }: { pr: PR; locale: 'en' | 'de' }) {
         <span style={{ color: pr.accent }}>{pr.icon}</span>
         <span
           className="eyebrow"
-          style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.18em' }}
+          style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.18em' }}
         >
           {pr.label.toUpperCase()}
         </span>

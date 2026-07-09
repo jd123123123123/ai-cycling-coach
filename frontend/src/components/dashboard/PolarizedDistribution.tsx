@@ -187,7 +187,7 @@ export default function PolarizedDistribution() {
               }
               lowConfidenceCopy={lowConfidenceCopy}
             />
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 8, letterSpacing: '0.2em', marginTop: 2 }}>
+            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.2em', marginTop: 2 }}>
               {locale === 'de' ? 'NOTE' : 'GRADE'}
             </span>
           </div>
@@ -369,7 +369,7 @@ export default function PolarizedDistribution() {
                   className="eyebrow mt-0.5"
                   style={{
                     color: gradeInfo.color,
-                    fontSize: 9,
+                    fontSize: 10.5,
                     letterSpacing: '0.22em',
                   }}
                 >

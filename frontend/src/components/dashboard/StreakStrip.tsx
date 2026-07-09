@@ -138,7 +138,7 @@ function GoalPill({
       <span
         className="eyebrow shrink-0"
         style={{
-          fontSize: 9,
+          fontSize: 10.5,
           letterSpacing: '0.22em',
           color: done ? 'var(--color-ink)' : 'var(--color-muted)',
           fontWeight: done ? 600 : 400,
@@ -332,7 +332,7 @@ export default function StreakStrip() {
 
       {/* 14-day chain — each day is a tiny stacked indicator */}
       <div className="flex items-center justify-between gap-2 pt-1">
-        <span className="eyebrow shrink-0" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+        <span className="eyebrow shrink-0" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
           {locale === 'de' ? 'LETZTE 14 TAGE' : 'LAST 14 DAYS'}
         </span>
         <div className="flex items-center gap-1 flex-1 justify-center">
@@ -368,7 +368,7 @@ export default function StreakStrip() {
             )
           })}
         </div>
-        <span className="eyebrow shrink-0 hidden sm:inline" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}>
+        <span className="eyebrow shrink-0 hidden sm:inline" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
           {locale === 'de' ? 'HEUTE' : 'TODAY'}
         </span>
       </div>

@@ -277,7 +277,7 @@ export default function GarminConnectPage() {
           </p>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
           <ReassuranceChip text={locale === 'de' ? 'Verschlüsselt gespeichert' : 'Encrypted at rest'} />
           <ReassuranceChip text={locale === 'de' ? 'Nie geteilt' : 'Never shared'} />
           <ReassuranceChip text={locale === 'de' ? 'Jederzeit widerrufbar' : 'Revoke anytime'} />

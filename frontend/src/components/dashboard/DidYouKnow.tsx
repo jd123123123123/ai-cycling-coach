@@ -243,7 +243,7 @@ export default function DidYouKnow() {
           className="eyebrow num-mono"
           style={{
             color: 'var(--color-amber-2)',
-            fontSize: 9,
+            fontSize: 10.5,
             letterSpacing: '0.22em',
             fontWeight: 600,
           }}

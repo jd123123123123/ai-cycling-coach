@@ -467,15 +467,15 @@ export default function HRVTrend() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#30D158' }} />
-              <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{locale === 'de' ? 'ÜBER' : 'ABOVE'}</span>
+              <span className="eyebrow" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>{locale === 'de' ? 'ÜBER' : 'ABOVE'}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-amber)' }} />
-              <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{locale === 'de' ? 'INNEN' : 'WITHIN'}</span>
+              <span className="eyebrow" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>{locale === 'de' ? 'INNEN' : 'WITHIN'}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-alert)' }} />
-              <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{locale === 'de' ? 'UNTER' : 'BELOW'}</span>
+              <span className="eyebrow" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>{locale === 'de' ? 'UNTER' : 'BELOW'}</span>
             </div>
           </div>
         </div>

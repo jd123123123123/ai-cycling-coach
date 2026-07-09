@@ -235,7 +235,7 @@ function Chip({
         backgroundColor: `color-mix(in srgb, ${color} 6%, transparent)`,
       }}
     >
-      <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.18em' }}>
+      <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.18em' }}>
         {label.toUpperCase()}
       </span>
       <span style={{ color, fontWeight: 600 }}>{value}</span>

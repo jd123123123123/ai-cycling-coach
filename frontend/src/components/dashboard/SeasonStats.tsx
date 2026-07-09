@@ -107,7 +107,7 @@ function Stat({ label, value, spark, yoy, color }: StatProps) {
     <div className="flex flex-col gap-1.5">
       <span
         className="eyebrow"
-        style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.22em' }}
+        style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}
       >
         {label}
       </span>

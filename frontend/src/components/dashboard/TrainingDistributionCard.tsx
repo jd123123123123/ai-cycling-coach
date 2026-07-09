@@ -45,7 +45,7 @@ export default function TrainingDistributionCard() {
         <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
           {de ? 'INTENSITÄTSVERTEILUNG' : 'INTENSITY DISTRIBUTION'}
         </span>
-        <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9 }}>
+        <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>
           {Math.round(data.total_hours ?? 0)}h · {de ? '28 TAGE' : '28 DAYS'}
         </span>
       </div>
