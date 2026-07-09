@@ -110,12 +110,17 @@ def upgrade() -> None:
         );
     """)
     op.execute("""
-        SELECT create_hypertable(
-            'activities',
-            'started_at',
-            chunk_time_interval => INTERVAL '7 days',
-            if_not_exists => TRUE
-        );
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
+                PERFORM create_hypertable(
+                    'activities',
+                    'started_at',
+                    chunk_time_interval => INTERVAL '7 days',
+                    if_not_exists => TRUE
+                );
+            END IF;
+        END $$;
     """)
     op.execute("ALTER TABLE activities ENABLE ROW LEVEL SECURITY;")
     op.execute("""
@@ -145,12 +150,17 @@ def upgrade() -> None:
         );
     """)
     op.execute("""
-        SELECT create_hypertable(
-            'daily_metrics',
-            'recorded_at',
-            chunk_time_interval => INTERVAL '30 days',
-            if_not_exists => TRUE
-        );
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
+                PERFORM create_hypertable(
+                    'daily_metrics',
+                    'recorded_at',
+                    chunk_time_interval => INTERVAL '30 days',
+                    if_not_exists => TRUE
+                );
+            END IF;
+        END $$;
     """)
     op.execute("ALTER TABLE daily_metrics ENABLE ROW LEVEL SECURITY;")
     op.execute("""

@@ -32,12 +32,17 @@ def upgrade() -> None:
 
     # Convert to TimescaleDB hypertable partitioned on recorded_at (7-day chunks)
     op.execute("""
-        SELECT create_hypertable(
-            'daily_metric_samples',
-            'recorded_at',
-            chunk_time_interval => INTERVAL '7 days',
-            if_not_exists => TRUE
-        );
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
+                PERFORM create_hypertable(
+                    'daily_metric_samples',
+                    'recorded_at',
+                    chunk_time_interval => INTERVAL '7 days',
+                    if_not_exists => TRUE
+                );
+            END IF;
+        END $$;
     """)
 
     # Indexes for common query patterns
