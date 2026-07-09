@@ -204,7 +204,7 @@ export default function DebriefHero({ report }: { report: RaceDebrief }) {
         </div>
       </div>
 
-      <div className="flex items-start gap-5">
+      <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:gap-5 sm:text-left">
         <div className="flex flex-col items-center gap-1.5 shrink-0">
           <GradeBadge score={verdict.grade_score} letter={verdict.grade_letter} color={color} />
           <div className="flex flex-col items-center">
@@ -222,8 +222,8 @@ export default function DebriefHero({ report }: { report: RaceDebrief }) {
             style={{
               fontFamily: 'var(--font-serif, serif)',
               color: 'var(--color-ink)',
-              fontSize: 21,
-              lineHeight: 1.32,
+              fontSize: 'clamp(17px, 4.6vw, 21px)',
+              lineHeight: 1.34,
               maxWidth: '60ch',
               fontWeight: 400,
             }}

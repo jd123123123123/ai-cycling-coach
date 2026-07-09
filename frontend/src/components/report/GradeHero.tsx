@@ -185,7 +185,7 @@ export default function GradeHero({
         <WindowSegmented value={days} onChange={onDaysChange} />
       </div>
 
-      <div className="flex items-start gap-5">
+      <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:gap-5 sm:text-left">
         <GradeRing score={report.grade_score} letter={report.grade_letter} color={color} />
 
         <div className="flex-1 min-w-0">
@@ -194,8 +194,8 @@ export default function GradeHero({
             style={{
               fontFamily: 'var(--font-serif, serif)',
               color: 'var(--color-ink)',
-              fontSize: 21,
-              lineHeight: 1.32,
+              fontSize: 'clamp(17px, 4.6vw, 21px)',
+              lineHeight: 1.34,
               maxWidth: '60ch',
               fontWeight: 400,
             }}
@@ -204,7 +204,7 @@ export default function GradeHero({
           </p>
 
           {/* consolidated stat row — delta, percentile, trend */}
-          <div className="flex items-center gap-3 flex-wrap mt-3.5">
+          <div className="flex items-center justify-center sm:justify-start gap-3 flex-wrap mt-3.5">
             {delta != null && delta !== 0 && (
               <span className="num-mono" style={{
                 fontSize: 11, color: delta > 0 ? 'var(--color-good)' : 'var(--color-bad)',

@@ -20,6 +20,9 @@ import {
   Award,
   Zap,
   Lock,
+  Clock,
+  Bike,
+  Crown,
 } from 'lucide-react'
 import PillarSection from '../../dashboard/PillarSection'
 import CoachSafetyBanner from '../CoachSafetyBanner'
@@ -38,16 +41,16 @@ import { useT, useLocale } from '../../../contexts/LocaleContext'
 import type { Locale } from '../../../i18n/strings'
 import type { ActivityRead } from '../../../api/dashboard'
 
-// SocialTab — the fourth surface (spec §1, §6, §7 · Phase 0).
-//
-// Four MECE pillars, each answering exactly one question, plus a
-// coach-safety banner above pillar 1 that outranks every competitive nudge.
-// Runs entirely on one athlete's real data: solo "vs. past self" is the
-// default. No fabricated rivals — credibility is the whole game (spec §0.2).
+// SocialTab — the fourth surface. Four MECE pillars, each a distinct dopamine
+// beat, all running honestly on one athlete's real data (solo "vs. past self"
+// is the default; no fabricated rivals). A coach-safety banner outranks every
+// competitive nudge. Rebuilt to be genuinely addictive: an Apple-style closing
+// ring, reactive/funny personality copy, and real "cool facts" from ride data.
 
-// ── Ring math — identical to CrewTab's shipped Squad Cup math (spec §2.1) ──
+// ── Ring math — identical to the shipped Squad Cup ──
 const DAILY_TARGET_DEFAULT = 70
 const DAILY_CAP = 1.5
+const PERFECT_WEEK = 700 // 100 pts/day × 7 — the "close every ring" mark
 
 function dailyTargetFrom(profile: { weekly_hours_available?: number | null } | undefined): number {
   const weeklyHours = profile?.weekly_hours_available ?? null
@@ -56,24 +59,19 @@ function dailyTargetFrom(profile: { weekly_hours_available?: number | null } | u
 }
 
 interface WeekScore {
-  dailyPct: number[] // 7 entries Mon..Sun
+  dailyPct: number[]
   weeklyScore: number
   weeklyTSS: number
-  bestRide: number // best single-activity TSS in the window
+  bestRide: number
 }
 
-function computeWeek(
-  activities: ActivityRead[],
-  start: Date,
-  end: Date,
-  dailyTarget: number,
-): WeekScore {
+function computeWeek(activities: ActivityRead[], start: Date, end: Date, dailyTarget: number): WeekScore {
   const dailyTSS = Array.from({ length: 7 }, () => 0)
   let bestRide = 0
   for (const a of activities) {
     const d = new Date(a.started_at)
     if (!isWithinInterval(d, { start, end })) continue
-    const dow = (d.getDay() + 6) % 7 // Mon=0
+    const dow = (d.getDay() + 6) % 7
     const tss = a.tss ?? 0
     dailyTSS[dow] += tss
     if (tss > bestRide) bestRide = tss
@@ -84,31 +82,52 @@ function computeWeek(
   return { dailyPct, weeklyScore, weeklyTSS, bestRide }
 }
 
-// ── Small shared UI (mirrors CrewTab exactly) ─────────────────────────────
+// ── Cool-facts: real, celebratory numbers from the week's rides ──
+interface Insights {
+  kj: number
+  km: number
+  hours: number
+  rides: number
+  bestKm: number
+  bestTss: number
+}
 
+function computeInsights(activities: ActivityRead[], start: Date, end: Date): Insights {
+  let kj = 0, meters = 0, secs = 0, rides = 0, bestKm = 0, bestTss = 0
+  for (const a of activities) {
+    const d = new Date(a.started_at)
+    if (!isWithinInterval(d, { start, end })) continue
+    rides++
+    const dur = a.duration_seconds ?? 0
+    secs += dur
+    const dist = a.distance_meters ?? 0
+    meters += dist
+    // kJ ≈ average power × time; NP is a fair proxy for a fun stat.
+    if (a.normalized_power && dur) kj += (a.normalized_power * dur) / 1000
+    const km = dist / 1000
+    if (km > bestKm) bestKm = km
+    if ((a.tss ?? 0) > bestTss) bestTss = a.tss ?? 0
+  }
+  return { kj: Math.round(kj), km: meters / 1000, hours: secs / 3600, rides, bestKm, bestTss }
+}
+
+// ── Small shared UI (mirrors CrewTab) ──
 function RankBadge({ rank }: { rank: number }) {
   if (rank > 3) {
     return (
-      <span
-        className="num-mono shrink-0"
-        style={{ color: 'var(--color-muted)', fontSize: 11, minWidth: 22, textAlign: 'center' }}
-      >
+      <span className="num-mono shrink-0" style={{ color: 'var(--color-muted)', fontSize: 11, minWidth: 22, textAlign: 'center' }}>
         {rank}
       </span>
     )
   }
   const colors = ['#FFD60A', '#C7C7CC', '#BF6E2A']
   const color = colors[rank - 1]
-  return (
-    <Medal
-      size={16}
-      strokeWidth={2.2}
-      style={{ color, filter: `drop-shadow(0 0 6px color-mix(in srgb, ${color} 50%, transparent))` }}
-    />
-  )
+  return <Medal size={16} strokeWidth={2.2} style={{ color, filter: `drop-shadow(0 0 6px color-mix(in srgb, ${color} 50%, transparent))` }} />
 }
 
 function WeekBars({ dailyPct, isYou }: { dailyPct: number[]; isYou: boolean }) {
+  const { locale } = useLocale()
+  const days = locale === 'de' ? ['M', 'D', 'M', 'D', 'F', 'S', 'S'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S']
   const max = Math.max(1, ...dailyPct, DAILY_CAP)
   return (
     <div className="flex items-end gap-[3px] h-5" aria-hidden>
@@ -116,23 +135,9 @@ function WeekBars({ dailyPct, isYou }: { dailyPct: number[]; isYou: boolean }) {
         const h = Math.min(100, (p / max) * 100)
         const good = p >= 1
         const partial = p > 0 && p < 1
-        const color = good
-          ? (isYou ? 'var(--color-forest-2)' : '#30D158')
-          : partial
-            ? 'var(--color-amber)'
-            : 'var(--color-rule)'
+        const color = good ? (isYou ? 'var(--color-forest-2)' : '#30D158') : partial ? 'var(--color-amber)' : 'var(--color-rule)'
         return (
-          <span
-            key={i}
-            style={{
-              width: 5,
-              height: `${Math.max(8, h)}%`,
-              backgroundColor: color,
-              borderRadius: 2,
-              opacity: p === 0 ? 0.35 : 1,
-              transition: 'height 500ms cubic-bezier(.22,1,.36,1)',
-            }}
-          />
+          <span key={i} title={days[i]} style={{ width: 5, height: `${Math.max(8, h)}%`, backgroundColor: color, borderRadius: 2, opacity: p === 0 ? 0.35 : 1, transition: 'height 500ms cubic-bezier(.22,1,.36,1)' }} />
         )
       })}
     </div>
@@ -146,10 +151,7 @@ function Countdown({ weekEnd, locale }: { weekEnd: Date; locale: Locale }) {
   const mins = Math.floor((secs % 3600) / 60)
   const parts = days > 0 ? `${days}d ${hrs}h` : hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`
   return (
-    <span
-      className="inline-flex items-center gap-1.5 num-mono"
-      style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.14em' }}
-    >
+    <span className="inline-flex items-center gap-1.5 num-mono" style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.14em' }}>
       <Timer size={10} strokeWidth={2} />
       {parts} {locale === 'de' ? 'ÜBRIG' : 'LEFT'}
     </span>
@@ -173,26 +175,14 @@ function StandingRow({ standing, rank, locale }: { standing: Standing; rank: num
     <div
       className="flex items-center gap-3 px-4 py-3 rounded-[14px]"
       style={{
-        backgroundColor: standing.isYou
-          ? 'color-mix(in srgb, var(--color-forest-2) 10%, var(--color-paper-2))'
-          : 'var(--color-paper-2)',
-        border: standing.isYou
-          ? '1px solid color-mix(in srgb, var(--color-forest-2) 35%, var(--color-rule))'
-          : first
-            ? '1px solid rgba(255, 214, 10, 0.35)'
-            : '1px solid var(--color-rule)',
+        backgroundColor: standing.isYou ? 'color-mix(in srgb, var(--color-forest-2) 10%, var(--color-paper-2))' : 'var(--color-paper-2)',
+        border: standing.isYou ? '1px solid color-mix(in srgb, var(--color-forest-2) 35%, var(--color-rule))' : first ? '1px solid rgba(255, 214, 10, 0.35)' : '1px solid var(--color-rule)',
         boxShadow: first ? '0 0 16px rgba(255, 214, 10, 0.08) inset' : undefined,
       }}
     >
       <RankBadge rank={rank} />
-      <div
-        className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)' }}
-      >
-        <span
-          className="num-mono text-[12px] font-semibold"
-          style={{ color: standing.isYou ? 'var(--color-forest-2)' : 'var(--color-muted)' }}
-        >
+      <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)' }}>
+        <span className="num-mono text-[12px] font-semibold" style={{ color: standing.isYou ? 'var(--color-forest-2)' : 'var(--color-muted)' }}>
           {standing.isYou ? (locale === 'de' ? 'DU' : 'YOU') : standing.handle.slice(0, 2).toUpperCase()}
         </span>
       </div>
@@ -202,51 +192,32 @@ function StandingRow({ standing, rank, locale }: { standing: Standing; rank: num
             {standing.isYou ? (locale === 'de' ? 'Du' : 'You') : standing.handle}
           </p>
           {standing.status === 'pending' && (
-            <span
-              className="eyebrow shrink-0"
-              style={{ fontSize: 9, color: 'var(--color-amber)', letterSpacing: '0.18em' }}
-            >
+            <span className="eyebrow shrink-0" style={{ fontSize: 9, color: 'var(--color-amber)', letterSpacing: '0.18em' }}>
               {locale === 'de' ? 'AUSSTEHEND' : 'PENDING'}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2 mt-1">
           <WeekBars dailyPct={standing.dailyPct} isYou={standing.isYou} />
-          <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>
-            {Math.round(standing.weeklyTSS)} TSS
-          </span>
+          <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>{Math.round(standing.weeklyTSS)} TSS</span>
         </div>
       </div>
       <div className="text-right shrink-0">
         <div className="flex items-baseline gap-1 justify-end">
-          <span
-            className="num-display leading-none"
-            style={{ fontSize: 20, color: standing.isYou ? 'var(--color-forest-2)' : 'var(--color-ink)' }}
-          >
-            {s}
-          </span>
-          <span
-            className="num-mono"
-            style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.12em' }}
-          >
-            PTS
-          </span>
+          <span className="num-display leading-none" style={{ fontSize: 20, color: standing.isYou ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>{s}</span>
+          <span className="num-mono" style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.12em' }}>PTS</span>
         </div>
       </div>
     </div>
   )
 }
 
-// ── Invite helpers (mirrors CrewTab) ──────────────────────────────────────
-
+// ── Invite helpers ──
 function copyInviteLink(): Promise<boolean> {
   const url = `${window.location.origin}/invite?ref=squad`
-  if (navigator.clipboard?.writeText) {
-    return navigator.clipboard.writeText(url).then(() => true).catch(() => false)
-  }
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(url).then(() => true).catch(() => false)
   return Promise.resolve(false)
 }
-
 function shareInvite(weeklyScore: number, locale: Locale): Promise<boolean> {
   const url = `${window.location.origin}/invite?ref=squad`
   const text = locale === 'de'
@@ -254,14 +225,101 @@ function shareInvite(weeklyScore: number, locale: Locale): Promise<boolean> {
     : `Join my cycling squad — I'm at ${Math.round(weeklyScore)} pts this week. Catch me if you can.`
   const title = locale === 'de' ? 'Tritt meiner Crew bei' : 'Join my squad'
   const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> }
-  if (nav.share) {
-    return nav.share({ title, text, url }).then(() => true).catch(() => false)
-  }
+  if (nav.share) return nav.share({ title, text, url }).then(() => true).catch(() => false)
   return copyInviteLink()
 }
 
-// ── The tab ───────────────────────────────────────────────────────────────
+// ── Reactive personality copy — funny, warm, never mean, coach-safe ──
+interface Vibe { emoji: string; title: string; sub: string }
+function weekVibe(o: {
+  de: boolean; mode: 'go' | 'ease' | 'rest'; lead: number; gap: number; streak: number; thisScore: number; dailyTarget: number
+}): Vibe {
+  const { de, mode, lead, gap, streak, thisScore, dailyTarget } = o
+  if (mode === 'rest')
+    return {
+      emoji: '🛌',
+      title: de ? 'Ruhetag — und das zählt als Sieg.' : 'Rest day — and that counts as a win.',
+      sub: de ? 'Der stärkste Zug heute ist der, den du nicht machst. Dein Ring schließt durchs Ausruhen.' : 'Today’s strongest move is the one you don’t make. Your ring closes by resting.',
+    }
+  if (lead > 0)
+    return {
+      emoji: '👻💨',
+      title: de ? 'Dein Geister-Ich ist abgehängt.' : 'You dropped your ghost.',
+      sub: de ? `${lead} Punkte Vorsprung auf letzte Woche. Bis Sonntag draufbleiben.` : `${lead} points clear of last week. Keep the hammer down till Sunday.`,
+    }
+  if (streak >= 3)
+    return {
+      emoji: '🔥',
+      title: de ? `${streak} Tage am Stück. Du brennst.` : `${streak} days straight. You're on fire.`,
+      sub: de ? 'Nicht du wirst der Grund sein, dass die Serie stirbt.' : "Don't be the reason the streak dies.",
+    }
+  if (gap > 0 && gap <= 120)
+    return {
+      emoji: '☕',
+      title: de ? `Nur ${gap} Punkte hinten.` : `Only ${gap} points back.`,
+      sub: de ? `Ein Espresso und eine ${Math.ceil((gap / 100) * dailyTarget)}-TSS-Einheit — dann führst du.` : `One espresso and a ${Math.ceil((gap / 100) * dailyTarget)}-TSS session — then you lead.`,
+    }
+  if (thisScore === 0)
+    return {
+      emoji: '🌱',
+      title: de ? 'Noch ein leeres Blatt.' : 'A blank week, so far.',
+      sub: de ? 'Die erste Einheit schreibt die Schlagzeile.' : 'Your first session writes the headline.',
+    }
+  return {
+    emoji: '🚀',
+    title: de ? 'Die Woche rollt.' : 'The week is rolling.',
+    sub: de ? 'Jeder Tag am Ziel bringt 100 Punkte. Maximum 150%.' : 'Every day at target banks 100 points. Cap is 150%.',
+  }
+}
 
+// ── Ring hero — the addictive centrepiece (Apple closing-ring) ──
+function RingHero({ animated, pct, target, beat, locale }: { animated: number; pct: number; target: number; beat: boolean; locale: Locale }) {
+  const size = 168, sw = 15, R = (size - sw) / 2, C = 2 * Math.PI * R
+  const color = beat ? '#FFD60A' : 'var(--color-forest-2)'
+  const de = locale === 'de'
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke="var(--color-rule)" strokeWidth={sw} />
+        <circle
+          cx={size / 2} cy={size / 2} r={R} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"
+          strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(1, pct))}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          style={{ transition: 'stroke-dashoffset 900ms cubic-bezier(.22,1,.36,1)', filter: `drop-shadow(0 0 10px color-mix(in srgb, ${color} 55%, transparent))` }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="num-display leading-none" style={{ fontSize: 46, color, fontVariationSettings: '"opsz" 144, "wght" 560' }}>{animated}</span>
+        <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.16em', marginTop: 3 }}>{de ? 'PUNKTE' : 'POINTS'}</span>
+        <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-ink-2)', marginTop: 4 }}>{de ? `Ziel ${Math.round(target)}` : `Goal ${Math.round(target)}`}</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Cool-fact card — one striking number + a funny, true one-liner ──
+function CoolFactCard({ icon: Icon, value, unit, label, quip, accent }: {
+  icon: typeof Zap; value: string; unit: string; label: string; quip: string; accent?: string
+}) {
+  const color = accent ?? 'var(--color-forest-2)'
+  return (
+    <div className="rounded-[18px] p-4 sm:p-5 flex flex-col gap-2" style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 30, height: 30, backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)` }}>
+          <Icon size={16} strokeWidth={2} style={{ color }} />
+        </span>
+        <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', fontSize: 9.5, letterSpacing: '0.18em' }}>{label}</span>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="num-display leading-none" style={{ fontSize: 'clamp(26px, 7vw, 32px)', color: 'var(--color-ink)' }}>{value}</span>
+        <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{unit}</span>
+      </div>
+      <p className="text-[12.5px] leading-snug" style={{ color: 'var(--color-ink-2)' }}>{quip}</p>
+    </div>
+  )
+}
+
+// ── The tab ──
 type Lens = 'effort' | 'rising' | 'consistent'
 
 export default function SocialTab() {
@@ -276,7 +334,6 @@ export default function SocialTab() {
   const lastWeekStart = subDays(weekStart, 7)
   const lastWeekEnd = subDays(weekEnd, 7)
 
-  // Pull two full weeks so both scores come from one query.
   const { data: actsData } = useActivitiesRange(lastWeekStart, today)
   const { data: profile } = useAthleteProfile()
   const { data: power } = usePowerProfile()
@@ -290,14 +347,9 @@ export default function SocialTab() {
   const dailyTarget = dailyTargetFrom(profile)
   const activities = useMemo(() => actsData?.activities ?? [], [actsData])
 
-  const thisWeek = useMemo(
-    () => computeWeek(activities, weekStart, weekEnd, dailyTarget),
-    [activities, weekStart, weekEnd, dailyTarget],
-  )
-  const lastWeek = useMemo(
-    () => computeWeek(activities, lastWeekStart, lastWeekEnd, dailyTarget),
-    [activities, lastWeekStart, lastWeekEnd, dailyTarget],
-  )
+  const thisWeek = useMemo(() => computeWeek(activities, weekStart, weekEnd, dailyTarget), [activities, weekStart, weekEnd, dailyTarget])
+  const lastWeek = useMemo(() => computeWeek(activities, lastWeekStart, lastWeekEnd, dailyTarget), [activities, lastWeekStart, lastWeekEnd, dailyTarget])
+  const insights = useMemo(() => computeInsights(activities, weekStart, weekEnd), [activities, weekStart, weekEnd])
 
   const thisScore = Math.round(thisWeek.weeklyScore)
   const lastScore = Math.round(lastWeek.weeklyScore)
@@ -305,38 +357,32 @@ export default function SocialTab() {
 
   const beatLastWeek = lastScore > 0 && thisScore > lastScore
   const gap = lastScore - thisScore
+  const lead = thisScore - lastScore
+  // The ring fills toward last week's mark (your ghost) or a perfect week.
+  const ringTarget = lastScore > 0 ? lastScore : PERFECT_WEEK
+  const ringPct = ringTarget > 0 ? thisScore / ringTarget : 0
 
-  // Confetti fires once, only on a genuine change (beating last week's score).
   const [celebrated, setCelebrated] = useState(false)
   useEffect(() => {
     if (beatLastWeek && !celebrated) setCelebrated(true)
   }, [beatLastWeek, celebrated])
 
-  // ── Fairness inputs (spec §2.2–2.4) ──
+  // ── Fairness inputs ──
   const ftp = profile?.ftp_watts ?? null
   const weight = profile?.weight_kg ?? null
-  // Prefer explicit FTP W/kg from the profile; fall back to the power
-  // profile's Coggan CP W/kg when weight/FTP aren't both on file.
   const wkgFtp = ftp && weight && weight > 0 ? ftp / weight : (power?.cp_wkg ?? null)
 
-  // Improvement rate: CTL now vs 28d ago (spec §2.3)
   const improvement = useMemo(() => {
     const entries = pmc?.entries ?? []
     if (entries.length < 2) return null
     const now = entries[entries.length - 1]
-    // find entry ~28 days before the last one
     const targetDate = subDays(parseISO(now.date), 28)
     let past = entries[0]
-    for (const e of entries) {
-      if (parseISO(e.date) <= targetDate) past = e
-    }
+    for (const e of entries) if (parseISO(e.date) <= targetDate) past = e
     if (!past || past.ctl <= 0) return null
     return { rate: (now.ctl - past.ctl) / past.ctl, ctlNow: now.ctl, ctlThen: past.ctl }
   }, [pmc])
 
-  // Consistency: ring-close streak + rolling-28d frequency (spec §2.4).
-  // A day counts toward the streak if the ring closed (TSS ≥ target) OR it was
-  // a rest day (0 TSS) — you can't lose a streak by following your coach.
   const consistency = useMemo(() => {
     const entries = pmc?.entries ?? []
     if (entries.length === 0) return { streak: 0, frequency: 0 }
@@ -347,87 +393,32 @@ export default function SocialTab() {
       if (closed) streak++
       else break
     }
-    const last28 = entries.slice(-28)
-    const frequency = last28.filter((e) => e.daily_tss > 0).length
+    const frequency = entries.slice(-28).filter((e) => e.daily_tss > 0).length
     return { streak, frequency }
   }, [pmc, dailyTarget])
 
-  // ── Standings (crew mode mirrors CrewTab exactly) ──
-  const you: Standing = {
-    id: 'you',
-    handle: 'You',
-    isYou: true,
-    weeklyScore: thisWeek.weeklyScore,
-    weeklyTSS: thisWeek.weeklyTSS,
-    dailyPct: thisWeek.dailyPct,
-    status: 'live',
-  }
-  const pastYou: Standing = {
-    id: 'past-you',
-    handle: de ? 'Letzte Woche' : 'Last week',
-    isYou: false,
-    weeklyScore: lastWeek.weeklyScore,
-    weeklyTSS: lastWeek.weeklyTSS,
-    dailyPct: lastWeek.dailyPct,
-    status: 'live',
-  }
+  const vibe = weekVibe({ de, mode: gate.mode, lead, gap, streak: consistency.streak, thisScore, dailyTarget })
+
+  // ── Standings ──
+  const you: Standing = { id: 'you', handle: 'You', isYou: true, weeklyScore: thisWeek.weeklyScore, weeklyTSS: thisWeek.weeklyTSS, dailyPct: thisWeek.dailyPct, status: 'live' }
+  const pastYou: Standing = { id: 'past-you', handle: de ? 'Letzte Woche' : 'Last week', isYou: false, weeklyScore: lastWeek.weeklyScore, weeklyTSS: lastWeek.weeklyTSS, dailyPct: lastWeek.dailyPct, status: 'live' }
   const standings = useMemo<Standing[]>(() => {
-    const crewStandings: Standing[] = crew.map((m) => ({
-      id: m.id,
-      handle: m.handle,
-      isYou: false,
-      weeklyScore: 0,
-      weeklyTSS: 0,
-      dailyPct: Array.from({ length: 7 }, () => 0),
-      status: 'pending' as const,
-    }))
+    const crewStandings: Standing[] = crew.map((m) => ({ id: m.id, handle: m.handle, isYou: false, weeklyScore: 0, weeklyTSS: 0, dailyPct: Array.from({ length: 7 }, () => 0), status: 'pending' as const }))
     return [you, ...crewStandings].sort((a, b) => b.weeklyScore - a.weeklyScore)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [crew, thisWeek])
   const yourRank = standings.findIndex((s) => s.isYou) + 1
 
-  // ── Badges (client-derived, spec §5.3 / §4) ──
+  // ── Badges ──
   const lastWeekPerfect = lastWeek.dailyPct.length === 7 && lastWeek.dailyPct.every((p) => p >= 1)
-  const badges = useMemo(
-    () => [
-      {
-        key: 'streak_7',
-        icon: Flame,
-        label: de ? '7-Tage-Serie' : '7-day streak',
-        earned: consistency.streak >= 7,
-        how: de ? '7 Tage in Folge den Ring schließen' : 'Close your ring 7 days running',
-      },
-      {
-        key: 'streak_30',
-        icon: Flame,
-        label: de ? '30-Tage-Serie' : '30-day streak',
-        earned: consistency.streak >= 30,
-        how: de ? '30 Tage am Stück dranbleiben' : 'Stay on it 30 days straight',
-      },
-      {
-        key: 'perfect_week',
-        icon: CheckCircle2,
-        label: de ? 'Perfekte Woche' : 'Perfect week',
-        earned: lastWeekPerfect,
-        how: de ? 'An allen 7 Tagen den Ring schließen' : 'Close the ring all 7 days',
-      },
-      {
-        key: 'most_improved',
-        icon: TrendingUp,
-        label: de ? 'Größter Sprung' : 'Most improved',
-        earned: (improvement?.rate ?? 0) >= 0.05,
-        how: de ? 'CTL in 28 Tagen um 5% steigern' : 'Grow CTL 5% in 28 days',
-      },
-      {
-        key: 'ring_week_win',
-        icon: Trophy,
-        label: de ? 'Woche geschlagen' : 'Beat last week',
-        earned: beatLastWeek,
-        how: de ? 'Den Ring-Score der Vorwoche übertreffen' : "Top last week's ring score",
-      },
-    ],
-    [consistency.streak, lastWeekPerfect, improvement, beatLastWeek, de],
-  )
+  const badges = useMemo(() => [
+    { key: 'streak_7', icon: Flame, label: de ? '7-Tage-Serie' : '7-day streak', earned: consistency.streak >= 7, how: de ? '7 Tage in Folge den Ring schließen' : 'Close your ring 7 days running' },
+    { key: 'streak_30', icon: Flame, label: de ? '30-Tage-Serie' : '30-day streak', earned: consistency.streak >= 30, how: de ? '30 Tage am Stück dranbleiben' : 'Stay on it 30 days straight' },
+    { key: 'perfect_week', icon: CheckCircle2, label: de ? 'Perfekte Woche' : 'Perfect week', earned: lastWeekPerfect, how: de ? 'An allen 7 Tagen den Ring schließen' : 'Close the ring all 7 days' },
+    { key: 'most_improved', icon: TrendingUp, label: de ? 'Größter Sprung' : 'Most improved', earned: (improvement?.rate ?? 0) >= 0.05, how: de ? 'CTL in 28 Tagen um 5% steigern' : 'Grow CTL 5% in 28 days' },
+    { key: 'ring_week_win', icon: Trophy, label: de ? 'Woche geschlagen' : 'Beat last week', earned: beatLastWeek, how: de ? 'Den Ring-Score der Vorwoche übertreffen' : "Top last week's ring score" },
+  ], [consistency.streak, lastWeekPerfect, improvement, beatLastWeek, de])
+  const earnedCount = badges.filter((b) => b.earned).length
 
   // ── Fairness lens ──
   const [lens, setLens] = useState<Lens>('effort')
@@ -441,40 +432,26 @@ export default function SocialTab() {
   const [draft, setDraft] = useState('')
   const [copied, setCopied] = useState(false)
   const [crewNameDraft, setCrewNameDraft] = useState('')
+  function handleInvite(e: React.FormEvent) { e.preventDefault(); if (draft.trim()) { invite(draft); setDraft('') } }
+  async function handleShare() { const ok = await shareInvite(thisWeek.weeklyScore, locale); if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1600) } }
 
-  function handleInvite(e: React.FormEvent) {
-    e.preventDefault()
-    if (draft.trim()) {
-      invite(draft)
-      setDraft('')
-    }
-  }
-  async function handleShare() {
-    const ok = await shareInvite(thisWeek.weeklyScore, locale)
-    if (ok) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1600)
-    }
-  }
-
-  const cardBase = {
-    backgroundColor: 'var(--color-paper-2)',
-    border: '1px solid var(--color-rule)',
-  } as const
-
-  // Endowed progress: real progress toward last week's total, stated truthfully.
+  const cardBase = { backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
   const progressPct = lastScore > 0 ? Math.min(1, thisScore / lastScore) : thisScore > 0 ? 1 : 0
+
+  // ── Cool-fact quips (real numbers, funny & always-true) ──
+  const croissants = Math.max(0, Math.round(insights.kj / 1004))
+  const episodes = Math.max(0, Math.round(insights.hours / 0.75))
+  const marathons = insights.km / 42.195
 
   return (
     <div className="flex flex-col gap-9 sm:gap-11">
-      {/* Coach-safety interlock — outranks everything below (spec §4) */}
       <CoachSafetyBanner />
 
-      {/* ── ① This Week's Challenge ─────────────────────────────── */}
+      {/* ── ① Diese Woche — the ring ─────────────────────────────── */}
       <PillarSection
         index="1"
-        title={de ? 'Diese Woche' : "This Week's Challenge"}
-        question={de ? 'Was ist das Spiel diese Woche — und gewinne ich es?' : "What's the game this week — and am I winning it?"}
+        title={de ? 'Diese Woche' : 'This Week'}
+        question={de ? 'Schlage ich mein früheres Ich?' : 'Am I beating my past self?'}
       >
         <div
           className="relative paper-grain rounded-[22px] overflow-hidden"
@@ -487,391 +464,233 @@ export default function SocialTab() {
           }}
         >
           {celebrated && <Confetti />}
-          <div className="px-6 py-6 sm:px-8 sm:py-7 flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="px-5 py-6 sm:px-8 sm:py-8 flex flex-col gap-5">
+            <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 min-w-0">
                 <Trophy size={14} strokeWidth={2} style={{ color: beatLastWeek ? '#FFD60A' : 'var(--color-forest-2)' }} />
-                <span className="eyebrow" style={{ color: 'var(--color-ink)', letterSpacing: '0.28em', fontSize: 10, fontWeight: 600 }}>
-                  {de ? 'RING-WOCHE · DU GEGEN LETZTE WOCHE' : 'RING WEEK · YOU vs LAST WEEK'}
+                <span className="eyebrow" style={{ color: 'var(--color-ink)', letterSpacing: '0.26em', fontSize: 10, fontWeight: 600 }}>
+                  {de ? 'RING-WOCHE' : 'RING WEEK'}
                 </span>
               </div>
               <Countdown weekEnd={weekEnd} locale={locale} />
             </div>
 
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <span
-                className="num-display leading-none"
-                style={{
-                  fontSize: 'clamp(36px, 5vw, 52px)',
-                  color: beatLastWeek ? '#FFD60A' : 'var(--color-ink)',
-                  fontVariationSettings: '"opsz" 144, "wght" 500',
-                }}
-              >
-                {heroCount}
-              </span>
-              <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)', letterSpacing: '0.14em' }}>
-                {t('points_label')}
-              </span>
-              {hasCrew && standings.length > 1 && (
-                <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)', letterSpacing: '0.12em' }}>
-                  · {t('rank_label')} {yourRank} {t('of_label')} {standings.length}
-                </span>
-              )}
-              <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)', letterSpacing: '0.12em' }}>
-                · {de ? 'LETZTE WOCHE' : 'LAST WEEK'} {lastScore}
-              </span>
-            </div>
-
-            {/* Guiding sentence — serif italic */}
-            <p
-              className="text-[13px] leading-relaxed"
-              style={{
-                fontFamily: '"Fraunces", serif',
-                fontStyle: 'italic',
-                fontVariationSettings: '"opsz" 30, "wght" 400',
-                color: 'var(--color-ink-2)',
-                maxWidth: '58ch',
-              }}
-            >
-              {gate.mode === 'rest'
-                ? de
-                  ? 'Diese Woche pausiert das Rennen — dein Coach verordnet Erholung. Der Ring schließt heute durchs Ausruhen.'
-                  : "The race pauses this week — your coach is prescribing recovery. Your ring closes today by resting."
-                : beatLastWeek
-                  ? de
-                    ? `Du hast dein früheres Ich um ${thisScore - lastScore} Punkte geschlagen. Halte den Vorsprung bis Sonntag.`
-                    : `You've beaten your past self by ${thisScore - lastScore} points. Hold the lead until Sunday.`
-                  : gap > 0
-                    ? gate.mode === 'ease'
-                      ? de
-                        ? 'Ein leichter Tag hält deinen Ring am Leben — kein Grund, die Lücke heute zu jagen.'
-                        : 'A light spin keeps your ring alive — no need to chase the gap today.'
-                      : de
-                        ? `${gap} Punkte hinter der Vorwoche. Eine ${Math.ceil((gap / 100) * dailyTarget)}-TSS-Einheit schließt die Lücke.`
-                        : `${gap} points behind last week. A ${Math.ceil((gap / 100) * dailyTarget)}-TSS session closes the gap.`
-                    : de
-                      ? 'Sammle jeden Tag Punkte — erreiche dein Tagesziel und du bekommst 100. Maximum sind 150% pro Tag.'
-                      : 'Earn points each day — hit your daily target and bank 100. Cap is 150% per day.'}
-            </p>
-
-            {/* Endowed-progress bar toward last week's total — with a truthful reason */}
-            <div className="flex flex-col gap-1.5 pt-1">
-              <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-rule)' }} aria-hidden>
-                <div
-                  style={{
-                    width: `${Math.round(progressPct * 100)}%`,
-                    height: '100%',
-                    backgroundColor: beatLastWeek ? '#FFD60A' : 'var(--color-forest-2)',
-                    borderRadius: 999,
-                    transition: 'width 600ms cubic-bezier(.22,1,.36,1)',
-                  }}
-                />
+            {/* Ring + reactive headline — stacks on mobile, row on sm+ */}
+            <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:gap-7 sm:text-left">
+              <RingHero animated={heroCount} pct={ringPct} target={ringTarget} beat={beatLastWeek} locale={locale} />
+              <div className="flex-1 min-w-0 flex flex-col gap-2">
+                <span style={{ fontSize: 30, lineHeight: 1 }}>{vibe.emoji}</span>
+                <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(20px, 5.4vw, 26px)', fontWeight: 500, lineHeight: 1.12, letterSpacing: '-0.015em', color: 'var(--color-ink)' }}>
+                  {vibe.title}
+                </h3>
+                <p style={{ color: 'var(--color-ink-2)', fontSize: 13.5, lineHeight: 1.5, maxWidth: '48ch' }}>{vibe.sub}</p>
               </div>
-              <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.08em' }}>
-                {lastScore > 0
-                  ? de
-                    ? `DU STARTEST NICHT BEI NULL — LETZTE WOCHE HAST DU ${lastScore} PKT GESAMMELT. DAS IST DAS ZIEL.`
-                    : `YOU DON'T START AT ZERO — YOU BANKED ${lastScore} PTS LAST WEEK. THAT'S THE MARK.`
-                  : de
-                    ? `TAGESZIEL ${dailyTarget} TSS · 150% MAX · 7 TAGE`
-                    : `DAILY TARGET ${dailyTarget} TSS · 150% CAP · 7 DAYS`}
-              </span>
             </div>
 
-            {/* This week's 7-day ring texture */}
-            <div className="flex items-center gap-3 pt-1">
-              <WeekBars dailyPct={thisWeek.dailyPct} isYou />
-              <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.12em' }}>
-                {de ? 'MO → SO' : 'MON → SUN'} · {Math.round(thisWeek.weeklyTSS)} TSS
-              </span>
+            {/* Endowed-progress bar toward last week's total */}
+            <div className="flex flex-col gap-1.5">
+              <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-rule)' }} aria-hidden>
+                <div style={{ width: `${Math.round(progressPct * 100)}%`, height: '100%', backgroundColor: beatLastWeek ? '#FFD60A' : 'var(--color-forest-2)', borderRadius: 999, transition: 'width 700ms cubic-bezier(.22,1,.36,1)' }} />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="num-mono" style={{ fontSize: 9.5, color: 'var(--color-muted)', letterSpacing: '0.08em' }}>
+                  {lastScore > 0
+                    ? de ? `LETZTE WOCHE: ${lastScore} PKT · DAS IST DIE MARKE` : `LAST WEEK: ${lastScore} PTS · THAT'S THE MARK`
+                    : de ? `TAGESZIEL ${dailyTarget} TSS · 150% MAX` : `DAILY TARGET ${dailyTarget} TSS · 150% CAP`}
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <WeekBars dailyPct={thisWeek.dailyPct} isYou />
+                  {hasCrew && standings.length > 1 && (
+                    <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>#{yourRank}/{standings.length}</span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </PillarSection>
 
-      {/* ── ② The Crew ──────────────────────────────────────────── */}
+      {/* ── ② Coole Fakten — the fun, celebratory numbers ─────────── */}
       <PillarSection
         index="2"
-        title={de ? 'Die Crew' : 'The Crew'}
-        question={de ? 'Wie schlägt sich mein Team — und trage ich meinen Teil bei?' : 'How does my squad stack up — and am I pulling my weight?'}
+        title={de ? 'Coole Fakten' : 'Cool Facts'}
+        question={de ? 'Was habe ich diese Woche eigentlich angerichtet?' : 'What did I actually pull off this week?'}
       >
-        {hasCrew ? (
-          <>
-            <div className="flex flex-col gap-2">
-              {standings.map((s, i) => (
-                <StandingRow key={s.id} standing={s} rank={i + 1} locale={locale} />
-              ))}
-            </div>
-
-            {/* Invite card */}
-            <div className="paper-grain rounded-[20px] px-5 py-5 sm:px-6 sm:py-6" style={cardBase}>
-              <div className="flex items-start gap-3 mb-4">
-                <div
-                  className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: 'rgba(48, 209, 88, 0.10)' }}
-                >
-                  <UserPlus size={18} strokeWidth={2} color="#30D158" />
-                </div>
-                <div>
-                  <p className="text-[15px] font-medium" style={{ color: 'var(--color-ink)' }}>
-                    {t('riders_go_further')}
-                  </p>
-                  <p className="text-[12px] leading-relaxed mt-1" style={{ color: 'var(--color-muted)' }}>
-                    {de
-                      ? 'Bis zu 8 Fahrer. Nur Trainingsdaten (Serie, Wochen-TSS, Punkte) werden geteilt — niemals Körperdaten.'
-                      : 'Up to 8 riders. Only training outputs (streak, weekly TSS, points) are shared — never body data.'}
-                  </p>
-                </div>
-              </div>
-              <form onSubmit={handleInvite} className="flex gap-2 mb-3">
-                <input
-                  type="text"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={de ? 'E-Mail einladen' : 'Invite by email'}
-                  className="flex-1 px-3 py-2.5 rounded-[12px] text-[14px]"
-                  style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)', outline: 'none' }}
-                />
-                <button
-                  type="submit"
-                  disabled={!draft.trim()}
-                  className="px-4 py-2.5 rounded-[12px] text-[13px] font-medium transition-opacity"
-                  style={{ backgroundColor: '#30D158', color: '#0C0C0E', opacity: draft.trim() ? 1 : 0.5 }}
-                >
-                  {de ? 'Hinzufügen' : 'Add'}
-                </button>
-              </form>
-              <button
-                type="button"
-                onClick={handleShare}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-[12px] text-[13px] font-medium transition-all"
-                style={{ backgroundColor: 'transparent', border: '1px solid var(--color-rule)', color: copied ? '#30D158' : 'var(--color-ink-2)' }}
-              >
-                {copied ? (
-                  <>
-                    <CheckCircle2 size={14} strokeWidth={2} />
-                    {de ? 'Einladungslink kopiert' : 'Invite link copied'}
-                  </>
-                ) : (
-                  <>
-                    <Link2 size={14} strokeWidth={2} />
-                    {t('share_invite_link')}
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Manage crew */}
-            {crew.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <span className="eyebrow px-1" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}>
-                  {de ? 'Crew verwalten' : 'Manage crew'} · {crew.length}
-                </span>
-                {crew.map((m: CrewMember) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center justify-between px-4 py-2.5 rounded-[12px]"
-                    style={cardBase}
-                  >
-                    <span className="text-[13px]" style={{ color: 'var(--color-ink-2)' }}>{m.handle}</span>
-                    {m.id.startsWith('inv-') && (
-                      <button
-                        type="button"
-                        onClick={() => remove(m.id)}
-                        className="text-[11px]"
-                        style={{ color: 'var(--color-muted)' }}
-                      >
-                        {de ? 'Zurückziehen' : 'Revoke'}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+        {insights.rides === 0 ? (
+          <div className="rounded-[18px] px-5 py-8 text-center" style={{ border: '1px dashed var(--color-rule)' }}>
+            <span style={{ fontSize: 26 }}>🫙</span>
+            <p className="text-[13px] mt-2" style={{ color: 'var(--color-muted)' }}>
+              {de ? 'Noch keine Fahrt diese Woche — deine erste Einheit füllt diese Karten mit Angeber-Zahlen.' : 'No ride this week yet — your first session fills these cards with bragging numbers.'}
+            </p>
+          </div>
         ) : (
-          // Solo fallback — You vs. Past You
-          <>
-            <div className="paper-grain rounded-[20px] px-5 py-5 sm:px-6" style={cardBase}>
-              <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}>
-                {de ? 'DU GEGEN DEIN FRÜHERES ICH' : 'YOU vs PAST YOU'}
-              </span>
-              <div className="flex flex-col gap-2 mt-3">
-                {[you, pastYou]
-                  .slice()
-                  .sort((a, b) => b.weeklyScore - a.weeklyScore)
-                  .map((s, i) => (
-                    <StandingRow key={s.id} standing={s} rank={i + 1} locale={locale} />
-                  ))}
-              </div>
-              <p className="text-[12px] leading-relaxed mt-3" style={{ color: 'var(--color-muted)' }}>
-                {de
-                  ? 'Kein Gegner erfunden — du misst dich ehrlich an deiner eigenen Vorwoche. Lade eine Crew ein, wenn du das Feld erweitern willst.'
-                  : "No opponent invented — you race honestly against your own last week. Add a crew when you want the field to grow."}
-              </p>
-            </div>
-
-            {/* Create-crew CTA */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                const name = crewNameDraft.trim()
-                if (!name) return
-                createCrew.mutate(name, { onSuccess: () => setCrewNameDraft('') })
-              }}
-              className="flex items-center gap-2 flex-wrap"
-            >
-              <input
-                value={crewNameDraft}
-                onChange={(e) => setCrewNameDraft(e.target.value)}
-                placeholder={t('crew_name_placeholder')}
-                maxLength={60}
-                className="flex-1 min-w-[200px] px-3 py-2.5 rounded-[12px] text-[13px]"
-                style={{ backgroundColor: 'var(--color-paper)', color: 'var(--color-ink)', border: '1px solid var(--color-rule)' }}
-                aria-label={de ? 'Crew-Name' : 'Crew name'}
-              />
-              <button
-                type="submit"
-                disabled={!crewNameDraft.trim() || createCrew.isPending}
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-medium disabled:opacity-50"
-                style={{ backgroundColor: 'var(--color-forest-2)', color: 'var(--color-paper)', boxShadow: '0 1px 8px color-mix(in srgb, var(--color-forest-2) 35%, transparent)' }}
-              >
-                {createCrew.isPending ? t('creating') : t('create_crew')}
-                <UserPlus size={14} strokeWidth={2} />
-              </button>
-            </form>
-          </>
+          <div className="grid grid-cols-2 gap-3">
+            <CoolFactCard
+              icon={Zap} accent="var(--color-amber)"
+              value={insights.kj.toLocaleString(de ? 'de' : 'en')} unit="kJ"
+              label={de ? 'ENERGIE' : 'ENERGY'}
+              quip={croissants > 0 ? (de ? `≈ ${croissants} Croissants zurückverdient 🥐` : `≈ ${croissants} croissants earned back 🥐`) : (de ? 'Jede Faser zählt.' : 'Every fibre counts.')}
+            />
+            <CoolFactCard
+              icon={Clock} accent="var(--color-forest-2)"
+              value={insights.hours.toFixed(1)} unit="h"
+              label={de ? 'IM SATTEL' : 'IN THE SADDLE'}
+              quip={episodes > 0 ? (de ? `= ${episodes} Folgen deiner Serie 📺` : `= ${episodes} episodes of your show 📺`) : (de ? 'Kurz, aber knackig.' : 'Short but sharp.')}
+            />
+            <CoolFactCard
+              icon={Bike} accent="var(--color-ink-blue)"
+              value={insights.km.toFixed(0)} unit="km"
+              label={de ? 'DISTANZ' : 'DISTANCE'}
+              quip={marathons >= 1 ? (de ? `= ${marathons.toFixed(1)}× ein Marathon 🏃` : `= ${marathons.toFixed(1)}× a marathon 🏃`) : (de ? 'Die Reifen sind noch warm.' : 'Tyres still warm.')}
+            />
+            <CoolFactCard
+              icon={Crown} accent="#FFD60A"
+              value={insights.bestKm >= 1 ? insights.bestKm.toFixed(0) : Math.round(insights.bestTss).toString()} unit={insights.bestKm >= 1 ? 'km' : 'TSS'}
+              label={de ? 'KÖNIGSETAPPE' : 'QUEEN STAGE'}
+              quip={de ? 'Deine härteste Einheit der Woche 👑' : 'Your hardest session this week 👑'}
+            />
+          </div>
         )}
       </PillarSection>
 
-      {/* ── ③ Where I Stand ─────────────────────────────────────── */}
+      {/* ── ③ Wo ich stehe — fair progress ───────────────────────── */}
       <PillarSection
         index="3"
         title={de ? 'Wo ich stehe' : 'Where I Stand'}
-        question={de ? 'Fair — nicht nur am schnellsten — wie schneide ich ab?' : 'Fairly — not just fastest — how do I compare?'}
+        question={de ? 'Fair — nicht nur am schnellsten — wie schlage ich mich?' : 'Fairly — not just fastest — how am I doing?'}
       >
         <div className="flex flex-col gap-4">
-          <SegmentedTabs
-            tabs={lensTabs}
-            value={lens}
-            onChange={setLens}
-            ariaLabel={de ? 'Vergleichsobjektiv' : 'Comparison lens'}
-            indicatorId="fairness-lens-indicator"
-          />
-
+          <SegmentedTabs tabs={lensTabs} value={lens} onChange={setLens} ariaLabel={de ? 'Vergleichsobjektiv' : 'Comparison lens'} indicatorId="fairness-lens-indicator" />
           <div className="paper-grain rounded-[20px] px-5 py-5 sm:px-6 sm:py-6" style={cardBase}>
             {lens === 'effort' && (
               wkgFtp ? (
                 <div className="flex flex-col gap-3">
                   <BandChip wkgFtp={wkgFtp} locale={locale} />
                   <p className="text-[12px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                    {de
-                      ? 'Das ist du gegen deine eigene Decke — steige ein Band auf, nicht das eines anderen. Nie Watt-gegen-Watt, immer nur dein Verhältnis.'
-                      : "This is you against your own ceiling — climb one band, not someone else's. Never watt-vs-watt, only your own ratio."}
+                    {de ? 'Du gegen deine eigene Decke — steige ein Band auf, nicht das eines anderen. Nie Watt-gegen-Watt, immer nur dein Verhältnis.' : "You against your own ceiling — climb one band, not someone else's. Never watt-vs-watt, only your own ratio."}
                   </p>
                 </div>
               ) : (
                 <p className="text-[13px]" style={{ color: 'var(--color-muted)' }}>
-                  {de
-                    ? 'Trage FTP und Gewicht im Profil ein, um dein faires Leistungsband zu sehen.'
-                    : 'Add your FTP and weight in your profile to see your fair effort band.'}
+                  {de ? 'Trage FTP und Gewicht im Profil ein, um dein faires Leistungsband zu sehen.' : 'Add your FTP and weight in your profile to see your fair effort band.'}
                 </p>
               )
             )}
-
             {lens === 'rising' && (
-              <FairMetric
-                icon={TrendingUp}
+              <FairMetric icon={TrendingUp}
                 eyebrow={de ? 'AUFSTIEG · CTL 28 TAGE' : 'RISING · CTL 28 DAYS'}
                 value={improvement ? `${improvement.rate >= 0 ? '+' : ''}${(improvement.rate * 100).toFixed(1)}%` : '—'}
-                caption={
-                  improvement
-                    ? de
-                      ? `Fitness von ${Math.round(improvement.ctlThen)} auf ${Math.round(improvement.ctlNow)} — dein Zuwachs, nicht der eines Profis.`
-                      : `Fitness from ${Math.round(improvement.ctlThen)} to ${Math.round(improvement.ctlNow)} — your gain, not a pro's.`
-                    : de
-                      ? 'Noch nicht genug Verlauf, um deine Aufstiegsrate zu berechnen.'
-                      : 'Not enough history yet to compute your rising rate.'
-                }
-                positive={(improvement?.rate ?? 0) >= 0}
-              />
+                caption={improvement ? (de ? `Fitness von ${Math.round(improvement.ctlThen)} auf ${Math.round(improvement.ctlNow)} — dein Zuwachs, nicht der eines Profis.` : `Fitness from ${Math.round(improvement.ctlThen)} to ${Math.round(improvement.ctlNow)} — your gain, not a pro's.`) : (de ? 'Noch nicht genug Verlauf, um deine Aufstiegsrate zu berechnen.' : 'Not enough history yet to compute your rising rate.')}
+                positive={(improvement?.rate ?? 0) >= 0} />
             )}
-
             {lens === 'consistent' && (
-              <FairMetric
-                icon={CalendarCheck}
+              <FairMetric icon={CalendarCheck}
                 eyebrow={de ? 'KONSTANZ · SERIE & FREQUENZ' : 'CONSISTENT · STREAK & FREQUENCY'}
                 value={`${consistency.streak}${de ? ' T' : 'd'}`}
-                caption={
-                  de
-                    ? `${consistency.frequency} Einheiten in den letzten 28 Tagen. Ruhetage zählen — du verlierst keine Serie, wenn du deinem Coach folgst.`
-                    : `${consistency.frequency} sessions in the last 28 days. Rest days count — you can't lose a streak by following your coach.`
-                }
-                positive
-              />
+                caption={de ? `${consistency.frequency} Einheiten in den letzten 28 Tagen. Ruhetage zählen — du verlierst keine Serie, wenn du deinem Coach folgst.` : `${consistency.frequency} sessions in the last 28 days. Rest days count — you can't lose a streak by following your coach.`}
+                positive />
             )}
           </div>
         </div>
       </PillarSection>
 
-      {/* ── ④ Duels & Honors ────────────────────────────────────── */}
+      {/* ── ④ Crew & Ehre — squad + honors + duel ────────────────── */}
       <PillarSection
         index="4"
-        title={de ? 'Duelle & Auszeichnungen' : 'Duels & Honors'}
-        question={de ? 'Wen habe ich geschlagen, und was habe ich verdient?' : 'Who did I beat, and what have I earned?'}
+        title={de ? 'Crew & Ehre' : 'Crew & Honors'}
+        question={de ? 'Mit wem messe ich mich, und was habe ich verdient?' : 'Who am I racing, and what have I earned?'}
       >
+        {hasCrew ? (
+          <>
+            <div className="flex flex-col gap-2">
+              {standings.map((s, i) => <StandingRow key={s.id} standing={s} rank={i + 1} locale={locale} />)}
+            </div>
+            <div className="paper-grain rounded-[20px] px-5 py-5 sm:px-6 sm:py-6" style={cardBase}>
+              <div className="flex items-start gap-3 mb-4">
+                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(48, 209, 88, 0.10)' }}>
+                  <UserPlus size={18} strokeWidth={2} color="#30D158" />
+                </div>
+                <div>
+                  <p className="text-[15px] font-medium" style={{ color: 'var(--color-ink)' }}>{t('riders_go_further')}</p>
+                  <p className="text-[12px] leading-relaxed mt-1" style={{ color: 'var(--color-muted)' }}>
+                    {de ? 'Bis zu 8 Fahrer. Nur Trainingsdaten (Serie, Wochen-TSS, Punkte) werden geteilt — niemals Körperdaten.' : 'Up to 8 riders. Only training outputs (streak, weekly TSS, points) are shared — never body data.'}
+                  </p>
+                </div>
+              </div>
+              <form onSubmit={handleInvite} className="flex gap-2 mb-3">
+                <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={de ? 'E-Mail einladen' : 'Invite by email'}
+                  className="flex-1 px-3 py-2.5 rounded-[12px] text-[14px]" style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)', outline: 'none' }} />
+                <button type="submit" disabled={!draft.trim()} className="px-4 py-2.5 rounded-[12px] text-[13px] font-medium transition-opacity" style={{ backgroundColor: '#30D158', color: '#0C0C0E', opacity: draft.trim() ? 1 : 0.5 }}>
+                  {de ? 'Hinzufügen' : 'Add'}
+                </button>
+              </form>
+              <button type="button" onClick={handleShare} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-[12px] text-[13px] font-medium transition-all" style={{ backgroundColor: 'transparent', border: '1px solid var(--color-rule)', color: copied ? '#30D158' : 'var(--color-ink-2)' }}>
+                {copied ? <><CheckCircle2 size={14} strokeWidth={2} />{de ? 'Einladungslink kopiert' : 'Invite link copied'}</> : <><Link2 size={14} strokeWidth={2} />{t('share_invite_link')}</>}
+              </button>
+            </div>
+            {crew.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <span className="eyebrow px-1" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}>{de ? 'Crew verwalten' : 'Manage crew'} · {crew.length}</span>
+                {crew.map((m: CrewMember) => (
+                  <div key={m.id} className="flex items-center justify-between px-4 py-2.5 rounded-[12px]" style={cardBase}>
+                    <span className="text-[13px]" style={{ color: 'var(--color-ink-2)' }}>{m.handle}</span>
+                    {m.id.startsWith('inv-') && <button type="button" onClick={() => remove(m.id)} className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{de ? 'Zurückziehen' : 'Revoke'}</button>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="paper-grain rounded-[20px] px-5 py-5 sm:px-6" style={cardBase}>
+              <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}>{de ? 'DU GEGEN DEIN FRÜHERES ICH' : 'YOU vs PAST YOU'}</span>
+              <div className="flex flex-col gap-2 mt-3">
+                {[you, pastYou].slice().sort((a, b) => b.weeklyScore - a.weeklyScore).map((s, i) => <StandingRow key={s.id} standing={s} rank={i + 1} locale={locale} />)}
+              </div>
+              <p className="text-[12px] leading-relaxed mt-3" style={{ color: 'var(--color-muted)' }}>
+                {de ? 'Kein Gegner erfunden — du misst dich ehrlich an deiner eigenen Vorwoche. Lade eine Crew ein, wenn das Feld wachsen soll.' : "No opponent invented — you race honestly against your own last week. Add a crew when you want the field to grow."}
+              </p>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); const name = crewNameDraft.trim(); if (!name) return; createCrew.mutate(name, { onSuccess: () => setCrewNameDraft('') }) }} className="flex items-center gap-2 flex-wrap">
+              <input value={crewNameDraft} onChange={(e) => setCrewNameDraft(e.target.value)} placeholder={t('crew_name_placeholder')} maxLength={60}
+                className="flex-1 min-w-[200px] px-3 py-2.5 rounded-[12px] text-[13px]" style={{ backgroundColor: 'var(--color-paper)', color: 'var(--color-ink)', border: '1px solid var(--color-rule)' }} aria-label={de ? 'Crew-Name' : 'Crew name'} />
+              <button type="submit" disabled={!crewNameDraft.trim() || createCrew.isPending} className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-medium disabled:opacity-50" style={{ backgroundColor: 'var(--color-forest-2)', color: 'var(--color-paper)', boxShadow: '0 1px 8px color-mix(in srgb, var(--color-forest-2) 35%, transparent)' }}>
+                {createCrew.isPending ? t('creating') : t('create_crew')}
+                <UserPlus size={14} strokeWidth={2} />
+              </button>
+            </form>
+          </>
+        )}
+
         {/* Honors case */}
+        <div className="flex items-center justify-between px-1 pt-2">
+          <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}>{de ? 'AUSZEICHNUNGEN' : 'HONORS'}</span>
+          <span className="num-mono" style={{ fontSize: 10.5, color: 'var(--color-amber)' }}>{earnedCount}/{badges.length} {de ? 'freigeschaltet' : 'unlocked'}</span>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           {badges.map((b) => {
             const Icon = b.earned ? b.icon : Lock
             return (
-              <div
-                key={b.key}
-                className="rounded-[16px] px-4 py-4 flex flex-col items-center text-center gap-2"
-                style={{
-                  backgroundColor: 'var(--color-paper-2)',
-                  border: b.earned ? '1px solid rgba(255, 214, 10, 0.35)' : '1px solid var(--color-rule)',
-                  boxShadow: b.earned ? '0 0 16px rgba(255, 214, 10, 0.06) inset' : undefined,
-                  opacity: b.earned ? 1 : 0.62,
-                }}
-              >
-                <Icon
-                  size={20}
-                  strokeWidth={2}
-                  style={{ color: b.earned ? '#FFD60A' : 'var(--color-muted)' }}
-                />
+              <div key={b.key} className="rounded-[16px] px-4 py-4 flex flex-col items-center text-center gap-2"
+                style={{ backgroundColor: 'var(--color-paper-2)', border: b.earned ? '1px solid rgba(255, 214, 10, 0.35)' : '1px solid var(--color-rule)', boxShadow: b.earned ? '0 0 16px rgba(255, 214, 10, 0.06) inset' : undefined, opacity: b.earned ? 1 : 0.62 }}>
+                <Icon size={20} strokeWidth={2} style={{ color: b.earned ? '#FFD60A' : 'var(--color-muted)' }} />
                 <span className="text-[12px] font-medium" style={{ color: 'var(--color-ink)' }}>{b.label}</span>
-                {!b.earned && (
-                  <span className="text-[10px] leading-tight" style={{ color: 'var(--color-muted)' }}>{b.how}</span>
-                )}
+                {!b.earned && <span className="text-[10px] leading-tight" style={{ color: 'var(--color-muted)' }}>{b.how}</span>}
               </div>
             )
           })}
         </div>
 
-        {/* Duel strip — You vs Past You, best ride each week */}
+        {/* Duel — best ride, you vs past you */}
         <div className="paper-grain rounded-[20px] px-5 py-5 sm:px-6" style={cardBase}>
           <div className="flex items-center gap-2 mb-4">
             <Zap size={14} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} />
-            <span className="eyebrow" style={{ color: 'var(--color-ink)', letterSpacing: '0.22em', fontSize: 10, fontWeight: 600 }}>
-              {de ? 'DUELL · BESTE EINHEIT · DU GEGEN FRÜHER' : 'DUEL · BEST RIDE · YOU vs PAST YOU'}
-            </span>
+            <span className="eyebrow" style={{ color: 'var(--color-ink)', letterSpacing: '0.22em', fontSize: 10, fontWeight: 600 }}>{de ? 'DUELL · BESTE EINHEIT · DU GEGEN FRÜHER' : 'DUEL · BEST RIDE · YOU vs PAST YOU'}</span>
           </div>
           <div className="flex items-stretch gap-3">
-            <DuelSide
-              label={de ? 'Diese Woche' : 'This week'}
-              tss={thisWeek.bestRide}
-              win={thisWeek.bestRide >= lastWeek.bestRide}
-              isYou
-            />
-            <div className="flex items-center">
-              <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)', letterSpacing: '0.14em' }}>VS</span>
-            </div>
-            <DuelSide
-              label={de ? 'Letzte Woche' : 'Last week'}
-              tss={lastWeek.bestRide}
-              win={lastWeek.bestRide > thisWeek.bestRide}
-            />
+            <DuelSide label={de ? 'Diese Woche' : 'This week'} tss={thisWeek.bestRide} win={thisWeek.bestRide >= lastWeek.bestRide} isYou />
+            <div className="flex items-center"><span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)', letterSpacing: '0.14em' }}>VS</span></div>
+            <DuelSide label={de ? 'Letzte Woche' : 'Last week'} tss={lastWeek.bestRide} win={lastWeek.bestRide > thisWeek.bestRide} />
           </div>
         </div>
       </PillarSection>
@@ -879,61 +698,32 @@ export default function SocialTab() {
   )
 }
 
-// ── FairMetric — one fair, relative number, framed vs your past self ──
-function FairMetric({
-  icon: Icon,
-  eyebrow,
-  value,
-  caption,
-  positive,
-}: {
-  icon: typeof TrendingUp
-  eyebrow: string
-  value: string
-  caption: string
-  positive: boolean
-}) {
+// ── FairMetric ──
+function FairMetric({ icon: Icon, eyebrow, value, caption, positive }: { icon: typeof TrendingUp; eyebrow: string; value: string; caption: string; positive: boolean }) {
   return (
     <div className="flex items-start gap-4">
-      <div
-        className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--color-forest-2) 12%, transparent)' }}
-      >
+      <div className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-forest-2) 12%, transparent)' }}>
         <Icon size={20} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} />
       </div>
       <div className="min-w-0">
         <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.2em', fontSize: 9 }}>{eyebrow}</span>
-        <div
-          className="num-display leading-none mt-1.5"
-          style={{ fontSize: 'clamp(28px, 4vw, 36px)', color: positive ? 'var(--color-forest-2)' : 'var(--color-ink)' }}
-        >
-          {value}
-        </div>
+        <div className="num-display leading-none mt-1.5" style={{ fontSize: 'clamp(28px, 4vw, 36px)', color: positive ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>{value}</div>
         <p className="text-[12px] leading-relaxed mt-2" style={{ color: 'var(--color-muted)', maxWidth: '52ch' }}>{caption}</p>
       </div>
     </div>
   )
 }
 
-// ── DuelSide — one contestant in the best-ride duel ──
+// ── DuelSide ──
 function DuelSide({ label, tss, win, isYou = false }: { label: string; tss: number; win: boolean; isYou?: boolean }) {
   return (
-    <div
-      className="flex-1 rounded-[16px] px-4 py-4 flex flex-col gap-1"
-      style={{
-        backgroundColor: isYou ? 'color-mix(in srgb, var(--color-forest-2) 10%, var(--color-paper-2))' : 'var(--color-paper-2)',
-        border: win ? '1px solid rgba(255, 214, 10, 0.4)' : '1px solid var(--color-rule)',
-        boxShadow: win ? '0 0 16px rgba(255, 214, 10, 0.08) inset' : undefined,
-      }}
-    >
+    <div className="flex-1 rounded-[16px] px-4 py-4 flex flex-col gap-1" style={{ backgroundColor: isYou ? 'color-mix(in srgb, var(--color-forest-2) 10%, var(--color-paper-2))' : 'var(--color-paper-2)', border: win ? '1px solid rgba(255, 214, 10, 0.4)' : '1px solid var(--color-rule)', boxShadow: win ? '0 0 16px rgba(255, 214, 10, 0.08) inset' : undefined }}>
       <div className="flex items-center gap-1.5">
         {win && <Award size={13} strokeWidth={2.2} style={{ color: '#FFD60A' }} />}
         <span className="text-[12px] font-medium" style={{ color: 'var(--color-ink)' }}>{label}</span>
       </div>
       <div className="flex items-baseline gap-1">
-        <span className="num-display leading-none" style={{ fontSize: 24, color: win ? '#FFD60A' : 'var(--color-ink)' }}>
-          {Math.round(tss)}
-        </span>
+        <span className="num-display leading-none" style={{ fontSize: 24, color: win ? '#FFD60A' : 'var(--color-ink)' }}>{Math.round(tss)}</span>
         <span className="num-mono" style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.12em' }}>TSS</span>
       </div>
     </div>
