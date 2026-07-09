@@ -8,6 +8,7 @@
 import { Link } from 'react-router-dom'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import LanguageToggle from '../components/dashboard/LanguageToggle'
+import TargetEventEditor from '../components/dashboard/TargetEventEditor'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useLocale } from '../contexts/LocaleContext'
 
@@ -31,6 +32,9 @@ export default function SettingsPage() {
               : (language === 'simple' ? 'Preferences' : 'Settings')}
           </h1>
         </div>
+
+        {/* Target event — drives the whole plan */}
+        <TargetEventEditor />
 
         {/* Coach language */}
         <section
