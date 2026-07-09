@@ -1,27 +1,22 @@
 import { useSearchParams } from 'react-router-dom'
-import { Sun, CalendarDays, BarChart3, Repeat, Users } from 'lucide-react'
+import { Sun, CalendarDays, BarChart3 } from 'lucide-react'
 import { useT, useLocale } from '../../contexts/LocaleContext'
 
 // Mobile bottom navigation — your thumb can't reach a top tab strip on a
-// phone. Apple HIG / Strava / Whoop / Garmin Connect all use bottom nav on
-// mobile. Appears only below 'lg'. Mirrors the four desktop surfaces:
-// Today (verdict) · Train (plan) · Analyze (evidence/report/workspace) · Crew.
+// phone. Appears only below 'lg'. Mirrors the three desktop surfaces:
+// Today (the call) · Plan (week + workouts) · Analyze (all evidence).
 
-type TabId = 'today' | 'train' | 'analyze' | 'workouts' | 'crew'
+type TabId = 'today' | 'plan' | 'analyze'
 
-const TABS: Array<{ id: TabId; labelKey: 'tab_today' | 'tab_train' | 'tab_analyze' | 'tab_workouts' | 'tab_crew'; icon: React.ReactNode }> = [
+const TABS: Array<{ id: TabId; labelKey: 'tab_today' | 'tab_plan' | 'tab_analyze'; icon: React.ReactNode }> = [
   { id: 'today',   labelKey: 'tab_today',   icon: <Sun size={20} strokeWidth={1.8} /> },
-  { id: 'train',   labelKey: 'tab_train',   icon: <CalendarDays size={20} strokeWidth={1.8} /> },
+  { id: 'plan',    labelKey: 'tab_plan',    icon: <CalendarDays size={20} strokeWidth={1.8} /> },
   { id: 'analyze', labelKey: 'tab_analyze', icon: <BarChart3 size={20} strokeWidth={1.8} /> },
-  { id: 'workouts', labelKey: 'tab_workouts', icon: <Repeat size={20} strokeWidth={1.8} /> },
-  { id: 'crew',    labelKey: 'tab_crew',    icon: <Users size={20} strokeWidth={1.8} /> },
 ]
 
 function resolveActive(raw: string | null): TabId {
-  if (raw === 'train' || raw === 'week') return 'train'
+  if (raw === 'plan' || raw === 'train' || raw === 'week' || raw === 'workouts') return 'plan'
   if (raw === 'analyze' || raw === 'trends' || raw === 'report') return 'analyze'
-  if (raw === 'workouts') return 'workouts'
-  if (raw === 'crew') return 'crew'
   return 'today'
 }
 

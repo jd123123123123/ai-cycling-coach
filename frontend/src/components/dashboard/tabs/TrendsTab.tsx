@@ -1,16 +1,11 @@
 /**
- * TrendsTab — the instrument panel. Everything analytical lives here so Today
- * stays a one-glance verdict and Train stays the plan. Grouped into collapsible
- * sections; the most decision-relevant one (fitness & form) is open by default.
- *
- * Now user-reorderable: each top-level visual group is a CardDef; <ReorderableTab>
- * renders them in the user's saved order and hosts the Customize editor.
+ * TrendsTab — the instrument panel behind Analyze's narrative. Deduped: ramp
+ * lives in Plan, recent rides live on Today, and the intensity view is one
+ * classification + one distribution (not three overlapping charts).
  */
 import DashboardSection from '../DashboardSection'
 import TrendsHero from '../TrendsHero'
 import PMCChart from '../PMCChart'
-import RampRate from '../RampRate'
-import IntensityDistribution from '../IntensityDistribution'
 import PolarizedDistribution from '../PolarizedDistribution'
 import TrainingDistributionCard from '../TrainingDistributionCard'
 import HRVTrend from '../HRVTrend'
@@ -23,19 +18,9 @@ import VolumeHistory from '../VolumeHistory'
 import PersonalBests from '../PersonalBests'
 import CalendarHeatmap from '../CalendarHeatmap'
 import TrainingLogStrip from '../TrainingLogStrip'
-import RecentActivities from '../RecentActivities'
 import ReorderableTab from '../ReorderableTab'
 import { useT } from '../../../contexts/LocaleContext'
 import type { CardDef } from '../cardRegistry'
-
-function RampEfficiencyRow() {
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <RampRate />
-      <EfficiencyTrend />
-    </div>
-  )
-}
 
 function IntensitySection() {
   const t = useT()
@@ -43,10 +28,7 @@ function IntensitySection() {
     <DashboardSection id="trends-intensity" title={t('section_intensity')} defaultExpanded>
       <div className="flex flex-col gap-4">
         <TrainingDistributionCard />
-        <div className="grid gap-4 md:grid-cols-2">
-          <IntensityDistribution />
-          <PolarizedDistribution />
-        </div>
+        <PolarizedDistribution />
       </div>
     </DashboardSection>
   )
@@ -88,7 +70,6 @@ function HistorySection() {
           <PersonalBests />
         </div>
         <CalendarHeatmap />
-        <RecentActivities />
       </div>
     </DashboardSection>
   )
@@ -99,7 +80,7 @@ export default function TrendsTab() {
   const cards: CardDef[] = [
     { id: 'trends-hero', label: t('card_trends_hero'), render: () => <TrendsHero /> },
     { id: 'pmc-chart', label: t('card_pmc_chart'), render: () => <PMCChart /> },
-    { id: 'ramp-efficiency', label: t('card_ramp_efficiency'), render: () => <RampEfficiencyRow /> },
+    { id: 'efficiency', label: t('card_ramp_efficiency'), render: () => <EfficiencyTrend /> },
     { id: 'intensity-distribution', label: t('card_intensity_distribution'), render: () => <IntensitySection /> },
     { id: 'biometrics', label: t('card_biometrics'), render: () => <BiometricsSection /> },
     { id: 'estimates', label: t('card_estimates'), render: () => <EstimatesSection /> },

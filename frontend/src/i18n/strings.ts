@@ -98,10 +98,12 @@ export const STRINGS = {
   // Tab labels
   tab_today: { en: 'Today', de: 'Heute' },
   tab_train: { en: 'Train', de: 'Training' },
+  tab_plan: { en: 'Plan', de: 'Plan' },
   tab_trends: { en: 'Trends', de: 'Trends' },
   tab_crew: { en: 'Crew', de: 'Crew' },
   tab_report: { en: 'Report', de: 'Report' },
   tab_analyze: { en: 'Analyze', de: 'Analyse' },
+  analyze_charts: { en: 'Detailed charts', de: 'Detaillierte Charts' },
   analyze_overview: { en: 'Overview', de: 'Übersicht' },
   analyze_report: { en: 'Report', de: 'Report' },
   analyze_workspace: { en: 'Workspace', de: 'Workspace' },

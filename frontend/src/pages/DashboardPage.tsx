@@ -18,26 +18,28 @@ import { useReducedMotion } from 'motion/react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import StickyReadinessBar from '../components/dashboard/StickyReadinessBar'
 import TodayTab from '../components/dashboard/tabs/TodayTab'
-import WeekTab from '../components/dashboard/tabs/WeekTab'
+import PlanTab from '../components/dashboard/tabs/PlanTab'
 import AnalyzeTab from '../components/dashboard/tabs/AnalyzeTab'
-import WorkoutsTab from '../components/dashboard/tabs/WorkoutsTab'
 import CrewTab from '../components/dashboard/tabs/CrewTab'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { useT } from '../contexts/LocaleContext'
 
-type TabId = 'today' | 'train' | 'analyze' | 'workouts' | 'crew'
+type TabId = 'today' | 'plan' | 'analyze' | 'crew'
 
 function resolveTab(raw: string | null): TabId {
   switch (raw) {
     case 'today': return 'today'
+    // Plan folds the old Train/Week + Workouts surfaces
+    case 'plan':
     case 'train':
-    case 'week': return 'train'
-    case 'analyze': return 'analyze'
-    case 'workouts': return 'workouts'
-    case 'crew': return 'crew'
+    case 'week':
+    case 'workouts': return 'plan'
     // analytics surfaces folded into the Analyze hub
+    case 'analyze':
     case 'trends':
     case 'report': return 'analyze'
+    // Crew stays routable (?tab=crew) but is not in the nav until it's real
+    case 'crew': return 'crew'
     // legacy sport tabs collapsed into Today
     case 'bike':
     case 'run':
@@ -62,18 +64,15 @@ export default function DashboardPage() {
   const t = useT()
   const tabs: readonly { id: TabId; label: string }[] = [
     { id: 'today',   label: t('tab_today') },
-    { id: 'train',   label: t('tab_train') },
+    { id: 'plan',    label: t('tab_plan') },
     { id: 'analyze', label: t('tab_analyze') },
-    { id: 'workouts', label: t('tab_workouts') },
-    { id: 'crew',    label: t('tab_crew') },
   ]
 
   const tabContent = (() => {
     switch (activeTab) {
       case 'today':   return <TodayTab />
-      case 'train':   return <WeekTab />
+      case 'plan':    return <PlanTab />
       case 'analyze': return <AnalyzeTab />
-      case 'workouts': return <WorkoutsTab />
       case 'crew':    return <CrewTab />
     }
   })()

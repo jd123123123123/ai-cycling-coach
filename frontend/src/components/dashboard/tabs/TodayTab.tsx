@@ -12,13 +12,9 @@ import { useLocale } from '../../../contexts/LocaleContext'
 import AchievementBadges from '../AchievementBadges'
 import DidYouKnow from '../DidYouKnow'
 import MomentumChips from '../MomentumChips'
-import PMCCompact from '../PMCCompact'
 import SeasonStats from '../SeasonStats'
-import TrainingLogStrip from '../TrainingLogStrip'
 import RecentActivities from '../RecentActivities'
-import ExternalWorkouts from '../ExternalWorkouts'
 import TodayHero from '../TodayHero'
-import WorkoutExportRow from '../WorkoutExportRow'
 import StreakStrip from '../StreakStrip'
 import WeeklyChallenge from '../WeeklyChallenge'
 import DashboardSection from '../DashboardSection'
@@ -54,18 +50,16 @@ export default function TodayTab() {
         <MorningCheckin />
       </PillarSection>
 
-      {/* ── ② Progress: am I adapting? ── */}
+      {/* ── ② Progress: am I adapting? (full fitness trend lives in Analyze) ── */}
       <PillarSection index="2" title={copy.progress} question={copy.progressQ}>
         <FormProgressPanel />
         <MorningRecap />
-        <PMCCompact />
         <MomentumChips />
       </PillarSection>
 
       {/* ── ③ Load balance: is the input sustainable? ── */}
       <PillarSection index="3" title={copy.load} question={copy.loadQ}>
         <WeeklyChallenge />
-        <TrainingLogStrip />
       </PillarSection>
 
       {/* ── ④ Consistency: am I showing up? ── */}
@@ -73,9 +67,9 @@ export default function TodayTab() {
         <StreakStrip />
       </PillarSection>
 
-      {/* ── ⑤ History: the record ── */}
+      {/* ── ⑤ History: today's glance (deep records live in Analyze) ── */}
       <PillarSection index="5" title={copy.history} question={copy.historyQ}>
-        <RecentActivities limit={8} />
+        <RecentActivities limit={6} />
       </PillarSection>
 
       {/* ── Context, demoted ── */}
@@ -84,8 +78,6 @@ export default function TodayTab() {
           <SeasonStats />
           <AchievementBadges />
           <DidYouKnow />
-          <ExternalWorkouts />
-          <WorkoutExportRow />
         </div>
       </DashboardSection>
     </div>
