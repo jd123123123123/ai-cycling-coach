@@ -88,7 +88,7 @@ async def test_precompute_writes_all_presets(monkeypatch):
 async def test_precompute_continues_when_one_window_fails(monkeypatch):
     calls = {"n": 0}
 
-    async def flaky(db, user_id, days):
+    async def flaky(db, user_id, days, lang="en"):
         calls["n"] += 1
         if days == 14:
             raise RuntimeError("boom")

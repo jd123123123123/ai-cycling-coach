@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { formatDistanceToNow } from 'date-fns'
+import { de as deLocale } from 'date-fns/locale'
 import { Sparkles, ChevronRight, RefreshCw } from 'lucide-react'
 import { useCoachBrief, useRefreshBrief } from '../../hooks/useCoachBrief'
 import type { CoachBriefResponse } from '../../api/coach'
@@ -115,11 +116,11 @@ function BriefBody({
 
   const generatedAgo = useMemo(() => {
     try {
-      return formatDistanceToNow(new Date(brief.generated_at), { addSuffix: true })
+      return formatDistanceToNow(new Date(brief.generated_at), { addSuffix: true, locale: locale === 'de' ? deLocale : undefined })
     } catch {
       return ''
     }
-  }, [brief.generated_at])
+  }, [brief.generated_at, locale])
 
   // Guard: if prescribed_workout is missing (legacy row), render a degraded
   // message. New briefs always have it.

@@ -147,24 +147,33 @@ def _pct_change(cur: float | None, prev: float | None) -> float | None:
     return (cur - prev) / abs(prev) * 100.0
 
 
-def build_radar(cur: WindowMetrics, prev: WindowMetrics | None) -> list:
+def build_radar(cur: WindowMetrics, prev: WindowMetrics | None, lang: str = "en") -> list:
     """Five 0-100 body-system axes for the current window. `prev` (the previous
     equal window) feeds the recovery trend; absent -> recovery uses sleep only."""
+    de = lang == "de"
     axes = []
 
     # --- Aerobic Fitness: CTL level (65%) + within-window ramp (35%) ---
+    aerobic_label = "Aerobe Fitness" if de else "Aerobic Fitness"
     if cur.pmc_days == 0 or cur.avg_ctl is None:
-        axes.append(_axis("aerobic", "Aerobic Fitness", None, "No fitness data in this window."))
+        axes.append(_axis("aerobic", aerobic_label, None,
+                          "Keine Fitnessdaten in diesem Zeitraum." if de
+                          else "No fitness data in this window."))
     else:
         level = _lerp_score(cur.avg_ctl, 0, 90)            # CTL 90 -> elite -> 100
         ramp_delta = cur.ctl_delta if cur.ctl_delta is not None else 0.0
         ramp = _clamp(50 + ramp_delta * 8)                 # +6 CTL -> ~98, flat -> 50
         score = 0.65 * level + 0.35 * ramp
-        trend = "climbing" if ramp_delta >= 0.4 else "holding" if ramp_delta > -0.4 else "detraining"
-        axes.append(_axis("aerobic", "Aerobic Fitness", score,
-                          f"CTL {round(cur.avg_ctl)}, fitness {trend}."))
+        if de:
+            trend = "steigend" if ramp_delta >= 0.4 else "stabil" if ramp_delta > -0.4 else "nachlassend"
+            detail = f"CTL {round(cur.avg_ctl)}, Fitness {trend}."
+        else:
+            trend = "climbing" if ramp_delta >= 0.4 else "holding" if ramp_delta > -0.4 else "detraining"
+            detail = f"CTL {round(cur.avg_ctl)}, fitness {trend}."
+        axes.append(_axis("aerobic", aerobic_label, score, detail))
 
     # --- Recovery: sleep debt + HRV trend + RHR trend (mean of available) ---
+    recovery_label = "Erholung" if de else "Recovery"
     parts: list[float] = []
     if cur.sleep_debt_hours is not None:
         parts.append(_inv_score(cur.sleep_debt_hours, 0, 14))
@@ -175,44 +184,60 @@ def build_radar(cur: WindowMetrics, prev: WindowMetrics | None) -> list:
     if rhr_pct is not None:
         parts.append(_clamp(50 - rhr_pct * 5))             # RHR up = worse
     if not parts:
-        axes.append(_axis("recovery", "Recovery", None, "No recovery data in this window."))
+        axes.append(_axis("recovery", recovery_label, None,
+                          "Keine Erholungsdaten in diesem Zeitraum." if de
+                          else "No recovery data in this window."))
     else:
         score = sum(parts) / len(parts)
         detail_bits = []
         if cur.sleep_debt_hours is not None:
-            detail_bits.append(f"Sleep debt {round(cur.sleep_debt_hours, 1)}h")
+            detail_bits.append((f"Schlafdefizit {round(cur.sleep_debt_hours, 1)} h" if de
+                                else f"Sleep debt {round(cur.sleep_debt_hours, 1)}h"))
         if hrv_pct is not None:
             detail_bits.append(f"HRV {hrv_pct:+.0f}%")
         if rhr_pct is not None:
             detail_bits.append(f"RHR {rhr_pct:+.0f}%")
-        recovery_detail = (", ".join(detail_bits) + ".") if detail_bits else "Recovery signals tracked."
-        axes.append(_axis("recovery", "Recovery", score, recovery_detail))
+        if detail_bits:
+            recovery_detail = ", ".join(detail_bits) + "."
+        else:
+            recovery_detail = "Erholungssignale erfasst." if de else "Recovery signals tracked."
+        axes.append(_axis("recovery", recovery_label, score, recovery_detail))
 
     # --- Consistency: training-day ratio (target 0.6) + small streak bonus ---
     ratio = cur.training_days / cur.days if cur.days else 0.0
     base = _lerp_score(ratio, 0, 0.6)
     streak_bonus = _clamp((cur.longest_streak - 1) * 4, 0, 20)
     cons = _clamp(0.85 * base + streak_bonus)
-    axes.append(_axis("consistency", "Consistency", cons,
-                      f"{cur.training_days}/{cur.days} days trained, "
-                      f"best streak {cur.longest_streak}."))
+    if de:
+        cons_detail = (f"{cur.training_days}/{cur.days} Tage trainiert, "
+                       f"beste Serie {cur.longest_streak}.")
+    else:
+        cons_detail = (f"{cur.training_days}/{cur.days} days trained, "
+                       f"best streak {cur.longest_streak}.")
+    axes.append(_axis("consistency", "Konstanz" if de else "Consistency", cons, cons_detail))
 
     # --- Intensity Balance: penalize grey-zone (Seiler) ---
+    intensity_label = "Intensitäts-Balance" if de else "Intensity Balance"
     if cur.activity_count == 0 or cur.grey_pct is None:
-        axes.append(_axis("intensity", "Intensity Balance", None, "No rides to assess intensity."))
+        axes.append(_axis("intensity", intensity_label, None,
+                          "Keine Fahrten zur Intensitätsbewertung." if de
+                          else "No rides to assess intensity."))
     else:
         score = _clamp(100 - cur.grey_pct * 2.5)           # 20% grey -> 50, 40% -> 0
-        axes.append(_axis("intensity", "Intensity Balance", score,
-                          f"{round(cur.grey_pct)}% of rides in the grey zone."))
+        axes.append(_axis("intensity", intensity_label, score,
+                          (f"{round(cur.grey_pct)}% der Fahrten in der grauen Zone." if de
+                           else f"{round(cur.grey_pct)}% of rides in the grey zone.")))
 
     # --- Durability: aerobic decoupling (lower better) ---
     if cur.avg_decoupling is None:
         axes.append(_axis("durability", "Durability", None,
-                          "Not enough sample-stream rides to assess drift."))
+                          "Zu wenige Fahrten mit Streamdaten für die Drift-Bewertung." if de
+                          else "Not enough sample-stream rides to assess drift."))
     else:
         score = _inv_score(cur.avg_decoupling, 0, 10)      # 0% -> 100, 10%+ -> 0
         axes.append(_axis("durability", "Durability", score,
-                          f"Avg Pw:HR drift {cur.avg_decoupling:.1f}%."))
+                          (f"Ø Pw:HF-Drift {cur.avg_decoupling:.1f}%." if de
+                           else f"Avg Pw:HR drift {cur.avg_decoupling:.1f}%.")))
 
     return axes
 
@@ -248,38 +273,57 @@ def composite_grade(axes: list) -> tuple[float | None, str | None]:
 _DELTA_METRICS: list[dict] = [
     {"key": "ctl", "attr": "avg_ctl", "label": "Fitness", "unit": "CTL",
      "threshold": 2.0, "relative": False, "higher_is_good": True,
-     "why": "Chronic load is your fitness ceiling — up is fitter."},
+     "why": "Chronic load is your fitness ceiling — up is fitter.",
+     "label_de": "Fitness",
+     "why_de": "Die chronische Last ist deine Fitness-Obergrenze — mehr heißt fitter."},
     {"key": "tsb", "attr": "avg_tsb", "label": "Form", "unit": "TSB",
      "threshold": 5.0, "relative": False, "higher_is_good": True,
-     "why": "Positive form means you're fresher and race-ready."},
+     "why": "Positive form means you're fresher and race-ready.",
+     "label_de": "Form",
+     "why_de": "Positive Form heißt frischer und rennbereit."},
     {"key": "tss", "attr": "total_tss", "label": "Training load", "unit": "TSS",
      "threshold": 10.0, "relative": True, "higher_is_good": True,
-     "why": "More quality load drives adaptation — if recovery keeps up."},
+     "why": "More quality load drives adaptation — if recovery keeps up.",
+     "label_de": "Trainingslast",
+     "why_de": "Mehr Qualitätslast treibt die Anpassung — solange die Erholung mithält."},
     {"key": "training_days", "attr": "training_days", "label": "Consistency", "unit": "days",
      "threshold": 1.0, "relative": False, "higher_is_good": True,
-     "why": "Frequency beats heroics — more days trained compounds."},
+     "why": "Frequency beats heroics — more days trained compounds.",
+     "label_de": "Konstanz", "unit_de": "Tage",
+     "why_de": "Frequenz schlägt Heldentaten — mehr Trainingstage summieren sich."},
     {"key": "hrv", "attr": "avg_hrv", "label": "HRV", "unit": "ms",
      "threshold": 5.0, "relative": True, "higher_is_good": True,
-     "why": "Rising HRV signals your nervous system is adapting well."},
+     "why": "Rising HRV signals your nervous system is adapting well.",
+     "label_de": "HRV",
+     "why_de": "Steigende HRV zeigt, dass sich dein Nervensystem gut anpasst."},
     {"key": "rhr", "attr": "avg_rhr", "label": "Resting HR", "unit": "bpm",
      "threshold": 2.0, "relative": False, "higher_is_good": False,
-     "why": "A lower resting heart rate tracks improving aerobic health."},
+     "why": "A lower resting heart rate tracks improving aerobic health.",
+     "label_de": "Ruhepuls",
+     "why_de": "Ein niedrigerer Ruhepuls spricht für bessere aerobe Gesundheit."},
     {"key": "sleep", "attr": "avg_sleep_hours", "label": "Sleep", "unit": "h",
      "threshold": 0.5, "relative": False, "higher_is_good": True,
-     "why": "Sleep is the biggest lever on recovery and adaptation."},
+     "why": "Sleep is the biggest lever on recovery and adaptation.",
+     "label_de": "Schlaf",
+     "why_de": "Schlaf ist der größte Hebel für Erholung und Anpassung."},
     {"key": "ef", "attr": "avg_ef", "label": "Efficiency", "unit": "W/bpm",
      "threshold": 0.05, "relative": False, "higher_is_good": True,
-     "why": "More watts per heartbeat means a stronger aerobic engine."},
+     "why": "More watts per heartbeat means a stronger aerobic engine.",
+     "label_de": "Effizienz",
+     "why_de": "Mehr Watt pro Herzschlag heißt ein stärkerer aerober Motor."},
     {"key": "decoupling", "attr": "avg_decoupling", "label": "Durability", "unit": "%",
      "threshold": 1.5, "relative": False, "higher_is_good": False,
-     "why": "Less Pw:HR drift means you hold power deeper into rides."},
+     "why": "Less Pw:HR drift means you hold power deeper into rides.",
+     "label_de": "Durability",
+     "why_de": "Weniger Pw:HF-Drift heißt, du hältst die Leistung länger durch."},
 ]
 
 
-def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None):
+def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None, lang: str = "en"):
     """Return (improvements, weaknesses). Only metrics whose change crosses
     their significance threshold surface; everything else is noise."""
     from app.schemas.period_report import DeltaItem
+    de = lang == "de"
     improvements: list[tuple[float, DeltaItem]] = []
     weaknesses: list[tuple[float, DeltaItem]] = []
     if prev is None:
@@ -305,15 +349,21 @@ def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None):
         rose = delta > 0
         is_improvement = rose == m["higher_is_good"]
         direction = "up" if rose else "down"
-        verb = "improving" if is_improvement else "slipping"
-        detail = f"{m['label']}: {b:g} → {a:g} {m['unit']} ({delta:+g})"
+        label_txt = m["label_de"] if de else m["label"]
+        unit_txt = m.get("unit_de", m["unit"]) if de else m["unit"]
+        why_txt = m["why_de"] if de else m["why"]
+        if de:
+            verb = "verbessert" if is_improvement else "nachlassend"
+        else:
+            verb = "improving" if is_improvement else "slipping"
+        detail = f"{label_txt}: {b:g} → {a:g} {unit_txt} ({delta:+g})"
         item = DeltaItem(
             key=m["key"],
-            label=f"{m['label']} {verb}",
+            label=f"{label_txt} {verb}",
             detail=detail,
-            why=m["why"],
+            why=why_txt,
             delta=round(delta, 2),
-            unit=m["unit"],
+            unit=unit_txt,
             direction=direction,
             is_improvement=is_improvement,
         )
@@ -324,29 +374,33 @@ def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None):
     return [item for _, item in improvements], [item for _, item in weaknesses]
 
 
-def build_milestones(cur: WindowMetrics) -> list:
+def build_milestones(cur: WindowMetrics, lang: str = "en") -> list:
     """Game-y achievement chips for the window. Conservative thresholds so a
     milestone always means something."""
     from app.schemas.period_report import Milestone
+    de = lang == "de"
     out: list[Milestone] = []
 
     if cur.longest_streak >= 3:
         out.append(Milestone(
             icon_key="flame",
-            label=f"{cur.longest_streak}-day streak",
-            detail="Consecutive days trained in this window.",
+            label=(f"{cur.longest_streak}-Tage-Serie" if de else f"{cur.longest_streak}-day streak"),
+            detail=("Aufeinanderfolgende Trainingstage in diesem Zeitraum." if de
+                    else "Consecutive days trained in this window."),
         ))
     if cur.total_tss >= 700:
         out.append(Milestone(
             icon_key="zap",
             label=f"{round(cur.total_tss)} TSS",
-            detail="High training load banked this window.",
+            detail=("Hohe Trainingslast in diesem Zeitraum gesammelt." if de
+                    else "High training load banked this window."),
         ))
     if cur.training_days >= max(1, int(round(cur.days * 0.7))):
         out.append(Milestone(
             icon_key="trophy",
-            label="Iron consistency",
-            detail=f"Trained {cur.training_days} of {cur.days} days.",
+            label="Eiserne Konstanz" if de else "Iron consistency",
+            detail=(f"{cur.training_days} von {cur.days} Tagen trainiert." if de
+                    else f"Trained {cur.training_days} of {cur.days} days."),
         ))
     return out
 
@@ -473,16 +527,30 @@ def _rule_based_verdict(
     grade_score: float | None,
     top_improvement: str | None,
     top_weakness: str | None,
+    lang: str = "en",
 ) -> str:
     """Deterministic 1-2 sentence summary used when Claude is unavailable."""
+    de = lang == "de"
     if grade_letter is None:
+        if de:
+            return (f"Deine letzten {days} Tage haben noch nicht genug Daten für eine "
+                    "Bewertung — verbinde ein Gerät oder logge ein paar Fahrten, um "
+                    "deinen Report freizuschalten.")
         return (f"Your last {days} days don't have enough data to grade yet — "
                 "connect a device or log a few rides to unlock your report.")
-    bits = [f"Your last {days} days grade {grade_letter} ({round(grade_score or 0)}/100)."]
-    if top_improvement:
-        bits.append(f"Biggest win: {top_improvement.lower()}.")
-    if top_weakness:
-        bits.append(f"Watch: {top_weakness.lower()}.")
+    if de:
+        bits = [f"Deine letzten {days} Tage werden mit {grade_letter} "
+                f"({round(grade_score or 0)}/100) bewertet."]
+        if top_improvement:
+            bits.append(f"Größter Gewinn: {top_improvement.lower()}.")
+        if top_weakness:
+            bits.append(f"Achtung: {top_weakness.lower()}.")
+    else:
+        bits = [f"Your last {days} days grade {grade_letter} ({round(grade_score or 0)}/100)."]
+        if top_improvement:
+            bits.append(f"Biggest win: {top_improvement.lower()}.")
+        if top_weakness:
+            bits.append(f"Watch: {top_weakness.lower()}.")
     text = " ".join(bits)
     return text[:280]
 
@@ -496,10 +564,11 @@ def _percentile(value: float, population: list[float]) -> int | None:
     return round(n_le / len(population) * 100)
 
 
-def build_evidence(cur: WindowMetrics, prev: WindowMetrics | None) -> list:
+def build_evidence(cur: WindowMetrics, prev: WindowMetrics | None, lang: str = "en") -> list:
     """Compact metric chips for under the verdict — CoachBrief style. Level
     chips (CTL/TSB) always show; trend chips (HRV/RHR) only with a baseline."""
     from app.schemas.period_report import EvidenceChip
+    de = lang == "de"
     chips: list[EvidenceChip] = []
 
     if cur.avg_ctl is not None:
@@ -516,42 +585,73 @@ def build_evidence(cur: WindowMetrics, prev: WindowMetrics | None) -> list:
         chips.append(EvidenceChip(label="HRV", value=f"{hrv_pct:+.0f}%",
                                   tone="good" if hrv_pct >= 0 else "bad"))
     if cur.sleep_debt_hours is not None and cur.sleep_debt_hours >= 0.5:
-        chips.append(EvidenceChip(label="Sleep debt", value=f"{cur.sleep_debt_hours:.1f}h",
+        chips.append(EvidenceChip(label="Schlafdefizit" if de else "Sleep debt",
+                                  value=f"{cur.sleep_debt_hours:.1f}h",
                                   tone="bad" if cur.sleep_debt_hours >= 4 else "neutral"))
     if cur.grey_pct is not None and cur.grey_pct >= 20:
-        chips.append(EvidenceChip(label="Grey zone", value=f"{round(cur.grey_pct)}%", tone="bad"))
+        chips.append(EvidenceChip(label="Graue Zone" if de else "Grey zone",
+                                  value=f"{round(cur.grey_pct)}%", tone="bad"))
     return chips
 
 
-def build_intensity(cur: WindowMetrics, phase: str | None):
+# Human-readable German names for the TID model machine keys.
+_TID_MODEL_DE = {
+    "polarized": "polarisiert",
+    "pyramidal": "pyramidal",
+    "threshold": "schwellenlastig",
+    "high_intensity": "hochintensiv",
+}
+
+
+def build_intensity(cur: WindowMetrics, phase: str | None, lang: str = "en"):
     """Seiler 3-zone intensity distribution vs the phase target. Returns None
     when no ride could be classified into a zone."""
     from app.schemas.period_report import IntensityMix
     from app.services.tid_optimizer import assess_tid
 
+    de = lang == "de"
     sample = cur.z1_count + cur.z2_count + cur.z3_count
     if sample == 0:
         return None
 
     a = assess_tid(cur.z1_count, cur.z2_count, cur.z3_count, phase)
-    verdict = (
-        f"{a.z1_pct:.0f}% easy / {a.z2_pct:.0f}% moderate / {a.z3_pct:.0f}% hard — "
-        f"a {a.model.replace('_', ' ')} shape."
-    )
+    if de:
+        model_name = _TID_MODEL_DE.get(a.model, a.model.replace("_", " "))
+        verdict = (
+            f"{a.z1_pct:.0f}% locker / {a.z2_pct:.0f}% moderat / {a.z3_pct:.0f}% hart — "
+            f"ein {model_name}es Profil."
+        )
+        if a.aligned:
+            fix = None
+        elif a.target == "polarized":
+            fix = ("Zu viel Grauzonen-Arbeit zum Schärfen. Polarisiere: lockere Tage "
+                   "wirklich locker (unter LT1), harte Tage richtig hart (VO2), und "
+                   "reduziere das Tempo-/Schwellen-Volumen.")
+        else:
+            fix = ("Baue eine breitere aerobe Basis: halte das meiste Volumen locker und "
+                   "lass die Schwellenarbeit in den harten Anteil auslaufen — ein "
+                   "pyramidales Profil.")
+    else:
+        verdict = (
+            f"{a.z1_pct:.0f}% easy / {a.z2_pct:.0f}% moderate / {a.z3_pct:.0f}% hard — "
+            f"a {a.model.replace('_', ' ')} shape."
+        )
+        fix = None if a.aligned else a.recommendation
     return IntensityMix(
         z1_pct=a.z1_pct, z2_pct=a.z2_pct, z3_pct=a.z3_pct,
         model=a.model, target_model=a.target, aligned=a.aligned,
         verdict=verdict,
-        fix=None if a.aligned else a.recommendation,
+        fix=fix,
         sample_rides=sample,
     )
 
 
-def build_load_dynamics(cur: WindowMetrics):
+def build_load_dynamics(cur: WindowMetrics, lang: str = "en"):
     """Foster monotony/strain + weekly CTL ramp over the window. Returns None
     when there are too few training days to read a pattern."""
     from app.schemas.period_report import LoadDynamics
 
+    de = lang == "de"
     if cur.training_days < 4 or not cur.daily_tss:
         return None
 
@@ -569,22 +669,37 @@ def build_load_dynamics(cur: WindowMetrics):
     flag = "ok"
     if ramp is not None and ramp >= 6.0:
         flag = "ramping"
-        note = (f"Fitness is ramping fast (+{ramp:g} CTL/week). Keep the weekly load "
-                "rise under ~8% and bank a recovery week soon to lock it in.")
+        if de:
+            note = (f"Die Fitness steigt schnell (+{ramp:g} CTL/Woche). Halte den "
+                    "wöchentlichen Lastanstieg unter ~8 % und plane bald eine "
+                    "Erholungswoche, um die Gewinne zu sichern.")
+        else:
+            note = (f"Fitness is ramping fast (+{ramp:g} CTL/week). Keep the weekly load "
+                    "rise under ~8% and bank a recovery week soon to lock it in.")
     elif monotony is not None and monotony >= 2.0:
         flag = "monotonous"
-        note = (f"Every day looks alike (monotony {monotony:g}). Add true easy days and "
-                "one genuinely hard day — contrast is what drives adaptation and recovery.")
+        if de:
+            note = (f"Jeder Tag sieht gleich aus (Monotonie {monotony:g}). Baue echte "
+                    "lockere Tage und einen richtig harten Tag ein — Kontrast treibt "
+                    "Anpassung und Erholung.")
+        else:
+            note = (f"Every day looks alike (monotony {monotony:g}). Add true easy days and "
+                    "one genuinely hard day — contrast is what drives adaptation and recovery.")
     elif sd == 0 or (ramp is not None and ramp <= 0.3 and mean < 40):
         flag = "flat"
-        note = "Load is flat — add a session or a longer ride to keep adapting."
+        note = ("Die Last ist flach — füge eine Einheit oder eine längere Fahrt hinzu, "
+                "um weiter anzupassen." if de
+                else "Load is flat — add a session or a longer ride to keep adapting.")
     else:
         bits = []
         if ramp is not None:
-            bits.append(f"ramp +{ramp:g} CTL/week")
+            bits.append((f"Anstieg +{ramp:g} CTL/Woche" if de else f"ramp +{ramp:g} CTL/week"))
         if monotony is not None:
-            bits.append(f"monotony {monotony:g}")
-        note = "Healthy load" + (" — " + ", ".join(bits) + "." if bits else ".")
+            bits.append((f"Monotonie {monotony:g}" if de else f"monotony {monotony:g}"))
+        if de:
+            note = "Gesunde Last" + (" — " + ", ".join(bits) + "." if bits else ".")
+        else:
+            note = "Healthy load" + (" — " + ", ".join(bits) + "." if bits else ".")
 
     return LoadDynamics(
         ramp_per_week=ramp, monotony=monotony, strain=strain, flag=flag, note=note,
@@ -639,6 +754,7 @@ def build_prescriptions(
     intensity=None,
     load_dynamics=None,
     trajectory=None,
+    lang: str = "en",
 ) -> list:
     """Ranked, concrete actions for the coming window. Safety always leads: a
     high-severity cause or deep-negative form means back off, and while
@@ -647,6 +763,7 @@ def build_prescriptions(
     capped at four, each with the expected effect."""
     from app.schemas.period_report import Prescription
 
+    de = lang == "de"
     high = any(getattr(c, "severity", None) == "high" for c in causes)
     deep_neg_form = cur.avg_tsb is not None and cur.avg_tsb < -20
     recovering = high or deep_neg_form
@@ -657,79 +774,133 @@ def build_prescriptions(
 
     if recovering:
         out.append(Prescription(
-            priority=0, headline="Back off and recover", icon_key="rest", tone="bad",
-            detail=("Your recovery signals are flashing. Take 2-3 easy days or a rest day "
+            priority=0,
+            headline="Zurückschalten und erholen" if de else "Back off and recover",
+            icon_key="rest", tone="bad",
+            detail=("Deine Erholungssignale blinken. Nimm 2-3 lockere Tage oder einen "
+                    "Ruhetag, bevor du wieder hart fährst." if de
+                    else "Your recovery signals are flashing. Take 2-3 easy days or a rest day "
                     "before any hard efforts."),
-            effect="Lets adaptation catch up — you grow when you absorb load, not when you pile it on.",
+            effect=("Lässt die Anpassung aufholen — du wächst, wenn du Last verarbeitest, "
+                    "nicht wenn du sie anhäufst." if de
+                    else "Lets adaptation catch up — you grow when you absorb load, not when you pile it on."),
         ))
 
     # Trajectory gap — only when we're not actively recovering.
     if not recovering and trajectory is not None:
         gap = trajectory.weekly_tss_required - trajectory.weekly_tss_actual
         if trajectory.on_track in {"behind", "at_risk"} and gap > max(20.0, 0.05 * trajectory.weekly_tss_actual):
+            if de:
+                effect = (f"Schließt die Fitness-Lücke Richtung CTL {round(trajectory.ctl_target)}."
+                          if trajectory.ctl_target else "Hält deine Fitness auf den Renntag ausgerichtet.")
+            else:
+                effect = (f"Closes the fitness gap toward CTL {round(trajectory.ctl_target)}."
+                          if trajectory.ctl_target else "Keeps your fitness pointed at race day.")
             out.append(Prescription(
-                priority=0, headline="Lift weekly load to stay on track", icon_key="build", tone="caution",
-                detail=(f"Add ~{round(gap)} TSS/week to reach your target by event day "
+                priority=0,
+                headline="Wochenlast anheben, um auf Kurs zu bleiben" if de else "Lift weekly load to stay on track",
+                icon_key="build", tone="caution",
+                detail=(f"Füge ~{round(gap)} TSS/Woche hinzu, um dein Ziel bis zum Renntag zu "
+                        f"erreichen (jetzt ~{round(trajectory.weekly_tss_actual)}, "
+                        f"nötig ~{round(trajectory.weekly_tss_required)})." if de
+                        else f"Add ~{round(gap)} TSS/week to reach your target by event day "
                         f"(now ~{round(trajectory.weekly_tss_actual)}, need ~{round(trajectory.weekly_tss_required)})."),
-                effect=f"Closes the fitness gap toward CTL {round(trajectory.ctl_target)}." if trajectory.ctl_target else "Keeps your fitness pointed at race day.",
+                effect=effect,
             ))
 
     # Consistency.
     if ratio < 0.3:
         out.append(Prescription(
-            priority=0, headline="Build the habit first", icon_key="build", tone="caution",
-            detail=(f"You trained {cur.training_days} of {cur.days} days. Consistency comes "
+            priority=0,
+            headline="Erst die Gewohnheit aufbauen" if de else "Build the habit first",
+            icon_key="build", tone="caution",
+            detail=(f"Du hast {cur.training_days} von {cur.days} Tagen trainiert. Konstanz "
+                    "kommt zuerst — plane eine weitere kurze Einheit, bevor du die großen "
+                    "Tage jagst." if de
+                    else f"You trained {cur.training_days} of {cur.days} days. Consistency comes "
                     "first — aim for one more short session before chasing big days."),
-            effect="Consistency beats intensity — frequency is what builds the aerobic base.",
+            effect=("Konstanz schlägt Intensität — Frequenz baut die aerobe Basis." if de
+                    else "Consistency beats intensity — frequency is what builds the aerobic base."),
         ))
 
     # Intensity mix.
     if intensity is not None and not intensity.aligned and intensity.fix:
         out.append(Prescription(
-            priority=0, headline="Fix your intensity mix", icon_key="balance", tone="caution",
+            priority=0,
+            headline="Intensitäts-Mix korrigieren" if de else "Fix your intensity mix",
+            icon_key="balance", tone="caution",
             detail=intensity.fix,
-            effect="More of the right adaptation per hour — fewer junk-tempo miles.",
+            effect=("Mehr passende Anpassung pro Stunde — weniger sinnlose Tempo-Kilometer." if de
+                    else "More of the right adaptation per hour — fewer junk-tempo miles."),
         ))
 
     # Load shape.
     if not recovering and load_dynamics is not None:
         if load_dynamics.flag == "monotonous":
             out.append(Prescription(
-                priority=0, headline="Vary easy and hard days", icon_key="balance", tone="neutral",
+                priority=0,
+                headline="Lockere und harte Tage abwechseln" if de else "Vary easy and hard days",
+                icon_key="balance", tone="neutral",
                 detail=load_dynamics.note,
-                effect="Day-to-day contrast lowers monotony and unlocks better recovery.",
+                effect=("Der Tag-zu-Tag-Kontrast senkt die Monotonie und ermöglicht bessere "
+                        "Erholung." if de
+                        else "Day-to-day contrast lowers monotony and unlocks better recovery."),
             ))
         elif load_dynamics.flag == "ramping" or (not recovering and ramp >= 4.0):
             out.append(Prescription(
-                priority=0, headline="Hold the ramp, then recover", icon_key="build", tone="good",
-                detail=("Fitness is climbing fast. Keep the stimulus but cap the weekly load "
+                priority=0,
+                headline="Anstieg halten, dann erholen" if de else "Hold the ramp, then recover",
+                icon_key="build", tone="good",
+                detail=("Die Fitness steigt schnell. Halte den Reiz, aber deckle den "
+                        "wöchentlichen Lastanstieg nahe 8 % (Friel) und plane eine "
+                        "Erholungswoche." if de
+                        else "Fitness is climbing fast. Keep the stimulus but cap the weekly load "
                         "rise near 8% (Friel) and plan a recovery week."),
-                effect="Locks in the gains instead of digging a fatigue hole.",
+                effect=("Sichert die Gewinne, statt ein Ermüdungsloch zu graben." if de
+                        else "Locks in the gains instead of digging a fatigue hole."),
             ))
 
     # Sleep debt.
     if cur.sleep_debt_hours is not None and cur.sleep_debt_hours >= 4.0:
         out.append(Prescription(
-            priority=0, headline="Pay down sleep debt", icon_key="sleep", tone="caution",
-            detail=(f"You're carrying {cur.sleep_debt_hours:.0f}h of sleep debt. Protect "
+            priority=0,
+            headline="Schlafdefizit abbauen" if de else "Pay down sleep debt",
+            icon_key="sleep", tone="caution",
+            detail=(f"Du schleppst {cur.sleep_debt_hours:.0f} h Schlafdefizit mit dir herum. "
+                    "Schütze in den nächsten Nächten 7,5 h+." if de
+                    else f"You're carrying {cur.sleep_debt_hours:.0f}h of sleep debt. Protect "
                     "7.5h+ for the next few nights."),
-            effect="Sleep is where HRV and adaptation rebound — the cheapest gains you'll get.",
+            effect=("Im Schlaf erholen sich HRV und Anpassung — die günstigsten Gewinne "
+                    "überhaupt." if de
+                    else "Sleep is where HRV and adaptation rebound — the cheapest gains you'll get."),
         ))
 
     # Closers — always have at least one forward action.
     if not out or (not recovering and len(out) < 2):
         if grade_score is not None and grade_score >= 80:
             out.append(Prescription(
-                priority=0, headline="Keep doing what works", icon_key="arrow", tone="good",
-                detail="Balanced, productive window. Repeat the structure and nudge one session's quality up.",
-                effect="Steady, repeatable progression — protect your sleep and easy days.",
+                priority=0,
+                headline="Weiter so, was funktioniert" if de else "Keep doing what works",
+                icon_key="arrow", tone="good",
+                detail=("Ausgewogener, produktiver Zeitraum. Wiederhole die Struktur und hebe "
+                        "die Qualität einer Einheit leicht an." if de
+                        else "Balanced, productive window. Repeat the structure and nudge one session's quality up."),
+                effect=("Stetige, wiederholbare Progression — schütze deinen Schlaf und deine "
+                        "lockeren Tage." if de
+                        else "Steady, repeatable progression — protect your sleep and easy days."),
             ))
         else:
             out.append(Prescription(
-                priority=0, headline="Hold steady and sharpen", icon_key="arrow", tone="neutral",
-                detail=("Solid base. Add a touch more polarized intensity — hard days hard, "
+                priority=0,
+                headline="Stabil bleiben und schärfen" if de else "Hold steady and sharpen",
+                icon_key="arrow", tone="neutral",
+                detail=("Solide Basis. Füge etwas mehr polarisierte Intensität hinzu — harte "
+                        "Tage hart, lockere Tage locker — und halte das Grauzonen-Tempo im "
+                        "Griff." if de
+                        else "Solid base. Add a touch more polarized intensity — hard days hard, "
                         "easy days easy — and keep grey-zone tempo in check."),
-                effect="Moves the needle without adding fatigue.",
+                effect=("Bringt Fortschritt, ohne Ermüdung aufzubauen." if de
+                        else "Moves the needle without adding fatigue."),
             ))
 
     # Dedupe by headline, cap at 4, assign 1-based priority.
@@ -754,9 +925,9 @@ def _next_step_from(prescriptions: list) -> object:
     return NextStep(headline=top.headline, detail=top.detail, tone=top.tone)
 
 
-def build_next_step(grade_score: float | None, cur: WindowMetrics, causes: list) -> object:
+def build_next_step(grade_score: float | None, cur: WindowMetrics, causes: list, lang: str = "en") -> object:
     """Back-compat single recommendation — the top of the ranked prescriptions."""
-    return _next_step_from(build_prescriptions(grade_score, cur, causes))
+    return _next_step_from(build_prescriptions(grade_score, cur, causes, lang=lang))
 
 
 async def _historical_composites(
@@ -795,6 +966,19 @@ _VERDICT_SYSTEM = (
     "so. No platitudes, no emoji, no hedging, no bullet lists. Under 600 characters."
 )
 
+_VERDICT_SYSTEM_DE = (
+    "Du bist ein Elite-Ausdauer-Coach und schreibst den Trainingszeitraum-Review "
+    "eines Athleten. Schreibe 3-4 Sätze, schlicht und direkt, in der Du-Form. "
+    "Beginne mit dem Kernurteil, nenne 2-3 ECHTE Zahlen aus den Daten, benenne den "
+    "einzigen größten Gewinn und das einzige größte Risiko und schließe mit der einen "
+    "Sache, die als Nächstes zu tun ist. STRIKT: Verwende NUR die im Datenblock "
+    "gegebenen Zahlen — erfinde nichts, runde nicht anders und leite keine Werte ab, "
+    "die nicht vorliegen. Behaupte nicht, vor wie vielen Tagen eine Einheit war, und "
+    "unterstelle keine aufeinanderfolgenden Einheiten, außer die Daten sagen es. "
+    "Keine Floskeln, keine Emojis, kein Herumdrucksen, keine Aufzählungen. Antworte "
+    "auf Deutsch. Unter 600 Zeichen."
+)
+
 
 async def _ai_verdict(
     days: int,
@@ -804,14 +988,18 @@ async def _ai_verdict(
     weaknesses: list,
     evidence: list | None = None,
     next_step: object | None = None,
+    lang: str = "en",
 ) -> tuple[str, str]:
     """Return (verdict_text, model_used). Falls back to a rule-based string when
     no API key is set or the call fails — mirrors /analytics/summarize."""
+    de = lang == "de"
     top_imp = improvements[0].label if improvements else None
     top_weak = weaknesses[0].label if weaknesses else None
-    fallback = _rule_based_verdict(days, grade_letter, grade_score, top_imp, top_weak)
+    fallback = _rule_based_verdict(days, grade_letter, grade_score, top_imp, top_weak, lang)
     if next_step is not None:
-        fallback = (fallback + f" Next: {next_step.headline.lower()}.")[:600]
+        nxt = (f" Als Nächstes: {next_step.headline.lower()}." if de
+               else f" Next: {next_step.headline.lower()}.")
+        fallback = (fallback + nxt)[:600]
 
     if not settings.ANTHROPIC_API_KEY:
         return fallback, "rule-based-fallback"
@@ -837,7 +1025,7 @@ async def _ai_verdict(
             # the verdict stops "changing between page loads" and is less prone to
             # fabricating numbers.
             temperature=0,
-            system=[{"type": "text", "text": _VERDICT_SYSTEM,
+            system=[{"type": "text", "text": _VERDICT_SYSTEM_DE if de else _VERDICT_SYSTEM,
                      "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_msg}],
         )
@@ -877,9 +1065,11 @@ async def _upsert_report(db: AsyncSession, user_id: int, days: int, report) -> N
     report.generated_at = now
 
 
-async def get_or_build_report(db: AsyncSession, user_id: int, days: int):
+async def get_or_build_report(db: AsyncSession, user_id: int, days: int, lang: str = "en"):
     """Read-through cache around build_report. Returns a fresh cached PeriodReport
-    when one exists within the TTL, else builds, upserts, and returns it."""
+    when one exists within the TTL AND matches the requested locale, else builds,
+    upserts, and returns it. The report carries its language so a locale switch
+    rebuilds instead of serving stale English (or vice-versa)."""
     from app.schemas.period_report import PeriodReport
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=PERIOD_REPORT_TTL_HOURS)
@@ -891,32 +1081,33 @@ async def get_or_build_report(db: AsyncSession, user_id: int, days: int):
         )
     )
     row = result.scalar_one_or_none()
-    if row is not None:
+    if row is not None and (row.report or {}).get("lang", "en") == lang:
         try:
             return PeriodReport.model_validate({**row.report, "generated_at": row.generated_at})
         except ValidationError:
             logger.warning("Discarding malformed cached report user=%s days=%s", user_id, days)
-    report = await build_report(db, user_id, days)
+    report = await build_report(db, user_id, days, lang)
     await _upsert_report(db, user_id, days, report)
     return report
 
 
-async def precompute_preset_reports(db: AsyncSession, user_id: int) -> None:
+async def precompute_preset_reports(db: AsyncSession, user_id: int, lang: str = "en") -> None:
     """Build + cache the preset windows. One window failing logs and continues."""
     for days in PRESET_WINDOWS:
         try:
-            report = await build_report(db, user_id, days)
+            report = await build_report(db, user_id, days, lang)
             await _upsert_report(db, user_id, days, report)
         except Exception as exc:  # noqa: BLE001 — best-effort cache warming
             logger.warning("precompute_preset_reports failed user=%s days=%s: %s", user_id, days, exc)
 
 
-async def build_report(db: AsyncSession, user_id: int, days: int):
+async def build_report(db: AsyncSession, user_id: int, days: int, lang: str = "en"):
     """Assemble the full PeriodReport for the last `days` days vs the previous
     equal window, enriched with evidence, causes, a forward next-step, a
     historical composite trend, and a richer coach verdict."""
     from app.schemas.period_report import PeriodReport
 
+    lang = "de" if str(lang).lower().startswith("de") else "en"
     days = max(3, min(int(days), 365))
     today = date.today()
     end = today
@@ -931,7 +1122,7 @@ async def build_report(db: AsyncSession, user_id: int, days: int):
                     or prev.biometric_days > 0)
     prev_for_calc = prev if has_baseline else None
 
-    radar = build_radar(cur, prev_for_calc)
+    radar = build_radar(cur, prev_for_calc, lang)
     grade_score, grade_letter = composite_grade(radar)
 
     # Grade delta vs previous equal window
@@ -947,9 +1138,9 @@ async def build_report(db: AsyncSession, user_id: int, days: int):
         _percentile(grade_score, trend) if grade_score is not None and trend else None
     )
 
-    improvements, weaknesses = build_deltas(cur, prev_for_calc)
-    milestones = build_milestones(cur)
-    evidence = build_evidence(cur, prev_for_calc)
+    improvements, weaknesses = build_deltas(cur, prev_for_calc, lang)
+    milestones = build_milestones(cur, lang)
+    evidence = build_evidence(cur, prev_for_calc, lang)
 
     # Causes (why am I dragging) — reuse the today-anchored synthesizer.
     causes: list = []
@@ -1004,23 +1195,23 @@ async def build_report(db: AsyncSession, user_id: int, days: int):
         phase = None
 
     try:
-        intensity = build_intensity(cur, phase)
+        intensity = build_intensity(cur, phase, lang)
     except Exception:  # noqa: BLE001
         logger.exception("period report: build_intensity failed")
     try:
-        load_dynamics = build_load_dynamics(cur)
+        load_dynamics = build_load_dynamics(cur, lang)
     except Exception:  # noqa: BLE001
         logger.exception("period report: build_load_dynamics failed")
     trajectory = await build_trajectory(db, user_id, phase)
 
     prescriptions = build_prescriptions(
-        grade_score, cur, causes, intensity, load_dynamics, trajectory
+        grade_score, cur, causes, intensity, load_dynamics, trajectory, lang=lang
     )
     next_step = _next_step_from(prescriptions)
 
     verdict, model = await _ai_verdict(
         days, grade_letter, grade_score, improvements, weaknesses,
-        evidence=evidence, next_step=next_step,
+        evidence=evidence, next_step=next_step, lang=lang,
     )
 
     return PeriodReport(
@@ -1048,5 +1239,6 @@ async def build_report(db: AsyncSession, user_id: int, days: int):
         trajectory=trajectory,
         ai_verdict=verdict,
         ai_model=model,
+        lang=lang,
     )
 

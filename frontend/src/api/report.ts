@@ -111,11 +111,12 @@ export interface PeriodReport {
   milestones: Milestone[]
   ai_verdict: string
   ai_model: string
+  lang?: string
 }
 
-export async function fetchPeriodReport(days: number): Promise<PeriodReport> {
+export async function fetchPeriodReport(days: number, lang = 'en'): Promise<PeriodReport> {
   const res = await apiClient.get<PeriodReport>('/analytics/period-report', {
-    params: { days },
+    params: { days, lang },
   })
   return res.data
 }

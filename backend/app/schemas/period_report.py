@@ -132,6 +132,9 @@ class PeriodReport(BaseModel):
     milestones: list[Milestone]
     ai_verdict: str
     ai_model: str
+    # Locale the report text was generated in ('en' | 'de'). Stamped so the
+    # read-through cache rebuilds when the requested locale differs.
+    lang: str = "en"
     # Cache freshness stamp — None on a live build; set to the row's
     # generated_at when served from the period_reports cache.
     generated_at: datetime | None = None

@@ -240,13 +240,15 @@ async def get_period_report(
     _user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
     days: int = 7,
+    lang: str = "en",
 ) -> PeriodReport:
     if days < 3 or days > 365:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="days must be between 3 and 365",
         )
-    return await get_or_build_report(db, _user.id, days)
+    lang = "de" if lang.lower().startswith("de") else "en"
+    return await get_or_build_report(db, _user.id, days, lang)
 
 
 @router.get(

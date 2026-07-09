@@ -83,7 +83,7 @@ function ActivityDetail({
   const isDe = locale === 'de'
   const title =
     activity.title?.trim() ||
-    `${sportLabel(activity.sport, locale)} · ${formatRelativeDay(activity.started_at)}`
+    `${sportLabel(activity.sport, locale)} · ${formatRelativeDay(activity.started_at, locale)}`
 
   const isSimple = language === 'simple'
 
@@ -214,7 +214,7 @@ function ActivityRow({
 }) {
   const { locale } = useLocale()
   const meta = SPORT_META[a.sport]
-  const title = a.title?.trim() || `${sportLabel(a.sport, locale)} · ${formatRelativeDay(a.started_at)}`
+  const title = a.title?.trim() || `${sportLabel(a.sport, locale)} · ${formatRelativeDay(a.started_at, locale)}`
   const parts: string[] = []
   if (a.duration_seconds) parts.push(formatDuration(a.duration_seconds))
   if (a.distance_meters) parts.push(formatDistanceKm(a.distance_meters))
@@ -274,7 +274,7 @@ function ActivityRow({
                   className="num-mono text-[11px] whitespace-nowrap"
                   style={{ color: 'var(--color-muted)' }}
                 >
-                  {formatRelativeDay(a.started_at)}
+                  {formatRelativeDay(a.started_at, locale)}
                 </span>
                 {timeStr && (
                   <div
@@ -515,7 +515,7 @@ export default function RecentActivities({
           }
           title={
             selectedActivity.title?.trim() ||
-            `${sportLabel(selectedActivity.sport, locale)} · ${formatRelativeDay(selectedActivity.started_at)}`
+            `${sportLabel(selectedActivity.sport, locale)} · ${formatRelativeDay(selectedActivity.started_at, locale)}`
           }
         >
           <ActivityDetail activity={selectedActivity} language={language} />

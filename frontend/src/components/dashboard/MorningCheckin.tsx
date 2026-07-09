@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
 import { useT, useLocale } from '../../contexts/LocaleContext'
 
 // Morning check-in — the single highest-retention interaction in fitness apps.
@@ -53,6 +54,7 @@ function saveFeeling(feeling: Feeling) {
 export default function MorningCheckin() {
   const t = useT()
   const { locale } = useLocale()
+  const reduce = useReducedMotion()
   const [feeling, setFeeling] = useState<Feeling | null>(null)
   const [justSelected, setJustSelected] = useState(false)
   const [dismissed, setDismissed] = useState(false)
@@ -103,7 +105,12 @@ export default function MorningCheckin() {
           className="flex items-center gap-3"
           style={{ animation: 'score-enter 400ms cubic-bezier(.22,1,.36,1) both' }}
         >
-          <span style={{ fontSize: 28 }}>{meta.emoji}</span>
+          <motion.span
+            style={{ fontSize: 28, display: 'inline-block' }}
+            initial={reduce ? false : { scale: 0, rotate: -20 }}
+            animate={reduce ? undefined : { scale: [0, 1.35, 1], rotate: [-20, 8, 0] }}
+            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], times: [0, 0.6, 1] }}
+          >{meta.emoji}</motion.span>
           <div>
             <span className="eyebrow" style={{ color: meta.color, letterSpacing: '0.22em' }}>
               {t('logged_chip')}
@@ -130,28 +137,19 @@ export default function MorningCheckin() {
           </div>
           <div className="flex items-center gap-2">
             {FEELINGS.map((f) => (
-              <button
+              <motion.button
                 key={f.key}
                 type="button"
                 onClick={() => handleSelect(f.key)}
-                className="flex flex-col items-center gap-1 px-3 py-2.5 rounded-[12px] transition-all"
+                className="flex flex-col items-center gap-1 px-3 py-2.5 rounded-[12px]"
                 style={{
                   backgroundColor: 'var(--color-paper)',
                   border: '1px solid var(--color-rule)',
                   minWidth: 72,
                 }}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget
-                  el.style.backgroundColor = f.bg
-                  el.style.borderColor = f.color + '55'
-                  el.style.transform = 'translateY(-1px)'
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget
-                  el.style.backgroundColor = 'var(--color-paper)'
-                  el.style.borderColor = 'var(--color-rule)'
-                  el.style.transform = 'translateY(0)'
-                }}
+                whileHover={reduce ? undefined : { y: -2, backgroundColor: f.bg, borderColor: f.color + '55' }}
+                whileTap={reduce ? undefined : { scale: 0.9 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 18 }}
               >
                 <span style={{ fontSize: 22, lineHeight: 1 }}>{f.emoji}</span>
                 <span
@@ -160,7 +158,7 @@ export default function MorningCheckin() {
                 >
                   {feelingLabel(f.key, locale).toUpperCase()}
                 </span>
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>

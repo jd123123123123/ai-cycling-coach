@@ -185,15 +185,16 @@ export function formatDistanceKm(meters: number | null): string {
   return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`
 }
 
-export function formatRelativeDay(iso: string): string {
+export function formatRelativeDay(iso: string, locale = 'en'): string {
+  const de = locale === 'de'
   const date = new Date(iso)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const d = new Date(date)
   d.setHours(0, 0, 0, 0)
   const diff = Math.round((today.getTime() - d.getTime()) / 86400000)
-  if (diff === 0) return 'Today'
-  if (diff === 1) return 'Yesterday'
-  if (diff < 7) return `${diff}d ago`
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  if (diff === 0) return de ? 'Heute' : 'Today'
+  if (diff === 1) return de ? 'Gestern' : 'Yesterday'
+  if (diff < 7) return de ? `vor ${diff} T` : `${diff}d ago`
+  return date.toLocaleDateString(de ? 'de-DE' : undefined, { month: 'short', day: 'numeric' })
 }
