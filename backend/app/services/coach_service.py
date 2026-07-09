@@ -1294,7 +1294,7 @@ def _safe_template_for_ceiling(ceiling: str) -> str:
     }.get(ceiling, "z2_endurance_60")
 
 
-def _verdict_for_template(template_id: str, language: str, ceiling: str) -> str | None:
+def _verdict_for_template(template_id: str, language: str, ceiling: str, de: bool = False) -> str | None:
     """Verdict line that matches the actual prescribed template — used after
     the safety rails (or post-ride override) replace the LLM's pick so the
     hero verdict doesn't contradict the workout card.
@@ -1306,10 +1306,25 @@ def _verdict_for_template(template_id: str, language: str, ceiling: str) -> str 
     # "anaerobic" (which we treat as the closest neighbour, vo2).
     category = "vo2" if tpl.category == "anaerobic" else tpl.category
     if language == "simple":
+        if de:
+            if ceiling in ("rest", "easy") and category in ("rest", "recovery"):
+                return _SIMPLE_VERDICT_BY_CEILING_DE[ceiling]
+            return _SIMPLE_VERDICT_BY_SESSION_DE.get(category, tpl.name)
         if ceiling in ("rest", "easy") and category in ("rest", "recovery"):
             return _SIMPLE_VERDICT_BY_CEILING[ceiling]
         return _SIMPLE_VERDICT_BY_SESSION.get(category, tpl.name)
     # technical
+    if de:
+        technical_by_session_de = {
+            "vo2":        "VO2 heute — du bist frisch",
+            "threshold":  "Schwelle heute — Qualitätsfenster",
+            "sweet_spot": "Sweet Spot heute — Fitness aufbauen",
+            "tempo":      "Tempo heute — unter der Schwelle",
+            "endurance":  tpl.name,
+            "recovery":   "Recovery-Spin — parasympathisch halten",
+            "rest":       "Ruhetag — voll parasympathisch",
+        }
+        return technical_by_session_de.get(category, tpl.name)
     technical_by_session = {
         "vo2":        "VO2 today — you're fresh",
         "threshold":  "Threshold today — quality window",
@@ -1580,6 +1595,38 @@ _SIMPLE_VERDICT_BY_SESSION: dict[str, str] = {
 _SIMPLE_ALTERNATE_LESS_TIME = "Got 30 min? Just spin the legs."
 _SIMPLE_ALTERNATE_RECOVER = "Tired? Put your legs up, do nothing."
 
+# German (informal du/dein) parallels for the simple-mode maps above.
+_SIMPLE_TITLE_BY_CATEGORY_DE: dict[str, str] = {
+    "recovery":   "Lockeres Ausrollen",
+    "endurance":  "Entspannte Ausfahrt",
+    "tempo":      "Gleichmäßiger Druck",
+    "sweet_spot": "Fokussierte Einheit",
+    "threshold":  "Harte Ausfahrt",
+    "vo2":        "Harte Intervalle",
+    "anaerobic":  "Sprint-Tag",
+    "rest":       "Ruhetag",
+}
+
+_SIMPLE_VERDICT_BY_CEILING_DE: dict[str, str] = {
+    "rest":     "Ruh dich aus — lass deinen Körper heilen",
+    "easy":     "Nimm's heute locker",
+    "moderate": "Gleichmäßige Einheit — nichts Verrücktes",
+    "push":     "Du bist bereit — leg los",
+}
+
+_SIMPLE_VERDICT_BY_SESSION_DE: dict[str, str] = {
+    "vo2":        "Harte Intervalle — du bist frisch",
+    "threshold":  "Harte Ausfahrt — Qualitätstag",
+    "sweet_spot": "Fokussierte Einheit heute",
+    "tempo":      "Gleichmäßiger Druck heute",
+    "endurance":  "Lockere Stunde auf dem Rad",
+    "recovery":   "Lockeres Ausrollen — einfach bewegen",
+    "rest":       "Ruhetag — Beine hoch",
+}
+
+_SIMPLE_ALTERNATE_LESS_TIME_DE = "Nur 30 min? Roll einfach die Beine locker."
+_SIMPLE_ALTERNATE_RECOVER_DE = "Müde? Beine hoch, mach gar nichts."
+
 
 # ======================================================================
 # Post-ride review narrative templates — language + grade aware
@@ -1594,6 +1641,22 @@ _HEADLINE_BY_GRADE_SIMPLE: dict[str, str] = {
     "undercooked": "Lighter than planned",
 }
 
+_HEADLINE_BY_GRADE_SIMPLE_DE: dict[str, str] = {
+    "perfect":     "Perfekt getroffen",
+    "strong":      "Solide Arbeit",
+    "okay":        "Nicht schlecht — ein bisschen daneben",
+    "overcooked":  "Das war mehr als nötig",
+    "undercooked": "Leichter als geplant",
+}
+
+_HEADLINE_BY_GRADE_TECHNICAL_DE: dict[str, str] = {
+    "perfect":     "Perfekte Ausführung",
+    "strong":      "Starke Einheit",
+    "okay":        "Okaye Einheit — lockere Toleranz",
+    "overcooked":  "Übertrieben — TSS über Ziel",
+    "undercooked": "Zu leicht — unter der vorgegebenen Last",
+}
+
 _HEADLINE_BY_GRADE_TECHNICAL: dict[str, str] = {
     "perfect":     "Perfect execution",
     "strong":      "Strong session",
@@ -1604,7 +1667,22 @@ _HEADLINE_BY_GRADE_TECHNICAL: dict[str, str] = {
 
 # Simple-mode next-session nudges keyed by (grade, session_type category).
 # Grade drives tone; session_type hints at what to do next.
-def _simple_nudge(grade: str, session_type: str, phase: str) -> str:
+def _simple_nudge(grade: str, session_type: str, phase: str, de: bool = False) -> str:
+    if de:
+        if grade == "perfect":
+            return "Morgen: Ruhe ist verdient — du hast genau das geholt, was heute nötig war."
+        if grade == "strong":
+            return "Iss gut, schlaf tief. Morgen bleibt die Ausfahrt locker."
+        if grade == "okay":
+            return "Nächstes Mal ziel auf eine engere Übereinstimmung mit der vorgegebenen Zeit und Belastung."
+        if grade == "overcooked":
+            return "Erhol dich heute Abend richtig. Morgen ist ein lockerer Tag — im Ernst."
+        # undercooked
+        if session_type == "vo2":
+            return "Häng beim nächsten harten Intervallblock 5-10 min dran."
+        if session_type == "threshold":
+            return "Dein nächster Schwellenblock darf etwas länger sein — ziel auf das volle Ziel."
+        return "Deine nächste Ausfahrt darf etwas länger werden — die Beine geben es her."
     if grade == "perfect":
         return "Tomorrow: rest is earned — you got exactly what today needed."
     if grade == "strong":
@@ -1621,7 +1699,22 @@ def _simple_nudge(grade: str, session_type: str, phase: str) -> str:
     return "Your next ride can stretch a bit longer — you have the legs for it."
 
 
-def _technical_nudge(grade: str, session_type: str, phase: str) -> str:
+def _technical_nudge(grade: str, session_type: str, phase: str, de: bool = False) -> str:
+    if de:
+        if grade == "perfect":
+            return "Erholung heute Abend ist verdient — parasympathisches Fenster für Anpassung offen."
+        if grade == "strong":
+            return f"Konsolidieren: Z1-Ausrollen oder Ruhe morgen, damit der {session_type}-Reiz absorbiert wird."
+        if grade == "okay":
+            return "Nächster Block gleicher Kategorie: auf ±10% der Template-Vorgabe einengen."
+        if grade == "overcooked":
+            return "ATL wird heute Abend hochschießen; TSB fällt → Ruhetag laut Banister erforderlich."
+        # undercooked
+        if session_type == "vo2":
+            return "Häng beim nächsten VO2-Block ein Intervall dran (4-5→5-6); Coggan-Z5-Reiz braucht mindestens 20 min Zeit bei VO2max."
+        if session_type == "threshold":
+            return "Dehne die Schwellenintervalle im nächsten Block 15→18 min, um die LT2-Anpassungsschwelle zu treffen."
+        return "Nächster Endurance-Block kann 10-15 min länger werden, um die San-Millán-Z2-Grenze zu reizen."
     if grade == "perfect":
         return "Recovery tonight is earned — parasympathetic window open for adaptation."
     if grade == "strong":
@@ -1639,7 +1732,7 @@ def _technical_nudge(grade: str, session_type: str, phase: str) -> str:
 
 
 # Physiological read generators — concise "what your body did" sentences.
-def _simple_physio_read(compliance: dict, trajectory: dict) -> str:
+def _simple_physio_read(compliance: dict, trajectory: dict, de: bool = False) -> str:
     parts: list[str] = []
     grade = compliance.get("grade")
     ef = compliance.get("ef")
@@ -1647,6 +1740,46 @@ def _simple_physio_read(compliance: dict, trajectory: dict) -> str:
     dur = compliance.get("duration", {})
     tss = compliance.get("tss", {})
     actual_min = int(round(dur.get("actual", 0)))
+
+    if de:
+        # Opening line — what happened
+        if grade == "perfect":
+            parts.append(
+                f"Du bist {actual_min} Minuten genau im richtigen Bereich gefahren — "
+                "die Grundlagenausdauer baut sich still auf."
+            )
+        elif grade == "strong":
+            parts.append(
+                f"{actual_min} Minuten im Kasten, genau im Bereich dessen, was heute gefragt war."
+            )
+        elif grade == "okay":
+            parts.append(
+                f"{actual_min} Minuten geschafft — etwas neben dem Ideal, aber trotzdem sinnvolle Zeit auf dem Rad."
+            )
+        elif grade == "overcooked":
+            delta = tss.get("delta_pct", 0)
+            parts.append(
+                f"Das war größer als der Plan — {abs(int(delta))}% über dem Ziel. "
+                "Dein Körper wird es spüren."
+            )
+        else:  # undercooked
+            parts.append(
+                f"Leichter als heute nötig — {actual_min} Minuten, obwohl der Plan größer war."
+            )
+
+        # Second sentence — EF / VI observation
+        if ef is not None and ef >= 1.4:
+            parts.append(
+                "Deine Herzfrequenz blieb relativ zur Anstrengung niedrig — da zeigt sich Grundlagenausdauer."
+            )
+        elif ef is not None and ef < 1.1:
+            parts.append("Deine Herzfrequenz lief für die getretene Leistung hoch — du bist vielleicht ermüdet.")
+        if vi is not None and vi > 1.08:
+            parts.append("Das Tempo war unruhig — gleichmäßigere Einheiten holen mehr aus derselben Ausfahrt.")
+        elif vi is not None and vi <= 1.06 and grade in ("perfect", "strong"):
+            parts.append("Du bist gleichmäßig gefahren — gleichmäßig getretene Ausfahrten arbeiten effizient.")
+
+        return " ".join(parts[:3])
 
     # Opening line — what happened
     if grade == "perfect":
@@ -1688,7 +1821,7 @@ def _simple_physio_read(compliance: dict, trajectory: dict) -> str:
     return " ".join(parts[:3])
 
 
-def _technical_physio_read(compliance: dict, trajectory: dict) -> str:
+def _technical_physio_read(compliance: dict, trajectory: dict, de: bool = False) -> str:
     parts: list[str] = []
     grade = compliance.get("grade")
     ef = compliance.get("ef")
@@ -1697,6 +1830,53 @@ def _technical_physio_read(compliance: dict, trajectory: dict) -> str:
     tss = compliance.get("tss", {})
     actual_tss = int(round(tss.get("actual", 0)))
     target_tss = int(round(tss.get("target", 0)))
+
+    if de:
+        # Opening sentence — data-rich
+        if grade == "perfect":
+            parts.append(
+                f"TSS {actual_tss} vs. Ziel {target_tss} — innerhalb von Coggans ±10%-Compliance-Fenster."
+            )
+        elif grade == "strong":
+            parts.append(
+                f"TSS {actual_tss} (Ziel {target_tss}) — innerhalb des Starke-Compliance-Bands."
+            )
+        elif grade == "okay":
+            parts.append(
+                f"TSS {actual_tss} vs. Ziel {target_tss} — locker, aber innerhalb der 30%-Toleranz."
+            )
+        elif grade == "overcooked":
+            parts.append(
+                f"TSS {actual_tss} vs. Ziel {target_tss} ({tss.get('delta_pct', 0):+.0f}%) — "
+                "über Coggans Compliance-Obergrenze."
+            )
+        else:
+            parts.append(
+                f"TSS {actual_tss} vs. Ziel {target_tss} ({tss.get('delta_pct', 0):+.0f}%) — "
+                "unter der vorgegebenen Last."
+            )
+
+        # EF commentary — San Millán framework
+        if ef is not None:
+            if ef >= 1.45:
+                parts.append(
+                    f"EF {ef} signalisiert vertiefte aerobe Grundlage nach San Milláns Pw:HR-Framework."
+                )
+            elif ef < 1.15:
+                parts.append(
+                    f"EF {ef} ist niedrig — entweder Restermüdung oder eine harte Anstrengung, die die HF nahe ans Limit treibt."
+                )
+            else:
+                parts.append(f"EF {ef} — im erwarteten aeroben Band für diesen Einheitstyp.")
+
+        # VI commentary — Coggan variability
+        if vi is not None:
+            if vi <= 1.06:
+                parts.append(f"VI {vi} — Steady-State-Pacing, Coggan-Variabilität eng.")
+            elif vi > 1.10:
+                parts.append(f"VI {vi} — Pacing-Variabilität über Ziel; an gleichmäßigerer Leistung arbeiten.")
+
+        return " ".join(parts[:3])
 
     # Opening sentence — data-rich
     if grade == "perfect":
@@ -1745,9 +1925,11 @@ def _technical_physio_read(compliance: dict, trajectory: dict) -> str:
     return " ".join(parts[:3])
 
 
-def _simple_trajectory_narrative(trajectory: dict) -> str:
+def _simple_trajectory_narrative(trajectory: dict, de: bool = False) -> str:
     hook = trajectory.get("narrative_hook")
     if not hook:
+        if de:
+            return "Du baust Kontinuität auf — und genau darum geht's."
         return "You're building consistency — that's the whole game."
     # Strip technical terms from hook if any slipped in (defensive — the
     # trajectory module emits plain-enough text but we scrub anyway for simple).
@@ -1767,10 +1949,15 @@ def _simple_trajectory_narrative(trajectory: dict) -> str:
     return out.strip()
 
 
-def _technical_trajectory_narrative(trajectory: dict) -> str:
+def _technical_trajectory_narrative(trajectory: dict, de: bool = False) -> str:
     hook = trajectory.get("narrative_hook")
     if hook:
         return hook
+    if de:
+        return (
+            f"CTL {trajectory.get('ctl_now', 0):.1f}, 7d-Delta {trajectory.get('ctl_7d_delta', 0):+.1f}. "
+            "Aktuelles Muster fortsetzen."
+        )
     return (
         f"CTL {trajectory.get('ctl_now', 0):.1f}, 7d delta {trajectory.get('ctl_7d_delta', 0):+.1f}. "
         "Continue current pattern."
@@ -1780,6 +1967,7 @@ def _technical_trajectory_narrative(trajectory: dict) -> str:
 def _build_post_ride_review(
     snapshot_post_ride: dict,
     language: str,
+    de: bool = False,
 ) -> dict:
     """Assemble the complete post_ride_review dict for the brief payload.
 
@@ -1796,15 +1984,21 @@ def _build_post_ride_review(
     phase = compliance.get("phase", "maintenance")
 
     if language == "simple":
-        headline = _HEADLINE_BY_GRADE_SIMPLE.get(grade, "Session logged")
-        physio = _simple_physio_read(compliance, trajectory)
-        trajectory_narrative = _simple_trajectory_narrative(trajectory)
-        nudge = _simple_nudge(grade, session_type, phase)
+        if de:
+            headline = _HEADLINE_BY_GRADE_SIMPLE_DE.get(grade, "Einheit erfasst")
+        else:
+            headline = _HEADLINE_BY_GRADE_SIMPLE.get(grade, "Session logged")
+        physio = _simple_physio_read(compliance, trajectory, de=de)
+        trajectory_narrative = _simple_trajectory_narrative(trajectory, de=de)
+        nudge = _simple_nudge(grade, session_type, phase, de=de)
     else:
-        headline = _HEADLINE_BY_GRADE_TECHNICAL.get(grade, "Session logged")
-        physio = _technical_physio_read(compliance, trajectory)
-        trajectory_narrative = _technical_trajectory_narrative(trajectory)
-        nudge = _technical_nudge(grade, session_type, phase)
+        if de:
+            headline = _HEADLINE_BY_GRADE_TECHNICAL_DE.get(grade, "Einheit erfasst")
+        else:
+            headline = _HEADLINE_BY_GRADE_TECHNICAL.get(grade, "Session logged")
+        physio = _technical_physio_read(compliance, trajectory, de=de)
+        trajectory_narrative = _technical_trajectory_narrative(trajectory, de=de)
+        nudge = _technical_nudge(grade, session_type, phase, de=de)
 
     activities = snapshot_post_ride.get("activities") or []
     totals = snapshot_post_ride.get("totals") or {
@@ -1820,7 +2014,10 @@ def _build_post_ride_review(
     # top-level grade is None (per-ride chips render instead) so the headline
     # should not promise a single grade.
     if count >= 2:
-        headline = "Two sessions logged" if count == 2 else f"{count} sessions logged"
+        if de:
+            headline = "Zwei Einheiten erfasst" if count == 2 else f"{count} Einheiten erfasst"
+        else:
+            headline = "Two sessions logged" if count == 2 else f"{count} sessions logged"
         # Top-level grade is None for multi-session — frontend hides the
         # grade pill and renders per-ride chips on each row.
         emitted_grade: str | None = None
@@ -1855,6 +2052,7 @@ def _simple_rationale(
     zones: dict,
     ceiling: str,
     injury_flag: bool,
+    de: bool = False,
 ) -> str:
     """Build a plain-English rationale that avoids FTP/TSS/CTL/Z-jargon entirely.
 
@@ -1862,17 +2060,60 @@ def _simple_rationale(
     way a friend would ("your sleep's been light", "you're catching up from
     last week's rides").
     """
+    hrv_delta = hrv.get("delta_pct") if hrv else None
+    sleep_debt = sleep.get("total_debt_hours") if sleep else None
+    tsb = pmc.get("tsb")
+
+    if de:
+        if injury_flag:
+            return (
+                "Dein Körper braucht eine Pause, solange die Verletzung heilt. "
+                "Ein freier Tag heute zahlt sich nächste Woche aus — versprochen."
+            )
+
+        parts: list[str] = []
+
+        # Opener — set the tone
+        if ceiling == "rest":
+            parts.append("Dein Körper hisst heute die weiße Fahne.")
+        elif ceiling == "easy":
+            parts.append("Du läufst auf Reserve — nehmen wir's locker.")
+        elif ceiling == "moderate":
+            parts.append("Du bist gut in Form, aber nicht ganz frisch.")
+        else:
+            parts.append("Die Beine fühlen sich gut an, lass es zählen.")
+
+        # Cite something the athlete actually did or feels
+        if isinstance(hrv_delta, (int, float)) and hrv_delta < -8:
+            parts.append("Dein Körper zeigt in der letzten Woche Zeichen von Ermüdung.")
+        elif isinstance(sleep_debt, (int, float)) and sleep_debt > 3:
+            parts.append("Der Schlaf war zuletzt knapp — das summiert sich.")
+        elif isinstance(tsb, (int, float)) and tsb < -15:
+            parts.append("Du bist hart gefahren — die Ermüdung holt dich ein.")
+        elif isinstance(tsb, (int, float)) and tsb > 15:
+            parts.append("Du hast dich gut ausgeruht und die Beine sind bereit.")
+        elif zones and zones.get("grey_zone_flag"):
+            parts.append(
+                "Du bist viel in den mittleren Gängen unterwegs — fahren wir locker oder hart, nicht dazwischen."
+            )
+
+        # Close with what the workout is for
+        if ceiling in ("rest", "easy"):
+            parts.append("Heute geht's um Erholung.")
+        elif ceiling == "moderate":
+            parts.append("Heute geht's um solide Zeit, ohne ein Loch zu graben.")
+        else:
+            parts.append("Heute geht's darum, die gute Art von müde aufzubauen.")
+
+        return " ".join(parts)
+
     if injury_flag:
         return (
             "Your body's asking for a break while that injury heals. "
             "A day off today pays off next week — promise."
         )
 
-    hrv_delta = hrv.get("delta_pct") if hrv else None
-    sleep_debt = sleep.get("total_debt_hours") if sleep else None
-    tsb = pmc.get("tsb")
-
-    parts: list[str] = []
+    parts = []
 
     # Opener — set the tone
     if ceiling == "rest":
@@ -1916,9 +2157,26 @@ def _technical_rationale(
     ceiling: str,
     max_tss: float,
     phase: str,
+    de: bool = False,
 ) -> str:
     """The current (pre-5.2) rationale, kept for technical mode."""
     parts: list[str] = []
+    if de:
+        parts.append(
+            f"TSB ist {pmc['tsb']:.1f}, CTL {pmc['ctl']:.1f} (Banister Fitness-Ermüdung)."
+        )
+        if hrv.get("delta_pct") is not None:
+            parts.append(
+                f"7-Tage-HRV {hrv['delta_pct']:+.1f}% vs. 28-Tage-Baseline."
+            )
+        if zones.get("grey_zone_flag"):
+            parts.append(
+                f"Z2-Schleichen: {zones['z2_pct']}% der jüngsten Zeit — über Seilers Grauzonen-Schwelle."
+            )
+        parts.append(
+            f"Obergrenze: '{ceiling}', TSS-Cap {max_tss:.0f}. Friel-Phase: {phase}."
+        )
+        return " ".join(parts)
     parts.append(
         f"TSB is {pmc['tsb']:.1f}, CTL {pmc['ctl']:.1f} (Banister fitness-fatigue)."
     )
@@ -1965,6 +2223,9 @@ def _rule_based_brief(snapshot: dict) -> dict:
     # values from leaking jargon into what's supposed to be a plain-English
     # response.
     language = "technical" if snapshot.get("language") == "technical" else "simple"
+    # German rendering flag — when the UI locale is 'de' every user-facing
+    # string below (and in the helpers) renders in informal German.
+    de = snapshot.get("ui_locale") == "de"
 
     # Verdict tuned to ceiling + picked session type
     picked_id = snapshot.get("picked_template_id") or "z2_endurance_60"
@@ -1986,35 +2247,67 @@ def _rule_based_brief(snapshot: dict) -> dict:
     # Verdict
     # --------------------------------------------------------------
     if language == "simple":
-        if ctx.injury_flag:
-            verdict = "Rest today — take care of that injury"
-        elif ceiling in ("rest", "easy"):
-            verdict = _SIMPLE_VERDICT_BY_CEILING[ceiling]
-        else:
-            verdict = _SIMPLE_VERDICT_BY_SESSION.get(
-                session_type, _SIMPLE_VERDICT_BY_CEILING.get(ceiling, "Easy day today")
-            )
-    else:
-        if ceiling == "rest":
-            verdict = "Rest — injury takes priority"
-        elif ceiling == "easy":
-            if ctx.hrv_delta_pct < -10:
-                verdict = "Recovery only — HRV flagged"
+        if de:
+            if ctx.injury_flag:
+                verdict = "Ruhetag — kümmer dich um die Verletzung"
+            elif ceiling in ("rest", "easy"):
+                verdict = _SIMPLE_VERDICT_BY_CEILING_DE[ceiling]
             else:
-                verdict = "Recovery only — TSB overreach"
-        elif ceiling == "moderate":
-            verdict = f"{template.name} — manage fatigue"
+                verdict = _SIMPLE_VERDICT_BY_SESSION_DE.get(
+                    session_type, _SIMPLE_VERDICT_BY_CEILING_DE.get(ceiling, "Lockerer Tag heute")
+                )
         else:
-            label_by_session = {
-                "vo2":        "VO2 today — you're fresh",
-                "threshold":  "Threshold today — quality window",
-                "sweet_spot": "Sweet spot today — build fitness",
-                "tempo":      "Tempo today — sub-threshold",
-                "endurance":  f"{template.name}",
-                "recovery":   "Recovery spin — maintain parasympathetic",
-                "rest":       "Rest day — full parasympathetic",
-            }
-            verdict = label_by_session.get(session_type, template.name)
+            if ctx.injury_flag:
+                verdict = "Rest today — take care of that injury"
+            elif ceiling in ("rest", "easy"):
+                verdict = _SIMPLE_VERDICT_BY_CEILING[ceiling]
+            else:
+                verdict = _SIMPLE_VERDICT_BY_SESSION.get(
+                    session_type, _SIMPLE_VERDICT_BY_CEILING.get(ceiling, "Easy day today")
+                )
+    else:
+        if de:
+            if ceiling == "rest":
+                verdict = "Ruhe — Verletzung hat Vorrang"
+            elif ceiling == "easy":
+                if ctx.hrv_delta_pct < -10:
+                    verdict = "Nur Recovery — HRV auffällig"
+                else:
+                    verdict = "Nur Recovery — TSB-Überlastung"
+            elif ceiling == "moderate":
+                verdict = f"{template.name} — Ermüdung managen"
+            else:
+                label_by_session_de = {
+                    "vo2":        "VO2 heute — du bist frisch",
+                    "threshold":  "Schwelle heute — Qualitätsfenster",
+                    "sweet_spot": "Sweet Spot heute — Fitness aufbauen",
+                    "tempo":      "Tempo heute — unter der Schwelle",
+                    "endurance":  f"{template.name}",
+                    "recovery":   "Recovery-Spin — parasympathisch halten",
+                    "rest":       "Ruhetag — voll parasympathisch",
+                }
+                verdict = label_by_session_de.get(session_type, template.name)
+        else:
+            if ceiling == "rest":
+                verdict = "Rest — injury takes priority"
+            elif ceiling == "easy":
+                if ctx.hrv_delta_pct < -10:
+                    verdict = "Recovery only — HRV flagged"
+                else:
+                    verdict = "Recovery only — TSB overreach"
+            elif ceiling == "moderate":
+                verdict = f"{template.name} — manage fatigue"
+            else:
+                label_by_session = {
+                    "vo2":        "VO2 today — you're fresh",
+                    "threshold":  "Threshold today — quality window",
+                    "sweet_spot": "Sweet spot today — build fitness",
+                    "tempo":      "Tempo today — sub-threshold",
+                    "endurance":  f"{template.name}",
+                    "recovery":   "Recovery spin — maintain parasympathetic",
+                    "rest":       "Rest day — full parasympathetic",
+                }
+                verdict = label_by_session.get(session_type, template.name)
 
     # --------------------------------------------------------------
     # Rationale
@@ -2022,20 +2315,35 @@ def _rule_based_brief(snapshot: dict) -> dict:
     if language == "simple":
         rationale = _simple_rationale(
             pmc=pmc, hrv=hrv, sleep=sleep, zones=zones,
-            ceiling=ceiling, injury_flag=ctx.injury_flag,
+            ceiling=ceiling, injury_flag=ctx.injury_flag, de=de,
         )
     else:
         rationale = _technical_rationale(
             pmc=pmc, hrv=hrv, zones=zones,
             ceiling=ceiling, max_tss=max_tss,
-            phase=athlete.get("goal_phase", "base"),
+            phase=athlete.get("goal_phase", "base"), de=de,
         )
 
     # --------------------------------------------------------------
     # Prescribed workout — shared shape, different why_this_workout + title
     # --------------------------------------------------------------
     if language == "simple":
-        if ctx.injury_flag:
+        if de:
+            if ctx.injury_flag:
+                why_this = (
+                    "Machen wir's nicht schlimmer — ein Ruhetag jetzt zahlt sich später aus."
+                )
+            elif ceiling in ("rest", "easy"):
+                why_this = (
+                    "Dein Körper ist müde von dem, was du zuletzt gemacht hast. "
+                    "Heute locker heißt, du erholst dich schneller."
+                )
+            else:
+                why_this = (
+                    "Du warst konstant — heute geht's darum, etwas Qualität hinzuzufügen, "
+                    "ohne ein Streichholz zu verbrennen."
+                )
+        elif ctx.injury_flag:
             why_this = (
                 "Let's not make things worse — a rest day now pays off later."
             )
@@ -2051,12 +2359,20 @@ def _rule_based_brief(snapshot: dict) -> dict:
             )
         why_this = why_this[:300]
     else:
-        why_parts: list[str] = [f"Phase: {athlete.get('goal_phase', 'base')}."]
-        why_parts.append(f"TSB {pmc['tsb']:.0f}, CTL {pmc['ctl']:.0f}.")
-        if hrv.get("delta_pct") is not None:
-            why_parts.append(f"HRV {hrv['delta_pct']:+.0f}%.")
-        why_parts.append(template.purpose)
-        why_this = " ".join(why_parts)[:300]
+        if de:
+            why_parts: list[str] = [f"Phase: {athlete.get('goal_phase', 'base')}."]
+            why_parts.append(f"TSB {pmc['tsb']:.0f}, CTL {pmc['ctl']:.0f}.")
+            if hrv.get("delta_pct") is not None:
+                why_parts.append(f"HRV {hrv['delta_pct']:+.0f}%.")
+            why_parts.append(template.purpose)
+            why_this = " ".join(why_parts)[:300]
+        else:
+            why_parts = [f"Phase: {athlete.get('goal_phase', 'base')}."]
+            why_parts.append(f"TSB {pmc['tsb']:.0f}, CTL {pmc['ctl']:.0f}.")
+            if hrv.get("delta_pct") is not None:
+                why_parts.append(f"HRV {hrv['delta_pct']:+.0f}%.")
+            why_parts.append(template.purpose)
+            why_this = " ".join(why_parts)[:300]
 
     # --------------------------------------------------------------
     # "Already rode today" override — acknowledge the completed session
@@ -2072,43 +2388,81 @@ def _rule_based_brief(snapshot: dict) -> dict:
     post_ride_present_for_rule = bool(snapshot.get("post_ride"))
     if post_ride_present_for_rule or today_minutes >= 20.0:
         # Session intensity label for the friendly verdict
-        if today_tss_per_hour >= 90:
-            effort_simple = "tough session"
-            effort_tech = "high-intensity session"
-        elif today_tss_per_hour >= 65:
-            effort_simple = "solid ride"
-            effort_tech = "threshold-adjacent session"
+        if de:
+            if today_tss_per_hour >= 90:
+                effort_simple = "harte Einheit"
+                effort_tech = "hochintensive Einheit"
+            elif today_tss_per_hour >= 65:
+                effort_simple = "solide Ausfahrt"
+                effort_tech = "schwellennahe Einheit"
+            else:
+                effort_simple = "Ausfahrt"
+                effort_tech = "Endurance-Einheit"
         else:
-            effort_simple = "ride"
-            effort_tech = "endurance session"
+            if today_tss_per_hour >= 90:
+                effort_simple = "tough session"
+                effort_tech = "high-intensity session"
+            elif today_tss_per_hour >= 65:
+                effort_simple = "solid ride"
+                effort_tech = "threshold-adjacent session"
+            else:
+                effort_simple = "ride"
+                effort_tech = "endurance session"
         # Round display numbers
         mins_disp = int(round(today_minutes))
         tss_disp = int(round(today_tss))
         if language == "simple":
-            verdict = f"Nice — {mins_disp} min done today"
-            rationale = (
-                f"You already got a {effort_simple} in today "
-                f"({mins_disp} min). That's the work — no second session needed. "
-                "Fuel, hydrate, and let recovery do its thing."
-            )
-            why_this = (
-                "You've already trained. Today's session is logged, "
-                "so the smart move is rest and recovery. "
-                "Tomorrow you'll come back stronger."
-            )[:300]
+            if de:
+                verdict = f"Stark — {mins_disp} min heute geschafft"
+                rationale = (
+                    f"Du hast heute schon eine {effort_simple} eingebaut "
+                    f"({mins_disp} min). Das ist die Arbeit — keine zweite Einheit nötig. "
+                    "Tanken, trinken und die Erholung ihren Job machen lassen."
+                )
+                why_this = (
+                    "Du hast schon trainiert. Die heutige Einheit ist erfasst, "
+                    "also ist der schlaue Zug jetzt Ruhe und Erholung. "
+                    "Morgen kommst du stärker zurück."
+                )[:300]
+            else:
+                verdict = f"Nice — {mins_disp} min done today"
+                rationale = (
+                    f"You already got a {effort_simple} in today "
+                    f"({mins_disp} min). That's the work — no second session needed. "
+                    "Fuel, hydrate, and let recovery do its thing."
+                )
+                why_this = (
+                    "You've already trained. Today's session is logged, "
+                    "so the smart move is rest and recovery. "
+                    "Tomorrow you'll come back stronger."
+                )[:300]
         else:
-            verdict = f"Session complete — {tss_disp} TSS logged"
-            rationale = (
-                f"Today's {effort_tech} is on the books: {mins_disp} min, "
-                f"{tss_disp} TSS, {today_tss_per_hour:.0f} TSS/h peak. "
-                f"Stacking another workout on top would push ATL up without "
-                f"adaptive benefit — prioritise recovery."
-            )
-            why_this = (
-                f"Already trained today ({tss_disp} TSS). "
-                "A second session would fight absorption, not add fitness. "
-                "Let the body consolidate."
-            )[:300]
+            if de:
+                verdict = f"Einheit abgeschlossen — {tss_disp} TSS erfasst"
+                rationale = (
+                    f"Die heutige {effort_tech} steht in den Büchern: {mins_disp} min, "
+                    f"{tss_disp} TSS, {today_tss_per_hour:.0f} TSS/h Spitze. "
+                    f"Noch eine Einheit obendrauf würde ATL erhöhen, ohne "
+                    f"adaptiven Nutzen — Erholung priorisieren."
+                )
+                why_this = (
+                    f"Heute schon trainiert ({tss_disp} TSS). "
+                    "Eine zweite Einheit würde gegen die Absorption arbeiten, nicht Fitness aufbauen. "
+                    "Lass den Körper konsolidieren."
+                )[:300]
+            else:
+                verdict = f"Session complete — {tss_disp} TSS logged"
+                rationale = (
+                    f"Today's {effort_tech} is on the books: {mins_disp} min, "
+                    f"{tss_disp} TSS, {today_tss_per_hour:.0f} TSS/h peak. "
+                    f"Stacking another workout on top would push ATL up without "
+                    f"adaptive benefit — prioritise recovery."
+                )
+                why_this = (
+                    f"Already trained today ({tss_disp} TSS). "
+                    "A second session would fight absorption, not add fitness. "
+                    "Let the body consolidate."
+                )[:300]
         # Force the prescribed template to rest so downstream renders cleanly.
         template = TEMPLATES.get("rest_day", template)
 
@@ -2121,9 +2475,14 @@ def _rule_based_brief(snapshot: dict) -> dict:
 
     # In simple mode, overwrite the title with a plain-English one
     if language == "simple":
-        simple_title = _SIMPLE_TITLE_BY_CATEGORY.get(
-            template.category, "Ride today"
-        )
+        if de:
+            simple_title = _SIMPLE_TITLE_BY_CATEGORY_DE.get(
+                template.category, "Ausfahrt heute"
+            )
+        else:
+            simple_title = _SIMPLE_TITLE_BY_CATEGORY.get(
+                template.category, "Ride today"
+            )
         prescribed["title"] = simple_title
 
     # --------------------------------------------------------------
@@ -2134,29 +2493,43 @@ def _rule_based_brief(snapshot: dict) -> dict:
         alternates = [
             {
                 "label": "less_time",
-                "one_liner": _SIMPLE_ALTERNATE_LESS_TIME,
+                "one_liner": _SIMPLE_ALTERNATE_LESS_TIME_DE if de else _SIMPLE_ALTERNATE_LESS_TIME,
                 "template_id": less_time_tid,
             },
             {
                 "label": "recover",
-                "one_liner": _SIMPLE_ALTERNATE_RECOVER,
+                "one_liner": _SIMPLE_ALTERNATE_RECOVER_DE if de else _SIMPLE_ALTERNATE_RECOVER,
                 "template_id": "recovery_30",
             },
         ]
     else:
         less_time_tpl = TEMPLATES[less_time_tid]
-        alternates = [
-            {
-                "label": "less_time",
-                "one_liner": f"Shorter window: {less_time_tpl.name} (~{int(less_time_tpl.base_tss)} TSS)",
-                "template_id": less_time_tid,
-            },
-            {
-                "label": "recover",
-                "one_liner": "Tired? 30 min Z1 recovery spin.",
-                "template_id": "recovery_30",
-            },
-        ]
+        if de:
+            alternates = [
+                {
+                    "label": "less_time",
+                    "one_liner": f"Kürzeres Fenster: {less_time_tpl.name} (~{int(less_time_tpl.base_tss)} TSS)",
+                    "template_id": less_time_tid,
+                },
+                {
+                    "label": "recover",
+                    "one_liner": "Müde? 30 min Z1 Recovery-Spin.",
+                    "template_id": "recovery_30",
+                },
+            ]
+        else:
+            alternates = [
+                {
+                    "label": "less_time",
+                    "one_liner": f"Shorter window: {less_time_tpl.name} (~{int(less_time_tpl.base_tss)} TSS)",
+                    "template_id": less_time_tid,
+                },
+                {
+                    "label": "recover",
+                    "one_liner": "Tired? 30 min Z1 recovery spin.",
+                    "template_id": "recovery_30",
+                },
+            ]
 
     # --------------------------------------------------------------
     # 7-day outlook — language-aware notes
@@ -2166,31 +2539,54 @@ def _rule_based_brief(snapshot: dict) -> dict:
         weekday = (_today_local() + timedelta(days=i)).weekday()
         if weekday == 6:
             tss = round(min(ctx.ctl * 1.1, max_tss if max_tss else ctx.ctl * 1.1), 0)
-            note = "Long easy ride — build the base." if language == "simple" \
-                else "Long Z2 — build aerobic base."
+            if de:
+                note = "Lange lockere Ausfahrt — Grundlage aufbauen." if language == "simple" \
+                    else "Langes Z2 — aerobe Grundlage aufbauen."
+            else:
+                note = "Long easy ride — build the base." if language == "simple" \
+                    else "Long Z2 — build aerobic base."
         elif weekday == 2:
             tss = round(min(ctx.ctl * 0.9, max_tss if max_tss else ctx.ctl * 0.9), 0)
-            note = "Hard ride mid-week." if language == "simple" \
-                else "Mid-week quality — intervals near threshold."
+            if de:
+                note = "Harte Ausfahrt unter der Woche." if language == "simple" \
+                    else "Qualität unter der Woche — Intervalle nahe der Schwelle."
+            else:
+                note = "Hard ride mid-week." if language == "simple" \
+                    else "Mid-week quality — intervals near threshold."
         elif weekday in (0, 4):
             tss = round(ctx.ctl * 0.3, 0)
-            note = "Rest or easy spin." if language == "simple" \
-                else "Rest or easy spin."
+            if de:
+                note = "Ruhe oder lockeres Ausrollen." if language == "simple" \
+                    else "Ruhe oder lockeres Ausrollen."
+            else:
+                note = "Rest or easy spin." if language == "simple" \
+                    else "Rest or easy spin."
         else:
             tss = round(ctx.ctl * 0.6, 0)
-            note = "Easy hour on the bike." if language == "simple" \
-                else "Endurance Z2."
+            if de:
+                note = "Lockere Stunde auf dem Rad." if language == "simple" \
+                    else "Endurance Z2."
+            else:
+                note = "Easy hour on the bike." if language == "simple" \
+                    else "Endurance Z2."
         outlook.append({"day_offset": i, "suggested_tss": tss, "note": note})
 
     # --------------------------------------------------------------
     # Frameworks cited — plain English in simple mode
     # --------------------------------------------------------------
     if language == "simple":
-        frameworks_cited = [
-            "Rest makes you faster",
-            "Easy days matter",
-            "Consistency beats intensity",
-        ]
+        if de:
+            frameworks_cited = [
+                "Ruhe macht dich schneller",
+                "Lockere Tage zählen",
+                "Kontinuität schlägt Intensität",
+            ]
+        else:
+            frameworks_cited = [
+                "Rest makes you faster",
+                "Easy days matter",
+                "Consistency beats intensity",
+            ]
     else:
         frameworks_cited = [
             "Banister fitness-fatigue",
@@ -2208,7 +2604,7 @@ def _rule_based_brief(snapshot: dict) -> dict:
     post_ride_payload = snapshot.get("post_ride")
     post_ride_review: dict | None = None
     if isinstance(post_ride_payload, dict):
-        post_ride_review = _build_post_ride_review(post_ride_payload, language)
+        post_ride_review = _build_post_ride_review(post_ride_payload, language, de=de)
 
     return {
         "verdict": verdict,
@@ -2247,8 +2643,9 @@ async def generate_brief(snapshot: dict, language: str = "simple", locale: str =
     also stamped with `language` so the rule-based fallback can branch on it.
     """
     # Ensure the snapshot carries the language so rule-based fallback + user
-    # message rendering both see the same value.
-    snapshot = {**snapshot, "language": language}
+    # message rendering both see the same value. Also stamp the UI locale so the
+    # rule-based path can render German when the UI is in German.
+    snapshot = {**snapshot, "language": language, "ui_locale": locale}
 
     if not settings.ANTHROPIC_API_KEY:
         logger.info("ANTHROPIC_API_KEY not set — using rule-based fallback brief")
