@@ -278,6 +278,66 @@ function RideStoryChart({ story, climbs }: { story: DebriefStory; climbs?: Climb
   return <div ref={containerRef} className="w-full min-w-0" />
 }
 
+// ─── W′-balance strip — "where you spent yourself" ──────────────────────────────
+// The anaerobic battery (W′) draining over the ride. This is the single most
+// narrative-critical trace for "why did you fade": it makes the matchbook verdict
+// visible. Rendered as a self-contained SVG area that shades toward red as the
+// tank empties, with the lowest point marked.
+function WbalStrip({ t, wbal, de }: { t: number[]; wbal: number[]; de: boolean }) {
+  if (!wbal || wbal.length < 2 || t.length !== wbal.length) return null
+  const max = Math.max(...wbal)
+  if (!isFinite(max) || max <= 0) return null
+  const min = Math.min(...wbal)
+  const minIdx = wbal.indexOf(min)
+  const pctFull = Math.max(0, Math.min(1, min / max)) // fullness at the emptiest point
+  const drained = 1 - pctFull
+
+  // Only worth showing if the athlete actually dipped into the reserve.
+  if (drained < 0.12) return null
+
+  const W = 1000, H = 120
+  const n = wbal.length
+  const px = (i: number) => (i / (n - 1)) * W
+  const py = (v: number) => H - Math.max(0, Math.min(1, v / max)) * H
+  const line = wbal.map((v, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ')
+  const area = `${line} L${W},${H} L0,${H} Z`
+
+  const emptiest = drained >= 0.92
+  const minLabel = emptiest
+    ? (de ? 'Tank geleert' : 'Tank emptied')
+    : (de ? `noch ${Math.round(pctFull * 100)}% Reserve` : `${Math.round(pctFull * 100)}% left`)
+  const kjFull = (max / 1000).toFixed(1)
+
+  return (
+    <div className="px-6 pb-6 sm:px-7" style={{ borderTop: '1px solid var(--color-rule)' }}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 pt-5 pb-3">
+        <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10.5, letterSpacing: '0.22em', fontWeight: 600 }}>
+          {de ? 'W′-AKKU · DEINE STREICHHÖLZER' : "W′ BATTERY · YOUR MATCHES"}
+        </span>
+        <span className="num-mono" style={{ fontSize: 11, color: emptiest ? 'var(--color-bad)' : 'var(--color-ink-2)' }}>
+          {de ? `Tank ${kjFull} kJ · tiefster Punkt: ${minLabel}` : `Tank ${kjFull} kJ · lowest point: ${minLabel}`}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: 72, display: 'block' }}>
+        <defs>
+          <linearGradient id="wbalfill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-good)" stopOpacity="0.28" />
+            <stop offset="55%" stopColor="var(--color-caution)" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="var(--color-bad)" stopOpacity="0.30" />
+          </linearGradient>
+        </defs>
+        {/* empty-tank danger zone (bottom 15%) */}
+        <rect x="0" y={H * 0.85} width={W} height={H * 0.15} fill="var(--color-bad)" opacity="0.08" />
+        <path d={area} fill="url(#wbalfill)" />
+        <path d={line} fill="none" stroke="var(--color-ink)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        {/* lowest-point marker */}
+        <line x1={px(minIdx)} y1="0" x2={px(minIdx)} y2={H} stroke={emptiest ? 'var(--color-bad)' : 'var(--color-caution)'} strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" opacity="0.7" />
+        <circle cx={px(minIdx)} cy={py(min)} r="4" fill={emptiest ? 'var(--color-bad)' : 'var(--color-caution)'} vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
+  )
+}
+
 // ─── Main component ─────────────────────────────────────────────────────────────
 
 export default function RideStory({ story, climbs }: { story: DebriefStory | null; climbs?: Climb[] }) {
@@ -340,6 +400,8 @@ export default function RideStory({ story, climbs }: { story: DebriefStory | nul
           </div>
         )}
       </div>
+
+      <WbalStrip t={story.t} wbal={story.wbal} de={de} />
     </div>
   )
 }

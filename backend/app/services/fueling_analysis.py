@@ -71,16 +71,26 @@ def analyze_fueling(
     fat_g = total_kcal * (1.0 - cho_frac) / _KCAL_PER_G_FAT
     band = _carb_target_band(if_, duration_h)
 
-    if durability_drop_pct is not None and decoupling_pct is not None:
+    both_signals = durability_drop_pct is not None and decoupling_pct is not None
+    if both_signals:
         underfueled = (
             duration_h >= 1.5 and durability_drop_pct >= 12.0 and decoupling_pct >= 6.0
         )
+    elif decoupling_pct is not None:
+        # Fallback: durability_drop_pct isn't populated yet (stream pipeline not
+        # built), which used to leave the fuel prescription permanently dark. A
+        # marked cardiac drift on a long ride is a weaker but still actionable
+        # under-fuelling flag — fire it, and label the basis honestly below.
+        underfueled = duration_h >= 2.0 and decoupling_pct > 8.0
     else:
         underfueled = None
 
-    if underfueled:
+    if underfueled and both_signals:
         note = ("Starker Einbruch spät im Rennen mit HF-Drift — wahrscheinlich zu wenig Kohlenhydrate."
                 if de else "High late-ride fade with cardiac drift — likely ran low on carbs.")
+    elif underfueled:
+        note = ("Deutlicher HF-Drift auf langer Fahrt — mögliche Unterversorgung (nur auf Basis des kardialen Drifts)."
+                if de else "Marked cardiac drift on a long ride — possible under-fuelling (based on cardiac drift alone).")
     elif underfueled is False:
         note = ("Kein klares Zeichen für Unterversorgung."
                 if de else "No strong under-fueling signature.")

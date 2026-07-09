@@ -16,11 +16,14 @@
  * to maximize content density. CoachChat is still reachable via Cmd+K.
  */
 import { useEffect, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { SlidersHorizontal } from 'lucide-react'
 import CoachChat from './CoachChat'
 import CommandPalette from '../ui/CommandPalette'
 import MobileBottomNav from './MobileBottomNav'
 import SyncButton from './SyncButton'
 import LocaleSwitch from './LocaleSwitch'
+import { useLocale } from '../../contexts/LocaleContext'
 
 interface DashboardShellProps {
   children: ReactNode
@@ -38,6 +41,7 @@ export default function DashboardShell({
   const [chatOpen, setChatOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [coachDraft, setCoachDraft] = useState<string | undefined>(undefined)
+  const { locale } = useLocale()
 
   // Cmd+K (or Ctrl+K) — command palette
   useEffect(() => {
@@ -59,6 +63,16 @@ export default function DashboardShell({
         <div className="flex justify-end items-center gap-2 pt-3">
           <LocaleSwitch />
           <SyncButton compact />
+          {/* Profile & training settings — push intensity + target event live here */}
+          <Link
+            to="/settings"
+            aria-label={locale === 'de' ? 'Profil & Einstellungen' : 'Profile & settings'}
+            title={locale === 'de' ? 'Profil — Push-Intensität & Zielwettkampf' : 'Profile — push intensity & target event'}
+            className="inline-flex items-center justify-center rounded-full transition-colors min-h-[36px] min-w-[36px]"
+            style={{ width: 36, height: 36, border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)', backgroundColor: 'var(--color-paper-2)' }}
+          >
+            <SlidersHorizontal size={16} strokeWidth={2} />
+          </Link>
         </div>
 
         {tabs && <div className="-mb-2">{tabs}</div>}

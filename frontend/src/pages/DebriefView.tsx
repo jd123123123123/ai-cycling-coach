@@ -56,14 +56,17 @@ export default function DebriefView() {
         )}
         {data && (
           <>
+            {/* MECE narrative arc: Verdict → What happened → What it means →
+                The evidence → What to do → (bonus) Head-to-head. Each act is a
+                distinct job; the timeline now precedes interpretation. */}
             <Act order={0}><DebriefHero report={data} /></Act>
-            <Act order={1}><KeyReads report={data} /></Act>
+            <Act order={1}><RideStory story={data.story} climbs={data.climbs} /></Act>
+            <Act order={2}><KeyReads report={data} /></Act>
+            <Act order={3}><BreakdownPanels report={data} /></Act>
+            <Act order={4}><DebriefPlan plan={data.plan} /></Act>
             {activityId != null && (
-              <Act order={2}><CompareDuel activityId={activityId} /></Act>
+              <Act order={5}><CompareDuel activityId={activityId} /></Act>
             )}
-            <Act order={3}><RideStory story={data.story} climbs={data.climbs} /></Act>
-            <Act order={4}><BreakdownPanels report={data} /></Act>
-            <Act order={5}><DebriefPlan plan={data.plan} /></Act>
           </>
         )}
       </div>

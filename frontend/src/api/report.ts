@@ -14,6 +14,8 @@ export interface DeltaItem {
   detail: string
   why: string
   delta: number
+  prev_value: number | null
+  curr_value: number | null
   unit: string
   direction: 'up' | 'down'
   is_improvement: boolean

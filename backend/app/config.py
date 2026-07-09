@@ -39,7 +39,10 @@ class Settings(BaseSettings):
     # was overkill (and tier-gated → silent fallback to rule-based on many keys).
     COACH_MODEL: str = "claude-opus-4-8"
     COACH_CHAT_MODEL: str = "claude-sonnet-4-6"   # chat uses same model
-    COACH_BRIEF_CACHE_HOURS: int = 1              # short TTL — briefs stay fresh
+    # Caching is refresh-on-demand: a brief regenerates ONLY on an explicit
+    # refresh (force=True) or a Garmin sync (which busts the cache when new data
+    # lands). Time alone never regenerates it — hence an effectively-infinite TTL.
+    COACH_BRIEF_CACHE_HOURS: int = 24 * 365
 
     # Race Debrief uses the strongest model for the analytical verdict, independent
     # of the coach brief model. Opus 4.8: adaptive thinking, no sampling params.

@@ -31,6 +31,8 @@ export interface TrainingGoals {
   // the backend, so extra keys are persisted as-is).
   training_model?: 'polarized' | 'sweetspot' | 'pyramidal'
   days_per_week?: number
+  // How hard the coach should push. Modulates the adaptive engine's upside only.
+  push_intensity?: 'steady' | 'balanced' | 'aggressive' | 'all_in'
 }
 
 export interface AthleteProfileUpdate {

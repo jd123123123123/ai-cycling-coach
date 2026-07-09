@@ -9,6 +9,10 @@ class TrainingGoals(BaseModel):
     target_event_name: str | None = None
     target_event_date: str | None = None  # ISO date string e.g. "2026-09-15"
     weekly_hours: float | None = None
+    # How hard the athlete wants to be pushed. Modulates ONLY the upside of the
+    # adaptive engine (escalate/push volume + escalation eagerness); the HRV
+    # back-off safety gate is never relaxed. See adaptive_readiness.ambition_from_intensity.
+    push_intensity: Literal['steady', 'balanced', 'aggressive', 'all_in'] | None = None
 
 
 class AthleteProfileCreate(BaseModel):

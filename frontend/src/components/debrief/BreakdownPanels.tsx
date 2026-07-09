@@ -86,10 +86,22 @@ function Eyebrow({ label, accent }: { label: string; accent?: string }) {
   )
 }
 
+/** A concrete "do this next" line with a number in it. Every analyzer ends in one
+ * so the debrief is prescriptive, never descriptive-only. */
+function ActionLine({ text, accent }: { text: string; accent?: string }) {
+  const color = accent ?? 'var(--color-forest-2)'
+  return (
+    <p className="flex items-start gap-1.5 mt-1" style={{ color: 'var(--color-ink)', fontSize: 13, lineHeight: 1.4, fontWeight: 500 }}>
+      <span style={{ color }}>→</span>
+      <span>{text}</span>
+    </p>
+  )
+}
+
 /** Full-width "slide": message column (eyebrow + serif headline + so-what) on
  * the left, evidence on the right. This is the McKinsey slide shape. */
-function Slide({ eyebrow, headline, explain, accent, children }: {
-  eyebrow: string; headline: string; explain?: string; accent?: string; children: React.ReactNode
+function Slide({ eyebrow, headline, explain, action, accent, children }: {
+  eyebrow: string; headline: string; explain?: string; action?: string; accent?: string; children: React.ReactNode
 }) {
   return (
     <div className="rounded-2xl overflow-hidden" style={CARD_STYLE}>
@@ -102,6 +114,7 @@ function Slide({ eyebrow, headline, explain, accent, children }: {
           {explain && (
             <p className="leading-relaxed" style={{ color: 'var(--color-ink-2)', fontSize: 13.5 }}>{explain}</p>
           )}
+          {action && <ActionLine text={action} accent={accent} />}
         </div>
         <div className="flex flex-col justify-center gap-4 p-6 sm:p-7 debrief-slide-ev">
           {children}
@@ -112,8 +125,8 @@ function Slide({ eyebrow, headline, explain, accent, children }: {
 }
 
 /** Compact card for stat-only blocks that pair two-across. */
-function Card({ label, accent, headline, read, children }: {
-  label: string; accent?: string; headline?: string; read?: string; children: React.ReactNode
+function Card({ label, accent, headline, read, action, children }: {
+  label: string; accent?: string; headline?: string; read?: string; action?: string; children: React.ReactNode
 }) {
   return (
     <div className="rounded-2xl overflow-hidden h-full flex flex-col" style={CARD_STYLE}>
@@ -125,7 +138,8 @@ function Card({ label, accent, headline, read, children }: {
           <h4 style={{ fontFamily: 'var(--font-serif)', fontSize: 18, fontWeight: 500, lineHeight: 1.15, color: 'var(--color-ink)' }}>{headline}</h4>
         )}
         {children}
-        {read && <p className="leading-relaxed mt-auto" style={{ color: 'var(--color-ink-2)', fontSize: 12.5 }}>{read}</p>}
+        {read && <p className="leading-relaxed" style={{ color: 'var(--color-ink-2)', fontSize: 12.5 }}>{read}</p>}
+        {action && <div className="mt-auto"><ActionLine text={action} accent={accent} /></div>}
       </div>
     </div>
   )
@@ -231,8 +245,16 @@ function EffortsSlide({ efforts, weightKg }: { efforts: EffortMatch[]; weightKg:
   const explain = prs
     ? (de ? 'Die Beine hatten echten Punch, als es zählte — die Rekorde beweisen, dass die Form da ist.' : 'The legs had real punch when it counted — these records show the fitness is there to build on.')
     : (de ? 'Balken zeigen % deiner 90-Tage-Bestleistung je Dauer. Grün = neuer Rekord.' : 'Each bar is % of your 90-day best at that duration. Green marks a new record.')
+  // No PR: point at the single duration closest to a record so the next block has a target.
+  const closest = prs ? undefined : [...efforts].filter((e) => e.pct_of_best != null).sort((a, b) => (b.pct_of_best ?? 0) - (a.pct_of_best ?? 0))[0]
+  const action = prs
+    ? (de ? 'Neue Bestwerte hochladen und FTP/Zonen prüfen.' : 'Log the records and recheck your FTP and zones.')
+    : closest
+      ? (de ? `Am nächsten dran: ${durationLabel(closest.duration_s, de)} bei ${Math.round(closest.pct_of_best ?? 0)}% — dieses Energiesystem im nächsten Block priorisieren (Ziel ≥${Math.round(closest.ride_watts) + 1} W).`
+            : `Closest to a record: ${durationLabel(closest.duration_s, de)} at ${Math.round(closest.pct_of_best ?? 0)}% — prioritise that energy system next block (target ≥${Math.round(closest.ride_watts) + 1} W).`)
+      : undefined
   return (
-    <Slide eyebrow={de ? 'SPITZENLEISTUNGEN · DER MOTOR' : 'PEAK EFFORTS · THE ENGINE'} headline={headline} explain={explain} accent={prs ? 'var(--color-good)' : undefined}>
+    <Slide eyebrow={de ? 'SPITZENLEISTUNGEN · DER MOTOR' : 'PEAK EFFORTS · THE ENGINE'} headline={headline} explain={explain} action={action} accent={prs ? 'var(--color-good)' : undefined}>
       <div className="flex flex-col gap-2.5">
         {rows.map((e, i) => (
           <div key={i} className="flex items-center gap-3" style={{ fontSize: 12 }}>
@@ -254,7 +276,7 @@ function EffortsSlide({ efforts, weightKg }: { efforts: EffortMatch[]; weightKg:
 }
 
 // ─── Climbs (the terrain) ────────────────────────────────────────────────────────
-function ClimbsSlide({ climbs }: { climbs: Climb[] }) {
+function ClimbsSlide({ climbs, ftp, weightKg }: { climbs: Climb[]; ftp: number | null; weightKg: number | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!climbs || climbs.length === 0) return null
   // Bridge over-segmented fragments into whole climbs, then keep the ones worth
@@ -274,8 +296,18 @@ function ClimbsSlide({ climbs }: { climbs: Climb[] }) {
   const explain = de
     ? 'Zusammenhängende Anstiege des Tages, sortiert nach Höhenmetern — je mit Länge, Ø-Steigung, Klettertempo (VAM) und deiner Leistung.'
     : 'The day’s climbs as whole ascents, ordered by elevation — each with length, average gradient, climb rate (VAM) and your power.'
+  // Target watts on the biggest climb — hold threshold-ish, ration the bottom third.
+  const hardest = shown[0]
+  const lo = ftp && ftp > 0 ? Math.round(0.9 * ftp) : null
+  const hi = ftp && ftp > 0 ? Math.round(ftp) : null
+  const didW = hardest?.w_per_kg != null && weightKg ? Math.round(hardest.w_per_kg * weightKg) : null
+  const action = lo && hi
+    ? (de
+        ? `Auf dem längsten Anstieg ${lo}–${hi} W anpeilen${didW ? ` (heute ~${didW} W)` : ''} — das untere Drittel bewusst ruhiger angehen.`
+        : `On the longest climb, target ${lo}–${hi} W${didW ? ` (you did ~${didW} W)` : ''} — start the bottom third deliberately softer.`)
+    : undefined
   return (
-    <Slide eyebrow={de ? 'ANSTIEGE · DAS TERRAIN' : 'CLIMBS · THE TERRAIN'} headline={headline} explain={explain} accent="var(--color-good)">
+    <Slide eyebrow={de ? 'ANSTIEGE · DAS TERRAIN' : 'CLIMBS · THE TERRAIN'} headline={headline} explain={explain} action={action} accent="var(--color-good)">
       <div className="flex flex-col">
         {/* header row */}
         <div className="num-mono flex items-center gap-2 pb-2" style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.1em', borderBottom: '1px solid var(--color-rule)' }}>
@@ -309,7 +341,7 @@ function ClimbsSlide({ climbs }: { climbs: Climb[] }) {
 }
 
 // ─── Compact stat cards (by the numbers) ─────────────────────────────────────────
-function EfficiencyCard({ efficiency }: { efficiency: Efficiency | null }) {
+function EfficiencyCard({ efficiency, ftp }: { efficiency: Efficiency | null; ftp: number | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!efficiency) return null
   const { efficiency_factor: ef, decoupling_pct: dc, avg_hr: hr } = efficiency
@@ -323,8 +355,16 @@ function EfficiencyCard({ efficiency }: { efficiency: Efficiency | null }) {
     : dc < 5 ? (de ? 'Kaum HF-Drift — Aerobsystem hat die Distanz getragen.' : 'Barely any drift — your aerobic system carried the distance.')
     : dc > 10 ? (de ? 'HF stieg für dieselbe Leistung — Verpflegung oder Pace prüfen.' : 'HR climbed for the same power — check fuelling or pacing.')
     : (de ? 'Leichte Entkopplung zum Ende hin.' : 'A little decoupling toward the finish.')
+  // Concrete target: cap the aerobic effort + hydrate to keep drift under 5%.
+  const cap = ftp && ftp > 0 ? Math.round(0.75 * ftp) : null
+  const action = dc == null || dc < 5 ? undefined
+    : dc > 10
+      ? (cap
+          ? (de ? `Erste Stunde bei ≤${cap} W deckeln und 500–750 ml/h trinken — Drift unter 5% halten.` : `Cap the first hour at ≤${cap} W and drink 500–750 ml/h to hold drift under 5%.`)
+          : (de ? 'Startpace ~5% senken und 500–750 ml/h trinken, um den Drift unter 5% zu halten.' : 'Ease the opening pace ~5% and drink 500–750 ml/h to hold drift under 5%.'))
+      : (de ? 'Die ersten 90 min ~5 W leichter fahren und alle 10 min trinken.' : 'Ride the first 90 min ~5 W easier and drink every 10 min.')
   return (
-    <Card label={de ? 'EFFIZIENZ' : 'EFFICIENCY'} accent={tone} headline={headline} read={read}>
+    <Card label={de ? 'EFFIZIENZ' : 'EFFICIENCY'} accent={tone} headline={headline} read={read} action={action}>
       <StatRow>
         {ef != null && <StatBlock value={ef.toFixed(2)} label="EF" />}
         {dc != null && <StatBlock value={`${dc.toFixed(1)}`} unit="%" label={de ? 'HF-Drift' : 'Decoupling'} color={tone} />}
@@ -353,9 +393,10 @@ function MatchbookCard({ matchbook }: { matchbook: Matchbook | null }) {
   )
 }
 
-function QuadrantCard({ quadrant }: { quadrant: Quadrant | null }) {
+function QuadrantCard({ quadrant, ftp }: { quadrant: Quadrant | null; ftp: number | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!quadrant) return null
+  const w = (frac: number) => (ftp && ftp > 0 ? `${Math.round(frac * ftp)} W` : de ? 'Tempo-Watt' : 'tempo watts')
   const cells = [
     { label: de ? 'Kraft ↑ / Kadenz ↑' : 'hi force / hi cad', pct: quadrant.q1_pct, tag: 'Q1' },
     { label: de ? 'Kraft ↑ / Kadenz ↓' : 'hi force / lo cad', pct: quadrant.q2_pct, tag: 'Q2' },
@@ -375,8 +416,14 @@ function QuadrantCard({ quadrant }: { quadrant: Quadrant | null }) {
     Q3: de ? 'Überwiegend locker gefahren — gut fürs Sparen, aber am Berg brauchst du auch Drehmoment.' : 'Mostly easy pedalling — good for saving energy, but climbs still demand torque.',
     Q4: de ? 'Hohe Kadenz, wenig Kraft — effizient. Für steile Rampen etwas mehr Kraftausdauer trainieren.' : 'High cadence, low force — efficient. Add strength-endurance for the steep ramps.',
   }
+  const actionByTag: Record<string, string> = {
+    Q1: de ? `Kraftausdauer statt Attacken: 3×12 min bei ${w(0.9)}, 1×/Woche.` : `Trade surges for strength-endurance: 3×12 min at ${w(0.9)}, once a week.`,
+    Q2: de ? `Am Berg leichter übersetzen — Kadenz 85–95 bei ${w(0.9)} halten.` : `Gear down on climbs — hold 85–95 rpm at ${w(0.9)}.`,
+    Q3: de ? `Drehmoment aufbauen: 3×8 min bei 50–60 rpm, ${w(0.85)} am Berg, 1×/Woche.` : `Build torque: 3×8 min at 50–60 rpm, ${w(0.85)} on a climb, once a week.`,
+    Q4: de ? `Für steile Rampen Kraftausdauer ergänzen: 3×8 min bei 55–60 rpm, ${w(0.85)}.` : `Add strength-endurance for steep ramps: 3×8 min at 55–60 rpm, ${w(0.85)}.`,
+  }
   return (
-    <Card label={de ? 'QUADRANTEN' : 'PEDALLING STYLE'} headline={headlineByTag[dom.tag]} read={readByTag[dom.tag]}>
+    <Card label={de ? 'QUADRANTEN' : 'PEDALLING STYLE'} headline={headlineByTag[dom.tag]} read={readByTag[dom.tag]} action={actionByTag[dom.tag]}>
       <div className="grid grid-cols-2 gap-2">
         {cells.map((c) => {
           const isDom = c.tag === dom.tag
@@ -428,8 +475,13 @@ function WkoCard({ wko, weightKg }: { wko: WkoModel | null; weightKg: number | n
   const read = de
     ? `Aus der Leistungs-Dauer-Kurve dieser Fahrt geschätzt — kein CP-Test. W′ ist dein anaerober „Akku“ für kurze Attacken.`
     : `Estimated from this ride's power–duration curve — not a CP test. W′ is your anaerobic "battery" for short attacks.`
+  // Concrete target: extend time-to-exhaustion by riding at CP for the current TTE.
+  const cp = Math.round(wko.cp_watts)
+  const action = de
+    ? `Schwellen-Intervalle bei CP (${cp} W) über ${fmtMmSs(wko.tte_s)} fahren, um deine TTE zu verlängern.`
+    : `Ride threshold intervals at CP (${cp} W) for ${fmtMmSs(wko.tte_s)} to extend your time-to-exhaustion.`
   return (
-    <Card label={de ? 'LEISTUNGSMODELL' : 'POWER MODEL'} accent="var(--color-ink-blue)" headline={de ? 'Dein aktueller Motor' : 'Your engine, modelled'} read={read}>
+    <Card label={de ? 'LEISTUNGSMODELL' : 'POWER MODEL'} accent="var(--color-ink-blue)" headline={de ? 'Dein aktueller Motor' : 'Your engine, modelled'} read={read} action={action}>
       <span className="num-mono self-start rounded-full px-2 py-0.5" style={{ fontSize: 9.5, fontWeight: 600, color: conf.c, border: `1px solid color-mix(in srgb, ${conf.c} 35%, var(--color-rule))` }}>
         {conf.t} · R² {r2.toFixed(2)}
       </span>
@@ -448,10 +500,16 @@ function CdaCard({ cda }: { cda: Cda | null }) {
   const { locale } = useLocale(); const de = locale === 'de'
   if (!cda) return null
   if (cda.cda_m2 < 0.18 || cda.cda_m2 > 0.55) return null
+  // Aero power saved by trimming CdA 0.02 m² at 40 km/h: P = ½·ρ·CdA·v³.
+  const wSaved = Math.round(0.5 * 1.225 * 0.02 * Math.pow(11.11, 3))
+  const action = de
+    ? `Auf Flachstücken tief bleiben — 0,02 m² weniger CdA sparen ~${wSaved} W bei 40 km/h.`
+    : `Hold an aero position on the flats — trimming CdA 0.02 m² saves ~${wSaved} W at 40 km/h.`
   return (
     <Card label={de ? 'AERODYNAMIK' : 'AERODYNAMICS'} accent="var(--color-ink-blue)"
       headline={`CdA ${cda.cda_m2.toFixed(3)} m²`}
-      read={de ? 'Schätzung aus Geschwindigkeit, Leistung und Steigung — Richtwert, kein Windkanal.' : 'Estimated from speed, power and grade — directional, not a wind-tunnel figure.'}>
+      read={de ? 'Schätzung aus Geschwindigkeit, Leistung und Steigung — Richtwert, kein Windkanal.' : 'Estimated from speed, power and grade — directional, not a wind-tunnel figure.'}
+      action={action}>
       <StatRow>
         <StatBlock value={cda.cda_m2.toFixed(3)} unit="m²" label="CdA" />
         <StatBlock value={(cda.avg_speed_ms * 3.6).toFixed(1)} unit="km/h" label={de ? 'Ø Geschw.' : 'Avg speed'} />
@@ -466,6 +524,7 @@ export default function BreakdownPanels({ report }: { report: RaceDebrief }) {
   const { locale } = useLocale(); const de = locale === 'de'
   const { data: profile } = useAthleteProfile()
   const weightKg = profile?.weight_kg ?? null
+  const ftp = profile?.ftp_watts ?? null
   const hasEfficiency = !!report.efficiency && (report.efficiency.efficiency_factor != null || report.efficiency.decoupling_pct != null || report.efficiency.avg_hr != null)
   const cdaShown = !!report.cda && report.cda.cda_m2 >= 0.18 && report.cda.cda_m2 <= 0.55
   const hasCompact = !!report.matchbook || hasEfficiency || !!report.wko || !!report.fueling || !!report.quadrant || cdaShown
@@ -476,7 +535,7 @@ export default function BreakdownPanels({ report }: { report: RaceDebrief }) {
     <div className="flex flex-col gap-8 sm:gap-10">
       <PacingSlide pacing={report.pacing} />
       <EffortsSlide efforts={report.efforts} weightKg={weightKg} />
-      <ClimbsSlide climbs={report.climbs} />
+      <ClimbsSlide climbs={report.climbs} ftp={ftp} weightKg={weightKg} />
 
       {hasCompact && (
         <div className="flex flex-col gap-5">
@@ -489,10 +548,10 @@ export default function BreakdownPanels({ report }: { report: RaceDebrief }) {
           />
           <div className="grid gap-4 md:grid-cols-2 items-stretch">
             <MatchbookCard matchbook={report.matchbook} />
-            <EfficiencyCard efficiency={report.efficiency} />
+            <EfficiencyCard efficiency={report.efficiency} ftp={ftp} />
             <WkoCard wko={report.wko} weightKg={weightKg} />
             <FuelingCard fueling={report.fueling} />
-            <QuadrantCard quadrant={report.quadrant} />
+            <QuadrantCard quadrant={report.quadrant} ftp={ftp} />
             <CdaCard cda={report.cda} />
           </div>
         </div>

@@ -21,11 +21,11 @@ import GarminSyncedBanner from '../components/dashboard/GarminSyncedBanner'
 import TodayTab from '../components/dashboard/tabs/TodayTab'
 import PlanTab from '../components/dashboard/tabs/PlanTab'
 import AnalyzeTab from '../components/dashboard/tabs/AnalyzeTab'
-import CrewTab from '../components/dashboard/tabs/CrewTab'
+import SocialTab from '../components/social/tabs/SocialTab'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { useT } from '../contexts/LocaleContext'
 
-type TabId = 'today' | 'plan' | 'analyze' | 'crew'
+type TabId = 'today' | 'plan' | 'analyze' | 'social'
 
 function resolveTab(raw: string | null): TabId {
   switch (raw) {
@@ -39,8 +39,9 @@ function resolveTab(raw: string | null): TabId {
     case 'analyze':
     case 'trends':
     case 'report': return 'analyze'
-    // Crew stays routable (?tab=crew) but is not in the nav until it's real
-    case 'crew': return 'crew'
+    // Social is the fourth surface; legacy ?tab=crew aliases into it
+    case 'social':
+    case 'crew': return 'social'
     // legacy sport tabs collapsed into Today
     case 'bike':
     case 'run':
@@ -67,6 +68,7 @@ export default function DashboardPage() {
     { id: 'today',   label: t('tab_today') },
     { id: 'plan',    label: t('tab_plan') },
     { id: 'analyze', label: t('tab_analyze') },
+    { id: 'social',  label: t('tab_social') },
   ]
 
   const tabContent = (() => {
@@ -74,7 +76,7 @@ export default function DashboardPage() {
       case 'today':   return <TodayTab />
       case 'plan':    return <PlanTab />
       case 'analyze': return <AnalyzeTab />
-      case 'crew':    return <CrewTab />
+      case 'social':  return <SocialTab />
     }
   })()
 

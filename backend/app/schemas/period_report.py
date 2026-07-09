@@ -27,6 +27,8 @@ class DeltaItem(BaseModel):
     detail: str = Field(description="real numbers, e.g. 'CTL 48 → 52 (+4)'")
     why: str = Field(description="one line on why it matters")
     delta: float
+    prev_value: float | None = Field(default=None, description="value in the previous window (the 'before')")
+    curr_value: float | None = Field(default=None, description="value in the current window (the 'after')")
     unit: str = ""
     direction: str = Field(description="'up' or 'down' (raw metric movement)")
     is_improvement: bool

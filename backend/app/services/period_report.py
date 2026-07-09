@@ -363,6 +363,8 @@ def build_deltas(cur: WindowMetrics, prev: WindowMetrics | None, lang: str = "en
             detail=detail,
             why=why_txt,
             delta=round(delta, 2),
+            prev_value=round(b, 2),
+            curr_value=round(a, 2),
             unit=unit_txt,
             direction=direction,
             is_improvement=is_improvement,
@@ -1043,7 +1045,10 @@ async def _ai_verdict(
         return fallback, "rule-based-fallback"
 
 
-PERIOD_REPORT_TTL_HOURS = 18
+# Refresh-on-demand: a report regenerates only on a Garmin sync that lands new
+# activities (which deletes today's cached windows) or an explicit refresh — not
+# from elapsed time. Effectively-infinite TTL so time alone never rebuilds it.
+PERIOD_REPORT_TTL_HOURS = 24 * 365
 PRESET_WINDOWS = (7, 14, 30)
 
 

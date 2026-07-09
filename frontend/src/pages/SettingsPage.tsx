@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import LanguageToggle from '../components/dashboard/LanguageToggle'
 import TargetEventEditor from '../components/dashboard/TargetEventEditor'
+import PushIntensityEditor from '../components/dashboard/PushIntensityEditor'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useLocale } from '../contexts/LocaleContext'
 
@@ -35,6 +36,9 @@ export default function SettingsPage() {
 
         {/* Target event — drives the whole plan */}
         <TargetEventEditor />
+
+        {/* How hard to push — modulates the adaptive engine's upside */}
+        <PushIntensityEditor />
 
         {/* Coach language */}
         <section

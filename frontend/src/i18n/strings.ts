@@ -103,6 +103,7 @@ export const STRINGS = {
   tab_crew: { en: 'Crew', de: 'Crew' },
   tab_report: { en: 'Report', de: 'Report' },
   tab_analyze: { en: 'Analyze', de: 'Analyse' },
+  tab_social: { en: 'Social', de: 'Social' },
   analyze_charts: { en: 'Detailed charts', de: 'Detaillierte Charts' },
   analyze_overview: { en: 'Overview', de: 'Übersicht' },
   analyze_report: { en: 'Report', de: 'Report' },

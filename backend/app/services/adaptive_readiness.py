@@ -30,6 +30,29 @@ HRV_BAND_SD = 0.5
 # Aggressive default: how many clean in-band blocks widen the push.
 DEFAULT_AMBITION = 1.0
 
+# Athlete "how hard should I be pushed" preference → ambition multiplier.
+# Modulates ONLY the upside (escalate/push volume + escalation eagerness).
+# The HRV back-off safety gate (deload/hold) is NEVER relaxed by this.
+_AMBITION = {
+    "steady": 0.85,      # ease me in — protect recovery, smaller pushes
+    "balanced": 1.0,     # the evidence-graded default
+    "aggressive": 1.12,  # chase adaptation — bigger pushes, escalate readily
+    "all_in": 1.25,      # send it — max overload the safety rails still allow
+}
+_AMBITION_LABEL = {
+    "steady": ("Steady push", "Sanfter Aufbau"),
+    "balanced": ("Balanced push", "Ausgewogener Push"),
+    "aggressive": ("Aggressive push", "Aggressiver Push"),
+    "all_in": ("All-in push", "Volle Attacke"),
+}
+# Cap so no chained multiplier ever prescribes a reckless jump.
+_VOL_CAP = 1.4
+
+
+def ambition_from_intensity(level: str | None) -> float:
+    """Map the athlete's push-intensity preference to an ambition multiplier."""
+    return _AMBITION.get((level or "balanced"), 1.0)
+
 
 @dataclass
 class Signal:
@@ -64,10 +87,18 @@ def assess_adaptation(
     sleep_score: float | None,
     load_ramp: float | None,        # acute:chronic load ratio (soft guardrail only)
     lang: str = "en",
+    ambition: float = 1.0,          # athlete push preference — upside only
+    push_level: str = "balanced",
 ) -> Directive:
-    """Pure core. See module docstring for the grounding of each rule."""
+    """Pure core. See module docstring for the grounding of each rule.
+
+    `ambition` (from the athlete's push-intensity setting) scales ONLY the upside:
+    push/escalate volume and how readily we escalate. The HRV back-off gate
+    (deload/hold) is never relaxed — safety is not a preference.
+    """
     de = _de(lang)
     sig: list[Signal] = []
+    hungry = ambition >= 1.1  # aggressive / all-in athletes escalate on softer evidence
 
     # ── HRV band (RCT primary gate) ──────────────────────────────────────
     hrv_state = "unknown"
@@ -109,19 +140,24 @@ def assess_adaptation(
             "warn", "RCT") if hrv_state == "below" else Signal(
             "Mehrere Ermüdungssignale zusammen — vorsichtig." if de else "Several fatigue signals together — play it safe.",
             "warn", "expert"))
-    elif hrv_state in ("in", "above") and durability_improving and not poor_sleep and not deep_neg_tsb:
-        # Confirmed adaptation → escalate (the "go crazier" loop).
-        d = Directive("escalate", "push", 1.12, hrv_state,
+    elif hrv_state in ("in", "above") and (durability_improving or (hungry and not durability_worse)) \
+            and not poor_sleep and not deep_neg_tsb:
+        # Confirmed adaptation → escalate (the "go crazier" loop). Hungry athletes
+        # escalate on softer evidence (durability merely not worsening).
+        d = Directive("escalate", "push", min(1.12 * ambition, _VOL_CAP), hrv_state,
                       "Voll draufhalten — dein Körper adaptiert." if de else "Push hard — your body is adapting.",
                       confidence="moderate")
         sig.append(Signal(
             "HRV hält im Band, während die Last stieg — grünes Licht zum Eskalieren." if de
             else "HRV holding in-band while load rose — green light to escalate.", "good", "RCT"))
         sig.append(Signal(
-            "Durability verbessert sich (Entkopplung sinkt)." if de
-            else "Durability improving (decoupling trending down).", "good", "expert"))
+            ("Durability verbessert sich (Entkopplung sinkt)." if de
+             else "Durability improving (decoupling trending down).") if durability_improving
+            else ("Durability stabil — dein Push-Level nutzt den Spielraum." if de
+                  else "Durability holding — your push setting takes the room."),
+            "good", "expert"))
     elif hrv_state in ("in", "above"):
-        d = Directive("push", "hard", 1.0, hrv_state,
+        d = Directive("push", "hard", min(1.0 * ambition, _VOL_CAP), hrv_state,
                       "Grünes Licht — belaste hart." if de else "Green light — load hard.",
                       confidence="moderate")
         sig.append(Signal(
@@ -133,9 +169,17 @@ def assess_adaptation(
                           "Etwas Ermüdung tragen — moderat halten." if de else "Carrying fatigue — keep it moderate.")
             sig.append(Signal(f"TSB {tsb:.0f} — tiefe Ermüdungslast." if de else f"TSB {tsb:.0f} — deep fatigue load.", "warn", "expert"))
         else:
-            d = Directive("push", "hard", 1.0, hrv_state,
+            d = Directive("push", "hard", min(1.0 * ambition, _VOL_CAP), hrv_state,
                           "Belaste hart." if de else "Load hard.")
             sig.append(Signal("Keine HRV-Daten — nutze TSB als Näherung." if de else "No HRV data — using TSB as a proxy.", "neutral", "expert"))
+
+    # ── Transparency: surface the athlete's chosen push level on upside days ──
+    if d.directive in ("escalate", "push") and push_level != "balanced":
+        en_lbl, de_lbl = _AMBITION_LABEL.get(push_level, ("Balanced push", "Ausgewogener Push"))
+        sig.append(Signal(
+            f"{de_lbl} aktiv — Volumen ×{d.volume_modifier:.2f}." if de
+            else f"{en_lbl} on — volume ×{d.volume_modifier:.2f}.",
+            "neutral", "expert"))
 
     # ── Ramp guardrail (warning only — ACWR discredited) ─────────────────
     if ramp_hot and d.directive in ("escalate", "push"):
@@ -162,6 +206,13 @@ async def _hrv_series(db: AsyncSession, user_id: int, days: int = 35) -> list[fl
 
 
 async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "en") -> Directive:
+    # Athlete push-intensity preference → ambition (upside only).
+    from app.models.athlete_profile import AthleteProfile
+    prow = await db.execute(select(AthleteProfile.goals).where(AthleteProfile.user_id == user_id))
+    goals = prow.scalar_one_or_none() or {}
+    push_level = (goals.get("push_intensity") if isinstance(goals, dict) else None) or "balanced"
+    ambition = ambition_from_intensity(push_level)
+
     ln = await _hrv_series(db, user_id)
     hrv_recent = mean(ln[-7:]) if len(ln) >= 3 else None
     baseline_window = ln[-28:] if len(ln) >= 10 else ln
@@ -207,5 +258,5 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
     return assess_adaptation(
         hrv_recent=hrv_recent, hrv_baseline=hrv_baseline, hrv_sd=hrv_sd, hrv_below_days=below_days,
         tsb=tsb, decoupling_delta=decoupling_delta, sleep_score=(float(sleep_score) if sleep_score is not None else None),
-        load_ramp=load_ramp, lang=lang,
+        load_ramp=load_ramp, lang=lang, ambition=ambition, push_level=push_level,
     )

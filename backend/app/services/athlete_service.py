@@ -81,6 +81,9 @@ async def update_goals(
     if "weekly_hours" in goals_data:
         current_goals["weekly_hours"] = goals_data["weekly_hours"]
 
+    if "push_intensity" in goals_data:
+        current_goals["push_intensity"] = goals_data["push_intensity"]
+
     if "target_event_name" in goals_data or "target_event_date" in goals_data:
         target_event = current_goals.get("target_event", {})
         if "target_event_name" in goals_data:

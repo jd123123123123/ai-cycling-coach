@@ -144,7 +144,9 @@ export function buildReads(d: RaceDebrief, de: boolean): Read[] {
       title: de ? 'Neue Bestwerte' : 'New power records',
       read: de ? `Du hast ${prs.length} Leistungs-Rekord${prs.length > 1 ? 'e' : ''} aufgestellt — u. a. ${Math.round(best.ride_watts)} W über ${durLabel(best.duration_s, de)}.`
                : `You set ${prs.length} power record${prs.length > 1 ? 's' : ''} this ride — including ${Math.round(best.ride_watts)} W for ${durLabel(best.duration_s, de)}.`,
-      weight: 60 }))
+      doThis: de ? 'Neue Bestwerte hochladen: FTP prüfen und Zonen neu setzen.' : 'Log the record — recheck your FTP and re-zone off it.',
+      // A genuine PR is the emotional peak of the ride — it must always lead.
+      weight: 95 }))
   } else {
     // near-max highlight
     const near = (d.efforts ?? []).filter((e) => (e.pct_of_best ?? 0) >= 95)
@@ -170,9 +172,36 @@ export function buildReads(d: RaceDebrief, de: boolean): Read[] {
   return out
 }
 
-/** Top N reads, most important first — for the Key Reads band. */
+const isWin = (s: Status) => s === 'good'
+const isFix = (s: Status) => s === 'bad' || s === 'watch'
+
+/** The single biggest win of the ride (highest-weight positive read), if any. */
+export function bestRead(d: RaceDebrief, de: boolean): Read | undefined {
+  return [...buildReads(d, de)].filter((x) => isWin(x.status)).sort((a, b) => b.weight - a.weight)[0]
+}
+
+/** The single biggest thing to fix (highest-weight negative read), if any. */
+export function worstRead(d: RaceDebrief, de: boolean): Read | undefined {
+  const neg = [...buildReads(d, de)].filter((x) => isFix(x.status)).sort((a, b) => b.weight - a.weight)
+  // Prefer a true flag ('bad') over a mere 'watch'.
+  return neg.find((x) => x.status === 'bad') ?? neg[0]
+}
+
+/**
+ * Top N reads for the Key Reads band. Guarantees the band is balanced — it always
+ * includes the single biggest win AND the single biggest fix, so a strong ride
+ * never buries its PR under criticism and a weak ride still shows one bright spot.
+ * The remaining slots fill by weight; the final band is sorted by weight for hierarchy.
+ */
 export function keyReads(d: RaceDebrief, de: boolean, n = 4): Read[] {
-  return [...buildReads(d, de)].sort((a, b) => b.weight - a.weight).slice(0, n)
+  const byWeight = [...buildReads(d, de)].sort((a, b) => b.weight - a.weight)
+  const picked: Read[] = []
+  const seen = new Set<string>()
+  const add = (x?: Read) => { if (x && !seen.has(x.key) && picked.length < n) { seen.add(x.key); picked.push(x) } }
+  add(byWeight.find((x) => isWin(x.status)))   // guarantee one win
+  add(byWeight.find((x) => isFix(x.status)))   // guarantee one fix
+  for (const x of byWeight) add(x)             // fill the rest by weight
+  return picked.sort((a, b) => b.weight - a.weight)
 }
 
 function durLabel(seconds: number, de: boolean): string {

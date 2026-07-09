@@ -415,12 +415,11 @@ async def _refresh_period_report_cache(db, user_id, today, new_activities, tz_na
         daily_due = should_precompute_daily(datetime.now(timezone.utc), tz_name, last)
 
         if new_activities > 0:
+            # New data landed → invalidate ALL cached windows (presets + custom).
+            # TTL is effectively infinite (refresh-on-demand), so a date-scoped
+            # delete would strand a prior-day custom window as permanently stale.
             await db.execute(
-                delete(PeriodReportCache).where(
-                    PeriodReportCache.user_id == user_id,
-                    PeriodReportCache.generated_at
-                    >= datetime.combine(today, datetime.min.time(), tzinfo=UTC),
-                )
+                delete(PeriodReportCache).where(PeriodReportCache.user_id == user_id)
             )
             await db.commit()
             await precompute_preset_reports(db, user_id)
@@ -540,16 +539,15 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
             dates_touched.append(cursor)
             cursor += timedelta(days=1)
 
-        # Invalidate cached coach briefs that were generated today (UTC). The
-        # next read of /coach/brief will regenerate against the freshly-synced
-        # activities + daily metrics. Defensive: a delete failure must NOT
-        # break the sync return — the brief will simply stay stale until TTL.
+        # Invalidate ALL cached coach briefs for this user. Briefs now use an
+        # effectively-infinite TTL (refresh-on-demand), so a date-scoped delete
+        # would leave a prior-day brief stuck forever. A Garmin sync is exactly
+        # the "new data arrived" signal that should regenerate it — the next read
+        # of /coach/brief rebuilds against the freshly-synced activities/metrics.
+        # Defensive: a delete failure must NOT break the sync return.
         try:
             await db.execute(
-                delete(CoachBrief).where(
-                    CoachBrief.user_id == user_id,
-                    CoachBrief.generated_at >= datetime.combine(today, datetime.min.time(), tzinfo=UTC),
-                )
+                delete(CoachBrief).where(CoachBrief.user_id == user_id)
             )
             await db.commit()
         except Exception as exc:

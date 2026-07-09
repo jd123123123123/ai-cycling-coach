@@ -1,22 +1,24 @@
 import { useSearchParams } from 'react-router-dom'
-import { Sun, CalendarDays, BarChart3 } from 'lucide-react'
+import { Sun, CalendarDays, BarChart3, Trophy } from 'lucide-react'
 import { useT, useLocale } from '../../contexts/LocaleContext'
 
 // Mobile bottom navigation — your thumb can't reach a top tab strip on a
-// phone. Appears only below 'lg'. Mirrors the three desktop surfaces:
-// Today (the call) · Plan (week + workouts) · Analyze (all evidence).
+// phone. Appears only below 'lg'. Mirrors the four desktop surfaces:
+// Today (the call) · Plan (week + workouts) · Analyze (all evidence) · Social.
 
-type TabId = 'today' | 'plan' | 'analyze'
+type TabId = 'today' | 'plan' | 'analyze' | 'social'
 
-const TABS: Array<{ id: TabId; labelKey: 'tab_today' | 'tab_plan' | 'tab_analyze'; icon: React.ReactNode }> = [
+const TABS: Array<{ id: TabId; labelKey: 'tab_today' | 'tab_plan' | 'tab_analyze' | 'tab_social'; icon: React.ReactNode }> = [
   { id: 'today',   labelKey: 'tab_today',   icon: <Sun size={20} strokeWidth={1.8} /> },
   { id: 'plan',    labelKey: 'tab_plan',    icon: <CalendarDays size={20} strokeWidth={1.8} /> },
   { id: 'analyze', labelKey: 'tab_analyze', icon: <BarChart3 size={20} strokeWidth={1.8} /> },
+  { id: 'social',  labelKey: 'tab_social',  icon: <Trophy size={20} strokeWidth={1.8} /> },
 ]
 
 function resolveActive(raw: string | null): TabId {
   if (raw === 'plan' || raw === 'train' || raw === 'week' || raw === 'workouts') return 'plan'
   if (raw === 'analyze' || raw === 'trends' || raw === 'report') return 'analyze'
+  if (raw === 'social' || raw === 'crew') return 'social'
   return 'today'
 }
 

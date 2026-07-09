@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocale } from '../../contexts/LocaleContext'
 import type { RaceDebrief } from '../../api/debrief'
+import { bestRead, worstRead, type Read } from './insights'
 
 function gradeColor(letter: string | null): string {
   if (!letter) return 'var(--color-muted)'
@@ -108,27 +109,47 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function VerdictList({ title, items, tone }: { title: string; items: string[]; tone: 'good' | 'bad' }) {
-  const color = tone === 'good' ? 'var(--color-good)' : 'var(--color-bad)'
+/**
+ * The Hero's single biggest-win / biggest-fix pair. Distinct from KeyReads (which
+ * carries the full ranked band) — this is the one-glance "best thing / worst thing,
+ * and exactly what to do about it." Each carries the read's concrete action so the
+ * verdict is never descriptive-only.
+ */
+function HeadlineCard({ kind, read, de }: { kind: 'win' | 'fix'; read: Read | undefined; de: boolean }) {
+  const color = kind === 'win' ? 'var(--color-good)' : 'var(--color-bad)'
+  const title = kind === 'win' ? (de ? 'GRÖSSTER GEWINN' : 'BIGGEST WIN') : (de ? 'WICHTIGSTER FIX' : 'BIGGEST FIX')
   return (
-    <div className="flex flex-col gap-3">
-      <span className="eyebrow num-mono" style={{ color, fontSize: 10, letterSpacing: '0.22em' }}>
+    <div
+      className="flex flex-col gap-2 rounded-[14px] p-4"
+      style={{ background: `color-mix(in srgb, ${color} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 26%, var(--color-rule))` }}
+    >
+      <span className="eyebrow num-mono" style={{ color, fontSize: 9.5, letterSpacing: '0.22em' }}>
         {title}
       </span>
-      {items.length === 0 ? (
-        <span style={{ color: 'var(--color-muted)', fontSize: 13 }}>—</span>
+      {read ? (
+        <>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            {read.metric && (
+              <span className="num-mono" style={{ color, fontSize: 20, fontWeight: 600 }}>{read.metric}</span>
+            )}
+            <span style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-ink)', fontSize: 15, fontWeight: 500 }}>
+              {read.title}
+            </span>
+          </div>
+          <p style={{ color: 'var(--color-ink-2)', fontSize: 13, lineHeight: 1.45 }}>{read.read}</p>
+          {read.doThis && (
+            <p className="mt-0.5 flex items-start gap-1.5" style={{ color: 'var(--color-ink)', fontSize: 13, lineHeight: 1.4, fontWeight: 500 }}>
+              <span style={{ color }}>→</span>
+              <span>{read.doThis}</span>
+            </p>
+          )}
+        </>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {items.map((item, i) => (
-            <li key={i} className="flex items-start gap-2.5" style={{ color: 'var(--color-ink)', fontSize: 14, lineHeight: 1.4 }}>
-              <span
-                className="shrink-0 rounded-full mt-1.5"
-                style={{ width: 6, height: 6, backgroundColor: color }}
-              />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
+        <span style={{ color: 'var(--color-muted)', fontSize: 13 }}>
+          {kind === 'win'
+            ? (de ? 'Solide durchgezogen — kein einzelner Ausreißer nach oben.' : 'Solid throughout — no single standout to call out.')
+            : (de ? 'Sauber ausgeführt — nichts Dringendes zu beheben.' : 'Cleanly executed — nothing urgent to fix.')}
+        </span>
       )}
     </div>
   )
@@ -226,18 +247,11 @@ export default function DebriefHero({ report }: { report: RaceDebrief }) {
         <Stat label={locale === 'de' ? 'GESCHW.' : 'AVG SPEED'} value={`${header.avg_speed_kmh.toFixed(1)} km/h`} />
       </div>
 
-      {/* went-well / watch-out */}
-      <div className="grid gap-5 md:grid-cols-2 mt-6 pt-5" style={{ borderTop: '1px solid var(--color-rule)' }}>
-        <VerdictList
-          title={locale === 'de' ? 'GUT GELAUFEN' : 'WENT WELL'}
-          items={verdict.went_well}
-          tone="good"
-        />
-        <VerdictList
-          title={locale === 'de' ? 'ACHTUNG' : 'WATCH OUT'}
-          items={verdict.watch_out}
-          tone="bad"
-        />
+      {/* biggest win + biggest fix — one glance, each with its action.
+          The full ranked band lives in KeyReads, so no duplication here. */}
+      <div className="grid gap-4 md:grid-cols-2 mt-6 pt-5" style={{ borderTop: '1px solid var(--color-rule)' }}>
+        <HeadlineCard kind="win" read={bestRead(report, de)} de={de} />
+        <HeadlineCard kind="fix" read={worstRead(report, de)} de={de} />
       </div>
     </div>
   )

@@ -35,11 +35,11 @@ from app.services.w_balance import w_prime_balance
 logger = logging.getLogger(__name__)
 
 DEBRIEF_TTL_HOURS = 24 * 30  # a ride's analysis is stable; long TTL
-# Note: efforts[].is_pr is computed by comparing this ride's efforts against the
-# athlete's whole-history MMP envelope as of generation time, not recomputed on
-# read. So a PR flag reflects the athlete's best known at build time; it can go
-# stale (a later ride superseding it, or reclassifying it as no longer a PR)
-# for up to DEBRIEF_TTL_HOURS until the cached report expires and rebuilds.
+# Note: efforts[].is_pr is computed at build time against the athlete's whole-history
+# MMP envelope, but with a 30-day TTL a later ride could silently supersede a PR and
+# we'd keep celebrating it. So `get_or_build_debrief` re-evaluates each effort's is_pr
+# on READ against the CURRENT envelope (a cheap single-column scan + dict aggregation)
+# before returning a cached report — see _refresh_pr_flags.
 _STORY_MAX_POINTS = 600
 
 _VERDICT_SYSTEM = (
@@ -163,7 +163,8 @@ def _merge_climb_gain(climbs):
     return [(g, (g / d * 100.0) if d > 0 else 0.0) for _, _, g, d in merged]
 
 
-def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop, climbs=None, de: bool = False):
+def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop, climbs=None,
+                tss: float = 0.0, total_kj: float = 0.0, de: bool = False):
     """Deterministic ranked prescriptions — one per detected problem, each with a
     concrete race tactic + training fix. Tactics reference THIS ride's own hardest
     climb so the advice is course-specific, not generic."""
@@ -213,11 +214,34 @@ def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop, climbs
             training_fix="Tempo-/Schwellenblöcke nach 2+ h Grundlage einbauen." if de else "Add tempo/threshold blocks after 2+ h of endurance.",
             tone="neutral"))
     if not plan:
-        plan.append(dict(priority=1,
+        plan.append(dict(priority=len(plan) + 1,
             headline="Weiter so" if de else "Keep doing what works",
             race_tactic="Diese Einteilung und Verpflegung wiederholen." if de else "Repeat this pacing and fuelling.",
             training_fix="Belastung schrittweise steigern; Erholung schützen." if de else "Progress load gradually; protect recovery.",
             tone="good"))
+
+    # Recovery / next-48h beat — always present, keyed off today's load. The schema
+    # has no category field, so we prefix the headline with "Recovery/Erholung".
+    # Refuel: rough glycogen replacement ≈ 25% of work as carbs (kJ→g at 4 kcal/g).
+    carbs_g = round(total_kj * 0.25 / 4.0) if total_kj else 0
+    if tss >= 250:
+        rest = ("Morgen komplett ruhen und zusätzlichen Schlaf einplanen." if de
+                else "Take a full rest day tomorrow and bank extra sleep.")
+        rtone = "caution"
+    elif tss >= 150:
+        rest = ("Morgen locker rollen oder ruhen." if de
+                else "Keep tomorrow easy or take a rest day.")
+        rtone = "neutral"
+    else:
+        rest = ("Normale Trainingswoche — kein besonderer Erholungsbedarf." if de
+                else "Carry on with your normal week — no special recovery needed.")
+        rtone = "good"
+    plan.append(dict(priority=len(plan) + 1,
+        headline="Erholung — Auffüllen & Ruhe" if de else "Recovery — refuel & rest",
+        race_tactic=(f"In den nächsten 2 h ~{carbs_g} g Kohlenhydrate auffüllen, um die Glykogenspeicher zu füllen (Reis-/Nudelmahlzeit plus Regenerationsgetränk)."
+                     if de else f"Replace ~{carbs_g} g of carbs in the next 2 h to refill glycogen (a rice/pasta meal plus a recovery drink)."),
+        training_fix=rest,
+        tone=rtone))
     return plan
 
 
@@ -269,12 +293,25 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: st
     total_kj = round(sum(power) / 1000.0, 1) if power else 0.0
     if_val = round(np_watts / ftp, 3) if ftp else None
     dist_km = round((activity.distance_meters or 0.0) / 1000.0, 1)
-    avg_speed_kmh = round(dist_km / (n / 3600.0), 1) if n > 0 and dist_km else 0.0
+    # Moving time & average speed. Streams are 1 Hz (one sample = one second), so a
+    # sample count is a second count. When a speed stream exists, count only moving
+    # samples (speed > 0.5 m/s ≈ 1.8 km/h — filters coasting/stops) as moving time
+    # and average speed off those samples. With no speed stream we fall back to the
+    # sample count, which is ELAPSED time (not moving), and derive avg speed from
+    # the same elapsed base so the header stays internally consistent.
+    speed_clean = [float(v) for v in speed if v is not None] if speed else []
+    moving_speeds = [v for v in speed_clean if v > 0.5]
+    if speed_clean:
+        moving_time_s = len(moving_speeds)
+        avg_speed_kmh = round(sum(moving_speeds) / len(moving_speeds) * 3.6, 1) if moving_speeds else 0.0
+    else:
+        moving_time_s = n  # no speed stream: elapsed time, not true moving time
+        avg_speed_kmh = round(dist_km / (moving_time_s / 3600.0), 1) if moving_time_s > 0 and dist_km else 0.0
     header = dict(
         title=activity.title or "Race", date=activity.started_at.isoformat(),
         sport=activity.sport, distance_km=dist_km,
         elevation_m=round(sum(seg.elev_gain_m for seg in segments), 0),
-        moving_time_s=n, np_watts=round(np_watts, 1), if_=if_val,
+        moving_time_s=moving_time_s, np_watts=round(np_watts, 1), if_=if_val,
         tss=float(activity.tss or 0.0), total_kj=total_kj, avg_speed_kmh=avg_speed_kmh,
     )
 
@@ -307,7 +344,8 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: st
         ai_verdict=_rule_based_verdict(activity, score, good, bad, de),
         ai_model="rule-based-fallback", went_well=good, watch_out=bad,
     )
-    plan = _build_plan(pacing, mb, efficiency, fueling, durability_drop, climbs, de)
+    plan = _build_plan(pacing, mb, efficiency, fueling, durability_drop, climbs,
+                       tss=float(activity.tss or 0.0), total_kj=total_kj, de=de)
 
     return RaceDebrief(
         activity_id=activity.id, header=header, verdict=verdict, story=story, lang=lang,
@@ -375,6 +413,32 @@ async def build_debrief(db: AsyncSession, user_id: int, activity_id: int, lang: 
     return report
 
 
+async def _refresh_pr_flags(db: AsyncSession, user_id: int, report: RaceDebrief) -> None:
+    """Recompute efforts[].is_pr (and best/pct) against the CURRENT MMP envelope.
+
+    A cached PR flag reflects the athlete's best at build time; a later ride can
+    supersede it. We rebuild the envelope from all stored per-ride MMP curves and
+    re-run the same effort-matching used at build time, so a stale PR is demoted on
+    read rather than celebrated for up to the (long) cache TTL.
+    """
+    if not report.efforts:
+        return
+    env_res = await db.execute(
+        select(ActivityStream.mmp_curve).where(
+            ActivityStream.user_id == user_id, ActivityStream.mmp_curve.isnot(None)))
+    envelope = aggregate_mmp_curves([row[0] for row in env_res.all() if row[0]])
+    if not envelope:
+        return
+    ride_mmp = {e.duration_s: e.ride_watts for e in report.efforts}
+    fresh = {m.duration_s: m for m in effort_matching.match_efforts(ride_mmp, envelope)}
+    for e in report.efforts:
+        m = fresh.get(e.duration_s)
+        if m is not None:
+            e.is_pr = m.is_pr
+            e.best_watts = m.best_watts
+            e.pct_of_best = m.pct_of_best
+
+
 async def get_or_build_debrief(db: AsyncSession, user_id: int, activity_id: int, lang: str = "en") -> RaceDebrief | None:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=DEBRIEF_TTL_HOURS)
     row = (await db.execute(
@@ -386,9 +450,13 @@ async def get_or_build_debrief(db: AsyncSession, user_id: int, activity_id: int,
     # locale switch rebuilds instead of serving stale English (or vice-versa).
     if row is not None and (row.report or {}).get("lang", "en") == lang:
         try:
-            return RaceDebrief.model_validate({**row.report, "generated_at": row.generated_at})
+            report = RaceDebrief.model_validate({**row.report, "generated_at": row.generated_at})
         except ValidationError:
             logger.warning("Discarding malformed cached debrief user=%s act=%s", user_id, activity_id)
+        else:
+            # Re-evaluate PR flags against the current envelope before serving cache.
+            await _refresh_pr_flags(db, user_id, report)
+            return report
     report = await build_debrief(db, user_id, activity_id, lang)
     if report is None:
         return None
