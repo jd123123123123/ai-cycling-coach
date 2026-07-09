@@ -206,6 +206,11 @@ def project(
         except (ValueError, TypeError):
             goal_date = None
 
+    # A target event in the past is not an active goal — the race already
+    # happened. Treat it as no-goal so we stop projecting "to race day".
+    if goal_date is not None and goal_date < date.today():
+        goal_date = None
+
     # ---- No-goal path — emit a useful CTL-trend observation -------------
     if goal_date is None:
         if ctl_7d > 0.5:
