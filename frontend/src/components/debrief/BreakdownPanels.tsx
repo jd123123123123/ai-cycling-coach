@@ -150,14 +150,19 @@ function StatRow({ children }: { children: React.ReactNode }) {
 }
 
 // ─── Act header ────────────────────────────────────────────────────────────────
-function ActHeader({ kicker, title }: { kicker: string; title: string }) {
+function ActHeader({ kicker, title, subtitle }: { kicker: string; title: string; subtitle?: string }) {
   return (
-    <div className="flex items-baseline gap-3 mb-1">
-      <div className="flex flex-col gap-1">
-        <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.24em' }}>{kicker}</span>
-        <h2 style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-serif)', fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: 500, letterSpacing: '-0.015em', lineHeight: 1 }}>{title}</h2>
+    <div className="mb-1">
+      <div className="flex items-baseline gap-3">
+        <div className="flex flex-col gap-1">
+          <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.24em' }}>{kicker}</span>
+          <h2 style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-serif)', fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: 500, letterSpacing: '-0.015em', lineHeight: 1 }}>{title}</h2>
+        </div>
+        <div className="flex-1 self-center" style={{ height: 1, background: 'var(--color-rule)' }} />
       </div>
-      <div className="flex-1 self-center" style={{ height: 1, background: 'var(--color-rule)' }} />
+      {subtitle && (
+        <p className="mt-1.5" style={{ color: 'var(--color-ink-2)', fontSize: 13, fontStyle: 'italic' }}>{subtitle}</p>
+      )}
     </div>
   )
 }
@@ -475,7 +480,13 @@ export default function BreakdownPanels({ report }: { report: RaceDebrief }) {
 
       {hasCompact && (
         <div className="flex flex-col gap-5">
-          <ActHeader kicker={de ? 'IM DETAIL' : 'BY THE NUMBERS'} title={de ? 'Das Kleingedruckte' : 'The finer detail'} />
+          <ActHeader
+            kicker={de ? 'IM DETAIL' : 'BY THE NUMBERS'}
+            title={de ? 'Das Kleingedruckte' : 'The finer detail'}
+            subtitle={de
+              ? 'Die Zahlen hinter dem Urteil — für alle, die tiefer graben wollen.'
+              : 'The numbers behind the verdict — for when you want to dig deeper.'}
+          />
           <div className="grid gap-4 md:grid-cols-2 items-stretch">
             <MatchbookCard matchbook={report.matchbook} />
             <EfficiencyCard efficiency={report.efficiency} />

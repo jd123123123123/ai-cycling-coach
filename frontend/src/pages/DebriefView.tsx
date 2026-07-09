@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { motion, useReducedMotion } from 'motion/react'
 import { useLocale } from '../contexts/LocaleContext'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import DebriefHero from '../components/debrief/DebriefHero'
@@ -7,6 +9,21 @@ import CompareDuel from '../components/debrief/CompareDuel'
 import RideStory from '../components/debrief/RideStory'
 import BreakdownPanels from '../components/debrief/BreakdownPanels'
 import DebriefPlan from '../components/debrief/DebriefPlan'
+
+// Each debrief act rises in on a staggered, spring-eased cadence — the report
+// reveals itself as a narrative rather than dumping all at once.
+function Act({ order, children }: { order: number; children: ReactNode }) {
+  const reduce = useReducedMotion()
+  return (
+    <motion.section
+      initial={reduce ? false : { opacity: 0, y: 16 }}
+      animate={reduce ? undefined : { opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: Math.min(order * 0.08, 0.4) }}
+    >
+      {children}
+    </motion.section>
+  )
+}
 
 export default function DebriefView() {
   const { id } = useParams()
@@ -39,26 +56,14 @@ export default function DebriefView() {
         )}
         {data && (
           <>
-            <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both' }}>
-              <DebriefHero report={data} />
-            </section>
-            <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '80ms' }}>
-              <KeyReads report={data} />
-            </section>
+            <Act order={0}><DebriefHero report={data} /></Act>
+            <Act order={1}><KeyReads report={data} /></Act>
             {activityId != null && (
-              <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '160ms' }}>
-                <CompareDuel activityId={activityId} />
-              </section>
+              <Act order={2}><CompareDuel activityId={activityId} /></Act>
             )}
-            <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '240ms' }}>
-              <RideStory story={data.story} climbs={data.climbs} />
-            </section>
-            <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '240ms' }}>
-              <BreakdownPanels report={data} />
-            </section>
-            <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) both', animationDelay: '320ms' }}>
-              <DebriefPlan plan={data.plan} />
-            </section>
+            <Act order={3}><RideStory story={data.story} climbs={data.climbs} /></Act>
+            <Act order={4}><BreakdownPanels report={data} /></Act>
+            <Act order={5}><DebriefPlan plan={data.plan} /></Act>
           </>
         )}
       </div>

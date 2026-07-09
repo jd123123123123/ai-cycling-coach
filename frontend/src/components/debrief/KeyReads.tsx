@@ -13,12 +13,22 @@ export default function KeyReads({ report }: { report: RaceDebrief }) {
 
   return (
     <div>
-      <h2
-        className="mb-3"
-        style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, letterSpacing: '-0.01em' }}
-      >
-        {de ? 'Worauf es ankommt' : 'What matters'}
-      </h2>
+      <div className="mb-3">
+        <div className="eyebrow" style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em', fontSize: 10.5 }}>
+          {de ? 'SCHLÜSSEL-READS' : 'KEY READS'}
+        </div>
+        <h2
+          className="mt-1"
+          style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-serif)', fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: 500, letterSpacing: '-0.015em', lineHeight: 1 }}
+        >
+          {de ? 'Worauf es ankommt' : 'What matters'}
+        </h2>
+        <p className="mt-1.5" style={{ color: 'var(--color-ink-2)', fontSize: 13, fontStyle: 'italic' }}>
+          {de
+            ? 'Die vier Signale mit dem höchsten Aussagewert — was passiert ist, was es bedeutet, was zu tun ist.'
+            : 'The four highest-signal reads — what happened, what it means, what to do.'}
+        </p>
+      </div>
       <div className="grid sm:grid-cols-2 gap-3">
         {reads.map((rd, i) => {
           const color = STATUS_COLOR[rd.status]

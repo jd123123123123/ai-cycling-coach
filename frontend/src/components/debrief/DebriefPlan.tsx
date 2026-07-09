@@ -48,6 +48,11 @@ export default function DebriefPlan({ plan }: { plan: Prescription[] }) {
           <h2 style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-serif)', fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: 500, letterSpacing: '-0.015em', lineHeight: 1 }}>
             {de ? 'Dein Plan' : 'Your plan'}
           </h2>
+          <p style={{ color: 'var(--color-ink-2)', fontSize: 13, fontStyle: 'italic' }}>
+            {de
+              ? 'Zwei, drei konkrete Hebel für die nächste Fahrt — abgeleitet aus dieser.'
+              : 'Two or three concrete levers for your next ride — drawn from this one.'}
+          </p>
         </div>
         <div className="flex-1 self-center" style={{ height: 1, background: 'var(--color-rule)' }} />
       </div>

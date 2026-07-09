@@ -314,6 +314,11 @@ export default function RideStory({ story, climbs }: { story: DebriefStory | nul
           <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(21px, 2.4vw, 26px)', fontWeight: 500, lineHeight: 1.12, letterSpacing: '-0.015em', color: 'var(--color-ink)' }}>
             {de ? 'So verlief das Rennen' : 'How the race unfolded'}
           </h3>
+          <p style={{ color: 'var(--color-ink-2)', fontSize: 13, fontStyle: 'italic' }}>
+            {de
+              ? 'Wo Leistung, Herzfrequenz und Höhe zusammenspielten — die entscheidenden Momente markiert.'
+              : 'Where power, heart rate and elevation played out — key moments marked.'}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           {legend.map((l) => (
