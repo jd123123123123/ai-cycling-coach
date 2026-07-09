@@ -21,4 +21,5 @@ COPY . .
 ENV GARMIN_TOKEN_STORE_ROOT=/data/garmin_tokens
 
 # Run migrations, then boot the API on Railway's injected $PORT.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+RUN chmod +x start.sh
+CMD ["./start.sh"]
