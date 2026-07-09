@@ -41,6 +41,8 @@ from app.schemas.coach import (
 )
 from app.models.athlete_profile import AthleteProfile
 from app.services import coach_service
+from app.schemas.adaptive import AdaptiveDirective
+from app.services.adaptive_readiness import build_adaptive_directive
 from app.services.advanced_metrics import why_am_i_tired
 from app.services.coach_prompt import SYSTEM_PROMPT
 from app.services.external_workouts import match_workouts, predict_tss
@@ -322,6 +324,24 @@ async def transparency(
 # explicitly. The defaults are conservative coaching floors from Friel's
 # Cyclist's Training Bible Ch.5 — shared with the under-built taper override.
 # ----------------------------------------------------------------------
+
+
+@router.get("/adaptive", response_model=AdaptiveDirective)
+async def adaptive_directive(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    lang: str = "en",
+) -> AdaptiveDirective:
+    """Daily autoregulation directive — HRV-band-gated intensity ceiling + volume,
+    escalating on confirmed adaptation. Evidence-graded (see adaptive_readiness)."""
+    lang = "de" if lang.lower().startswith("de") else "en"
+    d = await build_adaptive_directive(db, current_user.id, lang)
+    return AdaptiveDirective(
+        directive=d.directive, intensity_ceiling=d.intensity_ceiling,
+        volume_modifier=d.volume_modifier, hrv_state=d.hrv_state, headline=d.headline,
+        signals=[{"text": s.text, "tone": s.tone, "evidence": s.evidence} for s in d.signals],
+        confidence=d.confidence, lang=lang,
+    )
 
 
 @router.get("/trajectory", response_model=GoalTrajectoryRead)

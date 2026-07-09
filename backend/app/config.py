@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # Sonnet 4.6 — broadly available tier, ~5× cheaper than Opus, fast enough
     # for daily briefs, plenty smart for structured tool-use output. Opus 4.7
     # was overkill (and tier-gated → silent fallback to rule-based on many keys).
-    COACH_MODEL: str = "claude-sonnet-4-6"
+    COACH_MODEL: str = "claude-opus-4-8"
     COACH_CHAT_MODEL: str = "claude-sonnet-4-6"   # chat uses same model
     COACH_BRIEF_CACHE_HOURS: int = 1              # short TTL — briefs stay fresh
 

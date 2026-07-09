@@ -5,6 +5,7 @@
  * Context (season stats, badges, trivia, tools) is demoted to a collapsed "Mehr".
  */
 import CoachBrief from '../CoachBrief'
+import AdaptiveDirectiveCard from '../AdaptiveDirectiveCard'
 import FormProgressPanel from '../FormProgressPanel'
 import MorningCheckin from '../MorningCheckin'
 import MorningRecap from '../MorningRecap'
@@ -46,6 +47,7 @@ export default function TodayTab() {
       {/* ── ① Today's call: the readiness verdict, the session, the check-in ── */}
       <PillarSection index="1" title={de ? 'Heute' : 'Today'} question={copy.heroQ}>
         <TodayHero />
+        <AdaptiveDirectiveCard />
         <CoachBrief />
         <MorningCheckin />
       </PillarSection>

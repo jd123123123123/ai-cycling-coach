@@ -1,0 +1,211 @@
+"""Adaptive training engine — aggressive autoregulation, grounded in evidence.
+
+Decisions are DETERMINISTIC rules from the deep-research grounding
+(docs/superpowers/specs/2026-07-09-adaptive-training-engine.md). The narrative is
+written by Opus 4.8 on top; the numbers here are not LLM guesswork.
+
+Primary lever (RCT — Nuuttila 2022, Javaloyes 2019): morning HRV vs a 4-week
+rolling lnRMSSD baseline with a ±0.5 SD band. In-band → load; below-band →
+back off; in-band while load rose + durability improving → ESCALATE.
+
+Everything not HRV-band is EXPERT-OPINION (TSB, decoupling, ramp) — soft, never a
+hard gate. ACWR is used only as a warning, never a causal threshold (discredited).
+"""
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+from statistics import mean, pstdev
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import ActivityStream, DailyMetric
+from app.services.goal_trajectory import _ctl_7d_delta
+from app.services.pmc_service import compute_user_pmc
+
+# Nuuttila 2022 validated band.
+HRV_BAND_SD = 0.5
+# Aggressive default: how many clean in-band blocks widen the push.
+DEFAULT_AMBITION = 1.0
+
+
+@dataclass
+class Signal:
+    text: str
+    tone: str        # "good" | "warn" | "bad" | "neutral"
+    evidence: str    # "RCT" | "expert" | "guardrail"
+
+
+@dataclass
+class Directive:
+    directive: str            # "escalate" | "push" | "hold" | "deload" | "rest"
+    intensity_ceiling: str    # "push" | "hard" | "moderate" | "easy" | "rest"
+    volume_modifier: float    # multiply planned volume/TSS
+    hrv_state: str            # "below" | "in" | "above" | "unknown"
+    headline: str
+    signals: list[Signal] = field(default_factory=list)
+    confidence: str = "moderate"
+
+
+def _de(lang: str) -> bool:
+    return lang == "de"
+
+
+def assess_adaptation(
+    *,
+    hrv_recent: float | None,       # 7-day rolling lnRMSSD (or None)
+    hrv_baseline: float | None,     # 28-day rolling lnRMSSD mean
+    hrv_sd: float | None,           # 28-day lnRMSSD SD
+    hrv_below_days: int,            # # of last 3 days below the band
+    tsb: float,
+    decoupling_delta: float | None, # recent decoupling minus baseline (neg = improving)
+    sleep_score: float | None,
+    load_ramp: float | None,        # acute:chronic load ratio (soft guardrail only)
+    lang: str = "en",
+) -> Directive:
+    """Pure core. See module docstring for the grounding of each rule."""
+    de = _de(lang)
+    sig: list[Signal] = []
+
+    # ── HRV band (RCT primary gate) ──────────────────────────────────────
+    hrv_state = "unknown"
+    if hrv_recent is not None and hrv_baseline is not None and hrv_sd:
+        low = hrv_baseline - HRV_BAND_SD * hrv_sd
+        high = hrv_baseline + HRV_BAND_SD * hrv_sd
+        if hrv_recent < low:
+            hrv_state = "below"
+        elif hrv_recent > high:
+            hrv_state = "above"
+        else:
+            hrv_state = "in"
+
+    # ── Corroborating (expert-opinion) signals ───────────────────────────
+    poor_sleep = sleep_score is not None and sleep_score < 55
+    deep_neg_tsb = tsb <= -25
+    durability_improving = decoupling_delta is not None and decoupling_delta <= -1.0
+    durability_worse = decoupling_delta is not None and decoupling_delta >= 3.0
+    ramp_hot = load_ramp is not None and load_ramp >= 1.5
+
+    # Multi-signal maladaptation concern (expert, conservative — not a diagnosis).
+    concern = sum([hrv_state == "below", poor_sleep, deep_neg_tsb, durability_worse]) >= 2
+
+    # ── Decision (aggressive autoregulation) ─────────────────────────────
+    if hrv_state == "below" and hrv_below_days >= 2:
+        d = Directive("deload", "easy", 0.55, hrv_state,
+                      "Deload — dein Körper braucht Erholung." if de else "Deload — your body needs to recover.",
+                      confidence="high")
+        sig.append(Signal(
+            f"HRV {hrv_below_days} Tage unter deiner Basislinie — klares Ermüdungssignal." if de
+            else f"HRV below baseline {hrv_below_days} days running — a clear fatigue signal.",
+            "bad", "RCT"))
+    elif hrv_state == "below" or concern:
+        d = Directive("hold", "easy", 0.8, hrv_state,
+                      "Heute zurückschalten." if de else "Ease off today.",
+                      confidence="high" if hrv_state == "below" else "moderate")
+        sig.append(Signal(
+            "HRV unter dem Band — Intensität kappen." if de else "HRV below the band — cap intensity.",
+            "warn", "RCT") if hrv_state == "below" else Signal(
+            "Mehrere Ermüdungssignale zusammen — vorsichtig." if de else "Several fatigue signals together — play it safe.",
+            "warn", "expert"))
+    elif hrv_state in ("in", "above") and durability_improving and not poor_sleep and not deep_neg_tsb:
+        # Confirmed adaptation → escalate (the "go crazier" loop).
+        d = Directive("escalate", "push", 1.12, hrv_state,
+                      "Voll draufhalten — dein Körper adaptiert." if de else "Push hard — your body is adapting.",
+                      confidence="moderate")
+        sig.append(Signal(
+            "HRV hält im Band, während die Last stieg — grünes Licht zum Eskalieren." if de
+            else "HRV holding in-band while load rose — green light to escalate.", "good", "RCT"))
+        sig.append(Signal(
+            "Durability verbessert sich (Entkopplung sinkt)." if de
+            else "Durability improving (decoupling trending down).", "good", "expert"))
+    elif hrv_state in ("in", "above"):
+        d = Directive("push", "hard", 1.0, hrv_state,
+                      "Grünes Licht — belaste hart." if de else "Green light — load hard.",
+                      confidence="moderate")
+        sig.append(Signal(
+            "HRV im Band — bereit für Qualität." if de else "HRV in-band — ready for quality.", "good", "RCT"))
+    else:
+        # No HRV data — fall back to freshness (expert), stay bold but honest.
+        if deep_neg_tsb:
+            d = Directive("hold", "moderate", 0.85, hrv_state,
+                          "Etwas Ermüdung tragen — moderat halten." if de else "Carrying fatigue — keep it moderate.")
+            sig.append(Signal(f"TSB {tsb:.0f} — tiefe Ermüdungslast." if de else f"TSB {tsb:.0f} — deep fatigue load.", "warn", "expert"))
+        else:
+            d = Directive("push", "hard", 1.0, hrv_state,
+                          "Belaste hart." if de else "Load hard.")
+            sig.append(Signal("Keine HRV-Daten — nutze TSB als Näherung." if de else "No HRV data — using TSB as a proxy.", "neutral", "expert"))
+
+    # ── Ramp guardrail (warning only — ACWR discredited) ─────────────────
+    if ramp_hot and d.directive in ("escalate", "push"):
+        if d.directive == "escalate":
+            d.directive = "push"
+            d.volume_modifier = min(d.volume_modifier, 1.0)
+        sig.append(Signal(
+            "Lastanstieg ist steil — schärfer beobachten (kein hartes Limit)." if de
+            else "Load ramp is steep — watch closely (not a hard limit).", "warn", "guardrail"))
+
+    d.signals = sig
+    return d
+
+
+async def _hrv_series(db: AsyncSession, user_id: int, days: int = 35) -> list[float]:
+    since = date.today() - timedelta(days=days)
+    rows = await db.execute(
+        select(DailyMetric.recorded_at, DailyMetric.hrv_status)
+        .where(DailyMetric.user_id == user_id, DailyMetric.recorded_at >= since)
+        .order_by(DailyMetric.recorded_at.asc())
+    )
+    vals = [float(r[1]) for r in rows.all() if r[1] is not None and r[1] > 0]
+    return [math.log(v) for v in vals]  # lnRMSSD-style stabilisation
+
+
+async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "en") -> Directive:
+    ln = await _hrv_series(db, user_id)
+    hrv_recent = mean(ln[-7:]) if len(ln) >= 3 else None
+    baseline_window = ln[-28:] if len(ln) >= 10 else ln
+    hrv_baseline = mean(baseline_window) if len(baseline_window) >= 10 else None
+    hrv_sd = pstdev(baseline_window) if len(baseline_window) >= 10 else None
+
+    below_days = 0
+    if hrv_baseline is not None and hrv_sd:
+        low = hrv_baseline - HRV_BAND_SD * hrv_sd
+        below_days = sum(1 for v in ln[-3:] if v < low)
+
+    pmc = (await compute_user_pmc(db, user_id, days=90)).get("total") or []
+    tsb = float(pmc[-1].get("tsb", 0.0)) if pmc else 0.0
+    # Soft acute:chronic ramp (7d vs 28d mean daily TSS) — warning only.
+    load_ramp = None
+    if len(pmc) >= 28:
+        acute = mean([float(p.get("tss", 0.0)) for p in pmc[-7:]])
+        chronic = mean([float(p.get("tss", 0.0)) for p in pmc[-28:]])
+        load_ramp = acute / chronic if chronic > 0 else None
+    _ = _ctl_7d_delta([{**p} for p in pmc]) if pmc else 0.0  # available if needed
+
+    # Sleep (most recent).
+    srow = await db.execute(
+        select(DailyMetric.sleep_score).where(DailyMetric.user_id == user_id, DailyMetric.sleep_score.isnot(None))
+        .order_by(DailyMetric.recorded_at.desc()).limit(1)
+    )
+    sleep_score = srow.scalar_one_or_none()
+
+    # Decoupling trend: latest ride vs median of prior rides.
+    drows = await db.execute(
+        select(ActivityStream.decoupling_pct).where(
+            ActivityStream.user_id == user_id, ActivityStream.decoupling_pct.isnot(None)
+        ).limit(30)
+    )
+    decs = [float(r[0]) for r in drows.all()]
+    decoupling_delta = None
+    if len(decs) >= 4:
+        latest = decs[0]
+        prior = sorted(decs[1:])
+        base = prior[len(prior) // 2]
+        decoupling_delta = latest - base
+
+    return assess_adaptation(
+        hrv_recent=hrv_recent, hrv_baseline=hrv_baseline, hrv_sd=hrv_sd, hrv_below_days=below_days,
+        tsb=tsb, decoupling_delta=decoupling_delta, sleep_score=(float(sleep_score) if sleep_score is not None else None),
+        load_ramp=load_ramp, lang=lang,
+    )
