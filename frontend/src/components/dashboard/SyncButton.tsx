@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { AlertTriangle, Check, RefreshCw, WifiOff } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useForceSync } from '../../hooks/useForceSync'
 import { useLocale } from '../../contexts/LocaleContext'
 import { tFor } from '../../i18n/strings'
@@ -67,6 +68,7 @@ interface SyncButtonProps {
 export default function SyncButton({ compact = false, className = '' }: SyncButtonProps) {
   const { data: status, isLoading } = useGarminStatus()
   const sync = useForceSync()
+  const navigate = useNavigate()
   const { locale } = useLocale()
   const reduce = useReducedMotion()
 
@@ -110,24 +112,29 @@ export default function SyncButton({ compact = false, className = '' }: SyncButt
     stale:        { dot: 'var(--color-amber)',  text: 'var(--color-amber)',  label: tFor(locale, 'sync_label_synced') },
     syncing:      { dot: 'var(--color-amber)',  text: 'var(--color-amber)',  label: tFor(locale, 'sync_label_syncing') },
     error:        { dot: 'var(--color-alert)',  text: 'var(--color-alert)',  label: tFor(locale, 'sync_label_failed') },
-    disconnected: { dot: 'var(--color-muted)',  text: 'var(--color-muted)',  label: tFor(locale, 'sync_label_not_connected') },
+    disconnected: { dot: 'var(--color-forest-2)', text: 'var(--color-forest-2)', label: locale === 'de' ? 'Garmin verbinden' : 'Connect Garmin' },
   }
   const TONE = TONE_MAP[tone]
 
   const ageStr = relativeAge(status?.last_sync_at ?? null, now, locale)
-  const disabled = isLoading || isSyncing || tone === 'disconnected'
+  const disabled = isLoading || isSyncing
 
   const handleClick = useCallback(() => {
     if (disabled) return
+    // Disconnected → the pill becomes a "Connect Garmin" CTA routing to the flow.
+    if (tone === 'disconnected') {
+      navigate('/garmin/connect')
+      return
+    }
     setErrorMsg(null)
     sync.mutate()
-  }, [disabled, sync])
+  }, [disabled, tone, navigate, sync])
 
   const title =
     tone === 'disconnected'
       ? locale === 'de'
-        ? 'Garmin in den Einstellungen verbinden, um zu synchronisieren'
-        : 'Connect Garmin in Settings to start syncing'
+        ? 'Garmin verbinden, um zu synchronisieren — hier klicken'
+        : 'Connect Garmin to start syncing — click here'
       : tone === 'error'
         ? locale === 'de'
           ? `Letzte Synchronisierung fehlgeschlagen${status?.sync_status ? ` (${status.sync_status})` : ''}. Zum Wiederholen klicken.`
@@ -188,7 +195,7 @@ export default function SyncButton({ compact = false, className = '' }: SyncButt
           )}
         </span>
 
-        {!compact && (
+        {(!compact || tone === 'disconnected') && (
           <span
             className="num-mono"
             style={{
