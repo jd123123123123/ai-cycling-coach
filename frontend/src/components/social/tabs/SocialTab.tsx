@@ -16,7 +16,6 @@ import {
   CheckCircle2,
   Flame,
   TrendingUp,
-  Award,
   Zap,
   Lock,
   Clock,
@@ -27,6 +26,7 @@ import PillarSection from '../../dashboard/PillarSection'
 import CoachSafetyBanner from '../CoachSafetyBanner'
 import PowerArena from '../PowerArena'
 import MemberFinder from '../MemberFinder'
+import DuelArena from '../DuelArena'
 import Confetti from '../../ui/Confetti'
 import { useCountUp } from '../../../hooks/useCountUp'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
@@ -34,7 +34,7 @@ import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { usePowerProfile } from '../../../hooks/usePowerProfile'
 import { usePMC } from '../../../hooks/usePMC'
 import { useAdaptiveGate } from '../../../hooks/useAdaptiveGate'
-import { useCrew, useCreateCrew, useMyCrew } from '../../../hooks/useCrew'
+import { useCrew, useCreateCrew, useMyCrew, useDuel } from '../../../hooks/useCrew'
 import type { CrewMember } from '../../../hooks/useCrew'
 import { useT, useLocale } from '../../../contexts/LocaleContext'
 import type { Locale } from '../../../i18n/strings'
@@ -350,6 +350,7 @@ export default function SocialTab() {
 
   const { crew, invite, remove } = useCrew()
   const { data: myCrewData } = useMyCrew()
+  const { data: duel } = useDuel()
   const createCrew = useCreateCrew()
   const hasCrew = !!myCrewData?.crew
   const crewId = myCrewData?.crew?.id ?? null
@@ -661,35 +662,10 @@ export default function SocialTab() {
           })}
         </div>
 
-        {/* Duel — best ride, you vs past you */}
-        <div className="paper-grain rounded-[20px] px-5 py-5 sm:px-6" style={cardBase}>
-          <div className="flex items-center gap-2 mb-4">
-            <Zap size={14} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} />
-            <span className="eyebrow" style={{ color: 'var(--color-ink)', letterSpacing: '0.22em', fontSize: 10, fontWeight: 600 }}>{de ? 'DUELL · BESTE EINHEIT · DU GEGEN FRÜHER' : 'DUEL · BEST RIDE · YOU vs PAST YOU'}</span>
-          </div>
-          <div className="flex items-stretch gap-3">
-            <DuelSide label={de ? 'Diese Woche' : 'This week'} tss={thisWeek.bestRide} win={thisWeek.bestRide >= lastWeek.bestRide} isYou />
-            <div className="flex items-center"><span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)', letterSpacing: '0.14em' }}>VS</span></div>
-            <DuelSide label={de ? 'Letzte Woche' : 'Last week'} tss={lastWeek.bestRide} win={lastWeek.bestRide > thisWeek.bestRide} />
-          </div>
-        </div>
+        {/* Duel Arena — gamified head-to-head, Past-You ↔ Crew */}
+        <DuelArena duel={duel} locale={locale} restMode={gate.mode === 'rest'} />
       </PillarSection>
     </div>
   )
 }
 
-// ── DuelSide ──
-function DuelSide({ label, tss, win, isYou = false }: { label: string; tss: number; win: boolean; isYou?: boolean }) {
-  return (
-    <div className="flex-1 rounded-[16px] px-4 py-4 flex flex-col gap-1" style={{ backgroundColor: isYou ? 'color-mix(in srgb, var(--color-forest-2) 10%, var(--color-paper-2))' : 'var(--color-paper-2)', border: win ? '1px solid rgba(255, 214, 10, 0.4)' : '1px solid var(--color-rule)', boxShadow: win ? '0 0 16px rgba(255, 214, 10, 0.08) inset' : undefined }}>
-      <div className="flex items-center gap-1.5">
-        {win && <Award size={13} strokeWidth={2.2} style={{ color: '#FFD60A' }} />}
-        <span className="text-[12px] font-medium" style={{ color: 'var(--color-ink)' }}>{label}</span>
-      </div>
-      <div className="flex items-baseline gap-1">
-        <span className="num-display leading-none" style={{ fontSize: 24, color: win ? '#FFD60A' : 'var(--color-ink)' }}>{Math.round(tss)}</span>
-        <span className="num-mono" style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.12em' }}>TSS</span>
-      </div>
-    </div>
-  )
-}

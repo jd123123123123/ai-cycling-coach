@@ -82,3 +82,26 @@ class StandingsResponse(BaseModel):
     week_end: str                # ISO yyyy-mm-dd (Sunday)
     daily_target_tss: int
     standings: list[StandingRow]
+
+
+# ── Duel — head-to-head rich stats (You vs Last Week / You vs Crew) ──
+class DuelStats(BaseModel):
+    handle: str = "rider"
+    user_id: int | None = None
+    tss: int = 0
+    distance_km: float = 0.0
+    hours: float = 0.0
+    kj: int = 0
+    rides: int = 0
+    active_days: int = 0
+    best_tss: int = 0
+    ring_score: int = 0
+    avg_if: float = 0.0
+
+
+class DuelResponse(BaseModel):
+    week_start: str
+    week_end: str
+    you_this_week: DuelStats
+    you_last_week: DuelStats
+    crew: list[DuelStats] = Field(default_factory=list)   # crew-mates this week (excl. you)

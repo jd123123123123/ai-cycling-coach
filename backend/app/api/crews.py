@@ -25,11 +25,13 @@ from app.schemas.crew import (
     CrewMineResponse,
     CrewRead,
     DiscoverMember,
+    DuelResponse,
     InviteByUserCreate,
     StandingsResponse,
 )
 from app.services.crew_score import (
     _handle_from_email,
+    crew_duel,
     crew_standings,
 )
 
@@ -177,6 +179,21 @@ async def invite_by_user(
     if target is None:
         raise HTTPException(status_code=404, detail="user not found")
     return await create_invite(crew_id, CrewInviteCreate(email=target.email), current_user, db)
+
+
+@router.get("/me/duel", response_model=DuelResponse)
+async def my_duel(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> DuelResponse:
+    """Head-to-head rich stats: you this week vs last week (always), plus each
+    crew-mate's week (when in a crew). Powers the Duel Arena."""
+    today = await _athlete_local_today(db, current_user.id)
+    week_start = _monday_of(today)
+    mem = await _user_membership(db, current_user.id)
+    crew_id = mem.crew_id if mem else None
+    data = await crew_duel(db, current_user.id, crew_id, week_start)
+    return DuelResponse(**data)
 
 
 @router.get("/me", response_model=CrewMineResponse)

@@ -5,6 +5,7 @@ import {
   disbandCrew,
   discoverMembers,
   fetchCrewStandings,
+  fetchDuel,
   fetchMyCrew,
   inviteMemberByUser,
   inviteToCrew,
@@ -12,6 +13,7 @@ import {
   revokeCrewInvite,
   type CrewMineResponse,
   type DiscoverMember,
+  type DuelResponse,
   type StandingsResponse,
 } from '../api/crew'
 
@@ -118,6 +120,20 @@ export function useDiscoverMembers(q: string) {
     queryKey: [...DISCOVER_KEY, q],
     queryFn: () => discoverMembers(q || undefined),
     staleTime: 30 * 1000,
+    retry: (failureCount, error: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const status = (error as any)?.response?.status
+      if (status === 401 || status === 403) return false
+      return failureCount < 1
+    },
+  })
+}
+
+export function useDuel() {
+  return useQuery<DuelResponse>({
+    queryKey: ['crew', 'duel'],
+    queryFn: fetchDuel,
+    staleTime: 60 * 1000,
     retry: (failureCount, error: unknown) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const status = (error as any)?.response?.status

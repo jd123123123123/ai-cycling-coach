@@ -122,3 +122,31 @@ export async function inviteMemberByUser(
   )
   return res.data
 }
+
+// ── Duel — rich head-to-head weekly stats ──
+export interface DuelStats {
+  handle: string
+  user_id?: number | null
+  tss: number
+  distance_km: number
+  hours: number
+  kj: number
+  rides: number
+  active_days: number
+  best_tss: number
+  ring_score: number
+  avg_if: number
+}
+
+export interface DuelResponse {
+  week_start: string
+  week_end: string
+  you_this_week: DuelStats
+  you_last_week: DuelStats
+  crew: DuelStats[]
+}
+
+export async function fetchDuel(): Promise<DuelResponse> {
+  const res = await apiClient.get<DuelResponse>('/crews/me/duel')
+  return res.data
+}
