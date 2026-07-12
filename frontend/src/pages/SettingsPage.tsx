@@ -5,7 +5,8 @@
  * TODO(06.1 Wave 3): explicit sync-status pill details.
  * TODO(06.2): density toggle.
  */
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import LanguageToggle from '../components/dashboard/LanguageToggle'
 import TargetEventEditor from '../components/dashboard/TargetEventEditor'
@@ -16,10 +17,38 @@ import { useLocale } from '../contexts/LocaleContext'
 export default function SettingsPage() {
   const { language } = useLanguage()
   const { locale } = useLocale()
+  const navigate = useNavigate()
+
+  const goBack = () => {
+    // Return to wherever they came from; fall back to the dashboard so mobile
+    // users are never trapped on this page with no way back.
+    if (window.history.length > 1) navigate(-1)
+    else navigate('/dashboard?tab=today')
+  }
 
   return (
     <DashboardShell>
       <div className="p-6 max-w-2xl mx-auto flex flex-col gap-8">
+        {/* Back / close — mobile users need an explicit way out */}
+        <div className="flex items-center justify-between -mb-2">
+          <button
+            type="button"
+            onClick={goBack}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 min-h-[40px] transition-colors"
+            style={{ fontSize: 13, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)', backgroundColor: 'var(--color-paper-2)' }}
+          >
+            <ArrowLeft size={15} strokeWidth={2} />
+            {locale === 'de' ? 'Zurück' : 'Back'}
+          </button>
+          <button
+            type="button"
+            onClick={goBack}
+            className="rounded-full px-4 py-1.5 min-h-[40px] text-[13px] font-medium transition-opacity"
+            style={{ color: 'var(--color-paper)', backgroundColor: 'var(--color-ink)' }}
+          >
+            {locale === 'de' ? 'Fertig' : 'Done'}
+          </button>
+        </div>
         <div>
           <span className="eyebrow" style={{ color: 'var(--color-amber)', letterSpacing: '0.2em' }}>
             {locale === 'de' ? 'Einstellungen' : 'Settings'}

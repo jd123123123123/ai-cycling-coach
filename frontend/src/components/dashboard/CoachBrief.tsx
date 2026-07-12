@@ -4,7 +4,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
 import { Sparkles, ChevronRight, RefreshCw } from 'lucide-react'
 import { useCoachBrief, useRefreshBrief } from '../../hooks/useCoachBrief'
-import type { CoachBriefResponse } from '../../api/coach'
+import type { CoachBriefResponse, TomorrowPlan, IntensityChip } from '../../api/coach'
 import ContributorsSheet from './ContributorsSheet'
 import PrescribedWorkoutCard from './PrescribedWorkoutCard'
 import TomorrowCard from './TomorrowCard'
@@ -16,6 +16,29 @@ import { translateCoach } from '../../utils/coachLanguage'
 
 function isRuleBased(model: string): boolean {
   return model === 'rule-based-fallback'
+}
+
+// The LLM sometimes omits `tomorrow_plan`, and with refresh-on-demand caching a
+// brief that lacks it would hide "Tomorrow" indefinitely. Rebuild it from the
+// always-present rule-based projection (localized `outlook_7d` for tomorrow +
+// the planned workout's category) so tomorrow's training never disappears.
+function deriveTomorrow(brief: CoachBriefResponse): TomorrowPlan | null {
+  const outlook = brief.outlook_7d?.find((o) => o.day_offset === 1) ?? null
+  const planned = (brief.evidence as Record<string, unknown> | undefined)?.tomorrow_planned_workout as
+    | { category?: string; predicted_tss?: number; purpose?: string }
+    | undefined
+  if (!outlook && !planned) return null
+  const catMap: Record<string, IntensityChip> = {
+    recovery: 'recovery', rest: 'recovery', endurance: 'endurance',
+    tempo: 'tempo', threshold: 'threshold', sweet_spot: 'threshold',
+    vo2: 'vo2', vo2max: 'vo2', anaerobic: 'vo2', neuromuscular: 'vo2', race: 'race',
+  }
+  const chip = catMap[(planned?.category ?? '').toLowerCase()] ?? 'endurance'
+  return {
+    description: outlook?.note || planned?.purpose || '',
+    predicted_tss: outlook?.suggested_tss ?? planned?.predicted_tss ?? 0,
+    intensity_chip: chip,
+  }
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -230,18 +253,25 @@ function BriefBody({
          workout card by default. Tapping the section expands both
          (TomorrowCard / RegenerationCard each render nothing on missing
          data, so the section is auto-empty for legacy brief shapes). */}
-      {(brief.tomorrow_plan || (brief.regeneration?.bullets ?? []).length > 0) && (
-        <DashboardSection
-          id="brief-tomorrow-recovery"
-          title={t('tomorrow_recovery_section')}
-          defaultExpanded={false}
-        >
-          <div className="flex flex-col gap-4">
-            <TomorrowCard data={brief.tomorrow_plan ?? null} />
-            <RegenerationCard bullets={brief.regeneration?.bullets ?? null} />
-          </div>
-        </DashboardSection>
-      )}
+      {(() => {
+        // Prefer the LLM plan; fall back to the rule-based projection so
+        // tomorrow's training is always shown.
+        const tomorrowData = brief.tomorrow_plan ?? deriveTomorrow(brief)
+        const hasRegen = (brief.regeneration?.bullets ?? []).length > 0
+        if (!tomorrowData && !hasRegen) return null
+        return (
+          <DashboardSection
+            id="brief-tomorrow-recovery"
+            title={t('tomorrow_recovery_section')}
+            defaultExpanded={false}
+          >
+            <div className="flex flex-col gap-4">
+              <TomorrowCard data={tomorrowData} />
+              <RegenerationCard bullets={brief.regeneration?.bullets ?? null} />
+            </div>
+          </DashboardSection>
+        )
+      })()}
 
       {/* Outlook removed per product decision — CoachBrief focuses on TODAY only. */}
 

@@ -16,7 +16,6 @@ import {
   CheckCircle2,
   Flame,
   TrendingUp,
-  CalendarCheck,
   Award,
   Zap,
   Lock,
@@ -26,9 +25,8 @@ import {
 } from 'lucide-react'
 import PillarSection from '../../dashboard/PillarSection'
 import CoachSafetyBanner from '../CoachSafetyBanner'
-import BandChip from '../BandChip'
+import PowerArena from '../PowerArena'
 import Confetti from '../../ui/Confetti'
-import { SegmentedTabs } from '../../ui/SegmentedTabs'
 import { useCountUp } from '../../../hooks/useCountUp'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
@@ -320,8 +318,6 @@ function CoolFactCard({ icon: Icon, value, unit, label, quip, accent }: {
 }
 
 // ── The tab ──
-type Lens = 'effort' | 'rising' | 'consistent'
-
 export default function SocialTab() {
   const t = useT()
   const { locale } = useLocale()
@@ -367,11 +363,7 @@ export default function SocialTab() {
     if (beatLastWeek && !celebrated) setCelebrated(true)
   }, [beatLastWeek, celebrated])
 
-  // ── Fairness inputs ──
-  const ftp = profile?.ftp_watts ?? null
-  const weight = profile?.weight_kg ?? null
-  const wkgFtp = ftp && weight && weight > 0 ? ftp / weight : (power?.cp_wkg ?? null)
-
+  // ── Progress inputs (fed to the Power League) ──
   const improvement = useMemo(() => {
     const entries = pmc?.entries ?? []
     if (entries.length < 2) return null
@@ -419,14 +411,6 @@ export default function SocialTab() {
     { key: 'ring_week_win', icon: Trophy, label: de ? 'Woche geschlagen' : 'Beat last week', earned: beatLastWeek, how: de ? 'Den Ring-Score der Vorwoche übertreffen' : "Top last week's ring score" },
   ], [consistency.streak, lastWeekPerfect, improvement, beatLastWeek, de])
   const earnedCount = badges.filter((b) => b.earned).length
-
-  // ── Fairness lens ──
-  const [lens, setLens] = useState<Lens>('effort')
-  const lensTabs = [
-    { id: 'effort' as const, label: de ? 'Leistung' : 'Effort' },
-    { id: 'rising' as const, label: de ? 'Aufstieg' : 'Rising' },
-    { id: 'consistent' as const, label: de ? 'Konstanz' : 'Consistent' },
-  ]
 
   // ── Invite state ──
   const [draft, setDraft] = useState('')
@@ -553,45 +537,18 @@ export default function SocialTab() {
         )}
       </PillarSection>
 
-      {/* ── ③ Wo ich stehe — fair progress ───────────────────────── */}
+      {/* ── ③ Die Kraft-Liga — how I stack up against every cyclist ── */}
       <PillarSection
         index="3"
-        title={de ? 'Wo ich stehe' : 'Where I Stand'}
-        question={de ? 'Fair — nicht nur am schnellsten — wie schlage ich mich?' : 'Fairly — not just fastest — how am I doing?'}
+        title={de ? 'Die Kraft-Liga' : 'The Power League'}
+        question={de ? 'Wie stehe ich gegen alle anderen Fahrer da?' : 'How do I stack up against every other rider?'}
       >
-        <div className="flex flex-col gap-4">
-          <SegmentedTabs tabs={lensTabs} value={lens} onChange={setLens} ariaLabel={de ? 'Vergleichsobjektiv' : 'Comparison lens'} indicatorId="fairness-lens-indicator" />
-          <div className="paper-grain rounded-[20px] px-5 py-5 sm:px-6 sm:py-6" style={cardBase}>
-            {lens === 'effort' && (
-              wkgFtp ? (
-                <div className="flex flex-col gap-3">
-                  <BandChip wkgFtp={wkgFtp} locale={locale} />
-                  <p className="text-[12px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                    {de ? 'Du gegen deine eigene Decke — steige ein Band auf, nicht das eines anderen. Nie Watt-gegen-Watt, immer nur dein Verhältnis.' : "You against your own ceiling — climb one band, not someone else's. Never watt-vs-watt, only your own ratio."}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-[13px]" style={{ color: 'var(--color-muted)' }}>
-                  {de ? 'Trage FTP und Gewicht im Profil ein, um dein faires Leistungsband zu sehen.' : 'Add your FTP and weight in your profile to see your fair effort band.'}
-                </p>
-              )
-            )}
-            {lens === 'rising' && (
-              <FairMetric icon={TrendingUp}
-                eyebrow={de ? 'AUFSTIEG · CTL 28 TAGE' : 'RISING · CTL 28 DAYS'}
-                value={improvement ? `${improvement.rate >= 0 ? '+' : ''}${(improvement.rate * 100).toFixed(1)}%` : '—'}
-                caption={improvement ? (de ? `Fitness von ${Math.round(improvement.ctlThen)} auf ${Math.round(improvement.ctlNow)} — dein Zuwachs, nicht der eines Profis.` : `Fitness from ${Math.round(improvement.ctlThen)} to ${Math.round(improvement.ctlNow)} — your gain, not a pro's.`) : (de ? 'Noch nicht genug Verlauf, um deine Aufstiegsrate zu berechnen.' : 'Not enough history yet to compute your rising rate.')}
-                positive={(improvement?.rate ?? 0) >= 0} />
-            )}
-            {lens === 'consistent' && (
-              <FairMetric icon={CalendarCheck}
-                eyebrow={de ? 'KONSTANZ · SERIE & FREQUENZ' : 'CONSISTENT · STREAK & FREQUENCY'}
-                value={`${consistency.streak}${de ? ' T' : 'd'}`}
-                caption={de ? `${consistency.frequency} Einheiten in den letzten 28 Tagen. Ruhetage zählen — du verlierst keine Serie, wenn du deinem Coach folgst.` : `${consistency.frequency} sessions in the last 28 days. Rest days count — you can't lose a streak by following your coach.`}
-                positive />
-            )}
-          </div>
-        </div>
+        <PowerArena
+          power={power}
+          improvementRate={improvement?.rate ?? null}
+          streak={consistency.streak}
+          locale={locale}
+        />
       </PillarSection>
 
       {/* ── ④ Crew & Ehre — squad + honors + duel ────────────────── */}
@@ -694,22 +651,6 @@ export default function SocialTab() {
           </div>
         </div>
       </PillarSection>
-    </div>
-  )
-}
-
-// ── FairMetric ──
-function FairMetric({ icon: Icon, eyebrow, value, caption, positive }: { icon: typeof TrendingUp; eyebrow: string; value: string; caption: string; positive: boolean }) {
-  return (
-    <div className="flex items-start gap-4">
-      <div className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center" style={{ backgroundColor: 'color-mix(in srgb, var(--color-forest-2) 12%, transparent)' }}>
-        <Icon size={20} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} />
-      </div>
-      <div className="min-w-0">
-        <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.2em', fontSize: 9 }}>{eyebrow}</span>
-        <div className="num-display leading-none mt-1.5" style={{ fontSize: 'clamp(28px, 4vw, 36px)', color: positive ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>{value}</div>
-        <p className="text-[12px] leading-relaxed mt-2" style={{ color: 'var(--color-muted)', maxWidth: '52ch' }}>{caption}</p>
-      </div>
     </div>
   )
 }

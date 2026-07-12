@@ -72,8 +72,11 @@ async def update_goals(
 
     goals_data = goals.model_dump(exclude_none=True)
 
-    # Build the goals dict — map flat schema fields to nested structure
-    current_goals = profile.goals or {}
+    # Build the goals dict — map flat schema fields to nested structure.
+    # COPY into a new dict: mutating profile.goals in place and reassigning the
+    # same object doesn't mark the JSON column dirty (SQLAlchemy tracks by
+    # identity), so new keys like push_intensity would silently never persist.
+    current_goals = dict(profile.goals or {})
 
     if "target_ftp" in goals_data:
         current_goals["target_ftp"] = goals_data["target_ftp"]
