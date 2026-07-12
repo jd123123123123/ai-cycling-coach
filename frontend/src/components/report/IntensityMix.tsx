@@ -15,6 +15,20 @@ function modelName(model: string, locale: string): string {
   return locale === 'de' ? m.de : m.en
 }
 
+const MODEL_HINT: Record<string, { en: string; de: string }> = {
+  polarized: { en: 'Polarized — lots of easy plus a little very hard, almost nothing in between', de: 'Polarisiert — viel leicht + wenig sehr hart, kaum dazwischen' },
+  pyramidal: { en: 'Pyramidal — mostly easy, less moderate, least hard', de: 'Pyramidal — viel leicht, weniger mittel, am wenigsten hart' },
+  threshold: { en: 'Threshold — a lot of time in the moderate/hard middle', de: 'Schwelle — viel Zeit im mittleren/harten Bereich' },
+  high_intensity: { en: 'High-intensity — a large share of hard riding', de: 'Hochintensiv — hoher Anteil harter Fahrten' },
+  unstructured: { en: 'Unstructured — no clear distribution pattern', de: 'Unstrukturiert — kein klares Verteilungsmuster' },
+}
+
+function modelHint(model: string, locale: string): string | undefined {
+  const m = MODEL_HINT[model]
+  if (!m) return undefined
+  return locale === 'de' ? m.de : m.en
+}
+
 /** Seiler 3-zone intensity distribution vs the phase-appropriate target.
  * Renders nothing when no ride could be classified. */
 export default function IntensityMix({ mix }: { mix: IntensityMixData }) {
@@ -70,10 +84,11 @@ export default function IntensityMix({ mix }: { mix: IntensityMixData }) {
       <div className="mt-3.5 flex items-center gap-2 flex-wrap" style={{ fontSize: 12.5, color: 'var(--color-ink-2)' }}>
         <span
           className="rounded-full px-2 py-0.5"
+          title={modelHint(mix.model, locale)}
           style={{
             border: `1px solid color-mix(in srgb, ${mix.aligned ? 'var(--color-good)' : 'var(--color-caution)'} 35%, var(--color-rule))`,
             color: mix.aligned ? 'var(--color-good)' : 'var(--color-caution)',
-            fontSize: 11.5, fontWeight: 600,
+            fontSize: 11.5, fontWeight: 600, cursor: 'help',
           }}
         >
           {modelName(mix.model, locale)}

@@ -3,12 +3,15 @@ import {
   acceptCrewInvite,
   createCrew,
   disbandCrew,
+  discoverMembers,
   fetchCrewStandings,
   fetchMyCrew,
+  inviteMemberByUser,
   inviteToCrew,
   leaveCrew,
   revokeCrewInvite,
   type CrewMineResponse,
+  type DiscoverMember,
   type StandingsResponse,
 } from '../api/crew'
 
@@ -104,6 +107,35 @@ export function useDisbandCrew() {
   return useMutation({
     mutationFn: (crewId: number) => disbandCrew(crewId),
     onSuccess: () => qc.invalidateQueries({ queryKey: MY_CREW_KEY }),
+  })
+}
+
+const DISCOVER_KEY = ['crew', 'discover'] as const
+
+// Find other athletes on the app (handles only). `q` filters by handle.
+export function useDiscoverMembers(q: string) {
+  return useQuery<DiscoverMember[]>({
+    queryKey: [...DISCOVER_KEY, q],
+    queryFn: () => discoverMembers(q || undefined),
+    staleTime: 30 * 1000,
+    retry: (failureCount, error: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const status = (error as any)?.response?.status
+      if (status === 401 || status === 403) return false
+      return failureCount < 1
+    },
+  })
+}
+
+export function useInviteMemberByUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ crewId, userId }: { crewId: number; userId: number }) =>
+      inviteMemberByUser(crewId, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: MY_CREW_KEY })
+      qc.invalidateQueries({ queryKey: DISCOVER_KEY })
+    },
   })
 }
 

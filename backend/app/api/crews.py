@@ -24,6 +24,8 @@ from app.schemas.crew import (
     CrewMemberRead,
     CrewMineResponse,
     CrewRead,
+    DiscoverMember,
+    InviteByUserCreate,
     StandingsResponse,
 )
 from app.services.crew_score import (
@@ -127,6 +129,54 @@ def _monday_of(d: date) -> date:
 # ──────────────────────────────────────────────────────────────────────
 # Endpoints
 # ──────────────────────────────────────────────────────────────────────
+
+
+@router.get("/discover", response_model=list[DiscoverMember])
+async def discover_members(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    q: str | None = None,
+    limit: int = 30,
+) -> list[DiscoverMember]:
+    """Find other athletes on the app to add to your crew. Returns handles only
+    (never raw emails). `q` filters by handle/email prefix (case-insensitive).
+    Members already in a crew are flagged `in_crew` so the UI can disable them."""
+    rows = (
+        await db.execute(
+            select(User).where(User.id != current_user.id, User.is_active.is_(True))
+        )
+    ).scalars().all()
+    ql = (q or "").lower().strip()
+    out: list[DiscoverMember] = []
+    for u in rows:
+        handle = _handle_from_email(u.email or "")
+        if ql and ql not in handle.lower() and ql not in (u.email or "").lower():
+            continue
+        mem = await _user_membership(db, u.id)
+        out.append(DiscoverMember(user_id=u.id, handle=handle, in_crew=mem is not None))
+    out.sort(key=lambda m: (m.in_crew, m.handle.lower()))
+    return out[:limit]
+
+
+@router.post(
+    "/{crew_id}/invites/by-user",
+    response_model=CrewInviteRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def invite_by_user(
+    crew_id: int,
+    payload: InviteByUserCreate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> CrewInviteRead:
+    """Invite a discovered member by user_id — resolves their email server-side
+    (never exposed to the client) and reuses the email-invite path."""
+    target = (
+        await db.execute(select(User).where(User.id == payload.user_id))
+    ).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    return await create_invite(crew_id, CrewInviteCreate(email=target.email), current_user, db)
 
 
 @router.get("/me", response_model=CrewMineResponse)

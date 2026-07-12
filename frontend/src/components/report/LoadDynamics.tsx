@@ -14,16 +14,29 @@ export default function LoadDynamics({ load }: { load: LoadDynamicsData }) {
   const { locale } = useLocale()
   const accent = FLAG_COLOR[load.flag] ?? 'var(--color-muted)'
 
-  const chips: { label: string; value: string }[] = []
+  const de = locale === 'de'
+  const chips: { label: string; value: string; hint: string }[] = []
   if (load.ramp_per_week !== null) {
     const v = load.ramp_per_week
-    chips.push({ label: locale === 'de' ? 'Aufbau/Woche' : 'Ramp/week', value: `${v > 0 ? '+' : ''}${v}` })
+    chips.push({
+      label: de ? 'Aufbau/Woche' : 'Ramp/week',
+      value: `${v > 0 ? '+' : ''}${v}`,
+      hint: de ? 'CTL-Änderung pro Woche — wie schnell deine Fitness aufbaut' : 'CTL change per week — how fast your fitness is building',
+    })
   }
   if (load.monotony !== null) {
-    chips.push({ label: locale === 'de' ? 'Monotonie' : 'Monotony', value: `${load.monotony}` })
+    chips.push({
+      label: de ? 'Monotonie' : 'Monotony',
+      value: `${load.monotony}`,
+      hint: de ? 'Wie gleichförmig deine Tage sind — unter 2 ist gut' : 'How samey your days are — under 2 is good',
+    })
   }
   if (load.strain !== null) {
-    chips.push({ label: locale === 'de' ? 'Belastung' : 'Strain', value: `${load.strain}` })
+    chips.push({
+      label: de ? 'Belastung' : 'Strain',
+      value: `${load.strain}`,
+      hint: de ? 'Belastung × Monotonie — Spitzen erhöhen das Krankheitsrisiko' : 'Load × monotony — spikes raise illness risk',
+    })
   }
 
   return (
@@ -40,9 +53,11 @@ export default function LoadDynamics({ load }: { load: LoadDynamicsData }) {
           <div
             key={i}
             className="rounded-[12px] px-3 py-2"
+            title={c.hint}
             style={{
               border: `1px solid color-mix(in srgb, ${accent} 28%, var(--color-rule))`,
               backgroundColor: `color-mix(in srgb, ${accent} 7%, var(--color-paper))`,
+              cursor: 'help',
             }}
           >
             <div className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 17, fontWeight: 600, lineHeight: 1.1 }}>

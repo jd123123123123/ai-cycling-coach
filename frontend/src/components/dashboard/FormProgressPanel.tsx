@@ -16,6 +16,22 @@ const VERDICT: Record<Verdict, { color: string; en: string; de: string }> = {
   steady: { color: 'var(--color-caution)', en: 'STEADY', de: 'STABIL' },
 }
 
+// Plain-language glosses for the dense marker labels, matched on the
+// abbreviation inside the (backend-provided) label. Rendered as a native
+// title= tooltip so first-time readers can decode TSB/CTL/eFTP/TSS.
+function markerGloss(label: string, de: boolean): string | undefined {
+  const l = label.toUpperCase()
+  if (l.includes('TSB') || l.includes('FORM'))
+    return de ? 'Frische (TSB): plus = ausgeruht, minus = müde' : 'Freshness (TSB): plus = rested, minus = tired'
+  if (l.includes('CTL') || l.includes('FITNESS') || l.includes('FITNES'))
+    return de ? 'Dein Ausdauer-Fundament (CTL)' : 'Your fitness base (CTL)'
+  if (l.includes('EFTP') || l.includes('FTP'))
+    return de ? 'Geschätzte FTP (eFTP) aus deinen Fahrten' : 'Estimated FTP (eFTP) from your rides'
+  if (l.includes('TSS'))
+    return de ? 'Trainingslast — 100 ≈ eine harte Stunde' : 'Training load — 100 ≈ one hard hour'
+  return undefined
+}
+
 // "Form & Progress" — the latest ride read against the athlete's fitness
 // baseline: is this a sign of progress, or of accumulating fatigue?
 export default function FormProgressPanel() {
@@ -58,21 +74,29 @@ export default function FormProgressPanel() {
         color: 'var(--color-ink)', fontFamily: 'var(--font-serif)', fontSize: 22,
         fontWeight: 500, letterSpacing: '-0.01em',
       }}>{data.headline}</h2>
-      <p className="mb-4" style={{ color: 'var(--color-ink-2)', fontSize: 12.5 }}>
+      <p className="mb-1" style={{ color: 'var(--color-ink-2)', fontSize: 12.5 }}>
         {de ? 'Letzte Fahrt' : 'Latest ride'}: {data.activity_title}
+      </p>
+      {/* Disambiguates from the hero's "Form heute": these markers read form &
+         fitness as of the last ride, not today's live figure. */}
+      <p className="mb-4" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
+        {de ? 'Werte nach der letzten Fahrt' : 'Values after your last ride'}
       </p>
 
       {/* fitness / ride markers */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-        {data.markers.map((m, i) => (
+        {data.markers.map((m, i) => {
+          const gloss = markerGloss(m.label, de)
+          return (
           <div key={i} className="rounded-[12px] px-3 py-2.5" style={{
             background: 'var(--color-paper)', border: '1px solid var(--color-rule)',
           }}>
-            <div style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{m.label}</div>
+            <div title={gloss} style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: gloss ? 'help' : undefined }}>{m.label}</div>
             <div className="num-mono" style={{ color: TONE_COLOR[m.tone], fontSize: 18, fontWeight: 500, lineHeight: 1.2 }}>{m.value}</div>
             {m.baseline && <div style={{ color: 'var(--color-ink-2)', fontSize: 10.5 }}>{m.baseline}</div>}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* evidence signals */}

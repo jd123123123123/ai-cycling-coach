@@ -157,7 +157,7 @@ export default function WeeklyChallenge() {
         {/* Content */}
         <div className="flex flex-col gap-1 min-w-0 flex-1">
           <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
-            {de ? 'Wochen-Ring' : 'Weekly ring'} · {sessions} / {Math.ceil(goal / 80)} {de ? 'Einheiten' : 'sessions'}
+            {de ? 'Wochen-Ring' : 'Weekly ring'} · {sessions} / {Math.ceil(goal / 70)} {de ? 'Einheiten' : 'sessions'}
           </span>
           <p
             className="text-[15px] font-medium leading-snug"

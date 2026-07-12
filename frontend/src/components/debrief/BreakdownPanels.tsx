@@ -145,7 +145,7 @@ function Card({ label, accent, headline, read, action, children }: {
   )
 }
 
-function StatBlock({ value, unit, label, color }: { value: string; unit?: string; label: string; color?: string }) {
+function StatBlock({ value, unit, label, color, hint }: { value: string; unit?: string; label: string; color?: string; hint?: string }) {
   return (
     <div>
       <div className="flex items-baseline gap-1">
@@ -154,7 +154,13 @@ function StatBlock({ value, unit, label, color }: { value: string; unit?: string
         </span>
         {unit && <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{unit}</span>}
       </div>
-      <div className="num-mono mt-1" style={{ color: 'var(--color-muted)', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{label}</div>
+      <div
+        className="num-mono mt-1"
+        title={hint}
+        style={{ color: 'var(--color-muted)', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: hint ? 'help' : undefined }}
+      >
+        {label}
+      </div>
     </div>
   )
 }
@@ -199,7 +205,8 @@ function PacingSlide({ pacing }: { pacing: Pacing | null }) {
     <Slide eyebrow={de ? 'PACING · GEWONNEN & VERLOREN' : 'PACING · WON & LOST'} headline={headline} explain={explain} accent={tone}>
       <StatRow>
         <StatBlock value={`${split > 0 ? '+' : ''}${split.toFixed(1)}`} unit="%" label={de ? 'Split' : 'Split'} color={tone} />
-        {pacing.variability_index != null && <StatBlock value={pacing.variability_index.toFixed(2)} label="VI" />}
+        {pacing.variability_index != null && <StatBlock value={pacing.variability_index.toFixed(2)} label="VI"
+          hint={de ? 'Variabilitäts-Index — 1,0 = gleichmäßig, höher = wechselhaft' : 'Variability Index — 1.0 = even, higher = surgier'} />}
         <StatBlock value={`${pacing.surge_count}`} label={de ? 'Angriffe' : 'Surges'} />
       </StatRow>
       <div className="mt-1">
@@ -315,7 +322,7 @@ function ClimbsSlide({ climbs, ftp, weightKg }: { climbs: Climb[]; ftp: number |
           <span style={{ width: 58 }}>{de ? 'LÄNGE' : 'LENGTH'}</span>
           <span style={{ width: 46 }}>{de ? 'STG.' : 'GRADE'}</span>
           <span style={{ width: 56 }}>{de ? 'HM' : 'GAIN'}</span>
-          <span style={{ width: 52 }}>VAM</span>
+          <span style={{ width: 52 }} title={de ? 'VAM — Höhenmeter pro Stunde (Klettertempo)' : 'VAM — vertical metres climbed per hour (climb rate)'}>VAM m/h</span>
           {shown.some((c) => c.w_per_kg != null) && <span style={{ width: 52 }}>W/KG</span>}
           <span className="ml-auto">{de ? 'ZEIT' : 'TIME'}</span>
         </div>
@@ -349,12 +356,12 @@ function EfficiencyCard({ efficiency, ftp }: { efficiency: Efficiency | null; ft
   const tone = dc == null ? undefined : dc < 5 ? 'var(--color-good)' : dc > 10 ? 'var(--color-bad)' : 'var(--color-caution)'
   const headline = dc == null ? (de ? 'Effizienz' : 'Efficiency')
     : dc < 5 ? (de ? 'Form gehalten' : 'Held your form')
-    : dc > 10 ? (de ? 'Deutlicher HF-Drift' : 'Notable cardiac drift')
+    : dc > 10 ? (de ? 'Deutlicher HF-Drift' : 'Notable HR drift')
     : (de ? 'Etwas Drift zum Ende' : 'Some drift late on')
   const read = dc == null ? undefined
     : dc < 5 ? (de ? 'Kaum HF-Drift — Aerobsystem hat die Distanz getragen.' : 'Barely any drift — your aerobic system carried the distance.')
     : dc > 10 ? (de ? 'HF stieg für dieselbe Leistung — Verpflegung oder Pace prüfen.' : 'HR climbed for the same power — check fuelling or pacing.')
-    : (de ? 'Leichte Entkopplung zum Ende hin.' : 'A little decoupling toward the finish.')
+    : (de ? 'Leichte Entkopplung zum Ende hin.' : 'A little HR drift toward the finish.')
   // Concrete target: cap the aerobic effort + hydrate to keep drift under 5%.
   const cap = ftp && ftp > 0 ? Math.round(0.75 * ftp) : null
   const action = dc == null || dc < 5 ? undefined
@@ -366,8 +373,10 @@ function EfficiencyCard({ efficiency, ftp }: { efficiency: Efficiency | null; ft
   return (
     <Card label={de ? 'EFFIZIENZ' : 'EFFICIENCY'} accent={tone} headline={headline} read={read} action={action}>
       <StatRow>
-        {ef != null && <StatBlock value={ef.toFixed(2)} label="EF" />}
-        {dc != null && <StatBlock value={`${dc.toFixed(1)}`} unit="%" label={de ? 'HF-Drift' : 'Decoupling'} color={tone} />}
+        {ef != null && <StatBlock value={ef.toFixed(2)} label="EF"
+          hint={de ? 'Effizienzfaktor — Leistung pro Herzschlag' : 'Efficiency Factor — power per heartbeat'} />}
+        {dc != null && <StatBlock value={`${dc.toFixed(1)}`} unit="%" label={de ? 'HF-Drift' : 'HR drift'} color={tone}
+          hint={de ? 'HF-Drift — HF steigt bei gleicher Leistung; unter 5% ist gut' : 'HR drift — heart rate climbs at the same power; under 5% is good'} />}
         {hr != null && <StatBlock value={`${Math.round(hr)}`} unit="bpm" label={de ? 'Ø HF' : 'Avg HR'} />}
       </StatRow>
     </Card>
@@ -379,15 +388,20 @@ function MatchbookCard({ matchbook }: { matchbook: Matchbook | null }) {
   if (!matchbook) return null
   const tone = matchbook.fully_depleted ? 'var(--color-bad)' : 'var(--color-good)'
   const headline = matchbook.fully_depleted ? (de ? 'Tank komplett geleert' : 'Emptied the tank') : (de ? 'Reserve klug eingeteilt' : 'Matches well spent')
-  const read = matchbook.fully_depleted
-    ? (de ? 'Anaerobe Reserve auf null — nichts blieb fürs Finale.' : 'Anaerobic reserve drained to zero — nothing left for the finale.')
-    : (de ? 'Reserve gehalten — Antritte klug dosiert.' : 'Reserve held — you spent your matches wisely.')
+  const definition = de
+    ? 'Ein Streichholz = eine harte Anstrengung aus der anaeroben Reserve (W′). '
+    : 'A match = one hard effort spent from your anaerobic reserve (W′). '
+  const read = definition + (matchbook.fully_depleted
+    ? (de ? 'Reserve auf null — nichts blieb fürs Finale.' : 'Reserve drained to zero — nothing left for the finale.')
+    : (de ? 'Reserve gehalten — Antritte klug dosiert.' : 'Reserve held — you spent your matches wisely.'))
   return (
     <Card label={de ? 'STREICHHOLZHEFT' : 'MATCHBOOK'} accent={tone} headline={headline} read={read}>
       <StatRow>
         <StatBlock value={`${matchbook.match_count}`} label={de ? 'Streichhölzer' : 'Matches'} />
-        <StatBlock value={fmtMmSs(matchbook.time_above_cp_s)} label={de ? 'Über CP' : 'Above CP'} />
-        <StatBlock value={Math.max(0, matchbook.min_bal_j / 1000).toFixed(1)} unit="kJ" label={de ? 'Min. W-Bal' : 'Min W-bal'} color={tone} />
+        <StatBlock value={fmtMmSs(matchbook.time_above_cp_s)} label={de ? 'Über CP' : 'Above CP'}
+          hint={de ? 'Zeit oberhalb der Kritischen Leistung (CP) — hier wird die Reserve verbraucht' : 'Time above Critical Power (CP) — where the reserve is spent'} />
+        <StatBlock value={Math.max(0, matchbook.min_bal_j / 1000).toFixed(1)} unit="kJ" label={de ? 'Min. W-Bal' : 'Min W-bal'} color={tone}
+          hint={de ? 'Tiefster Stand der anaeroben Reserve (W′) — niedriger = näher an leer' : 'Lowest point of the anaerobic reserve (W′) — lower = closer to empty'} />
       </StatRow>
     </Card>
   )
@@ -473,8 +487,8 @@ function WkoCard({ wko, weightKg }: { wko: WkoModel | null; weightKg: number | n
       : { c: 'var(--color-muted)', t: de ? 'grobe Schätzung' : 'rough estimate' }
   const wkg = weightKg && weightKg > 0
   const read = de
-    ? `Aus der Leistungs-Dauer-Kurve dieser Fahrt geschätzt — kein CP-Test. W′ ist dein anaerober „Akku“ für kurze Attacken.`
-    : `Estimated from this ride's power–duration curve — not a CP test. W′ is your anaerobic "battery" for short attacks.`
+    ? `Aus der Leistungs-Dauer-Kurve dieser Fahrt geschätzt — kein CP-Test. W′ ist deine anaerobe Reserve für kurze Attacken.`
+    : `Estimated from this ride's power–duration curve — not a CP test. W′ is your anaerobic reserve for short attacks.`
   // Concrete target: extend time-to-exhaustion by riding at CP for the current TTE.
   const cp = Math.round(wko.cp_watts)
   const action = de
@@ -486,11 +500,16 @@ function WkoCard({ wko, weightKg }: { wko: WkoModel | null; weightKg: number | n
         {conf.t} · R² {r2.toFixed(2)}
       </span>
       <StatRow>
-        <StatBlock value={`${Math.round(wko.cp_watts)}`} unit={wkg ? `W · ${(wko.cp_watts / (weightKg as number)).toFixed(1)} W/kg` : 'W'} label="CP" />
-        <StatBlock value={(wko.w_prime_j / 1000).toFixed(1)} unit="kJ" label="W′" />
-        <StatBlock value={`${Math.round(wko.pmax_watts)}`} unit={wkg ? `W · ${(wko.pmax_watts / (weightKg as number)).toFixed(1)} W/kg` : 'W'} label="Pmax" />
-        <StatBlock value={fmtMmSs(wko.tte_s)} label="TTE" />
-        <StatBlock value={wko.vo2max_estimate != null ? wko.vo2max_estimate.toFixed(1) : '—'} label={de ? 'VO₂max (gesch.)' : 'VO₂max (est.)'} />
+        <StatBlock value={`${Math.round(wko.cp_watts)}`} unit={wkg ? `W · ${(wko.cp_watts / (weightKg as number)).toFixed(1)} W/kg` : 'W'} label="CP"
+          hint={de ? 'Kritische Leistung — die höchste Dauerleistung' : 'Critical Power — the highest power you can hold steady'} />
+        <StatBlock value={(wko.w_prime_j / 1000).toFixed(1)} unit="kJ" label="W′"
+          hint={de ? 'W′ — anaerobe Reserve für kurze Attacken' : "W′ — anaerobic reserve for short attacks"} />
+        <StatBlock value={`${Math.round(wko.pmax_watts)}`} unit={wkg ? `W · ${(wko.pmax_watts / (weightKg as number)).toFixed(1)} W/kg` : 'W'} label="Pmax"
+          hint={de ? 'Maximale Sprintleistung' : 'Maximum sprint power'} />
+        <StatBlock value={fmtMmSs(wko.tte_s)} label="TTE"
+          hint={de ? 'Zeit bis zur Erschöpfung an CP' : 'Time to exhaustion at CP'} />
+        <StatBlock value={wko.vo2max_estimate != null ? wko.vo2max_estimate.toFixed(1) : '—'} label={de ? 'VO₂max (gesch.)' : 'VO₂max (est.)'}
+          hint={de ? 'Geschätzte maximale Sauerstoffaufnahme — Maß der aeroben Ausdauer' : 'Estimated maximal oxygen uptake — a measure of aerobic capacity'} />
       </StatRow>
     </Card>
   )

@@ -20,6 +20,7 @@ import {
   subDays,
 } from 'date-fns'
 import { useSearchParams } from 'react-router-dom'
+import { useLocale } from '../../contexts/LocaleContext'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { ActivityRead } from '../../api/dashboard'
 import { formatHours, formatDelta } from '../../utils/format'
@@ -70,7 +71,11 @@ interface WeekStripProps {
 }
 
 export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
+  const { locale } = useLocale()
+  const de = locale === 'de'
   const now = new Date()
+  const restWord = de ? 'Ruhe' : 'rest'
+  const upcomingWord = de ? 'geplant' : 'upcoming'
   // Monday-start: cycling training weeks canonically run Mon→Sun (Coggan PMC,
   // TrainingPeaks, etc.).
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
@@ -203,13 +208,13 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
                 type="button"
                 title={
                   cell.isFuture
-                    ? `${format(cell.date, 'EEE, MMM d')} · upcoming`
+                    ? `${format(cell.date, 'EEE, MMM d')} · ${upcomingWord}`
                     : cell.count === 0
-                      ? `${format(cell.date, 'EEE, MMM d')} · rest`
+                      ? `${format(cell.date, 'EEE, MMM d')} · ${restWord}`
                       : `${format(cell.date, 'EEE, MMM d')} · ${formatHours(cell.durationSeconds)} · ${Math.round(cell.tss)} TSS`
                 }
                 onClick={() => setSearchParams({ tab: 'plan' }, { replace: true })}
-                aria-label={`${format(cell.date, 'EEEE, MMM d')} — tap to view plan`}
+                aria-label={`${format(cell.date, 'EEEE, MMM d')} — ${de ? 'tippen für Plan' : 'tap to view plan'}`}
                 className="flex flex-col items-end justify-end gap-1 focus:outline-none"
                 style={{ paddingBottom: 2 }}
               >
@@ -265,14 +270,14 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
             className="eyebrow"
             style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}
           >
-            This week · {format(weekStart, 'MMM d')}–{format(weekEnd, 'd')}
+            {de ? 'Diese Woche' : 'This week'} · {format(weekStart, 'MMM d')}–{format(weekEnd, 'd')}
           </span>
           {isLoading ? (
             <span
               className="num-mono text-[14px] animate-pulse"
               style={{ color: 'var(--color-ink-2)' }}
             >
-              loading…
+              {de ? 'lädt…' : 'loading…'}
             </span>
           ) : (
             <div className="flex items-baseline gap-3 flex-wrap">
@@ -280,7 +285,7 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
                 className="num-display text-[22px] sm:text-[26px] leading-none"
                 style={{ color: 'var(--color-ink)' }}
               >
-                {totals.ridesDone} {totals.ridesDone === 1 ? 'session' : 'sessions'}
+                {totals.ridesDone} {de ? (totals.ridesDone === 1 ? 'Einheit' : 'Einheiten') : (totals.ridesDone === 1 ? 'session' : 'sessions')}
               </span>
               <span
                 className="num-mono text-[13px]"
@@ -314,7 +319,7 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
               >
                 {formatDelta(weekVsAvg.thisWeekTSS, weekVsAvg.avgTSS)}
               </span>
-              {' vs avg'}
+              {de ? ' vs. Ø' : ' vs avg'}
             </>
           )}
         </p>
@@ -333,10 +338,10 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
               className="flex flex-col items-center gap-1"
               title={
                 cell.isFuture
-                  ? `${format(cell.date, 'EEE, MMM d')} · upcoming`
+                  ? `${format(cell.date, 'EEE, MMM d')} · ${upcomingWord}`
                   : cell.count === 0
-                    ? `${format(cell.date, 'EEE, MMM d')} · rest`
-                    : `${format(cell.date, 'EEE, MMM d')} · ${cell.count} session${cell.count > 1 ? 's' : ''} · ${Math.round(cell.tss)} TSS · ${formatHours(cell.durationSeconds)}`
+                    ? `${format(cell.date, 'EEE, MMM d')} · ${restWord}`
+                    : `${format(cell.date, 'EEE, MMM d')} · ${cell.count} ${de ? (cell.count > 1 ? 'Einheiten' : 'Einheit') : `session${cell.count > 1 ? 's' : ''}`} · ${Math.round(cell.tss)} TSS · ${formatHours(cell.durationSeconds)}`
               }
             >
               <span

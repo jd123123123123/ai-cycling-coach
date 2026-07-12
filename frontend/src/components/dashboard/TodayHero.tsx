@@ -41,7 +41,7 @@ function useViewportIsMobile(breakpoint = 640): boolean {
  * this card is the verdict, not the data dump.
  */
 
-function StateRing({ score, color, size, recoveryLabel }: { score: number; color: string; size: number; recoveryLabel: string }) {
+function StateRing({ score, color, size, recoveryLabel, scaleHint }: { score: number; color: string; size: number; recoveryLabel: string; scaleHint: string }) {
   const animated = useCountUp(score, { durationMs: 1200, digits: 0 })
   const stroke = Math.max(9, Math.round(size * 0.085))
   const radius = (size - stroke) / 2
@@ -51,8 +51,9 @@ function StateRing({ score, color, size, recoveryLabel }: { score: number; color
   return (
     <div
       className="relative shrink-0 flex items-center justify-center"
-      style={{ width: size, height: size }}
-      aria-label={`${recoveryLabel} ${score}`}
+      style={{ width: size, height: size, cursor: 'help' }}
+      aria-label={`${recoveryLabel} ${score} / 100`}
+      title={scaleHint}
     >
       {/* Ambient color glow — the state tint, soft */}
       <div
@@ -83,16 +84,9 @@ function StateRing({ score, color, size, recoveryLabel }: { score: number; color
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className="num-mono"
-          style={{
-            color: 'var(--color-ink)',
-            fontSize: Math.round(size * 0.27),
-            fontWeight: 500,
-            lineHeight: 1,
-          }}
-        >
-          {animated}
+        <span className="num-mono inline-flex items-baseline" style={{ color: 'var(--color-ink)', lineHeight: 1 }}>
+          <span style={{ fontSize: Math.round(size * 0.27), fontWeight: 500 }}>{animated}</span>
+          <span style={{ fontSize: Math.round(size * 0.11), fontWeight: 500, color: 'var(--color-muted)' }}>/100</span>
         </span>
         <span className="eyebrow mt-1" style={{ color, fontSize: 10, letterSpacing: '0.24em', fontWeight: 600 }}>
           {recoveryLabel}
@@ -117,8 +111,8 @@ function EyebrowChip({ children, color = 'var(--color-muted)' }: { children: Rea
   )
 }
 
-function whyChips(evidence: Record<string, unknown>, locale: 'en' | 'de'): Array<{ key: string; text: string; tone: 'good' | 'caution' | 'bad' | 'neutral' }> {
-  const out: Array<{ key: string; text: string; tone: 'good' | 'caution' | 'bad' | 'neutral' }> = []
+function whyChips(evidence: Record<string, unknown>, locale: 'en' | 'de'): Array<{ key: string; text: string; tone: 'good' | 'caution' | 'bad' | 'neutral'; title?: string }> {
+  const out: Array<{ key: string; text: string; tone: 'good' | 'caution' | 'bad' | 'neutral'; title?: string }> = []
   const pmc = evidence.pmc as Record<string, unknown> | undefined
   const bio = evidence.biometrics as Record<string, unknown> | undefined
   const hrv = bio?.hrv as Record<string, unknown> | undefined
@@ -127,17 +121,40 @@ function whyChips(evidence: Record<string, unknown>, locale: 'en' | 'de'): Array
   const hrvDelta = hrv?.delta_pct as number | null | undefined
   if (typeof hrvDelta === 'number') {
     const tone = hrvDelta < -8 ? 'bad' : hrvDelta < -3 ? 'caution' : 'good'
-    out.push({ key: 'hrv', text: `HRV ${hrvDelta >= 0 ? '+' : ''}${hrvDelta.toFixed(1)}%`, tone })
+    out.push({
+      key: 'hrv',
+      text: `HRV ${hrvDelta >= 0 ? '+' : ''}${hrvDelta.toFixed(1)}%`,
+      tone,
+      title: locale === 'de'
+        ? 'Herzfrequenzvariabilität ggü. deiner Basislinie — höher = besser erholt'
+        : 'Heart-rate variability vs your baseline — higher = better recovered',
+    })
   }
   const tsb = pmc?.tsb as number | null | undefined
   if (typeof tsb === 'number') {
     const tone = tsb < -25 ? 'bad' : tsb < -10 ? 'neutral' : 'good'
-    out.push({ key: 'tsb', text: `TSB ${tsb >= 0 ? '+' : ''}${Math.round(tsb)}${tsb < -10 && tsb > -25 ? (locale === 'de' ? ' (produktiv)' : ' (productive)') : ''}`, tone })
+    // Labelled "Form heute" (today's live TSB) to distinguish it from the
+    // Form & Fortschritt panel, which reports form *after the last ride*.
+    out.push({
+      key: 'tsb',
+      text: `${locale === 'de' ? 'Form heute' : 'Form today'} ${tsb >= 0 ? '+' : ''}${Math.round(tsb)}${tsb < -10 && tsb > -25 ? (locale === 'de' ? ' (produktiv)' : ' (productive)') : ''}`,
+      tone,
+      title: locale === 'de'
+        ? 'Frische (TSB): plus = ausgeruht, minus = müde'
+        : 'Freshness (TSB): plus = rested, minus = tired',
+    })
   }
   const sleepDebt = sleep?.avg_nightly_debt_h as number | null | undefined
   if (typeof sleepDebt === 'number' && sleepDebt > 0.2) {
     const tone = sleepDebt > 1.5 ? 'bad' : sleepDebt > 0.6 ? 'caution' : 'neutral'
-    out.push({ key: 'sleep', text: `${locale === 'de' ? 'Schlafdefizit' : 'Sleep debt'} ${sleepDebt.toFixed(1)} h`, tone })
+    out.push({
+      key: 'sleep',
+      text: `${locale === 'de' ? 'Schlafdefizit' : 'Sleep debt'} ${sleepDebt.toFixed(1)} h`,
+      tone,
+      title: locale === 'de'
+        ? 'Fehlender Schlaf ggü. deinem Bedarf, Ø der letzten Nächte'
+        : 'Missing sleep vs your need, averaged over recent nights',
+    })
   }
   return out.slice(0, 4)
 }
@@ -159,6 +176,7 @@ export default function TodayHero() {
   const ringSize = isMobile ? 108 : 140
   const t = useT()
   const { locale } = useLocale()
+  const de = locale === 'de'
 
   const metrics = metricsResp?.metrics ?? []
   const latest = latestWithData(metrics, 'hrv_status') ?? latestWithData(metrics, 'body_battery') ?? latestWithData(metrics, 'sleep_score')
@@ -188,9 +206,18 @@ export default function TodayHero() {
   const rawPhase = athlete?.goal_phase as string | undefined
   const daysToGoal = athlete?.days_to_goal as number | undefined
   const goalName = athlete?.goal_target as string | undefined
-  // Pretty-print the phase: "build1" → "Build 1", "peak" → "Peak"
-  const phaseLabel = rawPhase && rawPhase !== 'unknown'
-    ? rawPhase
+  // Pretty-print the phase: "build1" → "Build 1", "peak" → "Peak".
+  // In German, map the canonical phase names so nothing leaks English.
+  const PHASE_LABEL_DE: Record<string, string> = {
+    base1: 'Grundlage 1', base2: 'Grundlage 2',
+    build1: 'Aufbau 1', build2: 'Aufbau 2',
+    peak: 'Peak', taper: 'Taper', race: 'Rennwoche',
+    maintenance: 'Erhaltung', transition: 'Übergang', recovery: 'Erholung',
+  }
+  const phaseKey = rawPhase && rawPhase !== 'unknown' ? rawPhase.toLowerCase().replace(/\s+/g, '') : null
+  const phaseLabel = phaseKey
+    ? (de && PHASE_LABEL_DE[phaseKey]) ||
+      rawPhase!
         .replace(/([a-z])(\d)/i, '$1 $2')
         .replace(/^\w/, (c) => c.toUpperCase())
     : null
@@ -202,17 +229,8 @@ export default function TodayHero() {
   // "Why" chips
   const why = whyChips((brief?.evidence as Record<string, unknown> | undefined) ?? {}, locale)
 
-  // Footer micro-stats: sleep score · weekly strain · streak (approximation —
-  // strain pulls from weekly_progress.total_tss / weekly_intensity_quota TSS
-  // target. Streak is not yet plumbed in here; this card defers to the
-  // dedicated StreakStrip / WeeklyChallenge below for the real values, but a
-  // single-line summary anchors the bottom of the hero.)
-  const wp = (brief?.evidence as Record<string, unknown> | undefined)?.weekly_progress as Record<string, unknown> | undefined
-  const weeklyQuota = (brief?.evidence as Record<string, unknown> | undefined)?.weekly_intensity_quota as Record<string, unknown> | undefined
-  const tssWeek = (wp?.total_tss_this_week as number | undefined) ?? 0
-  const weeklyHours = (weeklyQuota?.total_hours as number | undefined) ?? 0
-  const tssTarget = Math.max(1, Math.round(weeklyHours * 70)) // ~70 TSS/h proxy
-  const strainPct = Math.min(100, Math.round((tssWeek / tssTarget) * 100))
+  // Footer micro-stat: sleep score. Weekly strain deliberately lives once —
+  // in the WeeklyChallenge ring below — so the hero doesn't duplicate it.
   const sleepScore = latest?.sleep_score ?? null
 
   // Trajectory micro-line. Prefer the AI-generated `narrative_hook` from the
@@ -301,7 +319,13 @@ export default function TodayHero() {
          once, in the CoachBrief's prescribed-workout card below — this hero is
          the verdict, not the prescription. */}
       <div className="flex gap-5 sm:gap-7 items-center flex-wrap">
-        <StateRing score={score ?? 0} color={color} size={ringSize} recoveryLabel={t('recovery_label')} />
+        <StateRing
+          score={score ?? 0}
+          color={color}
+          size={ringSize}
+          recoveryLabel={t('recovery_label')}
+          scaleHint={de ? 'Erholung 0–100 · niedrig · mittel · hoch' : 'Recovery 0–100 · low · mid · high'}
+        />
 
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           <h1
@@ -323,10 +347,12 @@ export default function TodayHero() {
               {why.map((c) => (
                 <span
                   key={c.key}
+                  title={c.title}
                   className="num-mono text-[11px] px-1.5 py-0.5 rounded-sm whitespace-nowrap"
                   style={{
                     color: TONE_COLOR[c.tone],
                     border: `1px solid color-mix(in srgb, ${TONE_COLOR[c.tone]} 35%, var(--color-rule))`,
+                    cursor: c.title ? 'help' : undefined,
                   }}
                 >
                   {c.text}
@@ -348,19 +374,14 @@ export default function TodayHero() {
             <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}>{Math.round(sleepScore)}</span>
           </div>
         )}
-        <div className="flex items-baseline gap-1.5">
-          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>{t('strain_week_label')}</span>
-          <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}>{strainPct}%</span>
-          <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
-            {locale === 'de' ? 'von' : 'of'} {tssTarget}
-          </span>
-        </div>
+        {/* Weekly strain intentionally lives once, in the WeeklyChallenge ring
+           below — kept out of the hero footer to avoid a duplicate "X% von Y". */}
         {meta && (
           <span
             className="eyebrow num-mono"
             style={{ color, fontSize: 11, letterSpacing: '0.18em', fontWeight: 600 }}
           >
-            {meta.label.toUpperCase()}
+            {(de ? meta.labelDe : meta.label).toUpperCase()}
           </span>
         )}
       </div>

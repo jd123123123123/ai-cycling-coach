@@ -26,6 +26,7 @@ import {
 import PillarSection from '../../dashboard/PillarSection'
 import CoachSafetyBanner from '../CoachSafetyBanner'
 import PowerArena from '../PowerArena'
+import MemberFinder from '../MemberFinder'
 import Confetti from '../../ui/Confetti'
 import { useCountUp } from '../../../hooks/useCountUp'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
@@ -196,14 +197,26 @@ function StandingRow({ standing, rank, locale }: { standing: Standing; rank: num
           )}
         </div>
         <div className="flex items-center gap-2 mt-1">
-          <WeekBars dailyPct={standing.dailyPct} isYou={standing.isYou} />
-          <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>{Math.round(standing.weeklyTSS)} TSS</span>
+          {standing.status === 'pending' ? (
+            <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>
+              {locale === 'de' ? 'zählt, sobald sie beitreten' : 'counts once they join'}
+            </span>
+          ) : (
+            <>
+              <WeekBars dailyPct={standing.dailyPct} isYou={standing.isYou} />
+              <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>{Math.round(standing.weeklyTSS)} TSS</span>
+            </>
+          )}
         </div>
       </div>
       <div className="text-right shrink-0">
         <div className="flex items-baseline gap-1 justify-end">
-          <span className="num-display leading-none" style={{ fontSize: 20, color: standing.isYou ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>{s}</span>
-          <span className="num-mono" style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.12em' }}>PTS</span>
+          <span className="num-display leading-none" style={{ fontSize: 20, color: standing.isYou ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>
+            {standing.status === 'pending' ? '—' : s}
+          </span>
+          {standing.status !== 'pending' && (
+            <span className="num-mono" style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.12em' }}>PTS</span>
+          )}
         </div>
       </div>
     </div>
@@ -339,6 +352,7 @@ export default function SocialTab() {
   const { data: myCrewData } = useMyCrew()
   const createCrew = useCreateCrew()
   const hasCrew = !!myCrewData?.crew
+  const crewId = myCrewData?.crew?.id ?? null
 
   const dailyTarget = dailyTargetFrom(profile)
   const activities = useMemo(() => actsData?.activities ?? [], [actsData])
@@ -489,6 +503,12 @@ export default function SocialTab() {
                   )}
                 </div>
               </div>
+              {/* Always-visible explainer — how the score works (audit: never hidden). */}
+              <p className="text-[11px] leading-snug pt-0.5" style={{ color: 'var(--color-muted)' }}>
+                {de
+                  ? `So funktioniert's: Jeder Tag, an dem du dein Tagesziel (${dailyTarget} TSS) erreichst, bringt 100 Punkte — max. 150% pro Tag. „Ring" = dein Tagesziel; voll = erreicht. TSS = Trainingslast (Dauer × Intensität).`
+                  : `How it works: each day you hit your daily target (${dailyTarget} TSS) banks 100 points — max 150%/day. "Ring" = your daily target; full = hit. TSS = training load (duration × intensity).`}
+              </p>
             </div>
           </div>
         </div>
@@ -529,9 +549,9 @@ export default function SocialTab() {
             />
             <CoolFactCard
               icon={Crown} accent="#FFD60A"
-              value={insights.bestKm >= 1 ? insights.bestKm.toFixed(0) : Math.round(insights.bestTss).toString()} unit={insights.bestKm >= 1 ? 'km' : 'TSS'}
-              label={de ? 'KÖNIGSETAPPE' : 'QUEEN STAGE'}
-              quip={de ? 'Deine härteste Einheit der Woche 👑' : 'Your hardest session this week 👑'}
+              value={Math.round(insights.bestTss).toString()} unit="TSS"
+              label={de ? 'HÄRTESTE EINHEIT' : 'HARDEST RIDE'}
+              quip={de ? `Deine intensivste Fahrt 👑${insights.bestKm >= 1 ? ` · ${insights.bestKm.toFixed(0)} km` : ''}` : `Your most intense ride 👑${insights.bestKm >= 1 ? ` · ${insights.bestKm.toFixed(0)} km` : ''}`}
             />
           </div>
         )}
@@ -557,6 +577,9 @@ export default function SocialTab() {
         title={de ? 'Crew & Ehre' : 'Crew & Honors'}
         question={de ? 'Mit wem messe ich mich, und was habe ich verdient?' : 'Who am I racing, and what have I earned?'}
       >
+        {/* Find + add other athletes on the app */}
+        <MemberFinder crewId={crewId} locale={locale} />
+
         {hasCrew ? (
           <>
             <div className="flex flex-col gap-2">

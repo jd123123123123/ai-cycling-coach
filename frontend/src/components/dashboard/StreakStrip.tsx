@@ -111,16 +111,20 @@ function GoalPill({
   label,
   done,
   progress,
+  title,
 }: {
   label: string
   done: boolean
   progress: number
+  title?: string
 }) {
   const color = done ? '#30D158' : 'var(--color-muted)'
   return (
     <div
       className="flex items-center gap-2 px-2.5 py-1.5 rounded-full transition-colors"
+      title={title}
       style={{
+        cursor: title ? 'help' : undefined,
         backgroundColor: done ? 'rgba(48, 209, 88, 0.08)' : 'transparent',
         border: done
           ? '1px solid rgba(48, 209, 88, 0.28)'
@@ -326,6 +330,7 @@ export default function StreakStrip() {
             label={t('streak_goal_recover')}
             done={todayStatus.recovered}
             progress={todayStatus.recovered ? 1 : 0}
+            title={locale === 'de' ? 'Ziel erreicht bei Schlaf-Score ≥ 70' : 'Met when sleep score ≥ 70'}
           />
         </div>
       </div>

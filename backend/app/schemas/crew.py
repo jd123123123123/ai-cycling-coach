@@ -51,6 +51,17 @@ class CrewInviteCreate(BaseModel):
     email: EmailStr
 
 
+class InviteByUserCreate(BaseModel):
+    user_id: int
+
+
+class DiscoverMember(BaseModel):
+    """A discoverable app member — handle only, never a raw email (privacy)."""
+    user_id: int
+    handle: str
+    in_crew: bool   # already in some crew → can't be invited to yours
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Standings
 # ──────────────────────────────────────────────────────────────────────

@@ -186,7 +186,18 @@ export default function GradeHero({
       </div>
 
       <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:gap-5 sm:text-left">
-        <GradeRing score={report.grade_score} letter={report.grade_letter} color={color} />
+        <div className="flex flex-col items-center gap-1.5 shrink-0">
+          <GradeRing score={report.grade_score} letter={report.grade_letter} color={color} />
+          <span
+            className="num-mono"
+            style={{ fontSize: 8.5, letterSpacing: '0.16em', color: 'var(--color-muted)', textAlign: 'center', maxWidth: 112 }}
+            title={locale === 'de'
+              ? 'Gesamtnote für deine Form über diesen Zeitraum — aus Belastung, Intensität und Erholung'
+              : 'Overall grade for your fitness across this period — from load, intensity and recovery'}
+          >
+            {locale === 'de' ? 'FORM DES ZEITRAUMS' : 'PERIOD FITNESS'}
+          </span>
+        </div>
 
         <div className="flex-1 min-w-0">
           {/* AI verdict — editorial headline */}
@@ -214,10 +225,14 @@ export default function GradeHero({
             )}
             {report.grade_percentile != null && (
               <span className="num-mono px-2 py-0.5 rounded-full" style={{
-                fontSize: 10, color: 'var(--color-ink-2)',
+                fontSize: 10, color: 'var(--color-ink-2)', cursor: 'help',
                 backgroundColor: 'color-mix(in srgb, var(--color-ink) 6%, transparent)',
-              }}>
-                {locale === 'de' ? `Top ${Math.max(1, 100 - report.grade_percentile)}% · deine Historie` : `Top ${Math.max(1, 100 - report.grade_percentile)}% · your history`}
+              }}
+                title={locale === 'de'
+                  ? 'Rang unter deinen eigenen bisherigen Zeiträumen — kein globaler Vergleich'
+                  : 'Ranked against your own past periods — not a global leaderboard'}
+              >
+                {locale === 'de' ? `Top ${Math.max(1, 100 - report.grade_percentile)}% deiner Zeiträume` : `Top ${Math.max(1, 100 - report.grade_percentile)}% of your past periods`}
               </span>
             )}
             {report.composite_trend.length >= 3 && (

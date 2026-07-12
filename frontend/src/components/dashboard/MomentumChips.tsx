@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { format, subDays } from 'date-fns'
-import { Flame, TrendingUp, Target, Sparkles } from 'lucide-react'
+import { TrendingUp, Target, Sparkles } from 'lucide-react'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { usePMC } from '../../hooks/usePMC'
@@ -117,32 +117,10 @@ export default function MomentumChips() {
     }
   }
 
-  // ── Streak chip ───────────────────────────────────────────────────
-  // Consecutive days with a logged daily-metric row that has body_battery
-  // (proxy for "wearable was on"). Lightweight; the dedicated StreakStrip
-  // owns the strict 3-goal version.
-  if (metrics.length > 0) {
-    const dateSet = new Set(
-      metrics
-        .filter((m) => (m.body_battery ?? null) != null || (m.sleep_score ?? null) != null)
-        .map((m) => (m.date ?? m.recorded_at?.slice(0, 10) ?? '').slice(0, 10)),
-    )
-    let streak = 0
-    let cursor = new Date(today)
-    while (dateSet.has(format(cursor, 'yyyy-MM-dd'))) {
-      streak++
-      cursor = subDays(cursor, 1)
-      if (streak > 60) break  // safety cap
-    }
-    if (streak >= 3) {
-      chips.push({
-        key: 'logged-streak',
-        icon: <Flame size={11} strokeWidth={2.2} />,
-        label: locale === 'de' ? `${streak}-Tage-Serie erfasst` : `${streak}-day logged streak`,
-        tone: streak >= 7 ? 'good' : 'neutral',
-      })
-    }
-  }
+  // ── Streak chip removed ───────────────────────────────────────────
+  // The consecutive-day streak lives once, in the dedicated StreakStrip
+  // (its strict 3-goal definition). A second, looser streak here read as a
+  // contradictory duplicate, so it was dropped.
 
   // ── Milestone chips ───────────────────────────────────────────────
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
@@ -170,11 +148,15 @@ export default function MomentumChips() {
     })
   }
 
-  // CTL milestone — next "round 5" number from current CTL upward.
+  // Fitness (CTL) milestone — the next round-5 number strictly ABOVE current
+  // CTL, so it always reads as a forward target (never a number below where
+  // the athlete already sits). Labelled "Fitness (CTL)" to line up with the
+  // Form & Fortschritt panel's fitness marker.
   if (pmcEntries.length > 0) {
     const latest = pmcEntries[pmcEntries.length - 1]
     const ctl = latest.ctl
-    const nextRound = Math.ceil((ctl + 0.5) / 5) * 5
+    // Round strictly up to the next multiple of 5 above the current value.
+    const nextRound = (Math.floor(ctl / 5) + 1) * 5
     const gap = nextRound - ctl
     // Average daily CTL gain over the last 7 days
     const prior7 = pmcEntries.length >= 8 ? pmcEntries[pmcEntries.length - 8] : pmcEntries[0]
@@ -185,7 +167,7 @@ export default function MomentumChips() {
         chips.push({
           key: 'ctl-milestone',
           icon: <TrendingUp size={11} strokeWidth={2.2} />,
-          label: locale === 'de' ? `~${daysToTarget} T bis CTL ${nextRound}` : `~${daysToTarget} d to CTL ${nextRound}`,
+          label: locale === 'de' ? `~${daysToTarget} T bis Fitness ${nextRound}` : `~${daysToTarget} d to Fitness ${nextRound}`,
           tone: 'good',
         })
       }

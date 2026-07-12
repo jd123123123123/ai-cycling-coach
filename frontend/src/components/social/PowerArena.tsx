@@ -12,11 +12,11 @@ import type { PowerProfile } from '../../hooks/usePowerProfile'
 // profiling (trainingpeaks.com), amateur W/kg distributions (roadmancycling.com).
 
 // Classic community racing categories by FTP W/kg (recognisable everywhere).
-function racingCat(wkg: number): { c: string; color: string; nextAt: number | null; nextC: string | null } {
-  if (wkg >= 4.0) return { c: 'A', color: '#FFD60A', nextAt: null, nextC: null }
-  if (wkg >= 3.2) return { c: 'B', color: 'var(--color-forest-2)', nextAt: 4.0, nextC: 'A' }
-  if (wkg >= 2.5) return { c: 'C', color: 'var(--color-ink-blue)', nextAt: 3.2, nextC: 'B' }
-  return { c: 'D', color: 'var(--color-muted)', nextAt: 2.5, nextC: 'C' }
+function racingCat(wkg: number): { c: string; color: string; nextAt: number | null; nextC: string | null; range: string } {
+  if (wkg >= 4.0) return { c: 'A', color: '#FFD60A', nextAt: null, nextC: null, range: '≥ 4.0 W/kg' }
+  if (wkg >= 3.2) return { c: 'B', color: 'var(--color-forest-2)', nextAt: 4.0, nextC: 'A', range: '3.2–4.0 W/kg' }
+  if (wkg >= 2.5) return { c: 'C', color: 'var(--color-ink-blue)', nextAt: 3.2, nextC: 'B', range: '2.5–3.2 W/kg' }
+  return { c: 'D', color: 'var(--color-muted)', nextAt: 2.5, nextC: 'C', range: '< 2.5 W/kg' }
 }
 
 // % of trained cyclists you'd out-rank at this FTP W/kg (piecewise, interpolated).
@@ -123,6 +123,11 @@ export default function PowerArena({
               ? `Schlägt ~${pct}% der trainierten Fahrer.${toNext ? ` Nur ${toNext.toFixed(1)} W/kg bis Kat ${cat.nextC}.` : ' Spitzenkategorie erreicht. 🐐'}`
               : `Beats ~${pct}% of trained cyclists.${toNext ? ` Just ${toNext.toFixed(1)} W/kg to Cat ${cat.nextC}.` : ' Top category reached. 🐐'}`}
           </p>
+          <p className="text-[11px] leading-snug" style={{ color: 'var(--color-muted)' }}>
+            {de
+              ? `Kat ${cat.c} = ${cat.range}. Verglichen mit Referenzwerten trainierter Fahrer (Zwift/Coggan), nicht mit deiner Crew. W/kg = Watt pro Kilo Körpergewicht — macht Fahrer fair vergleichbar.`
+              : `Cat ${cat.c} = ${cat.range}. Measured against reference values for trained cyclists (Zwift/Coggan), not your crew. W/kg = watts per kilo of bodyweight — makes riders comparable.`}
+          </p>
         </div>
       </div>
 
@@ -131,9 +136,14 @@ export default function PowerArena({
         <div className="flex items-center gap-2">
           <Zap size={14} strokeWidth={2} style={{ color: 'var(--color-amber)' }} />
           <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 9.5, letterSpacing: '0.2em' }}>
-            {de ? 'KRAFTPROFIL · W/KG JE DAUER' : 'POWER PROFILE · W/KG BY DURATION'}
+            {de ? 'KRAFTPROFIL · SPITZEN-W/KG JE DAUER' : 'POWER PROFILE · PEAK W/KG BY DURATION'}
           </span>
         </div>
+        <p className="text-[11px] -mt-1" style={{ color: 'var(--color-muted)' }}>
+          {de
+            ? 'Balken = Anteil am Profi-Niveau je Dauer. Zeigt, ob du eher Sprinter (kurz) oder Diesel (lang) bist.'
+            : 'Bar = share of pro level for each duration. Shows whether you lean sprinter (short) or diesel (long).'}
+        </p>
         {DURATIONS.map((d) => {
           const wkg = lookup(wkgCurve, d.s)
           const frac = wkg ? Math.max(0, Math.min(1, wkg / d.pro)) : 0

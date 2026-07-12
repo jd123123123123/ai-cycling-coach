@@ -28,7 +28,7 @@ export default function TodayTab() {
     ? {
         heroQ: 'Was mache ich heute — und bin ich bereit dafür?',
         progress: 'Fortschritt', progressQ: 'Werde ich fitter oder ermüde ich?',
-        load: 'Belastung', loadQ: 'Ist mein Trainingspensum nachhaltig?',
+        load: 'Belastung', loadQ: 'Erreiche ich mein Wochenziel?',
         consistency: 'Konstanz', consistencyQ: 'Bleibe ich dran?',
         history: 'Verlauf', historyQ: 'Was habe ich zuletzt gemacht?',
         more: 'Mehr',
@@ -36,7 +36,7 @@ export default function TodayTab() {
     : {
         heroQ: "What do I do today — and am I ready for it?",
         progress: 'Progress', progressQ: 'Am I getting fitter, or fatiguing?',
-        load: 'Load', loadQ: 'Is my training volume sustainable?',
+        load: 'Load', loadQ: 'Am I hitting my weekly goal?',
         consistency: 'Consistency', consistencyQ: 'Am I staying on it?',
         history: 'History', historyQ: 'What have I done recently?',
         more: 'More',

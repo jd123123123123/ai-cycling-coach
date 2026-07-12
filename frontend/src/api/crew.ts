@@ -97,3 +97,28 @@ export async function fetchCrewStandings(
   })
   return res.data
 }
+
+// ── Member discovery — find other athletes on the app ──
+export interface DiscoverMember {
+  user_id: number
+  handle: string       // display handle only — never a raw email (privacy)
+  in_crew: boolean     // already in a crew → can't be invited
+}
+
+export async function discoverMembers(q?: string): Promise<DiscoverMember[]> {
+  const res = await apiClient.get<DiscoverMember[]>('/crews/discover', {
+    params: q ? { q } : undefined,
+  })
+  return res.data
+}
+
+export async function inviteMemberByUser(
+  crewId: number,
+  userId: number,
+): Promise<CrewInviteRead> {
+  const res = await apiClient.post<CrewInviteRead>(
+    `/crews/${crewId}/invites/by-user`,
+    { user_id: userId },
+  )
+  return res.data
+}

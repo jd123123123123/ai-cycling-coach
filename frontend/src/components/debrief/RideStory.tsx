@@ -310,14 +310,19 @@ function WbalStrip({ t, wbal, de }: { t: number[]; wbal: number[]; de: boolean }
 
   return (
     <div className="px-6 pb-6 sm:px-7" style={{ borderTop: '1px solid var(--color-rule)' }}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 pt-5 pb-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 pt-5 pb-1.5">
         <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10.5, letterSpacing: '0.22em', fontWeight: 600 }}>
-          {de ? 'W′-AKKU · DEINE STREICHHÖLZER' : "W′ BATTERY · YOUR MATCHES"}
+          {de ? 'W′ · ANAEROBE RESERVE' : 'W′ · ANAEROBIC RESERVE'}
         </span>
         <span className="num-mono" style={{ fontSize: 11, color: emptiest ? 'var(--color-bad)' : 'var(--color-ink-2)' }}>
           {de ? `Tank ${kjFull} kJ · tiefster Punkt: ${minLabel}` : `Tank ${kjFull} kJ · lowest point: ${minLabel}`}
         </span>
       </div>
+      <p className="pb-3" style={{ color: 'var(--color-ink-2)', fontSize: 13, fontStyle: 'italic' }}>
+        {de
+          ? 'Deine anaerobe Reserve im Verlauf — rot heißt fast leer.'
+          : 'Your anaerobic reserve draining — red = near empty.'}
+      </p>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: 72, display: 'block' }}>
         <defs>
           <linearGradient id="wbalfill" x1="0" y1="0" x2="0" y2="1">

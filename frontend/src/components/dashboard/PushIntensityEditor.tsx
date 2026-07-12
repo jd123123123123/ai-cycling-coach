@@ -97,8 +97,8 @@ export default function PushIntensityEditor() {
                 <span className="font-semibold text-[14px]" style={{ color: on ? 'var(--color-amber)' : 'var(--color-ink)' }}>
                   {de ? l.de : l.en}
                 </span>
-                <span className="num-display text-[12px]" style={{ color: on ? 'var(--color-amber)' : 'var(--color-muted)' }}>
-                  {l.vol}
+                <span className="num-mono text-[11px]" style={{ color: on ? 'var(--color-amber)' : 'var(--color-muted)' }}>
+                  {l.vol} {de ? 'Vol.' : 'vol.'}
                 </span>
               </div>
               <p className="mt-1 text-[12px] leading-snug" style={{ color: 'var(--color-ink-2)' }}>

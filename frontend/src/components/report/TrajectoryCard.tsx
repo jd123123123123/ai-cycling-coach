@@ -48,9 +48,15 @@ export default function TrajectoryCard({ traj }: { traj: Trajectory }) {
         </span>
       </div>
 
+      <p className="mt-1.5" style={{ color: 'var(--color-muted)', fontSize: 12, maxWidth: '64ch' }}>
+        {locale === 'de'
+          ? 'CTL = deine langfristige Formbelastung (rollende Fitness).'
+          : 'CTL = your long-run training load (rolling fitness).'}
+      </p>
+
       {/* CTL now → projected (→ target) mini-bar */}
       <div className="mt-4 flex flex-col gap-2">
-        <Bar label={locale === 'de' ? 'CTL jetzt' : 'CTL now'} pct={nowPct} value={Math.round(traj.ctl_now)} color="var(--color-ink-2)" />
+        <Bar label={locale === 'de' ? 'Fitness (CTL)' : 'Fitness (CTL)'} pct={nowPct} value={Math.round(traj.ctl_now)} color="var(--color-ink-2)" />
         <Bar label={locale === 'de' ? 'Projiziert' : 'Projected'} pct={projPct} value={Math.round(traj.ctl_projected_at_goal)} color="var(--color-good)" />
         {targetPct !== null && (
           <Bar label={locale === 'de' ? 'Ziel' : 'Target'} pct={targetPct} value={Math.round(traj.ctl_target as number)} color="var(--color-caution)" dashed />

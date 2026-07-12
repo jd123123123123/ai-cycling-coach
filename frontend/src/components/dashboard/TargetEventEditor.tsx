@@ -104,7 +104,7 @@ export default function TargetEventEditor() {
                   color: priority === p ? 'var(--color-forest-2)' : 'var(--color-ink-2)',
                   fontSize: 13, fontWeight: 600,
                 }}>
-                {p}{p === 'A' ? (de ? ' · Hauptziel' : ' · Main') : ''}
+                {p}{p === 'A' ? (de ? ' · Hauptziel' : ' · Main') : p === 'B' ? (de ? ' · Nebenziel' : ' · Secondary') : (de ? ' · Mitnehmen' : ' · Train through')}
               </button>
             ))}
           </div>

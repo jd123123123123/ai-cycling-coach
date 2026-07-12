@@ -71,6 +71,11 @@ export default function BodySystems({ axes }: { axes: RadarAxis[] }) {
       <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
         {locale === 'de' ? 'KÖRPERSYSTEME' : 'BODY SYSTEMS'}
       </span>
+      <p className="mt-1.5" style={{ color: 'var(--color-muted)', fontSize: 12 }}>
+        {locale === 'de'
+          ? '0–100 im Vergleich zu deiner Basis — höher ist besser.'
+          : '0–100 vs your own baseline — higher is better.'}
+      </p>
 
       <div className="grid gap-5 mt-3 md:grid-cols-2 md:items-center">
         {/* radar */}

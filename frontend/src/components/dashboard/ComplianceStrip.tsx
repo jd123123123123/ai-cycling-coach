@@ -175,10 +175,11 @@ function DayBar({ row, maxMin }: { row: DayRow; maxMin: number }) {
       </div>
       <span
         className="num-mono text-[11px] tabular-nums whitespace-nowrap"
-        style={{ color: 'var(--color-ink-2)' }}
+        title={de ? 'tatsächlich / geplant (Minuten)' : 'actual / planned (minutes)'}
+        style={{ color: 'var(--color-ink-2)', cursor: 'help' }}
       >
         {row.actualMin > 0 || row.plannedMin > 0
-          ? `${Math.round(row.actualMin)} / ${Math.round(row.plannedMin)} m`
+          ? `${Math.round(row.actualMin)} / ${Math.round(row.plannedMin)} min`
           : '—'}
       </span>
     </div>
@@ -267,7 +268,10 @@ export default function ComplianceStrip() {
         {gradeInfo ? (
           <div
             className="shrink-0 flex flex-col items-center leading-none"
-            style={{ animation: 'score-enter 600ms cubic-bezier(.22,1,.36,1) 100ms both' }}
+            title={de
+              ? 'Note aus Umsetzung: A 90–115 % · B 75–130 % · C ≥ 60 % · D < 60 %'
+              : 'Grade from compliance: A 90–115% · B 75–130% · C ≥60% · D <60%'}
+            style={{ animation: 'score-enter 600ms cubic-bezier(.22,1,.36,1) 100ms both', cursor: 'help' }}
           >
             <span
               className="num-display"

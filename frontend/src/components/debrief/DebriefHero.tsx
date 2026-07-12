@@ -96,13 +96,16 @@ function formatDuration(seconds: number): string {
   return `${h}:${String(m).padStart(2, '0')}`
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="flex flex-col gap-0.5 min-w-0">
+    <div className="flex flex-col gap-0.5 min-w-0" title={hint}>
       <span className="num-mono" style={{ fontSize: 18, color: 'var(--color-ink)', fontWeight: 600 }}>
         {value}
       </span>
-      <span className="eyebrow num-mono" style={{ fontSize: 9, letterSpacing: '0.14em', color: 'var(--color-muted)' }}>
+      <span
+        className="eyebrow num-mono"
+        style={{ fontSize: 9, letterSpacing: '0.14em', color: 'var(--color-muted)', cursor: hint ? 'help' : undefined }}
+      >
         {label}
       </span>
     </div>
@@ -240,10 +243,14 @@ export default function DebriefHero({ report }: { report: RaceDebrief }) {
           <Stat label={locale === 'de' ? 'HÖHENMETER' : 'ELEVATION'} value={`${Math.round(header.elevation_m)} m`} />
         )}
         <Stat label={locale === 'de' ? 'ZEIT' : 'TIME'} value={formatDuration(header.moving_time_s)} />
-        <Stat label="NP" value={`${Math.round(header.np_watts)} W`} />
-        <Stat label="IF" value={header.if_ != null ? header.if_.toFixed(2) : '—'} />
-        <Stat label="TSS" value={`${Math.round(header.tss)}`} />
-        <Stat label="kJ" value={`${Math.round(header.total_kj)}`} />
+        <Stat label="NP" value={`${Math.round(header.np_watts)} W`}
+          hint={de ? 'Normalized Power — gleichmäßige Vergleichsleistung' : 'Normalized Power — steady-state equivalent effort'} />
+        <Stat label="IF" value={header.if_ != null ? header.if_.toFixed(2) : '—'}
+          hint={de ? 'Intensitätsfaktor — wie hart ggü. deiner FTP (1,0 = Schwelle)' : 'Intensity Factor — how hard vs your FTP (1.0 = threshold)'} />
+        <Stat label="TSS" value={`${Math.round(header.tss)}`}
+          hint={de ? 'Trainingsbelastung — Gesamtstress der Fahrt' : 'Training Stress Score — total load of the ride'} />
+        <Stat label="kJ" value={`${Math.round(header.total_kj)}`}
+          hint={de ? 'Verrichtete Arbeit ≈ verbrannte Kalorien' : 'Work done ≈ calories burned'} />
         <Stat label={locale === 'de' ? 'GESCHW.' : 'AVG SPEED'} value={`${header.avg_speed_kmh.toFixed(1)} km/h`} />
       </div>
 

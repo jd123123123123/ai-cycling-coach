@@ -6,16 +6,28 @@ import type { DirectiveKind, Evidence, Tone } from '../../api/adaptive'
 const TONE: Record<Tone, string> = {
   good: 'var(--color-good)', warn: 'var(--color-caution)', bad: 'var(--color-bad)', neutral: 'var(--color-ink-2)',
 }
-const EV_LABEL: Record<Evidence, { en: string; de: string; color: string }> = {
-  RCT: { en: 'RCT', de: 'RCT', color: 'var(--color-good)' },
-  expert: { en: 'expert', de: 'Expertise', color: 'var(--color-caution)' },
-  guardrail: { en: 'guardrail', de: 'Leitplanke', color: 'var(--color-ink-blue)' },
+const EV_LABEL: Record<Evidence, { en: string; de: string; color: string; titleEn: string; titleDe: string }> = {
+  RCT: {
+    en: 'RCT', de: 'RCT', color: 'var(--color-good)',
+    titleEn: 'Backed by randomized controlled trials',
+    titleDe: 'Durch randomisierte Studien belegt',
+  },
+  expert: {
+    en: 'expert', de: 'Expertise', color: 'var(--color-caution)',
+    titleEn: 'Based on expert opinion / coaching consensus',
+    titleDe: 'Basiert auf Expertenmeinung / Coaching-Konsens',
+  },
+  guardrail: {
+    en: 'guardrail', de: 'Leitplanke', color: 'var(--color-ink-blue)',
+    titleEn: 'A safety guardrail, not a hard prescription',
+    titleDe: 'Eine Sicherheits-Leitplanke, keine feste Vorgabe',
+  },
 }
 const KIND: Record<DirectiveKind, { color: string; icon: string; en: string; de: string }> = {
   escalate: { color: 'var(--color-forest-2)', icon: '⚡', en: 'ESCALATE', de: 'ESKALIEREN' },
   push: { color: 'var(--color-good)', icon: '▲', en: 'PUSH HARD', de: 'VOLL DRAUF' },
   hold: { color: 'var(--color-caution)', icon: '=', en: 'HOLD', de: 'HALTEN' },
-  deload: { color: 'var(--color-bad)', icon: '▼', en: 'DELOAD', de: 'DELOAD' },
+  deload: { color: 'var(--color-bad)', icon: '▼', en: 'DELOAD', de: 'ENTLASTUNG' },
   rest: { color: 'var(--color-ink-2)', icon: '○', en: 'REST', de: 'RUHE' },
 }
 
@@ -34,6 +46,14 @@ export default function AdaptiveDirectiveCard() {
   const hrvLabel = de
     ? { below: 'HRV unter Band', in: 'HRV im Band', above: 'HRV über Band', unknown: 'HRV n/v' }
     : { below: 'HRV below band', in: 'HRV in-band', above: 'HRV above band', unknown: 'HRV n/a' }
+  const hrvTitle = de
+    ? 'HRV verglichen mit deiner 7-Tage-Basislinie'
+    : 'HRV compared with your 7-day baseline'
+  const volTitle = de ? 'Ggü. geplantem Umfang' : 'Vs planned volume'
+  const ceilingLabel = de ? 'Max-Intensität heute' : 'Ceiling'
+  const ceilingTitle = de
+    ? 'Höchste heute freigegebene Intensität'
+    : 'Highest intensity cleared for today'
 
   return (
     <motion.div
@@ -71,16 +91,16 @@ export default function AdaptiveDirectiveCard() {
 
       {/* levers */}
       <div className="flex flex-wrap gap-2 mt-4">
-        <span className="rounded-full px-2.5 py-1" style={{ fontSize: 11.5, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)', background: 'var(--color-paper)' }}>
+        <span title={hrvTitle} className="rounded-full px-2.5 py-1" style={{ fontSize: 11.5, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)', background: 'var(--color-paper)', cursor: 'help' }}>
           {hrvLabel[data.hrv_state]}
         </span>
         {volPct !== 0 && (
-          <span className="rounded-full px-2.5 py-1 num-mono" style={{ fontSize: 11.5, color: volPct > 0 ? 'var(--color-good)' : 'var(--color-caution)', border: '1px solid var(--color-rule)', background: 'var(--color-paper)' }}>
+          <span title={volTitle} className="rounded-full px-2.5 py-1 num-mono" style={{ fontSize: 11.5, color: volPct > 0 ? 'var(--color-good)' : 'var(--color-caution)', border: '1px solid var(--color-rule)', background: 'var(--color-paper)', cursor: 'help' }}>
             {de ? 'Volumen' : 'Volume'} {volPct > 0 ? `+${volPct}%` : `${volPct}%`}
           </span>
         )}
-        <span className="rounded-full px-2.5 py-1" style={{ fontSize: 11.5, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)', background: 'var(--color-paper)' }}>
-          {de ? 'Ceiling' : 'Ceiling'}: {data.intensity_ceiling}
+        <span title={ceilingTitle} className="rounded-full px-2.5 py-1" style={{ fontSize: 11.5, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)', background: 'var(--color-paper)', cursor: 'help' }}>
+          {ceilingLabel}: {data.intensity_ceiling}
         </span>
       </div>
 
@@ -98,7 +118,7 @@ export default function AdaptiveDirectiveCard() {
                   {s.tone === 'good' ? '▲' : s.tone === 'bad' ? '▼' : s.tone === 'warn' ? '›' : '·'}
                 </span>
                 <span style={{ color: 'var(--color-ink)', flex: 1 }}>{s.text}</span>
-                <span className="num-mono shrink-0" style={{ fontSize: 9.5, color: ev.color, letterSpacing: '0.08em', border: `1px solid color-mix(in srgb, ${ev.color} 35%, transparent)`, borderRadius: 4, padding: '1px 4px' }}>
+                <span title={de ? ev.titleDe : ev.titleEn} className="num-mono shrink-0" style={{ fontSize: 9.5, color: ev.color, letterSpacing: '0.08em', border: `1px solid color-mix(in srgb, ${ev.color} 35%, transparent)`, borderRadius: 4, padding: '1px 4px', cursor: 'help' }}>
                   {de ? ev.de : ev.en}
                 </span>
               </motion.div>
