@@ -63,7 +63,9 @@ export default function MomentumChips() {
   const today = useMemo(() => new Date(), [])
   const { data: brief } = useCoachBrief()
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 14), [today]), today)
-  const { data: pmc } = usePMC(14)
+  // Use a long window so CTL is fully seeded (a 14-day window starts CTL near
+  // zero and under-reports it, contradicting the Form & Progress panel's CTL).
+  const { data: pmc } = usePMC(90)
 
   const metrics: DailyMetric[] = metricsResp?.metrics ?? []
   const pmcEntries = pmc?.entries ?? []
