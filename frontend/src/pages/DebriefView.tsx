@@ -9,6 +9,7 @@ import CompareDuel from '../components/debrief/CompareDuel'
 import RideStory from '../components/debrief/RideStory'
 import BreakdownPanels from '../components/debrief/BreakdownPanels'
 import DebriefPlan from '../components/debrief/DebriefPlan'
+import DashboardSection from '../components/dashboard/DashboardSection'
 
 // Each debrief act rises in on a staggered, spring-eased cadence — the report
 // reveals itself as a narrative rather than dumping all at once.
@@ -29,6 +30,7 @@ export default function DebriefView() {
   const { id } = useParams()
   const activityId = id ? Number(id) : undefined
   const { locale } = useLocale()
+  const de = locale === 'de'
   const { data, isLoading, isError } = useRaceDebrief(activityId)
 
   return (
@@ -56,16 +58,56 @@ export default function DebriefView() {
         )}
         {data && (
           <>
-            {/* MECE narrative arc: Verdict → What happened → What it means →
-                The evidence → What to do → (bonus) Head-to-head. Each act is a
-                distinct job; the timeline now precedes interpretation. */}
+            {/* Hero-forward tiering: the verdict, the interpreted key reads and
+                the actionable plan stay open above the fold — the instant answer
+                to "how was my ride". The heavy evidence acts (the timeline
+                charts, the by-the-numbers cards, the head-to-head) are folded
+                into one-tap collapsibles so the deep stats are opt-in. */}
             <Act order={0}><DebriefHero report={data} /></Act>
-            <Act order={1}><RideStory story={data.story} climbs={data.climbs} /></Act>
-            <Act order={2}><KeyReads report={data} /></Act>
-            <Act order={3}><BreakdownPanels report={data} /></Act>
-            <Act order={4}><DebriefPlan plan={data.plan} /></Act>
+            <Act order={1}><KeyReads report={data} /></Act>
+            <Act order={2}><DebriefPlan plan={data.plan} /></Act>
+
+            {data.story && data.story.power.length > 0 && (
+              <Act order={3}>
+                <DashboardSection
+                  id="debrief-story"
+                  title={de ? 'So verlief die Fahrt' : 'How the ride unfolded'}
+                  subtitle={de
+                    ? 'Verlauf Minute für Minute — Leistung, Herzfrequenz, Höhe und W′-Reserve.'
+                    : 'The ride minute by minute — power, heart rate, elevation and W′ reserve.'}
+                  defaultExpanded={false}
+                >
+                  <RideStory story={data.story} climbs={data.climbs} />
+                </DashboardSection>
+              </Act>
+            )}
+
+            <Act order={4}>
+              <DashboardSection
+                id="debrief-breakdown"
+                title={de ? 'Im Detail' : 'By the numbers'}
+                subtitle={de
+                  ? 'Pacing, Spitzenleistungen, Anstiege und das Kleingedruckte hinter dem Urteil.'
+                  : 'Pacing, peak efforts, climbs and the finer detail behind the verdict.'}
+                defaultExpanded={false}
+              >
+                <BreakdownPanels report={data} />
+              </DashboardSection>
+            </Act>
+
             {activityId != null && (
-              <Act order={5}><CompareDuel activityId={activityId} /></Act>
+              <Act order={5}>
+                <DashboardSection
+                  id="debrief-compare"
+                  title={de ? 'Kopf an Kopf' : 'Head to head'}
+                  subtitle={de
+                    ? 'Dieselbe Fahrt gegen einen Rivalen — wer den Tag gewinnt.'
+                    : 'The same ride against a rival — who won the day.'}
+                  defaultExpanded={false}
+                >
+                  <CompareDuel activityId={activityId} />
+                </DashboardSection>
+              </Act>
             )}
           </>
         )}

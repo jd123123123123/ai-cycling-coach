@@ -157,7 +157,7 @@ function StatBlock({ value, unit, label, color, hint }: { value: string; unit?: 
       <div
         className="num-mono mt-1"
         title={hint}
-        style={{ color: 'var(--color-muted)', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: hint ? 'help' : undefined }}
+        style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', cursor: hint ? 'help' : undefined }}
       >
         {label}
       </div>
@@ -444,10 +444,10 @@ function QuadrantCard({ quadrant, ftp }: { quadrant: Quadrant | null; ftp: numbe
           return (
             <div key={c.tag} className="rounded-xl px-3 py-2.5" style={{ backgroundColor: 'var(--color-paper)', border: `1px solid ${isDom ? 'color-mix(in srgb, var(--color-forest-2) 45%, var(--color-rule))' : 'var(--color-rule)'}` }}>
               <div className="flex items-baseline justify-between">
-                <span className="num-mono" style={{ fontSize: 9, color: 'var(--color-muted)', letterSpacing: '0.1em' }}>{c.tag}</span>
-                <span style={{ fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, color: isDom ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>{Math.round(c.pct)}%</span>
+                <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.1em' }}>{c.tag}</span>
+                <span style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 500, color: isDom ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>{Math.round(c.pct)}%</span>
               </div>
-              <div style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>{c.label}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>{c.label}</div>
             </div>
           )
         })}
@@ -559,11 +559,11 @@ export default function BreakdownPanels({ report }: { report: RaceDebrief }) {
       {hasCompact && (
         <div className="flex flex-col gap-5">
           <ActHeader
-            kicker={de ? 'IM DETAIL' : 'BY THE NUMBERS'}
+            kicker={de ? 'KÖRPERSYSTEME & AUSRÜSTUNG' : 'SYSTEMS & EQUIPMENT'}
             title={de ? 'Das Kleingedruckte' : 'The finer detail'}
             subtitle={de
-              ? 'Die Zahlen hinter dem Urteil — für alle, die tiefer graben wollen.'
-              : 'The numbers behind the verdict — for when you want to dig deeper.'}
+              ? 'Streichholzheft, Effizienz, Leistungsmodell, Verpflegung, Tretstil und Aerodynamik dieser Fahrt.'
+              : 'Matchbook, efficiency, power model, fuelling, pedalling style and aerodynamics for this ride.'}
           />
           <div className="grid gap-4 md:grid-cols-2 items-stretch">
             <MatchbookCard matchbook={report.matchbook} />

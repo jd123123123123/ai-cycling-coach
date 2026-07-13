@@ -5,9 +5,23 @@ import type { RadarAxis } from '../../api/report'
  * bar, detail) of the athlete's body systems. A single labeled bar list, no
  * duplicate radar: the bars ARE the read. Axes without enough data read
  * "n. v." / "n/a" rather than sitting as a blank bar. */
+/** Rename the recovery axis so it never collides with Today's "Erholung" ring
+ * (a different 0–100 metric). Here it is the body *system*, not daily readiness. */
+function axisLabel(a: RadarAxis, de: boolean): string {
+  if (a.key === 'recovery' || a.label === 'Erholung' || a.label === 'Recovery') {
+    return de ? 'Regeneration' : 'Recovery system'
+  }
+  return a.label
+}
+
 export default function BodySystems({ axes }: { axes: RadarAxis[] }) {
   const { locale } = useLocale()
   const de = locale === 'de'
+
+  // Intensity distribution is owned in full by the IntensityMix panel (Seiler
+  // zones + model + fix); drop the thinner "Intensitäts-Balance" axis so the
+  // grey-zone concept is stated once, not three times.
+  const shown = axes.filter((a) => a.key !== 'intensity')
 
   return (
     <div
@@ -25,12 +39,12 @@ export default function BodySystems({ axes }: { axes: RadarAxis[] }) {
 
       {/* per-axis breakdown — the single labeled bar list */}
       <div className="flex flex-col gap-4 mt-4">
-        {axes.map((a) => {
+        {shown.map((a) => {
           const na = a.insufficient_data || a.score == null
           return (
             <div key={a.key} className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="flex-1 min-w-0" style={{ color: 'var(--color-ink)', fontSize: 14, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{a.label}</span>
+                <span className="flex-1 min-w-0" style={{ color: 'var(--color-ink)', fontSize: 14, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{axisLabel(a, de)}</span>
                 {na ? (
                   <span
                     className="num-mono shrink-0"

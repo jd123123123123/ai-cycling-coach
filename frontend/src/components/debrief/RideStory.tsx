@@ -368,22 +368,12 @@ export default function RideStory({ story, climbs }: { story: DebriefStory | nul
         boxShadow: '0 1px 0 rgba(255,255,255,0.04) inset, 0 18px 40px -24px rgba(0,0,0,0.85)',
       }}
     >
-      <div className="flex flex-wrap items-end justify-between gap-3 px-6 pt-6 pb-4 sm:px-7" style={{ borderBottom: '1px solid var(--color-rule)' }}>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <span className="shrink-0" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-ink-2)' }} />
-            <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10.5, letterSpacing: '0.24em', fontWeight: 600 }}>
-              {de ? 'VERLAUF · MINUTE FÜR MINUTE' : 'TIMELINE · MINUTE BY MINUTE'}
-            </span>
-          </div>
-          <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(21px, 2.4vw, 26px)', fontWeight: 500, lineHeight: 1.12, letterSpacing: '-0.015em', color: 'var(--color-ink)' }}>
-            {de ? 'So verlief das Rennen' : 'How the race unfolded'}
-          </h3>
-          <p style={{ color: 'var(--color-ink-2)', fontSize: 13, fontStyle: 'italic' }}>
-            {de
-              ? 'Wo Leistung, Herzfrequenz und Höhe zusammenspielten — die entscheidenden Momente markiert.'
-              : 'Where power, heart rate and elevation played out — key moments marked.'}
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-5 pb-4 sm:px-7" style={{ borderBottom: '1px solid var(--color-rule)' }}>
+        <div className="flex items-center gap-2">
+          <span className="shrink-0" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-ink-2)' }} />
+          <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10.5, letterSpacing: '0.24em', fontWeight: 600 }}>
+            {de ? 'VERLAUF · MINUTE FÜR MINUTE' : 'TIMELINE · MINUTE BY MINUTE'}
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           {legend.map((l) => (

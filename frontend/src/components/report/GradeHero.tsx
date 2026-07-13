@@ -87,6 +87,20 @@ function GradeRing({ score, letter, color }: { score: number | null; letter: str
   )
 }
 
+/** Window-scope the CTL/TSB chip labels so they never read as Today's live
+ * "Form heute" / "Fitness" — here they are the PERIOD AVERAGE. Also drops the
+ * grey-zone chip, which the IntensityMix panel owns in full (no triple-stated
+ * intensity finding). */
+function scopeEvidence(chips: EvidenceChip[], de: boolean): EvidenceChip[] {
+  return chips
+    .filter((c) => c.label !== 'Graue Zone' && c.label !== 'Grey zone')
+    .map((c) => {
+      if (c.label === 'TSB') return { ...c, label: de ? 'Ø Form (TSB)' : 'Avg form (TSB)' }
+      if (c.label === 'CTL') return { ...c, label: de ? 'Ø Fitness (CTL)' : 'Avg fitness (CTL)' }
+      return c
+    })
+}
+
 const PRESETS = [7, 14, 30] as const
 
 /** Compact segmented window control — "the lens on this verdict." Lives inside
@@ -171,6 +185,7 @@ export default function GradeHero({
   const { locale } = useLocale()
   const color = gradeColor(report.grade_letter)
   const delta = report.grade_delta
+  const evidence = scopeEvidence(report.evidence, locale === 'de')
   return (
     <div
       className="relative rounded-[20px] p-5 sm:p-7 overflow-hidden"
@@ -257,9 +272,9 @@ export default function GradeHero({
       </div>
 
       {/* Scannable headline metrics — one uniform row (value 16px, label 10.5px). */}
-      {report.evidence.length > 0 && (
+      {evidence.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-5">
-          {report.evidence.map((c: EvidenceChip, i: number) => (
+          {evidence.map((c: EvidenceChip, i: number) => (
             <div
               key={i}
               className="flex flex-col gap-0.5 rounded-[12px] px-3 py-2.5"

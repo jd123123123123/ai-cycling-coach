@@ -61,15 +61,6 @@ export default function CompareDuel({ activityId }: { activityId: number }) {
 
   return (
     <div>
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-serif)', fontSize: 21, fontWeight: 500, letterSpacing: '-0.01em' }}>
-          {de ? 'Kopf an Kopf' : 'Head to head'}
-        </h2>
-        <span style={{ color: 'var(--color-ink-2)', fontSize: 11.5, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          {de ? 'Dieselbe Fahrt' : 'Same ride'}
-        </span>
-      </div>
-
       <Scoreboard data={data} meName={meName} rivalName={rivalName} meWon={meWon} tie={tie} headline={headline} cats={cats} />
 
       {data.climb_duels.length > 0 && (

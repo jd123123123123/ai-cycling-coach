@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 import type { RaceDebrief } from '../../api/debrief'
 import { bestRead, worstRead, type Read } from './insights'
@@ -161,6 +162,7 @@ function HeadlineCard({ kind, read, de }: { kind: 'win' | 'fix'; read: Read | un
 export default function DebriefHero({ report }: { report: RaceDebrief }) {
   const { locale } = useLocale()
   const de = locale === 'de'
+  const [showAll, setShowAll] = useState(false)
   const { header, verdict, segments } = report
   const color = gradeColor(verdict.grade_letter)
   const hideElevation = header.elevation_m === 0 && segments.length === 0
@@ -236,22 +238,49 @@ export default function DebriefHero({ report }: { report: RaceDebrief }) {
         </div>
       </div>
 
-      {/* stat strip */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 mt-6 pt-5" style={{ borderTop: '1px solid var(--color-rule)' }}>
-        <Stat label={locale === 'de' ? 'DISTANZ' : 'DISTANCE'} value={`${header.distance_km.toFixed(1)} km`} />
-        {!hideElevation && (
-          <Stat label={locale === 'de' ? 'HÖHENMETER' : 'ELEVATION'} value={`${Math.round(header.elevation_m)} m`} />
-        )}
-        <Stat label={locale === 'de' ? 'ZEIT' : 'TIME'} value={formatDuration(header.moving_time_s)} />
-        <Stat label="NP" value={`${Math.round(header.np_watts)} W`}
-          hint={de ? 'Normalized Power — gleichmäßige Vergleichsleistung' : 'Normalized Power — steady-state equivalent effort'} />
-        <Stat label="IF" value={header.if_ != null ? header.if_.toFixed(2) : '—'}
-          hint={de ? 'Intensitätsfaktor — wie hart ggü. deiner FTP (1,0 = Schwelle)' : 'Intensity Factor — how hard vs your FTP (1.0 = threshold)'} />
+      {/* Compact hero stat row — just the four numbers that answer "how big / how
+          hard" at a glance. The fuller strip is one tap away below. */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5" style={{ borderTop: '1px solid var(--color-rule)' }}>
+        <Stat label={de ? 'DISTANZ' : 'DISTANCE'} value={`${header.distance_km.toFixed(1)} km`} />
+        <Stat label={de ? 'ZEIT' : 'TIME'} value={formatDuration(header.moving_time_s)} />
         <Stat label="TSS" value={`${Math.round(header.tss)}`}
           hint={de ? 'Trainingsbelastung — Gesamtstress der Fahrt' : 'Training Stress Score — total load of the ride'} />
-        <Stat label="kJ" value={`${Math.round(header.total_kj)}`}
-          hint={de ? 'Verrichtete Arbeit ≈ verbrannte Kalorien' : 'Work done ≈ calories burned'} />
-        <Stat label={locale === 'de' ? 'GESCHW.' : 'AVG SPEED'} value={`${header.avg_speed_kmh.toFixed(1)} km/h`} />
+        <Stat label="IF" value={header.if_ != null ? header.if_.toFixed(2) : '—'}
+          hint={de ? 'Intensitätsfaktor — wie hart ggü. deiner FTP (1,0 = Schwelle)' : 'Intensity Factor — how hard vs your FTP (1.0 = threshold)'} />
+      </div>
+
+      {/* Alle Werte — the fuller strip (NP, kJ, speed, elevation) tucked behind a
+          disclosure so the fold stays scannable. */}
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="flex items-center gap-1.5 num-mono"
+          aria-expanded={showAll}
+          style={{ fontSize: 10.5, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}
+        >
+          {de ? (showAll ? 'WENIGER' : 'ALLE WERTE') : (showAll ? 'LESS' : 'ALL STATS')}
+          <ChevronDown
+            size={14}
+            strokeWidth={2}
+            style={{ transform: showAll ? 'rotate(-180deg)' : 'rotate(0deg)', transition: 'transform 200ms ease' }}
+          />
+        </button>
+        <div
+          className="overflow-hidden"
+          style={{ maxHeight: showAll ? 200 : 0, opacity: showAll ? 1 : 0, transition: 'max-height 320ms ease, opacity 240ms ease' }}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
+            <Stat label="NP" value={`${Math.round(header.np_watts)} W`}
+              hint={de ? 'Normalized Power — gleichmäßige Vergleichsleistung' : 'Normalized Power — steady-state equivalent effort'} />
+            <Stat label="kJ" value={`${Math.round(header.total_kj)}`}
+              hint={de ? 'Verrichtete Arbeit ≈ verbrannte Kalorien' : 'Work done ≈ calories burned'} />
+            <Stat label={de ? 'GESCHW.' : 'AVG SPEED'} value={`${header.avg_speed_kmh.toFixed(1)} km/h`} />
+            {!hideElevation && (
+              <Stat label={de ? 'HÖHENMETER' : 'ELEVATION'} value={`${Math.round(header.elevation_m)} m`} />
+            )}
+          </div>
+        </div>
       </div>
 
       {/* biggest win + biggest fix — one glance, each with its action.
