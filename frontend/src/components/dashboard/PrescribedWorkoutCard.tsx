@@ -60,7 +60,7 @@ function MetricTile({
       </div>
       <span
         className="leading-tight truncate"
-        style={{ color: 'var(--color-ink)', fontSize: 18, fontWeight: 600 }}
+        style={{ color: 'var(--color-ink)', fontSize: 16, fontWeight: 600 }}
         title={sub ? `${value} · ${sub}` : value}
       >
         {value}
@@ -180,7 +180,7 @@ export default function PrescribedWorkoutCard({
           <h3
             className="num-display leading-tight dashboard-break-words"
             style={{
-              fontSize: 'clamp(22px, 3vw, 30px)',
+              fontSize: 'clamp(22px, 6vw, 30px)',
               color: 'var(--color-ink)',
               fontVariationSettings: '"opsz" 96, "SOFT" 30',
             }}

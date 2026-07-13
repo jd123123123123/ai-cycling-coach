@@ -1,4 +1,4 @@
-import { Calendar, dateFnsLocalizer, Views, type Event as RbcEvent, type EventProps, type DateCellWrapperProps } from 'react-big-calendar'
+import { Calendar, dateFnsLocalizer, Views, type Event as RbcEvent, type EventProps, type DateCellWrapperProps, type Formats } from 'react-big-calendar'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { format, parse, startOfWeek, getDay, addDays, startOfMonth, parseISO, addMinutes } from 'date-fns'
 import { enUS, de } from 'date-fns/locale'
@@ -21,8 +21,24 @@ import type { ActivityRead } from '../../api/dashboard'
 import WorkoutPreviewModal from './WorkoutPreviewModal'
 
 // ─── Localizer (REQUIRED — without it react-big-calendar renders nothing) ────
-const locales = { 'en-US': enUS }
+// Register both cultures so the calendar can render German weekday/month names
+// and, crucially, a 24h time gutter (no English AM/PM in a German UI).
+const locales = { 'en-US': enUS, de: de }
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales })
+
+// Force 24h time formats regardless of culture (defensive — the German UI must
+// never show AM/PM).
+const rangeTo24h = (
+  range: { start: Date; end: Date },
+  _culture: string | undefined,
+  loc?: { format: (d: Date, f: string, c?: string) => string },
+) => loc ? `${loc.format(range.start, 'HH:mm')} – ${loc.format(range.end, 'HH:mm')}` : ''
+
+const calendarFormats: Formats = {
+  timeGutterFormat: 'HH:mm',
+  eventTimeRangeFormat: rangeTo24h,
+  agendaTimeRangeFormat: rangeTo24h,
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -169,7 +185,9 @@ export default function TrainingCalendar() {
   const dfOpts = locale === 'de' ? { locale: de } : undefined
   const headerTitle = view === 'month'
     ? format(currentDate, 'MMMM yyyy', dfOpts)
-    : `${format(rangeStart, 'MMM d', dfOpts)} – ${format(addDays(rangeStart, 6), 'MMM d, yyyy', dfOpts)}`
+    : locale === 'de'
+      ? `${format(rangeStart, 'd. MMM', dfOpts)} – ${format(addDays(rangeStart, 6), 'd. MMM yyyy', dfOpts)}`
+      : `${format(rangeStart, 'MMM d', dfOpts)} – ${format(addDays(rangeStart, 6), 'MMM d, yyyy', dfOpts)}`
 
   const isLoading = activitiesQuery.isLoading || plannedQuery.isLoading
   const isError = activitiesQuery.isError || plannedQuery.isError
@@ -263,6 +281,8 @@ export default function TrainingCalendar() {
           <div className="h-[520px] sm:h-[640px]">
             <Calendar
               localizer={localizer}
+              culture={locale === 'de' ? 'de' : 'en-US'}
+              formats={calendarFormats}
               events={events}
               view={view}
               onView={(v) => setView(v as 'week' | 'month')}

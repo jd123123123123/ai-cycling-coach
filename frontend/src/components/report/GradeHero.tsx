@@ -18,6 +18,16 @@ function chipColor(tone: string): string {
   return 'var(--color-ink-2)'
 }
 
+/** Plain-language, supportive read of the letter grade — never demoralizing,
+ * so a "D" reads as "im Aufbau" (building) rather than a failing verdict. */
+function gradeWord(letter: string | null, de: boolean): string {
+  const c = letter?.[0]
+  if (c === 'A') return de ? 'stark' : 'strong'
+  if (c === 'B') return de ? 'solide' : 'solid'
+  if (c === 'C') return de ? 'stabil' : 'steady'
+  return de ? 'im Aufbau' : 'building'
+}
+
 /** Render the AI verdict, turning `**bold**` markdown spans into real emphasis
  * (the model emits markdown; raw asterisks would read as noise in the hero). */
 function renderVerdict(text: string) {
@@ -50,25 +60,25 @@ function useCountUp(target: number | null, duration = 900): number {
 
 function GradeRing({ score, letter, color }: { score: number | null; letter: string | null; color: string }) {
   const animated = useCountUp(score)
-  const R = 46
+  const R = 29
   const C = 2 * Math.PI * R
   const pct = score == null ? 0 : Math.min(1, animated / 100)
   return (
-    <div className="relative shrink-0" style={{ width: 112, height: 112 }}>
-      <svg width={112} height={112} viewBox="0 0 112 112">
-        <circle cx={56} cy={56} r={R} fill="none" stroke="var(--color-rule)" strokeWidth={8} />
+    <div className="relative shrink-0" style={{ width: 70, height: 70 }}>
+      <svg width={70} height={70} viewBox="0 0 70 70">
+        <circle cx={35} cy={35} r={R} fill="none" stroke="var(--color-rule)" strokeWidth={5} />
         <circle
-          cx={56} cy={56} r={R} fill="none" stroke={color} strokeWidth={8} strokeLinecap="round"
+          cx={35} cy={35} r={R} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round"
           strokeDasharray={C} strokeDashoffset={C * (1 - pct)}
-          transform="rotate(-90 56 56)"
+          transform="rotate(-90 35 35)"
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="leading-none" style={{ color, fontSize: 34, fontWeight: 600 }}>
+        <span className="leading-none" style={{ color, fontSize: 22, fontWeight: 600 }}>
           {letter ?? '—'}
         </span>
         {score != null && (
-          <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11, marginTop: 2 }}>
+          <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 9.5, marginTop: 1 }}>
             {Math.round(animated)}
           </span>
         )}
@@ -185,28 +195,32 @@ export default function GradeHero({
         <WindowSegmented value={days} onChange={onDaysChange} />
       </div>
 
-      <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:gap-5 sm:text-left">
+      {/* Verdict leads; the grade is a small supporting chip beside it. */}
+      <div className="flex items-start gap-4 sm:gap-5">
         <div className="flex flex-col items-center gap-1.5 shrink-0">
           <GradeRing score={report.grade_score} letter={report.grade_letter} color={color} />
           <span
-            className="num-mono"
-            style={{ fontSize: 10, letterSpacing: '0.14em', color: 'var(--color-muted)', textAlign: 'center', maxWidth: 120 }}
+            className="num-mono rounded-full px-2 py-0.5"
+            style={{
+              fontSize: 10.5, letterSpacing: '0.06em', color,
+              backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+            }}
             title={locale === 'de'
               ? 'Gesamtnote für deine Form über diesen Zeitraum — aus Belastung, Intensität und Erholung'
               : 'Overall grade for your fitness across this period — from load, intensity and recovery'}
           >
-            {locale === 'de' ? 'FORM DES ZEITRAUMS' : 'PERIOD FITNESS'}
+            {gradeWord(report.grade_letter, locale === 'de')}
           </span>
         </div>
 
         <div className="flex-1 min-w-0">
-          {/* AI verdict — editorial headline */}
+          {/* AI verdict — the emotional headline, on the type scale (not oversized) */}
           <p
             style={{
               fontFamily: 'var(--font-serif, serif)',
               color: 'var(--color-ink)',
-              fontSize: 'clamp(17px, 4.6vw, 21px)',
-              lineHeight: 1.34,
+              fontSize: 'clamp(15px, 3.4vw, 17px)',
+              lineHeight: 1.4,
               maxWidth: '60ch',
               fontWeight: 400,
             }}
@@ -215,7 +229,7 @@ export default function GradeHero({
           </p>
 
           {/* consolidated stat row — delta, percentile, trend */}
-          <div className="flex items-center justify-center sm:justify-start gap-3 flex-wrap mt-3.5">
+          <div className="flex items-center gap-3 flex-wrap mt-3">
             {delta != null && delta !== 0 && (
               <span className="num-mono" style={{
                 fontSize: 11, color: delta > 0 ? 'var(--color-good)' : 'var(--color-bad)',
@@ -242,17 +256,22 @@ export default function GradeHero({
         </div>
       </div>
 
-      {/* evidence chips — bordered pills */}
+      {/* Scannable headline metrics — one uniform row (value 16px, label 10.5px). */}
       {report.evidence.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap mt-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-5">
           {report.evidence.map((c: EvidenceChip, i: number) => (
-            <span
+            <div
               key={i}
-              className="num-mono inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-              style={{ fontSize: 11, color: 'var(--color-muted)', border: '1px solid var(--color-rule)' }}
+              className="flex flex-col gap-0.5 rounded-[12px] px-3 py-2.5"
+              style={{ backgroundColor: 'var(--color-paper)', border: '1px solid var(--color-rule)' }}
             >
-              {c.label} <span style={{ color: chipColor(c.tone) }}>{c.value}</span>
-            </span>
+              <span className="num-mono leading-none" style={{ fontSize: 16, fontWeight: 600, color: chipColor(c.tone) }}>
+                {c.value}
+              </span>
+              <span className="num-mono" style={{ fontSize: 10.5, letterSpacing: '0.04em', color: 'var(--color-muted)' }}>
+                {c.label}
+              </span>
+            </div>
           ))}
         </div>
       )}

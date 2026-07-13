@@ -4,7 +4,6 @@ import { usePeriodReport } from '../../../hooks/usePeriodReport'
 import GradeHero from '../../report/GradeHero'
 import BodySystems from '../../report/BodySystems'
 import ProgressLedger from '../../report/ProgressLedger'
-import MilestoneStrip from '../../report/MilestoneStrip'
 import CausesPanel from '../../report/CausesPanel'
 import NextStepCard from '../../report/NextStepCard'
 import IntensityMix from '../../report/IntensityMix'
@@ -64,12 +63,13 @@ export default function ReportTab() {
           </section>
 
           {/* ── Act 3 · Prescription ────────────────────────────────── */}
-          {(report.milestones.length > 0 || report.trajectory || report.prescriptions.length > 0 || report.next_step) && (
+          {/* Streaks/achievements live on Social now — Konstanz stays only as an
+              analytic score in Progress/Body Systems, no milestone strip here. */}
+          {(report.trajectory || report.prescriptions.length > 0 || report.next_step) && (
             <section
               className="flex flex-col gap-4"
               style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) 160ms both' }}
             >
-              <MilestoneStrip milestones={report.milestones} />
               {report.trajectory && <TrajectoryCard traj={report.trajectory} />}
               {report.prescriptions.length > 0
                 ? <PrescriptionList prescriptions={report.prescriptions} />

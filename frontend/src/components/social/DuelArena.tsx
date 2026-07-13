@@ -90,6 +90,10 @@ export default function DuelArena({ duel, locale, restMode }: { duel: DuelRespon
 
   const rows = useMemo(() => METRICS.filter((m) => (side === 'crew' ? m.crewFair : true)), [side])
 
+  // Fresh week: no ride yet. Don't render 8 all-loss rows — a single slim
+  // teaser reads far calmer and invites the first session.
+  const freshWeek = !!you && num(you, 'tss') === 0 && num(you, 'ring_score') === 0
+
   const { wins, losses, ties } = useMemo(() => {
     let w = 0, l = 0, t = 0
     if (you && opp) for (const m of rows) {
@@ -132,6 +136,12 @@ export default function DuelArena({ duel, locale, restMode }: { duel: DuelRespon
       {side === 'crew' && !hasCrew ? (
         <p className="text-[13px] leading-relaxed mt-4" style={{ color: 'var(--color-muted)' }}>
           {de ? 'Lade eine Crew ein (oben), um dich Kopf an Kopf mit anderen zu messen.' : 'Invite a crew (above) to go head-to-head with others.'}
+        </p>
+      ) : side === 'past' && freshWeek ? (
+        <p className="text-[13px] leading-relaxed mt-4" style={{ color: 'var(--color-muted)' }}>
+          {de
+            ? 'Noch keine Fahrt diese Woche — das Duell startet mit deiner ersten Einheit.'
+            : 'No ride this week yet — the duel starts with your first session.'}
         </p>
       ) : !you || !opp ? (
         <p className="text-[13px] mt-4" style={{ color: 'var(--color-muted)' }}>{de ? 'Noch keine Daten für dieses Duell.' : 'No data for this duel yet.'}</p>

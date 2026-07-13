@@ -18,6 +18,7 @@ import WeekVsLast from '../WeekVsLast'
 import DayPlanCard from '../DayPlanCard'
 import TrainingCalendar from '../TrainingCalendar'
 import PillarSection from '../PillarSection'
+import DashboardSection from '../DashboardSection'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
@@ -38,23 +39,22 @@ function WeekPlanSkeleton() {
         <div className="h-3.5 w-full rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
       </div>
 
-      {/* 7 mini pill skeletons */}
-      <div className="grid grid-cols-7 gap-1.5">
+      {/* 7 agenda-row skeletons */}
+      <div className="flex flex-col gap-1.5">
         {Array.from({ length: 7 }).map((_, i) => (
           <div
             key={i}
-            className="rounded-lg border"
+            className="flex items-center gap-3 rounded-xl border px-3.5"
             style={{
               backgroundColor: 'var(--color-paper-2)',
               borderColor: 'var(--color-rule)',
-              minHeight: 72,
+              minHeight: 56,
             }}
           >
-            <div className="h-full flex flex-col items-center justify-center gap-1.5 p-2">
-              <div className="h-2 w-3 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-              <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-              <div className="h-2 w-5 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
-            </div>
+            <div className="h-2.5 w-16 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+            <div className="h-3 flex-1 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
+            <div className="h-2.5 w-10 rounded animate-pulse" style={{ backgroundColor: 'var(--color-rule)' }} />
           </div>
         ))}
       </div>
@@ -152,20 +152,20 @@ function WeekPlanPrimary() {
   const durationsAreStub = new Set(workoutTargets).size <= 1
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* 7-day pill row — TrainHero above owns the week framing now,
-         so the pills are the visual core here. */}
-      <div className="grid grid-cols-7 gap-1.5">
-        {data.days.map((day) => (
-          <DayPlanCard
-            key={day.date}
-            day={day}
-            language={language}
-            activity={activityForDay(day.date)}
-            hideDuration={durationsAreStub}
-          />
-        ))}
-      </div>
+    <div className="flex flex-col gap-1.5">
+      {/* 7-day agenda list — one row per day (Mon–Sun): weekday+date, session
+         name, duration, TSS (or "Ruhetag"). The primary, MECE Plan surface —
+         "my forward schedule", not an hour-grid. */}
+      {data.days.map((day) => (
+        <DayPlanCard
+          key={day.date}
+          variant="row"
+          day={day}
+          language={language}
+          activity={activityForDay(day.date)}
+          hideDuration={durationsAreStub}
+        />
+      ))}
     </div>
   )
 }
@@ -185,16 +185,25 @@ export default function WeekTab() {
       <PillarSection index="1" title={de ? 'Diese Woche' : 'This week'}
         question={de ? 'Was steht diese Woche an?' : "What's on this week?"}>
         <WeekPlanPrimary />
-      </PillarSection>
 
-      <PillarSection index="2" title={de ? 'Gesamtplan' : 'Full plan'}
-        question={de ? 'Wie sieht mein kompletter Plan aus?' : 'What does my whole plan look like?'}>
-        <div className="min-w-0">
-          <TrainingCalendar />
+        {/* Optional full-calendar view — collapsed by default and desktop-only.
+           Mobile users get only the agenda list above; the 24h hour-grid never
+           leads the page. */}
+        <div className="hidden lg:block">
+          <DashboardSection
+            id="plan-calendar-detail"
+            title={de ? 'Detailansicht' : 'Detailed view'}
+            subtitle={de ? 'Kalender' : 'Calendar'}
+            defaultExpanded={false}
+          >
+            <div className="min-w-0">
+              <TrainingCalendar />
+            </div>
+          </DashboardSection>
         </div>
       </PillarSection>
 
-      <PillarSection index="3" title={de ? 'Umsetzung & Vergleich' : 'Execution & trend'}
+      <PillarSection index="2" title={de ? 'Umsetzung & Vergleich' : 'Execution & trend'}
         question={de ? 'Halte ich mich an den Plan — und sicher unterwegs?' : 'Am I on plan — and ramping safely?'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
           <div className="flex-1 min-w-0"><ComplianceStrip /></div>

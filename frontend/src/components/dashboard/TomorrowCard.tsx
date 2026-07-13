@@ -1,6 +1,7 @@
 import { addDays, format } from 'date-fns'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useT, useLocale } from '../../contexts/LocaleContext'
+import { simpleTitleFor } from '../../utils/coachLanguage'
 import type { TomorrowPlan, IntensityChip } from '../../api/coach'
 
 // Intensity → human label + state color. Same vocabulary as the
@@ -79,8 +80,13 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
   const chip = (data.intensity_chip as IntensityChip) ?? 'endurance'
   const tone = CHIP_TONE[chip] ?? 'neutral'
   const color = TONE_COLOR[tone]
+  // Localize the workout title via the same category→title map the main workout
+  // card uses (raw backend titles like "Recovery spin" are English-only).
+  const localizedTitle = planned?.category
+    ? simpleTitleFor(planned.category as Parameters<typeof simpleTitleFor>[0], planned?.title ?? '', locale)
+    : planned?.title
   const title =
-    planned?.title ||
+    localizedTitle ||
     (locale === 'de'
       ? `${chipLabel(chip, 'de') ?? 'Ausdauer'}-Tag`
       : `${chipLabel(chip, 'en') ?? 'Endurance'} day`)

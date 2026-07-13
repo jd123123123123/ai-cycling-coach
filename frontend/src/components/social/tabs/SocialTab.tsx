@@ -27,6 +27,7 @@ import PowerArena from '../PowerArena'
 import MemberFinder from '../MemberFinder'
 import DuelArena from '../DuelArena'
 import Confetti from '../../ui/Confetti'
+import { SegmentedTabs } from '../../ui/SegmentedTabs'
 import { useCountUp } from '../../../hooks/useCountUp'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
@@ -354,6 +355,16 @@ export default function SocialTab() {
   const de = locale === 'de'
   const gate = useAdaptiveGate()
 
+  // Sub-nav — Social stacked 5+ systems into one ~9,000px scroll. Splitting the
+  // pillars into three groups caps visible height to one group at a time.
+  type Group = 'wettkampf' | 'crew' | 'erfolge'
+  const [group, setGroup] = useState<Group>('wettkampf')
+  const groupTabs = [
+    { id: 'wettkampf' as const, label: de ? 'Wettkampf' : 'Compete' },
+    { id: 'crew' as const, label: 'Crew' },
+    { id: 'erfolge' as const, label: de ? 'Erfolge' : 'Achievements' },
+  ]
+
   const today = new Date()
   const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
@@ -463,6 +474,20 @@ export default function SocialTab() {
 
   return (
     <div className="flex flex-col gap-9 sm:gap-11">
+      {/* ── Sub-nav: one group visible at a time (caps scroll height) ── */}
+      <div className="flex justify-center sm:justify-start">
+        <SegmentedTabs
+          tabs={groupTabs}
+          value={group}
+          onChange={setGroup}
+          ariaLabel={de ? 'Social-Bereich' : 'Social section'}
+          indicatorId="social-group-indicator"
+        />
+      </div>
+
+      {/* ══ Wettkampf — ring · duel · cool facts ══════════════════════ */}
+      {group === 'wettkampf' && (
+      <>
       {/* ── ① Diese Woche — the ring ─────────────────────────────── */}
       <PillarSection
         index="1"
@@ -548,9 +573,9 @@ export default function SocialTab() {
         question={de ? 'Was habe ich diese Woche eigentlich angerichtet?' : 'What did I actually pull off this week?'}
       >
         {insights.rides === 0 ? (
-          <div className="rounded-[18px] px-5 py-8 text-center" style={{ border: '1px dashed var(--color-rule)' }}>
-            <span style={{ fontSize: 26 }}>🫙</span>
-            <p className="text-[13px] mt-2" style={{ color: 'var(--color-muted)' }}>
+          <div className="flex items-center gap-2.5 rounded-[14px] px-4 py-3" style={{ border: '1px dashed var(--color-rule)' }}>
+            <span style={{ fontSize: 16 }}>🫙</span>
+            <p className="text-[13px] leading-snug" style={{ color: 'var(--color-muted)' }}>
               {de ? 'Noch keine Fahrt diese Woche — deine erste Einheit füllt diese Karten mit Angeber-Zahlen.' : 'No ride this week yet — your first session fills these cards with bragging numbers.'}
             </p>
           </div>
@@ -584,25 +609,15 @@ export default function SocialTab() {
         )}
       </PillarSection>
 
-      {/* ── ④ Die Kraft-Liga — how I stack up against every cyclist ── */}
-      <PillarSection
-        index="4"
-        title={de ? 'Die Kraft-Liga' : 'The Power League'}
-        question={de ? 'Wie stehe ich gegen alle anderen Fahrer da?' : 'How do I stack up against every other rider?'}
-      >
-        <PowerArena
-          power={power}
-          improvementRate={improvement?.rate ?? null}
-          streak={consistency.streak}
-          locale={locale}
-        />
-      </PillarSection>
+      </>
+      )}
 
-      {/* ── ⑤ Crew & Ehre — squad + honors ───────────────────────── */}
+      {/* ══ Crew — find riders · standings · invite ═══════════════════ */}
+      {group === 'crew' && (
       <PillarSection
-        index="5"
-        title={de ? 'Crew & Ehre' : 'Crew & Honors'}
-        question={de ? 'Mit wem messe ich mich, und was habe ich verdient?' : 'Who am I racing, and what have I earned?'}
+        index="1"
+        title={de ? 'Mitglieder finden' : 'Find Members'}
+        question={de ? 'Mit wem messe ich mich?' : 'Who am I racing?'}
       >
         {/* Find + add other athletes on the app */}
         <MemberFinder crewId={crewId} locale={locale} />
@@ -668,7 +683,32 @@ export default function SocialTab() {
             </form>
           </>
         )}
+      </PillarSection>
+      )}
 
+      {/* ══ Erfolge — power league · honors ═══════════════════════════ */}
+      {group === 'erfolge' && (
+      <>
+      {/* ── ① Die Kraft-Liga — how I stack up against every cyclist ── */}
+      <PillarSection
+        index="1"
+        title={de ? 'Die Kraft-Liga' : 'The Power League'}
+        question={de ? 'Wie stehe ich gegen alle anderen Fahrer da?' : 'How do I stack up against every other rider?'}
+      >
+        <PowerArena
+          power={power}
+          improvementRate={improvement?.rate ?? null}
+          streak={consistency.streak}
+          locale={locale}
+        />
+      </PillarSection>
+
+      {/* ── ② Auszeichnungen — honors ─────────────────────────────── */}
+      <PillarSection
+        index="2"
+        title={de ? 'Auszeichnungen' : 'Honors'}
+        question={de ? 'Was habe ich verdient?' : 'What have I earned?'}
+      >
         {/* Honors case */}
         <div className="flex items-center justify-between px-1 pt-2">
           <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}>{de ? 'AUSZEICHNUNGEN' : 'HONORS'}</span>
@@ -704,6 +744,8 @@ export default function SocialTab() {
           })}
         </div>
       </PillarSection>
+      </>
+      )}
     </div>
   )
 }

@@ -212,7 +212,7 @@ function MiniKpi({ icon: Icon, label, value, positive, quip }: { icon: typeof Fl
     <div className="rounded-[16px] px-4 py-3.5 flex flex-col gap-1" style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
       <div className="flex items-center gap-1.5">
         <Icon size={13} strokeWidth={2} style={{ color: positive ? 'var(--color-forest-2)' : 'var(--color-muted)' }} />
-        <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', fontSize: 9, letterSpacing: '0.14em' }}>{label}</span>
+        <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.14em' }}>{label}</span>
       </div>
       <span className="num-display leading-none" style={{ fontSize: 26, color: positive ? 'var(--color-forest-2)' : 'var(--color-ink)' }}>{value}</span>
       <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{quip}</span>

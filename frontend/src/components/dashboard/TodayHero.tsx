@@ -4,7 +4,6 @@ import { useT, useLocale } from '../../contexts/LocaleContext'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
-import { useGoalTrajectory } from '../../hooks/useGoalTrajectory'
 import { useCountUp } from '../../hooks/useCountUp'
 import {
   computeReadiness,
@@ -27,18 +26,18 @@ function useViewportIsMobile(breakpoint = 640): boolean {
 }
 
 /**
- * TodayHero — the first card on Today.
+ * TodayHero — the ONE compact readiness line under today's session.
  *
- * Consolidates what was three separate cards (ReadinessHero + TrajectorySentence
- * + the verdict portion of CoachBrief) into one decisive "today is X" panel:
+ * The session (PrescribedWorkoutCard, rendered above by CoachBrief) is the
+ * page hero; this card is deliberately demoted to a single supporting strip:
  *
  *   eyebrow row : date · build phase · days-to-goal · last sync
- *   main row    : state-colored recovery ring + verdict + workout headline + CTA
- *   footer      : sleep · weekly strain · streak
+ *   readiness   : small ring + a uniform 3-metric row (Erholung · HRV Δ · Form)
  *
- * Everything analytical (the activity rings, percentile, full contributor sheet,
- * intraday wake/now pairs) still lives in the deeper ReadinessHero / Deep dive —
- * this card is the verdict, not the data dump.
+ * No big italic verdict, no trajectory trend, no scattered "why" pills — the
+ * recovery *reasoning* lives once, in CoachBrief's collapsed "Warum" expander,
+ * and the fitness trend is MECE-owned by Analyze. This is the readiness glance,
+ * not a second hero.
  */
 
 function StateRing({ score, color, size, recoveryLabel, scaleHint }: { score: number; color: string; size: number; recoveryLabel: string; scaleHint: string }) {
@@ -111,59 +110,21 @@ function EyebrowChip({ children, color = 'var(--color-muted)' }: { children: Rea
   )
 }
 
-function whyChips(evidence: Record<string, unknown>, locale: 'en' | 'de'): Array<{ key: string; text: string; tone: 'good' | 'caution' | 'bad' | 'neutral'; title?: string }> {
-  const out: Array<{ key: string; text: string; tone: 'good' | 'caution' | 'bad' | 'neutral'; title?: string }> = []
-  const pmc = evidence.pmc as Record<string, unknown> | undefined
-  const bio = evidence.biometrics as Record<string, unknown> | undefined
-  const hrv = bio?.hrv as Record<string, unknown> | undefined
-  const sleep = bio?.sleep as Record<string, unknown> | undefined
-
-  const hrvDelta = hrv?.delta_pct as number | null | undefined
-  if (typeof hrvDelta === 'number') {
-    const tone = hrvDelta < -8 ? 'bad' : hrvDelta < -3 ? 'caution' : 'good'
-    out.push({
-      key: 'hrv',
-      text: `HRV ${hrvDelta >= 0 ? '+' : ''}${hrvDelta.toFixed(1)}%`,
-      tone,
-      title: locale === 'de'
-        ? 'Herzfrequenzvariabilität ggü. deiner Basislinie — höher = besser erholt'
-        : 'Heart-rate variability vs your baseline — higher = better recovered',
-    })
-  }
-  const tsb = pmc?.tsb as number | null | undefined
-  if (typeof tsb === 'number') {
-    const tone = tsb < -25 ? 'bad' : tsb < -10 ? 'neutral' : 'good'
-    // Labelled "Form heute" (today's live TSB) to distinguish it from the
-    // Form & Fortschritt panel, which reports form *after the last ride*.
-    out.push({
-      key: 'tsb',
-      text: `${locale === 'de' ? 'Form heute' : 'Form today'} ${tsb >= 0 ? '+' : ''}${Math.round(tsb)}${tsb < -10 && tsb > -25 ? (locale === 'de' ? ' (produktiv)' : ' (productive)') : ''}`,
-      tone,
-      title: locale === 'de'
-        ? 'Frische (TSB): plus = ausgeruht, minus = müde'
-        : 'Freshness (TSB): plus = rested, minus = tired',
-    })
-  }
-  const sleepDebt = sleep?.avg_nightly_debt_h as number | null | undefined
-  if (typeof sleepDebt === 'number' && sleepDebt > 0.2) {
-    const tone = sleepDebt > 1.5 ? 'bad' : sleepDebt > 0.6 ? 'caution' : 'neutral'
-    out.push({
-      key: 'sleep',
-      text: `${locale === 'de' ? 'Schlafdefizit' : 'Sleep debt'} ${sleepDebt.toFixed(1)} h`,
-      tone,
-      title: locale === 'de'
-        ? 'Fehlender Schlaf ggü. deinem Bedarf, Ø der letzten Nächte'
-        : 'Missing sleep vs your need, averaged over recent nights',
-    })
-  }
-  return out.slice(0, 4)
-}
-
-const TONE_COLOR: Record<'good' | 'caution' | 'bad' | 'neutral', string> = {
-  good: 'var(--color-good)',
-  caution: 'var(--color-caution)',
-  bad: 'var(--color-bad)',
-  neutral: 'var(--color-ink-2)',
+// One cell of the uniform readiness row — same type scale everywhere:
+// value 16px, label 10.5px. A single accent per cell (tone), never a stack
+// of saturated blocks.
+function ReadinessCell({ label, value, sub, tone, title }: { label: string; value: string; sub?: string; tone: string; title?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0" style={{ cursor: title ? 'help' : undefined }} title={title}>
+      <span className="eyebrow truncate" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.16em' }}>
+        {label}
+      </span>
+      <span className="num-mono inline-flex items-baseline gap-1" style={{ color: tone, fontSize: 16, fontWeight: 600, lineHeight: 1.1 }}>
+        {value}
+        {sub && <span style={{ color: 'var(--color-muted)', fontSize: 11, fontWeight: 500 }}>{sub}</span>}
+      </span>
+    </div>
+  )
 }
 
 export default function TodayHero() {
@@ -171,12 +132,10 @@ export default function TodayHero() {
   const { data: brief } = useCoachBrief()
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 30), [today]), today)
   const { data: snapshot } = useTodaySnapshot()
-  const { data: trajectory } = useGoalTrajectory()
   const isMobile = useViewportIsMobile(640)
-  // Ring shrunk ~20% (was 108 / 140) — the today's-workout tiles below are now
-  // the dominant actionable element, so the readiness ring reads as verdict,
-  // not spectacle.
-  const ringSize = isMobile ? 86 : 112
+  // Ring is now a small supporting element — the session card above is the
+  // dominant thing on the page, so readiness reads as a glance, not spectacle.
+  const ringSize = isMobile ? 60 : 68
   const t = useT()
   const { locale } = useLocale()
   const de = locale === 'de'
@@ -229,68 +188,36 @@ export default function TodayHero() {
   const nowAt = snapshot?.body_battery?.now_at
   const asOf = nowAt ? format(new Date(nowAt), 'HH:mm') : null
 
-  // "Why" chips
-  const why = whyChips((brief?.evidence as Record<string, unknown> | undefined) ?? {}, locale)
-
-  // Footer micro-stat: sleep score. Weekly strain deliberately lives once —
-  // in the WeeklyChallenge ring below — so the hero doesn't duplicate it.
+  // Readiness-row inputs — the two evidence markers that sit beside Erholung.
+  const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
+  const pmc = evidence.pmc as Record<string, unknown> | undefined
+  const bio = evidence.biometrics as Record<string, unknown> | undefined
+  const hrv = bio?.hrv as Record<string, unknown> | undefined
+  const hrvDelta = hrv?.delta_pct as number | null | undefined
+  const tsb = pmc?.tsb as number | null | undefined
   const sleepScore = latest?.sleep_score ?? null
 
-  // Trajectory micro-line. Prefer the AI-generated `narrative_hook` from the
-  // trajectory endpoint — it carries phase/event context and an actionable
-  // delta ("add ~23 TSS/week to close the gap") that a templated state-label
-  // string can't. Fall back to a composed line only if the hook is empty.
-  function trajectoryLine(): { tone: 'good' | 'caution' | 'neutral'; text: string } | null {
-    if (!trajectory || trajectory.on_track === 'no_goal' || trajectory.event_name == null) return null
-    const tone: 'good' | 'caution' | 'neutral' =
-      trajectory.on_track === 'ahead' || trajectory.on_track === 'on_track'
-        ? 'good'
-        : trajectory.on_track === 'behind'
-          ? 'caution'
-          : 'neutral'
-    const hook = (trajectory.narrative_hook || '').trim()
-    if (hook) return { tone, text: hook }
-    // Fallback composition (rare — backend almost always provides a hook)
-    const ctlProj = Math.round(trajectory.ctl_projected_at_goal)
-    const ctlTarget = trajectory.ctl_target ? Math.round(trajectory.ctl_target) : null
-    const stateLabel: Record<'ahead' | 'on_track' | 'behind', string> =
-      locale === 'de'
-        ? {
-            ahead: 'Vor dem Plan',
-            on_track: 'Im Plan',
-            behind: 'Hinter dem Plan',
-          }
-        : {
-            ahead: 'Ahead of plan',
-            on_track: 'On track',
-            behind: 'Behind plan',
-          }
-    const targetPart = ctlTarget
-      ? locale === 'de'
-        ? ` von ${ctlTarget} Ziel`
-        : ` of ${ctlTarget} target`
-      : ''
-    return {
-      tone,
-      text:
-        locale === 'de'
-          ? `${stateLabel[trajectory.on_track]} · CTL projiziert ${ctlProj}${targetPart} am Renntag`
-          : `${stateLabel[trajectory.on_track]} · CTL projected ${ctlProj}${targetPart} at race day`,
-    }
-  }
-  const trajLine = trajectoryLine()
+  const hrvTone =
+    typeof hrvDelta === 'number'
+      ? hrvDelta < -8 ? 'var(--color-bad)' : hrvDelta < -3 ? 'var(--color-caution)' : 'var(--color-good)'
+      : 'var(--color-ink-2)'
+  const tsbTone =
+    typeof tsb === 'number'
+      ? tsb < -25 ? 'var(--color-bad)' : tsb < -10 ? 'var(--color-ink-2)' : 'var(--color-good)'
+      : 'var(--color-ink-2)'
 
   return (
     <div
-      className="rounded-[18px] p-5 sm:p-6"
+      className="rounded-[18px] p-4 sm:p-5"
       style={{
-        backgroundColor: meta?.bg ?? 'var(--color-paper-2)',
+        // Neutral surface — the single day-accent lives on the directive card
+        // below, not stacked here. Only the ring carries the tier colour.
+        backgroundColor: 'var(--color-paper-2)',
         border: '1px solid var(--color-rule)',
-        backgroundImage: meta ? `linear-gradient(180deg, color-mix(in srgb, ${color} 6%, transparent) 0%, transparent 70%)` : undefined,
       }}
     >
       {/* Eyebrow — date · build phase · days-to-goal · freshness */}
-      <div className="flex items-center gap-3 flex-wrap mb-4">
+      <div className="flex items-center gap-3 flex-wrap mb-3">
         <EyebrowChip>{format(today, 'EEE d MMM').toUpperCase()}</EyebrowChip>
         {phaseLabel && (
           <>
@@ -318,10 +245,9 @@ export default function TodayHero() {
         )}
       </div>
 
-      {/* Main row: ring + verdict + why chips. The workout + Start-ride CTA live
-         once, in the CoachBrief's prescribed-workout card below — this hero is
-         the verdict, not the prescription. */}
-      <div className="flex gap-5 sm:gap-7 items-center flex-wrap">
+      {/* ONE compact readiness line: small ring + a uniform metric row. This is
+         supporting context for the session above — never a second hero. */}
+      <div className="flex items-center gap-4 sm:gap-5">
         <StateRing
           score={score ?? 0}
           color={color}
@@ -329,87 +255,42 @@ export default function TodayHero() {
           recoveryLabel={t('recovery_label')}
           scaleHint={de ? 'Erholung 0–100 · niedrig · mittel · hoch' : 'Recovery 0–100 · low · mid · high'}
         />
-
-        <div className="flex-1 min-w-0 flex flex-col gap-2">
-          <h1
-            className="leading-[1.05]"
-            style={{
-              fontFamily: 'var(--font-serif, serif)',
-              fontStyle: 'italic',
-              fontSize: 'clamp(24px, 3.4vw, 36px)',
-              color: 'var(--color-ink)',
-              fontVariationSettings: '"opsz" 144, "SOFT" 30',
-            }}
-          >
-            {verdict}
-          </h1>
-
-          {why.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap mt-1">
-              <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>{t('why_label')}</span>
-              {why.map((c) => (
-                <span
-                  key={c.key}
-                  title={c.title}
-                  className="num-mono text-[11px] px-1.5 py-0.5 rounded-sm whitespace-nowrap"
-                  style={{
-                    color: TONE_COLOR[c.tone],
-                    border: `1px solid color-mix(in srgb, ${TONE_COLOR[c.tone]} 35%, var(--color-rule))`,
-                    cursor: c.title ? 'help' : undefined,
-                  }}
-                >
-                  {c.text}
-                </span>
-              ))}
-            </div>
-          )}
+        <div className="flex-1 min-w-0 grid grid-cols-3 gap-3 sm:gap-5">
+          <ReadinessCell
+            label={t('recovery_label')}
+            value={score != null ? String(Math.round(score)) : '—'}
+            tone={color}
+            title={de ? 'Erholung 0–100' : 'Recovery 0–100'}
+          />
+          <ReadinessCell
+            label="HRV Δ"
+            value={typeof hrvDelta === 'number' ? `${hrvDelta >= 0 ? '+' : ''}${hrvDelta.toFixed(1)}` : '—'}
+            sub={typeof hrvDelta === 'number' ? '%' : undefined}
+            tone={hrvTone}
+            title={de ? 'HRV ggü. deiner Basislinie — höher = besser erholt' : 'HRV vs your baseline — higher = better recovered'}
+          />
+          <ReadinessCell
+            label={de ? 'Form' : 'Form'}
+            value={typeof tsb === 'number' ? `${tsb >= 0 ? '+' : ''}${Math.round(tsb)}` : '—'}
+            tone={tsbTone}
+            title={de ? 'Frische (TSB): plus = ausgeruht, minus = müde' : 'Freshness (TSB): plus = rested, minus = tired'}
+          />
         </div>
       </div>
 
-      {/* Footer — momentum micro-stats. Single line, no extra cards. */}
+      {/* Verdict + sleep — a single muted supporting line, not a hero headline. */}
       <div
-        className="flex items-center gap-4 flex-wrap mt-5 pt-3"
+        className="flex items-center gap-3 flex-wrap mt-3 pt-3"
         style={{ borderTop: '1px solid var(--color-rule)' }}
       >
+        <span style={{ color: 'var(--color-ink-2)', fontSize: 13 }}>{verdict}</span>
         {sleepScore != null && (
-          <div className="flex items-baseline gap-1.5">
+          <span className="ml-auto inline-flex items-baseline gap-1.5">
             <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5 }}>{t('sleep_label')}</span>
             <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}>{Math.round(sleepScore)}</span>
-          </div>
-        )}
-        {/* Weekly strain intentionally lives once, in the WeeklyChallenge ring
-           below — kept out of the hero footer to avoid a duplicate "X% von Y". */}
-        {meta && (
-          <span
-            className="eyebrow num-mono"
-            style={{ color, fontSize: 11, letterSpacing: '0.18em', fontWeight: 600 }}
-          >
-            {(de ? meta.labelDe : meta.label).toUpperCase()}
           </span>
         )}
       </div>
-
-      {/* Trajectory micro-line — forward-looking carrot. Only renders when a
-         goal event is configured and the trajectory endpoint returns a
-         projection (no_goal → no line, no clutter). */}
-      {trajLine && (
-        <div className="mt-2 flex items-center gap-2 flex-wrap">
-          <span
-            className="num-mono"
-            style={{
-              color:
-                trajLine.tone === 'good'
-                  ? 'var(--color-good)'
-                  : trajLine.tone === 'caution'
-                    ? 'var(--color-caution)'
-                    : 'var(--color-ink-2)',
-              fontSize: 12,
-            }}
-          >
-            ▸ {trajLine.text}
-          </span>
-        </div>
-      )}
     </div>
   )
 }

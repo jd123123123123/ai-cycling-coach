@@ -30,17 +30,17 @@ export default function BodySystems({ axes }: { axes: RadarAxis[] }) {
           return (
             <div key={a.key} className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between gap-2">
-                <span style={{ color: 'var(--color-ink)', fontSize: 14 }}>{a.label}</span>
+                <span className="flex-1 min-w-0" style={{ color: 'var(--color-ink)', fontSize: 14, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{a.label}</span>
                 {na ? (
                   <span
-                    className="num-mono"
+                    className="num-mono shrink-0"
                     style={{ color: 'var(--color-muted)', fontSize: 12, letterSpacing: '0.04em' }}
                     title={de ? 'Nicht genug Daten für diese Achse' : 'Not enough data for this axis'}
                   >
                     {de ? 'n. v.' : 'n/a'}
                   </span>
                 ) : (
-                  <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 15, fontWeight: 600 }}>
+                  <span className="num-mono shrink-0" style={{ color: 'var(--color-ink-2)', fontSize: 15, fontWeight: 600 }}>
                     {Math.round(a.score as number)}
                   </span>
                 )}

@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react'
+import { Compass } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 import type { NextStep } from '../../api/report'
 
@@ -9,7 +9,9 @@ const TONE_COLOR: Record<string, string> = {
   neutral: 'var(--color-ink)',
 }
 
-/** Forward-looking recommendation — the report's actionable payoff. */
+/** Analytical read on what this period puts in focus — the "why," not a command.
+ * Today owns the day's directive; this card only explains where the emphasis
+ * lies so it never contradicts (or duplicates) that directive. */
 export default function NextStepCard({ step }: { step: NextStep }) {
   const { locale } = useLocale()
   const accent = TONE_COLOR[step.tone] ?? 'var(--color-ink)'
@@ -23,14 +25,14 @@ export default function NextStepCard({ step }: { step: NextStep }) {
       }}
     >
       <span className="eyebrow num-mono" style={{ color: accent, fontSize: 10, letterSpacing: '0.22em' }}>
-        {locale === 'de' ? 'NÄCHSTER SCHRITT' : 'DO THIS NEXT'}
+        {locale === 'de' ? 'WORAUF ES JETZT ANKOMMT' : 'WHERE THE FOCUS LIES'}
       </span>
       <div className="flex items-center gap-2.5 mt-2.5">
         <span
           className="flex items-center justify-center rounded-full shrink-0"
           style={{ width: 30, height: 30, backgroundColor: `color-mix(in srgb, ${accent} 20%, transparent)`, color: accent }}
         >
-          <ArrowRight size={17} strokeWidth={2.4} />
+          <Compass size={17} strokeWidth={2.4} />
         </span>
         <span
           style={{ fontFamily: 'var(--font-serif, serif)', color: 'var(--color-ink)', fontSize: 20, fontWeight: 500, lineHeight: 1.2 }}

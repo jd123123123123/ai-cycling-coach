@@ -1,12 +1,11 @@
 /**
  * TodayTab — executive-brief layout, scoped to exactly one job: "what do I do
  * today, and am I ready for it?". Trend reporting (CTL/TSB/eFTP), the gamified
- * weekly ring, and the consistency streak are MECE-owned by Analyze / Social,
- * so Today only carries slim teasers that point there — never their full
- * surfaces. Three tight pillars:
- *   ① Heute   — readiness verdict + today's workout (the big actionable focus)
- *   ② Woche   — compact load teaser → Social, form teaser → Analyze
- *   ③ Verlauf — recent rides
+ * weekly ring, the consistency streak AND the recent-ride history are
+ * MECE-owned by Analyze / Social, so Today only carries slim teasers that
+ * point there — never their full surfaces. Two tight pillars:
+ *   ① Heute — today's SESSION (the hero) → one readiness line → directive
+ *   ② Woche — compact load teaser → Social, form teaser → Analyze
  */
 import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
@@ -19,7 +18,6 @@ import AchievementBadges from '../AchievementBadges'
 import DidYouKnow from '../DidYouKnow'
 import MomentumChips from '../MomentumChips'
 import SeasonStats from '../SeasonStats'
-import RecentActivities from '../RecentActivities'
 import TodayHero from '../TodayHero'
 import WeeklyChallenge from '../WeeklyChallenge'
 import DashboardSection from '../DashboardSection'
@@ -53,23 +51,23 @@ export default function TodayTab() {
     ? {
         heroQ: 'Was mache ich heute — und bin ich bereit dafür?',
         week: 'Woche', weekQ: 'Belastung und Form auf einen Blick.',
-        history: 'Verlauf', historyQ: 'Was habe ich zuletzt gemacht?',
         more: 'Mehr',
       }
     : {
         heroQ: "What do I do today — and am I ready for it?",
         week: 'Week', weekQ: 'Load and form at a glance.',
-        history: 'History', historyQ: 'What have I done recently?',
         more: 'More',
       }
 
   return (
     <div className="flex flex-col gap-9 sm:gap-11">
-      {/* ── ① Today's call: the readiness verdict + today's session ── */}
+      {/* ── ① Today: the SESSION leads (CoachBrief owns the workout hero + its
+             one-line why), then ONE compact readiness line, then the demoted
+             directive. Morning input + momentum trail underneath. ── */}
       <PillarSection index="1" title={de ? 'Heute' : 'Today'} question={copy.heroQ}>
+        <CoachBrief />
         <TodayHero />
         <AdaptiveDirectiveCard />
-        <CoachBrief />
         <MorningCheckin />
         <MorningRecap />
         <MomentumChips />
@@ -79,11 +77,6 @@ export default function TodayTab() {
       <PillarSection index="2" title={copy.week} question={copy.weekQ}>
         <WeeklyChallenge teaser />
         <FormTeaser de={de} />
-      </PillarSection>
-
-      {/* ── ③ History: today's glance (deep records live in Analyze) ── */}
-      <PillarSection index="3" title={copy.history} question={copy.historyQ}>
-        <RecentActivities limit={6} />
       </PillarSection>
 
       {/* ── Context, demoted ── */}

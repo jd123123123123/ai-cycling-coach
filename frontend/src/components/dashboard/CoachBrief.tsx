@@ -203,35 +203,11 @@ function BriefBody({
         </div>
       </div>
 
-      {/* Verdict moved to TodayHero (Phase 2 rebuild). CoachBrief now opens
-         with the rationale + the workout card; the headline lives on the
-         hero card above so the page has exactly one "today's call" surface. */}
-
-      {/* Rationale — capped at 2 lines visually via max-width + line-clamp */}
-      <p
-        className="text-[14px] sm:text-[15px] leading-relaxed dashboard-break-words"
-        style={{
-          color: 'var(--color-ink-2)',
-          maxWidth: '62ch',
-          display: '-webkit-box',
-          WebkitLineClamp: 3,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-        }}
-      >
-        {brief.rationale}
-      </p>
-
-      {/* Evidence chips removed — TSB/CTL/HRV/Sleep are already surfaced as the
-         "why" chips on TodayHero above (the verdict card owns the recovery
-         evidence). The rationale prose carries the same signals in words, so a
-         second chip row here was pure duplication. */}
-
-      {/* Fold-1 hero — the prescribed workout for today. The post-ride review
-         card is owned by TodayPostRideReview at the top of the tab, so we do
-         NOT render it again here (it used to show twice when the athlete had
-         already trained today). When a review is showing above and there's no
-         workout to prescribe, render nothing rather than the legacy fallback. */}
+      {/* Fold-1 hero — the prescribed workout for today LEADS the whole page:
+         big session name + duration + its own one-line "why". Everything else
+         (readiness, recovery rationale, tomorrow) is supporting content below.
+         The post-ride review card is owned by TodayPostRideReview at the top
+         of the tab, so we do NOT render it again here. */}
       {workout ? (
         <PrescribedWorkoutCard workout={workout} alternates={alternates} />
       ) : postRideReview ? null : (
@@ -246,6 +222,25 @@ function BriefBody({
             No prescribed workout — legacy brief shape
           </span>
         </div>
+      )}
+
+      {/* Recovery rationale — stated ONCE, folded into a collapsed "Warum"
+         expander so it doesn't compete with the session hero above. This is
+         the single home for the day's recovery reasoning (the ring/directive
+         no longer repeat it). */}
+      {brief.rationale && (
+        <DashboardSection
+          id="brief-rationale"
+          title={t('why_this')}
+          defaultExpanded={false}
+        >
+          <p
+            className="text-[14px] sm:text-[15px] leading-relaxed dashboard-break-words"
+            style={{ color: 'var(--color-ink-2)', maxWidth: '62ch' }}
+          >
+            {brief.rationale}
+          </p>
+        </DashboardSection>
       )}
 
       {/* Tomorrow + recovery — both are forward-looking secondary content.

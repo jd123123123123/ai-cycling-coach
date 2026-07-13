@@ -88,7 +88,7 @@ export default function TrajectoryCard({ traj }: { traj: Trajectory }) {
 function Bar({ label, pct, value, color, dashed }: { label: string; pct: number; value: number; color: string; dashed?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <span style={{ color: 'var(--color-muted)', fontSize: 11.5, width: 76 }}>{label}</span>
+      <span className="shrink-0" style={{ color: 'var(--color-muted)', fontSize: 11.5, width: 88 }}>{label}</span>
       <div className="flex-1 rounded-full overflow-hidden" style={{ height: 8, backgroundColor: 'var(--color-rule)' }}>
         <div
           style={{

@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
+import { ChevronDown } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import type { DirectiveKind, Evidence, Tone } from '../../api/adaptive'
@@ -38,10 +40,10 @@ export default function AdaptiveDirectiveCard() {
   const de = locale === 'de'
   const reduce = useReducedMotion()
   const { data } = useAdaptive()
+  const [open, setOpen] = useState(false)
   if (!data) return null
 
   const k = KIND[data.directive]
-  const hot = !reduce && (data.directive === 'escalate' || data.directive === 'push')
   const volPct = Math.round((data.volume_modifier - 1) * 100)
   const hrvLabel = de
     ? { below: 'HRV unter Band', in: 'HRV im Band', above: 'HRV über Band', unknown: 'HRV n/v' }
@@ -56,41 +58,47 @@ export default function AdaptiveDirectiveCard() {
     : 'Highest intensity cleared for today'
 
   return (
-    <motion.div
-      className="relative rounded-[18px] p-5 sm:p-6 overflow-hidden"
+    <div
+      className="rounded-[14px] overflow-hidden"
       style={{
-        background: `color-mix(in srgb, ${k.color} 8%, var(--color-paper-2))`,
-        border: `1px solid color-mix(in srgb, ${k.color} 40%, transparent)`,
+        // Single, low-saturation accent — the directive is a supporting line
+        // under the session + readiness, not a red/green severity block.
+        background: 'var(--color-paper-2)',
+        border: `1px solid color-mix(in srgb, ${k.color} 30%, var(--color-rule))`,
       }}
-      animate={hot ? { boxShadow: [
-        `0 0 0px color-mix(in srgb, ${k.color} 0%, transparent)`,
-        `0 0 22px color-mix(in srgb, ${k.color} 30%, transparent)`,
-        `0 0 0px color-mix(in srgb, ${k.color} 0%, transparent)`,
-      ] } : undefined}
-      transition={hot ? { duration: 2.6, repeat: Infinity, ease: 'easeInOut' } : undefined}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="eyebrow" style={{ color: 'var(--color-ink-2)', letterSpacing: '0.2em', fontSize: 10.5 }}>
-          {de ? 'HEUTIGE ANSAGE' : "TODAY'S CALL"}
+      {/* One tappable line: directive label + one-line "why" (headline). */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2.5 px-4 py-3 text-left"
+        aria-expanded={open}
+      >
+        <span aria-hidden style={{ fontSize: 15, lineHeight: 1, color: k.color }}>{k.icon}</span>
+        <span className="num-mono shrink-0" style={{ color: k.color, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em' }}>
+          {de ? k.de : k.en}
         </span>
+        <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--color-ink)', fontSize: 13.5 }}>
+          {data.headline}
+        </span>
+        <ChevronDown
+          size={15}
+          strokeWidth={2}
+          style={{ color: 'var(--color-muted)', flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+        />
+      </button>
+
+      {!open ? null : (
+      <div className="px-4 pb-4 pt-1">
+      <div className="flex items-center justify-end mb-2">
         <span className="rounded-full px-2 py-0.5" style={{
           fontSize: 10, letterSpacing: '0.06em', color: 'var(--color-ink-2)',
           border: '1px solid var(--color-rule)',
         }}>{data.confidence === 'high' ? (de ? 'hohe Konfidenz' : 'high confidence') : (de ? 'moderate Konfidenz' : 'moderate confidence')}</span>
       </div>
 
-      <div className="flex items-center gap-3">
-        <span style={{ fontSize: 30, lineHeight: 1 }}>{k.icon}</span>
-        <div>
-          <div className="num-mono" style={{ color: k.color, fontSize: 22, fontWeight: 700, letterSpacing: '0.06em' }}>
-            {de ? k.de : k.en}
-          </div>
-          <p style={{ color: 'var(--color-ink)', fontSize: 14.5, marginTop: 1 }}>{data.headline}</p>
-        </div>
-      </div>
-
       {/* levers */}
-      <div className="flex flex-wrap gap-2 mt-4">
+      <div className="flex flex-wrap gap-2">
         <span title={hrvTitle} className="rounded-full px-2.5 py-1" style={{ fontSize: 11.5, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)', background: 'var(--color-paper)', cursor: 'help' }}>
           {hrvLabel[data.hrv_state]}
         </span>
@@ -126,6 +134,8 @@ export default function AdaptiveDirectiveCard() {
           })}
         </div>
       )}
-    </motion.div>
+      </div>
+      )}
+    </div>
   )
 }
