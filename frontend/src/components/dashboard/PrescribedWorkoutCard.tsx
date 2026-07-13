@@ -39,46 +39,40 @@ function MetricTile({
 }) {
   return (
     <div
-      className="flex items-center gap-3 rounded-xl px-3 py-2.5 min-w-0"
+      className="flex flex-col gap-1.5 rounded-2xl px-4 py-3.5 min-w-0"
       style={{
         backgroundColor: 'var(--color-paper-2)',
         border: '1px solid var(--color-rule)',
       }}
     >
-      <div
-        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: 'rgba(48, 108, 64, 0.10)' }}
-        aria-hidden
-      >
-        <Icon size={13} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} />
-      </div>
-      <div className="flex flex-col min-w-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <Icon size={13} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} aria-hidden />
         <span
-          className="eyebrow"
+          className="eyebrow truncate"
           style={{
             color: 'var(--color-muted)',
             fontSize: 10.5,
-            letterSpacing: '0.22em',
+            letterSpacing: '0.18em',
           }}
         >
           {label}
         </span>
-        <span
-          className="num-mono leading-tight truncate"
-          style={{ color: 'var(--color-ink)', fontSize: 14, fontWeight: 500 }}
-          title={sub ? `${value} · ${sub}` : value}
-        >
-          {value}
-          {sub && (
-            <span
-              className="ml-1 opacity-70"
-              style={{ fontSize: 11, fontWeight: 400 }}
-            >
-              {sub}
-            </span>
-          )}
-        </span>
       </div>
+      <span
+        className="leading-tight truncate"
+        style={{ color: 'var(--color-ink)', fontSize: 18, fontWeight: 600 }}
+        title={sub ? `${value} · ${sub}` : value}
+      >
+        {value}
+        {sub && (
+          <span
+            className="ml-1"
+            style={{ color: 'var(--color-ink-2)', fontSize: 13, fontWeight: 500 }}
+          >
+            {sub}
+          </span>
+        )}
+      </span>
     </div>
   )
 }
@@ -239,12 +233,23 @@ export default function PrescribedWorkoutCard({
         />
       </div>
 
-      {/* Interval ribbon */}
-      <IntervalRibbon
-        blocks={displayed.blocks}
-        summary={summaryLine(displayed, simpleMode, locale === 'de')}
-        language={language}
-      />
+      {/* Interval ribbon — only when there's a real zone/effort profile to draw.
+         On a rest day (no blocks) the ribbon would collapse to an empty grey
+         placeholder bar, so we render just the one-line summary instead. */}
+      {displayed.blocks.length > 0 ? (
+        <IntervalRibbon
+          blocks={displayed.blocks}
+          summary={summaryLine(displayed, simpleMode, locale === 'de')}
+          language={language}
+        />
+      ) : (
+        <p
+          className="num-mono text-[13px] dashboard-break-words"
+          style={{ color: 'var(--color-ink-2)' }}
+        >
+          {summaryLine(displayed, simpleMode, locale === 'de')}
+        </p>
+      )}
 
       {/* Why this workout */}
       {displayed.why_this_workout && (

@@ -50,7 +50,6 @@ export default function ReportTab() {
 
             <ProgressLedger
               improvements={report.improvements}
-              weaknesses={report.weaknesses}
               hasBaseline={report.has_baseline}
             />
 

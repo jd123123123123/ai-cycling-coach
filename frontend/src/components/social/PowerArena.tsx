@@ -35,12 +35,26 @@ function percentile(wkg: number): number {
   return 50
 }
 
-function tier(frac: number, de: boolean): string {
-  if (frac >= 0.82) return de ? 'Elite' : 'Elite'
-  if (frac >= 0.66) return de ? 'Stark' : 'Strong'
-  if (frac >= 0.52) return de ? 'Wettkampf' : 'Competitive'
-  if (frac >= 0.38) return de ? 'Fitness' : 'Fitness'
-  return de ? 'Einsteiger' : 'Beginner'
+// German gloss for the backend phenotype name + note (spec §5: DE shows no
+// English). Matched loosely so upstream label variants still map.
+function phenoNameDe(type: string): string {
+  const t = type.toLowerCase()
+  if (t.includes('sprint')) return 'Sprinter'
+  if (t.includes('punch')) return 'Puncheur'
+  if (t.includes('all')) return 'Allrounder'
+  if (t.includes('time') || t.includes('tt') || t.includes('zeitfahr')) return 'Zeitfahrer'
+  if (t.includes('climb') || t.includes('kletter')) return 'Kletterer'
+  return type
+}
+
+function phenoNoteDe(type: string): string {
+  const t = type.toLowerCase()
+  if (t.includes('sprint')) return 'Großes neuromuskuläres & anaerobes Reservoir — deine Stärke sind kurze, explosive Antritte.'
+  if (t.includes('punch')) return 'Explosiv auf kurzen Rampen — du glänzt bei Attacken und in welligem Terrain.'
+  if (t.includes('all')) return 'Ausgewogenes Profil über alle Dauern — keine echte Schwäche, überall einsetzbar.'
+  if (t.includes('time') || t.includes('tt') || t.includes('zeitfahr')) return 'Starker Motor an der Schwelle — dein Terrain sind lange, gleichmäßige Anstrengungen.'
+  if (t.includes('climb') || t.includes('kletter')) return 'Hohe Dauerleistung pro Kilo — dein Zuhause sind die langen Anstiege.'
+  return 'Dein individuelles Kraftprofil über alle Dauern.'
 }
 
 // "Pro/world-class" W/kg reference per duration — the top of each bar.
@@ -109,7 +123,7 @@ export default function PowerArena({
           className="shrink-0 grid place-items-center rounded-[18px]"
           style={{ width: 78, height: 78, border: `2px solid ${cat.color}`, boxShadow: `0 0 20px color-mix(in srgb, ${cat.color} 30%, transparent)`, background: `color-mix(in srgb, ${cat.color} 8%, transparent)` }}
         >
-          <span className="num-display leading-none" style={{ fontSize: 40, color: cat.color, fontVariationSettings: '"opsz" 144, "wght" 600' }}>{cat.c}</span>
+          <span className="num-display leading-none" style={{ fontSize: 'clamp(26px, 7vw, 34px)', color: cat.color, fontVariationSettings: '"opsz" 144, "wght" 600' }}>{cat.c}</span>
         </div>
         <div className="min-w-0 flex flex-col gap-1">
           <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', fontSize: 9.5, letterSpacing: '0.2em' }}>
@@ -147,7 +161,6 @@ export default function PowerArena({
         {DURATIONS.map((d) => {
           const wkg = lookup(wkgCurve, d.s)
           const frac = wkg ? Math.max(0, Math.min(1, wkg / d.pro)) : 0
-          const label = wkg ? tier(frac, de) : '—'
           const strong = frac >= 0.66
           return (
             <div key={d.s} className="flex items-center gap-3">
@@ -155,8 +168,10 @@ export default function PowerArena({
               <div className="flex-1 rounded-full overflow-hidden" style={{ height: 8, backgroundColor: 'var(--color-rule)' }}>
                 <div style={{ width: `${Math.round(frac * 100)}%`, height: '100%', backgroundColor: strong ? 'var(--color-amber)' : 'var(--color-forest-2)', borderRadius: 999, transition: 'width 700ms cubic-bezier(.22,1,.36,1)' }} />
               </div>
-              <span className="num-mono shrink-0 text-right" style={{ width: 52, fontSize: 12, color: 'var(--color-ink)', fontWeight: 600 }}>{wkg ? wkg.toFixed(1) : '—'}</span>
-              <span className="num-mono shrink-0 hidden sm:inline" style={{ width: 78, fontSize: 10, color: strong ? 'var(--color-amber)' : 'var(--color-muted)', textAlign: 'right' }}>{label}</span>
+              <div className="shrink-0 flex items-baseline justify-end gap-1" style={{ width: 66 }}>
+                <span className="num-mono" style={{ fontSize: 13.5, color: strong ? 'var(--color-amber)' : 'var(--color-ink)', fontWeight: 600 }}>{wkg ? wkg.toFixed(1) : '—'}</span>
+                <span className="num-mono" style={{ fontSize: 8.5, color: 'var(--color-muted)', letterSpacing: '0.02em' }}>W/kg</span>
+              </div>
             </div>
           )
         })}
@@ -164,8 +179,8 @@ export default function PowerArena({
           <div className="flex items-start gap-2 pt-1 mt-1" style={{ borderTop: '1px solid var(--color-rule)' }}>
             <span className="mt-2" style={{ fontSize: 15 }}>🧬</span>
             <div className="pt-1.5">
-              <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-ink)', fontWeight: 600 }}>{de ? 'Dein Typ: ' : 'Your type: '}{pheno}</span>
-              {phenoNote && <p className="text-[11.5px] leading-snug mt-0.5" style={{ color: 'var(--color-muted)' }}>{phenoNote}</p>}
+              <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-ink)', fontWeight: 600 }}>{de ? 'Dein Typ: ' : 'Your type: '}{de ? phenoNameDe(pheno) : pheno}</span>
+              {(de || phenoNote) && <p className="text-[12px] leading-snug mt-0.5" style={{ color: 'var(--color-muted)' }}>{de ? phenoNoteDe(pheno) : phenoNote}</p>}
             </div>
           </div>
         )}

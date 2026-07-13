@@ -190,7 +190,7 @@ export default function GradeHero({
           <GradeRing score={report.grade_score} letter={report.grade_letter} color={color} />
           <span
             className="num-mono"
-            style={{ fontSize: 8.5, letterSpacing: '0.16em', color: 'var(--color-muted)', textAlign: 'center', maxWidth: 112 }}
+            style={{ fontSize: 10, letterSpacing: '0.14em', color: 'var(--color-muted)', textAlign: 'center', maxWidth: 120 }}
             title={locale === 'de'
               ? 'Gesamtnote für deine Form über diesen Zeitraum — aus Belastung, Intensität und Erholung'
               : 'Overall grade for your fitness across this period — from load, intensity and recovery'}

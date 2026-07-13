@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { startOfWeek, endOfWeek, isWithinInterval, differenceInHours } from 'date-fns'
-import { Target } from 'lucide-react'
+import { Target, ChevronRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useCountUp } from '../../hooks/useCountUp'
@@ -17,7 +18,7 @@ const RING_STROKE = 10
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRC = 2 * Math.PI * RING_RADIUS
 
-export default function WeeklyChallenge() {
+export default function WeeklyChallenge({ teaser = false }: { teaser?: boolean }) {
   const { locale, t } = useLocale()
   const de = locale === 'de'
   const today = new Date()
@@ -75,6 +76,38 @@ export default function WeeklyChallenge() {
   }
 
   const dashOffset = RING_CIRC * (1 - pct)
+
+  // Teaser variant (Today): the gamified ring lives on Social — here we show
+  // only a slim, read-only one-line load figure that links across to it.
+  if (teaser) {
+    return (
+      <Link
+        to="/dashboard?tab=social"
+        className="flex items-center justify-between gap-3 rounded-[14px] px-4 py-3 transition-colors"
+        style={{
+          backgroundColor: 'var(--color-paper-2)',
+          border: '1px solid var(--color-rule)',
+          textDecoration: 'none',
+        }}
+      >
+        <span className="flex items-baseline gap-2 min-w-0">
+          <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.18em' }}>
+            {de ? 'DIESE WOCHE' : 'THIS WEEK'}
+          </span>
+          <span className="num-mono" style={{ color: 'var(--color-ink)', fontSize: 16, fontWeight: 600 }}>
+            {thisWeekTSS}
+          </span>
+          <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 14 }}>
+            / {goal} TSS
+          </span>
+        </span>
+        <span className="inline-flex items-center gap-1 shrink-0" style={{ color: 'var(--color-muted)', fontSize: 12 }}>
+          {de ? 'Ring' : 'Ring'}
+          <ChevronRight size={13} strokeWidth={2} />
+        </span>
+      </Link>
+    )
+  }
 
   return (
     <div

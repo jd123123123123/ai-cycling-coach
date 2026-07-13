@@ -276,10 +276,10 @@ export default function ComplianceStrip() {
             <span
               className="num-display"
               style={{
-                fontSize: 'clamp(52px, 7vw, 72px)',
+                fontSize: 'clamp(26px, 7vw, 34px)',
                 color: gradeInfo.color,
                 lineHeight: 1,
-                filter: `drop-shadow(0 0 16px color-mix(in srgb, ${gradeInfo.color} 35%, transparent))`,
+                filter: `drop-shadow(0 0 12px color-mix(in srgb, ${gradeInfo.color} 32%, transparent))`,
               }}
             >
               {gradeInfo.letter}

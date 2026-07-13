@@ -27,8 +27,8 @@ export default function CausesPanel({ causes }: { causes: Cause[] }) {
                 <AlertTriangle size={15} strokeWidth={2} />
               </span>
               <div className="flex flex-col">
-                <span style={{ color: 'var(--color-ink)', fontSize: 13.5 }}>{c.label}</span>
-                <span style={{ color: 'var(--color-muted)', fontSize: 12 }}>{c.evidence}</span>
+                <span style={{ color: 'var(--color-ink)', fontSize: 14 }}>{c.label}</span>
+                <span style={{ color: 'var(--color-muted)', fontSize: 13 }}>{c.evidence}</span>
               </div>
             </div>
           )

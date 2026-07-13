@@ -12,16 +12,13 @@
  */
 import { Link } from 'react-router-dom'
 import { parseISO } from 'date-fns'
-import { BentoCell, BentoGrid } from '../../ui/BentoGrid'
 import ComplianceStrip from '../ComplianceStrip'
 import RampRate from '../RampRate'
-import WeekStrip from '../WeekStrip'
 import WeekVsLast from '../WeekVsLast'
 import DayPlanCard from '../DayPlanCard'
 import TrainingCalendar from '../TrainingCalendar'
-import DashboardSection from '../DashboardSection'
 import PillarSection from '../PillarSection'
-import { useT, useLocale } from '../../../contexts/LocaleContext'
+import { useLocale } from '../../../contexts/LocaleContext'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLanguage } from '../../../hooks/useLanguage'
@@ -145,6 +142,15 @@ function WeekPlanPrimary() {
     return activities.find(a => (a.date ?? a.started_at?.slice(0, 10)) === dateStr) ?? null
   }
 
+  // Detect a uniform placeholder duration: if every workout day carries the
+  // identical target, the "1.5h × 7" strip is a stub, not a real prescription.
+  // In that case hide the duration and show weekday + intensity dot only.
+  const workoutTargets = data.days
+    .filter((d) => d.category !== 'rest')
+    .map((d) => d.duration_seconds_target ?? 0)
+    .filter((v) => v > 0)
+  const durationsAreStub = new Set(workoutTargets).size <= 1
+
   return (
     <div className="flex flex-col gap-3">
       {/* 7-day pill row — TrainHero above owns the week framing now,
@@ -156,6 +162,7 @@ function WeekPlanPrimary() {
             day={day}
             language={language}
             activity={activityForDay(day.date)}
+            hideDuration={durationsAreStub}
           />
         ))}
       </div>
@@ -163,21 +170,14 @@ function WeekPlanPrimary() {
   )
 }
 
-// ─── Local wrapper components ─────────────────────────────────────────────────
-
-function ComplianceRampRow() {
-  return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
-      <div className="flex-1 min-w-0"><ComplianceStrip /></div>
-      <div className="flex-1 min-w-0"><RampRate /></div>
-    </div>
-  )
-}
-
-// ─── WeekTab — MECE pillars, matching Today ───────────────────────────────────
+// ─── WeekTab — MECE pillars, plan-first ───────────────────────────────────────
+//
+// Reordered so the *actual plan* leads: this week's sessions, then the full
+// calendar (expanded, above the fold). The week-over-week analytics — which
+// overlap the Analyze tab's job — are demoted into a single compact band at the
+// bottom rather than two large hero cards competing with the plan.
 
 export default function WeekTab() {
-  const t = useT()
   const { locale } = useLocale()
   const de = locale === 'de'
   return (
@@ -187,24 +187,21 @@ export default function WeekTab() {
         <WeekPlanPrimary />
       </PillarSection>
 
-      <PillarSection index="2" title={de ? 'Umsetzung' : 'Execution'}
-        question={de ? 'Halte ich mich an den Plan — und ist die Steigerung sicher?' : 'Am I on plan — and is the ramp safe?'}>
-        <ComplianceRampRow />
-      </PillarSection>
-
-      <PillarSection index="3" title={de ? 'Vergleich' : 'Trend'}
-        question={de ? 'Wie schlägt sich diese Woche gegen die letzte?' : 'How does this week stack up vs last?'}>
-        <BentoGrid>
-          <BentoCell span={2}><WeekStrip /></BentoCell>
-          <BentoCell span={1}><WeekVsLast /></BentoCell>
-        </BentoGrid>
-      </PillarSection>
-
-      <DashboardSection title={t('full_plan')} id="week-calendar" defaultExpanded={false}>
+      <PillarSection index="2" title={de ? 'Gesamtplan' : 'Full plan'}
+        question={de ? 'Wie sieht mein kompletter Plan aus?' : 'What does my whole plan look like?'}>
         <div className="min-w-0">
           <TrainingCalendar />
         </div>
-      </DashboardSection>
+      </PillarSection>
+
+      <PillarSection index="3" title={de ? 'Umsetzung & Vergleich' : 'Execution & trend'}
+        question={de ? 'Halte ich mich an den Plan — und sicher unterwegs?' : 'Am I on plan — and ramping safely?'}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+          <div className="flex-1 min-w-0"><ComplianceStrip /></div>
+          <div className="flex-1 min-w-0"><WeekVsLast /></div>
+          <div className="flex-1 min-w-0"><RampRate /></div>
+        </div>
+      </PillarSection>
     </div>
   )
 }

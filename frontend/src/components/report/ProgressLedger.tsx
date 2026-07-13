@@ -67,8 +67,8 @@ function ProgressRow({ item }: { item: DeltaItem }) {
 
       {open && (
         <div className="mt-2.5 flex flex-col gap-1">
-          <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 12 }}>{item.detail}</span>
-          <span style={{ color: 'var(--color-muted)', fontSize: 12 }}>{item.why}</span>
+          <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 13 }}>{item.detail}</span>
+          <span style={{ color: 'var(--color-muted)', fontSize: 13 }}>{item.why}</span>
         </div>
       )}
       {!open && <span className="sr-only">{de ? 'Details' : 'Details'}</span>}
@@ -77,19 +77,17 @@ function ProgressRow({ item }: { item: DeltaItem }) {
 }
 
 export default function ProgressLedger({
-  improvements, weaknesses, hasBaseline,
-}: { improvements: DeltaItem[]; weaknesses: DeltaItem[]; hasBaseline: boolean }) {
+  improvements, hasBaseline,
+}: { improvements: DeltaItem[]; hasBaseline: boolean }) {
   const { locale } = useLocale()
   const de = locale === 'de'
   const nUp = improvements.length
-  const nDown = weaknesses.length
 
-  const emptyMsg = (kind: 'up' | 'down') =>
-    !hasBaseline
-      ? (de ? 'Noch kein Vergleichszeitraum.' : 'No previous window to compare yet.')
-      : kind === 'up'
-        ? (de ? 'Nichts hat sich genug bewegt für einen Erfolg.' : 'Nothing moved enough to call a win.')
-        : (de ? 'Keine nennenswerten Rückschritte — sauberer Zeitraum.' : 'No significant regressions — clean window.')
+  // The limiters live in one place — CausesPanel ("Was dich bremst"). This
+  // ledger owns only the wins, so the two lists never restate the same metric.
+  const emptyMsg = !hasBaseline
+    ? (de ? 'Noch kein Vergleichszeitraum.' : 'No previous window to compare yet.')
+    : (de ? 'Nichts hat sich genug bewegt für einen Erfolg.' : 'Nothing moved enough to call a win.')
 
   return (
     <div className="rounded-[18px] p-5 sm:p-6" style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
@@ -99,34 +97,23 @@ export default function ProgressLedger({
             {de ? 'FORTSCHRITT · DAMALS → JETZT' : 'PROGRESS · THEN → NOW'}
           </span>
           <h3 className="mt-1" style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(19px, 2.2vw, 23px)', fontWeight: 500, color: 'var(--color-ink)', lineHeight: 1.1 }}>
-            {de ? 'Wie ich mich verändert habe' : 'How I’ve changed'}
+            {de ? 'Was ich verbessert habe' : 'What I’ve improved'}
           </h3>
         </div>
-        {hasBaseline && (
-          <div className="flex items-center gap-2.5 shrink-0 num-mono" style={{ fontSize: 11.5 }}>
+        {hasBaseline && nUp > 0 && (
+          <div className="shrink-0 num-mono" style={{ fontSize: 12 }}>
             <span style={{ color: 'var(--color-good)' }}>▲ {nUp} {de ? 'besser' : 'up'}</span>
-            <span style={{ color: 'var(--color-caution)' }}>▼ {nDown} {de ? 'offen' : 'to fix'}</span>
           </div>
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="flex flex-col gap-2.5">
-          <span className="eyebrow num-mono" style={{ color: 'var(--color-good)', fontSize: 9.5, letterSpacing: '0.22em' }}>
-            {de ? 'VERBESSERT' : 'IMPROVED'}
-          </span>
-          {nUp === 0
-            ? <p style={{ color: 'var(--color-muted)', fontSize: 12.5 }}>{emptyMsg('up')}</p>
-            : improvements.map((d) => <ProgressRow key={d.key} item={d} />)}
-        </div>
-        <div className="flex flex-col gap-2.5">
-          <span className="eyebrow num-mono" style={{ color: 'var(--color-caution)', fontSize: 9.5, letterSpacing: '0.22em' }}>
-            {de ? 'NOCH AUSBAUFÄHIG' : 'STILL LACKING'}
-          </span>
-          {nDown === 0
-            ? <p style={{ color: 'var(--color-muted)', fontSize: 12.5 }}>{emptyMsg('down')}</p>
-            : weaknesses.map((d) => <ProgressRow key={d.key} item={d} />)}
-        </div>
+      <div className="flex flex-col gap-2.5">
+        <span className="eyebrow num-mono" style={{ color: 'var(--color-good)', fontSize: 10, letterSpacing: '0.22em' }}>
+          {de ? 'VERBESSERT' : 'IMPROVED'}
+        </span>
+        {nUp === 0
+          ? <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>{emptyMsg}</p>
+          : improvements.map((d) => <ProgressRow key={d.key} item={d} />)}
       </div>
     </div>
   )

@@ -48,7 +48,7 @@ export default function TrajectoryCard({ traj }: { traj: Trajectory }) {
         </span>
       </div>
 
-      <p className="mt-1.5" style={{ color: 'var(--color-muted)', fontSize: 12, maxWidth: '64ch' }}>
+      <p className="mt-1.5" style={{ color: 'var(--color-muted)', fontSize: 13, maxWidth: '64ch' }}>
         {locale === 'de'
           ? 'CTL = deine langfristige Formbelastung (rollende Fitness).'
           : 'CTL = your long-run training load (rolling fitness).'}

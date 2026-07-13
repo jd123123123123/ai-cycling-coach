@@ -140,6 +140,32 @@ export default function WeekVsLast() {
 
   if (thisWeek.sessions === 0 && lastWeek.sessions === 0) return null
 
+  // First/empty week guard: until at least one ride is logged THIS week, a
+  // "-100% vs last week" reads as failure. Never paint an empty week red —
+  // suppress every delta and show one neutral, encouraging empty-state line.
+  if (thisWeek.sessions === 0) {
+    return (
+      <div
+        className="paper-grain rounded-[20px] px-5 py-4 sm:px-6 sm:py-5"
+        style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
+      >
+        <span className="eyebrow" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em' }}>
+          {de ? 'Diese Woche vs. letzte' : 'This week vs last'}
+        </span>
+        <p className="mt-2 text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+          {de
+            ? 'Diese Woche noch keine Einheit — starte deine erste Fahrt.'
+            : 'No session logged this week yet — start your first ride.'}
+        </p>
+        {lastWeek.sessions > 0 && (
+          <p className="num-mono text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
+            {de ? 'Letzte Woche' : 'Last week'}: {lastWeek.totalTSS > 0 ? `${Math.round(lastWeek.totalTSS)} TSS` : `${lastWeek.totalHours.toFixed(1)} h`} · {lastWeek.sessions} {de ? (lastWeek.sessions !== 1 ? 'Einheiten' : 'Einheit') : `session${lastWeek.sessions !== 1 ? 's' : ''}`}
+          </p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div
       className="paper-grain rounded-[20px] px-5 py-4 sm:px-6 sm:py-5"

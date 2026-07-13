@@ -173,7 +173,10 @@ export default function TodayHero() {
   const { data: snapshot } = useTodaySnapshot()
   const { data: trajectory } = useGoalTrajectory()
   const isMobile = useViewportIsMobile(640)
-  const ringSize = isMobile ? 108 : 140
+  // Ring shrunk ~20% (was 108 / 140) — the today's-workout tiles below are now
+  // the dominant actionable element, so the readiness ring reads as verdict,
+  // not spectacle.
+  const ringSize = isMobile ? 86 : 112
   const t = useT()
   const { locale } = useLocale()
   const de = locale === 'de'

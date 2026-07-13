@@ -1,12 +1,17 @@
 /**
- * TodayTab — executive-brief layout. Leads with the answer (today's call), then
- * four MECE pillars, each resolving exactly one question with no overlap:
- *   ① Heute (the call)  ② Fortschritt  ③ Belastung  ④ Konstanz
- * Context (season stats, badges, trivia, tools) is demoted to a collapsed "Mehr".
+ * TodayTab — executive-brief layout, scoped to exactly one job: "what do I do
+ * today, and am I ready for it?". Trend reporting (CTL/TSB/eFTP), the gamified
+ * weekly ring, and the consistency streak are MECE-owned by Analyze / Social,
+ * so Today only carries slim teasers that point there — never their full
+ * surfaces. Three tight pillars:
+ *   ① Heute   — readiness verdict + today's workout (the big actionable focus)
+ *   ② Woche   — compact load teaser → Social, form teaser → Analyze
+ *   ③ Verlauf — recent rides
  */
+import { Link } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
 import CoachBrief from '../CoachBrief'
 import AdaptiveDirectiveCard from '../AdaptiveDirectiveCard'
-import FormProgressPanel from '../FormProgressPanel'
 import MorningCheckin from '../MorningCheckin'
 import MorningRecap from '../MorningRecap'
 import { useLocale } from '../../../contexts/LocaleContext'
@@ -16,10 +21,30 @@ import MomentumChips from '../MomentumChips'
 import SeasonStats from '../SeasonStats'
 import RecentActivities from '../RecentActivities'
 import TodayHero from '../TodayHero'
-import StreakStrip from '../StreakStrip'
 import WeeklyChallenge from '../WeeklyChallenge'
 import DashboardSection from '../DashboardSection'
 import PillarSection from '../PillarSection'
+
+// One-line "Form is coming" teaser — the full fitness trend (CTL/TSB/eFTP)
+// lives in Analyze; Today just points there so the two surfaces never overlap.
+function FormTeaser({ de }: { de: boolean }) {
+  return (
+    <Link
+      to="/dashboard?tab=analyze"
+      className="flex items-center justify-between gap-3 rounded-[14px] px-4 py-3 transition-colors"
+      style={{
+        backgroundColor: 'var(--color-paper-2)',
+        border: '1px solid var(--color-rule)',
+        textDecoration: 'none',
+      }}
+    >
+      <span style={{ color: 'var(--color-ink)', fontSize: 14 }}>
+        {de ? 'Form kommt — Details in Analyse' : 'Form is coming — see Analyze'}
+      </span>
+      <ChevronRight size={15} strokeWidth={2} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+    </Link>
+  )
+}
 
 export default function TodayTab() {
   const { locale } = useLocale()
@@ -27,50 +52,37 @@ export default function TodayTab() {
   const copy = de
     ? {
         heroQ: 'Was mache ich heute — und bin ich bereit dafür?',
-        progress: 'Fortschritt', progressQ: 'Werde ich fitter oder ermüde ich?',
-        load: 'Belastung', loadQ: 'Erreiche ich mein Wochenziel?',
-        consistency: 'Konstanz', consistencyQ: 'Bleibe ich dran?',
+        week: 'Woche', weekQ: 'Belastung und Form auf einen Blick.',
         history: 'Verlauf', historyQ: 'Was habe ich zuletzt gemacht?',
         more: 'Mehr',
       }
     : {
         heroQ: "What do I do today — and am I ready for it?",
-        progress: 'Progress', progressQ: 'Am I getting fitter, or fatiguing?',
-        load: 'Load', loadQ: 'Am I hitting my weekly goal?',
-        consistency: 'Consistency', consistencyQ: 'Am I staying on it?',
+        week: 'Week', weekQ: 'Load and form at a glance.',
         history: 'History', historyQ: 'What have I done recently?',
         more: 'More',
       }
 
   return (
     <div className="flex flex-col gap-9 sm:gap-11">
-      {/* ── ① Today's call: the readiness verdict, the session, the check-in ── */}
+      {/* ── ① Today's call: the readiness verdict + today's session ── */}
       <PillarSection index="1" title={de ? 'Heute' : 'Today'} question={copy.heroQ}>
         <TodayHero />
         <AdaptiveDirectiveCard />
         <CoachBrief />
         <MorningCheckin />
-      </PillarSection>
-
-      {/* ── ② Progress: am I adapting? (full fitness trend lives in Analyze) ── */}
-      <PillarSection index="2" title={copy.progress} question={copy.progressQ}>
-        <FormProgressPanel />
         <MorningRecap />
         <MomentumChips />
       </PillarSection>
 
-      {/* ── ③ Load balance: is the input sustainable? ── */}
-      <PillarSection index="3" title={copy.load} question={copy.loadQ}>
-        <WeeklyChallenge />
+      {/* ── ② Week: slim load + form teasers that hand off to Social / Analyze ── */}
+      <PillarSection index="2" title={copy.week} question={copy.weekQ}>
+        <WeeklyChallenge teaser />
+        <FormTeaser de={de} />
       </PillarSection>
 
-      {/* ── ④ Consistency: am I showing up? ── */}
-      <PillarSection index="4" title={copy.consistency} question={copy.consistencyQ}>
-        <StreakStrip />
-      </PillarSection>
-
-      {/* ── ⑤ History: today's glance (deep records live in Analyze) ── */}
-      <PillarSection index="5" title={copy.history} question={copy.historyQ}>
+      {/* ── ③ History: today's glance (deep records live in Analyze) ── */}
+      <PillarSection index="3" title={copy.history} question={copy.historyQ}>
         <RecentActivities limit={6} />
       </PillarSection>
 

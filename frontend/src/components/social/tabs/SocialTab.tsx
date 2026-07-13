@@ -23,7 +23,6 @@ import {
   Crown,
 } from 'lucide-react'
 import PillarSection from '../../dashboard/PillarSection'
-import CoachSafetyBanner from '../CoachSafetyBanner'
 import PowerArena from '../PowerArena'
 import MemberFinder from '../MemberFinder'
 import DuelArena from '../DuelArena'
@@ -248,9 +247,9 @@ function weekVibe(o: {
   const { de, mode, lead, gap, streak, thisScore, dailyTarget } = o
   if (mode === 'rest')
     return {
-      emoji: '🛌',
-      title: de ? 'Ruhetag — und das zählt als Sieg.' : 'Rest day — and that counts as a win.',
-      sub: de ? 'Der stärkste Zug heute ist der, den du nicht machst. Dein Ring schließt durchs Ausruhen.' : 'Today’s strongest move is the one you don’t make. Your ring closes by resting.',
+      emoji: '⏸️',
+      title: de ? 'Ring pausiert.' : 'Ring paused.',
+      sub: de ? 'Deine Punkte sind bereit, sobald du fährst.' : 'Your points are ready the moment you ride.',
     }
   if (lead > 0)
     return {
@@ -284,10 +283,28 @@ function weekVibe(o: {
 }
 
 // ── Ring hero — the addictive centrepiece (Apple closing-ring) ──
-function RingHero({ animated, pct, target, beat, locale }: { animated: number; pct: number; target: number; beat: boolean; locale: Locale }) {
-  const size = 168, sw = 15, R = (size - sw) / 2, C = 2 * Math.PI * R
+// NEVER a giant empty ring for a 0 value: when the week is blank we render a
+// slim bar instead, per the shared type scale.
+function RingHero({ animated, pct, target, beat, empty, locale }: { animated: number; pct: number; target: number; beat: boolean; empty: boolean; locale: Locale }) {
   const color = beat ? '#FFD60A' : 'var(--color-forest-2)'
   const de = locale === 'de'
+
+  if (empty) {
+    return (
+      <div className="shrink-0 w-full sm:w-[172px] flex flex-col gap-2.5">
+        <div className="flex items-baseline gap-2">
+          <span className="num-display leading-none" style={{ fontSize: 'clamp(26px, 7vw, 34px)', color: 'var(--color-ink)' }}>0</span>
+          <span className="num-mono" style={{ fontSize: 10.5, color: 'var(--color-muted)', letterSpacing: '0.16em' }}>{de ? 'PUNKTE' : 'POINTS'}</span>
+        </div>
+        <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-rule)' }} aria-hidden>
+          <div style={{ width: '3%', height: '100%', backgroundColor: color, borderRadius: 999 }} />
+        </div>
+        <span className="num-mono" style={{ fontSize: 10.5, color: 'var(--color-ink-2)' }}>{de ? `Ziel ${Math.round(target)}` : `Goal ${Math.round(target)}`}</span>
+      </div>
+    )
+  }
+
+  const size = 168, sw = 15, R = (size - sw) / 2, C = 2 * Math.PI * R
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -300,7 +317,7 @@ function RingHero({ animated, pct, target, beat, locale }: { animated: number; p
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="num-display leading-none" style={{ fontSize: 46, color, fontVariationSettings: '"opsz" 144, "wght" 560' }}>{animated}</span>
+        <span className="num-display leading-none" style={{ fontSize: 'clamp(26px, 7vw, 34px)', color, fontVariationSettings: '"opsz" 144, "wght" 560' }}>{animated}</span>
         <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.16em', marginTop: 3 }}>{de ? 'PUNKTE' : 'POINTS'}</span>
         <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-ink-2)', marginTop: 4 }}>{de ? `Ziel ${Math.round(target)}` : `Goal ${Math.round(target)}`}</span>
       </div>
@@ -319,13 +336,13 @@ function CoolFactCard({ icon: Icon, value, unit, label, quip, accent }: {
         <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 30, height: 30, backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)` }}>
           <Icon size={16} strokeWidth={2} style={{ color }} />
         </span>
-        <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', fontSize: 9.5, letterSpacing: '0.18em' }}>{label}</span>
+        <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}>{label}</span>
       </div>
       <div className="flex items-baseline gap-1.5">
-        <span className="num-display leading-none" style={{ fontSize: 'clamp(26px, 7vw, 32px)', color: 'var(--color-ink)' }}>{value}</span>
-        <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{unit}</span>
+        <span className="num-display leading-none" style={{ fontSize: 'clamp(26px, 7vw, 34px)', color: 'var(--color-ink)' }}>{value}</span>
+        <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-muted)' }}>{unit}</span>
       </div>
-      <p className="text-[12.5px] leading-snug" style={{ color: 'var(--color-ink-2)' }}>{quip}</p>
+      <p className="text-[13px] leading-snug" style={{ color: 'var(--color-ink-2)' }}>{quip}</p>
     </div>
   )
 }
@@ -418,13 +435,15 @@ export default function SocialTab() {
 
   // ── Badges ──
   const lastWeekPerfect = lastWeek.dailyPct.length === 7 && lastWeek.dailyPct.every((p) => p >= 1)
+  const lastWeekClosedDays = lastWeek.dailyPct.filter((p) => p >= 1).length
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n))
   const badges = useMemo(() => [
-    { key: 'streak_7', icon: Flame, label: de ? '7-Tage-Serie' : '7-day streak', earned: consistency.streak >= 7, how: de ? '7 Tage in Folge den Ring schließen' : 'Close your ring 7 days running' },
-    { key: 'streak_30', icon: Flame, label: de ? '30-Tage-Serie' : '30-day streak', earned: consistency.streak >= 30, how: de ? '30 Tage am Stück dranbleiben' : 'Stay on it 30 days straight' },
-    { key: 'perfect_week', icon: CheckCircle2, label: de ? 'Perfekte Woche' : 'Perfect week', earned: lastWeekPerfect, how: de ? 'An allen 7 Tagen den Ring schließen' : 'Close the ring all 7 days' },
-    { key: 'most_improved', icon: TrendingUp, label: de ? 'Größter Sprung' : 'Most improved', earned: (improvement?.rate ?? 0) >= 0.05, how: de ? 'CTL in 28 Tagen um 5% steigern' : 'Grow CTL 5% in 28 days' },
-    { key: 'ring_week_win', icon: Trophy, label: de ? 'Woche geschlagen' : 'Beat last week', earned: beatLastWeek, how: de ? 'Den Ring-Score der Vorwoche übertreffen' : "Top last week's ring score" },
-  ], [consistency.streak, lastWeekPerfect, improvement, beatLastWeek, de])
+    { key: 'streak_7', icon: Flame, color: '#FF9F0A', label: de ? '7-Tage-Serie' : '7-day streak', earned: consistency.streak >= 7, progress: clamp01(consistency.streak / 7), how: de ? '7 Tage in Folge' : 'Close 7 days running' },
+    { key: 'streak_30', icon: Flame, color: '#FF375F', label: de ? '30-Tage-Serie' : '30-day streak', earned: consistency.streak >= 30, progress: clamp01(consistency.streak / 30), how: de ? '30 Tage am Stück' : 'Stay on it 30 days' },
+    { key: 'perfect_week', icon: CheckCircle2, color: 'var(--color-forest-2)', label: de ? 'Perfekte Woche' : 'Perfect week', earned: lastWeekPerfect, progress: clamp01(lastWeekClosedDays / 7), how: de ? 'Alle 7 Tage schließen' : 'Close all 7 days' },
+    { key: 'most_improved', icon: TrendingUp, color: 'var(--color-ink-blue)', label: de ? 'Größter Sprung' : 'Most improved', earned: (improvement?.rate ?? 0) >= 0.05, progress: clamp01((improvement?.rate ?? 0) / 0.05), how: de ? 'CTL +5% in 28 Tagen' : 'Grow CTL 5% / 28d' },
+    { key: 'ring_week_win', icon: Trophy, color: '#FFD60A', label: de ? 'Woche geschlagen' : 'Beat last week', earned: beatLastWeek, progress: lastScore > 0 ? clamp01(thisScore / lastScore) : (thisScore > 0 ? 1 : 0), how: de ? 'Vorwoche übertreffen' : "Top last week's score" },
+  ], [consistency.streak, lastWeekPerfect, lastWeekClosedDays, improvement, beatLastWeek, lastScore, thisScore, de])
   const earnedCount = badges.filter((b) => b.earned).length
 
   // ── Invite state ──
@@ -444,8 +463,6 @@ export default function SocialTab() {
 
   return (
     <div className="flex flex-col gap-9 sm:gap-11">
-      <CoachSafetyBanner />
-
       {/* ── ① Diese Woche — the ring ─────────────────────────────── */}
       <PillarSection
         index="1"
@@ -476,7 +493,7 @@ export default function SocialTab() {
 
             {/* Ring + reactive headline — stacks on mobile, row on sm+ */}
             <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:gap-7 sm:text-left">
-              <RingHero animated={heroCount} pct={ringPct} target={ringTarget} beat={beatLastWeek} locale={locale} />
+              <RingHero animated={heroCount} pct={ringPct} target={ringTarget} beat={beatLastWeek} empty={thisScore === 0} locale={locale} />
               <div className="flex-1 min-w-0 flex flex-col gap-2">
                 <span style={{ fontSize: 30, lineHeight: 1 }}>{vibe.emoji}</span>
                 <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(20px, 5.4vw, 26px)', fontWeight: 500, lineHeight: 1.12, letterSpacing: '-0.015em', color: 'var(--color-ink)' }}>
@@ -515,9 +532,18 @@ export default function SocialTab() {
         </div>
       </PillarSection>
 
-      {/* ── ② Coole Fakten — the fun, celebratory numbers ─────────── */}
+      {/* ── ② Duell — head-to-head, straight after the ring ───────── */}
       <PillarSection
         index="2"
+        title={de ? 'Duell' : 'Duel'}
+        question={de ? 'Schlage ich mein früheres Ich — und die Crew?' : 'Am I beating my past self — and the crew?'}
+      >
+        <DuelArena duel={duel} locale={locale} restMode={gate.mode === 'rest'} />
+      </PillarSection>
+
+      {/* ── ③ Coole Fakten — the fun, celebratory numbers ─────────── */}
+      <PillarSection
+        index="3"
         title={de ? 'Coole Fakten' : 'Cool Facts'}
         question={de ? 'Was habe ich diese Woche eigentlich angerichtet?' : 'What did I actually pull off this week?'}
       >
@@ -558,9 +584,9 @@ export default function SocialTab() {
         )}
       </PillarSection>
 
-      {/* ── ③ Die Kraft-Liga — how I stack up against every cyclist ── */}
+      {/* ── ④ Die Kraft-Liga — how I stack up against every cyclist ── */}
       <PillarSection
-        index="3"
+        index="4"
         title={de ? 'Die Kraft-Liga' : 'The Power League'}
         question={de ? 'Wie stehe ich gegen alle anderen Fahrer da?' : 'How do I stack up against every other rider?'}
       >
@@ -572,9 +598,9 @@ export default function SocialTab() {
         />
       </PillarSection>
 
-      {/* ── ④ Crew & Ehre — squad + honors + duel ────────────────── */}
+      {/* ── ⑤ Crew & Ehre — squad + honors ───────────────────────── */}
       <PillarSection
-        index="4"
+        index="5"
         title={de ? 'Crew & Ehre' : 'Crew & Honors'}
         question={de ? 'Mit wem messe ich mich, und was habe ich verdient?' : 'Who am I racing, and what have I earned?'}
       >
@@ -648,22 +674,35 @@ export default function SocialTab() {
           <span className="eyebrow num-mono" style={{ color: 'var(--color-muted)', letterSpacing: '0.22em', fontSize: 10 }}>{de ? 'AUSZEICHNUNGEN' : 'HONORS'}</span>
           <span className="num-mono" style={{ fontSize: 10.5, color: 'var(--color-amber)' }}>{earnedCount}/{badges.length} {de ? 'freigeschaltet' : 'unlocked'}</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-3 gap-2">
           {badges.map((b) => {
-            const Icon = b.earned ? b.icon : Lock
+            const Icon = b.icon
+            const pct = Math.round(b.progress * 100)
             return (
-              <div key={b.key} className="rounded-[16px] px-4 py-4 flex flex-col items-center text-center gap-2"
-                style={{ backgroundColor: 'var(--color-paper-2)', border: b.earned ? '1px solid rgba(255, 214, 10, 0.35)' : '1px solid var(--color-rule)', boxShadow: b.earned ? '0 0 16px rgba(255, 214, 10, 0.06) inset' : undefined, opacity: b.earned ? 1 : 0.62 }}>
-                <Icon size={20} strokeWidth={2} style={{ color: b.earned ? '#FFD60A' : 'var(--color-muted)' }} />
-                <span className="text-[12px] font-medium" style={{ color: 'var(--color-ink)' }}>{b.label}</span>
-                {!b.earned && <span className="text-[10px] leading-tight" style={{ color: 'var(--color-muted)' }}>{b.how}</span>}
+              <div key={b.key} className="rounded-[14px] px-2.5 py-3 flex flex-col items-center text-center gap-1.5"
+                style={{
+                  backgroundColor: b.earned ? `color-mix(in srgb, ${b.color} 10%, var(--color-paper-2))` : 'var(--color-paper-2)',
+                  border: b.earned ? `1px solid color-mix(in srgb, ${b.color} 45%, transparent)` : '1px solid var(--color-rule)',
+                  boxShadow: b.earned ? `0 0 14px color-mix(in srgb, ${b.color} 14%, transparent) inset` : undefined,
+                }}>
+                <span className="grid place-items-center rounded-full shrink-0" style={{ width: 30, height: 30, backgroundColor: b.earned ? `color-mix(in srgb, ${b.color} 18%, transparent)` : 'var(--color-rule)' }}>
+                  {b.earned ? <Icon size={15} strokeWidth={2.2} style={{ color: b.color }} /> : <Lock size={13} strokeWidth={2} style={{ color: 'var(--color-muted)' }} />}
+                </span>
+                <span className="text-[11px] font-medium leading-tight" style={{ color: b.earned ? 'var(--color-ink)' : 'var(--color-ink-2)' }}>{b.label}</span>
+                {b.earned ? (
+                  <span className="num-mono" style={{ fontSize: 8.5, letterSpacing: '0.14em', color: b.color }}>{de ? 'ERREICHT' : 'EARNED'}</span>
+                ) : (
+                  <div className="w-full flex flex-col items-center gap-1">
+                    <div className="w-full h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-rule)' }} aria-hidden>
+                      <div style={{ width: `${pct}%`, height: '100%', backgroundColor: `color-mix(in srgb, ${b.color} 60%, transparent)`, borderRadius: 999, transition: 'width 600ms cubic-bezier(.22,1,.36,1)' }} />
+                    </div>
+                    <span className="num-mono leading-tight" style={{ fontSize: 8.5, color: 'var(--color-muted)' }}>{b.how}</span>
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
-
-        {/* Duel Arena — gamified head-to-head, Past-You ↔ Crew */}
-        <DuelArena duel={duel} locale={locale} restMode={gate.mode === 'rest'} />
       </PillarSection>
     </div>
   )

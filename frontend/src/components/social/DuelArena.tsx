@@ -55,7 +55,7 @@ function DuelRow({ m, you, opp, de, delay }: { m: Metric; you: number; opp: numb
         : { c: 'var(--color-muted)', s: '=' }
   return (
     <div className="flex items-center gap-3" style={{ animation: `card-enter 420ms var(--ease-apple-default, ease) ${delay}ms both` }}>
-      <span className="num-mono shrink-0" style={{ width: 92, fontSize: 10.5, color: 'var(--color-muted)', letterSpacing: '0.04em' }}>
+      <span className="shrink-0" style={{ width: 112, fontSize: 14, color: 'var(--color-ink)', fontWeight: 500, whiteSpace: 'nowrap' }}>
         {de ? m.de : m.en}
       </span>
       {/* dumbbell track */}
@@ -65,7 +65,7 @@ function DuelRow({ m, you, opp, de, delay }: { m: Metric; you: number; opp: numb
         <span className="absolute top-1/2 -translate-y-1/2 rounded-full" style={{ left: `calc(${ox}% - 4px)`, width: 8, height: 8, background: oppColor, border: '1px solid var(--color-paper)' }} title={de ? 'Gegner' : 'Opponent'} />
         <span className="absolute top-1/2 -translate-y-1/2 rounded-full" style={{ left: `calc(${yx}% - 5px)`, width: 10, height: 10, background: youColor, boxShadow: `0 0 8px ${youColor}` }} title={de ? 'Du' : 'You'} />
       </div>
-      <span className="num-mono shrink-0 text-right" style={{ width: 58, fontSize: 11, color: chip.c, fontWeight: 600 }}>{chip.s}</span>
+      <span className="num-mono shrink-0 text-right" style={{ width: 64, fontSize: 14, color: chip.c, fontWeight: 600 }}>{chip.s}</span>
     </div>
   )
 }
@@ -139,7 +139,7 @@ export default function DuelArena({ duel, locale, restMode }: { duel: DuelRespon
         <>
           {/* Scoreline + headline dumbbell */}
           <div className="mt-4 mb-4 flex flex-col items-center text-center gap-1">
-            <span className="num-display leading-none" style={{ fontSize: 'clamp(30px, 8vw, 40px)', color: overallWin ? '#FFD60A' : 'var(--color-ink)' }}>
+            <span className="num-display leading-none" style={{ fontSize: 'clamp(26px, 7vw, 34px)', color: overallWin ? '#FFD60A' : 'var(--color-ink)' }}>
               {headCount}
             </span>
             <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)', letterSpacing: '0.14em' }}>

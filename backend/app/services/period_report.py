@@ -708,7 +708,7 @@ def build_load_dynamics(cur: WindowMetrics, lang: str = "en"):
     )
 
 
-async def build_trajectory(db: AsyncSession, user_id: int, phase: str | None):
+async def build_trajectory(db: AsyncSession, user_id: int, phase: str | None, lang: str = "en"):
     """Banister projection toward the goal event — the same PMC + athlete goals
     the live coach uses. Returns None only on hard failure; the underlying
     projection degrades gracefully to a no-goal CTL-trend observation."""
@@ -730,6 +730,7 @@ async def build_trajectory(db: AsyncSession, user_id: int, phase: str | None):
             user_pmc=pmc_full.get("total") or [],
             athlete_goals=goals,
             phase=phase or "maintenance",
+            lang=lang,
         )
         return Trajectory(
             days_to_goal=tp.days_to_goal,

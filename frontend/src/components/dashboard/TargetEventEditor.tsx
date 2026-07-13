@@ -95,18 +95,22 @@ export default function TargetEventEditor() {
         <label className="flex flex-col gap-1.5 sm:col-span-2">
           <span className="eyebrow" style={labelStyle}>{de ? 'PRIORITÄT' : 'PRIORITY'}</span>
           <div className="flex gap-2">
-            {(['A', 'B', 'C'] as Priority[]).map((p) => (
-              <button key={p} type="button" onClick={() => setPriority(p)}
-                className="flex-1 rounded-[10px] py-2 transition-colors"
-                style={{
-                  border: `1px solid ${priority === p ? 'var(--color-forest-2)' : 'var(--color-rule)'}`,
-                  background: priority === p ? 'color-mix(in srgb, var(--color-forest-2) 12%, transparent)' : 'var(--color-paper)',
-                  color: priority === p ? 'var(--color-forest-2)' : 'var(--color-ink-2)',
-                  fontSize: 13, fontWeight: 600,
-                }}>
-                {p}{p === 'A' ? (de ? ' · Hauptziel' : ' · Main') : p === 'B' ? (de ? ' · Nebenziel' : ' · Secondary') : (de ? ' · Mitnehmen' : ' · Train through')}
-              </button>
-            ))}
+            {(['A', 'B', 'C'] as Priority[]).map((p) => {
+              const word = p === 'A' ? (de ? 'Hauptziel' : 'Main') : p === 'B' ? (de ? 'Nebenziel' : 'Secondary') : 'Optional'
+              const on = priority === p
+              return (
+                <button key={p} type="button" onClick={() => setPriority(p)}
+                  className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[10px] min-h-[52px] transition-colors"
+                  style={{
+                    border: `1px solid ${on ? 'var(--color-forest-2)' : 'var(--color-rule)'}`,
+                    background: on ? 'color-mix(in srgb, var(--color-forest-2) 12%, transparent)' : 'var(--color-paper)',
+                    color: on ? 'var(--color-forest-2)' : 'var(--color-ink-2)',
+                  }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1 }}>{p}</span>
+                  <span className="whitespace-nowrap" style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '0.02em' }}>{word}</span>
+                </button>
+              )
+            })}
           </div>
         </label>
       </div>

@@ -14,6 +14,12 @@ interface DayPlanCardProps {
   language: CoachLanguage
   /** Pass-through activity so card doesn't refetch — WeekTab passes the matching activity from useActivitiesRange */
   activity?: ActivityRead | null
+  /**
+   * When true the per-day planned duration is a uniform placeholder (every
+   * workout day shows the same value), so we hide the number rather than print
+   * a repeated "1.5h" stub across the strip. Rest days still read "Ruhe".
+   */
+  hideDuration?: boolean
 }
 
 // Category → zone token (no new color literals)
@@ -51,7 +57,7 @@ function fullDateLabel(dateStr: string): string { return parsedDate(dateStr) ? f
  * Above fold: weekday letter + intensity dot + duration only.
  * Tap opens SideSheet with IntervalRibbon + rationale + activity link.
  */
-export default function DayPlanCard({ day, language, activity = null }: DayPlanCardProps) {
+export default function DayPlanCard({ day, language, activity = null, hideDuration = false }: DayPlanCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const t = useT()
   const { locale } = useLocale()
@@ -60,7 +66,10 @@ export default function DayPlanCard({ day, language, activity = null }: DayPlanC
   const isFutureDay = dateObj ? isFuture(dateObj) && !isToday(dateObj) : false
   const isTodayDay = day.is_today
   const dotColor = CATEGORY_DOT_COLOR[day.category] ?? 'var(--color-zone-2)'
-  const duration = day.duration_seconds_target ? formatHours(day.duration_seconds_target) : day.category === 'rest' ? (locale === 'de' ? 'Ruhe' : 'Rest') : '—'
+  const isRest = day.category === 'rest'
+  const duration = day.duration_seconds_target ? formatHours(day.duration_seconds_target) : isRest ? (locale === 'de' ? 'Ruhe' : 'Rest') : '—'
+  // Suppress a repeated placeholder duration on workout days; rest keeps "Ruhe".
+  const showDuration = isRest || !hideDuration
   const adaptedBlocks = adaptIntervals(day.intervals)
 
   return (
@@ -91,9 +100,11 @@ export default function DayPlanCard({ day, language, activity = null }: DayPlanC
           {dateNumber(day.date)}
         </span>
         <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0 }} aria-hidden />
-        <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10 }}>
-          {duration}
-        </span>
+        {showDuration && (
+          <span className="num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10 }}>
+            {duration}
+          </span>
+        )}
       </button>
 
       <SideSheet open={sheetOpen} onClose={() => setSheetOpen(false)} eyebrow={weekdayLetter(day.date)} title={fullDateLabel(day.date)} width={560}>
