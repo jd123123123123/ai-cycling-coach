@@ -39,20 +39,20 @@ function MetricTile({
 }) {
   return (
     <div
-      className="flex flex-col gap-1.5 rounded-2xl px-4 py-3.5 min-w-0"
+      className="flex flex-col gap-1 rounded-[14px] px-3 py-2.5 min-w-0"
       style={{
         backgroundColor: 'var(--color-paper-2)',
         border: '1px solid var(--color-rule)',
       }}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        <Icon size={13} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} aria-hidden />
+      <div className="flex items-center gap-1.5 min-w-0">
+        <Icon size={12} strokeWidth={2} style={{ color: 'var(--color-forest-2)' }} aria-hidden />
         <span
           className="eyebrow truncate"
           style={{
             color: 'var(--color-muted)',
-            fontSize: 10.5,
-            letterSpacing: '0.18em',
+            fontSize: 9.5,
+            letterSpacing: '0.12em',
           }}
         >
           {label}
@@ -60,7 +60,7 @@ function MetricTile({
       </div>
       <span
         className="leading-tight truncate"
-        style={{ color: 'var(--color-ink)', fontSize: 16, fontWeight: 600 }}
+        style={{ color: 'var(--color-ink)', fontSize: 15, fontWeight: 600 }}
         title={sub ? `${value} · ${sub}` : value}
       >
         {value}
@@ -205,7 +205,7 @@ export default function PrescribedWorkoutCard({
 
       {/* Headline metrics — the three numbers a rider actually needs at a
          glance: time commitment, target zone (framework-backed), load. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <MetricTile
           icon={Clock}
           label={t('metric_duration')}
@@ -233,10 +233,10 @@ export default function PrescribedWorkoutCard({
         />
       </div>
 
-      {/* Interval ribbon — only when there's a real zone/effort profile to draw.
-         On a rest day (no blocks) the ribbon would collapse to an empty grey
-         placeholder bar, so we render just the one-line summary instead. */}
-      {displayed.blocks.length > 0 ? (
+      {/* Interval ribbon — only when there's a REAL multi-block profile to draw.
+         A single steady block (recovery/endurance) renders as a flat grey bar
+         that reads as broken, so for ≤1 block we show the one-line summary. */}
+      {displayed.blocks.length > 1 ? (
         <IntervalRibbon
           blocks={displayed.blocks}
           summary={summaryLine(displayed, simpleMode, locale === 'de')}

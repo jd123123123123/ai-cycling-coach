@@ -128,10 +128,11 @@ export default function DayPlanCard({ day, language, activity = null, hideDurati
           {/* Intensity dot */}
           <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0 }} aria-hidden />
 
-          {/* Session name */}
+          {/* Session name — wrap to 2 lines (German titles are long); no ellipsis
+             so distinct sessions stay distinguishable. */}
           <span
-            className="flex-1 min-w-0 truncate"
-            style={{ color: isRest ? 'var(--color-muted)' : 'var(--color-ink)', fontSize: 15, fontWeight: 500, fontStyle: isRest ? 'italic' : 'normal' }}
+            className="flex-1 min-w-0 line-clamp-2"
+            style={{ color: isRest ? 'var(--color-muted)' : 'var(--color-ink)', fontSize: 14.5, fontWeight: 500, lineHeight: 1.25, fontStyle: isRest ? 'italic' : 'normal' }}
           >
             {sessionName}
           </span>

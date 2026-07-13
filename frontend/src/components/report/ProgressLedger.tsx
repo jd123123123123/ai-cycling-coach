@@ -40,7 +40,7 @@ function ProgressRow({ item }: { item: DeltaItem }) {
       style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
     >
       <div className="flex items-center gap-3">
-        <span className="flex-1 min-w-0" style={{ color: 'var(--color-ink)', fontSize: 13.5, lineHeight: 1.3, overflowWrap: 'anywhere' }}>
+        <span className="flex-1 min-w-0" style={{ color: 'var(--color-ink)', fontSize: 13.5, lineHeight: 1.3, overflowWrap: 'normal', wordBreak: 'normal' }}>
           {item.label}
         </span>
         <div className="flex items-center gap-1.5 shrink-0">

@@ -82,9 +82,13 @@ export default function TomorrowCard({ data }: TomorrowCardProps) {
   const color = TONE_COLOR[tone]
   // Localize the workout title via the same category→title map the main workout
   // card uses (raw backend titles like "Recovery spin" are English-only).
-  const localizedTitle = planned?.category
-    ? simpleTitleFor(planned.category as Parameters<typeof simpleTitleFor>[0], planned?.title ?? '', locale)
-    : planned?.title
+  // Prefer the workout category; fall back to the intensity chip (planned data
+  // often has no category field) so the title localizes instead of leaking EN.
+  const localizedTitle = simpleTitleFor(
+    (planned?.category ?? chip) as Parameters<typeof simpleTitleFor>[0],
+    planned?.title ?? '',
+    locale,
+  )
   const title =
     localizedTitle ||
     (locale === 'de'
