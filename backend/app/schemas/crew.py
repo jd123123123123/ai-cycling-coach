@@ -71,17 +71,20 @@ class StandingRow(BaseModel):
     user_id: int
     handle: str
     is_you: bool
-    weekly_score: int            # 0..1050, sum of daily points (cap 150/day)
-    weekly_tss: int
-    daily_pct: list[int]         # 7 entries Mon..Sun, capped at 150
+    weekly_score: int            # sum of daily points (cap 150/day) over the window
+    weekly_tss: int              # total TSS over the window
+    daily_pct: list[int]         # ≤14 summed buckets across the window, capped at 150/day
 
 
 class StandingsResponse(BaseModel):
     crew_id: int
-    week_start: str              # ISO yyyy-mm-dd
-    week_end: str                # ISO yyyy-mm-dd (Sunday)
+    week_start: str              # ISO yyyy-mm-dd — window start
+    week_end: str                # ISO yyyy-mm-dd — window end
     daily_target_tss: int
     standings: list[StandingRow]
+    period: str = "week"                 # day | week | month | year
+    period_start: str | None = None      # ISO yyyy-mm-dd (mirrors week_start)
+    period_end: str | None = None        # ISO yyyy-mm-dd (mirrors week_end)
 
 
 # ── Duel — head-to-head rich stats (You vs Last Week / You vs Crew) ──

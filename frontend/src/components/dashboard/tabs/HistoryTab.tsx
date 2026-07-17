@@ -218,6 +218,83 @@ export default function HistoryTab() {
     ]
   }, [summary, de])
 
+  // Raw TSS delta % (numeric) drives the at-a-glance verdict headline.
+  const tssPct = summary.prev.tss ? Math.round(((summary.cur.tss - summary.prev.tss) / summary.prev.tss) * 100) : null
+  const hasPrev = summary.prev.tss > 0 || summary.prev.n > 0
+  const verdict = useMemo(() => {
+    const c = summary.cur
+    const tss = Math.round(c.tss).toLocaleString(de ? 'de' : 'en')
+    const sess = `${c.n} ${c.n === 1 ? (de ? 'Einheit' : 'session') : de ? 'Einheiten' : 'sessions'}`
+    if (!hasPrev || tssPct === null) {
+      return {
+        word: de ? 'Baseline im Aufbau' : 'Building baseline',
+        color: 'var(--color-strain)',
+        sentence: de ? `${tss} TSS · ${sess} — noch kein Vormonat zum Vergleich` : `${tss} TSS · ${sess} — no prior month to compare yet`,
+      }
+    }
+    const up = tssPct >= 0
+    const word = tssPct >= 10 ? (de ? 'Starker Monat' : 'Strong month')
+      : tssPct <= -10 ? (de ? 'Ruhigerer Monat' : 'Lighter month')
+      : (de ? 'Solider Monat' : 'Steady month')
+    const color = tssPct >= 10 ? 'var(--color-recovery)' : tssPct <= -10 ? 'var(--color-amber)' : 'var(--color-strain)'
+    const trend = de
+      ? `${up ? 'plus' : 'minus'} ${Math.abs(tssPct)}% ggü. Vormonat`
+      : `${up ? 'up' : 'down'} ${Math.abs(tssPct)}% on last month`
+    return { word, color, sentence: `${tss} TSS, ${trend} · ${sess}` }
+  }, [summary, tssPct, hasPrev, de])
+
+  // Headline numbers for the top summary card (load / hours / sessions).
+  const headline = useMemo(() => {
+    const c = summary.cur, p = summary.prev
+    return [
+      { label: de ? 'Belastung' : 'Load', value: Math.round(c.tss).toLocaleString(de ? 'de' : 'en'), unit: 'TSS', delta: pctDelta(c.tss, p.tss) },
+      { label: de ? 'Stunden' : 'Hours', value: fmtHm(c.sec), unit: 'h', delta: pctDelta(c.sec, p.sec) },
+      { label: de ? 'Einheiten' : 'Sessions', value: `${c.n}`, unit: '', delta: countDelta(c.n - p.n) },
+    ]
+  }, [summary, de])
+
+  // Per-day TSS across the current month (filtered) — reveals the month's shape.
+  const monthDaily = useMemo(() => {
+    const y = today.getFullYear(), mo = today.getMonth()
+    const n = getDaysInMonth(today)
+    return Array.from({ length: n }, (_, i) => {
+      const dnum = i + 1
+      const date = new Date(y, mo, dnum)
+      const key = format(date, 'yyyy-MM-dd')
+      return { dnum, key, v: Math.round(dayTss.get(key) ?? 0), future: date > today, isToday: dnum === today.getDate() }
+    })
+  }, [dayTss, today])
+  const monthDailyPeak = Math.max(...monthDaily.map((d) => d.v), 0)
+
+  // Sport split of the month's TSS (unfiltered) — the All view breakdown.
+  const monthSplit = useMemo(() => {
+    const y = today.getFullYear(), mo = today.getMonth()
+    const acc: Record<string, number> = { cycling: 0, running: 0, gym: 0 }
+    for (const a of all) {
+      const d = dateOf(a)
+      if (d.getFullYear() !== y || d.getMonth() !== mo) continue
+      if (a.sport in acc) acc[a.sport] += a.tss ?? 0
+    }
+    const total = acc.cycling + acc.running + acc.gym
+    return { acc, total }
+  }, [all, today])
+
+  // Weekly TSS within the current month for the active sport (single-sport view).
+  const monthWeekly = useMemo(() => {
+    const mStart = startOfMonth(today)
+    const first = startOfWeek(mStart, { weekStartsOn: 1 })
+    const weeks: { key: string; v: number }[] = []
+    for (let c = first; c <= today; c = addDays(c, 7)) weeks.push({ key: format(c, 'yyyy-MM-dd'), v: 0 })
+    const idx = new Map(weeks.map((w, i) => [w.key, i]))
+    for (const a of activities) {
+      const d = dateOf(a)
+      if (isNaN(d.getTime()) || d < first) continue
+      const i = idx.get(format(startOfWeek(d, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
+      if (i != null) weeks[i].v += a.tss ?? 0
+    }
+    return weeks.map((w) => ({ ...w, v: Math.round(w.v) }))
+  }, [activities, today])
+
   // Weekly TSS trend (12 weeks)
   const weekly = useMemo(() => {
     const buckets = Array.from({ length: 12 }, (_, i) => {
@@ -459,15 +536,51 @@ export default function HistoryTab() {
         </div>
       </div>
 
-      {/* This-Month summary → load-form drill-down */}
-      <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col gap-[18px]" style={cardStyle}>
+      {/* ── Month-in-review summary card — verdict + headline numbers ─────────── */}
+      <div className="rounded-[24px] p-5 flex flex-col gap-4" style={{ ...cardStyle, background: `linear-gradient(160deg, color-mix(in srgb, ${verdict.color} 12%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)` }}>
+        <div className="flex items-center justify-between">
+          <span className="eyebrow">{de ? 'Monat im Überblick' : 'Month in review'}</span>
+          <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{format(today, 'MMMM yyyy')}</span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="flex items-center gap-2">
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: verdict.color }} />
+            <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{verdict.word}</span>
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'var(--color-ink-2)' }}>{verdict.sentence}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {headline.map((s) => (
+            <div key={s.label} className="flex flex-col gap-[5px] rounded-[14px] p-3" style={{ background: 'var(--color-surface-2)' }}>
+              <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--color-muted)' }}>{s.label}</span>
+              <span className="flex items-end gap-[3px]">
+                <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{s.value}</span>
+                {s.unit && <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 3 }}>{s.unit}</span>}
+              </span>
+              {s.delta ? (
+                <span className="inline-flex items-center gap-[2px]" style={{ color: s.delta.up ? 'var(--color-recovery)' : 'var(--color-move)' }}>
+                  {s.delta.up ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+                  <span className="num-mono" style={{ fontSize: 11, fontWeight: 700 }}>{s.delta.text}</span>
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? '— Basis' : '— baseline'}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* This-Month summary — numeric tiles + daily-load chart + sport split/trend */}
+      <div className="rounded-[24px] p-5 flex flex-col gap-5" style={cardStyle}>
         <div className="flex items-center justify-between">
           <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Dieser Monat' : 'This Month'}</span>
-          <span className="flex items-center gap-1.5">
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{format(today, 'MMMM yyyy')}</span>
-            <ChevronRight size={16} className="hover-arrow" style={{ color: 'var(--color-muted)' }} />
-          </span>
+          <Link to="/load-form" className="hover-card inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>
+            {de ? 'Belastung & Form' : 'Load & form'}
+            <ChevronRight size={14} className="hover-arrow" style={{ color: 'var(--color-accent)' }} />
+          </Link>
         </div>
+
+        {/* Numeric tiles */}
         <div className="grid grid-cols-3 gap-x-3 gap-y-[18px]">
           {summaryStats.map((s) => (
             <div key={s.label} className="flex flex-col gap-[5px]">
@@ -485,8 +598,92 @@ export default function HistoryTab() {
             </div>
           ))}
         </div>
-        <div className="hover-reveal" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</div>
-      </Link>
+
+        {/* Daily load — per-day TSS across the month, hover any bar */}
+        <div className="flex flex-col gap-2.5" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 18 }}>
+          <div className="flex items-center justify-between">
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Tägliche Belastung' : 'Daily load'}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'TSS/Tag · Balken antippen' : 'TSS/day · tap a bar'}</span>
+          </div>
+          {monthDailyPeak > 0 ? (
+            <HoverBars
+              height={92}
+              gap={2}
+              radius={2}
+              defaultColor="var(--color-strain)"
+              bars={monthDaily.map((d) => ({
+                value: d.future ? 0 : d.v,
+                valueLabel: d.v > 0 ? `${d.v} TSS` : (de ? 'Ruhetag' : 'Rest day'),
+                label: format(parseISO(d.key), de ? 'EEE, d. MMM' : 'EEE, MMM d'),
+                highlight: d.isToday,
+              }))}
+            />
+          ) : (
+            <div className="grid place-items-center rounded-[14px]" style={{ height: 92, background: 'var(--color-surface-2)', fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>
+              {de ? 'Noch keine Einheiten diesen Monat' : 'No sessions logged this month yet'}
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{format(startOfMonth(today), de ? 'd. MMM' : 'MMM d')}</span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{format(today, de ? 'd. MMM' : 'MMM d')}</span>
+          </div>
+        </div>
+
+        {/* Filter = All → sport split of month TSS · single sport → its weekly trend */}
+        {filter === 'all' ? (
+          <div className="flex flex-col gap-2.5" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 18 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Sport-Aufteilung' : 'Sport split'}</span>
+            {monthSplit.total > 0 ? (
+              <>
+                <div className="flex w-full overflow-hidden rounded-full" style={{ height: 12, background: 'var(--color-surface-2)' }}>
+                  {(['cycling', 'running', 'gym'] as const).map((s) => {
+                    const pct = (monthSplit.acc[s] / monthSplit.total) * 100
+                    return pct > 0 ? <span key={s} style={{ width: `${pct}%`, background: sportColor(s) }} /> : null
+                  })}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                  {(['cycling', 'running', 'gym'] as const).map((s) => {
+                    const label = s === 'cycling' ? (de ? 'Rad' : 'Ride') : s === 'running' ? (de ? 'Lauf' : 'Run') : (de ? 'Kraft' : 'Strength')
+                    const pct = Math.round((monthSplit.acc[s] / monthSplit.total) * 100)
+                    return (
+                      <span key={s} className="flex items-center gap-1.5">
+                        <span style={{ width: 7, height: 7, borderRadius: 999, background: sportColor(s) }} />
+                        <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>{label}</span>
+                        <span className="num-mono" style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-ink)' }}>{pct}%</span>
+                        <span className="num-mono" style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--color-muted)' }}>{Math.round(monthSplit.acc[s])} TSS</span>
+                      </span>
+                    )
+                  })}
+                </div>
+              </>
+            ) : (
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Noch keine Belastung diesen Monat' : 'No load logged this month yet'}</span>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 18 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Wöchentlicher Verlauf' : 'Weekly trend'}</span>
+            {monthWeekly.some((w) => w.v > 0) ? (
+              <HoverBars
+                height={80}
+                gap={8}
+                defaultColor={sportColor(filter)}
+                bars={monthWeekly.map((w) => {
+                  const monday = parseISO(w.key)
+                  return {
+                    value: w.v,
+                    valueLabel: `${w.v} TSS`,
+                    label: `${format(monday, de ? 'd. MMM' : 'MMM d')} – ${format(addDays(monday, 6), de ? 'd. MMM' : 'MMM d')}`,
+                    color: sportColor(filter),
+                  }
+                })}
+              />
+            ) : (
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Noch keine Einheiten diesen Monat' : 'No sessions logged this month yet'}</span>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Month calendar → load-form drill-down */}
       <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>

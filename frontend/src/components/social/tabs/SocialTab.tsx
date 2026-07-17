@@ -17,7 +17,7 @@ import {
 import {
   useDuel, useCrewStandings, useMyCrew, useCreateCrew, useLeaveCrew,
 } from '../../../hooks/useCrew'
-import type { DuelStats } from '../../../api/crew'
+import type { DuelStats, CrewPeriod } from '../../../api/crew'
 import {
   useDiscover, useIncomingInvites, useConnect, useAcceptInvite, useDeclineInvite,
 } from '../../../hooks/useConnections'
@@ -38,6 +38,15 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { celebrate } from '../../../lib/confetti'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
+
+// Crew-leaderboard window options + their copy (subtitle prefix + row suffix).
+const BOARD_PERIODS: { id: CrewPeriod; en: string; de: string; phraseEn: string; phraseDe: string }[] = [
+  { id: 'day', en: 'Day', de: 'Tag', phraseEn: 'today', phraseDe: 'heute' },
+  { id: 'week', en: 'Week', de: 'Woche', phraseEn: 'this week', phraseDe: 'diese Woche' },
+  { id: 'month', en: 'Month', de: 'Monat', phraseEn: 'this month', phraseDe: 'diesen Monat' },
+  { id: 'year', en: 'Year', de: 'Jahr', phraseEn: 'this year', phraseDe: 'dieses Jahr' },
+]
+const capFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const innerStyle = { background: 'var(--color-surface-2)' } as const
 
 // Weekly personal load-challenge target (TSS). A round, honest weekly-volume goal.
@@ -121,7 +130,8 @@ export default function SocialTab() {
   const { locale } = useLocale()
   const de = locale === 'de'
   const { data: duel } = useDuel()
-  const { data: standings } = useCrewStandings()
+  const [boardPeriod, setBoardPeriod] = useState<CrewPeriod>('week')
+  const { data: standings } = useCrewStandings(boardPeriod)
   const { data: myCrew } = useMyCrew()
 
   // ── Connections: incoming invites + find people ──
@@ -257,6 +267,9 @@ export default function SocialTab() {
   }, [you, rival, de])
   const youScore = metrics.filter((m) => m.youWin).length * 10
   const rivalScore = metrics.filter((m) => !m.youWin).length * 10
+
+  // Copy for the selected leaderboard window (subtitle prefix + row suffix).
+  const boardPhrase = BOARD_PERIODS.find((p) => p.id === boardPeriod) ?? BOARD_PERIODS[1]
 
   // ── Leaderboard rows (real standings, ranked by weekly score) ──
   const board = useMemo(
@@ -503,12 +516,36 @@ export default function SocialTab() {
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-0.5">
             <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Crew-Rangliste' : 'Crew Leaderboard'}</span>
-            <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? `Diese Woche · ${hasCrew ? crewSize : '—'} Freunde` : `This week · ${hasCrew ? `your ${crewSize} friends` : 'your crew'}`}</span>
+            <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? `${capFirst(boardPhrase.de)} · ${hasCrew ? crewSize : '—'} Freunde` : `${capFirst(boardPhrase.en)} · ${hasCrew ? `your ${crewSize} friends` : 'your crew'}`}</span>
           </div>
           <div className="inline-flex items-center gap-[5px] rounded-full" style={{ background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)', padding: '5px 10px' }}>
             <Scale size={13} style={{ color: 'var(--color-recovery)' }} />
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-recovery)' }}>{de ? 'Normalisiert' : 'Normalized'}</span>
           </div>
+        </div>
+
+        {/* Day / Week / Month / Year window toggle */}
+        <div className="flex gap-1 rounded-full" style={{ background: 'var(--color-surface-2)', padding: 3 }}>
+          {BOARD_PERIODS.map((p) => {
+            const active = p.id === boardPeriod
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setBoardPeriod(p.id)}
+                aria-pressed={active}
+                className="flex-1 rounded-full"
+                style={{
+                  padding: '7px 4px', fontSize: 12,
+                  fontWeight: active ? 700 : 600,
+                  color: active ? 'var(--color-ink)' : 'var(--color-ink-2)',
+                  background: active ? 'var(--color-paper-2)' : 'transparent',
+                  border: active ? '1px solid var(--color-rule)' : '1px solid transparent',
+                  transition: 'color 120ms, background 120ms',
+                }}
+              >{de ? p.de : p.en}</button>
+            )
+          })}
         </div>
 
         {/* Metric chips (design chrome — ranking runs on real weekly load) */}
@@ -536,6 +573,7 @@ export default function SocialTab() {
           <>
             {board.map((s, i) => {
               const activeDays = s.daily_pct?.filter((d) => d > 0).length ?? 0
+              const bucketCount = s.daily_pct?.length ?? 7
               const gapToLead = Math.round(board[0].weekly_score - s.weekly_score)
               return (
               <div key={s.user_id} className="hover-card flex flex-col rounded-[12px]" style={{ background: s.is_you ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : 'transparent', padding: '8px 10px' }}>
@@ -544,7 +582,7 @@ export default function SocialTab() {
                   <span className="num-display grid place-items-center rounded-full shrink-0" style={{ width: 34, height: 34, fontSize: 14, color: 'var(--color-ink)', background: avColor(s.handle) }}>{initial(s.handle)}</span>
                   <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                     <span className="truncate" style={{ fontSize: 14, fontWeight: s.is_you ? 700 : 600, color: 'var(--color-ink)' }}>{s.handle}{s.is_you && <span style={{ fontWeight: 500, color: 'var(--color-muted)' }}> · {de ? 'du' : 'you'}</span>}</span>
-                    <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{Math.round(s.weekly_tss)} TSS · {de ? 'diese Woche' : 'this week'}</span>
+                    <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{Math.round(s.weekly_tss)} TSS · {de ? boardPhrase.phraseDe : boardPhrase.phraseEn}</span>
                   </div>
                   <div className="flex items-end gap-[3px]">
                     <span className="num-display" style={{ fontSize: 19, color: s.is_you ? 'var(--color-accent)' : 'var(--color-ink)' }}>{Math.round(s.weekly_score)}</span>
@@ -558,7 +596,7 @@ export default function SocialTab() {
                     <MiniStat label={de ? 'RANG' : 'RANK'} value={`${i + 1} / ${board.length}`} />
                     <MiniStat label={de ? 'LAST' : 'LOAD'} value={`${Math.round(s.weekly_tss)} TSS`} />
                     <MiniStat label={de ? 'PUNKTE' : 'SCORE'} value={`${Math.round(s.weekly_score)}`} />
-                    <MiniStat label={de ? 'AKTIV' : 'ACTIVE'} value={de ? `${activeDays}/7 Tage` : `${activeDays}/7 days`} />
+                    <MiniStat label={de ? 'AKTIV' : 'ACTIVE'} value={de ? `${activeDays}/${bucketCount} aktiv` : `${activeDays}/${bucketCount} active`} />
                     {i > 0 && <MiniStat label={de ? 'RÜCKSTAND' : 'TO LEAD'} value={`${gapToLead} ${de ? 'Pkt' : 'pts'}`} />}
                   </div>
                 </div>

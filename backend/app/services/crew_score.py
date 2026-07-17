@@ -90,6 +90,36 @@ def _week_dates(week_start: date) -> list[date]:
     return [week_start + timedelta(days=i) for i in range(WEEK_LEN)]
 
 
+def _window_dates(start_on: date, end_on: date) -> list[date]:
+    """Inclusive list of local days over [start_on, end_on]."""
+    if end_on < start_on:
+        return []
+    span = (end_on - start_on).days + 1
+    return [start_on + timedelta(days=i) for i in range(span)]
+
+
+def _downsample_points(points: list[int], max_buckets: int = 14) -> list[int]:
+    """Collapse a per-day points series into ≤ max_buckets contiguous buckets,
+    each the SUM of its days, so a row's mini-strip stays bounded regardless of
+    window length. Short windows (day=1, week=7) pass through untouched; a month
+    (~30 days) collapses to ~weekly buckets (4-5); a year (~365 days) to 12
+    monthly-ish buckets."""
+    n = len(points)
+    if n <= max_buckets:
+        return list(points)
+    if n <= 62:
+        buckets = (n + 6) // 7        # ~weekly grouping → month ≈ 4-5 buckets
+    else:
+        buckets = 12                  # year → 12 monthly-ish buckets
+    buckets = max(1, min(max_buckets, buckets))
+    out: list[int] = []
+    for i in range(buckets):
+        lo = i * n // buckets
+        hi = (i + 1) * n // buckets
+        out.append(sum(points[lo:hi]))
+    return out
+
+
 def _activity_kj(a: Activity) -> float:
     """Best-available work estimate in kJ. avg power × time is truest; fall back
     to NP (×0.9 to approximate avg) then to calories (kcal → kJ)."""
@@ -247,38 +277,48 @@ async def crew_duel(
     }
 
 
-async def crew_standings(
+async def crew_standings_window(
     db: AsyncSession,
     crew_id: int,
-    week_start: date,            # Monday in any of the athletes' tz; we treat
-                                 # this as the canonical "week-start" calendar
-                                 # date that all members share for the cup.
+    start_on: date,             # first local day of the window (inclusive)
+    end_on: date,               # last local day of the window (inclusive)
     caller_user_id: int,
 ) -> dict:
-    """Compute the standings for `crew_id` for the week starting `week_start`.
+    """Compute the standings for `crew_id` over the inclusive local-day window
+    [start_on, end_on]. Same scoring math as the weekly cup — each day a rider
+    earns min(DAILY_CAP, dayTSS/daily_target)×100 points — just summed over an
+    arbitrary number of days. The `daily_pct` mini-strip is downsampled to
+    ≤14 summed buckets so it stays bounded on long windows.
 
-    Returns the shape that maps to `StandingsResponse` in the schema module.
+    Returns the shape that maps to `StandingsResponse` in the schema module;
+    week_start/week_end (and period_start/period_end) are the window bounds.
     """
+    if end_on < start_on:
+        end_on = start_on
+
+    caller_target = DAILY_TARGET_DEFAULT
     user_ids = await _crew_member_user_ids(db, crew_id)
     if not user_ids:
         return {
             "crew_id": crew_id,
-            "week_start": week_start.isoformat(),
-            "week_end": (week_start + timedelta(days=6)).isoformat(),
-            "daily_target_tss": DAILY_TARGET_DEFAULT,
+            "week_start": start_on.isoformat(),
+            "week_end": end_on.isoformat(),
+            "period_start": start_on.isoformat(),
+            "period_end": end_on.isoformat(),
+            "daily_target_tss": caller_target,
             "standings": [],
         }
 
-    # Wide UTC window covers any participant tz. Slice into local days
+    # Wide UTC window (±1 day) covers any participant tz. Slice into local days
     # per-athlete below.
     window_start_utc = datetime.combine(
-        week_start - timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+        start_on - timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
     )
     window_end_utc = datetime.combine(
-        week_start + timedelta(days=WEEK_LEN), datetime.min.time(), tzinfo=timezone.utc
+        end_on + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
     )
 
-    week_days = _week_dates(week_start)
+    window_days = _window_dates(start_on, end_on)
     standings: list[dict] = []
 
     for uid in user_ids:
@@ -291,8 +331,8 @@ async def crew_standings(
         except Exception:
             tz = ZoneInfo("UTC")
 
-        # Per-day TSS bucket
-        per_day = {d: 0.0 for d in week_days}
+        # Per-day TSS bucket over the window.
+        per_day = {d: 0.0 for d in window_days}
         acts = await _activities_for_user_in_window(
             db, uid, window_start_utc, window_end_utc
         )
@@ -306,26 +346,28 @@ async def crew_standings(
         )
         daily_target = _daily_target_tss(weekly_hours)
 
-        daily_pct: list[int] = []
-        weekly_score = 0
-        weekly_tss = 0
-        for d in week_days:
+        day_points: list[int] = []
+        score = 0
+        total_tss = 0
+        for d in window_days:
             tss = per_day[d]
-            weekly_tss += int(round(tss))
+            total_tss += int(round(tss))
             # cap at DAILY_CAP * 100 = 150 points
             ratio = (tss / daily_target) if daily_target > 0 else 0.0
             pts = int(round(min(DAILY_CAP, ratio) * 100))
-            daily_pct.append(pts)
-            weekly_score += pts
+            day_points.append(pts)
+            score += pts
 
         standings.append(
             {
                 "user_id": uid,
                 "handle": display_handle(user),
                 "is_you": uid == caller_user_id,
-                "weekly_score": weekly_score,
-                "weekly_tss": weekly_tss,
-                "daily_pct": daily_pct,
+                # Response keeps the weekly_* field names for back-compat;
+                # they now carry the whole-window totals.
+                "weekly_score": score,
+                "weekly_tss": total_tss,
+                "daily_pct": _downsample_points(day_points),
             }
         )
 
@@ -333,7 +375,6 @@ async def crew_standings(
 
     # Headline daily_target_tss is the caller's own bar — the standings rows
     # already encode each athlete's own target inside daily_pct.
-    caller_target = DAILY_TARGET_DEFAULT
     if caller_user_id in user_ids:
         _, caller_profile = await _user_context(db, caller_user_id)
         caller_target = _daily_target_tss(
@@ -342,8 +383,25 @@ async def crew_standings(
 
     return {
         "crew_id": crew_id,
-        "week_start": week_start.isoformat(),
-        "week_end": (week_start + timedelta(days=6)).isoformat(),
+        "week_start": start_on.isoformat(),
+        "week_end": end_on.isoformat(),
+        "period_start": start_on.isoformat(),
+        "period_end": end_on.isoformat(),
         "daily_target_tss": caller_target,
         "standings": standings,
     }
+
+
+async def crew_standings(
+    db: AsyncSession,
+    crew_id: int,
+    week_start: date,            # Monday in any of the athletes' tz; we treat
+                                 # this as the canonical "week-start" calendar
+                                 # date that all members share for the cup.
+    caller_user_id: int,
+) -> dict:
+    """Weekly Squad Cup standings — thin wrapper over `crew_standings_window`
+    for the Mon..Sun week starting `week_start`."""
+    return await crew_standings_window(
+        db, crew_id, week_start, week_start + timedelta(days=6), caller_user_id
+    )

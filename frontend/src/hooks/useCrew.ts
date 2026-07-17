@@ -12,6 +12,7 @@ import {
   leaveCrew,
   revokeCrewInvite,
   type CrewMineResponse,
+  type CrewPeriod,
   type DiscoverMember,
   type DuelResponse,
   type StandingsResponse,
@@ -47,10 +48,10 @@ export function useMyCrew() {
   })
 }
 
-export function useCrewStandings(week?: string) {
+export function useCrewStandings(period: CrewPeriod = 'week', week?: string) {
   return useQuery<StandingsResponse>({
-    queryKey: [...STANDINGS_KEY_BASE, week ?? 'current'],
-    queryFn: () => fetchCrewStandings(week),
+    queryKey: [...STANDINGS_KEY_BASE, period, week ?? 'current'],
+    queryFn: () => fetchCrewStandings(period, week),
     staleTime: 60 * 1000,
     refetchOnWindowFocus: true,
     retry: (failureCount, error: unknown) => {

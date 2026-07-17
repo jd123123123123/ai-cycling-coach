@@ -41,7 +41,7 @@ from app.services.crew_score import (
     _handle_from_email,
     challenge_value_for_user,
     crew_duel,
-    crew_standings,
+    crew_standings_window,
 )
 
 router = APIRouter(prefix="/crews", tags=["crews"])
@@ -484,27 +484,55 @@ async def my_standings(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
     week: str | None = None,
+    period: str = "week",
 ) -> StandingsResponse:
-    """Squad Cup standings for the caller's crew.
+    """Standings for the caller's crew over a selectable window.
 
-    `week` accepts an ISO yyyy-mm-dd; the Monday of that date's ISO week is
-    used as the canonical week-start. Defaults to the caller's local current
-    week.
+    `period` is one of day | week | month | year, mapped to a window in the
+    caller's local tz: day → [today, today]; week → [Mon..Sun]; month →
+    [1st of month .. today]; year → [Jan 1 .. today].
+
+    `week` (ISO yyyy-mm-dd) still works for back-compat: the Monday of that
+    date's ISO week is used and `period` is forced to "week".
     """
     membership = await _user_membership(db, current_user.id)
     if membership is None:
         raise HTTPException(status_code=404, detail="not in a crew")
 
+    today = await _athlete_local_today(db, current_user.id)
+
     if week:
+        # Back-compat: explicit week pin overrides the period selector.
         try:
             base = date.fromisoformat(week)
         except ValueError:
             raise HTTPException(status_code=400, detail="bad week date")
+        start_on = _monday_of(base)
+        end_on = start_on + timedelta(days=6)
+        period_name = "week"
     else:
-        base = await _athlete_local_today(db, current_user.id)
-    week_start = _monday_of(base)
+        period_name = (period or "week").lower()
+        if period_name == "day":
+            start_on = end_on = today
+        elif period_name == "month":
+            start_on = today.replace(day=1)
+            end_on = today
+        elif period_name == "year":
+            start_on = today.replace(month=1, day=1)
+            end_on = today
+        else:  # week (default / unknown)
+            period_name = "week"
+            start_on = _monday_of(today)
+            end_on = start_on + timedelta(days=6)
 
-    payload = await crew_standings(db, membership.crew_id, week_start, current_user.id)
+    # Never iterate future days for open-ended windows (month/year end today).
+    if period_name in ("month", "year"):
+        end_on = min(end_on, today)
+
+    payload = await crew_standings_window(
+        db, membership.crew_id, start_on, end_on, current_user.id
+    )
+    payload["period"] = period_name
     return StandingsResponse(**payload)
 
 

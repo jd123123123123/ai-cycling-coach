@@ -33,13 +33,15 @@ export interface CrewMineResponse {
   pending_invites: CrewInviteRead[]
 }
 
+export type CrewPeriod = 'day' | 'week' | 'month' | 'year'
+
 export interface StandingRow {
   user_id: number
   handle: string
   is_you: boolean
-  weekly_score: number
-  weekly_tss: number
-  daily_pct: number[]   // 7 entries, Mon..Sun
+  weekly_score: number  // sum of daily points over the window
+  weekly_tss: number    // total TSS over the window
+  daily_pct: number[]   // ≤14 summed buckets across the window
 }
 
 export interface StandingsResponse {
@@ -48,6 +50,9 @@ export interface StandingsResponse {
   week_end: string
   daily_target_tss: number
   standings: StandingRow[]
+  period?: CrewPeriod
+  period_start?: string | null
+  period_end?: string | null
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -90,10 +95,14 @@ export async function revokeCrewInvite(inviteId: number): Promise<void> {
 }
 
 export async function fetchCrewStandings(
+  period?: CrewPeriod,
   week?: string,
 ): Promise<StandingsResponse> {
+  const params: Record<string, string> = {}
+  if (period) params.period = period
+  if (week) params.week = week
   const res = await apiClient.get<StandingsResponse>('/crews/me/standings', {
-    params: week ? { week } : undefined,
+    params: Object.keys(params).length ? params : undefined,
   })
   return res.data
 }
