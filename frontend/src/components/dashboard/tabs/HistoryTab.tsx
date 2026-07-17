@@ -145,7 +145,9 @@ export default function HistoryTab() {
   const { locale } = useLocale()
   const de = locale === 'de'
   const today = useMemo(() => new Date(), [])
-  const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 200), [today]), today)
+  // Pull a full year of history (API caps a single range at 366 days) so "See all"
+  // truly shows all past workouts, not just the last few months.
+  const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 365), [today]), today)
   const { data: power } = usePowerProfile()
   const [filter, setFilter] = useState<Filter>('all')
   // "See all" toggle for the Recent Activities list (collapsed → 5, expanded → all).

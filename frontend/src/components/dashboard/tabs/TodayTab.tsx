@@ -34,15 +34,6 @@ function readinessColor(score: number | null): string {
   return 'var(--color-move)'
 }
 
-function SubScore({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="flex-1 flex flex-col items-center gap-1">
-      <span className="num-display" style={{ fontSize: 20, color: color ?? 'var(--color-ink)' }}>{value}</span>
-      <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-muted)' }}>{label}</span>
-    </div>
-  )
-}
-
 export default function TodayTab() {
   const { locale } = useLocale()
   const { user } = useAuth()
@@ -58,8 +49,13 @@ export default function TodayTab() {
   const metrics = metricsResp?.metrics ?? []
   const latest = [...metrics].reverse().find((m) => m.hrv_status != null || m.resting_hr != null || m.sleep_score != null) ?? null
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
-  const readiness = evidence.readiness as Record<string, unknown> | undefined
-  const score = (readiness?.score as number | null | undefined)
+  // ONE readiness story across surfaces: derive the headline with the EXACT
+  // same chain the Recovery tab uses (live Garmin training-readiness snapshot →
+  // deterministic composite of HRV/battery/sleep). Both tabs read the same
+  // snapshot + the same 30-day metrics window, so the hero number here and the
+  // "% recovered" number on Recovery are guaranteed to be the same value —
+  // never two look-alike numbers that silently disagree.
+  const score = snapshot?.training_readiness
     ?? computeReadiness(latest?.hrv_status ?? null, latest?.body_battery ?? null, latest?.sleep_score ?? null)
   const rColor = readinessColor(score ?? null)
   const tier = readinessTier(score ?? null)
@@ -325,11 +321,124 @@ export default function TodayTab() {
       'Syncing your signals… your game plan is seconds away.',
     ])
   })()
-  // Plain-language read of the headline state — short verb form.
-  const readWord = tier === 'peak' || tier === 'ready' ? (de ? 'Bereit zu trainieren' : 'Primed to train')
-    : tier === 'caution' ? (de ? 'Locker angehen' : 'Ease into it')
-    : tier === 'rest' ? (de ? 'Erholen' : 'Recover')
-    : (de ? 'Lade…' : 'Loading…')
+  // Human wrap-up line — prefer the coach's REAL LLM verdict (richer, personal,
+  // already synthesized from today's evidence + any post-ride review); fall back
+  // to the deterministic witty line when the brief carries no verdict yet.
+  const verdictLine = brief?.verdict?.trim()
+  const wrapLine = verdictLine && verdictLine.length > 0 ? verdictLine : heroLine
+
+  // DAY-STATE-AWARE decision pill — the one-glance "today's move". It must never
+  // contradict the wrap-up line (or tell an athlete to "train" after they've
+  // already trained). Priority: already trained today → session logged (+ a
+  // recover nuance when depleted); rest day prescribed → rest day; otherwise the
+  // readiness tier decides go-hard / go-controlled / recover.
+  const { pillWord, pillColor } = (() => {
+    if (trainedToday) {
+      return roughRecovery
+        ? { pillWord: de ? 'Einheit erledigt · erholen' : 'Session logged · recover', pillColor: 'var(--color-amber)' }
+        : { pillWord: de ? 'Einheit erledigt' : 'Session logged', pillColor: 'var(--color-recovery)' }
+    }
+    if (isRestDay) return { pillWord: de ? 'Ruhetag' : 'Rest day', pillColor: 'var(--color-recovery)' }
+    if (tier === 'peak' || tier === 'ready') return { pillWord: de ? 'Bereit zu trainieren' : 'Primed to train', pillColor: rColor }
+    if (tier === 'caution') return { pillWord: de ? 'Kontrolliert trainieren' : 'Train controlled', pillColor: rColor }
+    if (tier === 'rest') return { pillWord: de ? 'Erholen · locker' : 'Recover · go easy', pillColor: rColor }
+    return { pillWord: de ? 'Lade…' : 'Loading…', pillColor: rColor }
+  })()
+
+  // ── MOMENT-ADAPTIVE HERO ───────────────────────────────────────────────────
+  // The hero surfaces DIFFERENT, moment-relevant signals. Detected from real
+  // data: whether a session is already logged today, and the wall-clock hour.
+  //   • post    → trained today: session wrap-up (what you did + recover + next)
+  //   • evening → not trained, ≥18:00: wind-down (recovery + tomorrow + sleep)
+  //   • morning → not trained, else: overnight-recovery story + what's on deck
+  const hour = today.getHours()
+  const moment: 'post' | 'evening' | 'morning' = trainedToday ? 'post' : hour >= 18 ? 'evening' : 'morning'
+
+  const sleepHours = latest?.sleep_detail?.total_s != null ? latest.sleep_detail.total_s / 3600 : null
+  // Session IF — prefer the review's measured intensity factor, else derive it
+  // from today's real TSS + moving time (same IF math as the prescribed card).
+  const sessionIF = review?.intensity_factor?.actual
+    ?? (exMin > 0 && moveLoad > 0 ? Math.sqrt(moveLoad / ((exMin / 60) * 100)) : null)
+  const gradeInfo = (g: NonNullable<typeof review>['grade']) => {
+    switch (g) {
+      case 'perfect': return { t: de ? 'A+ · perfekt' : 'A+ · perfect', c: 'var(--color-recovery)' }
+      case 'strong': return { t: de ? 'Stark' : 'Strong', c: 'var(--color-recovery)' }
+      case 'okay': return { t: de ? 'Solide' : 'Solid', c: 'var(--color-stand)' }
+      case 'overcooked': return { t: de ? 'Zu hart' : 'Overcooked', c: 'var(--color-amber)' }
+      case 'undercooked': return { t: de ? 'Zu leicht' : 'Undercooked', c: 'var(--color-amber)' }
+      default: return { t: '—', c: 'var(--color-ink)' }
+    }
+  }
+  const tomorrow = brief?.tomorrow_plan ?? null
+  const chipLabel = (c: string | undefined): string | undefined => {
+    if (!c) return undefined
+    const en: Record<string, string> = { recovery: 'Recovery', endurance: 'Endurance', tempo: 'Tempo', threshold: 'Threshold', vo2: 'VO₂', race: 'Race' }
+    const dede: Record<string, string> = { recovery: 'Erholung', endurance: 'Grundlage', tempo: 'Tempo', threshold: 'Schwelle', vo2: 'VO₂', race: 'Rennen' }
+    return (de ? dede : en)[c] ?? c
+  }
+
+  interface Tile { label: string; value: string; unit?: string; sub?: string; subColor?: string; color?: string }
+  const momentLabel = moment === 'post'
+    ? (de ? 'Einheit abgeschlossen' : 'Session wrap-up')
+    : moment === 'evening'
+      ? (de ? 'Ausklang' : 'Wind-down')
+      : (de ? 'Erholung über Nacht' : 'Overnight recovery')
+
+  const hrvSub = typeof hrvDelta === 'number'
+    ? { text: `${hrvDelta >= 0 ? '+' : ''}${Math.round(hrvDelta)}%`, color: hrvDelta >= 0 ? 'var(--color-recovery)' : 'var(--color-amber)' }
+    : null
+
+  const momentTiles: Tile[] = (() => {
+    if (moment === 'post') {
+      const g = review ? gradeInfo(review.grade) : null
+      return [
+        { label: de ? 'Dauer' : 'Duration', value: exMin > 0 ? `${exMin}` : '—', unit: exMin > 0 ? 'min' : '' },
+        { label: 'TSS', value: (hasTss || moveLoad > 0) ? `${moveLoad}` : '—', sub: (hasTss || moveLoad > 0) ? `${loadPct}% ${de ? 'Ziel' : 'goal'}` : undefined },
+        { label: de ? 'Intensität' : 'Intensity', value: sessionIF != null ? sessionIF.toFixed(2) : (wIntensity ? wIntensity.z : '—'), unit: sessionIF != null ? 'IF' : '', sub: wIntensity ? wIntensity.t : undefined },
+        { label: de ? 'Note' : 'Grade', value: g ? g.t : '—', color: g ? g.c : undefined },
+      ]
+    }
+    if (moment === 'evening') {
+      const sleepTarget = roughRecovery ? '8.5' : '8'
+      return [
+        { label: de ? 'Erholung' : 'Recovery', value: bodyBattery != null ? `${Math.round(bodyBattery)}` : '—', unit: bodyBattery != null ? '%' : '', color: 'var(--color-recovery)' },
+        { label: de ? 'Morgen' : 'Tomorrow', value: tomorrow?.predicted_tss != null ? `${Math.round(tomorrow.predicted_tss)}` : (isRestDay ? (de ? 'Ruhe' : 'Rest') : '—'), unit: tomorrow?.predicted_tss != null ? 'TSS' : '', sub: chipLabel(tomorrow?.intensity_chip) },
+        { label: de ? 'Schlafziel' : 'Sleep target', value: sleepTarget, unit: 'h', color: 'var(--color-stand)' },
+      ]
+    }
+    // morning
+    const tiles: Tile[] = [
+      { label: 'HRV', value: hrvNow != null ? `${Math.round(hrvNow)}` : '—', unit: hrvNow != null ? 'ms' : '', sub: hrvSub?.text, subColor: hrvSub?.color, color: 'var(--color-recovery)' },
+      { label: de ? 'Schlaf' : 'Sleep', value: sleepHours != null ? sleepHours.toFixed(1) : (sleepScore != null ? `${Math.round(sleepScore)}` : '—'), unit: sleepHours != null ? 'h' : '', sub: sleepScore != null ? `Score ${Math.round(sleepScore)}` : undefined, color: 'var(--color-stand)' },
+      { label: de ? 'Ruhepuls' : 'Resting HR', value: restingHr != null ? `${Math.round(restingHr)}` : '—', unit: restingHr != null ? 'bpm' : '', color: 'var(--color-move)' },
+    ]
+    if (!isRestDay && workout) {
+      tiles.push({ label: de ? 'Heute' : 'On deck', value: workout.predicted_tss != null ? `${Math.round(workout.predicted_tss)}` : '—', unit: workout.predicted_tss != null ? 'TSS' : '', sub: wIntensity ? wIntensity.z : undefined, color: 'var(--color-accent)' })
+    }
+    return tiles
+  })()
+
+  // "One thing that matters now" — a single moment-specific, real-signal line.
+  const focusLine: string | null = (() => {
+    if (moment === 'post') {
+      const nudge = review?.next_session_nudge?.trim() || brief?.regeneration?.bullets?.[0]?.trim()
+      if (nudge) return nudge
+      return de ? 'Priorität jetzt: auffüllen, dehnen, früh ins Bett.' : 'Priority now: refuel, stretch, early night.'
+    }
+    if (moment === 'evening') {
+      if (tomorrow?.description?.trim()) return `${de ? 'Morgen' : 'Tomorrow'}: ${tomorrow.description.trim()}`
+      if (!isRestDay && wTitle) return `${de ? 'Morgen wartet' : 'Up next'}: ${wTitle}`
+      return de ? 'Heute Abend zählt Schlaf — er baut die Form von morgen.' : "Tonight, sleep is the work — it builds tomorrow's form."
+    }
+    // morning
+    if (!isRestDay && wTitle) return `${de ? 'Fokus heute' : "Today's focus"}: ${wTitle}`
+    return de ? 'Fokus heute: Erholung ist die Aufgabe.' : "Today's focus: recovery is the assignment."
+  })()
+
+  // Momentum cues — a training streak + a real 7-day fitness (CTL) trend. Both
+  // are honest, real-data motivators; rendered as small chips, never hype.
+  const showStreak = streak > 0
+  const showFitnessTrend = dCtl != null
 
   return (
     <div className="flex flex-col gap-6 pb-4">
@@ -375,28 +484,61 @@ export default function TodayTab() {
           </ScoreRing>
           <div className="flex-1 min-w-0 flex flex-col gap-2">
             <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Bereitschaft' : 'Readiness'}</span>
-            <span className="inline-flex items-center gap-1.5 self-start rounded-full px-2.5 py-1" style={{ background: `color-mix(in srgb, ${rColor} 15%, transparent)` }}>
-              <span style={{ width: 7, height: 7, borderRadius: 999, background: rColor }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: rColor }}>{readWord}</span>
+            <span className="inline-flex items-center gap-1.5 self-start rounded-full px-2.5 py-1" style={{ background: `color-mix(in srgb, ${pillColor} 15%, transparent)` }}>
+              <span style={{ width: 7, height: 7, borderRadius: 999, background: pillColor }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: pillColor }}>{pillWord}</span>
             </span>
-            <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.4 }}>{heroLine}</p>
+            <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.4 }}>{wrapLine}</p>
           </div>
         </Link>
 
+        {/* Momentum cues — real streak + 7-day fitness trend, small chips */}
+        {(showStreak || showFitnessTrend) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {showStreak && (
+              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
+                <Flame size={13} style={{ color: 'var(--color-amber)' }} />
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>{streak} {de ? 'Tage Serie' : 'day streak'}</span>
+              </span>
+            )}
+            {showFitnessTrend && (
+              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
+                {dCtl! >= 0 ? <TrendingUp size={13} style={{ color: 'var(--color-recovery)' }} /> : <TrendingDown size={13} style={{ color: 'var(--color-muted)' }} />}
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>{de ? 'Fitness' : 'Fitness'} {dCtl! >= 0 ? '+' : ''}{dCtl} <span style={{ color: 'var(--color-muted)', fontWeight: 600 }}>(7d)</span></span>
+              </span>
+            )}
+          </div>
+        )}
+
         <div style={{ height: 1, background: 'var(--color-rule)' }} />
 
-        {/* Inputs that feed the one readiness score above — labeled so they read
-            as components, never as a rival headline number. Recovery = Body
-            Battery (a real Garmin recovery reserve, distinct from readiness). */}
+        {/* Moment-adaptive metric row — the RIGHT signals for right now:
+            morning = overnight recovery (HRV Δ / Sleep / RHR / on-deck);
+            post-session = wrap-up (Duration / TSS / IF / Grade);
+            evening = wind-down (Recovery / Tomorrow / Sleep target). */}
         <div className="flex flex-col gap-2.5">
-          <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{de ? 'Was in den Wert einfliesst' : 'What feeds this score'}</span>
+          <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{momentLabel}</span>
           <div className="flex">
-            <SubScore label={de ? 'Akku' : 'Battery'} value={bodyBattery != null ? `${Math.round(bodyBattery)}%` : '—'} color="var(--color-recovery)" />
-            <div style={{ width: 1, background: 'var(--color-rule)' }} />
-            <SubScore label="Form" value={typeof tsb === 'number' ? `${tsb >= 0 ? '+' : ''}${Math.round(tsb)}` : '—'} color="var(--color-strain)" />
-            <div style={{ width: 1, background: 'var(--color-rule)' }} />
-            <SubScore label={de ? 'Schlaf' : 'Sleep'} value={sleepScore != null ? `${Math.round(sleepScore)}` : '—'} color="var(--color-stand)" />
+            {momentTiles.map((t, i) => (
+              <div key={i} className="flex-1 flex items-stretch">
+                {i > 0 && <div style={{ width: 1, background: 'var(--color-rule)' }} />}
+                <div className="flex-1 flex flex-col items-center gap-1 px-1">
+                  <span className="flex items-baseline gap-0.5">
+                    <span className="num-display" style={{ fontSize: 19, color: t.color ?? 'var(--color-ink)', lineHeight: 1 }}>{t.value}</span>
+                    {t.unit && <span style={{ fontSize: 10, color: 'var(--color-muted)' }}>{t.unit}</span>}
+                  </span>
+                  <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-muted)', textAlign: 'center' }}>{t.label}</span>
+                  {t.sub && <span style={{ fontSize: 10, fontWeight: 700, color: t.subColor ?? 'var(--color-ink-2)', lineHeight: 1 }}>{t.sub}</span>}
+                </div>
+              </div>
+            ))}
           </div>
+          {focusLine && (
+            <div className="flex items-start gap-2" style={{ marginTop: 2 }}>
+              <Sparkles size={13} strokeWidth={2.2} style={{ color: rColor, marginTop: 2, flexShrink: 0 }} />
+              <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{focusLine}</p>
+            </div>
+          )}
         </div>
       </div>
 

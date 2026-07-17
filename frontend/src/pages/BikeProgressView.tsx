@@ -472,48 +472,11 @@ export default function BikeProgressView() {
             ))}
           </div>
 
-          {/* ── Summary: period-over-period headline ──────────────────── */}
-          <Card accent gap={16} pad={20}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.accent }}>
-                  {de ? `ZUSAMMENFASSUNG · ${rangeLabel.toUpperCase()}` : `SUMMARY · ${rangeLabel.toUpperCase()}`}
-                </span>
-                <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: C.ink, lineHeight: 1.35 }}>{verdict}</span>
-              </div>
-              <Pill color={C.accent} bg={soft(C.accent, 15)}>{de ? `${granTxt}` : `${granTxt} view`}</Pill>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-              <MetricTile label="TSS" value={noRides ? DASH : String(Math.round(tssNow))} cur={hasPrior ? tssNow : null} prev={hasPrior ? tssPrev : null} />
-              <MetricTile label={de ? 'STUNDEN' : 'HOURS'} value={noRides ? DASH : n1(hoursNow)?.toString() ?? DASH} unit="h" cur={hasPrior ? hoursNow : null} prev={hasPrior ? hoursPrev : null} digits={1} />
-              <MetricTile label={de ? 'DISTANZ' : 'DISTANCE'} value={noRides ? DASH : String(Math.round(distNow))} unit="km" cur={hasPrior ? distNow : null} prev={hasPrior ? distPrev : null} />
-              <MetricTile label={de ? 'Ø CTL' : 'AVG CTL'} value={ctlNow != null ? String(Math.round(ctlNow)) : DASH} cur={ctlNow} prev={ctlPrev} />
-            </div>
-            {/* Range-adaptive TSS trend — daily / weekly / monthly buckets */}
-            {tssBuckets.some((b) => b.value > 0) ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.ink2 }}>{de ? 'Belastung (TSS)' : 'Training load (TSS)'}</span>
-                  <span style={{ fontSize: 11, color: C.muted }}>{de ? `${granTxt} Buckets` : `${granTxt} buckets`}</span>
-                </div>
-                <HoverBars
-                  height={96}
-                  radius={5}
-                  defaultColor={C.accent}
-                  bars={tssBuckets.map((b, i) => ({
-                    value: b.value,
-                    valueLabel: `${Math.round(b.value)} TSS`,
-                    label: b.label,
-                    highlight: i === tssBuckets.length - 1,
-                  }))}
-                />
-              </>
-            ) : (
-              <span style={{ fontSize: 12, color: C.muted }}>{emptyMsg}</span>
-            )}
-          </Card>
+          {/* ═══ 1 · WHERE YOU STAND ═══ */}
+          <SectionHeader tick={C.accent} title={de ? 'WO DU STEHST' : 'WHERE YOU STAND'}
+            sub={de ? 'Deine Radform genau jetzt' : 'Your cycling fitness right now'} />
 
-          {/* ── Hero: Functional Threshold Power ──────────────────────── */}
+          {/* ── Hero: Functional Threshold Power (the headline number) ── */}
           <Card gap={20} pad={22}>
             <div className="flex items-center justify-between">
               <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: C.muted }}>
@@ -579,9 +542,50 @@ export default function BikeProgressView() {
             </div>
           </Card>
 
-          {/* ═══ PROGRESS ═══ */}
-          <SectionHeader tick={C.accent} title={de ? 'FORTSCHRITT' : 'PROGRESS'}
-            sub={de ? `Was du aufgebaut hast · ${monthsSpan} Monate` : `What you've built · ${monthsSpan} months`} />
+          {/* ── Summary: period-over-period verdict + training load ───── */}
+          <Card accent gap={16} pad={20}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
+                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.accent }}>
+                  {de ? `ZUSAMMENFASSUNG · ${rangeLabel.toUpperCase()}` : `SUMMARY · ${rangeLabel.toUpperCase()}`}
+                </span>
+                <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: C.ink, lineHeight: 1.35 }}>{verdict}</span>
+              </div>
+              <Pill color={C.accent} bg={soft(C.accent, 15)}>{de ? `${granTxt}` : `${granTxt} view`}</Pill>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+              <MetricTile label="TSS" value={noRides ? DASH : String(Math.round(tssNow))} cur={hasPrior ? tssNow : null} prev={hasPrior ? tssPrev : null} />
+              <MetricTile label={de ? 'STUNDEN' : 'HOURS'} value={noRides ? DASH : n1(hoursNow)?.toString() ?? DASH} unit="h" cur={hasPrior ? hoursNow : null} prev={hasPrior ? hoursPrev : null} digits={1} />
+              <MetricTile label={de ? 'DISTANZ' : 'DISTANCE'} value={noRides ? DASH : String(Math.round(distNow))} unit="km" cur={hasPrior ? distNow : null} prev={hasPrior ? distPrev : null} />
+              <MetricTile label={de ? 'Ø CTL' : 'AVG CTL'} value={ctlNow != null ? String(Math.round(ctlNow)) : DASH} cur={ctlNow} prev={ctlPrev} />
+            </div>
+            {/* Range-adaptive TSS trend — daily / weekly / monthly buckets */}
+            {tssBuckets.some((b) => b.value > 0) ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.ink2 }}>{de ? 'Belastung (TSS)' : 'Training load (TSS)'}</span>
+                  <span style={{ fontSize: 11, color: C.muted }}>{de ? `${granTxt} Buckets` : `${granTxt} buckets`}</span>
+                </div>
+                <HoverBars
+                  height={96}
+                  radius={5}
+                  defaultColor={C.accent}
+                  bars={tssBuckets.map((b, i) => ({
+                    value: b.value,
+                    valueLabel: `${Math.round(b.value)} TSS`,
+                    label: b.label,
+                    highlight: i === tssBuckets.length - 1,
+                  }))}
+                />
+              </>
+            ) : (
+              <span style={{ fontSize: 12, color: C.muted }}>{emptyMsg}</span>
+            )}
+          </Card>
+
+          {/* ═══ 2 · THE TREND ═══ */}
+          <SectionHeader tick={C.recovery} title={de ? 'DER TREND' : 'THE TREND'}
+            sub={de ? `Wie du hierher kamst · ${monthsSpan} Monate` : `How you got here · ${monthsSpan} months`} />
 
           {/* FTP Progression */}
           <Card>
@@ -637,53 +641,9 @@ export default function BikeProgressView() {
             </div>
           </Card>
 
-          {/* Power Profile — range-scoped best-effort power (best NP per bucket) */}
-          <Card gap={14}>
-            <CardHead title={de ? 'Leistungsprofil' : 'Power Profile'}
-              sub={de ? `Bestleistungen · ${rangeLabel}` : `Best efforts · ${rangeLabel}`}
-              right={<Pill color={C.ink2}><Medal size={14} style={{ color: C.amber }} /> {rides.length} {de ? 'Fahrten' : 'rides'}</Pill>} />
-            {noRides || !mmpBuckets.some((b) => b.value > 0) ? (
-              <div style={{ fontSize: 12, color: C.muted, padding: '20px 0' }}>
-                {de ? 'Keine Bestleistungen im Zeitraum' : 'No efforts in range'}
-              </div>
-            ) : (
-              <>
-                <div className="flex items-end justify-between">
-                  <div className="flex flex-col" style={{ gap: 2 }}>
-                    <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: C.ink2 }}>
-                      {de ? 'SPITZEN-NP · ZEITRAUM' : 'PEAK NP · RANGE'}
-                    </span>
-                    <div className="flex items-end" style={{ gap: 4 }}>
-                      <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{peakNp ?? DASH}</span>
-                      <span style={{ fontSize: 12, color: C.muted, paddingBottom: 3 }}>W</span>
-                    </div>
-                  </div>
-                  {peakNpWkg != null && (
-                    <Pill color={C.recovery} bg={soft(C.recovery, 15)}><ArrowUp size={12} /> {peakNpWkg} W/kg</Pill>
-                  )}
-                </div>
-                <HoverBars
-                  height={120}
-                  radius={5}
-                  defaultColor={C.surface3}
-                  bars={mmpBuckets.map((b) => ({
-                    value: b.value,
-                    valueLabel: `${Math.round(b.value)} W`,
-                    label: b.label,
-                    highlight: peakNp != null && Math.round(b.value) === Math.round(peakNp),
-                  }))}
-                />
-                <div className="flex items-center justify-between">
-                  <span style={{ fontSize: 11, color: C.muted }}>{de ? `Beste NP je ${granTxt}-Bucket` : `Best NP per ${granTxt} bucket`}</span>
-                  <span style={{ fontSize: 11, color: C.muted }}>{rangeLabel}</span>
-                </div>
-              </>
-            )}
-          </Card>
-
-          {/* ═══ PROJECTION ═══ */}
-          <SectionHeader tick={C.strain} title={de ? 'PROJEKTION' : 'PROJECTION'}
-            sub={de ? 'Wohin es geht · Modellprognose' : "Where you're headed · model forecast"} />
+          {/* ═══ 3 · THE PROJECTION ═══ */}
+          <SectionHeader tick={C.strain} title={de ? 'DIE PROGNOSE' : 'THE PROJECTION'}
+            sub={de ? 'Wohin es führt · Modellprognose' : "Where you're headed · model forecast"} />
 
           {/* FTP Forecast */}
           <Card>
@@ -740,6 +700,86 @@ export default function BikeProgressView() {
             </div>
           </Card>
 
+          {/* Event Prediction — where the projected fitness lands you on race day */}
+          <Card>
+            <div className="flex items-center" style={{ gap: 12 }}>
+              <span className="flex items-center justify-center rounded-[12px]" style={{ width: 40, height: 40, background: C.surface2, flex: 'none' }}>
+                <Flag size={22} style={{ color: C.amber }} />
+              </span>
+              <div className="flex flex-col" style={{ gap: 2 }}>
+                <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{goalName ?? 'Gran Fondo Dolomites'}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: C.muted }}>
+                  {daysToGoal != null ? `${daysToGoal} ${de ? 'Tage' : 'days'} · ` : ''}142 km · 3,800 m
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-[16px]" style={{ padding: 16, background: C.surface2 }}>
+              <div className="flex flex-col" style={{ gap: 3 }}>
+                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.muted }}>{de ? 'AKTUELL' : 'CURRENT'}</span>
+                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink2 }}>{curTime != null ? fmtRaceTime(curTime) : DASH}</span>
+              </div>
+              <ArrowRight size={20} style={{ color: C.muted }} />
+              <div className="flex flex-col items-end" style={{ gap: 3 }}>
+                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.accent }}>{de ? 'PROGNOSE' : 'PROJECTED'}</span>
+                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink }}>{projTime != null ? fmtRaceTime(projTime) : DASH}</span>
+              </div>
+              {timeSavedMin != null && (
+                <Pill color={C.recovery} bg={soft(C.recovery, 15)}><TrendingDown size={12} />{Math.abs(timeSavedMin)} min</Pill>
+              )}
+            </div>
+            {eventReason && (
+              <span style={{ fontSize: 12, fontWeight: 500, color: C.ink2, lineHeight: 1.4 }}>{eventReason}</span>
+            )}
+          </Card>
+
+          {/* ═══ 4 · THE DETAIL ═══ */}
+          <SectionHeader tick={C.muted} title={de ? 'DIE DETAILS' : 'THE DETAIL'}
+            sub={de ? 'Belege im Detail · Bestleistungen & Kurve' : 'The supporting reference · efforts & curve'} />
+
+          {/* Power Profile — range-scoped best-effort power (best NP per bucket) */}
+          <Card gap={14}>
+            <CardHead title={de ? 'Leistungsprofil' : 'Power Profile'}
+              sub={de ? `Bestleistungen · ${rangeLabel}` : `Best efforts · ${rangeLabel}`}
+              right={<Pill color={C.ink2}><Medal size={14} style={{ color: C.amber }} /> {rides.length} {de ? 'Fahrten' : 'rides'}</Pill>} />
+            {noRides || !mmpBuckets.some((b) => b.value > 0) ? (
+              <div style={{ fontSize: 12, color: C.muted, padding: '20px 0' }}>
+                {de ? 'Keine Bestleistungen im Zeitraum' : 'No efforts in range'}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-end justify-between">
+                  <div className="flex flex-col" style={{ gap: 2 }}>
+                    <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: C.ink2 }}>
+                      {de ? 'SPITZEN-NP · ZEITRAUM' : 'PEAK NP · RANGE'}
+                    </span>
+                    <div className="flex items-end" style={{ gap: 4 }}>
+                      <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{peakNp ?? DASH}</span>
+                      <span style={{ fontSize: 12, color: C.muted, paddingBottom: 3 }}>W</span>
+                    </div>
+                  </div>
+                  {peakNpWkg != null && (
+                    <Pill color={C.recovery} bg={soft(C.recovery, 15)}><ArrowUp size={12} /> {peakNpWkg} W/kg</Pill>
+                  )}
+                </div>
+                <HoverBars
+                  height={120}
+                  radius={5}
+                  defaultColor={C.surface3}
+                  bars={mmpBuckets.map((b) => ({
+                    value: b.value,
+                    valueLabel: `${Math.round(b.value)} W`,
+                    label: b.label,
+                    highlight: peakNp != null && Math.round(b.value) === Math.round(peakNp),
+                  }))}
+                />
+                <div className="flex items-center justify-between">
+                  <span style={{ fontSize: 11, color: C.muted }}>{de ? `Beste NP je ${granTxt}-Bucket` : `Best NP per ${granTxt} bucket`}</span>
+                  <span style={{ fontSize: 11, color: C.muted }}>{rangeLabel}</span>
+                </div>
+              </>
+            )}
+          </Card>
+
           {/* Power Curve */}
           <Card>
             <CardHead title={de ? 'Leistungskurve' : 'Power Curve'} sub={de ? 'Aktuell vs. projizierte Decke' : 'Current vs projected ceiling'}
@@ -776,38 +816,6 @@ export default function BikeProgressView() {
               {CURVE.map((c) => <span key={c.s} className="flex-1 text-center" style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{c.label}</span>)}
             </div>
             </>
-            )}
-          </Card>
-
-          {/* Event Prediction */}
-          <Card>
-            <div className="flex items-center" style={{ gap: 12 }}>
-              <span className="flex items-center justify-center rounded-[12px]" style={{ width: 40, height: 40, background: C.surface2, flex: 'none' }}>
-                <Flag size={22} style={{ color: C.amber }} />
-              </span>
-              <div className="flex flex-col" style={{ gap: 2 }}>
-                <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{goalName ?? 'Gran Fondo Dolomites'}</span>
-                <span style={{ fontSize: 12, fontWeight: 500, color: C.muted }}>
-                  {daysToGoal != null ? `${daysToGoal} ${de ? 'Tage' : 'days'} · ` : ''}142 km · 3,800 m
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between rounded-[16px]" style={{ padding: 16, background: C.surface2 }}>
-              <div className="flex flex-col" style={{ gap: 3 }}>
-                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.muted }}>{de ? 'AKTUELL' : 'CURRENT'}</span>
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink2 }}>{curTime != null ? fmtRaceTime(curTime) : DASH}</span>
-              </div>
-              <ArrowRight size={20} style={{ color: C.muted }} />
-              <div className="flex flex-col items-end" style={{ gap: 3 }}>
-                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.accent }}>{de ? 'PROGNOSE' : 'PROJECTED'}</span>
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink }}>{projTime != null ? fmtRaceTime(projTime) : DASH}</span>
-              </div>
-              {timeSavedMin != null && (
-                <Pill color={C.recovery} bg={soft(C.recovery, 15)}><TrendingDown size={12} />{Math.abs(timeSavedMin)} min</Pill>
-              )}
-            </div>
-            {eventReason && (
-              <span style={{ fontSize: 12, fontWeight: 500, color: C.ink2, lineHeight: 1.4 }}>{eventReason}</span>
             )}
           </Card>
 

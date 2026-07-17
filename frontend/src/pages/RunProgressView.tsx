@@ -369,50 +369,11 @@ export default function RunProgressView() {
           ))}
         </div>
 
-        {/* ── Summary: period-over-period headline ──────────────────────── */}
-        <div className="rounded-[24px] p-5 mt-5 flex flex-col gap-4" style={{ background: 'var(--color-accent-soft)', border: '1px solid var(--color-accent)' }}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex flex-col gap-1 min-w-0">
-              <span className="text-[11px] font-bold" style={{ color: 'var(--color-accent)', letterSpacing: 1 }}>
-                {T('SUMMARY', 'ZUSAMMENFASSUNG')} · {rangeDaysLabel.toUpperCase()}
-              </span>
-              <span className="text-[15px] font-bold font-[Sora]" style={{ color: 'var(--color-ink)', lineHeight: 1.35 }}>{summaryVerdict}</span>
-            </div>
-            <div className="rounded-full px-2.5 py-1.5 shrink-0" style={{ background: 'var(--color-accent)26' }}>
-              <span className="text-xs font-bold" style={{ color: 'var(--color-accent)' }}>{T(`${granTxt} view`, granTxt)}</span>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-            <SummaryTile label={T('DISTANCE', 'DISTANZ')} value={runsNow ? String(Math.round(curKm)) : '—'} unit="km" cur={hasPrior ? curKm : null} prev={hasPrior ? priorKm : null} />
-            <SummaryTile label={T('RUNS', 'LÄUFE')} value={String(runsNow)} cur={hasPrior ? runsNow : null} prev={hasPrior ? runsPrev : null} />
-            <SummaryTile label={T('HOURS', 'STUNDEN')} value={runsNow ? hoursNow.toFixed(1) : '—'} unit="h" cur={hasPrior ? hoursNow : null} prev={hasPrior ? hoursPrev : null} digits={1} />
-            <SummaryTile label="VO₂max" value={currentVO2 != null ? currentVO2.toFixed(0) : '—'} cur={currentVO2} prev={priorVO2} />
-          </div>
-          {distBuckets.some((b) => b.value > 0) ? (
-            <>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold" style={{ color: 'var(--color-ink-2)' }}>{T('Distance', 'Distanz')} (km)</span>
-                <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{T(`${granTxt} buckets`, `${granTxt} Buckets`)}</span>
-              </div>
-              <HoverBars
-                height={92}
-                radius={5}
-                defaultColor="var(--color-exercise)"
-                bars={distBuckets.map((b, i) => ({
-                  value: b.value,
-                  valueLabel: `${b.value.toFixed(0)} km`,
-                  label: b.label,
-                  highlight: i === distBuckets.length - 1,
-                }))}
-              />
-            </>
-          ) : (
-            <span className="text-sm" style={{ color: 'var(--color-muted)' }}>{T('No data in range', 'Keine Daten im Zeitraum')}</span>
-          )}
-        </div>
+        {/* ══ 1 · WHERE YOU STAND ══════════════════════════════════════ */}
+        <SectionHeader color="var(--color-accent)" title={T('Where you stand', 'Wo du stehst')} sub={T('Your running fitness right now', 'Deine Laufform genau jetzt')} />
 
-        {/* ── EngineHero: Aerobic engine / VO₂max ───────────────────────── */}
-        <div className="rounded-[24px] p-[22px] mt-5 flex flex-col gap-[18px]" style={card}>
+        {/* ── EngineHero: Aerobic engine / VO₂max (the headline number) ── */}
+        <div className="rounded-[24px] p-[22px] mt-4 flex flex-col gap-[18px]" style={card}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)', letterSpacing: 1 }}>
               {T('AEROBIC ENGINE', 'AEROBER MOTOR')}
@@ -476,8 +437,50 @@ export default function RunProgressView() {
           </div>
         </div>
 
-        {/* ══ PROGRESS ══════════════════════════════════════════════════ */}
-        <SectionHeader color="var(--color-recovery)" title={T('Progress', 'Fortschritt')} sub={T("Where you've come from", 'Woher du kommst')} />
+        {/* ── Summary: period-over-period verdict + training volume ─────── */}
+        <div className="rounded-[24px] p-5 mt-4 flex flex-col gap-4" style={{ background: 'var(--color-accent-soft)', border: '1px solid var(--color-accent)' }}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-1 min-w-0">
+              <span className="text-[11px] font-bold" style={{ color: 'var(--color-accent)', letterSpacing: 1 }}>
+                {T('SUMMARY', 'ZUSAMMENFASSUNG')} · {rangeDaysLabel.toUpperCase()}
+              </span>
+              <span className="text-[15px] font-bold font-[Sora]" style={{ color: 'var(--color-ink)', lineHeight: 1.35 }}>{summaryVerdict}</span>
+            </div>
+            <div className="rounded-full px-2.5 py-1.5 shrink-0" style={{ background: 'var(--color-accent)26' }}>
+              <span className="text-xs font-bold" style={{ color: 'var(--color-accent)' }}>{T(`${granTxt} view`, granTxt)}</span>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+            <SummaryTile label={T('DISTANCE', 'DISTANZ')} value={runsNow ? String(Math.round(curKm)) : '—'} unit="km" cur={hasPrior ? curKm : null} prev={hasPrior ? priorKm : null} />
+            <SummaryTile label={T('RUNS', 'LÄUFE')} value={String(runsNow)} cur={hasPrior ? runsNow : null} prev={hasPrior ? runsPrev : null} />
+            <SummaryTile label={T('HOURS', 'STUNDEN')} value={runsNow ? hoursNow.toFixed(1) : '—'} unit="h" cur={hasPrior ? hoursNow : null} prev={hasPrior ? hoursPrev : null} digits={1} />
+            <SummaryTile label="VO₂max" value={currentVO2 != null ? currentVO2.toFixed(0) : '—'} cur={currentVO2} prev={priorVO2} />
+          </div>
+          {distBuckets.some((b) => b.value > 0) ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold" style={{ color: 'var(--color-ink-2)' }}>{T('Distance', 'Distanz')} (km)</span>
+                <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{T(`${granTxt} buckets`, `${granTxt} Buckets`)}</span>
+              </div>
+              <HoverBars
+                height={92}
+                radius={5}
+                defaultColor="var(--color-exercise)"
+                bars={distBuckets.map((b, i) => ({
+                  value: b.value,
+                  valueLabel: `${b.value.toFixed(0)} km`,
+                  label: b.label,
+                  highlight: i === distBuckets.length - 1,
+                }))}
+              />
+            </>
+          ) : (
+            <span className="text-sm" style={{ color: 'var(--color-muted)' }}>{T('No data in range', 'Keine Daten im Zeitraum')}</span>
+          )}
+        </div>
+
+        {/* ══ 2 · THE TREND ═════════════════════════════════════════════ */}
+        <SectionHeader color="var(--color-recovery)" title={T('The trend', 'Der Trend')} sub={T('How you got here', 'Wie du hierher kamst')} />
 
         {/* VO₂max trend */}
         <div className="rounded-[24px] p-5 mt-4 flex flex-col gap-4" style={card}>
@@ -518,50 +521,6 @@ export default function RunProgressView() {
           )}
         </div>
 
-        {/* Personal records */}
-        <div className="rounded-[24px] p-5 mt-4 flex flex-col gap-4" style={card}>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-base font-semibold font-[Sora]" style={{ color: 'var(--color-ink)' }}>{T('Personal records', 'Persönliche Bestzeiten')}</span>
-            <span className="text-xs" style={{ color: 'var(--color-ink-2)' }}>{T(`Best efforts · ${rangeDaysLabel}`, `Bestleistungen · ${rangeDaysLabel}`)}</span>
-          </div>
-          <div className="flex flex-col gap-3.5">
-            {(['5K', '10K', 'Half'] as const).map((k, i) => {
-              const pr = prs[k]
-              return (
-                <div key={k}>
-                  {i > 0 && <div className="h-px w-full mb-3.5" style={{ background: 'var(--color-rule)' }} />}
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-base font-bold font-[Sora]" style={{ color: 'var(--color-ink)' }}>{k === 'Half' ? T('Half', 'Halb') : k}</span>
-                      <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-                        {pr ? `${T('Set', 'Am')} ${format(parseISO(pr.at), 'MMM yyyy')}` : T('No effort yet', 'Noch keine Zeit')}
-                      </span>
-                    </div>
-                    {pr ? (
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-lg font-bold font-[Sora]" style={{ color: 'var(--color-ink)' }}>{fmtRaceTime(pr.best)}</span>
-                          {pr.old != null && (
-                            <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{T('from', 'von')} {fmtRaceTime(pr.old)}</span>
-                          )}
-                        </div>
-                        {pr.old != null && pr.old > pr.best && (
-                          <div className="flex items-center gap-1 rounded-full px-2.5 py-1.5" style={{ background: 'var(--color-recovery)26' }}>
-                            <ArrowDownRight size={13} style={{ color: 'var(--color-recovery)' }} />
-                            <span className="text-[13px] font-bold" style={{ color: 'var(--color-recovery)' }}>{signedTime(pr.old - pr.best)}</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-lg font-bold font-[Sora]" style={{ color: 'var(--color-muted)' }}>—</span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
         {/* Weekly volume */}
         <div className="rounded-[24px] p-5 mt-4 flex flex-col gap-4" style={card}>
           <div className="flex items-center justify-between">
@@ -598,8 +557,8 @@ export default function RunProgressView() {
           )}
         </div>
 
-        {/* ══ PROJECTION ════════════════════════════════════════════════ */}
-        <SectionHeader color="var(--color-strain)" title={T('Projection', 'Prognose')} sub={T("Where you're headed", 'Wohin es geht')} />
+        {/* ══ 3 · THE PROJECTION ════════════════════════════════════════ */}
+        <SectionHeader color="var(--color-strain)" title={T('The projection', 'Die Prognose')} sub={T("Where you're headed", 'Wohin es geht')} />
 
         {/* VO₂max forecast */}
         <div className="rounded-[24px] p-5 mt-4 flex flex-col gap-4" style={card}>
@@ -670,6 +629,53 @@ export default function RunProgressView() {
           {raceReason && (
             <span className="text-[12px]" style={{ color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{raceReason}</span>
           )}
+        </div>
+
+        {/* ══ 4 · THE DETAIL ════════════════════════════════════════════ */}
+        <SectionHeader color="var(--color-muted)" title={T('The detail', 'Die Details')} sub={T('The supporting reference · best efforts', 'Belege im Detail · Bestleistungen')} />
+
+        {/* Personal records */}
+        <div className="rounded-[24px] p-5 mt-4 flex flex-col gap-4" style={card}>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-base font-semibold font-[Sora]" style={{ color: 'var(--color-ink)' }}>{T('Personal records', 'Persönliche Bestzeiten')}</span>
+            <span className="text-xs" style={{ color: 'var(--color-ink-2)' }}>{T(`Best efforts · ${rangeDaysLabel}`, `Bestleistungen · ${rangeDaysLabel}`)}</span>
+          </div>
+          <div className="flex flex-col gap-3.5">
+            {(['5K', '10K', 'Half'] as const).map((k, i) => {
+              const pr = prs[k]
+              return (
+                <div key={k}>
+                  {i > 0 && <div className="h-px w-full mb-3.5" style={{ background: 'var(--color-rule)' }} />}
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-base font-bold font-[Sora]" style={{ color: 'var(--color-ink)' }}>{k === 'Half' ? T('Half', 'Halb') : k}</span>
+                      <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                        {pr ? `${T('Set', 'Am')} ${format(parseISO(pr.at), 'MMM yyyy')}` : T('No effort yet', 'Noch keine Zeit')}
+                      </span>
+                    </div>
+                    {pr ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-lg font-bold font-[Sora]" style={{ color: 'var(--color-ink)' }}>{fmtRaceTime(pr.best)}</span>
+                          {pr.old != null && (
+                            <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{T('from', 'von')} {fmtRaceTime(pr.old)}</span>
+                          )}
+                        </div>
+                        {pr.old != null && pr.old > pr.best && (
+                          <div className="flex items-center gap-1 rounded-full px-2.5 py-1.5" style={{ background: 'var(--color-recovery)26' }}>
+                            <ArrowDownRight size={13} style={{ color: 'var(--color-recovery)' }} />
+                            <span className="text-[13px] font-bold" style={{ color: 'var(--color-recovery)' }}>{signedTime(pr.old - pr.best)}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-lg font-bold font-[Sora]" style={{ color: 'var(--color-muted)' }}>—</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
       </div>

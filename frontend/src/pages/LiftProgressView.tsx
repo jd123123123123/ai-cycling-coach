@@ -332,61 +332,10 @@ export default function LiftProgressView() {
           ))}
         </div>
 
-        {/* ===================== SUMMARY — period-over-period ===================== */}
-        <Card soft gap={14}>
-          <div className="flex items-start justify-between" style={{ gap: 12 }}>
-            <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-              <span className="eyebrow" style={{ fontSize: 11, letterSpacing: 1, color: 'var(--color-accent)' }}>
-                {(de ? 'ZUSAMMENFASSUNG' : 'SUMMARY')} · {windowLabel.toUpperCase()}
-              </span>
-              <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.35 }}>{summaryVerdict}</span>
-            </div>
-            <div className="rounded-full" style={{ padding: '6px 11px', background: SOFT_ACCENT, flex: 'none' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent)' }}>{de ? granTxt : `${granTxt} view`}</span>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-            {[
-              { l: de ? 'EINHEITEN' : 'SESSIONS', v: sessionCount > 0 ? String(sessionCount) : DASH, delta: hasPrior ? sessionCount - gymPrior.length : null, unit: '' },
-              { l: de ? 'PRO WOCHE' : 'PER WEEK', v: sessionCount > 0 ? `${perWeek}×` : DASH, delta: perWeekDelta, unit: '×' },
-              { l: de ? 'BEREITSCHAFT' : 'READINESS', v: readiness != null ? String(Math.round(readiness)) : DASH, delta: readinessDelta, unit: '' },
-            ].map((s) => (
-              <div key={s.l} className="flex flex-col rounded-[14px]" style={{ gap: 5, padding: 13, background: 'var(--color-surface-2)', minWidth: 0 }}>
-                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: 'var(--color-ink-2)' }}>{s.l}</span>
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.v}</span>
-                {s.delta != null ? (
-                  <span className="inline-flex items-center" style={{ gap: 3, fontSize: 11, fontWeight: 700, color: s.delta >= 0 ? C_GOOD : C_BAD, flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
-                    {s.delta >= 0 ? <ArrowUp size={11} color={C_GOOD} /> : <ArrowDown size={11} color={C_BAD} />}
-                    {s.delta >= 0 ? '+' : ''}{s.delta}{s.unit}
-                  </span>
-                ) : <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{DASH}</span>}
-              </div>
-            ))}
-          </div>
-          {sessionBuckets.some((b) => b.value > 0) ? (
-            <>
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Einheiten' : 'Sessions'}</span>
-                <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? `${granTxt} Buckets` : `${granTxt} buckets`}</span>
-              </div>
-              <HoverBars
-                height={84}
-                radius={5}
-                defaultColor="var(--color-accent)"
-                bars={sessionBuckets.map((b, i) => ({
-                  value: b.value,
-                  valueLabel: `${Math.round(b.value)} ${de ? 'Einh.' : 'sess.'}`,
-                  label: b.label,
-                  highlight: i === sessionBuckets.length - 1,
-                }))}
-              />
-            </>
-          ) : (
-            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Keine Daten im Zeitraum' : 'No data in range'}</span>
-          )}
-        </Card>
+        {/* ===================== 1 · WHERE YOU STAND ===================== */}
+        <SectionHeader color="var(--color-accent)" title={de ? 'Wo du stehst' : 'Where you stand'} sub={de ? 'Deine Kraft genau jetzt' : 'Your strength right now'} />
 
-        {/* ===================== HERO — STRENGTH SCORE · DOTS ===================== */}
+        {/* ===================== HERO — STRENGTH SCORE · DOTS (headline) ===================== */}
         <div
           className="rounded-[24px] flex flex-col"
           style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', padding: 22, gap: 18 }}
@@ -470,11 +419,62 @@ export default function LiftProgressView() {
           </div>
         </div>
 
-        {/* ===================== SECTION: MY ROUTINES (strength builder) ===================== */}
-        <RoutinesManager de={de} />
+        {/* ===================== SUMMARY — period-over-period verdict + frequency ===================== */}
+        <Card soft gap={14}>
+          <div className="flex items-start justify-between" style={{ gap: 12 }}>
+            <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
+              <span className="eyebrow" style={{ fontSize: 11, letterSpacing: 1, color: 'var(--color-accent)' }}>
+                {(de ? 'ZUSAMMENFASSUNG' : 'SUMMARY')} · {windowLabel.toUpperCase()}
+              </span>
+              <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.35 }}>{summaryVerdict}</span>
+            </div>
+            <div className="rounded-full" style={{ padding: '6px 11px', background: SOFT_ACCENT, flex: 'none' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent)' }}>{de ? granTxt : `${granTxt} view`}</span>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+            {[
+              { l: de ? 'EINHEITEN' : 'SESSIONS', v: sessionCount > 0 ? String(sessionCount) : DASH, delta: hasPrior ? sessionCount - gymPrior.length : null, unit: '' },
+              { l: de ? 'PRO WOCHE' : 'PER WEEK', v: sessionCount > 0 ? `${perWeek}×` : DASH, delta: perWeekDelta, unit: '×' },
+              { l: de ? 'BEREITSCHAFT' : 'READINESS', v: readiness != null ? String(Math.round(readiness)) : DASH, delta: readinessDelta, unit: '' },
+            ].map((s) => (
+              <div key={s.l} className="flex flex-col rounded-[14px]" style={{ gap: 5, padding: 13, background: 'var(--color-surface-2)', minWidth: 0 }}>
+                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: 'var(--color-ink-2)' }}>{s.l}</span>
+                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.v}</span>
+                {s.delta != null ? (
+                  <span className="inline-flex items-center" style={{ gap: 3, fontSize: 11, fontWeight: 700, color: s.delta >= 0 ? C_GOOD : C_BAD, flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
+                    {s.delta >= 0 ? <ArrowUp size={11} color={C_GOOD} /> : <ArrowDown size={11} color={C_BAD} />}
+                    {s.delta >= 0 ? '+' : ''}{s.delta}{s.unit}
+                  </span>
+                ) : <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{DASH}</span>}
+              </div>
+            ))}
+          </div>
+          {sessionBuckets.some((b) => b.value > 0) ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Einheiten' : 'Sessions'}</span>
+                <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? `${granTxt} Buckets` : `${granTxt} buckets`}</span>
+              </div>
+              <HoverBars
+                height={84}
+                radius={5}
+                defaultColor="var(--color-accent)"
+                bars={sessionBuckets.map((b, i) => ({
+                  value: b.value,
+                  valueLabel: `${Math.round(b.value)} ${de ? 'Einh.' : 'sess.'}`,
+                  label: b.label,
+                  highlight: i === sessionBuckets.length - 1,
+                }))}
+              />
+            </>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Keine Daten im Zeitraum' : 'No data in range'}</span>
+          )}
+        </Card>
 
-        {/* ===================== SECTION: PROGRESS ===================== */}
-        <SectionHeader color={C_GOOD} title={de ? 'Fortschritt' : 'Progress'} sub={de ? 'Wie weit du gekommen bist' : "How far you've come"} />
+        {/* ===================== 2 · THE TREND ===================== */}
+        <SectionHeader color={C_GOOD} title={de ? 'Der Trend' : 'The trend'} sub={de ? 'Wie du hierher kamst' : 'How you got here'} />
 
         {/* Total e1RM */}
         <Card gap={16}>
@@ -488,47 +488,8 @@ export default function LiftProgressView() {
           <EmptyChart note={unlock} />
         </Card>
 
-        {/* By Lift */}
-        <Card gap={14}>
-          <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Nach Übung' : 'By Lift'}</span>
-          {[
-            { name: de ? 'Kniebeuge' : 'Squat', c: C_SQUAT },
-            { name: de ? 'Bank' : 'Bench', c: C_BENCH },
-            { name: de ? 'Kreuzheben' : 'Deadlift', c: C_DEAD },
-          ].map((row) => (
-            <div key={row.name} className="flex items-center" style={{ gap: 12 }}>
-              <div className="flex flex-col" style={{ gap: 2, width: 96 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{row.name}</span>
-                <div className="flex items-center" style={{ gap: 2 }}>
-                  <ArrowUp size={11} color="var(--color-muted)" />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{DASH}</span>
-                </div>
-              </div>
-              <div className="flex-1" style={{ height: 4, borderRadius: 2, background: 'var(--color-surface-3)' }} />
-              <div className="flex items-end justify-end" style={{ gap: 2, width: 64 }}>
-                <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-ink)' }}>{DASH}</span>
-                <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 2 }}>kg</span>
-              </div>
-            </div>
-          ))}
-        </Card>
-
-        {/* Recent PRs */}
-        <Card gap={14}>
-          <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Neueste PRs' : 'Recent PRs'}</span>
-          <div className="flex items-center" style={{ gap: 12 }}>
-            <div className="flex items-center justify-center" style={{ width: 34, height: 34, borderRadius: 10, background: '#000000' }}>
-              <Trophy size={18} color="var(--color-muted)" />
-            </div>
-            <div className="flex flex-col flex-1" style={{ gap: 1 }}>
-              <span className="num-display" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink-2)' }}>{de ? 'Noch keine PRs' : 'No PRs yet'}</span>
-              <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{unlock}</span>
-            </div>
-          </div>
-        </Card>
-
-        {/* ===================== SECTION: PROJECTION ===================== */}
-        <SectionHeader color={C_SQUAT} title={de ? 'Prognose' : 'Projection'} sub={de ? 'Wohin dich dein Tempo führt' : "Where you're headed at this rate"} />
+        {/* ===================== 3 · THE PROJECTION ===================== */}
+        <SectionHeader color={C_SQUAT} title={de ? 'Die Prognose' : 'The projection'} sub={de ? 'Wohin dich dein Tempo führt' : "Where you're headed at this rate"} />
 
         {/* Total Projection */}
         <Card gap={16}>
@@ -574,6 +535,48 @@ export default function LiftProgressView() {
           </div>
         </Card>
 
+        {/* ===================== 4 · THE DETAIL ===================== */}
+        <SectionHeader color="var(--color-muted)" title={de ? 'Die Details' : 'The detail'} sub={de ? 'Belege im Detail · pro Übung & PRs' : 'The supporting reference · per-lift & PRs'} />
+
+        {/* By Lift */}
+        <Card gap={14}>
+          <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Nach Übung' : 'By Lift'}</span>
+          {[
+            { name: de ? 'Kniebeuge' : 'Squat', c: C_SQUAT },
+            { name: de ? 'Bank' : 'Bench', c: C_BENCH },
+            { name: de ? 'Kreuzheben' : 'Deadlift', c: C_DEAD },
+          ].map((row) => (
+            <div key={row.name} className="flex items-center" style={{ gap: 12 }}>
+              <div className="flex flex-col" style={{ gap: 2, width: 96 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{row.name}</span>
+                <div className="flex items-center" style={{ gap: 2 }}>
+                  <ArrowUp size={11} color="var(--color-muted)" />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{DASH}</span>
+                </div>
+              </div>
+              <div className="flex-1" style={{ height: 4, borderRadius: 2, background: 'var(--color-surface-3)' }} />
+              <div className="flex items-end justify-end" style={{ gap: 2, width: 64 }}>
+                <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-ink)' }}>{DASH}</span>
+                <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 2 }}>kg</span>
+              </div>
+            </div>
+          ))}
+        </Card>
+
+        {/* Recent PRs */}
+        <Card gap={14}>
+          <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Neueste PRs' : 'Recent PRs'}</span>
+          <div className="flex items-center" style={{ gap: 12 }}>
+            <div className="flex items-center justify-center" style={{ width: 34, height: 34, borderRadius: 10, background: '#000000' }}>
+              <Trophy size={18} color="var(--color-muted)" />
+            </div>
+            <div className="flex flex-col flex-1" style={{ gap: 1 }}>
+              <span className="num-display" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink-2)' }}>{de ? 'Noch keine PRs' : 'No PRs yet'}</span>
+              <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{unlock}</span>
+            </div>
+          </div>
+        </Card>
+
         {/* Strength Level Trajectory */}
         <Card gap={14}>
           <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Kraftniveau-Verlauf' : 'Strength Level Trajectory'}</span>
@@ -597,6 +600,9 @@ export default function LiftProgressView() {
             ))}
           </div>
         </Card>
+
+        {/* ===================== BUILD — routines manager (action tool, end of story) ===================== */}
+        <RoutinesManager de={de} />
 
       </div>
       <MobileBottomNav />
