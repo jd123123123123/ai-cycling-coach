@@ -81,6 +81,73 @@ _HARD_TYPES: frozenset[SessionType] = frozenset({"sweet_spot", "threshold", "vo2
 # Default available minutes when we have no schedule signal at generation time
 _DEFAULT_AVAILABLE_MINUTES = 90
 
+# Endurance-day template rotation — cycled across the week's *filler* Z2 days so
+# the plan is not the identical template 6× in a row. Ordered so each adjacent
+# day differs in both duration and shape (steady 90 → progressive 90 → short
+# 60). The Sunday long ride and any phase quality/climbing session are picked
+# separately (longest-fit / phase rules), so this only varies the mid-week
+# aerobic filler. Kept short and duration-diverse on purpose.
+_ENDURANCE_VARIETY: list[str] = [
+    "z2_endurance_90",
+    "z2_progressive_90",
+    "z2_endurance_60",
+]
+
+# How far past the weekly TSS target a filler endurance day may push before the
+# builder trims it. Key sessions (Sunday long, phase quality, climbing) are
+# never trimmed — only the aerobic filler absorbs the cap.
+_FILLER_OVERSHOOT = 1.10          # keep a full filler day if it lands ≤ 110% of budget
+_FILLER_RECOVERY_OVERSHOOT = 1.15  # else a recovery spin if it lands ≤ 115%
+
+
+def _rest_dows_for_week(
+    phase: Phase,
+    block_position: Literal["accumulation", "transmutation", "realization", "recovery"],
+) -> set[int]:
+    """Designate which day-of-week indices are scheduled rest days.
+
+    Rest count is driven by ``_PHASE_MIX[phase]["rest_days"]`` (base1 → 2), +1 on
+    a recovery week (mirrors ``weekly_intensity_quota``). Rest is placed
+    deterministically on the least-disruptive days first — Monday (post-weekend),
+    then Friday (pre-weekend) — while *protecting* the phase's key days so the
+    cap/rest logic composes with, rather than overrides, the session picker:
+
+        - Sunday (6)                 always protected — the long ride.
+        - Saturday (5)               protected in base/build/peak — 2nd weekend day.
+        - Wednesday (2)              protected in base2/build/peak — keystone quality.
+        - Tuesday (1) / Thursday (3) protected in build2/peak — the two quality days.
+
+    Taper and race manage their own rest/quality cadence inside
+    ``session_type_for_today`` (Mujika sharpening, race-week opener), so we return
+    an empty set for them and leave that untouched.
+    """
+    if phase in ("taper", "race"):
+        return set()
+
+    n_rest = int(round(_PHASE_MIX[phase]["rest_days"]))
+    if block_position == "recovery":
+        n_rest = min(6, n_rest + 1)
+
+    protected: set[int] = {6}  # Sunday long ride is sacred
+    if phase in ("base1", "base2", "build1", "build2", "peak"):
+        protected.add(5)  # Saturday — second weekend endurance day
+    if phase in ("base2", "build1", "build2", "peak"):
+        protected.add(2)  # Wednesday keystone quality
+    if phase in ("build2", "peak"):
+        protected.update({1, 3})  # Tue/Thu quality days
+
+    # Priority: rest Monday first, then Friday, then mid/late-week fillers,
+    # never a protected key day.
+    priority = [0, 4, 3, 1, 2, 5]
+    rest: set[int] = set()
+    for d in priority:
+        if len(rest) >= n_rest:
+            break
+        if d in protected:
+            continue
+        rest.add(d)
+    return rest
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Exported helper functions
@@ -228,13 +295,42 @@ def build_week_drafts(
     # Use a neutral TSB of 0 (no freshness / fatigue signal)
     synthetic_tsb = 0.0
 
-    # Track weekly progress as we build the week
+    # ── Rest-day skeleton ─────────────────────────────────────────────────
+    # Real rest days are placed deterministically from the phase's rest_days
+    # count (base1 → 2). At generation time we have no load history, so the
+    # picker's history-based Monday-rest rule can never fire — we own the week
+    # shape here instead.  On a rest DOW we emit the rest_day template (tss 0)
+    # rather than yet another Z2 session.
+    rest_dows = _rest_dows_for_week(phase, block_position)
+
+    # Riding days drive a realistic per-day time window (weekly hours spread
+    # over the days we actually ride, not all 7), so variety templates fit.
+    weekly_hours = athlete.weekly_hours_available or 10.0
+    riding_days = max(1, 7 - len(rest_dows))
+    base_available_min = max(30, int(weekly_hours * 60 / riding_days))
+
+    # ── Pass 1: resolve session type + template for each riding day ────────
     hard_sessions_done = 0
     vo2_sessions_done = 0
     cumulative_tss = 0.0
+    variety_idx = 0
+
+    # Per-day plan entries: dict with date/session_type/template/flags.
+    plan: list[dict] = []
 
     for dow in range(7):  # 0=Mon, 6=Sun
         day_date = week_start + timedelta(days=dow)
+
+        # Scheduled rest — skip the picker entirely so we never spend load or
+        # advance the quality counters on a rest day.
+        if dow in rest_dows:
+            plan.append({
+                "date": day_date,
+                "session_type": "rest",
+                "template": TEMPLATES["rest_day"],
+                "kind": "rest",
+            })
+            continue
 
         weekly_progress = {
             "hard_sessions_done": hard_sessions_done,
@@ -255,10 +351,7 @@ def build_week_drafts(
             is_recovery_week=(block_position == "recovery"),
         )
 
-        # Estimate available minutes from athlete schedule or default
-        available_min = int((athlete.weekly_hours_available or 10.0) / 7.0 * 60)
-        available_min = max(available_min, 30)  # floor at 30 min
-
+        available_min = base_available_min
         # For long ride (Sunday) or key sessions: use a longer window
         if dow == 6:  # Sunday long ride
             available_min = max(available_min, 120)
@@ -276,11 +369,66 @@ def build_week_drafts(
                 days_to_event=(athlete.target_event_date - day_date).days,
                 day_of_week=dow,
             )
+
+        # Variety: rotate the mid-week aerobic *filler* among distinct Z2
+        # templates so the week isn't the identical ride 6×. The Sunday long
+        # ride (longest-fit) and any climbing-preferred day keep their own
+        # pick and are exempt from the rotation.
+        is_filler = (
+            session_type == "endurance" and dow != 6 and preferred_id is None
+        )
+        if is_filler:
+            preferred_id = _ENDURANCE_VARIETY[variety_idx % len(_ENDURANCE_VARIETY)]
+            variety_idx += 1
+
         template = pick_template(
             session_type, ftp_w, available_min, preferred_template_id=preferred_id
         )
 
-        # Build interval_structure from template blocks
+        # Classify the day: filler endurance can be trimmed to hit the weekly
+        # TSS target; everything else (Sunday long, quality, climbing, recovery)
+        # is a fixed session we reserve budget for and never trim.
+        kind = "filler" if is_filler else "fixed"
+        plan.append({
+            "date": day_date,
+            "session_type": session_type,
+            "template": template,
+            "kind": kind,
+        })
+
+        # Advance synthetic weekly counters (rest days already skipped above).
+        if session_type in _HARD_TYPES:
+            hard_sessions_done += 1
+        if session_type == "vo2":
+            vo2_sessions_done += 1
+        cumulative_tss += template.base_tss
+
+    # ── Pass 2: cap the week to the TSS target by trimming filler ─────────
+    # Reserve the budget consumed by fixed sessions (long ride + quality +
+    # recovery). Whatever is left is the filler budget; once a full filler day
+    # would push the running filler total well past that budget, downgrade it
+    # to a recovery spin or a rest day so the week lands near target instead of
+    # ~2× it. Key sessions are never touched.
+    reserved = sum(
+        e["template"].base_tss for e in plan if e["kind"] == "fixed"
+    )
+    filler_budget = max(0.0, float(weekly_tss_target_val) - reserved)
+    filler_running = 0.0
+
+    for e in plan:
+        template = e["template"]
+        if e["kind"] == "filler":
+            tss = template.base_tss
+            if filler_running + tss <= filler_budget * _FILLER_OVERSHOOT:
+                filler_running += tss
+            else:
+                rec = TEMPLATES["recovery_60"]
+                if filler_running + rec.base_tss <= filler_budget * _FILLER_RECOVERY_OVERSHOOT:
+                    template = rec
+                    filler_running += rec.base_tss
+                else:
+                    template = TEMPLATES["rest_day"]
+
         intervals = [
             {
                 "name": blk.name,
@@ -291,27 +439,17 @@ def build_week_drafts(
             }
             for blk in template.blocks
         ]
-        interval_structure = {"intervals": intervals}
-
         duration_s = sum(blk.duration_s for blk in template.blocks)
-        draft = PlannedWorkoutDraft(
+        drafts.append(PlannedWorkoutDraft(
             user_id=athlete.user_id,
-            date=day_date,
+            date=e["date"],
             sport=sport,
             title=template.name,
             duration_seconds_target=duration_s,
-            interval_structure=interval_structure,
+            interval_structure={"intervals": intervals},
             template_id=template.id,
             blocks_source="ai_prescribed",
-        )
-        drafts.append(draft)
-
-        # Update synthetic weekly progress counters
-        if session_type in _HARD_TYPES:
-            hard_sessions_done += 1
-        if session_type == "vo2":
-            vo2_sessions_done += 1
-        cumulative_tss += template.base_tss
+        ))
 
     return drafts
 

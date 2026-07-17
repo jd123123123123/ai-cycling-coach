@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Footprints, Bike, Dumbbell, Trophy, TrendingUp,
-  TrendingDown, Medal, ArrowUp, LineChart, Flag, ArrowRight, Scale, Zap,
-  Wind, SlidersHorizontal, Mountain, Award,
+  TrendingDown, Medal, ArrowUp, LineChart, Flag, ArrowRight, Award,
 } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { useLocale } from '../contexts/LocaleContext'
@@ -24,7 +23,7 @@ import {
 
 /**
  * Bike Progress — a 1:1 rebuild of the Pencil "Bike Progress" (POWER · PROGRESS)
- * design: a deep progression / projection / potential screen for cycling.
+ * design: a deep progression / projection screen for cycling.
  *
  * Every headline figure is derived from real hooks and the sport-science engine in
  * utils/progression:
@@ -402,10 +401,32 @@ export default function BikeProgressView() {
   const curTime = currentFtp != null ? eventTime(currentFtp) : null
   const projTime = projFtp != null ? eventTime(projFtp) : null
   const timeSavedMin = curTime != null && projTime != null ? Math.round((curTime - projTime) / 60) : null
+  // Reason line for the event card — WHY the projected finish is faster/slower,
+  // keyed to the real FTP delta + W/kg trend that drives the climb-power model.
+  const eventReason: string | null = (() => {
+    if (curTime == null || projTime == null || currentFtp == null || projFtp == null || timeSavedMin == null) return null
+    const dW = projFtp - currentFtp
+    const wkgFrom = currentFtp != null && weight ? n1(currentFtp / weight) : null
+    const wkgTo = projFtp != null && weight ? n1(projFtp / weight) : null
+    const wkgTxt = wkgFrom != null && wkgTo != null && wkgFrom !== wkgTo ? ` (${wkgFrom}→${wkgTo} W/kg)` : ''
+    const mins = Math.abs(timeSavedMin)
+    if (timeSavedMin >= 1) {
+      return de
+        ? `≈${mins} min schneller — deine FTP steigt +${dW} W${wkgTxt} und hebt dein Tempo an den 3.800 Hm.`
+        : `≈${mins} min faster — your FTP is trending +${dW} W${wkgTxt}, lifting your speed on the 3,800 m of climbing.`
+    }
+    if (timeSavedMin <= -1) {
+      return de
+        ? `≈${mins} min langsamer — die Form trendet abwärts (${dW} W); mehr Umfang, um dein Klettertempo zu halten.`
+        : `≈${mins} min slower — fitness is trending down (${dW} W); add volume to hold your climb speed.`
+    }
+    return de
+      ? 'Auf Kurs — du hältst dein aktuelles Klettertempo.'
+      : 'On track — holding your current climb speed.'
+  })()
 
   // ── Hero W/kg + percentile bucket ────────────────────────────────────────
   const ftpWkg = currentFtp != null && weight ? n1(currentFtp / weight) : null
-  const projWkg = projFtp != null && weight ? n1(projFtp / (weight - 2.5)) : null
   const pctTop = ftpWkg == null ? null : ftpWkg >= 4.5 ? 3 : ftpWkg >= 4.0 ? 8 : ftpWkg >= 3.5 ? 18 : ftpWkg >= 3.0 ? 35 : 55
   const firstWkg = ftpSeries.length >= 2 && weight ? n1(ftpSeries[0].ftp / weight) : null
 
@@ -819,68 +840,9 @@ export default function BikeProgressView() {
                 <Pill color={C.recovery} bg={soft(C.recovery, 15)}><TrendingDown size={12} />{Math.abs(timeSavedMin)} min</Pill>
               )}
             </div>
-          </Card>
-
-          {/* ═══ POTENTIAL ═══ */}
-          <SectionHeader tick={C.exercise} title={de ? 'POTENZIAL' : 'POTENTIAL'}
-            sub={de ? 'Wenn du optimierst · quantifiziertes Plus' : 'If you optimize · quantified upside'} />
-
-          {/* Levers */}
-          <div className="flex flex-col" style={{ gap: 12 }}>
-            {[
-              { Icon: Scale, title: de ? '2,5 kg abnehmen' : 'Lose 2.5 kg', desc: `${n1(weight)} → ${n1(weight - 2.5)} kg`, gain: ftpWkg != null ? `+${n1(currentFtp! / (weight - 2.5) - ftpWkg)} W/kg` : '+0.3 W/kg', impact: 3, effort: 3 },
-              { Icon: Bike, title: de ? '1 Schwellenfahrt / Wo.' : 'Add 1 threshold ride / wk', desc: de ? '+6 W FTP in 8 Wochen' : '+6 W FTP in 8 weeks', gain: '+6 W', impact: 4, effort: 2 },
-              { Icon: Zap, title: de ? '5-min VO₂-Leistung heben' : 'Lift 5-min VO2 power', desc: de ? 'Die Leistungsdecke anheben' : 'Raise the power ceiling', gain: '+18 W', impact: 4, effort: 4 },
-              { Icon: Wind, title: de ? 'Aero-Position optimieren' : 'Optimize aero position', desc: de ? 'Wirksam @ 40 km/h' : 'Effective @ 40 km/h', gain: '+15 W', impact: 3, effort: 2 },
-              { Icon: SlidersHorizontal, title: de ? '80 / 20 polarisieren' : 'Polarize 80 / 20 intensity', desc: de ? 'Nachhaltiges CTL-Wachstum' : 'Sustainable CTL growth', gain: de ? 'Robust' : 'Durable', impact: 3, effort: 2 },
-            ].map((l, i) => (
-              <div key={i} className="rounded-[18px]" style={{ padding: 16, background: C.paper2, border: `1px solid ${C.rule}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="flex items-center" style={{ gap: 12 }}>
-                  <span className="flex items-center justify-center rounded-[12px]" style={{ width: 40, height: 40, background: soft(C.accent, 15), flex: 'none' }}>
-                    <l.Icon size={22} style={{ color: C.accent }} />
-                  </span>
-                  <div className="flex flex-col" style={{ gap: 2, minWidth: 0, flex: 1 }}>
-                    <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{l.title}</span>
-                    <span style={{ fontSize: 12, color: C.ink2 }}>{l.desc}</span>
-                  </div>
-                  <span className="num-display rounded-full" style={{ padding: '7px 12px', fontSize: 14, fontWeight: 700, color: C.accent, background: soft(C.accent, 15), flex: 'none' }}>{l.gain}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center" style={{ gap: 16 }}>
-                    {([['Impact', l.impact], ['Effort', l.effort]] as const).map(([lab, n]) => (
-                      <span key={lab} className="flex items-center" style={{ gap: 6 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{lab === 'Impact' ? (de ? 'Wirkung' : 'Impact') : (de ? 'Aufwand' : 'Effort')}</span>
-                        <span className="flex items-center" style={{ gap: 4 }}>
-                          {[0, 1, 2, 3, 4].map((d) => <span key={d} style={{ width: 5, height: 5, borderRadius: 5, background: d < n ? C.accent : C.surface3 }} />)}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                  <span className="inline-flex items-center rounded-full" style={{ gap: 5, padding: '8px 14px', background: C.surface3, fontSize: 12, fontWeight: 700, color: C.ink }}>
-                    {de ? 'Anwenden' : 'Apply'} <ArrowRight size={14} />
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Upside banner */}
-          <Card accent pad={20} gap={16}>
-            <div className="flex items-center" style={{ gap: 16 }}>
-              <span className="flex items-center justify-center rounded-full" style={{ width: 48, height: 48, background: C.accent, flex: 'none' }}>
-                <Mountain size={26} style={{ color: C.ink }} />
-              </span>
-              <div className="flex flex-col" style={{ gap: 3, minWidth: 0 }}>
-                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.accent }}>{de ? 'VOLLES POTENZIAL' : 'FULL UPSIDE'}</span>
-                <div className="flex items-end" style={{ gap: 7 }}>
-                  <span className="num-display" style={{ fontSize: 32, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{projWkg ?? DASH}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: C.ink2, paddingBottom: 6 }}>W/kg</span>
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 500, color: C.ink2 }}>
-                  {projWkg != null && projWkg >= 4.5 ? (de ? 'Kategorie-1-Kletterterrain' : 'Category-1 climber territory') : (de ? 'Starker Amateurbereich' : 'Strong amateur territory')}
-                </span>
-              </div>
-            </div>
+            {eventReason && (
+              <span style={{ fontSize: 12, fontWeight: 500, color: C.ink2, lineHeight: 1.4 }}>{eventReason}</span>
+            )}
           </Card>
 
           {/* ═══ PRO LAB (Pro mode) ═══ */}

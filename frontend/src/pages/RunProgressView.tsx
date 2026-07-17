@@ -4,7 +4,6 @@
  *   Header (sport toggle) · RangeFilter · EngineHero (Aerobic engine / VO₂max)
  *   ── PROGRESS:   VO₂max trend · Personal records · Weekly volume
  *   ── PROJECTION: VO₂max forecast · Race-time trajectory
- *   ── POTENTIAL:  Levers · Upside banner
  *   ── PRO LAB:    Elite physiology · Biomechanics · Durability · Fuelling &
  *                  sweat · Metabolic · Body comp        (shown in Pro mode)
  *   ── AMATEUR MODE: Simple/Pro toggle · Coach-explains · Beginner fundamentals
@@ -26,7 +25,7 @@ import { useNavigate } from 'react-router-dom'
 import { subDays, startOfWeek, startOfMonth, format, parseISO } from 'date-fns'
 import {
   ArrowLeft, Footprints, Bike, Dumbbell, Trophy, TrendingUp, ArrowDownRight,
-  Flag, ArrowRight, Medal, Gauge, Route, Scale, Thermometer, Plus, Zap,
+  Flag, ArrowRight, Medal, Gauge, Zap,
   Leaf, FlaskConical, MessageCircle, Info,
 } from 'lucide-react'
 import { useDailyMetrics } from '../hooks/useDailyMetrics'
@@ -300,6 +299,22 @@ export default function RunProgressView() {
     return { rows, projVdot }
   }, [perf.bestVdot, forecastData, slopePerMonth])
 
+  // Reason line for the predicted race times — WHY they get faster, keyed to the
+  // real VO₂max/VDOT trend that projects the VDOT forward.
+  const raceReason: string | null = useMemo(() => {
+    if (!race || perf.bestVdot == null) return null
+    const gain = race.projVdot - perf.bestVdot
+    const vFrom = Math.round(perf.bestVdot)
+    const vTo = Math.round(race.projVdot)
+    if (gain >= 0.5) {
+      return T(
+        `Faster across the board — VO₂max is trending up, lifting your VDOT ${vFrom}→${vTo} (+${gain.toFixed(1)} pts).`,
+        `Überall schneller — deine VO₂max steigt und hebt deinen VDOT ${vFrom}→${vTo} (+${gain.toFixed(1)} Pkt).`,
+      )
+    }
+    return T('On track — holding your current race times.', 'Auf Kurs — du hältst deine aktuellen Rennzeiten.')
+  }, [race, perf.bestVdot, de])
+
   const goalName = useMemo(() => {
     const ev = brief?.evidence as Record<string, unknown> | undefined
     const ath = ev?.athlete as Record<string, unknown> | undefined
@@ -340,7 +355,7 @@ export default function RunProgressView() {
         <div className="flex flex-col gap-3.5 pt-3">
           <div className="flex flex-col gap-0.5">
             <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--color-muted)', letterSpacing: 1 }}>
-              {T('PROGRESS & POTENTIAL', 'FORTSCHRITT & POTENZIAL')}
+              {T('PROGRESS & PROJECTION', 'FORTSCHRITT & PROGNOSE')}
             </span>
             <h1 className="text-[28px] font-bold font-[Sora]" style={{ color: 'var(--color-ink)' }}>
               {T('Running', 'Laufen')}
@@ -682,52 +697,8 @@ export default function RunProgressView() {
               <span className="text-sm" style={{ color: 'var(--color-muted)' }}>{T('Log a run ≥ 2 km to predict race times.', 'Lauf ≥ 2 km erfassen für Rennprognosen.')}</span>
             )}
           </div>
-        </div>
-
-        {/* ══ POTENTIAL ═════════════════════════════════════════════════ */}
-        <SectionHeader color="var(--color-accent)" title={T('Potential', 'Potenzial')} sub={T('If you optimize — highest-leverage moves', 'Wenn du optimierst — mit größter Hebelwirkung')} />
-
-        <div className="flex flex-col gap-3 mt-4">
-          {[
-            { icon: Gauge, color: 'var(--color-accent)', action: T('Raise cadence to 183+ spm', 'Kadenz auf 183+ spm erhöhen'), sub: T('Shorter ground contact, less braking', 'Kürzere Bodenkontaktzeit, weniger Bremsen'), gain: T('save 8 s/km', '8 s/km sparen'), impact: 3, effort: 2 },
-            { icon: Route, color: 'var(--color-strain)', action: T('Add 20 km/wk aerobic base', '20 km/Wo aerobe Basis ergänzen'), sub: T('Bigger engine in ~10 weeks', 'Größerer Motor in ~10 Wochen'), gain: '+2 VO₂max', impact: 3, effort: 3 },
-            { icon: Scale, color: 'var(--color-amber)', action: T('Drop 1.5 kg to race weight', '1,5 kg bis zum Rennge­wicht'), sub: T('Better power-to-weight on climbs', 'Besseres Leistungsgewicht am Berg'), gain: '−6 s/km', impact: 2, effort: 2 },
-            { icon: Dumbbell, color: 'var(--color-exercise)', action: T('2× strength sessions / week', '2× Krafttraining / Woche'), sub: T('Hold form in the final 10 km', 'Form über die letzten 10 km halten'), gain: T('−3% fade', '−3 % Abfall'), impact: 2, effort: 2 },
-            { icon: Thermometer, color: 'var(--color-move)', action: T('Heat + hill adaptation block', 'Hitze- + Berg-Anpassungsblock'), sub: T('Race-day heat & elevation resilience', 'Widerstand gegen Hitze & Höhe'), gain: '+3% GAP', impact: 2, effort: 3 },
-          ].map((l) => (
-            <LeverCard key={l.action} {...l} applyLabel={T('Apply', 'Anwenden')} impactLabel={T('Impact', 'Wirkung')} effortLabel={T('Effort', 'Aufwand')} />
-          ))}
-        </div>
-
-        {/* Upside banner */}
-        <div className="rounded-[24px] p-5 mt-4 flex flex-col gap-4" style={{ background: 'var(--color-accent-soft)', border: '1px solid var(--color-accent)' }}>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center rounded-full shrink-0" style={{ background: 'var(--color-accent)', width: 44, height: 44 }}>
-              <Zap size={26} style={{ color: 'var(--color-ink)' }} />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold" style={{ color: 'var(--color-muted)', letterSpacing: 1 }}>{T('FULL UPSIDE IF YOU OPTIMIZE', 'MAXIMUM BEI OPTIMIERUNG')}</span>
-              <div className="flex items-end gap-2">
-                <span className="text-[26px] font-bold font-[Sora]" style={{ color: 'var(--color-accent)' }}>−17 s/km</span>
-                <span className="text-[13px] font-medium pb-1" style={{ color: 'var(--color-ink-2)' }}>{T('faster', 'schneller')}</span>
-              </div>
-            </div>
-          </div>
-          <span className="text-[13px]" style={{ color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
-            {T('Every lever stacked compounds into your biggest breakthrough yet.', 'Alle Hebel gestapelt ergeben deinen bislang größten Durchbruch.')}
-          </span>
-          {prs['5K'] && (
-            <div className="flex items-center justify-between rounded-[14px] p-3.5" style={{ background: '#0A0C0FB3', border: '1px solid var(--color-accent)33' }}>
-              <div className="flex items-center gap-2.5">
-                <span className="text-[15px] font-bold font-[Sora]" style={{ color: 'var(--color-ink)' }}>5K</span>
-                <span className="text-[13px] font-medium" style={{ color: 'var(--color-muted)' }}>{fmtRaceTime(prs['5K']!.best)}</span>
-                <ArrowRight size={14} style={{ color: 'var(--color-muted)' }} />
-                <span className="text-[17px] font-bold font-[Sora]" style={{ color: 'var(--color-accent)' }}>{fmtRaceTime(prs['5K']!.best * 0.94)}</span>
-              </div>
-              <div className="rounded-full px-2.5 py-1.5" style={{ background: 'var(--color-accent)' }}>
-                <span className="text-xs font-bold" style={{ color: 'var(--color-ink)' }}>{T('optimized', 'optimiert')}</span>
-              </div>
-            </div>
+          {raceReason && (
+            <span className="text-[12px]" style={{ color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{raceReason}</span>
           )}
         </div>
 
@@ -1079,51 +1050,6 @@ function BigTile({ value, unit, label, accent }: { value: string; unit: string; 
       </div>
       <span className="text-[13px] font-semibold" style={{ color: 'var(--color-ink-2)' }}>{label}</span>
       <div className="rounded-[2px]" style={{ background: accent, width: 28, height: 3 }} />
-    </div>
-  )
-}
-
-function LeverCard({ icon: Ic, color, action, sub, gain, impact, effort, applyLabel, impactLabel, effortLabel }: {
-  icon: typeof Gauge; color: string; action: string; sub: string; gain: string; impact: number; effort: number; applyLabel: string; impactLabel: string; effortLabel: string
-}) {
-  return (
-    <div className="rounded-[18px] p-4 flex flex-col gap-3.5" style={card}>
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center rounded-xl shrink-0" style={{ background: `${color}26`, width: 42, height: 42 }}>
-          <Ic size={22} style={{ color }} />
-        </div>
-        <div className="flex-1 flex flex-col gap-0.5">
-          <span className="text-sm font-bold" style={{ color: 'var(--color-ink)', lineHeight: 1.25 }}>{action}</span>
-          <span className="text-xs" style={{ color: 'var(--color-ink-2)', lineHeight: 1.3 }}>{sub}</span>
-        </div>
-        <div className="rounded-full px-2.5 py-1.5 shrink-0" style={{ background: 'var(--color-recovery)26' }}>
-          <span className="text-[13px] font-bold font-[Sora]" style={{ color: 'var(--color-recovery)' }}>{gain}</span>
-        </div>
-      </div>
-      <div className="h-px w-full" style={{ background: 'var(--color-rule)' }} />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3.5">
-          <Dots label={impactLabel} n={impact} />
-          <Dots label={effortLabel} n={effort} />
-        </div>
-        <div className="flex items-center gap-1.5 rounded-full px-3.5 py-2" style={{ background: 'var(--color-accent-soft)' }}>
-          <span className="text-[13px] font-bold" style={{ color: 'var(--color-accent)' }}>{applyLabel}</span>
-          <Plus size={15} style={{ color: 'var(--color-accent)' }} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function Dots({ label, n }: { label: string; n: number }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] font-medium" style={{ color: 'var(--color-muted)' }}>{label}</span>
-      <div className="flex items-center gap-1">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-full" style={{ width: 5, height: 5, background: i < n ? 'var(--color-accent)' : 'var(--color-surface-3)' }} />
-        ))}
-      </div>
     </div>
   )
 }

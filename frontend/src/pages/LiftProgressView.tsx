@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Footprints, Bike, Dumbbell, TrendingUp, ArrowUp, ArrowDown, Trophy, Flag,
-  Check, Zap, Lock, Medal, Utensils, Moon, RotateCcw, Rocket, Plus, Gauge,
+  Check, Zap, Lock, Medal, Gauge,
   BarChart3, Lightbulb, FlaskConical, Smile, CalendarCheck, Scale,
 } from 'lucide-react'
 import { subDays } from 'date-fns'
@@ -23,7 +23,7 @@ import { RoutinesManager } from '../components/strength/RoutinesManager'
  * Lift Progress — the standalone /progress/lift screen. A 1:1 rebuild of the
  * Pencil "Strength" design: header + range filter, DOTS hero, PROGRESS
  * (total e1RM / by-lift / recent PRs), PROJECTION (forecast / projected 1RM /
- * level trajectory), POTENTIAL (5 optimisation levers + summary), PRO LAB
+ * level trajectory), PRO LAB
  * (VBT / lifting readiness / volume landmarks / force & symmetry / body comp),
  * and AMATEUR MODE (Simple/Pro toggle → coach-explains + simple scorecard).
  *
@@ -322,44 +322,6 @@ export default function LiftProgressView() {
         : { txt: de ? 'Erschöpft' : 'Depleted', color: C_BAD, soft: 'rgba(250,30,85,0.15)' }
 
   // ---- static coaching content (rendered 1:1) ------------------------------
-  const levers = [
-    {
-      icon: Dumbbell, color: C_DEAD, dots: 3, dotColor: C_DEAD,
-      title: de ? 'Posteriore-Kette-Volumen ergänzen' : 'Add posterior-chain volume',
-      sub: de ? 'RDLs + Good Mornings, 2×/Woche' : 'RDLs + good mornings, 2×/week',
-      gain: de ? '+12 kg Kreuzheben' : '+12 kg deadlift', gainColor: C_DEAD,
-      time: de ? '10 Wo' : '10 wk', impact: de ? 'Hoher Impact' : 'High impact',
-    },
-    {
-      icon: TrendingUp, color: C_BENCH, dots: 2, dotColor: C_BENCH,
-      title: de ? 'Bank-Sticking-Point angehen' : 'Attack the bench sticking point',
-      sub: de ? 'Pausenwiederholungen mittig, 6-Wochen-Block' : 'Pause reps at mid-range, 6 wk block',
-      gain: de ? '+7,5 kg Bankdrücken' : '+7.5 kg bench', gainColor: C_BENCH,
-      time: de ? '8 Wo' : '8 wk', impact: de ? 'Mittlerer Impact' : 'Medium impact',
-    },
-    {
-      icon: Utensils, color: C_GOOD, dots: 3, dotColor: C_GOOD,
-      title: de ? 'Protein auf 1,8 g/kg erhöhen' : 'Raise protein to 1.8 g/kg',
-      sub: de ? '+30 g/Tag für Erholung & Volumen' : '+30 g/day for recovery & volume',
-      gain: de ? '+ Erholung' : '+ recovery', gainColor: C_GOOD,
-      time: de ? 'laufend' : 'ongoing', impact: de ? 'Hoher Impact' : 'High impact',
-    },
-    {
-      icon: Moon, color: C_SQUAT, dots: 3, dotColor: C_SQUAT,
-      title: de ? 'Konstant 8 Std schlafen' : 'Sleep 8h consistently',
-      sub: de ? 'Größter kostenloser Kraft-Multiplikator' : 'Biggest free strength multiplier',
-      gain: de ? '+5–8% Leistung' : '+5–8% output', gainColor: C_SQUAT,
-      time: de ? '2 Wo' : '2 wk', impact: de ? 'Hoher Impact' : 'High impact',
-    },
-    {
-      icon: RotateCcw, color: C_AMBER, dots: 2, dotColor: C_AMBER,
-      title: de ? 'Deload alle 5 Wochen einplanen' : 'Program a deload every 5th wk',
-      sub: de ? 'Durchbricht das Kniebeuge-Plateau' : 'Breaks the squat plateau',
-      gain: de ? 'Plateau brechen' : 'break plateau', gainColor: C_AMBER,
-      time: de ? 'jetzt' : 'now', impact: de ? 'Mittlerer Impact' : 'Medium impact',
-    },
-  ]
-
   const volumeMuscles = [
     { name: de ? 'Quads' : 'Quads' },
     { name: de ? 'Rücken' : 'Back' },
@@ -384,7 +346,7 @@ export default function LiftProgressView() {
         <div className="flex flex-col" style={{ gap: 14 }}>
           <div className="flex flex-col" style={{ gap: 2 }}>
             <span className="eyebrow" style={{ fontSize: 12, letterSpacing: 1, color: 'var(--color-muted)' }}>
-              {de ? 'FORTSCHRITT · PROGNOSE · POTENZIAL' : 'PROGRESS · PROJECTION · POTENTIAL'}
+              {de ? 'FORTSCHRITT · PROGNOSE' : 'PROGRESS · PROJECTION'}
             </span>
             <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-ink)' }}>
               {de ? 'Kraft' : 'Strength'}
@@ -696,75 +658,6 @@ export default function LiftProgressView() {
               </div>
             ))}
           </div>
-        </Card>
-
-        {/* ===================== SECTION: POTENTIAL ===================== */}
-        <SectionHeader color={C_DEAD} title={de ? 'Potenzial' : 'Potential'} sub={de ? 'Ungenutztes Aufwärtspotenzial — wenn du optimierst' : 'Untapped upside — if you optimize'} />
-
-        {levers.map((lv) => (
-          <Card key={lv.title} gap={12} pad={16}>
-            <div className="flex items-center" style={{ gap: 12 }}>
-              <div className="flex items-center justify-center" style={{ width: 40, height: 40, borderRadius: 12, background: '#000000' }}>
-                <lv.icon size={20} color={lv.color} />
-              </div>
-              <div className="flex flex-col flex-1" style={{ gap: 2 }}>
-                <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{lv.title}</span>
-                <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{lv.sub}</span>
-              </div>
-              <div className="flex flex-col items-end" style={{ gap: 2 }}>
-                <div className="rounded-full" style={{ padding: '5px 10px', background: '#000000' }}>
-                  <span className="num-display" style={{ fontSize: 13, fontWeight: 700, color: lv.gainColor }}>{lv.gain}</span>
-                </div>
-                <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{lv.time}</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center" style={{ gap: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{lv.impact}</span>
-                <div className="flex items-center" style={{ gap: 3 }}>
-                  {[0, 1, 2].map((i) => (
-                    <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i < lv.dots ? lv.dotColor : 'var(--color-surface-3)' }} />
-                  ))}
-                </div>
-              </div>
-              <button
-                className="flex items-center rounded-full"
-                style={{ gap: 5, padding: '7px 14px', border: `1px solid ${lv.color}`, background: 'transparent' }}
-              >
-                <Plus size={14} color={lv.color} />
-                <span className="num-display" style={{ fontSize: 12, fontWeight: 700, color: lv.color }}>{de ? 'Anwenden' : 'Apply'}</span>
-              </button>
-            </div>
-          </Card>
-        ))}
-
-        {/* Potential summary */}
-        <Card soft gap={14}>
-          <div className="flex items-center" style={{ gap: 12 }}>
-            <div className="flex items-center justify-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-accent)' }}>
-              <Rocket size={22} color="var(--color-ink)" />
-            </div>
-            <div className="flex flex-col flex-1" style={{ gap: 1 }}>
-              <span className="num-display" style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Volles Potenzial freigeschaltet' : 'Full potential unlocked'}</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-accent)' }}>{de ? 'Alle Hebel oben kombinieren' : 'Stack every lever above'}</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between" style={{ paddingTop: 4 }}>
-            {[
-              { v: DASH, l: de ? 'prognost. Gesamt' : 'projected total' },
-              { v: DASH, l: de ? 'DOTS-Wert' : 'DOTS score' },
-              { v: DASH, l: de ? 'Kraftniveau' : 'strength level' },
-            ].map((s) => (
-              <div key={s.l} className="flex flex-col" style={{ gap: 2 }}>
-                <span className="num-display" style={{ fontSize: 19, fontWeight: 700, color: 'var(--color-ink)' }}>{s.v}</span>
-                <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{s.l}</span>
-              </div>
-            ))}
-          </div>
-          <button className="flex items-center justify-center rounded-full" style={{ gap: 8, padding: 14, background: 'var(--color-accent)' }}>
-            <Zap size={18} color="var(--color-ink)" />
-            <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Optimierungsplan erstellen' : 'Build my optimization plan'}</span>
-          </button>
         </Card>
 
         {/* ===================== SECTION: PRO LAB (pro mode only) ===================== */}
