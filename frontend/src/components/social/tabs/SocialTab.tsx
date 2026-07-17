@@ -167,7 +167,6 @@ export default function SocialTab() {
   const invites = incoming ?? []
   const acceptInvite = useAcceptInvite()
   const declineInvite = useDeclineInvite()
-  const [findOpen, setFindOpen] = useState(false)
 
   // ── Nudges: incoming trash-talk feed + send ──
   const { data: incomingNudges } = useIncomingNudges()
@@ -266,8 +265,14 @@ export default function SocialTab() {
   }
 
   function onOpenFinder() {
-    setFindOpen(true)
     requestAnimationFrame(() => finderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
+  // Open the create-challenge form and bring it into view — reached from the
+  // finder ("Challenge your crew") so adding people flows straight into a duel.
+  function onOpenChallenge() {
+    setChallengeFormOpen(true)
+    requestAnimationFrame(() => challengeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
 
   // Copy for the selected leaderboard window (subtitle prefix + row suffix).
@@ -399,6 +404,22 @@ export default function SocialTab() {
             {label}
           </button>
         ))}
+      </div>
+
+      {/* ── FIND PEOPLE (prominent, persistent) — search anyone on the app and
+          add them to your crew. Kept high on the page so building a crew is the
+          first obvious action. ── */}
+      <div ref={finderRef} className="rounded-[24px] p-5 flex flex-col gap-3.5" style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-accent)' }}>
+        <div className="flex items-center gap-3">
+          <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'color-mix(in srgb, var(--color-accent) 18%, transparent)' }}>
+            <UserPlus size={24} style={{ color: 'var(--color-accent)' }} />
+          </span>
+          <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+            <span className="num-display truncate" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Menschen finden' : 'Find people'}</span>
+            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Fahrer suchen und in deine Crew holen' : 'Search anyone and add them to your crew'}</span>
+          </div>
+        </div>
+        <FindPeople de={de} hasCrew={hasCrew} onChallenge={onOpenChallenge} />
       </div>
 
       {/* ── BATTLE HERO(ES) — one live weekly battle per crew member ── */}
@@ -606,6 +627,15 @@ export default function SocialTab() {
         )}
 
         {challengeFormOpen && (
+          <div className="flex items-center gap-1.5 rounded-[12px]" style={{ background: 'var(--color-surface-2)', padding: '8px 11px' }}>
+            <Users size={13} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.35 }}>
+              {de ? 'Alle in deiner Crew treten gegen dieses Ziel an.' : 'Everyone in your crew competes against this target.'}
+            </span>
+          </div>
+        )}
+
+        {challengeFormOpen && (
           <NewChallengeForm
             de={de}
             pending={createChallenge.isPending}
@@ -774,20 +804,6 @@ export default function SocialTab() {
         )}
       </div>
 
-      {/* ── FIND PEOPLE ── */}
-      <div ref={finderRef} className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
-        <button type="button" onClick={() => setFindOpen((v) => !v)} className="flex items-center gap-3 w-full text-left">
-          <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'var(--color-surface-2)' }}>
-            <UserPlus size={24} style={{ color: 'var(--color-accent)' }} />
-          </span>
-          <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-            <span className="num-display truncate" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Menschen finden' : 'Find people'}</span>
-            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Fahrer nach Handle suchen und verbinden' : 'Search riders by handle and connect'}</span>
-          </div>
-          <ChevronRight size={18} style={{ color: 'var(--color-muted)', transform: findOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
-        </button>
-        {findOpen && <FindPeople de={de} />}
-      </div>
     </div>
   )
 }
@@ -987,20 +1003,34 @@ function InviteCard({ inv, de, onAccept, onDecline, accepting, declining }: {
   )
 }
 
-function FindPeople({ de }: { de: boolean }) {
+function FindPeople({ de, hasCrew, onChallenge }: { de: boolean; hasCrew: boolean; onChallenge?: () => void }) {
   const [q, setQ] = useState('')
-  const { data: results, isFetching } = useDiscover(q)
+  // Debounce keystrokes so we don't fire a request per character. An empty
+  // debounced query returns everyone (browsable suggestions).
+  const [debounced, setDebounced] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q.trim()), 250)
+    return () => clearTimeout(t)
+  }, [q])
+
+  const { data: results, isFetching } = useDiscover(debounced)
   const connect = useConnect()
   const [requested, setRequested] = useState<Set<number>>(new Set())
+  // The last handle we successfully invited — drives the confirmation banner.
+  const [lastInvited, setLastInvited] = useState<string | null>(null)
 
-  function onConnect(userId: number) {
+  function onConnect(userId: number, handle: string) {
     connect.mutate(userId, {
-      onSuccess: () => setRequested((prev) => new Set(prev).add(userId)),
+      onSuccess: () => {
+        setRequested((prev) => new Set(prev).add(userId))
+        setLastInvited(handle)
+      },
     })
   }
 
   const rows = results ?? []
-  const hasQuery = q.trim().length >= 1
+  const hasQuery = debounced.length >= 1
+  const invitedCount = requested.size
 
   return (
     <div className="flex flex-col gap-3">
@@ -1010,9 +1040,10 @@ function FindPeople({ de }: { de: boolean }) {
           type="text"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={de ? 'Handle suchen…' : 'Search by handle…'}
+          placeholder={de ? 'Nach Handle oder E-Mail suchen…' : 'Search by handle or email…'}
           className="flex-1 bg-transparent outline-none"
           style={{ fontSize: 14, color: 'var(--color-ink)' }}
+          aria-label={de ? 'Fahrer suchen' : 'Search riders'}
         />
         {q && (
           <button type="button" onClick={() => setQ('')} aria-label={de ? 'Löschen' : 'Clear'} className="grid place-items-center shrink-0">
@@ -1021,17 +1052,61 @@ function FindPeople({ de }: { de: boolean }) {
         )}
       </div>
 
-      {!hasQuery ? (
-        <p style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Tippe einen Handle, um Fahrer zu finden.' : 'Type a handle to find riders.'}</p>
-      ) : isFetching && rows.length === 0 ? (
-        <p style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Suche…' : 'Searching…'}</p>
-      ) : rows.length === 0 ? (
-        <p style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Niemand gefunden.' : 'No one found.'}</p>
-      ) : (
-        rows.map((r) => (
-          <PersonRow key={r.user_id} r={r} de={de} requested={requested.has(r.user_id)} onConnect={() => onConnect(r.user_id)} connecting={connect.isPending && connect.variables === r.user_id} />
-        ))
+      {/* Confirmation — invite sent, closes the loop with the accept step */}
+      {lastInvited && (
+        <div className="rounded-[12px] flex items-start gap-2" style={{ background: 'color-mix(in srgb, var(--color-recovery) 16%, transparent)', padding: '10px 12px' }}>
+          <Check size={15} strokeWidth={2.6} style={{ color: 'var(--color-recovery)', flexShrink: 0, marginTop: 1 }} />
+          <span className="flex-1 min-w-0" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.4 }}>
+            {de
+              ? `Einladung an ${lastInvited} gesendet — sie erscheinen in deiner Crew, sobald sie annehmen.`
+              : `Invite sent to ${lastInvited} — they'll appear in your crew once they accept.`}
+          </span>
+          <button type="button" onClick={() => setLastInvited(null)} aria-label={de ? 'Schließen' : 'Dismiss'} className="grid place-items-center shrink-0">
+            <X size={14} style={{ color: 'var(--color-muted)' }} />
+          </button>
+        </div>
       )}
+
+      {/* Section label — clarifies suggestions vs. search results */}
+      {rows.length > 0 && (
+        <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>
+          {hasQuery ? (de ? 'ERGEBNISSE' : 'RESULTS') : (de ? 'VORSCHLÄGE' : 'SUGGESTIONS')}
+        </span>
+      )}
+
+      {/* Results / suggestions — scroll-capped so the list never dominates */}
+      <div className="flex flex-col gap-2" style={{ maxHeight: 320, overflowY: 'auto' }}>
+        {isFetching && rows.length === 0 ? (
+          <p style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Suche…' : 'Searching…'}</p>
+        ) : rows.length === 0 ? (
+          <p style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+            {hasQuery ? (de ? 'Niemand gefunden.' : 'No one found.') : (de ? 'Noch keine anderen Fahrer auf der App.' : 'No other riders on the app yet.')}
+          </p>
+        ) : (
+          rows.map((r) => (
+            <PersonRow key={r.user_id} r={r} de={de} requested={requested.has(r.user_id)} onConnect={() => onConnect(r.user_id, r.handle)} connecting={connect.isPending && connect.variables === r.user_id} />
+          ))
+        )}
+      </div>
+
+      {connect.isError && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Einladen fehlgeschlagen — versuch es nochmal.' : 'Invite failed — try again.'}</span>
+      )}
+
+      {/* Close the loop: once you've added riders, challenge the whole crew */}
+      {onChallenge && (
+        <button type="button" onClick={onChallenge} className="inline-flex items-center justify-center gap-1.5 rounded-full w-full" style={{ background: invitedCount > 0 || hasCrew ? 'var(--color-accent)' : 'var(--color-surface-2)', padding: 12, marginTop: 2 }}>
+          <Target size={16} style={{ color: invitedCount > 0 || hasCrew ? 'var(--color-ink)' : 'var(--color-ink-2)' }} />
+          <span className="num-display" style={{ fontSize: 13, color: invitedCount > 0 || hasCrew ? 'var(--color-ink)' : 'var(--color-ink-2)' }}>
+            {de ? 'Crew herausfordern' : 'Challenge your crew'}
+          </span>
+        </button>
+      )}
+      <p style={{ fontSize: 11, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+        {de
+          ? 'Jeder, den du hinzufügst, tritt bei einer Crew-Challenge automatisch mit an.'
+          : 'Everyone you add competes together in a crew challenge — no per-person setup.'}
+      </p>
     </div>
   )
 }
@@ -1050,13 +1125,13 @@ function PersonRow({ r, de, requested, onConnect, connecting }: {
         </span>
       ) : requested ? (
         <span className="inline-flex items-center gap-1.5 rounded-full" style={{ background: 'var(--color-surface-3)', padding: '7px 12px' }}>
-          <Check size={14} style={{ color: 'var(--color-recovery)' }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-recovery)' }}>{de ? 'Angefragt ✓' : 'Requested ✓'}</span>
+          <Clock size={13} style={{ color: 'var(--color-amber)' }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-amber)' }}>{de ? 'Eingeladen · offen' : 'Invited · pending'}</span>
         </span>
       ) : (
         <button type="button" onClick={onConnect} disabled={connecting} className="inline-flex items-center gap-1.5 rounded-full shrink-0" style={{ background: 'var(--color-accent)', padding: '7px 13px', opacity: connecting ? 0.6 : 1 }}>
           <UserPlus size={14} style={{ color: 'var(--color-ink)' }} />
-          <span className="num-display" style={{ fontSize: 12, color: 'var(--color-ink)' }}>{de ? 'Verbinden' : 'Connect'}</span>
+          <span className="num-display" style={{ fontSize: 12, color: 'var(--color-ink)' }}>{de ? 'Hinzufügen' : 'Add'}</span>
         </button>
       )}
     </div>

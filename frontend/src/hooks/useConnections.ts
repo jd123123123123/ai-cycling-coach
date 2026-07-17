@@ -25,14 +25,14 @@ const noRetryOnAuth = (failureCount: number, error: unknown) => {
   return failureCount < 1
 }
 
-// Search app users by handle. Enabled once the query has at least one char; an
-// empty query would return every user, which we skip to avoid a heavy fetch.
+// Search app users by handle/email. An empty query intentionally returns
+// everyone (up to the backend limit) so the finder is browsable — you can
+// scan suggestions before typing. Callers debounce keystrokes.
 export function useDiscover(q: string) {
   const query = q.trim()
   return useQuery<DiscoverResult[]>({
     queryKey: [...DISCOVER_KEY, query],
     queryFn: () => discoverPeople(query || undefined),
-    enabled: query.length >= 1,
     staleTime: 30 * 1000,
     retry: noRetryOnAuth,
   })

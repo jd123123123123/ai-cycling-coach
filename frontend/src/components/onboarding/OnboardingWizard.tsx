@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'motion/react'
-import { Check, ChevronLeft, ChevronRight, Activity, HeartPulse, Zap, CalendarDays, Gauge, Sparkles, Loader2 } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Activity, HeartPulse, Zap, CalendarDays, Gauge, Sparkles, Loader2, Watch, Bike, Apple, Copy } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useGarminStatus } from '../../hooks/useGarminStatus'
+import { useWahooStatus } from '../../hooks/useWahooStatus'
+import { getWahooConnectUrl } from '../../api/wahoo'
+import { getAppleHealthSetup, type AppleHealthSetup } from '../../api/appleHealth'
 import { apiClient } from '../../api/client'
 import { grantConsent } from '../../api/consent'
 import { CONSENT_TYPES } from '../../types/consent'
@@ -61,7 +64,7 @@ interface Form {
 
 const STEP_META = [
   { key: 'welcome', icon: Sparkles },
-  { key: 'garmin', icon: Activity },
+  { key: 'connect', icon: Activity },
   { key: 'you', icon: HeartPulse },
   { key: 'zones', icon: Zap },
   { key: 'availability', icon: CalendarDays },
@@ -83,6 +86,7 @@ export default function OnboardingWizard() {
   const { data: actsData } = useActivitiesRange(ninetyAgo, today)
   const { data: metricsData } = useDailyMetrics(thirtyAgo, today)
   const { data: garmin } = useGarminStatus()
+  const { data: wahoo } = useWahooStatus()
 
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
@@ -205,8 +209,8 @@ export default function OnboardingWizard() {
   }
 
   const stepTitles = de
-    ? ['Willkommen', 'Garmin verbinden', 'Über dich', 'Schwellen & Zonen', 'Verfügbarkeit', 'Dein Ziel', 'Wochenintensität', 'Überblick']
-    : ['Welcome', 'Connect Garmin', 'About you', 'Thresholds & zones', 'Availability', 'Your goal', 'Weekly intensity', 'Review']
+    ? ['Willkommen', 'Daten verbinden', 'Über dich', 'Schwellen & Zonen', 'Verfügbarkeit', 'Dein Ziel', 'Wochenintensität', 'Überblick']
+    : ['Welcome', 'Connect your data', 'About you', 'Thresholds & zones', 'Availability', 'Your goal', 'Weekly intensity', 'Review']
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--color-paper)', color: 'var(--color-ink)' }}>
@@ -254,7 +258,7 @@ export default function OnboardingWizard() {
             transition={{ duration: 0.22 }}
           >
             {step === 0 && <WelcomeStep de={de} form={form} set={set} />}
-            {step === 1 && <GarminStep de={de} connected={!!garmin?.connected} qc={qc} />}
+            {step === 1 && <ConnectDataStep de={de} garminConnected={!!garmin?.connected} wahooConnected={!!wahoo?.connected} qc={qc} onSkip={() => setStep((s) => s + 1)} />}
             {step === 2 && <YouStep de={de} form={form} set={set} predicted={predictedMaxHr(ageFromDob(form.dob))} obsMaxHr={obsMaxHr} obsRestHr={obsRestHr} />}
             {step === 3 && <ZonesStep de={de} form={form} set={set} estFtp={estFtp} pZones={pZones} hZones={hZones} />}
             {step === 4 && <AvailabilityStep de={de} form={form} set={set} />}
@@ -449,6 +453,272 @@ function consentDesc(de: boolean, type: string, fallback: string): string {
     : type === 'data_analytics'
     ? 'Wir nutzen aggregierte, anonymisierte Daten zur Verbesserung unserer Algorithmen. Deine Einzeldaten werden nie geteilt.'
     : fallback
+}
+
+// ── Connect your data — pick one of Garmin / Wahoo / Apple Health ────────────
+
+type Source = 'garmin' | 'wahoo' | 'apple'
+
+function ConnectDataStep({ de, garminConnected, wahooConnected, qc, onSkip }: {
+  de: boolean
+  garminConnected: boolean
+  wahooConnected: boolean
+  qc: ReturnType<typeof useQueryClient>
+  onSkip: () => void
+}) {
+  // Default the open card to whatever is already connected, else nothing.
+  const [picked, setPicked] = useState<Source | null>(
+    garminConnected ? 'garmin' : wahooConnected ? 'wahoo' : null,
+  )
+
+  const sources: Array<{ key: Source; icon: typeof Watch; label: string; sub: string; connected: boolean }> = [
+    {
+      key: 'garmin',
+      icon: Watch,
+      label: 'Garmin',
+      sub: de ? 'HRV, Body Battery, Aktivitäten' : 'HRV, body battery, activities',
+      connected: garminConnected,
+    },
+    {
+      key: 'wahoo',
+      icon: Bike,
+      label: 'Wahoo',
+      sub: de ? 'ELEMNT / KICKR Workouts' : 'ELEMNT / KICKR workouts',
+      connected: wahooConnected,
+    },
+    {
+      key: 'apple',
+      icon: Apple,
+      label: 'Apple Health',
+      sub: de ? 'via Auto Health Export' : 'via Auto Health Export',
+      connected: false,
+    },
+  ]
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[14px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+        {de
+          ? 'Verbinde eine Datenquelle, damit wir deine Aktivitäten und Erholungsdaten ziehen — daraus schätzen wir FTP und Herzfrequenz-Werte automatisch. Wähle Garmin, Wahoo oder Apple Health.'
+          : 'Connect a data source so we can pull your activities and recovery data — we’ll estimate FTP and heart-rate values from it automatically. Pick Garmin, Wahoo, or Apple Health.'}
+      </p>
+
+      {/* Source picker — three tiles */}
+      <div className="grid grid-cols-3 gap-2">
+        {sources.map((s) => {
+          const active = picked === s.key
+          const Icon = s.icon
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setPicked(s.key)}
+              className="rounded-[14px] p-3 text-left transition-colors flex flex-col gap-2"
+              style={{
+                border: `1px solid ${active ? 'var(--color-forest-2)' : 'var(--color-rule)'}`,
+                backgroundColor: active ? 'color-mix(in srgb, var(--color-forest-2) 10%, transparent)' : 'var(--color-paper-2)',
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <Icon size={18} strokeWidth={2} style={{ color: active ? 'var(--color-forest-2)' : 'var(--color-ink-2)' }} />
+                {s.connected && (
+                  <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-good)' }} />
+                )}
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[13px] font-medium leading-tight" style={{ color: 'var(--color-ink)' }}>{s.label}</span>
+                <span className="text-[10.5px] leading-tight" style={{ color: 'var(--color-muted)' }}>{s.sub}</span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Selected source's connect flow */}
+      {picked === 'garmin' && <GarminStep de={de} connected={garminConnected} qc={qc} />}
+      {picked === 'wahoo' && <WahooConnect de={de} connected={wahooConnected} />}
+      {picked === 'apple' && <AppleHealthConnect de={de} />}
+
+      {/* Skip — connecting is always optional */}
+      <button
+        type="button"
+        onClick={onSkip}
+        className="text-[12px] text-center underline"
+        style={{ color: 'var(--color-muted)' }}
+      >
+        {de ? 'Später in den Einstellungen verbinden' : 'Skip for now, connect later in Settings'}
+      </button>
+    </div>
+  )
+}
+
+function WahooConnect({ de, connected }: { de: boolean; connected: boolean }) {
+  const [busy, setBusy] = useState(false)
+  const [notConfigured, setNotConfigured] = useState(false)
+
+  async function connect() {
+    setBusy(true)
+    try {
+      const url = await getWahooConnectUrl()
+      // Full navigation to Wahoo's OAuth consent screen; it redirects back via
+      // /wahoo/callback when done.
+      window.location.href = url
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 409) setNotConfigured(true)
+      setBusy(false)
+    }
+  }
+
+  if (connected) {
+    return (
+      <Card>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center rounded-full" style={{ width: 36, height: 36, backgroundColor: 'color-mix(in srgb, var(--color-good) 18%, transparent)' }}>
+            <Check size={18} strokeWidth={2.4} style={{ color: 'var(--color-good)' }} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[14px] font-medium" style={{ color: 'var(--color-ink)' }}>{de ? 'Wahoo verbunden' : 'Wahoo connected'}</span>
+            <span className="text-[12px]" style={{ color: 'var(--color-muted)' }}>{de ? 'Deine Workouts werden automatisch synchronisiert.' : 'Your workouts will sync automatically.'}</span>
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <div className="flex flex-col gap-3">
+        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+          {de
+            ? 'Verbinde deine Wahoo-Cloud (ELEMNT / KICKR), um Workouts mit Leistung, Herzfrequenz und Distanz zu synchronisieren.'
+            : 'Connect your Wahoo Cloud (ELEMNT / KICKR) to sync workouts with power, heart rate, and distance.'}
+        </p>
+        {notConfigured ? (
+          <p className="text-[13px]" style={{ color: 'var(--color-muted)' }}>
+            {de
+              ? 'Wahoo ist auf diesem Server noch nicht konfiguriert — frag deinen Admin (kommt bald).'
+              : 'Wahoo isn’t configured on this server yet — ask your admin (coming soon).'}
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={connect}
+            disabled={busy}
+            className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-medium self-start"
+            style={{ color: 'var(--color-paper)', backgroundColor: 'var(--color-forest-2)', opacity: busy ? 0.6 : 1 }}
+          >
+            {busy && <Loader2 size={15} className="animate-spin" />}
+            {busy ? (de ? 'Öffne Wahoo…' : 'Opening Wahoo…') : (de ? 'Wahoo verbinden' : 'Connect Wahoo')}
+          </button>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function AppleHealthConnect({ de }: { de: boolean }) {
+  const [setup, setSetup] = useState<AppleHealthSetup | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [copied, setCopied] = useState<'url' | 'token' | null>(null)
+
+  async function load() {
+    setBusy(true)
+    setErr(null)
+    try {
+      setSetup(await getAppleHealthSetup())
+    } catch {
+      setErr(de ? 'Einrichtung konnte nicht geladen werden.' : 'Could not load setup details.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function copy(text: string, which: 'url' | 'token') {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(which)
+      setTimeout(() => setCopied((c) => (c === which ? null : c)), 1500)
+    } catch {
+      /* clipboard blocked — the value is still visible to copy manually */
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex flex-col gap-3">
+        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
+          {de
+            ? 'Apple Health kann nicht direkt an eine Web-App senden. Nutze die iOS-App „Auto Health Export“: füge unten die Webhook-URL und den Token als REST-API-Ziel ein.'
+            : 'Apple Health can’t push to a web app directly. Use the “Auto Health Export” iOS app: paste the webhook URL and token below as a REST-API destination.'}
+        </p>
+
+        {!setup ? (
+          <>
+            {err && <span className="text-[12px]" style={{ color: 'var(--color-alert)' }}>{err}</span>}
+            <button
+              type="button"
+              onClick={load}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-medium self-start"
+              style={{ color: 'var(--color-paper)', backgroundColor: 'var(--color-forest-2)', opacity: busy ? 0.6 : 1 }}
+            >
+              {busy && <Loader2 size={15} className="animate-spin" />}
+              {busy ? (de ? 'Lade…' : 'Loading…') : (de ? 'Einrichtung anzeigen' : 'Show setup details')}
+            </button>
+          </>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <CopyRow label={de ? 'Webhook-URL' : 'Webhook URL'} value={setup.webhook_url} copied={copied === 'url'} onCopy={() => copy(setup.webhook_url, 'url')} de={de} />
+            <CopyRow label="Token" value={setup.token} copied={copied === 'token'} onCopy={() => copy(setup.token, 'token')} de={de} mono />
+            <ol className="flex flex-col gap-1.5 text-[12px] leading-snug" style={{ color: 'var(--color-muted)' }}>
+              <li>{de ? '1. „Auto Health Export“ aus dem App Store installieren.' : '1. Install “Auto Health Export” from the App Store.'}</li>
+              <li>{de ? '2. Einstellungen → Automations → REST-API-Ziel hinzufügen (POST).' : '2. Settings → Automations → add a REST API destination (POST).'}</li>
+              <li>{de ? '3. Webhook-URL einfügen, Header „Authorization: Bearer <Token>“ setzen.' : '3. Paste the webhook URL, add header “Authorization: Bearer <token>”.'}</li>
+              <li>{de ? '4. Workouts + gewünschte Metriken aktivieren und Sync planen.' : '4. Enable Workouts + the metrics you want and set a sync schedule.'}</li>
+            </ol>
+            <p className="text-[12px]" style={{ color: 'var(--color-muted)' }}>
+              {de
+                ? 'Sobald die App die erste Übertragung sendet, erscheinen deine Daten hier — du kannst fortfahren.'
+                : 'Once the app sends its first payload, your data will appear here — you can continue for now.'}
+            </p>
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function CopyRow({ label, value, copied, onCopy, de, mono }: {
+  label: string; value: string; copied: boolean; onCopy: () => void; de: boolean; mono?: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.16em' }}>{label}</span>
+      <div className="flex items-center gap-2">
+        <span
+          className={mono ? 'num-mono' : undefined}
+          style={{
+            flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontSize: 12, color: 'var(--color-ink-2)', backgroundColor: 'var(--color-paper)',
+            border: '1px solid var(--color-rule)', borderRadius: 10, padding: '9px 12px',
+          }}
+        >
+          {value}
+        </span>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-medium shrink-0"
+          style={{ border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)', backgroundColor: 'var(--color-paper)' }}
+        >
+          {copied ? <Check size={14} strokeWidth={2.4} style={{ color: 'var(--color-good)' }} /> : <Copy size={14} strokeWidth={2} />}
+          {copied ? (de ? 'Kopiert' : 'Copied') : (de ? 'Kopieren' : 'Copy')}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function GarminStep({ de, connected, qc }: { de: boolean; connected: boolean; qc: ReturnType<typeof useQueryClient> }) {
