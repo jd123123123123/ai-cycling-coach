@@ -194,6 +194,16 @@ function App() {
             }
           />
 
+          {/* Full workout detail for ANY planned day (today alias handled inside). */}
+          <Route
+            path="/workout/:date"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <WorkoutDetailView />
+              </ProtectedRoute>
+            }
+          />
+
           <Route path="/recovery/trends" element={<ProtectedRoute checkOnboarding><RecoveryTrendsView /></ProtectedRoute>} />
 
           <Route path="/progress/run" element={<ProtectedRoute checkOnboarding><RunProgressView /></ProtectedRoute>} />

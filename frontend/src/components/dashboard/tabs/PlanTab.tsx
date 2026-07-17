@@ -793,6 +793,11 @@ export default function PlanTab() {
                 </span>
               ))}
             </div>
+
+            {/* Open the full detail page for THIS planned day (same layout as today). */}
+            <Link to={`/workout/${selectedDate}`} className="inline-flex items-center justify-center gap-2 rounded-full py-3 min-h-[44px]" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 14, fontWeight: 700 }}>
+              <Target size={16} strokeWidth={2.4} /> {de ? 'Ganzes Workout ansehen' : 'View full workout'}
+            </Link>
           </div>
         )
       })()}

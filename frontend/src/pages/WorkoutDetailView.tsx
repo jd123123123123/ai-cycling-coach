@@ -3,20 +3,26 @@
  * NavRow (back · title · share) → Hero (icon, title, sub, 4 summary chips) →
  * Interval Profile chart card → Structure steps card → Targets card →
  * Fueling card → Devices card → coral Start CTA (+ Edit). Reached from the
- * Today / Train workout cards at /workout/today. Renders the real
- * prescribed-workout blocks (ResolvedBlock[]) from the coach brief.
+ * Today / Train workout cards at /workout/today and /workout/:date.
+ * TODAY renders the real prescribed-workout blocks (ResolvedBlock[]) from the
+ * coach brief (rich "why today" narrative). A FUTURE planned day resolves that
+ * day's session from the weekly plan (useCurrentWeek) and renders the SAME
+ * layout, mapping its DayPlan/intervals into the identical block visualization.
  */
 import { useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import { format, parseISO, differenceInCalendarWeeks } from 'date-fns'
 import {
   ChevronLeft, Share2, Bike, Footprints, Dumbbell, Repeat, Zap, Heart, Gauge, Apple, Droplet,
   Play, SlidersHorizontal, Sparkles, Target, BookOpen,
 } from 'lucide-react'
 import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
+import { useCurrentWeek } from '../hooks/useCurrentWeek'
 import { useLocale } from '../contexts/LocaleContext'
 import { detectWorkoutSport } from '../api/coach'
 import type { ResolvedBlock, PrescribedWorkout, WorkoutSport } from '../api/coach'
+import type { DayPlan } from '../api/weeks'
 
 // Per-sport hero identity.
 const SPORT_META: Record<WorkoutSport, { Icon: typeof Bike; en: string; de: string }> = {
@@ -76,26 +82,128 @@ function summarize(w: PrescribedWorkout) {
   return { blocks, totalS, minutes, main, peakPct, kj: Math.round(kj), zones }
 }
 
+// ── Future-day mapping: DayPlan → PrescribedWorkout ──────────────────────────
+// A planned week day carries interval blocks (duration + %FTP + zone) but no
+// resolved watts/names/RPE. We derive those the same way the today path does:
+// watts from the athlete FTP, a zone-labeled name, and a zone-approximated RPE —
+// so the identical block/interval visualization renders from real plan data.
+const ZONE_NAME: Record<number, { en: string; de: string }> = {
+  1: { en: 'Recovery', de: 'Erholung' },
+  2: { en: 'Endurance', de: 'Grundlage' },
+  3: { en: 'Tempo', de: 'Tempo' },
+  4: { en: 'Threshold', de: 'Schwelle' },
+  5: { en: 'VO₂ Max', de: 'VO₂max' },
+  6: { en: 'Anaerobic', de: 'Anaerob' },
+  7: { en: 'Neuromuscular', de: 'Neuromuskulär' },
+}
+const RPE_BY_ZONE: Record<number, number> = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 7, 6: 8, 7: 10 }
+
+function dayHasSession(d: DayPlan): boolean {
+  const dur = d.duration_seconds_target ?? (d.intervals ?? []).reduce((s, iv) => s + (iv.duration_seconds ?? 0), 0)
+  return d.category !== 'rest' && (dur > 0 || (d.intervals?.length ?? 0) > 0 || (d.target_tss ?? 0) > 0)
+}
+
+function mapDayToWorkout(d: DayPlan, ftp: number | null, de: boolean): PrescribedWorkout {
+  const blocks: ResolvedBlock[] = (d.intervals ?? []).map((iv) => {
+    const z = Math.min(7, Math.max(1, iv.zone))
+    const pct = iv.power_target_pct_ftp ?? 0
+    const watts = ftp != null && pct > 0 ? Math.round(pct * ftp) : 0
+    return {
+      name: de ? ZONE_NAME[z].de : ZONE_NAME[z].en,
+      duration_s: iv.duration_seconds ?? 0,
+      target_watts_low: watts,
+      target_watts_high: watts,
+      target_pct_ftp: pct,
+      zone: z,
+      rpe: RPE_BY_ZONE[z] ?? 4,
+      cadence_low: null,
+      cadence_high: null,
+      target_hr_low: null,
+      target_hr_high: null,
+    }
+  })
+  const totalS = d.duration_seconds_target ?? blocks.reduce((s, b) => s + b.duration_s, 0)
+  return {
+    template_id: d.template_id ?? '',
+    title: d.title,
+    duration_minutes: Math.round(totalS / 60),
+    total_duration_s: totalS,
+    predicted_tss: d.target_tss ?? 0,
+    framework_cited: '',
+    purpose: null,
+    category: d.category,
+    blocks,
+    why_this_workout: d.rationale || null,
+  }
+}
+
 export default function WorkoutDetailView() {
   const navigate = useNavigate()
   const { locale } = useLocale()
   const de = locale === 'de'
-  // Always open at the very top (not wherever the previous screen was scrolled).
-  useEffect(() => { window.scrollTo(0, 0) }, [])
+  const { date: dateParam } = useParams<{ date?: string }>()
+  // Resolve the target day. "today" (or the /workout/today alias, i.e. no param)
+  // maps to today's date; any other param is a literal YYYY-MM-DD planned day.
+  const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), [])
+  const targetDate = !dateParam || dateParam === 'today' ? todayStr : dateParam
+  const isToday = targetDate === todayStr
+  // Week offset from today's Monday-week to the target date's Monday-week (0..12).
+  const weekOffset = useMemo(() => {
+    if (isToday) return 0
+    try {
+      return Math.min(12, Math.max(0, differenceInCalendarWeeks(parseISO(targetDate), new Date(), { weekStartsOn: 1 })))
+    } catch { return 0 }
+  }, [isToday, targetDate])
+
+  // Always open at the very top (re-scroll when navigating between days).
+  useEffect(() => { window.scrollTo(0, 0) }, [targetDate])
   const { data: brief } = useCoachBrief()
   const { data: profile } = useAthleteProfile()
-  const w = brief?.prescribed_workout ?? null
-  const sport: WorkoutSport = w ? detectWorkoutSport(w) : 'cycling'
-  const sportMeta = SPORT_META[sport]
+  const { data: week } = useCurrentWeek(weekOffset)
+  const ftp = profile?.ftp_watts ?? null
+
+  // Today → the coach brief's rich prescribed workout. A future day → its planned
+  // session from the weekly plan, mapped into the same PrescribedWorkout shape.
+  const dayPlan = useMemo(() => (isToday ? null : week?.days?.find((d) => d.date === targetDate) ?? null), [isToday, week, targetDate])
+  const w: PrescribedWorkout | null = useMemo(() => {
+    if (isToday) return brief?.prescribed_workout ?? null
+    if (dayPlan && dayHasSession(dayPlan)) return mapDayToWorkout(dayPlan, ftp, de)
+    return null
+  }, [isToday, brief, dayPlan, ftp, de])
+
+  // Sport — future days carry an explicit sport; today's is inferred from the brief.
+  const sport: WorkoutSport = isToday
+    ? (w ? detectWorkoutSport(w) : 'cycling')
+    : ((dayPlan?.sport as WorkoutSport) ?? 'cycling')
+  const sportMeta = SPORT_META[sport] ?? SPORT_META.cycling
   const thrPaceSPerKm = profile?.running_threshold_pace_ms ? 1000 / profile.running_threshold_pace_ms : null
   const groups = useMemo(() => (w ? groupBlocks(w.blocks) : []), [w])
   const s = useMemo(() => (w ? summarize(w) : null), [w])
+  // Intensity terrain from the real interval blocks (x=time, y=effort). Declared
+  // BEFORE any early return (derives blocks from `s` with a null guard) so hook
+  // order never changes between the loading and loaded renders (React #310).
+  const terrain = useMemo(() => {
+    const blocks = s?.blocks ?? []
+    if (!blocks.length) return { area: '', line: '' }
+    const total = blocks.reduce((a, b) => a + b.duration_s, 0) || 1
+    let x = 0
+    const pts: Array<[number, number]> = []
+    for (const b of blocks) {
+      const bw = (b.duration_s / total) * 400
+      const eff = b.target_pct_ftp > 0 ? b.target_pct_ftp / 1.35 : b.zone / 7
+      const y = 120 - Math.min(114, Math.max(10, eff * 114))
+      pts.push([x, y]); pts.push([x + bw, y]); x += bw
+    }
+    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ')
+    return { area: `${line} L400 120 L0 120 Z`, line }
+  }, [s])
   // "Why today & goal" inputs — the coach's real rationale + the target event.
+  // Adaptations are a live "now" concept, so they only apply to today.
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
   const athlete = evidence.athlete as Record<string, unknown> | undefined
   const goalName = athlete?.goal_target as string | undefined
   const daysToGoal = athlete?.days_to_goal as number | undefined
-  const adaptSummary = (brief as { adaptations?: { summary?: string } } | undefined)?.adaptations?.summary
+  const adaptSummary = isToday ? (brief as { adaptations?: { summary?: string } } | undefined)?.adaptations?.summary : undefined
 
   const t = {
     title: de ? 'Workout' : 'Workout',
@@ -140,11 +248,23 @@ export default function WorkoutDetailView() {
   )
 
   if (!w || !s) {
+    // Honest, date-aware empty state: today with no brief, or a planned rest /
+    // no-session day. A rest day (or content-less day) reads as recovery.
+    const isRest = !isToday && (!dayPlan || dayPlan.category === 'rest' || !dayHasSession(dayPlan))
+    const dLabel = isToday ? null : format(parseISO(targetDate), de ? 'EEEE, d. MMM' : 'EEEE, MMM d')
+    const msg = isToday
+      ? t.none
+      : isRest
+        ? (de ? 'Ruhetag — Erholung & Regeneration. Keine Einheit geplant.' : 'Rest day — recovery & regeneration. No session planned.')
+        : (de ? 'Keine Einheit für diesen Tag.' : 'No session for this day.')
     return (
       <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
         <div className="mx-auto w-full max-w-md">{nav}</div>
-        <div className="grid place-items-center py-24">
-          <p style={{ color: 'var(--color-ink-2)' }}>{t.none}</p>
+        <div className="grid place-items-center py-24 px-6 text-center">
+          <div className="flex flex-col items-center gap-2">
+            {dLabel && <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{dLabel.toUpperCase()}</span>}
+            <p style={{ color: 'var(--color-ink-2)' }}>{msg}</p>
+          </div>
         </div>
       </div>
     )
@@ -177,21 +297,6 @@ export default function WorkoutDetailView() {
   // Intensity accent: higher peak %FTP/zone → warmer (coral); easy → cool.
   const intensity = Math.min(1, peakPct > 0 ? peakPct / 1.2 : (main?.zone ?? 2) / 7)
   const headerGlow = `color-mix(in srgb, var(--color-accent) ${Math.round(18 + intensity * 34)}%, transparent)`
-  // Intensity terrain from the real interval blocks (x=time, y=effort).
-  const terrain = useMemo(() => {
-    if (!blocks.length) return { area: '', line: '' }
-    const total = blocks.reduce((a, b) => a + b.duration_s, 0) || 1
-    let x = 0
-    const pts: Array<[number, number]> = []
-    for (const b of blocks) {
-      const bw = (b.duration_s / total) * 400
-      const eff = b.target_pct_ftp > 0 ? b.target_pct_ftp / 1.35 : b.zone / 7
-      const y = 120 - Math.min(114, Math.max(10, eff * 114))
-      pts.push([x, y]); pts.push([x + bw, y]); x += bw
-    }
-    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ')
-    return { area: `${line} L400 120 L0 120 Z`, line }
-  }, [blocks])
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
@@ -374,7 +479,7 @@ export default function WorkoutDetailView() {
           <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
             <div className="flex items-center gap-2">
               <Sparkles size={16} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
-              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '1.5px', color: 'var(--color-ink-2)' }}>{de ? 'WARUM HEUTE' : 'WHY TODAY'}</span>
+              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '1.5px', color: 'var(--color-ink-2)' }}>{isToday ? (de ? 'WARUM HEUTE' : 'WHY TODAY') : (de ? 'GEPLANTE EINHEIT' : 'PLANNED SESSION')}</span>
             </div>
 
             {/* the coach's rationale for prescribing this session today */}
