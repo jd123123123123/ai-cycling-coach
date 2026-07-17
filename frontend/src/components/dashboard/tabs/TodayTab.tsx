@@ -20,7 +20,6 @@ import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useGoalTrajectory } from '../../../hooks/useGoalTrajectory'
 import { computeReadiness, readinessTier } from '../../../utils/metrics'
 import ScoreRing from '../../ui/ScoreRing'
-import ActivityRings from '../../ui/ActivityRings'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
 
@@ -151,16 +150,7 @@ export default function TodayTab() {
   const todayActs = (acts?.activities ?? []).filter((a) => (a.started_at ?? a.date ?? '').slice(0, 10) === todayKey)
   const moveLoad = Math.round(todayActs.reduce((s, a) => s + (a.tss ?? 0), 0))
   const exMin = Math.round(todayActs.reduce((s, a) => s + (a.duration_seconds ?? 0) / 60, 0))
-  const kcalToday = Math.round(todayActs.reduce((s, a) => s + (a.calories ?? 0), 0))
   const hasTss = todayActs.some((a) => a.tss != null)
-  // Duration-weighted average power across today's power-equipped sessions.
-  const powerActs = todayActs.filter((a) => a.average_power != null && a.duration_seconds)
-  const avgPower = powerActs.length
-    ? Math.round(
-        powerActs.reduce((s, a) => s + a.average_power! * a.duration_seconds!, 0) /
-          powerActs.reduce((s, a) => s + a.duration_seconds!, 0),
-      )
-    : null
 
   // Daily training-load target: meso plan (weekly/7) → today's prescribed TSS → default.
   const dailyTssTarget = Math.max(
@@ -172,20 +162,6 @@ export default function TodayTab() {
     ),
   )
 
-  // Ring 1 — Training Load, or Sessions on a pure-strength day (TSS null).
-  const ring1 = hasTss || moveLoad > 0
-    ? { value: moveLoad, goal: dailyTssTarget, color: 'var(--color-move)', name: de ? 'Last' : 'Load', unit: 'TSS', display: `${moveLoad}` }
-    : { value: todayActs.length, goal: 1, color: 'var(--color-move)', name: de ? 'Einheiten' : 'Sessions', unit: '', display: `${todayActs.length}` }
-  // Ring 2 — Active moving time vs a solid ~90 min day.
-  const ring2 = { value: exMin, goal: 90, color: 'var(--color-exercise)', name: de ? 'Aktiv' : 'Active', unit: 'min', display: `${exMin}` }
-  // Ring 3 — Energy burned (real kcal); fall back to avg power when calories are absent.
-  const ring3 = kcalToday > 0
-    ? { value: kcalToday, goal: 800, color: 'var(--color-stand)', name: de ? 'Energie' : 'Energy', unit: 'kcal', display: kcalToday.toLocaleString(de ? 'de' : 'en') }
-    : avgPower != null
-      ? { value: avgPower, goal: 250, color: 'var(--color-stand)', name: de ? 'Ø Leistung' : 'Avg power', unit: 'W', display: `${avgPower}` }
-      : { value: 0, goal: 800, color: 'var(--color-stand)', name: de ? 'Energie' : 'Energy', unit: 'kcal', display: '—' }
-
-  const activityRings = [ring1, ring2, ring3]
   const hasSessionToday = todayActs.length > 0
   const loadPct = Math.min(100, Math.round((moveLoad / dailyTssTarget) * 100))
 
@@ -359,13 +335,14 @@ export default function TodayTab() {
   // from today's real TSS + moving time (same IF math as the prescribed card).
   const sessionIF = review?.intensity_factor?.actual
     ?? (exMin > 0 && moveLoad > 0 ? Math.sqrt(moveLoad / ((exMin / 60) * 100)) : null)
+  // Compact letter grade only (A+…F) — the tile is narrow, so no descriptor.
   const gradeInfo = (g: NonNullable<typeof review>['grade']) => {
     switch (g) {
-      case 'perfect': return { t: de ? 'A+ · perfekt' : 'A+ · perfect', c: 'var(--color-recovery)' }
-      case 'strong': return { t: de ? 'Stark' : 'Strong', c: 'var(--color-recovery)' }
-      case 'okay': return { t: de ? 'Solide' : 'Solid', c: 'var(--color-stand)' }
-      case 'overcooked': return { t: de ? 'Zu hart' : 'Overcooked', c: 'var(--color-amber)' }
-      case 'undercooked': return { t: de ? 'Zu leicht' : 'Undercooked', c: 'var(--color-amber)' }
+      case 'perfect': return { t: 'A+', c: 'var(--color-recovery)' }
+      case 'strong': return { t: 'A', c: 'var(--color-recovery)' }
+      case 'okay': return { t: 'B', c: 'var(--color-stand)' }
+      case 'overcooked': return { t: 'C', c: 'var(--color-amber)' }
+      case 'undercooked': return { t: 'D', c: 'var(--color-amber)' }
       default: return { t: '—', c: 'var(--color-ink)' }
     }
   }
@@ -686,47 +663,6 @@ export default function TodayTab() {
             CTL {ctl != null ? Math.round(ctl) : '—'} · ATL {atl != null ? Math.round(atl) : '—'} · TSB {typeof tsb === 'number' ? `${tsb >= 0 ? '+' : ''}${Math.round(tsb)}` : '—'} — <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>{de ? 'Last & Form öffnen →' : 'Full load & form →'}</span>
           </span>
         </div>
-      </Link>
-
-      {/* Today's training snapshot — TSS / active time / energy (real activity data) → History */}
-      <Link to="/dashboard?tab=history" className={`${CARD} hover-card flex flex-col gap-4`} style={cardStyle}>
-        <div className="flex items-center justify-between">
-          <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Heutige Belastung' : "Today's Training"}</span>
-          <span className="flex items-center gap-1">
-            {hasSessionToday && (hasTss || moveLoad > 0) && (
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Ziel' : 'Goal'} {loadPct}%</span>
-            )}
-            <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></span>
-          </span>
-        </div>
-        {hasSessionToday ? (
-          <div className="flex items-center gap-6">
-            <ActivityRings
-              size={104}
-              rings={activityRings.map((r) => ({ value: r.value, goal: r.goal, color: r.color }))}
-            />
-            <div className="flex-1 flex flex-col gap-3">
-              {activityRings.map((r, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><span style={{ width: 9, height: 9, borderRadius: 999, background: r.color }} /><span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink-2)' }}>{r.name}</span></div>
-                  <span className="flex items-baseline gap-1"><span className="num-display" style={{ fontSize: 17, color: 'var(--color-ink)' }}>{r.display}</span>{r.unit && <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{r.unit}</span>}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3.5 py-1">
-            <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 46, height: 46, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
-              <Moon size={20} strokeWidth={2} style={{ color: 'var(--color-muted)' }} />
-            </div>
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Noch keine Einheit heute' : 'No session yet today'}</span>
-              <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
-                {de ? `Tagesziel ${dailyTssTarget} TSS · deine Zahlen erscheinen nach dem Training.` : `Daily target ${dailyTssTarget} TSS · your numbers land here after you train.`}
-              </span>
-            </div>
-          </div>
-        )}
       </Link>
 
       {/* Metrics row — Resting HR / HRV / Strain (real Garmin) */}

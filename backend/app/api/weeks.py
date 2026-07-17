@@ -12,7 +12,9 @@ has a UniqueConstraint on (user_id, plan_start_date) and skips existing dates.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Literal
 
@@ -37,7 +39,11 @@ from app.schemas.weeks import (
     WeekResponse,
 )
 from app.services.advanced_metrics import ctl_atl_tsb_snapshot
-from app.services.mesocycle_generator import generate_mesocycle, issurin_block_for_week
+from app.services.mesocycle_generator import (
+    MESO_LENGTH_WEEKS,
+    generate_mesocycle,
+    issurin_block_for_week,
+)
 from app.services.performance_projection import (
     eftp_samples_from_activities,
     project_performance,
@@ -52,6 +58,111 @@ from app.services.workout_templates import TEMPLATES, get_template
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/weeks", tags=["weeks"])
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  LLM-personalized-week cache (in-process TTL)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# `personalize_week` is an Anthropic call (5–15s). Without a cache we paid it on
+# EVERY GET /weeks/current, so opening the Train tab hung each time. This mirrors
+# the CoachBrief 6h cache intent (get_or_generate_brief), but as a lightweight
+# in-process dict keyed by (user_id, week_start_iso, language, locale):
+#
+#   • HIT  → skip the LLM entirely and overlay the cached titles/rationale/preface
+#            onto the freshly rebuilt deterministic skeleton (cheap + deterministic).
+#   • MISS → serve the deterministic skeleton immediately (never block the response
+#            on the slow LLM) and refresh the cache in the BACKGROUND so the next
+#            open is personalized. A slow/unavailable LLM therefore never delays a
+#            response — the athlete just sees the deterministic week until the
+#            personalization lands.
+#
+# week_offset > 0 is deterministic-only and never touches this cache.
+
+_PERSONALIZED_WEEK_TTL_SECONDS = 6 * 3600  # ~6h, matching the coach-brief TTL intent
+_PersonalizedKey = tuple[int, str, str, str]  # (user_id, week_start_iso, language, locale)
+_personalized_week_cache: dict[_PersonalizedKey, tuple[float, dict]] = {}
+_personalized_week_inflight: set[_PersonalizedKey] = set()
+_personalized_week_bg_tasks: set[asyncio.Task] = set()
+
+
+def _personalized_cache_get(key: _PersonalizedKey) -> dict | None:
+    """Return the cached personalization if present and unexpired, else None."""
+    entry = _personalized_week_cache.get(key)
+    if entry is None:
+        return None
+    expires_at, payload = entry
+    if expires_at < time.time():
+        _personalized_week_cache.pop(key, None)
+        return None
+    return payload
+
+
+def _personalized_cache_put(key: _PersonalizedKey, payload: dict) -> None:
+    _personalized_week_cache[key] = (time.time() + _PERSONALIZED_WEEK_TTL_SECONDS, payload)
+
+
+async def _refresh_personalized_week(
+    key: _PersonalizedKey,
+    skeleton: list[dict],
+    llm_snapshot: dict,
+    language: Language,
+    locale: str,
+    weekly_tss_target: int,
+) -> None:
+    """Background task: run the LLM personalization and cache it for the next open.
+
+    Never awaited by the request — a failure or slow LLM only means the next open
+    stays deterministic. `personalize_week` takes plain data (no DB), so this is
+    safe to run detached from the request's DB session.
+    """
+    try:
+        result = await personalize_week(
+            skeleton,
+            llm_snapshot,
+            language=language,
+            locale=locale,
+            weekly_tss_target=weekly_tss_target,
+        )
+        if result is not None:
+            _personalized_cache_put(key, result)
+    except Exception:  # pragma: no cover — background best-effort
+        logger.exception("background week personalization failed for key=%s", key)
+    finally:
+        _personalized_week_inflight.discard(key)
+
+
+def _apply_personalization(days: list[DayPlan], preface: str, personalized: dict) -> str:
+    """Overlay cached/LLM personalization onto the deterministic days by date.
+
+    Returns the (possibly personalized) preface. Days are mutated in place; dates
+    that have no personalized entry keep their deterministic copy.
+    """
+    by_date = {d.get("date"): d for d in personalized.get("days", [])}
+    for dp in days:
+        pd = by_date.get(dp.date.isoformat())
+        if pd is None:
+            continue
+        dp.title = pd.get("title") or dp.title
+        if pd.get("rationale"):
+            dp.rationale = pd["rationale"]
+        dp.template_id = pd.get("template_id") or dp.template_id
+        dp.category = pd.get("category") or dp.category
+        dp.target_tss = pd.get("target_tss", dp.target_tss)
+        dp.duration_seconds_target = pd.get("duration_seconds_target", dp.duration_seconds_target)
+        intervals = pd.get("intervals")
+        if isinstance(intervals, list):
+            dp.intervals = [
+                IntervalBlockOut(
+                    duration_seconds=blk.get("duration_seconds", 0),
+                    power_target_pct_ftp=blk.get("power_target_pct_ftp"),
+                    zone=blk.get("zone", 1),
+                )
+                for blk in intervals
+            ]
+    if personalized.get("preface"):
+        preface = personalized["preface"]
+    return preface
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -259,6 +370,177 @@ def _per_day_rationale(
     return sentences[day_index % len(sentences)]
 
 
+def _build_day_plan(
+    day_date: date,
+    pw: PlannedWorkout | None,
+    today: date,
+    primary_sport: str,
+    language: Language,
+) -> DayPlan:
+    """Build one DayPlan from a PlannedWorkout row (or a rest/gap day when None).
+
+    Shared by the today-anchored current-week loop and the future-week preview
+    so both surfaces derive category / TSS / intervals / rationale identically.
+    """
+    dow = day_date.weekday()
+    if pw is not None:
+        template_id = pw.template_id
+        tmpl = get_template(template_id) if template_id else None
+        category: str = tmpl.category if tmpl else "endurance"
+        target_tss_val: int | None = int(round(tmpl.base_tss)) if tmpl else None
+
+        interval_structure = pw.interval_structure or {}
+        raw_intervals = interval_structure.get("intervals", [])
+        intervals_out = [
+            IntervalBlockOut(
+                duration_seconds=blk.get("duration_seconds", 0),
+                power_target_pct_ftp=blk.get("power_target_pct_ftp"),
+                zone=blk.get("zone", 1),
+            )
+            for blk in raw_intervals
+        ]
+        return DayPlan(
+            date=day_date,
+            sport=pw.sport,
+            title=pw.title,
+            template_id=template_id,
+            duration_seconds_target=pw.duration_seconds_target,
+            target_tss=target_tss_val,
+            category=category,
+            intervals=intervals_out,
+            rationale=_per_day_rationale(category, dow, language),
+            is_today=(day_date == today),
+        )
+
+    # Gap day — no PlannedWorkout exists for this date.
+    return DayPlan(
+        date=day_date,
+        sport=primary_sport,
+        title="Rest",
+        template_id=None,
+        duration_seconds_target=None,
+        target_tss=None,
+        category="rest",
+        intervals=[],
+        rationale=_per_day_rationale("rest", dow, language),
+        is_today=(day_date == today),
+    )
+
+
+async def _future_week_preview(
+    *,
+    db: AsyncSession,
+    current_user: User,
+    athlete: AthleteProfile,
+    primary_sport: str,
+    week_offset: int,
+    current_monday: date,
+    today: date,
+    live_ctl: float | None,
+    language: Language,
+    locale: Literal["en", "de"],
+) -> WeekResponse:
+    """Build a FUTURE-week plan preview (week_offset > 0).
+
+    The full Mon–Sun ``days`` list is materialized from the mesocycle covering
+    the target week, with the correct phase / block position / weekly TSS target
+    for THAT week. The now-only fields (projection, readiness, plan_changes) are
+    null and no LLM personalization runs — a future week is a deterministic plan
+    preview, not a live "today" surface. ``is_today`` is False on every day.
+    """
+    # Which meso covers the target week, and its position within that meso.
+    meso_index = week_offset // MESO_LENGTH_WEEKS
+    block_index_in_meso = week_offset % MESO_LENGTH_WEEKS
+    target_week_start = current_monday + timedelta(days=week_offset * 7)
+    target_week_end = target_week_start + timedelta(days=6)
+    meso_anchor = current_monday + timedelta(days=meso_index * MESO_LENGTH_WEEKS * 7)
+
+    # Generate (or return existing) the meso covering the target week. This also
+    # materializes the 28 PlannedWorkout drafts, so the target week's rows exist.
+    meso = await generate_mesocycle(
+        db, current_user.id, plan_start_date=meso_anchor, current_ctl=live_ctl
+    )
+
+    meso_phase = meso.phase
+    block_position = issurin_block_for_week(block_index_in_meso)
+    tss_targets: list[int] = meso.weekly_tss_targets or []
+    week_tss_target = (
+        tss_targets[block_index_in_meso]
+        if block_index_in_meso < len(tss_targets)
+        else 0
+    )
+    seiler_dist = meso.seiler_distribution or {}
+    seiler_z3_pct = float(seiler_dist.get("z3_pct", 0.15))
+
+    # Fitness context for the preface is "now" — the athlete's current CTL frames
+    # where the future week sits relative to today's fitness.
+    pmc_snap = await ctl_atl_tsb_snapshot(db, current_user.id)
+    ctl_now = float(pmc_snap.get("ctl") or 0.0)
+    ctl_delta_7d = float(pmc_snap.get("ctl_7d_delta") or 0.0)
+
+    target_event_date = athlete.target_event_date
+    target_event_type = athlete.target_event_type
+    days_to_event = (
+        (target_event_date - today).days if target_event_date is not None else None
+    )
+
+    # Load the 7 PlannedWorkout rows for the target week (Mon..Sun).
+    pw_result = await db.execute(
+        select(PlannedWorkout)
+        .where(
+            PlannedWorkout.user_id == current_user.id,
+            PlannedWorkout.date >= target_week_start,
+            PlannedWorkout.date <= target_week_end,
+        )
+        .order_by(PlannedWorkout.date)
+    )
+    pw_by_date: dict[date, PlannedWorkout] = {
+        pw.date: pw for pw in pw_result.scalars().all()
+    }
+
+    days: list[DayPlan] = []
+    for i in range(7):
+        day_date = target_week_start + timedelta(days=i)
+        pw = pw_by_date.get(day_date)
+        # today never falls inside a future week, so is_today is uniformly False.
+        days.append(_build_day_plan(day_date, pw, today, primary_sport, language))
+
+    preface = build_weekly_rationale(
+        phase=meso_phase,
+        block_position=block_position,
+        block_index_in_meso=block_index_in_meso,
+        weekly_tss_target=week_tss_target,
+        ctl_now=ctl_now,
+        ctl_delta_7d=ctl_delta_7d,
+        days_to_event=days_to_event,
+        target_event_type=target_event_type,
+        seiler_z3_pct=seiler_z3_pct,
+        language=language,
+        locale=locale,
+    )
+
+    meso_block_ctx = MesoBlockContext(
+        phase=meso_phase,
+        block_position=block_position,
+        block_index_in_meso=block_index_in_meso,
+        weekly_tss_target=week_tss_target,
+        days_to_event=days_to_event,
+        target_event_type=target_event_type,
+    )
+
+    return WeekResponse(
+        week_start=target_week_start,
+        week_end=target_week_end,
+        language=language,
+        preface=preface,
+        meso_block=meso_block_ctx,
+        days=days,
+        plan_changes=None,
+        projection=None,
+        readiness=None,
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  Endpoint
 # ──────────────────────────────────────────────────────────────────────────────
@@ -273,19 +555,40 @@ async def get_current_week(
         Literal["en", "de"],
         Query(description="UI locale — 'en' (default) or 'de'."),
     ] = "en",
+    week_offset: Annotated[
+        int,
+        Query(
+            ge=0,
+            le=12,
+            description=(
+                "Weeks ahead of the current week to preview. 0 (default) = the "
+                "today-anchored current week with all live extras (projection, "
+                "readiness, plan changes). >0 = a future Mon–Sun plan preview "
+                "with those now-only fields nulled."
+            ),
+        ),
+    ] = 0,
     db: AsyncSession = Depends(get_db_for_user),
     current_user: User = Depends(get_current_active_user),
 ) -> WeekResponse:
-    """Return today + next 6 days as a planned week with rationale.
+    """Return a planned week with rationale.
 
-    Generates a mesocycle if the athlete does not have one for the current week.
+    ``week_offset=0`` (default) returns today + next 6 days with the full set of
+    live extras. ``week_offset>0`` returns a future Mon–Sun plan preview built
+    from the mesocycle covering that week, with the now-only fields
+    (projection / readiness / plan_changes) set to null.
+
+    Generates a mesocycle if the athlete does not have one for the target week.
     Idempotent: repeat calls within the same week return the same plan.
     RLS-scoped: each user sees only their own workouts.
     """
     # ── 1. Compute today + week_start (Monday anchor) ─────────────────────
     today = date.today()
-    # week_start = most recent Monday (Monday=0 in weekday())
-    week_start = today - timedelta(days=today.weekday())
+    # current_monday = most recent Monday (Monday=0 in weekday())
+    current_monday = today - timedelta(days=today.weekday())
+    # For offset 0 the window anchors on today; the current-week code below
+    # keeps using `week_start` as that Monday anchor.
+    week_start = current_monday
     week_end = week_start + timedelta(days=6)
 
     # ── 2. Load athlete profile ───────────────────────────────────────────
@@ -323,6 +626,25 @@ async def get_current_week(
             live_ctl = float(_rows[-1].get("ctl") or 0.0)
     except Exception:  # pragma: no cover — degrade to proximity-only phase
         logger.exception("failed to load live CTL for mesocycle (user_id=%s)", current_user.id)
+
+    # ── 3b. Future-week preview branch (offset > 0) ───────────────────────
+    # A light-weight plan preview: the deterministic mesocycle skeleton for the
+    # selected future week, with the now-only fields (projection / readiness /
+    # plan_changes) nulled and no LLM personalization. offset=0 falls through to
+    # the full today-anchored path below, UNCHANGED.
+    if week_offset > 0:
+        return await _future_week_preview(
+            db=db,
+            current_user=current_user,
+            athlete=athlete,
+            primary_sport=primary_sport,
+            week_offset=week_offset,
+            current_monday=current_monday,
+            today=today,
+            live_ctl=live_ctl,
+            language=language,
+            locale=locale,
+        )
 
     try:
         meso = await generate_mesocycle(
@@ -398,64 +720,9 @@ async def get_current_week(
     for i in range(7):
         day_date = today + timedelta(days=i)
         pw = pw_by_date.get(day_date)
-
-        if pw is not None:
-            template_id = pw.template_id
-            tmpl = get_template(template_id) if template_id else None
-
-            # Resolve category from template or fallback to 'endurance'
-            category: str = tmpl.category if tmpl else "endurance"
-
-            # target_tss: template base_tss as rounded int
-            target_tss_val: int | None = (
-                int(round(tmpl.base_tss)) if tmpl else None
-            )
-
-            # Build interval list from interval_structure JSON
-            interval_structure = pw.interval_structure or {}
-            raw_intervals = interval_structure.get("intervals", [])
-            intervals_out = [
-                IntervalBlockOut(
-                    duration_seconds=blk.get("duration_seconds", 0),
-                    power_target_pct_ftp=blk.get("power_target_pct_ftp"),
-                    zone=blk.get("zone", 1),
-                )
-                for blk in raw_intervals
-            ]
-
-            # day-of-week index relative to week_start (Mon=0..Sun=6) for copy selection
-            dow = day_date.weekday()
-
-            day_plan = DayPlan(
-                date=day_date,
-                sport=pw.sport,
-                title=pw.title,
-                template_id=template_id,
-                duration_seconds_target=pw.duration_seconds_target,
-                target_tss=target_tss_val,
-                category=category,
-                intervals=intervals_out,
-                rationale=_per_day_rationale(category, dow, language),
-                is_today=(day_date == today),
-            )
-        else:
-            # Gap day — no PlannedWorkout exists (e.g. meso starts in the future
-            # or the date is outside the generated window)
-            dow = day_date.weekday()
-            day_plan = DayPlan(
-                date=day_date,
-                sport=primary_sport,
-                title="Rest",
-                template_id=None,
-                duration_seconds_target=None,
-                target_tss=None,
-                category="rest",
-                intervals=[],
-                rationale=_per_day_rationale("rest", dow, language),
-                is_today=(day_date == today),
-            )
-
-        days.append(day_plan)
+        days.append(
+            _build_day_plan(day_date, pw, today, primary_sport, language)
+        )
 
     # ── 9. Weekly preface from rationale service (deterministic default) ──
     preface = build_weekly_rationale(
@@ -659,38 +926,29 @@ async def get_current_week(
         ),
     }
 
-    personalized = await personalize_week(
-        skeleton,
-        llm_snapshot,
-        language=language,
-        locale=locale,
-        weekly_tss_target=week_tss_target,
+    # Cache-first: a hit overlays cached personalization and skips the LLM; a miss
+    # serves deterministic now and refreshes the cache in the background (deduped),
+    # so we never block this response on the 5–15s Anthropic call.
+    personalized_key: _PersonalizedKey = (
+        current_user.id, week_start.isoformat(), language, locale
     )
+    personalized = _personalized_cache_get(personalized_key)
     if personalized is not None:
-        by_date = {d.get("date"): d for d in personalized.get("days", [])}
-        for dp in days:
-            pd = by_date.get(dp.date.isoformat())
-            if pd is None:
-                continue
-            dp.title = pd.get("title") or dp.title
-            if pd.get("rationale"):
-                dp.rationale = pd["rationale"]
-            dp.template_id = pd.get("template_id") or dp.template_id
-            dp.category = pd.get("category") or dp.category
-            dp.target_tss = pd.get("target_tss", dp.target_tss)
-            dp.duration_seconds_target = pd.get("duration_seconds_target", dp.duration_seconds_target)
-            intervals = pd.get("intervals")
-            if isinstance(intervals, list):
-                dp.intervals = [
-                    IntervalBlockOut(
-                        duration_seconds=blk.get("duration_seconds", 0),
-                        power_target_pct_ftp=blk.get("power_target_pct_ftp"),
-                        zone=blk.get("zone", 1),
-                    )
-                    for blk in intervals
-                ]
-        if personalized.get("preface"):
-            preface = personalized["preface"]
+        preface = _apply_personalization(days, preface, personalized)
+    elif personalized_key not in _personalized_week_inflight:
+        _personalized_week_inflight.add(personalized_key)
+        _bg_task = asyncio.create_task(
+            _refresh_personalized_week(
+                personalized_key,
+                skeleton,
+                llm_snapshot,
+                language,
+                locale,
+                week_tss_target,
+            )
+        )
+        _personalized_week_bg_tasks.add(_bg_task)
+        _bg_task.add_done_callback(_personalized_week_bg_tasks.discard)
 
     # ── 9c. Performance projection with confidence bands ──────────────────
     # Bayesian Fitness-Fatigue projection to the goal (or ~12 wks). Past daily

@@ -1,36 +1,46 @@
+import { Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import ErrorBoundary from './components/ErrorBoundary'
+import AppSplash from './components/AppSplash'
+import { lazyWithRetry } from './lib/lazyWithRetry'
+
+// Auth entry points stay eager so first paint is instant.
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
-import DashboardPage from './pages/DashboardPage'
-import ConsentPage from './pages/ConsentPage'
-import ProfileSetupPage from './pages/ProfileSetupPage'
-import OnboardingWizard from './components/onboarding/OnboardingWizard'
-import GarminConnectPage from './pages/GarminConnectPage'
-import CalendarPage from './pages/CalendarPage'
-import ActivitiesPage from './pages/ActivitiesPage'
-import CoachPage from './pages/CoachPage'
-import SettingsPage from './pages/SettingsPage'
-import ProfileView from './pages/ProfileView'
-import DashboardsPage from './pages/DashboardsPage'
-import DebriefView from './pages/DebriefView'
-import SessionReportView from './pages/SessionReportView'
-import RideAnalysisView from './pages/RideAnalysisView'
-import LoadFormView from './pages/LoadFormView'
-import WorkoutDetailView from './pages/WorkoutDetailView'
-import RunProgressView from './pages/RunProgressView'
-import BikeProgressView from './pages/BikeProgressView'
-import LiftProgressView from './pages/LiftProgressView'
-import RunAnalysisView from './pages/RunAnalysisView'
-import RecoveryTrendsView from './pages/RecoveryTrendsView'
+
+// Every other routed page is code-split into its own lazily-loaded chunk.
+const DashboardPage = lazyWithRetry(() => import('./pages/DashboardPage'))
+const ConsentPage = lazyWithRetry(() => import('./pages/ConsentPage'))
+const ProfileSetupPage = lazyWithRetry(() => import('./pages/ProfileSetupPage'))
+const OnboardingWizard = lazyWithRetry(() => import('./components/onboarding/OnboardingWizard'))
+const GarminConnectPage = lazyWithRetry(() => import('./pages/GarminConnectPage'))
+const CalendarPage = lazyWithRetry(() => import('./pages/CalendarPage'))
+const ActivitiesPage = lazyWithRetry(() => import('./pages/ActivitiesPage'))
+const CoachPage = lazyWithRetry(() => import('./pages/CoachPage'))
+const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'))
+const ProfileView = lazyWithRetry(() => import('./pages/ProfileView'))
+const DashboardsPage = lazyWithRetry(() => import('./pages/DashboardsPage'))
+const DebriefView = lazyWithRetry(() => import('./pages/DebriefView'))
+const SessionReportView = lazyWithRetry(() => import('./pages/SessionReportView'))
+const RideAnalysisView = lazyWithRetry(() => import('./pages/RideAnalysisView'))
+const LoadFormView = lazyWithRetry(() => import('./pages/LoadFormView'))
+const WorkoutDetailView = lazyWithRetry(() => import('./pages/WorkoutDetailView'))
+const RunProgressView = lazyWithRetry(() => import('./pages/RunProgressView'))
+const BikeProgressView = lazyWithRetry(() => import('./pages/BikeProgressView'))
+const LiftProgressView = lazyWithRetry(() => import('./pages/LiftProgressView'))
+const RunAnalysisView = lazyWithRetry(() => import('./pages/RunAnalysisView'))
+const RecoveryTrendsView = lazyWithRetry(() => import('./pages/RecoveryTrendsView'))
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <LocaleProvider>
+        <ErrorBoundary>
+        <Suspense fallback={<AppSplash />}>
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -196,6 +206,8 @@ function App() {
           {/* Catch-all: redirect unknown paths to dashboard (ProtectedRoute handles auth check) */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        </Suspense>
+        </ErrorBoundary>
         </LocaleProvider>
       </AuthProvider>
     </BrowserRouter>

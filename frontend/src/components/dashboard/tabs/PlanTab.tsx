@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
-import { Bike, Footprints, Infinity as InfinityIcon, Play, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles } from 'lucide-react'
+import { Bike, Footprints, Infinity as InfinityIcon, Play, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles } from 'lucide-react'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
@@ -77,10 +77,22 @@ export default function PlanTab() {
   const todayStr = useMemo(() => format(today, 'yyyy-MM-dd'), [today])
   // Which day of the week strip is expanded inline below it (default = today).
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
-  const { data: week } = useCurrentWeek()
+  // How many weeks ahead of the current week we're previewing. 0 = this week
+  // (the today-anchored live view); >0 pages into the plan's future weeks.
+  const [weekOffset, setWeekOffset] = useState(0)
+  const MAX_WEEK_OFFSET = 12
+  const isFuture = weekOffset > 0
+  const { data: week } = useCurrentWeek(weekOffset)
   const { data: brief } = useCoachBrief()
   const { data: profile } = useAthleteProfile()
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 8), [today]), today)
+
+  // Keep the inline-preview selection inside the visible week. This week → today;
+  // a future week → its Monday (first day), until the user taps another day.
+  useEffect(() => {
+    if (weekOffset === 0) setSelectedDate(todayStr)
+    else if (week?.week_start) setSelectedDate(week.week_start.slice(0, 10))
+  }, [weekOffset, week?.week_start, todayStr])
 
   const ftp = profile?.ftp_watts ?? null
   const lthrRun = profile?.lthr_running ?? null
@@ -89,7 +101,9 @@ export default function PlanTab() {
   const days = week?.days ?? []
   // Inline day panel — the day the user tapped in the strip.
   const selDay = days.find((d) => d.date === selectedDate) ?? null
-  const selectedIsToday = selDay?.is_today ?? (selectedDate === todayStr)
+  // A future week never contains today, so its today-only surfaces (WOD, session
+  // review) must stay collapsed even during the brief selection-reset render.
+  const selectedIsToday = !isFuture && (selDay?.is_today ?? (selectedDate === todayStr))
   const workout = brief?.prescribed_workout
   // Session Review for the day trained — attached to the brief for TODAY only.
   // When the selected strip day is today and the athlete has already logged a
@@ -333,6 +347,22 @@ export default function PlanTab() {
     return [watts, `Z${z}`, d.target_tss ? `${Math.round(d.target_tss)} TSS` : null].filter(Boolean).join(' · ')
   }
 
+  // ── Week navigation labels ──
+  // Date range like "21–27 Jul" (or cross-month "28 Jul – 3 Aug").
+  const weekRangeLabel = useMemo(() => {
+    if (!week?.week_start || !week?.week_end) return ''
+    const ws = parseISO(week.week_start)
+    const we = parseISO(week.week_end)
+    return ws.getMonth() === we.getMonth()
+      ? `${format(ws, 'd')}–${format(we, 'd MMM')}`
+      : `${format(ws, 'd MMM')} – ${format(we, 'd MMM')}`
+  }, [week?.week_start, week?.week_end])
+  // Primary label: "This week" / "Next week" / the date range beyond that.
+  const weekLabel = weekOffset === 0 ? (de ? 'Diese Woche' : 'This week')
+    : weekOffset === 1 ? (de ? 'Nächste Woche' : 'Next week')
+      : weekRangeLabel
+  const weekTssTarget = meso?.weekly_tss_target ?? 0
+
   return (
     <div className="flex flex-col gap-6 pb-4">
       {/* Sport toggle */}
@@ -346,8 +376,10 @@ export default function PlanTab() {
         ))}
       </div>
 
-      {/* Plan status — position + projection + change/illness notes. */}
-      {(meso || projection || planChanges || readiness) && (
+      {/* Plan status — position + projection + change/illness notes.
+          Now-only (live projection / readiness / weekly progress-so-far), so it
+          is hidden when previewing a future week — that week has no "now". */}
+      {!isFuture && (meso || projection || planChanges || readiness) && (
         <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 20 }}>
           {/* Header */}
           <div className="flex items-center gap-2">
@@ -520,6 +552,30 @@ export default function PlanTab() {
         </div>
       </Link>
 
+      {/* Week navigation — page between this week and future plan weeks.
+          Prev is disabled at offset 0 (no paging into the past here); next is
+          capped at the plan's forward horizon. */}
+      <div className="flex items-center gap-2 rounded-[20px] p-2" style={cardStyle}>
+        <button type="button" aria-label={de ? 'Vorherige Woche' : 'Previous week'}
+          onClick={() => setWeekOffset((o) => Math.max(0, o - 1))} disabled={weekOffset === 0}
+          className="shrink-0 grid place-items-center rounded-full"
+          style={{ width: 40, height: 40, background: weekOffset === 0 ? 'transparent' : 'var(--color-surface-2)', opacity: weekOffset === 0 ? 0.35 : 1, cursor: weekOffset === 0 ? 'default' : 'pointer' }}>
+          <ChevronLeft size={20} strokeWidth={2.2} style={{ color: 'var(--color-ink-2)' }} />
+        </button>
+        <div className="flex-1 min-w-0 flex flex-col items-center" style={{ gap: 2 }}>
+          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{weekLabel}</span>
+          <span className="truncate" style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--color-muted)' }}>
+            {[weekRangeLabel, phaseLabel, weekTssTarget > 0 ? `${weekTssTarget} TSS` : null].filter(Boolean).join(' · ')}
+          </span>
+        </div>
+        <button type="button" aria-label={de ? 'Nächste Woche' : 'Next week'}
+          onClick={() => setWeekOffset((o) => Math.min(MAX_WEEK_OFFSET, o + 1))} disabled={weekOffset >= MAX_WEEK_OFFSET}
+          className="shrink-0 grid place-items-center rounded-full"
+          style={{ width: 40, height: 40, background: weekOffset >= MAX_WEEK_OFFSET ? 'transparent' : 'var(--color-surface-2)', opacity: weekOffset >= MAX_WEEK_OFFSET ? 0.35 : 1, cursor: weekOffset >= MAX_WEEK_OFFSET ? 'default' : 'pointer' }}>
+          <ChevronRight size={20} strokeWidth={2.2} style={{ color: 'var(--color-ink-2)' }} />
+        </button>
+      </div>
+
       {/* Week strip */}
       {days.length > 0 && (
         <div className="flex gap-1.5">
@@ -671,8 +727,11 @@ export default function PlanTab() {
       {/* Inline panel for a NON-today day tapped in the strip — no navigation, detail in place. */}
       {!selectedIsToday && (() => {
         const dLabel = format(parseISO(selectedDate), de ? 'EEEE, d. MMM' : 'EEEE, MMM d')
-        // Rest day (or a date with no planned session) → friendly rest state.
-        if (!selDay || selDay.category === 'rest') {
+        // Rest ONLY when the day has no actual work — key off real intervals/TSS/
+        // duration, not the category label, so a mislabeled day with a real
+        // session never wrongly collapses to "Rest day".
+        const hasWork = !!selDay && (dayDurSec(selDay) > 0 || (selDay.intervals?.length ?? 0) > 0 || (selDay.target_tss ?? 0) > 0)
+        if (!hasWork) {
           return (
             <div className="rounded-[24px] p-5 flex items-center gap-3.5" style={cardStyle}>
               <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
@@ -730,11 +789,13 @@ export default function PlanTab() {
         )
       })()}
 
-      {/* Upcoming */}
+      {/* Upcoming — the selected week's remaining sessions. On a future week each
+          row selects that day's inline preview (no live "start" for a future day);
+          this week keeps the Start-workout link. */}
       {upcoming.length > 0 && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{de ? 'Diese Woche' : 'This Week'}</span>
+            <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{weekOffset === 0 ? (de ? 'Diese Woche' : 'This Week') : weekLabel}</span>
             <span style={{ fontSize: 13, color: 'var(--color-muted)' }}>{upcoming.length} {de ? 'Einheiten' : 'sessions'}</span>
           </div>
           {upcoming.map((d) => {
@@ -742,8 +803,8 @@ export default function PlanTab() {
             const isGym = d.sport === 'gym'
             const Icon = isGym ? Dumbbell : isRun ? Footprints : Bike
             const col = isGym ? 'var(--color-amber)' : isRun ? 'var(--color-exercise)' : 'var(--color-strain)'
-            return (
-              <Link key={d.date} to="/workout/today" className="flex flex-col rounded-[20px] p-3.5 hover-card" style={cardStyle}>
+            const RowBody = (
+              <>
                 <div className="flex items-center gap-3.5">
                   <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: `color-mix(in srgb, ${col} 18%, transparent)` }}>
                     <Icon size={20} strokeWidth={2} style={{ color: col }} />
@@ -766,6 +827,16 @@ export default function PlanTab() {
                     <span className="ml-auto" style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{de ? 'Öffnen →' : 'Open →'}</span>
                   </div>
                 </div>
+              </>
+            )
+            return isFuture ? (
+              <button key={d.date} type="button" onClick={() => setSelectedDate(d.date)}
+                className="flex flex-col rounded-[20px] p-3.5 hover-card text-left" style={cardStyle}>
+                {RowBody}
+              </button>
+            ) : (
+              <Link key={d.date} to="/workout/today" className="flex flex-col rounded-[20px] p-3.5 hover-card" style={cardStyle}>
+                {RowBody}
               </Link>
             )
           })}

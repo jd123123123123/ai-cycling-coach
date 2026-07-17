@@ -311,3 +311,164 @@ class TestMaintenanceMode:
         assert resp.status_code == 200
         data = resp.json()
         assert data["meso_block"]["days_to_event"] is None
+
+
+# ---------------------------------------------------------------------------
+# Test 8: week_offset — future-week preview
+# ---------------------------------------------------------------------------
+
+class TestWeekOffset:
+    def _install(self, profile: MagicMock, user_id: int = 1):
+        user = _make_user(user_id)
+        mock_db = _make_mock_db(profile=profile)
+
+        async def _override_user():
+            return user
+
+        async def _override_db():
+            yield mock_db
+
+        app.dependency_overrides[get_current_active_user] = _override_user
+        app.dependency_overrides[get_current_user] = _override_user
+        app.dependency_overrides[get_db_for_user] = _override_db
+
+    def test_offset_1_returns_future_week_with_now_fields_null(self, client: TestClient):
+        profile = _make_profile(
+            target_event_date=date.today() + timedelta(days=60),
+            target_event_type="race",
+        )
+        self._install(profile)
+        meso = _make_meso()
+        try:
+            with (
+                patch("app.api.weeks.generate_mesocycle", new=AsyncMock(return_value=meso)),
+                patch("app.api.weeks.ctl_atl_tsb_snapshot", new=AsyncMock(return_value=MOCK_PMC_SNAP)),
+                patch("app.api.weeks.build_weekly_rationale", return_value=MOCK_PREFACE),
+                # personalize_week / projection must NOT be reached for offset>0.
+                patch(
+                    "app.api.weeks.personalize_week",
+                    new=AsyncMock(side_effect=AssertionError("LLM must not run for offset>0")),
+                ),
+            ):
+                resp = client.get("/weeks/current?week_offset=1")
+        finally:
+            app.dependency_overrides.clear()
+
+        assert resp.status_code == 200
+        data = resp.json()
+        # Week window is next Monday..Sunday, 7 days, none flagged today.
+        today = date.today()
+        current_monday = today - timedelta(days=today.weekday())
+        assert data["week_start"] == (current_monday + timedelta(days=7)).isoformat()
+        assert data["week_end"] == (current_monday + timedelta(days=13)).isoformat()
+        assert len(data["days"]) == 7
+        assert all(d["is_today"] is False for d in data["days"])
+        assert data["days"][0]["date"] == (current_monday + timedelta(days=7)).isoformat()
+        assert data["days"][-1]["date"] == (current_monday + timedelta(days=13)).isoformat()
+        # Now-only fields are nulled for a future preview.
+        assert data["projection"] is None
+        assert data["plan_changes"] is None
+        assert data["readiness"] is None
+        # This week is meso week index 1 (transmutation) with its own TSS target.
+        assert data["meso_block"]["block_index_in_meso"] == 1
+        assert data["meso_block"]["block_position"] == "transmutation"
+        assert data["meso_block"]["weekly_tss_target"] == meso.weekly_tss_targets[1]
+
+    def test_offset_0_unchanged(self, client: TestClient):
+        profile = _make_profile(
+            target_event_date=date.today() + timedelta(days=60),
+            target_event_type="race",
+        )
+        self._install(profile)
+        meso = _make_meso()
+        try:
+            with (
+                patch("app.api.weeks.generate_mesocycle", new=AsyncMock(return_value=meso)),
+                patch("app.api.weeks.ctl_atl_tsb_snapshot", new=AsyncMock(return_value=MOCK_PMC_SNAP)),
+                patch("app.api.weeks.build_weekly_rationale", return_value=MOCK_PREFACE),
+                patch("app.api.weeks.personalize_week", new=AsyncMock(return_value=None)),
+            ):
+                resp = client.get("/weeks/current?week_offset=0")
+        finally:
+            app.dependency_overrides.clear()
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["days"]) == 7
+        # offset 0 keeps the today-anchored contract: day[0] is today.
+        assert data["days"][0]["is_today"] is True
+        assert data["days"][0]["date"] == date.today().isoformat()
+
+    def test_offset_over_cap_rejected(self, client: TestClient):
+        profile = _make_profile()
+        self._install(profile)
+        try:
+            resp = client.get("/weeks/current?week_offset=13")
+        finally:
+            app.dependency_overrides.clear()
+        assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Test 9: personalized-week cache — a hit skips the Anthropic call
+# ---------------------------------------------------------------------------
+
+class TestPersonalizedWeekCache:
+    def _install(self, profile: MagicMock, user_id: int = 1):
+        user = _make_user(user_id)
+        mock_db = _make_mock_db(profile=profile)
+
+        async def _override_user():
+            return user
+
+        async def _override_db():
+            yield mock_db
+
+        app.dependency_overrides[get_current_active_user] = _override_user
+        app.dependency_overrides[get_current_user] = _override_user
+        app.dependency_overrides[get_db_for_user] = _override_db
+
+    def test_cache_hit_skips_llm_and_overlays(self, client: TestClient):
+        from app.api import weeks as weeks_api
+
+        today = date.today()
+        current_monday = today - timedelta(days=today.weekday())
+        key = (1, current_monday.isoformat(), "simple", "en")
+
+        # Pre-seed the cache so the request must NOT call the LLM. day[0] is today.
+        payload = {
+            "preface": "CACHED PREFACE",
+            "days": [{"date": today.isoformat(), "title": "Cached Title"}],
+        }
+
+        profile = _make_profile(
+            target_event_date=today + timedelta(days=60), target_event_type="race",
+        )
+        self._install(profile)
+        meso = _make_meso()
+
+        # personalize_week must NOT be awaited on a cache hit.
+        weeks_api._personalized_week_cache.clear()
+        weeks_api._personalized_week_inflight.clear()
+        weeks_api._personalized_cache_put(key, payload)
+        try:
+            with (
+                patch("app.api.weeks.generate_mesocycle", new=AsyncMock(return_value=meso)),
+                patch("app.api.weeks.ctl_atl_tsb_snapshot", new=AsyncMock(return_value=MOCK_PMC_SNAP)),
+                patch("app.api.weeks.build_weekly_rationale", return_value=MOCK_PREFACE),
+                patch(
+                    "app.api.weeks.personalize_week",
+                    new=AsyncMock(side_effect=AssertionError("LLM must not run on a cache hit")),
+                ),
+            ):
+                resp = client.get("/weeks/current")
+        finally:
+            weeks_api._personalized_week_cache.clear()
+            weeks_api._personalized_week_inflight.clear()
+            app.dependency_overrides.clear()
+
+        assert resp.status_code == 200
+        data = resp.json()
+        # Cached preface + today's title overlaid onto the deterministic skeleton.
+        assert data["preface"] == "CACHED PREFACE"
+        assert data["days"][0]["title"] == "Cached Title"
