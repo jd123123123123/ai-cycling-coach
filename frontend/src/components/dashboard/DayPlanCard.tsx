@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
 import { format, parseISO, isToday, isFuture } from 'date-fns'
 import { enUS, de } from 'date-fns/locale'
 import { SideSheet } from '../ui/SideSheet'
@@ -172,11 +174,14 @@ export default function DayPlanCard({ day, language, activity = null, hideDurati
               </div>
             )}
             {activity ? (
-              <p className="text-[13px]" style={{ color: 'var(--color-ink-2)' }}>
-                <span className="eyebrow" style={{ color: 'var(--color-muted)', marginRight: 6 }}>{t('activity_eyebrow')}</span>
-                {activity.title ?? t('untitled_activity')}
-                {activity.duration_seconds && <span style={{ marginLeft: 6, color: 'var(--color-muted)' }}>· {formatHours(activity.duration_seconds)}</span>}
-              </p>
+              <Link to={`/activities/${activity.id}/session-report`} className="flex items-center justify-between gap-2 text-[13px] rounded-lg" style={{ color: 'var(--color-ink-2)' }}>
+                <span className="min-w-0">
+                  <span className="eyebrow" style={{ color: 'var(--color-muted)', marginRight: 6 }}>{t('activity_eyebrow')}</span>
+                  {activity.title ?? t('untitled_activity')}
+                  {activity.duration_seconds && <span style={{ marginLeft: 6, color: 'var(--color-muted)' }}>· {formatHours(activity.duration_seconds)}</span>}
+                </span>
+                <ChevronRight size={15} strokeWidth={2} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+              </Link>
             ) : (
               <p className="text-[13px] italic" style={{ color: 'var(--color-muted)' }}>{t('no_activity_logged')}</p>
             )}
@@ -244,11 +249,14 @@ export default function DayPlanCard({ day, language, activity = null, hideDurati
           )}
 
           {activity ? (
-            <p className="text-[13px]" style={{ color: 'var(--color-ink-2)' }}>
-              <span className="eyebrow" style={{ color: 'var(--color-muted)', marginRight: 6 }}>{t('activity_eyebrow')}</span>
-              {activity.title ?? t('untitled_activity')}
-              {activity.duration_seconds && <span style={{ marginLeft: 6, color: 'var(--color-muted)' }}>· {formatHours(activity.duration_seconds)}</span>}
-            </p>
+            <Link to={`/activities/${activity.id}/session-report`} className="flex items-center justify-between gap-2 text-[13px] rounded-lg" style={{ color: 'var(--color-ink-2)' }}>
+              <span className="min-w-0">
+                <span className="eyebrow" style={{ color: 'var(--color-muted)', marginRight: 6 }}>{t('activity_eyebrow')}</span>
+                {activity.title ?? t('untitled_activity')}
+                {activity.duration_seconds && <span style={{ marginLeft: 6, color: 'var(--color-muted)' }}>· {formatHours(activity.duration_seconds)}</span>}
+              </span>
+              <ChevronRight size={15} strokeWidth={2} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+            </Link>
           ) : (
             <p className="text-[13px] italic" style={{ color: 'var(--color-muted)' }}>{t('no_activity_logged')}</p>
           )}

@@ -82,13 +82,13 @@ function StateRing({ score, color, size, recoveryLabel, scaleHint }: { score: nu
           }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      {/* Number-only gauge. The "Recovery" label lives once, on the adjacent
+         metric cell — rendering it inside this 68px ring overflowed the circle
+         (0.24em tracking ≈ 110px) and collided with that cell. */}
+      <div className="absolute inset-0 flex items-center justify-center">
         <span className="num-mono inline-flex items-baseline" style={{ color: 'var(--color-ink)', lineHeight: 1 }}>
-          <span style={{ fontSize: Math.round(size * 0.27), fontWeight: 500 }}>{animated}</span>
-          <span style={{ fontSize: Math.round(size * 0.11), fontWeight: 500, color: 'var(--color-muted)' }}>/100</span>
-        </span>
-        <span className="eyebrow mt-1" style={{ color, fontSize: 10, letterSpacing: '0.24em', fontWeight: 600 }}>
-          {recoveryLabel}
+          <span style={{ fontSize: Math.round(size * 0.32), fontWeight: 500 }}>{animated}</span>
+          <span style={{ fontSize: Math.round(size * 0.13), fontWeight: 500, color: 'var(--color-muted)' }}>/100</span>
         </span>
       </div>
     </div>

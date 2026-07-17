@@ -1,0 +1,319 @@
+<style>
+  :root{
+    --paper:#0C0C0E; --card:#1C1C1E; --card-2:#242427;
+    --rule:rgba(255,255,255,.09); --rule-2:rgba(255,255,255,.14);
+    --ink:#F5F5F7; --ink-2:rgba(235,235,245,.72); --muted:rgba(235,235,245,.40);
+    --good:#30D158; --caution:#FF9F0A; --bad:#FF453A;
+    --bike:#30D158; --run:#FFD60A;
+    --serif:"Fraunces",Georgia,"Times New Roman",serif;
+    --sans:"Geist",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+    --shadow:0 4px 12px rgba(0,0,0,.55),0 2px 4px rgba(0,0,0,.40);
+    --rim:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -1px 0 rgba(0,0,0,.40);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;line-height:1.5;margin:0;
+    padding:32px 18px 80px}
+  .wrap{max-width:660px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+
+  /* annotation banner &mdash; this is a design pass, not the live app */
+  .note{border:1px dashed var(--rule-2);border-radius:14px;padding:14px 16px;
+    color:var(--ink-2);font-size:13px;background:rgba(255,255,255,.02)}
+  .note b{color:var(--ink)}
+  .note .k{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+  .report{background:var(--card);border:1px solid var(--rule);border-radius:22px;
+    box-shadow:var(--shadow),var(--rim);overflow:hidden}
+  .report.run{--accent:var(--run)}
+  .report.bike{--accent:var(--bike)}
+
+  /* header */
+  .head{padding:22px 24px 0;display:flex;flex-direction:column;gap:12px}
+  .crumbs{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .chip{font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+    padding:4px 10px;border-radius:999px;border:1px solid var(--rule-2);
+    display:inline-flex;gap:6px;align-items:center}
+  .chip .dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .chip.sport{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+  .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--muted)}
+  h1.title{font-family:var(--serif);font-weight:600;font-size:27px;line-height:1.08;
+    letter-spacing:-.01em;margin:0;text-wrap:balance}
+  .sub{font-family:var(--mono);font-size:12px;color:var(--muted);
+    display:flex;gap:8px;flex-wrap:wrap}
+  .sub b{color:var(--ink-2);font-weight:500}
+
+  /* verdict hero */
+  .verdict{padding:20px 24px 22px;display:flex;gap:20px;align-items:center;
+    border-bottom:1px solid var(--rule)}
+  .ring{--val:82;--col:var(--good);position:relative;width:78px;height:78px;
+    flex:none;border-radius:50%;
+    background:conic-gradient(var(--col) calc(var(--val)*1%),rgba(255,255,255,.07) 0);
+    display:grid;place-items:center}
+  .ring::before{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--card)}
+  .ring .g{position:relative;font-family:var(--serif);font-weight:600;font-size:30px;
+    line-height:1;color:var(--col)}
+  .ring .gl{position:relative;font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;
+    color:var(--muted);margin-top:2px}
+  .verdict .said{min-width:0}
+  .verdict .grade-tag{font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--accent);display:block;margin-bottom:5px}
+  .verdict p{margin:0;font-family:var(--serif);font-style:italic;font-size:18.5px;
+    line-height:1.32;color:var(--ink);text-wrap:pretty}
+
+  /* KPI compliance rows */
+  .kpis{padding:6px 24px 4px}
+  .sec-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--muted);padding:16px 0 8px}
+  .kpi{padding:13px 0;border-top:1px solid var(--rule)}
+  .kpi:first-of-type{border-top:0}
+  .kpi .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .kpi .name{font-size:13.5px;color:var(--ink-2)}
+  .kpi .vals{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;
+    display:flex;gap:8px;align-items:baseline}
+  .kpi .vals .t{color:var(--muted)}
+  .kpi .vals .arrow{color:var(--muted)}
+  .kpi .vals .a{color:var(--ink);font-weight:500}
+  .kpi .badge{font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:6px;
+    font-variant-numeric:tabular-nums}
+  .b-good{color:var(--good);background:color-mix(in srgb,var(--good) 13%,transparent)}
+  .b-hot{color:var(--caution);background:color-mix(in srgb,var(--caution) 15%,transparent)}
+  .b-under{color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
+  /* target-band bar: track, prescribed band, actual marker */
+  .bar{position:relative;height:8px;border-radius:999px;margin-top:9px;
+    background:rgba(255,255,255,.06);overflow:visible}
+  .band{position:absolute;top:0;bottom:0;border-radius:999px;
+    background:color-mix(in srgb,var(--good) 26%,transparent);
+    border:1px solid color-mix(in srgb,var(--good) 45%,transparent)}
+  .mark{position:absolute;top:50%;width:13px;height:13px;border-radius:50%;
+    transform:translate(-50%,-50%);border:2.5px solid var(--card);box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+  .bar .cap{position:absolute;top:12px;font-family:var(--mono);font-size:9px;color:var(--muted);
+    transform:translateX(-50%);white-space:nowrap}
+
+  /* meaning + next */
+  .band-block{padding:4px 24px 0;display:flex;flex-direction:column;gap:0}
+  .read{display:flex;gap:11px;padding:12px 0;border-top:1px solid var(--rule)}
+  .read .ic{flex:none;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;
+    font-size:12px;margin-top:1px}
+  .read .ic.up{color:var(--caution);background:color-mix(in srgb,var(--caution) 14%,transparent)}
+  .read .ic.ok{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}
+  .read h4{margin:0 0 2px;font-size:13.5px;font-weight:600;color:var(--ink)}
+  .read p{margin:0;font-size:13px;color:var(--ink-2);line-height:1.5}
+
+  .next{margin:18px 24px 24px;border-radius:16px;padding:16px 18px;
+    background:color-mix(in srgb,var(--accent) 8%,var(--card-2));
+    border:1px solid color-mix(in srgb,var(--accent) 30%,var(--rule))}
+  .next .nl{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--accent)}
+  .next h3{margin:6px 0 4px;font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:-.01em}
+  .next p{margin:0;font-size:13px;color:var(--ink-2)}
+  .next .cta{margin-top:12px;display:inline-flex;align-items:center;gap:7px;
+    font-size:12.5px;font-weight:600;color:var(--paper);background:var(--accent);
+    padding:9px 15px;border-radius:999px}
+
+  /* detail strip */
+  .detail{padding:2px 24px 22px}
+  .detail .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .stat{background:var(--card-2);border:1px solid var(--rule);border-radius:12px;padding:11px 12px}
+  .stat .l{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .stat .v{font-family:var(--mono);font-size:16px;margin-top:3px;font-variant-numeric:tabular-nums}
+  .stat .v small{font-size:11px;color:var(--ink-2)}
+  @media(max-width:520px){.detail .grid{grid-template-columns:repeat(2,1fr)}
+    .verdict{gap:15px}h1.title{font-size:23px}}
+
+  h2.sect{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--muted);
+    letter-spacing:.02em;margin:0}
+</style>
+
+<div class="wrap">
+  <div class="note">
+    <b>Design pass &mdash; &ldquo;Session Report&rdquo;.</b> A new per-activity surface that rates every ride &amp; run against
+    its prescription, then says what it means and how it shifts your next session. Built on the app&rsquo;s own tokens
+    (<span class="k">--color-paper / --color-forest / Fraunces / JetBrains Mono</span>) so it drops straight in.
+    Two examples below: a <b>bike</b> ride that ran hot, and a <b>run</b> where the easy run wasn&rsquo;t easy.
+    Fonts here approximate Fraunces/Geist; the live build uses the real faces.
+  </div>
+
+  <!-- ═══════════ BIKE ═══════════ -->
+  <div class="report bike">
+    <div class="head">
+      <div class="crumbs">
+        <span class="chip sport"><span class="dot"></span>RIDE</span>
+        <span class="eyebrow">Session Report</span>
+      </div>
+      <h1 class="title">Badia Radfahren</h1>
+      <div class="sub"><span>Sun, Jul 5</span><span>&middot;</span><b>106.2 km</b><span>&middot;</span><b>6:28</b><span>&middot;</span><span>3,048 m &uarr;</span></div>
+    </div>
+
+    <div class="verdict">
+      <div class="ring" style="--val:80;--col:var(--good)">
+        <span class="g">B</span><span class="gl">80/100</span>
+      </div>
+      <div class="said">
+        <span class="grade-tag">Prescribed: Long Endurance &middot; 5:30 h</span>
+        <p>Strong session &mdash; you held the endurance line, but the climbs pulled the intensity above plan and emptied your anaerobic tank.</p>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="sec-lbl">Prescribed vs actual</div>
+
+      <div class="kpi">
+        <div class="top">
+          <span class="name">Duration</span>
+          <span class="vals"><span class="t">5:30</span><span class="arrow">&rarr;</span><span class="a">6:28</span><span class="badge b-hot">+18%</span></span>
+        </div>
+        <div class="bar">
+          <div class="band" style="left:34%;width:20%"></div>
+          <div class="mark" style="left:72%;background:var(--caution)"></div>
+        </div>
+      </div>
+
+      <div class="kpi">
+        <div class="top">
+          <span class="name">Training load (TSS)</span>
+          <span class="vals"><span class="t">200</span><span class="arrow">&rarr;</span><span class="a">199</span><span class="badge b-good">on target</span></span>
+        </div>
+        <div class="bar">
+          <div class="band" style="left:40%;width:20%"></div>
+          <div class="mark" style="left:49%;background:var(--good)"></div>
+        </div>
+      </div>
+
+      <div class="kpi">
+        <div class="top">
+          <span class="name">Intensity (IF)</span>
+          <span class="vals"><span class="t">0.66</span><span class="arrow">&rarr;</span><span class="a">0.69</span><span class="badge b-hot">+5%</span></span>
+        </div>
+        <div class="bar">
+          <div class="band" style="left:38%;width:18%"></div>
+          <div class="mark" style="left:66%;background:var(--caution)"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="band-block">
+      <div class="sec-lbl">What it means</div>
+      <div class="read">
+        <span class="ic up">&uarr;</span>
+        <div><h4>You rode 18 min longer &amp; harder than planned</h4>
+        <p>Ten surges on the climbs pushed IF to 0.69 and drained W&prime; to zero &mdash; a genuine hard day, not the steady base ride prescribed.</p></div>
+      </div>
+      <div class="read">
+        <span class="ic ok">&check;</span>
+        <div><h4>Load landed exactly on target</h4>
+        <p>Despite the extra time, total TSS matched the plan &mdash; you paid for the surges with slower valleys.</p></div>
+      </div>
+    </div>
+
+    <div class="next">
+      <span class="nl">How this shifts your next session</span>
+      <h3>Tomorrow eases to a recovery spin.</h3>
+      <p>Because intensity ran hot and you emptied the tank, we&rsquo;re pulling tomorrow back to 45 min Z1 to bank the adaptation instead of digging deeper.</p>
+      <span class="cta">See tomorrow&rsquo;s plan &rarr;</span>
+    </div>
+
+    <div class="detail">
+      <div class="sec-lbl">The numbers</div>
+      <div class="grid">
+        <div class="stat"><div class="l">Norm. power</div><div class="v">232 <small>W</small></div></div>
+        <div class="stat"><div class="l">Efficiency</div><div class="v">1.42</div></div>
+        <div class="stat"><div class="l">Decoupling</div><div class="v">8.1<small>%</small></div></div>
+        <div class="stat"><div class="l">Work</div><div class="v">3,085 <small>kJ</small></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ RUN ═══════════ -->
+  <div class="report run">
+    <div class="head">
+      <div class="crumbs">
+        <span class="chip sport"><span class="dot"></span>RUN</span>
+        <span class="eyebrow">Session Report</span>
+      </div>
+      <h1 class="title">Almere Laufen</h1>
+      <div class="sub"><span>Fri, Apr 24</span><span>&middot;</span><b>8.6 km</b><span>&middot;</span><b>47:52</b><span>&middot;</span><span>Easy run</span></div>
+    </div>
+
+    <div class="verdict">
+      <div class="ring" style="--val:64;--col:var(--caution)">
+        <span class="g">C</span><span class="gl">64/100</span>
+      </div>
+      <div class="said">
+        <span class="grade-tag">Prescribed: Easy run &middot; 8 km @ 6:00/km</span>
+        <p>Good work getting it done &mdash; but your easy run wasn&rsquo;t easy. You ran faster and hotter than an aerobic day should be.</p>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="sec-lbl">Prescribed vs actual</div>
+
+      <div class="kpi">
+        <div class="top">
+          <span class="name">Distance</span>
+          <span class="vals"><span class="t">8.0 km</span><span class="arrow">&rarr;</span><span class="a">8.6 km</span><span class="badge b-good">+8%</span></span>
+        </div>
+        <div class="bar">
+          <div class="band" style="left:40%;width:22%"></div>
+          <div class="mark" style="left:60%;background:var(--good)"></div>
+        </div>
+      </div>
+
+      <div class="kpi">
+        <div class="top">
+          <span class="name">Avg pace</span>
+          <span class="vals"><span class="t">6:00/km</span><span class="arrow">&rarr;</span><span class="a">5:34/km</span><span class="badge b-hot">26s faster</span></span>
+        </div>
+        <div class="bar">
+          <div class="band" style="left:46%;width:24%"></div>
+          <div class="mark" style="left:30%;background:var(--caution)"></div>
+          <span class="cap" style="left:58%">easy zone</span>
+        </div>
+      </div>
+
+      <div class="kpi">
+        <div class="top">
+          <span class="name">Avg heart rate</span>
+          <span class="vals"><span class="t">&lt;150</span><span class="arrow">&rarr;</span><span class="a">156 bpm</span><span class="badge b-under">above cap</span></span>
+        </div>
+        <div class="bar">
+          <div class="band" style="left:20%;width:38%"></div>
+          <div class="mark" style="left:70%;background:var(--bad)"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="band-block">
+      <div class="sec-lbl">What it means</div>
+      <div class="read">
+        <span class="ic up">&uarr;</span>
+        <div><h4>Your easy run drifted into tempo</h4>
+        <p>26 s/km faster and 6 bpm over your aerobic cap. That adds fatigue without extra base-building benefit &mdash; the classic &ldquo;grey-zone&rdquo; trap.</p></div>
+      </div>
+    </div>
+
+    <div class="next">
+      <span class="nl">How this shifts your next session</span>
+      <h3>Hold it back on Wednesday&rsquo;s easy run.</h3>
+      <p>Keep 6:00/km and HR under 150 &mdash; leave the speed for Thursday&rsquo;s intervals, where hard is the point. Easy days easy, hard days hard.</p>
+      <span class="cta">See Wednesday&rsquo;s plan &rarr;</span>
+    </div>
+
+    <div class="detail">
+      <div class="sec-lbl">The numbers</div>
+      <div class="grid">
+        <div class="stat"><div class="l">Avg pace</div><div class="v">5:34<small>/km</small></div></div>
+        <div class="stat"><div class="l">Avg HR</div><div class="v">156 <small>bpm</small></div></div>
+        <div class="stat"><div class="l">Cadence</div><div class="v">172 <small>spm</small></div></div>
+        <div class="stat"><div class="l">rTSS</div><div class="v">58</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Reading the bars.</b> The green band is what was prescribed; the dot is where you actually landed &mdash;
+    green on target, amber ran hot, red missed. It&rsquo;s the one glance that answers &ldquo;did I do the session right?&rdquo;
+    before any numbers. Every ride &amp; run gets one, bike or run, today or last month.
+  </div>
+</div>

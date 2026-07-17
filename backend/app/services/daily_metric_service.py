@@ -59,7 +59,7 @@ async def upsert_daily_metric(
     existing = existing_q.scalar_one_or_none()
 
     fields = ("sleep_score", "hrv_status", "body_battery", "resting_hr",
-              "stress_level", "steps")
+              "stress_level", "steps", "training_readiness", "recovery_time_hours")
 
     if existing is None:
         metric = DailyMetric(
@@ -71,6 +71,8 @@ async def upsert_daily_metric(
             body_battery=data.get("body_battery"),
             resting_hr=data.get("resting_hr"),
             stress_level=data.get("stress_level"),
+            training_readiness=data.get("training_readiness"),
+            recovery_time_hours=data.get("recovery_time_hours"),
             steps=data.get("steps"),
             source="garmin",
             raw_data=data.get("raw_data"),

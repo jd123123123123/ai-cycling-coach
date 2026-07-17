@@ -198,6 +198,16 @@ export default function GradeHero({
     >
       <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
         <div className="flex items-center gap-3 flex-wrap min-w-0">
+          {/* Act-1 badge — matches the numbered ActSection headers below so the
+             Analyze surface reads 1 → 2 → 3, not an unnumbered hero then 2, 3. */}
+          <span
+            className="num-mono shrink-0 grid place-items-center rounded-full self-center"
+            style={{
+              width: 22, height: 22, fontSize: 11, fontWeight: 600,
+              color: 'var(--color-forest-2)',
+              border: '1px solid color-mix(in srgb, var(--color-forest-2) 40%, transparent)',
+            }}
+          >1</span>
           <span className="eyebrow num-mono" style={{ color: 'var(--color-ink-2)', fontSize: 10, letterSpacing: '0.22em' }}>
             {locale === 'de' ? 'ZEITRAUMBERICHT' : 'PERIOD REPORT'}
           </span>

@@ -19,14 +19,6 @@ import { useLocale } from '../../contexts/LocaleContext'
 // A day counts for the streak only when all 3 goals are met. Partial days
 // are shown as half-filled dots — visible progress even on imperfect days.
 
-const GOAL_LABEL = {
-  train: 'TRAIN',
-  checkin: 'CHECK IN',
-  recover: 'RECOVER',
-} as const
-
-type GoalKey = keyof typeof GOAL_LABEL
-
 interface DayStatus {
   date: Date
   trained: boolean
@@ -235,7 +227,7 @@ export default function StreakStrip() {
     }
   }, [actsData, metricsData, checkInDates, today])
 
-  const countedStreak = useCountUp(currentStreak, { duration: 800, enabled: true })
+  const countedStreak = useCountUp(currentStreak, { durationMs: 800 })
 
   const tier: 'cold' | 'warm' | 'hot' | 'fire' =
     currentStreak === 0

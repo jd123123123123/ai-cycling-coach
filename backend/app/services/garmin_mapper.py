@@ -155,6 +155,8 @@ def map_daily_metrics(
     heart_rate_data: dict | None,
     stress_data: dict | None,
     user_summary: dict | None,
+    training_status: dict | None = None,
+    training_readiness: dict | list | None = None,
 ) -> dict:
     """Transform multiple Garmin biometric API responses into a flat DailyMetric dict.
 
@@ -239,6 +241,22 @@ def map_daily_metrics(
     if user_summary is not None:
         steps = user_summary.get("totalSteps")
 
+    # VO₂max + fitness age from training status; readiness score/recovery from readiness.
+    vo2max = None
+    if training_status:
+        vo2max = (
+            ((training_status.get("mostRecentVO2Max") or {}).get("generic") or {})
+            .get("vo2MaxValue")
+        )
+    tr_score = None
+    recovery_time_hours = None
+    if isinstance(training_readiness, list) and training_readiness:
+        tr0 = training_readiness[0]
+        tr_score = tr0.get("score")
+        rt = tr0.get("recoveryTime")  # minutes
+        if rt is not None:
+            recovery_time_hours = round(rt / 60) if rt > 48 else rt
+
     # Preserve all raw responses for forward compatibility (new fields, debugging)
     raw_data = {
         "sleep": sleep_data,
@@ -247,6 +265,8 @@ def map_daily_metrics(
         "heart_rates": heart_rate_data,
         "stress": stress_data,
         "summary": user_summary,
+        "training_status": training_status,
+        "training_readiness": training_readiness,
     }
 
     return {
@@ -256,5 +276,8 @@ def map_daily_metrics(
         "resting_hr": resting_hr,
         "stress_level": stress_level,
         "steps": steps,
+        "training_readiness": tr_score,
+        "recovery_time_hours": recovery_time_hours,
         "raw_data": raw_data,
+        "_vo2max": vo2max,  # not a column; surfaced via API from raw_data
     }

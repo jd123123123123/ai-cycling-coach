@@ -205,10 +205,13 @@ export default function WeekTab() {
 
       <PillarSection index="2" title={de ? 'Umsetzung & Vergleich' : 'Execution & trend'}
         question={de ? 'Halte ich mich an den Plan — und sicher unterwegs?' : 'Am I on plan — and ramping safely?'}>
+        {/* empty:hidden — ComplianceStrip returns null with no logged sessions;
+           collapsing its wrapper keeps the remaining cards evenly split instead
+           of leaving a dead column. */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-          <div className="flex-1 min-w-0"><ComplianceStrip /></div>
-          <div className="flex-1 min-w-0"><WeekVsLast /></div>
-          <div className="flex-1 min-w-0"><RampRate /></div>
+          <div className="flex-1 min-w-0 empty:hidden"><ComplianceStrip /></div>
+          <div className="flex-1 min-w-0 empty:hidden"><WeekVsLast /></div>
+          <div className="flex-1 min-w-0 empty:hidden"><RampRate /></div>
         </div>
       </PillarSection>
     </div>

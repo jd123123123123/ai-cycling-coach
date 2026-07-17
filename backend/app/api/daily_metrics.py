@@ -14,6 +14,7 @@ from app.models.user import User
 from app.schemas.daily_metric import (
     DailyMetricListResponse,
     DailyMetricRead,
+    SleepDetail,
     IntradayDayResponse,
     IntradayPoint,
     TodaySnapshotResponse,
@@ -65,9 +66,53 @@ async def get_daily_metrics(
     )
 
     return DailyMetricListResponse(
-        metrics=[DailyMetricRead.model_validate(m) for m in metrics],
+        metrics=[_enrich(m) for m in metrics],
         count=len(metrics),
     )
+
+
+def _enrich(m) -> DailyMetricRead:
+    """Build the read model + attach sleep detail / VO₂max / readiness pulled
+    from the stored raw Garmin payload (no schema migration needed)."""
+    read = DailyMetricRead.model_validate(m)
+    raw = m.raw_data or {}
+    if isinstance(raw, str):
+        try:
+            import json
+            raw = json.loads(raw)
+        except Exception:
+            raw = {}
+
+    dto = ((raw.get("sleep") or {}).get("dailySleepDTO")) or {}
+    if dto.get("sleepTimeSeconds"):
+        read.sleep_detail = SleepDetail(
+            total_s=dto.get("sleepTimeSeconds"),
+            deep_s=dto.get("deepSleepSeconds"),
+            light_s=dto.get("lightSleepSeconds"),
+            rem_s=dto.get("remSleepSeconds"),
+            awake_s=dto.get("awakeSleepSeconds"),
+            awake_count=dto.get("awakeCount"),
+            spo2_avg=dto.get("averageSpO2Value"),
+            spo2_low=dto.get("lowestSpO2Value"),
+            spo2_high=dto.get("highestSpO2Value"),
+            respiration_avg=dto.get("averageRespirationValue"),
+            respiration_low=dto.get("lowestRespirationValue"),
+            respiration_high=dto.get("highestRespirationValue"),
+            sleep_stress=dto.get("avgSleepStress"),
+        )
+
+    ts = raw.get("training_status") or {}
+    vo2 = (((ts.get("mostRecentVO2Max") or {}).get("generic")) or {}).get("vo2MaxValue")
+    if vo2 is not None:
+        read.vo2max = vo2
+
+    tr = raw.get("training_readiness")
+    if isinstance(tr, list) and tr:
+        read.training_readiness = tr[0].get("score") if read.training_readiness is None else read.training_readiness
+        rt = tr[0].get("recoveryTime")
+        if rt is not None and read.recovery_time_hours is None:
+            read.recovery_time_hours = round(rt / 60) if rt > 48 else rt
+    return read
 
 
 @router.get("/{iso_date}/intraday", response_model=IntradayDayResponse)

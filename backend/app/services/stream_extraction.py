@@ -35,8 +35,16 @@ DEFAULT_MAX_GAP_S = 10
 # None until the first reading. Power is handled separately (never None).
 _CARRY_CHANNELS = (
     "heart_rate", "cadence", "altitude", "latitude", "longitude",
-    "speed", "distance", "temperature",
-    "left_right_balance", "torque_effectiveness", "pedal_smoothness",
+    "speed", "grade_adjusted_speed", "vertical_speed", "distance", "temperature",
+    # Cycling dynamics
+    "right_balance", "torque_effectiveness", "pedal_smoothness",
+    "pco_left", "pco_right",
+    "power_phase_left_start", "power_phase_left_end",
+    "power_phase_right_start", "power_phase_right_end",
+    "stamina", "stamina_potential", "performance_condition",
+    # Running dynamics
+    "vertical_oscillation", "ground_contact_time", "ground_contact_balance",
+    "vertical_ratio", "stride_length",
 )
 
 
@@ -49,11 +57,29 @@ class ActivityStreams:
     latitude: list[float | None] = field(default_factory=list)
     longitude: list[float | None] = field(default_factory=list)
     speed: list[float | None] = field(default_factory=list)
+    grade_adjusted_speed: list[float | None] = field(default_factory=list)
+    vertical_speed: list[float | None] = field(default_factory=list)
     distance: list[float | None] = field(default_factory=list)
     temperature: list[float | None] = field(default_factory=list)
-    left_right_balance: list[float | None] = field(default_factory=list)
+    # Cycling dynamics
+    right_balance: list[float | None] = field(default_factory=list)
     torque_effectiveness: list[float | None] = field(default_factory=list)
     pedal_smoothness: list[float | None] = field(default_factory=list)
+    pco_left: list[float | None] = field(default_factory=list)
+    pco_right: list[float | None] = field(default_factory=list)
+    power_phase_left_start: list[float | None] = field(default_factory=list)
+    power_phase_left_end: list[float | None] = field(default_factory=list)
+    power_phase_right_start: list[float | None] = field(default_factory=list)
+    power_phase_right_end: list[float | None] = field(default_factory=list)
+    stamina: list[float | None] = field(default_factory=list)
+    stamina_potential: list[float | None] = field(default_factory=list)
+    performance_condition: list[float | None] = field(default_factory=list)
+    # Running dynamics
+    vertical_oscillation: list[float | None] = field(default_factory=list)
+    ground_contact_time: list[float | None] = field(default_factory=list)
+    ground_contact_balance: list[float | None] = field(default_factory=list)
+    vertical_ratio: list[float | None] = field(default_factory=list)
+    stride_length: list[float | None] = field(default_factory=list)
 
     @property
     def duration_s(self) -> int:

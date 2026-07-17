@@ -1,6 +1,22 @@
 import { apiClient } from './client'
 import type { IntervalStructure } from '../types/workoutInterval'
 
+export interface SleepDetail {
+  total_s: number | null
+  deep_s: number | null
+  light_s: number | null
+  rem_s: number | null
+  awake_s: number | null
+  awake_count: number | null
+  spo2_avg: number | null
+  spo2_low: number | null
+  spo2_high: number | null
+  respiration_avg: number | null
+  respiration_low: number | null
+  respiration_high: number | null
+  sleep_stress: number | null
+}
+
 export interface DailyMetric {
   id: number
   user_id: number
@@ -14,6 +30,11 @@ export interface DailyMetric {
   steps: number | null
   weight_kg: number | null
   source: string | null
+  // Enriched from Garmin raw payloads (sleep stages, SpO₂, respiration, VO₂max).
+  sleep_detail: SleepDetail | null
+  vo2max: number | null
+  training_readiness: number | null
+  recovery_time_hours: number | null
 }
 
 export interface DailyMetricListResponse {
@@ -32,6 +53,8 @@ export interface ActivityRead {
   average_hr: number | null
   max_hr: number | null
   normalized_power: number | null
+  average_power: number | null
+  calories: number | null
   title: string | null
   source: string | null
   date?: string | null

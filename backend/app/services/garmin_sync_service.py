@@ -226,24 +226,33 @@ async def _sync_activity_streams(
     raw: dict,
     profile,
 ) -> None:
-    """Best-effort: fetch the per-second stream for a freshly-synced cycling
-    activity and persist it + derived science metrics (CP/W′/durability).
+    """Best-effort: fetch the per-second stream for a freshly-synced ride or run
+    and persist it + derived science metrics.
 
-    Cycling-only (power streams) and fully defensive — any failure (no power
-    data, Garmin hiccup, parse error) is logged and swallowed so a stream
+    Rides get the full power-duration model (CP/W′/durability). Runs get their
+    complete stream blob — GPS, pace, grade-adjusted pace, HR, and running
+    dynamics (vertical oscillation, ground contact, vertical ratio, stride
+    length) — but skip the cycling power model. Fully defensive: any failure
+    (no data, Garmin hiccup, parse error) is logged and swallowed so a stream
     problem can never break the core activity sync. Uses commit=False to stay
     inside the sync's single transaction (preserves the RLS SET LOCAL).
     """
-    if activity is None or getattr(activity, "sport", None) != "cycling":
+    sport = getattr(activity, "sport", None) if activity is not None else None
+    if activity is None or sport not in ("cycling", "running"):
         return
+    is_ride = sport == "cycling"
     garmin_id = raw.get("activityId")
     if garmin_id is None:
         return
     try:
         detail = await client.get_activity_details(int(garmin_id))
         records = garmin_details_to_records(detail)
-        if not records or not any(r.get("power") is not None for r in records):
-            return  # no power stream → nothing for the power-duration model
+        if not records:
+            return
+        # Rides need a power stream to be worth storing (drives the CP model);
+        # runs are worth storing for GPS / pace / HR / dynamics even without power.
+        if is_ride and not any(r.get("power") is not None for r in records):
+            return
         streams = records_to_streams(records)
         weather = None
         if has_gps(streams) and activity.started_at is not None:
@@ -263,6 +272,7 @@ async def _sync_activity_streams(
             ftp=ftp,
             weather=weather,
             commit=False,
+            store_power_model=is_ride,
         )
         logger.info(
             "Ingested streams for activity id=%s (garmin %s): NP=%.0f, CP=%s",
@@ -328,8 +338,18 @@ async def sync_daily_metrics(
         summary = await _safe_fetch(
             client.get_user_summary, current_day, "user_summary", user_id
         )
+        # VO₂max / fitness age (training status) + training readiness — extra datapoints.
+        training_status = await _safe_fetch(
+            client.get_training_status, current_day, "training_status", user_id
+        )
+        training_readiness = await _safe_fetch(
+            client.get_training_readiness, current_day, "training_readiness", user_id
+        )
 
-        mapped_data = map_daily_metrics(sleep, hrv, body_battery, heart_rates, stress, summary)
+        mapped_data = map_daily_metrics(
+            sleep, hrv, body_battery, heart_rates, stress, summary,
+            training_status=training_status, training_readiness=training_readiness,
+        )
         result = await upsert_daily_metric(db, user_id, current_day, mapped_data)
         if result is not None:
             inserted += 1

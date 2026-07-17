@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Clock, Zap, ChevronRight, Moon, Target, Flame } from 'lucide-react'
-import type { AlternateWorkout, PrescribedWorkout } from '../../api/coach'
+import type { AlternateWorkout, PrescribedWorkout, ResolvedBlock } from '../../api/coach'
 import IntervalRibbon from './IntervalRibbon'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { simpleTitleFor, translateCoach } from '../../utils/coachLanguage'
@@ -73,6 +73,82 @@ function MetricTile({
           </span>
         )}
       </span>
+    </div>
+  )
+}
+
+const ZONE_DOT: Record<number, string> = {
+  1: 'var(--color-zone-1)', 2: 'var(--color-zone-2)', 3: 'var(--color-zone-3)',
+  4: 'var(--color-zone-4)', 5: 'var(--color-zone-5)', 6: 'var(--color-zone-6)',
+  7: 'var(--color-zone-7)',
+}
+
+/**
+ * BlockTargets — the executable prescription, made visible.
+ *
+ * The IntervalRibbon draws the shape and carries the numbers only in hover
+ * tooltips (invisible on mobile). A rider needs the actual targets — watts or
+ * heart-rate, plus cadence — without hovering. We group identical blocks so
+ * "4× 5 min @ 250–265 W" reads the way a workout is written, not as 8 rows.
+ * Rest valves are folded in; pure warm-up/cool-down are dropped to keep the
+ * readout to the efforts that need a target.
+ */
+function BlockTargets({ blocks, simpleMode, de }: { blocks: ResolvedBlock[]; simpleMode: boolean; de: boolean }) {
+  type Group = {
+    name: string; zone: number; count: number; durS: number
+    wattsLow: number; wattsHigh: number
+    hrLow: number | null; hrHigh: number | null
+    cadLow: number | null; cadHigh: number | null
+  }
+  const groups: Group[] = []
+  for (const b of blocks) {
+    const nm = b.name.trim().toLowerCase()
+    // Drop pure warm-up / cool-down — they carry no target the rider paces to.
+    if (nm.startsWith('warm') || nm.startsWith('cool')) continue
+    const g = groups.find(
+      (x) => x.name === b.name && x.zone === b.zone &&
+        x.wattsLow === b.target_watts_low && x.wattsHigh === b.target_watts_high &&
+        x.hrLow === b.target_hr_low,
+    )
+    if (g) { g.count += 1; g.durS += b.duration_s }
+    else groups.push({
+      name: b.name, zone: b.zone, count: 1, durS: b.duration_s,
+      wattsLow: b.target_watts_low, wattsHigh: b.target_watts_high,
+      hrLow: b.target_hr_low, hrHigh: b.target_hr_high,
+      cadLow: b.cadence_low, cadHigh: b.cadence_high,
+    })
+  }
+  if (groups.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-1.5" aria-label={de ? 'Zielwerte' : 'Targets'}>
+      <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 9.5, letterSpacing: '0.16em' }}>
+        {de ? 'Zielwerte' : 'Targets'}
+      </span>
+      <div className="flex flex-col gap-1">
+        {groups.map((g, i) => {
+          const perMin = Math.round(g.durS / g.count / 60)
+          const hasWatts = g.wattsHigh > 0
+          const hasHr = g.hrLow != null && g.hrHigh != null
+          const target = hasWatts
+            ? `${g.wattsLow}–${g.wattsHigh} W`
+            : hasHr
+              ? `${g.hrLow}–${g.hrHigh} bpm`
+              : `Z${g.zone}`
+          const cadence = g.cadLow && g.cadHigh ? ` · ${g.cadLow}–${g.cadHigh} rpm` : ''
+          const zoneTag = !simpleMode && hasWatts ? ` · Z${g.zone}` : ''
+          const reps = g.count > 1 ? `${g.count}× ` : ''
+          return (
+            <div key={i} className="flex items-center gap-2 min-w-0 text-[12.5px]">
+              <span className="shrink-0 w-2 h-2 rounded-full" style={{ backgroundColor: ZONE_DOT[g.zone] ?? 'var(--color-muted)' }} aria-hidden />
+              <span className="num-mono truncate" style={{ color: 'var(--color-ink-2)' }}>
+                <span style={{ color: 'var(--color-ink)', fontWeight: 600 }}>{reps}{perMin} min</span>
+                {' · '}<span style={{ color: 'var(--color-ink)' }}>{target}</span>{zoneTag}{cadence}
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -251,6 +327,10 @@ export default function PrescribedWorkoutCard({
         </p>
       )}
 
+      {/* Executable targets — the actual watts/HR/cadence per effort, visible
+         without hovering the ribbon (which is the only place they lived). */}
+      <BlockTargets blocks={displayed.blocks} simpleMode={simpleMode} de={locale === 'de'} />
+
       {/* Why this workout */}
       {displayed.why_this_workout && (
         <div
@@ -338,17 +418,18 @@ export default function PrescribedWorkoutCard({
       >
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium min-h-[40px]"
+          className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-semibold min-h-[44px]"
           style={{
-            color: 'var(--color-paper)',
-            backgroundColor: 'var(--color-forest)',
-            border: '1px solid var(--color-forest)',
+            color: '#FFFFFF',
+            background: 'linear-gradient(135deg, var(--color-accent), #FF7E52)',
+            border: 'none',
+            boxShadow: '0 6px 18px -6px color-mix(in srgb, var(--color-accent) 70%, transparent)',
           }}
           title={t('push_to_garmin_soon')}
         >
-          <Zap size={13} strokeWidth={2} />
+          <Zap size={14} strokeWidth={2.4} />
           <span>{translateCoach('workoutCard.startCta', language, locale)}</span>
-          <ChevronRight size={13} strokeWidth={2} />
+          <ChevronRight size={14} strokeWidth={2.4} />
         </button>
         <button
           type="button"

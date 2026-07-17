@@ -1,47 +1,58 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Fraunces", "Times New Roman", serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Sora", "Inter", ui-sans-serif, sans-serif;   /* display */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* ── Dark surface hierarchy ─────────────────────────────────────────── */
-  --color-paper:   #0C0C0E;                    /* page bg — near black     */
-  --color-paper-2: #1C1C1E;                    /* card surface             */
-  --color-rule:    rgba(255, 255, 255, 0.09);  /* dividers / borders       */
+  /* ── Dark surface hierarchy (pencil-new.pen / WHOOP) ────────────────── */
+  --color-paper:     #0A0C0F;                  /* page bg — near black     */
+  --color-paper-2:   #14181D;                  /* card surface             */
+  --color-surface-2: #1E242B;                  /* raised surface           */
+  --color-surface-3: #2A313A;                  /* highest surface / chips  */
+  --color-rule:      #262C34;                  /* dividers / borders       */
 
   /* ── Typography ─────────────────────────────────────────────────────── */
-  --color-ink:   #F5F5F7;                      /* primary text             */
-  --color-ink-2: rgba(235, 235, 245, 0.72);   /* secondary text           */
-  --color-muted: rgba(235, 235, 245, 0.40);   /* labels / muted           */
+  --color-ink:   #FFFFFF;                      /* primary text             */
+  --color-ink-2: #9BA4AF;                      /* secondary text           */
+  --color-muted: #5C6570;                      /* labels / tertiary        */
 
-  /* ── Electric action palette ────────────────────────────────────────── */
-  --color-forest:      #30D158;               /* peak / success           */
-  --color-forest-2:    #34C759;               /* ready / positive         */
-  --color-amber:       #FF9F0A;               /* caution                  */
-  --color-amber-2:     #FFD60A;               /* bright accent            */
-  --color-amber-soft:  rgba(255, 159, 10, 0.14);
-  --color-ink-blue:    #0A84FF;               /* info                     */
-  --color-alert:       #FF453A;               /* error / rest             */
+  /* ── Accent + metric palette (WHOOP) ────────────────────────────────── */
+  --color-accent:      #FF5A3C;               /* brand / CTA — coral       */
+  --color-accent-soft: #FF5A3C26;
+  --color-forest:      #16E08A;               /* recovery / success        */
+  --color-forest-2:    #16E08A;               /* ready / positive          */
+  --color-amber:       #FFB020;               /* caution                   */
+  --color-amber-2:     #FFB020;               /* bright accent             */
+  --color-amber-soft:  #FFB02026;
+  --color-ink-blue:    #38B6FF;               /* strain / info             */
+  --color-alert:       #FA1E55;               /* error / rest              */
+
+  /* Metric channels (Apple-rings / WHOOP) */
+  --color-recovery: #16E08A;
+  --color-strain:   #38B6FF;
+  --color-move:     #FA1E55;
+  --color-exercise: #B4FF3D;
+  --color-stand:    #00E5D4;
 
   /* ── Tri-color status — use these (not zone tokens) for good/caution/bad ── */
-  --color-good:    #30D158;
-  --color-caution: #FF9F0A;
-  --color-bad:     #FF453A;
+  --color-good:    #16E08A;
+  --color-caution: #FFB020;
+  --color-bad:     #FA1E55;
 
   /* ── Zone palette (dark) ────────────────────────────────────────────── */
-  --color-zone-1: #3A3A3C;
-  --color-zone-2: #1D5C3F;
-  --color-zone-3: #7A5800;
-  --color-zone-4: #7A2E1A;
-  --color-zone-5: #5A1A0E;
-  --color-zone-6: #3D0F07;
-  --color-zone-7: #280A04;
+  --color-zone-1: #2A313A;
+  --color-zone-2: #16E08A;
+  --color-zone-3: #B4FF3D;
+  --color-zone-4: #FFB020;
+  --color-zone-5: #FF5A3C;
+  --color-zone-6: #FA1E55;
+  --color-zone-7: #C01048;
 
   /* ── Sport accents (per-discipline) ─────────────────────────────────── */
-  --color-sport-bike:     #30D158;             /* cycling = forest        */
-  --color-sport-run:      #FFD60A;             /* running = bright amber  */
-  --color-sport-strength: #0A84FF;             /* gym = ink-blue          */
+  --color-sport-bike:     #38B6FF;             /* cycling = strain blue    */
+  --color-sport-run:      #FF5A3C;             /* running = coral          */
+  --color-sport-strength: #B4FF3D;             /* gym = exercise lime      */
 
   /* ── Chart-only ─────────────────────────────────────────────────────── */
   --color-chart-axis:     #757465;             /* PMC axis colour (already used inline today) */
@@ -82,6 +93,54 @@
   --duration-medium: 400ms;
   --duration-long:   750ms;
   --duration-xlong:  1100ms;
+}
+
+/* ── Runtime color tokens (pencil-new.pen / WHOOP) ──────────────────────
+   Declared unlayered so var() lookups in inline styles resolve to these
+   exact values regardless of how Tailwind v4 @theme emits them. This is the
+   source of truth the app reads at runtime. */
+:root {
+  --color-paper:     #0A0C0F;
+  --color-paper-2:   #14181D;
+  --color-surface-2: #1E242B;
+  --color-surface-3: #2A313A;
+  --color-rule:      #262C34;
+
+  --color-ink:   #FFFFFF;
+  --color-ink-2: #9BA4AF;
+  --color-muted: #5C6570;
+
+  --color-accent:      #FF5A3C;
+  --color-accent-soft: #FF5A3C26;
+  --color-forest:      #16E08A;
+  --color-forest-2:    #16E08A;
+  --color-amber:       #FFB020;
+  --color-amber-2:     #FFB020;
+  --color-amber-soft:  #FFB02026;
+  --color-ink-blue:    #38B6FF;
+  --color-alert:       #FA1E55;
+
+  --color-recovery: #16E08A;
+  --color-strain:   #38B6FF;
+  --color-move:     #FA1E55;
+  --color-exercise: #B4FF3D;
+  --color-stand:    #00E5D4;
+
+  --color-good:    #16E08A;
+  --color-caution: #FFB020;
+  --color-bad:     #FA1E55;
+
+  --color-zone-1: #2A313A;
+  --color-zone-2: #16E08A;
+  --color-zone-3: #B4FF3D;
+  --color-zone-4: #FFB020;
+  --color-zone-5: #FF5A3C;
+  --color-zone-6: #FA1E55;
+  --color-zone-7: #C01048;
+
+  --color-sport-bike:     #38B6FF;
+  --color-sport-run:      #FF5A3C;
+  --color-sport-strength: #B4FF3D;
 }
 
 /* ── AI gradient (unchanged — only for AI-acting surfaces) ───────────── */
@@ -228,10 +287,10 @@
   /* ── Type utilities ────────────────────────────────────────────────── */
 
   .num-display {
-    font-family: "Fraunces", "Times New Roman", serif;
+    font-family: "Sora", "Inter", ui-sans-serif, sans-serif;
     font-feature-settings: "tnum", "lnum";
-    font-variation-settings: "opsz" 144, "SOFT" 50;
-    letter-spacing: -0.02em;
+    font-weight: 700;
+    letter-spacing: -0.03em;
   }
 
   .num-mono {
@@ -240,11 +299,11 @@
   }
 
   .eyebrow {
-    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     font-size: 11px;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--color-muted);
   }
 }
@@ -324,4 +383,84 @@
 }
 ::-webkit-scrollbar-corner {
   background: var(--color-paper, #0C0C0E);
+}
+
+/* ── Global interactivity: hover + press + keyboard-focus feedback ────────
+   Cards are styled inline, so :hover can't live on the element. These global
+   rules give every Link / button / role=button tactile feedback: a pointer
+   cursor, a subtle brighten on hover, a slight press-down on active, and a
+   visible focus ring for keyboard users. Gated behind hover-capable pointers
+   so touch devices don't get stuck in a hovered state. */
+a, button, [role="button"], summary, label[for], select { cursor: pointer; }
+button:disabled, [aria-disabled="true"], a[aria-disabled="true"] { cursor: default; }
+
+@media (hover: hover) and (pointer: fine) {
+  a, button, [role="button"] {
+    transition: filter 0.16s ease, transform 0.12s ease,
+                background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  }
+  a:hover,
+  button:not(:disabled):hover,
+  [role="button"]:not([aria-disabled="true"]):hover {
+    filter: brightness(1.15);
+  }
+  /* Anchor/button cards get a faint lift so hover reads on very dark surfaces */
+  a:hover { box-shadow: 0 6px 20px -12px rgba(0, 0, 0, 0.7); }
+  a:active,
+  button:not(:disabled):active,
+  [role="button"]:active {
+    transform: scale(0.98);
+    filter: brightness(1.05);
+  }
+}
+
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-accent, #FF5A3C);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+/* ── Hover-reveal: cards expand extra detail on hover (desktop pointers) ──
+   Put `.hover-card` on an interactive card, a `.hover-reveal` block with the
+   extra stats/preview (collapsed by default), and a `.hover-arrow` chevron
+   that slides in — so hovering a past workout previews more before you click
+   through to its detail view. Touch devices ignore this (no sticky hover). */
+.hover-reveal {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.22s ease, opacity 0.18s ease, margin-top 0.22s ease;
+}
+.hover-arrow {
+  opacity: 0;
+  transform: translateX(-5px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .hover-card:hover .hover-reveal { max-height: 220px; opacity: 1; margin-top: 12px; }
+  .hover-card:hover .hover-arrow { opacity: 1; transform: translateX(0); }
+}
+
+/* ── iPhone PWA / native-app feel ────────────────────────────────────────
+   Installed via "Add to Home Screen", the app runs standalone (no Safari
+   chrome). These rules make it feel native: no rubber-band white flash, no
+   tap-highlight or long-press callout on controls, and top padding for the
+   status-bar safe area under a black-translucent status bar. */
+html { -webkit-text-size-adjust: 100%; }
+body {
+  overscroll-behavior-y: none;
+  background: var(--color-paper, #0A0C0F);
+  -webkit-tap-highlight-color: transparent;
+}
+a, button, [role="button"], [role="tab"] {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+@media (display-mode: standalone) {
+  /* Reclaim the notch/status-bar area the black-translucent bar draws over. */
+  body { padding-top: env(safe-area-inset-top); }
 }

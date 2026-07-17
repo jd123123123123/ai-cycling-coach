@@ -31,6 +31,14 @@ def _handle_from_email(email: str) -> str:
     return local.replace(".", " ").replace("_", " ").replace("-", " ").title()
 
 
+def display_handle(user) -> str:
+    """A user's shown name: their real display_name if set, else email-derived."""
+    name = getattr(user, "display_name", None)
+    if name and name.strip():
+        return name.strip()
+    return _handle_from_email(getattr(user, "email", "") or "")
+
+
 def _daily_target_tss(weekly_hours: float | None) -> int:
     if weekly_hours is None or weekly_hours <= 0:
         return DAILY_TARGET_DEFAULT
@@ -146,7 +154,7 @@ async def weekly_rich_stats(
         ring_score += int(round(min(DAILY_CAP, ratio) * 100))
 
     return {
-        "handle": _handle_from_email(user.email or "") if user else "rider",
+        "handle": display_handle(user) if user else "rider",
         "tss": int(round(tss)),
         "distance_km": round(km, 1),
         "hours": round(hours, 1),
@@ -157,6 +165,62 @@ async def weekly_rich_stats(
         "ring_score": ring_score,
         "avg_if": round(if_sum / if_n, 2) if if_n else 0.0,
     }
+
+
+CHALLENGE_METRICS = ("tss", "distance_km", "active_days", "hours", "kj", "rides")
+
+
+async def challenge_value_for_user(
+    db: AsyncSession, uid: int, start_on: date, end_on: date, metric: str
+) -> float:
+    """One athlete's cumulative `metric` over the inclusive local-day window
+    [start_on, end_on]. Units match `weekly_rich_stats`: tss (rounded int),
+    distance_km (1dp), hours (1dp), kj (rounded int), rides (count), active_days
+    (distinct active local days). Days are boundaried in the athlete's local tz.
+    """
+    _, profile = await _user_context(db, uid)
+    tz_name = (profile.timezone if profile else None) or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("UTC")
+
+    # Wide UTC window (±1 day) covers any tz offset; slice into local days.
+    window_start_utc = datetime.combine(
+        start_on - timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+    )
+    window_end_utc = datetime.combine(
+        end_on + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+    )
+    acts = await _activities_for_user_in_window(db, uid, window_start_utc, window_end_utc)
+
+    tss = km = hours = kj = 0.0
+    rides = 0
+    active: set[date] = set()
+    for a in acts:
+        d = _local_day(a.started_at, tz)
+        if d < start_on or d > end_on:
+            continue
+        rides += 1
+        active.add(d)
+        tss += float(a.tss or 0.0)
+        km += float(a.distance_meters or 0.0) / 1000.0
+        hours += float(a.duration_seconds or 0.0) / 3600.0
+        kj += _activity_kj(a)
+
+    if metric == "tss":
+        return float(round(tss))
+    if metric == "distance_km":
+        return round(km, 1)
+    if metric == "hours":
+        return round(hours, 1)
+    if metric == "kj":
+        return float(round(kj))
+    if metric == "rides":
+        return float(rides)
+    if metric == "active_days":
+        return float(len(active))
+    return 0.0
 
 
 async def crew_duel(
@@ -257,7 +321,7 @@ async def crew_standings(
         standings.append(
             {
                 "user_id": uid,
-                "handle": _handle_from_email(user.email or ""),
+                "handle": display_handle(user),
                 "is_you": uid == caller_user_id,
                 "weekly_score": weekly_score,
                 "weekly_tss": weekly_tss,

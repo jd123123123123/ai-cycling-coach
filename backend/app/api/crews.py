@@ -10,12 +10,14 @@ from typing import Annotated
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.athlete_profile import AthleteProfile
 from app.models.crew import Crew, CrewInvite, CrewMembership
+from app.models.crew_challenge import CrewChallenge
+from app.models.crew_nudge import CrewNudge
 from app.models.user import User
 from app.schemas.crew import (
     CrewCreate,
@@ -29,8 +31,15 @@ from app.schemas.crew import (
     InviteByUserCreate,
     StandingsResponse,
 )
+from app.schemas.crew_challenge import (
+    ChallengeCreate,
+    ChallengeParticipant,
+    ChallengeRead,
+)
 from app.services.crew_score import (
+    display_handle,
     _handle_from_email,
+    challenge_value_for_user,
     crew_duel,
     crew_standings,
 )
@@ -88,7 +97,7 @@ def _members_to_read(rows: list[tuple[CrewMembership, User]]) -> list[CrewMember
     return [
         CrewMemberRead(
             user_id=u.id,
-            handle=_handle_from_email(u.email or ""),
+            handle=display_handle(u),
             joined_at=m.joined_at,
             role=("owner" if m.role == "owner" else "member"),
         )
@@ -151,7 +160,7 @@ async def discover_members(
     ql = (q or "").lower().strip()
     out: list[DiscoverMember] = []
     for u in rows:
-        handle = _handle_from_email(u.email or "")
+        handle = display_handle(u)
         if ql and ql not in handle.lower() and ql not in (u.email or "").lower():
             continue
         mem = await _user_membership(db, u.id)
@@ -497,3 +506,418 @@ async def my_standings(
 
     payload = await crew_standings(db, membership.crew_id, week_start, current_user.id)
     return StandingsResponse(**payload)
+
+
+# ─── In-app connection flow: incoming invites + accept/decline ──────────────
+# The invite is crew-scoped and email-bound. These endpoints let the invitee
+# (a real logged-in user whose email matches) see and act on requests IN THE
+# APP — no email link needed — so A invites B, B gets a notification, accepts,
+# joins A's crew, and both then see each other in the crew standings.
+from pydantic import BaseModel  # noqa: E402
+
+
+class IncomingInvite(BaseModel):
+    invite_id: int
+    crew_id: int
+    crew_name: str
+    inviter_handle: str
+    created_at: datetime
+
+
+@router.get("/invites/incoming", response_model=list[IncomingInvite])
+async def incoming_invites(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> list[IncomingInvite]:
+    """Pending crew invites addressed to the caller's email — the invitee's
+    in-app notification feed. Expired invites are filtered out."""
+    email = (current_user.email or "").lower()
+    rows = (
+        await db.execute(
+            select(CrewInvite, Crew, User)
+            .join(Crew, Crew.id == CrewInvite.crew_id)
+            .join(User, User.id == CrewInvite.inviter_user_id)
+            .where(CrewInvite.invitee_email == email, CrewInvite.status == "pending")
+            .order_by(CrewInvite.created_at.desc())
+        )
+    ).all()
+    now = datetime.now(timezone.utc)
+    out: list[IncomingInvite] = []
+    for inv, crew, inviter in rows:
+        exp = inv.expires_at if inv.expires_at.tzinfo else inv.expires_at.replace(tzinfo=timezone.utc)
+        if exp < now:
+            continue
+        out.append(IncomingInvite(
+            invite_id=inv.id, crew_id=crew.id, crew_name=crew.name,
+            inviter_handle=display_handle(inviter), created_at=inv.created_at,
+        ))
+    return out
+
+
+async def _resolve_incoming(db: AsyncSession, invite_id: int, current_user: User) -> CrewInvite:
+    invite = (
+        await db.execute(select(CrewInvite).where(CrewInvite.id == invite_id))
+    ).scalar_one_or_none()
+    if invite is None:
+        raise HTTPException(status_code=404, detail="invite not found")
+    if (current_user.email or "").lower() != invite.invitee_email:
+        raise HTTPException(status_code=403, detail="this invite is not addressed to you")
+    if invite.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "invite_not_pending", "msg": f"status: {invite.status}"},
+        )
+    return invite
+
+
+@router.post("/invites/{invite_id}/accept-mine", response_model=CrewMineResponse)
+async def accept_incoming(
+    invite_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> CrewMineResponse:
+    """Accept an in-app invite addressed to me → join the inviter's crew so we
+    can both see each other."""
+    invite = await _resolve_incoming(db, invite_id, current_user)
+    exp = invite.expires_at if invite.expires_at.tzinfo else invite.expires_at.replace(tzinfo=timezone.utc)
+    if exp < datetime.now(timezone.utc):
+        raise HTTPException(status_code=422, detail={"code": "invite_expired", "msg": "expired"})
+    if await _user_membership(db, current_user.id) is not None:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "already_in_crew", "msg": "leave your current crew first"},
+        )
+    db.add(CrewMembership(crew_id=invite.crew_id, user_id=current_user.id, role="member"))
+    invite.status = "accepted"
+    invite.accepted_at = datetime.now(timezone.utc)
+    await db.commit()
+    crew = (await db.execute(select(Crew).where(Crew.id == invite.crew_id))).scalar_one_or_none()
+    members = await _crew_member_rows(db, invite.crew_id)
+    pending = await _crew_pending_invites(db, invite.crew_id)
+    return CrewMineResponse(
+        crew=CrewRead(id=crew.id, name=crew.name, owner_user_id=crew.owner_user_id) if crew else None,
+        members=_members_to_read(members),
+        pending_invites=_invites_to_read(pending),
+    )
+
+
+@router.post("/invites/{invite_id}/decline", status_code=status.HTTP_204_NO_CONTENT)
+async def decline_incoming(
+    invite_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> None:
+    """Decline an in-app invite addressed to me."""
+    invite = await _resolve_incoming(db, invite_id, current_user)
+    invite.status = "declined"
+    await db.commit()
+
+
+class ConnectRequest(BaseModel):
+    user_id: int
+    crew_name: str | None = None
+
+
+@router.post("/connect", response_model=CrewInviteRead, status_code=status.HTTP_201_CREATED)
+async def connect_with_user(
+    payload: ConnectRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> CrewInviteRead:
+    """One-shot discover→invite: ensure the caller has a crew (auto-create on
+    first connect), then invite the target user into it. The target sees the
+    invite in their in-app notification feed and accepts/declines there."""
+    target = (
+        await db.execute(select(User).where(User.id == payload.user_id))
+    ).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    if target.id == current_user.id:
+        raise HTTPException(status_code=422, detail="cannot connect with yourself")
+
+    mem = await _user_membership(db, current_user.id)
+    if mem is None:
+        default_name = (payload.crew_name or f"{_handle_from_email(current_user.email or 'my')}'s crew").strip()[:60]
+        crew = Crew(name=default_name, owner_user_id=current_user.id)
+        db.add(crew)
+        await db.flush()
+        db.add(CrewMembership(crew_id=crew.id, user_id=current_user.id, role="owner"))
+        await db.flush()
+        crew_id = crew.id
+    else:
+        crew_id = mem.crew_id
+
+    return await create_invite(crew_id, CrewInviteCreate(email=target.email), current_user, db)
+
+
+# ─── Nudge — send a funny trash-talk line to a crew-mate ────────────────────
+# A lightweight social poke: pick a witty pre-written line (deterministically,
+# so it varies per athlete without RNG) and drop it in the opponent's feed.
+
+# ~12 witty trash-talk lines. Kept intentionally light-hearted.
+NUDGE_LINES: list[str] = [
+    "Your FTP called — it wants a rematch.",
+    "I've seen glaciers with a better power curve.",
+    "Nice recovery week... that lasted 3 weeks.",
+    "My warm-up is your threshold. Just saying.",
+    "Strava called: your last ride filed for early retirement.",
+    "Legs of steel? More like legs of soft-serve today.",
+    "I drafted behind you once. Fell asleep.",
+    "That TSS wouldn't scare a spin-class instructor.",
+    "Even your smart trainer is asking for a day off.",
+    "You call that a sprint? My grandma calls it a Sunday roll.",
+    "Watts up? Not your numbers, apparently.",
+    "I'd say catch me if you can, but we both know how that ends.",
+]
+
+
+class NudgeCreate(BaseModel):
+    to_user_id: int
+
+
+class NudgeResult(BaseModel):
+    text: str
+    to_user_id: int
+
+
+class IncomingNudge(BaseModel):
+    id: int
+    from_handle: str
+    text: str
+    created_at: datetime
+
+
+@router.post("/nudge", response_model=NudgeResult, status_code=status.HTTP_201_CREATED)
+async def send_nudge(
+    payload: NudgeCreate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> NudgeResult:
+    """Send a funny trash-talk line to a crew-mate. The line is picked
+    deterministically by (nudges already sent by this user) % len(lines) so it
+    varies without RNG. 403 if the target isn't in the caller's crew."""
+    if payload.to_user_id == current_user.id:
+        raise HTTPException(status_code=403, detail="cannot nudge yourself")
+
+    my_mem = await _user_membership(db, current_user.id)
+    target_mem = await _user_membership(db, payload.to_user_id)
+    if (
+        my_mem is None
+        or target_mem is None
+        or my_mem.crew_id != target_mem.crew_id
+    ):
+        raise HTTPException(status_code=403, detail="that athlete is not in your crew")
+
+    sent_count = (
+        await db.execute(
+            select(func.count(CrewNudge.id)).where(
+                CrewNudge.from_user_id == current_user.id
+            )
+        )
+    ).scalar_one()
+    text = NUDGE_LINES[sent_count % len(NUDGE_LINES)]
+
+    db.add(
+        CrewNudge(
+            from_user_id=current_user.id,
+            to_user_id=payload.to_user_id,
+            text=text,
+        )
+    )
+    await db.commit()
+    return NudgeResult(text=text, to_user_id=payload.to_user_id)
+
+
+@router.get("/nudges/incoming", response_model=list[IncomingNudge])
+async def incoming_nudges(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> list[IncomingNudge]:
+    """The caller's UNREAD nudges — their trash-talk notification feed."""
+    rows = (
+        await db.execute(
+            select(CrewNudge, User)
+            .join(User, User.id == CrewNudge.from_user_id)
+            .where(
+                CrewNudge.to_user_id == current_user.id,
+                CrewNudge.read_at.is_(None),
+            )
+            .order_by(CrewNudge.created_at.desc())
+        )
+    ).all()
+    return [
+        IncomingNudge(
+            id=nudge.id,
+            from_handle=display_handle(sender),
+            text=nudge.text,
+            created_at=nudge.created_at,
+        )
+        for (nudge, sender) in rows
+    ]
+
+
+@router.post("/nudges/{nudge_id}/read", status_code=status.HTTP_204_NO_CONTENT)
+async def mark_nudge_read(
+    nudge_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> None:
+    """Mark one of the caller's incoming nudges as read."""
+    nudge = (
+        await db.execute(
+            select(CrewNudge).where(
+                CrewNudge.id == nudge_id,
+                CrewNudge.to_user_id == current_user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if nudge is None:
+        raise HTTPException(status_code=404, detail="nudge not found")
+    if nudge.read_at is None:
+        nudge.read_at = datetime.now(timezone.utc)
+        await db.commit()
+
+
+# ─── Custom crew challenges ─────────────────────────────────────────────────
+# A crew member defines a challenge (metric + target over a period); the app
+# tracks each member's progress and whether they've reached the target so the
+# frontend can fire confetti / a notification on completion.
+
+
+async def _serialize_challenge(
+    db: AsyncSession, ch: CrewChallenge
+) -> ChallengeRead:
+    """Build the challenge read-model, computing each crew member's progress."""
+    creator = (
+        await db.execute(select(User).where(User.id == ch.creator_user_id))
+    ).scalar_one_or_none()
+
+    rows = await _crew_member_rows(db, ch.crew_id)
+    participants: list[ChallengeParticipant] = []
+    for (_m, u) in rows:
+        value = await challenge_value_for_user(
+            db, u.id, ch.starts_on, ch.ends_on, ch.metric
+        )
+        pct = int(min(100, round(value / ch.target * 100))) if ch.target > 0 else 0
+        participants.append(
+            ChallengeParticipant(
+                user_id=u.id,
+                handle=display_handle(u),
+                value=value,
+                reached=value >= ch.target,
+                pct=pct,
+            )
+        )
+    participants.sort(key=lambda p: p.value, reverse=True)
+
+    return ChallengeRead(
+        id=ch.id,
+        name=ch.name,
+        metric=ch.metric,  # type: ignore[arg-type]
+        target=ch.target,
+        period=ch.period,
+        starts_on=ch.starts_on,
+        ends_on=ch.ends_on,
+        creator_handle=display_handle(creator) if creator else "rider",
+        created_at=ch.created_at,
+        participants=participants,
+    )
+
+
+@router.post(
+    "/challenges",
+    response_model=ChallengeRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_challenge(
+    payload: ChallengeCreate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> ChallengeRead:
+    """Create a custom challenge for the caller's crew. If period='week' and the
+    dates are omitted, defaults to the current crew week (Mon–Sun) in the
+    caller's local timezone. 403 if the caller isn't in a crew."""
+    membership = await _user_membership(db, current_user.id)
+    if membership is None:
+        raise HTTPException(status_code=403, detail="not in a crew")
+
+    starts_on = payload.starts_on
+    ends_on = payload.ends_on
+    if payload.period == "week" and (starts_on is None or ends_on is None):
+        today = await _athlete_local_today(db, current_user.id)
+        week_start = _monday_of(today)
+        starts_on = week_start
+        ends_on = week_start + timedelta(days=6)
+    if starts_on is None or ends_on is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "missing_dates", "msg": "custom period needs starts_on and ends_on"},
+        )
+    if ends_on < starts_on:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "bad_dates", "msg": "ends_on must be on or after starts_on"},
+        )
+
+    challenge = CrewChallenge(
+        crew_id=membership.crew_id,
+        creator_user_id=current_user.id,
+        name=payload.name.strip(),
+        metric=payload.metric,
+        target=payload.target,
+        period=payload.period,
+        starts_on=starts_on,
+        ends_on=ends_on,
+    )
+    db.add(challenge)
+    await db.commit()
+    await db.refresh(challenge)
+    return await _serialize_challenge(db, challenge)
+
+
+@router.get("/challenges", response_model=list[ChallengeRead])
+async def list_challenges(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> list[ChallengeRead]:
+    """Active (non-archived) challenges for the caller's crew, each with every
+    crew member's live progress toward the target. Empty when not in a crew."""
+    membership = await _user_membership(db, current_user.id)
+    if membership is None:
+        return []
+    rows = (
+        await db.execute(
+            select(CrewChallenge)
+            .where(
+                CrewChallenge.crew_id == membership.crew_id,
+                CrewChallenge.archived.is_(False),
+            )
+            .order_by(CrewChallenge.created_at.desc())
+        )
+    ).scalars().all()
+    return [await _serialize_challenge(db, ch) for ch in rows]
+
+
+@router.delete("/challenges/{challenge_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def archive_challenge(
+    challenge_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> None:
+    """Archive a challenge. Any member of the challenge's crew may archive it;
+    404 if it isn't their crew's."""
+    membership = await _user_membership(db, current_user.id)
+    challenge = (
+        await db.execute(
+            select(CrewChallenge).where(CrewChallenge.id == challenge_id)
+        )
+    ).scalar_one_or_none()
+    if (
+        challenge is None
+        or membership is None
+        or challenge.crew_id != membership.crew_id
+    ):
+        raise HTTPException(status_code=404, detail="challenge not found")
+    if not challenge.archived:
+        challenge.archived = True
+        await db.commit()

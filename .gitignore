@@ -36,6 +36,10 @@ frontend/.vite/
 # Screenshot clutter (dev artifacts)
 *.png
 docs/**/*.png
+# …but the PWA icons must ship (served same-origin by the backend)
+!frontend/public/icon-192.png
+!frontend/public/icon-512.png
+!frontend/public/apple-touch-icon.png
 
 # Local data
 *.log

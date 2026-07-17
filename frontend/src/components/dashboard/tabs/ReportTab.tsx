@@ -137,7 +137,7 @@ export default function ReportTab() {
           {/* ── Act 2 · Diagnosis (collapsed by default) ──────────────────────── */}
           <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) 80ms both' }}>
             <ActSection
-              index="02"
+              index="2"
               storageId="diagnosis"
               defaultExpanded={false}
               title={de ? 'Diagnose' : 'Diagnosis'}
@@ -167,7 +167,7 @@ export default function ReportTab() {
           {(report.trajectory || report.prescriptions.length > 0 || report.next_step) && (
             <section style={{ animation: 'card-enter 480ms var(--ease-apple-default, ease) 160ms both' }}>
               <ActSection
-                index="03"
+                index="3"
                 storageId="prescription"
                 defaultExpanded={false}
                 title={de ? 'Verordnung' : 'Prescription'}

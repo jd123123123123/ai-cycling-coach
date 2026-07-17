@@ -28,14 +28,12 @@ import { useLocale } from '../../contexts/LocaleContext'
 interface DashboardShellProps {
   children: ReactNode
   stickyBar?: ReactNode
-  tabs?: ReactNode
   workoutPreviewModal?: ReactNode
 }
 
 export default function DashboardShell({
   children,
   stickyBar,
-  tabs,
   workoutPreviewModal,
 }: DashboardShellProps) {
   const [chatOpen, setChatOpen] = useState(false)
@@ -59,7 +57,7 @@ export default function DashboardShell({
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-paper)' }}>
       {stickyBar}
 
-      <main className="paper-grain max-w-6xl mx-auto px-4 sm:px-6 pb-28 lg:pb-20 flex flex-col gap-6 sm:gap-8 min-w-0">
+      <main className="paper-grain max-w-md mx-auto px-4 pb-28 flex flex-col gap-6 min-w-0">
         <div className="flex justify-end items-center gap-2 pt-3">
           <LocaleSwitch />
           <SyncButton compact />
@@ -75,7 +73,6 @@ export default function DashboardShell({
           </Link>
         </div>
 
-        {tabs && <div className="-mb-2">{tabs}</div>}
 
         <section className="min-w-0">
           {children}

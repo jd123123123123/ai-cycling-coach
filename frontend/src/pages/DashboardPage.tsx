@@ -20,26 +20,28 @@ import StickyReadinessBar from '../components/dashboard/StickyReadinessBar'
 import GarminSyncedBanner from '../components/dashboard/GarminSyncedBanner'
 import TodayTab from '../components/dashboard/tabs/TodayTab'
 import PlanTab from '../components/dashboard/tabs/PlanTab'
-import AnalyzeTab from '../components/dashboard/tabs/AnalyzeTab'
+import RecoveryTab from '../components/dashboard/tabs/RecoveryTab'
+import HistoryTab from '../components/dashboard/tabs/HistoryTab'
 import SocialTab from '../components/social/tabs/SocialTab'
-import { SegmentedTabs } from '../components/ui/SegmentedTabs'
-import { useT } from '../contexts/LocaleContext'
 
-type TabId = 'today' | 'plan' | 'analyze' | 'social'
+type TabId = 'today' | 'plan' | 'recovery' | 'analyze' | 'social'
 
 function resolveTab(raw: string | null): TabId {
   switch (raw) {
     case 'today': return 'today'
-    // Plan folds the old Train/Week + Workouts surfaces
+    // Train folds the old Plan/Week + Workouts surfaces
     case 'plan':
     case 'train':
     case 'week':
     case 'workouts': return 'plan'
-    // analytics surfaces folded into the Analyze hub
+    // Recovery — biometrics / readiness
+    case 'recovery': return 'recovery'
+    // History = analytics (Load & Form + records)
     case 'analyze':
+    case 'history':
     case 'trends':
     case 'report': return 'analyze'
-    // Social is the fourth surface; legacy ?tab=crew aliases into it
+    // Social is the fifth surface; legacy ?tab=crew aliases into it
     case 'social':
     case 'crew': return 'social'
     // legacy sport tabs collapsed into Today
@@ -50,55 +52,27 @@ function resolveTab(raw: string | null): TabId {
 }
 
 export default function DashboardPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const reducedMotion = useReducedMotion()
 
   const activeTab: TabId = resolveTab(searchParams.get('tab'))
-
-  const handleTabChange = (id: TabId) => {
-    setSearchParams({ tab: id }, { replace: true })
-  }
 
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [activeTab])
 
-  const t = useT()
-  const tabs: readonly { id: TabId; label: string }[] = [
-    { id: 'today',   label: t('tab_today') },
-    { id: 'plan',    label: t('tab_plan') },
-    { id: 'analyze', label: t('tab_analyze') },
-    { id: 'social',  label: t('tab_social') },
-  ]
-
   const tabContent = (() => {
     switch (activeTab) {
-      case 'today':   return <TodayTab />
-      case 'plan':    return <PlanTab />
-      case 'analyze': return <AnalyzeTab />
-      case 'social':  return <SocialTab />
+      case 'today':    return <TodayTab />
+      case 'plan':     return <PlanTab />
+      case 'recovery': return <RecoveryTab />
+      case 'analyze':  return <HistoryTab />
+      case 'social':   return <SocialTab />
     }
   })()
 
-  const navValue: TabId = activeTab
-
   return (
-    <DashboardShell
-      stickyBar={<StickyReadinessBar />}
-      tabs={
-        // Desktop only — on <lg viewports MobileBottomNav owns navigation
-        // and the top tab strip is redundant + steals header height.
-        <div className="hidden lg:block">
-          <SegmentedTabs
-            tabs={tabs}
-            value={navValue}
-            onChange={handleTabChange}
-            ariaLabel="Dashboard sections"
-          />
-          <div className="hairline" />
-        </div>
-      }
-    >
+    <DashboardShell stickyBar={<StickyReadinessBar />}>
       <GarminSyncedBanner />
       <div
         key={activeTab}

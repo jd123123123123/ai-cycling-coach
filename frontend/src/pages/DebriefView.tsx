@@ -37,7 +37,7 @@ export default function DebriefView() {
     <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
       <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-9 sm:gap-11">
         <Link
-          to="/dashboard?tab=analyze"
+          to="/dashboard?tab=history"
           className="inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1.5 transition-colors"
           style={{ fontSize: 12.5, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)' }}
         >

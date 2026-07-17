@@ -27,6 +27,74 @@ from app.services.training_load import (
 
 logger = logging.getLogger(__name__)
 
+# 0.90 × HRmax is a standard, widely-used estimate of lactate-threshold HR
+# (LTHR) when no measured threshold is available. This is the ONLY approximation
+# permitted in TSS computation — every other input uses real, measured values.
+_LTHR_HRMAX_FRACTION = 0.90
+
+
+def _resolve_lthr(profile: AthleteProfile, prefer_running: bool = False) -> float | None:
+    """Return a usable LTHR for hrTSS.
+
+    Prefers a measured threshold (lthr_running/lthr_cycling). When both are null
+    but max_heart_rate is set, falls back to the standard 0.90×HRmax estimate.
+    Returns None when neither a measured LTHR nor an HRmax is available.
+    """
+    if prefer_running:
+        measured = profile.lthr_running or profile.lthr_cycling
+    else:
+        measured = profile.lthr_cycling or profile.lthr_running
+    if measured:
+        return float(measured)
+    if profile.max_heart_rate:
+        # Standard LTHR estimate: 0.90 × HRmax.
+        return round(_LTHR_HRMAX_FRACTION * profile.max_heart_rate)
+    return None
+
+
+def _compute_hr_tss(
+    duration: int | float,
+    data: ActivityCreate,
+    profile: AthleteProfile,
+    lthr: float | None,
+    context: str,
+) -> float | None:
+    """Compute hrTSS from HR data, or None when HR data is genuinely absent.
+
+    Guards against division-by-zero (HRmax must exceed HRrest).
+    """
+    if not all([data.average_hr, lthr, profile.resting_heart_rate, profile.max_heart_rate]):
+        logger.debug(
+            "Skipping %s hrTSS: average_hr=%s lthr=%s resting_hr=%s max_hr=%s",
+            context,
+            data.average_hr,
+            lthr,
+            profile.resting_heart_rate,
+            profile.max_heart_rate,
+        )
+        return None
+    if profile.max_heart_rate <= profile.resting_heart_rate:
+        logger.warning(
+            "Skipping %s hrTSS: max_hr (%s) <= resting_hr (%s)",
+            context,
+            profile.max_heart_rate,
+            profile.resting_heart_rate,
+        )
+        return None
+    try:
+        # TODO: add sex field to AthleteProfile — defaulting to "male" for now
+        return calculate_hr_tss(
+            duration_seconds=duration,
+            average_hr=float(data.average_hr),
+            lthr=float(lthr),
+            hr_rest=float(profile.resting_heart_rate),
+            hr_max=float(profile.max_heart_rate),
+            sex="male",
+        )
+    except (ValueError, ZeroDivisionError) as exc:
+        logger.warning("%s hrTSS calculation failed: %s", context, exc)
+        return None
+
 
 def _compute_tss(data: ActivityCreate, profile: AthleteProfile) -> float | None:
     """Compute TSS from activity data and athlete profile thresholds.
@@ -53,46 +121,25 @@ def _compute_tss(data: ActivityCreate, profile: AthleteProfile) -> float | None:
             return None
 
     elif data.sport == "running":
-        if not data.distance_meters or not profile.running_threshold_pace_ms:
-            logger.debug(
-                "Skipping running TSS: distance=%s threshold_pace=%s",
-                data.distance_meters,
-                profile.running_threshold_pace_ms,
-            )
-            return None
-        # Compute speed in m/s from distance and duration
-        speed_ms = data.distance_meters / duration
-        try:
-            return calculate_running_tss(duration, speed_ms, profile.running_threshold_pace_ms)
-        except ValueError as exc:
-            logger.warning("Running TSS calculation failed: %s", exc)
-            return None
+        # Preferred: pace-based rTSS when a real running threshold pace is set.
+        if profile.running_threshold_pace_ms and data.distance_meters:
+            # Compute speed in m/s from distance and duration
+            speed_ms = data.distance_meters / duration
+            try:
+                return calculate_running_tss(duration, speed_ms, profile.running_threshold_pace_ms)
+            except ValueError as exc:
+                logger.warning("Running TSS calculation failed: %s", exc)
+                return None
+        # Fallback: HR-based TSS when threshold pace is missing but HR data exists.
+        # Prefer a measured running LTHR; estimate 0.90×HRmax only when unset.
+        lthr = _resolve_lthr(profile, prefer_running=True)
+        return _compute_hr_tss(duration, data, profile, lthr, context="running")
 
     elif data.sport == "gym":
-        # Prefer LTHR from cycling; fall back to running LTHR
-        lthr = profile.lthr_cycling or profile.lthr_running
-        if not all([data.average_hr, lthr, profile.resting_heart_rate, profile.max_heart_rate]):
-            logger.debug(
-                "Skipping gym hrTSS: average_hr=%s lthr=%s resting_hr=%s max_hr=%s",
-                data.average_hr,
-                lthr,
-                profile.resting_heart_rate,
-                profile.max_heart_rate,
-            )
-            return None
-        try:
-            # TODO: add sex field to AthleteProfile — defaulting to "male" for now
-            return calculate_hr_tss(
-                duration_seconds=duration,
-                average_hr=float(data.average_hr),
-                lthr=float(lthr),
-                hr_rest=float(profile.resting_heart_rate),
-                hr_max=float(profile.max_heart_rate),
-                sex="male",
-            )
-        except (ValueError, ZeroDivisionError) as exc:
-            logger.warning("Gym hrTSS calculation failed: %s", exc)
-            return None
+        # Prefer a measured LTHR (cycling, then running); estimate 0.90×HRmax
+        # only when both measured thresholds are null.
+        lthr = _resolve_lthr(profile, prefer_running=False)
+        return _compute_hr_tss(duration, data, profile, lthr, context="gym")
 
     return None
 
@@ -178,6 +225,65 @@ async def list_activities(
 
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def recompute_missing_tss(db: AsyncSession, user_id: int) -> int:
+    """Backfill TSS for the user's activities that currently have tss IS NULL.
+
+    Loads the athlete profile once, then recomputes TSS for every NULL-tss
+    activity by reconstructing the same input _compute_tss expects from the
+    stored Activity fields. Only updates rows where a value could be computed
+    (e.g. HR data now yields hrTSS via the LTHR fallback). Returns the count
+    of rows updated.
+    """
+    profile = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+    )
+    profile = profile.scalar_one_or_none()
+    if profile is None:
+        logger.info("recompute_missing_tss: no athlete profile for user_id=%s", user_id)
+        return 0
+
+    result = await db.execute(
+        select(Activity).where(
+            Activity.user_id == user_id,
+            Activity.tss.is_(None),
+        )
+    )
+    activities = list(result.scalars().all())
+
+    updated = 0
+    for activity in activities:
+        # ActivityCreate enforces duration_seconds > 0; skip malformed rows
+        # (they could never yield a TSS anyway).
+        if not activity.duration_seconds or activity.duration_seconds <= 0:
+            continue
+        # Reconstruct the ActivityCreate-shaped input _compute_tss expects.
+        data = ActivityCreate(
+            sport=activity.sport,
+            started_at=activity.started_at,
+            duration_seconds=activity.duration_seconds,
+            distance_meters=activity.distance_meters,
+            average_power=activity.average_power,
+            normalized_power=activity.normalized_power,
+            average_hr=activity.average_hr,
+            max_hr=activity.max_hr,
+        )
+        tss = _compute_tss(data, profile)
+        if tss is not None:
+            activity.tss = tss
+            updated += 1
+
+    if updated:
+        await db.commit()
+
+    logger.info(
+        "recompute_missing_tss: user_id=%s scanned=%d updated=%d",
+        user_id,
+        len(activities),
+        updated,
+    )
+    return updated
 
 
 async def get_activity(

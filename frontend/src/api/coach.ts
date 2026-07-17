@@ -48,6 +48,21 @@ export interface PrescribedWorkout {
   why_this_workout?: string | null
 }
 
+export type WorkoutSport = 'cycling' | 'running' | 'gym'
+
+/**
+ * Infer a prescribed workout's sport. PrescribedWorkout carries no explicit
+ * sport field, so we read category / framework / title keywords and fall back
+ * to the presence of real watt targets → cycling (bike default).
+ */
+export function detectWorkoutSport(w: PrescribedWorkout): WorkoutSport {
+  const hay = `${w.category ?? ''} ${w.framework_cited ?? ''} ${w.title ?? ''}`.toLowerCase()
+  if (/\b(gym|strength|kraft|lift|hypertroph|squat|deadlift|bench|press|mobility|core)\b/.test(hay)) return 'gym'
+  if (/\b(run|running|lauf|jog|5k|10k|marathon|track|tempo run|interval run)\b/.test(hay)) return 'running'
+  const hasWatts = (w.blocks ?? []).some((b) => b.target_watts_high > 0)
+  return hasWatts ? 'cycling' : 'cycling'
+}
+
 export interface AlternateWorkout {
   label: 'less_time' | 'recover'
   one_liner: string
@@ -156,6 +171,21 @@ export interface CoachBriefResponse {
   // briefs without these fields stay backward-compatible.
   tomorrow_plan?: TomorrowPlan | null
   regeneration?: Regeneration | null
+  // "What changed & why" — transparent adaptation of today's plan.
+  adaptations?: Adaptations | null
+}
+
+export interface AdaptationChange {
+  signal: string
+  direction: 'up' | 'down' | 'flat'
+  detail: string
+  action: string
+  principle: string
+  severity: 'boost' | 'hold' | 'ease'
+}
+export interface Adaptations {
+  summary: string
+  changes: AdaptationChange[]
 }
 
 export interface CauseEntry {

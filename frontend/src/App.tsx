@@ -15,6 +15,14 @@ import CoachPage from './pages/CoachPage'
 import SettingsPage from './pages/SettingsPage'
 import DashboardsPage from './pages/DashboardsPage'
 import DebriefView from './pages/DebriefView'
+import SessionReportView from './pages/SessionReportView'
+import RideAnalysisView from './pages/RideAnalysisView'
+import LoadFormView from './pages/LoadFormView'
+import WorkoutDetailView from './pages/WorkoutDetailView'
+import RunProgressView from './pages/RunProgressView'
+import BikeProgressView from './pages/BikeProgressView'
+import LiftProgressView from './pages/LiftProgressView'
+import RunAnalysisView from './pages/RunAnalysisView'
 
 function App() {
   return (
@@ -120,6 +128,55 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route
+            path="/activities/:id/session-report"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <SessionReportView />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/activities/:id/ride"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <RideAnalysisView />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/activities/:id/run"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <RunAnalysisView />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/load-form"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <LoadFormView />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/workout/today"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <WorkoutDetailView />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="/progress/run" element={<ProtectedRoute checkOnboarding><RunProgressView /></ProtectedRoute>} />
+          <Route path="/progress/bike" element={<ProtectedRoute checkOnboarding><BikeProgressView /></ProtectedRoute>} />
+          <Route path="/progress/lift" element={<ProtectedRoute checkOnboarding><LiftProgressView /></ProtectedRoute>} />
 
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

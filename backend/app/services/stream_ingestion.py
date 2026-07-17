@@ -28,8 +28,17 @@ _CORE_CHANNELS = ("power", "heart_rate", "cadence", "altitude")
 # Must stay in sync with `_CARRY_CHANNELS` in stream_extraction.py: this is
 # exactly that set minus the core carried channels (heart_rate/cadence/altitude).
 _OPTIONAL_CHANNELS = (
-    "latitude", "longitude", "speed", "distance", "temperature",
-    "left_right_balance", "torque_effectiveness", "pedal_smoothness",
+    "latitude", "longitude", "speed", "grade_adjusted_speed", "vertical_speed",
+    "distance", "temperature",
+    # Cycling dynamics
+    "right_balance", "torque_effectiveness", "pedal_smoothness",
+    "pco_left", "pco_right",
+    "power_phase_left_start", "power_phase_left_end",
+    "power_phase_right_start", "power_phase_right_end",
+    "stamina", "stamina_potential", "performance_condition",
+    # Running dynamics
+    "vertical_oscillation", "ground_contact_time", "ground_contact_balance",
+    "vertical_ratio", "stride_length",
 )
 
 
@@ -66,12 +75,18 @@ async def ingest_activity_streams(
     ftp: float | None,
     weather: dict | None = None,
     commit: bool = True,
+    store_power_model: bool = True,
 ) -> RideAnalysis:
     """Analyze + persist streams for one activity. Returns the analysis bundle.
 
     Pass ``commit=False`` from inside a larger transaction (e.g. the Garmin sync
     loop, which keeps a single transaction so the RLS ``SET LOCAL`` survives) —
     the row is then flushed, and the caller commits at its own boundary.
+
+    ``store_power_model=False`` (runs) still persists the full stream blob (GPS,
+    pace, HR, running dynamics) + decoupling, but nulls the cycling-only power
+    model (CP / W′ / eFTP / MMP curve) and skips the NP backfill so a run's
+    running-power never pollutes the cycling power-duration / FTP model.
     """
     analysis = analyze_streams(streams.power, hr_series=_hr_for_analysis(streams), ftp=ftp)
 
@@ -81,13 +96,13 @@ async def ingest_activity_streams(
         "streams": build_streams_blob(streams),
         "weather": weather,
         "has_gps": has_gps(streams),
-        "mmp_curve": {str(k): v for k, v in analysis.mmp_curve.items()},
-        "normalized_power": analysis.np_watts,
+        "mmp_curve": {str(k): v for k, v in analysis.mmp_curve.items()} if store_power_model else None,
+        "normalized_power": analysis.np_watts if store_power_model else None,
         "decoupling_pct": analysis.decoupling_pct,
         "total_kj": analysis.total_kj,
-        "cp_watts": analysis.cp.cp_watts if analysis.cp else None,
-        "w_prime_j": analysis.cp.w_prime_j if analysis.cp else None,
-        "eftp_watts": analysis.cp.eftp_watts if analysis.cp else None,
+        "cp_watts": (analysis.cp.cp_watts if analysis.cp else None) if store_power_model else None,
+        "w_prime_j": (analysis.cp.w_prime_j if analysis.cp else None) if store_power_model else None,
+        "eftp_watts": (analysis.cp.eftp_watts if analysis.cp else None) if store_power_model else None,
     }
     if row is None:
         db.add(ActivityStream(activity_id=activity_id, **payload))
@@ -95,12 +110,14 @@ async def ingest_activity_streams(
         for k, v in payload.items():
             setattr(row, k, v)
 
-    # Backfill the activity's NP from the true stream-derived value when absent.
-    await db.execute(
-        update(Activity)
-        .where(Activity.id == activity_id, Activity.normalized_power.is_(None))
-        .values(normalized_power=analysis.np_watts)
-    )
+    # Backfill the activity's NP from the true stream-derived value when absent
+    # (cycling only — a run's power model must not seed the cycling NP field).
+    if store_power_model:
+        await db.execute(
+            update(Activity)
+            .where(Activity.id == activity_id, Activity.normalized_power.is_(None))
+            .values(normalized_power=analysis.np_watts)
+        )
     if commit:
         await db.commit()
     else:

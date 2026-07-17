@@ -1,7 +1,19 @@
 import axios from 'axios'
 import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// API base. Precedence:
+//   1. VITE_API_URL when set (explicit backend URL, e.g. local dev on :8042).
+//   2. '' (same-origin, relative) in a production build — the backend serves
+//      this SPA behind one public HTTPS origin, so /coach/brief etc. resolve to
+//      the same host. Same-origin means cookies + auth "just work" (no CORS, no
+//      Safari cross-site cookie blocking) — ideal for the iPhone PWA.
+//   3. localhost:8042 as the dev fallback.
+const BASE_URL =
+  import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== ''
+    ? import.meta.env.VITE_API_URL
+    : import.meta.env.PROD
+      ? ''
+      : 'http://localhost:8042'
 
 // Access token stored in memory only — never in localStorage
 let _accessToken: string | null = null

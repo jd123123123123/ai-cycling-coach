@@ -25,20 +25,42 @@ from datetime import datetime, timezone
 _FIELD_KEYS = {
     "power": ("directPower",),
     "heart_rate": ("directHeartRate",),
-    "cadence": ("directBikeCadence", "directRunCadence", "directDoubleCadence"),
+    # Bikes report rpm via directBikeCadence; runs report full steps/min via
+    # directDoubleCadence (≈168) — prefer that over directRunCadence (per-leg ≈84).
+    "cadence": ("directBikeCadence", "directDoubleCadence", "directRunCadence"),
     "altitude": ("directElevation",),
     "latitude": ("directLatitude",),
     "longitude": ("directLongitude",),
     "speed": ("directSpeed", "directEnhancedSpeed"),
+    "grade_adjusted_speed": ("directGradeAdjustedSpeed",),
+    "vertical_speed": ("directVerticalSpeed",),
     "distance": ("sumDistance",),
     "temperature": ("directAirTemperature", "directOutsideTemperature"),
-    "left_right_balance": ("directLeftRightBalance",),
+    # Cycling dynamics. Garmin reports L/R split as the RIGHT-leg percentage
+    # (directRightBalance); left = 100 − right.
+    "right_balance": ("directRightBalance", "directLeftRightBalance"),
     "torque_effectiveness": (
         "directLeftTorqueEffectiveness", "directRightTorqueEffectiveness",
     ),
     "pedal_smoothness": (
         "directLeftPedalSmoothness", "directRightPedalSmoothness",
     ),
+    "pco_left": ("directLeftPlatformCenterOffset",),
+    "pco_right": ("directRightPlatformCenterOffset",),
+    "power_phase_left_start": ("directLeftPowerPhaseStart",),
+    "power_phase_left_end": ("directLeftPowerPhaseEnd",),
+    "power_phase_right_start": ("directRightPowerPhaseStart",),
+    "power_phase_right_end": ("directRightPowerPhaseEnd",),
+    # Garmin body-battery-of-effort signals (present on capable head units).
+    "stamina": ("directAvailableStamina",),
+    "stamina_potential": ("directPotentialStamina",),
+    "performance_condition": ("directPerformanceCondition",),
+    # Running dynamics (Garmin HRM-Pro / Running Dynamics Pod / compatible watch).
+    "vertical_oscillation": ("directVerticalOscillation",),
+    "ground_contact_time": ("directGroundContactTime",),
+    "ground_contact_balance": ("directGroundContactBalance",),
+    "vertical_ratio": ("directVerticalRatio",),
+    "stride_length": ("directStrideLength",),
 }
 _TIMESTAMP_KEY = "directTimestamp"
 

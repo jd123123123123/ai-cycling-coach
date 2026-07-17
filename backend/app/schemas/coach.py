@@ -226,6 +226,10 @@ class BriefRead(BaseModel):
     # without these fields continue to validate (defaults are None).
     tomorrow_plan: TomorrowPlan | None = None
     regeneration: Regeneration | None = None
+    # "What changed & why" — transparent adaptation of today's plan from the
+    # day's real signals (HRV, TSB, CTL ramp, ACWR, sleep, yesterday's session),
+    # each grounded in a research-backed principle.
+    adaptations: dict | None = None
 
     class Config:
         from_attributes = True

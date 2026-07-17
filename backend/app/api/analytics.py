@@ -22,6 +22,8 @@ from app.schemas.analytics import QueryResult, QuerySpec
 from app.schemas.period_report import PeriodReport
 from app.schemas.race_debrief import RaceDebrief
 from app.schemas.ride_compare import RideComparison
+from app.schemas.session_report import SessionReport
+from app.services.session_report import build_session_report
 from app.schemas.form_progress import FormProgress
 from app.services.form_progress import build_form_progress
 from app.schemas.user_dashboard import ChartSpec
@@ -305,6 +307,27 @@ async def get_form_progress(
     if fp is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     return fp
+
+
+@router.get(
+    "/activities/{activity_id}/session-report",
+    response_model=SessionReport,
+    summary="Rate one completed ride or run against its prescription",
+)
+async def get_session_report(
+    activity_id: int,
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    lang: str = "en",
+) -> SessionReport:
+    lang = "de" if lang.lower().startswith("de") else "en"
+    report = await build_session_report(db, _user.id, activity_id, lang)
+    if report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Activity not found.",
+        )
+    return report
 
 
 class InterpretRequest(BaseModel):

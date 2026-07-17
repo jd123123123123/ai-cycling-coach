@@ -13,11 +13,20 @@ from app.models.period_report_cache import PeriodReportCache  # noqa: F401
 from app.models.coach_recommendation import CoachRecommendation  # noqa: F401
 from app.models.mesocycle_plan import MesocyclePlan  # noqa: F401
 from app.models.crew import Crew, CrewInvite, CrewMembership  # noqa: F401
+from app.models.crew_nudge import CrewNudge  # noqa: F401
+from app.models.crew_challenge import CrewChallenge  # noqa: F401
 from app.models.activity_stream import ActivityStream  # noqa: F401
+from app.models.strength import (  # noqa: F401
+    StrengthRoutine,
+    RoutineExercise,
+    StrengthSession,
+    StrengthSetLog,
+)
 
 __all__ = [
     "User", "AthleteProfile", "ConsentRecord", "Activity", "GarminCredential",
     "DailyMetric", "PlannedWorkout", "DailyMetricSample", "CoachBrief",
     "UserDashboard", "UserTabLayout", "PeriodReportCache", "CoachRecommendation", "MesocyclePlan",
-    "Crew", "CrewMembership", "CrewInvite", "ActivityStream",
+    "Crew", "CrewMembership", "CrewInvite", "CrewNudge", "CrewChallenge", "ActivityStream",
+    "StrengthRoutine", "RoutineExercise", "StrengthSession", "StrengthSetLog",
 ]

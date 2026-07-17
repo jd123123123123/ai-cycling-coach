@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict, deque
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
@@ -42,6 +42,7 @@ from app.schemas.coach import (
 from app.models.athlete_profile import AthleteProfile
 from app.services import coach_service
 from app.schemas.adaptive import AdaptiveDirective
+from app.services.adaptation_explainer import explain_adaptations
 from app.services.adaptive_readiness import build_adaptive_directive
 from app.services.advanced_metrics import why_am_i_tired
 from app.services.coach_prompt import SYSTEM_PROMPT
@@ -159,7 +160,19 @@ def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
         post_ride_review=post_ride_review,
         tomorrow_plan=tomorrow_plan,
         regeneration=regeneration,
+        adaptations=explain_adaptations(
+            evidence if isinstance(evidence, dict) else {},
+            de=_evidence_is_de(evidence),
+        ),
     )
+
+
+def _evidence_is_de(evidence: Any) -> bool:
+    """Best-effort locale flag for the adaptation copy (evidence carries locale)."""
+    if isinstance(evidence, dict):
+        loc = evidence.get("locale") or evidence.get("lang") or evidence.get("language_locale")
+        return str(loc).lower().startswith("de")
+    return False
 
 
 @router.get("/brief", response_model=BriefRead)

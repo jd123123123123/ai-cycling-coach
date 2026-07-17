@@ -4,6 +4,24 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict
 
 
+class SleepDetail(BaseModel):
+    """Rich sleep + overnight-vitals breakdown extracted from the stored Garmin
+    sleep payload (dailySleepDTO). All optional — a device/night may lack any."""
+    total_s: int | None = None
+    deep_s: int | None = None
+    light_s: int | None = None
+    rem_s: int | None = None
+    awake_s: int | None = None
+    awake_count: int | None = None
+    spo2_avg: float | None = None
+    spo2_low: int | None = None
+    spo2_high: int | None = None
+    respiration_avg: float | None = None
+    respiration_low: float | None = None
+    respiration_high: float | None = None
+    sleep_stress: float | None = None
+
+
 class DailyMetricRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -19,6 +37,11 @@ class DailyMetricRead(BaseModel):
     steps: int | None
     weight_kg: float | None
     source: str | None
+    # Enriched from raw_data (no schema migration): sleep stages, SpO₂, respiration.
+    sleep_detail: SleepDetail | None = None
+    vo2max: float | None = None
+    training_readiness: int | None = None
+    recovery_time_hours: int | None = None
 
 
 class DailyMetricListResponse(BaseModel):

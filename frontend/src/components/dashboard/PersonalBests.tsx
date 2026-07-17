@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { subDays, format, isAfter } from 'date-fns'
 import { Trophy, Zap, Timer, Gauge, Route, Share2 } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
@@ -24,6 +25,7 @@ interface PR {
   accent: string
   isNew: boolean
   activityTitle: string | null
+  activityId: number | null
 }
 
 function avgRunningPaceMinPerKm(a: ActivityRead): number | null {
@@ -60,6 +62,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date, locale: 'en'
       accent: 'var(--color-forest-2)',
       isNew: isAfter(new Date(longestRide.started_at), sevenDaysAgo),
       activityTitle: longestRide.title,
+      activityId: longestRide.id,
     })
   }
 
@@ -79,6 +82,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date, locale: 'en'
       accent: 'rgba(190, 124, 34, 0.95)',
       isNew: isAfter(new Date(peakNP.started_at), sevenDaysAgo),
       activityTitle: peakNP.title,
+      activityId: peakNP.id,
     })
   }
 
@@ -98,6 +102,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date, locale: 'en'
       accent: 'rgba(214, 87, 47, 1)',
       isNew: isAfter(new Date(biggestTSS.started_at), sevenDaysAgo),
       activityTitle: biggestTSS.title,
+      activityId: biggestTSS.id,
     })
   }
 
@@ -118,6 +123,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date, locale: 'en'
       accent: 'var(--color-forest-2)',
       isNew: isAfter(new Date(longestCyclingDur.started_at), sevenDaysAgo),
       activityTitle: longestCyclingDur.title,
+      activityId: longestCyclingDur.id,
     })
   }
 
@@ -141,6 +147,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date, locale: 'en'
       accent: 'rgba(190, 124, 34, 0.95)',
       isNew: isAfter(new Date(fastestPace.a.started_at), sevenDaysAgo),
       activityTitle: fastestPace.a.title,
+      activityId: fastestPace.a.id,
     })
   }
 
@@ -161,6 +168,7 @@ function computePRs(activities: ActivityRead[], sevenDaysAgo: Date, locale: 'en'
       accent: 'var(--color-amber-2)',
       isNew: isAfter(new Date(longestRun.started_at), sevenDaysAgo),
       activityTitle: longestRun.title,
+      activityId: longestRun.id,
     })
   }
 
@@ -181,15 +189,24 @@ function PRCard({ pr, locale }: { pr: PR; locale: 'en' | 'de' }) {
     return `${animatedValue.toFixed(animatedValue < 10 ? 1 : 0)} ${pr.value.split(' ').slice(1).join(' ')}`
   })()
 
+  // The whole card opens that ride's debrief. Falls back to a plain div when
+  // the PR has no backing activity id (shouldn't happen, but keeps it safe).
+  const CardTag: React.ElementType = pr.activityId != null ? Link : 'div'
+  const linkProps = pr.activityId != null
+    ? { to: `/activities/${pr.activityId}/session-report` as const }
+    : {}
+
   return (
-    <div
-      className="relative flex-shrink-0 flex flex-col gap-2 rounded-[14px] px-4 py-3"
+    <CardTag
+      {...(linkProps as Record<string, unknown>)}
+      className="relative flex-shrink-0 flex flex-col gap-2 rounded-[14px] px-4 py-3 no-underline transition-transform hover:-translate-y-0.5"
       style={{
         minWidth: 148,
         maxWidth: 180,
         backgroundColor: 'var(--color-paper)',
         border: `1px solid ${pr.isNew ? pr.accent + '55' : 'var(--color-rule)'}`,
         boxShadow: pr.isNew ? `0 0 18px color-mix(in srgb, ${pr.accent} 18%, transparent)` : 'none',
+        cursor: pr.activityId != null ? 'pointer' : 'default',
       }}
     >
       {/* NEW badge */}
@@ -249,6 +266,7 @@ function PRCard({ pr, locale }: { pr: PR; locale: 'en' | 'de' }) {
         type="button"
         onClick={(e) => {
           e.stopPropagation()
+          e.preventDefault() // card is a Link — don't navigate on Share
           const text = locale === 'de'
             ? `Gerade eine neue Bestleistung aufgestellt — ${pr.label.toLowerCase()}: ${pr.value}. Das ist die Fitness, die der letzte Block gebracht hat. 🚴`
             : `Just set a new personal best — ${pr.label.toLowerCase()}: ${pr.value}. This is the fitness the last block earned. 🚴`
@@ -272,7 +290,7 @@ function PRCard({ pr, locale }: { pr: PR; locale: 'en' | 'de' }) {
       >
         <Share2 size={12} strokeWidth={2} />
       </button>
-    </div>
+    </CardTag>
   )
 }
 

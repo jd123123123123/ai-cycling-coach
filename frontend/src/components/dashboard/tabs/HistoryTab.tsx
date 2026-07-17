@@ -1,0 +1,714 @@
+/**
+ * HistoryTab — rebuilt 1:1 from the Pencil "Screen · History" content frame.
+ * Card order (top→bottom): Header (title + filter chips) · This-Month summary ·
+ * month Calendar · Consistency heatmap · Weekly-Load trend · Personal Records ·
+ * Recent Activities. All values come from real activity + power-profile data;
+ * fields the backend lacks (elevation / GPS route / strength sets·kcal) render
+ * the pen structure with a graceful "—".
+ */
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  subDays, addDays, format, parseISO, startOfMonth, startOfWeek,
+  getDaysInMonth, getDay, differenceInCalendarDays,
+} from 'date-fns'
+import {
+  Bike, Footprints, Dumbbell, SlidersHorizontal, ChevronLeft, ChevronRight,
+  Flame, Trophy, Mountain, Zap, ArrowUp, ArrowDown, Timer, Heart, Gauge, Route,
+  type LucideIcon,
+} from 'lucide-react'
+import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
+import { usePowerProfile } from '../../../hooks/usePowerProfile'
+import { useLocale } from '../../../contexts/LocaleContext'
+import HoverBars from '../../ui/HoverBars'
+import type { ActivityRead } from '../../../api/dashboard'
+
+type Filter = 'all' | 'cycling' | 'running' | 'gym'
+const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
+
+const sportColor = (s: string) =>
+  s === 'running' ? 'var(--color-recovery)' : s === 'cycling' ? 'var(--color-strain)' : 'var(--color-amber)'
+const sportIcon = (s: string) => (s === 'running' ? Footprints : s === 'cycling' ? Bike : Dumbbell)
+
+// ── Generative activity thumbnail ──────────────────────────────────────────
+// Deterministic (SSR-stable, offline, CSP-safe) SVG rendered from the activity's
+// own numbers — no external image service. FNV-1a hash → mulberry32 PRNG seeds a
+// motif that is unique but stable per activity: an "intensity terrain" ridge for
+// outdoor endurance, a rep/bar motif for gym.
+function fnv1a(str: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return h >>> 0
+}
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function ActivityThumb({ activity, color, Icon }: { activity: ActivityRead; color: string; Icon: LucideIcon }) {
+  const W = 64
+  const H = 64
+  // Seed from real fields only → stable per activity, distinct across activities.
+  const seed = fnv1a(
+    `${activity.id}:${Math.round(activity.tss ?? 0)}:${Math.round(activity.distance_meters ?? 0)}:` +
+      `${Math.round(activity.duration_seconds ?? 0)}:${Math.round(activity.average_hr ?? 0)}`,
+  )
+  const rnd = mulberry32(seed)
+  const gid = `thumb-fill-${activity.id}`
+  const isGym = activity.sport === 'gym'
+
+  // Endurance → ridge/route line; Gym → rep bars. Both seeded from `rnd`.
+  const endurance = (() => {
+    const n = 9
+    const step = W / (n - 1)
+    const ys = Array.from({ length: n }, () => 0.28 + rnd() * 0.55) // fraction of H above the floor
+    const top = ys.map((f, i) => `${i === 0 ? 'M' : 'L'} ${(i * step).toFixed(1)} ${(H - f * H).toFixed(1)}`).join(' ')
+    const area = `M 0 ${H} ${ys.map((f, i) => `L ${(i * step).toFixed(1)} ${(H - f * H).toFixed(1)}`).join(' ')} L ${W} ${H} Z`
+    return { top, area }
+  })()
+
+  const bars = (() => {
+    const n = 5
+    const bw = 6
+    const gap = (W - n * bw) / (n + 1)
+    return Array.from({ length: n }, (_, i) => {
+      const h = (0.32 + rnd() * 0.58) * H
+      return { x: gap + i * (bw + gap), y: H - h, h, w: bw }
+    })
+  })()
+
+  return (
+    <span
+      className="relative shrink-0 overflow-hidden rounded-[14px]"
+      style={{ width: 64, height: 64, border: `1px solid color-mix(in srgb, ${color} 22%, transparent)` }}
+    >
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden className="absolute inset-0">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.55" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.06" />
+          </linearGradient>
+        </defs>
+        <rect width={W} height={H} fill="var(--color-surface-2)" />
+        <rect width={W} height={H} fill={`color-mix(in srgb, ${color} 12%, transparent)`} />
+        {isGym ? (
+          <g>
+            {bars.map((b, i) => (
+              <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} rx={3} fill={`url(#${gid})`} stroke={color} strokeOpacity={0.7} strokeWidth={1} />
+            ))}
+          </g>
+        ) : (
+          <g>
+            <path d={endurance.area} fill={`url(#${gid})`} />
+            <path d={endurance.top} fill="none" stroke={color} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
+          </g>
+        )}
+      </svg>
+      {/* Sport icon watermark */}
+      <Icon size={18} className="absolute" style={{ right: 5, bottom: 5, color, opacity: 0.32 }} />
+    </span>
+  )
+}
+
+const fmtHm = (sec: number) => {
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  return `${h}:${String(m).padStart(2, '0')}`
+}
+const fmtDur = (sec: number) => (sec >= 3600 ? fmtHm(sec) : `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`)
+const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`
+const durLabel = (sec: number) => (sec >= 3600 ? `${fmtHm(sec)} h` : `${Math.round(sec / 60)} min`)
+const paceStr = (sec: number, meters: number) => {
+  const km = meters / 1000
+  if (!km) return '—'
+  const spk = sec / km
+  return `${Math.floor(spk / 60)}:${String(Math.round(spk % 60)).padStart(2, '0')}`
+}
+
+function heatColor(tss: number): string {
+  if (tss <= 0) return 'var(--color-surface-2)'
+  if (tss < 30) return 'color-mix(in srgb, var(--color-recovery) 18%, transparent)'
+  if (tss < 70) return 'color-mix(in srgb, var(--color-recovery) 40%, transparent)'
+  if (tss < 130) return 'color-mix(in srgb, var(--color-recovery) 70%, transparent)'
+  return 'var(--color-recovery)'
+}
+
+export default function HistoryTab() {
+  const { locale } = useLocale()
+  const de = locale === 'de'
+  const today = useMemo(() => new Date(), [])
+  const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 200), [today]), today)
+  const { data: power } = usePowerProfile()
+  const [filter, setFilter] = useState<Filter>('all')
+  // "See all" toggle for the Recent Activities list (collapsed → 5, expanded → all).
+  const [showAll, setShowAll] = useState(false)
+  // Active consistency-heatmap cell → floating tooltip (date + that day's TSS).
+  const [heatCell, setHeatCell] = useState<{ ci: number; key: string; t: number } | null>(null)
+
+  const all = acts?.activities ?? []
+  const activities = useMemo(() => (filter === 'all' ? all : all.filter((a) => a.sport === filter)), [all, filter])
+
+  const dateOf = (a: ActivityRead) => parseISO(a.started_at ?? a.date ?? '')
+
+  // TSS + dominant sport per calendar day (filtered)
+  const dayTss = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const a of activities) {
+      const k = (a.started_at ?? a.date ?? '').slice(0, 10)
+      if (k) m.set(k, (m.get(k) ?? 0) + (a.tss ?? 0))
+    }
+    return m
+  }, [activities])
+
+  const daySport = useMemo(() => {
+    const m = new Map<string, { sport: string; tss: number }>()
+    for (const a of activities) {
+      const k = (a.started_at ?? a.date ?? '').slice(0, 10)
+      if (!k) continue
+      const cur = m.get(k)
+      if (!cur || (a.tss ?? 0) >= cur.tss) m.set(k, { sport: a.sport, tss: a.tss ?? 0 })
+    }
+    return m
+  }, [activities])
+
+  // This-month vs last-month summary
+  const summary = useMemo(() => {
+    const agg = (year: number, month: number) => {
+      const win = activities.filter((a) => {
+        const d = dateOf(a)
+        return d.getFullYear() === year && d.getMonth() === month
+      })
+      return {
+        km: win.reduce((s, a) => s + (a.distance_meters ?? 0) / 1000, 0),
+        sec: win.reduce((s, a) => s + (a.duration_seconds ?? 0), 0),
+        tss: win.reduce((s, a) => s + (a.tss ?? 0), 0),
+        n: win.length,
+      }
+    }
+    const cur = agg(today.getFullYear(), today.getMonth())
+    const prevRef = subDays(startOfMonth(today), 1)
+    const prev = agg(prevRef.getFullYear(), prevRef.getMonth())
+    return { cur, prev }
+  }, [activities, today])
+
+  const pctDelta = (cur: number, prev: number) => {
+    if (!prev) return null
+    const p = Math.round(((cur - prev) / prev) * 100)
+    return { up: p >= 0, text: `${p >= 0 ? '+' : ''}${p}%` }
+  }
+  const countDelta = (d: number) => (d === 0 ? null : { up: d > 0, text: `${d > 0 ? '+' : ''}${d}` })
+
+  const summaryStats = useMemo(() => {
+    const c = summary.cur, p = summary.prev
+    const loc = de ? 'de' : 'en'
+    return [
+      { label: de ? 'Distanz' : 'Distance', value: Math.round(c.km).toLocaleString(loc), unit: 'km', delta: pctDelta(c.km, p.km) },
+      { label: de ? 'Zeit' : 'Time', value: fmtHm(c.sec), unit: 'h', delta: pctDelta(c.sec, p.sec) },
+      { label: de ? 'Höhenmeter' : 'Elevation', value: '—', unit: 'm', delta: null },
+      { label: 'TSS', value: Math.round(c.tss).toLocaleString(loc), unit: '', delta: pctDelta(c.tss, p.tss) },
+      { label: de ? 'Einheiten' : 'Sessions', value: `${c.n}`, unit: '', delta: countDelta(c.n - p.n) },
+    ]
+  }, [summary, de])
+
+  // Weekly TSS trend (12 weeks)
+  const weekly = useMemo(() => {
+    const buckets = Array.from({ length: 12 }, (_, i) => {
+      const monday = startOfWeek(subDays(today, (11 - i) * 7), { weekStartsOn: 1 })
+      return { key: format(monday, 'yyyy-MM-dd'), v: 0 }
+    })
+    const idx = new Map(buckets.map((b, i) => [b.key, i]))
+    for (const a of activities) {
+      const d = dateOf(a)
+      if (isNaN(d.getTime())) continue
+      const key = format(startOfWeek(d, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      const i = idx.get(key)
+      if (i != null) buckets[i].v += a.tss ?? 0
+    }
+    return buckets.map((b) => ({ ...b, v: Math.round(b.v) }))
+  }, [activities, today])
+  const weeklyAvg = Math.round(weekly.reduce((s, w) => s + w.v, 0) / weekly.length)
+
+  // Consistency heatmap — 26 weeks × 7 days
+  const heat = useMemo(() => {
+    const startMon = startOfWeek(subDays(today, 25 * 7), { weekStartsOn: 1 })
+    return Array.from({ length: 26 }, (_, w) =>
+      Array.from({ length: 7 }, (_, d) => {
+        const date = addDays(startMon, w * 7 + d)
+        const key = format(date, 'yyyy-MM-dd')
+        return { key, t: dayTss.get(key) ?? 0, future: date > today }
+      }),
+    )
+  }, [dayTss, today])
+
+  const streak = useMemo(() => {
+    let n = 0
+    let cur = today
+    while (dayTss.get(format(cur, 'yyyy-MM-dd'))) { n++; cur = subDays(cur, 1) }
+    if (n === 0) {
+      cur = subDays(today, 1)
+      while (dayTss.get(format(cur, 'yyyy-MM-dd'))) { n++; cur = subDays(cur, 1) }
+    }
+    return n
+  }, [dayTss, today])
+
+  // Personal records — computed per-sport so the card can react to the active filter.
+  const prs = useMemo(() => {
+    const cyc = all.filter((a) => a.sport === 'cycling')
+    const run = all.filter((a) => a.sport === 'running')
+    const gym = all.filter((a) => a.sport === 'gym')
+    const maxBy = (arr: ActivityRead[], f: (a: ActivityRead) => number) =>
+      arr.reduce<ActivityRead | null>((b, a) => (f(a) > (b ? f(b) : -Infinity) ? a : b), null)
+
+    // ── Cycling ──────────────────────────────────────────────────────────────
+    const longestRide = maxBy(cyc.filter((a) => a.distance_meters != null), (a) => a.distance_meters ?? 0)
+    const fastestRide = cyc
+      .filter((a) => (a.distance_meters ?? 0) > 3000 && (a.duration_seconds ?? 0) > 0)
+      .map((a) => ({ a, kmh: (a.distance_meters! / 1000) / (a.duration_seconds! / 3600) }))
+      .sort((x, y) => y.kmh - x.kmh)[0]
+    const p20 = power?.peaks?.['1200']
+
+    // ── Running — distance PRs pace-scaled from runs that reached near the mark ─
+    const scaledBest = (minMeters: number, targetMeters: number) => run
+      .filter((a) => (a.distance_meters ?? 0) >= minMeters && a.duration_seconds)
+      .map((a) => ({ a, sec: a.duration_seconds! * (targetMeters / (a.distance_meters ?? 1)) }))
+      .sort((x, y) => x.sec - y.sec)[0]
+    const best5k = scaledBest(4500, 5000)
+    const best10k = scaledBest(9500, 10000)
+    const longestRun = maxBy(run.filter((a) => a.distance_meters != null), (a) => a.distance_meters ?? 0)
+    const bestPace = run
+      .filter((a) => (a.distance_meters ?? 0) > 500 && a.duration_seconds)
+      .map((a) => ({ a, spk: a.duration_seconds! / ((a.distance_meters ?? 1) / 1000) }))
+      .filter((x) => x.spk > 120 && x.spk < 1200)
+      .sort((x, y) => x.spk - y.spk)[0]
+
+    // ── Strength — real gym fields only (duration / calories / avg HR) ─────────
+    const gymThisMonth = gym.filter((a) => {
+      const d = dateOf(a)
+      return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()
+    }).length
+    const longestGym = maxBy(gym.filter((a) => a.duration_seconds != null), (a) => a.duration_seconds ?? 0)
+    const topCalGym = maxBy(gym.filter((a) => a.calories != null), (a) => a.calories ?? 0)
+    const topHrGym = maxBy(gym.filter((a) => a.average_hr != null), (a) => a.average_hr ?? 0)
+
+    return { longestRide, fastestRide, p20, best5k, best10k, longestRun, bestPace, gymThisMonth, longestGym, topCalGym, topHrGym }
+  }, [all, power, today])
+
+  // Row set is keyed to the active sport filter so the card matches Ride / Run /
+  // Strength / All. Real data only — honest "—" where a metric has no basis.
+  const prRows = useMemo(() => {
+    const dfmt = (a?: ActivityRead | null) => (a?.started_at ? format(parseISO(a.started_at), 'MMM d, yyyy') : '—')
+    const b5 = prs.best5k, b10 = prs.best10k, bp = prs.bestPace
+
+    const rideRows = [
+      {
+        icon: Bike, color: 'var(--color-strain)', title: de ? 'Längste Fahrt' : 'Longest Ride',
+        date: dfmt(prs.longestRide), value: prs.longestRide ? `${((prs.longestRide.distance_meters ?? 0) / 1000).toFixed(0)} km` : '—',
+        to: prs.longestRide ? `/activities/${prs.longestRide.id}/ride` : null,
+      },
+      {
+        icon: Gauge, color: 'var(--color-accent)', title: de ? 'Schnellster Schnitt' : 'Fastest avg speed',
+        date: dfmt(prs.fastestRide?.a), value: prs.fastestRide ? `${prs.fastestRide.kmh.toFixed(1)} km/h` : '—',
+        to: prs.fastestRide?.a ? `/activities/${prs.fastestRide.a.id}/ride` : null,
+      },
+      { icon: Mountain, color: 'var(--color-amber)', title: de ? 'Größter Anstieg' : 'Biggest Climb', date: '—', value: '—', to: null },
+      { icon: Zap, color: 'var(--color-accent)', title: de ? 'Max 20-Min-Leistung' : 'Max 20-min Power', date: '—', value: prs.p20 ? `${Math.round(prs.p20)} W` : '—', to: null },
+    ]
+
+    if (filter === 'running') {
+      return [
+        {
+          icon: Footprints, color: 'var(--color-recovery)', title: de ? 'Schnellste 5K' : 'Fastest 5K',
+          date: dfmt(b5?.a), value: b5 ? mmss(b5.sec) : '—', to: b5?.a ? `/activities/${b5.a.id}/run` : null,
+        },
+        {
+          icon: Timer, color: 'var(--color-recovery)', title: de ? 'Schnellste 10K' : 'Fastest 10K',
+          date: dfmt(b10?.a), value: b10 ? mmss(b10.sec) : '—', to: b10?.a ? `/activities/${b10.a.id}/run` : null,
+        },
+        {
+          icon: Route, color: 'var(--color-strain)', title: de ? 'Längster Lauf' : 'Longest Run',
+          date: dfmt(prs.longestRun), value: prs.longestRun ? `${((prs.longestRun.distance_meters ?? 0) / 1000).toFixed(1)} km` : '—',
+          to: prs.longestRun ? `/activities/${prs.longestRun.id}/run` : null,
+        },
+        {
+          icon: Gauge, color: 'var(--color-accent)', title: de ? 'Bestes Tempo' : 'Best Pace',
+          date: dfmt(bp?.a), value: bp ? `${mmss(bp.spk)} /km` : '—', to: bp?.a ? `/activities/${bp.a.id}/run` : null,
+        },
+      ]
+    }
+
+    if (filter === 'gym') {
+      return [
+        {
+          icon: Dumbbell, color: 'var(--color-amber)', title: de ? 'Einheiten diesen Monat' : 'Sessions this month',
+          date: format(today, 'MMMM yyyy'), value: `${prs.gymThisMonth}`, to: null,
+        },
+        {
+          icon: Timer, color: 'var(--color-strain)', title: de ? 'Längste Einheit' : 'Longest session',
+          date: dfmt(prs.longestGym), value: prs.longestGym?.duration_seconds != null ? durLabel(prs.longestGym.duration_seconds) : '—', to: null,
+        },
+        {
+          icon: Flame, color: 'var(--color-move)', title: de ? 'Meiste Kalorien' : 'Top calorie burn',
+          date: dfmt(prs.topCalGym), value: prs.topCalGym?.calories != null ? `${Math.round(prs.topCalGym.calories)} kcal` : '—', to: null,
+        },
+        {
+          icon: Heart, color: 'var(--color-recovery)', title: de ? 'Höchste Ø HF' : 'Highest avg HR',
+          date: dfmt(prs.topHrGym), value: prs.topHrGym?.average_hr != null ? `${Math.round(prs.topHrGym.average_hr)} bpm` : '—', to: null,
+        },
+      ]
+    }
+
+    if (filter === 'cycling') return rideRows
+
+    // 'all' — a sensible mixed set (Fastest 5K + core cycling records).
+    return [
+      {
+        icon: Footprints, color: 'var(--color-recovery)', title: de ? 'Schnellste 5K' : 'Fastest 5K',
+        date: dfmt(b5?.a), value: b5 ? mmss(b5.sec) : '—', to: b5?.a ? `/activities/${b5.a.id}/run` : null,
+      },
+      rideRows[0],
+      rideRows[2],
+      rideRows[3],
+    ]
+  }, [prs, de, filter, today])
+
+  // Full filtered, newest-first list; the Recent card shows 5 unless expanded.
+  const sortedActivities = useMemo(
+    () => [...activities].sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? '')),
+    [activities],
+  )
+  const recent = showAll ? sortedActivities : sortedActivities.slice(0, 5)
+
+  const relDate = (a: ActivityRead) => {
+    const d = dateOf(a)
+    if (isNaN(d.getTime())) return '—'
+    const diff = differenceInCalendarDays(today, d)
+    const day = diff === 0 ? (de ? 'Heute' : 'Today') : diff === 1 ? (de ? 'Gestern' : 'Yesterday') : format(d, 'MMM d')
+    return `${day} · ${format(d, 'h:mm a')}`
+  }
+
+  const recentStats = (a: ActivityRead): { v: string; l: string }[] => {
+    const km = a.distance_meters != null ? (a.distance_meters / 1000).toFixed(1) : '—'
+    const dur = a.duration_seconds ?? 0
+    if (a.sport === 'gym') {
+      // Gym payloads lack `sets`; show only real fields: duration, kcal, avg HR.
+      return [
+        { v: a.duration_seconds != null ? `${Math.round(dur / 60)}` : '—', l: 'min' },
+        { v: a.calories != null ? `${Math.round(a.calories)}` : '—', l: 'kcal' },
+        { v: a.average_hr != null ? `${Math.round(a.average_hr)}` : '—', l: de ? 'Ø HF' : 'avg HR' },
+      ]
+    }
+    if (a.sport === 'running') {
+      return [
+        { v: km, l: 'km' },
+        { v: a.duration_seconds != null ? fmtDur(dur) : '—', l: dur >= 3600 ? 'h:m' : 'time' },
+        { v: a.distance_meters ? paceStr(dur, a.distance_meters) : '—', l: '/km' },
+      ]
+    }
+    return [
+      { v: km, l: 'km' },
+      { v: a.duration_seconds != null ? fmtDur(dur) : '—', l: dur >= 3600 ? 'h:m' : 'time' },
+      { v: a.normalized_power != null ? `${Math.round(a.normalized_power)}` : '—', l: 'watts' },
+    ]
+  }
+
+  // Extra stats revealed on hover — only real, populated fields (no fabrication)
+  const recentHoverStats = (a: ActivityRead): { v: string; l: string }[] => {
+    const out: { v: string; l: string }[] = []
+    if (a.average_hr != null) out.push({ v: `${Math.round(a.average_hr)}`, l: de ? 'Ø HF' : 'avg HR' })
+    if (a.max_hr != null) out.push({ v: `${Math.round(a.max_hr)}`, l: de ? 'Max HF' : 'max HR' })
+    if (a.sport === 'cycling' && a.average_power != null) out.push({ v: `${Math.round(a.average_power)}`, l: de ? 'Ø W' : 'avg W' })
+    if (a.sport === 'running' && a.distance_meters) out.push({ v: paceStr(a.duration_seconds ?? 0, a.distance_meters), l: '/km' })
+    if (a.tss != null) out.push({ v: `${Math.round(a.tss)}`, l: 'TSS' })
+    if (a.calories != null) out.push({ v: `${Math.round(a.calories)}`, l: 'kcal' })
+    return out
+  }
+
+  // Month calendar
+  const monthStart = startOfMonth(today)
+  const daysInMonth = getDaysInMonth(today)
+  const leadBlanks = (getDay(monthStart) + 6) % 7
+
+  return (
+    <div className="flex flex-col gap-6 pb-5">
+      {/* Header: title + filter chips */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h1 className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)' }}>{de ? 'Verlauf' : 'History'}</h1>
+          <button type="button" className="grid place-items-center rounded-full" style={{ width: 40, height: 40, ...cardStyle }}>
+            <SlidersHorizontal size={20} style={{ color: 'var(--color-ink-2)' }} />
+          </button>
+        </div>
+        <div className="flex gap-2">
+          {([['all', de ? 'Alle' : 'All'], ['cycling', de ? 'Rad' : 'Ride'], ['running', de ? 'Lauf' : 'Run'], ['gym', de ? 'Kraft' : 'Strength']] as const).map(([f, label]) => {
+            const on = filter === f
+            return (
+              <button key={f} type="button" onClick={() => setFilter(f)} className="rounded-full"
+                style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: on ? 'var(--color-accent)' : 'var(--color-paper-2)', border: `1px solid ${on ? 'var(--color-accent)' : 'var(--color-rule)'}`, color: on ? 'var(--color-paper)' : 'var(--color-ink-2)' }}>
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* This-Month summary → load-form drill-down */}
+      <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col gap-[18px]" style={cardStyle}>
+        <div className="flex items-center justify-between">
+          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Dieser Monat' : 'This Month'}</span>
+          <span className="flex items-center gap-1.5">
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{format(today, 'MMMM yyyy')}</span>
+            <ChevronRight size={16} className="hover-arrow" style={{ color: 'var(--color-muted)' }} />
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-x-3 gap-y-[18px]">
+          {summaryStats.map((s) => (
+            <div key={s.label} className="flex flex-col gap-[5px]">
+              <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.3px', color: 'var(--color-muted)' }}>{s.label}</span>
+              <span className="flex items-end gap-[3px]">
+                <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{s.value}</span>
+                {s.unit && <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 3 }}>{s.unit}</span>}
+              </span>
+              {s.delta && (
+                <span className="inline-flex items-center gap-[2px]" style={{ color: s.delta.up ? 'var(--color-recovery)' : 'var(--color-move)' }}>
+                  {s.delta.up ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                  <span style={{ fontSize: 11, fontWeight: 600 }}>{s.delta.text}</span>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="hover-reveal" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</div>
+      </Link>
+
+      {/* Month calendar → load-form drill-down */}
+      <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{format(today, 'MMMM')}</span>
+            <ChevronRight size={16} className="hover-arrow" style={{ color: 'var(--color-muted)' }} />
+          </span>
+          <span className="flex items-center gap-3.5">
+            <ChevronLeft size={20} style={{ color: 'var(--color-muted)' }} />
+            <ChevronRight size={20} style={{ color: 'var(--color-ink-2)' }} />
+          </span>
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {(de ? ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] : ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']).map((d, i) => (
+            <span key={i} className="text-center" style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)' }}>{d}</span>
+          ))}
+          {Array.from({ length: leadBlanks }).map((_, i) => <div key={`b${i}`} style={{ height: 42 }} />)}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const dnum = i + 1
+            const key = format(new Date(today.getFullYear(), today.getMonth(), dnum), 'yyyy-MM-dd')
+            const info = daySport.get(key)
+            const isToday = dnum === today.getDate()
+            const col = info ? sportColor(info.sport) : undefined
+            return (
+              <div key={dnum} className="flex flex-col items-center justify-center gap-[3px] rounded-[10px]"
+                style={{
+                  height: 42,
+                  background: col ? `color-mix(in srgb, ${col} 15%, transparent)` : 'var(--color-surface-2)',
+                  border: isToday ? '1.5px solid var(--color-accent)' : 'none',
+                }}>
+                <span className="num-mono" style={{ fontSize: 12, fontWeight: info ? 700 : 500, color: info ? 'var(--color-ink)' : 'var(--color-muted)' }}>{dnum}</span>
+                {col && <span style={{ width: 5, height: 5, borderRadius: 999, background: col }} />}
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex items-center gap-3.5">
+          {[[de ? 'Rad' : 'Ride', 'var(--color-strain)'], [de ? 'Lauf' : 'Run', 'var(--color-recovery)'], [de ? 'Kraft' : 'Strength', 'var(--color-amber)']].map(([l, c]) => (
+            <span key={l} className="flex items-center gap-[5px]">
+              <span style={{ width: 6, height: 6, borderRadius: 999, background: c }} />
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{l}</span>
+            </span>
+          ))}
+        </div>
+        <div className="hover-reveal" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</div>
+      </Link>
+
+      {/* Consistency heatmap */}
+      <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-0.5">
+            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Konstanz' : 'Consistency'}</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Letzte 6 Monate' : 'Last 6 months'}</span>
+          </div>
+          <span className="flex items-center gap-[5px] rounded-full" style={{ padding: '6px 12px', background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)' }}>
+            <Flame size={15} style={{ color: 'var(--color-recovery)' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-recovery)' }}>{streak}{de ? '-Tage-Serie' : '-day streak'}</span>
+          </span>
+        </div>
+        <div className="relative select-none">
+          {heatCell && (
+            <div
+              className="absolute z-20 pointer-events-none flex flex-col items-center"
+              style={{ left: `${((heatCell.ci + 0.5) / heat.length) * 100}%`, bottom: '100%', marginBottom: 8, transform: 'translateX(-50%)' }}
+            >
+              <div
+                className="rounded-[10px] px-2.5 py-1.5 flex flex-col items-center gap-0.5 whitespace-nowrap"
+                style={{ background: 'var(--color-surface-3)', border: '1px solid var(--color-rule)', boxShadow: '0 6px 18px rgba(0,0,0,0.45)' }}
+              >
+                <span className="num-display" style={{ fontSize: 14, lineHeight: 1, color: heatCell.t > 0 ? 'var(--color-recovery)' : 'var(--color-muted)' }}>{heatCell.t > 0 ? `${heatCell.t} TSS` : (de ? 'Ruhetag' : 'Rest day')}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-muted)' }}>{format(parseISO(heatCell.key), de ? 'EEE, d. MMM' : 'EEE, MMM d')}</span>
+              </div>
+              <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid var(--color-surface-3)' }} />
+            </div>
+          )}
+          <div className="flex gap-[3px]">
+            {heat.map((col, ci) => (
+              <div key={ci} className="flex-1 flex flex-col gap-[3px]">
+                {col.map((cell) => (
+                  <div
+                    key={cell.key}
+                    style={{ height: 9, borderRadius: 2, background: cell.future ? 'transparent' : heatColor(cell.t), cursor: cell.future ? 'default' : 'pointer' }}
+                    onPointerEnter={() => !cell.future && setHeatCell({ ci, key: cell.key, t: Math.round(cell.t) })}
+                    onPointerDown={() => !cell.future && setHeatCell({ ci, key: cell.key, t: Math.round(cell.t) })}
+                    onPointerLeave={() => setHeatCell((cur) => (cur?.key === cell.key ? null : cur))}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-[5px]">
+          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Weniger' : 'Less'}</span>
+          {['var(--color-surface-2)', 'color-mix(in srgb, var(--color-recovery) 18%, transparent)', 'color-mix(in srgb, var(--color-recovery) 40%, transparent)', 'color-mix(in srgb, var(--color-recovery) 70%, transparent)', 'var(--color-recovery)'].map((c, i) => (
+            <span key={i} style={{ width: 10, height: 10, borderRadius: 2, background: c }} />
+          ))}
+          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Mehr' : 'More'}</span>
+        </div>
+      </div>
+
+      {/* Weekly-Load trend — hover any bar for its TSS + week; card links to load-form */}
+      <div className="hover-card rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-0.5">
+            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Wochenlast' : 'Weekly Load'}</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'TSS · letzte 12 Wochen · Balken antippen' : 'TSS · last 12 weeks · tap a bar'}</span>
+          </div>
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="num-display" style={{ fontSize: 18, color: 'var(--color-strain)' }}>{weeklyAvg}</span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Ø / Woche' : 'avg / wk'}</span>
+          </div>
+        </div>
+        <HoverBars
+          height={130}
+          gap={6}
+          defaultColor="var(--color-strain)"
+          bars={weekly.map((w, i) => {
+            const monday = parseISO(w.key)
+            const sunday = addDays(monday, 6)
+            return {
+              value: w.v,
+              valueLabel: `${w.v} TSS`,
+              label: `${format(monday, de ? 'd. MMM' : 'MMM d')} – ${format(sunday, de ? 'd. MMM' : 'MMM d')}`,
+              highlight: i === weekly.length - 1,
+            }
+          })}
+        />
+        <div className="flex items-center justify-between">
+          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'vor 12 Wochen' : '12 wks ago'}</span>
+          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Diese Woche' : 'This week'}</span>
+        </div>
+        <Link to="/load-form" className="hover-reveal inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</Link>
+      </div>
+
+      {/* Personal records */}
+      <div className="rounded-[24px] flex flex-col" style={{ ...cardStyle, padding: '6px 20px' }}>
+        <div className="flex items-center justify-between" style={{ padding: '14px 0' }}>
+          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Rekorde' : 'Personal Records'}</span>
+          <Trophy size={18} style={{ color: 'var(--color-amber)' }} />
+        </div>
+        {prRows.map((p, i) => {
+          const rowClass = 'hover-card flex items-center gap-3'
+          const rowStyle = { padding: '14px 0', borderTop: i > 0 ? '1px solid var(--color-rule)' : 'none' } as const
+          const inner = (
+            <>
+              <span className="grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, background: `color-mix(in srgb, ${p.color} 15%, transparent)` }}>
+                <p.icon size={20} style={{ color: p.color }} />
+              </span>
+              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{p.title}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{p.date}</span>
+              </div>
+              <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{p.value}</span>
+              {p.to && <ChevronRight size={16} className="hover-arrow" style={{ color: 'var(--color-muted)' }} />}
+            </>
+          )
+          return p.to
+            ? <Link key={p.title} to={p.to} className={rowClass} style={rowStyle}>{inner}</Link>
+            : <div key={p.title} className="flex items-center gap-3" style={rowStyle}>{inner}</div>
+        })}
+      </div>
+
+      {/* Recent activities */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="flex items-baseline gap-2">
+            <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{de ? 'Letzte Aktivitäten' : 'Recent Activities'}</span>
+            <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>
+              {sortedActivities.length} {de ? 'Aktivitäten' : sortedActivities.length === 1 ? 'activity' : 'activities'}
+            </span>
+          </span>
+          {sortedActivities.length > 5 && (
+            <button type="button" onClick={() => setShowAll((v) => !v)} className="inline-flex items-center gap-0.5" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-accent)' }}>
+              {showAll ? (de ? 'Weniger' : 'Show less') : (de ? 'Alle' : 'See all')}
+              <ChevronRight size={15} style={{ color: 'var(--color-accent)', transform: showAll ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform 0.18s ease' }} />
+            </button>
+          )}
+        </div>
+        {recent.map((a) => {
+          const Icon = sportIcon(a.sport)
+          const col = sportColor(a.sport)
+          const route = a.sport === 'running' ? `/activities/${a.id}/run` : `/activities/${a.id}/ride`
+          const hoverStats = recentHoverStats(a)
+          return (
+            <Link key={a.id} to={route} className="hover-card flex items-center gap-3 rounded-[24px] p-3" style={cardStyle}>
+              {/* Generative thumbnail — deterministic SVG motif seeded from the activity's own numbers */}
+              <ActivityThumb activity={a} color={col} Icon={Icon} />
+              <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Icon size={15} style={{ color: col }} />
+                  <span className="truncate" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{a.title ?? (de ? 'Einheit' : 'Session')}</span>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{relDate(a)}</span>
+                <div className="flex gap-4">
+                  {recentStats(a).map((s, si) => (
+                    <div key={si} className="flex flex-col gap-px">
+                      <span className="num-display" style={{ fontSize: 14, color: 'var(--color-ink)' }}>{s.v}</span>
+                      <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{s.l}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Hover-reveal: extra real stats + call-to-view */}
+                <div className="hover-reveal flex flex-col gap-2" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 8 }}>
+                  {hoverStats.length > 0 && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                      {hoverStats.map((s, si) => (
+                        <div key={si} className="flex items-baseline gap-1">
+                          <span className="num-mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>{s.v}</span>
+                          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{s.l}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Analyse ansehen →' : 'View analysis →'}</span>
+                </div>
+              </div>
+              <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-muted)' }} />
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
+}

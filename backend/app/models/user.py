@@ -21,6 +21,8 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    # Optional real display name; falls back to the email-derived handle when null.
+    display_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
