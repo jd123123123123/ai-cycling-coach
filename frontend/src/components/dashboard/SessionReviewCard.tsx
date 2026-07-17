@@ -5,7 +5,8 @@
  * same card can render on the Train (Plan) tab for a day the athlete trained.
  * Behaviour + markup are identical to the original inline TodayTab version.
  */
-import { Activity, Target, TrendingUp, Trophy, ChevronRight } from 'lucide-react'
+import { Activity, Target, TrendingUp, Trophy, ChevronRight, ListChecks } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import type { PostRideReview, CompliancePair, RideGrade } from '../../api/coach'
 
 // ── Session Review helpers ──────────────────────────────────────────────────
@@ -136,6 +137,13 @@ export default function SessionReviewCard({ review, de }: { review: PostRideRevi
           ))}
         </div>
       )}
+
+      {/* Open today's full workout detail (blocks, targets, structure). */}
+      <Link to="/workout/today" className="inline-flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)', padding: '11px 16px', fontSize: 13.5, fontWeight: 700 }}>
+        <ListChecks size={16} style={{ color: gm.color }} />
+        {de ? 'Workout-Details ansehen' : 'View workout details'}
+        <ChevronRight size={15} style={{ color: 'var(--color-muted)' }} />
+      </Link>
     </div>
   )
 }
