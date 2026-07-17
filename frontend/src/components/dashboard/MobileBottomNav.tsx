@@ -50,13 +50,23 @@ export default function MobileBottomNav() {
   }
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-40 flex justify-center px-4 pointer-events-none" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
+    <div
+      className="fixed bottom-0 inset-x-0 z-40 flex justify-center px-4 pointer-events-none"
+      style={{
+        paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)',
+        // Promote to its own compositing layer so iOS Safari keeps it rock-solid
+        // during momentum scroll (a plain fixed bar can lag/detach otherwise).
+        transform: 'translateZ(0)',
+        WebkitTransform: 'translateZ(0)',
+        willChange: 'transform',
+      }}
+    >
       <nav
         className="pointer-events-auto flex items-stretch justify-between gap-0.5 w-full max-w-md"
         style={{
-          background: 'color-mix(in srgb, #1A1F26 90%, transparent)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
+          // Solid (not backdrop-blur): backdrop-filter on a fixed element
+          // repaints incorrectly on iOS scroll and makes the bar flicker/jump.
+          background: '#161B22',
           border: '1px solid var(--color-rule)',
           borderRadius: 100,
           padding: '6px 6px',
