@@ -5,7 +5,7 @@
  * PowerZones (Power/Pace toggle, Z1–Z7) → Cross-training.
  * Real week-plan, FTP, and activity data throughout.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
 import { Bike, Footprints, Infinity as InfinityIcon, Play, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles } from 'lucide-react'
@@ -77,6 +77,14 @@ export default function PlanTab() {
   const todayStr = useMemo(() => format(today, 'yyyy-MM-dd'), [today])
   // Which day of the week strip is expanded inline below it (default = today).
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
+  // Select a day and scroll the strip + inline preview into view — used by both
+  // the week-strip dots and the session-list rows, so tapping any session opens
+  // THAT day's detail inline (never navigates to today's workout).
+  const stripRef = useRef<HTMLDivElement>(null)
+  const selectDay = (date: string) => {
+    setSelectedDate(date)
+    stripRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
   // How many weeks ahead of the current week we're previewing. 0 = this week
   // (the today-anchored live view); >0 pages into the plan's future weeks.
   const [weekOffset, setWeekOffset] = useState(0)
@@ -578,7 +586,7 @@ export default function PlanTab() {
 
       {/* Week strip */}
       {days.length > 0 && (
-        <div className="flex gap-1.5">
+        <div ref={stripRef} className="flex gap-1.5">
           {days.map((d) => {
             const dd = parseISO(d.date)
             const done = trainedDays.has(d.date.slice(0, 10))
@@ -590,7 +598,7 @@ export default function PlanTab() {
             const dotColor = d.sport === 'running' ? 'var(--color-exercise)' : d.sport === 'gym' ? 'var(--color-amber)' : 'var(--color-strain)'
             const dark = isSelected
             return (
-              <button key={d.date} type="button" onClick={() => setSelectedDate(d.date)}
+              <button key={d.date} type="button" onClick={() => selectDay(d.date)}
                 className="flex-1 flex flex-col items-center gap-1.5 rounded-2xl py-2.5 transition-colors"
                 style={{
                   background: isSelected ? 'var(--color-accent)' : 'var(--color-paper-2)',
@@ -829,15 +837,13 @@ export default function PlanTab() {
                 </div>
               </>
             )
-            return isFuture ? (
-              <button key={d.date} type="button" onClick={() => setSelectedDate(d.date)}
+            // Tapping any session row (this week or future) opens THAT day's
+            // detail inline — never navigates to today's workout.
+            return (
+              <button key={d.date} type="button" onClick={() => selectDay(d.date)}
                 className="flex flex-col rounded-[20px] p-3.5 hover-card text-left" style={cardStyle}>
                 {RowBody}
               </button>
-            ) : (
-              <Link key={d.date} to="/workout/today" className="flex flex-col rounded-[20px] p-3.5 hover-card" style={cardStyle}>
-                {RowBody}
-              </Link>
             )
           })}
         </div>
