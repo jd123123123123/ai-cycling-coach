@@ -81,6 +81,22 @@ export default function TodayTab() {
   const atl = pmcLatest?.atl ?? null
   const dCtl = pmcLatest && pmcWeek ? Math.round(pmcLatest.ctl - pmcWeek.ctl) : null
 
+  // Mini-PMC trend for the Training Load card: CTL (fitness) area + ATL (fatigue)
+  // line over the last ~6 weeks, so the numbers get a shape underneath them.
+  const loadTrend = useMemo(() => {
+    const rows = (pmc?.entries ?? []).slice(-42)
+    if (rows.length < 2) return null
+    const W = 300, H = 60, pad = 4
+    const max = Math.max(1, ...rows.map((r) => Math.max(r.ctl, r.atl)))
+    const x = (i: number) => pad + (i / (rows.length - 1)) * (W - 2 * pad)
+    const y = (v: number) => H - pad - (v / max) * (H - 2 * pad)
+    const line = (key: 'ctl' | 'atl') =>
+      rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(' ')
+    const ctlLine = line('ctl')
+    const ctlArea = `${ctlLine} L${x(rows.length - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z`
+    return { W, H, ctlLine, ctlArea, atlLine: line('atl') }
+  }, [pmc])
+
   const workout = brief?.prescribed_workout
   const review = brief?.post_ride_review ?? null
   const adaptations = (brief as { adaptations?: Adaptations | null } | undefined)?.adaptations ?? null
@@ -348,6 +364,30 @@ export default function TodayTab() {
             </div>
           ))}
         </div>
+        {loadTrend && (
+          <div className="flex flex-col gap-1.5">
+            <svg viewBox={`0 0 ${loadTrend.W} ${loadTrend.H}`} preserveAspectRatio="none" style={{ width: '100%', height: 60, display: 'block', overflow: 'visible' }}>
+              <defs>
+                <linearGradient id="ctlFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--color-strain)" stopOpacity="0.32" />
+                  <stop offset="100%" stopColor="var(--color-strain)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d={loadTrend.ctlArea} fill="url(#ctlFill)" />
+              <path d={loadTrend.ctlLine} fill="none" stroke="var(--color-strain)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              <path d={loadTrend.atlLine} fill="none" stroke="var(--color-amber)" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+            </svg>
+            <div className="flex items-center gap-4">
+              <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)' }}>
+                <span style={{ width: 10, height: 2.5, borderRadius: 2, background: 'var(--color-strain)' }} />{de ? 'Fitness (CTL)' : 'Fitness (CTL)'}
+              </span>
+              <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)' }}>
+                <span style={{ width: 10, height: 2.5, borderRadius: 2, background: 'var(--color-amber)' }} />{de ? 'Ermüdung (ATL)' : 'Fatigue (ATL)'}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)', marginLeft: 'auto' }}>{de ? '6 Wochen' : '6 weeks'}</span>
+            </div>
+          </div>
+        )}
         <div className="hover-reveal">
           <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
             CTL {ctl != null ? Math.round(ctl) : '—'} · ATL {atl != null ? Math.round(atl) : '—'} · TSB {typeof tsb === 'number' ? `${tsb >= 0 ? '+' : ''}${Math.round(tsb)}` : '—'} — <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>{de ? 'Last & Form öffnen →' : 'Full load & form →'}</span>
