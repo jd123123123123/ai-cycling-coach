@@ -161,6 +161,10 @@ class TestAuthenticatedHappyPath:
                     "app.api.weeks.build_weekly_rationale",
                     return_value=MOCK_PREFACE,
                 ),
+                patch(
+                    "app.api.weeks.personalize_week",
+                    new=AsyncMock(return_value=None),
+                ),
             ):
                 resp = client.get("/weeks/current")
         finally:
@@ -181,6 +185,7 @@ class TestAuthenticatedHappyPath:
                 patch("app.api.weeks.generate_mesocycle", new=AsyncMock(return_value=meso)),
                 patch("app.api.weeks.ctl_atl_tsb_snapshot", new=AsyncMock(return_value=MOCK_PMC_SNAP)),
                 patch("app.api.weeks.build_weekly_rationale", return_value=MOCK_PREFACE),
+                patch("app.api.weeks.personalize_week", new=AsyncMock(return_value=None)),
             ):
                 resp = client.get("/weeks/current")
         finally:
@@ -198,6 +203,7 @@ class TestAuthenticatedHappyPath:
                 patch("app.api.weeks.generate_mesocycle", new=AsyncMock(return_value=meso)),
                 patch("app.api.weeks.ctl_atl_tsb_snapshot", new=AsyncMock(return_value=MOCK_PMC_SNAP)),
                 patch("app.api.weeks.build_weekly_rationale", return_value=technical_preface),
+                patch("app.api.weeks.personalize_week", new=AsyncMock(return_value=None)),
             ):
                 resp = client.get("/weeks/current?language=technical")
         finally:
@@ -296,6 +302,7 @@ class TestMaintenanceMode:
                 patch("app.api.weeks.generate_mesocycle", new=AsyncMock(return_value=meso)),
                 patch("app.api.weeks.ctl_atl_tsb_snapshot", new=AsyncMock(return_value=MOCK_PMC_SNAP)),
                 patch("app.api.weeks.build_weekly_rationale", return_value=MOCK_PREFACE),
+                patch("app.api.weeks.personalize_week", new=AsyncMock(return_value=None)),
             ):
                 resp = client.get("/weeks/current")
         finally:

@@ -28,7 +28,48 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: str
+    display_name: str | None = None
+    avatar_url: str | None = None
     is_active: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# Max size of the stored base64 data: URL. ~300 KB of base64 ≈ ~225 KB of image.
+MAX_AVATAR_CHARS = 300 * 1024
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Partial update of the current user's account-level profile.
+
+    Only ``display_name`` and ``avatar_url`` are user-editable here; athlete stats
+    live on /athletes/me. ``avatar_url`` must be a base64 ``data:image/...`` URI —
+    arbitrary URLs are rejected (SSRF-safe: we never fetch remote content).
+    """
+
+    display_name: str | None = None
+    avatar_url: str | None = None
+
+    @field_validator("display_name")
+    @classmethod
+    def display_name_length(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = v.strip()
+        if len(v) > 80:
+            raise ValueError("display_name must be 80 characters or fewer")
+        return v or None
+
+    @field_validator("avatar_url")
+    @classmethod
+    def avatar_is_small_data_uri(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        if not v.startswith("data:image/"):
+            raise ValueError("avatar_url must be a data:image/...;base64 URI")
+        if ";base64," not in v:
+            raise ValueError("avatar_url must be base64-encoded")
+        if len(v) > MAX_AVATAR_CHARS:
+            raise ValueError("avatar_url is too large (max ~300 KB)")
+        return v

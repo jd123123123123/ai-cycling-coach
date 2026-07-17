@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Footprints, Bike, Dumbbell, TrendingUp, ArrowUp, ArrowDown, Trophy, Flag,
-  Check, Zap, Lock, Medal, Gauge,
-  BarChart3, Lightbulb, FlaskConical, Smile, CalendarCheck, Scale,
+  Check, Zap, Lock, Medal,
 } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { useLocale } from '../contexts/LocaleContext'
@@ -22,10 +21,8 @@ import { RoutinesManager } from '../components/strength/RoutinesManager'
 /**
  * Lift Progress — the standalone /progress/lift screen. A 1:1 rebuild of the
  * Pencil "Strength" design: header + range filter, DOTS hero, PROGRESS
- * (total e1RM / by-lift / recent PRs), PROJECTION (forecast / projected 1RM /
- * level trajectory), PRO LAB
- * (VBT / lifting readiness / volume landmarks / force & symmetry / body comp),
- * and AMATEUR MODE (Simple/Pro toggle → coach-explains + simple scorecard).
+ * (total e1RM / by-lift / recent PRs), and PROJECTION (forecast / projected
+ * 1RM / level trajectory).
  *
  * DATA CEILING: the backend gym Activity carries no per-set weight/rep/exercise
  * data, so every e1RM / by-lift / DOTS / VBT / volume-landmark figure is an
@@ -43,12 +40,10 @@ const C_SQUAT = 'var(--color-strain)' // #38B6FF
 const C_BENCH = 'var(--color-stand)' // #00E5D4
 const C_DEAD = 'var(--color-accent)' // #FF5A3C
 const C_GOOD = 'var(--color-recovery)' // #16E08A
-const C_AMBER = 'var(--color-amber)' // #FFB020
 const C_BAD = 'var(--color-move)' // #FA1E55
 
 const SOFT_ACCENT = 'var(--color-accent-soft)' // #FF5A3C26
 const SOFT_GOOD = 'rgba(22,224,138,0.15)'
-const SOFT_AMBER = 'rgba(255,176,32,0.15)'
 
 // ---------------------------------------------------------------------------
 // Optional future set-logging path → real strength-science library.
@@ -153,23 +148,6 @@ function EmptyChart({ note, height = 120 }: { note: string; height?: number }) {
   )
 }
 
-// Period-over-period delta chip — green up / red down. REAL data only; the
-// caller renders it only when the prior window has comparable data.
-function DeltaChip({ delta, unit = '', sub }: { delta: number; unit?: string; sub: string }) {
-  const up = delta >= 0
-  const color = up ? C_GOOD : C_BAD
-  const soft = up ? SOFT_GOOD : 'rgba(250,30,85,0.15)'
-  return (
-    <div className="flex items-center rounded-full self-start" style={{ gap: 5, padding: '4px 9px', background: soft }}>
-      {up ? <ArrowUp size={12} color={color} /> : <ArrowDown size={12} color={color} />}
-      <span className="num-display" style={{ fontSize: 11, fontWeight: 700, color }}>
-        {up ? '+' : ''}{delta}{unit}
-      </span>
-      <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{sub}</span>
-    </div>
-  )
-}
-
 // ---------------------------------------------------------------------------
 export default function LiftProgressView() {
   const navigate = useNavigate()
@@ -177,7 +155,6 @@ export default function LiftProgressView() {
   const de = locale === 'de'
   const unlock = de ? 'Krafteinheiten mit Sätzen & Gewichten protokollieren' : 'Log sets & weights to unlock'
 
-  const [mode, setMode] = useState<'simple' | 'pro'>('simple')
   const RANGES = [
     { k: '7D', d: 7 }, { k: '14D', d: 14 }, { k: '31D', d: 31 },
     { k: '90D', d: 90 }, { k: '1Y', d: 365 }, { k: 'All', d: 1460 },
@@ -201,7 +178,6 @@ export default function LiftProgressView() {
   const { data: profile } = useAthleteProfile()
 
   const windowLabel = de ? `letzte ${fetchDays} Tage` : `last ${fetchDays} days`
-  const priorSub = de ? 'vs. Vorperiode' : `vs. prior ${fetchDays}d`
 
   // ---- REAL gym-derived figures --------------------------------------------
   // `gym` = every fetched session (feeds the streak walk-back); current/prior
@@ -220,35 +196,11 @@ export default function LiftProgressView() {
     ? Math.round((perWeek - priorPerWeek) * 10) / 10
     : null
 
-  const streak = useMemo(() => {
-    const weekKey = (iso: string) => {
-      const d = new Date(iso)
-      const day = (d.getDay() + 6) % 7
-      d.setDate(d.getDate() - day)
-      return d.toISOString().slice(0, 10)
-    }
-    const weeks = new Set(gym.map((a) => weekKey(a.started_at)))
-    let s = 0
-    const cur = new Date(now)
-    // walk back from the current week while each week has ≥1 gym session
-    for (;;) {
-      const day = (cur.getDay() + 6) % 7
-      const monday = new Date(cur)
-      monday.setDate(cur.getDate() - day)
-      if (weeks.has(monday.toISOString().slice(0, 10))) {
-        s += 1
-        cur.setDate(cur.getDate() - 7)
-      } else break
-    }
-    return s
-  }, [gym, now])
-
   const latestMetric = useMemo(() => {
     const m = (metricData?.metrics ?? []).filter((x) => x.training_readiness != null)
     return m.length ? m[m.length - 1] : null
   }, [metricData])
   const readiness = latestMetric?.training_readiness ?? null
-  const hrv = latestMetric?.hrv_status ?? null
   const weightKg = profile?.weight_kg ?? (metricData?.metrics ?? []).find((m) => m.weight_kg != null)?.weight_kg ?? null
 
   // Period-over-period lifting-readiness delta (mean training_readiness,
@@ -313,21 +265,7 @@ export default function LiftProgressView() {
       ? `Frequenz ${trendWord(freqPct)} vs. die letzten ${fetchDays} Tage${readinessDelta != null ? ` · Bereitschaft ${readinessDelta >= 0 ? '+' : ''}${readinessDelta}` : ''}`
       : `Frequency ${trendWord(freqPct)} vs the previous ${fetchDays} days${readinessDelta != null ? ` · readiness ${readinessDelta >= 0 ? '+' : ''}${readinessDelta}` : ''}`
 
-  const readinessLabel = readiness == null
-    ? { txt: DASH, color: 'var(--color-muted)', soft: 'var(--color-surface-2)' }
-    : readiness >= 80
-      ? { txt: de ? 'Bereit' : 'Primed', color: C_GOOD, soft: SOFT_GOOD }
-      : readiness >= 50
-        ? { txt: de ? 'Moderat' : 'Moderate', color: C_AMBER, soft: SOFT_AMBER }
-        : { txt: de ? 'Erschöpft' : 'Depleted', color: C_BAD, soft: 'rgba(250,30,85,0.15)' }
 
-  // ---- static coaching content (rendered 1:1) ------------------------------
-  const volumeMuscles = [
-    { name: de ? 'Quads' : 'Quads' },
-    { name: de ? 'Rücken' : 'Back' },
-    { name: de ? 'Brust' : 'Chest' },
-    { name: de ? 'Posteriore Kette' : 'Posterior chain' },
-  ]
 
   // ---------------------------------------------------------------------------
   return (
@@ -660,293 +598,6 @@ export default function LiftProgressView() {
           </div>
         </Card>
 
-        {/* ===================== SECTION: PRO LAB (pro mode only) ===================== */}
-        {mode === 'pro' && (
-          <>
-            <SectionHeader color={C_BENCH} title={de ? 'Pro-Labor' : 'Pro Lab'} sub={de ? 'Die Metriken, die Elite-Lifter besessen verfolgen' : 'The metrics elite lifters obsess over'} />
-
-            {/* Bar Speed · VBT */}
-            <Card gap={16}>
-              <div className="flex items-center justify-between">
-                <CardTitle title={de ? 'Balkengeschw. · VBT' : 'Bar Speed · VBT'} sub={de ? 'Geschwindigkeitsbasierte Autoregulation' : 'Velocity-based autoregulation'} />
-                <div className="rounded-full" style={{ padding: '5px 10px', background: '#000000' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: C_BENCH }}>{de ? 'e1RM live' : 'e1RM live'}</span>
-                </div>
-              </div>
-              {[
-                { name: de ? 'Kniebeuge' : 'Squat' },
-                { name: de ? 'Bank' : 'Bench' },
-                { name: de ? 'Kreuzheben' : 'Deadlift' },
-              ].map((row) => (
-                <div key={row.name} className="flex items-center" style={{ gap: 12 }}>
-                  <div className="flex flex-col" style={{ gap: 1, width: 78 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{row.name}</span>
-                    <span style={{ fontSize: 10, color: 'var(--color-muted)' }}>@ {DASH}</span>
-                  </div>
-                  <div className="flex-1" style={{ height: 8, borderRadius: 4, background: 'var(--color-surface-3)' }} />
-                  <div className="flex items-end justify-end" style={{ gap: 3, width: 78 }}>
-                    <span className="num-display" style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-ink)' }}>{DASH}</span>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 2 }}>m/s</span>
-                  </div>
-                </div>
-              ))}
-              <div style={{ height: 1, background: 'var(--color-rule)' }} />
-              <span style={{ fontSize: 11, color: 'var(--color-muted)', lineHeight: 1.4 }}>
-                {de
-                  ? 'Geschwindigkeitsverlust-Cap 20% → Satz beenden. e1RM automatisch aus dem Last-Geschwindigkeits-Profil geschätzt.'
-                  : 'Velocity-loss cap 20% → end the set. e1RM auto-estimated from the load–velocity profile.'}
-              </span>
-            </Card>
-
-            {/* Lifting Readiness — REAL (training readiness) */}
-            <Card gap={14}>
-              <div className="flex items-start justify-between">
-                <div className="flex flex-col" style={{ gap: 3 }}>
-                  <div className="flex items-center" style={{ gap: 8 }}>
-                    <span className="eyebrow" style={{ fontSize: 11, letterSpacing: 0.5, color: 'var(--color-muted)' }}>{de ? 'HEBE-BEREITSCHAFT' : 'LIFTING READINESS'}</span>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>· {windowLabel}</span>
-                  </div>
-                  <div className="flex items-end" style={{ gap: 6 }}>
-                    <span className="num-display" style={{ fontSize: 38, fontWeight: 700, color: readinessLabel.color, lineHeight: 1 }}>
-                      {readiness != null ? Math.round(readiness) : DASH}
-                    </span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 6 }}>%</span>
-                  </div>
-                  {readinessDelta != null && (
-                    <DeltaChip delta={readinessDelta} sub={priorSub} />
-                  )}
-                </div>
-                <div className="flex items-center rounded-full" style={{ gap: 5, padding: '6px 11px', background: readinessLabel.soft }}>
-                  <Zap size={14} color={readinessLabel.color} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: readinessLabel.color }}>{readinessLabel.txt}</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                {[
-                  { v: DASH, l: de ? 'Balkengeschw. vs Basis' : 'bar speed vs base', c: C_GOOD },
-                  { v: DASH, l: de ? 'Griffkraft' : 'grip strength', c: 'var(--color-ink)' },
-                  { v: hrv != null ? String(Math.round(hrv)) : DASH, l: 'HRV', c: C_SQUAT },
-                ].map((s) => (
-                  <div key={s.l} className="flex flex-col" style={{ gap: 2 }}>
-                    <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: s.c }}>{s.v}</span>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{s.l}</span>
-                  </div>
-                ))}
-              </div>
-              <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
-                {readiness == null
-                  ? unlock
-                  : readiness >= 80
-                    ? (de ? 'Bereitschaft hoch — grünes Licht für schwere Top-Sätze heute.' : 'Readiness is high — green light to push top sets today.')
-                    : readiness >= 50
-                      ? (de ? 'Moderate Bereitschaft — halte das geplante Volumen, vermeide neue PRs.' : 'Moderate readiness — hold planned volume, skip new PR attempts.')
-                      : (de ? 'Niedrige Bereitschaft — reduziere Last oder mach einen leichten Tag.' : 'Low readiness — pull back load or take a light day.')}
-              </span>
-            </Card>
-
-            {/* Volume Landmarks */}
-            <Card gap={14}>
-              <CardTitle title={de ? 'Volumen-Landmarken' : 'Volume Landmarks'} sub={de ? 'Wochensätze vs MEV · MAV · MRV' : 'Weekly sets vs MEV · MAV · MRV'} />
-              {volumeMuscles.map((m) => (
-                <div key={m.name} className="flex items-center" style={{ gap: 10 }}>
-                  <div className="flex flex-col" style={{ gap: 2, width: 84 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{m.name}</span>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)' }}>{DASH}</span>
-                  </div>
-                  {/* reference track with MEV–MRV green band (science reference; no user marker without set data) */}
-                  <div className="relative flex-1" style={{ height: 16 }}>
-                    <div style={{ position: 'absolute', top: 6, left: 0, right: 0, height: 4, borderRadius: 2, background: 'var(--color-surface-3)' }} />
-                    <div style={{ position: 'absolute', top: 5, left: '50%', width: '25%', height: 6, borderRadius: 3, background: SOFT_GOOD }} />
-                  </div>
-                  <div className="flex items-end justify-end" style={{ gap: 2, width: 44 }}>
-                    <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{DASH}</span>
-                    <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 2 }}>{de ? 'Sätze' : 'sets'}</span>
-                  </div>
-                </div>
-              ))}
-              <div className="flex items-center rounded-[12px]" style={{ gap: 8, padding: 12, background: SOFT_ACCENT }}>
-                <Lightbulb size={15} color="var(--color-accent)" />
-                <span className="flex-1" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink)', lineHeight: 1.35 }}>{unlock}</span>
-              </div>
-            </Card>
-
-            {/* Force & Symmetry */}
-            <Card gap={14}>
-              <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Kraft & Symmetrie' : 'Force & Symmetry'}</span>
-              <div className="flex" style={{ gap: 10 }}>
-                {[
-                  { unit: '%', l: de ? 'L/R-Balance' : 'L/R balance', c: C_AMBER },
-                  { unit: 'kN/s', l: de ? 'Kraftentw. (RFD)' : 'force dev (RFD)', c: C_SQUAT },
-                  { unit: 'kN', l: de ? 'Spitzenkraft' : 'peak force', c: 'var(--color-ink)' },
-                ].map((s) => (
-                  <div key={s.l} className="flex flex-col flex-1 rounded-[14px]" style={{ gap: 4, padding: 13, background: 'var(--color-surface-2)' }}>
-                    <div className="flex items-end" style={{ gap: 2 }}>
-                      <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: s.c }}>{DASH}</span>
-                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 2 }}>{s.unit}</span>
-                    </div>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{s.l}</span>
-                  </div>
-                ))}
-              </div>
-              <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{unlock}</span>
-            </Card>
-
-            {/* Body Composition */}
-            <Card gap={14}>
-              <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Körperzusammensetzung' : 'Body Composition'}</span>
-              <div className="flex" style={{ gap: 10 }}>
-                {[
-                  { unit: 'kg', l: de ? 'Magermasse' : 'lean mass', c: 'var(--color-ink)' },
-                  { unit: '%', l: de ? 'Körperfett' : 'body fat', c: C_BENCH },
-                  { unit: '', l: de ? 'gesamt / mager' : 'total / lean', c: C_DEAD },
-                  { unit: '', l: 'DOTS', c: C_GOOD },
-                ].map((s) => (
-                  <div key={s.l} className="flex flex-col flex-1 items-center rounded-[14px]" style={{ gap: 4, padding: '13px 8px', background: 'var(--color-surface-2)' }}>
-                    <div className="flex items-end" style={{ gap: 2 }}>
-                      <span className="num-display" style={{ fontSize: 19, fontWeight: 700, color: s.c }}>{DASH}</span>
-                      {s.unit && <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 2 }}>{s.unit}</span>}
-                    </div>
-                    <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--color-muted)', textAlign: 'center' }}>{s.l}</span>
-                  </div>
-                ))}
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
-                {weightKg != null
-                  ? (de ? `Körpergewicht ${Math.round(weightKg)} kg — Zusammensetzung & DOTS erfordern protokollierte Sätze.` : `Bodyweight ${Math.round(weightKg)} kg — composition & DOTS need logged sets.`)
-                  : unlock}
-              </span>
-            </Card>
-          </>
-        )}
-
-        {/* ===================== SECTION: AMATEUR MODE ===================== */}
-        <SectionHeader color={C_GOOD} title={de ? 'Amateur-Modus' : 'Amateur mode'} sub={de ? 'Die Zahlen verständlich machen' : 'Make the numbers make sense'} />
-
-        {/* Simple / Pro view toggle */}
-        <div className="flex rounded-full" style={{ background: 'var(--color-surface-2)', padding: 4, gap: 3 }}>
-          {[
-            { k: 'simple' as const, icon: Smile, label: de ? 'Einfach' : 'Simple' },
-            { k: 'pro' as const, icon: FlaskConical, label: de ? 'Pro' : 'Pro' },
-          ].map((t) => (
-            <button
-              key={t.k}
-              onClick={() => setMode(t.k)}
-              className="flex flex-1 items-center justify-center rounded-full"
-              style={{
-                gap: 6, padding: '10px 6px',
-                background: mode === t.k ? 'var(--color-accent)' : 'transparent',
-                color: mode === t.k ? 'var(--color-ink)' : 'var(--color-ink-2)',
-              }}
-            >
-              <t.icon size={16} />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Simple-mode content: coach-explains + simple scorecard */}
-        {mode === 'simple' && (
-          <>
-            {/* Coach explains — Bar speed (VBT) */}
-            <Card gap={10} pad={16}>
-              <div className="flex items-center" style={{ gap: 11 }}>
-                <div className="flex items-center justify-center" style={{ width: 38, height: 38, borderRadius: 11, background: SOFT_GOOD }}>
-                  <Gauge size={20} color={C_GOOD} />
-                </div>
-                <div className="flex flex-col flex-1" style={{ gap: 1 }}>
-                  <span className="eyebrow" style={{ fontSize: 10, letterSpacing: 1, color: C_GOOD }}>{de ? 'COACH ERKLÄRT' : 'COACH EXPLAINS'}</span>
-                  <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Balkengeschwindigkeit (VBT)' : 'Bar speed (VBT)'}</span>
-                </div>
-              </div>
-              <span style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
-                {de
-                  ? 'Bewegt sich die Stange langsamer als sonst, bist du müde — geh leichter. Schneller als normal? Leg Gewicht drauf. Die App entscheidet für dich, kein Rätselraten.'
-                  : "If the bar moves slower than usual, you're tired — go lighter. Faster than normal? Add weight. The app decides for you, no guesswork."}
-              </span>
-            </Card>
-
-            {/* Coach explains — Volume landmarks */}
-            <Card gap={10} pad={16}>
-              <div className="flex items-center" style={{ gap: 11 }}>
-                <div className="flex items-center justify-center" style={{ width: 38, height: 38, borderRadius: 11, background: SOFT_GOOD }}>
-                  <BarChart3 size={20} color={C_GOOD} />
-                </div>
-                <div className="flex flex-col flex-1" style={{ gap: 1 }}>
-                  <span className="eyebrow" style={{ fontSize: 10, letterSpacing: 1, color: C_GOOD }}>{de ? 'COACH ERKLÄRT' : 'COACH EXPLAINS'}</span>
-                  <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Volumen-Landmarken' : 'Volume landmarks'}</span>
-                </div>
-              </div>
-              <span style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
-                {de
-                  ? 'MEV / MAV / MRV = das Minimum, der Sweet-Spot und die meisten Wochensätze bevor du übertrainierst. Bleib einfach im grünen Band.'
-                  : 'MEV / MAV / MRV = the minimum, the sweet-spot, and the most weekly sets before you overtrain. Just stay in the green band.'}
-              </span>
-            </Card>
-
-            {/* Simple scorecard */}
-            <Card gap={14}>
-              <CardTitle title={de ? 'Deine einfache Scorecard' : 'Your simple scorecard'} sub={`${de ? 'Die 3 Dinge, die gerade am meisten zählen' : 'The 3 things that matter most right now'} · ${windowLabel}`} />
-
-              {/* Consistency — REAL (gym frequency + streak) */}
-              <div className="flex items-center" style={{ gap: 12 }}>
-                <div className="flex items-center justify-center" style={{ width: 36, height: 36, borderRadius: 10, background: '#000000' }}>
-                  <CalendarCheck size={18} color={C_GOOD} />
-                </div>
-                <div className="flex flex-col flex-1" style={{ gap: 1 }}>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Konstanz' : 'Consistency'}</span>
-                  <span style={{ fontSize: 11, color: 'var(--color-ink-2)' }}>
-                    {sessionCount === 0
-                      ? (de ? 'Keine Daten im Zeitraum' : 'No data in range')
-                      : streak > 0 ? `${streak}${de ? '-Wochen-Serie' : '-week streak'} 🔥` : (de ? 'Serie starten' : 'Start a streak')}
-                  </span>
-                </div>
-                <div className="flex flex-col items-end" style={{ gap: 3 }}>
-                  <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>
-                    {sessionCount > 0 ? `${perWeek}× / ${de ? 'Woche' : 'week'}` : DASH}
-                  </span>
-                  {perWeekDelta != null && (
-                    <DeltaChip delta={perWeekDelta} unit="×" sub={priorSub} />
-                  )}
-                </div>
-              </div>
-
-              {/* Effort balance — needs load data */}
-              <div className="flex items-center" style={{ gap: 12 }}>
-                <div className="flex items-center justify-center" style={{ width: 36, height: 36, borderRadius: 10, background: '#000000' }}>
-                  <Scale size={18} color={C_SQUAT} />
-                </div>
-                <div className="flex flex-col flex-1" style={{ gap: 1 }}>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Belastungs-Balance' : 'Effort balance'}</span>
-                  <span style={{ fontSize: 11, color: 'var(--color-ink-2)' }}>{de ? 'schwer vs leicht' : 'heavy vs light'}</span>
-                </div>
-                <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{DASH}</span>
-              </div>
-
-              {/* Next PB — needs lift data */}
-              <div className="flex items-center" style={{ gap: 12 }}>
-                <div className="flex items-center justify-center" style={{ width: 36, height: 36, borderRadius: 10, background: '#000000' }}>
-                  <Flag size={18} color={C_DEAD} />
-                </div>
-                <div className="flex flex-col flex-1" style={{ gap: 1 }}>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Nächster PB' : 'Next PB'}</span>
-                  <span style={{ fontSize: 11, color: 'var(--color-ink-2)' }}>{unlock}</span>
-                </div>
-                <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{DASH}</span>
-              </div>
-
-              <div style={{ height: 1, background: 'var(--color-rule)' }} />
-
-              {/* Peer percentile — needs DOTS */}
-              <div className="flex flex-col" style={{ gap: 8 }}>
-                <div className="flex items-center justify-between">
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>{de ? 'Stärker als die meisten deiner Größe' : 'Stronger than most lifters your size'}</span>
-                  <span className="num-display" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-accent)' }}>{DASH}</span>
-                </div>
-                <div style={{ height: 8, borderRadius: 4, background: 'var(--color-surface-3)' }} />
-              </div>
-            </Card>
-          </>
-        )}
       </div>
       <MobileBottomNav />
     </div>

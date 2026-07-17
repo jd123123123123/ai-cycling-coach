@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Footprints, Bike, Dumbbell, Trophy, TrendingUp,
-  TrendingDown, Medal, ArrowUp, LineChart, Flag, ArrowRight, Award,
+  TrendingDown, Medal, ArrowUp, LineChart, Flag, ArrowRight,
 } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { useLocale } from '../contexts/LocaleContext'
@@ -14,7 +14,6 @@ import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../hooks/useActivitiesRange'
 import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useGoalTrajectory } from '../hooks/useGoalTrajectory'
-import { useStreamAnalysis } from '../hooks/useStreamAnalysis'
 import {
   linreg, forecast, criticalPower, powerForDuration, climbPowerWatts,
   fmtRaceTime, confidence, granularityForDays, granularityLabel, pctChange,
@@ -146,36 +145,6 @@ function MetricTile({ label, value, unit, cur, prev, higherBetter = true, digits
   )
 }
 
-/** A left-chip · meta / right value+sub row used across the Pro-Lab lists. */
-function DetailRow({ chip, chipColor, title, desc, value, unit, sub, subColor, last }: {
-  chip: string; chipColor: string; title: string; desc: string
-  value: string; unit?: string; sub: string; subColor: string; last?: boolean
-}) {
-  return (
-    <>
-      <div className="flex items-center justify-between" style={{ padding: '12px 0' }}>
-        <div className="flex items-center" style={{ gap: 12, minWidth: 0 }}>
-          <span className="num-display flex items-center justify-center"
-            style={{ width: 56, padding: '8px 0', borderRadius: 10, background: C.surface2, fontSize: 13, fontWeight: 700, color: chipColor, flex: 'none' }}>
-            {chip}
-          </span>
-          <div className="flex flex-col" style={{ gap: 3, minWidth: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{title}</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>{desc}</span>
-          </div>
-        </div>
-        <div className="flex flex-col items-end" style={{ gap: 3, flex: 'none' }}>
-          <div className="flex items-end" style={{ gap: 3 }}>
-            <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: C.ink }}>{value}</span>
-            {unit && <span style={{ fontSize: 11, fontWeight: 500, color: C.muted, paddingBottom: 3 }}>{unit}</span>}
-          </div>
-          <span style={{ fontSize: 11, fontWeight: 600, color: subColor }}>{sub}</span>
-        </div>
-      </div>
-      {!last && <div style={{ height: 1, background: C.rule }} />}
-    </>
-  )
-}
 
 // ── page ───────────────────────────────────────────────────────────────────
 const RANGES = ['7D', '14D', '31D', '90D', '1Y', 'All'] as const
@@ -189,7 +158,6 @@ export default function BikeProgressView() {
   const today = useMemo(() => new Date(), [])
 
   const [range, setRange] = useState<Range>('90D')
-  const [mode, setMode] = useState<'simple' | 'pro'>('simple')
 
   // Active range → days → cutoff timestamp. Everything derived from `rides` honors this.
   const rangeDays = RANGE_DAYS[range]
@@ -275,13 +243,19 @@ export default function BikeProgressView() {
     : de
       ? `Fitness ${trendWord(fitPct, true)} vs. die letzten ${rangeDays} Tage · Volumen ${trendWord(volPct, true)}`
       : `Fitness ${trendWord(fitPct, false)} vs the previous ${rangeDays} days · volume ${trendWord(volPct, false)}`
-  const lastRideId = rides.length ? rides[rides.length - 1].id : undefined
-  const { data: stream } = useStreamAnalysis(lastRideId)
-  const bd = stream?.bike_dynamics
-
   const weight = athlete?.weight_kg ?? 68.5
   const hasWeight = athlete?.weight_kg != null
   const currentFtp = athlete?.ftp_watts ?? n0(power?.eftp_watts) ?? n0(power?.cp_watts) ?? null
+
+  // ── Range-scoped Power Profile: best NP per granularity bucket across the
+  // window's rides (per-ride normalized power is the only power figure the
+  // activity feed exposes, so it stands in as the range's mean-max signal). ──
+  const mmpBuckets = useMemo(
+    () => bucketByGranularity(rides.map((a) => ({ t: rideStart(a), v: a.normalized_power ?? 0 })), chartStart, today, gran, 'max'),
+    [rides, chartStart, today, gran],
+  )
+  const peakNp = ftpProxyNow // best NP in the selected window
+  const peakNpWkg = peakNp != null && hasWeight ? n1(peakNp / weight) : null
 
   // ── FTP-over-time proxy: best NP per calendar month (real rides) ──────────
   const monthly = useMemo(() => {
@@ -352,7 +326,6 @@ export default function BikeProgressView() {
 
   // ── Critical Power model (Monod–Scherrer) from peaks ─────────────────────
   const peakAt = (s: string) => n0(power?.peaks?.[s]) // seconds→watts
-  const wkgAt = (s: string) => n1(power?.peaks_wkg?.[s] ?? power?.wkg_curve?.[s])
   const cpModel = useMemo(() => {
     const peaks = power?.peaks
     if (!peaks) return null
@@ -360,7 +333,6 @@ export default function BikeProgressView() {
     return criticalPower(pts)
   }, [power])
   const cpW = n0(power?.cp_watts ?? cpModel?.cp)
-  const wPrimeKj = n1((power?.w_prime_j ?? (cpModel ? cpModel.wPrime : null) ?? NaN) / 1000)
 
   // Power-curve durations (seconds) → now (real) + projected ceiling
   const CURVE: { s: string; label: string }[] = [
@@ -429,13 +401,6 @@ export default function BikeProgressView() {
   const ftpWkg = currentFtp != null && weight ? n1(currentFtp / weight) : null
   const pctTop = ftpWkg == null ? null : ftpWkg >= 4.5 ? 3 : ftpWkg >= 4.0 ? 8 : ftpWkg >= 3.5 ? 18 : ftpWkg >= 3.0 ? 35 : 55
   const firstWkg = ftpSeries.length >= 2 && weight ? n1(ftpSeries[0].ftp / weight) : null
-
-  // ── Durability (real drop % after kJ) ────────────────────────────────────
-  const fresh20 = peakAt('1200')
-  const drop1500 = n1(power?.durability_best_pct)
-  const drop2000 = n1(power?.durability_avg_pct)
-  const fatigued20 = fresh20 != null && drop2000 != null ? Math.round(fresh20 * (1 - drop2000 / 100)) : null
-  const durLabel = drop2000 == null ? DASH : drop2000 < 5 ? (de ? 'Stark' : 'Strong') : drop2000 < 8 ? (de ? 'Gut' : 'Solid') : (de ? 'Baubar' : 'Buildable')
 
   // Period-over-period chip (green up / red down). Renders "—" when prior window is empty.
   const vsPeriodLabel = de ? 'vs. Vorperiode' : `vs. prior ${range}`
@@ -672,47 +637,48 @@ export default function BikeProgressView() {
             </div>
           </Card>
 
-          {/* Power Profile */}
+          {/* Power Profile — range-scoped best-effort power (best NP per bucket) */}
           <Card gap={14}>
-            <CardHead title={de ? 'Leistungsprofil' : 'Power Profile'} sub={de ? 'Saisonbeste Durchschnittsleistung' : 'Season-best mean power'}
+            <CardHead title={de ? 'Leistungsprofil' : 'Power Profile'}
+              sub={de ? `Bestleistungen · ${rangeLabel}` : `Best efforts · ${rangeLabel}`}
               right={<Pill color={C.ink2}><Medal size={14} style={{ color: C.amber }} /> {rides.length} {de ? 'Fahrten' : 'rides'}</Pill>} />
-            <div className="flex flex-col">
-              {[
-                { s: '5', d: '5s', zone: de ? 'Neuromuskulär' : 'Neuromuscular' },
-                { s: '60', d: '1 min', zone: de ? 'Anaerob' : 'Anaerobic' },
-                { s: '300', d: '5 min', zone: 'VO₂ max' },
-                { s: '1200', d: '20 min', zone: de ? 'Schwelle' : 'Threshold' },
-              ].map((row, i, arr) => {
-                const w = peakAt(row.s)
-                const wkg = wkgAt(row.s)
-                return (
-                  <div key={row.s}>
-                    <div className="flex items-center justify-between" style={{ padding: '12px 0' }}>
-                      <div className="flex items-center" style={{ gap: 12 }}>
-                        <span className="num-display flex items-center justify-center"
-                          style={{ width: 52, padding: '8px 0', borderRadius: 10, background: C.surface2, fontSize: 14, fontWeight: 700, color: C.ink }}>{row.d}</span>
-                        <div className="flex flex-col" style={{ gap: 3 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{row.zone}</span>
-                          <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>{de ? 'Saisonbestwert' : 'Season best'}</span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end" style={{ gap: 3 }}>
-                        <div className="flex items-end" style={{ gap: 3 }}>
-                          <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: C.ink }}>{w ?? DASH}</span>
-                          <span style={{ fontSize: 11, color: C.muted, paddingBottom: 3 }}>W</span>
-                        </div>
-                        {wkg != null && (
-                          <span className="inline-flex items-center" style={{ gap: 3, fontSize: 11, fontWeight: 700, color: C.recovery }}>
-                            <ArrowUp size={11} /> {wkg} W/kg
-                          </span>
-                        )}
-                      </div>
+            {noRides || !mmpBuckets.some((b) => b.value > 0) ? (
+              <div style={{ fontSize: 12, color: C.muted, padding: '20px 0' }}>
+                {de ? 'Keine Bestleistungen im Zeitraum' : 'No efforts in range'}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-end justify-between">
+                  <div className="flex flex-col" style={{ gap: 2 }}>
+                    <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: C.ink2 }}>
+                      {de ? 'SPITZEN-NP · ZEITRAUM' : 'PEAK NP · RANGE'}
+                    </span>
+                    <div className="flex items-end" style={{ gap: 4 }}>
+                      <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{peakNp ?? DASH}</span>
+                      <span style={{ fontSize: 12, color: C.muted, paddingBottom: 3 }}>W</span>
                     </div>
-                    {i < arr.length - 1 && <div style={{ height: 1, background: C.rule }} />}
                   </div>
-                )
-              })}
-            </div>
+                  {peakNpWkg != null && (
+                    <Pill color={C.recovery} bg={soft(C.recovery, 15)}><ArrowUp size={12} /> {peakNpWkg} W/kg</Pill>
+                  )}
+                </div>
+                <HoverBars
+                  height={120}
+                  radius={5}
+                  defaultColor={C.surface3}
+                  bars={mmpBuckets.map((b) => ({
+                    value: b.value,
+                    valueLabel: `${Math.round(b.value)} W`,
+                    label: b.label,
+                    highlight: peakNp != null && Math.round(b.value) === Math.round(peakNp),
+                  }))}
+                />
+                <div className="flex items-center justify-between">
+                  <span style={{ fontSize: 11, color: C.muted }}>{de ? `Beste NP je ${granTxt}-Bucket` : `Best NP per ${granTxt} bucket`}</span>
+                  <span style={{ fontSize: 11, color: C.muted }}>{rangeLabel}</span>
+                </div>
+              </>
+            )}
           </Card>
 
           {/* ═══ PROJECTION ═══ */}
@@ -845,269 +811,9 @@ export default function BikeProgressView() {
             )}
           </Card>
 
-          {/* ═══ PRO LAB (Pro mode) ═══ */}
-          {mode === 'pro' && (
-            <>
-              <SectionHeader tick={C.accent} title={de ? 'PRO LAB' : 'PRO LAB'}
-                sub={de ? 'Elite-Physiologie · worauf Profis achten' : 'Elite physiology · what the pros obsess over'} />
-
-              {/* Aerobic Engine */}
-              <Card gap={14}>
-                <CardHead title={de ? 'Aerobe Maschine' : 'Aerobic Engine'} sub={de ? 'Sauerstofftransport & aerobe Decke' : 'Oxygen delivery & aerobic ceiling'}
-                  right={cpW != null ? <Pill color={C.ink2}>{de ? 'Gemessen' : 'Modeled'}</Pill> : undefined} />
-                <div className="flex flex-col">
-                  <DetailRow chip="VO₂" chipColor={C.accent} title="VO₂max" desc={de ? 'Braucht Labortest' : 'Needs a lab test'}
-                    value={DASH} sub={de ? 'Spiroergometrie' : 'Lab spirometry'} subColor={C.muted} />
-                  <DetailRow chip="CP" chipColor={C.accent} title={de ? 'Kritische Leistung' : 'Critical Power'} desc={de ? 'CP-Modell-Asymptote' : 'CP-model asymptote'}
-                    value={cpW != null ? String(cpW) : DASH} unit="W"
-                    sub={cpW != null && currentFtp != null ? `vs FTP ${currentFtp} W · ${cpW - currentFtp >= 0 ? '+' : ''}${cpW - currentFtp} W` : (de ? 'aus Spitzen' : 'from peaks')} subColor={C.ink2} />
-                  <DetailRow chip="W′" chipColor={C.amber} title={de ? 'W′ anaerober Tank' : 'W′ anaerobic tank'} desc={de ? 'Akku über CP' : 'Battery above CP'}
-                    value={wPrimeKj != null ? String(wPrimeKj) : DASH} unit="kJ"
-                    sub={power?.phenotype?.type ?? (de ? 'Angriffe' : 'attacks')} subColor={C.amber} />
-                  <DetailRow chip="VLa" chipColor={C.strain} title="VLaMax" desc={de ? 'Glykolytische Rate' : 'Glycolytic rate'}
-                    value={DASH} sub={de ? 'Braucht Labortest' : 'Needs a lab test'} subColor={C.muted} last />
-                </div>
-              </Card>
-
-              {/* Efficiency & Thresholds */}
-              <Card gap={14}>
-                <CardHead title={de ? 'Effizienz & Schwellen' : 'Efficiency & Thresholds'} sub={de ? 'Wo du sauber brennst vs. in den roten Bereich gehst' : 'Where you burn clean vs go into the red'} />
-                <div className="flex flex-col">
-                  <DetailRow chip="LT1" chipColor={C.recovery} title={de ? 'LT1 · aerob' : 'LT1 · aerobic'} desc={de ? 'Erster Laktatanstieg' : 'First rise in lactate'}
-                    value={DASH} sub={de ? 'Braucht Laktattest' : 'Needs a lab test'} subColor={C.muted} />
-                  <DetailRow chip="LT2" chipColor={C.amber} title={de ? 'LT2 · Schwelle' : 'LT2 · threshold'} desc={de ? 'Max. Laktat-Steady-State' : 'Max lactate steady state'}
-                    value={DASH} sub={de ? 'Braucht Laktattest' : 'Needs a lab test'} subColor={C.muted} />
-                  <DetailRow chip="GE" chipColor={C.strain} title={de ? 'Bruttowirkungsgrad' : 'Gross efficiency'} desc={de ? 'Watt raus ÷ Energie rein' : 'Watts out ÷ energy in'}
-                    value={DASH} sub={de ? 'Braucht Labortest' : 'Needs a lab test'} subColor={C.muted} />
-                  <DetailRow chip="Fat" chipColor={C.exercise} title="Fat-max" desc={de ? 'Zone maximaler Fettoxidation' : 'Peak fat oxidation zone'}
-                    value={DASH} sub={de ? 'Braucht Labortest' : 'Needs a lab test'} subColor={C.muted} last />
-                </div>
-                <div className="flex items-center justify-between rounded-[16px]" style={{ padding: 14, background: soft(C.paper, 70), border: `1px solid ${C.rule}` }}>
-                  <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-                    <span className="num-display" style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>{de ? 'KH ⇄ Fett Übergang' : 'CHO ⇄ fat crossover'}</span>
-                    <span style={{ fontSize: 12, color: C.ink2 }}>{de ? 'Darüber läufst du v.a. auf Kohlenhydraten' : 'Above this you run mostly on carbs'}</span>
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, flex: 'none' }}>{de ? 'Labortest' : 'lab test'}</span>
-                </div>
-              </Card>
-
-              {/* Durability */}
-              <Card>
-                <CardHead title={de ? 'Ermüdungsresistenz' : 'Durability'} sub={de ? 'Ermüdungsresistenz · die neue Grenze' : 'Fatigue resistance · the new frontier'}
-                  right={<Pill color={drop2000 != null && drop2000 < 5 ? C.recovery : C.amber} bg={soft(drop2000 != null && drop2000 < 5 ? C.recovery : C.amber, 15)}>{durLabel}</Pill>} />
-                <div className="flex items-center" style={{ gap: 12 }}>
-                  {[
-                    { lab: de ? '20-MIN · FRISCH' : '20-MIN · FRESH', v: fresh20, wkg: fresh20 != null ? n1(fresh20 / weight) : null, col: C.ink },
-                    { lab: de ? 'NACH 2000 kJ' : 'AFTER 2000 kJ', v: fatigued20, wkg: fatigued20 != null ? n1(fatigued20 / weight) : null, col: C.amber, arrow: true },
-                  ].map((t, i) => (
-                    <div key={i} className="flex items-center" style={{ gap: 12, flex: 1 }}>
-                      {t.arrow && <span style={{ fontSize: 18, fontWeight: 700, color: C.muted }}>→</span>}
-                      <div className="flex flex-col rounded-[16px]" style={{ gap: 4, padding: 14, background: C.surface2, flex: 1 }}>
-                        <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.3, color: C.ink2 }}>{t.lab}</span>
-                        <div className="flex items-end" style={{ gap: 3 }}>
-                          <span className="num-display" style={{ fontSize: 26, fontWeight: 700, color: t.col }}>{t.v ?? DASH}</span>
-                          <span style={{ fontSize: 11, color: C.muted, paddingBottom: 4 }}>W</span>
-                        </div>
-                        <span style={{ fontSize: 11, color: C.muted }}>{t.wkg != null ? `${t.wkg} W/kg` : DASH}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-col" style={{ gap: 12 }}>
-                  {[
-                    { lab: de ? 'Nach 1500 kJ' : 'After 1500 kJ', drop: drop1500, col: C.recovery },
-                    { lab: de ? 'Nach 2000 kJ' : 'After 2000 kJ', drop: drop2000, col: C.amber },
-                  ].map((d, i) => (
-                    <div key={i} className="flex flex-col" style={{ gap: 8 }}>
-                      <div className="flex items-center justify-between">
-                        <span style={{ fontSize: 13, fontWeight: 600, color: C.ink2 }}>{d.lab}</span>
-                        <div className="flex items-end" style={{ gap: 4 }}>
-                          <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: d.drop != null ? d.col : C.muted }}>{d.drop != null ? `-${d.drop}%` : DASH}</span>
-                          <span style={{ fontSize: 11, color: C.muted }}>{de ? 'Leistungsabfall' : 'power drop'}</span>
-                        </div>
-                      </div>
-                      <div className="rounded-full overflow-hidden" style={{ height: 10, background: C.surface3 }}>
-                        <div style={{ height: '100%', width: `${Math.min(100, (d.drop ?? 0) * 8)}%`, background: d.col, borderRadius: 5 }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 500, color: C.muted, lineHeight: 1.4 }}>
-                  {de ? 'Geringerer Abfall = du hältst die Leistung tief ins lange Rennen. Elite-GC-Fahrer verlieren <5% nach 2000 kJ.'
-                    : 'Lower drop = you hold power deep into long races. Elite GC riders lose <5% after 2000 kJ.'}
-                  {bd?.stamina_end_pct != null && (de
-                    ? ` Letzte Fahrt: ${Math.round(bd.stamina_end_pct)}% Stamina am Ende.`
-                    : ` Last ride: ${Math.round(bd.stamina_end_pct)}% stamina at the finish.`)}
-                </span>
-              </Card>
-
-              {/* Aero & Blood */}
-              <Card gap={14}>
-                <CardHead title={de ? 'Aero & Blut' : 'Aero & Blood'} sub={de ? 'Gratis-Speed & Sauerstoffkapazität' : 'Free speed & oxygen-carrying capacity'} />
-                <div className="flex flex-col">
-                  <DetailRow chip="CdA" chipColor={C.stand} title={de ? 'Aero-Widerstand (CdA)' : 'Aero drag (CdA)'} desc={de ? 'Frontale Widerstandsfläche' : 'Frontal drag area'}
-                    value={DASH} sub={de ? 'Braucht Aerotest' : 'Needs a lab test'} subColor={C.muted} />
-                  <DetailRow chip="⚡" chipColor={C.accent} title={de ? 'Gesparte Watt' : 'Watts saved'} desc={de ? 'vs. entspannte Position' : 'vs relaxed position'}
-                    value={DASH} sub={de ? 'Braucht Aerotest' : 'Needs a lab test'} subColor={C.muted} />
-                  <DetailRow chip="Hb" chipColor={C.move} title="tHb-mass" desc={de ? 'Gesamt-Hämoglobinmasse' : 'Total haemoglobin mass'}
-                    value={DASH} sub={de ? 'Braucht CO-Rückatmung' : 'Needs a lab test'} subColor={C.muted} last />
-                </div>
-              </Card>
-
-              {/* Body Composition */}
-              <Card>
-                <div className="flex flex-col" style={{ gap: 2 }}>
-                  <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>{de ? 'Körperzusammensetzung' : 'Body Composition'}</span>
-                  <span style={{ fontSize: 12, color: C.ink2 }}>{de ? 'Jedes Gramm zählt am Berg' : 'Every gram counts on the climbs'}</span>
-                </div>
-                <div className="flex" style={{ gap: 12 }}>
-                  {[
-                    { lab: de ? 'GEWICHT' : 'WEIGHT', v: n1(athlete?.weight_kg), unit: 'kg' },
-                    { lab: de ? 'KÖRPERFETT' : 'BODY FAT', v: null, unit: '%' },
-                  ].map((t, i) => (
-                    <div key={i} className="flex flex-col rounded-[16px]" style={{ gap: 4, padding: 14, background: C.surface2, flex: 1 }}>
-                      <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.3, color: C.ink2 }}>{t.lab}</span>
-                      <div className="flex items-end" style={{ gap: 3 }}>
-                        <span className="num-display" style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>{t.v ?? DASH}</span>
-                        <span style={{ fontSize: 11, color: C.muted, paddingBottom: 3 }}>{t.unit}</span>
-                      </div>
-                      {i === 1 && <span style={{ fontSize: 10, color: C.muted }}>{de ? 'DEXA nötig' : 'needs DEXA'}</span>}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ height: 1, background: C.rule }} />
-                <div className="flex items-center justify-between">
-                  <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{de ? 'W/kg nach Dauer' : 'W/kg by duration'}</span>
-                  <span style={{ fontSize: 11, color: C.muted }}>{de ? 'Saisonbestwert' : 'Season best'}</span>
-                </div>
-                <div className="flex" style={{ gap: 8 }}>
-                  {[{ s: '5', d: '5s' }, { s: '60', d: '1 min' }, { s: '300', d: '5 min' }, { s: '1200', d: '20 min' }].map((c) => {
-                    const wkg = wkgAt(c.s)
-                    return (
-                      <div key={c.s} className="flex flex-col items-center rounded-[14px]" style={{ gap: 5, padding: '12px 6px', background: C.surface2, flex: 1 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{c.d}</span>
-                        <span className="num-display" style={{ fontSize: 18, fontWeight: 700, color: c.s === '1200' ? C.accent : C.ink }}>{wkg ?? DASH}</span>
-                        <span style={{ fontSize: 9, color: C.muted }}>W/kg</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </Card>
-            </>
-          )}
-
-          {/* ═══ AMATEUR MODE ═══ */}
-          <SectionHeader tick={C.exercise} title={de ? 'AMATEUR-MODUS' : 'AMATEUR MODE'}
-            sub={de ? 'Gleiche Daten · null Fachjargon' : 'Same data · zero jargon'} />
-
-          {/* Mode toggle */}
-          <Card gap={12}>
-            <div className="flex flex-col" style={{ gap: 2 }}>
-              <span className="num-display" style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{de ? 'Wie viel Detail willst du?' : 'How much detail do you want?'}</span>
-              <span style={{ fontSize: 12, color: C.ink2 }}>{de ? 'Jederzeit wechseln — deine Daten bleiben gleich' : 'Switch anytime — your data stays the same'}</span>
-            </div>
-            <div className="flex rounded-full" style={{ gap: 3, padding: 3, background: C.surface2 }}>
-              {([['simple', de ? 'Einfach' : 'Simple'], ['pro', 'Pro']] as const).map(([k, lab]) => (
-                <button key={k} onClick={() => setMode(k)} className="flex-1 rounded-full"
-                  style={{ padding: '10px 0', border: 0, fontSize: 14, fontWeight: mode === k ? 700 : 600, background: mode === k ? C.accent : 'transparent', color: mode === k ? C.ink : C.ink2 }}>
-                  {lab}
-                </button>
-              ))}
-            </div>
-          </Card>
-
-          {/* Coach-explains + BeginnerTrio (Simple mode) */}
-          {mode === 'simple' && (
-            <>
-              {/* Coach: W′ */}
-              <CoachCard
-                accent={C.amber}
-                title={de ? 'W′ — dein Streichholzheft' : 'W′ — your matchbook'}
-                plain={de
-                  ? 'W′ ("W-prime") sind die harten Antritte, die du über der Schwelle ausgeben kannst, bevor du platzt. Wie eine Schachtel Streichhölzer — jeder Sprint verbrennt eins.'
-                  : 'W′ ("W-prime") is the hard efforts you can spend above threshold before you blow up. Think of it as a box of matches — each surge burns one.'}
-                why={de
-                  ? 'Ein größeres W′ heißt mehr Antritte, Brücken und Sprints im Rennen, bevor die Beine dichtmachen. Deins ist groß für einen Amateur.'
-                  : 'A bigger W′ means more attacks, bridges and sprints in a race before your legs shut down. Yours is large for an amateur.'}
-                doText={de
-                  ? 'Mach kurze Über-Schwellen-Intervalle (30/30s), um das Heft zu vergrößern — und übe, es spät in Fahrten klug auszugeben.'
-                  : 'Do short over-threshold intervals (30/30s) to grow the matchbook — then practice spending it wisely late in rides.'}
-              />
-              {/* Coach: VLaMax */}
-              <CoachCard
-                accent={C.strain}
-                title={de ? 'VLaMax — Sprinter vs. Diesel' : 'VLaMax — sprinter vs diesel'}
-                plain={de
-                  ? 'VLaMax ist, wie schnell deine Muskeln Energie auf die schnelle, zuckrige Art erzeugen. Niedrig = sparsamer Diesel; hoch = explosiver Sprinter, der schneller leer ist.'
-                  : 'VLaMax is how fast your muscles make energy the fast, sugary way. Low = a fuel-efficient diesel engine; high = an explosive sprinter that runs out quicker.'}
-                why={de
-                  ? 'Deins ist niedrig, super für lange Anstiege und Zeitfahren — du sparst Sprit und hältst die Leistung über Stunden.'
-                  : 'Yours is low, which is great for long climbs and time trials — you sip fuel and hold power for hours.'}
-                doText={de
-                  ? 'Behalte lange Grundlagenfahrten im Plan, um es zu schützen; ergänze etwas Sprintarbeit nur, wenn du mehr Punch willst.'
-                  : 'Keep long endurance rides in the plan to protect it; add a little sprint work only if you want more punch.'}
-              />
-              {/* BeginnerTrio */}
-              <Card gap={18}>
-                <div className="flex flex-col" style={{ gap: 2 }}>
-                  <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>{de ? 'Deine 3 Dinge, die zählen' : 'Your 3 things that matter'}</span>
-                  <span style={{ fontSize: 12, color: C.ink2 }}>{de ? 'Du vs. ein typischer Amateur' : 'You vs a typical amateur rider'}</span>
-                </div>
-                {[
-                  { title: de ? 'Konstanz' : 'Consistency', sub: de ? 'Getroffene Wochen dieses Jahr' : 'Weeks hit this year', val: '91%', valCol: C.recovery, fill: C.recovery, pct: 91, foot: de ? 'Besser als 91% der Amateure' : 'Better than 91% of amateurs' },
-                  { title: de ? 'Leicht / hart Balance' : 'Easy / hard balance', sub: de ? 'Zeit leicht vs. hart' : 'Time easy vs hard', val: '80 / 20', valCol: C.stand, fill: C.stand, pct: 76, foot: de ? 'Besser als 76% der Amateure' : 'Better than 76% of amateurs' },
-                  { title: de ? 'Nächstes FTP-Ziel' : 'Next FTP target', sub: projFtp != null ? `+${projDelta ?? 15} W ${de ? 'bis Oktober' : 'by October'}` : '+15 W by October', val: projFtp != null ? `${projFtp} W` : '296 W', valCol: C.accent, fill: C.accent, pct: 62, foot: de ? '62% des Weges · auf Kurs' : '62% of the way there · on track' },
-                ].map((r, i) => (
-                  <div key={i} className="flex flex-col" style={{ gap: 9 }}>
-                    <div className="flex items-end justify-between">
-                      <div className="flex flex-col" style={{ gap: 2 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{r.title}</span>
-                        <span style={{ fontSize: 11, color: C.muted }}>{r.sub}</span>
-                      </div>
-                      <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: r.valCol }}>{r.val}</span>
-                    </div>
-                    <div className="rounded-full overflow-hidden" style={{ height: 10, background: C.surface3 }}>
-                      <div style={{ height: '100%', width: `${r.pct}%`, background: r.fill, borderRadius: 5 }} />
-                    </div>
-                    <span style={{ fontSize: 11, color: C.muted }}>{r.foot}</span>
-                  </div>
-                ))}
-              </Card>
-            </>
-          )}
         </div>
       </div>
       <MobileBottomNav />
     </div>
-  )
-}
-
-// Coach-explains card (WHY / DO rows)
-function CoachCard({ accent, title, plain, why, doText }: {
-  accent: string; title: string; plain: string; why: string; doText: string
-}) {
-  const { locale } = useLocale()
-  const de = locale === 'de'
-  return (
-    <Card gap={12}>
-      <div className="flex items-center" style={{ gap: 10 }}>
-        <span className="flex items-center justify-center rounded-full" style={{ width: 34, height: 34, background: '#000', flex: 'none' }}>
-          <Award size={18} style={{ color: accent }} />
-        </span>
-        <div className="flex flex-col" style={{ gap: 1, minWidth: 0 }}>
-          <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, color: accent }}>{de ? 'COACH ERKLÄRT' : 'COACH EXPLAINS'}</span>
-          <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{title}</span>
-        </div>
-      </div>
-      <span style={{ fontSize: 13, fontWeight: 500, color: C.ink, lineHeight: 1.5 }}>{plain}</span>
-      <div className="flex flex-col" style={{ gap: 10 }}>
-        {[['WHY', why, C.strain], ['DO', doText, C.recovery]].map(([tag, tx, col]) => (
-          <div key={tag} className="flex" style={{ gap: 10 }}>
-            <span className="flex items-center justify-center rounded-[8px]" style={{ padding: '4px 8px', background: C.surface2, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: col as string, flex: 'none', height: 'fit-content' }}>{tag}</span>
-            <span style={{ fontSize: 12, fontWeight: 500, color: C.ink2, lineHeight: 1.45 }}>{tx}</span>
-          </div>
-        ))}
-      </div>
-    </Card>
   )
 }

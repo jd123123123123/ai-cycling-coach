@@ -13,7 +13,7 @@ has a UniqueConstraint on (user_id, plan_start_date) and skips existing dates.
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,18 +21,31 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
+from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
 from app.models.planned_workout import PlannedWorkout
 from app.models.user import User
+from app.models.daily_metric import DailyMetric
 from app.schemas.weeks import (
     DayPlan,
     IntervalBlockOut,
     Language,
     MesoBlockContext,
+    PlanChanges,
+    Projection,
+    Readiness,
     WeekResponse,
 )
 from app.services.advanced_metrics import ctl_atl_tsb_snapshot
 from app.services.mesocycle_generator import generate_mesocycle, issurin_block_for_week
+from app.services.performance_projection import (
+    eftp_samples_from_activities,
+    project_performance,
+)
+from app.services.plan_change_explainer import detect_plan_changes, explain_plan_changes
+from app.services.readiness_detector import detect_readiness
+from app.services.training_periodization import _CATEGORY_CANDIDATES
+from app.services.weekly_plan_llm import personalize_week
 from app.services.weekly_rationale import build_weekly_rationale
 from app.services.workout_templates import TEMPLATES, get_template
 
@@ -176,6 +189,55 @@ _DAY_RATIONALE_TECHNICAL: dict[str, list[str]] = {
         "Intense VO2 block — Z5 intervals for aerobic ceiling development.",
     ],
 }
+
+
+def _safe_float(value, default: float) -> float:
+    """Coerce to float, falling back to default on None / non-numeric (guards
+    against MagicMock profile attrs in tests and NULL columns in prod)."""
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _event_terrain(athlete) -> str | None:
+    """Best-effort target-event terrain from the profile's goals JSON."""
+    goals = getattr(athlete, "goals", None)
+    if isinstance(goals, dict):
+        te = goals.get("target_event")
+        if isinstance(te, dict):
+            terrain = te.get("terrain") or te.get("profile")
+            if isinstance(terrain, str):
+                return terrain
+    return None
+
+
+def _candidate_template_ids(
+    category: str,
+    ftp_w: int,
+    skeleton_template_id: str | None,
+) -> list[str]:
+    """Template ids the LLM may choose for a day of the given session type.
+
+    Sourced from the deterministic picker's `_CATEGORY_CANDIDATES`, FTP-gated
+    the same way `pick_template` gates, and always including the skeleton's own
+    pick so "keep it" validates. This whitelist is what `enforce_week_rails`
+    validates the LLM's choice against — an invented id falls back to the
+    skeleton pick.
+    """
+    ids: list[str] = []
+    for tid in _CATEGORY_CANDIDATES.get(category, []):  # type: ignore[arg-type]
+        tpl = TEMPLATES.get(tid)
+        if tpl is None:
+            continue
+        if tpl.min_ftp_required is not None and (not ftp_w or ftp_w < tpl.min_ftp_required):
+            continue
+        ids.append(tid)
+    if skeleton_template_id and skeleton_template_id in TEMPLATES and skeleton_template_id not in ids:
+        ids.append(skeleton_template_id)
+    return ids
 
 
 def _per_day_rationale(
@@ -395,7 +457,7 @@ async def get_current_week(
 
         days.append(day_plan)
 
-    # ── 9. Weekly preface from rationale service ─────────────────────────
+    # ── 9. Weekly preface from rationale service (deterministic default) ──
     preface = build_weekly_rationale(
         phase=meso_phase,
         block_position=block_position,
@@ -409,6 +471,286 @@ async def get_current_week(
         language=language,
         locale=locale,
     )
+
+    # ── 9-readiness. Illness / overtraining / readiness signal ────────────
+    # Rolling ln(RMSSD) + resting-HR baselines from the athlete's OWN history.
+    # Best-effort: any failure leaves readiness_dict=None (never breaks response).
+    readiness_dict: dict | None = None
+    readiness_out: Readiness | None = None
+    try:
+        dm_res = await db.execute(
+            select(DailyMetric)
+            .where(
+                DailyMetric.user_id == current_user.id,
+                DailyMetric.recorded_at
+                >= datetime(
+                    (today - timedelta(days=30)).year,
+                    (today - timedelta(days=30)).month,
+                    (today - timedelta(days=30)).day,
+                    tzinfo=timezone.utc,
+                ),
+            )
+            .order_by(DailyMetric.recorded_at.asc())
+        )
+        dm_rows = dm_res.scalars().all()
+        # Collapse to one reading per calendar day (latest wins), ascending.
+        by_day: dict[date, DailyMetric] = {}
+        for m in dm_rows:
+            d = m.date or (m.recorded_at.date() if m.recorded_at else None)
+            if d is not None:
+                by_day[d] = m
+        daily_readiness = [
+            {"date": d, "hrv": by_day[d].hrv_status, "rhr": by_day[d].resting_hr}
+            for d in sorted(by_day)
+        ]
+        if daily_readiness:
+            readiness_dict = detect_readiness(daily_readiness)
+            if readiness_dict.get("status") != "unknown":
+                readiness_out = Readiness(
+                    status=readiness_dict["status"],
+                    reason=readiness_dict["reason_de" if locale == "de" else "reason_en"],
+                    suggest_easy=bool(readiness_dict.get("suggest_easy")),
+                )
+    except Exception:  # pragma: no cover — never break the week response
+        logger.exception("readiness detection failed for user_id=%s", current_user.id)
+
+    # ── 9a. Change detection — planned vs actual over the trailing 7 days ──
+    # SKIPPED / UNDERTRAINED / OVERTRAINED, so the plan-change message reflects
+    # what actually happened. Best-effort: any failure leaves plan_changes=None.
+    plan_changes: PlanChanges | None = None
+    atl_now = float(pmc_snap.get("atl") or 0.0)
+    acwr = (atl_now / ctl_now) if ctl_now > 0 else None
+    actual_week_tss = 0.0
+    planned_week_tss = 0.0
+    activity_count_7d = 0
+    try:
+        win_start = today - timedelta(days=7)
+        past_pw_res = await db.execute(
+            select(PlannedWorkout).where(
+                PlannedWorkout.user_id == current_user.id,
+                PlannedWorkout.date >= win_start,
+                PlannedWorkout.date < today,
+            )
+        )
+        past_pws = past_pw_res.scalars().all()
+        planned_days: list[dict] = []
+        for pw in past_pws:
+            tmpl = get_template(pw.template_id) if pw.template_id else None
+            planned_days.append({
+                "date": pw.date.isoformat(),
+                "dow": pw.date.weekday(),
+                "category": tmpl.category if tmpl else "endurance",
+                "planned_tss": float(tmpl.base_tss) if tmpl else 0.0,
+            })
+
+        act_res = await db.execute(
+            select(Activity).where(
+                Activity.user_id == current_user.id,
+                Activity.started_at >= datetime(win_start.year, win_start.month, win_start.day, tzinfo=timezone.utc),
+                Activity.started_at < datetime(today.year, today.month, today.day, tzinfo=timezone.utc),
+            )
+        )
+        actual_by_date: dict[str, float] = {}
+        for a in act_res.scalars().all():
+            if a.started_at is None:
+                continue
+            key = a.started_at.date().isoformat()
+            actual_by_date[key] = actual_by_date.get(key, 0.0) + float(a.tss or 0.0)
+            activity_count_7d += 1
+
+        detection = detect_plan_changes(planned_days, actual_by_date, acwr=acwr)
+        planned_week_tss = detection["planned_week_tss"]
+        actual_week_tss = detection["actual_week_tss"]
+
+        # Skeleton dicts (parallel to `days`) drive both the plan-change message
+        # (which references the CURRENT week's rest/quality days) and the LLM
+        # personalization below.
+        skeleton = [
+            {
+                "dow": dp.date.weekday(),
+                "date": dp.date.isoformat(),
+                "is_today": dp.is_today,
+                "session_type": dp.category,
+                "category": dp.category,
+                "is_rest": dp.category == "rest",
+                "template_id": dp.template_id,
+                "title": dp.title,
+                "rationale": dp.rationale,
+                "target_tss": dp.target_tss,
+                "duration_minutes": (
+                    int(round(dp.duration_seconds_target / 60))
+                    if dp.duration_seconds_target else None
+                ),
+                "available_templates": _candidate_template_ids(
+                    dp.category, ftp_w, dp.template_id
+                ),
+            }
+            for dp in days
+        ]
+
+        explained = explain_plan_changes(
+            detection,
+            current_skeleton=skeleton,
+            weekly_tss_target=week_tss_target,
+            de=(locale == "de"),
+            readiness=readiness_dict,
+        )
+        if explained is not None:
+            plan_changes = PlanChanges(**explained)
+    except Exception:  # pragma: no cover — never break the week response
+        logger.exception("plan-change detection failed for user_id=%s", current_user.id)
+        skeleton = [
+            {
+                "dow": dp.date.weekday(),
+                "date": dp.date.isoformat(),
+                "is_today": dp.is_today,
+                "session_type": dp.category,
+                "category": dp.category,
+                "is_rest": dp.category == "rest",
+                "template_id": dp.template_id,
+                "title": dp.title,
+                "rationale": dp.rationale,
+                "target_tss": dp.target_tss,
+                "duration_minutes": (
+                    int(round(dp.duration_seconds_target / 60))
+                    if dp.duration_seconds_target else None
+                ),
+                "available_templates": _candidate_template_ids(
+                    dp.category, ftp_w, dp.template_id
+                ),
+            }
+            for dp in days
+        ]
+
+    # ── 9b. LLM personalization (creative, individual — WITHIN the rails) ──
+    # On success we adopt the personalized titles/rationale/preface and the
+    # rail-enforced template/duration/TSS. On ANY failure or missing API key,
+    # `personalize_week` returns None and we keep the deterministic skeleton.
+    llm_snapshot = {
+        "athlete": {
+            "goal_target": target_event_type or "your goal",
+            "goal_event_type": target_event_type,
+            "event_terrain": _event_terrain(athlete),
+            "days_to_goal": days_to_event,
+            "goal_phase": meso_phase,
+            "hours_per_day": round(
+                _safe_float(getattr(athlete, "weekly_hours_available", None), 8.0) / 7.0, 1
+            ),
+            "primary_sport": primary_sport,
+            "secondary_sport": (
+                sec if isinstance(sec := getattr(athlete, "secondary_sport", None), str) else None
+            ),
+            "ftp": ftp_w,
+        },
+        "pmc": {
+            "ctl": ctl_now,
+            "atl": atl_now,
+            "tsb": float(pmc_snap.get("tsb") or 0.0),
+            "ctl_7d_delta": ctl_delta_7d,
+        },
+        "recent_load": {
+            "activity_count": activity_count_7d,
+            "actual_tss": actual_week_tss,
+            "planned_tss": planned_week_tss,
+        },
+        "plan_deviation": (
+            {"status": plan_changes.status, "detail": plan_changes.message}
+            if plan_changes is not None else None
+        ),
+    }
+
+    personalized = await personalize_week(
+        skeleton,
+        llm_snapshot,
+        language=language,
+        locale=locale,
+        weekly_tss_target=week_tss_target,
+    )
+    if personalized is not None:
+        by_date = {d.get("date"): d for d in personalized.get("days", [])}
+        for dp in days:
+            pd = by_date.get(dp.date.isoformat())
+            if pd is None:
+                continue
+            dp.title = pd.get("title") or dp.title
+            if pd.get("rationale"):
+                dp.rationale = pd["rationale"]
+            dp.template_id = pd.get("template_id") or dp.template_id
+            dp.category = pd.get("category") or dp.category
+            dp.target_tss = pd.get("target_tss", dp.target_tss)
+            dp.duration_seconds_target = pd.get("duration_seconds_target", dp.duration_seconds_target)
+            intervals = pd.get("intervals")
+            if isinstance(intervals, list):
+                dp.intervals = [
+                    IntervalBlockOut(
+                        duration_seconds=blk.get("duration_seconds", 0),
+                        power_target_pct_ftp=blk.get("power_target_pct_ftp"),
+                        zone=blk.get("zone", 1),
+                    )
+                    for blk in intervals
+                ]
+        if personalized.get("preface"):
+            preface = personalized["preface"]
+
+    # ── 9c. Performance projection with confidence bands ──────────────────
+    # Bayesian Fitness-Fatigue projection to the goal (or ~12 wks). Past daily
+    # TSS drives the fitness/fatigue convolutions; the plan's forward weekly TSS
+    # target extends them; eFTP samples from sustained efforts fit the scale.
+    # Best-effort — any failure leaves projection=None.
+    projection_out: Projection | None = None
+    try:
+        from app.services.pmc_service import compute_user_pmc
+
+        _pmc_full = await compute_user_pmc(db, current_user.id, days=120)
+        past_daily_tss = [
+            {"date": r["date"], "tss": float(r.get("tss") or 0.0)}
+            for r in (_pmc_full.get("total") or [])
+        ]
+
+        # Forward plan: spread the week's TSS target evenly, out to the goal
+        # (capped at 84 days) or a 12-week default horizon.
+        horizon_days = 84
+        if days_to_event is not None and 0 < days_to_event <= 84:
+            horizon_days = days_to_event
+        daily_target = (week_tss_target / 7.0) if week_tss_target else 0.0
+        future_daily_tss = [
+            {"date": today + timedelta(days=i + 1), "tss": daily_target}
+            for i in range(horizon_days)
+        ]
+
+        # eFTP observation series from sustained hard efforts (last 120 days).
+        obs_win_start = today - timedelta(days=120)
+        obs_res = await db.execute(
+            select(Activity).where(
+                Activity.user_id == current_user.id,
+                Activity.started_at
+                >= datetime(obs_win_start.year, obs_win_start.month, obs_win_start.day, tzinfo=timezone.utc),
+            )
+        )
+        obs_activities = [
+            {
+                "date": a.started_at.date() if a.started_at else None,
+                "normalized_power": a.normalized_power,
+                "duration_seconds": a.duration_seconds,
+            }
+            for a in obs_res.scalars().all()
+            if a.started_at is not None
+        ]
+        observations = eftp_samples_from_activities(obs_activities, ftp_w)
+
+        if past_daily_tss:
+            proj = project_performance(
+                past_daily_tss,
+                future_daily_tss,
+                ftp_watts=float(ftp_w),
+                observations=observations,
+                today=today,
+                goal_date=target_event_date,
+                de=(locale == "de"),
+            )
+            projection_out = Projection(**proj)
+    except Exception:  # pragma: no cover — never break the week response
+        logger.exception("performance projection failed for user_id=%s", current_user.id)
 
     # ── 10. Assemble response ─────────────────────────────────────────────
     meso_block_ctx = MesoBlockContext(
@@ -427,4 +769,7 @@ async def get_current_week(
         preface=preface,
         meso_block=meso_block_ctx,
         days=days,
+        plan_changes=plan_changes,
+        projection=projection_out,
+        readiness=readiness_out,
     )

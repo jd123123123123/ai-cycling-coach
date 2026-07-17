@@ -40,14 +40,89 @@ class MesoBlockContext(BaseModel):
     target_event_type: str | None
 
 
+class PlanChangeItem(BaseModel):
+    """One detected deviation between the plan and what actually happened."""
+    type: str  # 'skipped' | 'undertrained' | 'overtrained'
+    severity: str  # 'ease' | 'boost'
+    # Present for 'skipped' only:
+    dow: int | None = None
+    date: str | None = None  # ISO date string
+    category: str | None = None
+    planned_tss: float | None = None
+    actual_tss: float | None = None
+    acwr: float | None = None
+
+
+class PlanChanges(BaseModel):
+    """How the athlete's real training diverged from the plan, and how the week
+    adapted. Surfaced when a day was skipped or the athlete over/under-trained;
+    None when the week is on track. The frontend renders `message` verbatim.
+    """
+    status: str  # 'skipped' | 'undertrained' | 'overtrained'
+    message: str  # clear, localized (de/en) one-liner
+    changes: list[PlanChangeItem]
+
+
+class ProjectionPoint(BaseModel):
+    """One sampled point on the forward projection path with confidence bands."""
+    date: str  # ISO date
+    central: float
+    p10: float  # 80% band lower
+    p90: float  # 80% band upper
+    p25: float  # 50% band lower
+    p75: float  # 50% band upper
+
+
+class Projection(BaseModel):
+    """Bayesian Fitness-Fatigue performance projection with confidence bands.
+
+    Decision-support (NOT a guarantee). `mode` is 'performance' when a real
+    eFTP marker series drove the fit, 'fitness' when we fell back to projecting
+    the fitness signal with deliberately wider bands. All watts.
+    """
+    mode: str  # 'performance' | 'fitness'
+    unit: str  # 'watts'
+    metric_label: str
+    samples_used: int
+    horizon_date: str  # ISO date
+    days_out: int
+    current_estimate: float | None
+    projected_central: float | None
+    band_50: list[float] | None  # [lo, hi] at horizon (50% band)
+    band_80: list[float] | None  # [lo, hi] at horizon (80% band)
+    path: list[ProjectionPoint]
+    projected_outcome: str  # localized plain-language outcome
+    caveat: str  # localized honest caveat
+
+
+class Readiness(BaseModel):
+    """Illness / overtraining / readiness signal from the athlete's OWN rolling
+    HRV (ln-RMSSD) + resting-HR baselines. `status` drives the "what could
+    change" note. Localized `reason` already matches the request locale.
+    """
+    status: str  # 'green' | 'amber' | 'illness' | 'overreaching' | 'unknown'
+    reason: str
+    suggest_easy: bool
+
+
 class WeekResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     week_start: date
     week_end: date
     language: Language
-    preface: str  # 3-5 sentence rationale from build_weekly_rationale
+    preface: str  # 3-5 sentence rationale (LLM-personalized when available)
     meso_block: MesoBlockContext
     days: list[DayPlan]  # exactly 7
+    # Plan-change communication — populated when a day was skipped or the
+    # athlete over/under-trained vs the plan; None when on track. The message
+    # is already localized to the request locale.
+    plan_changes: PlanChanges | None = None
+    # Forward performance projection with 50%/80% confidence bands. None only
+    # when projection could not be computed at all.
+    projection: Projection | None = None
+    # Today's readiness signal (illness/overreaching/amber/green). None when
+    # there is no biometric history to judge.
+    readiness: Readiness | None = None
 
 
 __all__ = [
@@ -55,5 +130,10 @@ __all__ = [
     "IntervalBlockOut",
     "DayPlan",
     "MesoBlockContext",
+    "PlanChangeItem",
+    "PlanChanges",
+    "ProjectionPoint",
+    "Projection",
+    "Readiness",
     "WeekResponse",
 ]

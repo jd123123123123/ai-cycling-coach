@@ -32,7 +32,6 @@ import {
 import type {
   ChallengeMetric, ChallengePeriod, CrewChallenge, CreateChallengeInput,
 } from '../../../api/challenges'
-import CoachSafetyBanner from '../CoachSafetyBanner'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import { celebrate } from '../../../lib/confetti'
@@ -175,7 +174,6 @@ export default function SocialTab() {
   const nudges = incomingNudges ?? []
   const markNudge = useMarkNudgeRead()
   const sendNudge = useSendNudge()
-  const [nudgeSent, setNudgeSent] = useState<string | null>(null)
 
   // ── Crew membership mutations ──
   const leaveCrew = useLeaveCrew()
@@ -183,7 +181,6 @@ export default function SocialTab() {
 
   // ── Inbox (bell) + battle details toggles ──
   const [inboxOpen, setInboxOpen] = useState(false)
-  const [detailsOpen, setDetailsOpen] = useState(false)
   const inboxCount = invites.length + nudges.length
 
   // ── Challenges opt-out (localStorage) ──
@@ -254,18 +251,14 @@ export default function SocialTab() {
 
   const you = duel?.you_this_week
   const hasCrew = !!(duel?.crew && duel.crew.length > 0)
-  const rival: DuelStats | undefined = hasCrew ? duel!.crew[0] : duel?.you_last_week
-  const rivalIsPast = !hasCrew
   const crewSize = hasCrew ? duel!.crew.length + 1 : 0
-  // Opponent to nudge — only a real crew rival (never "Past You").
-  const opponentId = !rivalIsPast && rival?.user_id ? rival.user_id : undefined
-
-  function onNudge() {
-    if (!opponentId) return
-    sendNudge.mutate(opponentId, {
-      onSuccess: (res) => setNudgeSent(res.text),
-    })
-  }
+  // Concurrent weekly battles — you vs EACH crew member. With no crew, a single
+  // battle against "Past You" (last week) keeps the surface alive.
+  const battles: Array<{ opponent: DuelStats; isPast: boolean }> = hasCrew
+    ? duel!.crew.map((opponent) => ({ opponent, isPast: false }))
+    : duel?.you_last_week
+      ? [{ opponent: duel.you_last_week, isPast: true }]
+      : []
 
   function onBellClick() {
     setInboxOpen((v) => !v)
@@ -276,26 +269,6 @@ export default function SocialTab() {
     setFindOpen(true)
     requestAnimationFrame(() => finderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
-
-  // ── Battle: 6-metric weekly scorecard ──
-  const metrics = useMemo(() => {
-    if (!you || !rival) return []
-    const def: Array<{ key: keyof DuelStats; label: string; fmt: (n: number) => string; color: string }> = [
-      { key: 'distance_km', label: de ? 'Distanz · km' : 'Distance · km', fmt: (n) => `${Math.round(n)}`, color: 'var(--color-strain)' },
-      { key: 'tss', label: de ? 'Last · TSS' : 'Load · TSS', fmt: (n) => `${Math.round(n)}`, color: 'var(--color-accent)' },
-      { key: 'hours', label: de ? 'Zeit · h' : 'Active · h', fmt: (n) => n.toFixed(1), color: 'var(--color-recovery)' },
-      { key: 'kj', label: de ? 'Energie · kJ' : 'Energy · kJ', fmt: (n) => Math.round(n).toLocaleString(de ? 'de' : 'en'), color: 'var(--color-amber)' },
-      { key: 'rides', label: de ? 'Einheiten' : 'Sessions', fmt: (n) => `${Math.round(n)}`, color: 'var(--color-exercise)' },
-      { key: 'best_tss', label: de ? 'Beste · TSS' : 'Best · TSS', fmt: (n) => `${Math.round(n)}`, color: 'var(--color-move)' },
-    ]
-    return def.map((d) => {
-      const yv = Number(you[d.key] ?? 0)
-      const rv = Number(rival[d.key] ?? 0)
-      return { ...d, yv, rv, youWin: yv >= rv }
-    })
-  }, [you, rival, de])
-  const youScore = metrics.filter((m) => m.youWin).length * 10
-  const rivalScore = metrics.filter((m) => !m.youWin).length * 10
 
   // Copy for the selected leaderboard window (subtitle prefix + row suffix).
   const boardPhrase = BOARD_PERIODS.find((p) => p.id === boardPeriod) ?? BOARD_PERIODS[1]
@@ -356,8 +329,6 @@ export default function SocialTab() {
 
   return (
     <div className="flex flex-col gap-5 pb-6">
-      <CoachSafetyBanner />
-
       {/* ── HEADER ── */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
@@ -430,129 +401,29 @@ export default function SocialTab() {
         ))}
       </div>
 
-      {/* ── BATTLE HERO ── */}
-      <div ref={battleRef}>
-        {you && rival ? (
-          <div className="rounded-[24px] p-5 flex flex-col gap-4 hover-card" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
-            {/* Head */}
-            <div className="flex items-center justify-between">
+      {/* ── BATTLE HERO(ES) — one live weekly battle per crew member ── */}
+      <div ref={battleRef} className="flex flex-col gap-4">
+        {you && battles.length > 0 ? (
+          <>
+            {battles.length > 1 && (
               <div className="flex items-center gap-[7px]">
                 <Swords size={18} style={{ color: 'var(--color-accent)' }} />
-                <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Wochenduell' : 'Weekly Battle'}</span>
-                <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-accent)' }} /></span>
+                <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Wochenduelle' : 'Weekly Battles'}</span>
+                <span className="num-mono grid place-items-center rounded-full" style={{ minWidth: 20, height: 20, padding: '0 6px', fontSize: 11, fontWeight: 700, color: 'var(--color-ink)', background: 'var(--color-surface-2)' }}>{battles.length}</span>
               </div>
-              <div className="inline-flex items-center gap-[5px] rounded-full" style={{ background: 'var(--color-surface-2)', padding: '5px 10px' }}>
-                <Clock size={13} style={{ color: 'var(--color-amber)' }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-amber)' }}>{timeLeft(duel?.week_end, de)}</span>
-              </div>
-            </div>
-
-            {/* Face-off */}
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col items-center gap-[7px] flex-1">
-                <span className="num-display grid place-items-center rounded-full" style={{ width: 56, height: 56, fontSize: 20, color: 'var(--color-ink)', background: 'var(--color-accent)', border: '3px solid var(--color-accent)' }}>{initial(you.handle || 'You')}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Du' : 'You'}</span>
-                <span className="num-display" style={{ fontSize: 30, color: youScore >= rivalScore ? 'var(--color-accent)' : 'var(--color-muted)' }}>{youScore}</span>
-              </div>
-              <div className="flex flex-col items-center gap-[3px]">
-                <span className="eyebrow" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'PUNKTE' : 'BATTLE PTS'}</span>
-                <span className="num-display grid place-items-center rounded-full" style={{ width: 38, height: 38, fontSize: 13, color: 'var(--color-muted)', background: 'var(--color-surface-2)' }}>VS</span>
-              </div>
-              <div className="flex flex-col items-center gap-[7px] flex-1">
-                <span className="num-display grid place-items-center rounded-full" style={{ width: 56, height: 56, fontSize: 20, color: 'var(--color-ink)', background: 'var(--color-strain)' }}>{initial(rivalIsPast ? (de ? 'Du' : 'You') : rival.handle)}</span>
-                <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)', maxWidth: 90 }}>{rivalIsPast ? (de ? 'Du letzte Wo.' : 'Past You') : rival.handle}</span>
-                <span className="num-display" style={{ fontSize: 30, color: rivalScore > youScore ? 'var(--color-strain)' : 'var(--color-muted)' }}>{rivalScore}</span>
-              </div>
-            </div>
-
-            <div style={{ height: 1, background: 'var(--color-rule)' }} />
-
-            {/* Table head */}
-            <div className="flex items-center gap-2.5">
-              <span className="eyebrow flex-1" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'WERTUNG JE METRIK' : 'SCORE BY METRIC'}</span>
-              <span className="eyebrow text-right" style={{ fontSize: 10, color: 'var(--color-accent)', width: 64 }}>{de ? 'DU' : 'YOU'}</span>
-              <span className="eyebrow text-right truncate" style={{ fontSize: 10, color: 'var(--color-strain)', width: 64 }}>{(rivalIsPast ? (de ? 'DU' : 'PAST') : rival.handle).toUpperCase()}</span>
-            </div>
-
-            {/* Metric rows */}
-            {metrics.map((m) => (
-              <div key={m.key} className="flex items-center gap-2.5" style={{ padding: '3px 0' }}>
-                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                  <span style={{ width: 6, height: 6, borderRadius: 999, background: m.youWin ? 'var(--color-accent)' : 'var(--color-strain)', flexShrink: 0 }} />
-                  <span className="truncate" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>{m.label}</span>
-                </div>
-                <span className="num-mono text-right inline-flex items-center justify-end gap-1" style={{ fontSize: 14, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : 'var(--color-muted)', width: 64 }}>
-                  {m.fmt(m.yv)}{m.youWin && <Check size={11} strokeWidth={3} />}
-                </span>
-                <span className="num-mono text-right" style={{ fontSize: 14, fontWeight: 700, color: !m.youWin ? 'var(--color-strain)' : 'var(--color-muted)', width: 64 }}>{m.fmt(m.rv)}</span>
-              </div>
+            )}
+            {battles.map(({ opponent, isPast }) => (
+              <BattleCard
+                key={isPast ? 'past-you' : (opponent.user_id ?? opponent.handle)}
+                you={you}
+                opponent={opponent}
+                isPast={isPast}
+                weekEnd={duel?.week_end}
+                de={de}
+                sendNudge={sendNudge}
+              />
             ))}
-
-            {/* Hover: per-metric head-to-head margin */}
-            <div className="hover-reveal">
-              <div className="rounded-[12px] flex flex-col gap-2" style={{ background: 'var(--color-surface-2)', padding: '11px 12px' }}>
-                <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'VORSPRUNG JE METRIK' : 'HEAD-TO-HEAD MARGIN'}</span>
-                {metrics.map((m) => (
-                  <div key={m.key} className="flex items-center gap-2.5">
-                    <span className="truncate flex-1" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>{m.label}</span>
-                    <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : 'var(--color-strain)' }}>
-                      {m.fmt(Math.abs(m.yv - m.rv))} {m.youWin ? (de ? 'vorn' : 'ahead') : (de ? 'zurück' : 'behind')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>
-              {de ? '6 Metriken · je 10 Punkte · Wochensieger gewinnt.' : '6 metrics · each metric worth 10 pts · winner takes the week.'}
-            </p>
-
-            {/* Tap-to-expand head-to-head margin (mirrors the hover panel for touch) */}
-            {detailsOpen && (
-              <div className="rounded-[12px] flex flex-col gap-2" style={{ background: 'var(--color-surface-2)', padding: '11px 12px' }}>
-                <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'VORSPRUNG JE METRIK' : 'HEAD-TO-HEAD MARGIN'}</span>
-                {metrics.map((m) => (
-                  <div key={m.key} className="flex items-center gap-2.5">
-                    <span className="truncate flex-1" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>{m.label}</span>
-                    <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : 'var(--color-strain)' }}>
-                      {m.fmt(Math.abs(m.yv - m.rv))} {m.youWin ? (de ? 'vorn' : 'ahead') : (de ? 'zurück' : 'behind')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* CTA */}
-            <div className="flex gap-2.5">
-              <button type="button" onClick={() => setDetailsOpen((v) => !v)} className="flex-1 inline-flex items-center justify-center gap-[7px] rounded-full" style={{ background: 'var(--color-surface-2)', padding: 13 }}>
-                <BarChart3 size={17} style={{ color: 'var(--color-ink-2)' }} />
-                <span className="num-display" style={{ fontSize: 14, color: 'var(--color-ink-2)' }}>{de ? (detailsOpen ? 'Details schließen' : 'Duell-Details') : (detailsOpen ? 'Hide details' : 'Battle details')}</span>
-              </button>
-              <button type="button" onClick={onNudge} disabled={!opponentId || sendNudge.isPending} title={!opponentId ? (de ? 'Anstupsen sobald du einen Crew-Rivalen hast' : 'Nudge works once you have a crew rival') : undefined} className="inline-flex items-center justify-center gap-1.5 rounded-full" style={{ background: 'var(--color-accent)', padding: '13px 18px', opacity: !opponentId || sendNudge.isPending ? 0.5 : 1 }}>
-                <Hand size={17} style={{ color: 'var(--color-ink)' }} />
-                <span className="num-display" style={{ fontSize: 14, color: 'var(--color-ink)' }}>{de ? 'Anstupsen' : 'Nudge'}</span>
-              </button>
-            </div>
-
-            {/* Nudge confirmation — shows the funny line the server sent */}
-            {nudgeSent && (
-              <div className="rounded-[12px] flex items-start gap-2" style={{ background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)', padding: '10px 12px' }}>
-                <Send size={14} style={{ color: 'var(--color-accent)', flexShrink: 0, marginTop: 2 }} />
-                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                  <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-accent)' }}>
-                    {de ? `GESENDET AN ${(rival?.handle ?? '').toUpperCase()}` : `SENT TO ${(rival?.handle ?? '').toUpperCase()}`}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>“{nudgeSent}”</span>
-                </div>
-                <button type="button" onClick={() => setNudgeSent(null)} aria-label={de ? 'Schließen' : 'Dismiss'} className="grid place-items-center shrink-0">
-                  <X size={15} style={{ color: 'var(--color-muted)' }} />
-                </button>
-              </div>
-            )}
-            {sendNudge.isError && (
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Anstupsen fehlgeschlagen — versuch es nochmal.' : 'Nudge failed — try again.'}</span>
-            )}
-          </div>
+          </>
         ) : (
           <EmptyCrew de={de} onFind={onOpenFinder} />
         )}
@@ -917,6 +788,172 @@ export default function SocialTab() {
         </button>
         {findOpen && <FindPeople de={de} />}
       </div>
+    </div>
+  )
+}
+
+// One live weekly battle: you vs a single opponent (a real crew member, or
+// "Past You" when you have no crew). Computes its own 6-metric scoreline, owns
+// its own Battle-details toggle + Nudge (targeting THIS opponent's user_id).
+function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge }: {
+  you: DuelStats
+  opponent: DuelStats
+  isPast: boolean
+  weekEnd: string | undefined
+  de: boolean
+  sendNudge: ReturnType<typeof useSendNudge>
+}) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [nudgeSent, setNudgeSent] = useState<string | null>(null)
+  // Only a real crew rival can be nudged (never "Past You").
+  const opponentId = !isPast && opponent.user_id ? opponent.user_id : undefined
+  const nudging = sendNudge.isPending && sendNudge.variables === opponentId
+  const opponentName = isPast ? (de ? 'Du letzte Wo.' : 'Past You') : opponent.handle
+
+  const metrics = useMemo(() => {
+    const def: Array<{ key: keyof DuelStats; label: string; fmt: (n: number) => string; color: string }> = [
+      { key: 'distance_km', label: de ? 'Distanz · km' : 'Distance · km', fmt: (n) => `${Math.round(n)}`, color: 'var(--color-strain)' },
+      { key: 'tss', label: de ? 'Last · TSS' : 'Load · TSS', fmt: (n) => `${Math.round(n)}`, color: 'var(--color-accent)' },
+      { key: 'hours', label: de ? 'Zeit · h' : 'Active · h', fmt: (n) => n.toFixed(1), color: 'var(--color-recovery)' },
+      { key: 'kj', label: de ? 'Energie · kJ' : 'Energy · kJ', fmt: (n) => Math.round(n).toLocaleString(de ? 'de' : 'en'), color: 'var(--color-amber)' },
+      { key: 'rides', label: de ? 'Einheiten' : 'Sessions', fmt: (n) => `${Math.round(n)}`, color: 'var(--color-exercise)' },
+      { key: 'best_tss', label: de ? 'Beste · TSS' : 'Best · TSS', fmt: (n) => `${Math.round(n)}`, color: 'var(--color-move)' },
+    ]
+    return def.map((d) => {
+      const yv = Number(you[d.key] ?? 0)
+      const rv = Number(opponent[d.key] ?? 0)
+      return { ...d, yv, rv, youWin: yv >= rv }
+    })
+  }, [you, opponent, de])
+  const youScore = metrics.filter((m) => m.youWin).length * 10
+  const oppScore = metrics.filter((m) => !m.youWin).length * 10
+
+  function onNudge() {
+    if (!opponentId) return
+    sendNudge.mutate(opponentId, { onSuccess: (res) => setNudgeSent(res.text) })
+  }
+
+  return (
+    <div className="rounded-[24px] p-5 flex flex-col gap-4 hover-card" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
+      {/* Head */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-[7px] min-w-0">
+          <Swords size={18} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Wochenduell' : 'Weekly Battle'}</span>
+          <span className="truncate" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-muted)' }}>· {opponentName}</span>
+          <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-accent)' }} /></span>
+        </div>
+        <div className="inline-flex items-center gap-[5px] rounded-full shrink-0" style={{ background: 'var(--color-surface-2)', padding: '5px 10px' }}>
+          <Clock size={13} style={{ color: 'var(--color-amber)' }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-amber)' }}>{timeLeft(weekEnd, de)}</span>
+        </div>
+      </div>
+
+      {/* Face-off */}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col items-center gap-[7px] flex-1">
+          <span className="num-display grid place-items-center rounded-full" style={{ width: 56, height: 56, fontSize: 20, color: 'var(--color-ink)', background: 'var(--color-accent)', border: '3px solid var(--color-accent)' }}>{initial(you.handle || 'You')}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Du' : 'You'}</span>
+          <span className="num-display" style={{ fontSize: 30, color: youScore >= oppScore ? 'var(--color-accent)' : 'var(--color-muted)' }}>{youScore}</span>
+        </div>
+        <div className="flex flex-col items-center gap-[3px]">
+          <span className="eyebrow" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'PUNKTE' : 'BATTLE PTS'}</span>
+          <span className="num-display grid place-items-center rounded-full" style={{ width: 38, height: 38, fontSize: 13, color: 'var(--color-muted)', background: 'var(--color-surface-2)' }}>VS</span>
+        </div>
+        <div className="flex flex-col items-center gap-[7px] flex-1">
+          <span className="num-display grid place-items-center rounded-full" style={{ width: 56, height: 56, fontSize: 20, color: 'var(--color-ink)', background: 'var(--color-strain)' }}>{initial(isPast ? (de ? 'Du' : 'You') : opponent.handle)}</span>
+          <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)', maxWidth: 90 }}>{opponentName}</span>
+          <span className="num-display" style={{ fontSize: 30, color: oppScore > youScore ? 'var(--color-strain)' : 'var(--color-muted)' }}>{oppScore}</span>
+        </div>
+      </div>
+
+      <div style={{ height: 1, background: 'var(--color-rule)' }} />
+
+      {/* Table head */}
+      <div className="flex items-center gap-2.5">
+        <span className="eyebrow flex-1" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'WERTUNG JE METRIK' : 'SCORE BY METRIC'}</span>
+        <span className="eyebrow text-right" style={{ fontSize: 10, color: 'var(--color-accent)', width: 64 }}>{de ? 'DU' : 'YOU'}</span>
+        <span className="eyebrow text-right truncate" style={{ fontSize: 10, color: 'var(--color-strain)', width: 64 }}>{(isPast ? (de ? 'DU' : 'PAST') : opponent.handle).toUpperCase()}</span>
+      </div>
+
+      {/* Metric rows */}
+      {metrics.map((m) => (
+        <div key={m.key} className="flex items-center gap-2.5" style={{ padding: '3px 0' }}>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span style={{ width: 6, height: 6, borderRadius: 999, background: m.youWin ? 'var(--color-accent)' : 'var(--color-strain)', flexShrink: 0 }} />
+            <span className="truncate" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>{m.label}</span>
+          </div>
+          <span className="num-mono text-right inline-flex items-center justify-end gap-1" style={{ fontSize: 14, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : 'var(--color-muted)', width: 64 }}>
+            {m.fmt(m.yv)}{m.youWin && <Check size={11} strokeWidth={3} />}
+          </span>
+          <span className="num-mono text-right" style={{ fontSize: 14, fontWeight: 700, color: !m.youWin ? 'var(--color-strain)' : 'var(--color-muted)', width: 64 }}>{m.fmt(m.rv)}</span>
+        </div>
+      ))}
+
+      {/* Hover: per-metric head-to-head margin */}
+      <div className="hover-reveal">
+        <div className="rounded-[12px] flex flex-col gap-2" style={{ background: 'var(--color-surface-2)', padding: '11px 12px' }}>
+          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'VORSPRUNG JE METRIK' : 'HEAD-TO-HEAD MARGIN'}</span>
+          {metrics.map((m) => (
+            <div key={m.key} className="flex items-center gap-2.5">
+              <span className="truncate flex-1" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>{m.label}</span>
+              <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : 'var(--color-strain)' }}>
+                {m.fmt(Math.abs(m.yv - m.rv))} {m.youWin ? (de ? 'vorn' : 'ahead') : (de ? 'zurück' : 'behind')}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+        {de ? '6 Metriken · je 10 Punkte · Wochensieger gewinnt.' : '6 metrics · each metric worth 10 pts · winner takes the week.'}
+      </p>
+
+      {/* Tap-to-expand head-to-head margin (mirrors the hover panel for touch) */}
+      {detailsOpen && (
+        <div className="rounded-[12px] flex flex-col gap-2" style={{ background: 'var(--color-surface-2)', padding: '11px 12px' }}>
+          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'VORSPRUNG JE METRIK' : 'HEAD-TO-HEAD MARGIN'}</span>
+          {metrics.map((m) => (
+            <div key={m.key} className="flex items-center gap-2.5">
+              <span className="truncate flex-1" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>{m.label}</span>
+              <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : 'var(--color-strain)' }}>
+                {m.fmt(Math.abs(m.yv - m.rv))} {m.youWin ? (de ? 'vorn' : 'ahead') : (de ? 'zurück' : 'behind')}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* CTA */}
+      <div className="flex gap-2.5">
+        <button type="button" onClick={() => setDetailsOpen((v) => !v)} className="flex-1 inline-flex items-center justify-center gap-[7px] rounded-full" style={{ background: 'var(--color-surface-2)', padding: 13 }}>
+          <BarChart3 size={17} style={{ color: 'var(--color-ink-2)' }} />
+          <span className="num-display" style={{ fontSize: 14, color: 'var(--color-ink-2)' }}>{de ? (detailsOpen ? 'Details schließen' : 'Duell-Details') : (detailsOpen ? 'Hide details' : 'Battle details')}</span>
+        </button>
+        <button type="button" onClick={onNudge} disabled={!opponentId || nudging} title={!opponentId ? (de ? 'Anstupsen sobald du einen Crew-Rivalen hast' : 'Nudge works once you have a crew rival') : undefined} className="inline-flex items-center justify-center gap-1.5 rounded-full" style={{ background: 'var(--color-accent)', padding: '13px 18px', opacity: !opponentId || nudging ? 0.5 : 1 }}>
+          <Hand size={17} style={{ color: 'var(--color-ink)' }} />
+          <span className="num-display" style={{ fontSize: 14, color: 'var(--color-ink)' }}>{de ? 'Anstupsen' : 'Nudge'}</span>
+        </button>
+      </div>
+
+      {/* Nudge confirmation — shows the funny line the server sent */}
+      {nudgeSent && (
+        <div className="rounded-[12px] flex items-start gap-2" style={{ background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)', padding: '10px 12px' }}>
+          <Send size={14} style={{ color: 'var(--color-accent)', flexShrink: 0, marginTop: 2 }} />
+          <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+            <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-accent)' }}>
+              {de ? `GESENDET AN ${opponentName.toUpperCase()}` : `SENT TO ${opponentName.toUpperCase()}`}
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>“{nudgeSent}”</span>
+          </div>
+          <button type="button" onClick={() => setNudgeSent(null)} aria-label={de ? 'Schließen' : 'Dismiss'} className="grid place-items-center shrink-0">
+            <X size={15} style={{ color: 'var(--color-muted)' }} />
+          </button>
+        </div>
+      )}
+      {sendNudge.isError && sendNudge.variables === opponentId && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Anstupsen fehlgeschlagen — versuch es nochmal.' : 'Nudge failed — try again.'}</span>
+      )}
     </div>
   )
 }

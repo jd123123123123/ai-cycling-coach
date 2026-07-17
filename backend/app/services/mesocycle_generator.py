@@ -82,15 +82,21 @@ _HARD_TYPES: frozenset[SessionType] = frozenset({"sweet_spot", "threshold", "vo2
 _DEFAULT_AVAILABLE_MINUTES = 90
 
 # Endurance-day template rotation — cycled across the week's *filler* Z2 days so
-# the plan is not the identical template 6× in a row. Ordered so each adjacent
-# day differs in both duration and shape (steady 90 → progressive 90 → short
-# 60). The Sunday long ride and any phase quality/climbing session are picked
-# separately (longest-fit / phase rules), so this only varies the mid-week
-# aerobic filler. Kept short and duration-diverse on purpose.
+# no two steady days are identical. Each entry occupies a different band inside
+# Z2 (low 0.60 → upper 0.70 → progressive 0.60→0.72 → tempo-touch 0.65/0.76 →
+# steady 0.65 → short 0.65) AND a different duration (100/75/90/75/90/60 min),
+# so adjacent filler days differ in both intensity and shape — the week reads as
+# textured aerobic base, not the same 0.65-FTP ride repeated. Still 100% aerobic
+# (Seiler LIT): this is within-Z2 variety, not added quality. The Sunday long
+# ride and any phase quality/climbing session are picked separately (longest-fit
+# / phase rules), so this only varies the mid-week aerobic filler.
 _ENDURANCE_VARIETY: list[str] = [
-    "z2_endurance_90",
-    "z2_progressive_90",
-    "z2_endurance_60",
+    "z2_endurance_low_100",         # low Z2, 100min — easy/long fat-burning
+    "z2_endurance_upper_75",        # upper Z2, 75min — firm high-aerobic
+    "z2_progressive_90",            # ramp 0.60→0.72, 90min
+    "z2_endurance_tempo_touch_75",  # 0.65 base + 3× tempo touches, 75min
+    "z2_endurance_90",              # steady 0.65, 90min
+    "z2_endurance_60",              # steady 0.65, 60min
 ]
 
 # How far past the weekly TSS target a filler endurance day may push before the

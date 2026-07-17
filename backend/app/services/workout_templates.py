@@ -620,6 +620,72 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         ],
         base_tss=78.0,
     ),
+
+    # ---- Within-Z2 texture variants -------------------------------------
+    # These three share the aerobic-base purpose of the flat 0.65 z2_endurance
+    # stack but occupy *different bands inside Z2* (low / upper) or add a light
+    # tempo touch, so the week's steady days differ in intensity AND duration
+    # instead of being the identical 0.65-FTP ride repeated. All stay aerobic
+    # (Seiler LIT) — this is within-Z2 variety, not added quality.
+    "z2_endurance_low_100": WorkoutTemplate(
+        id="z2_endurance_low_100",
+        name="Low Z2 — 100min fat-burning endurance",
+        category="endurance",
+        purpose=(
+            "Longer, easier low-Z2 (0.60 FTP) fat-oxidation ride — the "
+            "'all-day pace' end of the aerobic band. Higher volume at lower "
+            "strain; maximises fat-oxidation rate and time-in-zone without "
+            "creeping toward LT1."
+        ),
+        framework_cited="San Millán low-Z2 · Seiler LIT · Maffetone aerobic",
+        blocks=[
+            IntervalBlock(
+                name="Low endurance", duration_s=100 * 60,
+                target_pct_ftp=0.60, target_rpe=3, zone=2,
+            ),
+        ],
+        base_tss=62.0,
+    ),
+    "z2_endurance_upper_75": WorkoutTemplate(
+        id="z2_endurance_upper_75",
+        name="Upper Z2 — 75min high-aerobic",
+        category="endurance",
+        purpose=(
+            "Shorter, firmer upper-Z2 (0.70 FTP) ride pressing the top of the "
+            "aerobic band just under LT1. Higher aerobic stimulus per minute "
+            "than the 0.65 steady ride while staying comfortably sub-threshold."
+        ),
+        framework_cited="San Millán upper-Z2 · Seiler LIT · Friel base",
+        blocks=[
+            IntervalBlock(
+                name="High aerobic", duration_s=75 * 60,
+                target_pct_ftp=0.70, target_rpe=5, zone=2,
+            ),
+        ],
+        base_tss=63.0,
+    ),
+    "z2_endurance_tempo_touch_75": WorkoutTemplate(
+        id="z2_endurance_tempo_touch_75",
+        name="Endurance + tempo touches — 75min",
+        category="endurance",
+        purpose=(
+            "Aerobic ride with three short ~0.76-FTP tempo touches folded into "
+            "a 0.63-FTP Z2 base — a light aerobic-density stimulus that breaks "
+            "up the steady day without making it a quality session. Still an "
+            "easy day (>75% of the ride is Z2)."
+        ),
+        framework_cited="Seiler LIT · Friel aerobic-density touches",
+        blocks=[
+            IntervalBlock(name="Z2 base", duration_s=20 * 60, target_pct_ftp=0.63, target_rpe=4, zone=2),
+            IntervalBlock(name="Tempo touch 1", duration_s=6 * 60, target_pct_ftp=0.76, target_rpe=6, zone=3),
+            IntervalBlock(name="Z2 base", duration_s=12 * 60, target_pct_ftp=0.63, target_rpe=4, zone=2),
+            IntervalBlock(name="Tempo touch 2", duration_s=6 * 60, target_pct_ftp=0.76, target_rpe=6, zone=3),
+            IntervalBlock(name="Z2 base", duration_s=12 * 60, target_pct_ftp=0.63, target_rpe=4, zone=2),
+            IntervalBlock(name="Tempo touch 3", duration_s=6 * 60, target_pct_ftp=0.76, target_rpe=6, zone=3),
+            IntervalBlock(name="Z2 cool", duration_s=13 * 60, target_pct_ftp=0.60, target_rpe=3, zone=2),
+        ],
+        base_tss=58.0,
+    ),
     "z2_long_240": WorkoutTemplate(
         id="z2_long_240",
         name="Long Z2 — 4h base ride",

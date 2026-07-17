@@ -1,14 +1,37 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db
 from app.models.consent import ConsentRecord
 from app.models.user import User
+from app.schemas.auth import ProfileUpdateRequest, UserResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+    data: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    """Update the current user's account profile (display name + avatar).
+
+    Only the two account-level fields are editable here; athlete stats live on
+    PATCH/PUT /athletes/me. The avatar must be a small base64 ``data:image/...``
+    URI (validated in the schema) — never an external URL. Owner = current_user.
+    """
+    # exclude_unset: only touch fields the client actually sent (partial update).
+    fields = data.model_dump(exclude_unset=True)
+    if "display_name" in fields:
+        current_user.display_name = fields["display_name"]
+    if "avatar_url" in fields:
+        current_user.avatar_url = fields["avatar_url"]
+
+    await db.commit()
+    await db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)

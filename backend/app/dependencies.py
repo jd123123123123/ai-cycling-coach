@@ -60,6 +60,11 @@ async def get_db_for_user(
     underlying sync session so the variable is re-applied at the start of every new
     transaction (initial + each implicit BEGIN after a commit).
     """
+    # SECURITY: coerce to int before interpolating into the SET LOCAL string.
+    # `SET LOCAL` cannot be parameterised via bind params, so the value is
+    # formatted into the SQL text — int() guarantees it is purely numeric and
+    # rejects (raising ValueError → 500, never executing) any non-integer that
+    # could otherwise smuggle SQL through a malformed/forged token.
     user_id = int(current_user.id)
     set_local_sql = text(f"SET LOCAL app.current_user_id = '{user_id}'")
 

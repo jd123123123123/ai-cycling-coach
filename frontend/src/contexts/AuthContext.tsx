@@ -17,6 +17,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   register: (data: RegisterRequest) => Promise<void>
   logout: () => Promise<void>
+  /** Re-fetch the current user from the server (e.g. after a profile save). */
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -81,6 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(userData)
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    const userData = await authApi.getMe()
+    setUser(userData)
+  }, [])
+
   const logout = useCallback(async () => {
     try {
       await authApi.logout()
@@ -100,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        refreshUser,
       }}
     >
       {children}

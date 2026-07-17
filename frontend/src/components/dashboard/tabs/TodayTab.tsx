@@ -9,8 +9,9 @@
 import { useMemo, useState, useRef } from 'react'
 import { subDays, format, startOfWeek, addDays, parseISO } from 'date-fns'
 import { Link } from 'react-router-dom'
-import { Flag, Heart, Activity, Zap, Target, Play, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles, Trophy } from 'lucide-react'
-import type { Adaptations, PostRideReview, CompliancePair, RideGrade } from '../../../api/coach'
+import { Flag, Heart, Activity, Zap, Target, Play, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles } from 'lucide-react'
+import type { Adaptations } from '../../../api/coach'
+import SessionReviewCard from '../SessionReviewCard'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
@@ -21,6 +22,7 @@ import { computeReadiness, readinessTier } from '../../../utils/metrics'
 import ScoreRing from '../../ui/ScoreRing'
 import ActivityRings from '../../ui/ActivityRings'
 import { useLocale } from '../../../contexts/LocaleContext'
+import { useAuth } from '../../../contexts/AuthContext'
 
 const CARD = 'rounded-[24px] p-5'
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
@@ -43,6 +45,7 @@ function SubScore({ label, value, color }: { label: string; value: string; color
 
 export default function TodayTab() {
   const { locale } = useLocale()
+  const { user } = useAuth()
   const de = locale === 'de'
   const today = useMemo(() => new Date(), [])
   const { data: brief } = useCoachBrief()
@@ -64,7 +67,13 @@ export default function TodayTab() {
   const athlete = evidence.athlete as Record<string, unknown> | undefined
   const goalName = athlete?.goal_target as string | undefined
   const daysToGoal = athlete?.days_to_goal as number | undefined
-  const athleteName = (athlete?.name as string | undefined)?.split(' ')[0]
+  // Prefer the coach evidence name; fall back to the logged-in user's email local
+  // part (e.g. "jannis.deters@…" → "Jannis") so the greeting is always personal.
+  const nameFromEmail = (email: string | undefined | null): string | undefined => {
+    const local = (email ?? '').split('@')[0]?.split(/[._-]/)[0]
+    return local ? local.charAt(0).toUpperCase() + local.slice(1) : undefined
+  }
+  const athleteName = ((athlete?.name as string | undefined)?.split(' ')[0]) || nameFromEmail(user?.email)
 
   const pmcBio = evidence.biometrics as Record<string, unknown> | undefined
   const hrv = pmcBio?.hrv as Record<string, unknown> | undefined
@@ -72,6 +81,7 @@ export default function TodayTab() {
   const pmcEv = evidence.pmc as Record<string, unknown> | undefined
   const tsb = (pmcEv?.tsb as number | null | undefined) ?? pmc?.entries?.at(-1)?.tsb ?? null
   const sleepScore = latest?.sleep_score ?? null
+  const bodyBattery = latest?.body_battery ?? null
   const restingHr = latest?.resting_hr ?? null
   const hrvNow = snapshot?.hrv_overnight_avg ?? latest?.hrv_status ?? null
 
@@ -218,21 +228,175 @@ export default function TodayTab() {
     return n
   }, [today, trainedSet])
 
-  const stateText = tier === 'peak' || tier === 'ready' ? (de ? 'Bereit für harte Belastung' : 'Primed to train')
-    : tier === 'caution' ? (de ? 'Solide — moderat belasten' : 'Solid — train moderate')
-    : tier === 'rest' ? (de ? 'Erholung priorisieren' : 'Prioritize recovery')
+  // Refreshingly-funny, always-true day wrap-up — synthesizes today's move
+  // (already-trained / rest / prescribed session) against the real readiness
+  // tier + HRV/sleep signals. Every line cites a REAL signal and today's real
+  // move; nothing fabricated. Variants are picked deterministically by day of
+  // month (no Math.random) so the line varies day-to-day but is stable today.
+  const trainedToday = !!review || hasSessionToday
+  const hrvDown = typeof hrvDelta === 'number' && hrvDelta <= -3
+  const hrvUp = typeof hrvDelta === 'number' && hrvDelta >= 3
+  const sleptWell = typeof sleepScore === 'number' && sleepScore >= 80
+  const sleptShort = typeof sleepScore === 'number' && sleepScore < 65
+  const green = tier === 'peak' || tier === 'ready'
+  const roughRecovery = hrvDown || tier === 'rest' || sleptShort
+  const wTitle = workout?.title
+  const hrvPct = typeof hrvDelta === 'number' ? `${hrvDelta >= 0 ? '+' : ''}${Math.round(hrvDelta)}%` : null
+
+  // Strongest TRUE positive signal, phrased as a lowercase mid-sentence clause.
+  const goodReason = hrvUp && hrvPct ? (de ? `die HRV brummt (${hrvPct})` : `HRV's humming (${hrvPct})`)
+    : sleptWell ? (de ? `der Schlaf lag bei ${Math.round(sleepScore!)}` : `sleep landed at ${Math.round(sleepScore!)}`)
+    : green ? (de ? 'die Bereitschaft steht auf Grün' : 'readiness is green')
+    : (de ? 'die Werte sind ruhig' : 'the signals are calm')
+  // Strongest TRUE cautionary signal, same lowercase clause form.
+  const badReason = hrvDown && hrvPct ? (de ? `die HRV lahmt (${hrvPct})` : `HRV's dragging its feet (${hrvPct})`)
+    : sleptShort ? (de ? `der Schlaf war dünn (${Math.round(sleepScore!)})` : `sleep came up light (${Math.round(sleepScore!)})`)
+    : (de ? 'du bist sichtlich platt' : "you're clearly cooked")
+  const badReasonCap = badReason.charAt(0).toUpperCase() + badReason.slice(1)
+  const namePart = athleteName ? `, ${athleteName}` : ''
+  const pick = (arr: string[]) => arr[today.getDate() % arr.length]
+
+  const heroLine = (() => {
+    if (trainedToday) {
+      if (roughRecovery) return pick(de ? [
+        `Solide Einheit, aber ${badReason} — heute Abend zählt Schlaf, nicht Strava.`,
+        `Arbeit erledigt; jetzt ${badReason}, also sei nett zu dir und bleib horizontal.`,
+        `Training drin, aber ${badReason}. Erholungsmodus: voll aktiviert.`,
+      ] : [
+        `Solid work logged, but ${badReason} — tonight's about sleep, not Strava.`,
+        `You did the work; now ${badReason}, so be kind to yourself and horizontal.`,
+        `Session's in, but ${badReason}. Recovery mode: fully engaged.`,
+      ])
+      return pick(de ? [
+        `Einheit im Kasten und ${goodReason} — jetzt darfst du grandios faul sein.`,
+        `Training sitzt, ${goodReason}. Erlaubnis zum Nichtstun: erteilt.`,
+        `Abgeliefert, ${goodReason} — Beine hoch und ruhig ein bisschen stolz sein.`,
+      ] : [
+        `You banked the work and ${goodReason} — go be gloriously lazy.`,
+        `Session's done and ${goodReason}. Permission to do absolutely nothing: granted.`,
+        `Work's in the bank, ${goodReason} — put your legs up and gloat a little.`,
+      ])
+    }
+    if (isRestDay) {
+      return pick(de ? [
+        `Ruhetag${namePart}. Deine Beine schicken gerade ein Dankeschön — tu nichts, aber brillant.`,
+        `Keine Einheit heute${namePart} — Erholung ist das Training, und du glänzt im Liegen.`,
+        `Ruhetag verdient${namePart}. Schuldgefühle nicht inklusive, Fortschritt schon.`,
+      ] : [
+        `Rest day${namePart}. Your legs just sent a thank-you note — do nothing, brilliantly.`,
+        `No session today${namePart} — recovery is the workout, and you're crushing it lying down.`,
+        `Rest day earned${namePart}. Guilt not included; gains are.`,
+      ])
+    }
+    if (wTitle) {
+      if (green) return pick(de ? [
+        `Du bist bereit und ${wTitle} ist heute die Einheit zum Abliefern — ${goodReason}.`,
+        `Grünes Licht: ${goodReason}, also wartet ${wTitle} nur darauf, zerlegt zu werden.`,
+        `Beine geladen und ${goodReason} — mach ${wTitle} zu deinem Spielplatz.`,
+      ] : [
+        `You're primed and today's ${wTitle} is the one to nail — ${goodReason}.`,
+        `Green light: ${goodReason}, so ${wTitle} is begging to be crushed.`,
+        `Legs are loaded and ${goodReason} — go make ${wTitle} regret nothing.`,
+      ])
+      if (tier === 'rest' || hrvDown) return pick(de ? [
+        `Achtung: ${badReason}, halt ${wTitle} also locker — Heldenmodus kann warten.`,
+        `${badReasonCap} heute — nimm ${wTitle} als lockere Runde, nicht als Duell.`,
+        `Der Körper zeigt Gelb (${badReason}); ${wTitle} locker fahren oder gegen Erholung tauschen.`,
+      ] : [
+        `Heads-up: ${badReason}, so keep ${wTitle} chill — hero mode can wait.`,
+        `${badReasonCap} today — treat ${wTitle} as a gentle spin, not a duel.`,
+        `Body's waving a yellow flag (${badReason}); do ${wTitle} easy or swap for rest.`,
+      ])
+      return pick(de ? [
+        `Mittlere Signale heute — geh ${wTitle} kontrolliert an und schau, wie's läuft.`,
+        `Nicht Topform, nicht kaputt — ${wTitle} vernünftig fahren und die Beine entscheiden lassen.`,
+        `Gelbliche Bereitschaft: ${wTitle} ist ein Go, nur nicht das Internet gewinnen wollen.`,
+      ] : [
+        `Middling signals today — take ${wTitle} at a controlled effort and see how it flows.`,
+        `Not peak, not wrecked — run ${wTitle} sensibly and let the legs vote.`,
+        `Amber-ish readiness: ${wTitle} is a go, just don't try to win the internet.`,
+      ])
+    }
+    return pick(de ? [
+      'Die Zahlen trudeln noch ein — gleich hast du deinen Read.',
+      'Signale werden synchronisiert… dein Spielplan ist in Sekunden da.',
+    ] : [
+      "Numbers are still landing — hang tight and I'll have your read in a moment.",
+      'Syncing your signals… your game plan is seconds away.',
+    ])
+  })()
+  // Plain-language read of the headline state — short verb form.
+  const readWord = tier === 'peak' || tier === 'ready' ? (de ? 'Bereit zu trainieren' : 'Primed to train')
+    : tier === 'caution' ? (de ? 'Locker angehen' : 'Ease into it')
+    : tier === 'rest' ? (de ? 'Erholen' : 'Recover')
     : (de ? 'Lade…' : 'Loading…')
 
   return (
     <div className="flex flex-col gap-6 pb-4">
-      {/* Greeting header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <h1 className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)' }}>{greeting}</h1>
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>{format(today, de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d')}</span>
+      {/* Hero — "here's exactly where you stand right now" snapshot.
+          Greeting + date, headline readiness state + score ring, a personalized
+          one-liner synthesized from today's move × readiness, and 3 key stats.
+          Gradient + glow are keyed to the readiness color. */}
+      <div
+        className="rounded-[28px] p-5 flex flex-col gap-5"
+        style={{
+          background: `linear-gradient(150deg, color-mix(in srgb, ${rColor} 15%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)`,
+          border: `1px solid color-mix(in srgb, ${rColor} 40%, var(--color-rule))`,
+          boxShadow: `0 12px 34px -18px color-mix(in srgb, ${rColor} 70%, transparent)`,
+        }}
+      >
+        {/* Greeting + date + avatar */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <h1 className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)', lineHeight: 1.1 }}>{greeting}</h1>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>{format(today, de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d')}</span>
+          </div>
+          <Link
+            to="/profile"
+            className="shrink-0 grid place-items-center rounded-full overflow-hidden"
+            style={{ width: 46, height: 46, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}
+            aria-label={de ? 'Profil öffnen' : 'Open profile'}
+          >
+            {user?.avatar_url ? (
+              <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{(athleteName ?? 'A').charAt(0).toUpperCase()}</span>
+            )}
+          </Link>
         </div>
-        <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 46, height: 46, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
-          <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{(athleteName ?? 'A').charAt(0).toUpperCase()}</span>
+
+        {/* Readiness ring + headline state + personalized one-liner */}
+        <Link to="/dashboard?tab=recovery" className="hover-card flex items-center gap-5">
+          <ScoreRing score={score ?? 0} color={rColor} size={104}>
+            <div className="flex flex-col items-center">
+              <span className="num-display" style={{ fontSize: 32, color: rColor, lineHeight: 1 }}>{score != null ? Math.round(score) : '—'}</span>
+              <span className="eyebrow" style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>/ 100</span>
+            </div>
+          </ScoreRing>
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
+            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Bereitschaft' : 'Readiness'}</span>
+            <span className="inline-flex items-center gap-1.5 self-start rounded-full px-2.5 py-1" style={{ background: `color-mix(in srgb, ${rColor} 15%, transparent)` }}>
+              <span style={{ width: 7, height: 7, borderRadius: 999, background: rColor }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: rColor }}>{readWord}</span>
+            </span>
+            <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.4 }}>{heroLine}</p>
+          </div>
+        </Link>
+
+        <div style={{ height: 1, background: 'var(--color-rule)' }} />
+
+        {/* Inputs that feed the one readiness score above — labeled so they read
+            as components, never as a rival headline number. Recovery = Body
+            Battery (a real Garmin recovery reserve, distinct from readiness). */}
+        <div className="flex flex-col gap-2.5">
+          <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{de ? 'Was in den Wert einfliesst' : 'What feeds this score'}</span>
+          <div className="flex">
+            <SubScore label={de ? 'Akku' : 'Battery'} value={bodyBattery != null ? `${Math.round(bodyBattery)}%` : '—'} color="var(--color-recovery)" />
+            <div style={{ width: 1, background: 'var(--color-rule)' }} />
+            <SubScore label="Form" value={typeof tsb === 'number' ? `${tsb >= 0 ? '+' : ''}${Math.round(tsb)}` : '—'} color="var(--color-strain)" />
+            <div style={{ width: 1, background: 'var(--color-rule)' }} />
+            <SubScore label={de ? 'Schlaf' : 'Sleep'} value={sleepScore != null ? `${Math.round(sleepScore)}` : '—'} color="var(--color-stand)" />
+          </div>
         </div>
       </div>
 
@@ -256,37 +420,8 @@ export default function TodayTab() {
         </Link>
       )}
 
-      {/* Recovery card → Recovery tab */}
-      <Link to="/dashboard?tab=recovery" className={`${CARD} hover-card flex flex-col gap-[18px]`} style={cardStyle}>
-        <div className="flex items-center gap-5">
-          <ScoreRing score={score ?? 0} color={rColor} size={112}>
-            <div className="flex flex-col items-center">
-              <span className="num-display" style={{ fontSize: 34, color: rColor, lineHeight: 1 }}>{score != null ? Math.round(score) : '—'}</span>
-            </div>
-          </ScoreRing>
-          <div className="flex-1 min-w-0 flex flex-col gap-2">
-            <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Bereitschaft' : 'Readiness'}</span>
-            <span className="inline-flex items-center gap-1.5 self-start rounded-full px-2.5 py-1" style={{ background: `color-mix(in srgb, ${rColor} 15%, transparent)` }}>
-              <span style={{ width: 7, height: 7, borderRadius: 999, background: rColor }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: rColor }}>{stateText}</span>
-            </span>
-            <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
-              {brief?.verdict || (de ? 'HRV und Ruhepuls im gesunden Bereich.' : 'HRV and resting heart rate are in a healthy range.')}
-            </p>
-          </div>
-        </div>
-        <div style={{ height: 1, background: 'var(--color-rule)' }} />
-        <div className="flex">
-          <SubScore label={de ? 'Erholung' : 'Recovery'} value={score != null ? `${Math.round(score)}%` : '—'} color="var(--color-recovery)" />
-          <div style={{ width: 1, background: 'var(--color-rule)' }} />
-          <SubScore label="Form" value={typeof tsb === 'number' ? `${tsb >= 0 ? '+' : ''}${Math.round(tsb)}` : '—'} color="var(--color-strain)" />
-          <div style={{ width: 1, background: 'var(--color-rule)' }} />
-          <SubScore label={de ? 'Schlaf' : 'Sleep'} value={sleepScore != null ? `${Math.round(sleepScore)}` : '—'} color="var(--color-stand)" />
-        </div>
-      </Link>
-
       {/* Session Review — recommendation vs. what the athlete actually did */}
-      {review && <SessionReview review={review} de={de} />}
+      {review && <SessionReviewCard review={review} de={de} />}
 
       {/* Rest day — no session prescribed: nothing to start or view */}
       {isRestDay && (
@@ -566,138 +701,6 @@ function LoadTrendChart({ trend, de }: { trend: LoadTrend; de: boolean }) {
         </span>
         <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)', marginLeft: 'auto' }}>{de ? '1 Woche' : '1 week'}</span>
       </div>
-    </div>
-  )
-}
-
-// ── Session Review helpers ──────────────────────────────────────────────────
-function gradeMeta(grade: RideGrade | null, de: boolean): { color: string; label: string } {
-  switch (grade) {
-    case 'perfect': return { color: 'var(--color-recovery)', label: de ? 'Perfekt' : 'Perfect' }
-    case 'strong': return { color: 'var(--color-recovery)', label: de ? 'Stark' : 'Strong' }
-    case 'okay': return { color: 'var(--color-amber)', label: de ? 'Solide' : 'Okay' }
-    case 'overcooked': return { color: 'var(--color-move)', label: de ? 'Überzogen' : 'Overcooked' }
-    case 'undercooked': return { color: 'var(--color-amber)', label: de ? 'Zu locker' : 'Undercooked' }
-    default: return { color: 'var(--color-muted)', label: '—' }
-  }
-}
-const bandColor = (band: CompliancePair['band']) =>
-  band === 'match' ? 'var(--color-recovery)' : band === 'over' ? 'var(--color-move)' : 'var(--color-amber)'
-
-function CompRow({ label, pair, fmt }: { label: string; pair: CompliancePair; fmt: (v: number) => string }) {
-  const col = bandColor(pair.band)
-  const sign = pair.delta_pct >= 0 ? '+' : ''
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="num-mono" style={{ fontSize: 12.5, color: 'var(--color-muted)' }}>{fmt(pair.target)}</span>
-        <ChevronRight size={13} style={{ color: 'var(--color-muted)' }} />
-        <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{fmt(pair.actual)}</span>
-        <span className="inline-flex items-center rounded-full" style={{ padding: '2px 8px', background: `color-mix(in srgb, ${col} 15%, transparent)`, color: col, fontSize: 11, fontWeight: 700 }}>{sign}{Math.round(pair.delta_pct)}%</span>
-      </div>
-    </div>
-  )
-}
-
-function SessionReview({ review, de }: { review: PostRideReview; de: boolean }) {
-  const gm = gradeMeta(review.grade, de)
-  const multi = review.grade == null && (review.activities?.length ?? 0) >= 2
-  const fmtMin = (v: number) => `${Math.round(v)} min`
-  const fmtTss = (v: number) => `${Math.round(v)}`
-  const fmtIf = (v: number) => v.toFixed(2)
-
-  const insights: { icon: typeof Activity; color: string; label: string; text: string }[] = []
-  if (review.physiological_read) insights.push({ icon: Activity, color: 'var(--color-recovery)', label: de ? 'Körper' : 'Body', text: review.physiological_read })
-  if (review.goal_trajectory) insights.push({ icon: Target, color: 'var(--color-strain)', label: de ? 'Zielverlauf' : 'Goal', text: review.goal_trajectory })
-  if (review.next_session_nudge) insights.push({ icon: TrendingUp, color: 'var(--color-accent)', label: de ? 'Nächste Einheit' : 'Next up', text: review.next_session_nudge })
-
-  const totals = multi ? review.totals : undefined
-
-  return (
-    <div
-      className="rounded-[24px] p-5 flex flex-col gap-[18px]"
-      style={{ background: `linear-gradient(125deg, color-mix(in srgb, ${gm.color} 14%, var(--color-paper-2)) 0%, var(--color-paper-2) 72%)`, border: `1px solid color-mix(in srgb, ${gm.color} 55%, var(--color-rule))` }}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Trophy size={16} strokeWidth={2.4} style={{ color: gm.color }} />
-          <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: gm.color }}>{de ? 'Einheit im Rückblick' : 'Session Review'}</span>
-        </div>
-        {review.grade && (
-          <span className="inline-flex items-center gap-1.5 rounded-full" style={{ padding: '4px 12px', background: `color-mix(in srgb, ${gm.color} 18%, transparent)` }}>
-            <span style={{ width: 7, height: 7, borderRadius: 999, background: gm.color }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: gm.color }}>{gm.label}</span>
-          </span>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <h2 className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)', lineHeight: 1.2 }}>{review.headline}</h2>
-        {review.target_template_title && (
-          <p style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{de ? 'Vorgabe' : 'Prescribed'}: {review.target_template_title}</p>
-        )}
-      </div>
-
-      {/* Recommendation vs. actual */}
-      <div className="rounded-2xl p-3.5 flex flex-col gap-2.5" style={{ background: 'color-mix(in srgb, var(--color-paper) 55%, transparent)', border: '1px solid var(--color-rule)' }}>
-        <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'Vorgabe → Ist' : 'Target → actual'}</span>
-        <CompRow label={de ? 'Dauer' : 'Duration'} pair={review.duration} fmt={fmtMin} />
-        <CompRow label="TSS" pair={review.tss} fmt={fmtTss} />
-        {review.intensity_factor && <CompRow label={de ? 'Intensität (IF)' : 'Intensity (IF)'} pair={review.intensity_factor} fmt={fmtIf} />}
-      </div>
-
-      {/* Multi-activity wrap-up — totals + per-ride compliance chips */}
-      {multi && (
-        <div className="flex flex-col gap-2.5">
-          {totals && (
-            <div className="flex gap-5">
-              {([
-                { l: de ? 'EINHEITEN' : 'SESSIONS', v: `${totals.count}` },
-                { l: 'TSS', v: `${Math.round(totals.tss)}` },
-                { l: de ? 'DAUER' : 'DURATION', v: `${Math.round(totals.duration_minutes)} min` },
-                { l: de ? 'DISTANZ' : 'DISTANCE', v: totals.distance_km ? `${totals.distance_km.toFixed(1)} km` : '—' },
-              ]).map((s, i) => (
-                <div key={i} className="flex flex-col gap-1">
-                  <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{s.l}</span>
-                  <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{s.v}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {(review.activities ?? []).map((a, i) => {
-            const am = gradeMeta(a.compliance_grade ?? null, de)
-            return (
-              <div key={i} className="flex items-center justify-between gap-2 rounded-xl" style={{ padding: '8px 12px', background: 'color-mix(in srgb, var(--color-paper) 55%, transparent)', border: '1px solid var(--color-rule)' }}>
-                <span className="truncate" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{a.title}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  {a.tss != null && <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-muted)' }}>{Math.round(a.tss)} TSS</span>}
-                  {a.compliance_grade && (
-                    <span className="rounded-full" style={{ padding: '2px 8px', background: `color-mix(in srgb, ${am.color} 15%, transparent)`, color: am.color, fontSize: 11, fontWeight: 700 }}>{am.label}</span>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Coach feedback */}
-      {insights.length > 0 && (
-        <div className="flex flex-col gap-2.5">
-          {insights.map((it, i) => (
-            <div key={i} className="flex gap-2.5">
-              <span className="shrink-0 grid place-items-center rounded-full mt-0.5" style={{ width: 22, height: 22, background: `color-mix(in srgb, ${it.color} 15%, transparent)` }}>
-                <it.icon size={13} style={{ color: it.color }} />
-              </span>
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{it.label}</span>
-                <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{it.text}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

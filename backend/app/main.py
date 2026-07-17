@@ -1,13 +1,47 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.scheduler import run_all_user_syncs, scheduler
 
 logger = logging.getLogger(__name__)
+
+# ─── Content-Security-Policy ────────────────────────────────────────────────
+# Crafted for the built SPA (frontend/dist/index.html): a single ES-module
+# bundle + stylesheet from same-origin /assets, inline styles injected by the
+# React runtime, data: images/favicon, the same-origin API (connect-src), and
+# the Google Fonts stylesheet (fonts.googleapis.com) + font files
+# (fonts.gstatic.com) the page links. No inline/eval scripts are used, so
+# script-src stays a strict 'self' with no 'unsafe-inline'/'unsafe-eval'.
+_CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+        "img-src 'self' data:",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' data: https://fonts.gstatic.com",
+        "connect-src 'self'",
+        "manifest-src 'self'",
+        "worker-src 'self'",
+    ]
+)
+
+# Static security headers applied to every response.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(), camera=(), microphone=()",
+    "Content-Security-Policy": _CSP,
+}
 
 
 @asynccontextmanager
@@ -42,6 +76,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Attach security headers to every response.
+
+    Sets a strict CSP tuned for the served SPA, plus nosniff / anti-clickjacking
+    / referrer / permissions headers. HSTS is only emitted for HTTPS requests
+    (behind Railway's TLS-terminating proxy the scheme arrives via
+    X-Forwarded-Proto). We only *add* headers here — we never touch the
+    SPA handler's Cache-Control (index.html no-cache / hashed-asset immutable),
+    so caching behaviour is unchanged.
+    """
+    response = await call_next(request)
+    for key, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(key, value)
+
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    is_https = request.url.scheme == "https" or forwarded_proto == "https"
+    if is_https:
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=63072000; includeSubDomains",
+        )
+    return response
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Generic 500 handler — never leak stack traces / internals to clients.
+
+    FastAPI's HTTPException and request-validation errors are handled by their
+    own handlers before reaching here; this only catches truly unexpected
+    exceptions. The detail is logged server-side (with traceback) and the
+    client receives an opaque message.
+    """
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
 from app.api.auth import router as auth_router  # noqa: E402
 from app.api.athletes import router as athletes_router  # noqa: E402
 from app.api.goals import router as goals_router  # noqa: E402
@@ -59,6 +134,7 @@ from app.api.dashboards import router as dashboards_router  # noqa: E402
 from app.api.weeks import router as weeks_router  # noqa: E402
 from app.api.crews import router as crews_router  # noqa: E402
 from app.api.apple_health import router as apple_health_router  # noqa: E402
+from app.api.wahoo import router as wahoo_router  # noqa: E402
 from app.api.tab_layouts import router as tab_layouts_router  # noqa: E402
 from app.api.workouts import router as workouts_router  # noqa: E402
 from app.api.strength import router as strength_router  # noqa: E402
@@ -80,6 +156,7 @@ app.include_router(dashboards_router)
 app.include_router(weeks_router)
 app.include_router(crews_router)
 app.include_router(apple_health_router)
+app.include_router(wahoo_router)
 app.include_router(tab_layouts_router)
 app.include_router(workouts_router)
 app.include_router(strength_router)

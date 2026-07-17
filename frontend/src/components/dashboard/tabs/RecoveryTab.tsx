@@ -9,8 +9,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
 import {
-  Activity, Heart, Wind, Droplet, Thermometer, Moon, Calendar, Zap, Sunset,
-  ChevronRight, type LucideIcon,
+  Activity, Heart, Wind, Droplet, Thermometer, Moon, Zap, Sunset,
+  ChevronRight, LineChart, type LucideIcon,
 } from 'lucide-react'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
@@ -18,7 +18,7 @@ import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
 import { computeReadiness, readinessTier } from '../../../utils/metrics'
 import ScoreRing from '../../ui/ScoreRing'
 import MetricCard from '../../ui/MetricCard'
-import HoverBars from '../../ui/HoverBars'
+import { BottomSheet } from '../../strength/BottomSheet'
 import { useLocale } from '../../../contexts/LocaleContext'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
@@ -88,7 +88,7 @@ function Driver({
 export default function RecoveryTab() {
   const { locale } = useLocale()
   const de = locale === 'de'
-  const [balActive, setBalActive] = useState<number | null>(null)
+  const [calSheet, setCalSheet] = useState<string | null>(null)
   const today = useMemo(() => new Date(), [])
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 30), [today]), today)
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 7), [today]), today)
@@ -130,16 +130,6 @@ export default function RecoveryTab() {
   const rhrNow = latest?.resting_hr ?? null
   const sleepNow = latest?.sleep_score ?? null
   const stressNow = snapshot?.stress?.now ?? latest?.stress_level ?? null
-
-  // 7-day readiness series
-  const weekScores = useMemo(() => Array.from({ length: 7 }, (_, i) => {
-    const d = subDays(today, 6 - i)
-    const key = format(d, 'yyyy-MM-dd')
-    const m = byDate.get(key)
-    const s = m ? computeReadiness(m.hrv_status ?? null, m.body_battery ?? null, m.sleep_score ?? null) : null
-    return { key, label: format(d, 'EEEEE'), dateLabel: format(d, de ? 'EEEE, d. MMM' : 'EEEE, MMM d'), score: s, isToday: i === 6 }
-  }), [byDate, today, de])
-  const weekAvg = avg(weekScores.map((w) => w.score).filter((v): v is number => v != null))
 
   const status = tier === 'peak' || tier === 'ready'
     ? { t: de ? 'Du bist bereit für Leistung' : "You're primed to perform", s: de ? 'HRV und Ruhepuls sind im gesunden Bereich. Ziel: höhere Belastung heute.' : 'HRV and resting heart rate are in a healthy range. Aim for a higher strain today.' }
@@ -207,19 +197,6 @@ export default function RecoveryTab() {
     return Math.round(clamp(100 * (1 - stdMin / 120), 0, 100)) // 0 var→100%, 2h SD→0%
   }, [recentSleep])
 
-  // Recovery vs Strain — 7 columns: day strain (from TSS) + recovery capacity (readiness)
-  const balCols = useMemo(() => Array.from({ length: 7 }, (_, i) => {
-    const d = subDays(today, 6 - i)
-    const key = format(d, 'yyyy-MM-dd')
-    const tss = tssByDate.get(key) ?? 0
-    const strain = tss > 0 ? Math.min(21, tss / 8) : 0
-    const m = byDate.get(key)
-    const cap = m ? computeReadiness(m.hrv_status ?? null, m.body_battery ?? null, m.sleep_score ?? null) : null
-    return { key, label: format(d, 'EEEEE'), dateLabel: format(d, de ? 'EEEE, d. MMM' : 'EEEE, MMM d'), strain, strainPct: (strain / 21) * 100, cap, hasStrain: tss > 0 }
-  }), [byDate, tssByDate, today, de])
-  const overDays = balCols.filter((c) => c.cap != null && c.strainPct > c.cap).length
-  const balanced = overDays <= 2
-
   // Daytime stress distribution over last 7 days (Garmin stress 0–100)
   const stressBands = useMemo(() => {
     let low = 0, med = 0, high = 0
@@ -239,6 +216,43 @@ export default function RecoveryTab() {
   const greenDays = calDays.filter((c) => c.score != null && c.score >= 66).length
   const calLead = calDays.length ? calDays[0].weekday : 0
 
+  // Calendar-day detail — everything the daily feed backs for the tapped date.
+  // Honest "—" for any field Garmin didn't record that day.
+  const calDetail = useMemo(() => {
+    if (!calSheet) return null
+    const m = byDate.get(calSheet) ?? null
+    const s = m ? (m.training_readiness ?? computeReadiness(m.hrv_status ?? null, m.body_battery ?? null, m.sleep_score ?? null)) : null
+    const dsd = m?.sleep_detail ?? null
+    const stg = dsd ? [
+      { n: de ? 'Tief' : 'Deep', c: 'var(--color-strain)', s: dsd.deep_s },
+      { n: de ? 'Leicht' : 'Light', c: 'var(--color-stand)', s: dsd.light_s },
+      { n: 'REM', c: 'var(--color-recovery)', s: dsd.rem_s },
+      { n: de ? 'Wach' : 'Awake', c: 'var(--color-muted)', s: dsd.awake_s },
+    ] : []
+    const stgSum = stg.reduce((a, x) => a + (x.s ?? 0), 0)
+    const tss = tssByDate.get(calSheet) ?? 0
+    const strain = tss > 0 ? Math.min(21, tss / 8) : null
+    return {
+      key: calSheet,
+      dateLabel: format(parseISO(calSheet), de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d'),
+      hasData: m != null,
+      score: s,
+      tier: readinessTier(s ?? null),
+      hrv: m?.hrv_status ?? null,
+      rhr: m?.resting_hr ?? null,
+      sleepScore: m?.sleep_score ?? null,
+      sleepS: dsd?.total_s ?? null,
+      stages: stg,
+      stageSum: stgSum,
+      stress: m?.stress_level ?? null,
+      bodyBattery: m?.body_battery ?? null,
+      vo2max: m?.vo2max ?? null,
+      strain,
+      resp: dsd?.respiration_avg ?? null,
+      spo2: dsd?.spo2_avg ?? null,
+    }
+  }, [calSheet, byDate, tssByDate, de])
+
   // recommendation zone
   const zoneColor = tier === 'peak' || tier === 'ready' ? 'var(--color-recovery)' : tier === 'caution' ? 'var(--color-amber)' : 'var(--color-move)'
   const zoneLabel = tier === 'peak' || tier === 'ready' ? (de ? 'grüne Zone' : 'green zone') : tier === 'caution' ? (de ? 'gelbe Zone' : 'yellow zone') : (de ? 'rote Zone' : 'red zone')
@@ -249,21 +263,6 @@ export default function RecoveryTab() {
   const recBody = tier === 'peak' || tier === 'ready'
     ? (de ? 'HRV liegt über der Basislinie und der Schlaf war stark. Nutze das Fenster für eine Qualitätseinheit — schütze danach den Schlaf.' : 'HRV is above baseline and sleep was strong. Use the window for a quality session, then protect recovery tonight.')
     : (de ? 'Deine Signale zeigen Ermüdung. Halte es locker und ziele auf 7,5 h+ Schlaf, damit HRV und Anpassung zurückkommen.' : 'Your signals point to fatigue. Keep it easy and aim for 7.5h+ sleep so HRV and adaptation rebound.')
-
-  const vitals = [
-    {
-      label: de ? 'Atemfrequenz' : 'Respiratory Rate', unit: 'br/min',
-      value: sd?.respiration_avg != null ? sd.respiration_avg.toFixed(0) : null,
-      range: sd?.respiration_low != null && sd?.respiration_high != null ? `${sd.respiration_low.toFixed(0)}–${sd.respiration_high.toFixed(0)}` : null,
-    },
-    {
-      label: de ? 'Ruhe-SpO₂' : 'Resting SpO₂', unit: '%',
-      value: sd?.spo2_avg != null ? Math.round(sd.spo2_avg).toString() : null,
-      range: sd?.spo2_low != null && sd?.spo2_high != null ? `${Math.round(sd.spo2_low)}–${Math.round(sd.spo2_high)}` : null,
-    },
-    // Skin temp: Garmin returned skinTempDataExists:false — stays honest "—".
-    { label: de ? 'Hauttemperatur' : 'Skin Temperature', unit: '°C dev', value: null as string | null, range: null as string | null },
-  ]
 
   // Sleep Quality tiles (fixed .pen labels; fill the ones real data now backs).
   const sleepTiles: { l: string; v: string; note?: string }[] = [
@@ -283,9 +282,11 @@ export default function RecoveryTab() {
           <span className="eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>{format(today, de ? 'EEEE, d. MMM' : 'EEEE, MMM d').toUpperCase()}</span>
           <h1 className="num-display" style={{ fontSize: 28, color: 'var(--color-ink)' }}>{de ? 'Erholung' : 'Recovery'}</h1>
         </div>
-        <span className="grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
-          <Calendar size={20} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} />
-        </span>
+        <Link to="/recovery/trends" className="hover-card inline-flex items-center rounded-full" style={{ gap: 7, padding: '9px 14px', background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
+          <LineChart size={16} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Trends' : 'Trends'}</span>
+          <ChevronRight size={15} className="hover-arrow" style={{ color: 'var(--color-muted)' }} />
+        </Link>
       </div>
 
       {/* 2 · Recovery hero */}
@@ -346,31 +347,6 @@ export default function RecoveryTab() {
           trend={rhrNow != null && rhr7 != null ? { text: `${Math.round(Math.abs(rhrNow - rhr7))} ${rhrNow <= rhr7 ? (de ? 'unter Ø' : 'below avg') : (de ? 'über Ø' : 'above avg')}`, color: rhrNow <= rhr7 ? 'var(--color-recovery)' : 'var(--color-amber)', dir: rhrNow <= rhr7 ? 'down' : 'up' } : undefined} />
       </div>
 
-      {/* 5 · 7-Day Recovery */}
-      <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 18 }}>
-        <div className="flex items-center justify-between">
-          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? '7-Tage-Erholung' : '7-Day Recovery'}</span>
-          {weekAvg != null && <span className="inline-flex items-center rounded-full" style={{ padding: '5px 10px', background: 'var(--color-recovery-soft, color-mix(in srgb, var(--color-recovery) 15%, transparent))', fontSize: 12, fontWeight: 600, color: 'var(--color-recovery)' }}>{Math.round(weekAvg)}% {de ? 'Ø' : 'avg'}</span>}
-        </div>
-        <HoverBars
-          height={140}
-          gap={10}
-          radius={7}
-          bars={weekScores.map((w) => ({
-            value: w.score ?? 0,
-            valueLabel: w.score != null ? `${Math.round(w.score)}%` : DASH,
-            label: w.dateLabel,
-            color: w.score != null ? tierColor(w.score) : 'var(--color-surface-3)',
-            highlight: w.isToday,
-          }))}
-        />
-        <div className="flex gap-2.5">
-          {weekScores.map((w) => (
-            <span key={w.key} className="flex-1 text-center eyebrow" style={{ fontSize: 12, fontWeight: 600, color: w.isToday ? 'var(--color-ink-2)' : 'var(--color-muted)' }}>{w.label}</span>
-          ))}
-        </div>
-      </div>
-
       {/* 6 · Sleep (stages — no backend duration/stage feed → graceful) */}
       <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
         <div className="flex items-center justify-between">
@@ -405,51 +381,6 @@ export default function RecoveryTab() {
           ))}
         </div>
       </div>
-
-      {/* 7 · Baseline Trends · 14 days — hover any bar for its value + day */}
-      {(() => {
-        const last14 = metrics.slice(-14)
-        const dLabel = (m: typeof metrics[number]) => {
-          const k = (m.date ?? m.recorded_at ?? '').slice(0, 10)
-          return k ? format(parseISO(k), de ? 'EEEE, d. MMM' : 'EEEE, MMM d') : ''
-        }
-        const hrvs = last14.map((m) => ({ v: m.hrv_status, d: dLabel(m) })).filter((x): x is { v: number; d: string } => x.v != null)
-        const rhrs = last14.map((m) => ({ v: m.resting_hr, d: dLabel(m) })).filter((x): x is { v: number; d: string } => x.v != null)
-        const row = (label: string, pts: { v: number; d: string }[], color: string, unit: string) => {
-          if (pts.length < 3) return null
-          const vals = pts.map((p) => p.v)
-          const mx = Math.max(...vals), mn = Math.min(...vals), span = mx - mn || 1
-          return (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{label}</span>
-                <span className="flex items-end gap-1"><span className="num-mono" style={{ fontSize: 16, fontWeight: 700, color }}>{Math.round(vals[vals.length - 1])}</span><span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 2 }}>{unit}</span></span>
-              </div>
-              <HoverBars
-                height={64}
-                gap={4}
-                defaultColor={color}
-                bars={pts.map((p, i) => ({
-                  // height normalized min→max (20–100%) so trend shape reads; tooltip shows the real value
-                  value: 20 + ((p.v - mn) / span) * 80,
-                  valueLabel: `${Math.round(p.v)} ${unit}`,
-                  label: p.d,
-                  color,
-                  highlight: i === pts.length - 1,
-                }))}
-              />
-              <div className="flex justify-between"><span style={{ fontSize: 10, color: 'var(--color-muted)' }}>{de ? 'vor 14 T' : '14d ago'}</span><span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Heute' : 'Today'}</span></div>
-            </div>
-          )
-        }
-        return (
-          <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 18 }}>
-            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Basislinien-Trends · 14 Tage' : 'Baseline Trends · 14 days'}</span>
-            {row('HRV', hrvs, 'var(--color-recovery)', 'ms') ?? <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'HRV — zu wenig Daten' : 'HRV — not enough data'}</span>}
-            {row(de ? 'Ruhepuls' : 'Resting HR', rhrs, 'var(--color-strain)', 'bpm') ?? <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Ruhepuls — zu wenig Daten' : 'Resting HR — not enough data'}</span>}
-          </div>
-        )
-      })()}
 
       {/* 8 · Sleep Need Tonight — need/debt/bed-by COMPUTED from real sleep durations. */}
       <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
@@ -587,7 +518,7 @@ export default function RecoveryTab() {
         <div className="flex items-end justify-between">
           <div className="flex flex-col" style={{ gap: 2 }}>
             <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Erholungs-Kalender' : 'Recovery Calendar'}</span>
-            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Letzte 30 Tage' : 'Last 30 days'}</span>
+            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Letzte 30 Tage · Tag antippen' : 'Last 30 days · tap a day'}</span>
           </div>
           <div className="flex flex-col items-end">
             <span className="num-display" style={{ fontSize: 26, color: 'var(--color-recovery)' }}>{greenDays}</span>
@@ -598,9 +529,9 @@ export default function RecoveryTab() {
           {(de ? ['M', 'D', 'M', 'D', 'F', 'S', 'S'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S']).map((d, i) => <span key={i} className="text-center" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{d}</span>)}
           {Array.from({ length: calLead }).map((_, i) => <div key={`b${i}`} style={{ height: 34, borderRadius: 8, background: 'var(--color-surface-2)' }} />)}
           {calDays.map((c) => (
-            <div key={c.key} title={`${c.dateLabel} · ${c.score != null ? `${Math.round(c.score)}% ${de ? 'Bereitschaft' : 'readiness'}` : (de ? 'keine Daten' : 'no data')}`} className="grid place-items-center" style={{ height: 34, borderRadius: 8, background: c.score != null ? `color-mix(in srgb, ${tierColor(c.score)} 15%, transparent)` : 'var(--color-surface-2)', border: c.isToday ? '1.5px solid var(--color-accent)' : 'none', cursor: 'default' }}>
+            <button key={c.key} type="button" onClick={() => setCalSheet(c.key)} title={`${c.dateLabel} · ${c.score != null ? `${Math.round(c.score)}% ${de ? 'Bereitschaft' : 'readiness'}` : (de ? 'keine Daten' : 'no data')}`} className="grid place-items-center" style={{ height: 34, borderRadius: 8, padding: 0, background: c.score != null ? `color-mix(in srgb, ${tierColor(c.score)} 15%, transparent)` : 'var(--color-surface-2)', border: c.isToday ? '1.5px solid var(--color-accent)' : '1px solid transparent', cursor: 'pointer' }}>
               <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: c.score != null ? tierColor(c.score) : 'var(--color-muted)' }}>{c.day}</span>
-            </div>
+            </button>
           ))}
         </div>
         <div className="flex items-center gap-4">
@@ -608,25 +539,6 @@ export default function RecoveryTab() {
             <div key={l.n} className="flex items-center gap-1.5"><span style={{ width: 12, height: 12, borderRadius: 4, background: l.c }} /><span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{l.n}</span></div>
           ))}
         </div>
-      </div>
-
-      {/* 14 · Vitals Trends (SpO₂ / respiration / skin-temp not in feed → graceful) */}
-      <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 18 }}>
-        <div className="flex flex-col" style={{ gap: 2 }}>
-          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Vitalwert-Trends' : 'Vitals Trends'}</span>
-          <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? '14-Tage-Fenster vs. Basislinie' : '14-day window vs baseline'}</span>
-        </div>
-        {vitals.map((v) => (
-          <div key={v.label} className="flex flex-col" style={{ gap: 9 }}>
-            <div className="flex items-end justify-between">
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink-2)' }}>{v.label}</span>
-              <span className="flex items-end gap-1"><span className="num-display" style={{ fontSize: 17, color: v.value != null ? 'var(--color-ink)' : 'var(--color-ink-2)' }}>{v.value ?? DASH}</span><span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{v.unit}</span></span>
-            </div>
-            <div className="grid place-items-center" style={{ height: 52, borderRadius: 8, background: 'var(--color-surface-2)' }}>
-              <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{v.range != null ? `${de ? 'Bereich' : 'Range'} ${v.range} ${v.unit}` : (de ? 'Nicht erfasst' : 'Not tracked')}</span>
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* 15 · Behaviors & Journal (no journal feed → empty state) */}
@@ -643,62 +555,82 @@ export default function RecoveryTab() {
         </div>
       </div>
 
-      {/* 16 · Recovery vs Strain */}
-      <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
-        <div className="flex items-end justify-between">
-          <div className="flex flex-col" style={{ gap: 2 }}>
-            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Erholung vs. Belastung' : 'Recovery vs Strain'}</span>
-            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Diese Woche · Balance' : 'This week · balance'}</span>
-          </div>
-          <span className="flex items-center rounded-full" style={{ gap: 6, padding: '5px 10px', background: `color-mix(in srgb, ${balanced ? 'var(--color-recovery)' : 'var(--color-amber)'} 15%, transparent)` }}>
-            <span style={{ width: 8, height: 8, borderRadius: 4, background: balanced ? 'var(--color-recovery)' : 'var(--color-amber)' }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: balanced ? 'var(--color-recovery)' : 'var(--color-amber)' }}>{balanced ? (de ? 'Ausgewogen' : 'Balanced') : (de ? 'Überlastet' : 'Overreaching')}</span>
-          </span>
-        </div>
-        <div className="relative select-none">
-          {balActive != null && (() => {
-            const c = balCols[balActive]
-            return (
-              <div className="absolute z-20 pointer-events-none flex flex-col items-center" style={{ left: `${((balActive + 0.5) / balCols.length) * 100}%`, bottom: 120 + 8, transform: 'translateX(-50%)' }}>
-                <div className="rounded-[10px] px-2.5 py-1.5 flex flex-col items-center gap-0.5 whitespace-nowrap" style={{ background: 'var(--color-surface-3)', border: '1px solid var(--color-rule)', boxShadow: '0 6px 18px rgba(0,0,0,0.45)' }}>
-                  <span className="num-display" style={{ fontSize: 13, lineHeight: 1.2, color: 'var(--color-strain)' }}>{c.hasStrain ? `${c.strain.toFixed(1)} ${de ? 'Belastung' : 'strain'}` : (de ? 'Ruhetag' : 'Rest day')}</span>
-                  <span className="num-display" style={{ fontSize: 13, lineHeight: 1.2, color: 'var(--color-recovery)' }}>{c.cap != null ? `${Math.round(c.cap)}% ${de ? 'Kapazität' : 'capacity'}` : (de ? 'keine Erholungsdaten' : 'no recovery data')}</span>
-                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-muted)' }}>{c.dateLabel}</span>
+      {/* Calendar-day detail — tap a past day in the calendar to browse it. */}
+      <BottomSheet
+        open={calSheet != null}
+        onClose={() => setCalSheet(null)}
+        eyebrow={de ? 'TAGESDETAIL' : 'DAY DETAIL'}
+        title={calDetail?.dateLabel ?? ''}
+      >
+        {calDetail && (
+          !calDetail.hasData ? (
+            <div className="grid place-items-center rounded-[16px]" style={{ minHeight: 120, background: 'var(--color-surface-2)' }}>
+              <span style={{ fontSize: 13, color: 'var(--color-muted)' }}>{de ? 'Keine Daten für diesen Tag' : 'No data recorded for this day'}</span>
+            </div>
+          ) : (
+            <div className="flex flex-col" style={{ gap: 14 }}>
+              {/* Readiness headline */}
+              <div className="flex items-center justify-between rounded-[16px] p-4" style={{ background: 'var(--color-surface-2)' }}>
+                <div className="flex flex-col" style={{ gap: 2 }}>
+                  <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{de ? 'ERHOLUNG' : 'RECOVERY'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{calDetail.tier ? (de ? 'Bereitschaft' : 'Readiness') : (de ? 'keine Bewertung' : 'no score')}</span>
                 </div>
-                <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid var(--color-surface-3)' }} />
+                <div className="flex items-end" style={{ gap: 4 }}>
+                  <span className="num-display" style={{ fontSize: 40, lineHeight: 1, color: tierColor(calDetail.score ?? null) }}>{calDetail.score != null ? Math.round(calDetail.score) : DASH}</span>
+                  {calDetail.score != null && <span style={{ fontSize: 13, fontWeight: 600, color: tierColor(calDetail.score), paddingBottom: 4 }}>%</span>}
+                </div>
               </div>
-            )
-          })()}
-          <div className="flex items-end justify-between" style={{ gap: 6 }}>
-            {balCols.map((c, i) => {
-              const over = c.cap != null && c.strainPct > c.cap
-              return (
-                <div
-                  key={c.key}
-                  className="flex-1"
-                  style={{ position: 'relative', height: 120, cursor: 'pointer', outline: balActive === i ? '2px solid color-mix(in srgb, var(--color-ink) 25%, transparent)' : 'none', outlineOffset: 1, borderRadius: 8 }}
-                  onPointerEnter={() => setBalActive(i)}
-                  onPointerDown={() => setBalActive(i)}
-                  onPointerLeave={() => setBalActive((cur) => (cur === i ? null : cur))}
-                >
-                  <div style={{ position: 'absolute', inset: 0, borderRadius: 8, background: 'var(--color-surface-2)' }} />
-                  {c.cap != null && <div style={{ position: 'absolute', left: 0, right: 0, bottom: `${(c.cap / 100) * 120}px`, height: 87, maxHeight: `${(c.cap / 100) * 120}px`, borderRadius: 8, background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)' }} />}
-                  {c.hasStrain && <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${Math.max(4, (c.strainPct / 100) * 120)}px`, borderRadius: 8, background: over ? 'var(--color-amber)' : 'var(--color-strain)' }} />}
-                  {c.cap != null && <div style={{ position: 'absolute', left: 0, right: 0, bottom: `${(c.cap / 100) * 120}px`, height: 3, borderRadius: 2, background: 'var(--color-recovery)' }} />}
+
+              {/* Vitals grid */}
+              <div className="grid grid-cols-2" style={{ gap: 10 }}>
+                {[
+                  { l: 'HRV', v: calDetail.hrv != null ? String(Math.round(calDetail.hrv)) : DASH, u: 'ms', c: 'var(--color-recovery)' },
+                  { l: de ? 'Ruhepuls' : 'Resting HR', v: calDetail.rhr != null ? String(Math.round(calDetail.rhr)) : DASH, u: 'bpm', c: 'var(--color-accent)' },
+                  { l: de ? 'Body Battery' : 'Body Battery', v: calDetail.bodyBattery != null ? String(Math.round(calDetail.bodyBattery)) : DASH, u: '/100', c: 'var(--color-recovery)' },
+                  { l: de ? 'Tagesstress' : 'Daytime stress', v: calDetail.stress != null ? String(Math.round(calDetail.stress)) : DASH, u: '/100', c: 'var(--color-amber)' },
+                  { l: de ? 'Belastung' : 'Strain', v: calDetail.strain != null ? calDetail.strain.toFixed(1) : DASH, u: '/21', c: 'var(--color-strain)' },
+                  { l: 'VO₂max', v: calDetail.vo2max != null ? String(Math.round(calDetail.vo2max)) : DASH, u: '', c: 'var(--color-exercise)' },
+                ].map((t) => (
+                  <div key={t.l} className="flex flex-col rounded-[14px] p-3" style={{ background: 'var(--color-surface-2)', gap: 3 }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{t.l}</span>
+                    <span className="flex items-end" style={{ gap: 3 }}>
+                      <span className="num-display" style={{ fontSize: 22, color: t.v === DASH ? 'var(--color-ink-2)' : t.c }}>{t.v}</span>
+                      {t.u && t.v !== DASH && <span style={{ fontSize: 10, color: 'var(--color-muted)', paddingBottom: 3 }}>{t.u}</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Sleep */}
+              <div className="flex flex-col rounded-[16px] p-4" style={{ background: 'var(--color-surface-2)', gap: 12 }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2"><Moon size={16} style={{ color: 'var(--color-strain)' }} /><span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Schlaf' : 'Sleep'}</span></div>
+                  {calDetail.sleepScore != null && <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-strain)' }}>{Math.round(calDetail.sleepScore)}% {de ? 'Leistung' : 'perf.'}</span>}
                 </div>
-              )
-            })}
-          </div>
-        </div>
-        <div className="flex justify-between" style={{ gap: 6 }}>
-          {balCols.map((c) => <span key={c.key} className="flex-1 text-center" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{c.label}</span>)}
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5"><span style={{ width: 12, height: 12, borderRadius: 4, background: 'var(--color-strain)' }} /><span style={{ fontSize: 11, color: 'var(--color-ink-2)' }}>{de ? 'Tagesbelastung' : 'Day strain'}</span></div>
-          <div className="flex items-center gap-1.5"><span style={{ width: 14, height: 3, borderRadius: 2, background: 'var(--color-recovery)' }} /><span style={{ fontSize: 11, color: 'var(--color-ink-2)' }}>{de ? 'Erholungskapazität' : 'Recovery capacity'}</span></div>
-          <div className="flex items-center gap-1.5"><span style={{ width: 12, height: 12, borderRadius: 4, background: 'var(--color-amber)' }} /><span style={{ fontSize: 11, color: 'var(--color-ink-2)' }}>{de ? 'Überlastung' : 'Overreach'}</span></div>
-        </div>
-      </div>
+                <div className="flex items-end" style={{ gap: 6 }}>
+                  <span className="num-display" style={{ fontSize: 28, color: 'var(--color-ink)' }}>{fmtHm(calDetail.sleepS)}</span>
+                  <span style={{ fontSize: 12, color: 'var(--color-muted)', paddingBottom: 5 }}>{calDetail.sleepS != null ? (de ? 'geschlafen' : 'asleep') : (de ? 'nicht erfasst' : 'not tracked')}</span>
+                </div>
+                {calDetail.stageSum > 0 && (
+                  <>
+                    <div className="flex overflow-hidden" style={{ height: 12, borderRadius: 6, gap: 2 }}>
+                      {calDetail.stages.map((s) => ((s.s ?? 0) > 0 ? <div key={s.n} title={`${s.n}: ${fmtHm(s.s)}`} style={{ width: `${((s.s ?? 0) / calDetail.stageSum) * 100}%`, background: s.c }} /> : null))}
+                    </div>
+                    <div className="flex justify-between">
+                      {calDetail.stages.map((s) => (
+                        <div key={s.n} className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5"><span style={{ width: 7, height: 7, borderRadius: 999, background: s.c }} /><span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-ink-2)' }}>{s.n}</span></div>
+                          <span className="num-display" style={{ fontSize: 12, color: 'var(--color-ink)' }}>{fmtHm(s.s)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        )}
+      </BottomSheet>
     </div>
   )
 }

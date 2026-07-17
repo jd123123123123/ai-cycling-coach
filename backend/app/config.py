@@ -1,5 +1,11 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
+
+# Public default secrets that MUST NOT be used to sign tokens in production.
+_INSECURE_SECRET_DEFAULTS = {
+    "change-me-in-production",
+    "change-me-refresh-secret",
+}
 
 
 class Settings(BaseSettings):
@@ -13,7 +19,9 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "change-me-in-production"
     JWT_REFRESH_SECRET_KEY: str = "change-me-refresh-secret"
     CORS_ORIGINS: str = "http://localhost:5173"
-    DEBUG: bool = True
+    # Fail closed: default to production posture. Local/dev must set DEBUG=True
+    # explicitly (via .env) to run with the insecure default secrets below.
+    DEBUG: bool = False
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
@@ -26,6 +34,27 @@ class Settings(BaseSettings):
     # Container default was /data/garmin_tokens (volume-mounted) but that path is
     # read-only on bare-metal macOS dev — override via env var when running natively.
     GARMIN_TOKEN_STORE_ROOT: str = "/data/garmin_tokens"
+
+    # ------------------------------------------------------------------
+    # Wahoo Cloud API (OAuth2 authorization-code flow).
+    # The Wahoo integration is "configured" only when both the client id
+    # and secret are present — otherwise /wahoo/connect returns 409 and the
+    # app boots normally (feature simply unavailable).
+    # Register an app at https://developers.wahooligan.com to obtain these.
+    # ------------------------------------------------------------------
+    WAHOO_CLIENT_ID: str = ""
+    WAHOO_CLIENT_SECRET: str = ""
+    # OAuth redirect URI (must match the one registered with Wahoo). When unset,
+    # /wahoo/connect derives it from the incoming request base URL.
+    WAHOO_REDIRECT_URI: str = ""
+    # Wahoo token encryption key. Falls back to GARMIN_ENCRYPTION_KEY when unset
+    # so a single Fernet key can protect every integration's tokens at rest.
+    WAHOO_ENCRYPTION_KEY: str = ""
+
+    @property
+    def wahoo_configured(self) -> bool:
+        """Wahoo is usable only when both client id and secret are set."""
+        return bool(self.WAHOO_CLIENT_ID and self.WAHOO_CLIENT_SECRET)
 
     # ------------------------------------------------------------------
     # AI Coach (Phase 5) — Anthropic Claude integration.
@@ -57,6 +86,32 @@ class Settings(BaseSettings):
                 f"Got: {v}"
             )
         return v
+
+    @model_validator(mode="after")
+    def _guard_production_secrets(self) -> "Settings":
+        """Fail closed in production: never sign JWTs with the public default keys.
+
+        When DEBUG is False (production posture), refuse to boot if either JWT
+        signing secret is still the shipped ``change-me*`` placeholder — anyone
+        could forge tokens against a public default. Local/dev (DEBUG=True) keeps
+        running on defaults for zero-config setup.
+        """
+        if self.DEBUG:
+            return self
+        offenders = [
+            name
+            for name, value in (
+                ("JWT_SECRET_KEY", self.JWT_SECRET_KEY),
+                ("JWT_REFRESH_SECRET_KEY", self.JWT_REFRESH_SECRET_KEY),
+            )
+            if value in _INSECURE_SECRET_DEFAULTS
+        ]
+        if offenders:
+            raise ValueError(
+                "Refusing to start in production (DEBUG=False) with default secret(s): "
+                f"{', '.join(offenders)}. Set strong, unique values in the environment."
+            )
+        return self
 
     @property
     def cors_origins_list(self) -> list[str]:

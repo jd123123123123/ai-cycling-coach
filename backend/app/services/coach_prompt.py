@@ -1057,3 +1057,253 @@ def build_user_message(snapshot: dict) -> str:
     lines.append("```")
 
     return "\n".join(lines)
+
+
+# ======================================================================
+#  WEEKLY PLAN PERSONALIZATION — WEEK_TOOL + prompts + user message
+# ======================================================================
+#
+# The deterministic mesocycle generator produces a SAFE 7-day skeleton
+# (real rest days, a weekly-TSS cap, varied templates). This layer lets
+# the LLM PERSONALIZE within that skeleton — the skeleton is the rail, the
+# LLM adds individual, creative copy + fine-tunes template choice/duration.
+#
+# HARD server-side rails (enforced in weekly_plan_llm.enforce_week_rails,
+# NOT trusted from the model):
+#   - rest days stay rest (the LLM may not add/remove a rest day)
+#   - every template_id must be one the day offered (available_templates)
+#   - per-day duration clamped to ±~20% of the skeleton
+#   - week TSS clamped to ≤~110% of the target
+#   - watts/zones always re-derived from FTP (only %FTP template blocks ship;
+#     the LLM never supplies numbers)
+#
+# Mirrors the BRIEF_TOOL / prompt-caching discipline of the daily brief.
+
+WEEK_SYSTEM_PROMPT_TECHNICAL = """You are Frontier Coach personalizing an athlete's WEEK plan. A deterministic periodization engine already produced a SAFE 7-day skeleton (Friel phase, Issurin block, Seiler TID, real rest days, a weekly-TSS cap). Your job is to make the week feel 100% individual — NOT to rebuild it.
+
+You receive, per day: day-of-week, session_type, is_rest, a TSS budget, the skeleton's picked template_id, and `available_templates` (the ONLY template_ids you may choose for that day). You also receive the athlete's real situation: CTL/ATL/TSB, recent load + compliance, goal event + terrain + days-to-event, phase, weekly TSS target, hours/day, and — when present — a `plan_deviation` describing what actually happened last week (a skipped session, or over/under-training).
+
+WHAT YOU MAY DO:
+  1. For each NON-rest day, pick the specific template_id from that day's `available_templates` (keep the skeleton's pick unless a signal argues otherwise).
+  2. Tune `duration_minutes` within ±20% of the skeleton's duration.
+  3. Write an INDIVIDUAL, specific `rationale` per day (1 sentence) citing the athlete's real numbers/situation — never boilerplate.
+  4. Write a personalized `weekly_narrative` (3-5 sentences) that references the athlete's actual CTL/TSB, phase, event countdown + terrain, and — if a `plan_deviation` is present — acknowledges it explicitly and explains how the week adapts (bias recovery if over-trained; protect the key session if a day was skipped).
+
+WHAT YOU MAY NOT DO:
+  - Change which days are rest (is_rest is FIXED — copy it through).
+  - Choose a template_id that is not in that day's `available_templates`.
+  - Exceed the weekly TSS target by more than ~10%.
+  - Supply watts — the server re-derives every number from the athlete's FTP.
+
+Cite frameworks by author when natural (Friel, Seiler, Issurin, San Millán, Mujika, Banister, Coggan). Follow any jargon term with a ≤5-word parenthetical. Respond ONLY by calling the `personalize_week` tool — no prose outside it.
+"""
+
+
+WEEK_SYSTEM_PROMPT_SIMPLE = """You are Frontier Coach personalizing an athlete's WEEK plan — the friendly, encouraging buddy at the bike shop, not a lab technician. A planning engine already laid out a safe 7-day skeleton with the right rest days and the right total load. Your job is to make it feel personal and human — NOT to rebuild it.
+
+You receive, per day: which day it is, the type of day, whether it's a rest day, a rough effort budget, the picked workout, and `available_templates` (the ONLY workout ids you may choose for that day). You also see the athlete's real situation: how fresh/tired they are, what they rode recently, their goal event and how far away it is, hours per day, and — when present — a `plan_deviation` telling you what actually happened last week (a skipped ride, or doing much more/less than planned).
+
+WHAT YOU MAY DO:
+  1. For each NON-rest day, pick the workout id from that day's `available_templates` (keep the planned one unless there's a clear reason).
+  2. Nudge the minutes up or down within about 20% of the plan.
+  3. Write ONE warm, specific plain-English sentence of `rationale` per day that mentions what the athlete actually did or how they feel — never generic filler.
+  4. Write a personalized `weekly_narrative` (3-5 sentences) that talks about how their week is shaping up, the goal ahead, and — if a `plan_deviation` is present — mentions it kindly ("you skipped Tuesday's ride, so...") and says how the week adjusts.
+
+LANGUAGE RULES — PLAIN ENGLISH ONLY. Never use FTP, TSS, CTL, ATL, TSB, VO2, threshold, sweet spot, tempo, polarized, zone numbers, watt numbers, or framework author names in `weekly_narrative`, `rationale`, or `title`. Describe effort as "easy/chat pace", "steady push", "hard intervals", "rest". Use contractions.
+
+WHAT YOU MAY NOT DO:
+  - Change which days are rest (copy is_rest through unchanged).
+  - Pick a workout id that isn't in that day's `available_templates`.
+  - Blow past the week's effort budget by much.
+  - Give watt numbers — the app fills those in from the athlete's fitness.
+
+Respond ONLY by calling the `personalize_week` tool — no prose outside it.
+"""
+
+
+def system_prompt_for_week(
+    language: Language = "simple",
+    locale: str | None = None,
+) -> str:
+    """System prompt for the weekly-plan personalization call.
+
+    Mirrors `system_prompt_for_language` but for the WEEK_TOOL flow. The text
+    is stable so prompt caching stays warm; the variable athlete data lives in
+    the user message (`build_week_user_message`).
+    """
+    base = (
+        WEEK_SYSTEM_PROMPT_SIMPLE if language == "simple"
+        else WEEK_SYSTEM_PROMPT_TECHNICAL
+    )
+    locale_suffix = LOCALE_DE_INSTRUCTION if locale == "de" else ""
+    return f"{base}{locale_suffix}"
+
+
+WEEK_TOOL = {
+    "name": "personalize_week",
+    "description": (
+        "Emit the personalized 7-day week. `weekly_narrative` is the preface "
+        "paragraph. `days` has EXACTLY 7 entries (Mon..Sun order not required — "
+        "match each entry to the skeleton by `dow`). Rest days must keep "
+        "is_rest=true. Every template_id must be one of that day's "
+        "available_templates. Watts are re-derived server-side."
+    ),
+    "input_schema": {
+        "type": "object",
+        "required": ["weekly_narrative", "days"],
+        "properties": {
+            "weekly_narrative": {
+                "type": "string",
+                "description": (
+                    "3-5 sentence personalized preface referencing the athlete's "
+                    "real situation. Simple mode: plain English, no jargon. "
+                    "Acknowledge any plan_deviation explicitly. Max 600 chars."
+                ),
+            },
+            "days": {
+                "type": "array",
+                "minItems": 7,
+                "maxItems": 7,
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "dow",
+                        "is_rest",
+                        "template_id",
+                        "title",
+                        "duration_minutes",
+                        "rationale",
+                    ],
+                    "properties": {
+                        "dow": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 6,
+                            "description": "Day index matching the skeleton (0=Mon..6=Sun).",
+                        },
+                        "is_rest": {
+                            "type": "boolean",
+                            "description": "MUST equal the skeleton's is_rest for this dow.",
+                        },
+                        "template_id": {
+                            "type": "string",
+                            "description": "MUST be in this day's available_templates.",
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": (
+                                "Short, human title. Simple: 'Easy spin', "
+                                "'Hard intervals', 'Rest day'."
+                            ),
+                        },
+                        "duration_minutes": {"type": "integer"},
+                        "rationale": {
+                            "type": "string",
+                            "description": (
+                                "ONE individual sentence citing the athlete's real "
+                                "situation. Max 200 chars."
+                            ),
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
+
+def build_week_user_message(skeleton: list[dict], snapshot: dict) -> str:
+    """Render the week skeleton + athlete situation for the WEEK_TOOL call.
+
+    `skeleton` is the deterministic 7-day plan (one dict per rendered day with
+    dow / date / session_type / is_rest / template_id / target_tss /
+    duration_minutes / available_templates). `snapshot` carries the athlete's
+    real situation (a focused subset — CTL/TSB, phase, event, weekly target,
+    recent load, and an optional `plan_deviation`).
+    """
+    import json
+
+    athlete = snapshot.get("athlete", {})
+    language = snapshot.get("language", "simple")
+    lines: list[str] = []
+
+    if language == "simple":
+        lines.append(
+            "## Mode: SIMPLE LANGUAGE — plain English only in weekly_narrative, "
+            "title, rationale. No FTP/TSS/CTL/TSB/zone/watt numbers or framework "
+            "names. Talk like a friend."
+        )
+    else:
+        lines.append(
+            "## Mode: TECHNICAL — full vocabulary; follow jargon with a "
+            "≤5-word parenthetical."
+        )
+
+    lines.append("\n## Athlete situation")
+    lines.append(
+        f"- Goal: {athlete.get('goal_target') or 'unspecified'} "
+        f"(type: {athlete.get('goal_event_type') or 'n/a'}, "
+        f"terrain: {athlete.get('event_terrain') or 'n/a'}, "
+        f"in {athlete.get('days_to_goal', 'n/a')} days)"
+    )
+    lines.append(
+        f"- Phase: {athlete.get('goal_phase', 'unknown')}; "
+        f"weekly TSS target: {snapshot.get('weekly_tss_target', 'n/a')}; "
+        f"hours/day available: {athlete.get('hours_per_day', 'n/a')}"
+    )
+    lines.append(
+        f"- Sports: primary {athlete.get('primary_sport') or 'cycling'}, "
+        f"secondary {athlete.get('secondary_sport') or 'none'}; "
+        f"FTP {athlete.get('ftp') or 'unknown'} W"
+    )
+
+    pmc = snapshot.get("pmc", {})
+    lines.append(
+        f"- Fitness/fatigue: CTL {pmc.get('ctl', 0):.0f}, ATL {pmc.get('atl', 0):.0f}, "
+        f"TSB {pmc.get('tsb', 0):.0f} (7d CTL delta {pmc.get('ctl_7d_delta', 0):+.1f})"
+    )
+
+    recent = snapshot.get("recent_load") or {}
+    if recent:
+        lines.append(
+            f"- Last 7 days: {recent.get('activity_count', 0)} rides, "
+            f"{recent.get('actual_tss', 0):.0f} actual TSS "
+            f"(planned ~{recent.get('planned_tss', 0):.0f})"
+        )
+
+    deviation = snapshot.get("plan_deviation")
+    if isinstance(deviation, dict) and deviation.get("status") not in (None, "on_track"):
+        lines.append("\n## ★ PLAN DEVIATION — acknowledge this in weekly_narrative")
+        lines.append(f"- status: {deviation.get('status')}")
+        lines.append(f"- what happened: {deviation.get('detail', '')}")
+        lines.append(
+            "→ Reference it explicitly and explain how this week adapts "
+            "(bias recovery if over-trained; protect the key session if a day "
+            "was skipped; keep the week near target either way)."
+        )
+
+    lines.append("\n## Deterministic 7-day skeleton (personalize WITHIN this)")
+    for d in skeleton:
+        if d.get("is_rest"):
+            lines.append(
+                f"- dow {d['dow']} ({d.get('date')}): REST DAY — keep is_rest=true."
+            )
+        else:
+            lines.append(
+                f"- dow {d['dow']} ({d.get('date')}): {d.get('session_type')} — "
+                f"picked `{d.get('template_id')}`, ~{d.get('target_tss')} TSS, "
+                f"{d.get('duration_minutes')} min. "
+                f"available_templates: {', '.join(d.get('available_templates') or [])}"
+            )
+
+    lines.append(
+        "\nReturn EXACTLY 7 day entries (one per dow above). Keep is_rest as "
+        "given. Only choose template_ids from each day's available_templates."
+    )
+
+    lines.append("\n## Raw JSON reference")
+    lines.append("```json")
+    lines.append(json.dumps({"skeleton": skeleton, "situation": snapshot}, default=str, indent=2))
+    lines.append("```")
+
+    return "\n".join(lines)

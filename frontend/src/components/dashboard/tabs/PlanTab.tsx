@@ -8,12 +8,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
-import { Bike, Footprints, Infinity as InfinityIcon, Play, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, Moon } from 'lucide-react'
+import { Bike, Footprints, Infinity as InfinityIcon, Play, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles } from 'lucide-react'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLocale } from '../../../contexts/LocaleContext'
+import SessionReviewCard from '../SessionReviewCard'
 import { detectWorkoutSport } from '../../../api/coach'
 import type { ResolvedBlock, WorkoutSport } from '../../../api/coach'
 import type { DayPlan } from '../../../api/weeks'
@@ -90,8 +91,29 @@ export default function PlanTab() {
   const selDay = days.find((d) => d.date === selectedDate) ?? null
   const selectedIsToday = selDay?.is_today ?? (selectedDate === todayStr)
   const workout = brief?.prescribed_workout
+  // Session Review for the day trained — attached to the brief for TODAY only.
+  // When the selected strip day is today and the athlete has already logged a
+  // session, show the same Session Review card that appears on the Today tab.
+  const review = brief?.post_ride_review ?? null
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
-  const goalName = (evidence.athlete as Record<string, unknown> | undefined)?.goal_target as string | undefined
+  const athleteEv = (evidence.athlete as Record<string, unknown> | undefined) ?? {}
+  const goalName = athleteEv.goal_target as string | undefined
+  // Rest-day detection — identical rule to TodayTab: no workout, a rest/recovery
+  // template id or category, a rest/recovery title, or ~0 TSS & ~0 duration all
+  // mean "no session prescribed". Keeps the Train-tab WOD honest on rest days.
+  const isRestDay = useMemo(() => {
+    if (!workout) return true
+    const id = (workout.template_id ?? '').toLowerCase()
+    const cat = (workout.category ?? '').toLowerCase()
+    const title = (workout.title ?? '').toLowerCase()
+    if (/^(rest|recovery)/.test(id)) return true
+    if (/\b(rest|recovery)\b/.test(cat) || /\b(ruhetag|erholung)\b/.test(cat)) return true
+    if (/\b(rest day|ruhetag)\b/.test(title)) return true
+    const tss = workout.predicted_tss ?? 0
+    const dur = workout.duration_minutes ?? 0
+    if (tss <= 1 && dur <= 1) return true
+    return false
+  }, [workout])
 
   const weekStart = week?.week_start ? parseISO(week.week_start) : subDays(today, 7)
   const trainedDays = useMemo(() => new Set((acts?.activities ?? []).filter((a) => (a.tss ?? 0) > 0).map((a) => (a.started_at ?? a.date ?? '').slice(0, 10))), [acts])
@@ -100,14 +122,30 @@ export default function PlanTab() {
   // Everything below is scoped to the toggle so the page never shows one sport's
   // numbers under another's label. 'all' → the combined week.
   const sportDays = useMemo(() => days.filter((d) => sportMatch(d.sport)), [days, sport])
-  const sportSessions = sportDays.filter((d) => d.category !== 'rest')
-  const upcoming = sportDays.filter((d) => d.category !== 'rest' && !d.is_today && parseISO(d.date) >= today)
+  // A day's prescribed seconds — prefer the explicit target, but fall back to the
+  // sum of its interval blocks. LLM personalization can null out
+  // `duration_seconds_target` while keeping the interval structure, so this
+  // recovers the real planned hours instead of collapsing to "—".
+  const dayDurSec = (d: DayPlan) => d.duration_seconds_target ?? ((d.intervals ?? []).reduce((s, iv) => s + (iv.duration_seconds ?? 0), 0))
+  // A day is a real session when it carries any prescribed content — content-based
+  // so it survives category/duration re-shaping. True rest/gap days have none.
+  const isSessionDay = (d: DayPlan) => d.category !== 'rest' && (dayDurSec(d) > 0 || (d.intervals?.length ?? 0) > 0 || (d.target_tss ?? 0) > 0)
+  const sportSessions = sportDays.filter(isSessionDay)
+  const upcoming = sportDays.filter((d) => isSessionDay(d) && !d.is_today && parseISO(d.date) >= today)
   const hasSportSessions = sportSessions.length > 0
   const sportWord = sport === 'bike' ? (de ? 'Rad' : 'Bike') : sport === 'run' ? (de ? 'Lauf' : 'Run') : (de ? 'Alle' : 'All')
 
+  // Days-to-event — meso is the primary source, but it can be null even when the
+  // athlete has a goal date. Fall back to the coach evidence (days_to_goal /
+  // goal_event_date) so weeks-left doesn't regress to "—" when a goal exists.
+  const daysToGoalEv = typeof athleteEv.days_to_goal === 'number' ? athleteEv.days_to_goal as number : null
+  const goalEventDate = typeof athleteEv.goal_event_date === 'string' ? athleteEv.goal_event_date as string : null
+  const daysToEventResolved = meso?.days_to_event ?? daysToGoalEv
+    ?? (goalEventDate ? Math.max(0, Math.round((parseISO(goalEventDate).getTime() - today.getTime()) / 86400000)) : null)
+
   // Plan card — real aggregates, scoped to the selected discipline.
-  const weeksLeft = meso?.days_to_event != null ? Math.max(0, Math.ceil(meso.days_to_event / 7)) : null
-  const weekHours = sportDays.reduce((s, d) => s + (d.duration_seconds_target ?? 0), 0) / 3600
+  const weeksLeft = daysToEventResolved != null ? Math.max(0, Math.ceil(daysToEventResolved / 7)) : null
+  const weekHours = sportDays.reduce((s, d) => s + dayDurSec(d), 0) / 3600
   const sessionCount = sportSessions.length
   // Sport-specific TSS target = this sport's planned days; 'all' prefers the meso figure.
   const sportTargetTss = sportDays.reduce((s, d) => s + (d.target_tss ?? 0), 0)
@@ -156,6 +194,87 @@ export default function PlanTab() {
   const strengthDone = useMemo(() => (acts?.activities ?? []).filter((a) => a.sport === 'gym' && parseISO(a.started_at ?? a.date ?? '') >= weekStart).length, [acts, weekStart])
 
   const fmtDur = (s: number | null) => s == null ? '' : s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m` : `${Math.round(s / 60)} min`
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Plan-status card — plan position + projection + change/illness notes.
+  // Plan-level (not sport-scoped): meso weekly target + all-sport completed TSS.
+  // ─────────────────────────────────────────────────────────────────────────
+  const projection = week?.projection ?? null
+  const readiness = week?.readiness ?? null
+  const planChanges = week?.plan_changes ?? null
+
+  // Zone 1 — where we are. Phase stepper base→build→peak→taper.
+  const PHASE_STEPS = [
+    { key: 'base', en: 'Base', de: 'Grundlage' },
+    { key: 'build', en: 'Build', de: 'Aufbau' },
+    { key: 'peak', en: 'Peak', de: 'Peak' },
+    { key: 'taper', en: 'Taper', de: 'Taper' },
+  ] as const
+  const phaseKey = (meso?.phase ?? '').toLowerCase()
+  const activePhaseIdx = PHASE_STEPS.findIndex((p) => phaseKey.includes(p.key))
+  const BLOCK_POS: Record<string, { en: string; de: string }> = {
+    accumulation: { en: 'Accumulation', de: 'Akkumulation' },
+    transmutation: { en: 'Transmutation', de: 'Transmutation' },
+    realization: { en: 'Realization', de: 'Realisierung' },
+    recovery: { en: 'Recovery', de: 'Erholung' },
+  }
+  const blockPosLabel = meso?.block_position ? (de ? BLOCK_POS[meso.block_position]?.de : BLOCK_POS[meso.block_position]?.en) ?? meso.block_position : null
+  const weekOfMeso = meso?.block_index_in_meso != null ? meso.block_index_in_meso + 1 : null
+  const daysToEvent = daysToEventResolved
+  const planTarget = meso?.weekly_tss_target ?? 0
+  const planDone = useMemo(() => (acts?.activities ?? [])
+    .filter((a) => parseISO(a.started_at ?? a.date ?? '') >= weekStart)
+    .reduce((s, a) => s + (a.tss ?? 0), 0), [acts, weekStart])
+  const planPct = planTarget > 0 ? Math.min(100, (planDone / planTarget) * 100) : 0
+
+  // Zone 2 — projection chart geometry (50%/80% confidence bands + central path).
+  // NaN-safe: the backend can (transiently) emit null current/projected and
+  // non-finite band values. We filter to finite-only points, guard a zero range,
+  // and bail to the honest empty state rather than feed NaN to any SVG attribute.
+  const projChart = useMemo(() => {
+    if (!projection || projection.mode === 'insufficient') return null
+    const W = 320, H = 116, PL = 4, PR = 4, PT = 10, PB = 16
+    // Keep only points where EVERY band value is a finite number.
+    const pts = (projection.path ?? []).filter((p) =>
+      Number.isFinite(p.central) && Number.isFinite(p.p25) && Number.isFinite(p.p75) &&
+      Number.isFinite(p.p10) && Number.isFinite(p.p90))
+    if (pts.length < 2) return null
+    const xs = pts.map((_, i) => PL + (i / (pts.length - 1)) * (W - PL - PR))
+    const allLow = Math.min(...pts.map((p) => p.p10))
+    const allHigh = Math.max(...pts.map((p) => p.p90))
+    const range = allHigh - allLow
+    // Degenerate (zero/negative/non-finite) range → nothing meaningful to draw.
+    if (!Number.isFinite(range) || range <= 0) return null
+    const y = (v: number) => PT + (1 - (v - allLow) / range) * (H - PT - PB)
+    const line = pts.map((p, i) => `${xs[i].toFixed(1)},${y(p.central).toFixed(1)}`).join(' ')
+    const band = (lo: 'p10' | 'p25', hi: 'p75' | 'p90') => {
+      const top = pts.map((p, i) => `${xs[i].toFixed(1)},${y(p[hi]).toFixed(1)}`)
+      const bot = pts.map((p, i) => `${xs[i].toFixed(1)},${y(p[lo]).toFixed(1)}`).reverse()
+      return [...top, ...bot].join(' ')
+    }
+    return {
+      W, H, line, band80: band('p10', 'p90'), band50: band('p25', 'p75'),
+      startX: xs[0], startY: y(pts[0].central), endX: xs[xs.length - 1], endY: y(pts[pts.length - 1].central),
+    }
+  }, [projection])
+  // Current → projected headline numbers — only finite values become real digits.
+  const projCurrent = projection && Number.isFinite(projection.current_estimate as number) ? Math.round(projection.current_estimate as number) : null
+  const projProjected = projection && Number.isFinite(projection.projected_central as number) ? Math.round(projection.projected_central as number) : null
+
+  // Zone 3 — notes. Color + icon keyed off readiness status (falls back to plan_changes).
+  const readyStatus = readiness?.status ?? 'unknown'
+  const noteColor = readyStatus === 'illness' ? 'var(--color-move)'
+    : readyStatus === 'overreaching' ? 'var(--color-amber)'
+      : readyStatus === 'amber' ? 'var(--color-amber)'
+        : readyStatus === 'green' ? 'var(--color-recovery)'
+          : 'var(--color-muted)'
+  const NoteIcon = readyStatus === 'illness' ? Thermometer
+    : readyStatus === 'overreaching' ? Flame
+      : readyStatus === 'amber' ? AlertTriangle
+        : readyStatus === 'green' ? Check
+          : Info
+  const hasChangeNote = !!planChanges?.message?.trim()
+  const onTrackCalm = !hasChangeNote && readyStatus === 'green'
 
   // ── Per-session sport-specific meta derivation (Upcoming rows) ──
   // Category → representative zone when a session carries no interval blocks.
@@ -227,6 +346,151 @@ export default function PlanTab() {
         ))}
       </div>
 
+      {/* Plan status — position + projection + change/illness notes. */}
+      {(meso || projection || planChanges || readiness) && (
+        <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 20 }}>
+          {/* Header */}
+          <div className="flex items-center gap-2">
+            <MapIcon size={15} style={{ color: 'var(--color-accent)' }} />
+            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{de ? 'PLAN-STATUS' : 'PLAN STATUS'}</span>
+          </div>
+
+          {/* ── Zone 1 · Where we are ── */}
+          <div className="flex flex-col" style={{ gap: 12 }}>
+            {/* Phase stepper */}
+            <div className="flex items-center" style={{ gap: 6 }}>
+              {PHASE_STEPS.map((p, i) => {
+                const active = i === activePhaseIdx
+                const past = activePhaseIdx >= 0 && i < activePhaseIdx
+                return (
+                  <div key={p.key} className="flex-1 flex flex-col" style={{ gap: 5 }}>
+                    <div style={{ height: 4, borderRadius: 999, background: active ? 'var(--color-accent)' : past ? 'var(--color-accent-soft)' : 'var(--color-surface-2)' }} />
+                    <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, color: active ? 'var(--color-accent)' : 'var(--color-muted)', letterSpacing: '0.02em' }}>{de ? p.de : p.en}</span>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Block position + week of meso + days to event */}
+            <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
+              {blockPosLabel && (
+                <span className="inline-flex items-center rounded-full px-3 py-1" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 11.5, fontWeight: 600 }}>{blockPosLabel}</span>
+              )}
+              {weekOfMeso != null && (
+                <span className="inline-flex items-center rounded-full px-3 py-1" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 11.5, fontWeight: 600 }}>{de ? `Woche ${weekOfMeso}` : `Week ${weekOfMeso}`}</span>
+              )}
+              {daysToEvent != null && (
+                <span className="inline-flex items-center gap-1 rounded-full px-3 py-1" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 11.5, fontWeight: 700 }}>
+                  <Target size={12} /> {daysToEvent} {de ? 'Tage bis Event' : 'days to event'}
+                </span>
+              )}
+            </div>
+            {/* Weekly TSS target + progress-so-far */}
+            {planTarget > 0 && (
+              <div className="flex flex-col" style={{ gap: 6 }}>
+                <div className="flex items-baseline justify-between">
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Wochen-TSS' : 'Weekly TSS'}</span>
+                  <span className="num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>{Math.round(planDone)} / {Math.round(planTarget)}</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: 'var(--color-surface-2)', overflow: 'hidden' }}>
+                  <div style={{ width: `${planPct}%`, height: '100%', borderRadius: 999, background: 'var(--color-accent)' }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ height: 1, background: 'var(--color-rule)' }} />
+
+          {/* ── Zone 2 · Projection — where we can land ── */}
+          <div className="flex flex-col" style={{ gap: 12 }}>
+            <div className="flex items-center gap-2">
+              <TrendingUp size={14} style={{ color: 'var(--color-muted)' }} />
+              <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'PROGNOSE' : 'PROJECTION'}</span>
+            </div>
+            {projection && projection.mode !== 'insufficient' && projChart ? (
+              <>
+                {/* Metric label + current → projected */}
+                <div className="flex items-end justify-between flex-wrap" style={{ gap: 8 }}>
+                  <div className="flex flex-col" style={{ gap: 2 }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{projection.metric_label}</span>
+                    <div className="flex items-baseline" style={{ gap: 6 }}>
+                      <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink-2)' }}>{projCurrent != null ? projCurrent : '—'}</span>
+                      {/* Arrow only when both ends are real numbers — never a lone/broken chevron. */}
+                      {projCurrent != null && projProjected != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
+                      {projProjected != null && <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>{projProjected}</span>}
+                      <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-muted)' }}>{projection.unit}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Confidence-band chart */}
+                <svg viewBox={`0 0 ${projChart.W} ${projChart.H}`} className="w-full" style={{ display: 'block' }} role="img" aria-label={de ? 'Prognose mit Konfidenzband' : 'Projection with confidence band'}>
+                  <polygon points={projChart.band80} fill="var(--color-accent)" opacity="0.10" />
+                  <polygon points={projChart.band50} fill="var(--color-accent)" opacity="0.18" />
+                  <polyline points={projChart.line} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                  <circle cx={projChart.startX} cy={projChart.startY} r="3" fill="var(--color-accent)" />
+                  <circle cx={projChart.endX} cy={projChart.endY} r="3.5" fill="var(--color-accent)" stroke="var(--color-paper-2)" strokeWidth="1.5" />
+                </svg>
+                <div className="flex items-center" style={{ gap: 12 }}>
+                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.18 }} /> {de ? '50% Band' : '50% band'}</span>
+                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.10 }} /> {de ? '80% Band' : '80% band'}</span>
+                </div>
+                {/* Outcome headline + honest caveat */}
+                {projection.projected_outcome && <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>{projection.projected_outcome}</p>}
+                {projection.caveat && <p style={{ fontSize: 11.5, color: 'var(--color-muted)', lineHeight: 1.4 }}>{projection.caveat}</p>}
+              </>
+            ) : (
+              // Honest empty state — no fabricated numbers.
+              <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: 'var(--color-surface-2)' }}>
+                <Sparkles size={18} style={{ color: 'var(--color-muted)', flexShrink: 0, marginTop: 1 }} />
+                <div className="flex flex-col" style={{ gap: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Prognose noch nicht freigeschaltet' : 'Projection not unlocked yet'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{de ? 'Logge ein paar harte Einheiten, um deine Landing-Prognose freizuschalten.' : 'Log a few hard efforts to unlock your projection.'}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ height: 1, background: 'var(--color-rule)' }} />
+
+          {/* ── Zone 3 · Notes — what changed / could change ── */}
+          <div className="flex flex-col" style={{ gap: 10 }}>
+            <div className="flex items-center gap-2">
+              <Info size={14} style={{ color: 'var(--color-muted)' }} />
+              <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'HINWEISE' : 'NOTES'}</span>
+            </div>
+            {hasChangeNote ? (
+              <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: `color-mix(in srgb, ${noteColor} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${noteColor} 30%, transparent)` }}>
+                <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 28, height: 28, background: `color-mix(in srgb, ${noteColor} 20%, transparent)`, marginTop: 1 }}>
+                  <NoteIcon size={15} style={{ color: noteColor }} />
+                </span>
+                <div className="flex flex-col" style={{ gap: 2 }}>
+                  <span style={{ fontSize: 13, color: 'var(--color-ink)', lineHeight: 1.4 }}>{planChanges!.message}</span>
+                  {readiness?.reason && readiness.reason !== planChanges!.message && (
+                    <span style={{ fontSize: 11.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{readiness.reason}</span>
+                  )}
+                </div>
+              </div>
+            ) : onTrackCalm ? (
+              <div className="flex items-center gap-3 rounded-2xl p-3.5" style={{ background: 'color-mix(in srgb, var(--color-recovery) 10%, transparent)' }}>
+                <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 28, height: 28, background: 'color-mix(in srgb, var(--color-recovery) 20%, transparent)' }}>
+                  <Check size={15} strokeWidth={2.6} style={{ color: 'var(--color-recovery)' }} />
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Auf Kurs — keine Änderungen' : 'On track — no changes'}</span>
+              </div>
+            ) : readiness?.reason ? (
+              <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: `color-mix(in srgb, ${noteColor} 12%, transparent)` }}>
+                <NoteIcon size={16} style={{ color: noteColor, flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 13, color: 'var(--color-ink)', lineHeight: 1.4 }}>{readiness.reason}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 rounded-2xl p-3.5" style={{ background: 'var(--color-surface-2)' }}>
+                <Info size={16} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? 'Noch keine Hinweise für diese Woche.' : 'No notes for this week yet.'}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Plan card → Load & Form drill-down */}
       <Link to="/load-form" className="rounded-[24px] p-5 hover-card flex flex-col gap-4" style={cardStyle}>
         <div className="flex items-start justify-between gap-3">
@@ -287,8 +551,26 @@ export default function PlanTab() {
         </div>
       )}
 
+      {/* Session Review — the day you trained: same card as the Today tab.
+          Attached to the brief for today only, so it renders when today is the
+          selected strip day and a completed session's review exists. */}
+      {selectedIsToday && review && <SessionReviewCard review={review} de={de} />}
+
+      {/* Rest day — sport-agnostic recovery state; no Start button, no target chips. */}
+      {selectedIsToday && workout && isRestDay && (
+        <div className="rounded-[24px] p-5 flex items-center gap-3.5" style={cardStyle}>
+          <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
+            <Moon size={22} strokeWidth={2} style={{ color: 'var(--color-recovery)' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Ruhetag' : 'Rest day'}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{de ? 'Erholung & Regeneration — keine Einheit geplant.' : 'Recovery & regeneration — no session prescribed.'}</div>
+          </div>
+        </div>
+      )}
+
       {/* Workout of day (coral) — today selected + today's session matches the sport */}
-      {selectedIsToday && workout && wodMatches && (
+      {selectedIsToday && workout && !isRestDay && wodMatches && (
         <div className="rounded-[24px] p-5 flex flex-col gap-4"
           style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-accent)', boxShadow: '0 10px 28px -10px color-mix(in srgb, var(--color-accent) 40%, transparent)' }}>
           <div className="flex items-center justify-between">
@@ -362,8 +644,9 @@ export default function PlanTab() {
         </div>
       )}
 
-      {/* No matching session today — sport-aware graceful state (never bike data under Lauf) */}
-      {selectedIsToday && !(workout && wodMatches) && (
+      {/* No matching session today — sport-aware graceful state (never bike data under Lauf).
+          Rest days are handled by their own card above, so exclude them here. */}
+      {selectedIsToday && !isRestDay && !(workout && wodMatches) && (
         <div className="rounded-[24px] p-5 flex items-center gap-3.5" style={cardStyle}>
           <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
             {sport === 'run' ? <Footprints size={22} strokeWidth={2} style={{ color: 'var(--color-exercise)' }} />

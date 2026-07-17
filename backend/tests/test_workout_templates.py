@@ -41,6 +41,9 @@ class TestTemplateLibrary:
             "anaerobic_tabata_8x20_10", "polarized_long_z2_4x4",
             # Second-batch additions — endurance (4)
             "maf_aerobic_90", "z2_progressive_90", "z2_long_240", "z2_fasted_60",
+            # Within-Z2 texture variants (3)
+            "z2_endurance_low_100", "z2_endurance_upper_75",
+            "z2_endurance_tempo_touch_75",
             # recovery
             "recovery_60",
             # tempo (3)

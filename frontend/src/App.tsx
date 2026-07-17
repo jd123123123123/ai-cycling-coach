@@ -13,6 +13,7 @@ import CalendarPage from './pages/CalendarPage'
 import ActivitiesPage from './pages/ActivitiesPage'
 import CoachPage from './pages/CoachPage'
 import SettingsPage from './pages/SettingsPage'
+import ProfileView from './pages/ProfileView'
 import DashboardsPage from './pages/DashboardsPage'
 import DebriefView from './pages/DebriefView'
 import SessionReportView from './pages/SessionReportView'
@@ -23,6 +24,7 @@ import RunProgressView from './pages/RunProgressView'
 import BikeProgressView from './pages/BikeProgressView'
 import LiftProgressView from './pages/LiftProgressView'
 import RunAnalysisView from './pages/RunAnalysisView'
+import RecoveryTrendsView from './pages/RecoveryTrendsView'
 
 function App() {
   return (
@@ -112,6 +114,14 @@ function App() {
             }
           />
           <Route
+            path="/profile"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <ProfileView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/dashboards"
             element={
               <ProtectedRoute checkOnboarding>
@@ -173,6 +183,8 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route path="/recovery/trends" element={<ProtectedRoute checkOnboarding><RecoveryTrendsView /></ProtectedRoute>} />
 
           <Route path="/progress/run" element={<ProtectedRoute checkOnboarding><RunProgressView /></ProtectedRoute>} />
           <Route path="/progress/bike" element={<ProtectedRoute checkOnboarding><BikeProgressView /></ProtectedRoute>} />

@@ -28,12 +28,56 @@ export interface MesoBlockContext {
   target_event_type: string | null
 }
 
+// Projection — "where we can land" decision-support forecast.
+export interface ProjectionPathPoint {
+  date: string // ISO YYYY-MM-DD
+  central: number
+  p10: number  // 80% band lower
+  p90: number  // 80% band upper
+  p25: number  // 50% band lower
+  p75: number  // 50% band upper
+}
+
+export interface ProjectionContext {
+  mode: 'performance' | 'fitness' | 'insufficient'
+  unit: string
+  metric_label: string
+  current_estimate: number | null
+  projected_central: number | null
+  band_50: [number, number] | null
+  band_80: [number, number] | null
+  path: ProjectionPathPoint[]
+  projected_outcome: string
+  caveat: string
+}
+
+// Readiness — green / amber / illness / overreaching signal.
+export interface ReadinessContext {
+  status: 'green' | 'amber' | 'illness' | 'overreaching' | 'unknown'
+  reason: string
+  suggest_easy: boolean
+}
+
+// Plan-changes — already-localized message surfacing skip/under/over + illness.
+export interface PlanChangeItem {
+  [key: string]: unknown
+}
+
+export interface PlanChangesContext {
+  status: string
+  message: string
+  changes: PlanChangeItem[]
+}
+
 export interface WeekResponse {
   week_start: string
   week_end: string
   language: 'simple' | 'technical'
   preface: string
   meso_block: MesoBlockContext
+  projection: ProjectionContext | null
+  readiness: ReadinessContext | null
+  plan_changes: PlanChangesContext | null
   days: DayPlan[]
 }
 

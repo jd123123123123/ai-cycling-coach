@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { TokenResponse, User, RegisterRequest } from '../types/auth'
+import type { TokenResponse, User, RegisterRequest, UserProfileUpdate } from '../types/auth'
 
 /**
  * Register a new user.
@@ -48,5 +48,14 @@ export async function refreshToken(): Promise<TokenResponse> {
  */
 export async function getMe(): Promise<User> {
   const response = await apiClient.get<User>('/auth/me')
+  return response.data
+}
+
+/**
+ * Update the current user's account profile (display name + avatar).
+ * PATCH /users/me — avatar_url must be a base64 data:image/... URI.
+ */
+export async function updateUser(data: UserProfileUpdate): Promise<User> {
+  const response = await apiClient.patch<User>('/users/me', data)
   return response.data
 }
