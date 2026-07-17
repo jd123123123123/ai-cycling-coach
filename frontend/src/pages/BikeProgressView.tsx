@@ -129,16 +129,16 @@ function MetricTile({ label, value, unit, cur, prev, higherBetter = true, digits
   const good = abs == null ? null : higherBetter ? abs >= 0 : abs <= 0
   const col = good == null ? C.muted : good ? C.recovery : C.move
   return (
-    <div className="flex flex-col rounded-[16px]" style={{ gap: 6, padding: 14, background: C.surface2, flex: 1, minWidth: 0 }}>
+    <div className="flex flex-col rounded-[16px]" style={{ gap: 6, padding: 14, background: C.surface2, minWidth: 0 }}>
       <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: C.ink2 }}>{label}</span>
-      <div className="flex items-end" style={{ gap: 3 }}>
-        <span className="num-display" style={{ fontSize: 24, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{value}</span>
-        {unit && <span style={{ fontSize: 11, color: C.muted, paddingBottom: 2 }}>{unit}</span>}
+      <div className="flex items-end" style={{ gap: 3, minWidth: 0 }}>
+        <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
+        {unit && <span style={{ fontSize: 11, color: C.muted, paddingBottom: 2, flex: 'none' }}>{unit}</span>}
       </div>
       {abs == null ? (
         <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{DASH}</span>
       ) : (
-        <span className="inline-flex items-center" style={{ gap: 3, fontSize: 11, fontWeight: 700, color: col }}>
+        <span className="inline-flex items-center" style={{ gap: 3, fontSize: 11, fontWeight: 700, color: col, flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
           {abs >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
           {abs >= 0 ? '+' : ''}{abs.toFixed(digits)}{pct != null ? ` · ${pct >= 0 ? '+' : ''}${Math.round(pct)}%` : ''}
         </span>
@@ -497,7 +497,7 @@ export default function BikeProgressView() {
               </div>
               <Pill color={C.accent} bg={soft(C.accent, 15)}>{de ? `${granTxt}` : `${granTxt} view`}</Pill>
             </div>
-            <div className="flex" style={{ gap: 10, flexWrap: 'wrap', rowGap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               <MetricTile label="TSS" value={noRides ? DASH : String(Math.round(tssNow))} cur={hasPrior ? tssNow : null} prev={hasPrior ? tssPrev : null} />
               <MetricTile label={de ? 'STUNDEN' : 'HOURS'} value={noRides ? DASH : n1(hoursNow)?.toString() ?? DASH} unit="h" cur={hasPrior ? hoursNow : null} prev={hasPrior ? hoursPrev : null} digits={1} />
               <MetricTile label={de ? 'DISTANZ' : 'DISTANCE'} value={noRides ? DASH : String(Math.round(distNow))} unit="km" cur={hasPrior ? distNow : null} prev={hasPrior ? distPrev : null} />

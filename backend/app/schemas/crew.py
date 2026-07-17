@@ -74,6 +74,12 @@ class StandingRow(BaseModel):
     weekly_score: int            # sum of daily points (cap 150/day) over the window
     weekly_tss: int              # total TSS over the window
     daily_pct: list[int]         # ≤14 summed buckets across the window, capped at 150/day
+    # Real per-member values over the SAME window — for metric re-ranking on the
+    # leaderboard. Nullable: honest "—" where the source is missing. Elevation
+    # and 5K-PR have no data source and are intentionally absent.
+    distance_km: float | None = None   # cumulative ridden distance (km)
+    wkg: float | None = None           # ftp_watts / weight_kg (threshold W/kg)
+    vo2max: float | None = None        # latest VO2max on/before window end
 
 
 class StandingsResponse(BaseModel):

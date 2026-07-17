@@ -98,6 +98,23 @@ export default function TodayTab() {
   }, [pmc])
 
   const workout = brief?.prescribed_workout
+  // Rest-day detection — a rest day has nothing to start or view. Robustly read
+  // the same PrescribedWorkout the plan card renders: no workout at all, a
+  // rest/recovery template id or category, a rest/recovery title, or zeroed
+  // targets (≈0 TSS and ≈0 duration) all mean "no session prescribed".
+  const isRestDay = useMemo(() => {
+    if (!workout) return true
+    const id = (workout.template_id ?? '').toLowerCase()
+    const cat = (workout.category ?? '').toLowerCase()
+    const title = (workout.title ?? '').toLowerCase()
+    if (/^(rest|recovery)/.test(id)) return true
+    if (/\b(rest|recovery)\b/.test(cat) || /\b(ruhetag|erholung)\b/.test(cat)) return true
+    if (/\b(rest day|ruhetag)\b/.test(title)) return true
+    const tss = workout.predicted_tss ?? 0
+    const dur = workout.duration_minutes ?? 0
+    if (tss <= 1 && dur <= 1) return true
+    return false
+  }, [workout])
   const review = brief?.post_ride_review ?? null
   const adaptations = (brief as { adaptations?: Adaptations | null } | undefined)?.adaptations ?? null
   const [whyOpen, setWhyOpen] = useState(false)
@@ -266,8 +283,25 @@ export default function TodayTab() {
       {/* Session Review — recommendation vs. what the athlete actually did */}
       {review && <SessionReview review={review} de={de} />}
 
+      {/* Rest day — no session prescribed: nothing to start or view */}
+      {isRestDay && (
+        <div
+          className="rounded-[24px] p-5 flex items-center gap-3.5"
+          style={cardStyle}
+        >
+          <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 46, height: 46, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
+            <Moon size={22} strokeWidth={2} style={{ color: 'var(--color-recovery)' }} />
+          </div>
+          <div className="flex flex-col gap-1 min-w-0">
+            <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-recovery)' }}>{de ? 'Heutiger Plan' : "Today's plan"}</span>
+            <h2 className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{de ? 'Ruhetag' : 'Rest day'}</h2>
+            <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{de ? 'Erholung & Regeneration — keine Einheit vorgesehen.' : 'Recovery & regeneration — no session prescribed.'}</p>
+          </div>
+        </div>
+      )}
+
       {/* Workout card (coral) */}
-      {workout && (
+      {!isRestDay && workout && (
         <div
           className="rounded-[24px] p-5 hover-card flex flex-col gap-[18px]"
           style={{ background: 'linear-gradient(125deg, color-mix(in srgb, var(--color-accent) 16%, var(--color-paper-2)) 0%, var(--color-paper-2) 72%)', border: '1px solid var(--color-accent)' }}

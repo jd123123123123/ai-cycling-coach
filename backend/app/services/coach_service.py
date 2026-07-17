@@ -879,12 +879,29 @@ async def build_snapshot(
                 )
                 per_activity_compliance.append(None)
 
+        # Sport-aware session count. The top-level ride grade compares against
+        # the endurance prescription (picked_template), so only same-discipline
+        # sessions as the primary ride may drive the single-vs-multi decision
+        # and the aggregate target. A strength/gym log on the same day still
+        # renders as its own row (in `activities`), but must NOT flip the
+        # endurance comparison into "Two sessions" mode or add its TSS target
+        # into the ride's aggregate.
+        primary_sport = (getattr(primary, "sport", None) or "cycling")
+        endurance_rows = [
+            r for r in today_rows
+            if (getattr(r, "sport", None) or "cycling") == primary_sport
+        ]
+        endurance_count = len(endurance_rows)
+        _comp_by_row_id = {
+            id(r): c for r, c in zip(today_rows, per_activity_compliance)
+        }
+
         # Single-session fields (top-level compliance) — populated only when
-        # exactly one activity. For n>=2 we still need the schema fields, but
-        # we leave the top-level grade None and aggregate the duration/TSS pairs
-        # so the FE has totals available.
-        if today_count == 1:
-            primary_compliance = per_activity_compliance[0] or ride_compliance_to_dict(
+        # exactly one same-discipline session. For endurance_count >= 2 we still
+        # need the schema fields, but we leave the top-level grade None and
+        # aggregate the duration/TSS pairs over same-sport rides only.
+        if endurance_count <= 1:
+            primary_compliance = _comp_by_row_id.get(id(primary)) or ride_compliance_to_dict(
                 score_ride(
                     actual_activity=primary,
                     target_template=picked_template,
@@ -894,14 +911,18 @@ async def build_snapshot(
                 )
             )
         else:
-            # For n>=2, build aggregate duration / tss pairs (target = sum
-            # over per-ride targets, actual = sum of actuals). Grade is
-            # intentionally None — the FE renders per-ride chips instead.
+            # For endurance_count >= 2, build aggregate duration / tss pairs
+            # (target = sum over per-ride targets, actual = sum of actuals) —
+            # summed over same-discipline rides only. Grade is intentionally
+            # None — the FE renders per-ride chips instead.
             agg_target_min = 0.0
-            agg_actual_min = float(today_total_minutes)
+            agg_actual_min = 0.0
             agg_target_tss = 0.0
-            agg_actual_tss = float(today_bundle["totals"]["tss"])
-            for c in per_activity_compliance:
+            agg_actual_tss = 0.0
+            for r in endurance_rows:
+                agg_actual_min += (r.duration_seconds or 0) / 60.0
+                agg_actual_tss += float(r.tss or 0.0)
+                c = _comp_by_row_id.get(id(r))
                 if not c:
                     continue
                 d = c.get("duration") or {}
@@ -949,7 +970,33 @@ async def build_snapshot(
                 "phase": phase,
                 "session_type": today_session,
                 "template_id": picked_template.id,
+                "template_title": picked_template.name,
             }
+
+        # Target-template descriptor for the review header. It MUST reflect the
+        # same prescription the compliance actually graded against — not the
+        # live `picked_template`, which flips to a rest day once the athlete has
+        # already trained today. When the athlete completed today's Progressive
+        # Z2, ride_compliance.score() correctly grades against that real session
+        # (from the recommendation) while picked_template is now "Rest day"; we
+        # source id/title from the compliance result so title + numbers are one
+        # coherent source and the header never reads "Rest day" for a graded ride.
+        from app.services.workout_templates import get_template as _get_template
+        graded_id = None
+        graded_title = None
+        if isinstance(primary_compliance, dict):
+            graded_id = primary_compliance.get("template_id")
+            graded_title = primary_compliance.get("template_title")
+        graded_tpl = _get_template(graded_id) if graded_id else None
+        target_template_descriptor = {
+            "id": graded_id or picked_template.id,
+            "title": graded_title or picked_template.name,
+            "category": graded_tpl.category if graded_tpl else picked_template.category,
+            "framework_cited": (
+                graded_tpl.framework_cited if graded_tpl else picked_template.framework_cited
+            ),
+            "purpose": graded_tpl.purpose if graded_tpl else picked_template.purpose,
+        }
 
         # Stitch per-activity compliance grades into the activities[] list so
         # _build_post_ride_review can hand them to the frontend untouched.
@@ -964,13 +1011,7 @@ async def build_snapshot(
         post_ride_data = {
             "compliance": primary_compliance,
             "trajectory": trajectory_to_dict(trajectory),
-            "target_template": {
-                "id": picked_template.id,
-                "title": picked_template.name,
-                "category": picked_template.category,
-                "framework_cited": picked_template.framework_cited,
-                "purpose": picked_template.purpose,
-            },
+            "target_template": target_template_descriptor,
             "actual_activity": {
                 "id": primary.id,
                 "duration_minutes": int(round((primary.duration_seconds or 0) / 60)),
@@ -983,6 +1024,10 @@ async def build_snapshot(
             # Step 3 — multi-activity additions
             "activities": activities_out,
             "totals": today_bundle["totals"],
+            # Sport-aware count of same-discipline sessions as the primary ride.
+            # Drives the single-vs-multi headline so a gym log alongside a ride
+            # doesn't force the endurance grade into "Two sessions" mode.
+            "primary_session_count": endurance_count,
         }
 
     # ---------------------------------------------------------
@@ -1535,13 +1580,25 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     if post_ride_present:
         snapshot_post = snapshot.get("post_ride") or {}
         language = snapshot.get("language", "simple")
-        fallback_review = _build_post_ride_review(snapshot_post, language)
+        # German rendering flag — the LLM path (this function) previously
+        # dropped `de`, so German briefs rendered the review in English.
+        # Mirror the rule-based path: render German whenever the UI locale is de.
+        de = snapshot.get("ui_locale") == "de"
+        fallback_review = _build_post_ride_review(snapshot_post, language, de=de)
         llm_review = llm_payload.get("post_ride_review")
         if isinstance(llm_review, dict):
             # Merge — LLM wins on narrative fields, compliance numbers always
             # come from the deterministic scorer (LLM can't override math).
             merged = dict(fallback_review)
-            for narrative_key in ("headline", "physiological_read", "goal_trajectory", "next_session_nudge"):
+            # The headline is a fixed, grade-keyed phrase. The LLM tends to emit
+            # it in English even for a German brief, which would clobber the
+            # localized fallback. For German, always keep the German headline
+            # from the grade map; only let the LLM override the longer,
+            # genuinely-generated narrative fields.
+            narrative_keys = ("physiological_read", "goal_trajectory", "next_session_nudge")
+            if not de:
+                narrative_keys = ("headline", *narrative_keys)
+            for narrative_key in narrative_keys:
                 if isinstance(llm_review.get(narrative_key), str) and llm_review[narrative_key].strip():
                     merged[narrative_key] = llm_review[narrative_key]
             out["post_ride_review"] = merged
@@ -2007,7 +2064,15 @@ def _build_post_ride_review(
         "distance_km": 0.0,
         "count": 0,
     }
-    count = int(totals.get("count") or len(activities))
+    # Sport-aware count: prefer the same-discipline session count (set by
+    # build_snapshot) so a gym log alongside a ride does not flip the endurance
+    # review into multi-session mode. Falls back to the raw activity count for
+    # older payloads that predate this field.
+    count = int(
+        snapshot_post_ride.get("primary_session_count")
+        or totals.get("count")
+        or len(activities)
+    )
 
     # Step 3 — multi-activity headline override. When n>=2 the LLM/fallback
     # narrative refers to "today's sessions" rather than a single ride; the

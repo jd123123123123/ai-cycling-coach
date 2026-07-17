@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
 from app.models.crew import CrewMembership
+from app.models.daily_metric import DailyMetric
 from app.models.user import User
 
 DAILY_TARGET_DEFAULT = 70   # TSS/day baseline when weekly_hours is unset
@@ -277,6 +278,64 @@ async def crew_duel(
     }
 
 
+def _wkg_from_profile(profile: AthleteProfile | None) -> float | None:
+    """Watts-per-kilo at threshold = ftp_watts / weight_kg. None when either
+    input is missing/zero — never fabricated."""
+    if profile is None:
+        return None
+    ftp = getattr(profile, "ftp_watts", None)
+    weight = getattr(profile, "weight_kg", None)
+    if not ftp or not weight or weight <= 0:
+        return None
+    return round(float(ftp) / float(weight), 2)
+
+
+def _extract_vo2max(raw) -> float | None:
+    """Pull the Garmin VO2max estimate out of a daily_metric raw_data blob.
+    Mirrors app/api/daily_metrics.py: training_status.mostRecentVO2Max.generic
+    .vo2MaxValue. Tolerates raw stored as a JSON string."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            import json
+
+            raw = json.loads(raw)
+        except Exception:
+            return None
+    if not isinstance(raw, dict):
+        return None
+    ts = raw.get("training_status") or {}
+    val = (((ts.get("mostRecentVO2Max") or {}).get("generic")) or {}).get("vo2MaxValue")
+    try:
+        return float(val) if val is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+async def _latest_vo2max_for_user(
+    db: AsyncSession, uid: int, end_on: date
+) -> float | None:
+    """The member's most recent VO2max on/before `end_on` (window end). Scans
+    daily_metric rows newest-first and returns the first that carries a value;
+    None when the athlete has no VO2max data at all. Honest — never invented."""
+    stmt = (
+        select(DailyMetric.raw_data)
+        .where(
+            DailyMetric.user_id == uid,
+            DailyMetric.date <= end_on,
+        )
+        .order_by(DailyMetric.date.desc(), DailyMetric.recorded_at.desc())
+        .limit(60)
+    )
+    rows = await db.execute(stmt)
+    for (raw,) in rows.all():
+        vo2 = _extract_vo2max(raw)
+        if vo2 is not None:
+            return round(vo2, 1)
+    return None
+
+
 async def crew_standings_window(
     db: AsyncSession,
     crew_id: int,
@@ -331,8 +390,9 @@ async def crew_standings_window(
         except Exception:
             tz = ZoneInfo("UTC")
 
-        # Per-day TSS bucket over the window.
+        # Per-day TSS bucket over the window + cumulative distance.
         per_day = {d: 0.0 for d in window_days}
+        distance_km = 0.0
         acts = await _activities_for_user_in_window(
             db, uid, window_start_utc, window_end_utc
         )
@@ -340,6 +400,7 @@ async def crew_standings_window(
             d = _local_day(a.started_at, tz)
             if d in per_day:
                 per_day[d] += float(a.tss or 0.0)
+                distance_km += float(a.distance_meters or 0.0) / 1000.0
 
         weekly_hours = (
             getattr(profile, "weekly_hours_available", None) if profile else None
@@ -358,6 +419,8 @@ async def crew_standings_window(
             day_points.append(pts)
             score += pts
 
+        vo2max = await _latest_vo2max_for_user(db, uid, end_on)
+
         standings.append(
             {
                 "user_id": uid,
@@ -368,6 +431,12 @@ async def crew_standings_window(
                 "weekly_score": score,
                 "weekly_tss": total_tss,
                 "daily_pct": _downsample_points(day_points),
+                # Per-member real values over the SAME window, for metric
+                # re-ranking on the frontend. Null where the source is missing
+                # (never fabricated). Elevation + 5K PR have no source → omitted.
+                "distance_km": round(distance_km, 1),
+                "wkg": _wkg_from_profile(profile),
+                "vo2max": vo2max,
             }
         )
 

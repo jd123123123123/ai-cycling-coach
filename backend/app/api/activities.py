@@ -133,6 +133,35 @@ async def get_activity(
     return ActivityRead.model_validate(activity)
 
 
+@router.delete(
+    "/{activity_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an activity by ID",
+)
+async def delete_activity(
+    activity_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> None:
+    """Delete one of the authenticated user's activities.
+
+    Useful for removing a mis-logged session (e.g. a gym entry logged as a
+    ride). Returns 204 on success, 404 if the activity does not exist or
+    belongs to a different user. RLS enforces ownership at the DB level.
+    """
+    deleted = await activity_service.delete_activity(
+        db=db,
+        user_id=current_user.id,
+        activity_id=activity_id,
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Activity not found",
+        )
+    await db.commit()
+
+
 @router.get(
     "/{activity_id}/stream-analysis",
     summary="Per-second stream-derived analysis (splits, HR zones, GPS, dynamics)",

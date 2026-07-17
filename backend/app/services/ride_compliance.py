@@ -90,6 +90,7 @@ class RideCompliance:
     phase: str
     session_type: str
     template_id: str
+    template_title: str  # display name of the template actually graded against
 
 
 # ======================================================================
@@ -308,6 +309,7 @@ def score_ride(
         phase=phase,
         session_type=session_type,
         template_id=target_template.id,
+        template_title=target_template.name,
     )
 
 
@@ -352,6 +354,22 @@ def _local_date_for_activity(activity: Activity):
     if activity.started_at is None:
         return None
     return activity.started_at.date()
+
+
+def _is_rest_like(template: WorkoutTemplate | None) -> bool:
+    """A template is 'rest-like' when it prescribes no real work — a rest day,
+    an empty/zero-TSS shell, or a template whose id is literally a rest day.
+
+    Used to decide whether a persisted `coach_recommendations` row is a coherent
+    grading target. A stale/empty row that resolves to a rest day must NOT
+    override a real session the athlete was actually shown on the plan card.
+    """
+    if template is None:
+        return True
+    tid = (template.id or "").lower()
+    if "rest" in tid:
+        return True
+    return float(template.base_tss or 0.0) <= 0.0 and _template_duration_minutes(template) <= 0.0
 
 
 def _template_from_recommendation(rec) -> WorkoutTemplate | None:
@@ -437,11 +455,26 @@ async def score(
             )
             rec = None
 
+    # Grading-target selection.
+    #
+    # `target_template` is the LIVE picked template — exactly what the athlete
+    # was shown on today's plan card (e.g. "Progressive Z2"). The persisted
+    # `coach_recommendations` row is only preferred when it is a COHERENT real
+    # session: a stale or empty row that resolves to a rest day (or a row that
+    # disagrees with a real live prescription) must never win, otherwise the
+    # review grades the completed ride against the wrong target (the classic
+    # "Rest Day" / 180 min / 156 TSS mismatch).
+    #
+    # Rule: whenever the live pick is a real session, grade against it — that
+    # keeps the target coherent with the plan card. Only fall back to the
+    # persisted recommendation when the live pick is itself rest-like but the
+    # recommendation carries real work (keeps older briefs sensible).
     chosen_template: WorkoutTemplate = target_template
     used_recommendation = False
-    if rec is not None:
+    target_is_real = not _is_rest_like(target_template)
+    if not target_is_real and rec is not None:
         rec_template = _template_from_recommendation(rec)
-        if rec_template is not None:
+        if rec_template is not None and not _is_rest_like(rec_template):
             chosen_template = rec_template
             used_recommendation = True
 
@@ -483,4 +516,5 @@ def ride_compliance_to_dict(rc: RideCompliance) -> dict:
         "phase": rc.phase,
         "session_type": rc.session_type,
         "template_id": rc.template_id,
+        "template_title": rc.template_title,
     }

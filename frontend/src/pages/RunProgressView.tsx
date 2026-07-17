@@ -397,7 +397,7 @@ export default function RunProgressView() {
               <span className="text-xs font-bold" style={{ color: 'var(--color-accent)' }}>{T(`${granTxt} view`, granTxt)}</span>
             </div>
           </div>
-          <div className="flex gap-2.5 flex-wrap">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
             <SummaryTile label={T('DISTANCE', 'DISTANZ')} value={runsNow ? String(Math.round(curKm)) : '—'} unit="km" cur={hasPrior ? curKm : null} prev={hasPrior ? priorKm : null} />
             <SummaryTile label={T('RUNS', 'LÄUFE')} value={String(runsNow)} cur={hasPrior ? runsNow : null} prev={hasPrior ? runsPrev : null} />
             <SummaryTile label={T('HOURS', 'STUNDEN')} value={runsNow ? hoursNow.toFixed(1) : '—'} unit="h" cur={hasPrior ? hoursNow : null} prev={hasPrior ? hoursPrev : null} digits={1} />
@@ -963,16 +963,16 @@ function SummaryTile({ label, value, unit, cur, prev, higherBetter = true, digit
   const good = abs == null ? null : higherBetter ? abs >= 0 : abs <= 0
   const col = good == null ? 'var(--color-muted)' : good ? 'var(--color-recovery)' : 'var(--color-move)'
   return (
-    <div className="flex flex-col rounded-[14px] p-3.5 flex-1" style={{ background: 'var(--color-surface-2)', gap: 5, minWidth: 0 }}>
+    <div className="flex flex-col rounded-[14px] p-3.5" style={{ background: 'var(--color-surface-2)', gap: 5, minWidth: 0 }}>
       <span className="text-[10px] font-semibold" style={{ color: 'var(--color-ink-2)', letterSpacing: 0.4 }}>{label}</span>
-      <div className="flex items-end gap-1">
-        <span className="text-2xl leading-none font-bold font-[Sora]" style={{ color: 'var(--color-ink)' }}>{value}</span>
-        {unit && <span className="text-[11px] pb-0.5" style={{ color: 'var(--color-muted)' }}>{unit}</span>}
+      <div className="flex items-end gap-1" style={{ minWidth: 0 }}>
+        <span className="text-[22px] leading-none font-bold font-[Sora]" style={{ color: 'var(--color-ink)', fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
+        {unit && <span className="text-[11px] pb-0.5" style={{ color: 'var(--color-muted)', flex: 'none' }}>{unit}</span>}
       </div>
       {abs == null ? (
         <span className="text-[11px] font-semibold" style={{ color: 'var(--color-muted)' }}>—</span>
       ) : (
-        <span className="inline-flex items-center gap-1 text-[11px] font-bold" style={{ color: col }}>
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold" style={{ color: col, flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
           {abs >= 0 ? <TrendingUp size={11} /> : <ArrowDownRight size={11} />}
           {abs >= 0 ? '+' : ''}{abs.toFixed(digits)}{pct != null ? ` · ${pct >= 0 ? '+' : ''}${Math.round(pct)}%` : ''}
         </span>

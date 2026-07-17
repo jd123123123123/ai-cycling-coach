@@ -445,16 +445,21 @@ export default function LiftProgressView() {
               <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent)' }}>{de ? granTxt : `${granTxt} view`}</span>
             </div>
           </div>
-          <div className="flex" style={{ gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
             {[
               { l: de ? 'EINHEITEN' : 'SESSIONS', v: sessionCount > 0 ? String(sessionCount) : DASH, delta: hasPrior ? sessionCount - gymPrior.length : null, unit: '' },
               { l: de ? 'PRO WOCHE' : 'PER WEEK', v: sessionCount > 0 ? `${perWeek}×` : DASH, delta: perWeekDelta, unit: '×' },
               { l: de ? 'BEREITSCHAFT' : 'READINESS', v: readiness != null ? String(Math.round(readiness)) : DASH, delta: readinessDelta, unit: '' },
             ].map((s) => (
-              <div key={s.l} className="flex flex-col flex-1 rounded-[14px]" style={{ gap: 5, padding: 13, background: 'var(--color-surface-2)', minWidth: 0 }}>
+              <div key={s.l} className="flex flex-col rounded-[14px]" style={{ gap: 5, padding: 13, background: 'var(--color-surface-2)', minWidth: 0 }}>
                 <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: 'var(--color-ink-2)' }}>{s.l}</span>
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1 }}>{s.v}</span>
-                {s.delta != null ? <DeltaChip delta={s.delta} unit={s.unit} sub={priorSub} /> : <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{DASH}</span>}
+                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.v}</span>
+                {s.delta != null ? (
+                  <span className="inline-flex items-center" style={{ gap: 3, fontSize: 11, fontWeight: 700, color: s.delta >= 0 ? C_GOOD : C_BAD, flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
+                    {s.delta >= 0 ? <ArrowUp size={11} color={C_GOOD} /> : <ArrowDown size={11} color={C_BAD} />}
+                    {s.delta >= 0 ? '+' : ''}{s.delta}{s.unit}
+                  </span>
+                ) : <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{DASH}</span>}
               </div>
             ))}
           </div>

@@ -42,6 +42,12 @@ export interface StandingRow {
   weekly_score: number  // sum of daily points over the window
   weekly_tss: number    // total TSS over the window
   daily_pct: number[]   // ≤14 summed buckets across the window
+  // Real per-member values over the same window (for metric re-ranking).
+  // Nullable — honest "—" where the source is missing. Elevation + 5K PR
+  // have no data source and are intentionally absent.
+  distance_km?: number | null  // cumulative ridden distance (km)
+  wkg?: number | null          // ftp_watts / weight_kg (threshold W/kg)
+  vo2max?: number | null       // latest VO2max on/before window end
 }
 
 export interface StandingsResponse {

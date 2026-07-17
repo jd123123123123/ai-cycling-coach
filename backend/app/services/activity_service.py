@@ -299,3 +299,21 @@ async def get_activity(
         )
     )
     return result.scalar_one_or_none()
+
+
+async def delete_activity(
+    db: AsyncSession,
+    user_id: int,
+    activity_id: int,
+) -> bool:
+    """Delete a single activity owned by ``user_id``.
+
+    Returns True when a row was deleted, False when no matching activity exists
+    for this user (missing or owned by someone else). The caller commits.
+    """
+    activity = await get_activity(db, user_id=user_id, activity_id=activity_id)
+    if activity is None:
+        return False
+    await db.delete(activity)
+    await db.flush()
+    return True

@@ -17,7 +17,7 @@ import {
 import {
   useDuel, useCrewStandings, useMyCrew, useCreateCrew, useLeaveCrew,
 } from '../../../hooks/useCrew'
-import type { DuelStats, CrewPeriod } from '../../../api/crew'
+import type { DuelStats, CrewPeriod, StandingRow } from '../../../api/crew'
 import {
   useDiscover, useIncomingInvites, useConnect, useAcceptInvite, useDeclineInvite,
 } from '../../../hooks/useConnections'
@@ -47,6 +47,34 @@ const BOARD_PERIODS: { id: CrewPeriod; en: string; de: string; phraseEn: string;
   { id: 'year', en: 'Year', de: 'Jahr', phraseEn: 'this year', phraseDe: 'dieses Jahr' },
 ]
 const capFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+// Crew-leaderboard ranking metrics. `live` chips re-rank + relabel the board
+// off real per-member data over the selected window; disabled chips (Elev,
+// 5K PR) have no data source yet and are greyed out honestly.
+type BoardMetricId = 'load' | 'distance' | 'wkg' | 'vo2max' | 'elev' | 'pr5k'
+interface BoardMetric {
+  id: BoardMetricId
+  en: string
+  de: string
+  live: boolean
+  unit?: string
+  unitDe?: string
+  value?: (s: StandingRow) => number | null
+  fmt?: (v: number) => string
+}
+const BOARD_METRICS: BoardMetric[] = [
+  { id: 'load', en: 'Load', de: 'Last', live: true, unit: 'pts', unitDe: 'Pkt',
+    value: (s) => s.weekly_score, fmt: (v) => `${Math.round(v)}` },
+  { id: 'distance', en: 'Distance', de: 'Distanz', live: true, unit: 'km', unitDe: 'km',
+    value: (s) => s.distance_km ?? null, fmt: (v) => `${Math.round(v)}` },
+  { id: 'wkg', en: 'W/kg', de: 'W/kg', live: true, unit: 'W/kg', unitDe: 'W/kg',
+    value: (s) => s.wkg ?? null, fmt: (v) => v.toFixed(1) },
+  { id: 'vo2max', en: 'VO2max', de: 'VO2max', live: true, unit: 'ml/kg', unitDe: 'ml/kg',
+    value: (s) => s.vo2max ?? null, fmt: (v) => v.toFixed(1) },
+  { id: 'elev', en: 'Elev', de: 'Höhe', live: false },
+  { id: 'pr5k', en: '5K PR', de: '5K-Best', live: false },
+]
+
 const innerStyle = { background: 'var(--color-surface-2)' } as const
 
 // Weekly personal load-challenge target (TSS). A round, honest weekly-volume goal.
@@ -131,6 +159,7 @@ export default function SocialTab() {
   const de = locale === 'de'
   const { data: duel } = useDuel()
   const [boardPeriod, setBoardPeriod] = useState<CrewPeriod>('week')
+  const [boardMetric, setBoardMetric] = useState<BoardMetricId>('load')
   const { data: standings } = useCrewStandings(boardPeriod)
   const { data: myCrew } = useMyCrew()
 
@@ -271,11 +300,29 @@ export default function SocialTab() {
   // Copy for the selected leaderboard window (subtitle prefix + row suffix).
   const boardPhrase = BOARD_PERIODS.find((p) => p.id === boardPeriod) ?? BOARD_PERIODS[1]
 
-  // ── Leaderboard rows (real standings, ranked by weekly score) ──
-  const board = useMemo(
-    () => (standings?.standings ? [...standings.standings].sort((a, b) => b.weekly_score - a.weekly_score) : []),
-    [standings],
+  // Active ranking metric (falls back to Load if a disabled chip is somehow set).
+  const boardMetricDef = useMemo(
+    () => BOARD_METRICS.find((m) => m.id === boardMetric && m.live) ?? BOARD_METRICS[0],
+    [boardMetric],
   )
+
+  // ── Leaderboard rows (real standings, ranked by the selected metric desc;
+  // members missing a value sort last, then by weekly score as a tiebreak) ──
+  const board = useMemo(() => {
+    const rows: StandingRow[] = standings?.standings ? [...standings.standings] : []
+    const val = boardMetricDef.value!
+    return rows.sort((a, b) => {
+      const av = val(a)
+      const bv = val(b)
+      const an = av == null
+      const bn = bv == null
+      if (an && bn) return b.weekly_score - a.weekly_score
+      if (an) return 1
+      if (bn) return -1
+      if (bv !== av) return (bv as number) - (av as number)
+      return b.weekly_score - a.weekly_score
+    })
+  }, [standings, boardMetricDef])
 
   // ── Feed: crew this week ──
   const feed = duel?.crew ?? []
@@ -548,24 +595,41 @@ export default function SocialTab() {
           })}
         </div>
 
-        {/* Metric chips (design chrome — ranking runs on real weekly load) */}
+        {/* Metric chips — a real ranking selector. Live chips re-rank + relabel
+            the board off real per-member data; Elev & 5K PR are greyed out
+            (no data source yet). */}
         <div className="flex gap-1.5">
-          {['Distance', 'Elev', 'W/kg', 'VO2max', '5K PR'].map((c, i) => (
-            <span key={c} className="flex-1 text-center rounded-full" style={{
-              background: i === 2 ? 'var(--color-accent)' : 'var(--color-surface-2)',
-              color: i === 2 ? 'var(--color-ink)' : 'var(--color-ink-2)',
-              padding: '8px 4px', fontSize: 11, fontWeight: 600,
-            }}>{c}</span>
-          ))}
+          {BOARD_METRICS.map((m) => {
+            const active = m.live && m.id === boardMetric
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={!m.live}
+                onClick={() => m.live && setBoardMetric(m.id)}
+                aria-pressed={active}
+                title={!m.live ? (de ? 'Noch nicht erfasst' : 'Not tracked yet') : undefined}
+                className="flex-1 text-center rounded-full"
+                style={{
+                  background: active ? 'var(--color-accent)' : 'var(--color-surface-2)',
+                  color: active ? 'var(--color-ink)' : m.live ? 'var(--color-ink-2)' : 'var(--color-muted)',
+                  padding: '8px 4px', fontSize: 11, fontWeight: active ? 700 : 600,
+                  opacity: m.live ? 1 : 0.5,
+                  cursor: m.live ? 'pointer' : 'not-allowed',
+                  transition: 'color 120ms, background 120ms',
+                }}
+              >{de ? m.de : m.en}</button>
+            )
+          })}
         </div>
 
-        {/* Normalization note */}
+        {/* Ranking note — reflects the live metric + honest gaps */}
         <div className="flex items-center gap-1.5 rounded-[12px]" style={{ background: 'var(--color-surface-2)', padding: '8px 11px' }}>
           <Info size={13} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.35 }}>
             {de
-              ? 'Aktuell nach Wochen-Trainingslast gewertet — W/kg-Normalisierung folgt bald.'
-              : 'Ranked by weekly training load for now — W/kg normalization coming soon.'}
+              ? `Gewertet nach ${boardMetricDef.de} · ${boardPhrase.phraseDe}. Höhenmeter & 5K-Best werden noch nicht erfasst.`
+              : `Ranked by ${boardMetricDef.en} · ${boardPhrase.phraseEn}. Elevation & 5K PR aren't tracked yet.`}
           </span>
         </div>
 
@@ -574,7 +638,17 @@ export default function SocialTab() {
             {board.map((s, i) => {
               const activeDays = s.daily_pct?.filter((d) => d > 0).length ?? 0
               const bucketCount = s.daily_pct?.length ?? 7
-              const gapToLead = Math.round(board[0].weekly_score - s.weekly_score)
+              // Prominent value + unit for the selected metric ("—" when missing).
+              const metricRaw = boardMetricDef.value!(s)
+              const metricShown = metricRaw == null ? '—' : boardMetricDef.fmt!(metricRaw)
+              const metricUnit = de ? boardMetricDef.unitDe : boardMetricDef.unit
+              // Gap to the leader, expressed in the selected metric (only when
+              // both this row and the leader have a value).
+              const leadRaw = boardMetricDef.value!(board[0])
+              const gapToLead =
+                leadRaw != null && metricRaw != null
+                  ? `${boardMetricDef.fmt!(leadRaw - metricRaw)} ${metricUnit}`
+                  : '—'
               return (
               <div key={s.user_id} className="hover-card flex flex-col rounded-[12px]" style={{ background: s.is_you ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : 'transparent', padding: '8px 10px' }}>
                 <div className="flex items-center gap-2.5">
@@ -585,8 +659,8 @@ export default function SocialTab() {
                     <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{Math.round(s.weekly_tss)} TSS · {de ? boardPhrase.phraseDe : boardPhrase.phraseEn}</span>
                   </div>
                   <div className="flex items-end gap-[3px]">
-                    <span className="num-display" style={{ fontSize: 19, color: s.is_you ? 'var(--color-accent)' : 'var(--color-ink)' }}>{Math.round(s.weekly_score)}</span>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 3 }}>{de ? 'Pkt' : 'pts'}</span>
+                    <span className="num-display" style={{ fontSize: 19, color: metricRaw == null ? 'var(--color-muted)' : s.is_you ? 'var(--color-accent)' : 'var(--color-ink)' }}>{metricShown}</span>
+                    {metricRaw != null && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 3 }}>{metricUnit}</span>}
                   </div>
                   <span className="hover-arrow"><ChevronRight size={15} style={{ color: 'var(--color-muted)' }} /></span>
                 </div>
@@ -597,12 +671,14 @@ export default function SocialTab() {
                     <MiniStat label={de ? 'LAST' : 'LOAD'} value={`${Math.round(s.weekly_tss)} TSS`} />
                     <MiniStat label={de ? 'PUNKTE' : 'SCORE'} value={`${Math.round(s.weekly_score)}`} />
                     <MiniStat label={de ? 'AKTIV' : 'ACTIVE'} value={de ? `${activeDays}/${bucketCount} aktiv` : `${activeDays}/${bucketCount} active`} />
-                    {i > 0 && <MiniStat label={de ? 'RÜCKSTAND' : 'TO LEAD'} value={`${gapToLead} ${de ? 'Pkt' : 'pts'}`} />}
+                    {i > 0 && <MiniStat label={de ? 'RÜCKSTAND' : 'TO LEAD'} value={gapToLead} />}
                   </div>
                 </div>
               </div>
             )})}
-            <p style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? `Punkte = Anteil am Tagesziel (${Math.round(standings!.daily_target_tss)} TSS/Tag).` : `Score = share of the daily target (${Math.round(standings!.daily_target_tss)} TSS/day).`}</p>
+            {boardMetric === 'load' && (
+              <p style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? `Punkte = Anteil am Tagesziel (${Math.round(standings!.daily_target_tss)} TSS/Tag).` : `Score = share of the daily target (${Math.round(standings!.daily_target_tss)} TSS/day).`}</p>
+            )}
           </>
         ) : (
           <p style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? 'Die Rangliste erscheint, sobald deine Crew fährt.' : 'The leaderboard fills once your crew rides.'}</p>
