@@ -45,7 +45,7 @@ Priority key: **P0** = unlock built value / foundation (small, high-leverage). *
 
 ## P1 — Signature differentiators
 
-### P1.1 "The Road" — forward-looking load corridor
+### P1.1 "The Road" — forward-looking load corridor ✅ SHIPPED (July 18)
 - **Why:** Gentler Streak's Activity Path is the best load viz in consumer fitness; ours can be honest physics (CTL ramp-rate envelope + TSB bounds + the actual planned week) and bike-native (drawn like a route profile). Directly answers "playful AND more insightful." Apple's ADA rationale explicitly cited their *bidirectional* nudge — ours must warn at both band edges.
 - **What:** One hero viz: past 21 days + today + 10 days ahead. Corridor = safe-load envelope; line = rolling actual; the ahead segment consumes P0.3's forward-PMC simulator with the planned week; key days marked; position-in-band → verbal state reusing readiness tiers; tap future day → that day's workout (route exists). Top-of-band warns overreaching, bottom warns detraining. Desktop+mobile, reduced-motion safe, EN/DE.
 - **Where:** new `TheRoadCard` on Today (absorbing the PMC sparkline), `pmc_service` forward fn + `api/weeks.py`.

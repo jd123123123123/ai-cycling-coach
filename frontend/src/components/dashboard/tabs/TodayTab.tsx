@@ -6,17 +6,18 @@
  * (Resting HR / HRV / Strain) → Streak card (weekday status dots).
  * Every value is real Garmin/backend data; no extra cards.
  */
-import { useMemo, useState, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../../api/client'
 import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
-import { subDays, format, startOfWeek, addDays, parseISO } from 'date-fns'
+import { subDays, format, startOfWeek, addDays } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { Flag, Heart, Activity, Zap, Target, Play, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
 import type { Adaptations } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
 import RecoveryEtaCard from '../RecoveryEtaCard'
+import TheRoadCard from '../TheRoadCard'
 import { useStreak, useSetAthleteStatus } from '../../../hooks/useStreak'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
@@ -93,27 +94,6 @@ export default function TodayTab() {
   const ctl = pmcLatest?.ctl ?? null
   const atl = pmcLatest?.atl ?? null
   const dCtl = pmcLatest && pmcWeek ? Math.round(pmcLatest.ctl - pmcWeek.ctl) : null
-
-  // Mini-PMC trend for the Training Load card: CTL (fitness) area + ATL (fatigue)
-  // line over the last 7 days — interactive (tap/hover a day for its values).
-  const loadTrend = useMemo(() => {
-    const rows = (pmc?.entries ?? []).slice(-7)
-    if (rows.length < 2) return null
-    const W = 300, H = 60, pad = 4
-    const max = Math.max(1, ...rows.map((r) => Math.max(r.ctl, r.atl)))
-    const x = (i: number) => pad + (i / (rows.length - 1)) * (W - 2 * pad)
-    const y = (v: number) => H - pad - (v / max) * (H - 2 * pad)
-    const line = (key: 'ctl' | 'atl') =>
-      rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join(' ')
-    const ctlLine = line('ctl')
-    const ctlArea = `${ctlLine} L${x(rows.length - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z`
-    const pts = rows.map((r, i) => ({
-      xf: rows.length > 1 ? i / (rows.length - 1) : 0,
-      cx: x(i), ctlY: y(r.ctl), atlY: y(r.atl),
-      date: r.date, ctl: r.ctl, atl: r.atl, tsb: r.tsb,
-    }))
-    return { W, H, ctlLine, ctlArea, atlLine: line('atl'), pts }
-  }, [pmc])
 
   const workout = brief?.prescribed_workout
   // Rest-day detection — a rest day has nothing to start or view. Robustly read
@@ -696,37 +676,9 @@ export default function TodayTab() {
         </div>
       )}
 
-      {/* Training load → Load & Form drill-down */}
-      <Link to="/load-form" className={`${CARD} hover-card flex flex-col gap-4`} style={cardStyle}>
-        <div className="flex items-center justify-between">
-          <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Trainingslast' : 'Training Load'}</span>
-          {dCtl != null && (
-            <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1" style={{ background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)' }}>
-              {dCtl >= 0 ? <TrendingUp size={13} style={{ color: 'var(--color-recovery)' }} /> : <TrendingDown size={13} style={{ color: 'var(--color-recovery)' }} />}
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-recovery)' }}>{de ? 'Optimaler Aufbau' : 'Optimal ramp'}</span>
-            </span>
-          )}
-        </div>
-        <div className="flex">
-          {([
-            { v: ctl != null ? `${Math.round(ctl)}` : '—', n: de ? 'Fitness' : 'Fitness', c: 'CTL', color: 'var(--color-strain)' },
-            { v: atl != null ? `${Math.round(atl)}` : '—', n: de ? 'Ermüdung' : 'Fatigue', c: 'ATL', color: 'var(--color-amber)' },
-            { v: typeof tsb === 'number' ? `${tsb >= 0 ? '+' : ''}${Math.round(tsb)}` : '—', n: 'Form', c: 'TSB', color: 'var(--color-recovery)' },
-          ]).map((x, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-0.5" style={i > 0 ? { borderLeft: '1px solid var(--color-rule)' } : undefined}>
-              <span className="num-display" style={{ fontSize: 26, color: x.color }}>{x.v}</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{x.n}</span>
-              <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{x.c}</span>
-            </div>
-          ))}
-        </div>
-        {loadTrend && <LoadTrendChart trend={loadTrend} de={de} />}
-        <div className="hover-reveal">
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
-            CTL {ctl != null ? Math.round(ctl) : '—'} · ATL {atl != null ? Math.round(atl) : '—'} · TSB {typeof tsb === 'number' ? `${tsb >= 0 ? '+' : ''}${Math.round(tsb)}` : '—'} — <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>{de ? 'Last & Form öffnen →' : 'Full load & form →'}</span>
-          </span>
-        </div>
-      </Link>
+      {/* The Road — load corridor: 21 days back, today, 10 days ahead (P1.1).
+          Absorbs the old Training Load card's stat row + sparkline. */}
+      <TheRoadCard ctlNow={ctl} atlNow={atl} tsbNow={typeof tsb === 'number' ? tsb : null} dCtl={dCtl} />
 
       {/* Recovery outlook — forward TSB projection ("fresh by Thursday") */}
       <RecoveryEtaCard />
@@ -958,77 +910,6 @@ function WhyInputChips({ whyInputs, frameworks, de }: {
   )
 }
 
-// ── Interactive 7-day PMC trend (Training Load card) ─────────────────────────
-interface TrendPoint { xf: number; cx: number; ctlY: number; atlY: number; date: string; ctl: number; atl: number; tsb: number }
-interface LoadTrend { W: number; H: number; ctlLine: string; ctlArea: string; atlLine: string; pts: TrendPoint[] }
-
-function LoadTrendChart({ trend, de }: { trend: LoadTrend; de: boolean }) {
-  const [hi, setHi] = useState<number | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
-  const pick = (clientX: number) => {
-    const el = ref.current
-    if (!el || trend.pts.length < 2) return
-    const r = el.getBoundingClientRect()
-    const f = Math.max(0, Math.min(1, (clientX - r.left) / r.width))
-    setHi(Math.round(f * (trend.pts.length - 1)))
-  }
-  const sel = hi != null ? trend.pts[hi] : null
-  const dateLabel = (iso: string) => {
-    try { return format(parseISO(iso), de ? 'EE d.M.' : 'EEE M/d') } catch { return iso }
-  }
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div
-        ref={ref}
-        style={{ position: 'relative', width: '100%', height: 60, touchAction: 'none', cursor: 'pointer' }}
-        onPointerMove={(e) => pick(e.clientX)}
-        onPointerDown={(e) => pick(e.clientX)}
-        onPointerLeave={() => setHi(null)}
-      >
-        {sel && (
-          <div
-            className="num-mono"
-            style={{
-              position: 'absolute', top: -4, transform: 'translateX(-50%)',
-              left: `${sel.xf * 100}%`, whiteSpace: 'nowrap', pointerEvents: 'none',
-              background: 'var(--color-paper)', border: '1px solid var(--color-rule)', borderRadius: 8,
-              padding: '3px 7px', fontSize: 10, fontWeight: 600, color: 'var(--color-ink)', zIndex: 2,
-            }}
-          >
-            {dateLabel(sel.date)} · <span style={{ color: 'var(--color-strain)' }}>{Math.round(sel.ctl)}</span> / <span style={{ color: 'var(--color-amber)' }}>{Math.round(sel.atl)}</span>
-          </div>
-        )}
-        <svg viewBox={`0 0 ${trend.W} ${trend.H}`} preserveAspectRatio="none" style={{ width: '100%', height: 60, display: 'block', overflow: 'visible' }}>
-          <defs>
-            <linearGradient id="ctlFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--color-strain)" stopOpacity="0.32" />
-              <stop offset="100%" stopColor="var(--color-strain)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path d={trend.ctlArea} fill="url(#ctlFill)" />
-          <path d={trend.ctlLine} fill="none" stroke="var(--color-strain)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-          <path d={trend.atlLine} fill="none" stroke="var(--color-amber)" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
-          {sel && (
-            <>
-              <line x1={sel.cx} y1={0} x2={sel.cx} y2={trend.H} stroke="var(--color-rule)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-              <circle cx={sel.cx} cy={sel.ctlY} r={3.5} fill="var(--color-strain)" vectorEffect="non-scaling-stroke" />
-              <circle cx={sel.cx} cy={sel.atlY} r={3.5} fill="var(--color-amber)" vectorEffect="non-scaling-stroke" />
-            </>
-          )}
-        </svg>
-      </div>
-      <div className="flex items-center gap-4">
-        <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)' }}>
-          <span style={{ width: 10, height: 2.5, borderRadius: 2, background: 'var(--color-strain)' }} />{de ? 'Fitness (CTL)' : 'Fitness (CTL)'}
-        </span>
-        <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)' }}>
-          <span style={{ width: 10, height: 2.5, borderRadius: 2, background: 'var(--color-amber)' }} />{de ? 'Ermüdung (ATL)' : 'Fatigue (ATL)'}
-        </span>
-        <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)', marginLeft: 'auto' }}>{de ? '1 Woche' : '1 week'}</span>
-      </div>
-    </div>
-  )
-}
 
 function MetricTile({ to, icon: Icon, iconColor, label, value, unit, trend }: {
   to: string; icon: typeof Heart; iconColor: string; label: string; value: string; unit: string
