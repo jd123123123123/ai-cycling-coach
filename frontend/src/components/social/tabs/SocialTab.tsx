@@ -35,6 +35,8 @@ import type {
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import { celebrate } from '../../../lib/confetti'
+import { useAdaptiveGate, type GateMode } from '../../../hooks/useAdaptiveGate'
+import CoachSafetyBanner from '../CoachSafetyBanner'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 
@@ -167,6 +169,11 @@ export default function SocialTab() {
   const invites = incoming ?? []
   const acceptInvite = useAcceptInvite()
   const declineInvite = useDeclineInvite()
+
+  // ── Coach-safety interlock: the adaptive engine outranks the competition.
+  // rest → banner reframes rest as the win + competitive CTAs pause;
+  // ease → softened banner; go → nothing changes. ──
+  const gate = useAdaptiveGate()
 
   // ── Nudges: incoming trash-talk feed + send ──
   const { data: incomingNudges } = useIncomingNudges()
@@ -357,6 +364,10 @@ export default function SocialTab() {
         </div>
       </div>
 
+      {/* ── COACH-SAFETY INTERLOCK — when the coach prescribes recovery, the
+          whole page's competitive tone yields. Renders nothing on 'go'. ── */}
+      <CoachSafetyBanner />
+
       {/* ── INBOX: incoming nudges + invites (toggled by the Bell) ── */}
       <div ref={inboxRef}>
         {(inboxOpen || inboxCount > 0) && (
@@ -442,6 +453,7 @@ export default function SocialTab() {
                 weekEnd={duel?.week_end}
                 de={de}
                 sendNudge={sendNudge}
+                gateMode={gate.mode}
               />
             ))}
           </>
@@ -811,18 +823,21 @@ export default function SocialTab() {
 // One live weekly battle: you vs a single opponent (a real crew member, or
 // "Past You" when you have no crew). Computes its own 6-metric scoreline, owns
 // its own Battle-details toggle + Nudge (targeting THIS opponent's user_id).
-function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge }: {
+function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge, gateMode }: {
   you: DuelStats
   opponent: DuelStats
   isPast: boolean
   weekEnd: string | undefined
   de: boolean
   sendNudge: ReturnType<typeof useSendNudge>
+  gateMode: GateMode
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const [nudgeSent, setNudgeSent] = useState<string | null>(null)
-  // Only a real crew rival can be nudged (never "Past You").
-  const opponentId = !isPast && opponent.user_id ? opponent.user_id : undefined
+  const [nudgeSent, setNudgeSent] = useState<{ text: string; intercepted: boolean } | null>(null)
+  // Only a real crew rival can be nudged (never "Past You"), and only while the
+  // coach isn't prescribing recovery — competition never outranks physiology.
+  const resting = gateMode === 'rest'
+  const opponentId = !isPast && opponent.user_id && !resting ? opponent.user_id : undefined
   const nudging = sendNudge.isPending && sendNudge.variables === opponentId
   const opponentName = isPast ? (de ? 'Du letzte Wo.' : 'Past You') : opponent.handle
 
@@ -846,7 +861,9 @@ function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge }: {
 
   function onNudge() {
     if (!opponentId) return
-    sendNudge.mutate(opponentId, { onSuccess: (res) => setNudgeSent(res.text) })
+    sendNudge.mutate(opponentId, {
+      onSuccess: (res) => setNudgeSent({ text: res.text, intercepted: !!res.coach_intercepted }),
+    })
   }
 
   return (
@@ -921,8 +938,10 @@ function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge }: {
         </div>
       </div>
 
-      <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>
-        {de ? '6 Metriken · je 10 Punkte · Wochensieger gewinnt.' : '6 metrics · each metric worth 10 pts · winner takes the week.'}
+      <p style={{ fontSize: 11, fontWeight: 500, color: resting ? 'var(--color-forest-2)' : 'var(--color-muted)', lineHeight: 1.4 }}>
+        {resting
+          ? (de ? 'Coach-Ansage: Diese Woche gewinnt Erholung. Das Duell wartet auf dich.' : 'Coach’s call: recovery wins this week. The duel will wait for you.')
+          : (de ? '6 Metriken · je 10 Punkte · Wochensieger gewinnt.' : '6 metrics · each metric worth 10 pts · winner takes the week.')}
       </p>
 
       {/* Tap-to-expand head-to-head margin (mirrors the hover panel for touch) */}
@@ -946,21 +965,24 @@ function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge }: {
           <BarChart3 size={17} style={{ color: 'var(--color-ink-2)' }} />
           <span className="num-display" style={{ fontSize: 14, color: 'var(--color-ink-2)' }}>{de ? (detailsOpen ? 'Details schließen' : 'Duell-Details') : (detailsOpen ? 'Hide details' : 'Battle details')}</span>
         </button>
-        <button type="button" onClick={onNudge} disabled={!opponentId || nudging} title={!opponentId ? (de ? 'Anstupsen sobald du einen Crew-Rivalen hast' : 'Nudge works once you have a crew rival') : undefined} className="inline-flex items-center justify-center gap-1.5 rounded-full" style={{ background: 'var(--color-accent)', padding: '13px 18px', opacity: !opponentId || nudging ? 0.5 : 1 }}>
+        <button type="button" onClick={onNudge} disabled={!opponentId || nudging} title={resting ? (de ? 'Coach zuerst — Anstupsen pausiert, bis du erholt bist' : 'Coach first — nudging resumes once you’ve recovered') : !opponentId ? (de ? 'Anstupsen sobald du einen Crew-Rivalen hast' : 'Nudge works once you have a crew rival') : undefined} className="inline-flex items-center justify-center gap-1.5 rounded-full" style={{ background: 'var(--color-accent)', padding: '13px 18px', opacity: !opponentId || nudging ? 0.5 : 1 }}>
           <Hand size={17} style={{ color: 'var(--color-ink)' }} />
           <span className="num-display" style={{ fontSize: 14, color: 'var(--color-ink)' }}>{de ? 'Anstupsen' : 'Nudge'}</span>
         </button>
       </div>
 
-      {/* Nudge confirmation — shows the funny line the server sent */}
+      {/* Nudge confirmation — shows the line the server sent. If the coach
+          intercepted (recipient is recovering), say so honestly. */}
       {nudgeSent && (
-        <div className="rounded-[12px] flex items-start gap-2" style={{ background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)', padding: '10px 12px' }}>
-          <Send size={14} style={{ color: 'var(--color-accent)', flexShrink: 0, marginTop: 2 }} />
+        <div className="rounded-[12px] flex items-start gap-2" style={{ background: `color-mix(in srgb, ${nudgeSent.intercepted ? 'var(--color-forest-2)' : 'var(--color-accent)'} 14%, transparent)`, padding: '10px 12px' }}>
+          <Send size={14} style={{ color: nudgeSent.intercepted ? 'var(--color-forest-2)' : 'var(--color-accent)', flexShrink: 0, marginTop: 2 }} />
           <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-            <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-accent)' }}>
-              {de ? `GESENDET AN ${opponentName.toUpperCase()}` : `SENT TO ${opponentName.toUpperCase()}`}
+            <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: nudgeSent.intercepted ? 'var(--color-forest-2)' : 'var(--color-accent)' }}>
+              {nudgeSent.intercepted
+                ? (de ? `COACH HAT ERMUTIGUNG GELIEFERT · ${opponentName.toUpperCase()} ERHOLT SICH` : `COACH DELIVERED ENCOURAGEMENT · ${opponentName.toUpperCase()} IS RECOVERING`)
+                : (de ? `GESENDET AN ${opponentName.toUpperCase()}` : `SENT TO ${opponentName.toUpperCase()}`)}
             </span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>“{nudgeSent}”</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>“{nudgeSent.text}”</span>
           </div>
           <button type="button" onClick={() => setNudgeSent(null)} aria-label={de ? 'Schließen' : 'Dismiss'} className="grid place-items-center shrink-0">
             <X size={15} style={{ color: 'var(--color-muted)' }} />

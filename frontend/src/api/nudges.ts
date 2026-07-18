@@ -6,10 +6,13 @@ import { apiClient } from './client'
 // ──────────────────────────────────────────────────────────────────────
 
 // POST /crews/nudge — server picks + stores a random funny line for the
-// opponent and echoes it back so the sender can see what was sent.
+// opponent and echoes it back so the sender can see what was sent. When the
+// recipient's adaptive directive is rest/deload the coach-safety interlock
+// swaps trash talk for encouragement and flags it so the UI can say so.
 export interface SentNudge {
   text: string
   to_user_id: number
+  coach_intercepted?: boolean
 }
 
 export async function sendNudge(toUserId: number): Promise<SentNudge> {

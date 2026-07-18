@@ -698,6 +698,18 @@ NUDGE_LINES: list[str] = [
     "I'd say catch me if you can, but we both know how that ends.",
 ]
 
+# Coach-safety interlock: when the recipient's adaptive directive is rest or
+# deload, trash talk is swapped for encouragement. Competition never outranks
+# physiology — the nudge still lands (crew connection preserved), the content
+# changes.
+COACH_NUDGE_LINES: list[str] = [
+    "Trash talk intercepted by the coach. Translation: your crew misses you at full power.",
+    "Your rival poked you — the coach softened it: rest today, terrorize the leaderboard later.",
+    "Crew message, coach-approved: recovery is your only workout today. We'll hold your spot.",
+    "The smack talk got confiscated. What's left: heal up — we want you at your best.",
+    "Someone tried to challenge you mid-recovery. The coach said no. Rest well, come back swinging.",
+]
+
 
 class NudgeCreate(BaseModel):
     to_user_id: int
@@ -706,6 +718,9 @@ class NudgeCreate(BaseModel):
 class NudgeResult(BaseModel):
     text: str
     to_user_id: int
+    # True when the recipient is in rest/deload and the coach swapped the
+    # trash-talk line for encouragement. Lets the sender UI explain honestly.
+    coach_intercepted: bool = False
 
 
 class IncomingNudge(BaseModel):
@@ -743,7 +758,21 @@ async def send_nudge(
             )
         )
     ).scalar_one()
-    text = NUDGE_LINES[sent_count % len(NUDGE_LINES)]
+
+    # Coach-safety interlock: if the recipient's adaptive directive says rest
+    # or deload, swap trash talk for encouragement. Never let the physiology
+    # check break the social path — on any failure, fall back to trash talk.
+    coach_intercepted = False
+    try:
+        from app.services.adaptive_readiness import build_adaptive_directive
+
+        directive = await build_adaptive_directive(db, payload.to_user_id)
+        coach_intercepted = directive.directive in ("rest", "deload")
+    except Exception:
+        coach_intercepted = False
+
+    lines = COACH_NUDGE_LINES if coach_intercepted else NUDGE_LINES
+    text = lines[sent_count % len(lines)]
 
     db.add(
         CrewNudge(
@@ -753,7 +782,9 @@ async def send_nudge(
         )
     )
     await db.commit()
-    return NudgeResult(text=text, to_user_id=payload.to_user_id)
+    return NudgeResult(
+        text=text, to_user_id=payload.to_user_id, coach_intercepted=coach_intercepted
+    )
 
 
 @router.get("/nudges/incoming", response_model=list[IncomingNudge])
