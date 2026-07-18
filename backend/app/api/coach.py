@@ -392,17 +392,15 @@ async def goal_trajectory(
     if profile and isinstance(profile.goals, dict):
         goals = dict(profile.goals)
     if profile and profile.target_event_date:
-        goals.setdefault(
-            "target_event",
-            {
-                "name": (
-                    goals.get("target_event", {}).get("name")
-                    if isinstance(goals.get("target_event"), dict)
-                    else None
-                ),
-                "date": profile.target_event_date.isoformat(),
-            },
-        )
+        # The first-class column is the source of truth for the event DATE —
+        # the JSONB goals blob can carry a stale nested date (observed: a past
+        # date shadowing the real one via setdefault, collapsing the whole
+        # projection to on_track='no_goal'). Overwrite the date, keep the name.
+        existing = goals.get("target_event") if isinstance(goals.get("target_event"), dict) else {}
+        goals["target_event"] = {
+            **existing,
+            "date": profile.target_event_date.isoformat(),
+        }
     if "target_ctl" not in goals and profile:
         derived = default_target_ctl(profile.target_event_type, profile.target_priority)
         if derived is not None:

@@ -252,7 +252,10 @@ def project(
 
     # ---- CTL projection — linear extrapolation from trailing 7d delta ---
     daily_rate = ctl_7d / 7.0
-    ctl_proj = ctl_now + daily_rate * days_to_goal
+    # Linear extrapolation is the documented model, but a long horizon times a
+    # deload week must never project a *negative* fitness — floor at 0 (the
+    # narrative still reports the honest gap).
+    ctl_proj = max(0.0, ctl_now + daily_rate * days_to_goal)
     # During taper, CTL decays — add a soft downward bias over the last 14 days.
     # Mujika: volume cut 40-60% during taper; ATL drops faster than CTL, so CTL
     # drift is modest (~-1 to -3). We apply a fixed -2 for taper/race projections
