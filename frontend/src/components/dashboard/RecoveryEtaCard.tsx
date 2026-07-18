@@ -10,6 +10,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
+import { de as deLocale } from 'date-fns/locale'
 import { BatteryCharging, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../api/client'
@@ -72,8 +73,8 @@ export default function RecoveryEtaCard() {
 
   if (!data || days.length < 2) return null
 
-  const dayName = (iso: string) => format(parseISO(iso), de ? 'EEEE' : 'EEEE')
-  const shortDay = (iso: string) => format(parseISO(iso), de ? 'EE' : 'EEE')
+  const dayName = (iso: string) => format(parseISO(iso), 'EEEE', { locale: de ? deLocale : undefined })
+  const shortDay = (iso: string) => format(parseISO(iso), de ? 'EE' : 'EEE', { locale: de ? deLocale : undefined })
 
   const headline = data.already_fresh
     ? data.race_sharp_on

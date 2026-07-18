@@ -20,6 +20,7 @@ import RecoveryEtaCard from '../RecoveryEtaCard'
 import TheRoadCard from '../TheRoadCard'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import AbsorptionCard from '../AbsorptionCard'
+import LevelStripCard from '../LevelStripCard'
 import { useStreak, useSetAthleteStatus } from '../../../hooks/useStreak'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
@@ -704,6 +705,9 @@ export default function TodayTab() {
 
       {/* Recovery outlook — forward TSB projection ("fresh by Thursday") */}
       <RecoveryEtaCard />
+
+      {/* Level strip — real-work levels + forgiving streak (.pen i5D9C) */}
+      <LevelStripCard />
 
       {/* Metrics row — Resting HR / HRV / Strain (real Garmin) */}
       <div className="grid grid-cols-3 gap-3">
