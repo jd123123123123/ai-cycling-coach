@@ -11,7 +11,7 @@ the current user's data.
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -355,3 +355,18 @@ async def post_interpret(
             else status.HTTP_422_UNPROCESSABLE_ENTITY
         )
         raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.get("/breakthroughs")
+async def get_breakthroughs(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    days: Annotated[int, Query(ge=1, le=14, description="Look-back window for recent rides")] = 2,
+    locale: Annotated[str, Query(pattern="^(en|de)$")] = "en",
+) -> list[dict]:
+    """Physiology-grounded breakthroughs from recent rides (roadmap P1.2):
+    power-curve PBs at downsampling-safe durations (>=60s, >=2% over the prior
+    90-day best, >=5 prior powered rides) and eFTP model shifts (>=5 W)."""
+    from app.services.breakthrough_detector import detect_breakthroughs
+
+    return await detect_breakthroughs(db, current_user.id, recent_days=days, lang=locale)

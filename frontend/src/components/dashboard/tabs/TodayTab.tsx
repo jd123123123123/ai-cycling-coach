@@ -18,6 +18,7 @@ import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
 import RecoveryEtaCard from '../RecoveryEtaCard'
 import TheRoadCard from '../TheRoadCard'
+import BreakthroughCelebration from '../BreakthroughCelebration'
 import { useStreak, useSetAthleteStatus } from '../../../hooks/useStreak'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
@@ -538,6 +539,9 @@ export default function TodayTab() {
           )}
         </div>
       </div>
+
+      {/* Breakthrough celebration — only when the detector found a real one (P1.2) */}
+      <BreakthroughCelebration />
 
       {/* Race chip → Plan tab */}
       {goalName && (
