@@ -16,7 +16,7 @@ Existing tokens match; NEW: `gold #FFD166` (+`gold-soft #FFD16626`), `violet #8B
 | `pTlXd` | **Screen · Season & Race Day** | not built | target_event + goal_trajectory + performance_projection + mesocycle phases; race-day pacing from CP/W′ |
 | `YOpJB` | **V2 · Achievements** | AchievementBadges unmounted (P2.3) | activity+PMC history (already computed); backend persistence per P2.3 |
 | `K3PVt` | **V2 · Explore Routes** | not built | needs route source — free: OSM Overpass + Open-Meteo weather + own ridden GPS tracks. Scope decision needed |
-| `ci4oi` | **Screen · Live Ride** | not built — **conflicts with roadmap "no in-ride execution mode"** | ⚠ decision for Jannis: the .pen persona note says "pros get the HUD"; the competitive roadmap explicitly excluded in-ride. Flagged, not building until resolved |
+| `ci4oi` | **Screen · Live Ride** | **NOT BUILT — decided by Jannis (July 18): "no live functions, it should be a coach but not live during the ride."** The coach owns the before (plan/brief) and after (debrief/story); head units own the ride. | — |
 | `ux9vt` | V2 · Home Today | V1 built (today's session heavily upgraded it) | refresh = arc gauge + climber-level progression card (gold) — level mechanic feeds off W/kg bands (BandChip semantics) |
 | `Q5zjIH` | V2 · Ride Recap | V1 ride analysis exists | re-skin + absorb P1.2 breakthroughs + matches (P1.9) |
 | `doYpx` | V2 · Form & Fitness | `/load-form` exists | re-skin; The Road (P1.1) already covers the forward corridor |
