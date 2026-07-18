@@ -15,11 +15,6 @@ import { ChevronRight, Gauge, MessageSquarePlus } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useLocale } from '../../contexts/LocaleContext'
-import PMCChart from './PMCChart'
-import TrainingDistributionCard from './TrainingDistributionCard'
-import EfficiencyTrend from './EfficiencyTrend'
-import VO2MaxEstimate from './VO2MaxEstimate'
-import FormProgressPanel from './FormProgressPanel'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 
@@ -84,7 +79,12 @@ function FtpConfidenceCard() {
 export default function InsightsSection({ sport }: { sport: 'cycling' | 'running' | 'gym' | 'all' }) {
   const { locale } = useLocale()
   const de = locale === 'de'
-  const vo2Sport = sport === 'running' ? 'running' : 'cycling'
+  void sport
+  // Deliberately curated DOWN (user feedback, July 18): the old-era donor
+  // cards (PMC chart, TID, efficiency scatter, VO2, form panel) clashed with
+  // the current design language — mixed locales, off-brand chips, scatter
+  // plots. Depth stays reachable via /load-form and /progress/*; only cards
+  // built to the current quality bar render here.
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-0.5" style={{ marginTop: 8 }}>
@@ -94,11 +94,6 @@ export default function InsightsSection({ sport }: { sport: 'cycling' | 'running
         </span>
       </div>
       <FtpConfidenceCard />
-      <PMCChart />
-      <TrainingDistributionCard />
-      <EfficiencyTrend />
-      <VO2MaxEstimate sport={vo2Sport} />
-      <FormProgressPanel />
       {/* Power users → the NL chart workspace (no competitor has this) */}
       <Link to="/dashboards" className="rounded-[24px] p-5 hover-card flex items-center gap-3.5" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
         <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' }}>
