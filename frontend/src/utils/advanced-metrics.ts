@@ -150,7 +150,7 @@ export function calendarCells(pmcEntries: PMCEntry[], daysBack = 84): HeatmapCel
   today.setHours(0, 0, 0, 0)
   const map = new Map<string, number>()
   for (const e of pmcEntries) {
-    map.set(e.date, e.daily_tss ?? 0)
+    map.set(e.date, e.tss ?? e.daily_tss ?? 0)
   }
   const cells: HeatmapCell[] = []
   for (let i = daysBack - 1; i >= 0; i--) {

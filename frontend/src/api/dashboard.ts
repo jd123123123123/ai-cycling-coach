@@ -70,7 +70,10 @@ export interface PMCEntry {
   ctl: number
   atl: number
   tsb: number
-  daily_tss: number
+  /** The wire carries the day's load in `tss`; `daily_tss` is a legacy field
+   * that serializes as null — prefer `tss`. */
+  tss?: number | null
+  daily_tss: number | null
   narrative?: string | null    // Plain-English per-day summary shown in hover tooltip
 }
 

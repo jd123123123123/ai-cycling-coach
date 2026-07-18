@@ -25,7 +25,7 @@ export default function VolumeHistory() {
       const weekEntries = entries.filter((e) =>
         isWithinInterval(new Date(e.date), { start: weekStart, end: weekEnd }),
       )
-      const tss = weekEntries.reduce((s, e) => s + (e.daily_tss ?? 0), 0)
+      const tss = weekEntries.reduce((s, e) => s + (e.tss ?? e.daily_tss ?? 0), 0)
       const hours = tss / 70 // rough TSS-to-hours estimate at moderate intensity
 
       return {
