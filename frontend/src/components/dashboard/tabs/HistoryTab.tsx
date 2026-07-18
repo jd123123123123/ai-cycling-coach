@@ -21,6 +21,7 @@ import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { usePowerProfile } from '../../../hooks/usePowerProfile'
 import { useLocale } from '../../../contexts/LocaleContext'
 import HoverBars from '../../ui/HoverBars'
+import InsightsSection from '../InsightsSection'
 import type { ActivityRead } from '../../../api/dashboard'
 
 type Filter = 'all' | 'cycling' | 'running' | 'gym'
@@ -908,6 +909,10 @@ export default function HistoryTab() {
           )
         })}
       </div>
+
+      {/* Insights — the curated deep end (PMC, TID, efficiency, VO₂max, form,
+          AI-FTP framing, NL chart workspace). Roadmap P0.5. */}
+      <InsightsSection sport={filter} />
     </div>
   )
 }

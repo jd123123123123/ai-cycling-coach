@@ -111,7 +111,7 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
   const { data: actsData } = useActivitiesRange(start, today)
   const { data: profile } = useAthleteProfile()
 
-  const { vo2, vo2Prior, delta, tier, supportNumber, supportUnit } = useMemo(() => {
+  const { vo2, delta, tier, supportNumber } = useMemo(() => {
     const activities = actsData?.activities ?? []
     const now = today.getTime()
     const recentStart = subDays(today, WINDOW_DAYS_RECENT).getTime()
@@ -154,8 +154,9 @@ export default function VO2MaxEstimate({ sport }: { sport: Sport }) {
   }, [actsData, profile, sport, today, locale])
 
   const countedVO2 = useCountUp(Math.round((vo2 ?? 0) * 10) / 10, {
-    duration: 900,
-    enabled: vo2 != null,
+    durationMs: 900,
+    digits: 1,
+    skipZero: true,
   })
 
   if (vo2 == null) {
