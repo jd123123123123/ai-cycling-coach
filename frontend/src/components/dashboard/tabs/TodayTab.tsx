@@ -7,6 +7,9 @@
  * Every value is real Garmin/backend data; no extra cards.
  */
 import { useMemo, useState, useRef } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiClient } from '../../../api/client'
+import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays, format, startOfWeek, addDays, parseISO } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { Flag, Heart, Activity, Zap, Target, Play, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
@@ -681,6 +684,9 @@ export default function TodayTab() {
               <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{de ? 'Komplettes Workout →' : 'Full workout →'}</span>
             </div>
           </div>
+          {/* One-tap rails-safe alternates — the Go-Gentler choice architecture.
+              Applied through the SAME audited path as the chat modifier. */}
+          <AlternateRow de={de} indoor={false} />
           <Link to="/workout/today" className="inline-flex items-center justify-center gap-1.5 rounded-full py-2.5 min-h-[44px]" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)', fontSize: 14, fontWeight: 700 }}>
             <ListChecks size={16} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} /> {de ? 'Workout ansehen' : 'View full workout'} <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />
           </Link>
@@ -817,6 +823,96 @@ export default function TodayTab() {
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── One-tap alternates — rails-safe swaps for today's session ────────────────
+// Three honest options (45-min / gentler / indoor) applied through the same
+// audited modifier path the chat uses. The server's rails can downgrade or
+// refuse; the returned `reason` is narrated verbatim. Undo shares the chat
+// tool's 60-minute server-enforced window.
+function AlternateRow({ de, indoor }: { de: boolean; indoor: boolean }) {
+  const qc = useQueryClient()
+  const [result, setResult] = useState<{ reason: string; ok: boolean; undone?: boolean } | null>(null)
+  const apply = useMutation({
+    mutationFn: async (label: 'less_time' | 'recover' | 'indoor') =>
+      (await apiClient.post<{
+        success: boolean; reason: string; title?: string | null
+        duration_min?: number; predicted_tss?: number; template_id?: string
+      }>('/coach/brief/alternate', { label })).data,
+    onSuccess: (res) => {
+      setResult({ reason: res.reason, ok: !!res.success })
+      if (res.success) {
+        // The server's brief cache still holds the pre-swap prescription, so
+        // patch the visible card directly from the modification result.
+        qc.setQueriesData({ queryKey: COACH_BRIEF_KEY_ROOT }, (old: unknown) => {
+          const brief = old as { prescribed_workout?: Record<string, unknown> | null } | undefined
+          if (!brief?.prescribed_workout) return old
+          return {
+            ...brief,
+            prescribed_workout: {
+              ...brief.prescribed_workout,
+              ...(res.title ? { title: res.title } : {}),
+              ...(res.duration_min != null ? { duration_minutes: res.duration_min } : {}),
+              ...(res.predicted_tss != null ? { predicted_tss: res.predicted_tss } : {}),
+              ...(res.template_id ? { template_id: res.template_id } : {}),
+            },
+          }
+        })
+      }
+    },
+  })
+  const undo = useMutation({
+    mutationFn: async () => (await apiClient.post<{ success: boolean; reason?: string }>('/coach/brief/alternate/undo')).data,
+    onSuccess: (res) => {
+      setResult(res.success ? { reason: de ? 'Rückgängig gemacht — die Original-Einheit steht wieder.' : 'Undone — your original session is back.', ok: true, undone: true } : { reason: res.reason ?? '', ok: false })
+      if (res.success) qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
+    },
+  })
+  const busy = apply.isPending || undo.isPending
+  const OPTIONS: { label: 'less_time' | 'recover' | 'indoor'; text: string; hide?: boolean }[] = [
+    { label: 'less_time', text: de ? 'Nur 45 min' : '45-min version' },
+    { label: 'recover', text: de ? 'Sanfter' : 'Gentler' },
+    { label: 'indoor', text: 'Indoor', hide: indoor },
+  ]
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>
+          {de ? 'ODER PASS ES AN' : 'OR MAKE IT YOURS'}
+        </span>
+        {OPTIONS.filter((o) => !o.hide).map((o) => (
+          <button
+            key={o.label}
+            type="button"
+            disabled={busy}
+            onClick={() => apply.mutate(o.label)}
+            className="rounded-full px-2.5 py-1"
+            style={{
+              fontSize: 11.5, fontWeight: 600,
+              background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)',
+              color: 'var(--color-ink-2)', opacity: busy ? 0.6 : 1,
+            }}
+          >
+            {o.text}
+          </button>
+        ))}
+      </div>
+      {result?.reason && (
+        <div className="rounded-[12px] flex items-start gap-2" style={{ background: `color-mix(in srgb, ${result.ok ? 'var(--color-recovery)' : 'var(--color-amber)'} 12%, transparent)`, padding: '9px 11px' }}>
+          <Sparkles size={13} style={{ color: result.ok ? 'var(--color-recovery)' : 'var(--color-amber)', flexShrink: 0, marginTop: 2 }} />
+          <span className="flex-1 min-w-0" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{result.reason}</span>
+          {result.ok && !result.undone && (
+            <button type="button" disabled={busy} onClick={() => undo.mutate()} style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-accent)', flexShrink: 0 }}>
+              {de ? 'Rückgängig' : 'Undo'}
+            </button>
+          )}
+        </div>
+      )}
+      {apply.isError && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Anpassen fehlgeschlagen — versuch es nochmal.' : 'Change failed — try again.'}</span>
+      )}
     </div>
   )
 }

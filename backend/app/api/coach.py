@@ -639,3 +639,105 @@ async def export_workout(
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
+
+# ─── One-tap workout alternates (roadmap P0.4b) ─────────────────────────────
+# The Go-Gentler choice architecture: the Today card offers 2–3 rails-safe
+# swaps and applies them through the SAME audited path the chat tool uses
+# (apply_modification + rails + audit row + undo window). No new write path.
+
+_ALTERNATE_INTENTS: dict[str, tuple[str, dict]] = {
+    # label → (modification_type, params)
+    "less_time": ("shorten", {"duration_min": 45}),
+    "recover": ("easier", {}),
+    "indoor": ("indoor", {}),
+}
+
+
+from pydantic import BaseModel as _BaseModel
+
+
+class AlternateApply(_BaseModel):
+    label: Literal["less_time", "recover", "indoor"]
+
+
+@router.post("/brief/alternate")
+async def apply_brief_alternate(
+    payload: AlternateApply,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Apply a one-tap alternate to TODAY's planned workout. Mirrors the chat
+    `modify_planned_workout` tool exactly (rails, audit, undo eligibility);
+    returns the tool result — including `rails_downgraded` + a human `reason`
+    — for honest client narration."""
+    from datetime import date as _date
+
+    from app.services.coach_tools import _handle_modify_planned_workout
+
+    modification_type, params = _ALTERNATE_INTENTS[payload.label]
+    tool_input = {
+        "date": _date.today().isoformat(),
+        "modification_type": modification_type,
+        "params": params,
+    }
+    result = await _handle_modify_planned_workout(tool_input, current_user.id, db)
+
+    # Today's prescription often lives only in the brief (the mesocycle rows
+    # may not cover the current week yet). If the modifier found no
+    # PlannedWorkout row, materialize one from the brief's prescription and
+    # retry — the swap must work on exactly what the card shows.
+    if result.get("found") is False:
+        materialized = await _materialize_today_plan_from_brief(db, current_user.id)
+        if materialized:
+            result = await _handle_modify_planned_workout(tool_input, current_user.id, db)
+    return result
+
+
+async def _materialize_today_plan_from_brief(db: AsyncSession, user_id: int) -> bool:
+    """Create today's PlannedWorkout row from the latest brief's prescription.
+    Returns True when a row was created."""
+    from datetime import date as _date
+
+    from sqlalchemy import select as _select
+
+    from app.models.planned_workout import PlannedWorkout
+
+    row = await db.execute(
+        _select(CoachBrief)
+        .where(CoachBrief.user_id == user_id, CoachBrief.prescribed_workout.isnot(None))
+        .order_by(CoachBrief.generated_at.desc())
+        .limit(1)
+    )
+    brief = row.scalar_one_or_none()
+    pw_json = (brief.prescribed_workout or {}) if brief else {}
+    template_id = pw_json.get("template_id")
+    if not template_id:
+        return False
+    duration_min = int(pw_json.get("duration_minutes") or 60)
+    db.add(
+        PlannedWorkout(
+            user_id=user_id,
+            date=_date.today(),
+            sport="cycling",
+            title=pw_json.get("title") or "Planned session",
+            duration_seconds_target=duration_min * 60,
+            interval_structure={"intervals": pw_json.get("blocks") or []},
+            template_id=template_id,
+            blocks_source="ai_prescribed",
+        )
+    )
+    await db.commit()
+    return True
+
+
+@router.post("/brief/alternate/undo")
+async def undo_brief_alternate(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Undo the most recent workout modification (server enforces the same
+    60-minute window as chat undo)."""
+    from app.services.coach_tools import _handle_undo_last_modification
+
+    return await _handle_undo_last_modification({}, current_user.id, db)
