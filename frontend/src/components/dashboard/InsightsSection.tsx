@@ -11,7 +11,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { subDays } from 'date-fns'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Fingerprint, Gauge, MessageSquarePlus } from 'lucide-react'
+import { ChevronRight, Fingerprint, Gauge, MessageSquarePlus, Mountain, Trophy } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useLocale } from '../../contexts/LocaleContext'
@@ -107,6 +107,23 @@ export default function InsightsSection({ sport }: { sport: 'cycling' | 'running
         </div>
         <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-violet)' }} />
       </Link>
+      {/* Bike-native deep pages: climbs + achievements */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link to="/climbs" className="rounded-[24px] p-4 hover-card flex flex-col gap-2" style={cardStyle}>
+          <span className="grid place-items-center rounded-[12px]" style={{ width: 38, height: 38, background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)' }}>
+            <Mountain size={19} style={{ color: 'var(--color-recovery)' }} />
+          </span>
+          <span className="num-display" style={{ fontSize: 14.5, color: 'var(--color-ink)' }}>{de ? 'Deine Anstiege' : 'Your climbs'}</span>
+          <span style={{ fontSize: 11, color: 'var(--color-muted)', lineHeight: 1.35 }}>{de ? 'Profile, Pacing, Bestzeiten' : 'Profiles, pacing, PRs'}</span>
+        </Link>
+        <Link to="/achievements" className="rounded-[24px] p-4 hover-card flex flex-col gap-2" style={cardStyle}>
+          <span className="grid place-items-center rounded-[12px]" style={{ width: 38, height: 38, background: 'color-mix(in srgb, var(--color-gold) 18%, transparent)' }}>
+            <Trophy size={19} style={{ color: 'var(--color-gold)' }} />
+          </span>
+          <span className="num-display" style={{ fontSize: 14.5, color: 'var(--color-ink)' }}>{de ? 'Erfolge' : 'Achievements'}</span>
+          <span style={{ fontSize: 11, color: 'var(--color-muted)', lineHeight: 1.35 }}>{de ? 'Echte Meilensteine, kein XP' : 'Real milestones, no XP'}</span>
+        </Link>
+      </div>
       {/* Power users → the NL chart workspace (no competitor has this) */}
       <Link to="/dashboards" className="rounded-[24px] p-5 hover-card flex items-center gap-3.5" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
         <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' }}>

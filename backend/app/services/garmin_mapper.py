@@ -14,6 +14,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.schemas.activity import ActivityCreate
+from app.services.garmin_sleep_parser import parse_sleep_vitals
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +270,11 @@ def map_daily_metrics(
         "training_readiness": training_readiness,
     }
 
+    # Sleep stages / SpO₂ / respiration / overnight HRV — the free sleep
+    # payload carries all of these; garmin_sleep_parser flattens them into
+    # DailyMetric column values (all-None for untracked nights).
+    sleep_vitals = parse_sleep_vitals(sleep_data)
+
     return {
         "sleep_score": sleep_score,
         "hrv_status": hrv_status,
@@ -278,6 +284,7 @@ def map_daily_metrics(
         "steps": steps,
         "training_readiness": tr_score,
         "recovery_time_hours": recovery_time_hours,
+        **sleep_vitals,
         "raw_data": raw_data,
         "_vo2max": vo2max,  # not a column; surfaced via API from raw_data
     }

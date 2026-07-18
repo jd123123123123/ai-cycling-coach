@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
 from app.models.coach_brief import CoachBrief
+from app.models.daily_metric import DailyMetric
 from app.models.garmin_credential import GarminCredential
 from app.models.period_report_cache import PeriodReportCache
 from app.services.period_report import precompute_preset_reports, should_precompute_daily
@@ -48,6 +49,7 @@ from app.services.stream_extraction import records_to_streams
 from app.services.stream_ingestion import has_gps, ingest_activity_streams
 from app.services.garmin_client import GarminAuthError, GarminProvider
 from app.services.garmin_mapper import map_daily_metrics, map_garmin_activity
+from app.services.garmin_sleep_parser import apply_sleep_vitals, merge_raw_snapshots
 from app.services.intraday_sync_service import sync_intraday_samples_for_day
 from app.services.weather_client import fetch_ride_weather
 
@@ -350,9 +352,37 @@ async def sync_daily_metrics(
             sleep, hrv, body_battery, heart_rates, stress, summary,
             training_status=training_status, training_readiness=training_readiness,
         )
+
+        # Snapshot the previously stored raw payload BEFORE upsert overwrites
+        # it — upsert_daily_metric always replaces raw_data with the latest
+        # fetch, and a re-sync where one endpoint failed would otherwise wipe
+        # a rich sleep payload already captured for that night.
+        old_row = (
+            await db.execute(
+                select(DailyMetric).where(
+                    DailyMetric.user_id == user_id,
+                    DailyMetric.date == current_day,
+                )
+            )
+        ).scalar_one_or_none()
+        old_raw = dict(old_row.raw_data) if old_row is not None and isinstance(old_row.raw_data, dict) else None
+
         result = await upsert_daily_metric(db, user_id, current_day, mapped_data)
         if result is not None:
             inserted += 1
+            # Persist parsed sleep vitals (stages / SpO₂ / respiration /
+            # overnight HRV) as real columns — progressive, never clobbers.
+            filled = apply_sleep_vitals(result, mapped_data)
+            if filled:
+                logger.debug(
+                    "Sleep vitals filled for user_id=%s date=%s: %s",
+                    user_id, current_day, filled,
+                )
+            # Keep the richer per-source raw snapshot (newest-non-null wins).
+            merged_raw = merge_raw_snapshots(old_raw, result.raw_data)
+            if merged_raw is not None and merged_raw != result.raw_data:
+                result.raw_data = merged_raw
+            await db.flush()
 
         # Also persist intraday samples for this day — enables fast drill-down later.
         # Wrapped independently so a Garmin intraday API failure doesn't abort daily sync.

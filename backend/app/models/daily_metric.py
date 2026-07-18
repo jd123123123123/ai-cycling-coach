@@ -61,6 +61,25 @@ class DailyMetric(Base):
     training_readiness: Mapped[int | None] = mapped_column(Integer, nullable=True)
     recovery_time_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Sleep vitals parsed from the raw Garmin sleep payload (migration
+    # f3a4b5c6d7e8, populated by services/garmin_sleep_parser.py during sync).
+    # All nullable — an untracked night stays None end-to-end, never a fake 0.
+    # Skin temperature is deliberately absent: Garmin's free feed reports
+    # skinTempDataExists=false, so there is no honest value to store.
+    sleep_total_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sleep_deep_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sleep_light_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sleep_rem_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sleep_awake_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sleep_awake_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    spo2_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    spo2_low: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    spo2_high: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    respiration_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    respiration_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    respiration_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sleep_stress_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Data source: "garmin" | "manual"
     source: Mapped[str | None] = mapped_column(String(50), nullable=True)
 

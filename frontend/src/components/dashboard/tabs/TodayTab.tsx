@@ -562,9 +562,9 @@ export default function TodayTab() {
         </Link>
       )}
 
-      {/* Race chip → Plan tab */}
+      {/* Race chip → Season page (countdown, phases, race-day plan) */}
       {goalName && (
-        <Link to="/dashboard?tab=plan" className={`${CARD} hover-card flex items-center gap-3.5`} style={cardStyle}>
+        <Link to="/season" className={`${CARD} hover-card flex items-center gap-3.5`} style={cardStyle}>
           <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-surface-2)' }}>
             <Flag size={20} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} />
           </div>
