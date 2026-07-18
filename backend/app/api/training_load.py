@@ -132,3 +132,22 @@ async def get_zones(
     profile = await get_or_create_profile(db, current_user.id)
     zones = pmc_service.get_zones(profile)
     return zones
+
+
+@router.get(
+    "/recovery-eta",
+    summary="Forward TSB projection — when the athlete is fresh / race-sharp again",
+)
+async def get_recovery_eta(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    days: Annotated[
+        int,
+        Query(ge=3, le=21, description="Projection horizon in days (default 10)"),
+    ] = 10,
+) -> dict:
+    """Roll the CTL/ATL EWMA forward under the athlete's planned load (recent-
+    average fallback for unplanned days) and report the first projected day of
+    freshness (TSB ≥ −5) and race-sharpness (TSB ≥ +5), with a transparent
+    execution-variability band per day (roadmap P0.3)."""
+    return await pmc_service.project_pmc_forward(db, current_user.id, days_ahead=days)

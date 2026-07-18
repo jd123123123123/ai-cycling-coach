@@ -18,6 +18,7 @@ import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
 import { computeReadiness, readinessTier } from '../../../utils/metrics'
 import ScoreRing from '../../ui/ScoreRing'
 import MetricCard from '../../ui/MetricCard'
+import RecoveryEtaCard from '../RecoveryEtaCard'
 import { BottomSheet } from '../../strength/BottomSheet'
 import { useLocale } from '../../../contexts/LocaleContext'
 
@@ -512,6 +513,9 @@ export default function RecoveryTab() {
         </div>
         <div className="hover-reveal" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Zum heutigen Plan →' : "Go to today's plan →"}</div>
       </Link>
+
+      {/* 12b · Recovery outlook — forward TSB projection ("fresh by Thursday") */}
+      <RecoveryEtaCard />
 
       {/* 13 · Recovery Calendar */}
       <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>

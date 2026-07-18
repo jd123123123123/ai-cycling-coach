@@ -185,3 +185,116 @@ def get_zones(profile: AthleteProfile) -> dict:
         result["pace_zones"] = seiler_3_zones_running(profile.running_threshold_pace_ms)
 
     return result
+
+
+# ─── Forward projection — Recovery ETA (roadmap P0.3) ────────────────────────
+# Rolls the same CTL/ATL EWMA forward under the athlete's PLANNED load
+# (planned_workouts template base TSS; recent-average fallback for unplanned
+# days) and reports when form (TSB) crosses back into "fresh" and "race-sharp".
+# Uncertainty is expressed by running low/high input scenarios (±0.5 σ of the
+# athlete's recent daily TSS around the planned input) — a transparent
+# execution-variability band, not a confidence interval.
+
+FRESH_TSB = -5.0       # "fully fresh" — form back near neutral
+RACE_SHARP_TSB = 5.0   # "race-sharp" — form clearly positive
+
+
+async def project_pmc_forward(
+    db: AsyncSession,
+    user_id: int,
+    days_ahead: int = 10,
+) -> dict:
+    """Project CTL/ATL/TSB forward under planned load.
+
+    Returns {
+      "days": [{date, ctl, atl, tsb, tsb_low, tsb_high, planned_tss, source}],
+      "fresh_on": iso date | None,        # first day TSB ≥ FRESH_TSB
+      "race_sharp_on": iso date | None,   # first day TSB ≥ RACE_SHARP_TSB
+      "already_fresh": bool,
+      "basis": "plan" | "recent-average" | "mixed",
+    } — or {"days": []} when there is no training history to seed from.
+    """
+    from statistics import mean, pstdev
+
+    from sqlalchemy import select as _select
+
+    from app.models.planned_workout import PlannedWorkout
+    from app.services.training_load import calculate_tsb, update_ctl_atl
+    from app.services.workout_templates import TEMPLATES
+
+    history = await compute_user_pmc(db, user_id, days=90)
+    rows = history.get("total") or []
+    if not rows:
+        return {"days": [], "fresh_on": None, "race_sharp_on": None,
+                "already_fresh": False, "basis": "plan"}
+
+    ctl = float(rows[-1]["ctl"])
+    atl = float(rows[-1]["atl"])
+    today_tsb = calculate_tsb(ctl, atl)
+
+    recent_tss = [float(r.get("tss") or 0.0) for r in rows[-28:]]
+    avg_daily = mean(recent_tss) if recent_tss else 0.0
+    sd_daily = pstdev(recent_tss) if len(recent_tss) >= 7 else avg_daily * 0.5
+
+    today = date.today()
+    horizon = today + timedelta(days=days_ahead)
+    plan_rows = await db.execute(
+        _select(PlannedWorkout.date, PlannedWorkout.template_id)
+        .where(
+            PlannedWorkout.user_id == user_id,
+            PlannedWorkout.date > today,
+            PlannedWorkout.date <= horizon,
+        )
+    )
+    planned_by_date: dict[date, float] = {}
+    for d, template_id in plan_rows.all():
+        tmpl = TEMPLATES.get(template_id or "")
+        if tmpl is not None:
+            # A date may hold several planned sessions (e.g. ride + strength).
+            planned_by_date[d] = planned_by_date.get(d, 0.0) + float(tmpl.base_tss)
+
+    sources: set[str] = set()
+    days: list[dict] = []
+    # Three parallel scenarios: mid (planned), low input (fresher), high input.
+    mid = (ctl, atl)
+    lo = (ctl, atl)   # lower future TSS  → HIGHER tsb  (tsb_high)
+    hi = (ctl, atl)   # higher future TSS → LOWER tsb   (tsb_low)
+    fresh_on: str | None = None
+    race_sharp_on: str | None = None
+
+    for i in range(1, days_ahead + 1):
+        d = today + timedelta(days=i)
+        if d in planned_by_date:
+            tss_mid = planned_by_date[d]
+            sources.add("plan")
+        else:
+            tss_mid = avg_daily
+            sources.add("recent-average")
+        spread = min(0.5 * sd_daily, tss_mid) if tss_mid > 0 else 0.5 * sd_daily
+        mid = update_ctl_atl(*mid, tss_mid)
+        lo = update_ctl_atl(*lo, max(0.0, tss_mid - spread))
+        hi = update_ctl_atl(*hi, tss_mid + spread)
+        tsb_mid = calculate_tsb(*mid)
+        days.append({
+            "date": d.isoformat(),
+            "ctl": round(mid[0], 1),
+            "atl": round(mid[1], 1),
+            "tsb": round(tsb_mid, 1),
+            "tsb_high": round(calculate_tsb(*lo), 1),
+            "tsb_low": round(calculate_tsb(*hi), 1),
+            "planned_tss": round(tss_mid, 0),
+            "source": "plan" if d in planned_by_date else "recent-average",
+        })
+        if fresh_on is None and tsb_mid >= FRESH_TSB:
+            fresh_on = d.isoformat()
+        if race_sharp_on is None and tsb_mid >= RACE_SHARP_TSB:
+            race_sharp_on = d.isoformat()
+
+    basis = "mixed" if len(sources) > 1 else (sources.pop() if sources else "plan")
+    return {
+        "days": days,
+        "fresh_on": fresh_on,
+        "race_sharp_on": race_sharp_on,
+        "already_fresh": today_tsb >= FRESH_TSB,
+        "basis": basis,
+    }

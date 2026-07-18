@@ -13,6 +13,7 @@ import { Flag, Heart, Activity, Zap, Target, Play, ListChecks, ChevronRight, Che
 import type { Adaptations } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
+import RecoveryEtaCard from '../RecoveryEtaCard'
 import { useStreak, useSetAthleteStatus } from '../../../hooks/useStreak'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
@@ -685,6 +686,9 @@ export default function TodayTab() {
           </span>
         </div>
       </Link>
+
+      {/* Recovery outlook — forward TSB projection ("fresh by Thursday") */}
+      <RecoveryEtaCard />
 
       {/* Metrics row — Resting HR / HRV / Strain (real Garmin) */}
       <div className="grid grid-cols-3 gap-3">

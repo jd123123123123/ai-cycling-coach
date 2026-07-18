@@ -11,17 +11,17 @@ Priority key: **P0** = unlock built value / foundation (small, high-leverage). *
 
 ## P0 — Unlock what's built + foundation
 
-### P0.1 Wire the coach-safety interlock into the live app  ⚠ was falsely believed live
+### P0.1 Wire the coach-safety interlock into the live app ✅ SHIPPED (July 18)
 - **Why:** The analysis's "no competitor has this" claim is only true in code: `useAdaptiveGate.ts` and `CoachSafetyBanner.tsx` are imported by nothing, `DuelArena`/`PowerArena` are unmounted, and the backend nudge path (`api/crews.py` `send_nudge`) applies no physiology check — trash-talk nudges send regardless of rest state. The ethical signature must actually ship before we can market it.
 - **What:** Mount the gate in `SocialTab` (suppress/mute competition copy + challenge CTAs when directive = rest/deload, show the calm banner instead); add the physiology check to the backend nudge send path (block or soften when recipient is in rest/deload, with honest copy); decide fate of unmounted `DuelArena`/`PowerArena` (fold or delete).
 - **Where:** `frontend/src/hooks/useAdaptiveGate.ts`, `components/social/CoachSafetyBanner.tsx`, `components/social/tabs/SocialTab.tsx`, `backend/app/api/crews.py:718`.
 
-### P0.2 Forgiving streaks + athlete status
+### P0.2 Forgiving streaks + athlete status ✅ SHIPPED (July 18)
 - **Why:** Gentler Streak's most-quoted emotional hook *in reviews* ("so caring", "unique"); our live streak (TodayTab week-dots) = raw activity presence = the guilt mechanic they killed. Retention research: "streaks as gentle continuity, not ransom."
 - **What:** Streak counts *adherence to the plan* — planned rest days count; a status (healthy / sick / injured / life happens / taper) pauses without breaking, and feeds the plan (sick → auto-deload via the adaptive engine). Flame gets a "paused" state with honest copy ("Streak alive — you rested when the plan said rest. That's the skill."). Consolidate the two divergent implementations: the live one is `TodayTab.tsx:178-201` (week-dots + streak memo); the unmounted `StreakStrip.tsx` has different 3-goal-chain semantics — delete or explicitly resurrect, don't leave both.
 - **Where:** `TodayTab.tsx:178-201`, `StreakStrip.tsx` (decide), new status field (day-log or profile), `adaptive_readiness.py` hook-in, `i18n/strings.ts` EN/DE.
 
-### P0.3 Recovery ETA — "fully fresh by Thursday"
+### P0.3 Recovery ETA — "fully fresh by Thursday" ✅ SHIPPED (July 18)
 - **Why:** A top item on Bevel's own feedback board that they haven't shipped. Honest scope (verified): the forward TSB simulator **does not exist yet** — `performance_projection.py` projects eFTP (not TSB) and `pmc_service.py` is historical-only; nearest prior art is the single-point `tsb_projected_at_goal` heuristic in `goal_trajectory.py:263-274`.
 - **What:** New forward-PMC function in `pmc_service.py`: EWMA CTL/ATL recurrence rolled forward under the planned week's per-day `target_tss` (exists in `api/weeks.py`); uncertainty band from historical planned-vs-actual TSS variance. Card on Today (post-hard-session + rest states) and Recovery: "Fresh by Thursday; racing-sharp Saturday" + mini TSB-forward curve. Budget 2–3 days, not hours.
 - **Where:** `pmc_service.py` (new), `api/weeks.py` (planned TSS), new `RecoveryEtaCard`, TodayTab states, RecoveryTab.
