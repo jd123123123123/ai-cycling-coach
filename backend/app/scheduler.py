@@ -58,3 +58,20 @@ async def run_all_user_syncs() -> None:
                 # Continue with other users — one failure must not stop all syncs
 
     logger.info("Scheduled sync complete: %d succeeded, %d failed", synced, failed)
+
+
+async def run_morning_push_briefs() -> None:
+    """Hourly: send the morning-brief push to athletes inside their local
+    morning hour (roadmap P1.5). System-level job — RLS intentionally
+    bypassed, same as the sync job."""
+    from app.services.push_service import push_configured, run_morning_briefs
+
+    if not push_configured():
+        return
+    async with async_session_maker() as db:
+        try:
+            sent = await run_morning_briefs(db)
+            if sent:
+                logger.info("Morning brief push sent to %d athletes", sent)
+        except Exception:
+            logger.exception("Morning brief push job failed (non-fatal)")

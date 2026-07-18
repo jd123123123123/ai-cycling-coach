@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # Must be stored in .env; never commit the actual key.
     GARMIN_ENCRYPTION_KEY: str = ""
 
+    # Web-push (morning brief, roadmap P1.5). Unset → push endpoints 503 and
+    # the scheduler job no-ops; the app must boot without them.
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_CLAIMS_EMAIL: str = "mailto:coach@example.com"
+
     # Root directory for per-user Garmin OAuth token stores.
     # Container default was /data/garmin_tokens (volume-mounted) but that path is
     # read-only on bare-metal macOS dev — override via env var when running natively.

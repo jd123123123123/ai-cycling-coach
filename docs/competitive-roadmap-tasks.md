@@ -65,7 +65,7 @@ Priority key: **P0** = unlock built value / foundation (small, high-leverage). *
 - **What:** On sync, detect an unplanned or longer/harder-than-planned ride → automatically reshuffle the remaining week via `weekly_plan_llm.py` + `enforce_week_rails` → non-guilt disclosure card: "Great group ride — 82 TSS banked. Thursday's threshold moved to Friday." **Audit the compliance letter-grades so an unplanned ride is never graded as failure** ("overcooked" shaming a group ride violates the whole thesis). The "coming soon" stubs live on an unmounted card (`PrescribedWorkoutCard` inside never-mounted `CoachBrief`) — this is new work, not stub-finishing.
 - **Where:** `garmin_sync_service.py` (trigger), `weekly_plan_llm.py`, `ride_matching.py`/`ride_compliance.py` (grade audit), new disclosure card on Today/Train.
 
-### P1.5 Morning brief push — the ritual delivery vehicle
+### P1.5 Morning brief push — the ritual delivery vehicle ✅ SHIPPED (July 18)
 - **Why (critique find):** Bevel's 8-opens/day ritual is *manufactured* by proactive check-ins/widgets. We have an excellent Today page and nothing that summons the athlete to it. This is the delivery vehicle for P0.3, P0.4, P1.1.
 - **What:** PWA web-push morning brief: readiness + one heroLine + deep link straight to Today (every push must deep-link to the exact card it describes — Bevel's dead-link notifications are a repeated gripe); quiet-hours + rest-day aware (a rest-day push says rest, gently); app badging; PWA install prompt at the right moment (after first "wow", not first visit).
 - **Where:** backend push service (new; APScheduler exists), service worker in `frontend/public/`, settings opt-in.

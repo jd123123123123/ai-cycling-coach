@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.scheduler import run_all_user_syncs, scheduler
+from app.scheduler import run_all_user_syncs, run_morning_push_briefs, scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,15 @@ async def lifespan(app: FastAPI):
         "interval",
         hours=4,
         id="garmin_sync",
+        misfire_grace_time=600,
+    )
+    # Morning-brief push (P1.5): hourly sweep; each athlete gets at most one
+    # push per day, inside their local morning hour. No-ops without VAPID keys.
+    scheduler.add_job(
+        run_morning_push_briefs,
+        "interval",
+        hours=1,
+        id="morning_push",
         misfire_grace_time=600,
     )
     scheduler.start()
@@ -160,6 +169,10 @@ app.include_router(wahoo_router)
 app.include_router(tab_layouts_router)
 app.include_router(workouts_router)
 app.include_router(strength_router)
+
+from app.api.push import router as push_router  # noqa: E402
+
+app.include_router(push_router)
 
 
 @app.get("/healthz", tags=["health"])

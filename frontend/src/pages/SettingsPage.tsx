@@ -17,6 +17,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useLocale } from '../contexts/LocaleContext'
 import { useWahooStatus } from '../hooks/useWahooStatus'
 import { getWahooConnectUrl, disconnectWahoo } from '../api/wahoo'
+import { enableMorningBrief, disableMorningBrief, pushSupported, sendTestPush } from '../lib/push'
 
 export default function SettingsPage() {
   const { language } = useLanguage()
@@ -139,6 +140,9 @@ export default function SettingsPage() {
         {/* Wahoo connection */}
         <WahooConnectSection />
 
+        {/* Morning brief push (P1.5) */}
+        <MorningBriefSection />
+
         {/* Placeholder sections */}
         {/* TODO(06.1 Wave 3): explicit sync-status pill details here */}
         {/* TODO(06.2): density toggle (comfortable / compact) */}
@@ -260,6 +264,93 @@ function WahooConnectSection() {
           {locale === 'de' ? 'Wahoo verbinden' : 'Connect Wahoo'}
         </button>
       )}
+    </section>
+  )
+}
+
+/**
+ * MorningBriefSection — web-push opt-in (roadmap P1.5). Real states only:
+ * unsupported browser → honest note; server unconfigured (503) → hidden
+ * feature note; enabled → test-push + disable. Never advertises a dead pipe.
+ */
+function MorningBriefSection() {
+  const { locale } = useLocale()
+  const de = locale === 'de'
+  const [state, setState] = useState<'idle' | 'busy' | 'on' | 'unsupported' | 'unavailable'>(
+    () => (pushSupported() ? (Notification.permission === 'granted' ? 'on' : 'idle') : 'unsupported'),
+  )
+  const [note, setNote] = useState<string | null>(null)
+
+  async function enable() {
+    setState('busy'); setNote(null)
+    try {
+      await enableMorningBrief()
+      setState('on')
+      setNote(de ? 'Aktiviert — jeden Morgen ein Brief, nie mehr als einer.' : 'Enabled — one brief every morning, never more.')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : ''
+      if (msg === 'denied') { setState('idle'); setNote(de ? 'Benachrichtigungen wurden blockiert — erlaube sie im Browser.' : 'Notifications are blocked — allow them in your browser.') }
+      else if ((e as { response?: { status?: number } })?.response?.status === 503) { setState('unavailable'); setNote(null) }
+      else { setState('idle'); setNote(de ? 'Aktivierung fehlgeschlagen — versuch es nochmal.' : 'Enabling failed — try again.') }
+    }
+  }
+
+  async function disable() {
+    setState('busy')
+    try { await disableMorningBrief() } finally { setState('idle'); setNote(de ? 'Deaktiviert.' : 'Disabled.') }
+  }
+
+  async function test() {
+    setState('busy')
+    try {
+      const n = await sendTestPush()
+      setNote(n > 0 ? (de ? 'Test gesendet — schau auf dein Gerät.' : 'Test sent — check your device.') : (de ? 'Kein aktives Gerät gefunden — aktiviere zuerst.' : 'No active device found — enable first.'))
+    } catch { setNote(de ? 'Test fehlgeschlagen.' : 'Test failed.') } finally { setState('on') }
+  }
+
+  const busy = state === 'busy'
+  const enabled = state === 'on'
+
+  if (state === 'unsupported' || state === 'unavailable') {
+    return (
+      <section className="flex flex-col gap-2 p-5 rounded-[16px]" style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
+        <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}>{de ? 'MORGEN-BRIEF' : 'MORNING BRIEF'}</span>
+        <p className="text-[13px]" style={{ color: 'var(--color-muted)' }}>
+          {state === 'unsupported'
+            ? (de ? 'Push wird von diesem Browser nicht unterstützt.' : 'Push isn’t supported by this browser.')
+            : (de ? 'Push ist auf diesem Server nicht eingerichtet.' : 'Push isn’t configured on this server.')}
+        </p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="flex flex-col gap-3 p-5 rounded-[16px]" style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
+      <div className="flex flex-col gap-1">
+        <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}>{de ? 'MORGEN-BRIEF' : 'MORNING BRIEF'}</span>
+        <p className="text-[14px]" style={{ color: 'var(--color-ink-2)' }}>
+          {de
+            ? 'Ein Push pro Morgen: Bereitschaft + die heutige Einheit, direkt zu Heute verlinkt. Ruhetags-bewusst — nie Druck.'
+            : 'One push each morning: readiness + today’s session, deep-linked to Today. Rest-day aware — never pressure.'}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        {!enabled ? (
+          <button type="button" onClick={() => void enable()} disabled={busy} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium" style={{ backgroundColor: 'var(--color-accent)', color: '#0A0C0F', opacity: busy ? 0.6 : 1 }}>
+            {de ? 'Aktivieren' : 'Enable'}
+          </button>
+        ) : (
+          <>
+            <button type="button" onClick={() => void test()} disabled={busy} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium" style={{ backgroundColor: 'var(--color-ink)', color: 'var(--color-paper)', opacity: busy ? 0.6 : 1 }}>
+            {de ? 'Test senden' : 'Send test'}
+            </button>
+            <button type="button" onClick={() => void disable()} disabled={busy} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)', opacity: busy ? 0.6 : 1 }}>
+              {de ? 'Deaktivieren' : 'Disable'}
+            </button>
+          </>
+        )}
+      </div>
+      {note && <p className="text-[12px]" style={{ color: 'var(--color-muted)' }}>{note}</p>}
     </section>
   )
 }
