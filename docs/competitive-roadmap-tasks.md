@@ -60,7 +60,7 @@ Priority key: **P0** = unlock built value / foundation (small, high-leverage). *
 - **What:** Monday-morning animated story (4–6 swipeable panels): load vs plan, best moment (breakthrough/PB/duel), consistency, insight of the week ("Z2 discipline improved decoupling 2.1%→1.4%"), next week's shape. Self-referential only; **shareable image export as a first-class deliverable**; EN/DE.
 - **Where:** new `WeeklyRecapStory` route + Monday Today entry card; data from `period_report`, `session_report`, crew/duel results, P1.2 detections.
 
-### P1.4 Absorb-and-replan (promoted from P2 — was mis-scoped as a stub-finish)
+### P1.4 Absorb-and-replan (promoted from P2 — was mis-scoped as a stub-finish) ✅ SHIPPED (July 18)
 - **Why:** JOIN silently absorbing a group ride and re-planning is **the single most-praised adaptive behavior in the research**; rigid plans and guilt are the most hated. A manual "re-plan" button under-serves it.
 - **What:** On sync, detect an unplanned or longer/harder-than-planned ride → automatically reshuffle the remaining week via `weekly_plan_llm.py` + `enforce_week_rails` → non-guilt disclosure card: "Great group ride — 82 TSS banked. Thursday's threshold moved to Friday." **Audit the compliance letter-grades so an unplanned ride is never graded as failure** ("overcooked" shaming a group ride violates the whole thesis). The "coming soon" stubs live on an unmounted card (`PrescribedWorkoutCard` inside never-mounted `CoachBrief`) — this is new work, not stub-finishing.
 - **Where:** `garmin_sync_service.py` (trigger), `weekly_plan_llm.py`, `ride_matching.py`/`ride_compliance.py` (grade audit), new disclosure card on Today/Train.

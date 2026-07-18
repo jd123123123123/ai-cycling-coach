@@ -741,3 +741,31 @@ async def undo_brief_alternate(
     from app.services.coach_tools import _handle_undo_last_modification
 
     return await _handle_undo_last_modification({}, current_user.id, db)
+
+
+@router.get("/absorptions")
+async def get_absorptions(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    days: Annotated[int, Query(ge=1, le=14)] = 3,
+) -> list[dict]:
+    """Recent absorb-and-replan events (roadmap P1.4) for the Today disclosure
+    card: which ride was absorbed and what (if anything) was rebalanced."""
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+
+    from sqlalchemy import select as _select
+
+    rows = await db.execute(
+        _select(CoachBrief.rationale, CoachBrief.evidence, CoachBrief.generated_at)
+        .where(
+            CoachBrief.user_id == current_user.id,
+            CoachBrief.verdict == "absorption",
+            CoachBrief.generated_at >= _dt.now(_tz.utc) - _td(days=days),
+        )
+        .order_by(CoachBrief.generated_at.desc())
+        .limit(5)
+    )
+    return [
+        {"rationale": r[0], **((r[1] or {}).get("absorption") or {})}
+        for r in rows.all()
+    ]

@@ -19,6 +19,7 @@ import SessionReviewCard from '../SessionReviewCard'
 import RecoveryEtaCard from '../RecoveryEtaCard'
 import TheRoadCard from '../TheRoadCard'
 import BreakthroughCelebration from '../BreakthroughCelebration'
+import AbsorptionCard from '../AbsorptionCard'
 import { useStreak, useSetAthleteStatus } from '../../../hooks/useStreak'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
@@ -542,6 +543,9 @@ export default function TodayTab() {
 
       {/* Breakthrough celebration — only when the detector found a real one (P1.2) */}
       <BreakthroughCelebration />
+
+      {/* Absorb-and-replan disclosure — the plan bent around your riding (P1.4) */}
+      <AbsorptionCard />
 
       {/* Weekly recap entry — Monday + Tuesday, the reflection ritual (P1.3) */}
       {(today.getDay() === 1 || today.getDay() === 2) && (

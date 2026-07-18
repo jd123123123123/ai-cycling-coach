@@ -292,8 +292,17 @@ def score_ride(
             decoupling_pct = float(stashed)
 
     # ---- Grade ----------------------------------------------------------
-    if phase in _ABSOLUTE_TSS_BANDS:
-        grade: Grade = _absolute_grade(actual_tss, phase)
+    # Absorb-and-replan invariant (roadmap P1.4): an unplanned ride on a
+    # rest/no-plan day is a FREE ride the plan absorbs — grading it against a
+    # zero-TSS target would brand every group ride "overcooked", the exact
+    # guilt mechanic the product exists to kill. Judge it on the absolute
+    # band instead; the plan rebalances the rest of the week separately.
+    unplanned_free_ride = (target_template.base_tss or 0) <= 1 and actual_tss >= 20
+    if unplanned_free_ride:
+        band_phase = phase if phase in _ABSOLUTE_TSS_BANDS else "maintenance"
+        grade: Grade = _absolute_grade(actual_tss, band_phase)
+    elif phase in _ABSOLUTE_TSS_BANDS:
+        grade = _absolute_grade(actual_tss, phase)
     else:
         grade = _grade_from_pairs(duration_pair, tss_pair)
 

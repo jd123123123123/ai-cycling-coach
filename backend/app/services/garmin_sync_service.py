@@ -551,6 +551,13 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         credential.sync_status = "ok"
         await db.commit()
 
+        # Absorb-and-replan (P1.4): unplanned/oversized rides get absorbed and
+        # the week gently rebalanced. Best-effort by contract — never breaks sync.
+        if total_activities > 0:
+            from app.services.plan_absorption import absorb_new_activities
+
+            await absorb_new_activities(db, user_id)
+
         # Build the list of athlete-days the sync may have changed. Step 2 will
         # rethread this through athlete-local time; UTC `today` is fine for now.
         dates_touched: list[date] = []
