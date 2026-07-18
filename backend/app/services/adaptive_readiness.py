@@ -213,6 +213,49 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
     push_level = (goals.get("push_intensity") if isinstance(goals, dict) else None) or "balanced"
     ambition = ambition_from_intensity(push_level)
 
+    # Athlete status outranks every physiological signal: a self-declared
+    # sick/injured day is a rest day, "taking a break" is a deload — no HRV
+    # reading argues with the athlete's own report. This also cascades into
+    # the coach-safety interlock (rest/deload mutes competitive surfaces).
+    status = goals.get("athlete_status") if isinstance(goals, dict) else None
+    status_state = (status or {}).get("state")
+    if status_state in ("sick", "injured"):
+        de = _de(lang)
+        return Directive(
+            directive="rest",
+            intensity_ceiling="rest",
+            volume_modifier=0.0,
+            hrv_state="unknown",
+            headline=(
+                ("Du bist krank gemeldet — heute zählt nur Erholung." if status_state == "sick"
+                 else "Verletzt gemeldet — Heilung ist das Training.")
+                if de else
+                ("You're marked sick — recovery is the only session today." if status_state == "sick"
+                 else "Marked injured — healing is the training.")
+            ),
+            signals=[Signal(
+                text=("Selbst gemeldeter Status schlägt jedes Signal." if de
+                      else "Self-reported status outranks every signal."),
+                tone="neutral", evidence="expert",
+            )],
+            confidence="high",
+        )
+    if status_state == "break":
+        de = _de(lang)
+        return Directive(
+            directive="deload",
+            intensity_ceiling="easy",
+            volume_modifier=0.5,
+            hrv_state="unknown",
+            headline=("Pause eingelegt — locker bleiben, sanft zurückkommen." if de
+                      else "On a break — keep it light, ease back in."),
+            signals=[Signal(
+                text=("Selbst gemeldeter Status: Pause." if de else "Self-reported status: break."),
+                tone="neutral", evidence="expert",
+            )],
+            confidence="high",
+        )
+
     ln = await _hrv_series(db, user_id)
     hrv_recent = mean(ln[-7:]) if len(ln) >= 3 else None
     baseline_window = ln[-28:] if len(ln) >= 10 else ln

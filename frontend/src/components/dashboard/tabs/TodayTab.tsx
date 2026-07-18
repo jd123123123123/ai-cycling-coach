@@ -9,9 +9,11 @@
 import { useMemo, useState, useRef } from 'react'
 import { subDays, format, startOfWeek, addDays, parseISO } from 'date-fns'
 import { Link } from 'react-router-dom'
-import { Flag, Heart, Activity, Zap, Target, Play, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles } from 'lucide-react'
+import { Flag, Heart, Activity, Zap, Target, Play, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
 import type { Adaptations } from '../../../api/coach'
+import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
+import { useStreak, useSetAthleteStatus } from '../../../hooks/useStreak'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
@@ -44,6 +46,8 @@ export default function TodayTab() {
   const { data: pmc } = usePMC(90)
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 8), [today]), today)
   const { data: trajectory } = useGoalTrajectory()
+  const { data: streakData } = useStreak()
+  const setStatus = useSetAthleteStatus()
 
   const metrics = metricsResp?.metrics ?? []
   const latest = [...metrics].reverse().find((m) => m.hrv_status != null || m.resting_hr != null || m.sleep_score != null) ?? null
@@ -175,21 +179,30 @@ export default function TodayTab() {
     return athleteName ? `${base}, ${athleteName}` : base
   })()
 
-  // Week streak — current week Mon→Sun, real activity presence + status.
+  // Week streak — forgiving, plan-aware (server: trained + planned-rest days
+  // extend, sick/injured/break days pause, only skipped sessions break).
+  // Falls back to client activity-presence while the query loads.
   const trainedSet = useMemo(() => new Set((acts?.activities ?? []).map((a) => (a.started_at ?? a.date ?? '').slice(0, 10))), [acts])
   const weekDays = useMemo(() => {
     const monday = startOfWeek(today, { weekStartsOn: 1 })
     return Array.from({ length: 7 }, (_, i) => {
       const d = addDays(monday, i)
       const key = format(d, 'yyyy-MM-dd')
+      const serverState = streakData?.week?.find((w) => w.date === key)?.state
       const isToday = key === todayKey
       const isPast = d < today && !isToday
-      const done = trainedSet.has(key)
-      const state: 'done' | 'today' | 'rest' | 'upcoming' = done ? 'done' : isToday ? 'today' : isPast ? 'rest' : 'upcoming'
+      const done = serverState === 'trained' || (serverState == null && trainedSet.has(key))
+      const state: 'done' | 'today' | 'rest' | 'paused' | 'missed' | 'upcoming' =
+        done ? 'done'
+        : isToday ? 'today'
+        : serverState === 'rest' ? 'rest'
+        : serverState === 'paused' ? 'paused'
+        : serverState === 'missed' || serverState === 'unplanned' ? (isPast ? 'missed' : 'upcoming')
+        : isPast ? 'missed' : 'upcoming'
       return { key, label: format(d, 'EEEEE'), state }
     })
-  }, [today, todayKey, trainedSet])
-  const streak = useMemo(() => {
+  }, [today, todayKey, trainedSet, streakData])
+  const clientStreak = useMemo(() => {
     let n = 0
     for (let i = 0; i < 30; i++) {
       const key = format(subDays(today, i), 'yyyy-MM-dd')
@@ -199,6 +212,9 @@ export default function TodayTab() {
     }
     return n
   }, [today, trainedSet])
+  const streak = streakData?.streak ?? clientStreak
+  const streakPaused = streakData?.paused ?? false
+  const athleteState: AthleteState = streakData?.status?.state ?? 'healthy'
 
   // Refreshingly-funny, always-true day wrap-up — synthesizes today's move
   // (already-trained / rest / prescribed session) against the real readiness
@@ -309,6 +325,11 @@ export default function TodayTab() {
   // recover nuance when depleted); rest day prescribed → rest day; otherwise the
   // readiness tier decides go-hard / go-controlled / recover.
   const { pillWord, pillColor } = (() => {
+    // Self-reported status outranks every readiness signal — the hero must
+    // never say "primed to train" to an athlete who marked themselves sick.
+    if (athleteState === 'sick') return { pillWord: de ? 'Krank gemeldet · nur Erholung' : 'Marked sick · recovery only', pillColor: 'var(--color-amber)' }
+    if (athleteState === 'injured') return { pillWord: de ? 'Verletzt gemeldet · heilen' : 'Marked injured · heal up', pillColor: 'var(--color-amber)' }
+    if (athleteState === 'break') return { pillWord: de ? 'Pause · locker bleiben' : 'On a break · keep it light', pillColor: 'var(--color-recovery)' }
     if (trainedToday) {
       return roughRecovery
         ? { pillWord: de ? 'Einheit erledigt · erholen' : 'Session logged · recover', pillColor: 'var(--color-amber)' }
@@ -675,23 +696,31 @@ export default function TodayTab() {
           trend={strain != null ? { icon: Target, text: strainState, color: 'var(--color-strain)' } : undefined} />
       </div>
 
-      {/* Streak card — weekday status dots → History */}
-      <Link to="/dashboard?tab=history" className={`${CARD} hover-card flex flex-col gap-4`} style={cardStyle}>
+      {/* Streak card — forgiving, plan-aware. Planned rest days keep the flame
+          alive; sick/injured/break days PAUSE it (never break it) and feed the
+          coach (status → rest/deload directive → interlock). */}
+      <div className={`${CARD} flex flex-col gap-4`} style={cardStyle}>
         <div className="flex items-center justify-between">
           <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Diese Woche' : 'This Week'}</span>
           <span className="flex items-center gap-1">
             {streak > 0 && (
               <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)' }}>
-                <Flame size={14} style={{ color: 'var(--color-amber)' }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-amber)' }}>{streak} {de ? 'Tage Serie' : 'day streak'}</span>
+                {streakPaused
+                  ? <Pause size={14} style={{ color: 'var(--color-muted)' }} />
+                  : <Flame size={14} style={{ color: 'var(--color-amber)' }} />}
+                <span style={{ fontSize: 12, fontWeight: 600, color: streakPaused ? 'var(--color-muted)' : 'var(--color-amber)' }}>
+                  {streak} {de ? 'Tage Serie' : 'day streak'}{streakPaused ? (de ? ' · pausiert' : ' · paused') : ''}
+                </span>
               </span>
             )}
-            <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></span>
+            <Link to="/dashboard?tab=history" aria-label={de ? 'Verlauf öffnen' : 'Open history'} className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></Link>
           </span>
         </div>
         <div className="flex gap-2">
           {weekDays.map((d, i) => {
             const bg = d.state === 'done' ? 'color-mix(in srgb, var(--color-recovery) 18%, transparent)'
+              : d.state === 'rest' ? 'color-mix(in srgb, var(--color-recovery) 10%, transparent)'
+              : d.state === 'paused' ? 'color-mix(in srgb, var(--color-amber) 12%, transparent)'
               : d.state === 'today' ? 'var(--color-accent)' : 'var(--color-surface-2)'
             const border = d.state === 'upcoming' ? '1px solid var(--color-rule)' : 'none'
             return (
@@ -699,14 +728,56 @@ export default function TodayTab() {
                 <div className="grid place-items-center rounded-full" style={{ width: 34, height: 34, background: bg, border }}>
                   {d.state === 'done' && <Check size={17} strokeWidth={3} style={{ color: 'var(--color-recovery)' }} />}
                   {d.state === 'today' && <Zap size={17} strokeWidth={2.6} fill="#0A0C0F" style={{ color: '#0A0C0F' }} />}
-                  {d.state === 'rest' && <Moon size={14} style={{ color: 'var(--color-muted)' }} />}
+                  {d.state === 'rest' && <Moon size={14} style={{ color: 'var(--color-recovery)' }} />}
+                  {d.state === 'paused' && <Pause size={14} style={{ color: 'var(--color-amber)' }} />}
+                  {d.state === 'missed' && <Minus size={14} style={{ color: 'var(--color-muted)' }} />}
                 </div>
                 <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{d.label}</span>
               </div>
             )
           })}
         </div>
-      </Link>
+        {streakPaused && (
+          <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
+            {de
+              ? 'Serie pausiert — sie wartet auf dich. Erholung zählt nicht gegen dich.'
+              : 'Streak paused — it’s waiting for you. Recovery never counts against you.'}
+          </p>
+        )}
+        {/* Athlete status — one honest tap. Feeds streak pause + the coach
+            (sick/injured → rest directive → competitive surfaces mute). */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--color-muted)', marginRight: 2 }}>
+            {de ? 'STATUS' : 'STATUS'}
+          </span>
+          {([
+            { s: 'healthy' as AthleteState, en: 'Healthy', deL: 'Gesund' },
+            { s: 'sick' as AthleteState, en: 'Sick', deL: 'Krank' },
+            { s: 'injured' as AthleteState, en: 'Injured', deL: 'Verletzt' },
+            { s: 'break' as AthleteState, en: 'On a break', deL: 'Pause' },
+          ]).map(({ s, en, deL }) => {
+            const active = athleteState === s
+            return (
+              <button
+                key={s}
+                type="button"
+                disabled={setStatus.isPending}
+                onClick={() => { if (!active) setStatus.mutate(s) }}
+                className="rounded-full px-2.5 py-1"
+                style={{
+                  fontSize: 11.5, fontWeight: 600,
+                  background: active ? 'color-mix(in srgb, var(--color-amber) 16%, transparent)' : 'var(--color-surface-2)',
+                  border: `1px solid ${active ? 'var(--color-amber)' : 'var(--color-rule)'}`,
+                  color: active ? 'var(--color-amber)' : 'var(--color-ink-2)',
+                  opacity: setStatus.isPending ? 0.6 : 1,
+                }}
+              >
+                {de ? deL : en}
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
