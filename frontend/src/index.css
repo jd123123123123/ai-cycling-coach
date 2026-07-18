@@ -28,6 +28,18 @@
   --color-ink-blue:    #38B6FF;               /* strain / info             */
   --color-alert:       #FA1E55;               /* error / rest              */
 
+  /* ── V2 tokens (pencil-new.pen July 2026) ───────────────────────────── */
+  --color-gold:        #FFD166;               /* achievements / levels     */
+  --color-gold-soft:   #FFD16626;
+  --color-violet:      #8B5CF6;               /* phenotype / special       */
+  --color-violet-soft: #8B5CF626;
+  --color-zone-1:      #59C3FF;               /* power-zone scale          */
+  --color-zone-2:      #16E08A;
+  --color-zone-3:      #FFB020;
+  --color-zone-4:      #FF5A3C;
+  --color-zone-5:      #FA1E55;
+  --color-zone-6:      #8B5CF6;
+
   /* Metric channels (Apple-rings / WHOOP) */
   --color-recovery: #16E08A;
   --color-strain:   #38B6FF;

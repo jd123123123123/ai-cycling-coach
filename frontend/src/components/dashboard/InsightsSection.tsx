@@ -11,7 +11,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { subDays } from 'date-fns'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Gauge, MessageSquarePlus } from 'lucide-react'
+import { ChevronRight, Fingerprint, Gauge, MessageSquarePlus } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useLocale } from '../../contexts/LocaleContext'
@@ -94,6 +94,19 @@ export default function InsightsSection({ sport }: { sport: 'cycling' | 'running
         </span>
       </div>
       <FtpConfidenceCard />
+      {/* Deep power science → the Power Profile page (.pen QLszB, built V2) */}
+      <Link to="/power-profile" className="rounded-[24px] p-5 hover-card flex items-center gap-3.5" style={cardStyle}>
+        <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'color-mix(in srgb, var(--color-violet) 16%, transparent)' }}>
+          <Fingerprint size={22} style={{ color: 'var(--color-violet)' }} />
+        </span>
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Dein Power-Profil' : 'Your power profile'}</span>
+          <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+            {de ? 'Bestwerte, Critical Power, W′ und dein Fahrertyp — aus deinen Fahrten.' : 'Peak powers, Critical Power, W′ and your rider type — from your rides.'}
+          </span>
+        </div>
+        <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-violet)' }} />
+      </Link>
       {/* Power users → the NL chart workspace (no competitor has this) */}
       <Link to="/dashboards" className="rounded-[24px] p-5 hover-card flex items-center gap-3.5" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
         <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' }}>
