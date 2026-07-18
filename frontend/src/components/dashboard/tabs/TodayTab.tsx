@@ -180,6 +180,21 @@ export default function TodayTab() {
     return athleteName ? `${base}, ${athleteName}` : base
   })()
 
+  // "Why this?" — the SPECIFIC inputs behind today's prescription (never a
+  // black box: every chip is a real signal the engine weighed) + the science
+  // frameworks the brief cites. All values come from the brief evidence /
+  // metrics already loaded — nothing fabricated, chips render only when real.
+  const whyInputs = useMemo(() => {
+    const chips: { l: string; v: string }[] = []
+    if (typeof tsb === 'number') chips.push({ l: 'Form', v: `${tsb >= 0 ? '+' : ''}${Math.round(tsb)} TSB` })
+    if (atl != null) chips.push({ l: de ? 'Ermüdung' : 'Fatigue', v: `${Math.round(atl)} ATL` })
+    if (typeof hrvDelta === 'number') chips.push({ l: 'HRV', v: `${hrvDelta >= 0 ? '+' : ''}${Math.round(hrvDelta)}% vs. Baseline` })
+    if (sleepScore != null) chips.push({ l: de ? 'Schlaf' : 'Sleep', v: `${Math.round(sleepScore)}/100` })
+    if (typeof daysToGoal === 'number' && goalName) chips.push({ l: de ? 'Event' : 'Event', v: `${daysToGoal} ${de ? 'Tage bis' : 'days to'} ${goalName.length > 18 ? goalName.slice(0, 17) + '…' : goalName}` })
+    return chips
+  }, [tsb, atl, hrvDelta, sleepScore, daysToGoal, goalName, de])
+  const frameworks = (brief?.frameworks_cited ?? []).slice(0, 3)
+
   // Week streak — forgiving, plan-aware (server: trained + planned-rest days
   // extend, sick/injured/break days pause, only skipped sessions break).
   // Falls back to client activity-presence while the query loads.
@@ -624,6 +639,26 @@ export default function TodayTab() {
                       </div>
                     )
                   })}
+                  {(whyInputs.length > 0 || frameworks.length > 0) && (
+                    <WhyInputChips whyInputs={whyInputs} frameworks={frameworks} de={de} />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Why this? — inputs disclosure even when nothing was adapted today.
+              The coach shows its work: the exact signals it weighed. */}
+          {!adaptations?.changes?.length && (whyInputs.length > 0 || frameworks.length > 0) && (
+            <div className="rounded-2xl p-3.5 flex flex-col gap-2.5" style={{ background: 'color-mix(in srgb, var(--color-paper) 55%, transparent)', border: '1px solid var(--color-rule)' }}>
+              <button type="button" onClick={() => setWhyOpen((o) => !o)} className="flex items-center gap-2 text-left">
+                <Sparkles size={15} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
+                <span className="flex-1 min-w-0" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Warum genau diese Einheit?' : 'Why this session?'}</span>
+                <ChevronDown size={16} style={{ color: 'var(--color-muted)', transform: whyOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }} />
+              </button>
+              {whyOpen && (
+                <div style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 10 }}>
+                  <WhyInputChips whyInputs={whyInputs} frameworks={frameworks} de={de} />
                 </div>
               )}
             </div>
@@ -782,6 +817,47 @@ export default function TodayTab() {
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── "Why this?" input chips — the coach shows its work ───────────────────────
+// Every chip is a REAL signal the engine weighed today; frameworks are the
+// science the brief cites. Text wears ink tokens; nothing is fabricated.
+function WhyInputChips({ whyInputs, frameworks, de }: {
+  whyInputs: { l: string; v: string }[]
+  frameworks: string[]
+  de: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {whyInputs.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>
+            {de ? 'WAS DER COACH HEUTE GEWOGEN HAT' : 'WHAT THE COACH WEIGHED TODAY'}
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {whyInputs.map((c, i) => (
+              <span key={i} className="inline-flex items-center gap-1 rounded-full px-2 py-1" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--color-muted)' }}>{c.l}</span>
+                <span className="num-mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink)' }}>{c.v}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {frameworks.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>
+            {de ? 'WISSENSCHAFT' : 'SCIENCE'}
+          </span>
+          {frameworks.map((f, i) => (
+            <span key={i} className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-recovery)', background: 'color-mix(in srgb, var(--color-recovery) 12%, transparent)' }}>
+              {f}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
