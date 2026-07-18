@@ -370,3 +370,17 @@ async def get_breakthroughs(
     from app.services.breakthrough_detector import detect_breakthroughs
 
     return await detect_breakthroughs(db, current_user.id, recent_days=days, lang=locale)
+
+
+@router.get("/weekly-recap")
+async def get_weekly_recap(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    locale: Annotated[str, Query(pattern="^(en|de)$")] = "en",
+) -> dict:
+    """The Monday-morning story payload (roadmap P1.3): last completed week's
+    totals vs the week before, plan-vs-actual, fitness movement, breakthroughs
+    inside the week, best ride, streak state. Self-referential only."""
+    from app.services.weekly_recap import build_weekly_recap
+
+    return await build_weekly_recap(db, current_user.id, lang=locale)

@@ -23,6 +23,7 @@ const CoachPage = lazyWithRetry(() => import('./pages/CoachPage'))
 const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'))
 const ProfileView = lazyWithRetry(() => import('./pages/ProfileView'))
 const DashboardsPage = lazyWithRetry(() => import('./pages/DashboardsPage'))
+const WeeklyRecapStory = lazyWithRetry(() => import('./pages/WeeklyRecapStory'))
 const DebriefView = lazyWithRetry(() => import('./pages/DebriefView'))
 const SessionReportView = lazyWithRetry(() => import('./pages/SessionReportView'))
 const RideAnalysisView = lazyWithRetry(() => import('./pages/RideAnalysisView'))
@@ -205,6 +206,8 @@ function App() {
           />
 
           <Route path="/recovery/trends" element={<ProtectedRoute checkOnboarding><RecoveryTrendsView /></ProtectedRoute>} />
+
+          <Route path="/recap/week" element={<ProtectedRoute checkOnboarding><WeeklyRecapStory /></ProtectedRoute>} />
 
           <Route path="/progress/run" element={<ProtectedRoute checkOnboarding><RunProgressView /></ProtectedRoute>} />
           <Route path="/progress/bike" element={<ProtectedRoute checkOnboarding><BikeProgressView /></ProtectedRoute>} />

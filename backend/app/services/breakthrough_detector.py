@@ -54,11 +54,19 @@ async def detect_breakthroughs(
     user_id: int,
     recent_days: int = 2,
     lang: str = "en",
+    range_start: datetime | None = None,
+    range_end: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Compare each ride of the last `recent_days` against the athlete's prior
-    90-day bests. Returns breakthroughs, newest first."""
+    90-day bests. Returns breakthroughs, newest first.
+
+    When `range_start`/`range_end` are given they replace the recent-days
+    window (used by the weekly recap to celebrate a specific week)."""
     de = lang == "de"
-    since = datetime.now(timezone.utc) - timedelta(days=WINDOW_DAYS + recent_days)
+    horizon_days = recent_days
+    if range_start is not None:
+        horizon_days = max(1, (datetime.now(timezone.utc) - range_start).days + 1)
+    since = datetime.now(timezone.utc) - timedelta(days=WINDOW_DAYS + horizon_days)
 
     rows = await db.execute(
         select(
@@ -86,7 +94,12 @@ async def detect_breakthroughs(
 
     for i, ride in enumerate(rides):
         started = ride["started_at"]
-        if started is None or started < recent_cutoff:
+        if started is None:
+            continue
+        if range_start is not None:
+            if started < range_start or (range_end is not None and started > range_end):
+                continue
+        elif started < recent_cutoff:
             continue
         prior = rides[:i]
         if len(prior) < MIN_PRIOR_RIDES:

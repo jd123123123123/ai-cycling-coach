@@ -55,7 +55,7 @@ Priority key: **P0** = unlock built value / foundation (small, high-leverage). *
 - **What:** Detection service over per-ride CP/W′ + power curve: v1 restricted to **durations ≥60 s** (downsampling-safe); short-duration PBs only from Garmin's per-activity summary max-power fields. Sampling resolution is an explicit input to the confidence gate — never celebrate dirty data (Xert's missed-breakthrough grumbling killed the magic). On detection: celebration card on debrief + Today (confetti exists), plain-language explanation ("Your 5-min power beat everything in 90 days — the ceiling moved"), **shareable image card** (this is also the acquisition channel — quality matters).
 - **Where:** new `backend/app/services/breakthrough_detector.py`, `power_curve.py`, `activity_streams` fields, `DebriefHero`, `TodayTab`, `lib/confetti.ts`.
 
-### P1.3 Weekly recap story
+### P1.3 Weekly recap story ✅ SHIPPED (July 18)
 - **Why:** Gentler Streak's recaps + a "Wrapped" being a top Bevel board item prove the ritual; retention research: "apps that own [reflection + planning] own the athlete."
 - **What:** Monday-morning animated story (4–6 swipeable panels): load vs plan, best moment (breakthrough/PB/duel), consistency, insight of the week ("Z2 discipline improved decoupling 2.1%→1.4%"), next week's shape. Self-referential only; **shareable image export as a first-class deliverable**; EN/DE.
 - **Where:** new `WeeklyRecapStory` route + Monday Today entry card; data from `period_report`, `session_report`, crew/duel results, P1.2 detections.

@@ -543,6 +543,20 @@ export default function TodayTab() {
       {/* Breakthrough celebration — only when the detector found a real one (P1.2) */}
       <BreakthroughCelebration />
 
+      {/* Weekly recap entry — Monday + Tuesday, the reflection ritual (P1.3) */}
+      {(today.getDay() === 1 || today.getDay() === 2) && (
+        <Link to="/recap/week" className={`${CARD} hover-card flex items-center gap-3.5`} style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
+          <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 44, height: 44, background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' }}>
+            <Sparkles size={22} style={{ color: 'var(--color-accent)' }} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Deine Woche als Story' : 'Your week, as a story'}</span>
+            <p style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Letzte Woche in 5 Karten — was du gebaut hast.' : 'Last week in 5 cards — what you built.'}</p>
+          </div>
+          <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />
+        </Link>
+      )}
+
       {/* Race chip → Plan tab */}
       {goalName && (
         <Link to="/dashboard?tab=plan" className={`${CARD} hover-card flex items-center gap-3.5`} style={cardStyle}>
