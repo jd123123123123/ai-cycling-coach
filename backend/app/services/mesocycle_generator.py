@@ -44,6 +44,11 @@ from app.services.training_periodization import (
     pick_template,
     session_type_for_today,
 )
+from app.services.run_workout_templates import (
+    RUN_TEMPLATES,
+    RunTemplate,
+    run_interval_structure,
+)
 from app.services.workout_templates import TEMPLATES
 
 if TYPE_CHECKING:
@@ -104,6 +109,25 @@ _ENDURANCE_VARIETY: list[str] = [
 # never trimmed — only the aerobic filler absorbs the cap.
 _FILLER_OVERSHOOT = 1.10          # keep a full filler day if it lands ≤ 110% of budget
 _FILLER_RECOVERY_OVERSHOOT = 1.15  # else a recovery spin if it lands ≤ 115%
+
+# ── Dual-sport: maintenance runs woven into the bike week ────────────────────
+# When the athlete both rides and runs (secondary_sports includes 'running',
+# or primary running + secondary cycling) the generated week interleaves 2
+# easy maintenance runs (3 at weekly_hours >= 8) on bike-rest / bike-easy
+# days. Long-run progression is deliberately NOT handled here — that is the
+# run-program scheduler's domain (weeks API); when a RUN program is active we
+# defer run scheduling to it entirely.
+_RUN_EASY_TEMPLATE_ID = "run_easy_45"  # 45min Z2 — inside the 40-50min band
+# Weekly quality-run rotation (build/peak only): strides ↔ tempo, alternating
+# by calendar week so consecutive build weeks never repeat.
+_RUN_QUALITY_TEMPLATE_IDS: tuple[str, str] = ("run_strides_8x20", "run_tempo_20")
+_RUN_TSS_PER_MIN_EASY = 0.75      # conservative rTSS/min for a Z2 run
+_RUN_TSS_PER_MIN_QUALITY = 1.1    # rTSS/min for a tempo/strides session
+_RUN_QUALITY_PHASES: frozenset[str] = frozenset({"build1", "build2", "peak"})
+_EASY_BIKE_TYPES: frozenset[str] = frozenset({"endurance", "recovery"})
+_RUNS_PER_WEEK_DEFAULT = 2
+_RUNS_PER_WEEK_HIGH_VOLUME = 3    # when weekly_hours_available >= 8h
+_HIGH_VOLUME_HOURS = 8.0
 
 
 def _rest_dows_for_week(
@@ -263,6 +287,130 @@ class PlannedWorkoutDraft:
     blocks_source: str = "ai_prescribed"
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+#  Dual-sport helpers (bike week + interleaved maintenance runs)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _dual_sport_running(athlete: "AthleteProfile") -> bool:
+    """True when the athlete both rides and runs.
+
+    Either direction counts: primary cycling with 'running' in
+    secondary_sports, or primary running with 'cycling' in secondary_sports.
+    """
+    primary = (athlete.primary_sport or "cycling").lower()
+    secondary = {
+        str(s).lower() for s in (getattr(athlete, "secondary_sports", None) or [])
+    }
+    return (primary == "cycling" and "running" in secondary) or (
+        primary == "running" and "cycling" in secondary
+    )
+
+
+def _run_tss_estimate(template: RunTemplate, quality: bool) -> float:
+    """Deterministic rTSS estimate for a maintenance run.
+
+    duration_min × 0.75 for easy runs, × 1.1 for the weekly quality run
+    (tempo/strides). Counted against the week's TSS budget so the bike
+    filler trimming respects the shared load target.
+    """
+    per_min = _RUN_TSS_PER_MIN_QUALITY if quality else _RUN_TSS_PER_MIN_EASY
+    return (template.duration_s / 60.0) * per_min
+
+
+def _plan_week_runs(
+    plan: list[dict],
+    phase: Phase,
+    block_position: str,
+    weekly_hours: float,
+    week_start: date,
+) -> list[dict]:
+    """Place this week's maintenance runs around the bike skeleton.
+
+    Deterministic placement over the 7 pass-1 bike entries. Invariants:
+
+      - Runs land ONLY on bike-rest or bike-easy (endurance/recovery) days.
+      - Never on, the day before, OR the day after the hardest bike day
+        (highest planned base_tss; earliest day wins ties).
+      - At least ONE full rest day survives run-free (when the bike week has
+        scheduled rest at all).
+      - The single weekly quality run (build/peak phases, never on a recovery
+        week) is only placed on a day with no hard bike session within ±24h —
+        no two hard sessions across sports back-to-back. If no day qualifies,
+        every run stays easy.
+      - Target count: 2 runs/week, 3 when weekly_hours >= 8. Fewer when the
+        invariants leave fewer candidate days — constraints always win.
+
+    Returns a list of {"dow", "template", "quality", "tss"} dicts sorted by
+    day-of-week. Empty list when nothing can be placed.
+    """
+    n_runs = (
+        _RUNS_PER_WEEK_HIGH_VOLUME
+        if weekly_hours >= _HIGH_VOLUME_HOURS
+        else _RUNS_PER_WEEK_DEFAULT
+    )
+
+    ridden = [
+        (float(e["template"].base_tss), i)
+        for i, e in enumerate(plan)
+        if e["session_type"] != "rest"
+    ]
+    if not ridden:
+        return []
+    # Hardest bike day = max planned TSS; ties break to the earliest day.
+    hardest_dow = max(ridden, key=lambda t: (t[0], -t[1]))[1]
+    blocked = {hardest_dow - 1, hardest_dow, hardest_dow + 1}
+    hard_bike_dows = {
+        i for i, e in enumerate(plan) if e["session_type"] in _HARD_TYPES
+    }
+
+    rest_dows = [i for i, e in enumerate(plan) if e["session_type"] == "rest"]
+    easy_dows = [
+        i for i, e in enumerate(plan) if e["session_type"] in _EASY_BIKE_TYPES
+    ]
+
+    # One full rest day must survive with no run on it. Prefer to "protect" a
+    # rest day that is already excluded by the hardest-day adjacency rule so
+    # we don't burn an otherwise-usable candidate.
+    protected_rest: int | None = None
+    if rest_dows:
+        pre_blocked = [d for d in rest_dows if d in blocked]
+        protected_rest = pre_blocked[0] if pre_blocked else rest_dows[0]
+
+    rest_candidates = [
+        d for d in rest_dows if d not in blocked and d != protected_rest
+    ]
+    easy_candidates = [d for d in easy_dows if d not in blocked]
+    # Rest days first (clean single-session days), then easy-ride days.
+    chosen = (rest_candidates + easy_candidates)[:n_runs]
+    if not chosen:
+        return []
+
+    # Weekly quality run — build/peak only, never on the deload week, and
+    # never within 24h of a hard bike session (cross-sport hard-hard guard).
+    quality_dow: int | None = None
+    if phase in _RUN_QUALITY_PHASES and block_position != "recovery":
+        for d in sorted(chosen):
+            if not ({d - 1, d, d + 1} & hard_bike_dows):
+                quality_dow = d
+                break
+
+    week_ord = week_start.toordinal() // 7
+    quality_template = RUN_TEMPLATES[_RUN_QUALITY_TEMPLATE_IDS[week_ord % 2]]
+    easy_template = RUN_TEMPLATES[_RUN_EASY_TEMPLATE_ID]
+
+    entries: list[dict] = []
+    for d in sorted(chosen):
+        quality = d == quality_dow
+        template = quality_template if quality else easy_template
+        entries.append({
+            "dow": d,
+            "template": template,
+            "quality": quality,
+            "tss": _run_tss_estimate(template, quality),
+        })
+    return entries
+
+
 def build_week_drafts(
     athlete: "AthleteProfile",
     week_start: date,
@@ -280,6 +428,13 @@ def build_week_drafts(
     Monday is typically rest after a hard weekend.  Wednesday is the primary
     quality day for build phases.  Sunday is the long Z2 ride.
 
+    Dual-sport athletes (secondary_sports includes 'running', or primary
+    running + secondary cycling) additionally get 2-3 maintenance runs
+    (sport='running') interleaved on bike-rest / bike-easy days — see
+    _plan_week_runs for the placement invariants. Their rTSS estimate is
+    deducted from the filler budget so the combined week respects the target.
+    Cycling-only athletes get the exact same 7 drafts as before.
+
     Args:
         athlete:              AthleteProfile ORM object (needs ftp_watts, primary_sport).
         week_start:           Date of Monday (week[0]).
@@ -289,7 +444,8 @@ def build_week_drafts(
         ftp_w:                Athlete FTP in watts.
 
     Returns:
-        List of 7 PlannedWorkoutDraft objects (Mon..Sun), NOT persisted.
+        List of 7 bike PlannedWorkoutDraft objects (Mon..Sun) — plus the
+        week's run drafts for dual-sport athletes — NOT persisted.
     """
     sport = athlete.primary_sport or "cycling"
     # Weekly-intensity philosophy from onboarding (goals JSON) biases the
@@ -310,6 +466,20 @@ def build_week_drafts(
     prog = active_program(getattr(athlete, "goals", None))
     prog_id = prog[0] if prog else None
     prog_week = program_week_index(prog[1], week_start) if prog else 0
+
+    # ── Dual-sport gate ───────────────────────────────────────────────────
+    # Athlete rides AND runs → weave 2-3 maintenance runs into the bike week
+    # (pass 1.5 below). When a RUN program is active the weeks-API run
+    # scheduler owns the run days — we defer entirely so runs are never
+    # double-planned. Cycling-only athletes take none of these branches.
+    dual_running = (
+        _dual_sport_running(athlete)
+        and active_program(getattr(athlete, "goals", None), sport="run") is None
+    )
+    if dual_running:
+        # Bike skeleton rows are cycling; run rows carry sport='running'.
+        # (Matters for the primary-running + secondary-cycling direction.)
+        sport = "cycling"
 
     # ── Rest-day skeleton ─────────────────────────────────────────────────
     # Real rest days are placed deterministically from the phase's rest_days
@@ -451,16 +621,27 @@ def build_week_drafts(
             vo2_sessions_done += 1
         cumulative_tss += template.base_tss
 
+    # ── Pass 1.5: dual-sport run interleave ───────────────────────────────
+    # Place the week's maintenance runs around the bike skeleton. Their TSS
+    # estimate joins the reserved budget below, so the bike filler trimming
+    # still lands the COMBINED week near the weekly target.
+    run_entries: list[dict] = []
+    if dual_running:
+        run_entries = _plan_week_runs(
+            plan, phase, block_position, weekly_hours, week_start
+        )
+    run_tss_total = sum(e["tss"] for e in run_entries)
+
     # ── Pass 2: cap the week to the TSS target by trimming filler ─────────
     # Reserve the budget consumed by fixed sessions (long ride + quality +
-    # recovery). Whatever is left is the filler budget; once a full filler day
-    # would push the running filler total well past that budget, downgrade it
-    # to a recovery spin or a rest day so the week lands near target instead of
-    # ~2× it. Key sessions are never touched.
+    # recovery) plus any interleaved runs. Whatever is left is the filler
+    # budget; once a full filler day would push the running filler total well
+    # past that budget, downgrade it to a recovery spin or a rest day so the
+    # week lands near target instead of ~2× it. Key sessions are never touched.
     reserved = sum(
         e["template"].base_tss for e in plan if e["kind"] == "fixed"
     )
-    filler_budget = max(0.0, float(weekly_tss_target_val) - reserved)
+    filler_budget = max(0.0, float(weekly_tss_target_val) - reserved - run_tss_total)
     filler_running = 0.0
 
     for e in plan:
@@ -496,6 +677,20 @@ def build_week_drafts(
             duration_seconds_target=duration_s,
             interval_structure={"intervals": intervals},
             template_id=template.id,
+            blocks_source="ai_prescribed",
+        ))
+
+    # ── Append the interleaved run sessions (sport='running') ─────────────
+    for entry in run_entries:
+        run_template: RunTemplate = entry["template"]
+        drafts.append(PlannedWorkoutDraft(
+            user_id=athlete.user_id,
+            date=week_start + timedelta(days=entry["dow"]),
+            sport="running",
+            title=run_template.name,
+            duration_seconds_target=run_template.duration_s,
+            interval_structure=run_interval_structure(run_template),
+            template_id=run_template.id,
             blocks_source="ai_prescribed",
         ))
 

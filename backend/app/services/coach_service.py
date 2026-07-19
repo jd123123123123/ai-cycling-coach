@@ -62,6 +62,7 @@ from app.services.coach_prompt import (
     system_prompt_for_language,
 )
 from app.services.coach_tools import TOOL_SCHEMAS, dispatch_tool
+from app.services.day_rhythm import compute_day_rhythm, render_day_rhythm_context
 from app.services.goal_trajectory import project as project_trajectory, trajectory_to_dict
 from app.services.pmc_service import compute_user_pmc
 from app.services.ride_compliance import ride_compliance_to_dict, score_ride
@@ -1206,6 +1207,18 @@ async def build_snapshot(
         except Exception:  # pragma: no cover
             logger.exception("failed to project tomorrow's session for user_id=%s", user_id)
 
+    # Whole-day intraday rhythm — bedtime consistency, stress curve, observed
+    # best-training-window, today-vs-same-hours baseline. Best-effort: sparse
+    # data degrades field-by-field to None inside compute_day_rhythm (never
+    # fabricated), and any failure leaves the key as None.
+    day_rhythm_payload: dict | None = None
+    try:
+        day_rhythm_payload = await compute_day_rhythm(
+            db, user_id, target_date=_today_local(), tz=_athlete_tz()
+        )
+    except Exception:  # pragma: no cover — never break snapshot assembly
+        logger.exception("day_rhythm computation failed for user_id=%s", user_id)
+
     snapshot: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "language": language,
@@ -1284,6 +1297,9 @@ async def build_snapshot(
         # weekday multiplier) so the LLM has outlook_7d[1] in the user
         # message regardless of which path generates the brief.
         "tomorrow_outlook": tomorrow_outlook_payload,
+        # Whole-day intraday rhythm (day_rhythm.py) — lands in CoachBrief
+        # evidence['day_rhythm'] via the dict(snapshot) evidence payload.
+        "day_rhythm": day_rhythm_payload,
     }
     return snapshot
 
@@ -2733,6 +2749,11 @@ async def generate_brief(snapshot: dict, language: str = "simple", locale: str =
         ]
 
         user_message = build_user_message(snapshot)
+        # Day-rhythm evidence block — appended here (not in build_user_message)
+        # so the wiring stays local to the evidence assembly. None → no block.
+        rhythm_ctx = render_day_rhythm_context(snapshot.get("day_rhythm"))
+        if rhythm_ctx:
+            user_message = user_message + "\n\n" + rhythm_ctx
 
         response = await client.messages.create(
             model=settings.COACH_MODEL,
@@ -3057,6 +3078,10 @@ async def coach_chat_stream(
         + "\n\n--- Athlete snapshot ---\n"
         + build_user_message(snapshot)
     )
+    # Day-rhythm evidence block — same wiring as generate_brief. None → skip.
+    _rhythm_ctx = render_day_rhythm_context(snapshot.get("day_rhythm"))
+    if _rhythm_ctx:
+        chat_system = chat_system + "\n\n" + _rhythm_ctx
 
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
