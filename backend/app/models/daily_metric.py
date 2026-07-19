@@ -23,8 +23,13 @@ class DailyMetric(Base):
 
     __tablename__ = "daily_metrics"
 
-    # Composite PK: id + recorded_at (hypertable partition column must be in PK)
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # Composite PK: id + recorded_at (hypertable partition column must be in PK).
+    # autoincrement MUST be explicit on a composite PK — without it SQLAlchemy
+    # doesn't fetch the BIGSERIAL back via RETURNING, the instance keeps
+    # id=None, and any later same-session mutation of a freshly-inserted row
+    # dies with "Can't update ... using NULL for primary key" (bit us when the
+    # sleep-vitals pass started mutating rows right after insert).
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), primary_key=True, nullable=False, default=func.now()
     )

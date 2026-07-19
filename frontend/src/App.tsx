@@ -28,6 +28,7 @@ const PowerProfileView = lazyWithRetry(() => import('./pages/PowerProfileView'))
 const ClimbCompanionView = lazyWithRetry(() => import('./pages/ClimbCompanionView'))
 const SeasonView = lazyWithRetry(() => import('./pages/SeasonView'))
 const AchievementsView = lazyWithRetry(() => import('./pages/AchievementsView'))
+const ExploreRoutesView = lazyWithRetry(() => import('./pages/ExploreRoutesView'))
 const DebriefView = lazyWithRetry(() => import('./pages/DebriefView'))
 const SessionReportView = lazyWithRetry(() => import('./pages/SessionReportView'))
 const RideAnalysisView = lazyWithRetry(() => import('./pages/RideAnalysisView'))
@@ -217,6 +218,7 @@ function App() {
           <Route path="/climbs" element={<ProtectedRoute checkOnboarding><ClimbCompanionView /></ProtectedRoute>} />
           <Route path="/season" element={<ProtectedRoute checkOnboarding><SeasonView /></ProtectedRoute>} />
           <Route path="/achievements" element={<ProtectedRoute checkOnboarding><AchievementsView /></ProtectedRoute>} />
+          <Route path="/routes" element={<ProtectedRoute checkOnboarding><ExploreRoutesView /></ProtectedRoute>} />
 
           <Route path="/progress/run" element={<ProtectedRoute checkOnboarding><RunProgressView /></ProtectedRoute>} />
           <Route path="/progress/bike" element={<ProtectedRoute checkOnboarding><BikeProgressView /></ProtectedRoute>} />
