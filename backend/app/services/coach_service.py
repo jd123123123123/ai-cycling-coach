@@ -803,6 +803,7 @@ async def build_snapshot(
         athlete_ftp=ftp,
         available_minutes=today_available_minutes,
         preferred_template_id=preferred_template_id,
+        rotation_key=date.today().toordinal(),
     )
 
     # Derive best-available LTHR so workout blocks can show HR targets
@@ -1187,6 +1188,7 @@ async def build_snapshot(
                 athlete_ftp=ftp,
                 available_minutes=today_available_minutes,
                 preferred_template_id=tomorrow_preferred_id,
+                rotation_key=tomorrow_local_date.toordinal(),
             )
             tomorrow_planned_payload = {
                 "title": tomorrow_template.name,

@@ -46,13 +46,19 @@ _SECURITY_HEADERS = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Register Garmin sync job (every 4 hours)
+    # Register Garmin sync job — every 15 minutes (user directive, July 2026:
+    # near-live data). Incremental syncs are cheap (last_sync_at − 2h window);
+    # the client's per-request delays + rate-limit handling protect the
+    # unofficial API, and coalesce/max_instances stop overlapping runs from
+    # piling up when a sync takes longer than the interval.
     scheduler.add_job(
         run_all_user_syncs,
         "interval",
-        hours=4,
+        minutes=15,
         id="garmin_sync",
-        misfire_grace_time=600,
+        misfire_grace_time=300,
+        coalesce=True,
+        max_instances=1,
     )
     # Morning-brief push (P1.5): hourly sweep; each athlete gets at most one
     # push per day, inside their local morning hour. No-ops without VAPID keys.

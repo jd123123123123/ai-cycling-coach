@@ -211,12 +211,14 @@ class TestPhaseAdjustments:
         assert rc.grade in ("perfect", "strong")
 
     def test_rest_day_template_but_rode(self):
-        """Template is rest_day (target TSS=0) but athlete rode 40 TSS →
-        overcooked via the _pair(0, positive) branch."""
+        """Absorb-and-replan invariant (P1.4): an unplanned ride on a rest day
+        is a FREE ride graded on the absolute band — never 'overcooked' against
+        a zero target (the guilt mechanic the product kills). 40 TSS sits in
+        the maintenance good band → strong/perfect territory, not a failure."""
         tpl = TEMPLATES["rest_day"]
         act = _activity(duration_minutes=60, tss=40)
         rc = score_ride(act, tpl, ftp=280, phase="build1", session_type="rest")
-        assert rc.grade == "overcooked"
+        assert rc.grade in ("perfect", "strong", "okay")
 
 
 # ======================================================================

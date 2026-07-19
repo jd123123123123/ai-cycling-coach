@@ -303,11 +303,21 @@ class TestSessionTypeForToday:
             intensity_ceiling="moderate", day_of_week=2,
         ) == "sweet_spot"
 
-    def test_base1_midweek_is_endurance(self):
-        """Base1 is all endurance; no mid-week sweet_spot yet."""
+    def test_base1_wednesday_is_weekly_vo2_touch(self):
+        """Variety floor (July 2026): base1 Wednesday carries the ONE weekly
+        VO2/MAP touch; other midweek days stay endurance."""
         assert session_type_for_today(
             phase="base1", weekly_progress=None, tsb=5.0,
             intensity_ceiling="push", day_of_week=2,
+        ) == "vo2"
+        assert session_type_for_today(
+            phase="base1", weekly_progress=None, tsb=5.0,
+            intensity_ceiling="push", day_of_week=3,
+        ) == "endurance"
+        # Quota guard: once the week's VO2 is done, Wednesday degrades to endurance.
+        assert session_type_for_today(
+            phase="base1", weekly_progress={"vo2_sessions_done": 1, "hard_sessions_done": 1},
+            tsb=5.0, intensity_ceiling="push", day_of_week=2,
         ) == "endurance"
 
     def test_race_week_wed_is_race_pace_tune_up(self):

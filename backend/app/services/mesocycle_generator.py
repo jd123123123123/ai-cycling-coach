@@ -301,6 +301,16 @@ def build_week_drafts(
     # Use a neutral TSB of 0 (no freshness / fatigue signal)
     synthetic_tsb = 0.0
 
+    # ── Named builder program (FTP / VO₂max / 200k) ───────────────────────
+    # When the athlete picked a program, its weekly skeleton OWNS the week
+    # shape: session types, rotating template variants, and rest days. The
+    # TSS budgeting / trimming machinery below still applies unchanged.
+    from app.services.program_builder import active_program, program_day, program_week_index
+
+    prog = active_program(getattr(athlete, "goals", None))
+    prog_id = prog[0] if prog else None
+    prog_week = program_week_index(prog[1], week_start) if prog else 0
+
     # ── Rest-day skeleton ─────────────────────────────────────────────────
     # Real rest days are placed deterministically from the phase's rest_days
     # count (base1 → 2). At generation time we have no load history, so the
@@ -326,6 +336,35 @@ def build_week_drafts(
 
     for dow in range(7):  # 0=Mon, 6=Sun
         day_date = week_start + timedelta(days=dow)
+
+        # Program week shape (when a builder program is active) — the program
+        # decides rest days, session type, and the rotating template variant.
+        if prog_id is not None:
+            pd = program_day(prog_id, prog_week, dow, block_position == "recovery")
+            if pd == "REST":
+                plan.append({
+                    "date": day_date, "session_type": "rest",
+                    "template": TEMPLATES["rest_day"], "kind": "rest",
+                })
+                continue
+            assert not isinstance(pd, str)
+            available_min = base_available_min if dow != 5 else max(base_available_min, 150)
+            template = pick_template(
+                pd.session_type, ftp_w, available_min,
+                preferred_template_id=pd.template_id,
+                rotation_key=day_date.toordinal(),
+            )
+            if pd.session_type in ("vo2", "threshold", "sweet_spot", "tempo"):
+                hard_sessions_done += 1
+                if pd.session_type == "vo2":
+                    vo2_sessions_done += 1
+            kind = "fixed" if pd.fixed else "filler"
+            cumulative_tss += float(template.base_tss)
+            plan.append({
+                "date": day_date, "session_type": pd.session_type,
+                "template": template, "kind": kind,
+            })
+            continue
 
         # Scheduled rest — skip the picker entirely so we never spend load or
         # advance the quality counters on a rest day.
@@ -388,7 +427,10 @@ def build_week_drafts(
             variety_idx += 1
 
         template = pick_template(
-            session_type, ftp_w, available_min, preferred_template_id=preferred_id
+            session_type, ftp_w, available_min, preferred_template_id=preferred_id,
+            # Deterministic anti-monotony: rotate quality/endurance variants by
+            # calendar day so consecutive weeks never repeat the same picks.
+            rotation_key=day_date.toordinal(),
         )
 
         # Classify the day: filler endurance can be trimmed to hit the weekly

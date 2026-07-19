@@ -178,13 +178,26 @@ def weekly_intensity_quota(
     base_hard_ratio = mix["hard_ratio"]
     hard_ratio = base_hard_ratio
 
-    # Derive VO2 vs threshold session counts — VO2 is higher-stress so fewer reps
+    # Derive VO2 vs threshold session counts — VO2 is higher-stress so fewer reps.
+    # VARIETY FLOOR (July 2026, user feedback: "4 weeks of consecutive Z2"):
+    # every non-offseason build/base/maintenance week carries at least ONE
+    # quality touch. Science: even classic base retains a weekly high-intensity
+    # stimulus for VO2max/neuromuscular maintenance (Seiler's 80/20 counts the
+    # 20; Rønnestad 2014 shows weekly HIT maintenance preserves adaptations).
+    # Monotony is also a modeled risk (Foster) — identical weeks raise strain.
     vo2_sessions = 0
     threshold_sessions = 0
     if phase in ("build1", "build2", "peak"):
         vo2_sessions = 1
         threshold_sessions = 1 if phase == "build1" else 2
     elif phase == "base2":
+        vo2_sessions = 1
+        threshold_sessions = 1
+    elif phase == "base1":
+        # One short MAP touch per week — keeps the ceiling from sagging while
+        # the base builds, and keeps the plan humane to look at.
+        vo2_sessions = 1
+    elif phase == "maintenance":
         threshold_sessions = 1
 
     adj = _MODEL_ADJ.get(training_model or "")
@@ -439,7 +452,20 @@ def session_type_for_today(
             if hard_done < 1 and day_of_week == 2:
                 return _downgrade_to_ceiling(_apply_model_bias("sweet_spot", training_model), intensity_ceiling)
             return _downgrade_to_ceiling("endurance", intensity_ceiling)
-        # base1 / offseason / maintenance — all endurance mid-week
+        if phase == "base1":
+            # Variety floor (July 2026): ONE short VO2/MAP touch per week even
+            # in early base — Wednesday keystone. Keeps the aerobic ceiling
+            # from sagging through a long base (Rønnestad maintenance dose)
+            # and kills the "4 identical Z2 weeks" monotony.
+            if vo2_done < 1 and hard_done < 1 and day_of_week == 2:
+                return _downgrade_to_ceiling(_apply_model_bias("vo2", training_model), intensity_ceiling)
+            return _downgrade_to_ceiling("endurance", intensity_ceiling)
+        if phase == "maintenance":
+            # Keep one quality touch so maintenance doesn't decay into mush.
+            if hard_done < 1 and day_of_week == 2:
+                return _downgrade_to_ceiling(_apply_model_bias("sweet_spot", training_model), intensity_ceiling)
+            return _downgrade_to_ceiling("endurance", intensity_ceiling)
+        # offseason — all endurance mid-week
         return _downgrade_to_ceiling("endurance", intensity_ceiling)
 
     # Saturday — long ride candidate when Sunday is used for a race/event
@@ -604,6 +630,7 @@ def pick_template(
     available_minutes: int,
     templates: dict[str, WorkoutTemplate] | None = None,
     preferred_template_id: str | None = None,
+    rotation_key: int = 0,
 ) -> WorkoutTemplate:
     """Pick the best-fit template for today's session type + time window.
 
@@ -663,12 +690,19 @@ def pick_template(
         # Absolute last resort: return the first template in the library
         return next(iter(lib.values()))
 
-    # First candidate that fits — candidates are ordered by preferred length
-    # (longest first for endurance so we pick the biggest session the window
-    # allows). For other categories there's typically only 1-2 candidates.
-    for t in allowed:
-        if _template_minutes(t) <= max(1, available_minutes):
-            return t
+    # Everything that fits the time window. Candidates are ordered by
+    # preferred length (longest first for endurance).
+    fitting = [t for t in allowed if _template_minutes(t) <= max(1, available_minutes)]
+    if not fitting:
+        # None fits — return the shortest allowed option
+        return min(allowed, key=_template_minutes)
 
-    # None fits — return the shortest allowed option
-    return min(allowed, key=_template_minutes)
+    # VARIETY ROTATION (July 2026 — anti-monotony): rotation_key deterministically
+    # rotates among the fitting candidates instead of always first-fit, so a
+    # week of endurance days cycles progressive/steady/tempo-touch variants
+    # rather than repeating one template for a month. rotation_key=0 preserves
+    # the historical "biggest session that fits" choice (existing callers/tests
+    # unchanged); planners pass week+day derived keys.
+    if rotation_key:
+        return fitting[rotation_key % len(fitting)]
+    return fitting[0]

@@ -1031,3 +1031,101 @@ async def get_current_week(
         projection=projection_out,
         readiness=readiness_out,
     )
+
+
+# ─── Builder programs (July 2026): FTP / VO2max / 200k ──────────────────────
+# Pick a named focus program → the plan regenerates from this week with the
+# program's weekly skeleton (rotating variants, science-based shapes).
+
+
+from pydantic import BaseModel as _PBaseModel
+
+
+class ProgramSelect(_PBaseModel):
+    program: Literal["race", "ftp_builder", "vo2_builder", "endurance_200k"]
+
+
+@router.get("/programs")
+async def list_programs(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Available builder programs + the athlete's current selection."""
+    from app.services.program_builder import PROGRAM_META, active_program
+
+    prof = (
+        await db.execute(
+            select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
+        )
+    ).scalar_one_or_none()
+    current = active_program(getattr(prof, "goals", None) if prof else None)
+    return {
+        "current": current[0] if current else "race",
+        "started": current[1].isoformat() if current else None,
+        "programs": PROGRAM_META,
+    }
+
+
+@router.post("/program")
+async def select_program(
+    payload: ProgramSelect,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Set (or clear, with 'race') the builder program and regenerate the plan
+    from the current week: future planned days are replaced; ridden days and
+    the past are never touched."""
+    from datetime import date as _date, timedelta as _td
+
+    from sqlalchemy import delete as _delete
+
+    from app.models.mesocycle_plan import MesocyclePlan
+    from app.models.planned_workout import PlannedWorkout
+    from app.services.mesocycle_generator import generate_mesocycle
+    from app.services.pmc_service import compute_user_pmc
+    from sqlalchemy.orm.attributes import flag_modified
+
+    prof = (
+        await db.execute(
+            select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
+        )
+    ).scalar_one_or_none()
+    if prof is None:
+        raise HTTPException(status_code=409, detail="Complete your profile setup first")
+
+    goals = dict(prof.goals or {})
+    if payload.program == "race":
+        goals.pop("program", None)
+    else:
+        goals["program"] = {"id": payload.program, "started": _date.today().isoformat()}
+    prof.goals = goals
+    flag_modified(prof, "goals")
+
+    # Wipe FUTURE planned days + meso anchors from this week forward, then
+    # regenerate. Today and the past stay untouched (history is sacred).
+    today = _date.today()
+    monday = today - _td(days=today.weekday())
+    await db.execute(
+        _delete(PlannedWorkout).where(
+            PlannedWorkout.user_id == current_user.id,
+            PlannedWorkout.date > today,
+        )
+    )
+    await db.execute(
+        _delete(MesocyclePlan).where(
+            MesocyclePlan.user_id == current_user.id,
+            MesocyclePlan.plan_start_date >= monday - _td(days=28),
+        )
+    )
+    await db.commit()
+
+    live_ctl: float | None = None
+    try:
+        rows = (await compute_user_pmc(db, current_user.id, days=90)).get("total") or []
+        if rows:
+            live_ctl = float(rows[-1].get("ctl") or 0.0)
+    except Exception:  # noqa: BLE001 — degrade to proximity-only phase
+        live_ctl = None
+
+    await generate_mesocycle(db, current_user.id, plan_start_date=monday, current_ctl=live_ctl)
+    return {"ok": True, "program": payload.program}
