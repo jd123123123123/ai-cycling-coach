@@ -494,16 +494,30 @@ async def _future_week_preview(
         )
         .order_by(PlannedWorkout.date)
     )
-    pw_by_date: dict[date, PlannedWorkout] = {
-        pw.date: pw for pw in pw_result.scalars().all()
-    }
+    _all_pws = pw_result.scalars().all()
+    # Dual-sport: multiple rows can share a date (bike + run). The PRIMARY
+    # sport's row drives the day card; the other sport's title rides along as
+    # secondary_title instead of silently shadowing (July 2026 fix).
+    pw_by_date: dict[date, PlannedWorkout] = {}
+    secondary_by_date: dict[date, str] = {}
+    for pw in _all_pws:
+        cur = pw_by_date.get(pw.date)
+        if cur is None:
+            pw_by_date[pw.date] = pw
+        elif (pw.sport or "cycling") == primary_sport and (cur.sport or "cycling") != primary_sport:
+            secondary_by_date[pw.date] = cur.title
+            pw_by_date[pw.date] = pw
+        else:
+            secondary_by_date[pw.date] = pw.title
 
     days: list[DayPlan] = []
     for i in range(7):
         day_date = target_week_start + timedelta(days=i)
         pw = pw_by_date.get(day_date)
         # today never falls inside a future week, so is_today is uniformly False.
-        days.append(_build_day_plan(day_date, pw, today, primary_sport, language))
+        dp = _build_day_plan(day_date, pw, today, primary_sport, language)
+        dp.secondary_title = secondary_by_date.get(day_date)
+        days.append(dp)
 
     preface = build_weekly_rationale(
         phase=meso_phase,
@@ -712,17 +726,28 @@ async def get_current_week(
     )
     pws = pw_result.scalars().all()
 
-    # Build a lookup: date → PlannedWorkout (for gap-filling)
-    pw_by_date: dict[date, PlannedWorkout] = {pw.date: pw for pw in pws}
+    # Build a lookup: date → PlannedWorkout (for gap-filling). Dual-sport:
+    # primary sport wins the day card; the other sport's title rides along.
+    pw_by_date: dict[date, PlannedWorkout] = {}
+    secondary_by_date: dict[date, str] = {}
+    for pw in pws:
+        cur = pw_by_date.get(pw.date)
+        if cur is None:
+            pw_by_date[pw.date] = pw
+        elif (pw.sport or "cycling") == primary_sport and (cur.sport or "cycling") != primary_sport:
+            secondary_by_date[pw.date] = cur.title
+            pw_by_date[pw.date] = pw
+        else:
+            secondary_by_date[pw.date] = pw.title
 
     # ── 8. Build DayPlan list — exactly 7, one per day ──────────────────
     days: list[DayPlan] = []
     for i in range(7):
         day_date = today + timedelta(days=i)
         pw = pw_by_date.get(day_date)
-        days.append(
-            _build_day_plan(day_date, pw, today, primary_sport, language)
-        )
+        dp = _build_day_plan(day_date, pw, today, primary_sport, language)
+        dp.secondary_title = secondary_by_date.get(day_date)
+        days.append(dp)
 
     # ── 9. Weekly preface from rationale service (deterministic default) ──
     preface = build_weekly_rationale(

@@ -2824,7 +2824,20 @@ async def get_or_generate_brief(
         )
         cached = recent.scalar_one_or_none()
         if cached is not None:
-            return cached
+            # A rule-based-fallback brief means the LLM call FAILED at
+            # generation time (API hiccup) while a key is configured. Caching
+            # it for the full TTL leaves the athlete with terse templated copy
+            # all day (user-reported). Honor it for only 30 minutes, then
+            # retry the LLM on the next read.
+            if (
+                cached.model_used == "rule-based-fallback"
+                and settings.ANTHROPIC_API_KEY
+                and cached.generated_at
+                < datetime.now(timezone.utc) - timedelta(minutes=30)
+            ):
+                pass  # fall through to regeneration
+            else:
+                return cached
 
     snapshot = await build_snapshot(db, user_id, language=language)
     brief_payload = await generate_brief(snapshot, language=language, locale=locale)

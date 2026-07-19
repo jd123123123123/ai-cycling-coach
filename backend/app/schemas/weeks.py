@@ -29,6 +29,9 @@ class DayPlan(BaseModel):
     intervals: list[IntervalBlockOut]
     rationale: str  # one-sentence per-day "why" — deterministic in 7.0; LLM-polished in 7.2
     is_today: bool
+    # Dual-sport: a same-day session in the OTHER sport (e.g. an easy run on a
+    # bike day). Compact — title only; the run detail lives on its own row.
+    secondary_title: str | None = None
 
 
 class MesoBlockContext(BaseModel):

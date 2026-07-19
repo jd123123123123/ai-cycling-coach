@@ -588,6 +588,16 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
 
             await absorb_new_activities(db, user_id)
 
+        # Weight (best-effort, one range call per sync): scale/manual weigh-ins
+        # from the free weight-service → daily_metrics + profile W/kg source.
+        try:
+            from app.services.garmin_weight import apply_weigh_ins, parse_weigh_ins
+
+            payload = await client.get_weigh_ins(metrics_start, activity_end)
+            await apply_weigh_ins(db, user_id, parse_weigh_ins(payload))
+        except Exception:  # noqa: BLE001 — weight must never break a sync
+            logger.warning("weight fetch failed (user_id=%s) — non-fatal", user_id)
+
         # Build the list of athlete-days the sync may have changed. Step 2 will
         # rethread this through athlete-local time; UTC `today` is fine for now.
         dates_touched: list[date] = []

@@ -168,6 +168,18 @@ class GarminHealthDataClient:
         )
         return result if isinstance(result, list) else []
 
+    async def get_weigh_ins(self, start_date: date, end_date: date) -> dict | None:
+        # Weight/body-composition from the free weight-service (scale or manual
+        # entries in Garmin Connect). Range-native like body battery — one call
+        # per sync, not per day.
+        await self._ensure_auth()
+        return await asyncio.to_thread(
+            self._wrap,
+            self._api._connectapi,
+            f"/weight-service/weight/range/{start_date.isoformat()}/{end_date.isoformat()}",
+            params={"includeAll": True},
+        )
+
     async def get_training_status(self, for_date: date) -> dict | None:
         await self._ensure_auth()
         return await asyncio.to_thread(
