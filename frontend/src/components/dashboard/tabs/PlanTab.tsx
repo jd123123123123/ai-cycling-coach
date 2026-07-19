@@ -8,13 +8,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
-import { Bike, Footprints, Infinity as InfinityIcon, Play, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles } from 'lucide-react'
+import { Bike, Footprints, Infinity as InfinityIcon, Play, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp } from 'lucide-react'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLocale } from '../../../contexts/LocaleContext'
 import SessionReviewCard from '../SessionReviewCard'
+import FocusSection from '../../plan/FocusSection'
 import { detectWorkoutSport } from '../../../api/coach'
 import type { ResolvedBlock, WorkoutSport } from '../../../api/coach'
 import type { DayPlan } from '../../../api/weeks'
@@ -558,6 +559,15 @@ export default function PlanTab() {
             </div>
           ))}
         </div>
+      </Link>
+
+      {/* Focus — per-sport builder-program picker (Bike + Run rows). */}
+      <FocusSection />
+
+      {/* Bring-your-own plan → PDF/image import + adaptation (P: plan-upload) */}
+      <Link to="/plan/import" className="hover-card flex items-center gap-2 self-start rounded-full px-4 py-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>
+        <FileUp size={14} style={{ color: 'var(--color-accent)' }} />
+        {de ? 'Eigenen Plan importieren (PDF/Bild)' : 'Import your own plan (PDF/image)'}
       </Link>
 
       {/* Week navigation — page between this week and future plan weeks.

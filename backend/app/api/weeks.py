@@ -1033,16 +1033,54 @@ async def get_current_week(
     )
 
 
-# ─── Builder programs (July 2026): FTP / VO2max / 200k ──────────────────────
-# Pick a named focus program → the plan regenerates from this week with the
-# program's weekly skeleton (rotating variants, science-based shapes).
+# ─── Builder programs (July 2026): per-sport Bike + Run focus ────────────────
+# Pick a named focus program PER SPORT. Bike → the plan regenerates from this
+# week with the program's weekly skeleton (mesocycle hook). Run → the next 14
+# days of run PlannedWorkout rows are written directly (deterministic
+# Tue/Thu/Sat scheduler); full run-meso integration is the dual-sport
+# follow-up.
 
 
 from pydantic import BaseModel as _PBaseModel
 
+_BIKE_PROGRAM_CHOICES = ("ftp_builder", "vo2_builder", "endurance_200k")
+_RUN_PROGRAM_CHOICES = ("run_5k_speed", "run_10k_builder", "run_endurance_hm")
+
 
 class ProgramSelect(_PBaseModel):
-    program: Literal["race", "ftp_builder", "vo2_builder", "endurance_200k"]
+    # 'race' / 'none' both clear the sport's program (back to the race plan).
+    program: Literal[
+        "race", "none",
+        "ftp_builder", "vo2_builder", "endurance_200k",
+        "run_5k_speed", "run_10k_builder", "run_endurance_hm",
+    ]
+    sport: Literal["bike", "run"] = "bike"
+
+
+def _program_state(goals: dict | None) -> dict:
+    """Both sports' selection state + program metas — the shared response body."""
+    from app.services.program_builder import (
+        PROGRAM_META,
+        RUN_PROGRAM_META,
+        active_program,
+    )
+
+    bike = active_program(goals, "bike")
+    run = active_program(goals, "run")
+    return {
+        "bike": {
+            "current": bike[0] if bike else "race",
+            "started": bike[1].isoformat() if bike else None,
+        },
+        "run": {
+            "current": run[0] if run else "race",
+            "started": run[1].isoformat() if run else None,
+        },
+        "programs": {"bike": PROGRAM_META, "run": RUN_PROGRAM_META},
+        # Legacy flat keys — pre-per-sport clients read the bike program here.
+        "current": bike[0] if bike else "race",
+        "started": bike[1].isoformat() if bike else None,
+    }
 
 
 @router.get("/programs")
@@ -1050,20 +1088,58 @@ async def list_programs(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
 ) -> dict:
-    """Available builder programs + the athlete's current selection."""
-    from app.services.program_builder import PROGRAM_META, active_program
-
+    """Available builder programs (bike + run) + the athlete's per-sport selection."""
     prof = (
         await db.execute(
             select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
         )
     ).scalar_one_or_none()
-    current = active_program(getattr(prof, "goals", None) if prof else None)
-    return {
-        "current": current[0] if current else "race",
-        "started": current[1].isoformat() if current else None,
-        "programs": PROGRAM_META,
-    }
+    return _program_state(getattr(prof, "goals", None) if prof else None)
+
+
+async def _schedule_run_program(
+    db: AsyncSession, user_id: int, program_id: str, today: date
+) -> int:
+    """Write the next 14 days of run PlannedWorkout rows for a run program.
+
+    Deterministic Tue/Thu/Sat scheduler straight from the program skeleton —
+    does NOT touch the bike generator. Returns the number of rows written.
+    """
+    from datetime import timedelta as _td
+
+    from app.models.planned_workout import PlannedWorkout
+    from app.services.program_builder import program_week_index, run_program_day
+    from app.services.run_workout_templates import (
+        get_run_template,
+        run_interval_structure,
+    )
+
+    written = 0
+    for offset in range(1, 15):  # tomorrow .. +14 days
+        d = today + _td(days=offset)
+        monday = d - _td(days=d.weekday())
+        week_idx = program_week_index(today, monday)
+        template_id = run_program_day(program_id, week_idx, d.weekday())
+        if template_id is None:
+            continue
+        t = get_run_template(template_id)
+        if t is None:  # skeleton references only known templates; stay honest
+            continue
+        db.add(
+            PlannedWorkout(
+                user_id=user_id,
+                date=d,
+                sport="running",
+                title=t.name,
+                duration_seconds_target=t.duration_s,
+                description=t.purpose,
+                interval_structure=run_interval_structure(t),
+                template_id=t.id,
+                blocks_source="ai_prescribed",
+            )
+        )
+        written += 1
+    return written
 
 
 @router.post("/program")
@@ -1072,9 +1148,13 @@ async def select_program(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
 ) -> dict:
-    """Set (or clear, with 'race') the builder program and regenerate the plan
-    from the current week: future planned days are replaced; ridden days and
-    the past are never touched."""
+    """Set (or clear, with 'race'/'none') the sport's builder program.
+
+    Bike: future planned cycling days are replaced and the plan regenerates
+    from this week (existing mesocycle path). Run: future run rows are replaced
+    with the next 14 days from the run skeleton. Ridden days and the past are
+    never touched, and one sport's selection never wipes the other's rows.
+    """
     from datetime import date as _date, timedelta as _td
 
     from sqlalchemy import delete as _delete
@@ -1083,7 +1163,17 @@ async def select_program(
     from app.models.planned_workout import PlannedWorkout
     from app.services.mesocycle_generator import generate_mesocycle
     from app.services.pmc_service import compute_user_pmc
+    from app.services.program_builder import set_program
     from sqlalchemy.orm.attributes import flag_modified
+
+    clearing = payload.program in ("race", "none")
+    if not clearing:
+        valid = _BIKE_PROGRAM_CHOICES if payload.sport == "bike" else _RUN_PROGRAM_CHOICES
+        if payload.program not in valid:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Program '{payload.program}' is not a {payload.sport} program",
+            )
 
     prof = (
         await db.execute(
@@ -1093,21 +1183,36 @@ async def select_program(
     if prof is None:
         raise HTTPException(status_code=409, detail="Complete your profile setup first")
 
-    goals = dict(prof.goals or {})
-    if payload.program == "race":
-        goals.pop("program", None)
-    else:
-        goals["program"] = {"id": payload.program, "started": _date.today().isoformat()}
-    prof.goals = goals
+    prof.goals = set_program(
+        prof.goals, payload.sport, None if clearing else payload.program
+    )
     flag_modified(prof, "goals")
 
-    # Wipe FUTURE planned days + meso anchors from this week forward, then
-    # regenerate. Today and the past stay untouched (history is sacred).
     today = _date.today()
+
+    if payload.sport == "run":
+        # Replace FUTURE run rows only — bike plan and history stay untouched.
+        await db.execute(
+            _delete(PlannedWorkout).where(
+                PlannedWorkout.user_id == current_user.id,
+                PlannedWorkout.sport == "running",
+                PlannedWorkout.date > today,
+            )
+        )
+        if not clearing:
+            await _schedule_run_program(db, current_user.id, payload.program, today)
+        await db.commit()
+        return {"ok": True, "program": payload.program, "sport": "run",
+                **_program_state(prof.goals)}
+
+    # ── Bike: wipe FUTURE non-run planned days + meso anchors from this week
+    # forward, then regenerate. Today and the past stay untouched (history is
+    # sacred); run rows (sport='running') are preserved.
     monday = today - _td(days=today.weekday())
     await db.execute(
         _delete(PlannedWorkout).where(
             PlannedWorkout.user_id == current_user.id,
+            PlannedWorkout.sport != "running",
             PlannedWorkout.date > today,
         )
     )
@@ -1128,4 +1233,8 @@ async def select_program(
         live_ctl = None
 
     await generate_mesocycle(db, current_user.id, plan_start_date=monday, current_ctl=live_ctl)
-    return {"ok": True, "program": payload.program}
+    # generate_mesocycle leaves the commit to its caller (get_current_week does
+    # the same) — without this the fresh plan silently rolls back.
+    await db.commit()
+    return {"ok": True, "program": payload.program, "sport": "bike",
+            **_program_state(prof.goals)}

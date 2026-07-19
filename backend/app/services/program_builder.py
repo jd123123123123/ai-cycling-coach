@@ -20,17 +20,27 @@ Science anchors (mirrors coach_knowledge.py):
   work, back-to-back weekend endurance — the specific demands of a 200 km
   day (fatigue-resistance per the durability literature).
 
-The program is stored at athlete_profile.goals["program"] =
-{"id": ..., "started": "YYYY-MM-DD"} and consumed by build_week_drafts.
+Storage (July 2026, per-sport): athlete_profile.goals["program"] =
+{"bike": {"id": ..., "started": "YYYY-MM-DD"} | None,
+ "run":  {"id": ..., "started": "YYYY-MM-DD"} | None}.
+Backward compat: the legacy flat shape {"id": ..., "started": ...} is read as
+the BIKE program. Bike programs are consumed by build_week_drafts (mesocycle
+generator hook); run programs are scheduled directly as PlannedWorkout rows
+(Tue/Thu/Sat) by the weeks API — full run-meso integration is a follow-up.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
-ProgramId = str  # 'ftp_builder' | 'vo2_builder' | 'endurance_200k'
+ProgramId = str  # 'ftp_builder' | 'vo2_builder' | 'endurance_200k' | run ids
 
 PROGRAM_IDS: tuple[ProgramId, ...] = ("ftp_builder", "vo2_builder", "endurance_200k")
+
+# Run builder programs — pace-zone based (Friel run zones), no power templates.
+RUN_PROGRAM_IDS: tuple[ProgramId, ...] = (
+    "run_5k_speed", "run_10k_builder", "run_endurance_hm",
+)
 
 PROGRAM_META: dict[ProgramId, dict] = {
     "ftp_builder": {
@@ -49,6 +59,27 @@ PROGRAM_META: dict[ProgramId, dict] = {
         "name_en": "200k Builder", "name_de": "200k-Builder",
         "tagline_en": "8 weeks · long-ride ladder to 4h+ · durability and fueling for the big day",
         "tagline_de": "8 Wochen · Longride-Leiter bis 4h+ · Haltbarkeit und Fueling für den großen Tag",
+        "weeks": 8,
+    },
+}
+
+RUN_PROGRAM_META: dict[ProgramId, dict] = {
+    "run_5k_speed": {
+        "name_en": "5k Speed", "name_de": "5k-Speed",
+        "tagline_en": "8 weeks · VO₂ 400s/800s + strides · sharpen your fastest 5k",
+        "tagline_de": "8 Wochen · VO₂ 400er/800er + Steigerungen · dein schnellster 5k",
+        "weeks": 8,
+    },
+    "run_10k_builder": {
+        "name_en": "10k Builder", "name_de": "10k-Builder",
+        "tagline_en": "8 weeks · tempo + VO₂ repeats · hold a harder pace for longer",
+        "tagline_de": "8 Wochen · Tempo + VO₂-Wiederholungen · härteres Tempo länger halten",
+        "weeks": 8,
+    },
+    "run_endurance_hm": {
+        "name_en": "Half-Marathon Endurance", "name_de": "Halbmarathon-Ausdauer",
+        "tagline_en": "8 weeks · long-run ladder + tempo · the engine for 21.1 km",
+        "tagline_de": "8 Wochen · Longrun-Leiter + Tempo · der Motor für 21,1 km",
         "weeks": 8,
     },
 }
@@ -138,15 +169,12 @@ _SKELETONS: dict[ProgramId, dict[int, list[ProgramDay] | str]] = {
 }
 
 
-def active_program(goals: dict | None) -> tuple[ProgramId, date] | None:
-    """Parse goals JSONB → (program_id, started) or None."""
-    if not isinstance(goals, dict):
-        return None
-    p = goals.get("program")
+def _parse_entry(p: object, valid_ids: tuple[ProgramId, ...]) -> tuple[ProgramId, date] | None:
+    """Parse one {"id", "started"} entry → (program_id, started) or None."""
     if not isinstance(p, dict):
         return None
     pid = p.get("id")
-    if pid not in PROGRAM_IDS:
+    if pid not in valid_ids:
         return None
     try:
         started = date.fromisoformat(str(p.get("started")))
@@ -155,9 +183,57 @@ def active_program(goals: dict | None) -> tuple[ProgramId, date] | None:
     return pid, started
 
 
+def active_program(goals: dict | None, sport: str = "bike") -> tuple[ProgramId, date] | None:
+    """Parse goals JSONB → (program_id, started) for the given sport, or None.
+
+    Storage shapes accepted:
+    - Per-sport (current): {"program": {"bike": {...}|None, "run": {...}|None}}
+    - Legacy flat (pre-per-sport): {"program": {"id": ..., "started": ...}} —
+      read as the BIKE program; run reads None.
+    """
+    if not isinstance(goals, dict):
+        return None
+    p = goals.get("program")
+    if not isinstance(p, dict):
+        return None
+    valid = RUN_PROGRAM_IDS if sport == "run" else PROGRAM_IDS
+    if "bike" in p or "run" in p:  # per-sport shape
+        return _parse_entry(p.get(sport), valid)
+    # Legacy flat shape == bike
+    return _parse_entry(p, valid) if sport == "bike" else None
+
+
+def set_program(goals: dict | None, sport: str, program_id: ProgramId | None) -> dict:
+    """Return a NEW goals dict with the sport's program set (or cleared with None).
+
+    Migrates the legacy flat shape to the per-sport shape while preserving the
+    other sport's selection. When both sports end up cleared the "program" key
+    is removed entirely (absence == race plan, matching the legacy semantics).
+    """
+    out = dict(goals or {})
+    p = out.get("program")
+    nested: dict[str, dict | None] = {"bike": None, "run": None}
+    if isinstance(p, dict):
+        if "bike" in p or "run" in p:
+            for s in ("bike", "run"):
+                entry = p.get(s)
+                nested[s] = dict(entry) if isinstance(entry, dict) else None
+        elif p.get("id") in PROGRAM_IDS:  # legacy flat == bike
+            nested["bike"] = {"id": p["id"], "started": p.get("started")}
+    if program_id is None:
+        nested[sport] = None
+    else:
+        nested[sport] = {"id": program_id, "started": date.today().isoformat()}
+    if nested["bike"] is None and nested["run"] is None:
+        out.pop("program", None)
+    else:
+        out["program"] = nested
+    return out
+
+
 def program_week_index(started: date, week_start: date) -> int:
     """0-based week index inside the program (clamped to its length)."""
-    monday = started - __import__("datetime").timedelta(days=started.weekday())
+    monday = started - timedelta(days=started.weekday())
     idx = max(0, (week_start - monday).days // 7)
     return idx
 
@@ -180,3 +256,88 @@ def program_day(
     if is_recovery_week and day.session_type in ("vo2", "threshold", "sweet_spot", "tempo"):
         return ProgramDay("recovery", "recovery_60")
     return day
+
+
+# ─── RUN program skeletons ───────────────────────────────────────────────────
+# Pace-zone based (Friel run zones) — template ids reference
+# app.services.run_workout_templates.RUN_TEMPLATES. Deterministic Tue/Thu/Sat
+# run days; every slot rotates week over week so no two weeks look the same.
+# Consumed by the weeks API's direct 14-day run scheduler (NOT the mesocycle
+# generator — full run-meso integration is the dual-sport follow-up).
+_RUN_SKELETONS: dict[ProgramId, dict[int, list[str]]] = {
+    "run_5k_speed": {
+        1: [  # Tuesday — the VO₂ keystone, rotating 400s/800s flavors
+            "run_vo2_400s",
+            "run_vo2_800s",
+            "run_vo2_400s",
+            "run_strides_8x20",  # week 4 of each meso lands easier
+        ],
+        3: [  # Thursday — leg speed / controlled tempo
+            "run_strides_8x20",
+            "run_tempo_20",
+            "run_strides_8x20",
+            "run_recovery_25",
+        ],
+        5: [  # Saturday — aerobic support so the speed sticks
+            "run_long_60",
+            "run_progression_45",
+            "run_long_60",
+            "run_easy_45",
+        ],
+    },
+    "run_10k_builder": {
+        1: [  # Tuesday — threshold density, rotating
+            "run_tempo_2x15",
+            "run_tempo_20",
+            "run_tempo_2x15",
+            "run_strides_8x20",
+        ],
+        3: [  # Thursday — VO₂ touch keeps the ceiling
+            "run_vo2_800s",
+            "run_vo2_400s",
+            "run_vo2_800s",
+            "run_recovery_25",
+        ],
+        5: [  # Saturday — long-ish aerobic base
+            "run_long_75",
+            "run_progression_45",
+            "run_long_75",
+            "run_easy_45",
+        ],
+    },
+    "run_endurance_hm": {
+        1: [  # Tuesday — tempo durability, rotating
+            "run_tempo_20",
+            "run_tempo_2x15",
+            "run_progression_45",
+            "run_strides_8x20",
+        ],
+        3: [  # Thursday — easy volume + leg speed
+            "run_easy_45",
+            "run_strides_8x20",
+            "run_easy_45",
+            "run_recovery_25",
+        ],
+        5: [  # Saturday — THE long-run ladder (the point of the program)
+            "run_long_60",
+            "run_long_75",
+            "run_long_ladder_100",
+            "run_long_60",   # deload lands here
+            "run_long_75",
+            "run_long_ladder_100",
+            "run_long_ladder_100",
+            "run_long_75",
+        ],
+    },
+}
+
+
+def run_program_day(program_id: ProgramId, week_index: int, dow: int) -> str | None:
+    """Run-template id for (week, dow) of a RUN program — Tue/Thu/Sat, else None."""
+    slots = _RUN_SKELETONS.get(program_id)
+    if not slots:
+        return None
+    lst = slots.get(dow)
+    if not lst:
+        return None
+    return lst[week_index % len(lst)]

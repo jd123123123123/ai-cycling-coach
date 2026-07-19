@@ -32,6 +32,7 @@ import { computeReadiness, readinessTier } from '../../../utils/metrics'
 import ScoreRing from '../../ui/ScoreRing'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
+import { tFor } from '../../../i18n/strings'
 
 const CARD = 'rounded-[24px] p-5'
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
@@ -232,6 +233,12 @@ export default function TodayTab() {
   const roughRecovery = hrvDown || tier === 'rest' || sleptShort
   const wTitle = workout?.title
   const hrvPct = typeof hrvDelta === 'number' ? `${hrvDelta >= 0 ? '+' : ''}${Math.round(hrvDelta)}%` : null
+  // Sleep buckets for sleep-specific copy: >=85 earns a genuine compliment
+  // naming the number, 65–84 is neutral-positive, <65 (sleptShort above) gets
+  // a concrete recommendation + expectation-setting. sN is the real score.
+  const sN = sleepScore != null ? Math.round(sleepScore) : null
+  const sleptGreat = sN != null && sN >= 85
+  const sleptOk = sN != null && sN >= 65 && sN < 85
 
   // Strongest TRUE positive signal, phrased as a lowercase mid-sentence clause.
   const goodReason = hrvUp && hrvPct ? (de ? `die HRV brummt (${hrvPct})` : `HRV's humming (${hrvPct})`)
@@ -252,59 +259,208 @@ export default function TodayTab() {
         `Solide Einheit, aber ${badReason} — heute Abend zählt Schlaf, nicht Strava.`,
         `Arbeit erledigt; jetzt ${badReason}, also sei nett zu dir und bleib horizontal.`,
         `Training drin, aber ${badReason}. Erholungsmodus: voll aktiviert.`,
+        `Arbeit im Kasten, aber ${badReason} — die klügsten Watt heute Abend sind null.`,
+        `Für heute fertig; ${badReason} — also Abendessen, Licht runter, Schluss.`,
+        `Einheit gespeichert, aber ${badReason} — heute Abend ist aggressives Ausruhen dran.`,
       ] : [
         `Solid work logged, but ${badReason} — tonight's about sleep, not Strava.`,
         `You did the work; now ${badReason}, so be kind to yourself and horizontal.`,
         `Session's in, but ${badReason}. Recovery mode: fully engaged.`,
+        `Work's banked, but ${badReason} — the smartest watts tonight are zero.`,
+        `Done for today; ${badReason} — so it's dinner, dim lights, done.`,
+        `Session logged. Since ${badReason}, tonight's job is aggressive resting.`,
       ])
       return pick(de ? [
         `Einheit im Kasten und ${goodReason} — jetzt darfst du grandios faul sein.`,
         `Training sitzt, ${goodReason}. Erlaubnis zum Nichtstun: erteilt.`,
         `Abgeliefert, ${goodReason} — Beine hoch und ruhig ein bisschen stolz sein.`,
+        `Trainiert, und ${goodReason} — so einen Tag unterschreibst du zweimal.`,
+        `Arbeit erledigt und ${goodReason}. Sofa verdient, Form folgt.`,
+        `Haken dran, ${goodReason} — die Anpassung übernimmt die Nachtschicht.`,
       ] : [
         `You banked the work and ${goodReason} — go be gloriously lazy.`,
         `Session's done and ${goodReason}. Permission to do absolutely nothing: granted.`,
         `Work's in the bank, ${goodReason} — put your legs up and gloat a little.`,
+        `Trained, and ${goodReason} — that's a day you'd sign for twice.`,
+        `The work's done and ${goodReason}. Sofa earned, form pending.`,
+        `Boxes ticked, ${goodReason} — let the adaptation work the night shift.`,
       ])
     }
     if (isRestDay) {
+      // Sleep-specific rest-day lines: a great night doubles the recovery win,
+      // a thin night gets a concrete tonight-plan while the rest day absorbs it.
+      if (sleptGreat) return pick(de ? [
+        `Schlaf ${sN} am Ruhetag — doppelte Erholung eingesackt. Wunderschön.`,
+        `Ruhetag plus Schlaf bei ${sN}: die Anpassung macht Überstunden, du bist der Chef.`,
+        `Schlaf ${sN} an dem Tag, an dem der Plan nichts wollte — Erholung mit Zinseszins.`,
+        `Score ${sN} im Schlaf und null Trainingsstress — heute baut sich von selbst.`,
+        `Schlaf ${sN} + Ruhetag = das leise Duo, das Saisons gewinnt. Bleib liegen.`,
+        `Ruhetag, und du hast ${sN} geschlafen. Nichts zu reparieren — heute Nacht wiederholen.`,
+      ] : [
+        `Sleep ${sN} on a rest day — that's how you double-dip recovery. Beautiful.`,
+        `Rest day plus sleep at ${sN}: adaptation is working overtime and you're the boss.`,
+        `Sleep ${sN} on the one day the plan asked for nothing — recovery compounding nicely.`,
+        `A ${sN} sleep score and zero training stress — today literally builds itself.`,
+        `Sleep ${sN} + rest day = the quiet combo that wins seasons. Keep lounging.`,
+        `Rest day, and you slept a ${sN}. Nothing to fix here — do it again tonight.`,
+      ])
+      if (sleptShort) return pick(de ? [
+        `Ruhetag, und der Schlaf lag bei ${sN} — gutes Timing. Heute Abend: früher runterfahren, Bildschirme aus.`,
+        `Schlaf bei ${sN}; gut, dass heute nichts ansteht. Koffein früh stoppen, echte Nacht nachlegen.`,
+        `Schlaf ${sN} am Ruhetag — der Plan rettet dich gerade. Zahl's mit einer frühen Nacht zurück.`,
+        `Schlaf ${sN} — dünn. Der Ruhetag fängt das auf; heute Abend deutlich früher abschalten.`,
+        `Nur ${sN} beim Schlaf; der Ruhetag deckt dich. Kein Koffein nach dem Mittag wirkt Wunder.`,
+        `Schlaf ${sN}. Kein Training, keine Schuld — mach heute Nacht die Korrektur, nicht die Fortsetzung.`,
+      ] : [
+        `Rest day, and sleep was ${sN} — perfect timing. Tonight: earlier wind-down, screens off.`,
+        `Sleep came in at ${sN}; good thing today asks nothing. Cut caffeine early, bank a real night.`,
+        `A ${sN} sleep on a rest day is the plan saving you. Repay it with an early night.`,
+        `Sleep ${sN} — thin. The rest day absorbs it; tonight, start winding down well before you're tired.`,
+        `Only ${sN} on sleep; the rest day has you covered. No caffeine after lunch works wonders.`,
+        `Sleep ${sN}. Zero guilt, zero training — just make tonight the fix, not the sequel.`,
+      ])
       return pick(de ? [
         `Ruhetag${namePart}. Deine Beine schicken gerade ein Dankeschön — tu nichts, aber brillant.`,
         `Keine Einheit heute${namePart} — Erholung ist das Training, und du glänzt im Liegen.`,
         `Ruhetag verdient${namePart}. Schuldgefühle nicht inklusive, Fortschritt schon.`,
+        `Ruhetag${namePart} — der Plan sagt damit: die Arbeit wirkt.`,
+        `Heutige Aufgabe: nichts. Wer Ruhetage kann, peakt mit Absicht.`,
+        `Ruhetag. Fitness entsteht in den Lücken — du stehst gerade in einer.`,
       ] : [
         `Rest day${namePart}. Your legs just sent a thank-you note — do nothing, brilliantly.`,
         `No session today${namePart} — recovery is the workout, and you're crushing it lying down.`,
         `Rest day earned${namePart}. Guilt not included; gains are.`,
+        `Rest day${namePart} — the plan's way of saying the work is working.`,
+        `Today's assignment: nothing. Athletes who nail rest days peak on purpose.`,
+        `Rest day. Fitness is built in the gaps — you're standing in one.`,
       ])
     }
     if (wTitle) {
+      // Sleep outranks the readiness tier: a short night caps today at
+      // maintenance no matter how green the composite looks. At most TWO
+      // signals per line — sleep plus (optionally) the HRV delta.
+      if (sleptShort) {
+        const up = hrvUp && hrvPct != null
+        return pick(de ? [
+          up ? `Schlaf ${sN}, aber HRV ${hrvPct} — der Motor will. ${wTitle} ehrlich fahren, heute früher runterfahren.`
+             : `Schlaf ${sN} — heute zählt als Erhalt, nicht als Aufbau. ${wTitle} ehrlich halten, früher runterfahren.`,
+          `Eine ${sN}er-Nacht deckelt den Tag: ${wTitle} nach Plan, keine Bonus-Watt, Koffein ab Mittag streichen.`,
+          `Schlaf ${sN}. Fahr ${wTitle}, aber benote dich auf Zurückhaltung — die echte Einheit ist heute Nacht.`,
+          up ? `Dünner Schlaf (${sN}), willige HRV (${hrvPct}) — ${wTitle} zählt heute als Erhalt, auch das ein Sieg.`
+             : `Kurze Nacht (${sN}) — ${wTitle} geht trotzdem, als Erhalt. Heute Abend: Bildschirme aus, früher Licht aus.`,
+          `Schlaf ${sN} heißt: heute erhalten, morgen aufbauen. ${wTitle} locker-ehrlich, 30 Min früher runterfahren.`,
+          `Schlaf bei ${sN} — ${wTitle} im Plauderton fahren; das Comeback kaufst du mit einer frühen Nacht.`,
+        ] : [
+          up ? `Sleep ${sN}, but HRV ${hrvPct} — the engine's willing. Ride ${wTitle} honest, wind down earlier tonight.`
+             : `Sleep ${sN} — today counts as maintenance, not building. Keep ${wTitle} honest, wind down earlier.`,
+          `A ${sN} night caps the ceiling: ${wTitle} to plan, no bonus watts, caffeine off by mid-afternoon.`,
+          `Sleep ${sN}. Do ${wTitle}, but grade yourself on restraint — the real session tonight is in bed.`,
+          up ? `Thin sleep (${sN}), willing HRV (${hrvPct}) — ${wTitle} counts as maintenance today. Still a win.`
+             : `Short night (${sN}) — ${wTitle} still works as maintenance. Tonight: screens down, lights out early.`,
+          `Sleep ${sN} means today maintains, tomorrow builds. ${wTitle} easy-honest, wind-down 30 min earlier.`,
+          `Sleep hit ${sN} — keep ${wTitle} conversational; the comeback gets bought with an early night.`,
+        ])
+      }
+      if (tier === 'rest' || hrvDown) {
+        // Great sleep + dragging HRV: recovery is half-done — say both, crisply.
+        if (sleptGreat && hrvDown && hrvPct != null) return pick(de ? [
+          `Schlaf ${sN} hat geliefert, die HRV (${hrvPct}) zieht noch nach — ${wTitle} kontrolliert fahren.`,
+          `Starke Nacht (${sN}), maulige HRV (${hrvPct}) — nimm die Mitte: ${wTitle} nach Plan, keine Show-Sprints.`,
+          `Schlaf ${sN} vs. HRV ${hrvPct}: Erholung halb fertig. ${wTitle} ruhig — der Rest kommt heute Nacht.`,
+          `${sN} geschlafen; die HRV (${hrvPct}) sieht's anders. ${wTitle} locker starten, nur pushen, wenn die Beine ja sagen.`,
+          `Schlaf ${sN} kauft dir die Einheit; HRV ${hrvPct} setzt das Tempolimit. ${wTitle}, kontrolliert.`,
+          `Schlaf ${sN}, HRV bei ${hrvPct} — der Körper sortiert noch Papierkram. ${wTitle} sauber halten.`,
+        ] : [
+          `Sleep ${sN} did its job, but HRV ${hrvPct} hasn't caught up — ride ${wTitle} controlled and let it.`,
+          `Great night (${sN}), grumpy HRV (${hrvPct}) — take the middle: ${wTitle} to plan, no sprints for glory.`,
+          `Sleep ${sN} vs HRV ${hrvPct}: recovery's half-done. ${wTitle} steady — the other half comes tonight.`,
+          `You slept a ${sN}; HRV ${hrvPct} disagrees. Start ${wTitle} easy and only push if the legs vote yes.`,
+          `Sleep ${sN} bought you the session; HRV ${hrvPct} sets the speed limit. ${wTitle}, controlled.`,
+          `A ${sN} sleep with HRV at ${hrvPct} — the body's still filing paperwork. Keep ${wTitle} tidy.`,
+        ])
+        return pick(de ? [
+          `Achtung: ${badReason}, halt ${wTitle} also locker — Heldenmodus kann warten.`,
+          `${badReasonCap} heute — nimm ${wTitle} als lockere Runde, nicht als Duell.`,
+          `Der Körper zeigt Gelb (${badReason}); ${wTitle} locker fahren oder gegen Erholung tauschen.`,
+          `Kein rotes Licht, aber ${badReason} — ${wTitle} im Gesprächstempo hält die Woche am Leben.`,
+          `${badReasonCap} — also ${wTitle} wie ein Warm-up fahren. Fitness ist geduldig; Ermüdung merkt sich alles.`,
+          `Vorsichtstag: ${badReason}. ${wTitle} locker heute schlägt die Zwangspause nächste Woche.`,
+        ] : [
+          `Heads-up: ${badReason}, so keep ${wTitle} chill — hero mode can wait.`,
+          `${badReasonCap} today — treat ${wTitle} as a gentle spin, not a duel.`,
+          `Body's waving a yellow flag (${badReason}); do ${wTitle} easy or swap for rest.`,
+          `Not a red light, but ${badReason} — ${wTitle} at conversation pace keeps the week alive.`,
+          `Since ${badReason}, ride ${wTitle} like a warm-up. Fitness is patient; fatigue keeps receipts.`,
+          `Careful day: ${badReason}. ${wTitle} easy now beats a forced week off later.`,
+        ])
+      }
+      if (sleptGreat) {
+        const up = hrvUp && hrvPct != null
+        return pick(de ? [
+          `Schlaf ${sN} — genau da passiert Anpassung. Löse es bei ${wTitle} ein.`,
+          up ? `Schlaf ${sN}, HRV ${hrvPct} — grüner wird's nicht. ${wTitle} gehört heute dir.`
+             : `Schlaf ${sN} — der Körper hat die Nachtschicht geliefert. ${wTitle} gehört heute dir.`,
+          `Eine ${sN}er-Nacht ist Geld auf dem Konto — gib es für ${wTitle} aus, nicht fürs Scrollen.`,
+          `Schlaf ${sN}: Erholung voll bezahlt. ${wTitle} ist der Tag, um Zinsen einzusammeln.`,
+          up ? `${sN} geschlafen, HRV bei ${hrvPct} — der Motor ist warm. Richte ihn auf ${wTitle}.`
+             : `${sN} geschlafen — der Motor ist ausgeruht und warm. Richte ihn auf ${wTitle}.`,
+          `Schlaf-Score ${sN}. Aus solchen Nächten werden Athleten gebaut — nutz das für ${wTitle}.`,
+        ] : [
+          `Sleep ${sN} — that's where adaptation happens. Cash it in on ${wTitle}.`,
+          up ? `Sleep ${sN}, HRV ${hrvPct} — it doesn't get greener. ${wTitle} is yours today.`
+             : `Sleep ${sN} — the body did its overnight shift. ${wTitle} is yours today.`,
+          `A ${sN} night is money in the bank — spend it on ${wTitle}, not on scrolling.`,
+          `Sleep ${sN}: recovery paid in full. ${wTitle} is the day to collect interest.`,
+          up ? `Slept ${sN} with HRV at ${hrvPct} — the engine is warm. Point it at ${wTitle}.`
+             : `Slept a ${sN} — the engine is rested and warm. Point it at ${wTitle}.`,
+          `Sleep score ${sN}. Nights like that build athletes — go make ${wTitle} count.`,
+        ])
+      }
       if (green) return pick(de ? [
         `Du bist bereit und ${wTitle} ist heute die Einheit zum Abliefern — ${goodReason}.`,
         `Grünes Licht: ${goodReason}, also wartet ${wTitle} nur darauf, zerlegt zu werden.`,
         `Beine geladen und ${goodReason} — mach ${wTitle} zu deinem Spielplatz.`,
+        `Alles zeigt nach oben — ${goodReason}. ${wTitle} weiß nicht, was gleich passiert.`,
+        `Heute ist der Tag, für den der Plan geplant hat: ${goodReason}. ${wTitle} abliefern.`,
+        `Komplett grünes Brett — ${goodReason}. ${wTitle} verdient deine guten Beine.`,
       ] : [
         `You're primed and today's ${wTitle} is the one to nail — ${goodReason}.`,
         `Green light: ${goodReason}, so ${wTitle} is begging to be crushed.`,
         `Legs are loaded and ${goodReason} — go make ${wTitle} regret nothing.`,
+        `Everything's pointing up — ${goodReason}. ${wTitle} won't know what hit it.`,
+        `Today's the day the plan planned for: ${goodReason}. Go execute ${wTitle}.`,
+        `Full green board — ${goodReason}. ${wTitle} deserves your good legs.`,
       ])
-      if (tier === 'rest' || hrvDown) return pick(de ? [
-        `Achtung: ${badReason}, halt ${wTitle} also locker — Heldenmodus kann warten.`,
-        `${badReasonCap} heute — nimm ${wTitle} als lockere Runde, nicht als Duell.`,
-        `Der Körper zeigt Gelb (${badReason}); ${wTitle} locker fahren oder gegen Erholung tauschen.`,
+      // 65–84: neutral-positive, still naming the real number.
+      if (sleptOk) return pick(de ? [
+        `Schlaf ${sN} — solide, nicht spektakulär. ${wTitle} nach Plan ist heute genau richtig.`,
+        `Eine ${sN}er-Nacht: genug Sprit für ${wTitle}, nicht genug für Improvisation. Fahr den Plan.`,
+        `Schlaf ${sN} hält alles im Spiel — ${wTitle} wie geplant, dann schauen, wie es läuft.`,
+        `Ordentliche Nacht (${sN}). Mehr braucht ${wTitle} nicht — abliefern und erholen.`,
+        `Schlaf ${sN}: die ruhige Mitte. ${wTitle} im Soll-Tempo erledigt heute den Job.`,
+        `Solide ${sN} beim Schlaf — passt zum Tag: ${wTitle}, ruhig, fertig, früh ins Bett.`,
       ] : [
-        `Heads-up: ${badReason}, so keep ${wTitle} chill — hero mode can wait.`,
-        `${badReasonCap} today — treat ${wTitle} as a gentle spin, not a duel.`,
-        `Body's waving a yellow flag (${badReason}); do ${wTitle} easy or swap for rest.`,
+        `Sleep ${sN} — solid, not spectacular. ${wTitle} at plan is exactly right today.`,
+        `A ${sN} night: enough fuel for ${wTitle}, not enough for improvisation. Ride the plan.`,
+        `Sleep ${sN} keeps everything on the table — ${wTitle} as written, then see how it flows.`,
+        `Decent night (${sN}). ${wTitle} won't need more than that — execute and recover.`,
+        `Sleep ${sN}: the quiet middle. ${wTitle} at prescribed effort does its job today.`,
+        `A workmanlike ${sN} on sleep — matches today: ${wTitle}, steady, done, early night.`,
       ])
       return pick(de ? [
         `Mittlere Signale heute — geh ${wTitle} kontrolliert an und schau, wie's läuft.`,
         `Nicht Topform, nicht kaputt — ${wTitle} vernünftig fahren und die Beine entscheiden lassen.`,
         `Gelbliche Bereitschaft: ${wTitle} ist ein Go, nur nicht das Internet gewinnen wollen.`,
+        `Die Signale zucken mit den Schultern — ${wTitle} nach Plan, die ersten 20 Minuten entscheiden.`,
+        `Keine roten Flaggen, kein Feuerwerk: ${wTitle} wie verschrieben ist heute die kluge Wette.`,
+        `Die Daten sind unentschieden — fahr ${wTitle} nach Gefühl: locker starten, Steigerung verdienen.`,
       ] : [
         `Middling signals today — take ${wTitle} at a controlled effort and see how it flows.`,
         `Not peak, not wrecked — run ${wTitle} sensibly and let the legs vote.`,
         `Amber-ish readiness: ${wTitle} is a go, just don't try to win the internet.`,
+        `Signals are shrugging — ${wTitle} at plan, and let the first 20 minutes decide.`,
+        `No red flags, no fireworks: ${wTitle} as prescribed is the smart money today.`,
+        `The data's undecided, so ride ${wTitle} by feel — start easy, earn the upgrades.`,
       ])
     }
     return pick(de ? [
@@ -435,6 +591,87 @@ export default function TodayTab() {
     return de ? 'Fokus heute: Erholung ist die Aufgabe.' : "Today's focus: recovery is the assignment."
   })()
 
+  // ── "Morning read" — a compact deterministic paragraph under the hero line.
+  // Synthesizes ONLY real signals: last night's sleep (hours + score), the HRV
+  // delta vs baseline, whether yesterday was trained or rested, and today's
+  // prescribed session. Every clause is conditionally built — a missing signal
+  // simply drops its sentence, nothing is ever invented — and each language
+  // gets its own word order (no templated Denglish). Variant phrasing is picked
+  // deterministically with the same day-of-month `pick` as the hero line.
+  const yKey = format(subDays(today, 1), 'yyyy-MM-dd')
+  const yesterdayTrained = trainedSet.has(yKey)
+  const yesterdayTss = Math.round(
+    (acts?.activities ?? [])
+      .filter((a) => (a.started_at ?? a.date ?? '').slice(0, 10) === yKey)
+      .reduce((s, a) => s + (a.tss ?? 0), 0),
+  )
+  const morningRead: string | null = (() => {
+    if (moment !== 'morning') return null
+    if (sN == null && typeof hrvDelta !== 'number') return null
+
+    const hStr = sleepHours != null ? (de ? `${sleepHours.toFixed(1).replace('.', ',')} h` : `${sleepHours.toFixed(1)}h`) : null
+    const yCtx = yesterdayTrained
+      ? (yesterdayTss > 0
+          ? (de ? ` nach ${yesterdayTss} TSS gestern` : ` after yesterday's ${yesterdayTss} TSS`)
+          : (de ? ' nach der gestrigen Einheit' : " after yesterday's session"))
+      : (de ? ' nach dem gestrigen Ruhetag' : " after yesterday's rest day")
+
+    // Sentence 1 — sleep in context of yesterday (falls back to yesterday-only
+    // when no sleep data landed).
+    const s1 = (() => {
+      if (sN == null) {
+        return yesterdayTrained
+          ? (yesterdayTss > 0
+              ? (de ? `${yesterdayTss} TSS von gestern stecken in den Beinen.` : `${yesterdayTss} TSS from yesterday are in the legs.`)
+              : (de ? 'Die gestrige Einheit steckt noch in den Beinen.' : "Yesterday's session is still in the legs."))
+          : (de ? 'Gestern war Ruhetag — die Beine sollten ruhig sein.' : 'Yesterday was a rest day — the legs should be quiet.')
+      }
+      const base = hStr
+        ? (de ? `${hStr} Schlaf (Score ${sN})` : `Slept ${hStr} (${sN})`)
+        : (de ? `Schlaf-Score ${sN}` : `Sleep score ${sN}`)
+      const q = sleptGreat
+        ? pick(de ? ['eine richtige Nacht', 'Erholung sauber verbucht', 'so sieht Aufbau aus'] : ['a proper night', 'recovery banked in full', 'the kind training pays for'])
+        : sleptShort
+          ? pick(de ? ['etwas dünn', 'eher kurz', 'weniger, als der Plan mag'] : ['a bit thin', 'on the short side', 'less than the plan would like'])
+          : pick(de ? ['ordentlich, brauchbar', 'solide genug', 'kein Drama'] : ['decent and workable', 'solid enough', 'no drama there'])
+      return de ? `${base}${yCtx} — ${q}.` : `${base} — ${q}${yCtx}.`
+    })()
+
+    // Sentence 2 — the HRV delta vs baseline, only when real.
+    const s2 = typeof hrvDelta === 'number' && hrvPct != null
+      ? (hrvUp
+          ? pick(de
+              ? [`Die HRV ist bei ${hrvPct} — der Motor will.`, `HRV ${hrvPct} — der Motor sagt ja.`, `Die HRV (${hrvPct}) hält zu dir.`]
+              : [`HRV is ${hrvPct}, so the engine is willing.`, `HRV sits at ${hrvPct} — the engine says yes.`, `HRV ${hrvPct} has your back.`])
+          : hrvDown
+            ? pick(de
+                ? [`Die HRV liegt bei ${hrvPct} — das Ego bleibt heute in der Garage.`, `HRV ${hrvPct} bittet um Zurückhaltung.`, `HRV ${hrvPct} — der Motor will es ruhig.`]
+                : [`HRV is ${hrvPct}, so keep the ego parked.`, `HRV at ${hrvPct} asks for restraint.`, `HRV ${hrvPct} — the engine wants an easy one.`])
+            : pick(de
+                ? [`Die HRV ist stabil (${hrvPct}).`, `Die HRV hält die Linie (${hrvPct}).`]
+                : [`HRV is steady (${hrvPct}).`, `HRV is holding its line (${hrvPct}).`]))
+      : null
+
+    // Sentence 3 — today's move, keyed to the same state as the hero line.
+    const s3 = (() => {
+      if (isRestDay) return pick(de
+        ? ['Ruhetag wie geplant — lass ihn arbeiten.', 'Nichts im Plan; die Erholung ist die Einheit.', 'Heute wird geruht — nimm den Sieg mit.']
+        : ['Rest day as planned — let it do its job.', 'Nothing on the plan; recovery is the session.', 'Today rests — take the win.'])
+      if (!wTitle) return null
+      if (sleptShort || hrvDown) return pick(de
+        ? [`${wTitle} steht — locker starten, die Beine haben das letzte Wort.`, `${wTitle} bleibt im Plan; wenn die Beine meckern, kleiner dosieren.`, `${wTitle} wie geplant, aber ehrlich bleiben — kürzer ist heute auch eine Antwort.`]
+        : [`${wTitle} is on — start easy and let the legs cast the deciding vote.`, `${wTitle} stays on the plan; scale it down if the legs argue.`, `${wTitle} as planned, but keep it honest — shorter is a fine answer today.`])
+      if (green || sleptGreat) return pick(de
+        ? [`${wTitle} steht an — ein guter Tag, es richtig zu machen.`, `Grünes Licht für ${wTitle}; fahr es mit Absicht.`, `${wTitle} wie geplant — die Lage spricht für vollen Wert.`]
+        : [`${wTitle} is on deck — a good day to do it properly.`, `Green light for ${wTitle}; ride it like you mean it.`, `${wTitle} as planned — conditions point to full value.`])
+      return pick(de
+        ? [`${wTitle} wie geplant — ruhig fahren, keine Heldentaten nötig.`, `${wTitle} ist der Job heute; nach Plan fahren, danach neu bewerten.`, `${wTitle} im Soll-Bereich macht genau, was es soll.`]
+        : [`${wTitle} as planned — steady effort, no heroics needed.`, `${wTitle} is today's job; ride to plan, reassess after.`, `${wTitle} at prescribed effort does exactly what it should.`])
+    })()
+
+    return [s1, s2, s3].filter(Boolean).join(' ')
+  })()
+
   // Momentum cues — a training streak + a real 7-day fitness (CTL) trend. Both
   // are honest, real-data motivators; rendered as small chips, never hype.
   const showStreak = streak > 0
@@ -491,6 +728,15 @@ export default function TodayTab() {
             <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.4 }}>{wrapLine}</p>
           </div>
         </Link>
+
+        {/* Morning read — compact deterministic synthesis of last night + today.
+            Only renders in the morning moment and only from real signals. */}
+        {morningRead && (
+          <div className="flex flex-col gap-1">
+            <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{tFor(locale, 'morning_read')}</span>
+            <p style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.5 }}>{morningRead}</p>
+          </div>
+        )}
 
         {/* Momentum cues — real streak + 7-day fitness trend, small chips */}
         {(showStreak || showFitnessTrend) && (

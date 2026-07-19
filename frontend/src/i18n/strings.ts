@@ -35,6 +35,7 @@ export const STRINGS = {
   strain_week_label: { en: 'STRAIN · WEEK', de: 'BELASTUNG · WOCHE' },
   as_of: { en: 'AS OF', de: 'STAND' },
   days_to: { en: 'D TO', de: 'T BIS' },
+  morning_read: { en: 'Morning read', de: 'Morgenlage' },
 
   // MorningCheckin
   morning_checkin_prompt: { en: 'How does today feel?', de: 'Wie fühlst du dich heute?' },

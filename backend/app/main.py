@@ -180,11 +180,13 @@ from app.api.push import router as push_router  # noqa: E402
 from app.api.climbs import router as climbs_router  # noqa: E402
 from app.api.achievements import router as achievements_router  # noqa: E402
 from app.api.routes import router as routes_router  # noqa: E402
+from app.api.plan_import import router as plan_import_router  # noqa: E402
 
 app.include_router(push_router)
 app.include_router(climbs_router)
 app.include_router(achievements_router)
 app.include_router(routes_router)
+app.include_router(plan_import_router)
 
 
 @app.get("/healthz", tags=["health"])
