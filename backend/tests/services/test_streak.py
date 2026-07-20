@@ -16,24 +16,37 @@ from app.services.streak import build_streak
 TODAY = date(2026, 7, 17)  # a Friday
 
 
-def _db(activity_days: list[date], planned: list[tuple[date, str, str]], goals: dict | None):
-    """Fake db.execute dispatching on the selected columns."""
+def _db(
+    activity_days: list[date | datetime],
+    planned: list[tuple[date, str, str]],
+    goals: dict | None,
+    timezone_name: str = "Europe/Berlin",
+):
+    """Fake db.execute dispatching on the selected columns.
+
+    `activity_days` accepts plain dates (stored as 12:00 UTC — safely inside
+    the same Berlin local day) or full datetimes for boundary cases.
+    """
     db = MagicMock()
+
+    def _as_dt(d: date | datetime) -> datetime:
+        if isinstance(d, datetime):
+            return d
+        return datetime.combine(d, datetime.min.time(), tzinfo=timezone.utc).replace(hour=12)
 
     async def execute(stmt):  # noqa: ANN001
         text = str(stmt).lower()
         result = MagicMock()
         if "activities" in text:
-            result.all.return_value = [
-                (datetime.combine(d, datetime.min.time(), tzinfo=timezone.utc),)
-                for d in activity_days
-            ]
+            result.all.return_value = [(_as_dt(d),) for d in activity_days]
         elif "planned_workouts" in text:
             result.all.return_value = [
                 (d, template_id, title) for d, template_id, title in planned
             ]
-        else:  # athlete_profiles goals
-            result.scalar_one_or_none.return_value = goals
+        else:  # athlete_profiles row (goals + timezone)
+            result.scalar_one_or_none.return_value = SimpleNamespace(
+                goals=goals, timezone=timezone_name
+            )
         return result
 
     db.execute = AsyncMock(side_effect=execute)
@@ -97,6 +110,22 @@ async def test_today_unlogged_never_breaks():
     db = _db(_days(4, TODAY - timedelta(days=1)), [], None)
     out = await build_streak(db, 1, today=TODAY)
     assert out["streak"] == 4
+
+
+@pytest.mark.asyncio
+async def test_late_evening_activity_attributed_to_local_day():
+    """A 22:30-UTC ride is 00:30 *next day* Berlin time — the trained-day set
+    must use the athlete-local date (audit P0-2), so a streak whose day-1
+    training was logged late UTC on day-2 stays unbroken."""
+    # Day-1's session stored at 22:30 UTC on day-2 → local date is day-1.
+    late_utc = datetime.combine(
+        TODAY - timedelta(days=2), datetime.min.time(), tzinfo=timezone.utc
+    ).replace(hour=22, minute=30)
+    activity_days: list[date | datetime] = [TODAY, late_utc, TODAY - timedelta(days=2)]
+    db = _db(activity_days, [], None)
+    out = await build_streak(db, 1, today=TODAY)
+    # today + yesterday (late-UTC ride) + day-2 all trained → streak of 3.
+    assert out["streak"] == 3
 
 
 @pytest.mark.asyncio

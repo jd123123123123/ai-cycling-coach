@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
 from app.models.planned_workout import PlannedWorkout
+from app.services import athlete_time
 
 LOOKBACK_DAYS = 60
 PAUSE_STATES = {"sick", "injured", "break"}
@@ -43,15 +44,29 @@ def _is_rest_planned(template_id: str | None, title: str | None) -> bool:
 
 
 async def build_streak(db: AsyncSession, user_id: int, today: date | None = None) -> dict:
-    today = today or date.today()
+    # Bind the athlete tz FIRST so "today" and per-day attribution are
+    # athlete-local (usability audit P0-2): a 22:30 Berlin ride belongs to
+    # the local day it happened, not the UTC-next day.
+    prow = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+    )
+    profile = prow.scalar_one_or_none()
+    athlete_time.set_athlete_tz_from_profile(profile)
+
+    today = today or athlete_time.today_local()
     since = today - timedelta(days=LOOKBACK_DAYS)
 
     act_rows = await db.execute(
         select(Activity.started_at).where(
-            Activity.user_id == user_id, Activity.started_at >= since
+            Activity.user_id == user_id,
+            # One extra day of slack: an activity late on `since - 1` UTC can
+            # still belong to local day `since` after tz conversion.
+            Activity.started_at >= since - timedelta(days=1),
         )
     )
-    trained = {r[0].date() for r in act_rows.all() if r[0] is not None}
+    trained = {
+        athlete_time.local_date_of(r[0]) for r in act_rows.all() if r[0] is not None
+    }
 
     plan_rows = await db.execute(
         select(PlannedWorkout.date, PlannedWorkout.template_id, PlannedWorkout.title)
@@ -65,10 +80,7 @@ async def build_streak(db: AsyncSession, user_id: int, today: date | None = None
         else:
             session_planned.add(d)
 
-    prow = await db.execute(
-        select(AthleteProfile.goals).where(AthleteProfile.user_id == user_id)
-    )
-    goals = prow.scalar_one_or_none() or {}
+    goals = (profile.goals if profile is not None else None) or {}
     status = goals.get("athlete_status") if isinstance(goals, dict) else None
     status_state = (status or {}).get("state")
     status_since: date | None = None

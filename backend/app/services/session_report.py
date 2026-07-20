@@ -31,6 +31,8 @@ from app.schemas.session_report import (
     SessionReport,
 )
 from app.services import ride_compliance as _rc
+from app.services.athlete_time import local_date_of, set_athlete_tz_from_profile
+from app.services.sport import same_sport_family, sport_family
 from app.services.coach_service import (
     _HEADLINE_BY_GRADE_TECHNICAL,
     _HEADLINE_BY_GRADE_TECHNICAL_DE,
@@ -161,7 +163,12 @@ async def build_session_report(
     )
 
     sport = (act.sport or "cycling").lower()
-    act_date: date | None = act.started_at.date() if act.started_at else None
+
+    # Athlete-local day attribution (usability audit P0-2): bind the athlete tz
+    # so a 22:30 Berlin session lands on the local day it happened, not the
+    # UTC-next day — and so the prescription lookup finds the right rec.
+    set_athlete_tz_from_profile(profile)
+    act_date: date | None = local_date_of(act.started_at) if act.started_at else None
 
     # ---- Prescription lookup (drives phase selection + prescribed_title) ----
     rec: CoachRecommendation | None = None
@@ -174,13 +181,26 @@ async def build_session_report(
                 )
             )
         ).scalar_one_or_none()
-    has_prescription = rec is not None
 
-    session_type = _session_type_from_rec(rec)
+    # Sport gate (usability audit P0-2): a prescription only counts for
+    # grading when its sport family matches the activity's. Legacy recs
+    # (sport NULL) are cycling. A gym session on a bike-Z2 day is LOGGED,
+    # never graded against the bike template.
+    has_prescription = rec is not None and same_sport_family(
+        sport, rec.sport or "cycling"
+    )
 
-    # When a real prescription exists we grade against it (non-absolute phase
-    # so score() compares to the prescribed template, not a TSS band). Only when
-    # nothing was prescribed do we fall back to the athlete's true phase.
+    # Strength / unknown sports never grade against the (cycling/running)
+    # template libraries — build the neutral "logged" report directly with
+    # strength-appropriate facts (duration, avg HR), no bike KPIs.
+    if sport_family(sport) in ("strength", "other"):
+        return _logged_report(act, activity_id, sport, act_date, lang)
+
+    session_type = _session_type_from_rec(rec if has_prescription else None)
+
+    # When a real same-sport prescription exists we grade against it
+    # (non-absolute phase so score() compares to the prescribed template, not
+    # a TSS band). Otherwise fall back to the athlete's true phase.
     if has_prescription:
         phase = "build"
     else:
@@ -225,10 +245,17 @@ async def build_session_report(
 
     # ---- Grade ----
     # Cycling always grades (absolute band fallback guarantees a grade). Running
-    # only carries a grade when it was actually prescribed — the cycling-centric
-    # template library makes an unprescribed run grade meaningless.
+    # only carries a grade when a same-sport prescription exists — the
+    # cycling-centric template library makes an unprescribed run grade
+    # meaningless. score()'s own sport gate (graded=False) is honored too.
     grade: str | None = compliance.get("grade")
+    if not compliance.get("graded", True):
+        grade = None
     if sport == "running" and not has_prescription:
+        grade = None
+    # Never emit a grade when the underlying compliance inputs were absent —
+    # a card full of dashes must not carry a "B" (usability audit P0-2).
+    if (act.duration_seconds or 0) <= 0 or act.tss is None or float(act.tss) <= 0:
         grade = None
     grade_score = _GRADE_SCORE.get(grade or "", 60)
 
@@ -242,7 +269,9 @@ async def build_session_report(
     debrief_available = _has_streams(act, stream)
 
     # ---- Prescribed title ----
-    prescribed_title = _prescribed_title(rec)
+    # Only surface the prescription when it actually applied to this sport —
+    # a bike-Z2 title on a run card would misattribute the plan.
+    prescribed_title = _prescribed_title(rec if has_prescription else None)
 
     # ---- Sport-specific KPIs / reads / detail metrics ----
     distance_km = (
@@ -252,7 +281,10 @@ async def build_session_report(
     )
 
     if sport == "running":
-        kpis = _run_kpis(act, rec, profile, session_type, compliance, distance_km, de)
+        kpis = _run_kpis(
+            act, rec if has_prescription else None, profile, session_type,
+            compliance, distance_km, de,
+        )
         reads = _run_reads(kpis, grade, de)
         detail_metrics = _run_detail_metrics(act, stream, distance_km, de)
     else:
@@ -261,11 +293,15 @@ async def build_session_report(
         detail_metrics = _cyc_detail_metrics(act, stream, compliance, de)
 
     # ---- Next session nudge ----
-    next_session = NextSession(
-        label=_NEXT_LABEL[lang],
-        headline=_NEXT_HEADLINE_BY_GRADE[lang].get(grade or "strong", _NEXT_HEADLINE_BY_GRADE[lang]["strong"]),
-        detail=_technical_nudge(grade or "strong", session_type, phase, de=de),
-    )
+    # Only a graded session shifts the next one — an ungraded "logged" record
+    # must not generate a compliance-flavored nudge.
+    next_session: NextSession | None = None
+    if grade is not None:
+        next_session = NextSession(
+            label=_NEXT_LABEL[lang],
+            headline=_NEXT_HEADLINE_BY_GRADE[lang].get(grade, _NEXT_HEADLINE_BY_GRADE[lang]["strong"]),
+            detail=_technical_nudge(grade, session_type, phase, de=de),
+        )
 
     return SessionReport(
         activity_id=activity_id,
@@ -275,6 +311,7 @@ async def build_session_report(
         distance_km=distance_km,
         duration_minutes=round(dur_min, 1),
         grade=grade,
+        kind="graded" if grade is not None else "logged",
         grade_score=grade_score,
         headline=headline,
         prescribed_title=prescribed_title,
@@ -283,6 +320,91 @@ async def build_session_report(
         next_session=next_session,
         detail_metrics=detail_metrics,
         debrief_available=debrief_available,
+        lang=lang,
+    )
+
+
+# ----------------------------------------------------------------------
+#  Neutral "logged" report — sports outside the graded libraries
+# ----------------------------------------------------------------------
+
+def _logged_report(
+    act: Activity,
+    activity_id: int,
+    sport: str,
+    act_date: date | None,
+    lang: str,
+) -> SessionReport:
+    """Neutral record for strength/unknown sports (usability audit P0-2).
+
+    Facts only — duration and avg HR — never bike KPIs (no IF, no
+    TSS-vs-bike-template), no grade, no percent chips, no next-session nudge.
+    """
+    de = lang == "de"
+    dur_min = (act.duration_seconds or 0) / 60.0
+    distance_km = (
+        round(float(act.distance_meters) / 1000.0, 2) if act.distance_meters else None
+    )
+
+    kpis: list[SessionKPI] = [
+        SessionKPI(
+            key="duration",
+            label="Dauer" if de else "Duration",
+            target_display="—",
+            actual_display=_fmt_hm(dur_min),
+            delta_display="—",
+            delta_pct=0.0,
+            band="match",
+            sentiment="neutral",
+        )
+    ]
+    detail_metrics: list[DetailMetric] = []
+    if act.average_hr is not None:
+        kpis.append(SessionKPI(
+            key="hr",
+            label="Ø HF" if de else "Avg HR",
+            target_display="—",
+            actual_display=f"{act.average_hr} bpm",
+            delta_display="—",
+            delta_pct=0.0,
+            band="match",
+            sentiment="neutral",
+        ))
+        detail_metrics.append(DetailMetric(
+            label=("Ø HF" if de else "Avg HR"),
+            value=str(act.average_hr),
+            unit="bpm",
+        ))
+
+    reads = [SessionRead(
+        tone="ok",
+        title=("Einheit erfasst" if de else "Session logged"),
+        detail=(
+            "Im Trainingslog erfasst — sie zählt zu deiner Belastungshistorie, "
+            "wird aber nicht gegen die Rad-Vorgabe des Tages bewertet."
+            if de else
+            "Logged to your training history — it counts toward your load, "
+            "but is not graded against the day's bike prescription."
+        ),
+    )]
+
+    return SessionReport(
+        activity_id=activity_id,
+        title=act.title or sport.title(),
+        sport=sport,
+        date=act_date.isoformat() if act_date else "",
+        distance_km=distance_km,
+        duration_minutes=round(dur_min, 1),
+        grade=None,
+        kind="logged",
+        grade_score=60,
+        headline="Einheit erfasst" if de else "Session logged",
+        prescribed_title=None,
+        kpis=kpis,
+        reads=reads,
+        next_session=None,
+        detail_metrics=detail_metrics,
+        debrief_available=_has_streams(act, None),
         lang=lang,
     )
 

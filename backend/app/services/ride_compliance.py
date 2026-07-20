@@ -42,6 +42,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
+from app.services import athlete_time
+from app.services.sport import same_sport_family
 from app.services.workout_templates import IntervalBlock, WorkoutTemplate, get_template
 
 _log = logging.getLogger(__name__)
@@ -77,11 +79,16 @@ class RideCompliance:
 
     `phase`, `session_type`, and `template_id` are the context the narrative
     layer uses to craft the physiological read + goal-trajectory paragraphs.
+
+    `graded=False` (with grade/duration/tss = None) means the sport gate
+    refused to grade: the activity's sport family does not match the
+    prescription's (e.g. a gym session on a bike-Z2 day — usability audit
+    P0-2). Downstream must render a neutral "logged" card, never a grade.
     """
 
-    grade: Grade
-    duration: CompliancePair
-    tss: CompliancePair
+    grade: Grade | None
+    duration: CompliancePair | None
+    tss: CompliancePair | None
     intensity_factor: CompliancePair | None  # IF = NP / FTP
     variability_index: float | None          # VI = NP / avgP
     ef: float | None                         # NP / avgHR
@@ -91,6 +98,7 @@ class RideCompliance:
     session_type: str
     template_id: str
     template_title: str  # display name of the template actually graded against
+    graded: bool = True  # False → sport-gate refusal, render neutral "logged"
 
 
 # ======================================================================
@@ -353,16 +361,62 @@ def compliance_pair_to_dict(p: CompliancePair) -> dict:
 # back to the supplied `target_template` so callers don't break.
 
 def _local_date_for_activity(activity: Activity):
-    """Best-effort local-calendar date for a completed activity.
+    """Athlete-local calendar date for a completed activity.
 
-    The Activity model only carries a UTC-aware `started_at`. Until we
-    persist an explicit `local_date` column we approximate the local
-    date from `started_at` (UTC). For most riders this is correct ±1
-    day at the timezone boundary — acceptable for grading lookup.
+    Uses `athlete_time.local_date_of()` so a 22:30 Berlin ride (20:30 UTC)
+    attributes to the local day it happened on, not the UTC-next day.
+    Callers must bind the athlete tz first via
+    `athlete_time.set_athlete_tz_from_profile(profile)` — the ContextVar
+    falls back to Europe/Berlin otherwise (single-user MVP default).
     """
     if activity.started_at is None:
         return None
-    return activity.started_at.date()
+    return athlete_time.local_date_of(activity.started_at)
+
+
+def _template_sport(template_id: str | None) -> str:
+    """Implied sport of a template id.
+
+    The cycling library (workout_templates.py) uses bare ids
+    ('z2_endurance_60', 'rest_day', …); run templates
+    (run_workout_templates.py) are prefixed 'run_'. Strength has no
+    template library yet — accept a 'strength'/'gym' prefix defensively.
+    Everything else is cycling.
+    """
+    tid = (template_id or "").lower()
+    if tid.startswith("run_"):
+        return "running"
+    if tid.startswith(("strength", "gym")):
+        return "gym"
+    return "cycling"
+
+
+def _ungraded(
+    template: WorkoutTemplate,
+    phase: str,
+    session_type: str,
+) -> RideCompliance:
+    """Neutral 'logged, not graded' result — the sport gate refused to grade.
+
+    No grade, no compliance pairs, no percentages: downstream renders a
+    neutral card with the activity's own facts instead of a compliance
+    verdict against a different sport's prescription.
+    """
+    return RideCompliance(
+        grade=None,
+        duration=None,
+        tss=None,
+        intensity_factor=None,
+        variability_index=None,
+        ef=None,
+        decoupling_pct=None,
+        zone_match_pct=None,
+        phase=phase,
+        session_type=session_type,
+        template_id=template.id,
+        template_title=template.name,
+        graded=False,
+    )
 
 
 def _is_rest_like(template: WorkoutTemplate | None) -> bool:
@@ -474,18 +528,36 @@ async def score(
     # review grades the completed ride against the wrong target (the classic
     # "Rest Day" / 180 min / 156 TSS mismatch).
     #
-    # Rule: whenever the live pick is a real session, grade against it — that
-    # keeps the target coherent with the plan card. Only fall back to the
-    # persisted recommendation when the live pick is itself rest-like but the
-    # recommendation carries real work (keeps older briefs sensible).
+    # Rule: whenever the live pick is a real session OF THE ACTIVITY'S SPORT,
+    # grade against it — that keeps the target coherent with the plan card.
+    # Fall back to the persisted recommendation when the live pick is
+    # rest-like (keeps older briefs sensible) or belongs to a different sport
+    # family (a run rec must grade a run even when the live pick is a bike
+    # template), provided the recommendation carries real same-sport work.
+    activity_sport = getattr(actual_activity, "sport", None) or "cycling"
+    rec_sport = (getattr(rec, "sport", None) or "cycling") if rec is not None else None
+
     chosen_template: WorkoutTemplate = target_template
     used_recommendation = False
+    live_matches_sport = same_sport_family(activity_sport, _template_sport(target_template.id))
     target_is_real = not _is_rest_like(target_template)
-    if not target_is_real and rec is not None:
-        rec_template = _template_from_recommendation(rec)
-        if rec_template is not None and not _is_rest_like(rec_template):
-            chosen_template = rec_template
-            used_recommendation = True
+    if (not target_is_real or not live_matches_sport) and rec is not None:
+        if same_sport_family(activity_sport, rec_sport):
+            rec_template = _template_from_recommendation(rec)
+            if rec_template is not None and not _is_rest_like(rec_template):
+                chosen_template = rec_template
+                used_recommendation = True
+
+    # ---- Sport gate (usability audit P0-2) --------------------------------
+    # A completed activity may only be compliance-graded against a
+    # prescription of the SAME sport family. Yesterday's 10:21 gym session
+    # must never be graded as today's Z2 bike ride — return a neutral
+    # "logged" result instead (grade None, graded=False, no pairs).
+    prescription_sport = (
+        rec_sport if used_recommendation else _template_sport(chosen_template.id)
+    )
+    if not same_sport_family(activity_sport, prescription_sport or "cycling"):
+        return _ungraded(chosen_template, phase, session_type)
 
     compliance = score_ride(
         actual_activity=actual_activity,
@@ -511,10 +583,15 @@ async def score(
 
 
 def ride_compliance_to_dict(rc: RideCompliance) -> dict:
+    # Ungraded results (sport gate) carry no pairs. Serialize them as empty
+    # dicts, not None: every existing consumer does `(c.get("tss") or {})`
+    # or `compliance.get("tss", {})` — an empty dict keeps both patterns
+    # crash-free while still carrying no percentages to render.
     return {
         "grade": rc.grade,
-        "duration": compliance_pair_to_dict(rc.duration),
-        "tss": compliance_pair_to_dict(rc.tss),
+        "graded": rc.graded,
+        "duration": compliance_pair_to_dict(rc.duration) if rc.duration else {},
+        "tss": compliance_pair_to_dict(rc.tss) if rc.tss else {},
         "intensity_factor": (
             compliance_pair_to_dict(rc.intensity_factor) if rc.intensity_factor else None
         ),

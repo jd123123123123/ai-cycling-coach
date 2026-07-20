@@ -18,7 +18,10 @@ the full list is returned too so a richer UI can show every deviation.
 """
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Literal
+
+from app.services import athlete_time
 
 # Thresholds (research-aligned, conservative).
 _SKIP_PLANNED_MIN_TSS = 20.0    # a planned day below this is treated as rest/easy
@@ -50,6 +53,7 @@ def detect_plan_changes(
     actual_by_date: dict[str, float],
     *,
     acwr: float | None = None,
+    week_start: date | None = None,
 ) -> dict:
     """Compare planned vs actual over the recent window.
 
@@ -58,17 +62,36 @@ def detect_plan_changes(
             "planned_tss": float}`` for the trailing window (past days only).
         actual_by_date: ``{iso_date: actual_tss}`` from real activities.
         acwr: acute:chronic workload ratio, if known.
+        week_start: Monday of the current athlete-local week. Days dated
+            before it are dropped entirely (defense-in-depth for audit P0-2:
+            a week-old "skipped Tuesday" must never render on a fresh
+            Monday, regardless of the window the caller passed). Defaults to
+            the Monday derived from ``athlete_time.today_local()`` — callers
+            must have bound the athlete tz for that default to be exact.
 
     Returns ``{"changes": [ {type, dow, date, category, severity,
     planned_tss, actual_tss} ... ], "planned_week_tss": float,
     "actual_week_tss": float}``. Pure — no side effects.
     """
+    if week_start is None:
+        today = athlete_time.today_local()
+        week_start = today - timedelta(days=today.weekday())
+
     changes: list[dict] = []
     planned_week = 0.0
     actual_week = 0.0
 
     for d in planned_days:
         iso = d.get("date")
+        # Stale-week guard: any day from before the current athlete-local
+        # week is out of scope — it must neither flag a skip nor count
+        # toward this week's planned/actual totals.
+        if iso:
+            try:
+                if date.fromisoformat(str(iso)) < week_start:
+                    continue
+            except ValueError:
+                pass  # unparseable date — keep legacy behavior for that row
         planned_tss = float(d.get("planned_tss") or 0.0)
         actual_tss = float(actual_by_date.get(iso, 0.0) or 0.0)
         category = str(d.get("category") or "endurance")

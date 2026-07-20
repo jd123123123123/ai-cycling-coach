@@ -11,6 +11,7 @@ MUST hold with or without a key:
 from __future__ import annotations
 
 import asyncio
+from datetime import date
 
 from app.config import settings
 from app.services.plan_change_explainer import (
@@ -22,6 +23,12 @@ from app.services.workout_templates import TEMPLATES
 
 
 FTP = 250
+
+# The fixture dates below live in the week of Mon 2026-07-13. Detection tests
+# pin `week_start` to that Monday so the stale-week guard (audit P0-2: drop
+# deviations from before the current athlete-local week) doesn't discard them
+# as the real calendar moves on.
+WEEK_START = date(2026, 7, 13)
 
 
 def _skeleton() -> list[dict]:
@@ -179,7 +186,7 @@ def test_detect_skipped_training_day():
         {"date": "2026-07-15", "dow": 2, "category": "endurance", "planned_tss": 68.0},
     ]
     actual = {"2026-07-15": 70.0}  # Tuesday threshold skipped
-    det = detect_plan_changes(planned, actual)
+    det = detect_plan_changes(planned, actual, week_start=WEEK_START)
     types = {c["type"] for c in det["changes"]}
     assert "skipped" in types
     skip = next(c for c in det["changes"] if c["type"] == "skipped")
@@ -189,7 +196,7 @@ def test_detect_skipped_training_day():
 def test_detect_overtrained_via_acwr_and_volume():
     planned = [{"date": "2026-07-14", "dow": 1, "category": "endurance", "planned_tss": 100.0}]
     actual = {"2026-07-14": 200.0}
-    det = detect_plan_changes(planned, actual, acwr=1.6)
+    det = detect_plan_changes(planned, actual, acwr=1.6, week_start=WEEK_START)
     assert any(c["type"] == "overtrained" for c in det["changes"])
 
 
@@ -199,13 +206,13 @@ def test_detect_undertrained():
         {"date": "2026-07-15", "dow": 2, "category": "endurance", "planned_tss": 100.0},
     ]
     actual = {"2026-07-14": 40.0}  # 40 of 200 planned = 20%
-    det = detect_plan_changes(planned, actual)
+    det = detect_plan_changes(planned, actual, week_start=WEEK_START)
     assert any(c["type"] == "undertrained" for c in det["changes"])
 
 
 def test_explain_skipped_is_localized_and_names_the_day():
     planned = [{"date": "2026-07-14", "dow": 1, "category": "threshold", "planned_tss": 78.0}]
-    det = detect_plan_changes(planned, {})
+    det = detect_plan_changes(planned, {}, week_start=WEEK_START)
     en = explain_plan_changes(det, current_skeleton=_skeleton(), weekly_tss_target=350)
     assert en is not None and en["status"] == "skipped"
     assert "Tuesday" in en["message"]
@@ -215,5 +222,24 @@ def test_explain_skipped_is_localized_and_names_the_day():
 
 def test_explain_returns_none_when_on_track():
     planned = [{"date": "2026-07-14", "dow": 1, "category": "endurance", "planned_tss": 68.0}]
-    det = detect_plan_changes(planned, {"2026-07-14": 66.0})
+    det = detect_plan_changes(planned, {"2026-07-14": 66.0}, week_start=WEEK_START)
+    assert explain_plan_changes(det) is None
+
+
+def test_last_weeks_skip_dropped_on_fresh_monday():
+    """Stale-week guard (audit P0-2): a skipped Tuesday from LAST week must
+    not render as a deviation once the athlete-local week has rolled over —
+    a fresh Monday starts clean even if the caller's window leaks old days."""
+    planned = [
+        # Last week's skipped threshold day.
+        {"date": "2026-07-14", "dow": 1, "category": "threshold", "planned_tss": 78.0},
+        # This week's Monday, trained as planned.
+        {"date": "2026-07-20", "dow": 0, "category": "endurance", "planned_tss": 68.0},
+    ]
+    actual = {"2026-07-20": 66.0}
+    det = detect_plan_changes(planned, actual, week_start=date(2026, 7, 20))
+    assert det["changes"] == []
+    # The stale day must not pollute the week totals either.
+    assert det["planned_week_tss"] == 68.0
+    assert det["actual_week_tss"] == 66.0
     assert explain_plan_changes(det) is None

@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.daily_metric import DailyMetric
 from app.models.daily_metric_sample import DailyMetricSample
+from app.services import athlete_time
 
 logger = logging.getLogger(__name__)
 
@@ -403,7 +404,7 @@ async def compute_day_rhythm(
     individual fields are None wherever the inputs are too sparse. Two queries:
     (1) stress samples for the window, (2) daily_metrics rows for the window.
     """
-    tz = tz or ZoneInfo("Europe/Berlin")  # app-wide single-user default tz
+    tz = tz or athlete_time.athlete_tz()  # bound athlete tz (Berlin fallback)
     now_utc = now_utc or datetime.now(timezone.utc)
     target_date = target_date or now_utc.astimezone(tz).date()
     window_start_local = datetime.combine(

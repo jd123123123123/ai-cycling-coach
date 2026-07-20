@@ -51,6 +51,12 @@ class CoachRecommendation(Base):
 
     # Workout identity — what was prescribed.
     template_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    # Sport of the prescription ('cycling' | 'running' | 'gym'). NULL on
+    # legacy rows means 'cycling' (the library was cycling-only before the
+    # sport-gate landed — usability audit P0-2). Read via
+    # `rec.sport or "cycling"`; compliance grading only proceeds when
+    # `sport.same_sport_family(activity.sport, rec.sport or "cycling")`.
+    sport: Mapped[str | None] = mapped_column(String(20), nullable=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     predicted_tss: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -66,6 +66,11 @@ class SessionReport(BaseModel):
     duration_minutes: float
 
     grade: str | None           # perfect|strong|okay|overcooked|undercooked, None if unprescribed
+    # 'graded' → the session was compliance-scored against a same-sport
+    # prescription; 'logged' → neutral record (sport-family mismatch, missing
+    # duration/TSS inputs, or unprescribed run) — the FE renders facts only,
+    # no verdict ring, no percent chips (usability audit P0-2).
+    kind: Literal["graded", "logged"] = "graded"
     grade_score: int            # 0..100 for the verdict ring
     headline: str               # one-line verdict
     prescribed_title: str | None = None   # "Long Endurance · 5:30 h", None when no prescription

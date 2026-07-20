@@ -296,9 +296,12 @@ def _activity_with_date(
     *,
     duration_minutes: float = 60.0,
     tss: float | None = 45.0,
+    sport: str = "cycling",
+    started_at: datetime | None = None,
 ):
     a = _activity(duration_minutes=duration_minutes, tss=tss)
-    a.started_at = datetime(2026, 5, 3, 8, 30, tzinfo=timezone.utc)
+    a.started_at = started_at or datetime(2026, 5, 3, 8, 30, tzinfo=timezone.utc)
+    a.sport = sport
     return a
 
 
@@ -337,7 +340,10 @@ async def test_score_falls_back_to_template_when_no_recommendation():
 
 @pytest.mark.asyncio
 async def test_score_uses_recommendation_and_writes_back_eval():
-    tpl = TEMPLATES["z2_endurance_60"]
+    # The rec is preferred when the LIVE pick is rest-like (post-training the
+    # picker flips to rest) but the persisted recommendation carries the real
+    # session the athlete was shown.
+    tpl = TEMPLATES["rest_day"]
     # Build a stand-in recommendation row whose blocks reproduce the same
     # 60-min Z2 template — grading should produce "perfect" for a 62-min/47-TSS ride.
     rec = SimpleNamespace(
@@ -375,3 +381,131 @@ async def test_score_uses_recommendation_and_writes_back_eval():
     assert rec.eval_grade == rc.grade
     assert rec.eval_payload is not None
     session.commit.assert_awaited()
+
+
+# ======================================================================
+# Sport gate (usability audit P0-2) — grade only when sport families match
+# ======================================================================
+
+from app.services.ride_compliance import _local_date_for_activity
+
+
+def _bike_rec(**overrides):
+    base = dict(
+        id=42,
+        user_id=1,
+        target_date=datetime(2026, 5, 3).date(),
+        template_id="z2_endurance_60",
+        title="Z2 Endurance 60",
+        framework_cited="Coggan Z2",
+        predicted_tss=45,
+        sport=None,  # legacy NULL → cycling
+        blocks=[
+            {"name": "Main", "duration_s": 3600, "target_pct_ftp": 0.70, "zone": 2, "rpe": 4},
+        ],
+        evaluated_at=None,
+        eval_grade=None,
+        eval_payload=None,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+@pytest.mark.asyncio
+async def test_gym_activity_vs_bike_rec_is_ungraded():
+    """Yesterday's 10:21 gym session must never be graded as a Z2 bike ride:
+    the sport gate returns a neutral 'logged' result — no grade, no pairs."""
+    tpl = TEMPLATES["z2_endurance_60"]
+    rec = _bike_rec()
+    act = _activity_with_date(duration_minutes=45, tss=30, sport="gym")
+    session = _mock_session_with_rec(rec)
+
+    rc = await score(
+        db=session,
+        user_id=1,
+        actual_activity=act,
+        target_template=tpl,
+        ftp=280,
+        phase="build1",
+        session_type="endurance",
+    )
+    assert rc.graded is False
+    assert rc.grade is None
+    assert rc.duration is None
+    assert rc.tss is None
+    assert rc.intensity_factor is None
+    # No eval write-back for an ungraded result.
+    assert rec.evaluated_at is None
+    session.commit.assert_not_awaited()
+
+    # Serialization keeps every consumer's `(d.get("tss") or {})` pattern safe.
+    d = ride_compliance_to_dict(rc)
+    assert d["graded"] is False
+    assert d["grade"] is None
+    assert d["duration"] == {}
+    assert d["tss"] == {}
+
+
+@pytest.mark.asyncio
+async def test_run_activity_vs_run_rec_grades_normally():
+    """Same-family prescription grades: a run against its run rec."""
+    tpl = TEMPLATES["z2_endurance_60"]  # live pick is a bike template
+    rec = _bike_rec(
+        template_id="run_easy_45",
+        title="Easy Run 45",
+        predicted_tss=40,
+        sport="running",
+        blocks=[{"name": "Main", "duration_s": 2700, "target_pct_ftp": 0.0, "zone": 2, "rpe": 3}],
+    )
+    act = _activity_with_date(duration_minutes=45, tss=40, sport="running")
+    session = _mock_session_with_rec(rec)
+
+    rc = await score(
+        db=session,
+        user_id=1,
+        actual_activity=act,
+        target_template=tpl,
+        ftp=280,
+        phase="build1",
+        session_type="endurance",
+    )
+    assert rc.graded is True
+    assert rc.grade == "perfect"  # 45/45 min, 40/40 TSS
+    assert rc.template_id == "run_easy_45"
+
+
+@pytest.mark.asyncio
+async def test_run_activity_without_run_rec_is_ungraded():
+    """A run on a bike-prescription day is logged, not graded against the
+    bike template (legacy NULL rec sport means cycling)."""
+    tpl = TEMPLATES["z2_endurance_60"]
+    rec = _bike_rec()  # sport NULL → cycling
+    act = _activity_with_date(duration_minutes=45, tss=40, sport="running")
+    session = _mock_session_with_rec(rec)
+
+    rc = await score(
+        db=session,
+        user_id=1,
+        actual_activity=act,
+        target_template=tpl,
+        ftp=280,
+        phase="build1",
+        session_type="endurance",
+    )
+    assert rc.graded is False
+    assert rc.grade is None
+
+
+def test_local_date_uses_athlete_tz_not_utc():
+    """A 22:30 UTC finish is 00:30 Berlin next day — the grading lookup must
+    use the athlete-local date, so a late-local-evening ride (20:30 UTC =
+    22:30 Berlin) stays on its local day."""
+    late_local = _activity_with_date(
+        started_at=datetime(2026, 5, 3, 20, 30, tzinfo=timezone.utc)  # 22:30 Berlin
+    )
+    assert _local_date_for_activity(late_local) == datetime(2026, 5, 3).date()
+
+    past_utc_midnight = _activity_with_date(
+        started_at=datetime(2026, 5, 3, 22, 30, tzinfo=timezone.utc)  # 00:30 Berlin (May 4)
+    )
+    assert _local_date_for_activity(past_utc_midnight) == datetime(2026, 5, 4).date()
