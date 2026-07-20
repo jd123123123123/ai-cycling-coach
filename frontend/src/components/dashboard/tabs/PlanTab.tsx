@@ -19,6 +19,7 @@ import FocusSection from '../../plan/FocusSection'
 import { detectWorkoutSport } from '../../../api/coach'
 import type { ResolvedBlock, WorkoutSport } from '../../../api/coach'
 import type { DayPlan } from '../../../api/weeks'
+import { daysToEvent } from '../../../utils/loadMetrics'
 
 type Sport = 'bike' | 'run' | 'all'
 type ZoneMode = 'power' | 'pace' | 'hr'
@@ -158,13 +159,14 @@ export default function PlanTab() {
   const hasSportSessions = sportSessions.length > 0
   const sportWord = sport === 'bike' ? (de ? 'Rad' : 'Bike') : sport === 'run' ? (de ? 'Lauf' : 'Run') : (de ? 'Alle' : 'All')
 
-  // Days-to-event — meso is the primary source, but it can be null even when the
-  // athlete has a goal date. Fall back to the coach evidence (days_to_goal /
-  // goal_event_date) so weeks-left doesn't regress to "—" when a goal exists.
-  const daysToGoalEv = typeof athleteEv.days_to_goal === 'number' ? athleteEv.days_to_goal as number : null
+  // Days-to-event — ONE producer (utils/loadMetrics.daysToEvent) over the
+  // athlete's goal date (profile first, brief evidence as backup); the server's
+  // meso figure is only a fallback when no goal date is available client-side.
+  // Audit P0-5: the old three-way fallback (meso ?? stale brief evidence ??
+  // Math.round over a non-midnight `now`) flipped 138↔139 depending on the hour.
   const goalEventDate = typeof athleteEv.goal_event_date === 'string' ? athleteEv.goal_event_date as string : null
-  const daysToEventResolved = meso?.days_to_event ?? daysToGoalEv
-    ?? (goalEventDate ? Math.max(0, Math.round((parseISO(goalEventDate).getTime() - today.getTime()) / 86400000)) : null)
+  const goalDaysOut = daysToEvent(profile?.target_event_date ?? goalEventDate)
+  const daysToEventResolved = goalDaysOut != null ? Math.max(0, goalDaysOut) : meso?.days_to_event ?? null
 
   // Plan card — real aggregates, scoped to the selected discipline.
   const weeksLeft = daysToEventResolved != null ? Math.max(0, Math.ceil(daysToEventResolved / 7)) : null
@@ -243,7 +245,6 @@ export default function PlanTab() {
   }
   const blockPosLabel = meso?.block_position ? (de ? BLOCK_POS[meso.block_position]?.de : BLOCK_POS[meso.block_position]?.en) ?? meso.block_position : null
   const weekOfMeso = meso?.block_index_in_meso != null ? meso.block_index_in_meso + 1 : null
-  const daysToEvent = daysToEventResolved
   const planTarget = meso?.weekly_tss_target ?? 0
   const planDone = useMemo(() => (acts?.activities ?? [])
     .filter((a) => parseISO(a.started_at ?? a.date ?? '') >= weekStart)
@@ -419,9 +420,9 @@ export default function PlanTab() {
               {weekOfMeso != null && (
                 <span className="inline-flex items-center rounded-full px-3 py-1" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 11.5, fontWeight: 600 }}>{de ? `Woche ${weekOfMeso}` : `Week ${weekOfMeso}`}</span>
               )}
-              {daysToEvent != null && (
+              {daysToEventResolved != null && (
                 <span className="inline-flex items-center gap-1 rounded-full px-3 py-1" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 11.5, fontWeight: 700 }}>
-                  <Target size={12} /> {daysToEvent} {de ? 'Tage bis Event' : 'days to event'}
+                  <Target size={12} /> {daysToEventResolved} {de ? 'Tage bis Event' : 'days to event'}
                 </span>
               )}
             </div>

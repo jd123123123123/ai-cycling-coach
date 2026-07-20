@@ -18,6 +18,10 @@ export interface AthleteProfile {
   target_event_date: string | null   // ISO date YYYY-MM-DD
   target_event_type: 'race' | 'fondo' | 'audax' | 'maintenance' | null
   target_priority: 'A' | 'B' | 'C' | null
+  // P0-2 timezone handshake — IANA string (e.g. "Europe/Berlin") so the server
+  // can bucket days on the ATHLETE's calendar, not UTC. Optional until the
+  // backend field lands everywhere.
+  timezone?: string | null
   created_at: string
   updated_at: string | null
 }
@@ -51,4 +55,6 @@ export interface AthleteProfileUpdate {
   target_event_date?: string | null
   target_event_type?: 'race' | 'fondo' | 'audax' | 'maintenance' | null
   target_priority?: 'A' | 'B' | 'C' | null
+  // P0-2 timezone handshake — IANA string reported by the browser
+  timezone?: string | null
 }

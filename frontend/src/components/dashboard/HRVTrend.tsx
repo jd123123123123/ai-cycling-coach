@@ -395,7 +395,9 @@ export default function HRVTrend() {
     return { values: vals, bands: bds, dates: dts, current: cur, baseline: bl, status: st }
   }, [data])
 
-  const countedCurrent = useCountUp(current ?? 0, { duration: 800, enabled: current != null })
+  // useCountUp has no `enabled` option — when `current` is null the target is 0
+  // and the hook's skipZero default renders it statically without animating.
+  const countedCurrent = useCountUp(current ?? 0, { durationMs: 800 })
 
   const statusColor = {
     above: '#30D158',

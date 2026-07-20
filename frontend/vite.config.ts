@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -5,6 +6,12 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  test: {
+    // Pure-utility tests only for now (no jsdom): node environment keeps the
+    // runner dependency-free. Add jsdom when component tests arrive.
+    environment: 'node',
+    include: ['src/**/__tests__/**/*.test.ts'],
+  },
   build: {
     // Keep a sensible warning threshold now that heavy deps live in their own
     // long-cached vendor chunks rather than one 3MB entry file.

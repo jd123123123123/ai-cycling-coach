@@ -4,6 +4,7 @@ import { de as deLocale } from 'date-fns/locale'
 import { usePMC } from '../../hooks/usePMC'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { useStreak } from '../../hooks/useStreak'
 import { focusFor, focusLabelDe } from '../../utils/focusBadge'
 import { useT, useLocale } from '../../contexts/LocaleContext'
 import type { ActivityRead } from '../../api/dashboard'
@@ -40,11 +41,14 @@ export default function TrainingLogStrip() {
   const { data: pmc, isLoading: pmcLoading } = usePMC(DAYS)
   const { data: acts } = useActivitiesRange(start, today)
   const { data: profile } = useAthleteProfile()
+  // Server-computed forgiving streak — the ONLY streak producer (audit P0-5).
+  const { data: streakData } = useStreak()
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
 
   const cells = useMemo<DayCell[]>(() => {
     const tssByDate = new Map<string, number>()
-    for (const e of pmc?.entries ?? []) tssByDate.set(e.date, e.daily_tss)
+    // Wire carries the day's load in `tss`; `daily_tss` is legacy and serializes null.
+    for (const e of pmc?.entries ?? []) tssByDate.set(e.date, e.tss ?? e.daily_tss ?? 0)
 
     const actByDate = new Map<string, ActivityRead>()
     for (const a of acts?.activities ?? []) {
@@ -90,18 +94,12 @@ export default function TrainingLogStrip() {
       }
     }
 
-    // Current streak: walk back from today. A still-untrained today (the very
-    // last cell) doesn't break a run that reached yesterday — skip it, then
-    // count consecutive trained days until the first rest.
-    let streak = 0
-    for (let i = cells.length - 1; i >= 0; i--) {
-      if (cells[i].tss > 0) streak += 1
-      else if (i === cells.length - 1) continue
-      else break
-    }
-
-    return { active, rest: cells.length - active, big, streak }
+    return { active, rest: cells.length - active, big }
   }, [cells])
+
+  // Current streak comes from the server's forgiving-streak endpoint — never
+  // recomputed locally (the naive consecutive-TSS walk contradicted it).
+  const streak = streakData?.streak ?? 0
 
   const maxTss = Math.max(1, ...cells.map((c) => c.tss))
 
@@ -227,8 +225,8 @@ export default function TrainingLogStrip() {
           <strong style={{ color: 'var(--color-ink)' }}>{Math.round(summary.big?.tss ?? 0)} TSS</strong>
           {summary.big?.tss ? <> · {format(parseISO(summary.big.date), 'd MMM', dfnsOpts)}</> : null}
         </span>
-        {summary.streak > 1 && (
-          <span style={{ color: 'var(--color-good)' }}>{summary.streak}{t('log_streak_suffix')}</span>
+        {streak > 1 && (
+          <span style={{ color: 'var(--color-good)' }}>{streak}{t('log_streak_suffix')}</span>
         )}
       </div>
     </div>

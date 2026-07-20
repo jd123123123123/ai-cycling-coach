@@ -13,6 +13,7 @@ import { usePeriodReport } from '../hooks/usePeriodReport'
 import { usePowerProfile } from '../hooks/usePowerProfile'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useAdaptive } from '../hooks/useAdaptive'
+import { useCurrentWeek } from '../hooks/useCurrentWeek'
 
 /**
  * Load & Form — the standalone /load-form analytics screen. A 1:1 rebuild of the
@@ -95,6 +96,7 @@ export default function LoadFormView() {
   const { data: power } = usePowerProfile()
   const { data: athlete } = useAthleteProfile()
   const { data: adaptive } = useAdaptive()
+  const { data: weekPlan } = useCurrentWeek()
 
   const series = pmc?.entries ?? []
   const activities = actData?.activities ?? []
@@ -244,11 +246,20 @@ export default function LoadFormView() {
   const weekdayLetters = de ? ['M', 'D', 'M', 'D', 'F', 'S', 'S'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S']
   const todayIdx = (today.getDay() + 6) % 7
 
-  // ---- Trajectory (period report + PMC-derived fitness change) ------------
+  // Planned weekly TSS from the week plan (backend: planned_tss_total on
+  // GET /weeks/current). Tolerant read — the field may lag in the API type;
+  // absent → honest empty state, never a fake 0% bar.
+  const plannedWeekTss = (weekPlan as { planned_tss_total?: number | null } | undefined)?.planned_tss_total ?? null
+  const compliancePct = plannedWeekTss != null && plannedWeekTss > 0
+    ? Math.round((thisWeek.tss / plannedWeekTss) * 100)
+    : null
+
+  // ---- Trajectory (period report) -----------------------------------------
+  // Audit P0-5: the "Fitness 6wk" chip was removed — its 6-week CTL %change was
+  // seed-contaminated (read a different window of the same series and claimed
+  // "+69% rising" beside a negative CTL/wk tile). Do not re-add until it reads
+  // the same canonical CTL series as every other surface.
   const traj = report?.trajectory ?? null
-  const ctl6wAgo = series.length >= 43 ? series[series.length - 43].ctl : series[0]?.ctl ?? null
-  const fitness6w = latest && ctl6wAgo != null && ctl6wAgo > 0
-    ? Math.round(((latest.ctl - ctl6wAgo) / ctl6wAgo) * 100) : null
 
   // ---- Recommendation (adaptive directive) --------------------------------
   const recHeadline = adaptive?.headline ?? (de ? 'Empfehlung' : 'Recommendation')
@@ -345,8 +356,10 @@ export default function LoadFormView() {
               <span className="eyebrow" style={{ fontSize: 11, letterSpacing: 1, color: 'var(--color-muted)' }}>{de ? 'FITNESS · CTL' : 'FITNESS · CTL'}</span>
               <div className="flex items-center gap-2">
                 <span className="num-display" style={{ fontSize: 26, fontWeight: 700, color: 'var(--color-ink)' }}>{ctl ?? DASH}</span>
-                <span className="inline-flex items-center gap-1 rounded-full" style={{ padding: '3px 7px', background: 'var(--color-surface-2)', fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>
-                  <TrendingUp size={12} /> {showTrend(dCtl7)} {de ? 'Woche' : 'wk'}
+                {/* Icon + tone follow the sign — a quiet week is not a failure,
+                    so a falling CTL reads muted/neutral, never red. */}
+                <span className="inline-flex items-center gap-1 rounded-full" style={{ padding: '3px 7px', background: 'var(--color-surface-2)', fontSize: 11, fontWeight: 600, color: dCtl7 != null && dCtl7 < 0 ? 'var(--color-muted)' : 'var(--color-strain)' }}>
+                  {dCtl7 != null && dCtl7 < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />} {showTrend(dCtl7)} {de ? 'Woche' : 'wk'}
                 </span>
               </div>
             </div>
@@ -594,26 +607,32 @@ export default function LoadFormView() {
           ))}
         </Card>
 
-        {/* 8. This Week — plan compliance (real done; planned target unavailable) */}
+        {/* 8. This Week — plan compliance (real done vs planned_tss_total) */}
         <Card>
           <CardHead
             title={de ? 'Diese Woche' : 'This Week'}
             sub={de ? 'Plan-Erfüllung' : 'Plan compliance'}
             right={
               <div className="flex items-end gap-0.5">
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-accent)' }}>{DASH}</span>
+                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-accent)' }}>{compliancePct != null ? compliancePct : DASH}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-accent)', paddingBottom: 3 }}>%</span>
               </div>
             }
           />
-          <div style={{ height: 10, borderRadius: 5, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
-            <div style={{ width: '0%', height: '100%', background: 'var(--color-accent)' }} />
-          </div>
+          {compliancePct != null ? (
+            <div style={{ height: 10, borderRadius: 5, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(100, Math.max(0, compliancePct))}%`, height: '100%', background: 'var(--color-accent)' }} />
+            </div>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+              {de ? 'Noch keine Plandaten diese Woche' : 'No plan data yet this week'}
+            </span>
+          )}
           <div className="flex justify-between">
             {[
               { v: `${thisWeek.tss}`, l: de ? 'TSS erledigt' : 'TSS done' },
               { v: `${thisWeek.sessions}`, l: de ? 'Einheiten' : 'Sessions' },
-              { v: DASH, l: de ? 'TSS geplant' : 'TSS target' },
+              { v: plannedWeekTss != null ? `${Math.round(plannedWeekTss)}` : DASH, l: de ? 'TSS geplant' : 'TSS target' },
             ].map((s) => (
               <div key={s.l} className="flex flex-col gap-1">
                 <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{s.v}</span>
@@ -644,7 +663,7 @@ export default function LoadFormView() {
         {/* 9. Trajectory */}
         <Card gap={14}>
           <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Verlauf · nächste 7 Tage' : 'Trajectory · next 7 days'}</span>
-          {traj || fitness6w != null ? (
+          {traj ? (
             <div className="flex justify-between">
               {[
                 {
@@ -652,12 +671,6 @@ export default function LoadFormView() {
                   label: de ? 'Peak-Form ETA' : 'Peak form ETA',
                   value: traj?.days_to_goal != null ? `${traj.days_to_goal}${de ? 'T' : 'd'}` : DASH,
                   sub: traj?.taper_window || (de ? 'bei Taper' : 'if you taper'),
-                },
-                {
-                  Icon: TrendingUp, iconColor: 'var(--color-recovery)',
-                  label: de ? 'Fitness 6 Wo.' : 'Fitness 6wk',
-                  value: showTrend(fitness6w, '%'),
-                  sub: fitness6w != null && fitness6w >= 0 ? (de ? 'steigend' : 'rising') : (de ? 'fallend' : 'falling'),
                 },
                 {
                   Icon: Shield, iconColor: 'var(--color-amber)',

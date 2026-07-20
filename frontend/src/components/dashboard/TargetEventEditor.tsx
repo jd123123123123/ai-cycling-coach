@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { getGoals, updateGoals, updateProfile } from '../../api/athletes'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useLocale } from '../../contexts/LocaleContext'
+import { daysToEvent } from '../../utils/loadMetrics'
 
 type EventType = 'race' | 'fondo' | 'audax' | 'maintenance'
 type Priority = 'A' | 'B' | 'C'
@@ -48,7 +49,9 @@ export default function TargetEventEditor() {
   })
 
   const isPast = date && new Date(date) < new Date(new Date().toDateString())
-  const daysOut = date ? Math.ceil((new Date(date).getTime() - Date.now()) / 86400000) : null
+  // One days-to-event producer (audit P0-5) — the old Math.ceil over ms
+  // arithmetic disagreed with other surfaces by 1 depending on time of day.
+  const daysOut = daysToEvent(date)
 
   const labelStyle = { color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.14em' } as const
   const inputStyle = {

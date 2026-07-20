@@ -10,66 +10,19 @@
  * Missing data renders '—' or the card is omitted. No fabricated values.
  */
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, Flag, Gauge, Zap, TrendingUp, Target,
   CheckCircle2, Circle, PencilLine, Mountain, BadgeCheck,
 } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
-import { apiClient } from '../api/client'
+import { useAthleteProfile } from '../hooks/useAthleteProfile'
+import { useCurrentWeek } from '../hooks/useCurrentWeek'
+import { useGoalTrajectory } from '../hooks/useGoalTrajectory'
+import { useRecoveryEta } from '../hooks/useRecoveryEta'
+import { usePowerProfile } from '../hooks/usePowerProfile'
+import { daysToEvent } from '../utils/loadMetrics'
 import { useLocale } from '../contexts/LocaleContext'
-
-/* ── payload types (existing endpoints, probed) ── */
-
-interface AthleteProfileRead {
-  ftp_watts: number | null
-  weight_kg: number | null
-  goals: { target_ftp?: number; target_event?: { date?: string; name?: string } } | null
-  target_event_date: string | null
-  target_event_type: string | null
-  target_priority: string | null
-}
-
-interface WeekPayload {
-  week_start: string
-  meso_block: {
-    phase: string
-    block_position: string | null
-    weekly_tss_target: number | null
-    days_to_event: number | null
-  } | null
-}
-
-interface Trajectory {
-  ctl_now: number | null
-  ctl_7d_delta: number | null
-  ctl_projected_at_goal: number | null
-  ctl_target: number | null
-  tsb_projected_at_goal: number | null
-  on_track: 'ahead' | 'on_track' | 'behind' | 'no_goal'
-  weekly_tss_required: number | null
-  weekly_tss_actual: number | null
-  narrative_hook: string | null
-  event_name: string | null
-  event_date: string | null
-  event_type: string | null
-  target_priority: string | null
-}
-
-interface EtaDay { date: string; tsb: number; tsb_high: number; tsb_low: number }
-interface RecoveryEta {
-  days: EtaDay[]
-  fresh_on: string | null
-  race_sharp_on: string | null
-  already_fresh: boolean
-}
-
-interface PowerProfile {
-  available?: boolean
-  cp_watts: number | null
-  w_prime_j: number | null
-}
 
 /* ── shared bits ── */
 
@@ -140,31 +93,16 @@ export default function SeasonView() {
   const de = locale === 'de'
   const navigate = useNavigate()
 
-  const { data: profile } = useQuery<AthleteProfileRead>({
-    queryKey: ['athletes', 'me'],
-    queryFn: async () => (await apiClient.get<AthleteProfileRead>('/athletes/me')).data,
-    staleTime: 10 * 60 * 1000,
-  })
-  const { data: week } = useQuery<WeekPayload>({
-    queryKey: ['weeks', 'current'],
-    queryFn: async () => (await apiClient.get<WeekPayload>('/weeks/current')).data,
-    staleTime: 10 * 60 * 1000,
-  })
-  const { data: traj } = useQuery<Trajectory>({
-    queryKey: ['coach', 'trajectory', locale],
-    queryFn: async () => (await apiClient.get<Trajectory>(`/coach/trajectory?lang=${locale}`)).data,
-    staleTime: 10 * 60 * 1000,
-  })
-  const { data: eta } = useQuery<RecoveryEta>({
-    queryKey: ['training-load', 'recovery-eta', 14],
-    queryFn: async () => (await apiClient.get<RecoveryEta>('/training-load/recovery-eta?days=14')).data,
-    staleTime: 10 * 60 * 1000,
-  })
-  const { data: power } = useQuery<PowerProfile>({
-    queryKey: ['analytics', 'power-profile'],
-    queryFn: async () => (await apiClient.get<PowerProfile>('/analytics/power-profile')).data,
-    staleTime: 30 * 60 * 1000,
-  })
+  // Shared hooks only (audit P0-5): this page previously duplicated every
+  // query inline under drifting keys — ['athletes','me'] vs the shared
+  // ['athlete','me'], an unparameterized ['weeks','current'], and
+  // ['training-load','recovery-eta',14] — plus its own Trajectory type.
+  // Every figure now reads the same cache entry as the rest of the app.
+  const { data: profile } = useAthleteProfile()
+  const { data: week } = useCurrentWeek()
+  const { data: traj } = useGoalTrajectory()
+  const { data: eta } = useRecoveryEta()
+  const { data: power } = usePowerProfile()
 
   const today = useMemo(() => {
     const t = new Date()
@@ -174,8 +112,9 @@ export default function SeasonView() {
 
   const eventDateStr = traj?.event_date ?? profile?.target_event_date ?? null
   const eventDate = eventDateStr ? parseISODate(eventDateStr) : null
-  const daysToGo = eventDate ? daysBetween(today, eventDate) : null
-  const eventName = traj?.event_name ?? profile?.goals?.target_event?.name ?? null
+  // One producer for the countdown (audit P0-5) — never ad-hoc ms arithmetic.
+  const daysToGo = daysToEvent(eventDateStr)
+  const eventName = traj?.event_name ?? profile?.goals?.target_event_name ?? null
   const priority = (traj?.target_priority ?? profile?.target_priority ?? '').toUpperCase() || null
   const eventTypeRaw = traj?.event_type ?? profile?.target_event_type ?? null
   const eventTypeLabel = eventTypeRaw

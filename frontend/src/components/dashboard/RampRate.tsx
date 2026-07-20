@@ -10,13 +10,14 @@ import { useLocale } from '../../contexts/LocaleContext'
 //   5–15%  → amber: watch recovery markers
 //   > 15%  → red: overreaching risk, back off
 //
-// The underlying numbers come from the PMC (daily_tss sums).
+// The underlying numbers come from the PMC daily-load series. The wire carries
+// the day's load in `tss`; `daily_tss` is a legacy field that serializes null.
 
 const GREEN_MAX = 5
 const AMBER_MAX = 15
 
 function tssForWeek(
-  entries: Array<{ date: string; daily_tss: number }>,
+  entries: Array<{ date: string; tss?: number | null; daily_tss: number | null }>,
   weekIndex: number,
 ): number {
   const today = new Date()
@@ -24,7 +25,7 @@ function tssForWeek(
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
   return entries
     .filter((e) => isWithinInterval(new Date(e.date), { start: weekStart, end: weekEnd }))
-    .reduce((s, e) => s + (e.daily_tss ?? 0), 0)
+    .reduce((s, e) => s + (e.tss ?? e.daily_tss ?? 0), 0)
 }
 
 export default function RampRate() {
@@ -51,7 +52,9 @@ export default function RampRate() {
     return { thisWeek: w0, rampRate: rr, label: lbl, zone: z }
   }, [data, locale])
 
-  const countedTSS = useCountUp(thisWeek, { duration: 700, enabled: !isLoading })
+  // useCountUp has no `enabled` option — while loading `thisWeek` is 0 and
+  // the hook's skipZero default suppresses the animation anyway.
+  const countedTSS = useCountUp(thisWeek, { durationMs: 700 })
 
   const zoneColor = { green: '#30D158', amber: 'var(--color-amber)', red: 'var(--color-alert)' }[zone]
 

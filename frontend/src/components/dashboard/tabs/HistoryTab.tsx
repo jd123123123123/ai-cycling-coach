@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { usePowerProfile } from '../../../hooks/usePowerProfile'
+import { useStreak } from '../../../hooks/useStreak'
 import { useLocale } from '../../../contexts/LocaleContext'
 import HoverBars from '../../ui/HoverBars'
 import InsightsSection from '../InsightsSection'
@@ -328,16 +329,10 @@ export default function HistoryTab() {
     )
   }, [dayTss, today])
 
-  const streak = useMemo(() => {
-    let n = 0
-    let cur = today
-    while (dayTss.get(format(cur, 'yyyy-MM-dd'))) { n++; cur = subDays(cur, 1) }
-    if (n === 0) {
-      cur = subDays(today, 1)
-      while (dayTss.get(format(cur, 'yyyy-MM-dd'))) { n++; cur = subDays(cur, 1) }
-    }
-    return n
-  }, [dayTss, today])
+  // Server-computed forgiving streak — the ONLY streak producer (audit P0-5).
+  // Never recompute locally: the naive consecutive-TSS walk contradicted it.
+  const { data: streakData } = useStreak()
+  const streak = streakData?.streak ?? 0
 
   // Personal records — computed per-sport so the card can react to the active filter.
   const prs = useMemo(() => {

@@ -52,6 +52,8 @@ function adaptIntervals(intervals: IntervalBlockOut[]): ResolvedBlock[] {
       rpe: Math.round(b.zone * 1.2),
       cadence_low: null,
       cadence_high: null,
+      target_hr_low: null,
+      target_hr_high: null,
     }
   })
 }

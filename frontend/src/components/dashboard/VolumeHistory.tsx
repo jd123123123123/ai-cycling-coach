@@ -26,7 +26,6 @@ export default function VolumeHistory() {
         isWithinInterval(new Date(e.date), { start: weekStart, end: weekEnd }),
       )
       const tss = weekEntries.reduce((s, e) => s + (e.tss ?? e.daily_tss ?? 0), 0)
-      const hours = tss / 70 // rough TSS-to-hours estimate at moderate intensity
 
       return {
         week: i,
@@ -34,8 +33,8 @@ export default function VolumeHistory() {
         shortLabel: format(weekStart, 'd MMM'),
         tss: Math.round(tss),
         hours: weekEntries.reduce((s, e) => {
-          // Infer hours from daily_tss (approximate)
-          return s + (e.daily_tss ?? 0) / 70
+          // Infer hours from the daily load (approximate; `daily_tss` is legacy-null)
+          return s + (e.tss ?? e.daily_tss ?? 0) / 70
         }, 0),
         isCurrentWeek,
       }

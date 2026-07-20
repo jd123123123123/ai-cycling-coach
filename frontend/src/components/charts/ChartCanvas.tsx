@@ -277,6 +277,19 @@ function buildEChartsOption(
   }
 
   const showLegend = series.length > 1
+  // ECharts' XAXisOption is a discriminated union on `type`, so a literal with
+  // a union-typed `type` field never narrows — branch explicitly instead.
+  const xAxisCommon = {
+    axisLine: { lineStyle: { color: resolveCssVar('var(--color-rule)') } },
+    axisTick: { show: false },
+    axisLabel: axisLabelStyle,
+  }
+  const xAxis: echarts.EChartsOption['xAxis'] =
+    xType === 'category'
+      ? { type: 'category', boundaryGap: series.some((s) => s.type === 'bar'), ...xAxisCommon }
+      : xType === 'time'
+        ? { type: 'time', ...xAxisCommon }
+        : { type: 'value', ...xAxisCommon }
   return {
     animationDuration: 480,
     animationEasing: 'cubicOut',
@@ -299,13 +312,7 @@ function buildEChartsOption(
       textStyle: { color: resolveCssVar('var(--color-ink)'), fontSize: 12 },
       extraCssText: 'box-shadow: 0 8px 28px -12px rgba(20,24,17,0.18); border-radius: 10px;',
     },
-    xAxis: {
-      type: xType,
-      boundaryGap: series.some((s) => s.type === 'bar'),
-      axisLine: { lineStyle: { color: resolveCssVar('var(--color-rule)') } },
-      axisTick: { show: false },
-      axisLabel: axisLabelStyle,
-    },
+    xAxis,
     yAxis,
     series,
   }

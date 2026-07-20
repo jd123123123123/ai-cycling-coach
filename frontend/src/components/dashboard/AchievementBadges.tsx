@@ -281,11 +281,15 @@ const ACHIEVEMENT_DEFS: Array<{
     resolve: (_acts, pmc) => firstCtlAtLeast(pmc, 70),
   },
   {
+    // Historical badge: unlocks once for the FIRST 7-in-a-row ever logged.
+    // Deliberately NOT the current streak — that number comes solely from the
+    // server's forgiving-streak endpoint (audit P0-5). Label + hint must read
+    // as an all-time achievement so it can't be mistaken for today's streak.
     id: 'streak-7',
-    label: '7-day streak',
-    labelDe: '7-Tage-Serie',
-    hint: 'Seven straight logged days.',
-    hintDe: 'Sieben Tage am Stück erfasst.',
+    label: 'First 7-day streak',
+    labelDe: 'Erste 7-Tage-Serie',
+    hint: 'Logged seven straight days at least once — an all-time achievement, not your current streak.',
+    hintDe: 'Mindestens einmal sieben Tage am Stück erfasst — eine einmalige Auszeichnung, nicht deine aktuelle Serie.',
     icon: <Flame size={11} strokeWidth={2.2} />,
     resolve: (acts) => {
       if (acts.length === 0) return null

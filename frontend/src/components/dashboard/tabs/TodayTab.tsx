@@ -28,7 +28,9 @@ import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
 import { usePMC } from '../../../hooks/usePMC'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useGoalTrajectory } from '../../../hooks/useGoalTrajectory'
+import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { computeReadiness, readinessTier } from '../../../utils/metrics'
+import { latestLoad, daysToEvent, localDayKey } from '../../../utils/loadMetrics'
 import ScoreRing from '../../ui/ScoreRing'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -55,6 +57,7 @@ export default function TodayTab() {
   const { data: pmc } = usePMC(90)
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 8), [today]), today)
   const { data: trajectory } = useGoalTrajectory()
+  const { data: profile } = useAthleteProfile()
   const { data: streakData } = useStreak()
   const setStatus = useSetAthleteStatus()
 
@@ -74,7 +77,11 @@ export default function TodayTab() {
 
   const athlete = evidence.athlete as Record<string, unknown> | undefined
   const goalName = athlete?.goal_target as string | undefined
-  const daysToGoal = athlete?.days_to_goal as number | undefined
+  // P0-5: days-to-event comes from the shared selector over the LIVE profile
+  // event date; the cacheable brief evidence is only a last-resort fallback.
+  const daysToGoal = daysToEvent(profile?.target_event_date)
+    ?? (athlete?.days_to_goal as number | undefined)
+    ?? null
   // Prefer the coach evidence name; fall back to the logged-in user's email local
   // part (e.g. "jannis.deters@…" → "Jannis") so the greeting is always personal.
   const nameFromEmail = (email: string | undefined | null): string | undefined => {
@@ -86,18 +93,20 @@ export default function TodayTab() {
   const pmcBio = evidence.biometrics as Record<string, unknown> | undefined
   const hrv = pmcBio?.hrv as Record<string, unknown> | undefined
   const hrvDelta = hrv?.delta_pct as number | null | undefined
-  const pmcEv = evidence.pmc as Record<string, unknown> | undefined
-  const tsb = (pmcEv?.tsb as number | null | undefined) ?? pmc?.entries?.at(-1)?.tsb ?? null
   const sleepScore = latest?.sleep_score ?? null
   const bodyBattery = latest?.body_battery ?? null
   const restingHr = latest?.resting_hr ?? null
   const hrvNow = snapshot?.hrv_overnight_avg ?? latest?.hrv_status ?? null
 
-  const pmcLatest = pmc?.entries?.at(-1)
-  const pmcWeek = pmc?.entries && pmc.entries.length >= 8 ? pmc.entries[pmc.entries.length - 8] : pmc?.entries?.[0]
-  const ctl = pmcLatest?.ctl ?? null
-  const atl = pmcLatest?.atl ?? null
-  const dCtl = pmcLatest && pmcWeek ? Math.round(pmcLatest.ctl - pmcWeek.ctl) : null
+  // P0-5: ONE producer for CTL/ATL/TSB — the shared latestLoad selector over
+  // live PMC. Never the brief's evidence.pmc snapshot (60-day window, cacheable
+  // for far longer than a day) — the Form chip must always equal the displayed
+  // CTL − the displayed ATL.
+  const load = latestLoad(pmc?.entries)
+  const ctl = load?.ctl ?? null
+  const atl = load?.atl ?? null
+  const tsb = load?.tsb ?? null
+  const dCtl = load?.dCtl7 ?? null
 
   const workout = brief?.prescribed_workout
   // Rest-day detection — a rest day has nothing to start or view. Robustly read
@@ -138,8 +147,10 @@ export default function TodayTab() {
   }, [workout, de])
 
   // Today's training snapshot — real activity channels only (no steps).
-  const todayKey = format(today, 'yyyy-MM-dd')
-  const todayActs = (acts?.activities ?? []).filter((a) => (a.started_at ?? a.date ?? '').slice(0, 10) === todayKey)
+  // P0-2: activities are bucketed onto BROWSER-LOCAL days via the shared
+  // localDayKey selector — never a UTC `.slice(0, 10)` prefix.
+  const todayKey = localDayKey(today)
+  const todayActs = (acts?.activities ?? []).filter((a) => localDayKey(a.started_at ?? a.date ?? '') === todayKey)
   const moveLoad = Math.round(todayActs.reduce((s, a) => s + (a.tss ?? 0), 0))
   const exMin = Math.round(todayActs.reduce((s, a) => s + (a.duration_seconds ?? 0) / 60, 0))
   const hasTss = todayActs.some((a) => a.tss != null)
@@ -173,8 +184,8 @@ export default function TodayTab() {
   // metrics already loaded — nothing fabricated, chips render only when real.
   const whyInputs = useMemo(() => {
     const chips: { l: string; v: string }[] = []
-    if (typeof tsb === 'number') chips.push({ l: 'Form', v: `${tsb >= 0 ? '+' : ''}${Math.round(tsb)} TSB` })
-    if (atl != null) chips.push({ l: de ? 'Ermüdung' : 'Fatigue', v: `${Math.round(atl)} ATL` })
+    if (typeof tsb === 'number') chips.push({ l: 'Form', v: `${tsb >= 0 ? '+' : ''}${tsb} TSB` })
+    if (atl != null) chips.push({ l: de ? 'Ermüdung' : 'Fatigue', v: `${atl} ATL` })
     if (typeof hrvDelta === 'number') chips.push({ l: 'HRV', v: `${hrvDelta >= 0 ? '+' : ''}${Math.round(hrvDelta)}% vs. Baseline` })
     if (sleepScore != null) chips.push({ l: de ? 'Schlaf' : 'Sleep', v: `${Math.round(sleepScore)}/100` })
     if (typeof daysToGoal === 'number' && goalName) chips.push({ l: de ? 'Event' : 'Event', v: `${daysToGoal} ${de ? 'Tage bis' : 'days to'} ${goalName.length > 18 ? goalName.slice(0, 17) + '…' : goalName}` })
@@ -184,8 +195,8 @@ export default function TodayTab() {
 
   // Week streak — forgiving, plan-aware (server: trained + planned-rest days
   // extend, sick/injured/break days pause, only skipped sessions break).
-  // Falls back to client activity-presence while the query loads.
-  const trainedSet = useMemo(() => new Set((acts?.activities ?? []).map((a) => (a.started_at ?? a.date ?? '').slice(0, 10))), [acts])
+  // Day dots fall back to client activity-presence while the query loads.
+  const trainedSet = useMemo(() => new Set((acts?.activities ?? []).map((a) => localDayKey(a.started_at ?? a.date ?? ''))), [acts])
   const weekDays = useMemo(() => {
     const monday = startOfWeek(today, { weekStartsOn: 1 })
     return Array.from({ length: 7 }, (_, i) => {
@@ -205,17 +216,10 @@ export default function TodayTab() {
       return { key, label: format(d, 'EEEEE'), state }
     })
   }, [today, todayKey, trainedSet, streakData])
-  const clientStreak = useMemo(() => {
-    let n = 0
-    for (let i = 0; i < 30; i++) {
-      const key = format(subDays(today, i), 'yyyy-MM-dd')
-      if (i === 0 && !trainedSet.has(key)) continue // today may be unlogged
-      if (trainedSet.has(key)) n++
-      else break
-    }
-    return n
-  }, [today, trainedSet])
-  const streak = streakData?.streak ?? clientStreak
+  // P0-2: NO client-side streak fallback — the old consecutive-days algorithm
+  // contradicted the forgiving server streak while the query loaded. Until the
+  // server number arrives we render nothing rather than a different number.
+  const streak = streakData?.streak ?? null
   const streakPaused = streakData?.paused ?? false
   const athleteState: AthleteState = streakData?.status?.state ?? 'healthy'
 
@@ -598,11 +602,11 @@ export default function TodayTab() {
   // simply drops its sentence, nothing is ever invented — and each language
   // gets its own word order (no templated Denglish). Variant phrasing is picked
   // deterministically with the same day-of-month `pick` as the hero line.
-  const yKey = format(subDays(today, 1), 'yyyy-MM-dd')
+  const yKey = localDayKey(subDays(today, 1))
   const yesterdayTrained = trainedSet.has(yKey)
   const yesterdayTss = Math.round(
     (acts?.activities ?? [])
-      .filter((a) => (a.started_at ?? a.date ?? '').slice(0, 10) === yKey)
+      .filter((a) => localDayKey(a.started_at ?? a.date ?? '') === yKey)
       .reduce((s, a) => s + (a.tss ?? 0), 0),
   )
   const morningRead: string | null = (() => {
@@ -674,7 +678,7 @@ export default function TodayTab() {
 
   // Momentum cues — a training streak + a real 7-day fitness (CTL) trend. Both
   // are honest, real-data motivators; rendered as small chips, never hype.
-  const showStreak = streak > 0
+  const showStreak = streak != null && streak > 0
   const showFitnessTrend = dCtl != null
 
   return (
@@ -947,7 +951,7 @@ export default function TodayTab() {
 
       {/* The Road — load corridor: 21 days back, today, 10 days ahead (P1.1).
           Absorbs the old Training Load card's stat row + sparkline. */}
-      <TheRoadCard ctlNow={ctl} atlNow={atl} tsbNow={typeof tsb === 'number' ? tsb : null} dCtl={dCtl} />
+      <TheRoadCard ctlNow={ctl} atlNow={atl} tsbNow={tsb} dCtl={dCtl} />
 
       {/* Recovery outlook — forward TSB projection ("fresh by Thursday") */}
       <RecoveryEtaCard />
@@ -972,7 +976,7 @@ export default function TodayTab() {
         <div className="flex items-center justify-between">
           <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Diese Woche' : 'This Week'}</span>
           <span className="flex items-center gap-1">
-            {streak > 0 && (
+            {streak != null && streak > 0 && (
               <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)' }}>
                 {streakPaused
                   ? <Pause size={14} style={{ color: 'var(--color-muted)' }} />

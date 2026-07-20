@@ -158,12 +158,15 @@ export default function TheRoadCard({ ctlNow, atlNow, tsbNow, dCtl }: {
         })()}
       </div>
 
-      {/* CTL/ATL/TSB stat row (absorbed from the Training Load card) */}
+      {/* CTL/ATL/TSB stat row (absorbed from the Training Load card).
+          P0-5: props arrive as integers from the shared latestLoad selector and
+          are rendered VERBATIM — no re-rounding, so this row can never disagree
+          with the Form chip upstream (displayed TSB = displayed CTL − ATL). */}
       <div className="flex">
         {([
-          { v: ctlNow != null ? `${Math.round(ctlNow)}` : '—', n: de ? 'Fitness' : 'Fitness', c: 'CTL', color: 'var(--color-strain)' },
-          { v: atlNow != null ? `${Math.round(atlNow)}` : '—', n: de ? 'Ermüdung' : 'Fatigue', c: 'ATL', color: 'var(--color-amber)' },
-          { v: tsbNow != null ? `${tsbNow >= 0 ? '+' : ''}${Math.round(tsbNow)}` : '—', n: 'Form', c: 'TSB', color: 'var(--color-recovery)' },
+          { v: ctlNow != null ? `${ctlNow}` : '—', n: de ? 'Fitness' : 'Fitness', c: 'CTL', color: 'var(--color-strain)' },
+          { v: atlNow != null ? `${atlNow}` : '—', n: de ? 'Ermüdung' : 'Fatigue', c: 'ATL', color: 'var(--color-amber)' },
+          { v: tsbNow != null ? `${tsbNow >= 0 ? '+' : ''}${tsbNow}` : '—', n: 'Form', c: 'TSB', color: 'var(--color-recovery)' },
         ]).map((s, i) => (
           <div key={i} className="flex-1 flex flex-col items-center gap-0.5" style={i > 0 ? { borderLeft: '1px solid var(--color-rule)' } : undefined}>
             <span className="num-display" style={{ fontSize: 24, color: s.color }}>{s.v}</span>

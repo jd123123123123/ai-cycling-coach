@@ -17,6 +17,7 @@ import { ArrowLeft, Heart, Activity, Wind } from 'lucide-react'
 import { useDailyMetrics } from '../hooks/useDailyMetrics'
 import { useActivitiesRange } from '../hooks/useActivitiesRange'
 import { computeReadiness } from '../utils/metrics'
+import { localDayKey } from '../utils/loadMetrics'
 import HoverBars from '../components/ui/HoverBars'
 import MobileBottomNav from '../components/dashboard/MobileBottomNav'
 import { useLocale } from '../contexts/LocaleContext'
@@ -75,9 +76,16 @@ export default function RecoveryTrendsView() {
     for (const x of metrics) { const k = (x.date ?? x.recorded_at ?? '').slice(0, 10); if (k) m.set(k, x) }
     return m
   }, [metrics])
+  // Activities are bucketed by LOCAL calendar day (loadMetrics.localDayKey on
+  // the started_at timestamp) so they line up with the `format(d,'yyyy-MM-dd')`
+  // local day rows below — a UTC `.slice(0, 10)` put late-evening/early-morning
+  // rides on the wrong strain day.
   const tssByDate = useMemo(() => {
     const m = new Map<string, number>()
-    for (const a of acts?.activities ?? []) { const k = (a.started_at ?? '').slice(0, 10); if (k) m.set(k, (m.get(k) ?? 0) + (a.tss ?? 0)) }
+    for (const a of acts?.activities ?? []) {
+      const k = a.started_at ? localDayKey(a.started_at) : ''
+      if (k) m.set(k, (m.get(k) ?? 0) + (a.tss ?? 0))
+    }
     return m
   }, [acts])
 

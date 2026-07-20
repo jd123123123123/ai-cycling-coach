@@ -42,8 +42,8 @@ export default function WeeklyChallenge({ teaser = false }: { teaser?: boolean }
     return { thisWeekTSS: Math.round(tss), goal: g, pct: p, sessions: sess, hoursLeft: hrs }
   }, [activitiesData, profile, weekStart, weekEnd, today])
 
-  const countedTSS = useCountUp(thisWeekTSS, { duration: 900, enabled: true })
-  const countedPct = useCountUp(Math.round(pct * 100), { duration: 900, enabled: true })
+  const countedTSS = useCountUp(thisWeekTSS, { durationMs: 900 })
+  const countedPct = useCountUp(Math.round(pct * 100), { durationMs: 900 })
 
   const closed = pct >= 1
   const close = pct >= 0.7 && pct < 1

@@ -16,6 +16,7 @@ import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
 import { computeReadiness, readinessTier } from '../../../utils/metrics'
+import { localDayKey } from '../../../utils/loadMetrics'
 import ScoreRing from '../../ui/ScoreRing'
 import MetricCard from '../../ui/MetricCard'
 import RecoveryEtaCard from '../RecoveryEtaCard'
@@ -138,13 +139,15 @@ export default function RecoveryTab() {
       ? { t: de ? 'Moderat halten' : 'Keep it moderate', s: de ? 'Deine Erholung ist okay, aber nicht optimal — halte die Intensität im Zaum.' : 'Recovery is okay but not optimal — keep the intensity in check.' }
       : { t: de ? 'Erholung priorisieren' : 'Prioritize recovery', s: de ? 'Deine Signale zeigen Ermüdung. Ein leichter Tag zahlt sich aus.' : 'Your signals point to fatigue. An easy day will pay off.' }
 
-  // Strain per day from activity TSS (WHOOP-style 0–21)
+  // Strain per day from activity TSS (WHOOP-style 0–21). P0-2: bucket onto
+  // BROWSER-LOCAL days via the shared localDayKey selector — a `.slice(0, 10)`
+  // UTC prefix put late-evening rides on the wrong day.
   const tssByDate = useMemo(() => {
     const m = new Map<string, number>()
-    for (const a of acts?.activities ?? []) { const k = (a.started_at ?? '').slice(0, 10); if (k) m.set(k, (m.get(k) ?? 0) + (a.tss ?? 0)) }
+    for (const a of acts?.activities ?? []) { if (!a.started_at) continue; const k = localDayKey(a.started_at); m.set(k, (m.get(k) ?? 0) + (a.tss ?? 0)) }
     return m
   }, [acts])
-  const todayKey = format(today, 'yyyy-MM-dd')
+  const todayKey = localDayKey(today)
   const todayTSS = tssByDate.get(todayKey) ?? 0
   const todayStrain = todayTSS > 0 ? Math.min(21, todayTSS / 8) : null
   const targetStrain = score != null ? (score / 100) * 21 : null

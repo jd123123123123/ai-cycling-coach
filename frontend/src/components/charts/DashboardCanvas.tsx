@@ -12,7 +12,8 @@ import type { GridLayoutItem } from '../../api/dashboards'
 import { useLocale } from '../../contexts/LocaleContext'
 
 // react-grid-layout v2 dropped the WidthProvider HOC in favor of useContainerWidth.
-function ResponsiveGrid({ children, ...props }: React.ComponentProps<typeof Responsive>) {
+// `width` is measured here, so callers must not (and cannot) pass it.
+function ResponsiveGrid({ children, ...props }: Omit<React.ComponentProps<typeof Responsive>, 'width'>) {
   const { width, containerRef } = useContainerWidth()
   return (
     <div ref={containerRef as React.Ref<HTMLDivElement>}>
@@ -76,7 +77,8 @@ export default function DashboardCanvas({
   const { locale } = useLocale()
   const safeLayout = useMemo(() => ensureLayout(charts, layout), [charts, layout])
 
-  const handleLayoutChange = (newLayout: Layout[]) => {
+  // react-grid-layout v2: `Layout` IS the array (`readonly LayoutItem[]`).
+  const handleLayoutChange = (newLayout: Layout) => {
     if (!onLayoutChange) return
     onLayoutChange(
       newLayout.map((l) => ({
@@ -134,9 +136,8 @@ export default function DashboardCanvas({
       breakpoints={BREAKPOINTS}
       rowHeight={ROW_HEIGHT}
       margin={[14, 14]}
-      isDraggable={editable}
-      isResizable={editable}
-      draggableHandle=".cell-handle"
+      dragConfig={{ enabled: editable, handle: '.cell-handle' }}
+      resizeConfig={{ enabled: editable }}
       onLayoutChange={handleLayoutChange}
     >
       {charts.map((chart) => (

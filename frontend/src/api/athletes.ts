@@ -16,6 +16,23 @@ export async function getGoals(): Promise<TrainingGoals> {
   return data
 }
 
+// ── P0-2 timezone handshake ─────────────────────────────────────────────────
+// Reports the browser's IANA timezone so the server buckets "today" on the
+// athlete's calendar instead of UTC. PATCH is the contract landing this wave;
+// fall back to the existing partial-update PUT if only that route exists yet.
+export async function syncTimezone(timezone: string): Promise<void> {
+  try {
+    await apiClient.patch<AthleteProfile>('/athletes/me', { timezone })
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status
+    if (status === 404 || status === 405) {
+      await apiClient.put<AthleteProfile>('/athletes/me', { timezone })
+      return
+    }
+    throw err
+  }
+}
+
 // ── Forgiving streak + athlete status (roadmap P0.2) ────────────────────────
 // The streak measures adherence to the plan: trained days and planned rest
 // days extend it, self-reported sick/injured/break days pause it, and only a

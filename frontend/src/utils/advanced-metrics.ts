@@ -1,5 +1,6 @@
 import type { ActivityRead, PMCEntry } from '../api/dashboard'
 import type { AthleteProfile } from '../types/athlete'
+import { localDayKey } from './loadMetrics'
 
 // Efficiency Factor = NP / avg_HR. Higher = better aerobic economy.
 // Requires both normalized_power and average_hr — returns null if either missing.
@@ -111,7 +112,10 @@ export function weeklyTID(
     const we = new Date(ws)
     we.setDate(ws.getDate() + 7)
     const bucket: TIDWeek = {
-      weekStart: ws.toISOString().slice(0, 10),
+      // P0-2: `ws` is a LOCAL Monday midnight — toISOString() would shift it to
+      // the previous day for any UTC+ timezone (Berlin). Label with the shared
+      // local-day selector instead.
+      weekStart: localDayKey(ws),
       totals: { easy: 0, moderate: 0, hard: 0 },
       totalHours: 0,
     }
@@ -156,8 +160,10 @@ export function calendarCells(pmcEntries: PMCEntry[], daysBack = 84): HeatmapCel
   for (let i = daysBack - 1; i >= 0; i--) {
     const d = new Date(today)
     d.setDate(today.getDate() - i)
-    const iso = d.toISOString().slice(0, 10)
-    cells.push({ date: iso, tss: map.get(iso) ?? 0 })
+    // P0-2: `d` is LOCAL midnight — toISOString() labeled every Berlin heatmap
+    // cell with the PREVIOUS day. Use the shared local-day selector.
+    const key = localDayKey(d)
+    cells.push({ date: key, tss: map.get(key) ?? 0 })
   }
   return cells
 }

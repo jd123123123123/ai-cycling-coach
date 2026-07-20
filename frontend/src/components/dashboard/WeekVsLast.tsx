@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import {
   startOfWeek,
-  endOfWeek,
   subWeeks,
   isSameWeek,
 } from 'date-fns'
@@ -100,7 +99,6 @@ export default function WeekVsLast() {
   const today = new Date()
   const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 })
   const lastWeekStart = subWeeks(thisWeekStart, 1)
-  const lastWeekEnd = endOfWeek(lastWeekStart, { weekStartsOn: 1 })
 
   const { data: twoWeeksData, isLoading } = useActivitiesRange(lastWeekStart, today)
 
@@ -248,7 +246,6 @@ export default function WeekVsLast() {
             />
             {/* This week fill */}
             {(() => {
-              const maxV = Math.max(thisWeek.totalTSS, lastWeek.totalTSS, 0.01)
               const thisV = thisWeek.totalTSS > 0 ? thisWeek.totalTSS : thisWeek.totalHours * 50
               const lastV = lastWeek.totalTSS > 0 ? lastWeek.totalTSS : lastWeek.totalHours * 50
               const maxAll = Math.max(thisV, lastV, 0.01)
