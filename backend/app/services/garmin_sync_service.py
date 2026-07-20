@@ -630,7 +630,18 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         # Defensive: a delete failure must NOT break the sync return.
         try:
             await db.execute(
-                delete(CoachBrief).where(CoachBrief.user_id == user_id)
+                delete(CoachBrief).where(
+                    CoachBrief.user_id == user_id,
+                    # AUDIT rows are NOT cache: absorption dedup keys off
+                    # verdict='absorption' rows and the undo window off
+                    # 'modification'/'modification_undo'. Deleting them here
+                    # made every 15-min sync re-absorb the same rides and eat
+                    # the week's biggest planned session (the Z2 death-spiral,
+                    # plan-engine recon 2026-07-20).
+                    CoachBrief.verdict.notin_(
+                        ("absorption", "modification", "modification_undo")
+                    ),
+                )
             )
             await db.commit()
         except Exception as exc:
