@@ -70,3 +70,113 @@ async def test_status_overrides_directive(state, expected):
     d = await _badir(db, 1)
     assert d.directive == expected
     assert db.execute.await_count == 1  # short-circuits before HRV queries
+
+
+# ─── Day gates (usability audit P0-3) ───────────────────────────────────────
+# On a planned rest day — or once today's session is already done — the
+# directive must never headline 'Grünes Licht — belaste hart.' / 'Voll
+# draufhalten'. Rest day → 'Grünes Licht für morgen' (directive 'hold');
+# already trained → recovery-oriented headline.
+
+from app.services.adaptive_readiness import Directive as _Directive, _apply_day_gates
+from app.services.daily_decision import TodayContext as _TodayContext
+
+
+def _gate_db():
+    db = _MagicMock()
+
+    async def execute(stmt):  # noqa: ANN001
+        result = _MagicMock()
+        result.scalar_one_or_none.return_value = None
+        return result
+
+    db.execute = _AsyncMock(side_effect=execute)
+    return db
+
+
+def _push_directive(lang="de"):
+    return _Directive(
+        directive="push", intensity_ceiling="hard", volume_modifier=1.0,
+        hrv_state="in",
+        headline="Grünes Licht — belaste hart." if lang == "de" else "Green light — load hard.",
+    )
+
+
+@_pytest.mark.asyncio
+async def test_planned_rest_day_rewrites_push_headline(monkeypatch):
+    import app.services.daily_decision as _dd
+
+    async def _fake_ctx(db, user_id):  # noqa: ANN001
+        return _TodayContext(planned_is_rest=True)
+
+    monkeypatch.setattr(_dd, "load_today_context", _fake_ctx)
+    d = await _apply_day_gates(_gate_db(), 1, _push_directive("de"), "de")
+    assert d.headline == "Grünes Licht für morgen"
+    assert d.directive == "hold"
+    assert "belaste hart" not in d.headline.lower()
+
+
+@_pytest.mark.asyncio
+async def test_planned_rest_day_english_headline(monkeypatch):
+    import app.services.daily_decision as _dd
+
+    async def _fake_ctx(db, user_id):  # noqa: ANN001
+        return _TodayContext(planned_is_rest=True)
+
+    monkeypatch.setattr(_dd, "load_today_context", _fake_ctx)
+    d = await _apply_day_gates(_gate_db(), 1, _push_directive("en"), "en")
+    assert d.headline == "Green light for tomorrow"
+    assert d.directive == "hold"
+
+
+@_pytest.mark.asyncio
+async def test_already_trained_rewrites_to_recovery(monkeypatch):
+    import app.services.daily_decision as _dd
+
+    async def _fake_ctx(db, user_id):  # noqa: ANN001
+        return _TodayContext(
+            planned={"sport": "cycling", "title": "Z2", "template_id": "z2_endurance_60",
+                     "target_tss": 45.0, "duration_minutes": 60, "category": "endurance"},
+            activities=[{"sport": "cycling", "duration_minutes": 62, "tss": 48}],
+        )
+
+    monkeypatch.setattr(_dd, "load_today_context", _fake_ctx)
+    d = await _apply_day_gates(_gate_db(), 1, _push_directive("de"), "de")
+    assert d.directive == "hold"
+    assert d.intensity_ceiling == "easy"
+    assert "Erholung" in d.headline
+    assert "belaste hart" not in d.headline.lower()
+
+
+@_pytest.mark.asyncio
+async def test_training_day_keeps_push_headline(monkeypatch):
+    import app.services.daily_decision as _dd
+
+    async def _fake_ctx(db, user_id):  # noqa: ANN001
+        return _TodayContext(
+            planned={"sport": "cycling", "title": "SS", "template_id": "sweet_spot_2x20",
+                     "target_tss": 68.0, "duration_minutes": 75, "category": "sweet_spot"},
+            activities=[],
+        )
+
+    monkeypatch.setattr(_dd, "load_today_context", _fake_ctx)
+    d = await _apply_day_gates(_gate_db(), 1, _push_directive("de"), "de")
+    assert d.directive == "push"
+    assert d.headline == "Grünes Licht — belaste hart."
+
+
+@_pytest.mark.asyncio
+async def test_gym_on_bike_day_does_not_mute_directive(monkeypatch):
+    """A 58-min gym log with the bike session still open keeps the push."""
+    import app.services.daily_decision as _dd
+
+    async def _fake_ctx(db, user_id):  # noqa: ANN001
+        return _TodayContext(
+            planned={"sport": "cycling", "title": "SS", "template_id": "sweet_spot_2x20",
+                     "target_tss": 68.0, "duration_minutes": 75, "category": "sweet_spot"},
+            activities=[{"sport": "gym", "duration_minutes": 58, "tss": 25}],
+        )
+
+    monkeypatch.setattr(_dd, "load_today_context", _fake_ctx)
+    d = await _apply_day_gates(_gate_db(), 1, _push_directive("de"), "de")
+    assert d.directive == "push"

@@ -103,9 +103,13 @@ C. NEVER recommend caloric restriction, fasting before training as a weight-loss
 D. Power band tolerance: the server will override your watts with FTP-derived values (±5% for high zones, ±10% for Z1-2). You still include the `target_watts_low/high` so the shape is valid; don't worry about matching exactly.
 E. If HRV is suppressed >10% OR TSB < -30 → your prescribed workout must be recovery or rest. Name the signal in the rationale.
 
-F. ALREADY-TRAINED-TODAY: if `snapshot.weekly_progress.today_tss >= 25` the athlete has already ridden today. Do NOT prescribe a second session. Set `prescribed_workout.template_id = 'rest_day'`, both alternates to `rest_day` or `recovery_30`, verdict should acknowledge the session (e.g. "Session complete — 68 min logged"), and rationale cites today's duration + TSS + intensity. Explain that stacking another workout fights absorption, not builds fitness.
+F. ALREADY-TRAINED-TODAY — SPORT-AWARE: the trained-today gate keys off `snapshot.weekly_progress.today_ride_minutes` / `today_ride_tss` (the CYCLING tally), never the all-sport total.
+   - If `today_ride_minutes >= 20` the athlete has already RIDDEN today. Do NOT prescribe a second session. Set `prescribed_workout.template_id = 'rest_day'`, both alternates to `rest_day` or `recovery_30`, verdict acknowledges the ride (e.g. "Session complete — 68 min logged"), and rationale cites today's ride duration + TSS + intensity. Explain that stacking another workout fights absorption, not builds fitness.
+   - If only OTHER-sport work exists (`today_other_minutes >= 20`, `today_ride_minutes < 20`) do NOT flip to rest_day: keep the planned bike session as the prescription and acknowledge the other-sport work in the rationale with the correct label (strength session / run — NEVER call it a ride). Cross-sport credit, e.g. "Heute: 58 Min Krafttraining — die geplante Rad-Einheit steht weiterhin."
 
-G. POST-RIDE REVIEW MODE: when `snapshot.post_ride` is present (athlete trained today), your brief MUST include `post_ride_review` with the three narrative fields below. The compliance numbers (grade, duration, TSS, IF, VI, EF) are already computed — you read them from `snapshot.post_ride.compliance` and use the actual numbers in your narratives. You write:
+G. ONE DAILY DECISION IS AUTHORITATIVE: when the snapshot carries `today_planned_workout` / `today_planned_is_rest` (and/or a `daily_decision` state), that is the day's single decision — your verdict and prescription MUST agree with it. A planned rest day is narrated as a rest day (frame good recovery as "green light for tomorrow", never "load hard today"); a planned session that survives the signals is narrated as that session. Never contradict the plan truth.
+
+H. POST-RIDE REVIEW MODE: when `snapshot.post_ride` is present (athlete trained today), your brief MUST include `post_ride_review` with the three narrative fields below. The compliance numbers (grade, duration, TSS, IF, VI, EF) are already computed — you read them from `snapshot.post_ride.compliance` and use the actual numbers in your narratives. You write:
 
     - `headline` (3-8 words): a summary line matching the grade. "Perfect execution", "Strong session, a bit short", "Overcooked — big day".
     - `physiological_read` (2-3 sentences): cite EF, VI, decoupling when present. Reference San Millán's Pw:HR framework for EF trends, Coggan's variability band for VI. Talk about what the ride DID to the body — base deepening, aerobic stamp, fatigue accumulation.
@@ -179,7 +183,10 @@ B. If `athlete.injury_flag` is TRUE → `prescribed_workout` is `rest_day`. Both
 C. NEVER recommend skipping meals, fasting to lose weight, or restricting calories. Talking about eating enough / fueling rides is fine — in plain terms.
 D. If the athlete is clearly tired (the snapshot will tell you) → prescribe easy or rest. Say "your body's asking for a break" — not "HRV suppression flagged".
 
-E. IF THEY ALREADY RODE TODAY (snapshot.weekly_progress.today_tss >= 25): don't tell them to do another ride. Set `prescribed_workout.template_id = 'rest_day'`, both alternates as `rest_day` or `recovery_30`. Acknowledge it warmly — "Nice, you've already got XX minutes in today" — and tell them to eat well, hydrate, and let the ride do its thing. Never prescribe a second workout on top of a completed one.
+E. IF THEY ALREADY RODE TODAY (snapshot.weekly_progress.today_ride_minutes >= 20 — the BIKE tally, not the all-sport total): don't tell them to do another ride. Set `prescribed_workout.template_id = 'rest_day'`, both alternates as `rest_day` or `recovery_30`. Acknowledge it warmly — "Nice, you've already got XX minutes in today" — and tell them to eat well, hydrate, and let the ride do its thing. Never prescribe a second workout on top of a completed one.
+   BUT: if they only did a gym session or a run today (snapshot.weekly_progress.today_other_minutes >= 20 while today_ride_minutes < 20), the planned ride still stands — keep prescribing it, and give warm credit for the other work using the right words ("strength work", "your run" — never "ride").
+
+G. ONE DAILY DECISION IS AUTHORITATIVE: when the snapshot carries `today_planned_workout` / `today_planned_is_rest` (and/or a `daily_decision` state), that is the day's single answer — your verdict must agree with it. On a planned rest day, good recovery reads as "you're set up great for tomorrow", never "go hard today". Never contradict the plan.
 
 F. POST-RIDE REVIEW (when snapshot.post_ride is present): include a `post_ride_review` block with three plain-English narrative fields — NO acronyms, NO framework names, NO watt numbers. The compliance numbers are precomputed (you read them from snapshot.post_ride.compliance); you only write the words:
 
@@ -834,6 +841,28 @@ def build_user_message(snapshot: dict) -> str:
             f"rest days: {quota.get('rest_days')}"
         )
 
+    # ONE Daily Decision truth (audit P0-3) — the plan facts the narrative
+    # must never contradict. Rendered ahead of the picked template so the
+    # model sees the authoritative state first.
+    today_pw = snapshot.get("today_planned_workout")
+    if snapshot.get("today_planned_is_rest"):
+        lines.append(
+            "\n## ★ TODAY IS A PLANNED REST DAY (authoritative)\n"
+            "- The verdict must narrate a rest day. Good recovery = green "
+            "light for TOMORROW, never 'load hard today'."
+        )
+    elif isinstance(today_pw, dict):
+        lines.append("\n## Today's planned session (authoritative)")
+        lines.append(
+            f"- {today_pw.get('title')} (template_id={today_pw.get('template_id')}, "
+            f"sport={today_pw.get('sport')}, "
+            f"duration={today_pw.get('duration_minutes')} min)"
+        )
+        lines.append(
+            "- The verdict must agree with this plan (signals may cap the "
+            "load, never contradict the day's shape)."
+        )
+
     picked = snapshot.get("picked_template_preview")
     if picked:
         lines.append("\n## Picked template (your starting point)")
@@ -899,6 +928,14 @@ def build_user_message(snapshot: dict) -> str:
             f"- This calendar week so far (resets Monday — do NOT read as freshness): "
             f"{wp.get('total_tss_this_week', 0):.0f} TSS over "
             f"{wp.get('hard_sessions_done', 0)} hard session(s)"
+        )
+        # Sport-split today tally — the ALREADY-TRAINED gate reads the RIDE
+        # numbers; other-sport work earns credit but never flips the bike plan.
+        lines.append(
+            f"- Today by sport: ride {wp.get('today_ride_minutes', 0):.0f} min / "
+            f"{wp.get('today_ride_tss', 0):.0f} TSS; "
+            f"other sport ({wp.get('today_other_sport') or 'none'}): "
+            f"{wp.get('today_other_minutes', 0):.0f} min"
         )
         lines.append(
             "→ If the rolling 48h / 7d load is high but the calendar-week total is "

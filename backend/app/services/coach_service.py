@@ -28,10 +28,8 @@ from __future__ import annotations
 import json as _json_mod
 import logging
 import re
-from contextvars import ContextVar
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Literal
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,65 +102,18 @@ logger = logging.getLogger(__name__)
 # the *next* UTC day — the coach would prescribe a second session on
 # top of the one they just finished.
 #
-# Today-runthrough Step 2 — the active athlete tz lives in a ContextVar so
-# every helper in this module reads the same value without threading a `tz`
-# argument through every call. `set_athlete_tz_from_profile` is invoked at the
-# top of `build_snapshot` (the single entry point for every brief / chat /
-# upsert flow) right after the profile is loaded. The default keeps the
-# single-user MVP working when called outside a request context (e.g. tests
-# that instantiate helpers directly, scheduler tasks).
-_DEFAULT_ATHLETE_TZ = ZoneInfo("Europe/Berlin")
-_athlete_tz_var: ContextVar[ZoneInfo] = ContextVar(
-    "athlete_tz", default=_DEFAULT_ATHLETE_TZ
+# The implementation now lives in app.services.athlete_time so that weeks,
+# streaks, PMC bucketing and grading share the same notion of "today"
+# (usability audit P0-2). Aliased here to preserve this module's internal
+# naming and its public `set_athlete_tz_from_profile` import surface.
+from app.services.athlete_time import (  # noqa: E402
+    DEFAULT_ATHLETE_TZ as _DEFAULT_ATHLETE_TZ,
+    athlete_tz as _athlete_tz,
+    set_athlete_tz_from_profile,
+    today_local as _today_local,
+    today_local_window as _today_local_window,
+    week_local_window as _week_local_window,
 )
-
-
-def _athlete_tz() -> ZoneInfo:
-    """Return the current request's athlete tz, falling back to Europe/Berlin."""
-    return _athlete_tz_var.get()
-
-
-def set_athlete_tz_from_profile(profile: "AthleteProfile | None") -> None:
-    """Resolve the athlete tz from a loaded AthleteProfile and bind it to the
-    current async context. Bad/empty values silently fall back to the default
-    so a typo in the column never blocks brief generation.
-    """
-    if profile is None:
-        _athlete_tz_var.set(_DEFAULT_ATHLETE_TZ)
-        return
-    raw = getattr(profile, "timezone", None)
-    if not raw:
-        _athlete_tz_var.set(_DEFAULT_ATHLETE_TZ)
-        return
-    try:
-        _athlete_tz_var.set(ZoneInfo(raw))
-    except Exception:
-        _athlete_tz_var.set(_DEFAULT_ATHLETE_TZ)
-
-
-def _today_local(now_utc: datetime | None = None) -> date:
-    """Return today's date in the athlete's local timezone."""
-    now = (now_utc or datetime.now(timezone.utc)).astimezone(_athlete_tz())
-    return now.date()
-
-
-def _today_local_window(now_utc: datetime | None = None) -> tuple[datetime, datetime]:
-    """Athlete-local today 00:00 → tomorrow 00:00, returned as UTC datetimes."""
-    tz = _athlete_tz()
-    today = _today_local(now_utc)
-    start_local = datetime.combine(today, datetime.min.time(), tzinfo=tz)
-    end_local = start_local + timedelta(days=1)
-    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
-
-
-def _week_local_window(now_utc: datetime | None = None) -> tuple[datetime, datetime]:
-    """Monday 00:00 → next Monday 00:00 in athlete-local, returned as UTC datetimes."""
-    tz = _athlete_tz()
-    today = _today_local(now_utc)
-    monday_local = today - timedelta(days=today.weekday())
-    start_local = datetime.combine(monday_local, datetime.min.time(), tzinfo=tz)
-    end_local = start_local + timedelta(days=7)
-    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
 
 # ======================================================================
@@ -473,6 +424,13 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     today_tss = 0.0
     today_duration_minutes = 0.0
     today_max_tss_per_hour = 0.0
+    # Sport-split today tallies (audit P0-2): the coach's already-trained logic
+    # must know whether today's minutes were RIDDEN or done in another sport —
+    # a 58-min gym session must not read as a completed bike session.
+    today_ride_tss = 0.0
+    today_ride_minutes = 0.0
+    today_other_minutes = 0.0
+    today_other_by_family: dict[str, float] = {}
     yesterday_tss = 0.0
     last_48h_tss = 0.0
     rolling_7d_tss = 0.0
@@ -481,6 +439,8 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     # Used by session_type_for_today to avoid stacking back-to-back hard days
     # without an easy buffer — the standard hard/easy alternation rule.
     last_72h_quality_count = 0
+
+    from app.services.sport import sport_family as _sport_family
 
     for a in activities:
         tss = float(a.tss or 0)
@@ -498,7 +458,17 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
         # Today's cumulative TSS + duration + peak intensity (half-open window)
         if since_today <= started < end_today:
             today_tss += tss
-            today_duration_minutes += float(a.duration_seconds or 0) / 60.0
+            minutes = float(a.duration_seconds or 0) / 60.0
+            today_duration_minutes += minutes
+            fam = _sport_family(getattr(a, "sport", None) or "cycling")
+            if fam == "cycling":
+                today_ride_tss += tss
+                today_ride_minutes += minutes
+            else:
+                today_other_minutes += minutes
+                today_other_by_family[fam] = (
+                    today_other_by_family.get(fam, 0.0) + minutes
+                )
             if a.duration_seconds and a.duration_seconds >= 600:
                 tss_per_hour = (tss / a.duration_seconds) * 3600.0
                 today_max_tss_per_hour = max(today_max_tss_per_hour, tss_per_hour)
@@ -519,6 +489,12 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
             if tss_per_hour_72h >= 60.0:
                 last_72h_quality_count += 1
 
+    # Dominant other-sport family today (label for cross-sport credit copy).
+    today_other_sport = (
+        max(today_other_by_family, key=lambda k: today_other_by_family[k])
+        if today_other_by_family else None
+    )
+
     return {
         "hard_sessions_done": hard_sessions,
         "vo2_sessions_done": vo2_sessions,
@@ -527,6 +503,13 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
         "today_tss": round(today_tss, 1),
         "today_duration_minutes": round(today_duration_minutes, 1),
         "today_max_tss_per_hour": round(today_max_tss_per_hour, 1),
+        # Sport-split today tallies (audit P0-2) — 'today_ride_*' is the
+        # cycling family only; 'today_other_*' is everything else. The
+        # already-trained override keys off the RIDE tally, never the total.
+        "today_ride_tss": round(today_ride_tss, 1),
+        "today_ride_minutes": round(today_ride_minutes, 1),
+        "today_other_sport": today_other_sport,
+        "today_other_minutes": round(today_other_minutes, 1),
         "yesterday_tss": round(yesterday_tss, 1),
         "last_48h_tss": round(last_48h_tss, 1),
         "rolling_7d_tss": round(rolling_7d_tss, 1),
@@ -848,15 +831,32 @@ async def build_snapshot(
             key=lambda a: (a.tss or 0.0, a.duration_seconds or 0),
         )
 
-        # Goal trajectory projection — project() is pure, accepts dict rows.
-        # Compute once for the day; same trajectory applies regardless of
-        # whether the athlete did one ride or two.
-        pmc_full = await compute_user_pmc(db, user_id, days=90)
-        trajectory = project_trajectory(
-            user_pmc=pmc_full.get("total") or [],
-            athlete_goals=profile.goals if profile and isinstance(profile.goals, dict) else None,
-            phase=phase,
-        )
+        # Goal trajectory — via the single normalized entry point
+        # (goal_trajectory.compute_goal_trajectory, which normalizes goals +
+        # projection basis internally). Falls back to the legacy pure
+        # project() while the new entry point lands in the same wave.
+        trajectory_dict: dict = {}
+        try:
+            import inspect as _inspect
+            from app.services import goal_trajectory as _gt_mod
+            _compute_traj = getattr(_gt_mod, "compute_goal_trajectory", None)
+            if _compute_traj is not None:
+                _traj_res = _compute_traj(db, user_id, profile)
+                if _inspect.isawaitable(_traj_res):
+                    _traj_res = await _traj_res
+                trajectory_dict = _traj_res or {}
+            else:
+                pmc_full = await compute_user_pmc(db, user_id, days=90)
+                trajectory_dict = trajectory_to_dict(project_trajectory(
+                    user_pmc=pmc_full.get("total") or [],
+                    athlete_goals=(
+                        profile.goals if profile and isinstance(profile.goals, dict) else None
+                    ),
+                    phase=phase,
+                ))
+        except Exception:  # pragma: no cover — trajectory must never block the brief
+            logger.exception("goal trajectory computation failed for user_id=%s", user_id)
+            trajectory_dict = {}
 
         # Per-activity compliance (await — uses async ride_compliance.score()
         # which reads the persisted coach_recommendations row from Step 4).
@@ -881,6 +881,27 @@ async def build_snapshot(
                 )
                 per_activity_compliance.append(None)
 
+        # Graded-aware primary selection (audit P0-2): the day's primary grade
+        # may come ONLY from a graded (sport-matching) activity. Re-anchor the
+        # primary on the highest-TSS graded row when one exists — otherwise
+        # (all activities ungraded, e.g. only a gym log on a bike-plan day)
+        # the primary keeps its facts but the review carries no grade.
+        def _is_graded(c: dict | None) -> bool:
+            return (
+                isinstance(c, dict)
+                and c.get("graded", True) is not False
+                and bool(c.get("grade"))
+            )
+
+        _graded_rows = [
+            r for r, c in zip(today_rows, per_activity_compliance) if _is_graded(c)
+        ]
+        if _graded_rows:
+            primary = max(
+                _graded_rows,
+                key=lambda a: (a.tss or 0.0, a.duration_seconds or 0),
+            )
+
         # Sport-aware session count. The top-level ride grade compares against
         # the endurance prescription (picked_template), so only same-discipline
         # sessions as the primary ride may drive the single-vs-multi decision
@@ -903,15 +924,38 @@ async def build_snapshot(
         # need the schema fields, but we leave the top-level grade None and
         # aggregate the duration/TSS pairs over same-sport rides only.
         if endurance_count <= 1:
-            primary_compliance = _comp_by_row_id.get(id(primary)) or ride_compliance_to_dict(
-                score_ride(
-                    actual_activity=primary,
-                    target_template=picked_template,
-                    ftp=int(ftp) if ftp else None,
-                    phase=phase,
-                    session_type=today_session,
-                )
-            )
+            primary_compliance = _comp_by_row_id.get(id(primary))
+            if primary_compliance is None:
+                # Compliance scoring raised — legacy sync fallback, but ONLY
+                # for cycling: score_ride grades against the bike template and
+                # must never fabricate a grade for another sport's session.
+                from app.services.sport import sport_family as _sport_family_fn
+                if _sport_family_fn(primary_sport) == "cycling":
+                    primary_compliance = ride_compliance_to_dict(
+                        score_ride(
+                            actual_activity=primary,
+                            target_template=picked_template,
+                            ftp=int(ftp) if ftp else None,
+                            phase=phase,
+                            session_type=today_session,
+                        )
+                    )
+                else:
+                    primary_compliance = {
+                        "grade": None,
+                        "graded": False,
+                        "duration": {},
+                        "tss": {},
+                        "intensity_factor": None,
+                        "variability_index": None,
+                        "ef": None,
+                        "decoupling_pct": None,
+                        "zone_match_pct": None,
+                        "phase": phase,
+                        "session_type": today_session,
+                        "template_id": picked_template.id,
+                        "template_title": picked_template.name,
+                    }
         else:
             # For endurance_count >= 2, build aggregate duration / tss pairs
             # (target = sum over per-ride targets, actual = sum of actuals) —
@@ -1002,17 +1046,17 @@ async def build_snapshot(
 
         # Stitch per-activity compliance grades into the activities[] list so
         # _build_post_ride_review can hand them to the frontend untouched.
+        # Ungraded activities (sport gate: graded=False) contribute a neutral
+        # "logged" entry — sport + duration stay, compliance_grade stays None.
         activities_out: list[dict] = []
         for entry, comp in zip(today_bundle["activities"], per_activity_compliance):
             row = dict(entry)
-            row["compliance_grade"] = (
-                comp.get("grade") if isinstance(comp, dict) else None
-            )
+            row["compliance_grade"] = comp.get("grade") if _is_graded(comp) else None
             activities_out.append(row)
 
         post_ride_data = {
             "compliance": primary_compliance,
-            "trajectory": trajectory_to_dict(trajectory),
+            "trajectory": trajectory_dict,
             "target_template": target_template_descriptor,
             "actual_activity": {
                 "id": primary.id,
@@ -1026,6 +1070,10 @@ async def build_snapshot(
             # Step 3 — multi-activity additions
             "activities": activities_out,
             "totals": today_bundle["totals"],
+            # Sport family of the primary (graded when possible) activity —
+            # resolve_and_prescribe uses this so a gym-only day never forces
+            # the bike plan to rest_day.
+            "primary_sport": primary_sport,
             # Sport-aware count of same-discipline sessions as the primary ride.
             # Drives the single-vs-multi headline so a gym log alongside a ride
             # doesn't force the endurance grade into "Two sessions" mode.
@@ -1107,6 +1155,47 @@ async def build_snapshot(
         "suggested_tss": _tomorrow_tss,
         "note": _tomorrow_note,
     }
+
+    # TODAY's PlannedWorkout rows (audit P0-3) — the planned-rest truth the
+    # daily decision + LLM prompt key off. Previously only TOMORROW's row was
+    # queried, so the narrative could contradict today's actual plan.
+    today_planned_payload: dict | None = None
+    today_planned_is_rest = False
+    try:
+        from app.models.planned_workout import PlannedWorkout as _PW_today
+        today_pw_q = await db.execute(
+            select(_PW_today).where(
+                _PW_today.user_id == user_id,
+                _PW_today.date == today_local_date,
+            )
+        )
+        _today_pw_rows = list(today_pw_q.scalars().all())
+        _today_non_rest = [
+            r for r in _today_pw_rows
+            if (getattr(r, "template_id", None) or "") != "rest_day"
+            and "ruhetag" not in str(getattr(r, "title", "") or "").lower()
+            and "rest" not in str(getattr(r, "title", "") or "").lower()
+        ]
+        if _today_pw_rows and not _today_non_rest:
+            today_planned_is_rest = True
+        elif _today_non_rest:
+            from app.services.sport import sport_family as _fam_fn
+            _today_primary_pw = next(
+                (r for r in _today_non_rest if _fam_fn(getattr(r, "sport", None)) == "cycling"),
+                _today_non_rest[0],
+            )
+            today_planned_payload = {
+                "title": _today_primary_pw.title,
+                "template_id": _today_primary_pw.template_id,
+                "sport": _today_primary_pw.sport,
+                "duration_minutes": (
+                    int(round((_today_primary_pw.duration_seconds_target or 0) / 60))
+                    if _today_primary_pw.duration_seconds_target else None
+                ),
+                "indoor": bool(_today_primary_pw.indoor),
+            }
+    except Exception:  # pragma: no cover — model may be absent in some envs
+        logger.exception("failed to load today's planned workout for user_id=%s", user_id)
 
     # Tomorrow's PlannedWorkout — optional; present if the athlete has a
     # scheduled session. Skipped silently when the model isn't reachable.
@@ -1292,6 +1381,10 @@ async def build_snapshot(
         # only renders sections that are present.
         "yesterday_recommendation": yesterday_rec_payload,
         "todays_activities": todays_activities_payload,
+        # TODAY's plan truth (audit P0-3): the daily decision + LLM narrative
+        # must agree with what is actually planned today — never contradict it.
+        "today_planned_workout": today_planned_payload,
+        "today_planned_is_rest": today_planned_is_rest,
         "tomorrow_planned_workout": tomorrow_planned_payload,
         # tomorrow_outlook — pre-computed forward projection (CTL ×
         # weekday multiplier) so the LLM has outlook_7d[1] in the user
@@ -1511,12 +1604,19 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
                 f"intensity ceiling is '{ceiling}'."
             )
 
-    # Post-ride override: if the snapshot says the athlete trained today
-    # (post_ride present) we force rest_day regardless of what the LLM picked.
-    # The post_ride_review replaces the workout card in the UI — a second
-    # prescription would muddy the UX.
+    # Post-ride override: if the athlete completed a RIDE today we force
+    # rest_day regardless of what the LLM picked — the post_ride_review
+    # replaces the workout card in the UI. SPORT-AWARE (audit P0-2): a gym
+    # or run log on a bike-plan day does NOT flip the bike plan to rest;
+    # the plan stays the instruction and the review renders alongside.
     post_ride_present = bool(snapshot.get("post_ride"))
+    post_ride_forces_rest = False
     if post_ride_present:
+        from app.services.sport import sport_family as _fam_rp
+        _pr = snapshot.get("post_ride") or {}
+        _pr_sport = _pr.get("primary_sport") if isinstance(_pr, dict) else None
+        post_ride_forces_rest = _pr_sport is None or _fam_rp(_pr_sport) == "cycling"
+    if post_ride_forces_rest:
         template_id = "rest_day"
         why = why or "You've already trained today — review below."
 
@@ -1527,7 +1627,7 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     # recommendation.
     template_changed = (
         original_template_id in TEMPLATES and original_template_id != template_id
-    ) or (rank > max_rank) or post_ride_present
+    ) or (rank > max_rank) or post_ride_forces_rest
     if template_changed:
         language = "technical" if snapshot.get("language") == "technical" else "simple"
         realigned = _verdict_for_template(template_id, language, ceiling)
@@ -1616,6 +1716,13 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
             narrative_keys = ("physiological_read", "goal_trajectory", "next_session_nudge")
             if not de:
                 narrative_keys = ("headline", *narrative_keys)
+            # Ungraded day (sport gate) — NEVER emit a nudge, not even an
+            # LLM-written one: there is no prescription-vs-actual to coach on.
+            _comp_for_merge = snapshot_post.get("compliance") or {}
+            if _comp_for_merge.get("graded", True) is False:
+                narrative_keys = tuple(
+                    k for k in narrative_keys if k != "next_session_nudge"
+                )
             for narrative_key in narrative_keys:
                 if isinstance(llm_review.get(narrative_key), str) and llm_review[narrative_key].strip():
                     merged[narrative_key] = llm_review[narrative_key]
@@ -1749,7 +1856,7 @@ def _simple_nudge(grade: str, session_type: str, phase: str, de: bool = False) -
         if grade == "strong":
             return "Iss gut, schlaf tief. Morgen bleibt die Ausfahrt locker."
         if grade == "okay":
-            return "Nächstes Mal ziel auf eine engere Übereinstimmung mit der vorgegebenen Zeit und Belastung."
+            return "Kürzer als geplant — völlig okay. Die Woche fängt das auf."
         if grade == "overcooked":
             return "Erhol dich heute Abend richtig. Morgen ist ein lockerer Tag — im Ernst."
         # undercooked
@@ -1763,7 +1870,7 @@ def _simple_nudge(grade: str, session_type: str, phase: str, de: bool = False) -
     if grade == "strong":
         return "Eat well, sleep hard. Tomorrow's ride stays easy."
     if grade == "okay":
-        return "Next time aim for a closer match to the prescribed time and effort."
+        return "Shorter than planned — fine. The week absorbs it."
     if grade == "overcooked":
         return "Recover hard tonight. Tomorrow's an easy day — seriously."
     # undercooked
@@ -1781,7 +1888,7 @@ def _technical_nudge(grade: str, session_type: str, phase: str, de: bool = False
         if grade == "strong":
             return f"Konsolidieren: Z1-Ausrollen oder Ruhe morgen, damit der {session_type}-Reiz absorbiert wird."
         if grade == "okay":
-            return "Nächster Block gleicher Kategorie: auf ±10% der Template-Vorgabe einengen."
+            return "Etwas neben der Vorgabe — kein Problem. Der Wochen-Load gleicht das aus."
         if grade == "overcooked":
             return "ATL wird heute Abend hochschießen; TSB fällt → Ruhetag laut Banister erforderlich."
         # undercooked
@@ -1795,7 +1902,7 @@ def _technical_nudge(grade: str, session_type: str, phase: str, de: bool = False
     if grade == "strong":
         return f"Consolidate: Z1 spin or rest tomorrow so {session_type} stimulus absorbs."
     if grade == "okay":
-        return "Next same-category block: tighten within ±10% of template prescription."
+        return "A bit off the prescription — no problem. The weekly load absorbs it."
     if grade == "overcooked":
         return "ATL will spike tonight; TSB dropping → rest day required per Banister."
     # undercooked
@@ -2058,7 +2165,23 @@ def _build_post_ride_review(
     session_type = compliance.get("session_type", "endurance")
     phase = compliance.get("phase", "maintenance")
 
-    if language == "simple":
+    # Ungraded day (sport gate: graded=False, or no graded activity → grade
+    # None): render a neutral "logged" review. NEVER a nudge — there is no
+    # prescription-vs-actual comparison to coach on.
+    ungraded = compliance.get("graded", True) is False or not grade
+    if ungraded:
+        headline = "Einheit erfasst" if de else "Session logged"
+        physio = (
+            "Einheit erfasst — sie zählt für deine Woche, wird aber nicht gegen den heutigen Plan bewertet." if de
+            else "Session logged — it counts toward your week, but isn't graded against today's plan."
+        )
+        trajectory_narrative = (
+            _simple_trajectory_narrative(trajectory, de=de)
+            if language == "simple"
+            else _technical_trajectory_narrative(trajectory, de=de)
+        )
+        nudge = ""
+    elif language == "simple":
         if de:
             headline = _HEADLINE_BY_GRADE_SIMPLE_DE.get(grade, "Einheit erfasst")
         else:
@@ -2465,11 +2588,48 @@ def _rule_based_brief(snapshot: dict) -> dict:
     today_tss = float(wp.get("today_tss", 0.0))
     today_minutes = float(wp.get("today_duration_minutes", 0.0))
     today_tss_per_hour = float(wp.get("today_max_tss_per_hour", 0.0))
-    # Step 3 — match the new post-ride review trigger: any activity today
-    # with at least 20 min of total duration triggers the recap framing.
-    # Falls through to normal prescription when shorter than 20 min.
-    post_ride_present_for_rule = bool(snapshot.get("post_ride"))
-    if post_ride_present_for_rule or today_minutes >= 20.0:
+    # Sport-split tallies (audit P0-2): the full "already trained → rest_day"
+    # override may fire ONLY on ride minutes. A 58-min gym session on a
+    # bike-plan day keeps the bike plan visible; the strength work is
+    # acknowledged in the rationale instead (cross-sport credit).
+    today_ride_minutes = float(wp.get("today_ride_minutes", wp.get("today_duration_minutes", 0.0)))
+    today_ride_tss = float(wp.get("today_ride_tss", wp.get("today_tss", 0.0)))
+    today_other_minutes = float(wp.get("today_other_minutes", 0.0))
+    today_other_sport = wp.get("today_other_sport")
+    from app.services.sport import sport_family as _fam
+    post_ride_payload_probe = snapshot.get("post_ride")
+    post_ride_primary_sport = (
+        post_ride_payload_probe.get("primary_sport")
+        if isinstance(post_ride_payload_probe, dict) else None
+    )
+    post_ride_present_for_rule = bool(post_ride_payload_probe) and (
+        post_ride_primary_sport is None or _fam(post_ride_primary_sport) == "cycling"
+    )
+    ride_done_today = post_ride_present_for_rule or today_ride_minutes >= 20.0
+    other_sport_done_today = (not ride_done_today) and today_other_minutes >= 20.0
+
+    if other_sport_done_today and template.id != "rest_day":
+        # Cross-sport credit: keep today's bike plan as the instruction and
+        # acknowledge the non-ride work. No rest_day override, no "Ausfahrt".
+        o_mins = int(round(today_other_minutes))
+        if de:
+            o_label = {"strength": "Krafttraining", "running": "Lauf"}.get(
+                str(today_other_sport), "Training"
+            )
+            rationale = (
+                f"Heute schon {o_mins} Min {o_label} — das zählt. "
+                f"Die geplante Rad-Einheit steht weiterhin: {rationale}"
+            )
+        else:
+            o_label = {"strength": "strength session", "running": "run"}.get(
+                str(today_other_sport), "session"
+            )
+            rationale = (
+                f"{o_mins} min of {o_label} already banked today — it counts. "
+                f"Your planned ride still stands: {rationale}"
+            )
+
+    if ride_done_today:
         # Session intensity label for the friendly verdict
         if de:
             if today_tss_per_hour >= 90:
@@ -2491,9 +2651,10 @@ def _rule_based_brief(snapshot: dict) -> dict:
             else:
                 effort_simple = "ride"
                 effort_tech = "endurance session"
-        # Round display numbers
-        mins_disp = int(round(today_minutes))
-        tss_disp = int(round(today_tss))
+        # Round display numbers — RIDE tallies only (a same-day gym session
+        # must not inflate the "min heute geschafft" hero).
+        mins_disp = int(round(today_ride_minutes if today_ride_minutes > 0 else today_minutes))
+        tss_disp = int(round(today_ride_tss if today_ride_tss > 0 else today_tss))
         if language == "simple":
             if de:
                 verdict = f"Stark — {mins_disp} min heute geschafft"
@@ -2804,7 +2965,23 @@ async def get_or_generate_brief(
         locale = "en"
 
     if not force:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
+        # Day-freshness gate (audit P0-2): bind the athlete tz FIRST, then
+        # never serve a brief generated before the athlete-local start of
+        # today — a stale "58 min heute geschafft" hero from yesterday must
+        # die at midnight regardless of sync health. The 15-min-sync delete
+        # remains as an optimization, not the correctness mechanism.
+        from app.services.athlete_time import start_of_today_utc as _start_of_today_utc
+        try:
+            _prof_q = await db.execute(
+                select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+            )
+            set_athlete_tz_from_profile(_prof_q.scalar_one_or_none())
+        except Exception:  # pragma: no cover — mocked sessions / RLS quirks
+            pass
+        start_today_utc = _start_of_today_utc()
+
+        ttl_cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
+        cutoff = max(ttl_cutoff, start_today_utc)
         lang_expr = CoachBrief.evidence["language"].astext
         locale_expr = CoachBrief.evidence["locale"].astext
         from sqlalchemy import func
@@ -2823,6 +3000,14 @@ async def get_or_generate_brief(
             .limit(1)
         )
         cached = recent.scalar_one_or_none()
+        # Python-side re-check of the day gate — belt and braces for sessions
+        # that don't evaluate the SQL predicate (mocks) and for clock skew.
+        if cached is not None and cached.generated_at is not None:
+            _gen = cached.generated_at
+            if _gen.tzinfo is None:
+                _gen = _gen.replace(tzinfo=timezone.utc)
+            if _gen < start_today_utc:
+                cached = None
         if cached is not None:
             # A rule-based-fallback brief means the LLM call FAILED at
             # generation time (API hiccup) while a key is configured. Caching
@@ -2950,6 +3135,11 @@ async def _upsert_recommendation_for_today(
     predicted_tss = int(round(float(pw.get("predicted_tss") or 0)))
     framework_cited = pw.get("framework_cited") or None
     why = pw.get("why_this_workout") or None
+    # Sport family of the prescribed workout — bike templates are 'cycling',
+    # run templates are prefixed 'run_'. The compliance sport gate reads this.
+    rec_sport = "running" if template_id.startswith("run_") else (
+        "strength" if template_id.startswith(("strength", "gym")) else "cycling"
+    )
 
     if existing is None:
         rec = CoachRecommendation(
@@ -2964,6 +3154,8 @@ async def _upsert_recommendation_for_today(
             why_this_workout=why,
             source_brief_id=brief.id,
         )
+        if hasattr(CoachRecommendation, "sport"):
+            rec.sport = rec_sport
         db.add(rec)
     else:
         # Pin the day's plan. Once a real (non-rest) prescription has been
@@ -2989,6 +3181,8 @@ async def _upsert_recommendation_for_today(
         existing.blocks = blocks
         existing.why_this_workout = why
         existing.source_brief_id = brief.id
+        if hasattr(CoachRecommendation, "sport"):
+            existing.sport = rec_sport
         # Reset eval — the new prescription hasn't been graded yet.
         existing.evaluated_at = None
         existing.eval_grade = None

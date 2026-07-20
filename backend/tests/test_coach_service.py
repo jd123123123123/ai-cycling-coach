@@ -429,7 +429,9 @@ class TestGetOrGenerateBriefCache:
         existing = SimpleNamespace(
             id=42,
             user_id=1,
-            generated_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            # "now" — unambiguously inside both the TTL and the athlete-local
+            # day, so the day-freshness gate (audit P0-2) can't reject it.
+            generated_at=datetime.now(timezone.utc),
             verdict="cached",
             rationale="",
             evidence={},
@@ -1138,3 +1140,167 @@ class TestRecommendationPinning:
         existing, db = await self._run("z2_endurance_90", "tempo_2x20")
         assert existing.template_id == "tempo_2x20"
         assert existing.eval_grade is None  # reset for re-grading
+
+
+# ---------------------------------------------------------------------------
+# Day-freshness cache gate (usability audit P0-2) — a brief generated
+# YESTERDAY must never serve today, even inside the TTL window.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestBriefDayFreshnessGate:
+    async def test_yesterdays_brief_is_rejected_even_within_ttl(self, monkeypatch):
+        monkeypatch.setattr("app.services.coach_service.settings.ANTHROPIC_API_KEY", None)
+        # Huge TTL so ONLY the day gate can reject the cached row.
+        monkeypatch.setattr("app.services.coach_service.settings.COACH_BRIEF_CACHE_HOURS", 48)
+
+        stale = SimpleNamespace(
+            id=7,
+            user_id=1,
+            # 26h ago — inside the 48h TTL but before the athlete-local start
+            # of today in every timezone (a local day is at most 25h).
+            generated_at=datetime.now(timezone.utc) - timedelta(hours=26),
+            verdict="stale — 58 min heute geschafft",
+            rationale="",
+            evidence={},
+            options=None,
+            prescribed_workout={"template_id": "z2_endurance_60"},
+            alternates=[],
+            outlook_7d=[],
+            frameworks_cited=[],
+            raw_prompt="",
+            model_used="claude",
+        )
+        db = _MockDB(initial_cache=[stale])
+
+        monkeypatch.setattr(
+            "app.services.coach_service.build_snapshot",
+            AsyncMock(return_value=_sample_snapshot()),
+        )
+
+        result = await get_or_generate_brief(db, user_id=1, force=False)
+        assert result is not stale
+        assert db.add_count == 1  # regenerated
+
+    async def test_todays_brief_still_served(self, monkeypatch):
+        monkeypatch.setattr("app.services.coach_service.settings.ANTHROPIC_API_KEY", None)
+        monkeypatch.setattr("app.services.coach_service.settings.COACH_BRIEF_CACHE_HOURS", 48)
+
+        fresh = SimpleNamespace(
+            id=8, user_id=1,
+            generated_at=datetime.now(timezone.utc),
+            verdict="fresh", rationale="", evidence={},
+            options=None, prescribed_workout={"template_id": "z2_endurance_60"},
+            alternates=[], outlook_7d=[], frameworks_cited=[],
+            raw_prompt="", model_used="claude",
+        )
+        db = _MockDB(initial_cache=[fresh])
+        build_mock = AsyncMock(return_value=_sample_snapshot())
+        monkeypatch.setattr("app.services.coach_service.build_snapshot", build_mock)
+
+        result = await get_or_generate_brief(db, user_id=1, force=False)
+        assert result is fresh
+        build_mock.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Nudge copy (usability audit P0-2) — the machine-German scold is gone.
+# ---------------------------------------------------------------------------
+
+
+class TestNudgeCopy:
+    def test_machine_german_nudge_deleted_everywhere(self):
+        import inspect
+
+        src = inspect.getsource(coach_service)
+        assert "Nächstes Mal ziel auf eine engere Übereinstimmung" not in src
+        assert "Next time aim for a closer match" not in src
+
+    def test_okay_nudge_is_the_soft_shortfall_copy(self):
+        assert (
+            coach_service._simple_nudge("okay", "endurance", "base2", de=True)
+            == "Kürzer als geplant — völlig okay. Die Woche fängt das auf."
+        )
+        assert (
+            coach_service._simple_nudge("okay", "endurance", "base2", de=False)
+            == "Shorter than planned — fine. The week absorbs it."
+        )
+
+    def test_technical_okay_nudge_softened(self):
+        de = coach_service._technical_nudge("okay", "endurance", "base2", de=True)
+        en = coach_service._technical_nudge("okay", "endurance", "base2", de=False)
+        assert "einengen" not in de
+        assert "tighten" not in en
+
+    def test_ungraded_review_emits_no_nudge(self):
+        review = coach_service._build_post_ride_review(
+            {
+                "compliance": {
+                    "grade": None, "graded": False,
+                    "duration": {}, "tss": {},
+                    "session_type": "endurance", "phase": "base2",
+                    "template_id": "z2_endurance_60", "template_title": "Z2",
+                },
+                "trajectory": {},
+                "target_template": {"id": "z2_endurance_60", "title": "Z2"},
+            },
+            "simple",
+            de=True,
+        )
+        assert review["next_session_nudge"] == ""
+        assert review["grade"] is None
+
+
+# ---------------------------------------------------------------------------
+# Sport-aware already-trained override (usability audit P0-2)
+# ---------------------------------------------------------------------------
+
+
+class TestSportAwareAlreadyTrained:
+    def _snap_with_progress(self, *, ride_min=0.0, ride_tss=0.0, other_min=0.0,
+                            other_sport=None, locale=None):
+        snap = _sample_snapshot()
+        snap["weekly_progress"] = {
+            **snap["weekly_progress"],
+            "today_tss": ride_tss + (25.0 if other_min else 0.0),
+            "today_duration_minutes": ride_min + other_min,
+            "today_max_tss_per_hour": 50.0,
+            "today_ride_minutes": ride_min,
+            "today_ride_tss": ride_tss,
+            "today_other_minutes": other_min,
+            "today_other_sport": other_sport,
+        }
+        if locale:
+            snap["ui_locale"] = locale
+        return snap
+
+    def test_gym_session_keeps_bike_plan(self):
+        snap = self._snap_with_progress(other_min=58.0, other_sport="strength", locale="de")
+        brief = _rule_based_brief(snap)
+        # The bike plan survives — NOT forced to rest_day.
+        assert brief["prescribed_workout"]["template_id"] != "rest_day"
+        # …and the strength work is acknowledged with the correct label.
+        assert "Krafttraining" in brief["rationale"]
+        assert "Ausfahrt eingebaut" not in brief["rationale"]
+
+    def test_gym_session_english_label(self):
+        snap = self._snap_with_progress(other_min=58.0, other_sport="strength")
+        brief = _rule_based_brief(snap)
+        assert brief["prescribed_workout"]["template_id"] != "rest_day"
+        assert "strength session" in brief["rationale"]
+
+    def test_ride_still_forces_rest_day(self):
+        snap = self._snap_with_progress(ride_min=64.0, ride_tss=52.0)
+        brief = _rule_based_brief(snap)
+        assert brief["prescribed_workout"]["template_id"] == "rest_day"
+        assert "64 min" in brief["verdict"]
+
+    def test_ride_hero_uses_ride_minutes_not_total(self):
+        # 64-min ride + 58-min gym: the hero says 64, never 122.
+        snap = self._snap_with_progress(
+            ride_min=64.0, ride_tss=52.0, other_min=58.0, other_sport="strength",
+        )
+        brief = _rule_based_brief(snap)
+        assert "64 min" in brief["verdict"]
+        assert "122" not in brief["verdict"]

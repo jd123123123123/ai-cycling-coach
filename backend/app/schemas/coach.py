@@ -12,6 +12,66 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.adaptive import AdaptiveDirective
+
+
+# ======================================================================
+# ONE Daily Decision (usability audit P0-3)
+# ======================================================================
+#
+# Four surfaces (Today, Recovery, Load-Form, Coach) used to issue conflicting
+# instructions on the same day ("Ruhetag" vs "belaste hart"). DailyDecision is
+# the single producer — computed FRESH per request by
+# services.daily_decision.compute_daily_decision — that every surface renders
+# subordinately. Surfaces may add flavor but must never contradict `state`.
+
+DailyDecisionState = Literal[
+    "sick", "injured", "break",
+    "trained_already", "planned_rest",
+    "recover", "easy", "quality", "hard",
+]
+
+
+class DailyDecisionCTA(BaseModel):
+    """Primary call-to-action for the day (frontend maps `target` to a route)."""
+    label: str
+    target: str
+
+
+class DailyDecisionPlanned(BaseModel):
+    """Today's planned session, when one exists — the shape the plan keeps
+    even when the adaptive directive caps the load."""
+    title: str
+    template_id: str | None = None
+    target_tss: float | None = None
+    duration_minutes: int | None = None
+
+
+class DailyDecisionReadiness(BaseModel):
+    score: int | None = None
+    tier: str | None = None  # 'rest' | 'easy' | 'moderate' | 'push'
+
+
+class DailyDecision(BaseModel):
+    """The one answer to "what should I do today?" — see services.daily_decision."""
+    date: str  # athlete-local ISO date
+    state: DailyDecisionState
+    verdict: str
+    reason: str
+    cta: DailyDecisionCTA | None = None
+    planned: DailyDecisionPlanned | None = None
+    readiness: DailyDecisionReadiness = Field(default_factory=DailyDecisionReadiness)
+    tss_target: float | None = None
+    # Garmin-style 0-21 strain scale. ALWAYS tss_target/8 — daily_decision.py is
+    # the only derivation point. Null on rest / trained / sick days.
+    strain_target: float | None = None
+
+
+class AdaptiveDirectiveRead(AdaptiveDirective):
+    """/coach/adaptive response — the directive plus the day's single decision
+    so the Load-Form surface can render subordinately to it."""
+    daily_decision: DailyDecision | None = None
+
 
 # ======================================================================
 # Legacy — kept for backward compat on old rows + /coach endpoints
@@ -230,6 +290,10 @@ class BriefRead(BaseModel):
     # day's real signals (HRV, TSB, CTL ramp, ACWR, sleep, yesterday's session),
     # each grounded in a research-backed principle.
     adaptations: dict | None = None
+    # ONE Daily Decision (audit P0-3) — computed FRESH at request time in
+    # api/coach.py, never read from the cached row (cache skew between
+    # surfaces was half the audit bug). None only when computation fails.
+    daily_decision: DailyDecision | None = None
 
     class Config:
         from_attributes = True
@@ -266,16 +330,22 @@ class GoalTrajectoryRead(BaseModel):
     the frontend to re-fetch the full coach brief.
     """
     days_to_goal: int | None = None
-    ctl_now: float
-    ctl_7d_delta: float
-    ctl_projected_at_goal: float
+    # Projection fields are Optional (audit P0-4): when the underlying data
+    # can't support an honest projection the producer emits None and the UI
+    # renders an honest dash instead of a fabricated number.
+    ctl_now: float | None = None
+    ctl_7d_delta: float | None = None
+    ctl_projected_at_goal: float | None = None
     ctl_target: float | None = None
-    tsb_projected_at_goal: float
-    taper_window: Literal["too_flat", "ideal", "too_fresh", "overreached", "unknown"]
-    on_track: Literal["ahead", "on_track", "behind", "no_goal"]
-    weekly_tss_required: float
-    weekly_tss_actual: float
-    narrative_hook: str
+    tsb_projected_at_goal: float | None = None
+    taper_window: Literal["too_flat", "ideal", "too_fresh", "overreached", "unknown"] = "unknown"
+    on_track: Literal["ahead", "on_track", "behind", "no_goal"] = "no_goal"
+    weekly_tss_required: float | None = None
+    weekly_tss_actual: float | None = None
+    narrative_hook: str = ""
+    # What the projection is anchored on (e.g. 'pmc', 'plan_simulation',
+    # 'insufficient_data') — set by goal_trajectory.compute_goal_trajectory.
+    projection_basis: str = "pmc"
     # Event metadata enriches the UI without a second profile fetch. All optional
     # so the no-goal path renders the trend-only narrative.
     event_name: str | None = None

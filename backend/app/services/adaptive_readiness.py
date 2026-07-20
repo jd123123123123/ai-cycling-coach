@@ -298,8 +298,77 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
         base = prior[len(prior) // 2]
         decoupling_delta = latest - base
 
-    return assess_adaptation(
+    directive = assess_adaptation(
         hrv_recent=hrv_recent, hrv_baseline=hrv_baseline, hrv_sd=hrv_sd, hrv_below_days=below_days,
         tsb=tsb, decoupling_delta=decoupling_delta, sleep_score=(float(sleep_score) if sleep_score is not None else None),
         load_ramp=load_ramp, lang=lang, ambition=ambition, push_level=push_level,
     )
+    return await _apply_day_gates(db, user_id, directive, lang)
+
+
+async def _apply_day_gates(
+    db: AsyncSession, user_id: int, d: Directive, lang: str,
+) -> Directive:
+    """Planned-rest + already-trained gates (usability audit P0-3).
+
+    Physiology may say 'Grünes Licht — belaste hart', but on a planned rest
+    day — or once today's session is already done — that headline directly
+    contradicts the Today surface. Green light means green light FOR TOMORROW;
+    a finished session means the win is now recovery. Only the pushy
+    directives (push / escalate) are rewritten; deload/hold/rest already agree
+    with a quiet day.
+    """
+    if d.directive not in ("push", "escalate"):
+        return d
+
+    try:
+        from app.models.athlete_profile import AthleteProfile
+        from app.services.athlete_time import set_athlete_tz_from_profile
+        from app.services.daily_decision import load_today_context
+
+        # Bind the athlete tz before any "today" window is computed — callers
+        # outside a request context (scheduler) otherwise inherit a stale one.
+        try:
+            prow = await db.execute(
+                select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+            )
+            set_athlete_tz_from_profile(prow.scalar_one_or_none())
+        except Exception:  # pragma: no cover — tolerant of mocked sessions
+            pass
+
+        ctx = await load_today_context(db, user_id)
+    except Exception:  # pragma: no cover — the gate must never break the directive
+        return d
+
+    de = _de(lang)
+
+    already_done = ctx.planned_done or (ctx.planned is None and ctx.total_minutes >= 20.0)
+    if already_done:
+        d.directive = "hold"
+        d.intensity_ceiling = "easy"
+        d.volume_modifier = min(d.volume_modifier, 1.0)
+        d.headline = (
+            "Training erledigt — jetzt zählt Erholung." if de
+            else "Session done — recovery is the win now."
+        )
+        d.signals.append(Signal(
+            text=("Heutige Einheit ist absolviert — Signale sprechen für gute Erholung morgen." if de
+                  else "Today's session is complete — the signals point to strong recovery for tomorrow."),
+            tone="good", evidence="expert",
+        ))
+        return d
+
+    if ctx.planned_is_rest:
+        d.directive = "hold"
+        d.volume_modifier = min(d.volume_modifier, 1.0)
+        d.headline = (
+            "Grünes Licht für morgen" if de else "Green light for tomorrow"
+        )
+        d.signals.append(Signal(
+            text=("Heute ist Ruhetag geplant — nimm die Frische mit in die morgige Einheit." if de
+                  else "Today is a planned rest day — bank the freshness for tomorrow's session."),
+            tone="good", evidence="expert",
+        ))
+        return d
+
+    return d

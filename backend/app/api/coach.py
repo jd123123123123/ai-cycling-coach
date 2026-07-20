@@ -24,10 +24,12 @@ from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.coach_brief import CoachBrief
 from app.models.user import User
 from app.schemas.coach import (
+    AdaptiveDirectiveRead,
     AlternateWorkout,
     BriefOption,
     BriefRead,
     ChatRequest,
+    DailyDecision,
     ExternalWorkoutMatch,
     ExternalWorkoutsRead,
     GoalTrajectoryRead,
@@ -41,9 +43,10 @@ from app.schemas.coach import (
 )
 from app.models.athlete_profile import AthleteProfile
 from app.services import coach_service
-from app.schemas.adaptive import AdaptiveDirective
 from app.services.adaptation_explainer import explain_adaptations
 from app.services.adaptive_readiness import build_adaptive_directive
+from app.services.athlete_time import set_athlete_tz_from_profile, start_of_today_utc
+from app.services.daily_decision import compute_daily_decision
 from app.services.advanced_metrics import why_am_i_tired
 from app.services.coach_prompt import SYSTEM_PROMPT
 from app.services.external_workouts import match_workouts, predict_tss
@@ -82,7 +85,18 @@ def _check_chat_rate_limit(user_id: int) -> None:
     log.append(now)
 
 
-def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
+async def _load_profile(db: AsyncSession, user_id: int) -> AthleteProfile | None:
+    q = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+    )
+    return q.scalar_one_or_none()
+
+
+def _brief_to_read(
+    brief: CoachBrief,
+    from_cache: bool,
+    daily_decision: DailyDecision | None = None,
+) -> BriefRead:
     # Phase 5.1 shape: prescribed_workout + alternates. Legacy options only
     # populated for pre-5.1 rows still in the cache.
     prescribed = None
@@ -164,6 +178,9 @@ def _brief_to_read(brief: CoachBrief, from_cache: bool) -> BriefRead:
             evidence if isinstance(evidence, dict) else {},
             de=_evidence_is_de(evidence),
         ),
+        # ONE Daily Decision — always computed fresh by the endpoint, never
+        # read from the cached row (audit P0-3: cache skew between surfaces).
+        daily_decision=daily_decision,
     )
 
 
@@ -188,15 +205,24 @@ async def get_brief(
         Query(description="UI locale — 'en' (default) or 'de'. Drives the LLM to write its prose in that language."),
     ] = "en",
 ) -> BriefRead:
-    """Return the latest cached brief if < 6h old; otherwise regenerate and cache.
+    """Return the latest cached brief if < 6h old AND generated today
+    (athlete-local); otherwise regenerate and cache.
 
     The cache is keyed by language + locale — different combo = cache miss =
-    regenerate. Works without ANTHROPIC_API_KEY: falls back to a rule-based
-    brief (still language-aware) so the dashboard can always render.
+    regenerate. A brief generated YESTERDAY is never served today (audit
+    P0-2 day-freshness gate). Works without ANTHROPIC_API_KEY: falls back to
+    a rule-based brief (still language-aware) so the dashboard can always
+    render.
     """
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import func
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
+
+    # Bind the athlete tz BEFORE any "today" computation (audit P0-2).
+    profile = await _load_profile(db, current_user.id)
+    set_athlete_tz_from_profile(profile)
+
+    ttl_cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.COACH_BRIEF_CACHE_HOURS)
+    cutoff = max(ttl_cutoff, start_of_today_utc())
 
     lang_expr = CoachBrief.evidence["language"].astext
     locale_expr = CoachBrief.evidence["locale"].astext
@@ -218,7 +244,17 @@ async def get_brief(
     brief = await coach_service.get_or_generate_brief(
         db, current_user.id, force=False, language=language, locale=locale,
     )
-    return _brief_to_read(brief, from_cache=from_cache)
+
+    # ONE Daily Decision — computed FRESH at request time, never cached.
+    daily_decision: DailyDecision | None = None
+    try:
+        daily_decision = await compute_daily_decision(
+            db, current_user.id, profile, language=language, locale=locale,
+        )
+    except Exception:  # noqa: BLE001 — the brief must render regardless
+        daily_decision = None
+
+    return _brief_to_read(brief, from_cache=from_cache, daily_decision=daily_decision)
 
 
 @router.post("/brief/refresh", response_model=BriefRead)
@@ -235,10 +271,19 @@ async def refresh_brief(
     ] = "en",
 ) -> BriefRead:
     """Force-regenerate the brief in the requested language + locale."""
+    profile = await _load_profile(db, current_user.id)
+    set_athlete_tz_from_profile(profile)
     brief = await coach_service.get_or_generate_brief(
         db, current_user.id, force=True, language=language, locale=locale,
     )
-    return _brief_to_read(brief, from_cache=False)
+    daily_decision: DailyDecision | None = None
+    try:
+        daily_decision = await compute_daily_decision(
+            db, current_user.id, profile, language=language, locale=locale,
+        )
+    except Exception:  # noqa: BLE001
+        daily_decision = None
+    return _brief_to_read(brief, from_cache=False, daily_decision=daily_decision)
 
 
 @router.post("/chat")
@@ -339,21 +384,38 @@ async def transparency(
 # ----------------------------------------------------------------------
 
 
-@router.get("/adaptive", response_model=AdaptiveDirective)
+@router.get("/adaptive", response_model=AdaptiveDirectiveRead)
 async def adaptive_directive(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
     lang: str = "en",
-) -> AdaptiveDirective:
+) -> AdaptiveDirectiveRead:
     """Daily autoregulation directive — HRV-band-gated intensity ceiling + volume,
-    escalating on confirmed adaptation. Evidence-graded (see adaptive_readiness)."""
+    escalating on confirmed adaptation. Evidence-graded (see adaptive_readiness).
+
+    Carries the same fresh `daily_decision` as /coach/brief (audit P0-3) so
+    the Load-Form surface renders subordinately to the ONE decision.
+    """
     lang = "de" if lang.lower().startswith("de") else "en"
+    profile = await _load_profile(db, current_user.id)
+    set_athlete_tz_from_profile(profile)
     d = await build_adaptive_directive(db, current_user.id, lang)
-    return AdaptiveDirective(
+
+    daily_decision: DailyDecision | None = None
+    try:
+        daily_decision = await compute_daily_decision(
+            db, current_user.id, profile,
+            language="simple", locale=lang, directive=d,
+        )
+    except Exception:  # noqa: BLE001 — directive must render regardless
+        daily_decision = None
+
+    return AdaptiveDirectiveRead(
         directive=d.directive, intensity_ceiling=d.intensity_ceiling,
         volume_modifier=d.volume_modifier, hrv_state=d.hrv_state, headline=d.headline,
         signals=[{"text": s.text, "tone": s.tone, "evidence": s.evidence} for s in d.signals],
         confidence=d.confidence, lang=lang,
+        daily_decision=daily_decision,
     )
 
 
@@ -373,6 +435,39 @@ async def goal_trajectory(
         select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
     )
     profile = profile_q.scalar_one_or_none()
+
+    # Preferred path: the single normalized entry point (goal_trajectory.
+    # compute_goal_trajectory) — it normalizes goals internally and stamps
+    # projection_basis. Tolerant fallback to the legacy inline path until it
+    # lands in the same wave.
+    import inspect as _inspect
+
+    from app.services import goal_trajectory as _gt_mod
+    _compute = getattr(_gt_mod, "compute_goal_trajectory", None)
+    if _compute is not None:
+        try:
+            _res = _compute(db, current_user.id, profile)
+            if _inspect.isawaitable(_res):
+                _res = await _res
+        except Exception:  # noqa: BLE001 — fall back to the legacy path
+            _res = None
+        if isinstance(_res, dict) and _res:
+            payload = dict(_res)
+            goals_meta = (
+                profile.goals if profile and isinstance(profile.goals, dict) else {}
+            )
+            te = goals_meta.get("target_event")
+            payload.setdefault(
+                "event_name", te.get("name") if isinstance(te, dict) else None
+            )
+            payload.setdefault(
+                "event_date",
+                profile.target_event_date.isoformat()
+                if profile and profile.target_event_date else None,
+            )
+            payload.setdefault("event_type", profile.target_event_type if profile else None)
+            payload.setdefault("target_priority", profile.target_priority if profile else None)
+            return GoalTrajectoryRead(**payload)
 
     pmc_full = await compute_user_pmc(db, current_user.id, days=90)
     ctl_now = 0.0
