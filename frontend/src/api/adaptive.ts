@@ -7,40 +7,16 @@ export type Evidence = 'RCT' | 'expert' | 'guardrail'
 export interface AdaptiveSignal { text: string; tone: Tone; evidence: Evidence }
 
 // ── ONE Daily Decision (audit P0-3) ─────────────────────────────────────────
-// Mirrors backend/app/schemas/coach.py::DailyDecision. Every surface renders
-// this decision FIRST and may add flavor — never contradict `state`.
-export type DailyDecisionState =
-  | 'sick' | 'injured' | 'break'
-  | 'trained_already' | 'planned_rest'
-  | 'recover' | 'easy' | 'quality' | 'hard'
-
-export interface DailyDecisionCTA { label: string; target: string }
-
-export interface DailyDecisionPlanned {
-  title: string
-  template_id?: string | null
-  target_tss?: number | null
-  duration_minutes?: number | null
-}
-
-export interface DailyDecisionReadiness {
-  score?: number | null
-  tier?: string | null // 'rest' | 'easy' | 'moderate' | 'push'
-}
-
-export interface DailyDecision {
-  date: string // athlete-local ISO date
-  state: DailyDecisionState
-  verdict: string
-  reason: string
-  cta?: DailyDecisionCTA | null
-  planned?: DailyDecisionPlanned | null
-  readiness: DailyDecisionReadiness
-  tss_target?: number | null
-  // Garmin-style 0-21 scale; ALWAYS tss_target/8 (backend is the only
-  // derivation point). Null on rest / trained / sick days.
-  strain_target?: number | null
-}
+// Canonical types live in api/coach.ts (BriefRead.daily_decision carries the
+// same object). Re-exported here so adaptive consumers keep their imports.
+export type {
+  DailyDecision,
+  DailyDecisionCTA,
+  DailyDecisionPlanned,
+  DailyDecisionReadiness,
+  DailyDecisionState,
+} from './coach'
+import type { DailyDecision, DailyDecisionState } from './coach'
 
 /** True when the decision says "training happens today" (recover counts —
  * the plan keeps its shape, the directive only caps the load). */
