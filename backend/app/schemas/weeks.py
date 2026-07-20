@@ -95,6 +95,9 @@ class Projection(BaseModel):
     days_out: int
     current_estimate: float | None
     projected_central: float | None
+    # 0-100 fit confidence; <30 means the UI must show a range, never a point
+    # (audit P0-1: no '≈13 min faster' claims off a 3%-confidence model).
+    confidence_pct: int | None = None
     band_50: list[float] | None  # [lo, hi] at horizon (50% band)
     band_80: list[float] | None  # [lo, hi] at horizon (80% band)
     path: list[ProjectionPoint]
