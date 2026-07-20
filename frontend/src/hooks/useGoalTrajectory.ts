@@ -2,6 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchGoalTrajectory, type GoalTrajectoryResponse } from '../api/coach'
 import { useLocale } from '../contexts/LocaleContext'
 
+// Re-export so consumers can type against the trajectory without importing
+// the api module directly.
+export type { GoalTrajectoryResponse }
+
 export const GOAL_TRAJECTORY_KEY = ['coach', 'trajectory'] as const
 
 export function useGoalTrajectory() {

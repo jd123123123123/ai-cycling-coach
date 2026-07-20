@@ -15,6 +15,8 @@ import {
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
+import { useDailyDecision } from '../../../hooks/useAdaptive'
+import { isTrainState } from '../../../api/adaptive'
 import { computeReadiness, readinessTier } from '../../../utils/metrics'
 import { localDayKey } from '../../../utils/loadMetrics'
 import ScoreRing from '../../ui/ScoreRing'
@@ -95,6 +97,11 @@ export default function RecoveryTab() {
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 30), [today]), today)
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 7), [today]), today)
   const { data: snapshot } = useTodaySnapshot()
+  // ONE Daily Decision (audit P0-3) — this surface renders the decision FIRST;
+  // readiness copy only fills in on actual train days.
+  const { decision } = useDailyDecision()
+  const dState = decision?.state ?? null
+  const trainDay = isTrainState(dState)
 
   const metrics = metricsResp?.metrics ?? []
   const byDate = useMemo(() => {
@@ -133,11 +140,34 @@ export default function RecoveryTab() {
   const sleepNow = latest?.sleep_score ?? null
   const stressNow = snapshot?.stress?.now ?? latest?.stress_level ?? null
 
-  const status = tier === 'peak' || tier === 'ready'
-    ? { t: de ? 'Du bist bereit für Leistung' : "You're primed to perform", s: de ? 'HRV und Ruhepuls sind im gesunden Bereich. Ziel: höhere Belastung heute.' : 'HRV and resting heart rate are in a healthy range. Aim for a higher strain today.' }
-    : tier === 'caution'
-      ? { t: de ? 'Moderat halten' : 'Keep it moderate', s: de ? 'Deine Erholung ist okay, aber nicht optimal — halte die Intensität im Zaum.' : 'Recovery is okay but not optimal — keep the intensity in check.' }
-      : { t: de ? 'Erholung priorisieren' : 'Prioritize recovery', s: de ? 'Deine Signale zeigen Ermüdung. Ein leichter Tag zahlt sich aus.' : 'Your signals point to fatigue. An easy day will pay off.' }
+  const readinessGreen = tier === 'peak' || tier === 'ready'
+
+  // Hero status — the Daily Decision branches FIRST (never contradict the
+  // plan); only on train states fall through to the readiness-tier copy.
+  const status = (() => {
+    if (dState === 'planned_rest') {
+      return {
+        t: de ? 'Ruhetag — so geplant' : 'Rest day — as planned',
+        s: readinessGreen
+          ? (de ? 'Gut erholt — und heute ist Ruhetag geplant. Nimm die Frische mit in die morgige Einheit.' : "Well recovered — and today is a planned rest day. Bank it for tomorrow's quality session.")
+          : (de ? 'Ruhetag wie geplant — genau das, was dein Körper gerade braucht.' : 'Rest day as planned — exactly what your body needs right now.'),
+      }
+    }
+    if (dState === 'trained_already') {
+      return {
+        t: de ? 'Training erledigt — jetzt zählt Erholung' : 'Session banked — recovery counts now',
+        s: de ? 'Die Arbeit für heute ist gemacht. Tanken, trinken, schlafen — so wird Belastung zu Anpassung.' : "Today's work is done. Fuel, hydrate, sleep — that's how load becomes adaptation.",
+      }
+    }
+    if ((dState === 'sick' || dState === 'injured' || dState === 'break') && decision) {
+      return { t: decision.verdict, s: decision.reason }
+    }
+    return readinessGreen
+      ? { t: de ? 'Du bist bereit für Leistung' : "You're primed to perform", s: de ? 'HRV und Ruhepuls sind im gesunden Bereich. Ziel: höhere Belastung heute.' : 'HRV and resting heart rate are in a healthy range. Aim for a higher strain today.' }
+      : tier === 'caution'
+        ? { t: de ? 'Moderat halten' : 'Keep it moderate', s: de ? 'Deine Erholung ist okay, aber nicht optimal — halte die Intensität im Zaum.' : 'Recovery is okay but not optimal — keep the intensity in check.' }
+        : { t: de ? 'Erholung priorisieren' : 'Prioritize recovery', s: de ? 'Deine Signale zeigen Ermüdung. Ein leichter Tag zahlt sich aus.' : 'Your signals point to fatigue. An easy day will pay off.' }
+  })()
 
   // Strain per day from activity TSS (WHOOP-style 0–21). P0-2: bucket onto
   // BROWSER-LOCAL days via the shared localDayKey selector — a `.slice(0, 10)`
@@ -150,9 +180,15 @@ export default function RecoveryTab() {
   const todayKey = localDayKey(today)
   const todayTSS = tssByDate.get(todayKey) ?? 0
   const todayStrain = todayTSS > 0 ? Math.min(21, todayTSS / 8) : null
-  const targetStrain = score != null ? (score / 100) * 21 : null
-  const bandLo = targetStrain != null ? Math.max(0, targetStrain - 2.5) : null
-  const bandHi = targetStrain != null ? Math.min(21, targetStrain + 2.5) : null
+  // Load target comes from the ONE Daily Decision (plan × directive), in the
+  // plan's unit (TSS). The old readiness-derived (score/100)*21 target is gone —
+  // it contradicted rest days.
+  const tssTarget = trainDay && decision?.tss_target != null ? Math.round(decision.tss_target) : null
+  const targetQualifier = dState === 'quality'
+    ? (de ? 'Qualität' : 'quality')
+    : dState === 'hard'
+      ? (de ? 'harter Tag' : 'hard day')
+      : (de ? 'lockerer Tag' : 'easy day') // easy + recover (plan stays, load capped)
 
   // ── Sleep need / debt / bed-by — computed from REAL sleep durations only. ──
   // Garmin gives no sleep-need or bedtime field, so we derive them honestly from
@@ -260,13 +296,29 @@ export default function RecoveryTab() {
   // recommendation zone
   const zoneColor = tier === 'peak' || tier === 'ready' ? 'var(--color-recovery)' : tier === 'caution' ? 'var(--color-amber)' : 'var(--color-move)'
   const zoneLabel = tier === 'peak' || tier === 'ready' ? (de ? 'grüne Zone' : 'green zone') : tier === 'caution' ? (de ? 'gelbe Zone' : 'yellow zone') : (de ? 'rote Zone' : 'red zone')
-  const recTitle = tier === 'peak' || tier === 'ready'
-    ? (de ? 'Erholt — trainiere mit Absicht' : 'Recovered — train with intent')
-    : tier === 'caution' ? (de ? 'Halb erholt — dosiere' : 'Half recovered — pace it')
-      : (de ? 'Erschöpft — regeneriere' : 'Depleted — recover')
-  const recBody = tier === 'peak' || tier === 'ready'
-    ? (de ? 'HRV liegt über der Basislinie und der Schlaf war stark. Nutze das Fenster für eine Qualitätseinheit — schütze danach den Schlaf.' : 'HRV is above baseline and sleep was strong. Use the window for a quality session, then protect recovery tonight.')
-    : (de ? 'Deine Signale zeigen Ermüdung. Halte es locker und ziele auf 7,5 h+ Schlaf, damit HRV und Anpassung zurückkommen.' : 'Your signals point to fatigue. Keep it easy and aim for 7.5h+ sleep so HRV and adaptation rebound.')
+  // Decision first: on rest / trained / sick days the recommendation never
+  // pushes training, however green the readiness ring looks.
+  const recTitle = dState === 'planned_rest'
+    ? (de ? 'Ruhetag — so geplant' : 'Rest day — as planned')
+    : dState === 'trained_already'
+      ? (de ? 'Erledigt — Erholung ist jetzt der Gewinn' : 'Done — recovery is the win now')
+      : (dState === 'sick' || dState === 'injured' || dState === 'break') && decision
+        ? decision.verdict
+        : tier === 'peak' || tier === 'ready'
+          ? (de ? 'Erholt — trainiere mit Absicht' : 'Recovered — train with intent')
+          : tier === 'caution' ? (de ? 'Halb erholt — dosiere' : 'Half recovered — pace it')
+            : (de ? 'Erschöpft — regeneriere' : 'Depleted — recover')
+  const recBody = dState === 'planned_rest'
+    ? (readinessGreen
+      ? (de ? 'Gut erholt — und heute ist Ruhetag geplant. Nimm die Frische mit in die morgige Einheit.' : "Well recovered — and today is a planned rest day. Bank it for tomorrow's quality session.")
+      : (de ? 'Ruhetag wie geplant — genau das, was dein Körper gerade braucht.' : 'Rest day as planned — exactly what your body needs right now.'))
+    : dState === 'trained_already'
+      ? (decision?.reason ?? (de ? 'Das war die Arbeit für heute. Jetzt zählt Erholung: tanken, trinken, schlafen.' : "That's today's work. Recovery is the win now: fuel, hydrate, sleep."))
+      : (dState === 'sick' || dState === 'injured' || dState === 'break') && decision
+        ? decision.reason
+        : tier === 'peak' || tier === 'ready'
+          ? (de ? 'HRV liegt über der Basislinie und der Schlaf war stark. Nutze das Fenster für eine Qualitätseinheit — schütze danach den Schlaf.' : 'HRV is above baseline and sleep was strong. Use the window for a quality session, then protect recovery tonight.')
+          : (de ? 'Deine Signale zeigen Ermüdung. Halte es locker und ziele auf 7,5 h+ Schlaf, damit HRV und Anpassung zurückkommen.' : 'Your signals point to fatigue. Keep it easy and aim for 7.5h+ sleep so HRV and adaptation rebound.')
 
   // Sleep Quality tiles (fixed .pen labels; fill the ones real data now backs).
   const sleepTiles: { l: string; v: string; note?: string }[] = [
@@ -434,39 +486,57 @@ export default function RecoveryTab() {
         ))}
       </div>
 
-      {/* 10 · Today's Strain Target → load-form drill-down */}
-      <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
-        <div className="flex items-end justify-between">
-          <div className="flex flex-col" style={{ gap: 2 }}>
-            <span className="eyebrow flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'BELASTUNGSZIEL HEUTE' : "TODAY'S STRAIN TARGET"}<ChevronRight size={14} className="hover-arrow" style={{ color: 'var(--color-muted)' }} /></span>
-            <span className="flex items-end gap-1.5">
-              <span className="num-display" style={{ fontSize: 34, color: 'var(--color-recovery)' }}>{targetStrain != null ? targetStrain.toFixed(1) : DASH}</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 6 }}>{de ? 'optimal' : 'optimal'}</span>
-            </span>
+      {/* 10 · Today's Load Target — from the ONE Daily Decision (plan unit: TSS).
+          Only train states carry a target; rest / trained / sick days get a slim
+          confirmation row instead (no target, no progress bar). */}
+      {tssTarget != null ? (
+        <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
+          <div className="flex items-end justify-between">
+            <div className="flex flex-col" style={{ gap: 2 }}>
+              <span className="eyebrow flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'BELASTUNGSZIEL HEUTE' : "TODAY'S LOAD TARGET"}<ChevronRight size={14} className="hover-arrow" style={{ color: 'var(--color-muted)' }} /></span>
+              <span className="flex items-end gap-1.5">
+                <span className="num-display" style={{ fontSize: 34, color: 'var(--color-recovery)' }}>~{tssTarget}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 6 }}>TSS · {targetQualifier}</span>
+              </span>
+            </div>
+            <div className="flex flex-col items-end" style={{ gap: 2 }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Bisher' : 'So far'}</span>
+              <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{Math.round(todayTSS)}</span>
+            </div>
           </div>
-          <div className="flex flex-col items-end" style={{ gap: 2 }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Bisher' : 'So far'}</span>
-            <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{todayStrain != null ? todayStrain.toFixed(1) : '0.0'}</span>
+          <div style={{ position: 'relative', height: 24 }}>
+            <div style={{ position: 'absolute', top: 8, left: 0, right: 0, height: 8, borderRadius: 4, background: 'var(--color-surface-3)' }} />
+            <div style={{ position: 'absolute', top: 8, left: 0, height: 8, borderRadius: 4, width: `${Math.min(100, (todayTSS / tssTarget) * 100)}%`, background: 'var(--color-strain)' }} />
+            <div style={{ position: 'absolute', top: 3, left: `calc(${Math.min(100, (todayTSS / tssTarget) * 100)}% - 2px)`, width: 5, height: 18, borderRadius: 3, background: 'var(--color-ink)', border: '2px solid var(--color-paper-2)' }} />
           </div>
-        </div>
-        <div style={{ position: 'relative', height: 24 }}>
-          <div style={{ position: 'absolute', top: 8, left: 0, right: 0, height: 8, borderRadius: 4, background: 'var(--color-surface-3)' }} />
-          {bandLo != null && bandHi != null && <div style={{ position: 'absolute', top: 8, height: 8, borderRadius: 4, left: `${(bandLo / 21) * 100}%`, width: `${((bandHi - bandLo) / 21) * 100}%`, background: 'var(--color-recovery)' }} />}
-          <div style={{ position: 'absolute', top: 8, left: 0, height: 8, borderRadius: 4, width: `${((todayStrain ?? 0) / 21) * 100}%`, background: 'var(--color-strain)' }} />
-          <div style={{ position: 'absolute', top: 3, left: `calc(${((todayStrain ?? 0) / 21) * 100}% - 2px)`, width: 5, height: 18, borderRadius: 3, background: 'var(--color-ink)', border: '2px solid var(--color-paper-2)' }} />
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>0</span>
-          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-recovery)' }}>{de ? 'Optimalzone' : 'Optimal zone'}</span>
-          <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>21</span>
-        </div>
-        <div className="hover-reveal flex flex-col gap-1.5" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 10 }}>
-          {targetStrain != null && bandLo != null && bandHi != null && (
-            <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? 'Optimalband' : 'Optimal band'} <span className="num-mono" style={{ fontWeight: 700, color: 'var(--color-ink)' }}>{bandLo.toFixed(1)}–{bandHi.toFixed(1)}</span> · {de ? 'Ziel' : 'target'} <span className="num-mono" style={{ fontWeight: 700, color: 'var(--color-recovery)' }}>{targetStrain.toFixed(1)}</span></span>
-          )}
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</span>
-        </div>
-      </Link>
+          <div className="flex items-center justify-between">
+            <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>0</span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-recovery)' }}>{de ? `Belastungsziel heute: ~${tssTarget} TSS (${targetQualifier})` : `Load target today: ~${tssTarget} TSS (${targetQualifier})`}</span>
+            <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>~{tssTarget}</span>
+          </div>
+          <div className="hover-reveal flex flex-col gap-1.5" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 10 }}>
+            {decision?.planned?.title && (
+              <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? 'Geplant' : 'Planned'}: <span style={{ fontWeight: 600, color: 'var(--color-ink)' }}>{decision.planned.title}</span></span>
+            )}
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</span>
+          </div>
+        </Link>
+      ) : (
+        <Link to="/load-form" className="hover-card rounded-[24px] flex items-center justify-between" style={{ ...cardStyle, gap: 10, padding: '15px 20px' }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>
+            {dState === 'planned_rest'
+              ? (de ? 'Ruhetag — kein Belastungsziel heute' : 'Rest day — no load target today')
+              : dState === 'trained_already'
+                ? (todayTSS > 0
+                  ? (de ? `Erledigt — ${Math.round(todayTSS)} TSS gesammelt, kein weiteres Ziel` : `Done — ${Math.round(todayTSS)} TSS banked, no further target`)
+                  : (de ? 'Erledigt für heute — kein weiteres Ziel' : 'Done for today — no further target'))
+                : dState === 'sick' || dState === 'injured' || dState === 'break'
+                  ? (de ? 'Kein Belastungsziel — Erholung geht vor' : 'No load target — recovery comes first')
+                  : (de ? 'Belastung & Form ansehen' : 'View load & form')}
+          </span>
+          <ChevronRight size={16} className="hover-arrow shrink-0" style={{ color: 'var(--color-muted)' }} />
+        </Link>
+      )}
 
       {/* 11 · Daytime Stress */}
       <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 14 }}>

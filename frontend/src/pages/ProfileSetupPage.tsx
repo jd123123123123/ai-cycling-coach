@@ -25,8 +25,9 @@ export default function ProfileSetupPage() {
   const [weeklyHours, setWeeklyHours] = useState('')
   const [primarySport, setPrimarySport] = useState('')
 
-  // Goal fields
-  const [targetFtp, setTargetFtp] = useState('')
+  // Goal fields. No FTP-target field here (usability audit): a watts target
+  // typed during setup — before any baseline exists — became the demoralizing
+  // phantom goal. FTP targets are chosen deliberately on the Season page.
   const [targetEventName, setTargetEventName] = useState('')
   const [targetEventDate, setTargetEventDate] = useState('')
   const [goalWeeklyHours, setGoalWeeklyHours] = useState('')
@@ -71,9 +72,9 @@ export default function ProfileSetupPage() {
 
       await updateProfile(profileData)
 
-      // Build goals update (only include fields that have values)
+      // Build goals update (only include fields that have values).
+      // target_ftp is intentionally never written here — see note above.
       const goalsData: Record<string, number | string> = {}
-      if (targetFtp) goalsData.target_ftp = intOrUndefined(targetFtp)!
       if (targetEventName) goalsData.target_event_name = targetEventName
       if (targetEventDate) goalsData.target_event_date = targetEventDate
       if (goalWeeklyHours) goalsData.weekly_hours = numOrUndefined(goalWeeklyHours)!
@@ -274,14 +275,6 @@ export default function ProfileSetupPage() {
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <NumberField
-                  label={locale === 'de' ? 'Ziel-FTP (Watt)' : 'Target FTP (watts)'}
-                  min={0}
-                  max={2000}
-                  placeholder={locale === 'de' ? 'z. B. 300' : 'e.g. 300'}
-                  value={targetFtp}
-                  onChange={setTargetFtp}
-                />
                 <NumberField
                   label={locale === 'de' ? 'Ziel-Wochentrainingsstunden' : 'Weekly Training Hours Goal'}
                   min={0}

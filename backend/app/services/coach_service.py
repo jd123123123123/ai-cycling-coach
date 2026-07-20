@@ -781,6 +781,30 @@ async def build_snapshot(
         # rule only fires on a *clean* Tuesday at block start.
         preferred_template_id = "ftp_test_20min"
 
+    # Planned-rest override (audit P0-3): when TODAY's PlannedWorkout row says
+    # rest, the plan IS the decision — the readiness-driven session picker may
+    # not prescribe a session on a Ruhetag (the audit's four-voices blocker:
+    # the rule-based brief happily picked a Z2 spin while Today/Recovery said
+    # rest). Sick/trained overrides still apply later in the verdict cascade.
+    try:
+        from app.models.planned_workout import PlannedWorkout as _PW_pick
+        _pick_pw_rows = list((await db.execute(
+            select(_PW_pick).where(
+                _PW_pick.user_id == user_id,
+                _PW_pick.date == today_local_date,
+            )
+        )).scalars().all())
+        if _pick_pw_rows and all(
+            (getattr(r, "template_id", None) or "") == "rest_day"
+            or "ruhetag" in str(getattr(r, "title", "") or "").lower()
+            or "rest" in str(getattr(r, "title", "") or "").lower()
+            for r in _pick_pw_rows
+        ):
+            today_session = "rest"
+            preferred_template_id = None
+    except Exception:  # pragma: no cover — plan lookup must never block the brief
+        logger.exception("today planned-rest lookup failed (user_id=%s)", user_id)
+
     # Pick + parametrize the template
     picked_template = pick_template(
         session_type=today_session,
@@ -1620,14 +1644,25 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
         template_id = "rest_day"
         why = why or "You've already trained today — review below."
 
-    # If the rails (or post-ride override) replaced the LLM's pick, the LLM's
-    # verdict line was written for the *old* workout — it'll read "Hard
-    # intervals — you're fresh" while the card now shows an easy spin. Realign
-    # verdict to the actual prescribed template so the hero matches the
-    # recommendation.
+    # Planned-rest override (audit P0-3): when TODAY's PlannedWorkout row says
+    # rest, the brief must never prescribe a session — every surface renders
+    # the ONE daily decision, and the decision's precedence puts the plan's
+    # rest day above the readiness-driven pick. Without this, the rule-based
+    # fallback happily prescribed a Z2 spin on a Ruhetag while Today/Recovery
+    # said rest (the audit's four-voices blocker, alive on the Plan tab).
+    planned_rest_forces_rest = bool(snapshot.get("today_planned_is_rest")) and not post_ride_present
+    if planned_rest_forces_rest and template_id != "rest_day":
+        template_id = "rest_day"
+        why = None  # rest-day copy comes from the verdict/template, not the old pick
+
+    # If the rails (or post-ride/planned-rest override) replaced the LLM's
+    # pick, the LLM's verdict line was written for the *old* workout — it'll
+    # read "Hard intervals — you're fresh" while the card now shows an easy
+    # spin. Realign verdict to the actual prescribed template so the hero
+    # matches the recommendation.
     template_changed = (
         original_template_id in TEMPLATES and original_template_id != template_id
-    ) or (rank > max_rank) or post_ride_forces_rest
+    ) or (rank > max_rank) or post_ride_forces_rest or planned_rest_forces_rest
     if template_changed:
         language = "technical" if snapshot.get("language") == "technical" else "simple"
         realigned = _verdict_for_template(template_id, language, ceiling)

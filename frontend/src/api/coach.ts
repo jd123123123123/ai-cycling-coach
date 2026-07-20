@@ -146,6 +146,55 @@ export interface Regeneration {
 
 export type CoachLanguage = 'simple' | 'technical'
 
+// ─── ONE Daily Decision (usability audit P0-3) ──────────────────────────────
+//
+// Mirrors backend/app/schemas/coach.py DailyDecision exactly. Computed FRESH
+// server-side per /coach/brief request (never from the cached brief row) and
+// attached as BriefRead.daily_decision. Every surface renders subordinately —
+// surfaces may add flavor but must never contradict `state`.
+
+export type DailyDecisionState =
+  | 'sick'
+  | 'injured'
+  | 'break'
+  | 'trained_already'
+  | 'planned_rest'
+  | 'recover'
+  | 'easy'
+  | 'quality'
+  | 'hard'
+
+export interface DailyDecisionCTA {
+  label: string
+  target: string // frontend maps to a route, e.g. 'today#workout'
+}
+
+export interface DailyDecisionPlanned {
+  title: string
+  template_id?: string | null
+  target_tss?: number | null
+  duration_minutes?: number | null
+}
+
+export interface DailyDecisionReadiness {
+  score?: number | null
+  tier?: string | null // 'rest' | 'easy' | 'moderate' | 'push'
+}
+
+export interface DailyDecision {
+  date: string // athlete-local ISO date
+  state: DailyDecisionState
+  verdict: string
+  reason: string
+  cta?: DailyDecisionCTA | null
+  planned?: DailyDecisionPlanned | null
+  readiness: DailyDecisionReadiness
+  tss_target?: number | null
+  // Garmin-style 0-21 strain scale, ALWAYS tss_target/8 (derived server-side
+  // only). Null on rest / trained / sick days.
+  strain_target?: number | null
+}
+
 export interface CoachBriefResponse {
   id: number
   generated_at: string
@@ -173,6 +222,90 @@ export interface CoachBriefResponse {
   regeneration?: Regeneration | null
   // "What changed & why" — transparent adaptation of today's plan.
   adaptations?: Adaptations | null
+  // ONE Daily Decision (audit P0-3) — computed fresh at request time server-
+  // side, never read from the cached row. Null only when computation failed.
+  daily_decision?: DailyDecision | null
+}
+
+/**
+ * Defensive rescue for sport-gated "logged" reviews (audit P0-2).
+ *
+ * When the sport gate refuses to grade (e.g. only a gym session on a
+ * bike-plan day), the backend builds a review whose `duration`/`tss` pairs
+ * are empty objects — that shape fails BriefRead's PostRideReview validation
+ * server-side, so `brief.post_ride_review` arrives null even though the raw
+ * dict still lives in `brief.evidence.post_ride_review`. This helper parses
+ * ONLY that ungraded shape (grade == null) into a renderable PostRideReview
+ * so the frontend can show the neutral "logged" card. Graded reviews always
+ * survive validation and arrive typed — they are never rescued here.
+ */
+export function loggedReviewFromEvidence(
+  evidence: Record<string, unknown> | undefined | null,
+): PostRideReview | null {
+  const raw = evidence?.['post_ride_review']
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const r = raw as Record<string, unknown>
+  // Graded shape → the typed field is the only honest source; never rescue.
+  if (r['grade'] != null) return null
+  if (typeof r['headline'] !== 'string' || r['headline'].length === 0) return null
+
+  const zeroPair: CompliancePair = { target: 0, actual: 0, delta_pct: 0, band: 'match' }
+  const asPair = (v: unknown): CompliancePair => {
+    if (v && typeof v === 'object') {
+      const p = v as Record<string, unknown>
+      if (typeof p['target'] === 'number' && typeof p['actual'] === 'number') {
+        return {
+          target: p['target'],
+          actual: p['actual'],
+          delta_pct: typeof p['delta_pct'] === 'number' ? p['delta_pct'] : 0,
+          band: p['band'] === 'over' || p['band'] === 'under' ? p['band'] : 'match',
+        }
+      }
+    }
+    return zeroPair
+  }
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+  const activities: ActivityWrapup[] = Array.isArray(r['activities'])
+    ? (r['activities'] as unknown[]).flatMap((a): ActivityWrapup[] => {
+        if (!a || typeof a !== 'object') return []
+        const e = a as Record<string, unknown>
+        return [{
+          title: str(e['title']),
+          sport: str(e['sport']) || 'other',
+          tss: typeof e['tss'] === 'number' ? e['tss'] : null,
+          duration_minutes: typeof e['duration_minutes'] === 'number' ? e['duration_minutes'] : null,
+          distance_km: typeof e['distance_km'] === 'number' ? e['distance_km'] : null,
+          intensity_factor: typeof e['intensity_factor'] === 'number' ? e['intensity_factor'] : null,
+          efficiency_factor: typeof e['efficiency_factor'] === 'number' ? e['efficiency_factor'] : null,
+          variability_index: typeof e['variability_index'] === 'number' ? e['variability_index'] : null,
+          compliance_grade: null, // sport gate refused — never a grade
+        }]
+      })
+    : []
+  const totalsRaw = (r['totals'] ?? {}) as Record<string, unknown>
+  return {
+    grade: null,
+    headline: r['headline'],
+    duration: asPair(r['duration']),
+    tss: asPair(r['tss']),
+    intensity_factor: null,
+    variability_index: null,
+    ef: null,
+    decoupling_pct: null,
+    physiological_read: str(r['physiological_read']),
+    goal_trajectory: str(r['goal_trajectory']),
+    next_session_nudge: '', // ungraded day — never a nudge
+    target_template_id: str(r['target_template_id']),
+    target_template_title: str(r['target_template_title']),
+    session_type: str(r['session_type']) || 'endurance',
+    activities,
+    totals: {
+      tss: typeof totalsRaw['tss'] === 'number' ? totalsRaw['tss'] : 0,
+      duration_minutes: typeof totalsRaw['duration_minutes'] === 'number' ? totalsRaw['duration_minutes'] : 0,
+      distance_km: typeof totalsRaw['distance_km'] === 'number' ? totalsRaw['distance_km'] : 0,
+      count: typeof totalsRaw['count'] === 'number' ? totalsRaw['count'] : activities.length,
+    },
+  }
 }
 
 export interface AdaptationChange {
@@ -254,18 +387,24 @@ export async function fetchTransparency(): Promise<TransparencyResponse> {
 export type TaperWindow = 'too_flat' | 'ideal' | 'too_fresh' | 'overreached' | 'unknown'
 export type OnTrack = 'ahead' | 'on_track' | 'behind' | 'no_goal'
 
+// Mirrors backend GoalTrajectoryRead (audit P0-4): every projection field is
+// Optional — when the data can't support an honest projection the backend
+// emits null and the UI must render an honest dash, never a fabricated number.
 export interface GoalTrajectoryResponse {
   days_to_goal: number | null
-  ctl_now: number
-  ctl_7d_delta: number
-  ctl_projected_at_goal: number
+  ctl_now: number | null
+  ctl_7d_delta: number | null
+  ctl_projected_at_goal: number | null
   ctl_target: number | null
-  tsb_projected_at_goal: number
+  tsb_projected_at_goal: number | null
   taper_window: TaperWindow
   on_track: OnTrack
-  weekly_tss_required: number
-  weekly_tss_actual: number
+  weekly_tss_required: number | null
+  weekly_tss_actual: number | null
   narrative_hook: string
+  // What the projection is anchored on ('pmc', 'plan_simulation',
+  // 'insufficient_data', …) — set by goal_trajectory.compute_goal_trajectory.
+  projection_basis: string
   event_name: string | null
   event_date: string | null
   event_type: string | null

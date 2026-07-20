@@ -356,6 +356,28 @@ export const STRINGS = {
   workouts_metric_avg_hr: { en: 'Avg HR (bpm)', de: 'Ø HF (bpm)' },
   workouts_metric_pace: { en: 'Pace (/km)', de: 'Pace (/km)' },
   workouts_metric_tss: { en: 'TSS', de: 'TSS' },
+
+  // ── AGENT-MARKER: daily-decision + sport-honest review (Today/Coach agent) ──
+  // Decision pill words — keyed 1:1 off DailyDecision.state (audit P0-3).
+  dd_pill_sick: { en: 'Marked sick · recovery only', de: 'Krank gemeldet · nur Erholung' },
+  dd_pill_injured: { en: 'Marked injured · heal up', de: 'Verletzt gemeldet · heilen' },
+  dd_pill_break: { en: 'On a break · keep it light', de: 'Pause · locker bleiben' },
+  dd_pill_trained: { en: 'Session logged', de: 'Einheit erledigt' },
+  dd_pill_trained_recover: { en: 'Session logged · recover', de: 'Einheit erledigt · erholen' },
+  dd_pill_rest: { en: 'Rest day', de: 'Ruhetag' },
+  dd_pill_recover: { en: 'Recover · go easy', de: 'Erholen · locker' },
+  dd_pill_easy: { en: 'Easy day', de: 'Lockerer Tag' },
+  dd_pill_quality: { en: 'Quality day', de: 'Qualitätstag' },
+  dd_pill_hard: { en: 'Primed to train', de: 'Bereit zu trainieren' },
+  // Sport-honest review card — neutral "logged" mode (no grade, no percentages).
+  review_logged_eyebrow: { en: 'Session logged', de: 'Einheit erfasst' },
+  review_not_graded: {
+    en: "Counts toward your week — not graded against today's plan.",
+    de: 'Zählt für deine Woche — wird nicht am heutigen Plan gemessen.',
+  },
+  review_sport_label: { en: 'Sport', de: 'Sport' },
+  review_avg_hr_label: { en: 'Avg HR', de: 'Ø HF' },
+  // ── END AGENT-MARKER: daily-decision + sport-honest review ──
 } as const satisfies Record<string, StringSet>
 
 export type StringKey = keyof typeof STRINGS

@@ -11,6 +11,7 @@
  */
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, ArrowRight, Flag, Gauge, Zap, TrendingUp, Target,
   CheckCircle2, Circle, PencilLine, Mountain, BadgeCheck,
@@ -18,9 +19,10 @@ import {
 import DashboardShell from '../components/dashboard/DashboardShell'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
-import { useGoalTrajectory } from '../hooks/useGoalTrajectory'
+import { useGoalTrajectory, GOAL_TRAJECTORY_KEY } from '../hooks/useGoalTrajectory'
 import { useRecoveryEta } from '../hooks/useRecoveryEta'
 import { usePowerProfile } from '../hooks/usePowerProfile'
+import { updateGoals } from '../api/athletes'
 import { daysToEvent } from '../utils/loadMetrics'
 import { useLocale } from '../contexts/LocaleContext'
 
@@ -159,8 +161,13 @@ export default function SeasonView() {
 
   const activePhase: PhaseKey | null = mesoToPhaseKey(week?.meso_block?.phase) ?? timeline?.calendarPhase ?? null
 
-  /* fitness ring: projected CTL vs CTL target */
-  const ringPct = traj?.ctl_projected_at_goal != null && traj?.ctl_target != null && traj.ctl_target > 0
+  /* Honest projection gate (audit P0-4): only a real plan simulation counts.
+     projection_basis 'none' (or a null projected CTL) means "we can't know
+     yet" — every projection-derived figure renders an honest dash instead. */
+  const projectionValid = traj != null && traj.projection_basis !== 'none' && traj.ctl_projected_at_goal != null
+
+  /* fitness ring: projected CTL vs CTL target — only with a valid projection */
+  const ringPct = projectionValid && traj?.ctl_projected_at_goal != null && traj?.ctl_target != null && traj.ctl_target > 0
     ? Math.min(1, traj.ctl_projected_at_goal / traj.ctl_target)
     : null
   const ringColor = ringPct == null ? 'var(--color-muted)'
@@ -168,9 +175,12 @@ export default function SeasonView() {
     : ringPct >= 0.6 ? 'var(--color-amber)'
     : 'var(--color-accent)'
 
-  /* draft pacing bands from CP / W′ */
-  const cp = power?.available === false ? null : power?.cp_watts ?? null
-  const wPrime = power?.available === false ? null : power?.w_prime_j ?? null
+  /* Race-day pacing anchors on the CANONICAL displayed threshold (audit P0-1)
+     — never a CP that diverges from the FTP shown everywhere else. W′ only
+     when the model is valid (reconcile_threshold gates CP/W′ display). */
+  const displayFtp = power?.available === false ? null : power?.threshold_watts ?? null
+  const modelValid = power?.available !== false && power?.model_valid === true
+  const wPrime = modelValid ? power?.w_prime_j ?? null : null
   const matchesLo = wPrime != null ? Math.max(1, Math.floor(wPrime / 2500)) : null
   const matchesHi = wPrime != null ? Math.max(1, Math.ceil(wPrime / 2500)) : null
 
@@ -200,12 +210,13 @@ export default function SeasonView() {
     }
   }, [eta])
 
-  const onTrackChip = traj ? {
-    ahead: { label: de ? 'Vor dem Ziel' : 'Ahead of target', color: 'var(--color-recovery)' },
-    on_track: { label: de ? 'Auf Kurs' : 'On track', color: 'var(--color-recovery)' },
-    behind: { label: de ? 'Hinter dem Ziel' : 'Behind target', color: 'var(--color-amber)' },
-    no_goal: { label: de ? 'Kein CTL-Ziel' : 'No CTL target', color: 'var(--color-muted)' },
-  }[traj.on_track] : null
+  // Badge ONLY when a VALID projection says 'behind' (amber = caution with an
+  // action). On-track/ahead states render the card calmly without a badge, and
+  // an invalid projection must never wear a verdict it can't back up.
+  const isBehind = projectionValid && traj?.on_track === 'behind'
+  const onTrackChip = isBehind
+    ? { label: de ? 'Hinter dem Ziel' : 'Behind target', color: 'var(--color-amber)' }
+    : null
 
   /* countdown checklist — deterministic from the race date */
   const checklist = useMemo(() => {
@@ -218,6 +229,25 @@ export default function SeasonView() {
     ]
     return items.map((it) => ({ ...it, inDays: daysBetween(today, it.date) }))
   }, [eventDate, today])
+
+  /* Season FTP goal — never a raw progress bar against a stale auto-seed.
+     A target that is absent, equal to, or below the current FTP is the old
+     onboarding auto-copy (audit: the "demoralizing 350 W"), so it renders as
+     an honest "no target yet" state with a +5% suggestion the user can adopt. */
+  const currentFtp = profile?.ftp_watts ?? null
+  const targetFtp = profile?.goals?.target_ftp ?? null
+  const hasRealFtpTarget = currentFtp != null && currentFtp > 0 && targetFtp != null && targetFtp > currentFtp
+  const suggestedFtp = currentFtp != null && currentFtp > 0 ? Math.round(currentFtp * 1.05) : null
+  const qc = useQueryClient()
+  const adoptFtpTarget = useMutation({
+    mutationFn: (watts: number) => updateGoals({ target_ftp: watts }),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['athlete'] }),
+        qc.invalidateQueries({ queryKey: GOAL_TRAJECTORY_KEY }),
+      ])
+    },
+  })
 
   const prioChip = priority ? {
     bg: priority === 'A' ? 'var(--color-gold-soft)' : priority === 'B' ? 'color-mix(in srgb, var(--color-strain) 15%, transparent)' : 'var(--color-surface-2)',
@@ -400,8 +430,8 @@ export default function SeasonView() {
           </div>
         )}
 
-        {/* ── Race Day Plan — draft pacing from CP / W′ (.pen H1DZl4) ── */}
-        {eventDate != null && cp != null && (
+        {/* ── Race Day Plan — draft pacing from the CANONICAL threshold (.pen H1DZl4) ── */}
+        {eventDate != null && displayFtp != null && (
           <div className="flex flex-col gap-4 p-5" style={CARD}>
             <div className="flex items-center justify-between">
               <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Renntag-Plan' : 'Race Day Plan'}</span>
@@ -421,34 +451,38 @@ export default function SeasonView() {
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Pacing' : 'Pacing'}</span>
                 <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
                   {de
-                    ? `Anstiege ${Math.round(cp * 0.88)}–${Math.round(cp * 0.94)} W (88–94 % CP) · Flachstücke ${Math.round(cp * 0.75)}–${Math.round(cp * 0.82)} W (75–82 %)`
-                    : `Climbs at ${Math.round(cp * 0.88)}–${Math.round(cp * 0.94)} W (88–94% CP) · flats ${Math.round(cp * 0.75)}–${Math.round(cp * 0.82)} W (75–82%)`}
+                    ? `Anstiege ${Math.round(displayFtp * 0.88)}–${Math.round(displayFtp * 0.94)} W (88–94 % FTP) · Flachstücke ${Math.round(displayFtp * 0.75)}–${Math.round(displayFtp * 0.82)} W (75–82 %)`
+                    : `Climbs at ${Math.round(displayFtp * 0.88)}–${Math.round(displayFtp * 0.94)} W (88–94% FTP) · flats ${Math.round(displayFtp * 0.75)}–${Math.round(displayFtp * 0.82)} W (75–82%)`}
                 </span>
               </div>
             </div>
 
-            <div style={{ height: 1, background: 'var(--color-rule)' }} />
+            {/* W′ only when the CP model is valid — a W′ from a model that
+                disagrees with the displayed FTP would contradict the pacing row. */}
+            {wPrime != null && matchesLo != null && matchesHi != null && (
+              <>
+                <div style={{ height: 1, background: 'var(--color-rule)' }} />
 
-            <div className="flex gap-3.5">
-              <div className="grid place-items-center rounded-[12px]" style={{ width: 38, height: 38, background: 'var(--color-surface-2)', flexShrink: 0 }}>
-                <Zap size={19} style={{ color: 'var(--color-violet)' }} />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Körner-Budget' : 'Matches budget'}</span>
-                <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
-                  {wPrime != null && matchesLo != null && matchesHi != null
-                    ? (de
-                      ? `W′ ${(wPrime / 1000).toFixed(1)} kJ ≈ ${matchesLo === matchesHi ? matchesLo : `${matchesLo}–${matchesHi}`} harte Antritte über CP — für die entscheidenden Anstiege aufheben`
-                      : `W′ ${(wPrime / 1000).toFixed(1)} kJ ≈ ${matchesLo === matchesHi ? matchesLo : `${matchesLo}–${matchesHi}`} hard surges above CP — save them for the decisive climbs`)
-                    : '—'}
-                </span>
-              </div>
-            </div>
+                <div className="flex gap-3.5">
+                  <div className="grid place-items-center rounded-[12px]" style={{ width: 38, height: 38, background: 'var(--color-surface-2)', flexShrink: 0 }}>
+                    <Zap size={19} style={{ color: 'var(--color-violet)' }} />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Körner-Budget' : 'Matches budget'}</span>
+                    <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
+                      {de
+                        ? `W′ ${(wPrime / 1000).toFixed(1)} kJ ≈ ${matchesLo === matchesHi ? matchesLo : `${matchesLo}–${matchesHi}`} harte Antritte über der Schwelle — für die entscheidenden Anstiege aufheben`
+                        : `W′ ${(wPrime / 1000).toFixed(1)} kJ ≈ ${matchesLo === matchesHi ? matchesLo : `${matchesLo}–${matchesHi}`} hard surges above threshold — save them for the decisive climbs`}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <p style={{ fontSize: 11, color: 'var(--color-muted)' }}>
               {de
-                ? 'Pacing-Entwurf aus deiner Critical Power — wird verfeinert, je näher das Rennen rückt.'
-                : 'Draft pacing from your Critical Power — refined as the event nears.'}
+                ? 'Pacing-Entwurf aus deiner angezeigten FTP — wird verfeinert, je näher das Rennen rückt.'
+                : 'Draft pacing from your displayed FTP — refined as the event nears.'}
             </p>
           </div>
         )}
@@ -477,12 +511,12 @@ export default function SeasonView() {
               </div>
               <ArrowRight size={20} style={{ color: 'var(--color-muted)' }} />
               <div className="flex flex-col">
-                <span className="num-display" style={{ fontSize: 32, color: 'var(--color-strain)' }}>
-                  {traj.ctl_projected_at_goal != null ? Math.round(traj.ctl_projected_at_goal) : '—'}
+                <span className="num-display" style={{ fontSize: 32, color: projectionValid ? 'var(--color-strain)' : 'var(--color-muted)' }}>
+                  {projectionValid && traj.ctl_projected_at_goal != null ? Math.round(traj.ctl_projected_at_goal) : '—'}
                 </span>
                 <span className="eyebrow" style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>{de ? 'AM RENNTAG' : 'AT RACE DAY'}</span>
               </div>
-              {traj.ctl_target != null && (
+              {projectionValid && traj.ctl_target != null && (
                 <div className="ml-auto flex flex-col items-end">
                   <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink-2)' }}>{Math.round(traj.ctl_target)}</span>
                   <span className="eyebrow" style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>{de ? 'ZIEL-CTL' : 'CTL TARGET'}</span>
@@ -490,7 +524,17 @@ export default function SeasonView() {
               )}
             </div>
 
-            {traj.ctl_7d_delta != null && (
+            {/* Honest dash state (audit P0-4): the projection can't be computed
+                yet — say so plainly, with zero verdicts or advice numbers. */}
+            {!projectionValid && (
+              <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.5 }}>
+                {de
+                  ? 'Prognose folgt — nach 2–3 Trainingswochen können wir den Renntag hochrechnen.'
+                  : 'Forecast coming — we need 2–3 more training weeks to project race day.'}
+              </span>
+            )}
+
+            {projectionValid && traj.ctl_7d_delta != null && (
               <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>
                 {de
                   ? `CTL ${traj.ctl_7d_delta >= 0 ? '+' : ''}${traj.ctl_7d_delta.toFixed(1)} in den letzten 7 Tagen`
@@ -498,7 +542,9 @@ export default function SeasonView() {
                 {traj.weekly_tss_required != null && (
                   <span style={{ color: 'var(--color-muted)' }}>
                     {' · '}
-                    {de ? `~${Math.round(traj.weekly_tss_required)} TSS/Wo. nötig` : `~${Math.round(traj.weekly_tss_required)} TSS/wk needed`}
+                    {/* weekly_tss_required = the plan's own next-week TSS — an
+                        explanation of what's coming, never an add-more demand. */}
+                    {de ? `Nächste Planwoche: ~${Math.round(traj.weekly_tss_required)} TSS` : `Next plan week: ~${Math.round(traj.weekly_tss_required)} TSS`}
                   </span>
                 )}
               </span>
@@ -531,21 +577,25 @@ export default function SeasonView() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1 rounded-[16px] p-3.5" style={{ background: 'var(--color-surface-2)' }}>
-                <span className="eyebrow" style={{ fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>
-                  {de ? 'FORM AM RENNTAG' : 'FORM AT RACE DAY'}
-                </span>
-                <span className="num-display" style={{ fontSize: 22, color: traj.tsb_projected_at_goal != null && traj.tsb_projected_at_goal >= 0 ? 'var(--color-recovery)' : 'var(--color-ink)' }}>
-                  {traj.tsb_projected_at_goal != null ? `${traj.tsb_projected_at_goal >= 0 ? '+' : ''}${Math.round(traj.tsb_projected_at_goal)}` : '—'}
-                </span>
-                <span style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>
-                  {traj.tsb_projected_at_goal == null ? 'TSB'
-                    : traj.tsb_projected_at_goal >= 5 ? (de ? 'TSB — frisch & spritzig' : 'TSB — fresh & sharp')
-                    : traj.tsb_projected_at_goal >= -5 ? (de ? 'TSB — neutral' : 'TSB — neutral')
-                    : (de ? 'TSB — müde' : 'TSB — fatigued')}
-                </span>
-              </div>
+            <div className={projectionValid ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-1 gap-3'}>
+              {/* Form-at-race-day only when the projection is real — a TSB
+                  guess without a plan simulation would be a fabricated number. */}
+              {projectionValid && (
+                <div className="flex flex-col gap-1 rounded-[16px] p-3.5" style={{ background: 'var(--color-surface-2)' }}>
+                  <span className="eyebrow" style={{ fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>
+                    {de ? 'FORM AM RENNTAG' : 'FORM AT RACE DAY'}
+                  </span>
+                  <span className="num-display" style={{ fontSize: 22, color: traj.tsb_projected_at_goal != null && traj.tsb_projected_at_goal >= 0 ? 'var(--color-recovery)' : 'var(--color-ink)' }}>
+                    {traj.tsb_projected_at_goal != null ? `${traj.tsb_projected_at_goal >= 0 ? '+' : ''}${Math.round(traj.tsb_projected_at_goal)}` : '—'}
+                  </span>
+                  <span style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>
+                    {traj.tsb_projected_at_goal == null ? 'TSB'
+                      : traj.tsb_projected_at_goal >= 5 ? (de ? 'TSB — frisch & spritzig' : 'TSB — fresh & sharp')
+                      : traj.tsb_projected_at_goal >= -5 ? (de ? 'TSB — neutral' : 'TSB — neutral')
+                      : (de ? 'TSB — müde' : 'TSB — fatigued')}
+                  </span>
+                </div>
+              )}
               <div className="flex flex-col gap-1 rounded-[16px] p-3.5" style={{ background: 'var(--color-surface-2)' }}>
                 <span className="eyebrow" style={{ fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>
                   {de ? 'WOCHENDOSIS' : 'WEEKLY DOSE'}
@@ -562,36 +612,69 @@ export default function SeasonView() {
         )}
 
         {/* ── Season Goals (.pen iBvjn) ── */}
-        {profile?.goals?.target_ftp != null && profile.ftp_watts != null && (
+        {currentFtp != null && currentFtp > 0 && (
           <div className="flex flex-col gap-4 p-5" style={CARD}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Target size={16} style={{ color: 'var(--color-accent)' }} />
                 <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Saisonziele' : 'Season Goals'}</span>
               </div>
-              <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent)' }}>
-                {Math.round((profile.ftp_watts / profile.goals.target_ftp) * 100)}%
-              </span>
+              {hasRealFtpTarget && targetFtp != null && (
+                <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent)' }}>
+                  {Math.round((currentFtp / targetFtp) * 100)}%
+                </span>
+              )}
             </div>
 
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Ziel-FTP' : 'Target FTP'}</span>
-                <span className="num-mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>
-                  {profile.ftp_watts} <span style={{ color: 'var(--color-muted)', fontWeight: 600 }}>/ {profile.goals.target_ftp} W</span>
+            {hasRealFtpTarget && targetFtp != null ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Ziel-FTP' : 'Target FTP'}</span>
+                  <span className="num-mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>
+                    {currentFtp} <span style={{ color: 'var(--color-muted)', fontWeight: 600 }}>/ {targetFtp} W</span>
+                  </span>
+                </div>
+                <div className="rounded-full" style={{ height: 8, background: 'var(--color-surface-2)' }}>
+                  <div className="rounded-full" style={{ height: 8, width: `${Math.min(100, (currentFtp / targetFtp) * 100)}%`, background: 'var(--color-accent)' }} />
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+                  {de ? `${targetFtp - currentFtp} W bis zum Ziel` : `${targetFtp - currentFtp} W to go`}
                 </span>
               </div>
-              <div className="rounded-full" style={{ height: 8, background: 'var(--color-surface-2)' }}>
-                <div className="rounded-full" style={{ height: 8, width: `${Math.min(100, (profile.ftp_watts / profile.goals.target_ftp) * 100)}%`, background: 'var(--color-accent)' }} />
+            ) : (
+              /* No real target (absent, or the stale onboarding auto-copy that
+                 equals/undershoots the current FTP) — honest empty state with a
+                 +5% suggestion the athlete can adopt in one tap. Neutral tone,
+                 never a bar that shames or a "target reached" fiction. */
+              <div className="flex flex-col gap-3">
+                <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.5 }}>
+                  {suggestedFtp != null
+                    ? (de
+                      ? `Kein FTP-Ziel gesetzt — Ziel wählen (Vorschlag: ${suggestedFtp} W, +5 %)`
+                      : `No FTP target set — choose one (suggested: ${suggestedFtp} W, +5%)`)
+                    : (de ? 'Kein FTP-Ziel gesetzt.' : 'No FTP target set.')}
+                </span>
+                {suggestedFtp != null && (
+                  <button
+                    type="button"
+                    onClick={() => adoptFtpTarget.mutate(suggestedFtp)}
+                    disabled={adoptFtpTarget.isPending}
+                    className="self-start rounded-full px-4 py-2"
+                    style={{
+                      background: 'var(--color-accent-soft)', color: 'var(--color-accent)',
+                      fontSize: 12.5, fontWeight: 700,
+                      opacity: adoptFtpTarget.isPending ? 0.6 : 1,
+                      cursor: adoptFtpTarget.isPending ? 'default' : 'pointer',
+                    }}>
+                    {adoptFtpTarget.isPending
+                      ? (de ? 'Speichern …' : 'Saving…')
+                      : (de ? `Ziel setzen: ${suggestedFtp} W` : `Set target: ${suggestedFtp} W`)}
+                  </button>
+                )}
               </div>
-              <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-                {profile.goals.target_ftp > profile.ftp_watts
-                  ? (de ? `${profile.goals.target_ftp - profile.ftp_watts} W bis zum Ziel` : `${profile.goals.target_ftp - profile.ftp_watts} W to go`)
-                  : (de ? 'Ziel erreicht' : 'Target reached')}
-              </span>
-            </div>
+            )}
 
-            {profile.weight_kg != null && profile.weight_kg > 0 && (
+            {profile?.weight_kg != null && profile.weight_kg > 0 && (
               <div className="flex items-center justify-between" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 14 }}>
                 <div className="flex flex-col gap-0.5">
                   <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Watt pro Kilo' : 'Power to weight'}</span>
@@ -600,7 +683,7 @@ export default function SeasonView() {
                   </span>
                 </div>
                 <span className="num-display" style={{ fontSize: 20, color: 'var(--color-violet)' }}>
-                  {(profile.ftp_watts / profile.weight_kg).toFixed(2)} <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>W/kg</span>
+                  {(currentFtp / profile.weight_kg).toFixed(2)} <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>W/kg</span>
                 </span>
               </div>
             )}

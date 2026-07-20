@@ -17,6 +17,12 @@ export interface DayPlan {
   intervals: IntervalBlockOut[]
   rationale: string
   is_today: boolean
+  // Dual-sport: a same-day session in the OTHER sport (e.g. an easy run or a
+  // strength session on a bike day). Compact — title + planned TSS so the
+  // week list can render it as a visible line item instead of silently
+  // dropping its load (usability audit P0-5).
+  secondary_title: string | null
+  secondary_target_tss: number | null
 }
 
 export interface MesoBlockContext {
@@ -42,6 +48,12 @@ export interface ProjectionContext {
   mode: 'performance' | 'fitness' | 'insufficient'
   unit: string
   metric_label: string
+  samples_used: number
+  // 0–100 band-tightness × sample-richness score. < 30 ⇒ the UI must render a
+  // RANGE, not a point (audit P0-1). Optional: the backend Projection schema
+  // does not pass it through yet — consumers derive it from band_80 +
+  // samples_used when absent.
+  confidence_pct?: number
   current_estimate: number | null
   projected_central: number | null
   band_50: [number, number] | null
@@ -79,6 +91,11 @@ export interface WeekResponse {
   readiness: ReadinessContext | null
   plan_changes: PlanChangesContext | null
   days: DayPlan[]
+  // THE weekly planned-TSS number to render as the week's target: sum of ALL
+  // planned rows Mon–Sun INCLUDING dual-sport shadowed secondary sessions.
+  // meso_block.weekly_tss_target remains advisory-only (the generator's
+  // budget), NOT the display target. Null when no plan rows exist.
+  planned_tss_total: number | null
 }
 
 export async function fetchCurrentWeek(

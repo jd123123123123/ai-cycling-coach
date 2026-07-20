@@ -446,7 +446,12 @@ async def goal_trajectory(
     _compute = getattr(_gt_mod, "compute_goal_trajectory", None)
     if _compute is not None:
         try:
-            _res = _compute(db, current_user.id, profile)
+            _res = _compute(
+                db,
+                current_user.id,
+                profile,
+                lang="de" if lang.lower().startswith("de") else "en",
+            )
             if _inspect.isawaitable(_res):
                 _res = await _res
         except Exception:  # noqa: BLE001 — fall back to the legacy path

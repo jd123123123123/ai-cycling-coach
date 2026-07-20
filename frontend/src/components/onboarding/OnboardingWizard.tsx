@@ -185,13 +185,15 @@ export default function OnboardingWizard() {
       await updateProfile(profileUpdate)
 
       // 3) Goals (incl. weekly-intensity prefs in the free-form JSON).
+      // NEVER auto-seed target_ftp from the typed current FTP — a target the
+      // user never chose becomes a demoralizing phantom goal (usability
+      // audit). FTP targets are set deliberately via the Season goals UI.
       await updateGoals({
         ...(form.eventName ? { target_event_name: form.eventName } : {}),
         ...(form.eventDate ? { target_event_date: form.eventDate } : {}),
         weekly_hours: form.weeklyHours,
         training_model: form.model,
         days_per_week: form.daysPerWeek,
-        ...(form.ftp ? { target_ftp: Math.round(Number(form.ftp)) } : {}),
       })
 
       await qc.invalidateQueries()

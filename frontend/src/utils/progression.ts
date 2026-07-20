@@ -3,9 +3,11 @@
  * screens. Real, defensible models (no black-box fabrication):
  *   • Ordinary-least-squares trend + damped forecast toward a physiological ceiling
  *   • Riegel & Daniels VDOT race-time prediction (running)
- *   • Monod–Scherrer 2-parameter critical-power model (cycling)
  *   • Epley e1RM + DOTS strength scoring (lifting)
  * Every function is pure and takes real datapoints; callers pass measured data.
+ * (The client-side Monod–Scherrer CP model and climb-power event forecast were
+ * removed with audit P0-1/P0-4: cycling power modeling lives server-side and
+ * the ONE forward projection is the /weeks/current Bayesian band.)
  */
 
 // ── Linear regression ──────────────────────────────────────────────────────
@@ -85,34 +87,6 @@ export function raceTimeFromVdot(vdotVal: number, dist_m: number): number | null
     if (vo2at > vdotVal) lo = mid; else hi = mid
   }
   return (lo + hi) / 2
-}
-
-// ── Cycling ────────────────────────────────────────────────────────────────
-/** Monod–Scherrer 2-parameter CP model from (duration_s, power_w) peaks.
- *  P = W'/t + CP → linear in (1/t). Needs ≥2 efforts, ideally 2–12 min. */
-export function criticalPower(peaks: Array<{ t: number; p: number }>): { cp: number; wPrime: number; r2: number } | null {
-  const usable = peaks.filter((e) => e.t >= 120 && e.t <= 1200 && e.p > 0)
-  if (usable.length < 2) return null
-  const tr = linreg(usable.map((e) => ({ x: 1 / e.t, y: e.p })))
-  if (!tr) return null
-  return { cp: tr.intercept, wPrime: tr.slope, r2: tr.r2 }
-}
-
-/** Predict sustainable power (W) for a duration from CP + W'. */
-export function powerForDuration(cp: number, wPrime: number, t_s: number): number {
-  return cp + wPrime / t_s
-}
-
-/** Steady-state power (W) needed to climb: gravity + rolling + air (approx). */
-export function climbPowerWatts(opts: {
-  totalMassKg: number; gradient: number; speedMs: number; crr?: number; cda?: number; rho?: number
-}): number {
-  const { totalMassKg, gradient, speedMs, crr = 0.004, cda = 0.32, rho = 1.0 } = opts
-  const g = 9.81
-  const grav = totalMassKg * g * Math.sin(Math.atan(gradient)) * speedMs
-  const roll = totalMassKg * g * crr * Math.cos(Math.atan(gradient)) * speedMs
-  const air = 0.5 * rho * cda * speedMs ** 3
-  return (grav + roll + air) / 0.97 // drivetrain
 }
 
 // ── Lifting ────────────────────────────────────────────────────────────────

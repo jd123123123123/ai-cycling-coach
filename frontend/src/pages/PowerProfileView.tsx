@@ -6,28 +6,12 @@
  * computed from the athlete's own ride streams, no external service.
  */
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Zap, Gauge, Fingerprint, BatteryCharging, Percent } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
-import { apiClient } from '../api/client'
+import DashboardSection from '../components/dashboard/DashboardSection'
+import { usePowerProfile, useRideCounts } from '../hooks/usePowerProfile'
 import { useLocale } from '../contexts/LocaleContext'
-
-interface PowerProfile {
-  available?: boolean
-  cp_watts: number | null
-  w_prime_j: number | null
-  eftp_watts: number | null
-  r_squared: number | null
-  cp_wkg: number | null
-  n_rides: number
-  peaks: Record<string, number>
-  peaks_wkg: Record<string, number>
-  phenotype: { type: string; note: string; reserves: { neuromuscular_x: number; anaerobic_x: number; vo2_x: number } } | null
-  durability_best_pct: number | null
-  avg_decoupling_pct: number | null
-  total_kj: number | null
-}
 
 const CARD = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', borderRadius: 24 } as const
 
@@ -47,11 +31,8 @@ export default function PowerProfileView() {
   const de = locale === 'de'
   const navigate = useNavigate()
   const [unit, setUnit] = useState<'w' | 'wkg'>('w')
-  const { data } = useQuery<PowerProfile>({
-    queryKey: ['analytics', 'power-profile'],
-    queryFn: async () => (await apiClient.get<PowerProfile>('/analytics/power-profile')).data,
-    staleTime: 30 * 60 * 1000,
-  })
+  const { data } = usePowerProfile()
+  const { data: counts } = useRideCounts()
 
   const bars = useMemo(() => {
     if (!data) return []
@@ -66,6 +47,19 @@ export default function PowerProfileView() {
     }))
   }, [data, unit])
 
+  // THE display threshold (audit P0-1) + a W/kg derived from the same weight
+  // the backend used for cp_wkg (weight ≈ cp / cp_wkg) — arithmetic, not a
+  // second model. Null whenever either input is missing.
+  const threshold = data?.threshold_watts ?? null
+  const isManual = data?.threshold_source === 'manual'
+  const modelValid = data?.model_valid === true
+  const weightKg =
+    data?.cp_watts != null && data?.cp_wkg != null && data.cp_wkg > 0
+      ? data.cp_watts / data.cp_wkg
+      : null
+  const thresholdWkg = threshold != null && weightKg != null ? threshold / weightKg : null
+  const ridesWithPower = counts?.rides_with_power ?? data?.n_rides ?? null
+
   if (data && data.available === false) {
     return (
       <DashboardShell>
@@ -78,7 +72,9 @@ export default function PowerProfileView() {
     )
   }
 
-  const phen = data?.phenotype ?? null
+  // Phenotype is an output of the CP model — only shown when that model is
+  // validated (audit P0-1: no rider-type claims from an unreliable fit).
+  const phen = (data?.model_valid ? data?.phenotype : null) ?? null
   const reserves = phen ? [
     { label: de ? 'Neuromuskulär' : 'Neuromuscular', x: phen.reserves.neuromuscular_x, color: 'var(--color-zone-6)' },
     { label: de ? 'Anaerob' : 'Anaerobic', x: phen.reserves.anaerobic_x, color: 'var(--color-zone-5)' },
@@ -96,9 +92,9 @@ export default function PowerProfileView() {
           </button>
           <div className="flex flex-col">
             <h1 className="num-display" style={{ fontSize: 26, color: 'var(--color-ink)' }}>{de ? 'Power-Profil' : 'Power Profile'}</h1>
-            {data && (
+            {ridesWithPower != null && (
               <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-                {de ? `Aus ${data.n_rides} Fahrten mit Power — nur deine echten Daten` : `From ${data.n_rides} rides with power — your real data only`}
+                {de ? `Aus ${ridesWithPower} Fahrten mit Power — nur deine echten Daten` : `From ${ridesWithPower} rides with power — your real data only`}
               </span>
             )}
           </div>
@@ -142,8 +138,8 @@ export default function PowerProfileView() {
           </div>
         </div>
 
-        {/* ── Engine card: CP · W′ · eFTP (.pen CEBwA) ── */}
-        {data?.cp_watts != null && (
+        {/* ── Engine card: THE canonical threshold (audit P0-1) ── */}
+        {threshold != null && (
           <div className="flex flex-col gap-3.5 p-5" style={CARD}>
             <div className="flex items-center gap-2">
               <Gauge size={16} style={{ color: 'var(--color-recovery)' }} />
@@ -151,31 +147,57 @@ export default function PowerProfileView() {
                 {de ? 'DEIN MOTOR' : 'YOUR ENGINE'}
               </span>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="num-display" style={{ fontSize: 40, color: 'var(--color-ink)' }}>{Math.round(data.cp_watts)}</span>
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-muted)' }}>W CP</span>
-              {data.cp_wkg != null && (
-                <span className="num-mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-recovery)' }}>{data.cp_wkg.toFixed(1)} W/kg</span>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="num-display" style={{ fontSize: 40, color: 'var(--color-ink)' }}>{Math.round(threshold)}</span>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-muted)' }}>
+                W · {isManual ? 'FTP' : de ? 'FTP (geschätzt)' : 'FTP (estimated)'}
+              </span>
+              {thresholdWkg != null && (
+                <span className="num-mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-recovery)' }}>{thresholdWkg.toFixed(1)} W/kg</span>
               )}
             </div>
-            <div className="flex">
-              {([
-                { v: data.w_prime_j != null ? `${(data.w_prime_j / 1000).toFixed(1)} kJ` : '—', l: 'W′', hint: de ? 'Streichhölzer' : 'matchbook' },
-                { v: data.eftp_watts != null ? `${Math.round(data.eftp_watts)} W` : '—', l: 'eFTP', hint: de ? 'aus Fahrten' : 'from rides' },
-                { v: data.r_squared != null ? `${Math.round(data.r_squared * 100)}%` : '—', l: de ? 'Modell-Fit' : 'model fit', hint: 'R²' },
-              ]).map((s, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-0.5" style={i > 0 ? { borderLeft: '1px solid var(--color-rule)' } : undefined}>
-                  <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{s.v}</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>{s.l}</span>
-                  <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{s.hint}</span>
-                </div>
-              ))}
-            </div>
             <p style={{ fontSize: 11.5, color: 'var(--color-muted)', lineHeight: 1.4 }}>
-              {de
-                ? 'Critical Power aus dem Monod-Scherrer-Modell über deine besten Efforts — kein Testtag nötig.'
-                : 'Critical Power from the Monod–Scherrer model over your best efforts — no test day required.'}
+              {isManual
+                ? (de ? 'Aus deinem Profil — die eine Zahl, an der sich alles ausrichtet.' : 'From your profile — the one number everything else keys off.')
+                : (de
+                    ? 'Fortlaufend aus deinen besten Efforts geschätzt — kein Testtag nötig.'
+                    : 'Continuously estimated from your best efforts — no test day required.')}
             </p>
+            {modelValid ? (
+              <DashboardSection
+                id="power-profile-model-details"
+                title={de ? 'Modelldetails' : 'Model details'}
+                subtitle={de ? 'CP · W′ · eFTP — das Modell hinter der Schätzung' : 'CP · W′ · eFTP — the model behind the estimate'}
+              >
+                <div className="flex flex-col gap-3">
+                  <div className="flex">
+                    {([
+                      { v: data?.cp_watts != null ? `${Math.round(data.cp_watts)} W` : '—', l: 'CP', hint: de ? 'Dauerleistung' : 'sustainable' },
+                      { v: data?.w_prime_j != null ? `${(data.w_prime_j / 1000).toFixed(1)} kJ` : '—', l: 'W′', hint: de ? 'Streichhölzer' : 'matchbook' },
+                      { v: data?.eftp_watts != null ? `${Math.round(data.eftp_watts)} W` : '—', l: 'eFTP', hint: de ? 'aus Fahrten' : 'from rides' },
+                      { v: data?.r_squared != null ? `${Math.round(data.r_squared * 100)}%` : '—', l: de ? 'Modell-Fit' : 'model fit', hint: 'R²' },
+                    ]).map((s, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-0.5" style={i > 0 ? { borderLeft: '1px solid var(--color-rule)' } : undefined}>
+                        <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{s.v}</span>
+                        <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>{s.l}</span>
+                        <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{s.hint}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 11.5, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+                    {de
+                      ? 'Critical Power aus dem Monod-Scherrer-Modell über deine besten Efforts. Angezeigt wird immer die FTP oben — das Modell ist der Beleg dahinter.'
+                      : 'Critical Power from the Monod–Scherrer model over your best efforts. The FTP above is the display number — this model is the evidence behind it.'}
+                  </p>
+                </div>
+              </DashboardSection>
+            ) : (
+              <p style={{ fontSize: 11.5, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+                {de
+                  ? 'CP-Modell noch nicht belastbar — braucht mehr harte Bestwerte.'
+                  : 'CP model not reliable yet — needs more hard best efforts.'}
+              </p>
+            )}
           </div>
         )}
 

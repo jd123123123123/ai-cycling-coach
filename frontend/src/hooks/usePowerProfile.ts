@@ -3,6 +3,15 @@ import { apiClient } from '../api/client'
 
 export interface PowerProfile {
   available: boolean
+  /** THE canonical display threshold (audit P0-1): manual FTP when set, else
+   *  the sanitized model eFTP. Every power surface renders THIS number. */
+  threshold_watts?: number | null
+  threshold_source?: 'manual' | 'model' | null
+  /** Whether CP/W′ ("model details") may be shown at all. False when a manual
+   *  FTP exists and the model disagrees with it by more than 10%. */
+  model_valid?: boolean
+  /** 0–1 confidence in the modeled threshold (fit quality × data richness). */
+  confidence?: number
   cp_watts?: number
   w_prime_j?: number
   eftp_watts?: number
@@ -46,5 +55,23 @@ export function usePowerProfile() {
   return useQuery<PowerProfile>({
     queryKey: ['analytics', 'power-profile'],
     queryFn: async () => (await apiClient.get<PowerProfile>('/analytics/power-profile')).data,
+  })
+}
+
+/** GET /analytics/ride-counts — the ONE honest denominator per surface
+ *  (audit P0-5): cycling-only totals for "N rides", "N rides with power",
+ *  "N GPS rides". The three may legitimately differ; each label must state
+ *  which one it uses. */
+export interface RideCounts {
+  total_rides: number
+  rides_with_power: number
+  rides_with_gps: number
+}
+
+export function useRideCounts() {
+  return useQuery<RideCounts>({
+    queryKey: ['analytics', 'ride-counts'],
+    queryFn: async () => (await apiClient.get<RideCounts>('/analytics/ride-counts')).data,
+    staleTime: 30 * 60 * 1000,
   })
 }

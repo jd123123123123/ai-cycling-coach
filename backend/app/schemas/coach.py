@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.adaptive import AdaptiveDirective
 
@@ -197,11 +197,24 @@ class PostRideReview(BaseModel):
     """
     grade: Literal["perfect", "strong", "okay", "overcooked", "undercooked"] | None = None
     headline: str                       # 3-8 words, e.g. "Perfect execution"
-    # Compliance numbers (always emitted — simple mode shows them with friendly
-    # labels; technical mode shows them with their sports-science names).
-    duration: CompliancePair
-    tss: CompliancePair
+    # Whether this review was compliance-graded at all. Sport-gated days
+    # (audit P0-2: gym session on a bike-plan day) emit graded=False with the
+    # compliance pairs ABSENT — the UI renders a neutral 'logged' card.
+    graded: bool = True
+    # Compliance numbers (emitted whenever graded; None/{} on logged-only days
+    # — ride_compliance serializes ungraded axes as empty dicts, which must
+    # not fail validation and null the whole review).
+    duration: CompliancePair | None = None
+    tss: CompliancePair | None = None
     intensity_factor: CompliancePair | None = None
+
+    @field_validator("duration", "tss", "intensity_factor", mode="before")
+    @classmethod
+    def _empty_pair_is_none(cls, v: object) -> object:
+        # ride_compliance_to_dict serializes ungraded axes as {} (deliberately
+        # crash-safe for dict-get consumers); as a pydantic input that must
+        # read as absent, not as an invalid CompliancePair.
+        return None if isinstance(v, dict) and not v else v
     variability_index: float | None = None
     ef: float | None = None
     decoupling_pct: float | None = None

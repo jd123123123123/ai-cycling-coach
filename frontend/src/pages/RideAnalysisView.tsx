@@ -256,7 +256,7 @@ export default function RideAnalysisView() {
     const np = header?.np_watts ?? null
     const vi = pacing?.variability_index ?? (np && avg ? np / avg : null)
     const kj = header?.total_kj ?? null
-    const eftp = wko?.mftp_watts ?? power?.eftp_watts ?? power?.cp_watts ?? null
+    const eftp = wko?.mftp_watts ?? power?.threshold_watts ?? null
     return { avg, max, np, vi, kj, eftp }
   }, [story, header, pacing, wko, power])
 

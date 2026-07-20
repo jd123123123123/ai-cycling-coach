@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Map as MapIcon, Repeat, Mountain, Timer, Wind } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import { apiClient } from '../api/client'
+import { useRideCounts } from '../hooks/usePowerProfile'
 import { useLocale } from '../contexts/LocaleContext'
 
 interface RouteItem {
@@ -91,6 +92,9 @@ export default function ExploreRoutesView() {
     queryFn: async () => (await apiClient.get<RoutesResponse>('/routes/mine')).data,
     staleTime: 30 * 60 * 1000,
   })
+  // ONE honest denominator (audit P0-5): shared GPS-ride count, label states it.
+  const { data: rideCounts } = useRideCounts()
+  const gpsRides = rideCounts?.rides_with_gps ?? data?.n_gps_rides ?? null
 
   return (
     <DashboardShell>
@@ -104,8 +108,8 @@ export default function ExploreRoutesView() {
             {data && (
               <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
                 {de
-                  ? `${data.routes.length} Strecken aus ${data.n_gps_rides} GPS-Fahrten erkannt`
-                  : `${data.routes.length} routes recognized from ${data.n_gps_rides} GPS rides`}
+                  ? `${data.routes.length} Strecken aus ${gpsRides ?? data.n_gps_rides} GPS-Fahrten erkannt`
+                  : `${data.routes.length} routes recognized from ${gpsRides ?? data.n_gps_rides} GPS rides`}
               </span>
             )}
           </div>

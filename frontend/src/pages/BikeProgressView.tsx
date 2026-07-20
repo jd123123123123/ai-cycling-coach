@@ -14,9 +14,10 @@ import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../hooks/useActivitiesRange'
 import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useGoalTrajectory } from '../hooks/useGoalTrajectory'
+import { useCurrentWeek } from '../hooks/useCurrentWeek'
+import type { ProjectionContext } from '../api/weeks'
 import {
-  linreg, forecast, criticalPower, powerForDuration, climbPowerWatts,
-  fmtRaceTime, confidence, granularityForDays, granularityLabel, pctChange,
+  granularityForDays, granularityLabel, pctChange,
   bucketByGranularity, wkgPotential,
 } from '../utils/progression'
 
@@ -24,21 +25,18 @@ import {
  * Bike Progress — a 1:1 rebuild of the Pencil "Bike Progress" (POWER · PROGRESS)
  * design: a deep progression / projection screen for cycling.
  *
- * Every headline figure is derived from real hooks and the sport-science engine in
- * utils/progression:
- *   • FTP progression + forecast — monthly best-NP proxy series → OLS linreg →
- *     damped forecast toward a physiological ceiling (current + ~20 W).
- *   • Power curve / critical power — Monod–Scherrer CP + W′ from the power-duration
- *     peaks; powerForDuration() projects each duration's ceiling.
- *   • Event prediction (Gran Fondo Dolomites) — climbPowerWatts() inverted for road
- *     speed on the decisive climbs → current vs projected finish time.
- * Where a figure genuinely needs a lab (blood lactate LT1/LT2, VLaMax, gross
- * efficiency, CdA, tHb-mass, DEXA body-fat) we render the full structure with an
- * honest "—" / "needs a lab test" instead of fabricating a number.
+ * Every headline figure comes from real hooks:
+ *   • "Where you stand" — the canonical threshold_watts from
+ *     /analytics/power-profile (audit P0-1: one FTP everywhere).
+ *   • THE PROJECTION — the ONE forward forecast, the Bayesian /weeks/current
+ *     projection with its p10–p90 band; below 30 % confidence it shows a range,
+ *     never a point promise (audit P0-4: no 13-minute miracles).
+ *   • Power curve / peaks — sanitized server-side; rendered as-is.
+ * Where a figure genuinely needs a lab we render an honest "—" instead of
+ * fabricating a number.
  */
 
 const DASH = '—'
-const BIKE_KG = 8 // road bike + kit, for climb mass
 
 // hex→CSS-var token map from the .pen
 const C = {
@@ -174,6 +172,7 @@ export default function BikeProgressView() {
   const { data: actData } = useActivitiesRange(fetchFrom, today)
   const { data: brief } = useCoachBrief()
   const { data: traj } = useGoalTrajectory()
+  const { data: week } = useCurrentWeek()
 
   const pmcSeries = pmc?.entries ?? []
   const latestCtl = pmcSeries.length ? Math.round(pmcSeries[pmcSeries.length - 1].ctl) : null
@@ -245,7 +244,10 @@ export default function BikeProgressView() {
       : `Fitness ${trendWord(fitPct, false)} vs the previous ${rangeDays} days · volume ${trendWord(volPct, false)}`
   const weight = athlete?.weight_kg ?? 68.5
   const hasWeight = athlete?.weight_kg != null
-  const currentFtp = athlete?.ftp_watts ?? n0(power?.eftp_watts) ?? n0(power?.cp_watts) ?? null
+  // THE canonical threshold (audit P0-1): manual FTP when set, else the
+  // sanitized model eFTP — served by /analytics/power-profile.
+  const currentFtp = n0(power?.threshold_watts) ?? athlete?.ftp_watts ?? null
+  const ftpIsManual = power?.threshold_source === 'manual'
 
   // ── Range-scoped Power Profile: best NP per granularity bucket across the
   // window's rides (per-ride normalized power is the only power figure the
@@ -273,14 +275,6 @@ export default function BikeProgressView() {
     return Array.from(buckets.values()).sort((a, b) => a.ym.localeCompare(b.ym))
   }, [rides])
 
-  const trend = useMemo(() => {
-    if (monthly.length < 2) return null
-    const t0 = new Date(monthly[0].ym + '-01').getTime()
-    return linreg(monthly.map((m) => ({ x: (new Date(m.ym + '-01').getTime() - t0) / (7 * 864e5), y: m.ftp })))
-  }, [monthly])
-  const slopePerWeek = trend?.slope ?? null
-  const conf = confidence(trend)
-
   const ftpSeries = monthly.slice(-8)
   const ftpGain = ftpSeries.length >= 2 ? n0(ftpSeries[ftpSeries.length - 1].ftp - ftpSeries[0].ftp) : null
   const monthsSpan = monthly.length
@@ -288,114 +282,59 @@ export default function BikeProgressView() {
   // ── Potential vs W/kg standards (real, motivating — not current+20) ───────
   // Map current W/kg onto a men's coaching W/kg ladder → current level + the
   // next milestone band + a strong-amateur long-range target (~4.5 W/kg). The
-  // gauge shows genuine headroom, and the same attainable target watts feed the
-  // damped forecast as its ceiling.
+  // gauge shows genuine headroom.
   const ftpWkgNow = currentFtp != null && hasWeight ? currentFtp / weight : null
   const potential = ftpWkgNow != null ? wkgPotential(ftpWkgNow) : null
-  // Long-range attainable target in watts (strong-amateur W/kg × body weight).
-  // Falls back to a modest +20 W only when body weight is missing (no W/kg).
-  const ceiling = potential != null
-    ? Math.round(potential.targetValue * weight)
-    : (currentFtp != null ? currentFtp + 20 : null)
   // Next-milestone watts (crossing into the next W/kg band) + Δ to it.
   const nextWatts = potential != null ? Math.round(potential.nextValue * weight) : null
   const nextDelta = nextWatts != null && currentFtp != null ? nextWatts - currentFtp : null
-  const fc = useMemo(() => {
-    if (currentFtp == null || slopePerWeek == null) return []
-    return forecast(currentFtp, slopePerWeek, 13, ceiling ?? undefined)
-  }, [currentFtp, slopePerWeek, ceiling])
-  const projFtp = fc.length ? n0(fc[fc.length - 1]) : null
-  const projDelta = projFtp != null && currentFtp != null ? projFtp - currentFtp : null
   // Honest "how far along toward strong-amateur potential" — lands most rec
   // athletes ~60–75% with real room to grow (NOT the old ~92% current+20 gauge).
   const ceilPct = potential?.pctToTarget ?? null
 
-  // Forecast bars: last-2 actual months + 4 projected (sampled ~monthly = 4.3 wk)
-  const forecastBars = useMemo(() => {
-    const past = monthly.slice(-2).map((m) => ({ label: m.label, val: m.ftp, projected: false }))
-    const proj: { label: string; val: number; projected: boolean }[] = []
-    if (fc.length && past.length) {
-      const startMonth = new Date(monthly[monthly.length - 1].ym + '-01').getMonth()
-      for (let k = 1; k <= 4; k++) {
-        const idx = Math.min(fc.length - 1, Math.round(k * 4.33))
-        proj.push({ label: MONTHS[(startMonth + k) % 12], val: fc[idx], projected: true })
-      }
-    }
-    return [...past, ...proj]
-  }, [monthly, fc])
-
-  // ── Critical Power model (Monod–Scherrer) from peaks ─────────────────────
+  // ── Power-curve peaks (sanitized server-side) ─────────────────────────────
   const peakAt = (s: string) => n0(power?.peaks?.[s]) // seconds→watts
-  const cpModel = useMemo(() => {
-    const peaks = power?.peaks
-    if (!peaks) return null
-    const pts = Object.entries(peaks).map(([t, p]) => ({ t: Number(t), p }))
-    return criticalPower(pts)
-  }, [power])
-  const cpW = n0(power?.cp_watts ?? cpModel?.cp)
-
-  // Power-curve durations (seconds) → now (real) + projected ceiling
   const CURVE: { s: string; label: string }[] = [
     { s: '5', label: '5s' }, { s: '60', label: '1min' }, { s: '300', label: '5min' },
     { s: '1200', label: '20min' }, { s: '3600', label: '60min' },
   ]
-  const projPower = (s: number, now: number | null): number | null => {
-    if (now == null) return null
-    if (cpModel && s >= 120) {
-      const projCp = (cpW ?? cpModel.cp) + (projDelta ?? 0)
-      return Math.round(powerForDuration(projCp, cpModel.wPrime, s))
-    }
-    return Math.round(now * 1.05) // short efforts: modest neuromuscular projection
-  }
 
-  // ── Event prediction: Gran Fondo Dolomites (climb-power model) ────────────
+  // ── THE PROJECTION — the one forward forecast (audit P0-4) ───────────────
+  // The Bayesian /weeks/current projection with p10–p90 band. No client-side
+  // OLS forecast, no event-time claims: below 30 % confidence we show the
+  // range, never a point promise.
   const goalName = ((brief?.evidence as Record<string, unknown> | undefined)?.athlete as
     Record<string, unknown> | undefined)?.goal_target as string | undefined
   const daysToGoal = traj?.days_to_goal ?? null
-  const EVENT = { dist_m: 142_000, climb_m: 3_800, grad: 0.07 }
-  const speedForPower = (p: number, mass: number, grad: number) => {
-    let lo = 0.5, hi = 25
-    for (let i = 0; i < 44; i++) {
-      const mid = (lo + hi) / 2
-      if (climbPowerWatts({ totalMassKg: mass, gradient: grad, speedMs: mid }) > p) hi = mid
-      else lo = mid
-    }
-    return (lo + hi) / 2
-  }
-  const eventTime = (ftp: number): number => {
-    const mass = weight + BIKE_KG
-    const climbDist = EVENT.climb_m / EVENT.grad // road-m spent climbing
-    const flatDist = Math.max(0, EVENT.dist_m - climbDist)
-    const vc = speedForPower(ftp * 0.82, mass, EVENT.grad)
-    const vf = speedForPower(ftp * 0.68, mass, 0.001)
-    return climbDist / vc + flatDist / vf
-  }
-  const curTime = currentFtp != null ? eventTime(currentFtp) : null
-  const projTime = projFtp != null ? eventTime(projFtp) : null
-  const timeSavedMin = curTime != null && projTime != null ? Math.round((curTime - projTime) / 60) : null
-  // Reason line for the event card — WHY the projected finish is faster/slower,
-  // keyed to the real FTP delta + W/kg trend that drives the climb-power model.
-  const eventReason: string | null = (() => {
-    if (curTime == null || projTime == null || currentFtp == null || projFtp == null || timeSavedMin == null) return null
-    const dW = projFtp - currentFtp
-    const wkgFrom = currentFtp != null && weight ? n1(currentFtp / weight) : null
-    const wkgTo = projFtp != null && weight ? n1(projFtp / weight) : null
-    const wkgTxt = wkgFrom != null && wkgTo != null && wkgFrom !== wkgTo ? ` (${wkgFrom}→${wkgTo} W/kg)` : ''
-    const mins = Math.abs(timeSavedMin)
-    if (timeSavedMin >= 1) {
-      return de
-        ? `≈${mins} min schneller — deine FTP steigt +${dW} W${wkgTxt} und hebt dein Tempo an den 3.800 Hm.`
-        : `≈${mins} min faster — your FTP is trending +${dW} W${wkgTxt}, lifting your speed on the 3,800 m of climbing.`
-    }
-    if (timeSavedMin <= -1) {
-      return de
-        ? `≈${mins} min langsamer — die Form trendet abwärts (${dW} W); mehr Umfang, um dein Klettertempo zu halten.`
-        : `≈${mins} min slower — fitness is trending down (${dW} W); add volume to hold your climb speed.`
-    }
-    return de
-      ? 'Auf Kurs — du hältst dein aktuelles Klettertempo.'
-      : 'On track — holding your current climb speed.'
-  })()
+  const proj: ProjectionContext | null = week?.projection ?? null
+  // Mirror the backend's confidence formula (band tightness × sample richness)
+  // when confidence_pct isn't in the payload; never invent a higher number.
+  const projConfPct = useMemo(() => {
+    if (!proj) return null
+    if (proj.confidence_pct != null) return proj.confidence_pct
+    if (proj.projected_central == null || !proj.band_80) return null
+    const bandW = proj.band_80[1] - proj.band_80[0]
+    const ratio = proj.projected_central > 0 ? bandW / proj.projected_central : 1
+    const sampleFactor = proj.samples_used != null ? Math.min(1, proj.samples_used / 10) : 1
+    return Math.round(100 * Math.max(0, Math.min(1, (1 - ratio) * sampleFactor)))
+  }, [proj])
+  const projTier = projConfPct == null
+    ? null
+    : projConfPct >= 70
+      ? { label: de ? 'hoch' : 'high', color: C.recovery }
+      : projConfPct >= 40
+        ? { label: de ? 'moderat' : 'moderate', color: C.ink2 }
+        : { label: de ? 'niedrig' : 'low', color: C.muted }
+  // Below 30 % (or unknown) confidence: range-only, no central point promise.
+  const projRangeOnly = projConfPct == null || projConfPct < 30
+  const projP10 = proj?.band_80 ? Math.round(proj.band_80[0]) : null
+  const projP90 = proj?.band_80 ? Math.round(proj.band_80[1]) : null
+  const projCentral = proj?.projected_central != null ? Math.round(proj.projected_central) : null
+  const projCurrent = proj?.current_estimate != null ? Math.round(proj.current_estimate) : null
+  const projHorizonIso = proj?.path.length ? proj.path[proj.path.length - 1].date : null
+  const projHorizonLabel = projHorizonIso
+    ? new Date(`${projHorizonIso}T12:00:00`).toLocaleDateString(de ? 'de-DE' : 'en-US', { day: 'numeric', month: 'short' })
+    : null
 
   // ── Hero W/kg + percentile bucket ────────────────────────────────────────
   const ftpWkg = currentFtp != null && weight ? n1(currentFtp / weight) : null
@@ -480,7 +419,9 @@ export default function BikeProgressView() {
           <Card gap={20} pad={22}>
             <div className="flex items-center justify-between">
               <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: C.muted }}>
-                {de ? 'FUNKTIONELLE SCHWELLENLEISTUNG' : 'FUNCTIONAL THRESHOLD POWER'}
+                {ftpIsManual
+                  ? (de ? 'FTP · AUS DEINEM PROFIL' : 'FTP · FROM YOUR PROFILE')
+                  : (de ? 'FTP (GESCHÄTZT)' : 'FTP (ESTIMATED)')}
               </span>
               {pctTop != null && (
                 <Pill color={C.accent} bg={soft(C.accent, 15)}>
@@ -643,92 +584,119 @@ export default function BikeProgressView() {
 
           {/* ═══ 3 · THE PROJECTION ═══ */}
           <SectionHeader tick={C.strain} title={de ? 'DIE PROGNOSE' : 'THE PROJECTION'}
-            sub={de ? 'Wohin es führt · Modellprognose' : "Where you're headed · model forecast"} />
+            sub={de ? 'Richtung Renntag · mit Unsicherheitsband' : 'Toward race day · with uncertainty band'} />
 
-          {/* FTP Forecast */}
+          {/* THE one projection: /weeks/current Bayesian forecast, p10–p90 band */}
           <Card>
-            <CardHead title={de ? 'FTP-Prognose' : 'FTP Forecast'} sub={de ? `Projizierter Trend · aus ${rangeLabel}` : `Projected trend · from ${rangeLabel}`}
-              right={
-                <div className="flex items-center" style={{ gap: 10 }}>
-                  <span className="inline-flex items-center" style={{ gap: 4, fontSize: 11, color: C.muted }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 2, background: C.accent }} />{de ? 'Ist' : 'Actual'}
-                  </span>
-                  <span className="inline-flex items-center" style={{ gap: 4, fontSize: 11, color: C.muted }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 2, background: 'transparent', border: `1.5px solid ${C.accent}` }} />{de ? 'Prognose' : 'Projected'}
-                  </span>
-                </div>
-              } />
-            {forecastBars.length === 0 && (
-              <div style={{ fontSize: 12, color: C.muted, padding: '20px 0' }}>{emptyMsg}</div>
-            )}
-            <div className="flex items-end" style={{ gap: 10, height: 150 }}>
-              {forecastBars.map((b, i) => {
-                const mx = Math.max(...forecastBars.map((x) => x.val), 1)
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center justify-end" style={{ gap: 6, height: '100%' }}>
-                    <span className="num-display" style={{ fontSize: 11, fontWeight: 700, color: b.projected ? C.accent : C.muted }}>{Math.round(b.val)}</span>
-                    <span className="w-full" style={{
-                      height: `${(b.val / mx) * 100}%`, borderRadius: 6,
-                      background: b.projected ? soft(C.accent, 15) : (i === 1 ? C.accent : C.surface3),
-                      border: b.projected ? `1.5px solid ${C.accent}` : 'none',
-                    }} />
+            <CardHead
+              title={de ? 'Renntag-Prognose' : 'Race-day projection'}
+              sub={proj
+                ? `${proj.metric_label}${projHorizonLabel ? ` · ${de ? 'bis' : 'to'} ${projHorizonLabel}` : ''}`
+                : (de ? 'Modellprognose' : 'Model forecast')}
+              right={projTier && projConfPct != null ? (
+                <Pill color={projTier.color} bg={soft(projTier.color, 15)}>
+                  {projConfPct}% · {projTier.label}
+                </Pill>
+              ) : undefined}
+            />
+            {!proj ? (
+              <div style={{ fontSize: 12, color: C.muted, padding: '12px 0' }}>
+                {de
+                  ? 'Noch keine belastbare Prognose — braucht mehr Trainingshistorie.'
+                  : 'No reliable projection yet — needs more training history.'}
+              </div>
+            ) : (
+              <>
+                {/* Goal context */}
+                {(goalName != null || daysToGoal != null) && (
+                  <div className="flex items-center" style={{ gap: 10 }}>
+                    <span className="flex items-center justify-center rounded-[12px]" style={{ width: 34, height: 34, background: C.surface2, flex: 'none' }}>
+                      <Flag size={18} style={{ color: C.amber }} />
+                    </span>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: C.ink2 }}>
+                      {goalName ?? (de ? 'Zielevent' : 'Goal event')}
+                      {daysToGoal != null ? ` · ${daysToGoal} ${de ? 'Tage' : 'days'}` : ''}
+                    </span>
                   </div>
-                )
-              })}
-            </div>
-            <div className="flex" style={{ gap: 10 }}>
-              {forecastBars.map((b, i) => (
-                <span key={i} className="flex-1 text-center" style={{ fontSize: 10, fontWeight: b.projected ? 500 : 700, color: (!b.projected && i === 1) ? C.accent : C.muted }}>
-                  {b.label}{!b.projected && i === 1 ? (de ? ' · jetzt' : ' · now') : ''}
-                </span>
-              ))}
-            </div>
-            {/* Callout */}
-            <div className="flex items-center rounded-[16px]" style={{ gap: 12, padding: 14, background: soft(C.paper, 70), border: `1px solid ${soft(C.strain, 20)}` }}>
-              <span className="flex items-center justify-center rounded-full" style={{ width: 38, height: 38, background: C.strain, flex: 'none' }}>
-                <LineChart size={22} style={{ color: C.ink }} />
-              </span>
-              <div className="flex flex-col" style={{ gap: 2, minWidth: 0, flex: 1 }}>
-                <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{de ? 'Prognose FTP' : 'Projected FTP'} {projFtp ?? DASH} W</span>
-                <span style={{ fontSize: 12, color: C.ink2 }}>
-                  {conf.pct}% {de ? 'Konfidenz' : 'confidence'} · {de ? conf.label_de : conf.label}{latestCtl != null ? ` · CTL ${latestCtl}` : ''}{daysToGoal != null ? ` · ${daysToGoal}${de ? ' Tage bis Ziel' : ' days to goal'}` : ''}
-                </span>
-              </div>
-              {projDelta != null && (
-                <Pill color={C.recovery} bg={soft(C.recovery, 15)}><ArrowUp size={12} />{projDelta >= 0 ? '+' : ''}{projDelta} W</Pill>
-              )}
-            </div>
-          </Card>
-
-          {/* Event Prediction — where the projected fitness lands you on race day */}
-          <Card>
-            <div className="flex items-center" style={{ gap: 12 }}>
-              <span className="flex items-center justify-center rounded-[12px]" style={{ width: 40, height: 40, background: C.surface2, flex: 'none' }}>
-                <Flag size={22} style={{ color: C.amber }} />
-              </span>
-              <div className="flex flex-col" style={{ gap: 2 }}>
-                <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{goalName ?? 'Gran Fondo Dolomites'}</span>
-                <span style={{ fontSize: 12, fontWeight: 500, color: C.muted }}>
-                  {daysToGoal != null ? `${daysToGoal} ${de ? 'Tage' : 'days'} · ` : ''}142 km · 3,800 m
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between rounded-[16px]" style={{ padding: 16, background: C.surface2 }}>
-              <div className="flex flex-col" style={{ gap: 3 }}>
-                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.muted }}>{de ? 'AKTUELL' : 'CURRENT'}</span>
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink2 }}>{curTime != null ? fmtRaceTime(curTime) : DASH}</span>
-              </div>
-              <ArrowRight size={20} style={{ color: C.muted }} />
-              <div className="flex flex-col items-end" style={{ gap: 3 }}>
-                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.accent }}>{de ? 'PROGNOSE' : 'PROJECTED'}</span>
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink }}>{projTime != null ? fmtRaceTime(projTime) : DASH}</span>
-              </div>
-              {timeSavedMin != null && (
-                <Pill color={C.recovery} bg={soft(C.recovery, 15)}><TrendingDown size={12} />{Math.abs(timeSavedMin)} min</Pill>
-              )}
-            </div>
-            {eventReason && (
-              <span style={{ fontSize: 12, fontWeight: 500, color: C.ink2, lineHeight: 1.4 }}>{eventReason}</span>
+                )}
+                {projRangeOnly ? (
+                  /* Low/unknown confidence → range only, no point promise */
+                  <div className="flex flex-col" style={{ gap: 4 }}>
+                    <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink, lineHeight: 1.25 }}>
+                      {projP10 != null && projP90 != null
+                        ? (de
+                            ? `Richtung Renntag: ${projP10}–${projP90} W möglich`
+                            : `Trending toward ${projP10}–${projP90} W by race day`)
+                        : DASH}
+                    </span>
+                    <span style={{ fontSize: 12, color: C.muted }}>
+                      {de
+                        ? 'Das Band ist noch breit — je mehr Fahrten, desto enger wird es.'
+                        : 'The band is still wide — it tightens with every ride.'}
+                    </span>
+                  </div>
+                ) : (
+                  /* Central point + band */
+                  <div className="flex items-center justify-between rounded-[16px]" style={{ padding: 16, background: C.surface2 }}>
+                    <div className="flex flex-col" style={{ gap: 3 }}>
+                      <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.muted }}>{de ? 'AKTUELL' : 'CURRENT'}</span>
+                      <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink2 }}>{projCurrent != null ? `${projCurrent} W` : DASH}</span>
+                    </div>
+                    <ArrowRight size={20} style={{ color: C.muted }} />
+                    <div className="flex flex-col items-end" style={{ gap: 3 }}>
+                      <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.accent }}>{de ? 'RENNTAG' : 'RACE DAY'}</span>
+                      <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink }}>{projCentral != null ? `${projCentral} W` : DASH}</span>
+                      {projP10 != null && projP90 != null && (
+                        <span className="num-display" style={{ fontSize: 11, fontWeight: 600, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+                          {projP10}–{projP90} W (80 %)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {/* Band chart from the projection path */}
+                {proj.path.length >= 2 && (() => {
+                  const pts = proj.path
+                  const lo = Math.min(...pts.map((p) => p.p10))
+                  const hi = Math.max(...pts.map((p) => p.p90))
+                  const span = Math.max(1, hi - lo)
+                  const W = 300, H = 96
+                  const x = (i: number) => (i / (pts.length - 1)) * W
+                  const y = (v: number) => H - ((v - lo) / span) * (H - 10) - 5
+                  const band = [
+                    ...pts.map((p, i) => `${x(i).toFixed(1)},${y(p.p90).toFixed(1)}`),
+                    ...[...pts].reverse().map((p, i) => `${x(pts.length - 1 - i).toFixed(1)},${y(p.p10).toFixed(1)}`),
+                  ].join(' ')
+                  const central = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.central).toFixed(1)}`).join(' ')
+                  return (
+                    <div className="flex flex-col" style={{ gap: 6 }}>
+                      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: 96, display: 'block' }} aria-hidden>
+                        <polygon points={band} fill={soft(C.accent, 14)} />
+                        <polyline points={central} fill="none" stroke={C.accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <div className="flex items-center justify-between">
+                        <span style={{ fontSize: 10.5, color: C.muted }}>{de ? 'Jetzt' : 'Now'}</span>
+                        <span style={{ fontSize: 10.5, color: C.muted }}>
+                          {de ? 'Band: p10–p90 (80 %)' : 'Band: p10–p90 (80%)'}
+                        </span>
+                        <span style={{ fontSize: 10.5, color: C.muted }}>{projHorizonLabel ?? ''}</span>
+                      </div>
+                    </div>
+                  )
+                })()}
+                {/* Honest narration straight from the model — no client re-spin */}
+                <div className="flex items-start rounded-[16px]" style={{ gap: 12, padding: 14, background: soft(C.paper, 70), border: `1px solid ${soft(C.strain, 20)}` }}>
+                  <span className="flex items-center justify-center rounded-full" style={{ width: 34, height: 34, background: C.strain, flex: 'none' }}>
+                    <LineChart size={19} style={{ color: C.ink }} />
+                  </span>
+                  <div className="flex flex-col" style={{ gap: 3, minWidth: 0, flex: 1 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.ink, lineHeight: 1.4 }}>{proj.projected_outcome}</span>
+                    <span style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4 }}>
+                      {proj.caveat}{latestCtl != null ? ` · CTL ${latestCtl}` : ''}
+                    </span>
+                  </div>
+                </div>
+              </>
             )}
           </Card>
 
@@ -780,33 +748,23 @@ export default function BikeProgressView() {
             )}
           </Card>
 
-          {/* Power Curve */}
+          {/* Power Curve — sanitized server-side bests, no projected ceiling */}
           <Card>
-            <CardHead title={de ? 'Leistungskurve' : 'Power Curve'} sub={de ? 'Aktuell vs. projizierte Decke' : 'Current vs projected ceiling'}
-              right={
-                <div className="flex items-center" style={{ gap: 10 }}>
-                  <span className="inline-flex items-center" style={{ gap: 4, fontSize: 11, color: C.muted }}><span style={{ width: 9, height: 9, borderRadius: 2, background: C.accent }} />{de ? 'Jetzt' : 'Now'}</span>
-                  <span className="inline-flex items-center" style={{ gap: 4, fontSize: 11, color: C.muted }}><span style={{ width: 9, height: 9, borderRadius: 2, background: soft(C.accent, 15), border: `1px solid ${C.accent}` }} />{de ? 'Prog' : 'Proj'}</span>
-                </div>
-              } />
+            <CardHead title={de ? 'Leistungskurve' : 'Power Curve'}
+              sub={de ? 'Deine besten Efforts je Dauer' : 'Your best efforts per duration'} />
             {!power?.peaks || Object.keys(power.peaks).length === 0 ? (
               <div style={{ fontSize: 12, color: C.muted, padding: '20px 0' }}>{emptyMsg}</div>
             ) : (
             <>
-            <div className="flex items-end" style={{ gap: 12, height: 170 }}>
+            <div className="flex items-end" style={{ gap: 12, height: 150 }}>
               {CURVE.map((c) => {
                 const now = peakAt(c.s)
-                const proj = projPower(Number(c.s), now)
-                const gain = proj != null && now != null ? proj - now : null
                 const allNow = CURVE.map((x) => peakAt(x.s) ?? 0)
                 const mx = Math.max(...allNow, 1)
                 const curH = now != null ? (now / mx) * 120 : 0
-                const capH = gain != null && gain > 0 ? (gain / mx) * 120 : 0
                 return (
                   <div key={c.s} className="flex-1 flex flex-col items-center justify-end" style={{ gap: 5, height: '100%' }}>
-                    {gain != null && gain > 0 && <span className="num-display" style={{ fontSize: 10, fontWeight: 700, color: C.accent }}>+{gain}</span>}
-                    {capH > 0 && <span className="w-full" style={{ height: capH, background: soft(C.accent, 15), border: `1.5px solid ${C.accent}`, borderRadius: '6px 6px 0 0' }} />}
-                    <span className="w-full" style={{ height: curH, background: C.accent, borderRadius: capH > 0 ? '0 0 6px 6px' : 6 }} />
+                    <span className="w-full" style={{ height: curH, background: C.accent, borderRadius: 6 }} />
                     <span className="num-display" style={{ fontSize: 11, fontWeight: 700, color: C.ink2 }}>{now ?? DASH}</span>
                   </div>
                 )

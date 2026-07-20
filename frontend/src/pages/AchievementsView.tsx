@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import { apiClient } from '../api/client'
+import { useRideCounts } from '../hooks/usePowerProfile'
 import { useLocale } from '../contexts/LocaleContext'
 
 interface UnlockedItem {
@@ -109,6 +110,8 @@ export default function AchievementsView() {
       (await apiClient.get<AchievementsPayload>('/achievements/mine', { params: { lang: de ? 'de' : 'en' } })).data,
     staleTime: 5 * 60 * 1000,
   })
+  // ONE honest denominator (audit P0-5): the shared /analytics/ride-counts total.
+  const { data: rideCounts } = useRideCounts()
 
   const fmtDate = (iso: string) => {
     try {
@@ -140,8 +143,8 @@ export default function AchievementsView() {
         },
         {
           icon: Bike, color: 'var(--color-accent)',
-          value: fmtNum(data.all_time.rides),
-          label: de ? 'Fahrten' : 'rides',
+          value: fmtNum(rideCounts?.total_rides ?? data.all_time.rides),
+          label: de ? 'Fahrten (gesamt)' : 'rides (all-time)',
         },
       ]
     : []

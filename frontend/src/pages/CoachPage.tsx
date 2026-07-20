@@ -14,6 +14,7 @@ import { ArrowLeft, Sparkles, Send, Bot, Check, RotateCcw } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import { useChatStream, type ChatMessage } from '../hooks/useChatStream'
 import { useCoachBrief } from '../hooks/useCoachBrief'
+import { useDailyDecision } from '../hooks/useDailyDecision'
 import { usePMC } from '../hooks/usePMC'
 import { useLocale } from '../contexts/LocaleContext'
 
@@ -24,6 +25,10 @@ export default function CoachPage() {
   const de = locale === 'de'
   const navigate = useNavigate()
   const { data: brief } = useCoachBrief()
+  // ONE Daily Decision (audit P0-3) — same object the Today tab renders, read
+  // off the same brief query. Its verdict leads the briefing so chat and Today
+  // can never disagree about what today is.
+  const { decision } = useDailyDecision()
   const { data: pmc } = usePMC(14)
   const chat = useChatStream()
   const [draft, setDraft] = useState('')
@@ -95,6 +100,10 @@ export default function CoachPage() {
                   {de ? 'DEIN BRIEFING' : 'YOUR BRIEFING'}
                 </span>
               </div>
+              {/* The decision verdict leads — the rationale is flavor below it. */}
+              {decision && (
+                <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.45 }}>{decision.verdict}</p>
+              )}
               <p style={{ fontSize: 14.5, fontWeight: 500, color: 'var(--color-ink)', lineHeight: 1.5 }}>{brief.rationale}</p>
               {weekBars.length >= 2 && (
                 <div className="flex flex-col gap-1.5">

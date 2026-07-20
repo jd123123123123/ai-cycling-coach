@@ -51,11 +51,14 @@ export function useCoachBrief() {
       const fetchedMs = query.state.dataUpdatedAt
       if (fetchedMs && localDayKey(new Date(fetchedMs)) !== localDayKey(new Date())) return true
       // Trained today but the post-ride review hasn't been attached yet.
+      // Sport-gated 'logged' days keep the typed field null all day while the
+      // raw review lives in evidence — check both, or every window focus
+      // refetches forever on exactly the audit's gym-on-bike-day case.
       const evidence = (data.evidence ?? {}) as Record<string, unknown>
       const weekly = (evidence['weekly_progress'] ?? {}) as Record<string, unknown>
       const todayTssRaw = weekly['today_tss']
       const todayTss = typeof todayTssRaw === 'number' ? todayTssRaw : 0
-      const reviewMissing = data.post_ride_review == null
+      const reviewMissing = data.post_ride_review == null && evidence['post_ride_review'] == null
       return reviewMissing && todayTss > 0
     },
     // Brief endpoint always returns 200 (rule-based fallback). If it still 5xx'd,

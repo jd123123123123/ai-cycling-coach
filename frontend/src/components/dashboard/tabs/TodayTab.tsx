@@ -13,7 +13,7 @@ import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays, format, startOfWeek, addDays } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { Flag, Heart, Activity, Zap, Target, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
-import type { Adaptations } from '../../../api/coach'
+import { loggedReviewFromEvidence, type Adaptations } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
 import RecoveryEtaCard from '../RecoveryEtaCard'
@@ -24,6 +24,7 @@ import AbsorptionCard from '../AbsorptionCard'
 import LevelStripCard from '../LevelStripCard'
 import { useStreak, useSetAthleteStatus } from '../../../hooks/useStreak'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
+import { useDailyDecision, isActiveDecisionState, isSidelinedDecisionState } from '../../../hooks/useDailyDecision'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
 import { usePMC } from '../../../hooks/usePMC'
@@ -53,6 +54,10 @@ export default function TodayTab() {
   const de = locale === 'de'
   const today = useMemo(() => new Date(), [])
   const { data: brief } = useCoachBrief()
+  // ONE Daily Decision (audit P0-3) — computed fresh server-side per brief
+  // request. Every day-state flag below keys off decision.state; the client
+  // never derives its own instruction from the brief's workout shape again.
+  const { decision } = useDailyDecision()
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 30), [today]), today)
   const { data: snapshot } = useTodaySnapshot()
   const { data: pmc } = usePMC(90)
@@ -110,24 +115,22 @@ export default function TodayTab() {
   const dCtl = load?.dCtl7 ?? null
 
   const workout = brief?.prescribed_workout
-  // Rest-day detection — a rest day has nothing to start or view. Robustly read
-  // the same PrescribedWorkout the plan card renders: no workout at all, a
-  // rest/recovery template id or category, a rest/recovery title, or zeroed
-  // targets (≈0 TSS and ≈0 duration) all mean "no session prescribed".
-  const isRestDay = useMemo(() => {
-    if (!workout) return true
-    const id = (workout.template_id ?? '').toLowerCase()
-    const cat = (workout.category ?? '').toLowerCase()
-    const title = (workout.title ?? '').toLowerCase()
-    if (/^(rest|recovery)/.test(id)) return true
-    if (/\b(rest|recovery)\b/.test(cat) || /\b(ruhetag|erholung)\b/.test(cat)) return true
-    if (/\b(rest day|ruhetag)\b/.test(title)) return true
-    const tss = workout.predicted_tss ?? 0
-    const dur = workout.duration_minutes ?? 0
-    if (tss <= 1 && dur <= 1) return true
-    return false
-  }, [workout])
-  const review = brief?.post_ride_review ?? null
+  // Day-state flags — keyed off DailyDecision.state, the single server-side
+  // producer (audit P0-3). The old client regex over the prescribed workout is
+  // gone; while the decision hasn't arrived yet we fall back to the weakest
+  // honest signal only (no prescription → nothing to view).
+  const decisionState = decision?.state ?? null
+  const sidelined = isSidelinedDecisionState(decisionState) // sick / injured / break
+  const isRestDay = decisionState != null ? decisionState === 'planned_rest' : !workout
+  // A session is still on today's menu (recover / easy / quality / hard) —
+  // gates the workout card and the outdoor-window nudge.
+  const isActiveTrainingDay = decisionState != null
+    ? isActiveDecisionState(decisionState)
+    : (!!workout && !isRestDay)
+  // Sport-honest review: graded reviews arrive typed; sport-gated "logged"
+  // reviews are rescued from the raw evidence (their empty compliance pairs
+  // fail server-side validation, but the facts are real and renderable).
+  const review = brief?.post_ride_review ?? loggedReviewFromEvidence(evidence)
   const adaptations = (brief as { adaptations?: Adaptations | null } | undefined)?.adaptations ?? null
   const [whyOpen, setWhyOpen] = useState(false)
   const wBlocks = workout?.blocks ?? []
@@ -229,7 +232,13 @@ export default function TodayTab() {
   // tier + HRV/sleep signals. Every line cites a REAL signal and today's real
   // move; nothing fabricated. Variants are picked deterministically by day of
   // month (no Math.random) so the line varies day-to-day but is stable today.
-  const trainedToday = !!review || hasSessionToday
+  // Sport-aware "already trained" — the decision only flips to trained_already
+  // when today's completed work matches the planned sport family (a gym log on
+  // a bike-plan day keeps the bike plan as the instruction). Client signals
+  // are only the fallback while the decision loads.
+  const trainedToday = decisionState != null
+    ? decisionState === 'trained_already'
+    : (!!review || hasSessionToday)
   const hrvDown = typeof hrvDelta === 'number' && hrvDelta <= -3
   const hrvUp = typeof hrvDelta === 'number' && hrvDelta >= 3
   const sleptWell = typeof sleepScore === 'number' && sleepScore >= 80
@@ -259,6 +268,9 @@ export default function TodayTab() {
   const pick = (arr: string[]) => arr[today.getDate() % arr.length]
 
   const heroLine = (() => {
+    // Self-reported sick / injured / break — the decision's own explanation is
+    // the only honest line; no witty training flavor on a sidelined day.
+    if (decision && sidelined) return decision.reason
     if (trainedToday) {
       if (roughRecovery) return pick(de ? [
         `Solide Einheit, aber ${badReason} — heute Abend zählt Schlaf, nicht Strava.`,
@@ -366,7 +378,7 @@ export default function TodayTab() {
           `Sleep hit ${sN} — keep ${wTitle} conversational; the comeback gets bought with an early night.`,
         ])
       }
-      if (tier === 'rest' || hrvDown) {
+      if (decisionState === 'recover' || tier === 'rest' || hrvDown) {
         // Great sleep + dragging HRV: recovery is half-done — say both, crisply.
         if (sleptGreat && hrvDown && hrvPct != null) return pick(de ? [
           `Schlaf ${sN} hat geliefert, die HRV (${hrvPct}) zieht noch nach — ${wTitle} kontrolliert fahren.`,
@@ -476,11 +488,23 @@ export default function TodayTab() {
       'Syncing your signals… your game plan is seconds away.',
     ])
   })()
-  // Human wrap-up line — prefer the coach's REAL LLM verdict (richer, personal,
-  // already synthesized from today's evidence + any post-ride review); fall back
-  // to the deterministic witty line when the brief carries no verdict yet.
+  // Human wrap-up line — the brief's LLM verdict is FLAVOR and may only render
+  // while the brief's own day-shape agrees with the fresh decision (the backend
+  // now guarantees agreement on fresh generations; this guard catches a stale
+  // cached brief). On disagreement the decision's verdict wins — chat, Today
+  // and the pill can never tell different stories.
   const verdictLine = brief?.verdict?.trim()
-  const wrapLine = verdictLine && verdictLine.length > 0 ? verdictLine : heroLine
+  const briefAgreesWithDecision = (() => {
+    if (!decision) return true
+    if (decision.state === 'trained_already') return !!review
+    if (decision.state === 'planned_rest' || sidelined) {
+      return !workout || (workout.template_id ?? '').toLowerCase().startsWith('rest')
+    }
+    return !!workout // active states need a prescription to talk about
+  })()
+  const wrapLine = decision && !briefAgreesWithDecision
+    ? decision.verdict
+    : (verdictLine && verdictLine.length > 0 ? verdictLine : heroLine)
 
   // DAY-STATE-AWARE decision pill — the one-glance "today's move". It must never
   // contradict the wrap-up line (or tell an athlete to "train" after they've
@@ -488,20 +512,37 @@ export default function TodayTab() {
   // recover nuance when depleted); rest day prescribed → rest day; otherwise the
   // readiness tier decides go-hard / go-controlled / recover.
   const { pillWord, pillColor } = (() => {
-    // Self-reported status outranks every readiness signal — the hero must
-    // never say "primed to train" to an athlete who marked themselves sick.
-    if (athleteState === 'sick') return { pillWord: de ? 'Krank gemeldet · nur Erholung' : 'Marked sick · recovery only', pillColor: 'var(--color-amber)' }
-    if (athleteState === 'injured') return { pillWord: de ? 'Verletzt gemeldet · heilen' : 'Marked injured · heal up', pillColor: 'var(--color-amber)' }
-    if (athleteState === 'break') return { pillWord: de ? 'Pause · locker bleiben' : 'On a break · keep it light', pillColor: 'var(--color-recovery)' }
+    // ONE decision, one pill — keyed 1:1 off DailyDecision.state (audit P0-3).
+    if (decisionState != null) {
+      switch (decisionState) {
+        case 'sick': return { pillWord: tFor(locale, 'dd_pill_sick'), pillColor: 'var(--color-amber)' }
+        case 'injured': return { pillWord: tFor(locale, 'dd_pill_injured'), pillColor: 'var(--color-amber)' }
+        case 'break': return { pillWord: tFor(locale, 'dd_pill_break'), pillColor: 'var(--color-recovery)' }
+        case 'trained_already':
+          return roughRecovery
+            ? { pillWord: tFor(locale, 'dd_pill_trained_recover'), pillColor: 'var(--color-amber)' }
+            : { pillWord: tFor(locale, 'dd_pill_trained'), pillColor: 'var(--color-recovery)' }
+        case 'planned_rest': return { pillWord: tFor(locale, 'dd_pill_rest'), pillColor: 'var(--color-recovery)' }
+        case 'recover': return { pillWord: tFor(locale, 'dd_pill_recover'), pillColor: 'var(--color-amber)' }
+        case 'easy': return { pillWord: tFor(locale, 'dd_pill_easy'), pillColor: rColor }
+        case 'quality': return { pillWord: tFor(locale, 'dd_pill_quality'), pillColor: rColor }
+        case 'hard': return { pillWord: tFor(locale, 'dd_pill_hard'), pillColor: rColor }
+      }
+    }
+    // Fallback while the decision loads — self-reported status outranks every
+    // readiness signal, then the client's weakest-honest-signal chain.
+    if (athleteState === 'sick') return { pillWord: tFor(locale, 'dd_pill_sick'), pillColor: 'var(--color-amber)' }
+    if (athleteState === 'injured') return { pillWord: tFor(locale, 'dd_pill_injured'), pillColor: 'var(--color-amber)' }
+    if (athleteState === 'break') return { pillWord: tFor(locale, 'dd_pill_break'), pillColor: 'var(--color-recovery)' }
     if (trainedToday) {
       return roughRecovery
-        ? { pillWord: de ? 'Einheit erledigt · erholen' : 'Session logged · recover', pillColor: 'var(--color-amber)' }
-        : { pillWord: de ? 'Einheit erledigt' : 'Session logged', pillColor: 'var(--color-recovery)' }
+        ? { pillWord: tFor(locale, 'dd_pill_trained_recover'), pillColor: 'var(--color-amber)' }
+        : { pillWord: tFor(locale, 'dd_pill_trained'), pillColor: 'var(--color-recovery)' }
     }
-    if (isRestDay) return { pillWord: de ? 'Ruhetag' : 'Rest day', pillColor: 'var(--color-recovery)' }
-    if (tier === 'peak' || tier === 'ready') return { pillWord: de ? 'Bereit zu trainieren' : 'Primed to train', pillColor: rColor }
+    if (isRestDay) return { pillWord: tFor(locale, 'dd_pill_rest'), pillColor: 'var(--color-recovery)' }
+    if (tier === 'peak' || tier === 'ready') return { pillWord: tFor(locale, 'dd_pill_hard'), pillColor: rColor }
     if (tier === 'caution') return { pillWord: de ? 'Kontrolliert trainieren' : 'Train controlled', pillColor: rColor }
-    if (tier === 'rest') return { pillWord: de ? 'Erholen · locker' : 'Recover · go easy', pillColor: rColor }
+    if (tier === 'rest') return { pillWord: tFor(locale, 'dd_pill_recover'), pillColor: rColor }
     return { pillWord: de ? 'Lade…' : 'Loading…', pillColor: rColor }
   })()
 
@@ -573,7 +614,7 @@ export default function TodayTab() {
       { label: de ? 'Schlaf' : 'Sleep', value: sleepHours != null ? sleepHours.toFixed(1) : (sleepScore != null ? `${Math.round(sleepScore)}` : '—'), unit: sleepHours != null ? 'h' : '', sub: sleepScore != null ? `Score ${Math.round(sleepScore)}` : undefined, color: 'var(--color-stand)' },
       { label: de ? 'Ruhepuls' : 'Resting HR', value: restingHr != null ? `${Math.round(restingHr)}` : '—', unit: restingHr != null ? 'bpm' : '', color: 'var(--color-move)' },
     ]
-    if (!isRestDay && workout) {
+    if (isActiveTrainingDay && workout) {
       tiles.push({ label: de ? 'Heute' : 'On deck', value: workout.predicted_tss != null ? `${Math.round(workout.predicted_tss)}` : '—', unit: workout.predicted_tss != null ? 'TSS' : '', sub: wIntensity ? wIntensity.z : undefined, color: 'var(--color-accent)' })
     }
     return tiles
@@ -586,13 +627,15 @@ export default function TodayTab() {
       if (nudge) return nudge
       return de ? 'Priorität jetzt: auffüllen, dehnen, früh ins Bett.' : 'Priority now: refuel, stretch, early night.'
     }
+    // Sidelined (sick / injured / break) — the decision's explanation IS the focus.
+    if (decision && sidelined) return decision.reason
     if (moment === 'evening') {
       if (tomorrow?.description?.trim()) return `${de ? 'Morgen' : 'Tomorrow'}: ${tomorrow.description.trim()}`
-      if (!isRestDay && wTitle) return `${de ? 'Morgen wartet' : 'Up next'}: ${wTitle}`
+      if (isActiveTrainingDay && wTitle) return `${de ? 'Morgen wartet' : 'Up next'}: ${wTitle}`
       return de ? 'Heute Abend zählt Schlaf — er baut die Form von morgen.' : "Tonight, sleep is the work — it builds tomorrow's form."
     }
     // morning
-    if (!isRestDay && wTitle) return `${de ? 'Fokus heute' : "Today's focus"}: ${wTitle}`
+    if (isActiveTrainingDay && wTitle) return `${de ? 'Fokus heute' : "Today's focus"}: ${wTitle}`
     return de ? 'Fokus heute: Erholung ist die Aufgabe.' : "Today's focus: recovery is the assignment."
   })()
 
@@ -657,13 +700,14 @@ export default function TodayTab() {
                 : [`HRV is steady (${hrvPct}).`, `HRV is holding its line (${hrvPct}).`]))
       : null
 
-    // Sentence 3 — today's move, keyed to the same state as the hero line.
+    // Sentence 3 — today's move, keyed to the same decision state as the hero.
     const s3 = (() => {
+      if (sidelined) return null // the decision's reason carries the day; no workout talk
       if (isRestDay) return pick(de
         ? ['Ruhetag wie geplant — lass ihn arbeiten.', 'Nichts im Plan; die Erholung ist die Einheit.', 'Heute wird geruht — nimm den Sieg mit.']
         : ['Rest day as planned — let it do its job.', 'Nothing on the plan; recovery is the session.', 'Today rests — take the win.'])
-      if (!wTitle) return null
-      if (sleptShort || hrvDown) return pick(de
+      if (!wTitle || !isActiveTrainingDay) return null
+      if (decisionState === 'recover' || sleptShort || hrvDown) return pick(de
         ? [`${wTitle} steht — locker starten, die Beine haben das letzte Wort.`, `${wTitle} bleibt im Plan; wenn die Beine meckern, kleiner dosieren.`, `${wTitle} wie geplant, aber ehrlich bleiben — kürzer ist heute auch eine Antwort.`]
         : [`${wTitle} is on — start easy and let the legs cast the deciding vote.`, `${wTitle} stays on the plan; scale it down if the legs argue.`, `${wTitle} as planned, but keep it honest — shorter is a fine answer today.`])
       if (green || sleptGreat) return pick(de
@@ -853,8 +897,10 @@ export default function TodayTab() {
         </div>
       )}
 
-      {/* Workout card (coral) */}
-      {!isRestDay && workout && (
+      {/* Workout card (coral) — only while the decision says a session is
+          still on today's menu (recover/easy/quality/hard). On trained /
+          rest / sick days the review or rest card carries the day instead. */}
+      {isActiveTrainingDay && workout && (
         <div
           className="rounded-[24px] p-5 hover-card flex flex-col gap-[18px]"
           style={{ background: 'linear-gradient(125deg, color-mix(in srgb, var(--color-accent) 16%, var(--color-paper-2)) 0%, var(--color-paper-2) 72%)', border: '1px solid var(--color-accent)' }}
@@ -949,9 +995,10 @@ export default function TodayTab() {
         </div>
       )}
 
-      {/* Weather nudge — when to take today's session outside (hidden on rest
-          days, when no forecast/GPS location exists, or late in the day). */}
-      <WeatherNudge hidden={isRestDay} />
+      {/* Weather nudge — when to take today's session outside. Only relevant
+          while the decision leaves a session on the menu (easy/quality/hard/
+          recover); hidden on rest, trained, sick/injured/break days. */}
+      <WeatherNudge hidden={!isActiveTrainingDay} />
 
       {/* The Road — load corridor: 21 days back, today, 10 days ahead (P1.1).
           Absorbs the old Training Load card's stat row + sparkline. */}

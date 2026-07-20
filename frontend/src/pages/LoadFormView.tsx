@@ -14,6 +14,7 @@ import { usePowerProfile } from '../hooks/usePowerProfile'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useAdaptive } from '../hooks/useAdaptive'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
+import { latestLoad } from '../utils/loadMetrics'
 
 /**
  * Load & Form — the standalone /load-form analytics screen. A 1:1 rebuild of the
@@ -102,12 +103,15 @@ export default function LoadFormView() {
   const activities = actData?.activities ?? []
 
   // ---- Hero: TSB / CTL / ATL (from PMC) -----------------------------------
+  // P0-5: the shared selector is the ONLY producer — displayed TSB must equal
+  // displayed CTL − ATL (the audit's '+1 vs +7' bug lived exactly here).
   const latest = series.length ? series[series.length - 1] : null
   const prevWeek = series.length >= 8 ? series[series.length - 8] : series[0] ?? null
-  const tsb = latest ? Math.round(latest.tsb) : null
-  const ctl = latest ? Math.round(latest.ctl) : null
-  const atl = latest ? Math.round(latest.atl) : null
-  const dCtl7 = latest && prevWeek ? Math.round(latest.ctl - prevWeek.ctl) : null
+  const load = latestLoad(series)
+  const tsb = load?.tsb ?? null
+  const ctl = load?.ctl ?? null
+  const atl = load?.atl ?? null
+  const dCtl7 = load?.dCtl7 ?? null
   const dAtl7 = latest && prevWeek ? Math.round(latest.atl - prevWeek.atl) : null
 
   const TSB_MIN = -30, TSB_MAX = 25
@@ -197,8 +201,10 @@ export default function LoadFormView() {
   ].map((s) => ({ ...s, pct: sportGrand > 0 ? (s.tss / sportGrand) * 100 : 0 }))
 
   // ---- Fitness signals (power profile + athlete) --------------------------
-  const threshold = power?.cp_watts ?? power?.eftp_watts ?? athlete?.ftp_watts ?? null
-  const thrLabel = power?.cp_watts ? 'CP' : 'FTP'
+  // P0-1: ONE canonical number app-wide — never a raw CP that can disagree
+  // with the displayed FTP (audit: 'CP 363' here vs 'FTP 240' elsewhere).
+  const threshold = power?.threshold_watts ?? athlete?.ftp_watts ?? null
+  const thrLabel = 'FTP'
   const weight = athlete?.weight_kg ?? null
   const wkg = threshold != null && weight != null && weight > 0 ? threshold / weight : null
   const lthr = athlete?.lthr_cycling ?? null
@@ -261,9 +267,23 @@ export default function LoadFormView() {
   // the same canonical CTL series as every other surface.
   const traj = report?.trajectory ?? null
 
-  // ---- Recommendation (adaptive directive) --------------------------------
-  const recHeadline = adaptive?.headline ?? (de ? 'Empfehlung' : 'Recommendation')
-  const recBody = adaptive?.signals?.[0]?.text ?? adaptive?.intensity_ceiling ?? null
+  // ---- Recommendation — subordinate to the ONE Daily Decision (P0-3) ------
+  // The adaptive headline is rest-day-safe from the backend now — render it,
+  // don't override. Only the decision state steers the extra headline/CTA.
+  const decision = adaptive?.daily_decision ?? null
+  const dState = decision?.state ?? null
+  const recHeadline = dState === 'planned_rest'
+    ? (de ? 'Grünes Licht für morgen' : 'Green light for tomorrow')
+    : adaptive?.headline ?? (de ? 'Empfehlung' : 'Recommendation')
+  const recBody = decision?.reason ?? adaptive?.signals?.[0]?.text ?? adaptive?.intensity_ceiling ?? null
+  const recCta = dState === 'planned_rest'
+    ? { to: '/dashboard?tab=recovery', label: de ? 'Ruhetag ansehen' : 'View rest day' }
+    : dState === 'trained_already'
+      ? { to: '/dashboard?tab=today', label: de ? 'Einheit ansehen' : 'View session' }
+      : dState === 'sick' || dState === 'injured' || dState === 'break'
+        ? { to: '/dashboard?tab=recovery', label: de ? 'Erholung ansehen' : 'View recovery' }
+        : { to: '/dashboard?tab=today', label: de ? 'Einheit öffnen' : 'Open session' }
+  const RecIcon = dState === 'planned_rest' || dState === 'sick' || dState === 'injured' || dState === 'break' ? Moon : Check
 
   const showTrend = (v: number | null, unit = '') =>
     v == null ? DASH : `${v >= 0 ? '+' : ''}${v}${unit}`
@@ -695,26 +715,27 @@ export default function LoadFormView() {
           )}
         </Card>
 
-        {/* 10. Recommendation */}
+        {/* 10. Recommendation — renders the DailyDecision first, never a
+            push-CTA on rest / trained / sick days. */}
         <Card accent>
           <div className="flex items-center gap-3">
             <span className="flex items-center justify-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-accent)', color: 'var(--color-ink)' }}>
-              <Check size={24} />
+              <RecIcon size={22} />
             </span>
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="num-display" style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-ink)' }}>{recHeadline}</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-accent)' }}>{de ? "Heutige Empfehlung" : "Today's recommendation"}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-accent)' }}>{decision?.verdict ?? (de ? 'Heutige Empfehlung' : "Today's recommendation")}</span>
             </div>
           </div>
           {recBody && (
             <p style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--color-ink-2)' }}>{recBody}</p>
           )}
           <Link
-            to="/dashboard?tab=today"
+            to={recCta.to}
             className="flex items-center justify-center gap-2 rounded-full"
             style={{ padding: 15, background: 'var(--color-accent)', color: 'var(--color-ink)', fontSize: 15, fontWeight: 700 }}
           >
-            <span className="num-display" style={{ fontWeight: 700 }}>{de ? 'Einheit öffnen' : 'Open session'}</span>
+            <span className="num-display" style={{ fontWeight: 700 }}>{recCta.label}</span>
             <ArrowRight size={18} />
           </Link>
         </Card>

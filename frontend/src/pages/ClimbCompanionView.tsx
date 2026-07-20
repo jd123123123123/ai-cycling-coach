@@ -2,7 +2,8 @@
  * ClimbCompanionView — built against pencil-new.pen "Screen · Climb Companion"
  * (I3Nzs): Header → climb name + CAT chip → gradient-colored elevation profile
  * (zone tokens by grade) → Elevation-Gain / VAM-Target cards → Pacing Plan by
- * road section with CP-anchored target watts → Your Standing (PR + attempt
+ * road section with FTP-anchored target watts (the canonical threshold the
+ * backend paces from — chip and pacing watts always agree) → Your Standing (PR + attempt
  * deltas — own attempts only, no fabricated leaderboard) → Today on the Climb
  * (live Open-Meteo at the climb's real GPS; omitted for virtual/Zwift climbs).
  * Every climb comes from GET /climbs/mine — detected in the athlete's own ride
@@ -39,7 +40,16 @@ interface ClimbSummary {
   profile: ProfileBin[]; pacing: PacingSection[]
   vam_target: number | null; history: AttemptRow[]
 }
-interface ClimbsResponse { available: boolean; cp_watts: number | null; climbs: ClimbSummary[] }
+interface ClimbsResponse {
+  available: boolean
+  /** Canonical threshold (audit P0-1): manual FTP when set, else sanitized
+   *  model eFTP — the SAME number the pacing watts are computed from. */
+  threshold_watts: number | null
+  threshold_source: 'manual' | 'model' | null
+  /** @deprecated backward-compat alias of threshold_watts */
+  cp_watts: number | null
+  climbs: ClimbSummary[]
+}
 interface WxCurrent {
   temperature_2m: number; apparent_temperature: number
   relative_humidity_2m: number; wind_speed_10m: number; wind_direction_10m: number
@@ -197,8 +207,8 @@ export default function ClimbCompanionView() {
             </span>
             <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.55, maxWidth: 420 }}>
               {de
-                ? 'Fahre draußen (oder auf Zwift) mit Höhen- und Distanzdaten und synchronisiere — jeder Anstieg ab ca. 500 m Länge und 3 % Steigung taucht hier automatisch auf, mit Pacing-Zielen aus deiner CP.'
-                : 'Ride outdoors (or on Zwift) with altitude and distance data and sync — every climb of roughly 500 m+ at a 3 %+ grade shows up here automatically, with pacing targets from your CP.'}
+                ? 'Fahre draußen (oder auf Zwift) mit Höhen- und Distanzdaten und synchronisiere — jeder Anstieg ab ca. 500 m Länge und 3 % Steigung taucht hier automatisch auf, mit Pacing-Zielen aus deiner FTP.'
+                : 'Ride outdoors (or on Zwift) with altitude and distance data and sync — every climb of roughly 500 m+ at a 3 %+ grade shows up here automatically, with pacing targets from your FTP.'}
             </p>
           </div>
         </div>
@@ -366,13 +376,15 @@ export default function ClimbCompanionView() {
           </div>
         </div>
 
-        {/* ── Pacing plan (.pen lDSpU) — only with a real CP ── */}
-        {climb.pacing.length > 0 && data?.cp_watts != null && (
+        {/* ── Pacing plan (.pen lDSpU) — only with a real threshold ── */}
+        {climb.pacing.length > 0 && (data?.threshold_watts ?? data?.cp_watts) != null && (
           <div className="flex flex-col gap-3">
             <div className="flex items-end justify-between">
               <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{de ? 'Pacing-Plan' : 'Pacing Plan'}</span>
               <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-                {de ? `Basiert auf deiner CP · ${data.cp_watts} W` : `Based on your CP · ${data.cp_watts} W`}
+                {de
+                  ? `Basiert auf deiner FTP · ${data?.threshold_watts ?? data?.cp_watts} W`
+                  : `Based on your FTP · ${data?.threshold_watts ?? data?.cp_watts} W`}
               </span>
             </div>
             <div className="flex flex-col px-4 py-1" style={CARD}>

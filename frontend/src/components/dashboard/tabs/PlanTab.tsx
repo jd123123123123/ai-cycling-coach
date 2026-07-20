@@ -14,7 +14,6 @@ import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLocale } from '../../../contexts/LocaleContext'
-import SessionReviewCard from '../SessionReviewCard'
 import FocusSection from '../../plan/FocusSection'
 import { detectWorkoutSport } from '../../../api/coach'
 import type { ResolvedBlock, WorkoutSport } from '../../../api/coach'
@@ -122,22 +121,19 @@ export default function PlanTab() {
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
   const athleteEv = (evidence.athlete as Record<string, unknown> | undefined) ?? {}
   const goalName = athleteEv.goal_target as string | undefined
-  // Rest-day detection — identical rule to TodayTab: no workout, a rest/recovery
-  // template id or category, a rest/recovery title, or ~0 TSS & ~0 duration all
-  // mean "no session prescribed". Keeps the Train-tab WOD honest on rest days.
+  // Rest-day truth — the ONE daily decision (audit P0-3); the old client
+  // regex over the prescription could disagree with Today/Recovery whenever
+  // a cached brief carried a stale pick. Template shape stays as fallback
+  // only while the decision is loading.
+  const decisionState = brief?.daily_decision?.state ?? null
   const isRestDay = useMemo(() => {
+    if (decisionState) {
+      return !['recover', 'easy', 'quality', 'hard'].includes(decisionState)
+    }
     if (!workout) return true
     const id = (workout.template_id ?? '').toLowerCase()
-    const cat = (workout.category ?? '').toLowerCase()
-    const title = (workout.title ?? '').toLowerCase()
-    if (/^(rest|recovery)/.test(id)) return true
-    if (/\b(rest|recovery)\b/.test(cat) || /\b(ruhetag|erholung)\b/.test(cat)) return true
-    if (/\b(rest day|ruhetag)\b/.test(title)) return true
-    const tss = workout.predicted_tss ?? 0
-    const dur = workout.duration_minutes ?? 0
-    if (tss <= 1 && dur <= 1) return true
-    return false
-  }, [workout])
+    return /^(rest|recovery)/.test(id)
+  }, [decisionState, workout])
 
   const weekStart = week?.week_start ? parseISO(week.week_start) : subDays(today, 7)
   const trainedDays = useMemo(() => new Set((acts?.activities ?? []).filter((a) => (a.tss ?? 0) > 0).map((a) => (a.started_at ?? a.date ?? '').slice(0, 10))), [acts])
@@ -156,6 +152,23 @@ export default function PlanTab() {
   const isSessionDay = (d: DayPlan) => d.category !== 'rest' && (dayDurSec(d) > 0 || (d.intervals?.length ?? 0) > 0 || (d.target_tss ?? 0) > 0)
   const sportSessions = sportDays.filter(isSessionDay)
   const upcoming = sportDays.filter((d) => isSessionDay(d) && !d.is_today && parseISO(d.date) >= today)
+  // Dual-sport shadowed secondary sessions (audit P0-5): their TSS is inside
+  // planned_tss_total, so the week list must SHOW that load as visible line
+  // items instead of silently dropping it. Split strength vs run by title.
+  const shadowSecondary = useMemo(() => {
+    const rows = days.filter((d) => (d.secondary_target_tss ?? 0) > 0)
+    const isRunTitle = (t: string | null | undefined) => !!t && /\b(run|lauf|jog)/i.test(t)
+    const agg = (list: DayPlan[]) => ({
+      n: list.length,
+      tss: Math.round(list.reduce((s, d) => s + (d.secondary_target_tss ?? 0), 0)),
+    })
+    const runs = rows.filter((d) => isRunTitle(d.secondary_title))
+    const strength = rows.filter((d) => !isRunTitle(d.secondary_title))
+    return {
+      strength: strength.length > 0 ? agg(strength) : null,
+      runs: runs.length > 0 ? agg(runs) : null,
+    }
+  }, [days])
   const hasSportSessions = sportSessions.length > 0
   const sportWord = sport === 'bike' ? (de ? 'Rad' : 'Bike') : sport === 'run' ? (de ? 'Lauf' : 'Run') : (de ? 'Alle' : 'All')
 
@@ -172,9 +185,11 @@ export default function PlanTab() {
   const weeksLeft = daysToEventResolved != null ? Math.max(0, Math.ceil(daysToEventResolved / 7)) : null
   const weekHours = sportDays.reduce((s, d) => s + dayDurSec(d), 0) / 3600
   const sessionCount = sportSessions.length
-  // Sport-specific TSS target = this sport's planned days; 'all' prefers the meso figure.
+  // Sport-specific TSS target = this sport's planned days; 'all' prefers the
+  // server's planned_tss_total — THE weekly display target (includes dual-sport
+  // shadowed secondary sessions), reconciling header and list (audit P0-5).
   const sportTargetTss = sportDays.reduce((s, d) => s + (d.target_tss ?? 0), 0)
-  const weeklyTarget = sport === 'all' ? (meso?.weekly_tss_target ?? sportTargetTss) : sportTargetTss
+  const weeklyTarget = sport === 'all' ? (week?.planned_tss_total ?? sportTargetTss) : sportTargetTss
   const weeklyDone = useMemo(() => (acts?.activities ?? [])
     .filter((a) => sportMatch(a.sport ?? '') && parseISO(a.started_at ?? a.date ?? '') >= weekStart)
     .reduce((s, a) => s + (a.tss ?? 0), 0), [acts, sport, weekStart])
@@ -245,7 +260,9 @@ export default function PlanTab() {
   }
   const blockPosLabel = meso?.block_position ? (de ? BLOCK_POS[meso.block_position]?.de : BLOCK_POS[meso.block_position]?.en) ?? meso.block_position : null
   const weekOfMeso = meso?.block_index_in_meso != null ? meso.block_index_in_meso + 1 : null
-  const planTarget = meso?.weekly_tss_target ?? 0
+  // planned_tss_total is THE weekly display target (sum of all planned rows
+  // incl. shadowed secondaries); the meso figure is advisory-only fallback.
+  const planTarget = week?.planned_tss_total ?? meso?.weekly_tss_target ?? 0
   const planDone = useMemo(() => (acts?.activities ?? [])
     .filter((a) => parseISO(a.started_at ?? a.date ?? '') >= weekStart)
     .reduce((s, a) => s + (a.tss ?? 0), 0), [acts, weekStart])
@@ -284,6 +301,28 @@ export default function PlanTab() {
   // Current → projected headline numbers — only finite values become real digits.
   const projCurrent = projection && Number.isFinite(projection.current_estimate as number) ? Math.round(projection.current_estimate as number) : null
   const projProjected = projection && Number.isFinite(projection.projected_central as number) ? Math.round(projection.projected_central as number) : null
+  // Confidence (0-100). The backend computes confidence_pct (band tightness ×
+  // sample richness) but the /weeks schema doesn't pass it through yet — when
+  // absent, derive it with the identical formula from band_80 + samples_used.
+  const projConfidence = useMemo(() => {
+    if (!projection) return null
+    if (typeof projection.confidence_pct === 'number') return projection.confidence_pct
+    const b80 = projection.band_80
+    const central = projection.projected_central
+    if (!b80 || central == null || !Number.isFinite(central) || central <= 0) return 0
+    const ratio = (b80[1] - b80[0]) / central
+    const sampleFactor = Math.min(1, (projection.samples_used ?? 0) / 10)
+    return Math.round(100 * Math.max(0, Math.min(1, (1 - ratio) * sampleFactor)))
+  }, [projection])
+  // < 30% ⇒ a point forecast would be a promise the data can't keep (audit
+  // P0-1): render the 80% RANGE and drop every single-number race-day claim.
+  const projLowConf = projConfidence != null && projConfidence < 30
+  const projBand80 = projection?.band_80 ?? null
+  const projRangeHeadline = projLowConf && projBand80
+    ? (de
+      ? `Richtung Renntag: ${Math.round(projBand80[0])}–${Math.round(projBand80[1])} W möglich`
+      : `Trending toward ${Math.round(projBand80[0])}–${Math.round(projBand80[1])} W by race day`)
+    : null
 
   // Zone 3 — notes. Color + icon keyed off readiness status (falls back to plan_changes).
   const readyStatus = readiness?.status ?? 'unknown'
@@ -371,7 +410,9 @@ export default function PlanTab() {
   const weekLabel = weekOffset === 0 ? (de ? 'Diese Woche' : 'This week')
     : weekOffset === 1 ? (de ? 'Nächste Woche' : 'Next week')
       : weekRangeLabel
-  const weekTssTarget = meso?.weekly_tss_target ?? 0
+  // Header target = the server's planned_tss_total (sum of every planned row
+  // incl. shadowed secondaries) so header and day list always reconcile.
+  const weekTssTarget = week?.planned_tss_total ?? meso?.weekly_tss_target ?? 0
 
   return (
     <div className="flex flex-col gap-6 pb-4">
@@ -456,9 +497,21 @@ export default function PlanTab() {
                     <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{projection.metric_label}</span>
                     <div className="flex items-baseline" style={{ gap: 6 }}>
                       <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink-2)' }}>{projCurrent != null ? projCurrent : '—'}</span>
-                      {/* Arrow only when both ends are real numbers — never a lone/broken chevron. */}
-                      {projCurrent != null && projProjected != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
-                      {projProjected != null && <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>{projProjected}</span>}
+                      {/* Low confidence (<30%): the race-day end is a RANGE, never
+                          a point promise. Arrow only when both ends render. */}
+                      {projLowConf && projBand80 ? (
+                        <>
+                          {projCurrent != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
+                          <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>
+                            {Math.round(projBand80[0])}–{Math.round(projBand80[1])}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          {projCurrent != null && projProjected != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
+                          {projProjected != null && <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>{projProjected}</span>}
+                        </>
+                      )}
                       <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-muted)' }}>{projection.unit}</span>
                     </div>
                   </div>
@@ -475,8 +528,12 @@ export default function PlanTab() {
                   <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.18 }} /> {de ? '50% Band' : '50% band'}</span>
                   <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.10 }} /> {de ? '80% Band' : '80% band'}</span>
                 </div>
-                {/* Outcome headline + honest caveat */}
-                {projection.projected_outcome && <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>{projection.projected_outcome}</p>}
+                {/* Outcome headline + honest caveat. In low confidence the
+                    backend's central-number sentence is replaced by the range
+                    line — no single-number race-day promise. */}
+                {(projRangeHeadline ?? projection.projected_outcome) && (
+                  <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>{projRangeHeadline ?? projection.projected_outcome}</p>
+                )}
                 {projection.caveat && <p style={{ fontSize: 11.5, color: 'var(--color-muted)', lineHeight: 1.4 }}>{projection.caveat}</p>}
               </>
             ) : (
@@ -626,10 +683,17 @@ export default function PlanTab() {
         </div>
       )}
 
-      {/* Session Review — the day you trained: same card as the Today tab.
-          Attached to the brief for today only, so it renders when today is the
-          selected strip day and a completed session's review exists. */}
-      {selectedIsToday && review && <SessionReviewCard review={review} de={de} />}
+      {/* Session Review lives on the Today tab ONLY (usability audit: one home
+          per surface) — from here it's a one-line link, never a second mount. */}
+      {selectedIsToday && review && (
+        <Link to="/dashboard?tab=today" className="hover-card flex items-center gap-3 rounded-[20px] p-3.5" style={cardStyle}>
+          <ListChecks size={18} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>
+            {de ? 'Session-Review von heute — auf „Heute“ ansehen' : 'Today’s session review — view it on Today'}
+          </span>
+          <ChevronRight size={16} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+        </Link>
+      )}
 
       {/* Rest day — sport-agnostic recovery state; no Start button, no target chips. */}
       {selectedIsToday && workout && isRestDay && (
@@ -818,11 +882,13 @@ export default function PlanTab() {
       {/* Upcoming — the selected week's remaining sessions. On a future week each
           row selects that day's inline preview (no live "start" for a future day);
           this week keeps the workout link. */}
-      {upcoming.length > 0 && (
+      {(upcoming.length > 0 || shadowSecondary.strength != null || shadowSecondary.runs != null) && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{weekOffset === 0 ? (de ? 'Diese Woche' : 'This Week') : weekLabel}</span>
-            <span style={{ fontSize: 13, color: 'var(--color-muted)' }}>{upcoming.length} {de ? 'Einheiten' : 'sessions'}</span>
+            {upcoming.length > 0 && (
+              <span style={{ fontSize: 13, color: 'var(--color-muted)' }}>{upcoming.length} {de ? 'Einheiten' : 'sessions'}</span>
+            )}
           </div>
           {upcoming.map((d) => {
             const isRun = d.sport === 'running'
@@ -864,6 +930,28 @@ export default function PlanTab() {
               </button>
             )
           })}
+          {/* Shadowed dual-sport load — slim, neutral line items so the week's
+              visible sessions add up to the header's planned_tss_total. */}
+          {shadowSecondary.strength && (
+            <div className="flex items-center gap-3 rounded-[16px] px-3.5 py-2.5" style={cardStyle}>
+              <Dumbbell size={15} strokeWidth={2} style={{ color: 'var(--color-amber)', flexShrink: 0 }} />
+              <span className="num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
+                {de
+                  ? `Kraft ×${shadowSecondary.strength.n} · ${shadowSecondary.strength.tss} TSS`
+                  : `Strength ×${shadowSecondary.strength.n} · ${shadowSecondary.strength.tss} TSS`}
+              </span>
+            </div>
+          )}
+          {shadowSecondary.runs && (
+            <div className="flex items-center gap-3 rounded-[16px] px-3.5 py-2.5" style={cardStyle}>
+              <Footprints size={15} strokeWidth={2} style={{ color: 'var(--color-exercise)', flexShrink: 0 }} />
+              <span className="num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
+                {de
+                  ? `Lauf ×${shadowSecondary.runs.n} · ${shadowSecondary.runs.tss} TSS`
+                  : `Run ×${shadowSecondary.runs.n} · ${shadowSecondary.runs.tss} TSS`}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
