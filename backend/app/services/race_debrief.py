@@ -27,7 +27,7 @@ from app.services import (
     fueling_analysis, key_moments, matchbook, pacing_analysis, quadrant_analysis,
     ride_segmentation, wko_power_model,
 )
-from app.services.athlete_power_profile import aggregate_mmp_curves
+from app.services.athlete_power_profile import build_sanitized_envelope
 from app.services.environment import air_density
 from app.services.training_load import calculate_np
 from app.services.w_balance import w_prime_balance
@@ -405,7 +405,7 @@ async def build_debrief(db: AsyncSession, user_id: int, activity_id: int, lang: 
     env_res = await db.execute(
         select(ActivityStream.mmp_curve).where(
             ActivityStream.user_id == user_id, ActivityStream.mmp_curve.isnot(None)))
-    envelope = aggregate_mmp_curves([row[0] for row in env_res.all() if row[0]])
+    envelope = build_sanitized_envelope([row[0] for row in env_res.all() if row[0]])
     report = assemble_debrief(activity, stream, profile, envelope, lang)
     text, model = await _ai_verdict(report, lang)
     report.verdict.ai_verdict = text
@@ -426,7 +426,7 @@ async def _refresh_pr_flags(db: AsyncSession, user_id: int, report: RaceDebrief)
     env_res = await db.execute(
         select(ActivityStream.mmp_curve).where(
             ActivityStream.user_id == user_id, ActivityStream.mmp_curve.isnot(None)))
-    envelope = aggregate_mmp_curves([row[0] for row in env_res.all() if row[0]])
+    envelope = build_sanitized_envelope([row[0] for row in env_res.all() if row[0]])
     if not envelope:
         return
     ride_mmp = {e.duration_s: e.ride_watts for e in report.efforts}

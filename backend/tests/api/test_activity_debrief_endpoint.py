@@ -160,6 +160,11 @@ def _db_with_cache_hit(cached_report_payload, generated_at):
         sql = str(stmt)
         if "FROM race_debriefs" in sql:
             return _FakeResult(scalar=cached_row)  # cache hit
+        if "mmp_curve" in sql:
+            # _refresh_pr_flags legitimately re-reads the MMP envelope on the
+            # cache-hit path (stale PRs are demoted on read); empty envelope
+            # means the cached flags are served unchanged.
+            return _FakeResult(rows=[])
         raise AssertionError(f"unexpected query on cache-hit path: {sql}")
 
     db.execute = _execute

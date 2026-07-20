@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Activity, ActivityStream
 from app.schemas.form_progress import FormProgress, Marker, Signal
 from app.schemas.race_debrief import RaceDebrief
+from app.services.athlete_power_profile import reject_uncorroborated_peaks
 from app.services.goal_trajectory import _ctl_7d_delta
 from app.services.pmc_service import compute_user_pmc
 from app.services.race_debrief import get_or_build_debrief
@@ -149,7 +150,11 @@ async def _latest_ride(db: AsyncSession, user_id: int) -> Activity | None:
 
 
 async def _baselines(db: AsyncSession, user_id: int, exclude_activity_id: int) -> tuple[float | None, float | None]:
-    """Median decoupling and eFTP over the athlete's recent rides (excl. the latest)."""
+    """Median decoupling and eFTP over the athlete's recent rides (excl. the latest).
+
+    The eFTP list is sanitized first (audit P0-1): an inflated per-ride eFTP
+    from a corrupt power file must not raise the athlete's baseline.
+    """
     stmt = (
         select(ActivityStream.decoupling_pct, ActivityStream.eftp_watts)
         .where(ActivityStream.user_id == user_id, ActivityStream.activity_id != exclude_activity_id)
@@ -157,7 +162,9 @@ async def _baselines(db: AsyncSession, user_id: int, exclude_activity_id: int) -
     )
     rows = (await db.execute(stmt)).all()
     decs = [float(r[0]) for r in rows if r[0] is not None]
-    eftps = [float(r[1]) for r in rows if r[1] is not None]
+    eftps = reject_uncorroborated_peaks(
+        [float(r[1]) for r in rows if r[1] is not None]
+    )
     return (median(decs) if decs else None, median(eftps) if eftps else None)
 
 

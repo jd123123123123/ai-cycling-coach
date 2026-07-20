@@ -30,3 +30,22 @@ def test_markers_always_include_fitness_and_form():
     _, _, markers, _ = _eval()
     labels = [m.label for m in markers]
     assert "Fitness (CTL)" in labels and "Form (TSB)" in labels
+
+
+def test_baseline_eftp_ignores_uncorroborated_spike():
+    """Audit P0-1: a corrupt per-ride eFTP must not raise the baseline."""
+    import asyncio
+    from statistics import median
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.form_progress import _baselines
+
+    rows = [(5.0, 240.0), (5.5, 238.0), (6.0, 242.0), (5.0, 359.0)]
+    result = MagicMock()
+    result.all.return_value = rows
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=result)
+
+    dec, eftp = asyncio.run(_baselines(db, 1, exclude_activity_id=99))
+    assert eftp == median([238.0, 240.0, 242.0])  # 359 rejected
+    assert dec == median([5.0, 5.5, 6.0, 5.0])

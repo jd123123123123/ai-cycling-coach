@@ -17,7 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity import Activity
 from app.models.activity_stream import ActivityStream
 from app.models.athlete_profile import AthleteProfile
-from app.services.athlete_power_profile import aggregate_mmp_curves
+from app.services.athlete_power_profile import (
+    build_sanitized_envelope,
+    model_confidence,
+    reconcile_threshold,
+)
 from app.services.critical_power import fit_critical_power
 from app.services.durability import aerobic_decoupling, durability_drop
 from app.services.w_balance import w_balance_summary
@@ -31,15 +35,23 @@ PEAK_DURATIONS = (5, 15, 30, 60, 300, 600, 1200, 3600)
 def build_power_profile(
     power_arrays: list[list[float]],
     weight_kg: float | None,
+    ftp_watts: float | None = None,
 ) -> dict | None:
-    """Dense power profile from a set of ride power streams. None if no data."""
+    """Dense power profile from a set of ride power streams. None if no data.
+
+    Callers must pass CYCLING power arrays only. The envelope, chart curve and
+    peaks are all sanitized (5%-over-PR + corroboration, MAD, monotonic) so a
+    single corrupt ride cannot render an impossible point or poison the CP fit.
+    `ftp_watts` (the manual FTP, when set) enables the canonical threshold
+    reconciliation fields.
+    """
     arrays = [p for p in power_arrays if p]
     if not arrays:
         return None
 
-    # Dense per-ride MMP curves → best-effort envelope across all rides.
+    # Dense per-ride MMP curves → SANITIZED best-effort envelope across rides.
     per_ride = [mmp_curve(p, DEFAULT_DURATIONS_S) for p in arrays]
-    envelope = aggregate_mmp_curves(per_ride)
+    envelope = build_sanitized_envelope(per_ride)
     if not envelope:
         return None
 
@@ -56,6 +68,7 @@ def build_power_profile(
         if fit is not None:
             cp_wkg = round(fit.cp_watts / weight_kg, 2)
 
+    reconciled = reconcile_threshold(ftp_watts, fit.eftp_watts if fit else None)
     return {
         "cp_watts": fit.cp_watts if fit else None,
         "w_prime_j": fit.w_prime_j if fit else None,
@@ -63,6 +76,8 @@ def build_power_profile(
         "r_squared": fit.r_squared if fit else None,
         "cp_wkg": cp_wkg,
         "n_rides": len(arrays),
+        "confidence": model_confidence(len(arrays), fit.r_squared if fit else None),
+        **reconciled,
         "mmp_curve": curve,
         "wkg_curve": wkg_curve,
         "peaks": peaks,
@@ -72,7 +87,12 @@ def build_power_profile(
 
 
 async def compute_detailed_power_profile(db: AsyncSession, user_id: int) -> dict | None:
-    """Full power profile from stored streams + durability/decoupling metrics."""
+    """Full power profile from stored streams + durability/decoupling metrics.
+
+    CYCLING only: `mmp_curve IS NOT NULL` is the ingest-time cycling marker
+    (runs — and corrupt rides caught by the ingest guard — store None), so raw
+    run power streams never leak into the cycling power-duration model.
+    """
     res = await db.execute(
         select(
             ActivityStream.activity_id,
@@ -82,7 +102,10 @@ async def compute_detailed_power_profile(db: AsyncSession, user_id: int) -> dict
             ActivityStream.normalized_power,
             ActivityStream.cp_watts,
             ActivityStream.w_prime_j,
-        ).where(ActivityStream.user_id == user_id)
+        ).where(
+            ActivityStream.user_id == user_id,
+            ActivityStream.mmp_curve.isnot(None),
+        )
     )
     rows = res.all()
     if not rows:
@@ -91,11 +114,19 @@ async def compute_detailed_power_profile(db: AsyncSession, user_id: int) -> dict
     power_arrays = [(r.streams or {}).get("power") or [] for r in rows]
 
     prof_res = await db.execute(
-        select(AthleteProfile.weight_kg).where(AthleteProfile.user_id == user_id)
+        select(AthleteProfile.weight_kg, AthleteProfile.ftp_watts).where(
+            AthleteProfile.user_id == user_id
+        )
     )
-    weight = prof_res.scalar_one_or_none()
+    prof_row = prof_res.first()
+    weight = prof_row.weight_kg if prof_row else None
+    ftp = prof_row.ftp_watts if prof_row else None
 
-    profile = build_power_profile(power_arrays, float(weight) if weight else None)
+    profile = build_power_profile(
+        power_arrays,
+        float(weight) if weight else None,
+        ftp_watts=float(ftp) if ftp else None,
+    )
     if profile is None:
         return None
 

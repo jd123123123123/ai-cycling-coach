@@ -32,6 +32,16 @@ from app.services.w_balance import WBalanceResult, w_balance_summary
 DEFAULT_DURABILITY_KJ = 1500
 DEFAULT_DURABILITY_WINDOW_S = 300
 
+# ── Ingest guard (audit P0-1): stop corrupt power at the source ──────────────
+# No human produces > 2500 W instantaneous; clamp spikes before analysis.
+MAX_INSTANT_POWER_W = 2500.0
+# A 20-min MMP beyond 5 W/kg (or 500 W when weight is unknown) is a corrupt
+# file, not a performance — the ride's power MODEL is dropped (raw streams are
+# still stored), exactly like runs, so it can never poison the athlete model.
+SANITY_MMP_DURATION_S = 1200
+SANITY_WKG_BOUND = 5.0
+SANITY_ABS_BOUND_W = 500.0
+
 
 @dataclass(frozen=True)
 class RideAnalysis:
@@ -46,6 +56,9 @@ class RideAnalysis:
     w_bal: WBalanceResult | None = None
     durability: DurabilityResult | None = None
     decoupling_pct: float | None = None
+    # False when the ingest guard judged the power data corrupt: the power
+    # model (mmp/cp/eftp) must then be persisted as None, like runs.
+    power_model_valid: bool = True
 
 
 def analyze_streams(
@@ -54,13 +67,21 @@ def analyze_streams(
     ftp: float | None = None,
     durability_threshold_kj: int = DEFAULT_DURABILITY_KJ,
     durability_window_s: int = DEFAULT_DURABILITY_WINDOW_S,
+    weight_kg: float | None = None,
 ) -> RideAnalysis:
-    """Compose every stream-derived metric for one ride."""
+    """Compose every stream-derived metric for one ride.
+
+    `weight_kg` (optional) tightens the corrupt-power guard to 5 W/kg for the
+    20-min MMP; without it an absolute 500 W bound applies.
+    """
     n = len(power_series)
     if n == 0:
         return RideAnalysis(
             duration_s=0, avg_power=0.0, np_watts=0.0, if_=None, vi=None, total_kj=0.0
         )
+
+    # Clamp physically impossible instantaneous samples (sensor glitches).
+    power_series = [min(max(float(p), 0.0), MAX_INSTANT_POWER_W) for p in power_series]
 
     avg_power = sum(power_series) / n
     np_watts = calculate_np(power_series)
@@ -69,7 +90,20 @@ def analyze_streams(
     total_kj = sum(power_series) / 1000.0
     curve = mmp_curve(power_series)
 
-    cp = fit_critical_power(curve)
+    # Sustained-power sanity: a 20-min MMP beyond the human envelope means the
+    # file is corrupt → drop the power model entirely (streams stay stored).
+    power_model_valid = True
+    p20 = curve.get(SANITY_MMP_DURATION_S)
+    bound = (
+        SANITY_WKG_BOUND * weight_kg
+        if weight_kg and weight_kg > 0
+        else SANITY_ABS_BOUND_W
+    )
+    if p20 is not None and p20 > bound:
+        power_model_valid = False
+        curve = {}
+
+    cp = fit_critical_power(curve) if power_model_valid else None
     # W′-balance only makes sense with a positive anaerobic capacity; a flat
     # ride fits W′ ≈ 0 and the reconstitution term would divide by zero.
     w_bal = (
@@ -97,4 +131,5 @@ def analyze_streams(
         w_bal=w_bal,
         durability=durability,
         decoupling_pct=decoupling,
+        power_model_valid=power_model_valid,
     )

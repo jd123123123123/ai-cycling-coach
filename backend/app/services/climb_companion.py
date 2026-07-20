@@ -187,7 +187,11 @@ def build_pacing_plan(
     *,
     max_sections: int = 6,
 ) -> list[dict]:
-    """Gradient-weighted pacing sections with CP-anchored target watts.
+    """Gradient-weighted pacing sections with threshold-anchored target watts.
+
+    `cp_watts` is the athlete's CANONICAL threshold (manual FTP when set, else
+    the sanitized model eFTP) — see audit P0-1. The parameter keeps its legacy
+    name for call-site compatibility.
 
     Adjacent bins are grouped while their gradient stays near the running
     section mean, so sections follow the shape of the road; the plan is capped
@@ -485,24 +489,35 @@ async def load_athlete_climbs(db: AsyncSession, user_id: int) -> dict:
     rows = res.all()
 
     prof_res = await db.execute(
-        select(AthleteProfile.weight_kg).where(AthleteProfile.user_id == user_id)
+        select(AthleteProfile).where(AthleteProfile.user_id == user_id)
     )
-    weight = prof_res.scalar_one_or_none()
+    athlete_profile = prof_res.scalar_one_or_none()
+    weight = athlete_profile.weight_kg if athlete_profile else None
     mass_kg = float(weight) if weight else None
 
-    # CP: the cross-ride envelope fit (same number the Power Profile page shows)
-    # is far more reliable than any single ride's fit; fall back to the latest
-    # per-ride cp_watts only when the envelope can't be fit.
-    profile = await compute_athlete_power_profile(db, user_id)
-    cp_watts: float | None = profile.get("cp_watts") if profile else None
-    if cp_watts is None:
+    # Pacing anchor: the CANONICAL threshold (audit P0-1) — manual FTP when
+    # set, else the sanitized cross-ride model eFTP. Never a raw envelope CP
+    # that can disagree with the FTP shown everywhere else. Fall back to the
+    # stored FTP, then the latest per-ride CP, only when the model can't fit.
+    profile = await compute_athlete_power_profile(db, user_id, profile=athlete_profile)
+    threshold_watts: float | None = (
+        profile.get("threshold_watts") if profile else None
+    )
+    threshold_source: str | None = (
+        profile.get("threshold_source") if profile else None
+    )
+    if threshold_watts is None and athlete_profile and athlete_profile.ftp_watts:
+        threshold_watts = float(athlete_profile.ftp_watts)
+        threshold_source = "manual"
+    if threshold_watts is None:
         cp_res = await db.execute(
             select(ActivityStream.cp_watts)
             .where(ActivityStream.user_id == user_id, ActivityStream.cp_watts.isnot(None))
             .order_by(ActivityStream.created_at.desc())
             .limit(1)
         )
-        cp_watts = cp_res.scalar_one_or_none()
+        threshold_watts = cp_res.scalar_one_or_none()
+        threshold_source = "model" if threshold_watts is not None else None
 
     instances: list[dict] = []
     for r in rows:
@@ -515,12 +530,16 @@ async def load_athlete_climbs(db: AsyncSession, user_id: int) -> dict:
         ))
 
     groups = group_climbs(instances)
-    summaries = [summarize_group(g, cp_watts) for g in groups]
+    summaries = [summarize_group(g, threshold_watts) for g in groups]
     summaries.sort(key=lambda s: (s["attempts"], s["elevation_m"]), reverse=True)
     summaries = summaries[:MAX_CLIMBS]
 
     return {
         "available": len(summaries) > 0,
-        "cp_watts": round(cp_watts) if cp_watts else None,
+        # `cp_watts` kept for backward compatibility but now sourced from the
+        # canonical threshold; frontends should migrate to `threshold_watts`.
+        "cp_watts": round(threshold_watts) if threshold_watts else None,
+        "threshold_watts": round(threshold_watts) if threshold_watts else None,
+        "threshold_source": threshold_source,
         "climbs": summaries,
     }

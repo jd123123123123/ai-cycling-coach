@@ -76,6 +76,7 @@ async def ingest_activity_streams(
     weather: dict | None = None,
     commit: bool = True,
     store_power_model: bool = True,
+    weight_kg: float | None = None,
 ) -> RideAnalysis:
     """Analyze + persist streams for one activity. Returns the analysis bundle.
 
@@ -87,8 +88,26 @@ async def ingest_activity_streams(
     pace, HR, running dynamics) + decoupling, but nulls the cycling-only power
     model (CP / W′ / eFTP / MMP curve) and skips the NP backfill so a run's
     running-power never pollutes the cycling power-duration / FTP model.
+
+    The same nulling applies when the ingest guard flags the ride's power data
+    as corrupt (``analysis.power_model_valid`` False — a 20-min MMP beyond the
+    human envelope): raw streams are kept, the power model is not. Pass
+    ``weight_kg`` (profile weight) to tighten that guard to 5 W/kg.
     """
-    analysis = analyze_streams(streams.power, hr_series=_hr_for_analysis(streams), ftp=ftp)
+    analysis = analyze_streams(
+        streams.power,
+        hr_series=_hr_for_analysis(streams),
+        ftp=ftp,
+        weight_kg=weight_kg,
+    )
+    store_model = store_power_model and analysis.power_model_valid
+    if store_power_model and not analysis.power_model_valid:
+        logger.warning(
+            "Ingest guard: activity %s has an implausible sustained power "
+            "(20-min MMP beyond the sanity bound) — storing raw streams but "
+            "dropping its power model (mmp/CP/W'/eFTP -> None).",
+            activity_id,
+        )
 
     row = await db.get(ActivityStream, activity_id)
     payload = {
@@ -96,13 +115,13 @@ async def ingest_activity_streams(
         "streams": build_streams_blob(streams),
         "weather": weather,
         "has_gps": has_gps(streams),
-        "mmp_curve": {str(k): v for k, v in analysis.mmp_curve.items()} if store_power_model else None,
-        "normalized_power": analysis.np_watts if store_power_model else None,
+        "mmp_curve": {str(k): v for k, v in analysis.mmp_curve.items()} if store_model else None,
+        "normalized_power": analysis.np_watts if store_model else None,
         "decoupling_pct": analysis.decoupling_pct,
         "total_kj": analysis.total_kj,
-        "cp_watts": (analysis.cp.cp_watts if analysis.cp else None) if store_power_model else None,
-        "w_prime_j": (analysis.cp.w_prime_j if analysis.cp else None) if store_power_model else None,
-        "eftp_watts": (analysis.cp.eftp_watts if analysis.cp else None) if store_power_model else None,
+        "cp_watts": (analysis.cp.cp_watts if analysis.cp else None) if store_model else None,
+        "w_prime_j": (analysis.cp.w_prime_j if analysis.cp else None) if store_model else None,
+        "eftp_watts": (analysis.cp.eftp_watts if analysis.cp else None) if store_model else None,
     }
     if row is None:
         db.add(ActivityStream(activity_id=activity_id, **payload))
@@ -111,8 +130,9 @@ async def ingest_activity_streams(
             setattr(row, k, v)
 
     # Backfill the activity's NP from the true stream-derived value when absent
-    # (cycling only — a run's power model must not seed the cycling NP field).
-    if store_power_model:
+    # (cycling only — a run's power model must not seed the cycling NP field,
+    # and a guard-flagged corrupt ride must not either).
+    if store_model:
         await db.execute(
             update(Activity)
             .where(Activity.id == activity_id, Activity.normalized_power.is_(None))

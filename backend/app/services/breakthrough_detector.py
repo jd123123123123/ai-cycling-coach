@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
 from app.models.activity_stream import ActivityStream
+from app.services.athlete_power_profile import reject_uncorroborated_peaks
 
 # Human-meaningful durations, all downsampling-safe (≥ 60 s).
 KEY_DURATIONS: list[tuple[int, str, str]] = [
@@ -37,6 +38,16 @@ PB_MIN_GAIN_PCT = 2.0
 EFTP_MIN_GAIN_W = 5.0
 MIN_PRIOR_RIDES = 5
 WINDOW_DAYS = 90
+# Audit P0-1: a gain beyond this is suspect (likely a corrupt power file) and
+# needs a corroborating ride within 5% of the new value before we celebrate.
+SUSPECT_GAIN_PCT = 5.0
+_CORROBORATION_TOLERANCE = 0.05
+
+
+def _corroborated(now_w: float, raw_prior_vals: list[float]) -> bool:
+    """A second ride (raw history — including previously-suppressed spikes)
+    within 5% of the candidate value confirms it is physiologically real."""
+    return any(v >= (1.0 - _CORROBORATION_TOLERANCE) * now_w for v in raw_prior_vals)
 
 
 def _mmp_at(curve: dict | None, seconds: int) -> float | None:
@@ -113,8 +124,18 @@ async def detect_breakthroughs(
             prior_vals = [v for v in (_mmp_at(p["mmp"], seconds) for p in prior) if v]
             if len(prior_vals) < MIN_PRIOR_RIDES:
                 continue
-            best = max(prior_vals)
+            # Baseline from SANITIZED history: a corrupt prior spike must not
+            # set an impossible bar that suppresses real breakthroughs.
+            sanitized = reject_uncorroborated_peaks(prior_vals)
+            if not sanitized:
+                continue
+            best = max(sanitized)
             gain_pct = (now_w - best) / best * 100 if best > 0 else 0.0
+            # A suspect-sized gain needs a second ride within 5% of it — this
+            # kills one-off artifacts while celebrating a genuine breakthrough
+            # the second time it is confirmed.
+            if gain_pct > SUSPECT_GAIN_PCT and not _corroborated(now_w, prior_vals):
+                continue
             if gain_pct >= PB_MIN_GAIN_PCT:
                 label = label_de if de else label_en
                 out.append({
@@ -140,8 +161,16 @@ async def detect_breakthroughs(
         eftp_now = ride["eftp"]
         prior_eftps = [p["eftp"] for p in prior if p["eftp"]]
         if eftp_now and len(prior_eftps) >= MIN_PRIOR_RIDES:
-            best_eftp = max(prior_eftps)
-            if eftp_now - best_eftp >= EFTP_MIN_GAIN_W:
+            sanitized_eftps = reject_uncorroborated_peaks(prior_eftps)
+            best_eftp = max(sanitized_eftps) if sanitized_eftps else max(prior_eftps)
+            gain_over_best_pct = (
+                (eftp_now - best_eftp) / best_eftp * 100 if best_eftp > 0 else 0.0
+            )
+            if gain_over_best_pct > SUSPECT_GAIN_PCT and not _corroborated(
+                eftp_now, prior_eftps
+            ):
+                pass  # suspect one-off model spike — no celebration
+            elif eftp_now - best_eftp >= EFTP_MIN_GAIN_W:
                 out.append({
                     "kind": "eftp_shift",
                     "activity_id": ride["id"],

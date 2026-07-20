@@ -13,10 +13,13 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.dependencies import get_current_active_user, get_db_for_user
+from app.models.activity import Activity
+from app.models.activity_stream import ActivityStream
 from app.models.user import User
 from app.schemas.analytics import QueryResult, QuerySpec
 from app.schemas.period_report import PeriodReport
@@ -53,12 +56,49 @@ async def get_power_profile(
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
 ) -> dict:
     """Rich stream-derived power profile (dense MMP curve, peak powers, W/kg,
-    durability, decoupling). `{available: false}` when no power streams exist yet
-    so the UI can render an empty state."""
+    durability, decoupling). Cycling-only and outlier-sanitized (audit P0-1).
+    Includes the canonical threshold: `threshold_watts` (THE display number:
+    manual FTP when set, else the sanitized model eFTP), `threshold_source`
+    ('manual'|'model'), `model_valid` (CP/W′ display allowed) and `confidence`
+    (0-1). `{available: false}` when no power streams exist yet so the UI can
+    render an empty state."""
     profile = await compute_detailed_power_profile(db, _user.id)
     if profile is None:
         return {"available": False}
     return profile
+
+
+@router.get(
+    "/ride-counts",
+    summary="Cycling ride counts: total, with power streams, with GPS",
+)
+async def get_ride_counts(
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """One honest denominator for every analytics surface (audit P0-5):
+    `{total_rides, rides_with_power, rides_with_gps}` — cycling only, one SQL
+    with FILTER clauses."""
+    power_len = func.json_array_length(ActivityStream.streams.op("->")("power"))
+    lat_len = func.json_array_length(ActivityStream.streams.op("->")("latitude"))
+    stmt = (
+        select(
+            func.count(Activity.id).label("total_rides"),
+            func.count(Activity.id).filter(power_len > 0).label("rides_with_power"),
+            func.count(Activity.id)
+            .filter(or_(ActivityStream.has_gps.is_(True), lat_len > 0))
+            .label("rides_with_gps"),
+        )
+        .select_from(Activity)
+        .outerjoin(ActivityStream, ActivityStream.activity_id == Activity.id)
+        .where(Activity.user_id == _user.id, Activity.sport == "cycling")
+    )
+    row = (await db.execute(stmt)).one()
+    return {
+        "total_rides": int(row.total_rides or 0),
+        "rides_with_power": int(row.rides_with_power or 0),
+        "rides_with_gps": int(row.rides_with_gps or 0),
+    }
 
 
 @router.get(

@@ -104,7 +104,7 @@ class TestGarminDetailsExtraChannels:
             "activityDetailMetrics": [{"metrics": [1_782_024_082_000.0, 48.0, 78.0, 24.0]}],
         }
         rec = garmin_details_to_records(detail)[0]
-        assert rec["left_right_balance"] == 48.0
+        assert rec["right_balance"] == 48.0
         assert rec["torque_effectiveness"] == 78.0
         assert rec["pedal_smoothness"] == 24.0
 
@@ -113,5 +113,5 @@ class TestGarminDetailsExtraChannels:
         rows = [[90.0, 100.0, 130.0, 1_782_024_082_000.0, 200.0]]
         rec = garmin_details_to_records(_detail(rows))[0]
         for k in ("latitude", "longitude", "speed", "distance", "temperature",
-                  "left_right_balance", "torque_effectiveness", "pedal_smoothness"):
+                  "right_balance", "torque_effectiveness", "pedal_smoothness"):
             assert rec[k] is None

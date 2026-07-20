@@ -186,6 +186,51 @@ def test_no_nan_when_inputs_contain_non_finite():
     assert samples == [{"date": (TODAY - timedelta(days=7)).isoformat(), "value": 240.0}]
 
 
+def test_current_estimate_respects_anchor():
+    """Audit P0-1: with a stored FTP of 240 the Plan tab must not show 223 —
+    the projection is re-anchored so 'today' sits on the canonical threshold,
+    even when the eFTP samples pull far below it."""
+    past = _ramp_past()
+    xbd = _x_by_date(past)
+    dates = [p["date"] for p in past]
+    idxs = [round(i * (len(dates) - 1) / 9) for i in range(10)]
+    low_obs = [
+        {"date": dates[k].isoformat(), "value": 200.0 + 0.05 * xbd[dates[k].isoformat()]}
+        for k in idxs
+    ]
+    proj = project_performance(
+        past, _future(), ftp_watts=240, observations=low_obs, today=TODAY
+    )
+    assert proj["mode"] == "performance"
+    assert abs(proj["current_estimate"] - 240.0) <= 2.0
+
+
+def test_fitness_mode_current_estimate_anchored_too():
+    past = _ramp_past()
+    proj = project_performance(past, _future(), ftp_watts=240, observations=[], today=TODAY)
+    assert abs(proj["current_estimate"] - 240.0) <= 2.0
+
+
+def test_confidence_pct_exposed_and_gated():
+    past = _ramp_past()
+    none_ = project_performance(past, _future(), ftp_watts=250, observations=[], today=TODAY)
+    many = project_performance(
+        past, _future(), ftp_watts=250, observations=_obs_from(past, 30), today=TODAY
+    )
+    assert 0 <= none_["confidence_pct"] <= 100
+    assert 0 <= many["confidence_pct"] <= 100
+    # No performance samples → below the 30% show-a-range gate; a well-sampled
+    # fit → comfortably above it.
+    assert none_["confidence_pct"] < 30
+    assert many["confidence_pct"] >= 30
+    assert many["confidence_pct"] > none_["confidence_pct"]
+
+
+def test_empty_projection_has_zero_confidence():
+    proj = project_performance([], _future(), ftp_watts=250, today=TODAY)
+    assert proj["confidence_pct"] == 0
+
+
 def test_eftp_sample_gate():
     acts = [
         # qualifies: 30 min at NP 240 (IF 240/250=0.96)

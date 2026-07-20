@@ -255,6 +255,14 @@ def project_performance(
     # Sanitize the fitted map — a degenerate fit must never leak NaN downstream.
     p0 = _finite(p0, p0_prior)
     scale = _finite(scale, scale_prior)
+
+    # ANCHOR (audit P0-1): the canonical threshold is the trusted "today" value.
+    # Re-anchor the intercept so the central path passes exactly through the
+    # FTP anchor at t=now — the fit contributes the TREND (scale), the anchor
+    # sets the level. Without this, sparse/old eFTP samples could pull the
+    # displayed "current estimate" tens of watts away from the stored FTP
+    # (e.g. Plan tab showing 223 W against a stored FTP of 240 W).
+    p0 = _finite(ftp - scale * x_now, ftp)
     cov_np = np.array(cov, dtype=float)
     if not np.all(np.isfinite(cov_np)):
         cov_np = np.array(
@@ -308,6 +316,14 @@ def project_performance(
     now_mean = _finite(now_mean, ftp)
     days_out = max(0, (horizon_end - today).days)
 
+    # Confidence (0-100): band tightness at the horizon × sample richness.
+    # < 30 ⇒ the UI should show a range, not a point (audit P0-1).
+    band_w = float(end_point["p90"]) - float(end_point["p10"])
+    central_w = float(end_point["central"]) if end_point["central"] else 0.0
+    ratio = band_w / central_w if central_w > 0 else 1.0
+    sample_factor = min(1.0, n_samples / 10.0)
+    confidence_pct = int(round(100 * max(0.0, min(1.0, (1.0 - ratio) * sample_factor))))
+
     projected_outcome, caveat = _narrate(
         mode=mode,
         de=de,
@@ -323,6 +339,7 @@ def project_performance(
         "unit": unit,
         "metric_label": label_metric,
         "samples_used": n_samples,
+        "confidence_pct": confidence_pct,
         "horizon_date": horizon_end.isoformat(),
         "days_out": days_out,
         "current_estimate": round(now_mean, 1),
@@ -458,6 +475,7 @@ def _empty(de: bool) -> dict:
         "unit": "watts",
         "metric_label": "fitness-equivalent FTP",
         "samples_used": 0,
+        "confidence_pct": 0,
         "horizon_date": date.today().isoformat(),
         "days_out": 0,
         "current_estimate": None,

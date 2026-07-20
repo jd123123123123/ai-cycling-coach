@@ -41,12 +41,50 @@ def _flat_history(n=6, w=230.0, start_days_ago=60.0):
 
 @pytest.mark.asyncio
 async def test_pb_fires_on_clear_gain():
-    rows = _flat_history() + [_ride(99, 0.5, {"300": 245.0, "60": 322.0}, eftp=201.0)]
+    # +3.9% — above the 2% gate, below the 5% suspect threshold that would
+    # require a corroborating second ride (audit P0-1).
+    rows = _flat_history() + [_ride(99, 0.5, {"300": 239.0, "60": 322.0}, eftp=201.0)]
     out = await detect_breakthroughs(_db(rows), 1)
     kinds = {(b["kind"], b.get("duration_s")) for b in out}
-    assert ("power_pb", 300) in kinds  # 245 vs 230 = +6.5%
+    assert ("power_pb", 300) in kinds  # 239 vs 230 = +3.9%
     pb = next(b for b in out if b.get("duration_s") == 300)
-    assert pb["value_w"] == 245 and pb["prior_best_w"] == 230
+    assert pb["value_w"] == 239 and pb["prior_best_w"] == 230
+
+
+@pytest.mark.asyncio
+async def test_uncorroborated_suspect_gain_is_suppressed():
+    # A one-off +30% "PB" is a corrupt file, not physiology — silent.
+    rows = _flat_history() + [_ride(99, 0.5, {"300": 300.0})]
+    out = await detect_breakthroughs(_db(rows), 1)
+    assert not [b for b in out if b["kind"] == "power_pb"]
+
+
+@pytest.mark.asyncio
+async def test_corroborated_large_gain_is_celebrated():
+    # The first big ride (300 W, 5 days ago) was suppressed at its time; when
+    # the athlete CONFIRMS it (302 W today), the breakthrough fires — measured
+    # against the sanitized (pre-spike) baseline of 230 W.
+    rows = (
+        _flat_history()
+        + [_ride(50, 5, {"300": 300.0})]
+        + [_ride(99, 0.5, {"300": 302.0})]
+    )
+    out = await detect_breakthroughs(_db(rows), 1)
+    pb = [b for b in out if b["kind"] == "power_pb" and b["duration_s"] == 300]
+    assert pb and pb[0]["value_w"] == 302 and pb[0]["prior_best_w"] == 230
+
+
+@pytest.mark.asyncio
+async def test_corrupt_prior_does_not_raise_the_baseline():
+    # A corrupt 359-W prior must not suppress a real +3.9% PB vs the sane 230 W.
+    rows = (
+        _flat_history()
+        + [_ride(50, 30, {"300": 359.0})]
+        + [_ride(99, 0.5, {"300": 239.0})]
+    )
+    out = await detect_breakthroughs(_db(rows), 1)
+    pb = [b for b in out if b["kind"] == "power_pb" and b["duration_s"] == 300]
+    assert pb and pb[0]["prior_best_w"] == 230
 
 
 @pytest.mark.asyncio
@@ -76,6 +114,14 @@ async def test_eftp_shift():
     out = await detect_breakthroughs(_db(rows), 1)
     shift = [b for b in out if b["kind"] == "eftp_shift"]
     assert shift and shift[0]["value_w"] == 207 and shift[0]["prior_best_w"] == 200
+
+
+@pytest.mark.asyncio
+async def test_uncorroborated_eftp_spike_is_suppressed():
+    # +25% eFTP in one ride = corrupt power model, not a new engine.
+    rows = _flat_history() + [_ride(99, 0.5, {"300": 230.0}, eftp=250.0)]
+    out = await detect_breakthroughs(_db(rows), 1)
+    assert not [b for b in out if b["kind"] == "eftp_shift"]
 
 
 @pytest.mark.asyncio

@@ -59,3 +59,44 @@ class TestAnalyzeStreams:
         a = analyze_streams([200.0] * 600, ftp=None)
         assert a.if_ is None
         assert a.np_watts == pytest.approx(200.0, abs=1.0)
+
+
+class TestIngestGuard:
+    """Audit P0-1: corrupt power must be stopped at the source."""
+
+    def test_instantaneous_spikes_clamped_at_2500w(self):
+        power = [200.0] * 600
+        power[300] = 30000.0  # sensor glitch
+        a = analyze_streams(power, ftp=250.0)
+        assert a.mmp_curve[1] <= 2500.0
+        assert a.power_model_valid is True  # short ride: sustained guard can't judge
+
+    def test_absolute_bound_drops_power_model(self):
+        # 600 W held for 20 minutes is not human — model dropped, like runs.
+        a = analyze_streams([600.0] * 1200)
+        assert a.power_model_valid is False
+        assert a.cp is None
+        assert a.mmp_curve == {}
+        assert a.w_bal is None
+
+    def test_weight_tightens_the_bound(self):
+        # 450 W for 20 min exceeds 5 W/kg at 80 kg (400 W) → dropped.
+        a = analyze_streams([450.0] * 1200, weight_kg=80.0)
+        assert a.power_model_valid is False
+
+    def test_plausible_hard_ride_keeps_model(self):
+        power = (
+            [150.0] * 600
+            + [300.0] * 300
+            + [150.0] * 1200
+            + [270.0] * 720
+            + [150.0] * 600
+        )
+        a = analyze_streams(power, ftp=250.0, weight_kg=70.0)
+        assert a.power_model_valid is True
+        assert a.cp is not None
+
+    def test_short_ride_cannot_be_judged(self):
+        # No 20-min MMP exists → the sustained-power guard does not fire.
+        a = analyze_streams([550.0] * 600)
+        assert a.power_model_valid is True
