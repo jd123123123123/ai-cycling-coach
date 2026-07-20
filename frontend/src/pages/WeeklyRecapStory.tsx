@@ -13,9 +13,10 @@ import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { X, TrendingUp, TrendingDown, Trophy, Bike, Flame, ChevronRight, Download, Pause } from 'lucide-react'
+import { X, TrendingUp, TrendingDown, Trophy, Bike, CalendarCheck, ChevronRight, Download } from 'lucide-react'
 import { apiClient } from '../api/client'
 import { useLocale } from '../contexts/LocaleContext'
+import { useStreak, type WeekConsistency } from '../hooks/useStreak'
 
 interface Recap {
   week_start: string
@@ -31,6 +32,46 @@ interface Recap {
 
 const BG = '#0A0C0F'
 
+// ── P1-11 / P1-8 copy — pure, testable ──────────────────────────────────────
+
+/** The payoff sentence for done-vs-planned TSS. A quiet week (< 60% of plan)
+ *  gets the audit's no-guilt reframe — no shouted percentage, no blame; the
+ *  plan adapting IS the story. Normal weeks keep the factual copy (the percent
+ *  is plain body text, never a red number). */
+export function payoffLine(done: number, planned: number, de: boolean): string {
+  const compliance = Math.round((done / planned) * 100)
+  if (compliance < 60) {
+    return de
+      ? `${done} von ${planned} TSS — eine ruhige Woche. Dein Plan passt sich an.`
+      : `${done} of ${planned} TSS — a quiet week. Your plan adapts.`
+  }
+  const verdict = compliance >= 110
+    ? (de ? 'Mehr als der Plan — die nächste Woche gleicht das aus.' : 'More than planned — next week rebalances.')
+    : compliance >= 85
+      ? (de ? 'Genau im Korridor. So entsteht Form.' : 'Right in the corridor. This is how form is built.')
+      : (de ? 'Weniger als geplant — völlig okay, der Plan passt sich an.' : 'Less than planned — fine; the plan adapts.')
+  return de
+    ? `Geplant waren ${planned} TSS — du hast ${done} geliefert (${compliance}%). ${verdict}`
+    : `The plan asked for ${planned} TSS — you delivered ${done} (${compliance}%). ${verdict}`
+}
+
+/** The finale ends on the week's rhythm, not a streak (P1-11). Falls back to
+ *  last week's session count while the consistency stat hasn't landed yet. */
+export function finaleRhythmLine(
+  consistency: WeekConsistency | null | undefined,
+  sessions: number,
+  de: boolean,
+): string {
+  if (consistency && consistency.planned > 0) {
+    return de
+      ? `${consistency.met} von ${consistency.planned} geplanten Tagen — die Woche trägt.`
+      : `${consistency.met} of ${consistency.planned} planned days — the week holds.`
+  }
+  return de
+    ? `${sessions} Einheiten letzte Woche — der Rhythmus trägt.`
+    : `${sessions} sessions last week — the rhythm carries.`
+}
+
 export default function WeeklyRecapStory() {
   const { locale } = useLocale()
   const de = locale === 'de'
@@ -42,6 +83,10 @@ export default function WeeklyRecapStory() {
     queryFn: async () => (await apiClient.get<Recap>(`/analytics/weekly-recap?locale=${locale}`)).data,
     staleTime: 60 * 60 * 1000,
   })
+  // Current-week rhythm for the finale (P1-11) — the shared streak payload's
+  // consistency stat; hidden fallback copy while the backend hasn't sent it.
+  const { data: streakData } = useStreak()
+  const consistency = streakData?.consistency ?? null
 
   const panels = useMemo(() => {
     if (!data) return []
@@ -222,11 +267,9 @@ export default function WeeklyRecapStory() {
                 {data.ctl_delta >= 0 ? '+' : ''}{data.ctl_delta} <span style={{ fontSize: 22, color: 'var(--color-ink-2)' }}>{de ? 'Fitness (CTL)' : 'fitness (CTL)'}</span>
               </span>
             )}
-            {compliance != null && (
+            {compliance != null && data.planned_tss != null && (
               <p style={{ fontSize: 15, color: 'var(--color-ink-2)', lineHeight: 1.5 }}>
-                {de
-                  ? `Geplant waren ${data.planned_tss} TSS — du hast ${t.tss} geliefert (${compliance}%). ${compliance >= 110 ? 'Mehr als der Plan — die nächste Woche gleicht das aus.' : compliance >= 85 ? 'Genau im Korridor. So entsteht Form.' : 'Weniger als geplant — völlig okay, der Plan passt sich an.'}`
-                  : `The plan asked for ${data.planned_tss} TSS — you delivered ${t.tss} (${compliance}%). ${compliance >= 110 ? 'More than planned — next week rebalances.' : compliance >= 85 ? 'Right in the corridor. This is how form is built.' : 'Less than planned — fine; the plan adapts.'}`}
+                {payoffLine(t.tss, data.planned_tss, de)}
               </p>
             )}
           </motion.div>
@@ -237,14 +280,12 @@ export default function WeeklyRecapStory() {
             <span className="eyebrow" style={{ fontSize: 12, letterSpacing: '0.18em', color: 'var(--color-accent)', fontWeight: 700 }}>
               {de ? 'JETZT DIESE WOCHE' : 'NOW THIS WEEK'}
             </span>
+            {/* Weekly rhythm, not a streak (P1-11) — the story ends on how the
+                week is holding together, never on a chain that can "break". */}
             <div className="flex items-center gap-2.5">
-              {data.streak.paused
-                ? <Pause size={20} style={{ color: 'var(--color-muted)' }} />
-                : <Flame size={20} style={{ color: 'var(--color-amber)' }} />}
+              <CalendarCheck size={20} style={{ color: 'var(--color-recovery)' }} />
               <span style={{ fontSize: 16, color: 'var(--color-ink)', fontWeight: 600 }}>
-                {data.streak.paused
-                  ? (de ? 'Serie pausiert — sie wartet auf dich.' : 'Streak paused — it’s waiting for you.')
-                  : de ? `${data.streak.days} Tage Serie — weiter geht's.` : `${data.streak.days}-day streak — keep rolling.`}
+                {finaleRhythmLine(consistency, t.sessions, de)}
               </span>
             </div>
             <button

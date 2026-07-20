@@ -21,6 +21,16 @@ import { localDayKey } from '../utils/loadMetrics'
 import HoverBars from '../components/ui/HoverBars'
 import MobileBottomNav from '../components/dashboard/MobileBottomNav'
 import { useLocale } from '../contexts/LocaleContext'
+import { useLanguage } from '../contexts/LanguageContext'
+import { metricLabel, type GlossaryKey } from '../utils/metricLabel'
+import { useGlossary } from '../components/ui/GlossarySheet'
+
+// Static dotted underline — tap-to-explain affordance (never hover-only).
+const TAPPABLE_LABEL = {
+  textDecoration: 'underline dotted',
+  textUnderlineOffset: 3,
+  textDecorationColor: 'var(--color-muted)',
+} as const
 
 const DASH = '—'
 const C = {
@@ -63,6 +73,8 @@ export default function RecoveryTrendsView() {
   const navigate = useNavigate()
   const { locale } = useLocale()
   const de = locale === 'de'
+  const { language } = useLanguage()
+  const glossary = useGlossary()
   const [range, setRange] = useState<Range>(14)
   const today = useMemo(() => new Date(), [])
   const from = useMemo(() => subDays(today, range - 1), [today, range])
@@ -119,13 +131,29 @@ export default function RecoveryTrendsView() {
   const rangeLabel = de ? `letzte ${range} Tage` : `last ${range} days`
 
   // Baseline row — normalized bar heights (20–100%) so the trend shape reads;
-  // the tooltip carries the real value.
-  const baselineRow = (label: string, sel: (d: typeof days[number]) => number | null, color: string, unit: string) => {
+  // the tooltip carries the real value. When `glossaryKey` is set the label
+  // becomes a tappable chip that opens the glossary sheet with the latest
+  // reading (P1: jargon as an invitation).
+  const baselineRow = (label: string, sel: (d: typeof days[number]) => number | null, color: string, unit: string, glossaryKey?: GlossaryKey) => {
     const pts = days.map((d) => ({ v: sel(d), day: d.dateLabel, today: d.isToday })).filter((x): x is { v: number; day: string; today: boolean } => x.v != null)
+    const labelEl = glossaryKey ? (
+      <button
+        type="button"
+        onClick={() => {
+          const latest = pts.length ? pts[pts.length - 1].v : null
+          glossary.open(glossaryKey, latest != null ? `${Math.round(latest)} ${unit}` : null)
+        }}
+        style={{ fontSize: 12, fontWeight: 600, color: C.ink2, background: 'none', border: 0, padding: '14px 0', margin: '-14px 0', cursor: 'pointer', textAlign: 'left', ...TAPPABLE_LABEL }}
+      >
+        {label}
+      </button>
+    ) : (
+      <span style={{ fontSize: 12, fontWeight: 600, color: C.ink2 }}>{label}</span>
+    )
     if (pts.length < 3) {
       return (
         <div className="flex flex-col gap-2">
-          <span style={{ fontSize: 12, fontWeight: 600, color: C.ink2 }}>{label}</span>
+          {labelEl}
           <span style={{ fontSize: 12, color: C.muted }}>{de ? 'Zu wenig Daten im Fenster' : 'Not enough data in this window'}</span>
         </div>
       )
@@ -135,7 +163,7 @@ export default function RecoveryTrendsView() {
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span style={{ fontSize: 12, fontWeight: 600, color: C.ink2 }}>{label}</span>
+          {labelEl}
           <span className="flex items-end gap-1"><span className="num-mono" style={{ fontSize: 16, fontWeight: 700, color }}>{Math.round(vals[vals.length - 1])}</span><span style={{ fontSize: 10, fontWeight: 500, color: C.muted, paddingBottom: 2 }}>{unit}</span></span>
         </div>
         <HoverBars
@@ -215,7 +243,7 @@ export default function RecoveryTrendsView() {
           {/* Baseline Trends */}
           <Card>
             <span className="num-display" style={{ fontSize: 16, color: C.ink }}>{de ? `Basislinien-Trends · ${range} Tage` : `Baseline Trends · ${range} days`}</span>
-            {baselineRow('HRV', (d) => d.hrv, C.recovery, 'ms')}
+            {baselineRow(metricLabel('hrv', language, locale), (d) => d.hrv, C.recovery, 'ms', 'hrv')}
             {baselineRow(de ? 'Ruhepuls' : 'Resting HR', (d) => d.rhr, C.strain, 'bpm')}
           </Card>
 
@@ -223,7 +251,17 @@ export default function RecoveryTrendsView() {
           <Card gap={16}>
             <div className="flex items-end justify-between">
               <div className="flex flex-col" style={{ gap: 2 }}>
-                <span className="num-display" style={{ fontSize: 16, color: C.ink }}>{de ? 'Erholung vs. Belastung' : 'Recovery vs Strain'}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const todayTss = tssByDate.get(format(today, 'yyyy-MM-dd')) ?? null
+                    glossary.open('tss', todayTss != null && todayTss > 0 ? String(Math.round(todayTss)) : null)
+                  }}
+                  className="num-display"
+                  style={{ fontSize: 16, color: C.ink, background: 'none', border: 0, padding: '14px 0', margin: '-14px 0', cursor: 'pointer', textAlign: 'left', ...TAPPABLE_LABEL }}
+                >
+                  {de ? 'Erholung vs. Belastung' : 'Recovery vs Strain'}
+                </button>
                 <span style={{ fontSize: 12, color: C.muted }}>{de ? `${rangeLabel} · Balance` : `${rangeLabel} · balance`}</span>
               </div>
               <span className="flex items-center rounded-full" style={{ gap: 6, padding: '5px 10px', background: soft(balanced ? C.recovery : C.amber, 15) }}>
@@ -298,6 +336,7 @@ export default function RecoveryTrendsView() {
           </div>
         </div>
       </div>
+      {glossary.sheet}
       <MobileBottomNav />
     </div>
   )

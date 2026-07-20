@@ -135,3 +135,80 @@ async def test_week_states_present():
     assert len(out["week"]) == 7
     states = {w["state"] for w in out["week"]}
     assert states <= {"trained", "rest", "paused", "missed", "unplanned", "today", "upcoming"}
+
+
+# ─── Weekly consistency (usability audit P1-11) ──────────────────────────────
+# consistency = {met, planned}: planned training days met so far vs planned
+# training days in the WHOLE athlete-local week. Planned rest days never enter
+# the denominator; days later this week are never "missed", only not-yet-met.
+
+MONDAY = TODAY - timedelta(days=TODAY.weekday())  # 2026-07-13
+
+
+@pytest.mark.asyncio
+async def test_consistency_met_vs_planned_week():
+    mon, tue, wed = MONDAY, MONDAY + timedelta(days=1), MONDAY + timedelta(days=2)
+    fri, sat = MONDAY + timedelta(days=4), MONDAY + timedelta(days=5)  # fri == TODAY
+    planned = [
+        (mon, "z2_long_120", "Long Z2 — 2h"),
+        (tue, "rest_day", "Rest day"),          # rest: never in the denominator
+        (wed, "vo2_5x3", "VO2 5x3"),
+        (fri, "z2_90", "Z2 — 90min"),           # today, not yet trained
+        (sat, "z2_180", "Long ride"),           # future: not missed, not met
+    ]
+    db = _db([mon, wed], planned, None)
+    out = await build_streak(db, 1, today=TODAY)
+    assert out["consistency"] == {"met": 2, "planned": 4}
+
+
+@pytest.mark.asyncio
+async def test_consistency_training_today_counts_immediately():
+    planned = [(TODAY, "z2_90", "Z2 — 90min")]
+    db = _db([TODAY], planned, None)
+    out = await build_streak(db, 1, today=TODAY)
+    assert out["consistency"] == {"met": 1, "planned": 1}
+
+
+@pytest.mark.asyncio
+async def test_consistency_rest_only_week_is_zero_of_zero():
+    planned = [
+        (MONDAY + timedelta(days=i), "rest_day", "Rest day") for i in range(7)
+    ]
+    db = _db([], planned, None)
+    out = await build_streak(db, 1, today=TODAY)
+    assert out["consistency"] == {"met": 0, "planned": 0}
+
+
+@pytest.mark.asyncio
+async def test_consistency_unplanned_week_is_zero_of_zero():
+    # Training without a plan never manufactures a denominator.
+    db = _db(_days(3), [], None)
+    out = await build_streak(db, 1, today=TODAY)
+    assert out["consistency"] == {"met": 0, "planned": 0}
+
+
+@pytest.mark.asyncio
+async def test_consistency_paused_days_drop_from_denominator():
+    # Sick since Wednesday: Wed + Fri planned sessions drop out entirely —
+    # illness must not read as broken consistency (no-guilt rule).
+    mon, wed, fri = MONDAY, MONDAY + timedelta(days=2), MONDAY + timedelta(days=4)
+    planned = [
+        (mon, "z2_long_120", "Long Z2"),
+        (wed, "vo2_5x3", "VO2"),
+        (fri, "z2_90", "Z2"),
+    ]
+    goals = {"athlete_status": {"state": "sick", "since": wed.isoformat()}}
+    db = _db([mon], planned, goals)
+    out = await build_streak(db, 1, today=TODAY)
+    assert out["consistency"] == {"met": 1, "planned": 1}
+
+
+@pytest.mark.asyncio
+async def test_consistency_trained_through_pause_still_counts():
+    # Trained anyway on a paused day → the day stays in both counters.
+    mon, wed = MONDAY, MONDAY + timedelta(days=2)
+    planned = [(mon, "z2_long_120", "Long Z2"), (wed, "vo2_5x3", "VO2")]
+    goals = {"athlete_status": {"state": "sick", "since": wed.isoformat()}}
+    db = _db([mon, wed], planned, goals)
+    out = await build_streak(db, 1, today=TODAY)
+    assert out["consistency"] == {"met": 2, "planned": 2}

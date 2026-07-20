@@ -13,7 +13,11 @@ ChallengeMetric = Literal[
 class ChallengeCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     metric: ChallengeMetric
-    target: float = Field(..., gt=0)
+    # Omitted → the server computes a target scaled to the creator's OWN
+    # history (tss: 4-week avg weekly TSS × 1.05, floor 60; active_days:
+    # 3..6, never 7) — never a fixed 800-TSS wall. Other metrics still
+    # require an explicit target.
+    target: float | None = Field(None, gt=0)
     period: Literal["week", "custom"] = "week"
     starts_on: date | None = None
     ends_on: date | None = None

@@ -422,3 +422,118 @@ export function complianceDirectionText(
   if (band === 'over') return `A bit ${overLabel}`
   return 'A bit lighter than planned'
 }
+
+
+// ─── P1-7 — simple-mode workout names ────────────────────────────────────
+//
+// Template titles arrive shaped like 'Hill VO2 — 6×3min @ 115% FTP' or
+// 'Z2 endurance 60min @ 65% FTP'. In simple mode those become an invitation
+// instead of a wall: 'Berg-Intervalle · 6×3 Min sehr hart' / 'Hill
+// intervals · 6×3 min very hard'. Technical mode never calls this —
+// callers keep the raw title there.
+
+/**
+ * Intensity adjective from %FTP bands (audit P1-7):
+ *   <75 locker/easy · 75–90 zügig/steady · 90–105 hart/hard · >105 sehr hart/very hard
+ */
+export function intensityAdjective(pctFtp: number, locale: Locale = 'en'): string {
+  const de = locale === 'de'
+  if (pctFtp < 75) return de ? 'locker' : 'easy'
+  if (pctFtp < 90) return de ? 'zügig' : 'steady'
+  if (pctFtp <= 105) return de ? 'hart' : 'hard'
+  return de ? 'sehr hart' : 'very hard'
+}
+
+// Keyword → simple base name. Checked in order; first hit wins. Each entry
+// can differ between interval titles (N×M) and single-block rides.
+const NAME_RULES: Array<{
+  re: RegExp
+  intervals: { en: string; de: string }
+  single: { en: string; de: string }
+}> = [
+  {
+    re: /hill|berg|climb/i,
+    intervals: { en: 'Hill intervals', de: 'Berg-Intervalle' },
+    single: { en: 'Hill ride', de: 'Bergfahrt' },
+  },
+  {
+    re: /sprint|anaerobic|neuromuscular/i,
+    intervals: { en: 'Sprints', de: 'Sprints' },
+    single: { en: 'Sprint day', de: 'Sprint-Tag' },
+  },
+  {
+    re: /vo2|vo₂/i,
+    intervals: { en: 'Hard intervals', de: 'Harte Intervalle' },
+    single: { en: 'Hard ride', de: 'Harte Fahrt' },
+  },
+  {
+    re: /sweet\s*spot/i,
+    intervals: { en: 'Focused effort', de: 'Fokussierter Aufwand' },
+    single: { en: 'Focused effort', de: 'Fokussierter Aufwand' },
+  },
+  {
+    re: /threshold|schwelle|\bftp\s+(interval|test)/i,
+    intervals: { en: 'Hard intervals', de: 'Harte Intervalle' },
+    single: { en: 'Hard ride', de: 'Harte Fahrt' },
+  },
+  {
+    re: /tempo/i,
+    intervals: { en: 'Steady push', de: 'Gleichmäßig drücken' },
+    single: { en: 'Steady push', de: 'Gleichmäßig drücken' },
+  },
+  {
+    re: /endurance|\bz2\b|grundlage|\bbase\b/i,
+    intervals: { en: 'Chill ride', de: 'Lockere Fahrt' },
+    single: { en: 'Chill ride', de: 'Lockere Fahrt' },
+  },
+  {
+    re: /recovery|regeneration|\bz1\b/i,
+    intervals: { en: 'Easy spin', de: 'Locker drehen' },
+    single: { en: 'Easy spin', de: 'Locker drehen' },
+  },
+]
+
+/**
+ * Render a simple-mode variant of a technical workout title.
+ *
+ * Parses the common template shapes:
+ *   - 'Hill VO2 — 6×3min @ 115% FTP'  → 'Berg-Intervalle · 6×3 Min sehr hart'
+ *   - 'Z2 endurance 60min @ 65% FTP'  → 'Lockere Fahrt · 60 Min locker'
+ * Unknown shapes fall back to the original title — never a blank label.
+ */
+export function simpleWorkoutName(title: string, locale: Locale = 'en'): string {
+  if (!title || !title.trim()) return title
+  const de = locale === 'de'
+
+  // Structure: repeats ('6×3min' / '6x3 min') and/or a single duration.
+  const repeats = title.match(/(\d+)\s*[×x]\s*(\d+)\s*(?:min|m\b)/i)
+  const secRepeats = repeats ? null : title.match(/(\d+)\s*[×x]\s*(\d+)\s*(?:sec|s\b)/i)
+  const single = repeats || secRepeats ? null : title.match(/(\d+)\s*min\b/i)
+  const pct = title.match(/@\s*(\d+(?:[.,]\d+)?)\s*%\s*FTP/i)
+
+  const rule = NAME_RULES.find((r) => r.re.test(title))
+  const hasIntervals = repeats != null || secRepeats != null
+
+  // Nothing recognisable — keep the backend title rather than inventing one.
+  if (!rule && !hasIntervals && !single) return title
+
+  const name = rule
+    ? (hasIntervals ? rule.intervals : rule.single)[de ? 'de' : 'en']
+    : hasIntervals
+      ? de ? 'Intervalle' : 'Intervals'
+      : de ? 'Fahrt' : 'Ride'
+
+  const adj = pct ? intensityAdjective(parseFloat(pct[1].replace(',', '.')), locale) : null
+
+  let structure: string | null = null
+  if (repeats) {
+    structure = `${repeats[1]}×${repeats[2]} ${de ? 'Min' : 'min'}`
+  } else if (secRepeats) {
+    structure = `${secRepeats[1]}×${secRepeats[2]} ${de ? 'Sek' : 'sec'}`
+  } else if (single) {
+    structure = `${single[1]} ${de ? 'Min' : 'min'}`
+  }
+
+  const tail = [structure, adj].filter(Boolean).join(' ')
+  return tail ? `${name} · ${tail}` : name
+}

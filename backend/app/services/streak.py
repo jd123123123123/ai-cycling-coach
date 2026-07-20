@@ -134,8 +134,27 @@ async def build_streak(db: AsyncSession, user_id: int, today: date | None = None
             state = day_state(d)
         week.append({"date": d.isoformat(), "state": state})
 
+    # Weekly consistency (usability audit P1-11): planned training days met so
+    # far vs planned training days in the WHOLE athlete-local week. No-guilt
+    # semantics: planned rest days never enter the denominator, days later
+    # this week are not "missed" (they simply aren't met *yet*), and paused
+    # (sick/injured/break) days drop out of the denominator unless the athlete
+    # trained anyway.
+    met = 0
+    planned = 0
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        if d not in session_planned:
+            continue
+        if paused_on(d) and d not in trained:
+            continue
+        planned += 1
+        if d in trained:
+            met += 1
+
     return {
         "streak": streak,
+        "consistency": {"met": met, "planned": planned},
         "paused": paused_on(today),
         "status": (
             {"state": status_state, "since": status_since.isoformat()}

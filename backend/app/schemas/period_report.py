@@ -102,7 +102,11 @@ class Trajectory(BaseModel):
     ctl_projected_at_goal: float
     ctl_target: float | None = None
     tsb_projected_at_goal: float
-    taper_window: str = Field(description="'ideal' | 'too_fresh' | 'overreached' | 'unknown'")
+    taper_window: str | None = Field(
+        default=None,
+        description="'ideal' | 'too_fresh' | 'too_flat' | 'overreached' | null "
+                    "(null = not assessable yet; UI renders '—', never 'unknown')",
+    )
     on_track: str = Field(description="'yes' | 'behind' | 'ahead' | 'no_goal' | ...")
     weekly_tss_required: float
     weekly_tss_actual: float

@@ -3,7 +3,7 @@
  * Card order matches the .pen exactly: Greeting header (+avatar) → Race chip →
  * Recovery card (ring + 3 sub-scores) → Workout card (coral, 3-stat + view link) →
  * Load card (CTL/ATL/TSB) → Activity card (rings + legend) → Metrics row
- * (Resting HR / HRV / Strain) → Streak card (weekday status dots).
+ * (Resting HR / HRV / Strain) → Week-rhythm card (weekday status dots).
  * Every value is real Garmin/backend data; no extra cards.
  */
 import { useMemo, useState } from 'react'
@@ -11,8 +11,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../../api/client'
 import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays, format, startOfWeek, addDays } from 'date-fns'
+import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
-import { Flag, Heart, Activity, Zap, Target, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
+import { Flag, Heart, Activity, Zap, Target, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, CalendarCheck, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
 import { loggedReviewFromEvidence, type Adaptations } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
@@ -22,7 +23,8 @@ import WeatherNudge from '../WeatherNudge'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import AbsorptionCard from '../AbsorptionCard'
 import LevelStripCard from '../LevelStripCard'
-import { useStreak, useSetAthleteStatus } from '../../../hooks/useStreak'
+import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
+import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useDailyDecision, isActiveDecisionState, isSidelinedDecisionState } from '../../../hooks/useDailyDecision'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
@@ -48,6 +50,51 @@ function readinessColor(score: number | null): string {
   return 'var(--color-move)'
 }
 
+// ── P1-11 / P1-8 weekly rhythm — pure, testable helpers ─────────────────────
+
+/** Audit P1-11 copy: the weekly-rhythm stat that replaced the daily streak.
+ *  Null (→ hide entirely) while the backend hasn't sent consistency yet. */
+export function consistencyLabel(c: WeekConsistency | null | undefined, de: boolean): string | null {
+  if (!c || c.planned <= 0) return null
+  return de
+    ? `Konstanz: ${c.met} von ${c.planned} geplanten Tagen`
+    : `Consistency: ${c.met} of ${c.planned} planned days`
+}
+
+/** Trailing 4-week average weekly TSS from real PMC daily loads. Null while
+ *  history is too thin (< 14 days) to honestly call anything an average. */
+export function fourWeekAvgWeeklyTss(
+  entries: { tss?: number | null; daily_tss: number | null }[] | undefined | null,
+): number | null {
+  if (!entries || entries.length < 14) return null
+  const window = entries.slice(-28)
+  const total = window.reduce((s, e) => s + (e.tss ?? e.daily_tss ?? 0), 0)
+  return Math.round((total / window.length) * 7)
+}
+
+/** A planned week materially below the recent average is a deliberate quiet
+ *  week — a fitness dip during it is the plan working, not a failure. */
+const QUIET_WEEK_RATIO = 0.8
+
+/** P1-8: the greeting's "Fitness −4 (7d)" chip renders ONLY when a decline is
+ *  NOT plan-intended. Planned rest / recover days and deliberately quiet weeks
+ *  hide it; rises (and flat) always render. Tone stays neutral-muted either way. */
+export function shouldShowFitnessTrendChip(
+  dCtl: number | null,
+  decisionState: string | null,
+  plannedWeekTss: number | null,
+  fourWeekAvg: number | null,
+): boolean {
+  if (dCtl == null) return false
+  if (dCtl >= 0) return true
+  if (decisionState === 'planned_rest' || decisionState === 'recover') return false
+  if (
+    plannedWeekTss != null && fourWeekAvg != null && fourWeekAvg > 0 &&
+    plannedWeekTss < QUIET_WEEK_RATIO * fourWeekAvg
+  ) return false
+  return true
+}
+
 export default function TodayTab() {
   const { locale } = useLocale()
   const { user } = useAuth()
@@ -65,6 +112,9 @@ export default function TodayTab() {
   const { data: trajectory } = useGoalTrajectory()
   const { data: profile } = useAthleteProfile()
   const { data: streakData } = useStreak()
+  // Current week's plan — only read for planned_tss_total (quiet-week detection
+  // gating the fitness-trend chip, audit P1-8). Shares PlanTab's query cache.
+  const { data: weekPlan } = useCurrentWeek()
   const setStatus = useSetAthleteStatus()
   // Status changes that alter coaching (sick/injured/break) confirm first.
   const [confirmStatus, setConfirmStatus] = useState<Exclude<AthleteState, 'healthy'> | null>(null)
@@ -199,9 +249,9 @@ export default function TodayTab() {
   }, [tsb, atl, hrvDelta, sleepScore, daysToGoal, goalName, de])
   const frameworks = (brief?.frameworks_cited ?? []).slice(0, 3)
 
-  // Week streak — forgiving, plan-aware (server: trained + planned-rest days
-  // extend, sick/injured/break days pause, only skipped sessions break).
-  // Day dots fall back to client activity-presence while the query loads.
+  // Week rhythm dots — forgiving, plan-aware (server: trained + planned-rest
+  // days count as kept, sick/injured/break days pause, only skipped sessions
+  // miss). Day dots fall back to client activity-presence while loading.
   const trainedSet = useMemo(() => new Set((acts?.activities ?? []).map((a) => localDayKey(a.started_at ?? a.date ?? ''))), [acts])
   const weekDays = useMemo(() => {
     const monday = startOfWeek(today, { weekStartsOn: 1 })
@@ -219,14 +269,14 @@ export default function TodayTab() {
         : serverState === 'paused' ? 'paused'
         : serverState === 'missed' || serverState === 'unplanned' ? (isPast ? 'missed' : 'upcoming')
         : isPast ? 'missed' : 'upcoming'
-      return { key, label: format(d, 'EEEEE'), state }
+      return { key, label: formatDate(d, 'EEEEE', locale), state }
     })
   }, [today, todayKey, trainedSet, streakData])
-  // P0-2: NO client-side streak fallback — the old consecutive-days algorithm
-  // contradicted the forgiving server streak while the query loaded. Until the
-  // server number arrives we render nothing rather than a different number.
-  const streak = streakData?.streak ?? null
+  // P1-11: the daily streak number no longer renders on Today — the weekly
+  // rhythm (consistency: met/planned days) is the honest cadence stat. The
+  // paused flag still explains amber day-dots without streak vocabulary.
   const streakPaused = streakData?.paused ?? false
+  const consistency = streakData?.consistency ?? null
   const athleteState: AthleteState = streakData?.status?.state ?? 'healthy'
 
   // Refreshingly-funny, always-true day wrap-up — synthesizes today's move
@@ -723,10 +773,17 @@ export default function TodayTab() {
     return [s1, s2, s3].filter(Boolean).join(' ')
   })()
 
-  // Momentum cues — a training streak + a real 7-day fitness (CTL) trend. Both
-  // are honest, real-data motivators; rendered as small chips, never hype.
-  const showStreak = streak != null && streak > 0
-  const showFitnessTrend = dCtl != null
+  // Momentum cues — the weekly rhythm (consistency vs plan, P1-11) + a real
+  // 7-day fitness (CTL) trend. Both honest, real-data cues; never hype. The
+  // fitness chip hides when a decline is plan-intended (planned rest/recover
+  // day or a deliberately quiet week) so a working plan never reads as failure.
+  const consistencyText = consistencyLabel(consistency, de)
+  const showFitnessTrend = shouldShowFitnessTrendChip(
+    dCtl,
+    decisionState,
+    weekPlan?.planned_tss_total ?? null,
+    fourWeekAvgWeeklyTss(pmc?.entries),
+  )
 
   return (
     <div className="flex flex-col gap-6 pb-4">
@@ -746,7 +803,7 @@ export default function TodayTab() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-0.5 min-w-0">
             <h1 className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)', lineHeight: 1.1 }}>{greeting}</h1>
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>{format(today, de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d')}</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>{formatDate(today, de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d', locale)}</span>
           </div>
           <Link
             to="/profile"
@@ -789,13 +846,14 @@ export default function TodayTab() {
           </div>
         )}
 
-        {/* Momentum cues — real streak + 7-day fitness trend, small chips */}
-        {(showStreak || showFitnessTrend) && (
+        {/* Momentum cues — weekly rhythm (consistency vs plan) + 7-day fitness
+            trend, small neutral chips. No daily-streak framing (P1-11). */}
+        {(consistencyText != null || showFitnessTrend) && (
           <div className="flex flex-wrap items-center gap-2">
-            {showStreak && (
+            {consistencyText != null && (
               <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
-                <Flame size={13} style={{ color: 'var(--color-amber)' }} />
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>{streak} {de ? 'Tage Serie' : 'day streak'}</span>
+                <CalendarCheck size={13} style={{ color: consistency != null && consistency.met > 0 ? 'var(--color-recovery)' : 'var(--color-muted)' }} />
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>{consistencyText}</span>
               </span>
             )}
             {showFitnessTrend && (
@@ -1009,7 +1067,7 @@ export default function TodayTab() {
       {/* Recovery outlook — forward TSB projection ("fresh by Thursday") */}
       <RecoveryEtaCard />
 
-      {/* Level strip — real-work levels + forgiving streak (.pen i5D9C) */}
+      {/* Lifetime-work meter — real kJ toward the next milestone (.pen i5D9C) */}
       <LevelStripCard />
 
       {/* Metrics row — Resting HR / HRV / Strain (real Garmin) */}
@@ -1022,25 +1080,14 @@ export default function TodayTab() {
           trend={strain != null ? { icon: Target, text: strainState, color: 'var(--color-strain)' } : undefined} />
       </div>
 
-      {/* Streak card — forgiving, plan-aware. Planned rest days keep the flame
-          alive; sick/injured/break days PAUSE it (never break it) and feed the
-          coach (status → rest/deload directive → interlock). */}
+      {/* Week rhythm card — forgiving, plan-aware day dots. Planned rest days
+          count as kept; sick/injured/break days PAUSE the rhythm (never break
+          it) and feed the coach (status → rest/deload directive → interlock).
+          No daily-streak chip here — the week itself is the story (P1-11). */}
       <div className={`${CARD} flex flex-col gap-4`} style={cardStyle}>
         <div className="flex items-center justify-between">
           <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Diese Woche' : 'This Week'}</span>
-          <span className="flex items-center gap-1">
-            {streak != null && streak > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)' }}>
-                {streakPaused
-                  ? <Pause size={14} style={{ color: 'var(--color-muted)' }} />
-                  : <Flame size={14} style={{ color: 'var(--color-amber)' }} />}
-                <span style={{ fontSize: 12, fontWeight: 600, color: streakPaused ? 'var(--color-muted)' : 'var(--color-amber)' }}>
-                  {streak} {de ? 'Tage Serie' : 'day streak'}{streakPaused ? (de ? ' · pausiert' : ' · paused') : ''}
-                </span>
-              </span>
-            )}
-            <Link to="/dashboard?tab=history" aria-label={de ? 'Verlauf öffnen' : 'Open history'} className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></Link>
-          </span>
+          <Link to="/dashboard?tab=history" aria-label={de ? 'Verlauf öffnen' : 'Open history'} className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></Link>
         </div>
         <div className="flex gap-2">
           {weekDays.map((d, i) => {
@@ -1066,8 +1113,8 @@ export default function TodayTab() {
         {streakPaused && (
           <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
             {de
-              ? 'Serie pausiert — sie wartet auf dich. Erholung zählt nicht gegen dich.'
-              : 'Streak paused — it’s waiting for you. Recovery never counts against you.'}
+              ? 'Pausiert — die Woche wartet auf dich. Erholung zählt nicht gegen dich.'
+              : 'Paused — the week waits for you. Recovery never counts against you.'}
           </p>
         )}
         {/* Athlete status — one honest tap. Feeds streak pause + the coach

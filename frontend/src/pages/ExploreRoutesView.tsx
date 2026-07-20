@@ -141,7 +141,7 @@ export default function ExploreRoutesView() {
                 <span className="inline-flex items-center gap-1"><Repeat size={12} style={{ color: 'var(--color-accent)' }} /> {r.times_ridden}×</span>
                 <span className="inline-flex items-center gap-1"><MapIcon size={12} style={{ color: 'var(--color-muted)' }} /> {r.distance_km.toFixed(1)} km</span>
                 {r.elevation_m != null && <span className="inline-flex items-center gap-1"><Mountain size={12} style={{ color: 'var(--color-recovery)' }} /> {Math.round(r.elevation_m)} m</span>}
-                <span className="inline-flex items-center gap-1"><Timer size={12} style={{ color: 'var(--color-gold)' }} /> {de ? 'Best' : 'PR'} {fmtTime(r.best_time_s)}</span>
+                <span className="inline-flex items-center gap-1"><Timer size={12} style={{ color: 'var(--color-gold)' }} /> {de ? 'Bestwert' : 'PR'} {fmtTime(r.best_time_s)}</span>
               </div>
               <span style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>
                 {de ? 'Ø' : 'avg'} {fmtTime(r.avg_time_s)}

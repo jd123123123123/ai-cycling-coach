@@ -10,7 +10,7 @@
  */
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { subDays, format } from 'date-fns'
+import { subDays } from 'date-fns'
 import { Bike, Footprints, Dumbbell, ArrowUpRight } from 'lucide-react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { ActivityRead } from '../../api/dashboard'
@@ -24,6 +24,7 @@ import { useAthleteProfile, type AthleteProfile } from '../../hooks/useAthletePr
 import { SideSheet } from '../ui/SideSheet'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useLocale } from '../../contexts/LocaleContext'
+import { formatDate } from '../../utils/format'
 
 /** Format a UTC/local ISO timestamp to HH:MM. Falls back to UTC if no TZ info. */
 function formatTime(iso: string): string {
@@ -90,7 +91,7 @@ function ActivityDetail({
   const rows: Array<{ label: string; value: string | null }> = [
     {
       label: isDe ? 'Datum' : 'Date',
-      value: format(new Date(activity.started_at), 'EEEE, MMM d yyyy · HH:mm'),
+      value: formatDate(activity.started_at, locale === 'de' ? 'EEEE, d. MMM yyyy · HH:mm' : 'EEEE, MMM d yyyy · HH:mm', locale),
     },
     {
       label: isDe ? 'Dauer' : 'Duration',

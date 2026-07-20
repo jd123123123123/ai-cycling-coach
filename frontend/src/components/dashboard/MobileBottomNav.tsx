@@ -13,7 +13,7 @@ type TabId = 'today' | 'plan' | 'progress' | 'recovery' | 'analyze' | 'social'
 const TABS: Array<{ id: TabId; en: string; de: string; icon: React.ReactNode; route?: string }> = [
   { id: 'today',    en: 'Today',    de: 'Heute',    icon: <Zap size={20} strokeWidth={2} /> },
   { id: 'plan',     en: 'Train',    de: 'Training', icon: <Footprints size={20} strokeWidth={2} /> },
-  { id: 'progress', en: 'Progress', de: 'Progress', icon: <TrendingUp size={20} strokeWidth={2} />, route: '/progress/bike' },
+  { id: 'progress', en: 'Progress', de: 'Fortschritt', icon: <TrendingUp size={20} strokeWidth={2} />, route: '/progress/bike' },
   { id: 'recovery', en: 'Recovery', de: 'Erholung', icon: <Heart size={20} strokeWidth={2} /> },
   { id: 'analyze',  en: 'History',  de: 'Verlauf',  icon: <BarChart3 size={20} strokeWidth={2} /> },
   { id: 'social',   en: 'Social',   de: 'Social',   icon: <Users size={20} strokeWidth={2} /> },
@@ -101,7 +101,8 @@ export default function MobileBottomNav() {
               aria-label={label}
             >
               {tab.icon}
-              <span style={{ fontSize: 9, fontWeight: 600, color: isActive ? 'var(--color-accent)' : 'var(--color-muted)' }}>{label}</span>
+              {/* 11px floor (audit P1-12) — 9px labels were sub-AA squint territory */}
+              <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? 'var(--color-accent)' : 'var(--color-muted)' }}>{label}</span>
             </button>
           )
         })}

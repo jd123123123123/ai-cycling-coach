@@ -5,6 +5,9 @@ import { subDays } from 'date-fns'
 import type { PMCEntry } from '../../api/dashboard'
 import Sparkline from './Sparkline'
 import { useLocale } from '../../contexts/LocaleContext'
+import { useLanguage } from '../../contexts/LanguageContext'
+import { metricLabel } from '../../utils/metricLabel'
+import { useGlossary } from '../ui/GlossarySheet'
 
 type Loc = 'en' | 'de'
 
@@ -52,6 +55,8 @@ function ctlTrendNarrative(series: PMCEntry[], locale: Loc): string | null {
 
 export default function TrendsHero() {
   const { locale } = useLocale()
+  const { language } = useLanguage()
+  const glossary = useGlossary()
   const today = useMemo(() => new Date(), [])
   const { data: pmc, isLoading } = usePMC(90)
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 28), [today]), today)
@@ -120,11 +125,30 @@ export default function TrendsHero() {
         </p>
       )}
 
-      {/* Triple stat row + CTL sparkline */}
+      {/* Triple stat row + CTL sparkline. Simple mode routes labels through
+          metricLabel (P1: 'Einfach' governs the UI); technical stays verbatim.
+          Every stat is a tappable chip → glossary bottom sheet. */}
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-x-6 gap-y-3 items-center">
-        <Stat label={locale === 'de' ? 'FITNESS · CTL' : 'FITNESS · CTL'} value={String(Math.round(ctl))} sub={`${signed(dCtl)} · 7${locale === 'de' ? 'T' : 'd'}`} subColor={dCtl >= 0.4 ? 'var(--color-good)' : dCtl <= -0.4 ? 'var(--color-bad)' : 'var(--color-muted)'} />
-        <Stat label={locale === 'de' ? 'ERMÜDUNG · ATL' : 'FATIGUE · ATL'} value={String(Math.round(atl))} sub={`${signed(dAtl)} · 7${locale === 'de' ? 'T' : 'd'}`} subColor={dAtl >= 2 ? 'var(--color-caution)' : 'var(--color-muted)'} />
-        <Stat label={locale === 'de' ? 'FORM · TSB' : 'FORM · TSB'} value={signed(tsb)} valueColor={form.color} />
+        <Stat
+          label={language === 'simple' ? metricLabel('ctl', 'simple', locale).toUpperCase() : 'FITNESS · CTL'}
+          value={String(Math.round(ctl))}
+          sub={`${signed(dCtl)} · 7${locale === 'de' ? 'T' : 'd'}`}
+          subColor={dCtl >= 0.4 ? 'var(--color-good)' : dCtl <= -0.4 ? 'var(--color-bad)' : 'var(--color-muted)'}
+          onTap={() => glossary.open('ctl', String(Math.round(ctl)))}
+        />
+        <Stat
+          label={language === 'simple' ? metricLabel('atl', 'simple', locale).toUpperCase() : locale === 'de' ? 'ERMÜDUNG · ATL' : 'FATIGUE · ATL'}
+          value={String(Math.round(atl))}
+          sub={`${signed(dAtl)} · 7${locale === 'de' ? 'T' : 'd'}`}
+          subColor={dAtl >= 2 ? 'var(--color-caution)' : 'var(--color-muted)'}
+          onTap={() => glossary.open('atl', String(Math.round(atl)))}
+        />
+        <Stat
+          label={language === 'simple' ? metricLabel('tsb', 'simple', locale).toUpperCase() : 'FORM · TSB'}
+          value={signed(tsb)}
+          valueColor={form.color}
+          onTap={() => glossary.open('tsb', signed(tsb))}
+        />
         <div className="hidden sm:block">
           <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
             {locale === 'de' ? 'FITNESS · 90T' : 'FITNESS · 90D'}
@@ -140,13 +164,25 @@ export default function TrendsHero() {
         className="flex items-center gap-4 flex-wrap mt-4 pt-3"
         style={{ borderTop: '1px solid var(--color-rule)' }}
       >
-        <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
-          {locale === 'de' ? '28-Tage-TSS' : '28-day TSS'} · <span style={{ color: 'var(--color-ink)' }}>{tss28}</span>
-        </span>
+        <button
+          type="button"
+          className="num-mono"
+          onClick={() => glossary.open('tss', String(tss28))}
+          style={{
+            color: 'var(--color-muted)', fontSize: 11, background: 'none', border: 0,
+            padding: '14px 0', margin: '-14px 0', cursor: 'pointer',
+            textDecoration: 'underline dotted', textUnderlineOffset: 3, textDecorationColor: 'var(--color-muted)',
+          }}
+        >
+          {language === 'simple'
+            ? (locale === 'de' ? '28-Tage-Belastung' : '28-day Load')
+            : (locale === 'de' ? '28-Tage-TSS' : '28-day TSS')} · <span style={{ color: 'var(--color-ink)' }}>{tss28}</span>
+        </button>
         <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 11 }}>
           {locale === 'de' ? 'HRV-Tage' : 'HRV days'} · <span style={{ color: 'var(--color-ink)' }}>{hrvDaysAvail}/28</span>
         </span>
       </div>
+      {glossary.sheet}
     </div>
   )
 }
@@ -157,16 +193,27 @@ function Stat({
   sub,
   valueColor = 'var(--color-ink)',
   subColor = 'var(--color-muted)',
+  onTap,
 }: {
   label: string
   value: string
   sub?: string
   valueColor?: string
   subColor?: string
+  /** When set, the whole stat becomes a ≥44px tap target → glossary sheet. */
+  onTap?: () => void
 }) {
-  return (
-    <div className="flex flex-col">
-      <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em' }}>
+  const inner = (
+    <>
+      <span
+        className="eyebrow"
+        style={{
+          color: 'var(--color-muted)', fontSize: 10.5, letterSpacing: '0.22em',
+          ...(onTap
+            ? { textDecoration: 'underline dotted', textUnderlineOffset: 3, textDecorationColor: 'var(--color-muted)' }
+            : null),
+        }}
+      >
         {label}
       </span>
       <span className="num-mono leading-none mt-0.5" style={{ color: valueColor, fontSize: 28, fontWeight: 500 }}>
@@ -177,6 +224,19 @@ function Stat({
           {sub}
         </span>
       )}
-    </div>
+    </>
   )
+  if (onTap) {
+    return (
+      <button
+        type="button"
+        onClick={onTap}
+        className="flex flex-col items-start"
+        style={{ background: 'none', border: 0, padding: 0, minHeight: 44, cursor: 'pointer', textAlign: 'left' }}
+      >
+        {inner}
+      </button>
+    )
+  }
+  return <div className="flex flex-col">{inner}</div>
 }

@@ -36,6 +36,7 @@ def build_power_profile(
     power_arrays: list[list[float]],
     weight_kg: float | None,
     ftp_watts: float | None = None,
+    lang: str = "en",
 ) -> dict | None:
     """Dense power profile from a set of ride power streams. None if no data.
 
@@ -43,7 +44,8 @@ def build_power_profile(
     peaks are all sanitized (5%-over-PR + corroboration, MAD, monotonic) so a
     single corrupt ride cannot render an impossible point or poison the CP fit.
     `ftp_watts` (the manual FTP, when set) enables the canonical threshold
-    reconciliation fields.
+    reconciliation fields. `lang` ('de'|'en') localizes the athlete-facing
+    phenotype prose (P1-6: no English sentence in a German UI).
     """
     arrays = [p for p in power_arrays if p]
     if not arrays:
@@ -82,11 +84,13 @@ def build_power_profile(
         "wkg_curve": wkg_curve,
         "peaks": peaks,
         "peaks_wkg": peaks_wkg,
-        "phenotype": power_phenotype(fit.cp_watts, peaks) if fit else None,
+        "phenotype": power_phenotype(fit.cp_watts, peaks, lang=lang) if fit else None,
     }
 
 
-async def compute_detailed_power_profile(db: AsyncSession, user_id: int) -> dict | None:
+async def compute_detailed_power_profile(
+    db: AsyncSession, user_id: int, lang: str = "en"
+) -> dict | None:
     """Full power profile from stored streams + durability/decoupling metrics.
 
     CYCLING only: `mmp_curve IS NOT NULL` is the ingest-time cycling marker
@@ -126,6 +130,7 @@ async def compute_detailed_power_profile(db: AsyncSession, user_id: int) -> dict
         power_arrays,
         float(weight) if weight else None,
         ftp_watts=float(ftp) if ftp else None,
+        lang=lang,
     )
     if profile is None:
         return None

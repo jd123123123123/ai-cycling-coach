@@ -24,6 +24,7 @@ import { useRecoveryEta } from '../hooks/useRecoveryEta'
 import { usePowerProfile } from '../hooks/usePowerProfile'
 import { updateGoals } from '../api/athletes'
 import { daysToEvent } from '../utils/loadMetrics'
+import { formatDate } from '../utils/format'
 import { useLocale } from '../contexts/LocaleContext'
 
 /* ── shared bits ── */
@@ -123,8 +124,10 @@ export default function SeasonView() {
     ? (EVENT_TYPE_LABELS[eventTypeRaw] ? (de ? EVENT_TYPE_LABELS[eventTypeRaw].de : EVENT_TYPE_LABELS[eventTypeRaw].en) : eventTypeRaw)
     : null
 
-  const fmtDate = (d: Date, opts: Intl.DateTimeFormatOptions) =>
-    d.toLocaleDateString(de ? 'de-DE' : 'en-US', opts)
+  // Canonical date path (audit P1-6): date-fns + de locale via utils/format —
+  // each call site passes its EN/DE pattern pair (German day-first order).
+  const fmtDate = (d: Date, patterns: { en: string; de: string }) =>
+    formatDate(d, de ? patterns.de : patterns.en, locale)
 
   /* season timeline geometry — deterministic from the race date */
   const timeline = useMemo(() => {
@@ -301,7 +304,7 @@ export default function SeasonView() {
                 </span>
               ) : <span />}
               <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>
-                {fmtDate(eventDate, { weekday: 'short', month: 'short', day: 'numeric' })}
+                {fmtDate(eventDate, { en: 'EEE, MMM d', de: 'EEE, d. MMM' })}
               </span>
             </div>
 
@@ -310,7 +313,7 @@ export default function SeasonView() {
                 {eventName ?? (de ? 'Zielevent' : 'Target event')}
               </span>
               <span style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>
-                {[eventTypeLabel, fmtDate(eventDate, { year: 'numeric', month: 'long', day: 'numeric' })].filter(Boolean).join(' · ')}
+                {[eventTypeLabel, fmtDate(eventDate, { en: 'MMMM d, yyyy', de: 'd. MMMM yyyy' })].filter(Boolean).join(' · ')}
               </span>
             </div>
 
@@ -359,7 +362,7 @@ export default function SeasonView() {
             <div className="flex items-center justify-between">
               <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Saisonplan' : 'Season Plan'}</span>
               <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>
-                {fmtDate(timeline.seasonStart, { month: 'short' })} – {fmtDate(eventDate!, { month: 'short' })}
+                {fmtDate(timeline.seasonStart, { en: 'MMM', de: 'MMM' })} – {fmtDate(eventDate!, { en: 'MMM', de: 'MMM' })}
               </span>
             </div>
 
@@ -568,10 +571,10 @@ export default function SeasonView() {
                   {eta?.already_fresh
                     ? (de ? 'Bereits frisch (TSB ≥ −5)' : 'Already fresh (TSB ≥ −5)')
                     : eta?.fresh_on
-                      ? (de ? `Frisch ab ${fmtDate(parseISODate(eta.fresh_on), { month: 'short', day: 'numeric' })}` : `Fresh from ${fmtDate(parseISODate(eta.fresh_on), { month: 'short', day: 'numeric' })}`)
+                      ? (de ? `Frisch ab ${fmtDate(parseISODate(eta.fresh_on), { en: 'MMM d', de: 'd. MMM' })}` : `Fresh from ${fmtDate(parseISODate(eta.fresh_on), { en: 'MMM d', de: 'd. MMM' })}`)
                       : null}
                   {eta?.race_sharp_on
-                    ? `${eta.already_fresh || eta.fresh_on ? ' · ' : ''}${de ? `rennscharf ab ${fmtDate(parseISODate(eta.race_sharp_on), { month: 'short', day: 'numeric' })}` : `race-sharp from ${fmtDate(parseISODate(eta.race_sharp_on), { month: 'short', day: 'numeric' })}`}`
+                    ? `${eta.already_fresh || eta.fresh_on ? ' · ' : ''}${de ? `rennscharf ab ${fmtDate(parseISODate(eta.race_sharp_on), { en: 'MMM d', de: 'd. MMM' })}` : `race-sharp from ${fmtDate(parseISODate(eta.race_sharp_on), { en: 'MMM d', de: 'd. MMM' })}`}`
                     : null}
                 </span>
               </div>
@@ -714,7 +717,7 @@ export default function SeasonView() {
                         {de ? it.de : it.en}
                       </span>
                       <span style={{ fontSize: 11.5, color: 'var(--color-muted)' }}>
-                        {fmtDate(it.date, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        {fmtDate(it.date, { en: 'EEE, MMM d', de: 'EEE, d. MMM' })}
                       </span>
                     </div>
                     <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: isToday ? 'var(--color-accent)' : done ? 'var(--color-muted)' : 'var(--color-ink-2)' }}>

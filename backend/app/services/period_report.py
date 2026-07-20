@@ -730,6 +730,10 @@ async def build_trajectory(db: AsyncSession, user_id: int, phase: str | None, la
         payload = await compute_goal_trajectory(db, user_id, profile, lang=lang)
         if payload is None or payload.get("projection_basis") == "none":
             return None
+        # 'unknown' is a machine filler, not a fact — emit null so the UI
+        # renders an honest '—' instead of the English word "unknown" under
+        # Peak-Form ETA (usability audit P1-6).
+        taper = payload["taper_window"]
         return Trajectory(
             days_to_goal=payload["days_to_goal"],
             ctl_now=payload["ctl_now"],
@@ -737,7 +741,7 @@ async def build_trajectory(db: AsyncSession, user_id: int, phase: str | None, la
             ctl_projected_at_goal=payload["ctl_projected_at_goal"],
             ctl_target=payload["ctl_target"],
             tsb_projected_at_goal=payload["tsb_projected_at_goal"],
-            taper_window=payload["taper_window"],
+            taper_window=None if taper == "unknown" else taper,
             on_track=payload["on_track"],
             weekly_tss_required=payload["weekly_tss_required"],
             weekly_tss_actual=payload["weekly_tss_actual"],
@@ -1206,7 +1210,7 @@ async def build_report(db: AsyncSession, user_id: int, days: int, lang: str = "e
         load_dynamics = build_load_dynamics(cur, lang)
     except Exception:  # noqa: BLE001
         logger.exception("period report: build_load_dynamics failed")
-    trajectory = await build_trajectory(db, user_id, phase)
+    trajectory = await build_trajectory(db, user_id, phase, lang)
 
     prescriptions = build_prescriptions(
         grade_score, cur, causes, intensity, load_dynamics, trajectory, lang=lang

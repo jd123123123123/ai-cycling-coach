@@ -14,7 +14,7 @@ import {
 } from 'date-fns'
 import {
   Bike, Footprints, Dumbbell, SlidersHorizontal, ChevronLeft, ChevronRight,
-  Flame, Trophy, Mountain, Zap, ArrowUp, ArrowDown, Timer, Heart, Gauge, Route,
+  Flame, Trophy, Mountain, Zap, ArrowUp, CalendarCheck, Timer, Heart, Gauge, Route,
   type LucideIcon,
 } from 'lucide-react'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
@@ -143,6 +143,43 @@ function heatColor(tss: number): string {
   return 'var(--color-recovery)'
 }
 
+// ── Month-in-review verdict — pure, testable (audit P1-8) ───────────────────
+// A lighter month is neutral information (muted slate), never an amber/red
+// caution: quiet stretches are part of training, not failures.
+export interface MonthVerdict { word: string; color: string; sentence: string }
+export function monthVerdict(
+  curTss: number,
+  sessions: number,
+  tssPct: number | null,
+  hasPrev: boolean,
+  de: boolean,
+): MonthVerdict {
+  const tss = Math.round(curTss).toLocaleString(de ? 'de' : 'en')
+  const sess = `${sessions} ${sessions === 1 ? (de ? 'Einheit' : 'session') : de ? 'Einheiten' : 'sessions'}`
+  if (!hasPrev || tssPct === null) {
+    return {
+      word: de ? 'Baseline im Aufbau' : 'Building baseline',
+      color: 'var(--color-strain)',
+      sentence: de ? `${tss} TSS · ${sess} — noch kein Vormonat zum Vergleich` : `${tss} TSS · ${sess} — no prior month to compare yet`,
+    }
+  }
+  const up = tssPct >= 0
+  const word = tssPct >= 10 ? (de ? 'Starker Monat' : 'Strong month')
+    : tssPct <= -10 ? (de ? 'Ruhigerer Monat' : 'Lighter month')
+    : (de ? 'Solider Monat' : 'Steady month')
+  const color = tssPct >= 10 ? 'var(--color-recovery)' : tssPct <= -10 ? 'var(--color-muted)' : 'var(--color-strain)'
+  const trend = de
+    ? `${up ? 'plus' : 'minus'} ${Math.abs(tssPct)}% ggü. Vormonat`
+    : `${up ? 'up' : 'down'} ${Math.abs(tssPct)}% on last month`
+  return { word, color, sentence: `${tss} TSS, ${trend} · ${sess}` }
+}
+
+/** Scale for the 12-week bars comes from COMPLETED weeks only — the
+ *  in-progress week neither sets nor is judged by the finished scale. */
+export function completedWeekMax(bars: { value: number; inProgress?: boolean }[]): number {
+  return Math.max(...bars.filter((b) => !b.inProgress).map((b) => b.value), 1)
+}
+
 export default function HistoryTab() {
   const { locale } = useLocale()
   const de = locale === 'de'
@@ -225,27 +262,10 @@ export default function HistoryTab() {
   // Raw TSS delta % (numeric) drives the at-a-glance verdict headline.
   const tssPct = summary.prev.tss ? Math.round(((summary.cur.tss - summary.prev.tss) / summary.prev.tss) * 100) : null
   const hasPrev = summary.prev.tss > 0 || summary.prev.n > 0
-  const verdict = useMemo(() => {
-    const c = summary.cur
-    const tss = Math.round(c.tss).toLocaleString(de ? 'de' : 'en')
-    const sess = `${c.n} ${c.n === 1 ? (de ? 'Einheit' : 'session') : de ? 'Einheiten' : 'sessions'}`
-    if (!hasPrev || tssPct === null) {
-      return {
-        word: de ? 'Baseline im Aufbau' : 'Building baseline',
-        color: 'var(--color-strain)',
-        sentence: de ? `${tss} TSS · ${sess} — noch kein Vormonat zum Vergleich` : `${tss} TSS · ${sess} — no prior month to compare yet`,
-      }
-    }
-    const up = tssPct >= 0
-    const word = tssPct >= 10 ? (de ? 'Starker Monat' : 'Strong month')
-      : tssPct <= -10 ? (de ? 'Ruhigerer Monat' : 'Lighter month')
-      : (de ? 'Solider Monat' : 'Steady month')
-    const color = tssPct >= 10 ? 'var(--color-recovery)' : tssPct <= -10 ? 'var(--color-amber)' : 'var(--color-strain)'
-    const trend = de
-      ? `${up ? 'plus' : 'minus'} ${Math.abs(tssPct)}% ggü. Vormonat`
-      : `${up ? 'up' : 'down'} ${Math.abs(tssPct)}% on last month`
-    return { word, color, sentence: `${tss} TSS, ${trend} · ${sess}` }
-  }, [summary, tssPct, hasPrev, de])
+  const verdict = useMemo(
+    () => monthVerdict(summary.cur.tss, summary.cur.n, tssPct, hasPrev, de),
+    [summary, tssPct, hasPrev, de],
+  )
 
   // Headline numbers for the top summary card (load / hours / sessions).
   const headline = useMemo(() => {
@@ -315,7 +335,10 @@ export default function HistoryTab() {
     }
     return buckets.map((b) => ({ ...b, v: Math.round(b.v) }))
   }, [activities, today])
-  const weeklyAvg = Math.round(weekly.reduce((s, w) => s + w.v, 0) / weekly.length)
+  // Average over COMPLETED weeks only — the in-progress week would drag the
+  // number down and read like a shortfall (audit P1-8).
+  const completedWeeks = weekly.slice(0, -1)
+  const weeklyAvg = Math.round(completedWeeks.reduce((s, w) => s + w.v, 0) / Math.max(completedWeeks.length, 1))
 
   // Consistency heatmap — 26 weeks × 7 days
   const heat = useMemo(() => {
@@ -329,10 +352,11 @@ export default function HistoryTab() {
     )
   }, [dayTss, today])
 
-  // Server-computed forgiving streak — the ONLY streak producer (audit P0-5).
-  // Never recompute locally: the naive consecutive-TSS walk contradicted it.
+  // Weekly rhythm (P1-11): the Konstanz card shows the SAME consistency stat
+  // Today shows — met vs planned days this week — never a day-streak count
+  // that could contradict it. Hidden until the backend sends the stat.
   const { data: streakData } = useStreak()
-  const streak = streakData?.streak ?? 0
+  const consistency = streakData?.consistency ?? null
 
   // Personal records — computed per-sport so the card can react to the active filter.
   const prs = useMemo(() => {
@@ -556,10 +580,16 @@ export default function HistoryTab() {
                 {s.unit && <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 3 }}>{s.unit}</span>}
               </span>
               {s.delta ? (
-                <span className="inline-flex items-center gap-[2px]" style={{ color: s.delta.up ? 'var(--color-recovery)' : 'var(--color-move)' }}>
-                  {s.delta.up ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
-                  <span className="num-mono" style={{ fontSize: 11, fontWeight: 700 }}>{s.delta.text}</span>
-                </span>
+                s.delta.up ? (
+                  <span className="inline-flex items-center gap-[2px]" style={{ color: 'var(--color-recovery)' }}>
+                    <ArrowUp size={11} />
+                    <span className="num-mono" style={{ fontSize: 11, fontWeight: 700 }}>{s.delta.text}</span>
+                  </span>
+                ) : (
+                  // P1-8: a below-last-month delta is a quiet gray fact — never
+                  // a red arrow chip shouting a percent.
+                  <span className="num-mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{s.delta.text}</span>
+                )
               ) : (
                 <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? '— Basis' : '— baseline'}</span>
               )}
@@ -588,10 +618,15 @@ export default function HistoryTab() {
                 {s.unit && <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 3 }}>{s.unit}</span>}
               </span>
               {s.delta && (
-                <span className="inline-flex items-center gap-[2px]" style={{ color: s.delta.up ? 'var(--color-recovery)' : 'var(--color-move)' }}>
-                  {s.delta.up ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-                  <span style={{ fontSize: 11, fontWeight: 600 }}>{s.delta.text}</span>
-                </span>
+                s.delta.up ? (
+                  <span className="inline-flex items-center gap-[2px]" style={{ color: 'var(--color-recovery)' }}>
+                    <ArrowUp size={12} />
+                    <span style={{ fontSize: 11, fontWeight: 600 }}>{s.delta.text}</span>
+                  </span>
+                ) : (
+                  // P1-8: below-plan / below-last-month numbers stay neutral gray.
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{s.delta.text}</span>
+                )
               )}
             </div>
           ))}
@@ -737,10 +772,16 @@ export default function HistoryTab() {
             <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Konstanz' : 'Consistency'}</span>
             <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Letzte 6 Monate' : 'Last 6 months'}</span>
           </div>
-          <span className="flex items-center gap-[5px] rounded-full" style={{ padding: '6px 12px', background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)' }}>
-            <Flame size={15} style={{ color: 'var(--color-recovery)' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-recovery)' }}>{streak}{de ? '-Tage-Serie' : '-day streak'}</span>
-          </span>
+          {/* Weekly rhythm — the same consistency stat Today shows (P1-11);
+              hidden until the backend sends it. met = 0 stays neutral gray. */}
+          {consistency && consistency.planned > 0 && (
+            <span className="flex items-center gap-[5px] rounded-full" style={{ padding: '6px 12px', background: consistency.met > 0 ? 'color-mix(in srgb, var(--color-recovery) 15%, transparent)' : 'var(--color-surface-2)' }}>
+              <CalendarCheck size={15} style={{ color: consistency.met > 0 ? 'var(--color-recovery)' : 'var(--color-muted)' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: consistency.met > 0 ? 'var(--color-recovery)' : 'var(--color-muted)' }}>
+                {de ? `${consistency.met} von ${consistency.planned} geplanten Tagen` : `${consistency.met} of ${consistency.planned} planned days`}
+              </span>
+            </span>
+          )}
         </div>
         <div className="relative select-none">
           {heatCell && (
@@ -792,27 +833,27 @@ export default function HistoryTab() {
           </div>
           <div className="flex flex-col items-end gap-0.5">
             <span className="num-display" style={{ fontSize: 18, color: 'var(--color-strain)' }}>{weeklyAvg}</span>
-            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Ø / Woche' : 'avg / wk'}</span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Ø / volle Woche' : 'avg / full wk'}</span>
           </div>
         </div>
-        <HoverBars
+        <InProgressWeekBars
           height={130}
           gap={6}
-          defaultColor="var(--color-strain)"
           bars={weekly.map((w, i) => {
             const monday = parseISO(w.key)
             const sunday = addDays(monday, 6)
+            const inProgress = i === weekly.length - 1
             return {
               value: w.v,
-              valueLabel: `${w.v} TSS`,
+              valueLabel: `${w.v} TSS${inProgress ? (de ? ' · läuft noch' : ' · in progress') : ''}`,
               label: `${format(monday, de ? 'd. MMM' : 'MMM d')} – ${format(sunday, de ? 'd. MMM' : 'MMM d')}`,
-              highlight: i === weekly.length - 1,
+              inProgress,
             }
           })}
         />
         <div className="flex items-center justify-between">
           <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'vor 12 Wochen' : '12 wks ago'}</span>
-          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Diese Woche' : 'This week'}</span>
+          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Diese Woche · läuft noch' : 'This week · in progress'}</span>
         </div>
         <Link to="/load-form" className="hover-reveal inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</Link>
       </div>
@@ -908,6 +949,84 @@ export default function HistoryTab() {
       {/* Insights — the curated deep end (PMC, TID, efficiency, VO₂max, form,
           AI-FTP framing, NL chart workspace). Roadmap P0.5. */}
       <InsightsSection sport={filter} />
+    </div>
+  )
+}
+
+// ── In-progress-aware weekly bars (audit P1-8) ──────────────────────────────
+// Same interaction contract as HoverBars, plus one honesty rule: the current
+// (in-progress) week is a DIFFERENT kind of bar — reduced-opacity fill with a
+// dashed top edge and a "läuft noch / in progress" tooltip label — and it is
+// excluded from the completed weeks' scale so a half-lived week can never
+// render as the row's smallest "failure" bar.
+function InProgressWeekBars({
+  bars,
+  height = 130,
+  gap = 6,
+}: {
+  bars: { value: number; valueLabel: string; label: string; inProgress?: boolean }[]
+  height?: number
+  gap?: number
+}) {
+  const [active, setActive] = useState<number | null>(null)
+  const max = completedWeekMax(bars)
+  const act = active != null ? bars[active] : null
+
+  return (
+    <div className="relative select-none" style={{ width: '100%' }}>
+      {act && (
+        <div
+          className="absolute z-20 pointer-events-none flex flex-col items-center"
+          style={{
+            left: `${((active! + 0.5) / bars.length) * 100}%`,
+            bottom: height + 8,
+            transform: 'translateX(-50%)',
+          }}
+        >
+          <div
+            className="rounded-[10px] px-2.5 py-1.5 flex flex-col items-center gap-0.5 whitespace-nowrap"
+            style={{ background: 'var(--color-surface-3)', border: '1px solid var(--color-rule)', boxShadow: '0 6px 18px rgba(0,0,0,0.45)' }}
+          >
+            <span className="num-display" style={{ fontSize: 14, lineHeight: 1, color: act.inProgress ? 'var(--color-ink-2)' : 'var(--color-ink)' }}>{act.valueLabel}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-muted)' }}>{act.label}</span>
+          </div>
+          <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid var(--color-surface-3)' }} />
+        </div>
+      )}
+
+      <div className="flex items-end" style={{ height, gap }}>
+        {bars.map((b, i) => {
+          const on = active === i
+          return (
+            <button
+              key={i}
+              type="button"
+              className="flex-1 min-w-0 p-0 border-0 bg-transparent"
+              style={{ height: '100%', display: 'flex', alignItems: 'flex-end', cursor: 'pointer' }}
+              onPointerEnter={() => setActive(i)}
+              onPointerDown={() => setActive(i)}
+              onPointerLeave={() => setActive((cur) => (cur === i ? null : cur))}
+              aria-label={`${b.label}: ${b.valueLabel}`}
+            >
+              <span
+                className="block w-full"
+                style={{
+                  height: `${Math.min(100, Math.max(6, (b.value / max) * 100))}%`,
+                  background: b.inProgress
+                    ? 'color-mix(in srgb, var(--color-strain) 45%, transparent)'
+                    : 'var(--color-strain)',
+                  borderTop: b.inProgress ? '2px dashed var(--color-strain)' : 'none',
+                  borderRadius: '3px 3px 0 0',
+                  opacity: on || b.inProgress ? 1 : 0.8,
+                  outline: on ? '2px solid color-mix(in srgb, var(--color-ink) 25%, transparent)' : 'none',
+                  outlineOffset: 1,
+                  transition: 'opacity 0.12s ease',
+                }}
+              />
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

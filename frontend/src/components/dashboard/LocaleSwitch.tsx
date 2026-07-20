@@ -33,13 +33,15 @@ export default function LocaleSwitch() {
             key={o.key}
             type="button"
             onClick={() => setLocale(o.key)}
-            className="num-mono text-[10px] px-2.5 py-1 rounded-full"
+            // ≥44px real hit target (audit P1-12) — was ~36×23px.
+            className="num-mono text-[11px] px-3 rounded-full inline-flex items-center justify-center"
             style={{
               color: active ? 'var(--color-paper)' : 'var(--color-ink-2)',
               backgroundColor: active ? 'var(--color-ink)' : 'transparent',
               letterSpacing: '0.12em',
               fontWeight: active ? 600 : 400,
-              minWidth: 36,
+              minWidth: 44,
+              minHeight: 44,
               transition: 'background-color 200ms ease, color 200ms ease',
             }}
             aria-pressed={active}

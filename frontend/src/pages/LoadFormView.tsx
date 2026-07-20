@@ -184,7 +184,6 @@ export default function LoadFormView() {
   const priorComplete = weeks.length >= 3 ? weeks[weeks.length - 3] : null
   const rampPct = lastComplete && priorComplete && priorComplete.tss > 0
     ? Math.round(((lastComplete.tss - priorComplete.tss) / priorComplete.tss) * 100) : null
-  const rampSafe = rampPct == null || Math.abs(rampPct) <= 15
 
   // ---- Load trend (audit P1-9): this week vs 4-week average ---------------
   // Replaces the ACWR 'Verletzungsrisiko' gauge — injury-risk claims on a
@@ -289,6 +288,13 @@ export default function LoadFormView() {
   const compliancePct = plannedWeekTss != null && plannedWeekTss > 0
     ? Math.round((thisWeek.tss / plannedWeekTss) * 100)
     : null
+  // Audit P1-8: tone Plan-Erfüllung by progress vs the elapsed week — 0% on
+  // Monday morning means "the week is young", not failure. Accent only once
+  // done keeps pace with the days already elapsed; behind-pace stays neutral
+  // slate, never an alarm color.
+  const weekElapsedFrac = (((today.getDay() + 6) % 7) + 1) / 7
+  const complianceOnPace = compliancePct != null && compliancePct >= weekElapsedFrac * 100
+  const complianceColor = complianceOnPace ? 'var(--color-accent)' : 'var(--color-muted)'
 
   // ---- Trajectory (period report) -----------------------------------------
   // Audit P0-5: the "Fitness 6wk" chip was removed — its 6-week CTL %change was
@@ -431,9 +437,11 @@ export default function LoadFormView() {
             title={de ? 'Wöchentliche Last' : 'Weekly Load'}
             sub={de ? 'Trainingsstress pro Woche' : 'Training Stress Score per week'}
             right={rampPct != null ? (
-              <Pill color={rampSafe ? 'var(--color-recovery)' : 'var(--color-amber)'} soft={rampSafe ? 'rgba(22,224,138,0.15)' : 'rgba(255,176,32,0.15)'}>
-                <Check size={14} /> {showTrend(rampPct, '%')}
-              </Pill>
+              /* Audit P1-8: week-over-week delta is context, not a verdict —
+                 muted secondary text, no chip, no arrow, no amber shouting. */
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>
+                {showTrend(rampPct, ' %')} {de ? 'ggü. Vorwoche' : 'vs prior week'}
+              </span>
             ) : undefined}
           />
           <HoverBars
@@ -444,11 +452,15 @@ export default function LoadFormView() {
             bars={weeks.map((w, i) => {
               const monday = parseISO(w.key)
               const sunday = addDays(monday, 6)
+              const inProgress = i === weeks.length - 1
               return {
                 value: w.tss,
-                valueLabel: `${w.tss} TSS`,
+                valueLabel: inProgress ? `${w.tss} TSS · ${de ? 'läuft noch' : 'in progress'}` : `${w.tss} TSS`,
                 label: `${format(monday, de ? 'd. MMM' : 'MMM d')} – ${format(sunday, de ? 'd. MMM' : 'MMM d')}`,
-                highlight: i === weeks.length - 1,
+                // Audit P1-8: the running week is unfinished, not underperforming —
+                // same reduced-opacity treatment as the Belastungs-Trend bar,
+                // never the accent/failure color on a Monday-short bar.
+                color: inProgress ? 'color-mix(in srgb, var(--color-strain) 55%, transparent)' : undefined,
               }
             })}
           />
@@ -456,8 +468,8 @@ export default function LoadFormView() {
             {weeks.map((w, i) => {
               const isNow = i === weeks.length - 1
               return (
-                <span key={w.key} className="flex-1 text-center" style={{ fontSize: 11, fontWeight: isNow ? 700 : 500, color: isNow ? 'var(--color-accent)' : 'var(--color-muted)' }}>
-                  {isNow ? (de ? 'Jetzt' : 'Now') : `W${i + 1}`}
+                <span key={w.key} className="flex-1 text-center" style={{ fontSize: 11, fontWeight: isNow ? 600 : 500, color: isNow ? 'var(--color-ink-2)' : 'var(--color-muted)' }}>
+                  {isNow ? (de ? 'läuft noch' : 'in progress') : `W${i + 1}`}
                 </span>
               )
             })}
@@ -646,17 +658,19 @@ export default function LoadFormView() {
         <Card>
           <CardHead
             title={de ? 'Diese Woche' : 'This Week'}
-            sub={de ? 'Plan-Erfüllung' : 'Plan compliance'}
+            sub={compliancePct != null && !complianceOnPace
+              ? (de ? 'Plan-Erfüllung · läuft noch' : 'Plan compliance · in progress')
+              : (de ? 'Plan-Erfüllung' : 'Plan compliance')}
             right={
               <div className="flex items-end gap-0.5">
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-accent)' }}>{compliancePct != null ? compliancePct : DASH}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-accent)', paddingBottom: 3 }}>%</span>
+                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: complianceColor }}>{compliancePct != null ? compliancePct : DASH}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: complianceColor, paddingBottom: 3 }}>%</span>
               </div>
             }
           />
           {compliancePct != null ? (
             <div style={{ height: 10, borderRadius: 5, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
-              <div style={{ width: `${Math.min(100, Math.max(0, compliancePct))}%`, height: '100%', background: 'var(--color-accent)' }} />
+              <div style={{ width: `${Math.min(100, Math.max(0, compliancePct))}%`, height: '100%', background: complianceOnPace ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-muted) 55%, transparent)' }} />
             </div>
           ) : (
             <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
@@ -705,7 +719,16 @@ export default function LoadFormView() {
                   Icon: Calendar, iconColor: 'var(--color-strain)',
                   label: de ? 'Peak-Form ETA' : 'Peak form ETA',
                   value: traj?.days_to_goal != null ? `${traj.days_to_goal}${de ? 'T' : 'd'}` : DASH,
-                  sub: traj?.taper_window || (de ? 'bei Taper' : 'if you taper'),
+                  sub: (() => {
+                    const TAPER: Record<string, [string, string]> = {
+                      ideal: ['Taper sitzt', 'taper on point'],
+                      too_fresh: ['sehr frisch', 'very fresh'],
+                      too_flat: ['noch flach', 'still flat'],
+                      overreached: ['noch müde', 'still fatigued'],
+                    }
+                    const t = traj?.taper_window ? TAPER[traj.taper_window] : null
+                    return t ? (de ? t[0] : t[1]) : (de ? 'bei Taper' : 'if you taper')
+                  })(),
                 },
                 {
                   Icon: Shield, iconColor: 'var(--color-amber)',

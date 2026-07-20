@@ -89,5 +89,8 @@ async def my_streak(
 ) -> dict:
     """Plan-aware forgiving streak: trained days and planned rest days extend
     it, sick/injured/break days pause it, only a skipped planned session (or an
-    unplanned gap) breaks it. Includes per-day states for the current week."""
+    unplanned gap) breaks it. Includes per-day states for the current week and
+    `consistency: {met, planned}` — planned training days met so far vs planned
+    training days in the whole athlete-local week (P1-11: planned rest days
+    never count against, future days are never 'missed')."""
     return await build_streak(db, current_user.id)

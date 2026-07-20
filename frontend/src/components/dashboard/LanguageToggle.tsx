@@ -15,8 +15,7 @@
  *     we don't leak stale data forever if the user flips back and forth.
  *
  * Design notes:
- *   - 24px tall, "Paper" palette, sits next to the "Ask coach" button in the
- *     DashboardShell masthead.
+ *   - ≥44px tap targets (audit P1-12), "Paper" palette.
  *   - aria-pressed on each button so screen readers announce the active mode.
  *   - Two-option segmented control — if we ever add a third language, this
  *     component should be generalised, but for now hardcoding the pair keeps
@@ -70,7 +69,7 @@ export default function LanguageToggle() {
     <div
       role="radiogroup"
       aria-label={locale === 'de' ? 'Coach-Sprachmodus' : 'Coach language mode'}
-      className="inline-flex items-stretch rounded-full p-0.5 h-[28px]"
+      className="inline-flex items-stretch rounded-full p-0.5"
       style={{
         backgroundColor: 'var(--color-paper-2)',
         border: '1px solid var(--color-rule)',
@@ -87,6 +86,7 @@ export default function LanguageToggle() {
             aria-label={opt.hint}
             title={opt.hint}
             onClick={() => handleChange(opt.value)}
+            // ≥44px real hit target (audit P1-12) — was 28px tall.
             className="inline-flex items-center justify-center px-3 rounded-full text-[11px] font-medium transition-colors"
             style={{
               color: active ? 'var(--color-paper)' : 'var(--color-ink-2)',
@@ -94,6 +94,7 @@ export default function LanguageToggle() {
               border: active ? '1px solid var(--color-ink)' : '1px solid transparent',
               letterSpacing: '0.04em',
               minWidth: 68,
+              minHeight: 44,
             }}
           >
             {opt.label}

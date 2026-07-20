@@ -9,7 +9,7 @@ import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
 import type { ResolvedBlock } from '../../api/coach'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
 import type { ActivityRead } from '../../api/dashboard'
-import { formatHours } from '../../utils/format'
+import { formatDate, formatHours } from '../../utils/format'
 import { useT, useLocale } from '../../contexts/LocaleContext'
 
 interface DayPlanCardProps {
@@ -59,7 +59,7 @@ function adaptIntervals(intervals: IntervalBlockOut[]): ResolvedBlock[] {
 }
 
 function parsedDate(dateStr: string) { try { return parseISO(dateStr) } catch { return null } }
-function weekdayLetter(dateStr: string): string { return parsedDate(dateStr) ? format(parsedDate(dateStr)!, 'EEEEE') : '?' }
+function weekdayLetter(dateStr: string, locale: 'en' | 'de'): string { return parsedDate(dateStr) ? formatDate(parsedDate(dateStr)!, 'EEEEE', locale) : '?' }
 function dateNumber(dateStr: string): string { return parsedDate(dateStr) ? format(parsedDate(dateStr)!, 'd') : '' }
 function fullDateLabel(dateStr: string): string { return parsedDate(dateStr) ? format(parsedDate(dateStr)!, 'EEEE, MMMM d') : dateStr }
 // Localized agenda-row labels (de-DE / en-US), 24h-safe (no time component shown).
@@ -215,7 +215,7 @@ export default function DayPlanCard({ day, language, activity = null, hideDurati
         aria-label={`${fullDateLabel(day.date)} — ${day.category}, ${duration}`}
       >
         <span className="eyebrow" style={{ color: isTodayDay ? 'var(--color-ink)' : 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em', fontWeight: isTodayDay ? 700 : undefined }}>
-          {weekdayLetter(day.date)}
+          {weekdayLetter(day.date, locale)}
         </span>
         <span className="num-mono" style={{ color: 'var(--color-muted)', fontSize: 10 }}>
           {dateNumber(day.date)}
@@ -228,7 +228,7 @@ export default function DayPlanCard({ day, language, activity = null, hideDurati
         )}
       </button>
 
-      <SideSheet open={sheetOpen} onClose={() => setSheetOpen(false)} eyebrow={weekdayLetter(day.date)} title={fullDateLabel(day.date)} width={560}>
+      <SideSheet open={sheetOpen} onClose={() => setSheetOpen(false)} eyebrow={weekdayLetter(day.date, locale)} title={fullDateLabel(day.date)} width={560}>
         <div className="flex flex-col gap-5">
           {day.rationale && (
             <p className="text-[14px] leading-relaxed italic" style={{ color: 'var(--color-ink-2)' }}>

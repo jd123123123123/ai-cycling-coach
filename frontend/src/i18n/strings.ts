@@ -27,6 +27,13 @@ export const STRINGS = {
   target_tss: { en: 'Target TSS', de: 'Ziel-TSS' },
   more_to_chase: { en: 'more to chase', de: 'noch zu holen' },
   unlocked: { en: 'unlocked', de: 'freigeschaltet' },
+  // Chrome sweep (audit P1-6): nav_progress is consumed by the bottom-nav
+  // chrome (MobileBottomNav currently hardcodes de:'Progress'); add_action is
+  // the "+ Add" button word; best_label prefixes PR times ("Best 52 min" →
+  // "Bestwert 52 Min").
+  nav_progress: { en: 'Progress', de: 'Fortschritt' },
+  add_action: { en: 'Add', de: 'Hinzufügen' },
+  best_label: { en: 'Best', de: 'Bestwert' },
 
   // TodayHero
   recovery_label: { en: 'RECOVERY', de: 'ERHOLUNG' },

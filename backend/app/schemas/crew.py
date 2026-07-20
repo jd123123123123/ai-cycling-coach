@@ -30,6 +30,10 @@ class CrewRead(BaseModel):
     id: int
     name: str
     owner_user_id: int
+    # How many accepted members the crew has (owner included). Lets the
+    # frontend render ONE unambiguous crew card — never "crew exists" and
+    # "no crew yet" side by side.
+    member_count: int = 1
 
 
 class CrewMineResponse(BaseModel):
@@ -53,6 +57,17 @@ class CrewInviteCreate(BaseModel):
 
 class InviteByUserCreate(BaseModel):
     user_id: int
+
+
+class AcceptOptions(BaseModel):
+    """Optional body for invite-accept endpoints.
+
+    join_challenges — explicit opt-in (default FALSE) to the crew's
+    PRE-EXISTING challenges. Joining a crew never silently enters the new
+    member into a scoreboard; challenges created while they are a member
+    include them as before.
+    """
+    join_challenges: bool = False
 
 
 class DiscoverMember(BaseModel):
@@ -80,17 +95,26 @@ class StandingRow(BaseModel):
     distance_km: float | None = None   # cumulative ridden distance (km)
     wkg: float | None = None           # ftp_watts / weight_kg (threshold W/kg)
     vo2max: float | None = None        # latest VO2max on/before window end
+    # P1-10: points are the share of each rider's OWN weekly target
+    # (their 4-week avg weekly TSS × 1.05, floor 60) — never a fixed
+    # 120-TSS/day wall. Exposed so the footnote can say so.
+    weekly_target_tss: int | None = None
+    daily_target_tss: int | None = None  # weekly_target_tss / 7
 
 
 class StandingsResponse(BaseModel):
     crew_id: int
     week_start: str              # ISO yyyy-mm-dd — window start
     week_end: str                # ISO yyyy-mm-dd — window end
-    daily_target_tss: int
+    daily_target_tss: int        # the CALLER's own per-day bar (personal)
     standings: list[StandingRow]
     period: str = "week"                 # day | week | month | year
     period_start: str | None = None      # ISO yyyy-mm-dd (mirrors week_start)
     period_end: str | None = None        # ISO yyyy-mm-dd (mirrors week_end)
+    weekly_target_tss: int | None = None # the CALLER's own weekly bar
+    # Scoring semantics marker for the footnote: points = share of each
+    # rider's own weekly target.
+    points_basis: str = "own_weekly_target"
 
 
 # ── Duel — head-to-head rich stats (You vs Last Week / You vs Crew) ──
@@ -106,6 +130,9 @@ class DuelStats(BaseModel):
     best_tss: int = 0
     ring_score: int = 0
     avg_if: float = 0.0
+    # This rider's OWN bars (4-week history), never fixed walls.
+    weekly_target_tss: int | None = None
+    active_days_target: int | None = None
 
 
 class DuelResponse(BaseModel):
@@ -114,3 +141,10 @@ class DuelResponse(BaseModel):
     you_this_week: DuelStats
     you_last_week: DuelStats
     crew: list[DuelStats] = Field(default_factory=list)   # crew-mates this week (excl. you)
+    # Caller's personal-challenge defaults: own 4-week avg weekly TSS × 1.05
+    # (floor 60) and active-days 3..6 (never 7). Replaces the fixed 800 / 7.
+    weekly_target_tss: int | None = None
+    active_days_target: int | None = None
+    # Last week's TSS at the same weekday+time — pace basis so early-week UI
+    # can say "on pace vs last week" instead of a guaranteed 0 : <total> loss.
+    last_week_at_now: int = 0

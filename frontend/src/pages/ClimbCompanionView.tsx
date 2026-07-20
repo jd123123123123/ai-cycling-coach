@@ -19,6 +19,8 @@ import {
 import DashboardShell from '../components/dashboard/DashboardShell'
 import { apiClient } from '../api/client'
 import { useLocale } from '../contexts/LocaleContext'
+import { formatDate } from '../utils/format'
+import type { Locale } from '../i18n/strings'
 
 interface ProfileBin { km: number; gradient_pct: number; alt_m: number }
 interface PacingSection {
@@ -67,10 +69,10 @@ function fmtTime(s: number): string {
   return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${ss}` : `${m}:${ss}`
 }
 
-function fmtDate(iso: string | null, de: boolean): string {
+// Canonical date path (audit P1-6): date-fns + de locale via utils/format.
+function fmtDate(iso: string | null, locale: Locale): string {
   if (!iso) return '—'
-  const d = new Date(`${iso}T12:00:00`)
-  return d.toLocaleDateString(de ? 'de-DE' : 'en-US', { month: 'short', day: 'numeric' })
+  return formatDate(new Date(`${iso}T12:00:00`), locale === 'de' ? 'd. MMM' : 'MMM d', locale)
 }
 
 /** Strip virtual-platform prefixes for display only ("Zwift - The Gorby · km 1" → "The Gorby · km 1"). */
@@ -218,7 +220,7 @@ export default function ClimbCompanionView() {
 
   const catChip = climb.category !== 'uncat'
   const meta: string[] = []
-  if (climb.best_date) meta.push(fmtDate(climb.best_date, de))
+  if (climb.best_date) meta.push(fmtDate(climb.best_date, locale))
   if (climb.best_avg_power != null) meta.push(`${Math.round(climb.best_avg_power)} W ${de ? 'Ø' : 'avg'}`)
   if (climb.best_vam != null) meta.push(`${climb.best_vam.toLocaleString(de ? 'de-DE' : 'en-US')} VAM`)
 
@@ -265,7 +267,7 @@ export default function ClimbCompanionView() {
               </span>
             )}
             <span style={{ fontSize: 13.5, color: 'var(--color-ink-2)' }}>
-              {de ? `${climb.attempts}× gefahren · zuletzt ${fmtDate(climb.last_date, de)}` : `Ridden ${climb.attempts}× · last ${fmtDate(climb.last_date, de)}`}
+              {de ? `${climb.attempts}× gefahren · zuletzt ${fmtDate(climb.last_date, locale)}` : `Ridden ${climb.attempts}× · last ${fmtDate(climb.last_date, locale)}`}
             </span>
           </div>
         </div>
@@ -446,7 +448,7 @@ export default function ClimbCompanionView() {
                     return (
                       <div key={i} className="flex items-center gap-2.5 rounded-[12px] px-2.5 py-2" style={isPr ? { background: 'var(--color-accent-soft)' } : undefined}>
                         <span style={{ fontSize: 13, fontWeight: isPr ? 700 : 500, color: 'var(--color-ink)', flex: 1 }}>
-                          {fmtDate(h.date, de)}
+                          {fmtDate(h.date, locale)}
                           {h.avg_power != null && (
                             <span style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--color-muted)' }}>
                               {'  ·  '}{Math.round(h.avg_power)} W

@@ -16,6 +16,7 @@ import {
   ChevronLeft, Share2, Bike, Footprints, Dumbbell, Repeat, Zap, Heart, Gauge, Apple, Droplet,
   SlidersHorizontal, Sparkles, Target, BookOpen,
 } from 'lucide-react'
+import { formatDate } from '../utils/format'
 import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
@@ -250,7 +251,7 @@ export default function WorkoutDetailView() {
     // Honest, date-aware empty state: today with no brief, or a planned rest /
     // no-session day. A rest day (or content-less day) reads as recovery.
     const isRest = !isToday && (!dayPlan || dayPlan.category === 'rest' || !dayHasSession(dayPlan))
-    const dLabel = isToday ? null : format(parseISO(targetDate), de ? 'EEEE, d. MMM' : 'EEEE, MMM d')
+    const dLabel = isToday ? null : formatDate(parseISO(targetDate), de ? 'EEEE, d. MMM' : 'EEEE, MMM d', locale)
     const msg = isToday
       ? t.none
       : isRest

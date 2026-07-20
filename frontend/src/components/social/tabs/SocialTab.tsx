@@ -1,14 +1,16 @@
 /**
- * SocialTab — rebuilt 1:1 against the Pencil "Community" design. Renders, top to
- * bottom: a header (crew eyebrow + title + invite/notifications actions), a jump
- * chip row (Battles · Segments · Challenges · Feed), the weekly Battle scorecard
- * (you vs rival across 6 real weekly metrics), the normalized Crew Leaderboard,
- * a Segments card, a Challenges card, the crew Feed, and a Club card. Every
- * number comes from real duel/standings data. Cards whose data the backend does
- * not yet expose (GPS segment leaderboards, rich activity feed with kudos)
- * render the real structure with honest "—"/empty notes — never fabricated.
+ * SocialTab — rebuilt 1:1 against the Pencil "Community" design, re-ordered per
+ * audit P1-10: the tab GREETS YOU WITH YOUR CREW, not a scoreboard you're
+ * losing. Two views — Crew (default: merged crew card, find people, normalized
+ * leaderboard, challenges, feed, segments) and Duelle (secondary: weekly
+ * battles, or an inviting empty state with a quiet start button — the self-duel
+ * against last week is opt-in, never auto-shown). Every number comes from real
+ * duel/standings data. Cards whose data the backend does not yet expose (GPS
+ * segment leaderboards, rich activity feed with kudos) render the real
+ * structure with honest "—"/empty notes — never fabricated.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Swords, Trophy, Flame, Check, Users, UserPlus, Bell, Clock,
   Hand, Scale, Info, BarChart3, Bike, MessageCircle, Share2, ChevronRight,
@@ -19,8 +21,13 @@ import {
 } from '../../../hooks/useCrew'
 import type { DuelStats, CrewPeriod, StandingRow } from '../../../api/crew'
 import {
-  useDiscover, useIncomingInvites, useConnect, useAcceptInvite, useDeclineInvite,
+  useDiscover, useIncomingInvites, useDeclineInvite,
 } from '../../../hooks/useConnections'
+import { apiClient } from '../../../api/client'
+import {
+  buildAcceptPayload, buildConnectPayload, duelColumnHeaders, isEarlyWeek,
+  pickPersonalTargets, readPaceTss, readRowTargetTss, resolveCrewInfo,
+} from '../socialLogic'
 import type { IncomingInvite, DiscoverResult } from '../../../api/connections'
 import {
   useIncomingNudges, useSendNudge, useMarkNudgeRead,
@@ -78,8 +85,24 @@ const BOARD_METRICS: BoardMetric[] = [
 
 const innerStyle = { background: 'var(--color-surface-2)' } as const
 
-// Weekly personal load-challenge target (TSS). A round, honest weekly-volume goal.
-const LOAD_TARGET = 800
+// The self-duel (vs your own last week) is OPT-IN and per-week: it only shows
+// after the athlete presses "Start a duel", and resets every Monday so no one
+// is ever greeted by an auto-created losing scoreboard.
+const SELF_DUEL_KEY = 'social:selfDuelWeek'
+function readSelfDuelWeek(): string | null {
+  try {
+    return localStorage.getItem(SELF_DUEL_KEY)
+  } catch {
+    return null
+  }
+}
+function writeSelfDuelWeek(week: string) {
+  try {
+    localStorage.setItem(SELF_DUEL_KEY, week)
+  } catch {
+    /* ignore quota / private-mode errors */
+  }
+}
 
 // Challenges are personal/derived, so opting out of one is a client-side
 // preference persisted to localStorage (hidden ids), with a re-add affordance.
@@ -167,8 +190,25 @@ export default function SocialTab() {
   // ── Connections: incoming invites + find people ──
   const { data: incoming } = useIncomingInvites()
   const invites = incoming ?? []
-  const acceptInvite = useAcceptInvite()
   const declineInvite = useDeclineInvite()
+  // Accept carries the OPT-IN join_challenges flag (default false) — the
+  // landed backend contract: joining a crew never silently enters the new
+  // member into pre-existing challenges.
+  const qc = useQueryClient()
+  const acceptInvite = useMutation({
+    mutationFn: async (vars: { inviteId: number; join: boolean }) => {
+      const res = await apiClient.post(
+        `/crews/invites/${vars.inviteId}/accept-mine`,
+        buildAcceptPayload(vars.join),
+      )
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['crew'] })
+      qc.invalidateQueries({ queryKey: ['connections', 'invites', 'incoming'] })
+      qc.invalidateQueries({ queryKey: ['connections', 'discover'] })
+    },
+  })
 
   // ── Coach-safety interlock: the adaptive engine outranks the competition.
   // rest → banner reframes rest as the win + competitive CTAs pause;
@@ -258,28 +298,43 @@ export default function SocialTab() {
   const you = duel?.you_this_week
   const hasCrew = !!(duel?.crew && duel.crew.length > 0)
   const crewSize = hasCrew ? duel!.crew.length + 1 : 0
-  // Concurrent weekly battles — you vs EACH crew member. With no crew, a single
-  // battle against "Past You" (last week) keeps the surface alive.
-  const battles: Array<{ opponent: DuelStats; isPast: boolean }> = hasCrew
-    ? duel!.crew.map((opponent) => ({ opponent, isPast: false }))
-    : duel?.you_last_week
-      ? [{ opponent: duel.you_last_week, isPast: true }]
-      : []
+  // One unambiguous crew state (merges /crews/me with the duel roster).
+  const crewInfo = resolveCrewInfo(myCrew, duel?.crew?.length ?? 0)
+
+  // ── Views: the tab LANDS ON CREW; Duelle is a secondary, opt-in tab. ──
+  const [view, setView] = useState<'crew' | 'duels'>('crew')
+
+  // Concurrent weekly battles — you vs EACH crew member (real opponents only).
+  const crewBattles: DuelStats[] = hasCrew ? duel!.crew : []
+  // Self-duel vs last week: opt-in, per-week. Never auto-shown.
+  const [selfDuelWeek, setSelfDuelWeek] = useState<string | null>(() => readSelfDuelWeek())
+  const selfDuelActive = !!duel?.week_start && selfDuelWeek === duel.week_start
+  function startSelfDuel() {
+    if (!duel?.week_start) return
+    writeSelfDuelWeek(duel.week_start)
+    setSelfDuelWeek(duel.week_start)
+  }
+
+  // Pace field for the early-week self-duel line (tolerant of shape).
+  const paceTss = readPaceTss(duel)
 
   function onBellClick() {
     setInboxOpen((v) => !v)
     requestAnimationFrame(() => inboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
 
+  // The finder lives in the Crew view — switch there first, then scroll.
   function onOpenFinder() {
-    requestAnimationFrame(() => finderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    setView('crew')
+    setTimeout(() => finderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
   }
 
   // Open the create-challenge form and bring it into view — reached from the
   // finder ("Challenge your crew") so adding people flows straight into a duel.
   function onOpenChallenge() {
+    setView('crew')
     setChallengeFormOpen(true)
-    requestAnimationFrame(() => challengeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    setTimeout(() => challengeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
   }
 
   // Copy for the selected leaderboard window (subtitle prefix + row suffix).
@@ -312,31 +367,38 @@ export default function SocialTab() {
   // ── Feed: crew this week ──
   const feed = duel?.crew ?? []
 
-  // ── Club summary ──
-  const clubName = myCrew?.crew?.name
+  // ── Crew-card summary ──
   const combinedKm = useMemo(() => {
     if (!hasCrew) return 0
     const crewSum = duel!.crew.reduce((s, c) => s + Number(c.distance_km ?? 0), 0)
     return Math.round(crewSum + Number(you?.distance_km ?? 0))
   }, [hasCrew, duel, you])
 
-  // ── Challenges (real) ──
-  const loadPct = you ? Math.min(100, Math.round((you.tss / LOAD_TARGET) * 100)) : 0
-  const daysPct = you ? Math.round((you.active_days / 7) * 100) : 0
+  // ── Challenges (real, athlete-scaled — never a hardcoded 800/7) ──
+  const targets = pickPersonalTargets(duel)
+  const loadPct = you && targets.loadTargetTss
+    ? Math.min(100, Math.round((you.tss / targets.loadTargetTss) * 100))
+    : 0
+  const daysPct = you
+    ? Math.min(100, Math.round((you.active_days / targets.activeDaysTarget) * 100))
+    : 0
 
-  // ── Jump chips → smooth-scroll anchors ──
-  const battleRef = useRef<HTMLDivElement>(null)
-  const segmentsRef = useRef<HTMLDivElement>(null)
+  // ── View tabs + in-view smooth-scroll anchors ──
   const challengeRef = useRef<HTMLDivElement>(null)
   const feedRef = useRef<HTMLDivElement>(null)
   const inboxRef = useRef<HTMLDivElement>(null)
-  const boardRef = useRef<HTMLDivElement>(null)
   const finderRef = useRef<HTMLDivElement>(null)
-  const CHIPS: Array<{ label: string; ref: React.RefObject<HTMLDivElement | null>; active?: boolean }> = [
-    { label: de ? 'Duelle' : 'Battles', ref: battleRef, active: true },
-    { label: 'Segments', ref: segmentsRef },
-    { label: 'Challenges', ref: challengeRef },
-    { label: 'Feed', ref: feedRef },
+  const CHIPS: Array<{ id: string; label: string; active: boolean; onClick: () => void }> = [
+    { id: 'crew', label: 'Crew', active: view === 'crew', onClick: () => setView('crew') },
+    { id: 'duels', label: de ? 'Duelle' : 'Duels', active: view === 'duels', onClick: () => setView('duels') },
+    {
+      id: 'challenges', label: 'Challenges', active: false,
+      onClick: () => { setView('crew'); setTimeout(() => challengeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60) },
+    },
+    {
+      id: 'feed', label: 'Feed', active: false,
+      onClick: () => { setView('crew'); setTimeout(() => feedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60) },
+    },
   ]
 
   return (
@@ -380,9 +442,9 @@ export default function SocialTab() {
                 key={inv.invite_id}
                 inv={inv}
                 de={de}
-                onAccept={() => acceptInvite.mutate(inv.invite_id)}
+                onAccept={(join) => acceptInvite.mutate({ inviteId: inv.invite_id, join })}
                 onDecline={() => declineInvite.mutate(inv.invite_id)}
-                accepting={acceptInvite.isPending && acceptInvite.variables === inv.invite_id}
+                accepting={acceptInvite.isPending && acceptInvite.variables?.inviteId === inv.invite_id}
                 declining={declineInvite.isPending && declineInvite.variables === inv.invite_id}
               />
             ))}
@@ -401,10 +463,10 @@ export default function SocialTab() {
         )}
       </div>
 
-      {/* ── FILTERS / JUMP CHIPS ── */}
+      {/* ── VIEW TABS: Crew (default) · Duelle · jump chips ── */}
       <div className="flex gap-2">
-        {CHIPS.map(({ label, ref, active }) => (
-          <button key={label} type="button" onClick={() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        {CHIPS.map(({ id, label, active, onClick }) => (
+          <button key={id} type="button" onClick={onClick} aria-pressed={active}
             className="flex-1 inline-flex items-center justify-center rounded-full py-2.5"
             style={{
               background: active ? 'var(--color-accent)' : 'var(--color-paper-2)',
@@ -416,6 +478,101 @@ export default function SocialTab() {
           </button>
         ))}
       </div>
+
+      {/* ── DUELS VIEW (secondary, opt-in) — crew battles when you have a crew;
+          otherwise an inviting empty state. The self-duel against last week
+          only appears after a deliberate "start" — never as an auto-shown
+          losing scoreboard. ── */}
+      {view === 'duels' && (
+        <div className="flex flex-col gap-4">
+          {you && crewBattles.length > 0 ? (
+            <>
+              {crewBattles.length > 1 && (
+                <div className="flex items-center gap-[7px]">
+                  <Swords size={18} style={{ color: 'var(--color-accent)' }} />
+                  <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Wochenduelle' : 'Weekly Battles'}</span>
+                  <span className="num-mono grid place-items-center rounded-full" style={{ minWidth: 20, height: 20, padding: '0 6px', fontSize: 11, fontWeight: 700, color: 'var(--color-ink)', background: 'var(--color-surface-2)' }}>{crewBattles.length}</span>
+                </div>
+              )}
+              {crewBattles.map((opponent) => (
+                <BattleCard
+                  key={opponent.user_id ?? opponent.handle}
+                  you={you}
+                  opponent={opponent}
+                  isPast={false}
+                  weekStart={duel?.week_start}
+                  weekEnd={duel?.week_end}
+                  paceTss={paceTss}
+                  de={de}
+                  sendNudge={sendNudge}
+                  gateMode={gate.mode}
+                />
+              ))}
+            </>
+          ) : you && selfDuelActive && duel?.you_last_week ? (
+            <BattleCard
+              key="past-you"
+              you={you}
+              opponent={duel.you_last_week}
+              isPast
+              weekStart={duel.week_start}
+              weekEnd={duel.week_end}
+              paceTss={paceTss}
+              de={de}
+              sendNudge={sendNudge}
+              gateMode={gate.mode}
+            />
+          ) : (
+            <DuelEmptyState de={de} canStart={!!(you && duel?.you_last_week)} onStart={startSelfDuel} />
+          )}
+        </div>
+      )}
+
+      {view === 'crew' && (<>
+
+      {/* ── YOUR CREW — the one crew card. Name + member count + a single
+          invite CTA when a crew exists; a single create-crew card when not. ── */}
+      {crewInfo.exists ? (
+        <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
+          <div className="flex items-center gap-3">
+            <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'var(--color-accent)' }}><Users size={26} style={{ color: 'var(--color-ink)' }} /></span>
+            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+              <span className="num-display truncate" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{crewInfo.name ?? (de ? 'Deine Crew' : 'Your crew')}</span>
+              <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+                {de
+                  ? `${crewInfo.memberCount} ${crewInfo.memberCount === 1 ? 'Mitglied' : 'Mitglieder'}${combinedKm > 0 ? ` · ${combinedKm.toLocaleString('de')} km diese Woche` : ''}`
+                  : `${crewInfo.memberCount} ${crewInfo.memberCount === 1 ? 'member' : 'members'}${combinedKm > 0 ? ` · ${combinedKm.toLocaleString('en')} km this week` : ''}`}
+              </span>
+            </div>
+          </div>
+          <button type="button" onClick={onOpenFinder} className="inline-flex items-center justify-center gap-1.5 rounded-full w-full" style={{ background: 'var(--color-accent)', padding: 12 }}>
+            <UserPlus size={16} style={{ color: 'var(--color-ink)' }} />
+            <span className="num-display" style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Fahrer einladen' : 'Invite riders'}</span>
+          </button>
+          {leaveConfirm ? (
+            <div className="flex items-center gap-2.5 rounded-full" style={{ background: 'var(--color-surface-3)', padding: '8px 8px 8px 14px' }}>
+              <span className="flex-1 min-w-0" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Crew wirklich verlassen?' : 'Leave this crew?'}</span>
+              <button type="button" onClick={() => leaveCrew.mutate(undefined, { onSuccess: () => setLeaveConfirm(false) })} disabled={leaveCrew.isPending} className="inline-flex items-center gap-1.5 rounded-full shrink-0" style={{ background: 'var(--color-strain)', padding: '7px 13px', opacity: leaveCrew.isPending ? 0.6 : 1 }}>
+                <LogOut size={14} style={{ color: 'var(--color-ink)' }} />
+                <span className="num-display" style={{ fontSize: 12, color: 'var(--color-ink)' }}>{de ? 'Verlassen' : 'Leave'}</span>
+              </button>
+              <button type="button" onClick={() => setLeaveConfirm(false)} className="inline-flex items-center rounded-full shrink-0" style={{ background: 'var(--color-surface-2)', padding: '7px 13px' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Abbrechen' : 'Cancel'}</span>
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setLeaveConfirm(true)} className="self-start inline-flex items-center gap-1.5" style={{ background: 'transparent', padding: '2px 4px' }}>
+              <LogOut size={13} style={{ color: 'var(--color-muted)' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'Crew verlassen' : 'Leave crew'}</span>
+            </button>
+          )}
+          {leaveCrew.isError && (
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Verlassen fehlgeschlagen — versuch es nochmal.' : 'Could not leave — try again.'}</span>
+          )}
+        </div>
+      ) : (
+        <EmptyCrew de={de} />
+      )}
 
       {/* ── FIND PEOPLE (prominent, persistent) — search anyone on the app and
           add them to your crew. Kept high on the page so building a crew is the
@@ -433,37 +590,8 @@ export default function SocialTab() {
         <FindPeople de={de} hasCrew={hasCrew} onChallenge={onOpenChallenge} />
       </div>
 
-      {/* ── BATTLE HERO(ES) — one live weekly battle per crew member ── */}
-      <div ref={battleRef} className="flex flex-col gap-4">
-        {you && battles.length > 0 ? (
-          <>
-            {battles.length > 1 && (
-              <div className="flex items-center gap-[7px]">
-                <Swords size={18} style={{ color: 'var(--color-accent)' }} />
-                <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Wochenduelle' : 'Weekly Battles'}</span>
-                <span className="num-mono grid place-items-center rounded-full" style={{ minWidth: 20, height: 20, padding: '0 6px', fontSize: 11, fontWeight: 700, color: 'var(--color-ink)', background: 'var(--color-surface-2)' }}>{battles.length}</span>
-              </div>
-            )}
-            {battles.map(({ opponent, isPast }) => (
-              <BattleCard
-                key={isPast ? 'past-you' : (opponent.user_id ?? opponent.handle)}
-                you={you}
-                opponent={opponent}
-                isPast={isPast}
-                weekEnd={duel?.week_end}
-                de={de}
-                sendNudge={sendNudge}
-                gateMode={gate.mode}
-              />
-            ))}
-          </>
-        ) : (
-          <EmptyCrew de={de} onFind={onOpenFinder} />
-        )}
-      </div>
-
       {/* ── LEADERBOARD ── */}
-      <div ref={boardRef} className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
+      <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-0.5">
             <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Crew-Rangliste' : 'Crew Leaderboard'}</span>
@@ -553,6 +681,13 @@ export default function SocialTab() {
                 leadRaw != null && metricRaw != null
                   ? `${boardMetricDef.fmt!(leadRaw - metricRaw)} ${metricUnit}`
                   : '—'
+              // Per-rider weekly target (backend-scaled) — shown when present.
+              const rowTarget = readRowTargetTss(s)
+              // A zero early in the week is not a failure — render it muted,
+              // never in an alarm color.
+              const valueColor = metricRaw == null || metricRaw === 0
+                ? 'var(--color-muted)'
+                : s.is_you ? 'var(--color-accent)' : 'var(--color-ink)'
               return (
               <div key={s.user_id} className="hover-card flex flex-col rounded-[12px]" style={{ background: s.is_you ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : 'transparent', padding: '8px 10px' }}>
                 <div className="flex items-center gap-2.5">
@@ -563,7 +698,7 @@ export default function SocialTab() {
                     <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{Math.round(s.weekly_tss)} TSS · {de ? boardPhrase.phraseDe : boardPhrase.phraseEn}</span>
                   </div>
                   <div className="flex items-end gap-[3px]">
-                    <span className="num-display" style={{ fontSize: 19, color: metricRaw == null ? 'var(--color-muted)' : s.is_you ? 'var(--color-accent)' : 'var(--color-ink)' }}>{metricShown}</span>
+                    <span className="num-display" style={{ fontSize: 19, color: valueColor }}>{metricShown}</span>
                     {metricRaw != null && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 3 }}>{metricUnit}</span>}
                   </div>
                   <span className="hover-arrow"><ChevronRight size={15} style={{ color: 'var(--color-muted)' }} /></span>
@@ -575,37 +710,19 @@ export default function SocialTab() {
                     <MiniStat label={de ? 'LAST' : 'LOAD'} value={`${Math.round(s.weekly_tss)} TSS`} />
                     <MiniStat label={de ? 'PUNKTE' : 'SCORE'} value={`${Math.round(s.weekly_score)}`} />
                     <MiniStat label={de ? 'AKTIV' : 'ACTIVE'} value={de ? `${activeDays}/${bucketCount} aktiv` : `${activeDays}/${bucketCount} active`} />
+                    {rowTarget != null && <MiniStat label={de ? 'ZIEL' : 'TARGET'} value={`${Math.round(rowTarget)} TSS`} />}
                     {i > 0 && <MiniStat label={de ? 'RÜCKSTAND' : 'TO LEAD'} value={gapToLead} />}
                   </div>
                 </div>
               </div>
             )})}
             {boardMetric === 'load' && (
-              <p style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? `Punkte = Anteil am Tagesziel (${Math.round(standings!.daily_target_tss)} TSS/Tag).` : `Score = share of the daily target (${Math.round(standings!.daily_target_tss)} TSS/day).`}</p>
+              <p style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'Punkte = Anteil am eigenen Wochenziel' : 'Points = share of your own weekly target'}</p>
             )}
           </>
         ) : (
           <p style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? 'Die Rangliste erscheint, sobald deine Crew fährt.' : 'The leaderboard fills once your crew rides.'}</p>
         )}
-      </div>
-
-      {/* ── SEGMENTS ── */}
-      <div ref={segmentsRef} className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
-        <div className="flex items-center justify-between">
-          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>Segments</span>
-          <div className="inline-flex items-center gap-[5px] rounded-full" style={{ background: 'var(--color-surface-3)', padding: '4px 9px' }}>
-            <Mountain size={12} style={{ color: 'var(--color-ink-2)' }} />
-            <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-ink-2)' }}>{de ? 'GPS-SEGMENTE' : 'GPS SEGMENTS'}</span>
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-2.5 rounded-[14px] text-center" style={{ background: 'var(--color-surface-2)', padding: 18 }}>
-          <span className="grid place-items-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-surface-3)' }}><BarChart3 size={20} style={{ color: 'var(--color-muted)' }} /></span>
-          <p style={{ fontSize: 13, color: 'var(--color-ink-2)', maxWidth: '34ch' }}>
-            {de
-              ? 'Segment-Rennen sind noch nicht verbunden — Bestzeiten & KOM-Duelle folgen, sobald GPS-Segmente live sind.'
-              : "Segment racing isn't connected yet — your PRs and KOM duels appear once GPS segments go live."}
-          </p>
-        </div>
       </div>
 
       {/* ── CHALLENGES ── */}
@@ -683,11 +800,14 @@ export default function SocialTab() {
 
         {you ? (
           <>
-            {!hiddenChallenges.includes('load') && (
-              <ChallengeRow icon={Trophy} color="var(--color-amber)" name={de ? 'Wochen-Last' : 'Weekly Load'} sub={de ? 'persönlich' : 'personal'} pct={loadPct} progress={`${Math.round(you.tss)} / ${LOAD_TARGET} TSS`} detail={de ? `Noch ${Math.max(0, LOAD_TARGET - Math.round(you.tss))} TSS · ${timeLeft(duel?.week_end, de)}` : `${Math.max(0, LOAD_TARGET - Math.round(you.tss))} TSS to go · ${timeLeft(duel?.week_end, de)}`} de={de} onLeave={() => hideChallenge('load')} />
+            {/* Targets are athlete-scaled (backend-provided, ~own 4-week
+                average ×1.05); the load challenge only exists once there is an
+                honest basis for a target — never a fixed 800 TSS. */}
+            {targets.loadTargetTss != null && !hiddenChallenges.includes('load') && (
+              <ChallengeRow icon={Trophy} color="var(--color-amber)" name={de ? 'Wochen-Last' : 'Weekly Load'} sub={de ? 'persönlich · auf dich skaliert' : 'personal · scaled to you'} pct={loadPct} progress={`${Math.round(you.tss)} / ${targets.loadTargetTss} TSS`} detail={de ? `Noch ${Math.max(0, targets.loadTargetTss - Math.round(you.tss))} TSS · ${timeLeft(duel?.week_end, de)}` : `${Math.max(0, targets.loadTargetTss - Math.round(you.tss))} TSS to go · ${timeLeft(duel?.week_end, de)}`} de={de} onLeave={() => hideChallenge('load')} />
             )}
             {!hiddenChallenges.includes('days') && (
-              <ChallengeRow icon={Flame} color="var(--color-accent)" name={de ? 'Aktive Tage' : 'Active Days'} sub={de ? 'persönlich' : 'personal'} pct={daysPct} progress={de ? `${you.active_days} / 7 Tage` : `${you.active_days} / 7 days`} detail={de ? `Noch ${Math.max(0, 7 - you.active_days)} Tage offen · ${timeLeft(duel?.week_end, de)}` : `${Math.max(0, 7 - you.active_days)} days open · ${timeLeft(duel?.week_end, de)}`} de={de} onLeave={() => hideChallenge('days')} />
+              <ChallengeRow icon={Flame} color="var(--color-accent)" name={de ? 'Aktive Tage' : 'Active Days'} sub={de ? 'persönlich · auf dich skaliert' : 'personal · scaled to you'} pct={daysPct} progress={de ? `${you.active_days} / ${targets.activeDaysTarget} Tage` : `${you.active_days} / ${targets.activeDaysTarget} days`} detail={de ? `Noch ${Math.max(0, targets.activeDaysTarget - you.active_days)} Tage offen · ${timeLeft(duel?.week_end, de)}` : `${Math.max(0, targets.activeDaysTarget - you.active_days)} days open · ${timeLeft(duel?.week_end, de)}`} de={de} onLeave={() => hideChallenge('days')} />
             )}
             {hiddenChallenges.length === 0 && (
               <p style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'Verlasse eine Challenge, um sie auszublenden — du kannst sie jederzeit wieder aufnehmen.' : 'Leave a challenge to hide it — you can re-add it any time.'}</p>
@@ -762,59 +882,32 @@ export default function SocialTab() {
             </div>
           ))
         ) : (
-          <EmptyCrew de={de} onFind={onOpenFinder} note={de ? 'Sobald deine Crew fährt, siehst du hier ihre Woche.' : "Once your crew rides, you'll see their week here."} />
+          <div className="rounded-[24px] p-5" style={cardStyle}>
+            <p style={{ fontSize: 13, color: 'var(--color-muted)' }}>{de ? 'Sobald deine Crew fährt, siehst du hier ihre Woche.' : "Once your crew rides, you'll see their week here."}</p>
+          </div>
         )}
       </div>
 
-      {/* ── CLUB ── */}
-      <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
-        <div className="flex items-center gap-3">
-          <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'var(--color-accent)' }}><Users size={26} style={{ color: 'var(--color-ink)' }} /></span>
-          <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-            <span className="num-display truncate" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{clubName ?? (de ? 'Deine Crew' : 'Your crew')}</span>
-            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-              {hasCrew
-                ? (de ? `${crewSize} Mitglieder · ${combinedKm.toLocaleString('de')} km diese Woche` : `${crewSize} members · ${combinedKm.toLocaleString('en')} km this week`)
-                : (de ? 'Noch keine Crew — lade Fahrer ein' : 'No crew yet — invite riders')}
-            </span>
+      {/* ── SEGMENTS ── */}
+      <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
+        <div className="flex items-center justify-between">
+          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>Segments</span>
+          <div className="inline-flex items-center gap-[5px] rounded-full" style={{ background: 'var(--color-surface-3)', padding: '4px 9px' }}>
+            <Mountain size={12} style={{ color: 'var(--color-ink-2)' }} />
+            <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-ink-2)' }}>{de ? 'GPS-SEGMENTE' : 'GPS SEGMENTS'}</span>
           </div>
         </div>
-        {hasCrew ? (
-          <div className="flex flex-col gap-2.5">
-            <button type="button" onClick={() => boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="inline-flex items-center justify-center gap-1.5 rounded-full w-full" style={{ background: 'var(--color-surface-3)', padding: 12 }}>
-              <Trophy size={16} style={{ color: 'var(--color-accent)' }} />
-              <span className="num-display" style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Club-Rangliste ansehen' : 'View club leaderboard'}</span>
-              <ChevronRight size={14} style={{ color: 'var(--color-ink-2)' }} />
-            </button>
-            {leaveConfirm ? (
-              <div className="flex items-center gap-2.5 rounded-full" style={{ background: 'var(--color-surface-3)', padding: '8px 8px 8px 14px' }}>
-                <span className="flex-1 min-w-0" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Crew wirklich verlassen?' : 'Leave this crew?'}</span>
-                <button type="button" onClick={() => leaveCrew.mutate(undefined, { onSuccess: () => setLeaveConfirm(false) })} disabled={leaveCrew.isPending} className="inline-flex items-center gap-1.5 rounded-full shrink-0" style={{ background: 'var(--color-strain)', padding: '7px 13px', opacity: leaveCrew.isPending ? 0.6 : 1 }}>
-                  <LogOut size={14} style={{ color: 'var(--color-ink)' }} />
-                  <span className="num-display" style={{ fontSize: 12, color: 'var(--color-ink)' }}>{de ? 'Verlassen' : 'Leave'}</span>
-                </button>
-                <button type="button" onClick={() => setLeaveConfirm(false)} className="inline-flex items-center rounded-full shrink-0" style={{ background: 'var(--color-surface-2)', padding: '7px 13px' }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Abbrechen' : 'Cancel'}</span>
-                </button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => setLeaveConfirm(true)} className="inline-flex items-center justify-center gap-1.5 rounded-full w-full" style={{ background: 'transparent', border: '1px solid var(--color-rule)', padding: 11 }}>
-                <LogOut size={15} style={{ color: 'var(--color-strain)' }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Crew verlassen' : 'Leave crew'}</span>
-              </button>
-            )}
-            {leaveCrew.isError && (
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Verlassen fehlgeschlagen — versuch es nochmal.' : 'Could not leave — try again.'}</span>
-            )}
-          </div>
-        ) : (
-          <button type="button" onClick={onOpenFinder} className="inline-flex items-center justify-center gap-1.5 rounded-full w-full" style={{ background: 'var(--color-accent)', padding: 12 }}>
-            <UserPlus size={16} style={{ color: 'var(--color-ink)' }} />
-            <span className="num-display" style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Fahrer finden' : 'Find riders'}</span>
-            <ChevronRight size={14} style={{ color: 'var(--color-ink)' }} />
-          </button>
-        )}
+        <div className="flex flex-col items-center gap-2.5 rounded-[14px] text-center" style={{ background: 'var(--color-surface-2)', padding: 18 }}>
+          <span className="grid place-items-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-surface-3)' }}><BarChart3 size={20} style={{ color: 'var(--color-muted)' }} /></span>
+          <p style={{ fontSize: 13, color: 'var(--color-ink-2)', maxWidth: '34ch' }}>
+            {de
+              ? 'Segment-Rennen sind noch nicht verbunden — Bestzeiten & KOM-Duelle folgen, sobald GPS-Segmente live sind.'
+              : "Segment racing isn't connected yet — your PRs and KOM duels appear once GPS segments go live."}
+          </p>
+        </div>
       </div>
+
+      </>)}
 
     </div>
   )
@@ -823,11 +916,13 @@ export default function SocialTab() {
 // One live weekly battle: you vs a single opponent (a real crew member, or
 // "Past You" when you have no crew). Computes its own 6-metric scoreline, owns
 // its own Battle-details toggle + Nudge (targeting THIS opponent's user_id).
-function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge, gateMode }: {
+function BattleCard({ you, opponent, isPast, weekStart, weekEnd, paceTss, de, sendNudge, gateMode }: {
   you: DuelStats
   opponent: DuelStats
   isPast: boolean
+  weekStart: string | undefined
   weekEnd: string | undefined
+  paceTss: number | null
   de: boolean
   sendNudge: ReturnType<typeof useSendNudge>
   gateMode: GateMode
@@ -839,7 +934,15 @@ function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge, gateMode }:
   const resting = gateMode === 'rest'
   const opponentId = !isPast && opponent.user_id && !resting ? opponent.user_id : undefined
   const nudging = sendNudge.isPending && sendNudge.variables === opponentId
-  const opponentName = isPast ? (de ? 'Du letzte Wo.' : 'Past You') : opponent.handle
+  const opponentName = isPast ? (de ? 'Letzte Woche' : 'Last week') : opponent.handle
+  // Self-duel: unambiguous week columns (never DU / DU) …
+  const cols = duelColumnHeaders(isPast, de, opponent.handle)
+  // … and no-guilt colors: trailing your own last week is neutral slate, never
+  // an alarm red (that color stays reserved for real head-to-head rivals).
+  const loseColor = isPast ? 'var(--color-muted)' : 'var(--color-strain)'
+  // Early week the raw score would be a guaranteed 0:60 loss — show the
+  // pace-based comparison instead of a scoreboard + countdown.
+  const earlyWeek = isPast && isEarlyWeek(weekStart, Date.now(), Number(you.tss ?? 0), Number(opponent.tss ?? 0))
 
   const metrics = useMemo(() => {
     const def: Array<{ key: keyof DuelStats; label: string; fmt: (n: number) => string; color: string }> = [
@@ -876,50 +979,70 @@ function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge, gateMode }:
           <span className="truncate" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-muted)' }}>· {opponentName}</span>
           <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-accent)' }} /></span>
         </div>
-        <div className="inline-flex items-center gap-[5px] rounded-full shrink-0" style={{ background: 'var(--color-surface-2)', padding: '5px 10px' }}>
-          <Clock size={13} style={{ color: 'var(--color-amber)' }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-amber)' }}>{timeLeft(weekEnd, de)}</span>
-        </div>
+        {!earlyWeek && (
+          <div className="inline-flex items-center gap-[5px] rounded-full shrink-0" style={{ background: 'var(--color-surface-2)', padding: '5px 10px' }}>
+            <Clock size={13} style={{ color: 'var(--color-amber)' }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-amber)' }}>{timeLeft(weekEnd, de)}</span>
+          </div>
+        )}
       </div>
 
-      {/* Face-off */}
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col items-center gap-[7px] flex-1">
-          <span className="num-display grid place-items-center rounded-full" style={{ width: 56, height: 56, fontSize: 20, color: 'var(--color-ink)', background: 'var(--color-accent)', border: '3px solid var(--color-accent)' }}>{initial(you.handle || 'You')}</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Du' : 'You'}</span>
-          <span className="num-display" style={{ fontSize: 30, color: youScore >= oppScore ? 'var(--color-accent)' : 'var(--color-muted)' }}>{youScore}</span>
+      {earlyWeek ? (
+        /* Early-week self-duel: pace vs last week instead of a 0:60 scoreboard */
+        <div className="rounded-[14px] flex flex-col gap-1.5" style={{ background: 'var(--color-surface-2)', padding: '14px 16px' }}>
+          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'WOCHENVERGLEICH' : 'WEEK VS WEEK'}</span>
+          <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{de ? 'Auf Kurs deiner letzten Woche' : 'On pace with last week'}</span>
+          {paceTss != null && (
+            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+              {de
+                ? `${Math.round(you.tss)} TSS bisher · letzte Woche zu diesem Zeitpunkt: ${Math.round(paceTss)} TSS`
+                : `${Math.round(you.tss)} TSS so far · last week at this point: ${Math.round(paceTss)} TSS`}
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
+            {de ? 'Die Punktwertung startet, sobald die Woche Fahrt aufnimmt.' : 'Scoring kicks in once the week gets going.'}
+          </span>
         </div>
-        <div className="flex flex-col items-center gap-[3px]">
-          <span className="eyebrow" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'PUNKTE' : 'BATTLE PTS'}</span>
-          <span className="num-display grid place-items-center rounded-full" style={{ width: 38, height: 38, fontSize: 13, color: 'var(--color-muted)', background: 'var(--color-surface-2)' }}>VS</span>
+      ) : (
+        /* Face-off */
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col items-center gap-[7px] flex-1">
+            <span className="num-display grid place-items-center rounded-full" style={{ width: 56, height: 56, fontSize: 20, color: 'var(--color-ink)', background: 'var(--color-accent)', border: '3px solid var(--color-accent)' }}>{initial(you.handle || 'You')}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{isPast ? (de ? 'Diese Wo.' : 'This wk') : (de ? 'Du' : 'You')}</span>
+            <span className="num-display" style={{ fontSize: 30, color: youScore >= oppScore ? 'var(--color-accent)' : 'var(--color-muted)' }}>{youScore}</span>
+          </div>
+          <div className="flex flex-col items-center gap-[3px]">
+            <span className="eyebrow" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'PUNKTE' : 'BATTLE PTS'}</span>
+            <span className="num-display grid place-items-center rounded-full" style={{ width: 38, height: 38, fontSize: 13, color: 'var(--color-muted)', background: 'var(--color-surface-2)' }}>VS</span>
+          </div>
+          <div className="flex flex-col items-center gap-[7px] flex-1">
+            <span className="num-display grid place-items-center rounded-full" style={{ width: 56, height: 56, fontSize: 20, color: 'var(--color-ink)', background: isPast ? 'var(--color-surface-3)' : 'var(--color-strain)' }}>{initial(isPast ? (de ? 'Letzte' : 'Last') : opponent.handle)}</span>
+            <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)', maxWidth: 90 }}>{isPast ? (de ? 'Letzte Wo.' : 'Last wk') : opponentName}</span>
+            <span className="num-display" style={{ fontSize: 30, color: oppScore > youScore ? loseColor : 'var(--color-muted)' }}>{oppScore}</span>
+          </div>
         </div>
-        <div className="flex flex-col items-center gap-[7px] flex-1">
-          <span className="num-display grid place-items-center rounded-full" style={{ width: 56, height: 56, fontSize: 20, color: 'var(--color-ink)', background: 'var(--color-strain)' }}>{initial(isPast ? (de ? 'Du' : 'You') : opponent.handle)}</span>
-          <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)', maxWidth: 90 }}>{opponentName}</span>
-          <span className="num-display" style={{ fontSize: 30, color: oppScore > youScore ? 'var(--color-strain)' : 'var(--color-muted)' }}>{oppScore}</span>
-        </div>
-      </div>
+      )}
 
       <div style={{ height: 1, background: 'var(--color-rule)' }} />
 
-      {/* Table head */}
+      {/* Table head — self-duel columns are THIS WK / LAST WK, never DU / DU */}
       <div className="flex items-center gap-2.5">
         <span className="eyebrow flex-1" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'WERTUNG JE METRIK' : 'SCORE BY METRIC'}</span>
-        <span className="eyebrow text-right" style={{ fontSize: 10, color: 'var(--color-accent)', width: 64 }}>{de ? 'DU' : 'YOU'}</span>
-        <span className="eyebrow text-right truncate" style={{ fontSize: 10, color: 'var(--color-strain)', width: 64 }}>{(isPast ? (de ? 'DU' : 'PAST') : opponent.handle).toUpperCase()}</span>
+        <span className="eyebrow text-right" style={{ fontSize: 10, color: 'var(--color-accent)', width: 64 }}>{cols.you}</span>
+        <span className="eyebrow text-right truncate" style={{ fontSize: 10, color: loseColor, width: 64 }}>{cols.opp}</span>
       </div>
 
       {/* Metric rows */}
       {metrics.map((m) => (
         <div key={m.key} className="flex items-center gap-2.5" style={{ padding: '3px 0' }}>
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <span style={{ width: 6, height: 6, borderRadius: 999, background: m.youWin ? 'var(--color-accent)' : 'var(--color-strain)', flexShrink: 0 }} />
+            <span style={{ width: 6, height: 6, borderRadius: 999, background: m.youWin ? 'var(--color-accent)' : loseColor, flexShrink: 0 }} />
             <span className="truncate" style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>{m.label}</span>
           </div>
           <span className="num-mono text-right inline-flex items-center justify-end gap-1" style={{ fontSize: 14, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : 'var(--color-muted)', width: 64 }}>
             {m.fmt(m.yv)}{m.youWin && <Check size={11} strokeWidth={3} />}
           </span>
-          <span className="num-mono text-right" style={{ fontSize: 14, fontWeight: 700, color: !m.youWin ? 'var(--color-strain)' : 'var(--color-muted)', width: 64 }}>{m.fmt(m.rv)}</span>
+          <span className="num-mono text-right" style={{ fontSize: 14, fontWeight: 700, color: !m.youWin ? loseColor : 'var(--color-muted)', width: 64 }}>{m.fmt(m.rv)}</span>
         </div>
       ))}
 
@@ -930,7 +1053,7 @@ function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge, gateMode }:
           {metrics.map((m) => (
             <div key={m.key} className="flex items-center gap-2.5">
               <span className="truncate flex-1" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>{m.label}</span>
-              <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : 'var(--color-strain)' }}>
+              <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : loseColor }}>
                 {m.fmt(Math.abs(m.yv - m.rv))} {m.youWin ? (de ? 'vorn' : 'ahead') : (de ? 'zurück' : 'behind')}
               </span>
             </div>
@@ -951,7 +1074,7 @@ function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge, gateMode }:
           {metrics.map((m) => (
             <div key={m.key} className="flex items-center gap-2.5">
               <span className="truncate flex-1" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>{m.label}</span>
-              <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : 'var(--color-strain)' }}>
+              <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: m.youWin ? 'var(--color-accent)' : loseColor }}>
                 {m.fmt(Math.abs(m.yv - m.rv))} {m.youWin ? (de ? 'vorn' : 'ahead') : (de ? 'zurück' : 'behind')}
               </span>
             </div>
@@ -997,9 +1120,12 @@ function BattleCard({ you, opponent, isPast, weekEnd, de, sendNudge, gateMode }:
 }
 
 function InviteCard({ inv, de, onAccept, onDecline, accepting, declining }: {
-  inv: IncomingInvite; de: boolean; onAccept: () => void; onDecline: () => void; accepting: boolean; declining: boolean
+  inv: IncomingInvite; de: boolean; onAccept: (joinChallenges: boolean) => void; onDecline: () => void; accepting: boolean; declining: boolean
 }) {
   const busy = accepting || declining
+  // Pre-existing crew challenges are OPT-IN (unchecked by default) — accepting
+  // an invite never silently enters you into a scoreboard.
+  const [joinChallenges, setJoinChallenges] = useState(false)
   return (
     <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
       <div className="flex items-center gap-3">
@@ -1011,8 +1137,19 @@ function InviteCard({ inv, de, onAccept, onDecline, accepting, declining }: {
           </span>
         </div>
       </div>
+      <label className="flex items-center gap-2.5 rounded-[12px]" style={{ background: 'var(--color-surface-2)', padding: '9px 12px', cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={joinChallenges}
+          onChange={(e) => setJoinChallenges(e.target.checked)}
+          style={{ accentColor: 'var(--color-accent)', width: 15, height: 15, flexShrink: 0 }}
+        />
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>
+          {de ? 'Auch bei Crew-Challenges mitmachen' : 'Also join the crew challenges'}
+        </span>
+      </label>
       <div className="flex gap-2.5">
-        <button type="button" onClick={onAccept} disabled={busy} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full" style={{ background: 'var(--color-accent)', padding: 12, opacity: busy ? 0.6 : 1 }}>
+        <button type="button" onClick={() => onAccept(joinChallenges)} disabled={busy} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full" style={{ background: 'var(--color-accent)', padding: 12, opacity: busy ? 0.6 : 1 }}>
           <Check size={16} style={{ color: 'var(--color-ink)' }} />
           <span className="num-display" style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Annehmen' : 'Accept'}</span>
         </button>
@@ -1035,19 +1172,33 @@ function FindPeople({ de, hasCrew, onChallenge }: { de: boolean; hasCrew: boolea
     return () => clearTimeout(t)
   }, [q])
 
+  // Suggestions render whatever the backend sends — it filters test/internal
+  // accounts server-side; nothing is seeded or hardcoded here.
   const { data: results, isFetching } = useDiscover(debounced)
-  const connect = useConnect()
   const [requested, setRequested] = useState<Set<number>>(new Set())
   // The last handle we successfully invited — drives the confirmation banner.
   const [lastInvited, setLastInvited] = useState<string | null>(null)
+  // Crew-challenge entry is OPT-IN: unchecked by default, sent explicitly with
+  // every connect so adding a friend never auto-enters anyone into a challenge.
+  const [inviteToChallenge, setInviteToChallenge] = useState(false)
+
+  const qc = useQueryClient()
+  const connect = useMutation({
+    mutationFn: async (vars: { userId: number; handle: string; invite: boolean }) => {
+      const res = await apiClient.post('/crews/connect', buildConnectPayload(vars.userId, vars.invite))
+      return res.data
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['crew'] })
+      qc.invalidateQueries({ queryKey: ['connections', 'discover'] })
+      qc.invalidateQueries({ queryKey: ['connections', 'invites', 'incoming'] })
+      setRequested((prev) => new Set(prev).add(vars.userId))
+      setLastInvited(vars.handle)
+    },
+  })
 
   function onConnect(userId: number, handle: string) {
-    connect.mutate(userId, {
-      onSuccess: () => {
-        setRequested((prev) => new Set(prev).add(userId))
-        setLastInvited(handle)
-      },
-    })
+    connect.mutate({ userId, handle, invite: inviteToChallenge })
   }
 
   const rows = results ?? []
@@ -1073,6 +1224,19 @@ function FindPeople({ de, hasCrew, onChallenge }: { de: boolean; hasCrew: boolea
           </button>
         )}
       </div>
+
+      {/* Crew-challenge entry is opt-in — unchecked by default */}
+      <label className="flex items-center gap-2.5 rounded-[12px]" style={{ background: 'var(--color-surface-2)', padding: '9px 12px', cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={inviteToChallenge}
+          onChange={(e) => setInviteToChallenge(e.target.checked)}
+          style={{ accentColor: 'var(--color-accent)', width: 15, height: 15, flexShrink: 0 }}
+        />
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>
+          {de ? 'Auch zur Crew-Challenge einladen' : 'Also invite to the crew challenge'}
+        </span>
+      </label>
 
       {/* Confirmation — invite sent, closes the loop with the accept step */}
       {lastInvited && (
@@ -1106,7 +1270,7 @@ function FindPeople({ de, hasCrew, onChallenge }: { de: boolean; hasCrew: boolea
           </p>
         ) : (
           rows.map((r) => (
-            <PersonRow key={r.user_id} r={r} de={de} requested={requested.has(r.user_id)} onConnect={() => onConnect(r.user_id, r.handle)} connecting={connect.isPending && connect.variables === r.user_id} />
+            <PersonRow key={r.user_id} r={r} de={de} requested={requested.has(r.user_id)} onConnect={() => onConnect(r.user_id, r.handle)} connecting={connect.isPending && connect.variables?.userId === r.user_id} />
           ))
         )}
       </div>
@@ -1124,11 +1288,6 @@ function FindPeople({ de, hasCrew, onChallenge }: { de: boolean; hasCrew: boolea
           </span>
         </button>
       )}
-      <p style={{ fontSize: 11, color: 'var(--color-muted)', lineHeight: 1.4 }}>
-        {de
-          ? 'Jeder, den du hinzufügst, tritt bei einer Crew-Challenge automatisch mit an.'
-          : 'Everyone you add competes together in a crew challenge — no per-person setup.'}
-      </p>
     </div>
   )
 }
@@ -1161,15 +1320,18 @@ function PersonRow({ r, de, requested, onConnect, connecting }: {
 }
 
 function ChallengeRow({ icon: Icon, color, name, sub, pct, progress, detail, de, onLeave }: { icon: typeof Trophy; color: string; name: string; sub: string; pct: number; progress: string; detail: string; de: boolean; onLeave: () => void }) {
+  // No-guilt: a 0% early in the week is a neutral fact, not a failure — the
+  // challenge color only appears once there is actual progress to color.
+  const pctColor = pct > 0 ? color : 'var(--color-muted)'
   return (
     <div className="hover-card rounded-[14px] flex flex-col gap-2.5" style={{ background: 'var(--color-surface-2)', padding: 14 }}>
       <div className="flex items-center gap-2.5">
-        <span className="grid place-items-center rounded-[11px] shrink-0" style={{ width: 38, height: 38, background: 'var(--color-paper)' }}><Icon size={20} style={{ color }} /></span>
+        <span className="grid place-items-center rounded-[11px] shrink-0" style={{ width: 38, height: 38, background: 'var(--color-paper)' }}><Icon size={20} style={{ color: pctColor }} /></span>
         <div className="flex flex-col gap-0.5 flex-1 min-w-0">
           <span className="num-display truncate" style={{ fontSize: 14, color: 'var(--color-ink)' }}>{name}</span>
           <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{sub}</span>
         </div>
-        <span className="num-display" style={{ fontSize: 13, color }}>{pct}%</span>
+        <span className="num-display" style={{ fontSize: 13, color: pctColor }}>{pct}%</span>
         <button type="button" onClick={onLeave} className="inline-flex items-center gap-1 rounded-full shrink-0" style={{ background: 'var(--color-paper)', padding: '5px 10px' }}>
           <X size={12} style={{ color: 'var(--color-muted)' }} />
           <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'Verlassen' : 'Leave'}</span>
@@ -1181,7 +1343,7 @@ function ChallengeRow({ icon: Icon, color, name, sub, pct, progress, detail, de,
       <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-ink-2)' }}>{progress}</span>
       {/* Hover: progress detail */}
       <div className="hover-reveal">
-        <span style={{ fontSize: 11, fontWeight: 600, color }}>{detail}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: pctColor }}>{detail}</span>
       </div>
     </div>
   )
@@ -1373,7 +1535,9 @@ function FeedStat({ v, u }: { v: string; u: string }) {
   )
 }
 
-function EmptyCrew({ de, note, onFind }: { de: boolean; note?: string; onFind?: () => void }) {
+// The ONE empty-crew card — create a crew here; finding riders happens in the
+// Find-People card directly below (no duplicate stacked CTAs).
+function EmptyCrew({ de }: { de: boolean }) {
   const createCrew = useCreateCrew()
   const [name, setName] = useState('')
   const trimmed = name.trim()
@@ -1386,7 +1550,7 @@ function EmptyCrew({ de, note, onFind }: { de: boolean; note?: string; onFind?: 
   return (
     <div className="rounded-[24px] p-6 flex flex-col items-center gap-3.5 text-center" style={cardStyle}>
       <span className="grid place-items-center rounded-full" style={{ width: 48, height: 48, ...innerStyle }}><Users size={24} style={{ color: 'var(--color-muted)' }} /></span>
-      <p style={{ fontSize: 14, color: 'var(--color-ink-2)', maxWidth: '32ch' }}>{note ?? (de ? 'Noch keine Crew — erstelle eine und lade Fahrer ein, um Duelle und die Rangliste freizuschalten.' : 'No crew yet — create one and invite riders to unlock battles and the leaderboard.')}</p>
+      <p style={{ fontSize: 14, color: 'var(--color-ink-2)', maxWidth: '32ch' }}>{de ? 'Noch keine Crew — erstelle eine und lade Fahrer ein, um Duelle und die Rangliste freizuschalten.' : 'No crew yet — create one and invite riders to unlock battles and the leaderboard.'}</p>
 
       {/* Create crew */}
       <div className="flex items-center gap-2 rounded-full w-full" style={{ background: 'var(--color-surface-2)', padding: '6px 6px 6px 14px', maxWidth: 340 }}>
@@ -1408,10 +1572,25 @@ function EmptyCrew({ de, note, onFind }: { de: boolean; note?: string; onFind?: 
       {createCrew.isError && (
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Erstellen fehlgeschlagen — versuch es nochmal.' : 'Could not create — try again.'}</span>
       )}
+    </div>
+  )
+}
 
-      {onFind && (
-        <button type="button" onClick={onFind} className="inline-flex items-center gap-1.5 rounded-full px-4 py-2" style={{ background: 'transparent', border: '1px solid var(--color-rule)' }}>
-          <UserPlus size={15} style={{ color: 'var(--color-ink-2)' }} /> <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Fahrer finden' : 'Find riders'}</span>
+// Inviting duel empty state — no auto-created losing scoreboard. The self-duel
+// starts only when the athlete feels like racing themself.
+function DuelEmptyState({ de, canStart, onStart }: { de: boolean; canStart: boolean; onStart: () => void }) {
+  return (
+    <div className="rounded-[24px] p-6 flex flex-col items-center gap-3.5 text-center" style={cardStyle}>
+      <span className="grid place-items-center rounded-full" style={{ width: 48, height: 48, ...innerStyle }}>
+        <Swords size={22} style={{ color: 'var(--color-muted)' }} />
+      </span>
+      <p style={{ fontSize: 14, color: 'var(--color-ink-2)', maxWidth: '34ch' }}>
+        {de ? 'Starte ein Duell, wenn dir nach einem Wettkampf mit dir selbst ist.' : 'Start a duel when you feel like racing yourself.'}
+      </p>
+      {canStart && (
+        <button type="button" onClick={onStart} className="inline-flex items-center gap-1.5 rounded-full px-4 py-2" style={{ background: 'transparent', border: '1px solid var(--color-rule)' }}>
+          <Swords size={15} style={{ color: 'var(--color-ink-2)' }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Duell starten' : 'Start a duel'}</span>
         </button>
       )}
     </div>

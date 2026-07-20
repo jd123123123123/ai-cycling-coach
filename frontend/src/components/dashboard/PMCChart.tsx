@@ -7,6 +7,8 @@ import type { PMCEntry } from '../../api/dashboard'
 import { prefersReducedMotion } from '../../utils/motion'
 import Sparkline from './Sparkline'
 import { useLocale } from '../../contexts/LocaleContext'
+import { useLanguage } from '../../contexts/LanguageContext'
+import { metricLabel } from '../../utils/metricLabel'
 
 type Sport = 'total' | 'cycling' | 'running' | 'gym'
 
@@ -344,6 +346,8 @@ function HoverTooltip({
   left: number
   top: number
 }) {
+  const { locale } = useLocale()
+  const { language } = useLanguage()
   // Max-width tooltip card. We nudge it right/above the cursor and cap
   // it so long narratives wrap within ~280px for readability.
   const OFFSET_X = 14
@@ -372,9 +376,9 @@ function HoverTooltip({
         {dateLabel}
       </div>
       <div className="flex gap-3 num-mono text-[12px]" style={{ color: 'var(--color-ink)' }}>
-        <span><span style={{ color: C_CTL }}>●</span> CTL {entry.ctl.toFixed(1)}</span>
-        <span><span style={{ color: C_ATL }}>●</span> ATL {entry.atl.toFixed(1)}</span>
-        <span><span style={{ color: C_TSB }}>●</span> TSB {(tsb >= 0 ? '+' : '') + tsb.toFixed(1)}</span>
+        <span><span style={{ color: C_CTL }}>●</span> {metricLabel('ctl', language, locale)} {entry.ctl.toFixed(1)}</span>
+        <span><span style={{ color: C_ATL }}>●</span> {metricLabel('atl', language, locale)} {entry.atl.toFixed(1)}</span>
+        <span><span style={{ color: C_TSB }}>●</span> {metricLabel('tsb', language, locale)} {(tsb >= 0 ? '+' : '') + tsb.toFixed(1)}</span>
       </div>
       {narrative && (
         <p
@@ -397,6 +401,8 @@ function HoverTooltip({
 export default function PMCChart() {
   const { t, locale } = useLocale()
   const de = locale === 'de'
+  const { language } = useLanguage()
+  const simple = language === 'simple'
   const [sport, setSport] = useState<Sport>('total')
   const { data, isLoading, isError, refetch } = usePMC(90)
 
@@ -481,9 +487,9 @@ export default function PMCChart() {
           }}
         >
           <SummaryStat
-            label={t('fitness_ctl')}
+            label={simple ? metricLabel('ctl', 'simple', locale) : t('fitness_ctl')}
             value={latest.ctl.toFixed(1)}
-            unit="TSS/d"
+            unit={simple ? (de ? 'pro Tag' : 'per day') : 'TSS/d'}
             trend={
               ctlDelta == null
                 ? undefined
@@ -499,9 +505,9 @@ export default function PMCChart() {
             ) : <div style={{ height: 0 }} />}
           </SummaryStat>
           <SummaryStat
-            label={t('fatigue_atl')}
+            label={simple ? metricLabel('atl', 'simple', locale) : t('fatigue_atl')}
             value={latest.atl.toFixed(1)}
-            unit="TSS/d"
+            unit={simple ? (de ? 'pro Tag' : 'per day') : 'TSS/d'}
             accent={C_ATL}
           >
             {/* 12-day ATL sparkline — amber is caution-semantic for fatigue, not decoration */}
@@ -512,7 +518,7 @@ export default function PMCChart() {
             ) : <div style={{ height: 0 }} />}
           </SummaryStat>
           <SummaryStat
-            label={t('form_tsb')}
+            label={simple ? metricLabel('tsb', 'simple', locale) : t('form_tsb')}
             value={(latest.tsb >= 0 ? '+' : '') + latest.tsb.toFixed(1)}
             trend={form.label}
             accent={C_TSB}

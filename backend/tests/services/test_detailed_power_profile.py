@@ -109,3 +109,23 @@ async def test_detailed_profile_query_excludes_run_streams():
     out = await compute_detailed_power_profile(db, user_id=1)
     assert out is None
     assert "mmp_curve IS NOT NULL" in captured[0]
+
+
+class TestPhenotypeLocale:
+    """P1-6: `lang` flows through the profile builder into the phenotype prose."""
+
+    def _rides(self):
+        return TestBuildPowerProfile._rides(TestBuildPowerProfile())
+
+    def test_lang_de_localizes_phenotype_prose(self):
+        en = build_power_profile(self._rides(), weight_kg=70.0)
+        de = build_power_profile(self._rides(), weight_kg=70.0, lang="de")
+        assert en["phenotype"] is not None and de["phenotype"] is not None
+        assert de["phenotype"]["key"] == en["phenotype"]["key"]  # machine-stable
+        assert de["phenotype"]["note"] != en["phenotype"]["note"]
+
+    def test_default_stays_english(self):
+        prof = build_power_profile(self._rides(), weight_kg=70.0)
+        # This fixture's flat 1.3× reserves lean VO2 → the Pursuiter line, in English.
+        assert prof["phenotype"]["type"] == "Pursuiter"
+        assert "VO2" in prof["phenotype"]["note"]

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useLocale } from '../contexts/LocaleContext'
 import { apiClient } from '../api/client'
 
 export interface PowerProfile {
@@ -52,9 +53,10 @@ export interface PowerProfile {
 }
 
 export function usePowerProfile() {
+  const { locale } = useLocale()
   return useQuery<PowerProfile>({
-    queryKey: ['analytics', 'power-profile'],
-    queryFn: async () => (await apiClient.get<PowerProfile>('/analytics/power-profile')).data,
+    queryKey: ['analytics', 'power-profile', locale],
+    queryFn: async () => (await apiClient.get<PowerProfile>(`/analytics/power-profile?lang=${locale}`)).data,
   })
 }
 

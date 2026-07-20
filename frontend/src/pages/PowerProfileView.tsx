@@ -12,6 +12,16 @@ import DashboardShell from '../components/dashboard/DashboardShell'
 import DashboardSection from '../components/dashboard/DashboardSection'
 import { usePowerProfile, useRideCounts } from '../hooks/usePowerProfile'
 import { useLocale } from '../contexts/LocaleContext'
+import { useLanguage } from '../contexts/LanguageContext'
+import { metricLabel, type GlossaryKey } from '../utils/metricLabel'
+import { useGlossary } from '../components/ui/GlossarySheet'
+
+// Static dotted underline — the tap-to-explain affordance (no hover-only cues).
+const TAPPABLE_LABEL = {
+  textDecoration: 'underline dotted',
+  textUnderlineOffset: 3,
+  textDecorationColor: 'var(--color-muted)',
+} as const
 
 const CARD = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', borderRadius: 24 } as const
 
@@ -30,9 +40,15 @@ export default function PowerProfileView() {
   const { locale } = useLocale()
   const de = locale === 'de'
   const navigate = useNavigate()
+  const { language } = useLanguage()
+  const glossary = useGlossary()
   const [unit, setUnit] = useState<'w' | 'wkg'>('w')
   const { data } = usePowerProfile()
   const { data: counts } = useRideCounts()
+
+  // Locale-aware percent formatting — audit shows DE '5,8 %' / EN '5.8%'.
+  const fmtPct = (v: number) =>
+    de ? `${v.toFixed(1).replace('.', ',')} %` : `${v.toFixed(1)}%`
 
   const bars = useMemo(() => {
     if (!data) return []
@@ -149,9 +165,15 @@ export default function PowerProfileView() {
             </div>
             <div className="flex items-baseline gap-2 flex-wrap">
               <span className="num-display" style={{ fontSize: 40, color: 'var(--color-ink)' }}>{Math.round(threshold)}</span>
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-muted)' }}>
-                W · {isManual ? 'FTP' : de ? 'FTP (geschätzt)' : 'FTP (estimated)'}
-              </span>
+              <button
+                type="button"
+                onClick={() => glossary.open('ftp', `${Math.round(threshold)} W`)}
+                style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-muted)', background: 'none', border: 0, padding: '10px 0', cursor: 'pointer', ...TAPPABLE_LABEL }}
+              >
+                W · {isManual
+                  ? metricLabel('ftp', language, locale)
+                  : de ? `${metricLabel('ftp', language, locale)} (geschätzt)` : `${metricLabel('ftp', language, locale)} (estimated)`}
+              </button>
               {thresholdWkg != null && (
                 <span className="num-mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-recovery)' }}>{thresholdWkg.toFixed(1)} W/kg</span>
               )}
@@ -172,17 +194,35 @@ export default function PowerProfileView() {
                 <div className="flex flex-col gap-3">
                   <div className="flex">
                     {([
-                      { v: data?.cp_watts != null ? `${Math.round(data.cp_watts)} W` : '—', l: 'CP', hint: de ? 'Dauerleistung' : 'sustainable' },
-                      { v: data?.w_prime_j != null ? `${(data.w_prime_j / 1000).toFixed(1)} kJ` : '—', l: 'W′', hint: de ? 'Streichhölzer' : 'matchbook' },
-                      { v: data?.eftp_watts != null ? `${Math.round(data.eftp_watts)} W` : '—', l: 'eFTP', hint: de ? 'aus Fahrten' : 'from rides' },
-                      { v: data?.r_squared != null ? `${Math.round(data.r_squared * 100)}%` : '—', l: de ? 'Modell-Fit' : 'model fit', hint: 'R²' },
-                    ]).map((s, i) => (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-0.5" style={i > 0 ? { borderLeft: '1px solid var(--color-rule)' } : undefined}>
-                        <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{s.v}</span>
-                        <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>{s.l}</span>
-                        <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{s.hint}</span>
-                      </div>
-                    ))}
+                      { v: data?.cp_watts != null ? `${Math.round(data.cp_watts)} W` : '—', l: metricLabel('cp', language, locale), hint: de ? 'Dauerleistung' : 'sustainable', g: 'cp' as GlossaryKey, has: data?.cp_watts != null },
+                      { v: data?.w_prime_j != null ? `${(data.w_prime_j / 1000).toFixed(1)} kJ` : '—', l: metricLabel('w_prime', language, locale), hint: de ? 'Streichhölzer' : 'matchbook', g: 'w_prime' as GlossaryKey, has: data?.w_prime_j != null },
+                      { v: data?.eftp_watts != null ? `${Math.round(data.eftp_watts)} W` : '—', l: metricLabel('eftp', language, locale), hint: de ? 'aus Fahrten' : 'from rides', g: 'eftp' as GlossaryKey, has: data?.eftp_watts != null },
+                      { v: data?.r_squared != null ? `${Math.round(data.r_squared * 100)}%` : '—', l: de ? 'Modell-Fit' : 'model fit', hint: 'R²', g: null, has: false },
+                    ] as Array<{ v: string; l: string; hint: string; g: GlossaryKey | null; has: boolean }>).map((s, i) => {
+                      const inner = (
+                        <>
+                          <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{s.v}</span>
+                          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--color-ink-2)', ...(s.g ? TAPPABLE_LABEL : null) }}>{s.l}</span>
+                          <span className="eyebrow" style={{ fontSize: 9, color: 'var(--color-muted)' }}>{s.hint}</span>
+                        </>
+                      )
+                      const edge = i > 0 ? '1px solid var(--color-rule)' : undefined
+                      return s.g ? (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => glossary.open(s.g as GlossaryKey, s.has ? s.v : null)}
+                          className="flex-1 flex flex-col items-center gap-0.5"
+                          style={{ background: 'none', border: 0, borderLeft: edge, padding: 0, minHeight: 44, cursor: 'pointer' }}
+                        >
+                          {inner}
+                        </button>
+                      ) : (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-0.5" style={{ borderLeft: edge }}>
+                          {inner}
+                        </div>
+                      )
+                    })}
                   </div>
                   <p style={{ fontSize: 11.5, color: 'var(--color-muted)', lineHeight: 1.4 }}>
                     {de
@@ -229,12 +269,19 @@ export default function PowerProfileView() {
           </div>
         )}
 
-        {/* ── Durability tiles (.pen c5cMZ) ── */}
+        {/* ── Durability tiles (.pen c5cMZ) — tappable chips → glossary sheet ── */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5 p-4" style={CARD}>
+          <button
+            type="button"
+            onClick={() => glossary.open('durability', data?.durability_best_pct != null ? `${data.durability_best_pct > 0 ? '+' : ''}${Math.round(data.durability_best_pct)} %` : null)}
+            className="flex flex-col items-start gap-1.5 p-4 text-left"
+            style={{ ...CARD, minHeight: 44, cursor: 'pointer' }}
+          >
             <div className="flex items-center gap-1.5">
               <BatteryCharging size={14} style={{ color: 'var(--color-recovery)' }} />
-              <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'HALTBARKEIT' : 'DURABILITY'}</span>
+              <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--color-muted)', ...TAPPABLE_LABEL }}>
+                {metricLabel('durability', language, locale).toUpperCase()}
+              </span>
             </div>
             <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>
               {data?.durability_best_pct != null ? `${data.durability_best_pct > 0 ? '+' : ''}${Math.round(data.durability_best_pct)}%` : '—'}
@@ -242,11 +289,18 @@ export default function PowerProfileView() {
             <span style={{ fontSize: 10.5, color: 'var(--color-muted)', lineHeight: 1.35 }}>
               {de ? 'Bester Power-Abfall spät in einer Fahrt' : 'Best late-ride power drop-off'}
             </span>
-          </div>
-          <div className="flex flex-col gap-1.5 p-4" style={CARD}>
+          </button>
+          <button
+            type="button"
+            onClick={() => glossary.open('decoupling', data?.avg_decoupling_pct != null ? fmtPct(data.avg_decoupling_pct) : null)}
+            className="flex flex-col items-start gap-1.5 p-4 text-left"
+            style={{ ...CARD, minHeight: 44, cursor: 'pointer' }}
+          >
             <div className="flex items-center gap-1.5">
               <Percent size={14} style={{ color: 'var(--color-amber)' }} />
-              <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'ENTKOPPLUNG' : 'DECOUPLING'}</span>
+              <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--color-muted)', ...TAPPABLE_LABEL }}>
+                {metricLabel('decoupling', language, locale).toUpperCase()}
+              </span>
             </div>
             <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>
               {data?.avg_decoupling_pct != null ? `${data.avg_decoupling_pct.toFixed(1)}%` : '—'}
@@ -254,9 +308,10 @@ export default function PowerProfileView() {
             <span style={{ fontSize: 10.5, color: 'var(--color-muted)', lineHeight: 1.35 }}>
               {de ? 'Ø Puls-Drift — unter 5% ist stark aerob' : 'Avg HR drift — under 5% means a deep aerobic base'}
             </span>
-          </div>
+          </button>
         </div>
       </div>
+      {glossary.sheet}
     </DashboardShell>
   )
 }

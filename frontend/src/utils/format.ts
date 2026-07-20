@@ -1,11 +1,57 @@
 /**
- * format.ts — shared number-presentation utilities for the 06.2 token system.
+ * format.ts — shared number- and date-presentation utilities.
  *
  * Rules:
  * - Typographic minus sign U+2212 (−) is used instead of ASCII hyphen-minus (-).
  *   This is non-negotiable per research doc §2.4.4 (tabular-friendly, visually distinct).
- * - All functions are pure and have no external dependencies.
+ * - Number helpers are pure with no external dependencies; date helpers are the
+ *   ONE canonical locale-aware path (date-fns + de locale) — never call
+ *   date-fns format() with an EN-literal pattern in a component (audit P1-6).
  */
+import { format as dateFnsFormat, parseISO as dateFnsParseISO } from 'date-fns'
+import { de as dateFnsDe } from 'date-fns/locale'
+import type { Locale as UiLocale } from '../i18n/strings'
+
+function toDate(d: Date | string | number): Date {
+  return typeof d === 'string' ? dateFnsParseISO(d) : new Date(d)
+}
+
+/**
+ * formatDate(d, pattern, locale) — THE canonical locale-aware date formatter.
+ * Routes through date-fns with the German locale when locale === 'de', so a
+ * German user never reads "Monday, 20. July" chrome.
+ *
+ * @example
+ * formatDate(new Date(2026, 6, 20), 'EEEE, MMM d', 'en')   // "Monday, Jul 20"
+ * formatDate(new Date(2026, 6, 20), 'EEEE, d. MMM', 'de')  // "Montag, 20. Juli"
+ * formatDate('2026-07-20', 'EEEEEE', 'de')                 // "Mo"  (day-strip initial)
+ * formatDate('not-a-date', 'EEE')                          // "—"   (honest dash)
+ */
+export function formatDate(
+  d: Date | string | number,
+  pattern: string,
+  locale: UiLocale = 'en',
+): string {
+  const date = toDate(d)
+  if (Number.isNaN(date.getTime())) return '—'
+  return dateFnsFormat(date, pattern, locale === 'de' ? { locale: dateFnsDe } : undefined)
+}
+
+/**
+ * formatTime24(d, locale) — locale-appropriate clock time.
+ * German gets 24-hour ("10:21" — never "10:21 AM"); English keeps 12-hour.
+ *
+ * @example
+ * formatTime24(new Date(2026, 6, 20, 14, 9), 'de') // "14:09"
+ * formatTime24(new Date(2026, 6, 20, 14, 9), 'en') // "2:09 PM"
+ */
+export function formatTime24(d: Date | string | number, locale: UiLocale = 'en'): string {
+  const date = toDate(d)
+  if (Number.isNaN(date.getTime())) return '—'
+  return locale === 'de'
+    ? dateFnsFormat(date, 'HH:mm', { locale: dateFnsDe })
+    : dateFnsFormat(date, 'h:mm a')
+}
 
 /**
  * formatSigned(n, digits=0) — explicit sign, typographic minus (U+2212), tabular-friendly.

@@ -4,6 +4,7 @@ See docs/superpowers/specs/2026-05-13-crew-backend-design.md for the
 end-to-end design. This module ships Phase 1 (solo + pair).
 """
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from secrets import token_urlsafe
 from typing import Annotated
@@ -20,6 +21,7 @@ from app.models.crew_challenge import CrewChallenge
 from app.models.crew_nudge import CrewNudge
 from app.models.user import User
 from app.schemas.crew import (
+    AcceptOptions,
     CrewCreate,
     CrewInviteCreate,
     CrewInviteRead,
@@ -37,11 +39,14 @@ from app.schemas.crew_challenge import (
     ChallengeRead,
 )
 from app.services.crew_score import (
+    CHALLENGE_OPT_IN_ROLE,
     display_handle,
     _handle_from_email,
     challenge_value_for_user,
     crew_duel,
     crew_standings_window,
+    member_in_challenge,
+    personal_week_targets,
 )
 
 router = APIRouter(prefix="/crews", tags=["crews"])
@@ -137,6 +142,20 @@ def _monday_of(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
+# Scaffolding/seed accounts must never appear in people-suggestions.
+# Matches local-parts like test@, user@, userb@, user01@ … plus anything on
+# the reserved example.com domain (test@test.com, test01@example.com,
+# userb@example.com are live seeds).
+_TEST_ACCOUNT_LOCAL_RE = re.compile(r"^(test|user[a-z]?\d*)@", re.IGNORECASE)
+
+
+def _is_test_account(email: str | None) -> bool:
+    e = (email or "").strip().lower()
+    if not e:
+        return False
+    return bool(_TEST_ACCOUNT_LOCAL_RE.match(e)) or e.endswith("@example.com")
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Endpoints
 # ──────────────────────────────────────────────────────────────────────
@@ -160,6 +179,8 @@ async def discover_members(
     ql = (q or "").lower().strip()
     out: list[DiscoverMember] = []
     for u in rows:
+        if _is_test_account(u.email):
+            continue  # scaffolding users never show up as suggestions
         handle = display_handle(u)
         if ql and ql not in handle.lower() and ql not in (u.email or "").lower():
             continue
@@ -226,7 +247,12 @@ async def get_my_crew(
     members = await _crew_member_rows(db, crew.id)
     pending = await _crew_pending_invites(db, crew.id)
     return CrewMineResponse(
-        crew=CrewRead(id=crew.id, name=crew.name, owner_user_id=crew.owner_user_id),
+        crew=CrewRead(
+            id=crew.id,
+            name=crew.name,
+            owner_user_id=crew.owner_user_id,
+            member_count=len(members),
+        ),
         members=_members_to_read(members),
         pending_invites=_invites_to_read(pending),
     )
@@ -257,7 +283,12 @@ async def create_crew(
 
     members = await _crew_member_rows(db, crew.id)
     return CrewMineResponse(
-        crew=CrewRead(id=crew.id, name=crew.name, owner_user_id=crew.owner_user_id),
+        crew=CrewRead(
+            id=crew.id,
+            name=crew.name,
+            owner_user_id=crew.owner_user_id,
+            member_count=len(members),
+        ),
         members=_members_to_read(members),
         pending_invites=[],
     )
@@ -395,6 +426,7 @@ async def accept_invite(
     token: str,
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    options: AcceptOptions | None = None,
 ) -> CrewMineResponse:
     invite = (
         await db.execute(select(CrewInvite).where(CrewInvite.token == token))
@@ -428,8 +460,16 @@ async def accept_invite(
             detail={"code": "already_in_crew", "msg": "leave your current crew first"},
         )
 
+    # Joining a crew never silently enters the member into pre-existing
+    # challenges: that's an explicit opt-in (P1-10). The opt-in is stored as
+    # the CHALLENGE_OPT_IN_ROLE value in the existing role column.
+    role = (
+        CHALLENGE_OPT_IN_ROLE
+        if (options is not None and options.join_challenges)
+        else "member"
+    )
     db.add(
-        CrewMembership(crew_id=invite.crew_id, user_id=current_user.id, role="member")
+        CrewMembership(crew_id=invite.crew_id, user_id=current_user.id, role=role)
     )
     invite.status = "accepted"
     invite.accepted_at = datetime.now(timezone.utc)
@@ -444,7 +484,10 @@ async def accept_invite(
     pending = await _crew_pending_invites(db, invite.crew_id)
     return CrewMineResponse(
         crew=CrewRead(
-            id=crew.id, name=crew.name, owner_user_id=crew.owner_user_id
+            id=crew.id,
+            name=crew.name,
+            owner_user_id=crew.owner_user_id,
+            member_count=len(members),
         ) if crew else None,
         members=_members_to_read(members),
         pending_invites=_invites_to_read(pending),
@@ -603,9 +646,12 @@ async def accept_incoming(
     invite_id: int,
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    options: AcceptOptions | None = None,
 ) -> CrewMineResponse:
     """Accept an in-app invite addressed to me → join the inviter's crew so we
-    can both see each other."""
+    can both see each other. Pre-existing crew challenges are opt-in via
+    `options.join_challenges` (default false) — joining a crew never silently
+    enters you into a scoreboard."""
     invite = await _resolve_incoming(db, invite_id, current_user)
     exp = invite.expires_at if invite.expires_at.tzinfo else invite.expires_at.replace(tzinfo=timezone.utc)
     if exp < datetime.now(timezone.utc):
@@ -615,7 +661,12 @@ async def accept_incoming(
             status_code=422,
             detail={"code": "already_in_crew", "msg": "leave your current crew first"},
         )
-    db.add(CrewMembership(crew_id=invite.crew_id, user_id=current_user.id, role="member"))
+    role = (
+        CHALLENGE_OPT_IN_ROLE
+        if (options is not None and options.join_challenges)
+        else "member"
+    )
+    db.add(CrewMembership(crew_id=invite.crew_id, user_id=current_user.id, role=role))
     invite.status = "accepted"
     invite.accepted_at = datetime.now(timezone.utc)
     await db.commit()
@@ -623,7 +674,12 @@ async def accept_incoming(
     members = await _crew_member_rows(db, invite.crew_id)
     pending = await _crew_pending_invites(db, invite.crew_id)
     return CrewMineResponse(
-        crew=CrewRead(id=crew.id, name=crew.name, owner_user_id=crew.owner_user_id) if crew else None,
+        crew=CrewRead(
+            id=crew.id,
+            name=crew.name,
+            owner_user_id=crew.owner_user_id,
+            member_count=len(members),
+        ) if crew else None,
         members=_members_to_read(members),
         pending_invites=_invites_to_read(pending),
     )
@@ -854,6 +910,16 @@ async def _serialize_challenge(
     rows = await _crew_member_rows(db, ch.crew_id)
     participants: list[ChallengeParticipant] = []
     for (_m, u) in rows:
+        # No auto-entry (P1-10): only the creator, members who were in the
+        # crew when the challenge was made, and explicit opt-ins participate.
+        if not member_in_challenge(
+            member_user_id=u.id,
+            role=_m.role,
+            joined_at=_m.joined_at,
+            creator_user_id=ch.creator_user_id,
+            challenge_created_at=ch.created_at,
+        ):
+            continue
         value = await challenge_value_for_user(
             db, u.id, ch.starts_on, ch.ends_on, ch.metric
         )
@@ -918,12 +984,34 @@ async def create_challenge(
             detail={"code": "bad_dates", "msg": "ends_on must be on or after starts_on"},
         )
 
+    # Default targets scale to the creator's OWN history (P1-10) — never a
+    # fixed 800-TSS / 7-days wall. Window-proportional for custom periods.
+    target = payload.target
+    if target is None:
+        if payload.metric not in ("tss", "active_days"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "missing_target",
+                    "msg": f"metric '{payload.metric}' needs an explicit target",
+                },
+            )
+        targets = await personal_week_targets(
+            db, current_user.id, _monday_of(starts_on)
+        )
+        window_days = (ends_on - starts_on).days + 1
+        scale = window_days / 7.0
+        if payload.metric == "tss":
+            target = float(max(1, round(targets["weekly_target_tss"] * scale)))
+        else:  # active_days
+            target = float(max(1, round(targets["active_days_target"] * scale)))
+
     challenge = CrewChallenge(
         crew_id=membership.crew_id,
         creator_user_id=current_user.id,
         name=payload.name.strip(),
         metric=payload.metric,
-        target=payload.target,
+        target=target,
         period=payload.period,
         starts_on=starts_on,
         ends_on=ends_on,

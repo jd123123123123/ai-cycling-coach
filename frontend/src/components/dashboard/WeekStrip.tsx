@@ -23,7 +23,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { ActivityRead } from '../../api/dashboard'
-import { formatHours, formatDelta } from '../../utils/format'
+import { formatDate, formatHours, formatDelta } from '../../utils/format'
 import { toneFromPct, tokenForTone } from '../../utils/delta'
 
 interface DayCell {
@@ -201,7 +201,7 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
               ? Math.max(BAR_MIN_H, (cell.tss / maxTss) * BAR_MAX_H)
               : 0
             const { bg } = intensityColor(hasSession ? cell.tss : 0)
-            const dayLetter = format(cell.date, 'EEEEE')
+            const dayLetter = formatDate(cell.date, 'EEEEE', locale)
             return (
               <button
                 key={i}
@@ -330,7 +330,7 @@ export default function WeekStrip({ variant = 'full' }: WeekStripProps = {}) {
       <div className="grid grid-cols-7 gap-1.5 mt-4">
         {cells.map((cell, i) => {
           const { bg, border } = intensityColor(cell.isFuture ? 0 : cell.tss)
-          const dayLetter = format(cell.date, 'EEEEE') // M, T, W, T, F, S, S
+          const dayLetter = formatDate(cell.date, 'EEEEE', locale) // Mo Di Mi… in DE
           const dayNum = format(cell.date, 'd')
           return (
             <div

@@ -54,6 +54,17 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     }
   }, [locale])
 
+  // WCAG 3.1.1: the document language must match the UI language. index.html
+  // ships a neutral default; this binds <html lang> to the active locale on
+  // init AND on every change (screen readers + hyphenation follow it).
+  useEffect(() => {
+    try {
+      document.documentElement.lang = locale
+    } catch {
+      /* non-DOM environment (tests) — ignore */
+    }
+  }, [locale])
+
   const setLocale = useCallback((l: Locale) => setLocaleState(l), [])
   const t = useCallback((key: StringKey) => tFor(locale, key), [locale])
 

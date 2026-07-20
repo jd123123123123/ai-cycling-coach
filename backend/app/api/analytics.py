@@ -54,6 +54,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 async def get_power_profile(
     _user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    lang: str = "en",
 ) -> dict:
     """Rich stream-derived power profile (dense MMP curve, peak powers, W/kg,
     durability, decoupling). Cycling-only and outlier-sanitized (audit P0-1).
@@ -61,8 +62,10 @@ async def get_power_profile(
     manual FTP when set, else the sanitized model eFTP), `threshold_source`
     ('manual'|'model'), `model_valid` (CP/W′ display allowed) and `confidence`
     (0-1). `{available: false}` when no power streams exist yet so the UI can
-    render an empty state."""
-    profile = await compute_detailed_power_profile(db, _user.id)
+    render an empty state. `?lang=de` localizes the athlete-facing phenotype
+    prose (P1-6); `phenotype.key` stays locale-stable."""
+    lang = "de" if lang.lower().startswith("de") else "en"
+    profile = await compute_detailed_power_profile(db, _user.id, lang=lang)
     if profile is None:
         return {"available": False}
     return profile

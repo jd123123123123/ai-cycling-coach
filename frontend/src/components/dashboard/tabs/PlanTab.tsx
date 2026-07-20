@@ -19,6 +19,7 @@ import { detectWorkoutSport } from '../../../api/coach'
 import type { ResolvedBlock, WorkoutSport } from '../../../api/coach'
 import type { DayPlan } from '../../../api/weeks'
 import { daysToEvent } from '../../../utils/loadMetrics'
+import { formatDate } from '../../../utils/format'
 
 type Sport = 'bike' | 'run' | 'all'
 type ZoneMode = 'power' | 'pace' | 'hr'
@@ -59,6 +60,27 @@ const COGGAN = [
   { z: 'Z7', name_en: 'Neuromuscular', name_de: 'Neuromuskulär', lo: 1.51, hi: 0, color: 'var(--color-exercise)' },
 ]
 
+// Localized phase words for the raw meso phase key ("base1" → "Grundlage 1").
+const PHASE_WORDS: Record<string, { en: string; de: string }> = {
+  base: { en: 'Base', de: 'Grundlage' },
+  build: { en: 'Build', de: 'Aufbau' },
+  peak: { en: 'Peak', de: 'Peak' },
+  taper: { en: 'Taper', de: 'Taper' },
+  race: { en: 'Race', de: 'Rennen' },
+}
+
+// Localized session-category labels (plan-day category → chip/meta word) so a
+// German user never reads "Sweet spot" chrome under a Lauf row.
+const CAT_LABEL: Record<string, { en: string; de: string }> = {
+  recovery: { en: 'Recovery', de: 'Erholung' },
+  endurance: { en: 'Endurance', de: 'Grundlage' },
+  tempo: { en: 'Tempo', de: 'Tempo' },
+  sweet_spot: { en: 'Sweet Spot', de: 'Sweet Spot' },
+  threshold: { en: 'Threshold', de: 'Schwelle' },
+  vo2: { en: 'VO₂max', de: 'VO₂max' },
+  rest: { en: 'Rest', de: 'Ruhetag' },
+}
+
 function zoneBarColor(z: number): string {
   if (z <= 1) return 'var(--color-surface-3)'
   if (z <= 3) return 'var(--color-strain)'
@@ -68,7 +90,7 @@ function zoneBarColor(z: number): string {
 }
 
 export default function PlanTab() {
-  const { locale } = useLocale()
+  const { locale, t } = useLocale()
   const de = locale === 'de'
   const [sport, setSport] = useState<Sport>('bike')
   const [zoneMode, setZoneMode] = useState<ZoneMode>('power')
@@ -194,7 +216,19 @@ export default function PlanTab() {
     .filter((a) => sportMatch(a.sport ?? '') && parseISO(a.started_at ?? a.date ?? '') >= weekStart)
     .reduce((s, a) => s + (a.tss ?? 0), 0), [acts, sport, weekStart])
   const progressPct = weeklyTarget > 0 ? Math.min(100, (weeklyDone / weeklyTarget) * 100) : 0
-  const phaseLabel = meso?.phase ? meso.phase.replace(/([a-z])(\d)/i, '$1 $2').replace(/^\w/, (c) => c.toUpperCase()) : (de ? 'Grundlage' : 'Base')
+  // Phase chip — localized stem + number ("base1" → DE "Grundlage 1"), raw
+  // server value only as last-resort fallback.
+  const phaseLabel = useMemo(() => {
+    const raw = meso?.phase
+    if (!raw) return de ? 'Grundlage' : 'Base'
+    const m = raw.match(/^([a-z]+)\s*(\d+)?$/i)
+    const stem = (m?.[1] ?? raw).toLowerCase()
+    const word = Object.entries(PHASE_WORDS).find(([k]) => stem.startsWith(k))?.[1]
+    const label = word
+      ? (de ? word.de : word.en)
+      : raw.replace(/([a-z])(\d)/i, '$1 $2').replace(/^\w/, (c) => c.toUpperCase())
+    return m?.[2] ? `${label} ${m[2]}` : label
+  }, [meso?.phase, de])
   const planName = goalName ?? (de ? 'Trainingsplan' : 'Training Plan')
 
   // Workout-of-day — detect sport so meta/chips/profile follow the discipline.
@@ -325,7 +359,8 @@ export default function PlanTab() {
     : null
 
   // Zone 3 — notes. Color + icon keyed off readiness status (falls back to plan_changes).
-  const readyStatus = readiness?.status ?? 'unknown'
+  // 'none' sentinel = no readiness signal (never rendered as text).
+  const readyStatus = readiness?.status ?? 'none'
   const noteColor = readyStatus === 'illness' ? 'var(--color-move)'
     : readyStatus === 'overreaching' ? 'var(--color-amber)'
       : readyStatus === 'amber' ? 'var(--color-amber)'
@@ -343,6 +378,8 @@ export default function PlanTab() {
   // Category → representative zone when a session carries no interval blocks.
   const CAT_ZONE: Record<string, number> = { recovery: 1, endurance: 2, tempo: 3, sweet_spot: 4, threshold: 4, vo2: 5 }
   const cap = (s: string) => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+  // Localized category word; unmapped categories fall back to capitalization.
+  const catLabel = (c: string) => { const e = CAT_LABEL[c]; return e ? (de ? e.de : e.en) : cap(c) }
   // Peak interval — highest zone (tie → highest %FTP). Drives bike watts + zone.
   const peakInterval = (ivs: DayPlan['intervals']) => ivs.reduce<DayPlan['intervals'][number] | null>((m, b) => {
     if (!m) return b
@@ -376,7 +413,7 @@ export default function PlanTab() {
   // Secondary meta line, framed by discipline: bike→watts, run→pace/HR, gym→focus.
   const sessionMeta = (d: DayPlan): string => {
     if (d.sport === 'gym') {
-      return [d.category && d.category !== 'rest' ? cap(d.category) : null, de ? 'Kraft' : 'Strength'].filter(Boolean).join(' · ')
+      return [d.category && d.category !== 'rest' ? catLabel(d.category) : null, de ? 'Kraft' : 'Strength'].filter(Boolean).join(' · ')
     }
     if (d.sport === 'running') {
       const z = dominantZone(d.intervals) ?? CAT_ZONE[d.category] ?? 2
@@ -386,7 +423,7 @@ export default function PlanTab() {
         ? [`${pace} /km`, `Z${z}`]
         : hr
           ? [`Z${z}`, `${hr} bpm`]
-          : [`Z${z}`, cap(d.category)]
+          : [`Z${z}`, catLabel(d.category)]
       return parts.filter(Boolean).join(' · ')
     }
     // cycling → peak watts + zone + TSS
@@ -402,10 +439,11 @@ export default function PlanTab() {
     if (!week?.week_start || !week?.week_end) return ''
     const ws = parseISO(week.week_start)
     const we = parseISO(week.week_end)
+    const dm = de ? 'd. MMM' : 'd MMM'
     return ws.getMonth() === we.getMonth()
-      ? `${format(ws, 'd')}–${format(we, 'd MMM')}`
-      : `${format(ws, 'd MMM')} – ${format(we, 'd MMM')}`
-  }, [week?.week_start, week?.week_end])
+      ? `${formatDate(ws, 'd', locale)}–${formatDate(we, dm, locale)}`
+      : `${formatDate(ws, dm, locale)} – ${formatDate(we, dm, locale)}`
+  }, [week?.week_start, week?.week_end, de, locale])
   // Primary label: "This week" / "Next week" / the date range beyond that.
   const weekLabel = weekOffset === 0 ? (de ? 'Diese Woche' : 'This week')
     : weekOffset === 1 ? (de ? 'Nächste Woche' : 'Next week')
@@ -673,7 +711,7 @@ export default function PlanTab() {
                   border: isSelected ? 'none' : isToday ? '1px solid var(--color-accent)' : '1px solid var(--color-rule)',
                   opacity: offSport && !isSelected ? 0.4 : 1,
                 }}>
-                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, color: dark ? 'rgba(10,12,15,0.65)' : isToday ? 'var(--color-accent)' : 'var(--color-muted)' }}>{format(dd, 'EEE')}</span>
+                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, color: dark ? 'rgba(10,12,15,0.65)' : isToday ? 'var(--color-accent)' : 'var(--color-muted)' }}>{formatDate(dd, de ? 'EEEEEE' : 'EEE', locale)}</span>
                 <span className="num-display" style={{ fontSize: 15, color: dark ? '#0A0C0F' : 'var(--color-ink)' }}>{format(dd, 'd')}</span>
                 {done ? <Check size={14} strokeWidth={3} style={{ color: dark ? '#0A0C0F' : 'var(--color-recovery)' }} />
                   : <span style={{ width: 7, height: 7, borderRadius: 999, background: dark ? '#0A0C0F' : rest || offSport ? 'var(--color-surface-3)' : dotColor }} />}
@@ -811,7 +849,7 @@ export default function PlanTab() {
 
       {/* Inline panel for a NON-today day tapped in the strip — no navigation, detail in place. */}
       {!selectedIsToday && (() => {
-        const dLabel = format(parseISO(selectedDate), de ? 'EEEE, d. MMM' : 'EEEE, MMM d')
+        const dLabel = formatDate(parseISO(selectedDate), de ? 'EEEE, d. MMM' : 'EEEE, MMM d', locale)
         // Rest ONLY when the day has no actual work — key off real intervals/TSS/
         // duration, not the category label, so a mislabeled day with a real
         // session never wrongly collapses to "Rest day".
@@ -835,7 +873,7 @@ export default function PlanTab() {
         return (
           <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center rounded-full px-3 py-1.5" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em' }}>{de ? 'VORSCHAU' : 'PREVIEW'} · {format(parseISO(selectedDate), 'EEE, d. MMM')}</span>
+              <span className="inline-flex items-center rounded-full px-3 py-1.5" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em' }}>{de ? 'VORSCHAU' : 'PREVIEW'} · {formatDate(parseISO(selectedDate), de ? 'EEE, d. MMM' : 'EEE, MMM d', locale)}</span>
               <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: 'var(--color-surface-3)', fontSize: 12, color: 'var(--color-ink-2)' }}><meta.Icon size={13} style={{ color: meta.color }} /> {de ? meta.de : meta.en}</span>
             </div>
             <div className="flex flex-col gap-1">
@@ -907,7 +945,7 @@ export default function PlanTab() {
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
                     <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{fmtDur(d.duration_seconds_target)}</span>
-                    <span className="num-mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{format(parseISO(d.date), 'EEE')}</span>
+                    <span className="num-mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{formatDate(parseISO(d.date), 'EEE', locale)}</span>
                   </div>
                   <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></span>
                 </div>
@@ -915,7 +953,7 @@ export default function PlanTab() {
                   <div className="flex items-center gap-3 pt-2" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
                     <span>{sessionMeta(d)}</span>
                     <span>{fmtDur(d.duration_seconds_target)}</span>
-                    <span>{format(parseISO(d.date), 'EEEE')}</span>
+                    <span>{formatDate(parseISO(d.date), 'EEEE', locale)}</span>
                     <span className="ml-auto" style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{de ? 'Öffnen →' : 'Open →'}</span>
                   </div>
                 </div>
@@ -1061,29 +1099,52 @@ export default function PlanTab() {
         )
       })()}
 
-      {/* Cross-training — strength progress + this-week count */}
-      <div className="rounded-[24px] p-4 flex items-center gap-3.5" style={cardStyle}>
-        <Link to="/progress/lift" className="shrink-0 grid place-items-center rounded-full hover-card" style={{ width: 44, height: 44, background: 'color-mix(in srgb, var(--color-amber) 18%, transparent)' }}>
-          <Dumbbell size={22} strokeWidth={2} style={{ color: 'var(--color-amber)' }} />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Krafttraining' : 'Cross-training'}</div>
-          <div style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
-            {de
-              ? `${strengthDone} von ${STRENGTH_TARGET} Krafteinheiten diese Woche${strengthDone < STRENGTH_TARGET ? ' — dranbleiben.' : ' — stark.'}`
-              : `${strengthDone} of ${STRENGTH_TARGET} strength sessions done this week${strengthDone < STRENGTH_TARGET ? ' — keep it up.' : ' — nice.'}`}
+      {/* Cross-training — strength progress + this-week count. No-guilt
+          framing (audit P1-8): on Monday/Tuesday with zero done the copy is
+          forward-looking ("planned — e.g. Wednesday & Friday"), never a
+          "0 of 2 — keep it up" nag; from mid-week it states plain facts.
+          Below-plan states keep NEUTRAL surface colors — no accent alarm. */}
+      {(() => {
+        const dowMon0 = (today.getDay() + 6) % 7 // 0 = Monday … 6 = Sunday
+        const weekYoung = dowMon0 <= 1
+        const strengthCopy = strengthDone >= STRENGTH_TARGET
+          ? (de
+            ? `${strengthDone} von ${STRENGTH_TARGET} Krafteinheiten diese Woche — stark.`
+            : `${strengthDone} of ${STRENGTH_TARGET} strength sessions done this week — nice.`)
+          : strengthDone === 0 && weekYoung
+            ? (de
+              ? `${STRENGTH_TARGET} Krafteinheiten diese Woche geplant — z. B. Mittwoch & Freitag`
+              : `${STRENGTH_TARGET} strength sessions planned this week — e.g. Wednesday & Friday`)
+            : strengthDone === 0
+              ? (de
+                ? `Noch ${STRENGTH_TARGET} Krafteinheiten diese Woche offen.`
+                : `${STRENGTH_TARGET} strength sessions still open this week.`)
+              : (de
+                ? `${strengthDone} von ${STRENGTH_TARGET} Krafteinheiten diese Woche.`
+                : `${strengthDone} of ${STRENGTH_TARGET} strength sessions done this week.`)
+        return (
+          <div className="rounded-[24px] p-4 flex items-center gap-3.5" style={cardStyle}>
+            <Link to="/progress/lift" className="shrink-0 grid place-items-center rounded-full hover-card" style={{ width: 44, height: 44, background: 'color-mix(in srgb, var(--color-amber) 18%, transparent)' }}>
+              <Dumbbell size={22} strokeWidth={2} style={{ color: 'var(--color-amber)' }} />
+            </Link>
+            <div className="flex-1 min-w-0">
+              <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Krafttraining' : 'Cross-training'}</div>
+              <div style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{strengthCopy}</div>
+            </div>
+            {strengthDone >= STRENGTH_TARGET ? (
+              <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 32, height: 32, background: 'color-mix(in srgb, var(--color-recovery) 18%, transparent)' }}>
+                <Check size={16} strokeWidth={3} style={{ color: 'var(--color-recovery)' }} />
+              </span>
+            ) : (
+              /* Neutral Add — surface tone, never the accent alarm while the
+                 athlete is merely below plan (audit no-guilt rule). */
+              <Link to="/workout/today" className="shrink-0 inline-flex items-center gap-1 rounded-full px-4 py-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)', fontSize: 13, fontWeight: 700 }}>
+                <Plus size={15} strokeWidth={2.6} /> {t('add_action')}
+              </Link>
+            )}
           </div>
-        </div>
-        {strengthDone >= STRENGTH_TARGET ? (
-          <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 32, height: 32, background: 'color-mix(in srgb, var(--color-recovery) 18%, transparent)' }}>
-            <Check size={16} strokeWidth={3} style={{ color: 'var(--color-recovery)' }} />
-          </span>
-        ) : (
-          <Link to="/workout/today" className="shrink-0 inline-flex items-center gap-1 rounded-full px-4 py-2" style={{ background: 'var(--color-accent)', color: '#FFFFFF', fontSize: 13, fontWeight: 700 }}>
-            <Plus size={15} strokeWidth={2.6} /> {de ? 'Add' : 'Add'}
-          </Link>
-        )}
-      </div>
+        )
+      })()}
     </div>
   )
 }

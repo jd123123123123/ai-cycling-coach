@@ -2,6 +2,8 @@
 load dynamics (Foster), and the ranked prescription list."""
 from __future__ import annotations
 
+import pytest
+
 from app.services.period_report import (
     WindowMetrics,
     build_intensity,
@@ -109,3 +111,76 @@ class TestPrescriptions:
         assert step.headline == rx[0].headline
         assert step.detail == rx[0].detail
         assert step.tone == rx[0].tone
+
+
+class TestBuildTrajectory:
+    """P1-6: the period-report trajectory must speak the report's language and
+    never surface the machine filler 'unknown' as display text."""
+
+    def _payload(self, **over) -> dict:
+        base = dict(
+            projection_basis="model",
+            days_to_goal=40, ctl_now=50.0, ctl_7d_delta=1.0,
+            ctl_projected_at_goal=60.0, ctl_target=75.0,
+            tsb_projected_at_goal=-3.0, taper_window="unknown",
+            on_track="behind", weekly_tss_required=500.0,
+            weekly_tss_actual=400.0, narrative_hook="Auf Kurs.",
+        )
+        base.update(over)
+        return base
+
+    def _db(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        db = MagicMock()
+        res = MagicMock()
+        res.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=res)
+        return db
+
+    @pytest.mark.asyncio
+    async def test_unknown_taper_window_becomes_null(self, monkeypatch):
+        from app.services.period_report import build_trajectory
+
+        payload = self._payload()
+
+        async def fake(db, user_id, profile, lang="en"):
+            return payload
+
+        monkeypatch.setattr(
+            "app.services.goal_trajectory.compute_goal_trajectory", fake
+        )
+        traj = await build_trajectory(self._db(), 1, None, "de")
+        assert traj is not None
+        assert traj.taper_window is None  # UI renders '—', never 'unknown'
+
+    @pytest.mark.asyncio
+    async def test_real_taper_window_passes_through(self, monkeypatch):
+        from app.services.period_report import build_trajectory
+
+        payload = self._payload(taper_window="ideal")
+
+        async def fake(db, user_id, profile, lang="en"):
+            return payload
+
+        monkeypatch.setattr(
+            "app.services.goal_trajectory.compute_goal_trajectory", fake
+        )
+        traj = await build_trajectory(self._db(), 1, None, "en")
+        assert traj.taper_window == "ideal"
+
+    @pytest.mark.asyncio
+    async def test_lang_reaches_the_one_producer(self, monkeypatch):
+        from app.services.period_report import build_trajectory
+
+        seen: dict = {}
+
+        async def fake(db, user_id, profile, lang="en"):
+            seen["lang"] = lang
+            return None
+
+        monkeypatch.setattr(
+            "app.services.goal_trajectory.compute_goal_trajectory", fake
+        )
+        assert await build_trajectory(self._db(), 1, None, "de") is None
+        assert seen["lang"] == "de"
