@@ -548,11 +548,17 @@ async def build_snapshot(
         if isinstance(te, dict):
             goal_event_date = te.get("date")
             goal_target = te.get("name")
-            if goal_event_date:
-                try:
-                    goal_date_obj = date.fromisoformat(goal_event_date)
-                except (ValueError, TypeError):
-                    goal_date_obj = None
+    # First-class column BEATS the JSONB copy (same rule as 01a9ac1 for the
+    # trajectory): a stale goals.target_event.date (live-observed: 2026-07-05
+    # vs the real 2026-12-05) otherwise poisons days_to_goal, phase detection
+    # and every event-anchored sentence in the brief.
+    if profile is not None and getattr(profile, "target_event_date", None):
+        goal_event_date = profile.target_event_date.isoformat()
+    if goal_event_date:
+        try:
+            goal_date_obj = date.fromisoformat(goal_event_date)
+        except (ValueError, TypeError):
+            goal_date_obj = None
 
     pmc = await ctl_atl_tsb_snapshot(db, user_id)
     hrv = await hrv_trend(db, user_id, days=7)
