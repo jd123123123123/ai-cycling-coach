@@ -25,10 +25,11 @@ from app.services.workout_templates import (
 
 class TestTemplateLibrary:
     def test_all_templates_registered(self):
-        # 50-template library: 13 originals + 7 first-batch + 30 second-batch.
-        # Categories: rest/recovery (3), endurance (10), tempo (4),
-        # sweet_spot (4), threshold (10), vo2 (9), anaerobic (6).
+        # 55-template library: 13 originals + 7 first-batch + 30 second-batch
+        # + 2 plan-engine-v2 fun formats (tempo+bursts, playful-Z2 surges).
         expected = {
+            # Plan-engine v2 fun formats (science-file archetypes 11 + 25)
+            "tempo_bursts_3x10", "z2_endurance_surges_75",
             # Originals
             "rest_day", "recovery_30",
             "z2_endurance_60", "z2_endurance_90", "z2_long_120", "z2_long_180",

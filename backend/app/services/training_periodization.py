@@ -126,7 +126,11 @@ def detect_training_phase(
 # weekly availability into Z1-Z2 (easy) vs above-LT (hard) hours.
 _PHASE_MIX: dict[Phase, dict[str, float]] = {
     "offseason":   {"easy_ratio": 0.95, "hard_ratio": 0.00, "rest_days": 3.0},
-    "base1":       {"easy_ratio": 0.90, "hard_ratio": 0.05, "rest_days": 2.0},
+    # base1 hard_ratio 0.08 (July 2026 quality-quota): two weekly quality
+    # touches (one VO2/MAP + one tempo) — time-crunched pyramidal guidance
+    # (IJSPP 2023): at low volume, spending every scarce hour in Z2
+    # under-stimulates. Still ≥90% easy by duration.
+    "base1":       {"easy_ratio": 0.90, "hard_ratio": 0.08, "rest_days": 2.0},
     "base2":       {"easy_ratio": 0.85, "hard_ratio": 0.10, "rest_days": 2.0},
     "build1":      {"easy_ratio": 0.80, "hard_ratio": 0.15, "rest_days": 2.0},
     "build2":      {"easy_ratio": 0.75, "hard_ratio": 0.20, "rest_days": 2.0},
@@ -192,16 +196,23 @@ def weekly_intensity_quota(
     # Monotony is also a modeled risk (Foster) — identical weeks raise strain.
     vo2_sessions = 0
     threshold_sessions = 0
+    tempo_sessions = 0
     if phase in ("build1", "build2", "peak"):
         vo2_sessions = 1
         threshold_sessions = 1 if phase == "build1" else 2
     elif phase == "base2":
         vo2_sessions = 1
         threshold_sessions = 1
+        tempo_sessions = 1
     elif phase == "base1":
-        # One short MAP touch per week — keeps the ceiling from sagging while
-        # the base builds, and keeps the plan humane to look at.
+        # QUALITY QUOTA (July 2026): base weeks carry TWO distinct quality
+        # touches — one short MAP/VO2 (keeps the ceiling from sagging,
+        # Rønnestad maintenance dose) + one tempo/SS touch (time-crunched
+        # pyramidal density, IJSPP 2023). Most sessions stay pleasant
+        # (Ekkekakis affect constraint) — the tempo day is 'comfortably
+        # firm', not a second hard day.
         vo2_sessions = 1
+        tempo_sessions = 1
     elif phase == "maintenance":
         threshold_sessions = 1
 
@@ -221,6 +232,7 @@ def weekly_intensity_quota(
     if is_recovery:
         vo2_sessions = 0
         threshold_sessions = 0
+        tempo_sessions = 0
         hard_ratio = round(base_hard_ratio * 0.3, 4)
 
     # Conserve total load: easy absorbs whatever the hard ratio gained/lost, so
@@ -239,6 +251,8 @@ def weekly_intensity_quota(
         rest_days = max(rest_days, 7 - int(days_per_week))
         rest_days = min(6, rest_days)
         max_hard = max(0, min(3, int(days_per_week) - 1))
+        while vo2_sessions + threshold_sessions + tempo_sessions > max_hard and tempo_sessions > 0:
+            tempo_sessions -= 1
         while vo2_sessions + threshold_sessions > max_hard and threshold_sessions > 0:
             threshold_sessions -= 1
         while vo2_sessions + threshold_sessions > max_hard and vo2_sessions > 0:
@@ -250,6 +264,7 @@ def weekly_intensity_quota(
         "hard_hours": hard,
         "vo2_sessions": vo2_sessions,
         "threshold_sessions": threshold_sessions,
+        "tempo_sessions": tempo_sessions,
         "rest_days": rest_days,
         "total_hours": weekly_hours,
         "training_model": training_model,
@@ -458,11 +473,13 @@ def session_type_for_today(
                 return _downgrade_to_ceiling(_apply_model_bias("sweet_spot", training_model), intensity_ceiling)
             return _downgrade_to_ceiling("endurance", intensity_ceiling)
         if phase == "base1":
-            # Variety floor (July 2026): ONE short VO2/MAP touch per week even
-            # in early base — Wednesday keystone. Keeps the aerobic ceiling
-            # from sagging through a long base (Rønnestad maintenance dose)
-            # and kills the "4 identical Z2 weeks" monotony.
-            if vo2_done < 1 and hard_done < 1 and day_of_week == 2:
+            # Quality quota (July 2026): base1 carries TWO weekly quality
+            # touches — the Wednesday VO2/MAP keystone here, plus a Saturday
+            # tempo touch (below). Keeps the aerobic ceiling from sagging
+            # through a long base (Rønnestad maintenance dose) and kills the
+            # "4 identical Z2 weeks" monotony. hard_done < 2 (not < 1) so a
+            # tempo already banked this week no longer cancels the VO2 day.
+            if vo2_done < 1 and hard_done < 2 and day_of_week == 2:
                 return _downgrade_to_ceiling(_apply_model_bias("vo2", training_model), intensity_ceiling)
             return _downgrade_to_ceiling("endurance", intensity_ceiling)
         if phase == "maintenance":
@@ -473,8 +490,23 @@ def session_type_for_today(
         # offseason — all endurance mid-week
         return _downgrade_to_ceiling("endurance", intensity_ceiling)
 
-    # Saturday — long ride candidate when Sunday is used for a race/event
+    # Saturday — in base phases this is the SECOND weekly quality touch
+    # (tempo/SS, pleasant-firm per the affect constraint), completing the
+    # ≥2-distinct-touches quota with the Wednesday VO2/SS keystone. Guards:
+    # never on a deload week, never when the week already banked 2 quality
+    # sessions, never within 72h of another quality day, and never on tired
+    # legs (recent big volume). Sunday's long ride stays LIT, so this makes
+    # a classic firm-Saturday/long-easy-Sunday weekend. In every other phase
+    # Saturday remains the long-ride candidate (endurance).
     if day_of_week == 5:
+        if phase in ("base1", "base2") and not is_recovery_week:
+            yesterday_tss = float(progress.get("yesterday_tss", 0.0))
+            last_48h_tss = float(progress.get("last_48h_tss", 0.0))
+            recent_big_volume = yesterday_tss >= 90.0 or last_48h_tss >= 120.0
+            if hard_done < 2 and recent_quality < 1 and not recent_big_volume:
+                return _downgrade_to_ceiling(
+                    _apply_model_bias("tempo", training_model), intensity_ceiling
+                )
         return _downgrade_to_ceiling("endurance", intensity_ceiling)
 
     # Default catch-all
@@ -579,10 +611,11 @@ _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
         "z2_progressive_90", "z2_endurance_90", "z2_endurance_60",
     ],
     # Tempo includes the low-cadence force drill (still Z3 power, but a
-    # strength-biased rep that targets Type-IIa recruitment via cadence).
+    # strength-biased rep that targets Type-IIa recruitment via cadence)
+    # and the tempo+bursts fun format (surges on a Z3 base).
     "tempo":      [
         "tempo_2x30", "tempo_4x15", "tempo_progression_60",
-        "cadence_low_lcf_4x6", "tempo_3x10",
+        "tempo_bursts_3x10", "cadence_low_lcf_4x6", "tempo_3x10",
     ],
     # Sweet-spot ordered longest→shortest. sub_threshold_2x40 is genuinely
     # SST density even though categorized internally as sweet_spot.

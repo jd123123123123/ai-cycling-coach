@@ -1,14 +1,14 @@
 /**
- * PlanTab (Train) — rebuilt 1:1 from pencil-new.pen "Screen · Train" (oww6S).
- * Card order matches the .pen: SportToggle → PlanCard → WeekStrip →
- * WorkoutOfDay (coral, interval-profile bars + chips + view link) → Upcoming →
- * PowerZones (Power/Pace toggle, Z1–Z7) → Cross-training.
+ * PlanTab (Train) — P2-13 session-first order: SportToggle → WeekNav →
+ * WeekStrip → today's session cards → the week's session list → notes →
+ * PlanCard → Focus → plan import → ONE collapsed "Saison-Details" accordion
+ * (periodization chips + PROGNOSE + Leistungszonen) → progress → cross-training.
  * Real week-plan, FTP, and activity data throughout.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
-import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ListChecks, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp } from 'lucide-react'
+import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ChevronDown, ListChecks, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp } from 'lucide-react'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
@@ -17,7 +17,7 @@ import { useLocale } from '../../../contexts/LocaleContext'
 import FocusSection from '../../plan/FocusSection'
 import { detectWorkoutSport } from '../../../api/coach'
 import type { ResolvedBlock, WorkoutSport } from '../../../api/coach'
-import type { DayPlan } from '../../../api/weeks'
+import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
 import { daysToEvent } from '../../../utils/loadMetrics'
 import { formatDate } from '../../../utils/format'
 
@@ -89,6 +89,47 @@ function zoneBarColor(z: number): string {
   return 'var(--color-move)'
 }
 
+// ── Session-level power math (textfit handoff / audit P2-14) ────────────────
+// The old meta line paired the PEAK interval's watts with the SESSION's TSS
+// ("276 W · 82 TSS") — it read like broken math. Split instead into a
+// session-level headline (duration-weighted Ø watts) plus a labeled peak
+// sub-line, mirroring WorkoutDetailView's landed `peakChip` pattern.
+// Both are pure + exported for node-env vitest.
+
+/** Duration-weighted session-average watts from a day's intervals. */
+export function cyclingAvgWatts(ivs: IntervalBlockOut[], ftp: number | null): number | null {
+  if (ftp == null) return null
+  const withPct = ivs.filter((iv) => (iv.power_target_pct_ftp ?? 0) > 0 && iv.duration_seconds > 0)
+  const tot = withPct.reduce((s, iv) => s + iv.duration_seconds, 0)
+  if (tot <= 0) return null
+  const avgPct = withPct.reduce((s, iv) => s + iv.duration_seconds * (iv.power_target_pct_ftp as number), 0) / tot
+  return Math.round(avgPct * ftp)
+}
+
+/** "Spitzen: 4×15 Min @ 276 W (92 % FTP)" — the hardest repeated interval,
+ *  labeled as peaks. Null for steady single-zone rides (nothing to call out)
+ *  or when no FTP/powered interval exists — never fabricated. */
+export function cyclingPeakLine(ivs: IntervalBlockOut[], ftp: number | null, de: boolean): string | null {
+  if (ftp == null) return null
+  if (new Set(ivs.map((iv) => iv.zone)).size < 2) return null
+  const peak = ivs.reduce<IntervalBlockOut | null>((m, iv) => {
+    if ((iv.power_target_pct_ftp ?? 0) <= 0) return m
+    if (!m || (iv.power_target_pct_ftp as number) > (m.power_target_pct_ftp as number)) return iv
+    return m
+  }, null)
+  if (!peak) return null
+  const count = ivs.filter((iv) =>
+    iv.power_target_pct_ftp === peak.power_target_pct_ftp && iv.duration_seconds === peak.duration_seconds).length
+  const dur = peak.duration_seconds
+  const durStr = dur % 60 === 0 ? `${dur / 60}` : `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, '0')}`
+  const rep = count > 1 ? `${count}×` : ''
+  const watts = Math.round((peak.power_target_pct_ftp as number) * ftp)
+  const pct = Math.round((peak.power_target_pct_ftp as number) * 100)
+  return de
+    ? `Spitzen: ${rep}${durStr} Min @ ${watts} W (${pct} % FTP)`
+    : `Peaks: ${rep}${durStr} min @ ${watts} W (${pct}% FTP)`
+}
+
 export default function PlanTab() {
   const { locale, t } = useLocale()
   const de = locale === 'de'
@@ -111,6 +152,9 @@ export default function PlanTab() {
   // How many weeks ahead of the current week we're previewing. 0 = this week
   // (the today-anchored live view); >0 pages into the plan's future weeks.
   const [weekOffset, setWeekOffset] = useState(0)
+  // P2-13: PROGNOSE + Leistungszonen + periodization chips live in ONE
+  // collapsed accordion — closed by default, the session list leads the page.
+  const [saisonOpen, setSaisonOpen] = useState(false)
   const MAX_WEEK_OFFSET = 12
   const isFuture = weekOffset > 0
   const { data: week } = useCurrentWeek(weekOffset)
@@ -372,7 +416,6 @@ export default function PlanTab() {
         : readyStatus === 'green' ? Check
           : Info
   const hasChangeNote = !!planChanges?.message?.trim()
-  const onTrackCalm = !hasChangeNote && readyStatus === 'green'
 
   // ── Per-session sport-specific meta derivation (Upcoming rows) ──
   // Category → representative zone when a session carries no interval blocks.
@@ -380,13 +423,6 @@ export default function PlanTab() {
   const cap = (s: string) => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
   // Localized category word; unmapped categories fall back to capitalization.
   const catLabel = (c: string) => { const e = CAT_LABEL[c]; return e ? (de ? e.de : e.en) : cap(c) }
-  // Peak interval — highest zone (tie → highest %FTP). Drives bike watts + zone.
-  const peakInterval = (ivs: DayPlan['intervals']) => ivs.reduce<DayPlan['intervals'][number] | null>((m, b) => {
-    if (!m) return b
-    if (b.zone > m.zone) return b
-    if (b.zone === m.zone && (b.power_target_pct_ftp ?? 0) > (m.power_target_pct_ftp ?? 0)) return b
-    return m
-  }, null)
   // Dominant zone — most time-in-zone. Drives run pace/HR framing.
   const dominantZone = (ivs: DayPlan['intervals']): number | null => {
     if (!ivs.length) return null
@@ -426,12 +462,17 @@ export default function PlanTab() {
           : [`Z${z}`, catLabel(d.category)]
       return parts.filter(Boolean).join(' · ')
     }
-    // cycling → peak watts + zone + TSS
-    const pk = peakInterval(d.intervals)
-    const z = pk?.zone ?? CAT_ZONE[d.category] ?? 2
-    const watts = ftp != null && pk?.power_target_pct_ftp ? `${Math.round(pk.power_target_pct_ftp * ftp)} W` : null
-    return [watts, `Z${z}`, d.target_tss ? `${Math.round(d.target_tss)} TSS` : null].filter(Boolean).join(' · ')
+    // cycling → SESSION-level headline (Ø watts · dominant zone · TSS); the
+    // interval peak lives in its own labeled sub-line (sessionPeakSub) so peak
+    // watts are never paired with session TSS again (audit P2-14).
+    const avgW = cyclingAvgWatts(d.intervals, ftp)
+    const z = dominantZone(d.intervals) ?? CAT_ZONE[d.category] ?? 2
+    return [avgW != null ? `Ø ${avgW} W` : null, `Z${z}`, d.target_tss ? `${Math.round(d.target_tss)} TSS` : null].filter(Boolean).join(' · ')
   }
+  // Labeled peak sub-line for cycling sessions — WorkoutDetailView's peakChip
+  // grammar ("Spitzen: 4×15 Min @ 276 W (92 % FTP)"); null when meaningless.
+  const sessionPeakSub = (d: DayPlan): string | null =>
+    d.sport === 'cycling' ? cyclingPeakLine(d.intervals, ftp, de) : null
 
   // ── Week navigation labels ──
   // Date range like "21–27 Jul" (or cross-month "28 Jul – 3 Aug").
@@ -464,207 +505,6 @@ export default function PlanTab() {
           </button>
         ))}
       </div>
-
-      {/* Plan status — position + projection + change/illness notes.
-          Now-only (live projection / readiness / weekly progress-so-far), so it
-          is hidden when previewing a future week — that week has no "now". */}
-      {!isFuture && (meso || projection || planChanges || readiness) && (
-        <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 20 }}>
-          {/* Header */}
-          <div className="flex items-center gap-2">
-            <MapIcon size={15} style={{ color: 'var(--color-accent)' }} />
-            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{de ? 'PLAN-STATUS' : 'PLAN STATUS'}</span>
-          </div>
-
-          {/* ── Zone 1 · Where we are ── */}
-          <div className="flex flex-col" style={{ gap: 12 }}>
-            {/* Phase stepper */}
-            <div className="flex items-center" style={{ gap: 6 }}>
-              {PHASE_STEPS.map((p, i) => {
-                const active = i === activePhaseIdx
-                const past = activePhaseIdx >= 0 && i < activePhaseIdx
-                return (
-                  <div key={p.key} className="flex-1 flex flex-col" style={{ gap: 5 }}>
-                    <div style={{ height: 4, borderRadius: 999, background: active ? 'var(--color-accent)' : past ? 'var(--color-accent-soft)' : 'var(--color-surface-2)' }} />
-                    <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, color: active ? 'var(--color-accent)' : 'var(--color-muted)', letterSpacing: '0.02em' }}>{de ? p.de : p.en}</span>
-                  </div>
-                )
-              })}
-            </div>
-            {/* Block position + week of meso + days to event */}
-            <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
-              {blockPosLabel && (
-                <span className="inline-flex items-center rounded-full px-3 py-1" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 11.5, fontWeight: 600 }}>{blockPosLabel}</span>
-              )}
-              {weekOfMeso != null && (
-                <span className="inline-flex items-center rounded-full px-3 py-1" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 11.5, fontWeight: 600 }}>{de ? `Woche ${weekOfMeso}` : `Week ${weekOfMeso}`}</span>
-              )}
-              {daysToEventResolved != null && (
-                <span className="inline-flex items-center gap-1 rounded-full px-3 py-1" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 11.5, fontWeight: 700 }}>
-                  <Target size={12} /> {daysToEventResolved} {de ? 'Tage bis Event' : 'days to event'}
-                </span>
-              )}
-            </div>
-            {/* Weekly TSS target + progress-so-far */}
-            {planTarget > 0 && (
-              <div className="flex flex-col" style={{ gap: 6 }}>
-                <div className="flex items-baseline justify-between">
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Wochen-TSS' : 'Weekly TSS'}</span>
-                  <span className="num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>{Math.round(planDone)} / {Math.round(planTarget)}</span>
-                </div>
-                <div style={{ height: 6, borderRadius: 999, background: 'var(--color-surface-2)', overflow: 'hidden' }}>
-                  <div style={{ width: `${planPct}%`, height: '100%', borderRadius: 999, background: 'var(--color-accent)' }} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ height: 1, background: 'var(--color-rule)' }} />
-
-          {/* ── Zone 2 · Projection — where we can land ── */}
-          <div className="flex flex-col" style={{ gap: 12 }}>
-            <div className="flex items-center gap-2">
-              <TrendingUp size={14} style={{ color: 'var(--color-muted)' }} />
-              <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'PROGNOSE' : 'PROJECTION'}</span>
-            </div>
-            {projection && projection.mode !== 'insufficient' && projChart ? (
-              <>
-                {/* Metric label + current → projected */}
-                <div className="flex items-end justify-between flex-wrap" style={{ gap: 8 }}>
-                  <div className="flex flex-col" style={{ gap: 2 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{projection.metric_label}</span>
-                    <div className="flex items-baseline" style={{ gap: 6 }}>
-                      <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink-2)' }}>{projCurrent != null ? projCurrent : '—'}</span>
-                      {/* Low confidence (<30%): the race-day end is a RANGE, never
-                          a point promise. Arrow only when both ends render. */}
-                      {projLowConf && projBand80 ? (
-                        <>
-                          {projCurrent != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
-                          <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>
-                            {Math.round(projBand80[0])}–{Math.round(projBand80[1])}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          {projCurrent != null && projProjected != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
-                          {projProjected != null && <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>{projProjected}</span>}
-                        </>
-                      )}
-                      <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-muted)' }}>{projection.unit}</span>
-                    </div>
-                  </div>
-                </div>
-                {/* Confidence-band chart */}
-                <svg viewBox={`0 0 ${projChart.W} ${projChart.H}`} className="w-full" style={{ display: 'block' }} role="img" aria-label={de ? 'Prognose mit Konfidenzband' : 'Projection with confidence band'}>
-                  <polygon points={projChart.band80} fill="var(--color-accent)" opacity="0.10" />
-                  <polygon points={projChart.band50} fill="var(--color-accent)" opacity="0.18" />
-                  <polyline points={projChart.line} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-                  <circle cx={projChart.startX} cy={projChart.startY} r="3" fill="var(--color-accent)" />
-                  <circle cx={projChart.endX} cy={projChart.endY} r="3.5" fill="var(--color-accent)" stroke="var(--color-paper-2)" strokeWidth="1.5" />
-                </svg>
-                <div className="flex items-center" style={{ gap: 12 }}>
-                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.18 }} /> {de ? '50% Band' : '50% band'}</span>
-                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.10 }} /> {de ? '80% Band' : '80% band'}</span>
-                </div>
-                {/* Outcome headline + honest caveat. In low confidence the
-                    backend's central-number sentence is replaced by the range
-                    line — no single-number race-day promise. */}
-                {(projRangeHeadline ?? projection.projected_outcome) && (
-                  <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>{projRangeHeadline ?? projection.projected_outcome}</p>
-                )}
-                {projection.caveat && <p style={{ fontSize: 11.5, color: 'var(--color-muted)', lineHeight: 1.4 }}>{projection.caveat}</p>}
-              </>
-            ) : (
-              // Honest empty state — no fabricated numbers.
-              <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: 'var(--color-surface-2)' }}>
-                <Sparkles size={18} style={{ color: 'var(--color-muted)', flexShrink: 0, marginTop: 1 }} />
-                <div className="flex flex-col" style={{ gap: 2 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Prognose noch nicht freigeschaltet' : 'Projection not unlocked yet'}</span>
-                  <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{de ? 'Logge ein paar harte Einheiten, um deine Landing-Prognose freizuschalten.' : 'Log a few hard efforts to unlock your projection.'}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ height: 1, background: 'var(--color-rule)' }} />
-
-          {/* ── Zone 3 · Notes — what changed / could change ── */}
-          <div className="flex flex-col" style={{ gap: 10 }}>
-            <div className="flex items-center gap-2">
-              <Info size={14} style={{ color: 'var(--color-muted)' }} />
-              <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'HINWEISE' : 'NOTES'}</span>
-            </div>
-            {hasChangeNote ? (
-              <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: `color-mix(in srgb, ${noteColor} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${noteColor} 30%, transparent)` }}>
-                <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 28, height: 28, background: `color-mix(in srgb, ${noteColor} 20%, transparent)`, marginTop: 1 }}>
-                  <NoteIcon size={15} style={{ color: noteColor }} />
-                </span>
-                <div className="flex flex-col" style={{ gap: 2 }}>
-                  <span style={{ fontSize: 13, color: 'var(--color-ink)', lineHeight: 1.4 }}>{planChanges!.message}</span>
-                  {readiness?.reason && readiness.reason !== planChanges!.message && (
-                    <span style={{ fontSize: 11.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{readiness.reason}</span>
-                  )}
-                </div>
-              </div>
-            ) : onTrackCalm ? (
-              <div className="flex items-center gap-3 rounded-2xl p-3.5" style={{ background: 'color-mix(in srgb, var(--color-recovery) 10%, transparent)' }}>
-                <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 28, height: 28, background: 'color-mix(in srgb, var(--color-recovery) 20%, transparent)' }}>
-                  <Check size={15} strokeWidth={2.6} style={{ color: 'var(--color-recovery)' }} />
-                </span>
-                <span style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Auf Kurs — keine Änderungen' : 'On track — no changes'}</span>
-              </div>
-            ) : readiness?.reason ? (
-              <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: `color-mix(in srgb, ${noteColor} 12%, transparent)` }}>
-                <NoteIcon size={16} style={{ color: noteColor, flexShrink: 0, marginTop: 1 }} />
-                <span style={{ fontSize: 13, color: 'var(--color-ink)', lineHeight: 1.4 }}>{readiness.reason}</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 rounded-2xl p-3.5" style={{ background: 'var(--color-surface-2)' }}>
-                <Info size={16} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
-                <span style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? 'Noch keine Hinweise für diese Woche.' : 'No notes for this week yet.'}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Plan card → Load & Form drill-down */}
-      <Link to="/load-form" className="rounded-[24px] p-5 hover-card flex flex-col gap-4" style={cardStyle}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{de ? 'TRAININGSPLAN' : 'TRAINING PLAN'}{sport !== 'all' ? ` · ${sportWord}` : ''}</span>
-            <span className="num-display truncate" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{planName}</span>
-          </div>
-          <span className="shrink-0 inline-flex items-center gap-1">
-            <span className="inline-flex items-center rounded-full px-3 py-1.5" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 12, fontWeight: 700 }}>{phaseLabel}</span>
-            <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></span>
-          </span>
-        </div>
-        <div style={{ height: 8, borderRadius: 999, background: 'var(--color-surface-2)', overflow: 'hidden' }}>
-          <div style={{ width: `${progressPct}%`, height: '100%', borderRadius: 999, background: 'var(--color-accent)' }} />
-        </div>
-        <div className="flex">
-          {[
-            [weeksLeft != null ? `${weeksLeft}` : '—', de ? 'Wochen übrig' : 'Weeks left'],
-            [weekHours > 0 ? `${weekHours.toFixed(1)}h` : '—', de ? 'Wochenstunden' : 'Week hours'],
-            [`${sessionCount}`, de ? 'Einheiten' : 'Sessions'],
-          ].map(([v, l], i) => (
-            <div key={i} className="flex-1 flex flex-col gap-0.5">
-              <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{v}</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{l}</span>
-            </div>
-          ))}
-        </div>
-      </Link>
-
-      {/* Focus — per-sport builder-program picker (Bike + Run rows). */}
-      <FocusSection />
-
-      {/* Bring-your-own plan → PDF/image import + adaptation (P: plan-upload) */}
-      <Link to="/plan/import" className="hover-card flex items-center gap-2 self-start rounded-full px-4 py-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>
-        <FileUp size={14} style={{ color: 'var(--color-accent)' }} />
-        {de ? 'Eigenen Plan importieren (PDF/Bild)' : 'Import your own plan (PDF/image)'}
-      </Link>
 
       {/* Week navigation — page between this week and future plan weeks.
           Prev is disabled at offset 0 (no paging into the past here); next is
@@ -908,6 +748,9 @@ export default function PlanTab() {
                 </span>
               ))}
             </div>
+            {sessionPeakSub(selDay) && (
+              <p style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--color-muted)' }}>{sessionPeakSub(selDay)}</p>
+            )}
 
             {/* Open the full detail page for THIS planned day (same layout as today). */}
             <Link to={`/workout/${selectedDate}`} className="inline-flex items-center justify-center gap-2 rounded-full py-3 min-h-[44px]" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 14, fontWeight: 700 }}>
@@ -940,8 +783,12 @@ export default function PlanTab() {
                     <Icon size={20} strokeWidth={2} style={{ color: col }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="num-display truncate" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{d.title}</div>
+                    {/* clamp-2 (textfit): session titles wrap, never truncate */}
+                    <div className="num-display line-clamp-2" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{d.title}</div>
                     <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>{sessionMeta(d)}</div>
+                    {sessionPeakSub(d) && (
+                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{sessionPeakSub(d)}</div>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
                     <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{fmtDur(d.duration_seconds_target)}</span>
@@ -992,6 +839,166 @@ export default function PlanTab() {
           )}
         </div>
       )}
+
+      {/* Hinweise — plan changes / readiness stay VISIBLE outside the
+          accordion (adaptation is never hidden, spec law 2); the calm/empty
+          filler states are dropped (P2-13 de-clutter). Now-only. */}
+      {!isFuture && (hasChangeNote || readiness?.reason) && (
+        <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 10 }}>
+          <div className="flex items-center gap-2">
+            <Info size={14} style={{ color: 'var(--color-muted)' }} />
+            <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'HINWEISE' : 'NOTES'}</span>
+          </div>
+          {hasChangeNote ? (
+            <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: `color-mix(in srgb, ${noteColor} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${noteColor} 30%, transparent)` }}>
+              <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 28, height: 28, background: `color-mix(in srgb, ${noteColor} 20%, transparent)`, marginTop: 1 }}>
+                <NoteIcon size={15} style={{ color: noteColor }} />
+              </span>
+              <div className="flex flex-col" style={{ gap: 2 }}>
+                <span style={{ fontSize: 13, color: 'var(--color-ink)', lineHeight: 1.4 }}>{planChanges!.message}</span>
+                {readiness?.reason && readiness.reason !== planChanges!.message && (
+                  <span style={{ fontSize: 11.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{readiness.reason}</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: `color-mix(in srgb, ${noteColor} 12%, transparent)` }}>
+              <NoteIcon size={16} style={{ color: noteColor, flexShrink: 0, marginTop: 1 }} />
+              <span style={{ fontSize: 13, color: 'var(--color-ink)', lineHeight: 1.4 }}>{readiness?.reason}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Saison-Details — ONE collapsed accordion (P2-13): periodization
+          chips + PROGNOSE + Leistungszonen live here, off the scroll path. */}
+      <button
+        type="button"
+        onClick={() => setSaisonOpen((o) => !o)}
+        aria-expanded={saisonOpen}
+        className="hover-card rounded-[20px] p-4 flex items-center gap-3 text-left"
+        style={cardStyle}
+      >
+        <MapIcon size={18} style={{ color: 'var(--color-accent)' }} />
+        <div className="flex-1 min-w-0">
+          <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Saison-Details' : 'Season details'}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Periodisierung, Prognose & Leistungszonen' : 'Periodization, projection & power zones'}</div>
+        </div>
+        <ChevronDown size={18} style={{ color: 'var(--color-muted)', transform: saisonOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }} />
+      </button>
+      {saisonOpen && (
+        <>
+          {/* Periodisierung — phase stepper + block-position chips */}
+          {meso && (
+          <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 12 }}>
+            {/* Phase stepper */}
+            <div className="flex items-center" style={{ gap: 6 }}>
+              {PHASE_STEPS.map((p, i) => {
+                const active = i === activePhaseIdx
+                const past = activePhaseIdx >= 0 && i < activePhaseIdx
+                return (
+                  <div key={p.key} className="flex-1 flex flex-col" style={{ gap: 5 }}>
+                    <div style={{ height: 4, borderRadius: 999, background: active ? 'var(--color-accent)' : past ? 'var(--color-accent-soft)' : 'var(--color-surface-2)' }} />
+                    <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, color: active ? 'var(--color-accent)' : 'var(--color-muted)', letterSpacing: '0.02em' }}>{de ? p.de : p.en}</span>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Block position + week of meso + days to event */}
+            <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
+              {blockPosLabel && (
+                <span className="inline-flex items-center rounded-full px-3 py-1" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 11.5, fontWeight: 600 }}>{blockPosLabel}</span>
+              )}
+              {weekOfMeso != null && (
+                <span className="inline-flex items-center rounded-full px-3 py-1" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 11.5, fontWeight: 600 }}>{de ? `Woche ${weekOfMeso}` : `Week ${weekOfMeso}`}</span>
+              )}
+              {daysToEventResolved != null && (
+                <span className="inline-flex items-center gap-1 rounded-full px-3 py-1" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 11.5, fontWeight: 700 }}>
+                  <Target size={12} /> {daysToEventResolved} {de ? 'Tage bis Event' : 'days to event'}
+                </span>
+              )}
+            </div>
+            {/* Weekly TSS target + progress-so-far */}
+            {planTarget > 0 && (
+              <div className="flex flex-col" style={{ gap: 6 }}>
+                <div className="flex items-baseline justify-between">
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Wochen-TSS' : 'Weekly TSS'}</span>
+                  <span className="num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>{Math.round(planDone)} / {Math.round(planTarget)}</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: 'var(--color-surface-2)', overflow: 'hidden' }}>
+                  <div style={{ width: `${planPct}%`, height: '100%', borderRadius: 999, background: 'var(--color-accent)' }} />
+                </div>
+              </div>
+            )}
+          </div>
+          )}
+
+          {/* PROGNOSE — now-only; hidden when previewing a future week */}
+          {!isFuture && (
+          <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 12 }}>
+            <div className="flex items-center gap-2">
+              <TrendingUp size={14} style={{ color: 'var(--color-muted)' }} />
+              <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'PROGNOSE' : 'PROJECTION'}</span>
+            </div>
+            {projection && projection.mode !== 'insufficient' && projChart ? (
+              <>
+                {/* Metric label + current → projected */}
+                <div className="flex items-end justify-between flex-wrap" style={{ gap: 8 }}>
+                  <div className="flex flex-col" style={{ gap: 2 }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{projection.metric_label}</span>
+                    <div className="flex items-baseline" style={{ gap: 6 }}>
+                      <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink-2)' }}>{projCurrent != null ? projCurrent : '—'}</span>
+                      {/* Low confidence (<30%): the race-day end is a RANGE, never
+                          a point promise. Arrow only when both ends render. */}
+                      {projLowConf && projBand80 ? (
+                        <>
+                          {projCurrent != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
+                          <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>
+                            {Math.round(projBand80[0])}–{Math.round(projBand80[1])}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          {projCurrent != null && projProjected != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
+                          {projProjected != null && <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>{projProjected}</span>}
+                        </>
+                      )}
+                      <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-muted)' }}>{projection.unit}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Confidence-band chart */}
+                <svg viewBox={`0 0 ${projChart.W} ${projChart.H}`} className="w-full" style={{ display: 'block' }} role="img" aria-label={de ? 'Prognose mit Konfidenzband' : 'Projection with confidence band'}>
+                  <polygon points={projChart.band80} fill="var(--color-accent)" opacity="0.10" />
+                  <polygon points={projChart.band50} fill="var(--color-accent)" opacity="0.18" />
+                  <polyline points={projChart.line} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                  <circle cx={projChart.startX} cy={projChart.startY} r="3" fill="var(--color-accent)" />
+                  <circle cx={projChart.endX} cy={projChart.endY} r="3.5" fill="var(--color-accent)" stroke="var(--color-paper-2)" strokeWidth="1.5" />
+                </svg>
+                <div className="flex items-center" style={{ gap: 12 }}>
+                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.18 }} /> {de ? '50% Band' : '50% band'}</span>
+                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.10 }} /> {de ? '80% Band' : '80% band'}</span>
+                </div>
+                {/* Outcome headline + honest caveat. In low confidence the
+                    backend's central-number sentence is replaced by the range
+                    line — no single-number race-day promise. */}
+                {(projRangeHeadline ?? projection.projected_outcome) && (
+                  <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>{projRangeHeadline ?? projection.projected_outcome}</p>
+                )}
+                {projection.caveat && <p style={{ fontSize: 11.5, color: 'var(--color-muted)', lineHeight: 1.4 }}>{projection.caveat}</p>}
+              </>
+            ) : (
+              // Honest empty state — no fabricated numbers.
+              <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: 'var(--color-surface-2)' }}>
+                <Sparkles size={18} style={{ color: 'var(--color-muted)', flexShrink: 0, marginTop: 1 }} />
+                <div className="flex flex-col" style={{ gap: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Prognose noch nicht freigeschaltet' : 'Projection not unlocked yet'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{de ? 'Logge ein paar harte Einheiten, um deine Landing-Prognose freizuschalten.' : 'Log a few hard efforts to unlock your projection.'}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          )}
 
       {/* Zones — follows the active sport: run → Pace/HR, bike/all → Power/Pace. */}
       <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
@@ -1076,6 +1083,47 @@ export default function PlanTab() {
           </span>
         </div>
       </div>
+        </>
+      )}
+
+      {/* Plan card → Load & Form drill-down */}
+      <Link to="/load-form" className="rounded-[24px] p-5 hover-card flex flex-col gap-4" style={cardStyle}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{de ? 'TRAININGSPLAN' : 'TRAINING PLAN'}{sport !== 'all' ? ` · ${sportWord}` : ''}</span>
+            {/* clamp-2 (textfit): long plan/goal names wrap, never truncate */}
+            <span className="num-display line-clamp-2" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{planName}</span>
+          </div>
+          <span className="shrink-0 inline-flex items-center gap-1">
+            <span className="inline-flex items-center rounded-full px-3 py-1.5" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 12, fontWeight: 700 }}>{phaseLabel}</span>
+            <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></span>
+          </span>
+        </div>
+        <div style={{ height: 8, borderRadius: 999, background: 'var(--color-surface-2)', overflow: 'hidden' }}>
+          <div style={{ width: `${progressPct}%`, height: '100%', borderRadius: 999, background: 'var(--color-accent)' }} />
+        </div>
+        <div className="flex">
+          {[
+            [weeksLeft != null ? `${weeksLeft}` : '—', de ? 'Wochen übrig' : 'Weeks left'],
+            [weekHours > 0 ? `${weekHours.toFixed(1)}h` : '—', de ? 'Wochenstunden' : 'Week hours'],
+            [`${sessionCount}`, de ? 'Einheiten' : 'Sessions'],
+          ].map(([v, l], i) => (
+            <div key={i} className="flex-1 flex flex-col gap-0.5">
+              <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{v}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{l}</span>
+            </div>
+          ))}
+        </div>
+      </Link>
+
+      {/* Focus — per-sport builder-program picker (Bike + Run rows). */}
+      <FocusSection />
+
+      {/* Bring-your-own plan → PDF/image import + adaptation (P: plan-upload) */}
+      <Link to="/plan/import" className="hover-card flex items-center gap-2 self-start rounded-full px-4 py-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>
+        <FileUp size={14} style={{ color: 'var(--color-accent)' }} />
+        {de ? 'Eigenen Plan importieren (PDF/Bild)' : 'Import your own plan (PDF/image)'}
+      </Link>
 
       {/* Fortschritt & Potenzial — a single nav entry (not a second sport picker).
           Follows the toggle: it opens the progression screen for the active discipline. */}

@@ -1,10 +1,15 @@
 /**
- * TodayTab — rebuilt 1:1 from pencil-new.pen "Screen · Today" (OwSbv).
- * Card order matches the .pen exactly: Greeting header (+avatar) → Race chip →
- * Recovery card (ring + 3 sub-scores) → Workout card (coral, 3-stat + view link) →
- * Load card (CTL/ATL/TSB) → Activity card (rings + legend) → Metrics row
- * (Resting HR / HRV / Strain) → Week-rhythm card (weekday status dots).
- * Every value is real Garmin/backend data; no extra cards.
+ * TodayTab — V3 order from pencil-new.pen "V3 · Today" (OwSbv, Content u15pVY):
+ * 1 Greeting Header (greeting + the WeatherNudge chip, full-width beneath) →
+ * 2 Race chip (goal countdown → /season) → 3 Recovery/readiness card (hero) →
+ * 4 Workout card (decision-keyed; honest "Workout ansehen" CTA — no Start
+ *   button, user decision) or the V3 Rest Card (pen JhT2g) on planned_rest →
+ * 5 Load snapshot (TheRoadCard: Fitness/Fatigue/Form + plain words).
+ * Below the V3 five: Diese-Woche and "Woche als Story" as one slim link row
+ * each, plus the athlete-status control (feeds the coach interlock).
+ * Removed mounts (P2 dedupe): HRV/Ruhepuls/Strain tile row (Recovery owns
+ * them), RecoveryEtaCard (Recovery owns the outlook), LevelStripCard
+ * (Achievements/History own progress). Every value is real Garmin/backend data.
  */
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -13,16 +18,14 @@ import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays, format, startOfWeek, addDays } from 'date-fns'
 import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
-import { Flag, Heart, Activity, Zap, Target, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, CalendarCheck, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
+import { Flag, Bike, MessageCircle, Zap, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, CalendarCheck, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
 import { loggedReviewFromEvidence, type Adaptations } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
-import RecoveryEtaCard from '../RecoveryEtaCard'
 import TheRoadCard from '../TheRoadCard'
 import WeatherNudge from '../WeatherNudge'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import AbsorptionCard from '../AbsorptionCard'
-import LevelStripCard from '../LevelStripCard'
 import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
@@ -223,10 +226,6 @@ export default function TodayTab() {
 
   const hasSessionToday = todayActs.length > 0
   const loadPct = Math.min(100, Math.round((moveLoad / dailyTssTarget) * 100))
-
-  // Strain (0–21), derived from today's real training load.
-  const strain = moveLoad > 0 ? Math.min(21, moveLoad / 8) : null
-  const strainState = strain == null ? '—' : strain >= 8 && strain <= 16 ? (de ? 'Optimal' : 'Optimal') : strain > 16 ? (de ? 'Hoch' : 'High') : (de ? 'Leicht' : 'Light')
 
   const greeting = (() => {
     const h = today.getHours()
@@ -787,19 +786,10 @@ export default function TodayTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
-      {/* Hero — "here's exactly where you stand right now" snapshot.
-          Greeting + date, headline readiness state + score ring, a personalized
-          one-liner synthesized from today's move × readiness, and 3 key stats.
-          Gradient + glow are keyed to the readiness color. */}
-      <div
-        className="rounded-[28px] p-5 flex flex-col gap-5"
-        style={{
-          background: `linear-gradient(150deg, color-mix(in srgb, ${rColor} 15%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)`,
-          border: `1px solid color-mix(in srgb, ${rColor} 40%, var(--color-rule))`,
-          boxShadow: `0 12px 34px -18px color-mix(in srgb, ${rColor} 70%, transparent)`,
-        }}
-      >
-        {/* Greeting + date + avatar */}
+      {/* 1 · Greeting Header (pen GyODe) — greeting + date + avatar, with the
+          V3 WeatherChip mounted full-width beneath. `hidden` is passed for
+          mount compatibility only — the chip ignores it. */}
+      <div className="flex flex-col gap-3.5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-0.5 min-w-0">
             <h1 className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)', lineHeight: 1.1 }}>{greeting}</h1>
@@ -818,7 +808,41 @@ export default function TodayTab() {
             )}
           </Link>
         </div>
+        <WeatherNudge hidden={!isActiveTrainingDay} />
+      </div>
 
+      {/* 2 · Race chip (pen m3IzG1) — compact goal countdown → /season */}
+      {goalName && (
+        <Link to="/season" className={`${CARD} hover-card flex items-center gap-3.5`} style={cardStyle}>
+          <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-surface-2)' }}>
+            <Flag size={20} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Nächstes Ziel' : 'Next goal'}</div>
+            {/* clamp-2 (textfit): long event names wrap to two lines, never truncate */}
+            <div className="num-display line-clamp-2" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{goalName}</div>
+          </div>
+          {daysToGoal != null && daysToGoal > 0 && (
+            <div className="flex flex-col items-end">
+              <span className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)' }}>{Math.abs(daysToGoal)}</span>
+              <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'Tage' : 'days'}</span>
+            </div>
+          )}
+          <span className="hover-arrow"><ChevronRight size={18} style={{ color: 'var(--color-muted)' }} /></span>
+        </Link>
+      )}
+
+      {/* 3 · Recovery/readiness card — "here's exactly where you stand" hero:
+          score ring + verdict, morning read, momentum cues and moment tiles.
+          Gradient + glow are keyed to the readiness color. */}
+      <div
+        className="rounded-[28px] p-5 flex flex-col gap-5"
+        style={{
+          background: `linear-gradient(150deg, color-mix(in srgb, ${rColor} 15%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)`,
+          border: `1px solid color-mix(in srgb, ${rColor} 40%, var(--color-rule))`,
+          boxShadow: `0 12px 34px -18px color-mix(in srgb, ${rColor} 70%, transparent)`,
+        }}
+      >
         {/* Readiness ring + headline state + personalized one-liner */}
         <Link to="/dashboard?tab=recovery" className="hover-card flex items-center gap-5">
           <ScoreRing score={score ?? 0} color={rColor} size={104}>
@@ -897,63 +921,62 @@ export default function TodayTab() {
         </div>
       </div>
 
-      {/* Breakthrough celebration — only when the detector found a real one (P1.2) */}
-      <BreakthroughCelebration />
-
-      {/* Absorb-and-replan disclosure — the plan bent around your riding (P1.4) */}
-      <AbsorptionCard />
-
-      {/* Weekly recap entry — Monday + Tuesday, the reflection ritual (P1.3) */}
-      {(today.getDay() === 1 || today.getDay() === 2) && (
-        <Link to="/recap/week" className={`${CARD} hover-card flex items-center gap-3.5`} style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
-          <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 44, height: 44, background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' }}>
-            <Sparkles size={22} style={{ color: 'var(--color-accent)' }} />
-          </span>
-          <div className="flex-1 min-w-0">
-            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Deine Woche als Story' : 'Your week, as a story'}</span>
-            <p style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Letzte Woche in 5 Karten — was du gebaut hast.' : 'Last week in 5 cards — what you built.'}</p>
-          </div>
-          <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />
-        </Link>
-      )}
-
-      {/* Race chip → Season page (countdown, phases, race-day plan) */}
-      {goalName && (
-        <Link to="/season" className={`${CARD} hover-card flex items-center gap-3.5`} style={cardStyle}>
-          <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-surface-2)' }}>
-            <Flag size={20} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Nächstes Ziel' : 'Next goal'}</div>
-            <div className="num-display truncate" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{goalName}</div>
-          </div>
-          {daysToGoal != null && daysToGoal > 0 && (
-            <div className="flex flex-col items-end">
-              <span className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)' }}>{Math.abs(daysToGoal)}</span>
-              <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'Tage' : 'days'}</span>
-            </div>
-          )}
-          <span className="hover-arrow"><ChevronRight size={18} style={{ color: 'var(--color-muted)' }} /></span>
-        </Link>
-      )}
-
-      {/* Session Review — recommendation vs. what the athlete actually did */}
+      {/* 4 · Session Review — recommendation vs. what the athlete actually did */}
       {review && <SessionReviewCard review={review} de={de} />}
 
-      {/* Rest day — no session prescribed: nothing to start or view */}
+      {/* 4 · V3 Rest Card (pen JhT2g / iBIGi) — green, never punitive: the
+          decision's own reason, tomorrow preview, "Warum Pause?" → AI coach and
+          a manual-override link to the workout view, no-guilt footer. */}
       {isRestDay && (
         <div
-          className="rounded-[24px] p-5 flex items-center gap-3.5"
-          style={cardStyle}
+          className="rounded-[24px] p-5 flex flex-col gap-4"
+          style={{
+            background: 'linear-gradient(125deg, color-mix(in srgb, var(--color-recovery) 14%, var(--color-paper-2)) 0%, var(--color-paper-2) 75%)',
+            border: '1px solid var(--color-recovery)',
+          }}
         >
-          <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 46, height: 46, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
-            <Moon size={22} strokeWidth={2} style={{ color: 'var(--color-recovery)' }} />
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <Moon size={16} strokeWidth={2.2} style={{ color: 'var(--color-recovery)' }} />
+              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-recovery)' }}>{de ? 'Heutiger Plan' : "Today's plan"}</span>
+            </div>
+            <span className="rounded-full px-2.5 py-1" style={{ background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)', fontSize: 11, fontWeight: 700, color: 'var(--color-recovery)' }}>
+              {de ? 'Geplante Pause' : 'Planned rest'}
+            </span>
           </div>
-          <div className="flex flex-col gap-1 min-w-0">
-            <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-recovery)' }}>{de ? 'Heutiger Plan' : "Today's plan"}</span>
-            <h2 className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{de ? 'Ruhetag' : 'Rest day'}</h2>
-            <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{de ? 'Erholung & Regeneration — keine Einheit vorgesehen.' : 'Recovery & regeneration — no session prescribed.'}</p>
+          <div className="flex flex-col gap-1">
+            <h2 className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{de ? 'Erholungstag' : 'Recovery Day'}</h2>
+            <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+              {(decision?.reason?.trim() || (de ? 'Erholung ist heute die Einheit — der Plan verwandelt die Arbeit der Woche in Fitness.' : 'Recovery is the session today — the plan is turning this week’s work into fitness.'))}
+              {(() => {
+                const tp = tomorrow?.description?.trim()
+                  ? tomorrow.description.trim()
+                  : tomorrow?.predicted_tss != null
+                    ? `~${Math.round(tomorrow.predicted_tss)} TSS${chipLabel(tomorrow.intensity_chip) ? ` · ${chipLabel(tomorrow.intensity_chip)}` : ''}`
+                    : null
+                return tp ? ` ${de ? 'Morgen' : 'Tomorrow'}: ${tp}` : null
+              })()}
+            </p>
           </div>
+          <div className="flex gap-2">
+            <Link
+              to="/coach"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-3"
+              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}
+            >
+              <MessageCircle size={15} style={{ color: 'var(--color-ink-2)' }} /> {de ? 'Warum Pause?' : 'Why rest?'}
+            </Link>
+            <Link
+              to="/workout/today"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-3"
+              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}
+            >
+              <Bike size={15} style={{ color: 'var(--color-ink-2)' }} /> {de ? 'Trotzdem fahren · Z1' : 'Ride anyway · Z1'}
+            </Link>
+          </div>
+          <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+            {de ? 'Kein schlechtes Gewissen, nichts ausgegraut — der Plan hat diesen Tag mitgezählt.' : 'No guilt, no grey-outs — the plan already counted this day.'}
+          </p>
         </div>
       )}
 
@@ -1040,7 +1063,8 @@ export default function TodayTab() {
           </div>
           <div className="hover-reveal">
             <div className="flex flex-col gap-1" style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
-              <span className="truncate">{wBlockSummary ?? (wIntensity ? `${wIntensity.z} · ${wIntensity.t}` : (de ? 'Intervallprofil' : 'Interval profile'))}</span>
+              {/* clamp-2 (textfit): the block summary wraps to two lines, never truncates */}
+              <span className="line-clamp-2">{wBlockSummary ?? (wIntensity ? `${wIntensity.z} · ${wIntensity.t}` : (de ? 'Intervallprofil' : 'Interval profile'))}</span>
               <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{de ? 'Komplettes Workout →' : 'Full workout →'}</span>
             </div>
           </div>
@@ -1055,41 +1079,27 @@ export default function TodayTab() {
         </div>
       )}
 
-      {/* Weather nudge — when to take today's session outside. Only relevant
-          while the decision leaves a session on the menu (easy/quality/hard/
-          recover); hidden on rest, trained, sick/injured/break days. */}
-      <WeatherNudge hidden={!isActiveTrainingDay} />
-
-      {/* The Road — load corridor: 21 days back, today, 10 days ahead (P1.1).
-          Absorbs the old Training Load card's stat row + sparkline. */}
+      {/* 5 · Load snapshot — The Road: Fitness/Fatigue/Form trio + plain-words
+          caption, load corridor 21 days back → 10 ahead (P1.1). */}
       <TheRoadCard ctlNow={ctl} atlNow={atl} tsbNow={tsb} dCtl={dCtl} />
 
-      {/* Recovery outlook — forward TSB projection ("fresh by Thursday") */}
-      <RecoveryEtaCard />
+      {/* Breakthrough celebration — only when the detector found a real one (P1.2) */}
+      <BreakthroughCelebration />
 
-      {/* Lifetime-work meter — real kJ toward the next milestone (.pen i5D9C) */}
-      <LevelStripCard />
+      {/* Absorb-and-replan disclosure — the plan bent around your riding (P1.4) */}
+      <AbsorptionCard />
 
-      {/* Metrics row — Resting HR / HRV / Strain (real Garmin) */}
-      <div className="grid grid-cols-3 gap-3">
-        <MetricTile to="/dashboard?tab=recovery" icon={Heart} iconColor="var(--color-move)" label={de ? 'Ruhepuls' : 'Resting HR'} value={restingHr != null ? `${Math.round(restingHr)}` : '—'} unit="bpm"
-          trend={restingHr != null && latest?.resting_hr != null ? { icon: TrendingDown, text: de ? 'ausgeruht' : 'rested', color: 'var(--color-recovery)' } : undefined} />
-        <MetricTile to="/dashboard?tab=recovery" icon={Activity} iconColor="var(--color-recovery)" label="HRV" value={hrvNow != null ? `${Math.round(hrvNow)}` : '—'} unit="ms"
-          trend={typeof hrvDelta === 'number' ? { icon: hrvDelta >= 0 ? TrendingUp : TrendingDown, text: `${hrvDelta >= 0 ? '+' : ''}${hrvDelta.toFixed(0)}%`, color: hrvDelta >= 0 ? 'var(--color-recovery)' : 'var(--color-amber)' } : undefined} />
-        <MetricTile to="/dashboard?tab=recovery" icon={Zap} iconColor="var(--color-strain)" label="Strain" value={strain != null ? strain.toFixed(1) : '—'} unit=""
-          trend={strain != null ? { icon: Target, text: strainState, color: 'var(--color-strain)' } : undefined} />
-      </div>
-
-      {/* Week rhythm card — forgiving, plan-aware day dots. Planned rest days
-          count as kept; sick/injured/break days PAUSE the rhythm (never break
-          it) and feed the coach (status → rest/deload directive → interlock).
-          No daily-streak chip here — the week itself is the story (P1-11). */}
-      <div className={`${CARD} flex flex-col gap-4`} style={cardStyle}>
-        <div className="flex items-center justify-between">
-          <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Diese Woche' : 'This Week'}</span>
-          <Link to="/dashboard?tab=history" aria-label={de ? 'Verlauf öffnen' : 'Open history'} className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></Link>
+      {/* Diese Woche — ONE slim link row (P2 dedupe): forgiving, plan-aware
+          day dots inline; the full story lives on History. Planned rest days
+          count as kept; sick/injured/break days pause (never break) the week. */}
+      <Link to="/dashboard?tab=history" className="hover-card rounded-[20px] p-3.5 flex items-center gap-3" style={cardStyle}>
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Diese Woche' : 'This Week'}</span>
+          {streakPaused && (
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Pausiert — zählt nicht gegen dich' : 'Paused — never counts against you'}</span>
+          )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex-1 flex items-center justify-end gap-1.5">
           {weekDays.map((d, i) => {
             const bg = d.state === 'done' ? 'color-mix(in srgb, var(--color-recovery) 18%, transparent)'
               : d.state === 'rest' ? 'color-mix(in srgb, var(--color-recovery) 10%, transparent)'
@@ -1097,28 +1107,33 @@ export default function TodayTab() {
               : d.state === 'today' ? 'var(--color-accent)' : 'var(--color-surface-2)'
             const border = d.state === 'upcoming' ? '1px solid var(--color-rule)' : 'none'
             return (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                <div className="grid place-items-center rounded-full" style={{ width: 34, height: 34, background: bg, border }}>
-                  {d.state === 'done' && <Check size={17} strokeWidth={3} style={{ color: 'var(--color-recovery)' }} />}
-                  {d.state === 'today' && <Zap size={17} strokeWidth={2.6} fill="#0A0C0F" style={{ color: '#0A0C0F' }} />}
-                  {d.state === 'rest' && <Moon size={14} style={{ color: 'var(--color-recovery)' }} />}
-                  {d.state === 'paused' && <Pause size={14} style={{ color: 'var(--color-amber)' }} />}
-                  {d.state === 'missed' && <Minus size={14} style={{ color: 'var(--color-muted)' }} />}
-                </div>
-                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{d.label}</span>
-              </div>
+              <span key={i} title={d.label} className="grid place-items-center rounded-full shrink-0" style={{ width: 24, height: 24, background: bg, border }}>
+                {d.state === 'done' && <Check size={13} strokeWidth={3} style={{ color: 'var(--color-recovery)' }} />}
+                {d.state === 'today' && <Zap size={13} strokeWidth={2.6} fill="#0A0C0F" style={{ color: '#0A0C0F' }} />}
+                {d.state === 'rest' && <Moon size={11} style={{ color: 'var(--color-recovery)' }} />}
+                {d.state === 'paused' && <Pause size={11} style={{ color: 'var(--color-amber)' }} />}
+                {d.state === 'missed' && <Minus size={11} style={{ color: 'var(--color-muted)' }} />}
+              </span>
             )
           })}
         </div>
-        {streakPaused && (
-          <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
-            {de
-              ? 'Pausiert — die Woche wartet auf dich. Erholung zählt nicht gegen dich.'
-              : 'Paused — the week waits for you. Recovery never counts against you.'}
-          </p>
-        )}
-        {/* Athlete status — one honest tap. Feeds streak pause + the coach
-            (sick/injured → rest directive → competitive surfaces mute). */}
+        <ChevronRight size={16} className="hover-arrow shrink-0" style={{ color: 'var(--color-muted)' }} />
+      </Link>
+
+      {/* Woche als Story — ONE slim link row, Monday + Tuesday (P1.3) */}
+      {(today.getDay() === 1 || today.getDay() === 2) && (
+        <Link to="/recap/week" className="hover-card rounded-[20px] p-3.5 flex items-center gap-3" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
+          <Sparkles size={18} className="shrink-0" style={{ color: 'var(--color-accent)' }} />
+          <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)' }}>
+            {de ? 'Deine Woche als Story' : 'Your week, as a story'}
+          </span>
+          <ChevronRight size={16} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />
+        </Link>
+      )}
+
+      {/* Athlete status — one honest tap. Feeds streak pause + the coach
+          (sick/injured → rest directive → competitive surfaces mute). */}
+      <div className="rounded-[20px] p-3.5 flex flex-col gap-2" style={cardStyle}>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--color-muted)', marginRight: 2 }}>
             {de ? 'STATUS' : 'STATUS'}
@@ -1332,32 +1347,5 @@ function WhyInputChips({ whyInputs, frameworks, de }: {
         </div>
       )}
     </div>
-  )
-}
-
-
-function MetricTile({ to, icon: Icon, iconColor, label, value, unit, trend }: {
-  to: string; icon: typeof Heart; iconColor: string; label: string; value: string; unit: string
-  trend?: { icon: typeof Heart; text: string; color: string }
-}) {
-  return (
-    <Link to={to} className="rounded-[20px] p-4 hover-card flex flex-col gap-3" style={cardStyle}>
-      <div className="flex items-center gap-2">
-        <Icon size={17} style={{ color: iconColor }} />
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{label}</span>
-      </div>
-      <div className="flex items-end gap-1">
-        <span className="num-display" style={{ fontSize: 26, color: 'var(--color-ink)', lineHeight: 1 }}>{value}</span>
-        {unit && <span style={{ fontSize: 13, color: 'var(--color-muted)', paddingBottom: 3 }}>{unit}</span>}
-      </div>
-      {trend && (
-        <div className="hover-reveal">
-          <div className="flex items-center gap-1">
-            <trend.icon size={15} style={{ color: trend.color }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: trend.color }}>{trend.text}</span>
-          </div>
-        </div>
-      )}
-    </Link>
   )
 }

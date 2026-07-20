@@ -29,7 +29,7 @@ def _plan(d: date, template_id: str, title: str = ""):
     )
 
 
-def _db(acts, audits, day_plans, week_plans, week_tss_rows):
+def _db(acts, audits, day_plans, week_plans, week_tss_rows, adaptation_audits=None):
     db = MagicMock()
 
     async def execute(stmt):  # noqa: ANN001
@@ -38,6 +38,8 @@ def _db(acts, audits, day_plans, week_plans, week_tss_rows):
         result = MagicMock()
         if "coach_briefs" in low:
             result.scalars.return_value.all.return_value = audits
+        elif "plan_adaptations" in low:
+            result.scalars.return_value.all.return_value = adaptation_audits or []
         elif "planned_workouts" in low and "planned_workouts.date = " in low:
             result.scalars.return_value.all.return_value = day_plans
         elif "planned_workouts" in low:
@@ -51,6 +53,7 @@ def _db(acts, audits, day_plans, week_plans, week_tss_rows):
     db.execute = AsyncMock(side_effect=execute)
     db.add = MagicMock()
     db.commit = AsyncMock()
+    db.flush = AsyncMock()
     return db
 
 
@@ -62,7 +65,17 @@ async def test_unplanned_ride_absorbed_without_rebalance():
     assert len(out) == 1
     assert out[0]["kind"] == "unplanned"
     assert out[0]["rebalance"] is None
-    db.add.assert_called_once()
+    # Two rows per absorption: the CoachBrief audit + the plan_adaptations
+    # feed row (plan-engine v2 — adaptation without a feed entry is a bug).
+    added = [c.args[0] for c in db.add.call_args_list]
+    assert len(added) == 2
+    kinds = {type(o).__name__ for o in added}
+    assert kinds == {"CoachBrief", "PlanAdaptation"}
+    feed = next(o for o in added if type(o).__name__ == "PlanAdaptation")
+    assert feed.source == "post_workout"
+    assert feed.signal == "session_done"
+    assert feed.evidence["absorption"]["activity_id"] == 1
+    assert feed.message_en and feed.message_de
 
 
 @pytest.mark.asyncio
@@ -111,3 +124,113 @@ async def test_absorption_never_raises():
     db.execute = AsyncMock(side_effect=RuntimeError("db down"))
     out = await absorb_new_activities(db, 1)
     assert out == []
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Plan-engine v2 regressions — the recon-verified death-spiral shape:
+#  user 5's Sat sweet_spot_2x20 (the week's KEY session) was serially
+#  downgraded to rest_day because (a) the dedup audit was wiped on every
+#  sync and (b) the victim pick was "biggest remaining" with no category
+#  preference. These tests encode that exact failure.
+# ──────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_rebalance_trims_endurance_filler_not_the_key_session():
+    # Recon shape: remaining week = Sat sweet_spot_2x20 (85, KEY) + a filler
+    # z2_long_120 (90). Old code downgraded the biggest remaining — the long
+    # ride here, but with SS as the biggest it ate the quality day. New rule:
+    # the endurance filler is the victim; the SS session survives untouched.
+    ss = _plan(TODAY + timedelta(days=2), "sweet_spot_2x20", "Sweet spot — 2×20min")
+    filler = _plan(TODAY + timedelta(days=1), "z2_endurance_90", "Z2 endurance — 90min")
+    week = [_plan(TODAY - timedelta(days=1), "z2_progressive_90"), ss, filler]
+    db = _db([_act(1, 200.0)], [], [], week, [(200.0,), (150.0,)])
+    out = await absorb_new_activities(db, 1)
+    assert len(out) == 1
+    rb = out[0]["rebalance"]
+    assert rb is not None
+    assert rb["from"] == "z2_endurance_90", "victim must be the endurance filler"
+    assert ss.template_id == "sweet_spot_2x20", "key session must survive"
+    assert ss.blocks_source == "ai_prescribed"
+    assert filler.blocks_source == "coach_absorbed"
+
+
+@pytest.mark.asyncio
+async def test_rebalance_quality_only_touched_when_no_filler_remains():
+    ss = _plan(TODAY + timedelta(days=2), "sweet_spot_2x20", "Sweet spot — 2×20min")
+    week = [_plan(TODAY - timedelta(days=1), "z2_progressive_90"), ss]
+    db = _db([_act(1, 250.0)], [], [], week, [(250.0,)])
+    out = await absorb_new_activities(db, 1)
+    rb = out[0]["rebalance"]
+    assert rb is not None and rb["from"] == "sweet_spot_2x20"
+
+
+@pytest.mark.asyncio
+async def test_moderate_overage_trims_duration_not_the_whole_day():
+    # Overage smaller than the victim → swap to a SHORTER Z2 variant, not a
+    # recovery spin / rest day (trim duration first — plan-engine v2).
+    long_ride = _plan(TODAY + timedelta(days=1), "z2_long_120", "Long Z2 — 2h")
+    week = [
+        _plan(TODAY - timedelta(days=2), "z2_endurance_90"),
+        _plan(TODAY - timedelta(days=1), "z2_endurance_90"),
+        long_ride,
+    ]
+    # target = 68+68+90 = 226; banked = 190; remaining = 90 → projected 280;
+    # overage = 54 → trim target 90-54 = 36 TSS → no Z2 variant fits (min 45)
+    # ... use a gentler overage: banked 160 → projected 250, overage 24 →
+    # trim target 66 → z2_endurance_upper_75 (63) or z2_endurance_low_100.
+    db = _db([_act(1, 90.0)], [], [], week, [(90.0,), (70.0,)])
+    out = await absorb_new_activities(db, 1)
+    rb = out[0]["rebalance"]
+    assert rb is not None
+    assert rb["from"] == "z2_long_120"
+    assert rb["to"] not in ("rest_day", "recovery_60"), (
+        f"moderate overage must trim duration, got {rb['to']}"
+    )
+    from app.services.workout_templates import TEMPLATES
+    assert TEMPLATES[rb["to"]].category == "endurance"
+    assert long_ride.duration_seconds_target > 0
+    assert long_ride.interval_structure["intervals"], "trimmed day keeps real blocks"
+
+
+@pytest.mark.asyncio
+async def test_dedup_survives_brief_cache_wipe_via_plan_adaptations():
+    # The death-spiral: coach_briefs wiped by sync (audits=[]) — but the
+    # plan_adaptations feed row survives and blocks re-absorption.
+    adaptation_audits = [{"absorption": {"activity_id": 1}}]
+    db = _db([_act(1, 82.0)], [], [], [], [], adaptation_audits=adaptation_audits)
+    out = await absorb_new_activities(db, 1)
+    assert out == [], "activity must be absorbed at most once per actual ride"
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_absorbed_day_never_eased_twice():
+    # A day already eased by absorption (blocks_source='coach_absorbed') is
+    # never picked again — a PROGRAM day can only be absorbed into rest once
+    # per actual ride, and a second ride can't keep eating the same week.
+    already_eaten = _plan(TODAY + timedelta(days=1), "recovery_60", "Recovery spin — 60min")
+    already_eaten.blocks_source = "coach_absorbed"
+    week = [_plan(TODAY - timedelta(days=1), "z2_progressive_90"), already_eaten]
+    db = _db([_act(2, 300.0)], [], [], week, [(300.0,)])
+    out = await absorb_new_activities(db, 1)
+    assert len(out) == 1
+    assert out[0]["rebalance"] is None, "no fresh victim → no rebalance"
+    assert already_eaten.template_id == "recovery_60"
+
+
+@pytest.mark.asyncio
+async def test_rebalance_absorption_writes_extra_load_feed_row():
+    filler = _plan(TODAY + timedelta(days=1), "z2_endurance_90", "Z2 endurance — 90min")
+    week = [_plan(TODAY - timedelta(days=1), "z2_progressive_90"), filler]
+    db = _db([_act(1, 250.0)], [], [], week, [(250.0,)])
+    out = await absorb_new_activities(db, 1)
+    assert out[0]["rebalance"] is not None
+    added = [c.args[0] for c in db.add.call_args_list]
+    feed = next(o for o in added if type(o).__name__ == "PlanAdaptation")
+    assert feed.signal == "extra_load"
+    assert feed.rule == "absorb_and_replan"
+    assert feed.before is not None and feed.after is not None
+    # No-guilt register: the message must not shame ("missed", "verpasst"
+    # in the guilt sense) — it states the signal and the change.
+    assert "counted" in feed.message_en or "banked" in feed.message_en

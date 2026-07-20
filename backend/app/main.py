@@ -6,7 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.scheduler import run_all_user_syncs, run_morning_push_briefs, scheduler
+from app.scheduler import (
+    run_all_user_syncs,
+    run_hourly_plan_adaptation,
+    run_morning_push_briefs,
+    scheduler,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +73,18 @@ async def lifespan(app: FastAPI):
         hours=1,
         id="morning_push",
         misfire_grace_time=600,
+    )
+    # Hourly plan-adaptation loop (plan-engine v2): fresh signals reshape the
+    # upcoming week within rails; every change lands in the adaptation feed.
+    # Cheap when signals are unchanged (snapshot fingerprint short-circuit).
+    scheduler.add_job(
+        run_hourly_plan_adaptation,
+        "interval",
+        hours=1,
+        id="plan_adaptation",
+        misfire_grace_time=600,
+        coalesce=True,
+        max_instances=1,
     )
     scheduler.start()
     logger.info("APScheduler started with Garmin sync every 4 hours")

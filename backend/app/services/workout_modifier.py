@@ -163,6 +163,79 @@ def _template_exceeds_ceiling(template_id: str, ceiling: str) -> bool:
 
 
 # ======================================================================
+# Library-wide cascade helpers (plan-adaptation engine, July 2026)
+# ======================================================================
+#
+# ORDERED_TEMPLATES covers the original 12-template spine, but the library
+# has grown to 50+ templates (variety rotation, builder programs). The hourly
+# plan_adaptation_engine needs one-notch harder/easier steps for ANY template,
+# so we first map a template onto its nearest spine anchor (same category,
+# closest base_tss) and then walk the existing cascades from there. This keeps
+# ONE cascade spine — no parallel ordering to drift out of sync.
+
+# The Z2 family used by the soft-ease rule (recon-science R2: on a rough
+# night, quality drops to endurance but the SLOT and duration are kept so the
+# day still counts). Ordered short → long.
+_ENDURANCE_BY_DURATION: list[str] = [
+    "z2_endurance_60",
+    "z2_endurance_90",
+    "z2_long_120",
+    "z2_long_180",
+]
+
+
+def nearest_anchor(template_id: str) -> str:
+    """Map any library template onto its closest ORDERED_TEMPLATES anchor.
+
+    Same-category anchors are preferred; ties/nearness resolve by base_tss
+    distance. Unknown templates fall back to the safe z2_endurance_60 anchor
+    (same defensive default apply_modification uses).
+    """
+    if template_id in ORDERED_TEMPLATES:
+        return template_id
+    tmpl = TEMPLATES.get(template_id)
+    if tmpl is None:
+        return "z2_endurance_60"
+    same_cat = [
+        tid for tid in ORDERED_TEMPLATES if TEMPLATES[tid].category == tmpl.category
+    ]
+    pool = same_cat or ORDERED_TEMPLATES
+    return min(pool, key=lambda tid: abs(TEMPLATES[tid].base_tss - tmpl.base_tss))
+
+
+def one_notch_easier_id(template_id: str) -> str:
+    """One step down the easier cascade, valid for the FULL template library."""
+    return TEMPLATE_EASIER_CASCADE.get(nearest_anchor(template_id), "recovery_30")
+
+
+def one_notch_harder_id(template_id: str) -> str:
+    """One step up the harder cascade, valid for the FULL template library."""
+    anchor = nearest_anchor(template_id)
+    return TEMPLATE_HARDER_CASCADE.get(anchor, anchor)
+
+
+def endurance_for_duration(duration_min: int) -> str:
+    """The Z2 endurance template closest to ``duration_min`` (soft-ease rule:
+    intensity comes out, the time slot stays)."""
+    return min(
+        _ENDURANCE_BY_DURATION,
+        key=lambda tid: abs(_base_template_minutes(TEMPLATES[tid]) - duration_min),
+    )
+
+
+def materialize_template(
+    template_id: str,
+    ftp_w: int,
+    duration_min_target: int | None = None,
+    indoor: bool = False,
+) -> tuple[list[dict], int, float, dict]:
+    """Public wrapper over ``_materialize`` for external callers (the hourly
+    plan-adaptation engine) — returns (blocks, duration_min, predicted_tss,
+    metadata) in the canonical prescribed-workout shape."""
+    return _materialize(template_id, ftp_w, duration_min_target, indoor)
+
+
+# ======================================================================
 # Result dataclass
 # ======================================================================
 

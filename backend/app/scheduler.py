@@ -14,12 +14,14 @@ Design notes:
 """
 
 import logging
+from datetime import date, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
 from app.database import async_session_maker
 from app.models.garmin_credential import GarminCredential
+from app.models.planned_workout import PlannedWorkout
 from app.services.garmin_sync_service import sync_user_garmin
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,52 @@ async def run_all_user_syncs() -> None:
                 # Continue with other users — one failure must not stop all syncs
 
     logger.info("Scheduled sync complete: %d succeeded, %d failed", synced, failed)
+
+
+async def run_hourly_plan_adaptation() -> None:
+    """Hourly plan-adaptation sweep (plan-engine v2): every user with an
+    active plan gets today + the next six days re-evaluated against fresh
+    signals (sleep/HRV/status/load) by plan_adaptation_engine.run_for_user.
+
+    Mirrors run_all_user_syncs: system-level job (RLS intentionally bypassed —
+    all engine queries are user_id-scoped), per-user try/except so one failure
+    never blocks the rest. Cheap when nothing changes — the engine fingerprints
+    its signal snapshot and exits quietly on an unchanged hour."""
+    from app.services.plan_adaptation_engine import run_for_user
+
+    adapted = 0
+    failed = 0
+    async with async_session_maker() as db:
+        # "Active plan" = at least one planned workout today or in the future
+        # (yesterday included to tolerate timezone skew around midnight UTC).
+        rows = await db.execute(
+            select(PlannedWorkout.user_id)
+            .where(PlannedWorkout.date >= date.today() - timedelta(days=1))
+            .distinct()
+        )
+        user_ids = [r[0] for r in rows.all()]
+
+        for uid in user_ids:
+            try:
+                result = await run_for_user(db, uid)
+                if result.get("changes"):
+                    adapted += 1
+                    logger.info(
+                        "Plan adapted for user %d: %s",
+                        uid,
+                        [c["rule"] for c in result["changes"]],
+                    )
+            except Exception:
+                failed += 1
+                logger.exception("Plan adaptation failed for user %d — continuing", uid)
+                try:
+                    await db.rollback()  # keep the shared session usable
+                except Exception:  # noqa: BLE001 — rollback failure is terminal for this sweep
+                    logger.exception("Session rollback failed — aborting adaptation sweep")
+                    break
+
+    if adapted or failed:
+        logger.info("Plan adaptation sweep done: %d adapted, %d failed", adapted, failed)
 
 
 async def run_morning_push_briefs() -> None:

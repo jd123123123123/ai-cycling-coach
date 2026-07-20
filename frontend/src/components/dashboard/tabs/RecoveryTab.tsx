@@ -21,6 +21,7 @@ import { computeReadiness, readinessTier } from '../../../utils/metrics'
 import { localDayKey } from '../../../utils/loadMetrics'
 import ScoreRing from '../../ui/ScoreRing'
 import MetricCard from '../../ui/MetricCard'
+import StatValue from '../../ui/StatValue'
 import RecoveryEtaCard from '../RecoveryEtaCard'
 import { BottomSheet } from '../../strength/BottomSheet'
 import { useLocale } from '../../../contexts/LocaleContext'
@@ -320,14 +321,17 @@ export default function RecoveryTab() {
           ? (de ? 'HRV liegt über der Basislinie und der Schlaf war stark. Nutze das Fenster für eine Qualitätseinheit — schütze danach den Schlaf.' : 'HRV is above baseline and sleep was strong. Use the window for a quality session, then protect recovery tonight.')
           : (de ? 'Deine Signale zeigen Ermüdung. Halte es locker und ziele auf 7,5 h+ Schlaf, damit HRV und Anpassung zurückkommen.' : 'Your signals point to fatigue. Keep it easy and aim for 7.5h+ sleep so HRV and adaptation rebound.')
 
-  // Sleep Quality tiles (fixed .pen labels; fill the ones real data now backs).
-  const sleepTiles: { l: string; v: string; note?: string }[] = [
-    { l: de ? 'Effizienz' : 'Efficiency', v: efficiency != null ? `${efficiency}%` : DASH },
-    { l: de ? 'Einschlafzeit' : 'Latency', v: DASH, note: de ? 'nicht erfasst' : 'not tracked' },
-    { l: de ? 'Störungen' : 'Disturbances', v: sd?.awake_count != null ? String(sd.awake_count) : DASH },
-    { l: de ? 'Zeit im Bett' : 'Time in bed', v: timeInBed != null ? fmtHm(timeInBed) : DASH },
-    { l: de ? 'Konstanz' : 'Consistency', v: consistencyPct != null ? `${consistencyPct}%` : DASH, note: consistencyPct != null ? (de ? 'Einschlafzeit-Streuung' : 'bedtime variance') : (de ? 'zu wenig Nächte' : 'not enough nights') },
-    { l: de ? 'Atemrate' : 'Resp. rate', v: sd?.respiration_avg != null ? sd.respiration_avg.toFixed(0) : DASH },
+  // Sleep Quality tiles — every value renders through the honest-dash
+  // primitive (StatValue, audit P2-16): an untracked series can NEVER read as
+  // a fake 0/0%. The Konstanz tile previously hand-rolled its percent; now a
+  // missing signal renders "— · nicht erfasst / not tracked".
+  const sleepTiles: { l: string; value: number | string | null; unit?: string; caption?: string }[] = [
+    { l: de ? 'Effizienz' : 'Efficiency', value: efficiency, unit: '%' },
+    { l: de ? 'Einschlafzeit' : 'Latency', value: null },
+    { l: de ? 'Störungen' : 'Disturbances', value: sd?.awake_count ?? null },
+    { l: de ? 'Zeit im Bett' : 'Time in bed', value: timeInBed != null ? fmtHm(timeInBed) : null },
+    { l: de ? 'Konstanz' : 'Consistency', value: consistencyPct, unit: '%', caption: de ? 'Einschlafzeit-Streuung' : 'bedtime variance' },
+    { l: de ? 'Atemrate' : 'Resp. rate', value: sd?.respiration_avg != null ? Math.round(sd.respiration_avg) : null },
   ]
 
   return (
@@ -476,10 +480,9 @@ export default function RecoveryTab() {
         {[sleepTiles.slice(0, 3), sleepTiles.slice(3, 6)].map((rowTiles, ri) => (
           <div key={ri} className="grid grid-cols-3 gap-2.5">
             {rowTiles.map((tile) => (
-              <div key={tile.l} title={tile.note} className="flex flex-col rounded-[12px] p-3" style={{ background: 'var(--color-surface-2)', gap: 3 }}>
-                <span className="num-display" style={{ fontSize: 18, color: tile.v === DASH ? 'var(--color-ink-2)' : 'var(--color-ink)' }}>{tile.v}</span>
+              <div key={tile.l} className="flex flex-col rounded-[12px] p-3" style={{ background: 'var(--color-surface-2)', gap: 3 }}>
                 <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{tile.l}</span>
-                {tile.note && <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--color-muted)', opacity: 0.8 }}>{tile.note}</span>}
+                <StatValue value={tile.value} unit={tile.unit} caption={tile.caption} />
               </div>
             ))}
           </div>

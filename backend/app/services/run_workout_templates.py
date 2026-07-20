@@ -19,10 +19,14 @@ strides + progression-run practice.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 RunCategory = Literal["recovery", "endurance", "tempo", "threshold", "vo2"]
+
+# Adaptation metadata vocab — mirrors workout_templates (plan-engine v2).
+RunBlockPlacement = Literal["base", "build", "peak", "taper", "any"]
+RunMinReadiness = Literal["low", "medium", "high"]
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,14 @@ class RunTemplate:
     category: RunCategory
     purpose: str       # short prose ("Raises the aerobic ceiling")
     blocks: list[RunBlock]
+    # ── Adaptation metadata (plan-engine v2) — same semantics as the bike
+    # library: the adaptation engine swaps sessions by readiness/placement
+    # instead of deleting the day. fun_factor 1-3 biases variety rotation.
+    physiological_target: str = "aerobic_base"
+    block_placement: RunBlockPlacement = "any"
+    min_readiness: RunMinReadiness = "medium"
+    indoor_ok: bool = True
+    fun_factor: int = 2
 
     @property
     def duration_s(self) -> int:
@@ -179,6 +191,43 @@ RUN_TEMPLATES: dict[str, RunTemplate] = {
             _cd(180),
         ],
     ),
+    # ---- Fartlek / hills — the novelty + strength variety set ------------
+    "run_fartlek_40": RunTemplate(
+        id="run_fartlek_40",
+        name="Fartlek — 40min play",
+        category="tempo",
+        purpose=(
+            "Unstructured speed play: surge when you feel like it, float when "
+            "you don't. The highest-novelty run format — trains gear changes "
+            "without a stopwatch dictating the day."
+        ),
+        blocks=[
+            _wu(),
+            RunBlock(
+                "Fartlek play", 24 * 60, 3, 6,
+                "8-12 surges of 30s-2min at 'strong', full-feel recoveries — no rules",
+            ),
+            _cd(360),
+        ],
+    ),
+    "run_hill_reps_8x60": RunTemplate(
+        id="run_hill_reps_8x60",
+        name="Hill Reps — 8×60s",
+        category="vo2",
+        purpose=(
+            "Strength-endurance + VO₂ stimulus at lower impact than track "
+            "reps — the gradient does the loading, not the pace."
+        ),
+        blocks=[
+            _wu(),
+            *_reps(
+                8,
+                RunBlock("Hill rep", 60, 5, 8, "Strong uphill drive — tall hips, short steps"),
+                _jog(105, "Walk/jog down"),
+            ),
+            _cd(),
+        ],
+    ),
     # ---- Long runs ------------------------------------------------------
     "run_long_60": RunTemplate(
         id="run_long_60",
@@ -211,6 +260,40 @@ RUN_TEMPLATES: dict[str, RunTemplate] = {
         ],
     ),
 }
+
+
+# ── Adaptation metadata — populated for EVERY run template ──────────────
+# (physiological_target, block_placement, min_readiness, indoor_ok, fun_factor)
+_RUN_META: dict[str, tuple[str, RunBlockPlacement, RunMinReadiness, bool, int]] = {
+    "run_recovery_25":     ("recovery", "any", "low", True, 1),
+    "run_easy_30":         ("aerobic_base", "any", "low", True, 1),
+    "run_easy_45":         ("aerobic_base", "any", "low", True, 1),
+    "run_strides_8x20":    ("neuromuscular_power", "any", "medium", True, 3),
+    "run_vo2_400s":        ("vo2max", "build", "high", True, 2),
+    "run_vo2_800s":        ("vo2max", "build", "high", True, 2),
+    "run_tempo_20":        ("lactate_threshold", "build", "medium", True, 2),
+    "run_tempo_2x15":      ("lactate_threshold", "build", "high", True, 2),
+    "run_progression_45":  ("fatigue_resistance", "build", "medium", True, 2),
+    "run_fartlek_40":      ("aerobic_power", "any", "medium", True, 3),
+    "run_hill_reps_8x60":  ("strength_endurance", "build", "high", True, 3),
+    "run_long_60":         ("durability", "base", "medium", True, 2),
+    "run_long_75":         ("durability", "base", "medium", True, 2),
+    "run_long_ladder_100": ("durability", "build", "medium", False, 2),
+}
+
+_run_missing = set(RUN_TEMPLATES) - set(_RUN_META)
+assert not _run_missing, f"run templates missing adaptation metadata: {_run_missing}"
+for _tid, (_target, _placement, _readiness, _indoor, _fun) in _RUN_META.items():
+    _t = RUN_TEMPLATES.get(_tid)
+    if _t is not None:
+        RUN_TEMPLATES[_tid] = replace(
+            _t,
+            physiological_target=_target,
+            block_placement=_placement,
+            min_readiness=_readiness,
+            indoor_ok=_indoor,
+            fun_factor=_fun,
+        )
 
 
 def get_run_template(template_id: str) -> RunTemplate | None:

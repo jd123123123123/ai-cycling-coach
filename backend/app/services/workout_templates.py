@@ -19,7 +19,7 @@ San Millán Z2 (see .planning/research/training-frameworks.md).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 
@@ -37,6 +37,13 @@ Category = Literal[
     "anaerobic",
     "rest",
 ]
+
+# Machine-readable placement/readiness metadata (plan-engine v2). The
+# adaptation engine swaps sessions BY these fields — e.g. a low-readiness
+# morning replaces today's high-min_readiness VO2 with a same-slot,
+# low-readiness archetype instead of deleting the day.
+BlockPlacement = Literal["base", "build", "peak", "taper", "any"]
+MinReadiness = Literal["low", "medium", "high"]
 
 
 @dataclass(frozen=True)
@@ -73,6 +80,19 @@ class WorkoutTemplate:
     blocks: list[IntervalBlock]
     base_tss: float              # approximate TSS at the template's designed volume
     min_ftp_required: int | None = None  # skip if athlete FTP < this (safety)
+    # ── Adaptation metadata (plan-engine v2) ──────────────────────────────
+    # physiological_target: what the session develops, in one machine-usable
+    # word (aerobic_base, vo2max, ftp, lactate_clearance, …). block_placement:
+    # where in the macrocycle the session belongs. min_readiness: the lowest
+    # adaptive-readiness state the session should be prescribed at (VO2 needs
+    # 'high', a recovery spin is always fine). indoor_ok: feasible on a
+    # trainer. fun_factor 1-3: novelty/affect rating (Ekkekakis/Gonzalez-Cutre
+    # — the variety engine biases rotation toward higher-fun formats).
+    physiological_target: str = "aerobic_base"
+    block_placement: BlockPlacement = "any"
+    min_readiness: MinReadiness = "medium"
+    indoor_ok: bool = True
+    fun_factor: int = 2
 
 
 @dataclass(frozen=True)
@@ -716,6 +736,28 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         ],
         base_tss=42.0,
     ),
+    "z2_endurance_surges_75": WorkoutTemplate(
+        id="z2_endurance_surges_75",
+        name="Playful Z2 — 75min with 6 surprise surges",
+        category="endurance",
+        purpose=(
+            "An easy aerobic ride that stays a LIT day but breaks the trance: "
+            "six 15-second playful out-of-the-saddle surges sprinkled through "
+            "a 0.65-FTP Z2 base. Near-zero extra load, maximum boredom-kill — "
+            "novelty feeds intrinsic motivation (González-Cutre) without "
+            "touching the easy-day affect budget (Ekkekakis)."
+        ),
+        framework_cited="Seiler LIT · González-Cutre novelty · Ekkekakis affect",
+        blocks=[
+            IntervalBlock(name="Z2 base", duration_s=30 * 60, target_pct_ftp=0.65, target_rpe=4, zone=2),
+            IntervalBlock(
+                name="Surge play (6×15s sprints · long easy spins between)",
+                duration_s=15 * 60, target_pct_ftp=0.70, target_rpe=6, zone=2,
+            ),
+            IntervalBlock(name="Z2 close", duration_s=30 * 60, target_pct_ftp=0.65, target_rpe=4, zone=2),
+        ],
+        base_tss=58.0,
+    ),
     "recovery_60": WorkoutTemplate(
         id="recovery_60",
         name="Recovery spin — 60min",
@@ -783,6 +825,28 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             _cd(),
         ],
         base_tss=88.0,
+    ),
+    "tempo_bursts_3x10": WorkoutTemplate(
+        id="tempo_bursts_3x10",
+        name="Tempo + bursts — 3×10min @ 83% with 10s surges",
+        category="tempo",
+        purpose=(
+            "Steady tempo reps with a 10-second seated surge every 2 minutes — "
+            "adds neuromuscular snap and engagement to the aerobic workhorse "
+            "without changing its recovery cost. The surges mimic group-ride "
+            "reality; the base stays honest Z3."
+        ),
+        framework_cited="Friel tempo · Allen variable-power · CTS tempo+surges",
+        blocks=[
+            _wu(),
+            IntervalBlock(name="Tempo+bursts 1 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.85, target_rpe=6, zone=3),
+            _rec(4 * 60),
+            IntervalBlock(name="Tempo+bursts 2 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.85, target_rpe=6, zone=3),
+            _rec(4 * 60),
+            IntervalBlock(name="Tempo+bursts 3 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.85, target_rpe=7, zone=3),
+            _cd(),
+        ],
+        base_tss=72.0,
     ),
     "sub_threshold_2x40": WorkoutTemplate(
         id="sub_threshold_2x40",
@@ -1271,6 +1335,142 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         min_ftp_required=180,
     ),
 }
+
+
+# ======================================================================
+#  Adaptation metadata — populated for EVERY template (plan-engine v2)
+# ======================================================================
+# (physiological_target, block_placement, min_readiness, indoor_ok, fun_factor)
+# Values follow the evidence base: VO2/threshold need 'high' readiness
+# (HRV-gated per Kiviniemi/Javaloyes), recovery/skill work is always 'low',
+# rides ≥3h are flagged indoor_ok=False, and fun_factor 3 marks the
+# novelty/affect formats (surges, over-unders, race sims, ladders).
+
+_META: dict[str, tuple[str, BlockPlacement, MinReadiness, bool, int]] = {
+    # rest / recovery / skills
+    "rest_day":                    ("recovery", "any", "low", True, 1),
+    "recovery_30":                 ("recovery", "any", "low", True, 1),
+    "recovery_60":                 ("recovery", "any", "low", True, 1),
+    "cadence_high_fsr_6x3":        ("pedaling_skill", "any", "low", True, 2),
+    # endurance / aerobic base
+    "z2_endurance_60":             ("aerobic_base", "any", "low", True, 1),
+    "z2_endurance_90":             ("aerobic_base", "any", "low", True, 1),
+    "z2_long_120":                 ("durability", "base", "medium", True, 2),
+    "z2_long_180":                 ("durability", "base", "medium", False, 2),
+    "z2_long_240":                 ("durability", "base", "medium", False, 2),
+    "z2_climbing_long":            ("climbing_strength", "build", "medium", False, 3),
+    "maf_aerobic_90":              ("aerobic_base", "base", "low", True, 1),
+    "z2_progressive_90":           ("aerobic_base", "base", "medium", True, 2),
+    "z2_endurance_low_100":        ("fat_oxidation", "base", "low", True, 1),
+    "z2_endurance_upper_75":       ("aerobic_base", "base", "medium", True, 2),
+    "z2_endurance_tempo_touch_75": ("aerobic_base", "base", "medium", True, 2),
+    "z2_endurance_surges_75":      ("aerobic_base", "any", "medium", True, 3),
+    "z2_fasted_60":                ("fat_oxidation", "base", "medium", True, 1),
+    # tempo / sub-threshold
+    "tempo_3x10":                  ("muscular_endurance", "base", "medium", True, 2),
+    "tempo_2x30":                  ("muscular_endurance", "build", "medium", True, 2),
+    "tempo_4x15":                  ("muscular_endurance", "build", "medium", True, 2),
+    "tempo_progression_60":        ("muscular_endurance", "base", "medium", True, 2),
+    "tempo_bursts_3x10":           ("muscular_endurance", "any", "medium", True, 3),
+    "cadence_low_lcf_4x6":         ("climbing_strength", "base", "medium", True, 2),
+    "group_ride_variable":         ("race_specificity", "any", "medium", False, 3),
+    # sweet spot
+    "sweet_spot_2x20":             ("ftp", "any", "medium", True, 2),
+    "sweet_spot_3x20":             ("ftp", "build", "medium", True, 2),
+    "sweet_spot_4x15":             ("ftp", "build", "medium", True, 2),
+    "sub_threshold_2x40":          ("ftp", "build", "high", True, 1),
+    # threshold
+    "threshold_2x15":              ("ftp", "build", "high", True, 2),
+    "over_under_3x5":              ("lactate_clearance", "build", "high", True, 3),
+    "threshold_seiler_4x8":        ("ftp", "build", "high", True, 2),
+    "threshold_pyramid":           ("lactate_tolerance", "build", "high", True, 3),
+    "threshold_hill_4x10":         ("climbing_strength", "build", "high", True, 2),
+    "over_under_4x12":             ("lactate_clearance", "build", "high", True, 2),
+    "threshold_descending":        ("ftp", "peak", "high", True, 2),
+    "lactate_shuttles_3x8":        ("lactate_clearance", "build", "high", True, 2),
+    "crit_simulation_stochastic":  ("race_specificity", "peak", "high", True, 3),
+    "ftp_test_20min":              ("assessment", "any", "high", True, 2),
+    "ftp_ramp_test":               ("assessment", "any", "high", True, 2),
+    "race_pace_60_95":             ("race_specificity", "taper", "high", True, 2),
+    # vo2
+    "vo2_5x4":                     ("vo2max", "build", "high", True, 2),
+    "vo2_micro_30x30":             ("vo2max", "build", "high", True, 3),
+    "vo2_ronnestad_3x13":          ("vo2max", "build", "high", True, 3),
+    "vo2_map_5x3":                 ("vo2max", "build", "high", True, 2),
+    "polarized_long_z2_4x4":       ("durability", "build", "high", False, 3),
+    "vo2_hill_6x3":                ("vo2max", "build", "high", True, 2),
+    "vo2_microbursts_30x15_45":    ("vo2max", "build", "high", True, 3),
+    "vo2_3x6":                     ("vo2max", "build", "high", True, 2),
+    "vo2_descending_5_4_3_2_1":    ("vo2max", "peak", "high", True, 3),
+    # anaerobic / neuromuscular
+    "anaerobic_capacity_5x3_130":  ("anaerobic_capacity", "peak", "high", True, 2),
+    "anaerobic_8x90s":             ("anaerobic_capacity", "peak", "high", True, 2),
+    "anaerobic_tabata_8x20_10":    ("anaerobic_capacity", "peak", "high", True, 2),
+    "neuromuscular_sprints_8x15":  ("neuromuscular_power", "any", "medium", True, 3),
+    "neuromuscular_spinup_6x30":   ("neuromuscular_power", "any", "medium", True, 3),
+    "neuromuscular_standing_6x10": ("neuromuscular_power", "any", "medium", False, 3),
+}
+
+# Apply the metadata to the frozen templates (dataclasses.replace keeps the
+# instances immutable). Every template MUST have a row in _META — enforced by
+# the assertion so a new template can't ship without adaptation metadata.
+_missing = set(TEMPLATES) - set(_META)
+assert not _missing, f"templates missing adaptation metadata: {_missing}"
+for _tid, (_target, _placement, _readiness, _indoor, _fun) in _META.items():
+    _t = TEMPLATES.get(_tid)
+    if _t is not None:
+        TEMPLATES[_tid] = replace(
+            _t,
+            physiological_target=_target,
+            block_placement=_placement,
+            min_readiness=_readiness,
+            indoor_ok=_indoor,
+            fun_factor=_fun,
+        )
+
+
+# ======================================================================
+#  Endurance trim ladder — duration-first trimming (plan-engine v2)
+# ======================================================================
+# When a week runs over its TSS budget, the plan trims the DURATION of an
+# endurance day (a shorter Z2 variant still counts aerobically) before it
+# ever downgrades to a recovery spin or inserts an extra rest day — a 12h/wk
+# athlete must never silently receive a 5h week. Ordered by descending
+# base_tss; deliberately excludes special-purpose variants (fasted, MAF).
+
+ENDURANCE_TRIM_LADDER: tuple[str, ...] = (
+    "z2_long_120",              # 90 TSS · 120 min
+    "z2_progressive_90",        # 78 TSS · 90 min
+    "z2_endurance_90",          # 68 TSS · 90 min
+    "z2_endurance_upper_75",    # 63 TSS · 75 min
+    "z2_endurance_low_100",     # 62 TSS · 100 min
+    "z2_endurance_surges_75",   # 58 TSS · 75 min
+    "z2_endurance_tempo_touch_75",  # 58 TSS · 75 min
+    "z2_endurance_60",          # 45 TSS · 60 min
+)
+
+
+def pick_trim_variant(
+    max_tss: float,
+    max_minutes: int,
+    exclude_id: str | None = None,
+) -> WorkoutTemplate | None:
+    """Largest endurance variant fitting both a TSS cap and a time window.
+
+    Returns None when nothing on the ladder fits (callers then fall back to a
+    recovery spin / rest day). Used by the mesocycle filler trim and by
+    plan-absorption's rebalance so both trim duration before killing a day.
+    """
+    for tid in ENDURANCE_TRIM_LADDER:
+        if tid == exclude_id:
+            continue
+        t = TEMPLATES.get(tid)
+        if t is None:
+            continue
+        minutes = int(round(sum(b.duration_s for b in t.blocks) / 60))
+        if t.base_tss <= max_tss and minutes <= max_minutes:
+            return t
+    return None
 
 
 def get_template(template_id: str) -> WorkoutTemplate | None:

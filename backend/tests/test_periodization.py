@@ -409,6 +409,90 @@ class TestSessionTypeForToday:
         ) == "sweet_spot"
 
 
+class TestBaseQualityQuotaPicker:
+    """Plan-engine v2 (Z2-degeneration cause 2): base phases carry a SECOND
+    weekly quality touch on Saturday (tempo/SS), completing the ≥2-distinct-
+    touches quota with the Wednesday keystone."""
+
+    _FRESH = {
+        "hard_sessions_done": 0, "vo2_sessions_done": 0,
+        "last_72h_quality_count": 0, "yesterday_tss": 0.0,
+        "last_48h_tss": 0.0, "today_tss": 0.0,
+    }
+
+    def test_base1_saturday_is_tempo_touch(self):
+        assert session_type_for_today(
+            "base1", dict(self._FRESH), tsb=0.0,
+            intensity_ceiling="push", day_of_week=5,
+        ) == "tempo"
+
+    def test_base2_saturday_is_tempo_touch(self):
+        assert session_type_for_today(
+            "base2", dict(self._FRESH), tsb=0.0,
+            intensity_ceiling="push", day_of_week=5,
+        ) == "tempo"
+
+    def test_build_saturday_stays_endurance(self):
+        """Build phases already have Tue/Wed/Thu quality — Saturday remains
+        the long-ride candidate."""
+        assert session_type_for_today(
+            "build2", dict(self._FRESH), tsb=0.0,
+            intensity_ceiling="push", day_of_week=5,
+        ) == "endurance"
+
+    def test_recovery_week_saturday_stays_easy(self):
+        assert session_type_for_today(
+            "base1", dict(self._FRESH), tsb=0.0,
+            intensity_ceiling="push", day_of_week=5, is_recovery_week=True,
+        ) == "endurance"
+
+    def test_saturday_tempo_respects_quota_and_72h_guard(self):
+        done = dict(self._FRESH, hard_sessions_done=2)
+        assert session_type_for_today(
+            "base1", done, tsb=0.0, intensity_ceiling="push", day_of_week=5,
+        ) == "endurance"
+        recent = dict(self._FRESH, last_72h_quality_count=1)
+        assert session_type_for_today(
+            "base1", recent, tsb=0.0, intensity_ceiling="push", day_of_week=5,
+        ) == "endurance"
+
+    def test_saturday_tempo_respects_volume_guard(self):
+        tired = dict(self._FRESH, last_48h_tss=150.0)
+        assert session_type_for_today(
+            "base1", tired, tsb=0.0, intensity_ceiling="push", day_of_week=5,
+        ) == "endurance"
+
+    def test_saturday_tempo_respects_ceiling(self):
+        assert session_type_for_today(
+            "base1", dict(self._FRESH), tsb=0.0,
+            intensity_ceiling="easy", day_of_week=5,
+        ) == "recovery"
+
+    def test_polarized_athlete_keeps_saturday_easy(self):
+        """Polarized model has no grey zone — the tempo touch defers."""
+        assert session_type_for_today(
+            "base1", dict(self._FRESH), tsb=0.0,
+            intensity_ceiling="push", day_of_week=5, training_model="polarized",
+        ) == "endurance"
+
+    def test_base1_wednesday_vo2_survives_a_banked_tempo(self):
+        """hard_done<2 (was <1): a tempo already banked no longer cancels the
+        VO2 keystone — the 2-touch quota needs both."""
+        prog = dict(self._FRESH, hard_sessions_done=1)
+        assert session_type_for_today(
+            "base1", prog, tsb=5.0, intensity_ceiling="push", day_of_week=2,
+        ) == "vo2"
+
+    def test_base1_quota_lists_two_touches(self):
+        q = weekly_intensity_quota("base1", 12.0)
+        assert q["vo2_sessions"] == 1
+        assert q["tempo_sessions"] == 1
+
+    def test_recovery_week_quota_zeroes_tempo(self):
+        q = weekly_intensity_quota("base1", 12.0, block_position="recovery")
+        assert q["tempo_sessions"] == 0 and q["vo2_sessions"] == 0
+
+
 class TestPickTemplate:
     def test_vo2_picks_ronnestad_at_60min(self):
         # With the Rønnestad short-interval template in the library, 60-min

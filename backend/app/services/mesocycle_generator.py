@@ -49,7 +49,7 @@ from app.services.run_workout_templates import (
     RunTemplate,
     run_interval_structure,
 )
-from app.services.workout_templates import TEMPLATES
+from app.services.workout_templates import TEMPLATES, pick_trim_variant
 
 if TYPE_CHECKING:
     from app.models.athlete_profile import AthleteProfile
@@ -107,6 +107,7 @@ _ENDURANCE_VARIETY: list[str] = [
     "z2_endurance_low_100",         # low Z2, 100min — easy/long fat-burning
     "z2_endurance_upper_75",        # upper Z2, 75min — firm high-aerobic
     "z2_progressive_90",            # ramp 0.60→0.72, 90min
+    "z2_endurance_surges_75",       # 0.65 base + 6 playful 15s surges, 75min
     "z2_endurance_tempo_touch_75",  # 0.65 base + 3× tempo touches, 75min
     "z2_endurance_90",              # steady 0.65, 90min
     "z2_endurance_60",              # steady 0.65, 60min
@@ -117,6 +118,36 @@ _ENDURANCE_VARIETY: list[str] = [
 # never trimmed — only the aerobic filler absorbs the cap.
 _FILLER_OVERSHOOT = 1.10          # keep a full filler day if it lands ≤ 110% of budget
 _FILLER_RECOVERY_OVERSHOOT = 1.15  # else a recovery spin if it lands ≤ 115%
+
+# ── Declared-hours budget blend (plan-engine v2, Z2-degeneration cause 1) ────
+# The weekly TSS budget is no longer CTL×7 alone: an athlete who declares 12
+# h/wk must not receive a ~5h plan just because their CTL history is thin.
+# hours-implied load = weekly_hours × (typical_IF² × 100) TSS/h — at the
+# mostly-aerobic weekly IF ≈ 0.68 that is ~46 TSS per declared hour. When the
+# hours-implied load exceeds the CTL-safe anchor, the budget starts at a
+# meaningful fraction of the declared availability (floor) but never more
+# than 50% above the CTL anchor in one jump; the Friel 8% week-over-week cap
+# then closes the remaining gap progressively. When declared hours imply LESS
+# than the CTL anchor, time is the binding constraint and simply caps the plan.
+_TYPICAL_WEEK_IF = 0.68
+_TSS_PER_DECLARED_HOUR = round(_TYPICAL_WEEK_IF ** 2 * 100, 1)  # ≈ 46.2
+_HOURS_FLOOR_FRACTION = 0.65   # start at ≥65% of the hours-implied load …
+_MAX_BUDGET_LIFT = 1.5         # … but never jump >50% above the CTL anchor
+
+# ── Day-type-aware time windows (Z2-degeneration cause 3) ────────────────────
+# The flat weekly_hours/riding_days window locked every template ≥150 min out
+# of the plan forever. The LONG day now gets its own window: ~45% of declared
+# weekly hours (a 12h athlete's Sunday can be a real 3-4h ride), additionally
+# capped so the long ride doesn't swallow more than ~45% of the week's TSS
+# budget. Weekday windows keep the existing spread.
+_LONG_DAY_HOURS_SHARE = 0.45
+_LONG_DAY_TSS_SHARE = 0.45
+_Z2_TSS_PER_MIN_PLAN = 0.75    # planning-grade Z2 TSS/min (matches run est.)
+
+# Foster monotony ceiling for the PLANNED week (mean daily TSS / SD). Above
+# 2.0 the week reads "every day alike" — the guard swaps the smallest filler
+# to rest so hard days stay hard and easy days stay genuinely easy.
+_MONOTONY_LIMIT = 2.0
 
 # ── Dual-sport: maintenance runs woven into the bike week ────────────────────
 # When the athlete both rides and runs (secondary_sports includes 'running',
@@ -282,33 +313,70 @@ async def current_block_position(
     return issurin_block_for_week(week_index)
 
 
+def hours_implied_tss(weekly_hours: float) -> float:
+    """Weekly TSS the athlete's declared availability implies at typical IF.
+
+    ~46 TSS per declared hour (IF ≈ 0.68, a realistic blended aerobic-week
+    intensity). The transparency payload shows this next to the CTL anchor.
+    """
+    return float(weekly_hours) * _TSS_PER_DECLARED_HOUR
+
+
+def _blend_weekly_anchor(ctl_weekly: float, weekly_hours: float | None) -> float:
+    """Blend the CTL-safe anchor with the declared-hours load (cause-1 fix).
+
+    - No declared hours → pure CTL anchor (backward compatible).
+    - Declared hours imply LESS than the CTL anchor → time is the binding
+      constraint; the plan is capped at what the athlete can actually ride.
+    - Declared hours imply MORE → lift the anchor toward the hours-implied
+      load: at least the CTL anchor, at most min(65% of the hours-implied
+      load, 1.5× the CTL anchor). The Friel 8% week-over-week cap then keeps
+      closing the remaining gap each subsequent week/meso as CTL rises.
+    """
+    if weekly_hours is None or weekly_hours <= 0:
+        return ctl_weekly
+    implied = hours_implied_tss(weekly_hours)
+    if implied <= ctl_weekly:
+        return implied
+    floor = implied * _HOURS_FLOOR_FRACTION
+    return min(max(ctl_weekly, floor), ctl_weekly * _MAX_BUDGET_LIFT)
+
+
 def weekly_tss_target(
     ctl: float,
     phase: Phase,
     block_position: Literal["accumulation", "transmutation", "realization", "recovery"],
+    weekly_hours: float | None = None,
 ) -> int:
     """Compute weekly TSS target for one Issurin block position.
 
-    Formula: CTL × 7 × ramp_factor, capped at Friel 8% rule.
+    Formula: blended anchor × ramp_factor, capped at Friel 8% rule, where the
+    anchor blends CTL×7 with the athlete's declared weekly hours (see
+    ``_blend_weekly_anchor`` — a 12h athlete no longer gets a 5h plan just
+    because CTL history is thin, and a time-poor athlete is no longer asked
+    for more hours than they declared).
 
     The 8% cap prevents week-over-week TSS from increasing by more than
     FRIEL_RAMP_CAP_PCT over the previous build week.  For recovery weeks
     the cap is irrelevant (we always drop to 65%).
 
     TAPER/RACE phases override the block ramp with a Mujika volume cut
-    (60% / 45% of CTL×7) — you freshen into a race, you don't keep ramping.
-    This is also what makes the race-day forward simulation taper naturally.
+    (60% / 45% of the anchor) — you freshen into a race, you don't keep
+    ramping. This is also what makes the race-day forward simulation taper
+    naturally.
 
     Args:
         ctl:            Athlete's current CTL (stress/day average).
         phase:          Friel training phase (taper/race cut volume).
         block_position: Issurin block ('accumulation', 'transmutation',
                         'realization', 'recovery').
+        weekly_hours:   Athlete-declared weekly availability (None → pure
+                        CTL anchor, the pre-v2 behaviour).
 
     Returns:
         Integer weekly TSS.
     """
-    base_tss = ctl * 7.0
+    base_tss = _blend_weekly_anchor(ctl * 7.0, weekly_hours)
 
     phase_factor = _PHASE_VOLUME_FACTOR.get(phase)
     if phase_factor is not None:
@@ -322,6 +390,27 @@ def weekly_tss_target(
     # Clamp ramp to Friel 8% cap — if ramp already exceeds cap use cap
     effective_ramp = min(ramp, 1.0 + FRIEL_RAMP_CAP_PCT)
     return int(round(base_tss * effective_ramp))
+
+
+def planned_week_monotony(daily_tss: list[float]) -> float:
+    """Foster monotony of a PLANNED week: mean daily TSS / SD (population).
+
+    0.0 for an empty/zero week; a large sentinel (9.9) when every day is
+    identical (SD → 0), which is maximal monotony by definition. Exposed in
+    the meso evidence for transparency and enforced (< 2.0) by the builder's
+    monotony guard.
+    """
+    if not daily_tss:
+        return 0.0
+    n = len(daily_tss)
+    mean = sum(daily_tss) / n
+    if mean <= 0:
+        return 0.0
+    var = sum((x - mean) ** 2 for x in daily_tss) / n
+    sd = var ** 0.5
+    if sd < 1e-6:
+        return 9.9
+    return round(mean / sd, 2)
 
 
 @dataclass
@@ -545,11 +634,26 @@ def build_week_drafts(
     riding_days = max(1, 7 - len(rest_dows))
     base_available_min = max(30, int(weekly_hours * 60 / riding_days))
 
+    # Day-type-aware long-day window (Z2-degeneration cause 3): the LONG day
+    # gets ~45% of the declared weekly hours — a 12h athlete's Sunday can be a
+    # genuine 3h+ ride — additionally capped so the long ride doesn't swallow
+    # more than ~45% of the weekly TSS budget. Floor of 120 preserves the
+    # historical minimum long-ride window.
+    long_window_min = max(120, int(weekly_hours * 60 * _LONG_DAY_HOURS_SHARE))
+    budget_cap_min = int(
+        (_LONG_DAY_TSS_SHARE * max(0, weekly_tss_target_val)) / _Z2_TSS_PER_MIN_PLAN
+    )
+    long_day_min = max(120, min(long_window_min, budget_cap_min))
+
     # ── Pass 1: resolve session type + template for each riding day ────────
     hard_sessions_done = 0
     vo2_sessions_done = 0
     cumulative_tss = 0.0
-    variety_idx = 0
+    # Week-shifted variety start (plan-engine v2): the rotation index used to
+    # reset to 0 every week, so week after week Tuesday was the SAME texture.
+    # Offsetting by the calendar week makes consecutive weeks open on a
+    # different Z2 variant — deterministic, no randomness.
+    variety_idx = (week_start.toordinal() // 7) % len(_ENDURANCE_VARIETY)
 
     # Per-day plan entries: dict with date/session_type/template/flags.
     plan: list[dict] = []
@@ -568,11 +672,23 @@ def build_week_drafts(
                 })
                 continue
             assert not isinstance(pd, str)
-            available_min = base_available_min if dow != 5 else max(base_available_min, 150)
+            # Weekend endurance slots are the program's long-ride anchors.
+            # Pinned templates (the 200k Saturday ladder) get the full
+            # hours-derived window so z2_long_180/240 actually fit; unpinned
+            # slots (e.g. the vo2_builder Sunday) take the budget-aware long
+            # window and pick LONGEST-FIT (rotation_key=0) — passing the
+            # rotation key here was the bug that demoted the long ride to a
+            # 60-90min spin (Z2-degeneration cause 3).
+            if pd.session_type == "endurance" and dow in (5, 6):
+                available_min = long_window_min if pd.template_id else long_day_min
+                rotation = 0
+            else:
+                available_min = base_available_min if dow != 5 else max(base_available_min, 150)
+                rotation = day_date.toordinal()
             template = pick_template(
                 pd.session_type, ftp_w, available_min,
                 preferred_template_id=pd.template_id,
-                rotation_key=day_date.toordinal(),
+                rotation_key=rotation,
             )
             if pd.session_type in ("vo2", "threshold", "sweet_spot", "tempo"):
                 hard_sessions_done += 1
@@ -618,8 +734,8 @@ def build_week_drafts(
 
         available_min = base_available_min
         # For long ride (Sunday) or key sessions: use a longer window
-        if dow == 6:  # Sunday long ride
-            available_min = max(available_min, 120)
+        if dow == 6:  # Sunday long ride — day-type-aware window (cause 3)
+            available_min = max(available_min, long_day_min)
         elif session_type in _HARD_TYPES and dow == 2:  # Wed key session
             available_min = max(available_min, 75)
 
@@ -634,6 +750,10 @@ def build_week_drafts(
                 days_to_event=(athlete.target_event_date - day_date).days,
                 day_of_week=dow,
             )
+        # The Saturday climbing keystone (z2_climbing_long, 3h) needs the
+        # long-day window or it silently never fits a time-crunched athlete.
+        if dow == 5 and preferred_id == "z2_climbing_long":
+            available_min = max(available_min, long_window_min)
 
         # Variety: rotate the mid-week aerobic *filler* among distinct Z2
         # templates so the week isn't the identical ride 6×. The Sunday long
@@ -650,7 +770,10 @@ def build_week_drafts(
             session_type, ftp_w, available_min, preferred_template_id=preferred_id,
             # Deterministic anti-monotony: rotate quality/endurance variants by
             # calendar day so consecutive weeks never repeat the same picks.
-            rotation_key=day_date.toordinal(),
+            # The Sunday LONG slot is genuinely exempt now (rotation_key=0 →
+            # longest-fit): rotating it was Z2-degeneration cause 3, demoting
+            # the long ride to z2_endurance_60.
+            rotation_key=0 if dow == 6 else day_date.toordinal(),
         )
 
         # Classify the day: filler endurance can be trimmed to hit the weekly
@@ -685,9 +808,12 @@ def build_week_drafts(
     # ── Pass 2: cap the week to the TSS target by trimming filler ─────────
     # Reserve the budget consumed by fixed sessions (long ride + quality +
     # recovery) plus any interleaved runs. Whatever is left is the filler
-    # budget; once a full filler day would push the running filler total well
-    # past that budget, downgrade it to a recovery spin or a rest day so the
-    # week lands near target instead of ~2× it. Key sessions are never touched.
+    # budget. TRIM ORDER (plan-engine v2, Z2-degeneration cause 1): a filler
+    # that overshoots is first swapped for a SHORTER Z2 variant (the day stays
+    # aerobic — trim duration, not the plan's texture), then a recovery spin,
+    # and only as a last resort a rest day. Key/quality sessions are never
+    # touched — the old recovery_60/rest cascade is what collapsed a
+    # 12h-athlete's week into ~5h of spins.
     reserved = sum(
         e["template"].base_tss for e in plan if e["kind"] == "fixed"
     )
@@ -695,18 +821,61 @@ def build_week_drafts(
     filler_running = 0.0
 
     for e in plan:
+        if e["kind"] != "filler":
+            continue
+        tss = e["template"].base_tss
+        if filler_running + tss <= filler_budget * _FILLER_OVERSHOOT:
+            filler_running += tss
+            continue
+        remaining = filler_budget * _FILLER_OVERSHOOT - filler_running
+        shorter = pick_trim_variant(
+            remaining, base_available_min, exclude_id=e["template"].id
+        )
+        if shorter is not None:
+            e["template"] = shorter
+            filler_running += shorter.base_tss
+            continue
+        rec = TEMPLATES["recovery_60"]
+        if filler_running + rec.base_tss <= filler_budget * _FILLER_RECOVERY_OVERSHOOT:
+            e["template"] = rec
+            filler_running += rec.base_tss
+            continue
+        rec30 = TEMPLATES["recovery_30"]
+        if filler_running + rec30.base_tss <= filler_budget * _FILLER_RECOVERY_OVERSHOOT:
+            e["template"] = rec30
+            filler_running += rec30.base_tss
+        else:
+            e["template"] = TEMPLATES["rest_day"]
+
+    # ── Pass 2.5: Foster monotony guard (plan-engine v2) ──────────────────
+    # Planned monotony (mean daily TSS / SD, runs included) must stay below
+    # 2.0 — above it the week reads "every day alike" (Foster 1998: high
+    # monotony + strain associate with illness/overreaching; modest effect,
+    # used here as a VARIETY constraint, not an injury claim). The corrective
+    # move is contrast: swap the smallest still-riding filler day to rest so
+    # hard days stay hard and easy days become genuinely easy. Key sessions
+    # are never touched; two attempts max (stability > twitchiness).
+    run_tss_by_dow: dict[int, float] = {}
+    for entry in run_entries:
+        run_tss_by_dow[entry["dow"]] = run_tss_by_dow.get(entry["dow"], 0.0) + entry["tss"]
+    for _ in range(2):
+        daily = [
+            e["template"].base_tss + run_tss_by_dow.get(i, 0.0)
+            for i, e in enumerate(plan)
+        ]
+        if planned_week_monotony(daily) < _MONOTONY_LIMIT:
+            break
+        swappable = [
+            e for e in plan
+            if e["kind"] == "filler" and e["template"].base_tss > 0
+        ]
+        if not swappable:
+            break
+        victim = min(swappable, key=lambda e: e["template"].base_tss)
+        victim["template"] = TEMPLATES["rest_day"]
+
+    for e in plan:
         template = e["template"]
-        if e["kind"] == "filler":
-            tss = template.base_tss
-            if filler_running + tss <= filler_budget * _FILLER_OVERSHOOT:
-                filler_running += tss
-            else:
-                rec = TEMPLATES["recovery_60"]
-                if filler_running + rec.base_tss <= filler_budget * _FILLER_RECOVERY_OVERSHOOT:
-                    template = rec
-                    filler_running += rec.base_tss
-                else:
-                    template = TEMPLATES["rest_day"]
 
         intervals = [
             {
@@ -877,11 +1046,18 @@ async def generate_mesocycle(
     # (~mid-fitness recreational) only when no live CTL is available.
     ctl_for_ramp = float(current_ctl) if current_ctl is not None else 40.0
 
+    # Declared-hours blend (plan-engine v2): the weekly budget respects what
+    # the athlete SAID they can ride, not just what their CTL history shows —
+    # see _blend_weekly_anchor for the closing-the-gap rules.
+    declared_hours = getattr(athlete, "weekly_hours_available", None)
+
     tss_targets: list[int] = []
     prev_tss: int | None = None
     for week_idx in range(MESO_LENGTH_WEEKS):
         block_pos = issurin_block_for_week(week_idx)
-        tss = weekly_tss_target(ctl_for_ramp, phase, block_pos)
+        tss = weekly_tss_target(
+            ctl_for_ramp, phase, block_pos, weekly_hours=declared_hours
+        )
         # Enforce Friel 8% cap week-over-week on build weeks
         if prev_tss is not None and block_pos != "recovery":
             cap = int(round(prev_tss * (1.0 + FRIEL_RAMP_CAP_PCT)))
@@ -908,6 +1084,16 @@ async def generate_mesocycle(
         "ftp_watts": ftp_w,
         "days_to_goal": days_to_goal,
         "plan_generated_at": date.today().isoformat(),
+        # Budget transparency (plan-engine v2): both anchors the weekly
+        # budget was blended from, so "why is my week X TSS" is answerable.
+        "weekly_hours": declared_hours,
+        "budget_basis": {
+            "ctl_anchored": int(round(ctl_for_ramp * 7)),
+            "hours_implied": (
+                int(round(hours_implied_tss(declared_hours)))
+                if declared_hours else None
+            ),
+        },
     }
 
     # ── 9. Create MesocyclePlan ─────────────────────────────────────────────
@@ -938,6 +1124,7 @@ async def generate_mesocycle(
     existing_workout_dates: set[date] = {row[0] for row in existing_dates_result.fetchall()}
 
     inserted_count = 0
+    planned_monotony: list[float] = []
     for week_idx in range(MESO_LENGTH_WEEKS):
         week_start = plan_start_date + timedelta(weeks=week_idx)
         block_pos = issurin_block_for_week(week_idx)
@@ -951,6 +1138,18 @@ async def generate_mesocycle(
             block_position=block_pos,
             ftp_w=ftp_w if ftp_w >= 100 else 200,  # running fallback
         )
+
+        # Planned Foster monotony per week (transparency — the guard inside
+        # build_week_drafts already enforces < 2.0 where fillers allow).
+        daily_tss: dict[date, float] = {}
+        for draft in drafts:
+            est = template_tss_estimate(
+                draft.template_id, draft.duration_seconds_target
+            ) or 0.0
+            daily_tss[draft.date] = daily_tss.get(draft.date, 0.0) + est
+        planned_monotony.append(planned_week_monotony([
+            daily_tss.get(week_start + timedelta(days=i), 0.0) for i in range(7)
+        ]))
 
         for draft in drafts:
             if draft.date in existing_workout_dates:
@@ -973,6 +1172,10 @@ async def generate_mesocycle(
             )
             db.add(pw)
             inserted_count += 1
+
+    # Expose the planned-week monotony in the meso evidence (task: monotony
+    # guard transparency) — assign a NEW dict so the JSON column dirties.
+    meso.evidence = {**evidence, "planned_monotony": planned_monotony}
 
     await db.flush()  # assign IDs before returning
 

@@ -1,6 +1,7 @@
 /**
- * HistoryTab — rebuilt 1:1 from the Pencil "Screen · History" content frame.
- * Card order (top→bottom): Header (title + filter chips) · This-Month summary ·
+ * HistoryTab — rebuilt from the Pencil "Screen · History" content frame.
+ * Card order (top→bottom): Header (title + filter chips) · Monat im Überblick
+ * (ONE merged month card, P2-13: verdict + tiles + daily load + sport split) ·
  * month Calendar · Consistency heatmap · Weekly-Load trend · Personal Records ·
  * Recent Activities. All values come from real activity + power-profile data;
  * fields the backend lacks (elevation / GPS route / strength sets·kcal) render
@@ -266,16 +267,6 @@ export default function HistoryTab() {
     () => monthVerdict(summary.cur.tss, summary.cur.n, tssPct, hasPrev, de),
     [summary, tssPct, hasPrev, de],
   )
-
-  // Headline numbers for the top summary card (load / hours / sessions).
-  const headline = useMemo(() => {
-    const c = summary.cur, p = summary.prev
-    return [
-      { label: de ? 'Belastung' : 'Load', value: Math.round(c.tss).toLocaleString(de ? 'de' : 'en'), unit: 'TSS', delta: pctDelta(c.tss, p.tss) },
-      { label: de ? 'Stunden' : 'Hours', value: fmtHm(c.sec), unit: 'h', delta: pctDelta(c.sec, p.sec) },
-      { label: de ? 'Einheiten' : 'Sessions', value: `${c.n}`, unit: '', delta: countDelta(c.n - p.n) },
-    ]
-  }, [summary, de])
 
   // Per-day TSS across the current month (filtered) — reveals the month's shape.
   const monthDaily = useMemo(() => {
@@ -558,8 +549,11 @@ export default function HistoryTab() {
         </div>
       </div>
 
-      {/* ── Month-in-review summary card — verdict + headline numbers ─────────── */}
-      <div className="rounded-[24px] p-5 flex flex-col gap-4" style={{ ...cardStyle, background: `linear-gradient(160deg, color-mix(in srgb, ${verdict.color} 12%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)` }}>
+      {/* ── Monat im Überblick — ONE merged month card (P2-13): verdict
+          headline + numeric tiles + daily-load chart + sport split/trend.
+          The former separate "Dieser Monat" card duplicated Load/Hours/
+          Sessions at the same grain — merged, nothing is told twice. ── */}
+      <div className="rounded-[24px] p-5 flex flex-col gap-5" style={{ ...cardStyle, background: `linear-gradient(160deg, color-mix(in srgb, ${verdict.color} 12%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)` }}>
         <div className="flex items-center justify-between">
           <span className="eyebrow">{de ? 'Monat im Überblick' : 'Month in review'}</span>
           <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{format(today, 'MMMM yyyy')}</span>
@@ -570,42 +564,6 @@ export default function HistoryTab() {
             <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{verdict.word}</span>
           </span>
           <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'var(--color-ink-2)' }}>{verdict.sentence}</span>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {headline.map((s) => (
-            <div key={s.label} className="flex flex-col gap-[5px] rounded-[14px] p-3" style={{ background: 'var(--color-surface-2)' }}>
-              <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--color-muted)' }}>{s.label}</span>
-              <span className="flex items-end gap-[3px]">
-                <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{s.value}</span>
-                {s.unit && <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 3 }}>{s.unit}</span>}
-              </span>
-              {s.delta ? (
-                s.delta.up ? (
-                  <span className="inline-flex items-center gap-[2px]" style={{ color: 'var(--color-recovery)' }}>
-                    <ArrowUp size={11} />
-                    <span className="num-mono" style={{ fontSize: 11, fontWeight: 700 }}>{s.delta.text}</span>
-                  </span>
-                ) : (
-                  // P1-8: a below-last-month delta is a quiet gray fact — never
-                  // a red arrow chip shouting a percent.
-                  <span className="num-mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{s.delta.text}</span>
-                )
-              ) : (
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? '— Basis' : '— baseline'}</span>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* This-Month summary — numeric tiles + daily-load chart + sport split/trend */}
-      <div className="rounded-[24px] p-5 flex flex-col gap-5" style={cardStyle}>
-        <div className="flex items-center justify-between">
-          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Dieser Monat' : 'This Month'}</span>
-          <Link to="/load-form" className="hover-card inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>
-            {de ? 'Belastung & Form' : 'Load & form'}
-            <ChevronRight size={14} className="hover-arrow" style={{ color: 'var(--color-accent)' }} />
-          </Link>
         </div>
 
         {/* Numeric tiles */}
@@ -716,6 +674,10 @@ export default function HistoryTab() {
             )}
           </div>
         )}
+        <Link to="/load-form" className="hover-card inline-flex items-center gap-1 self-start" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>
+          {de ? 'Belastung & Form ansehen' : 'View load & form'}
+          <ChevronRight size={14} className="hover-arrow" style={{ color: 'var(--color-accent)' }} />
+        </Link>
       </div>
 
       {/* Month calendar → load-form drill-down */}
