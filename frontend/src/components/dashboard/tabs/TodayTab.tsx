@@ -66,6 +66,8 @@ export default function TodayTab() {
   const { data: profile } = useAthleteProfile()
   const { data: streakData } = useStreak()
   const setStatus = useSetAthleteStatus()
+  // Status changes that alter coaching (sick/injured/break) confirm first.
+  const [confirmStatus, setConfirmStatus] = useState<Exclude<AthleteState, 'healthy'> | null>(null)
 
   const metrics = metricsResp?.metrics ?? []
   const latest = [...metrics].reverse().find((m) => m.hrv_status != null || m.resting_hr != null || m.sleep_score != null) ?? null
@@ -1086,10 +1088,16 @@ export default function TodayTab() {
                 key={s}
                 type="button"
                 disabled={setStatus.isPending}
-                onClick={() => { if (!active) setStatus.mutate(s) }}
-                className="rounded-full px-2.5 py-1"
+                onClick={() => {
+                  if (active) return
+                  // Audit P1-12: taps that alter the plan get a confirm sheet;
+                  // returning to healthy is safe and applies directly.
+                  if (s === 'healthy') setStatus.mutate(s)
+                  else setConfirmStatus(s)
+                }}
+                className="rounded-full px-3.5"
                 style={{
-                  fontSize: 11.5, fontWeight: 600,
+                  fontSize: 11.5, fontWeight: 600, minHeight: 44,
                   background: active ? 'color-mix(in srgb, var(--color-amber) 16%, transparent)' : 'var(--color-surface-2)',
                   border: `1px solid ${active ? 'var(--color-amber)' : 'var(--color-rule)'}`,
                   color: active ? 'var(--color-amber)' : 'var(--color-ink-2)',
@@ -1101,6 +1109,49 @@ export default function TodayTab() {
             )
           })}
         </div>
+        {confirmStatus && (() => {
+          const COPY: Record<string, { de: string; en: string }> = {
+            sick: {
+              de: 'Als krank markieren? Dein Plan nimmt Intensität raus, bis du dich zurückmeldest.',
+              en: 'Mark yourself sick? Your plan backs off intensity until you check back in.',
+            },
+            injured: {
+              de: 'Als verletzt markieren? Dein Plan pausiert harte Einheiten, bis du dich zurückmeldest.',
+              en: 'Mark yourself injured? Your plan pauses hard sessions until you check back in.',
+            },
+            break: {
+              de: 'Pause einlegen? Plan und Rhythmus pausieren — ohne schlechtes Gewissen.',
+              en: 'Take a break? Plan and rhythm pause — guilt-free.',
+            },
+          }
+          const copy = COPY[confirmStatus]
+          return (
+            <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true">
+              <button type="button" aria-label={de ? 'Abbrechen' : 'Cancel'} onClick={() => setConfirmStatus(null)} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.55)' }} />
+              <div className="relative w-full max-w-md rounded-t-[24px] p-5 flex flex-col gap-4" style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}>
+                <span style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.5 }}>{de ? copy.de : copy.en}</span>
+                <div className="flex gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => { setStatus.mutate(confirmStatus); setConfirmStatus(null) }}
+                    className="flex-1 rounded-full"
+                    style={{ minHeight: 48, fontSize: 14, fontWeight: 700, background: 'var(--color-amber)', color: '#0A0C0F' }}
+                  >
+                    {de ? 'Ja, markieren' : 'Yes, mark it'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmStatus(null)}
+                    className="flex-1 rounded-full"
+                    style={{ minHeight: 48, fontSize: 14, fontWeight: 700, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }}
+                  >
+                    {de ? 'Abbrechen' : 'Cancel'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )

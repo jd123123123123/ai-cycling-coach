@@ -448,9 +448,15 @@ select:focus-visible {
   transition: max-height 0.22s ease, opacity 0.18s ease, margin-top 0.22s ease;
 }
 .hover-arrow {
-  opacity: 0;
-  transform: translateX(-5px);
+  /* Audit P1-12: drill-downs must be visible + tappable on touch — rest
+     opacity 0.6 (hover brightens), and padding/negative-margin grows the
+     hit area to ≥44px without shifting layout. */
+  opacity: 0.6;
+  transform: none;
   transition: opacity 0.16s ease, transform 0.16s ease;
+  padding: 13px;
+  margin: -13px;
+  box-sizing: content-box;
 }
 @media (hover: hover) and (pointer: fine) {
   .hover-card:hover .hover-reveal { max-height: 220px; opacity: 1; margin-top: 12px; }
