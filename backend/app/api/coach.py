@@ -254,6 +254,22 @@ async def get_brief(
     except Exception:  # noqa: BLE001 — the brief must render regardless
         daily_decision = None
 
+    # Divergence guard (audit P0-3 follow-up): a brief cached earlier today
+    # can still carry a prescription whose day-shape contradicts the FRESH
+    # decision (e.g. a rest day materialized after the brief was generated —
+    # the narrative would keep selling a Z2 spin). One forced regeneration
+    # realigns prose and prescription; the day-fresh gate bounds the cost.
+    if daily_decision is not None and from_cache:
+        rest_states = {"sick", "injured", "break", "trained_already", "planned_rest"}
+        decision_restish = daily_decision.state in rest_states
+        pw = brief.prescribed_workout if isinstance(brief.prescribed_workout, dict) else {}
+        brief_restish = (pw.get("template_id") or "") == "rest_day" or (pw.get("category") or "") == "rest"
+        if decision_restish != brief_restish:
+            brief = await coach_service.get_or_generate_brief(
+                db, current_user.id, force=True, language=language, locale=locale,
+            )
+            from_cache = False
+
     return _brief_to_read(brief, from_cache=from_cache, daily_decision=daily_decision)
 
 
