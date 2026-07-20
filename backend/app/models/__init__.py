@@ -17,6 +17,7 @@ from app.models.crew import Crew, CrewInvite, CrewMembership  # noqa: F401
 from app.models.crew_nudge import CrewNudge  # noqa: F401
 from app.models.crew_challenge import CrewChallenge  # noqa: F401
 from app.models.activity_stream import ActivityStream  # noqa: F401
+from app.models.plan_adaptation import PlanAdaptation  # noqa: F401
 from app.models.strength import (  # noqa: F401
     StrengthRoutine,
     RoutineExercise,
@@ -28,6 +29,7 @@ __all__ = [
     "User", "AthleteProfile", "ConsentRecord", "Activity", "GarminCredential",
     "WahooCredential",
     "DailyMetric", "PlannedWorkout", "DailyMetricSample", "CoachBrief",
+    "PlanAdaptation",
     "UserDashboard", "UserTabLayout", "PeriodReportCache", "CoachRecommendation", "MesocyclePlan",
     "Crew", "CrewMembership", "CrewInvite", "CrewNudge", "CrewChallenge", "ActivityStream",
     "StrengthRoutine", "RoutineExercise", "StrengthSession", "StrengthSetLog",
