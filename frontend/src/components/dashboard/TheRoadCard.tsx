@@ -12,12 +12,11 @@
  * Single series + band → no legend; text wears ink tokens (dataviz rules).
  */
 import { useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { useNavigate, Link } from 'react-router-dom'
 import { ChevronRight, TrendingUp, TrendingDown, Route } from 'lucide-react'
-import { apiClient } from '../../api/client'
 import { usePMC } from '../../hooks/usePMC'
+import { useRecoveryEta } from '../../hooks/useRecoveryEta'
 import { useLocale } from '../../contexts/LocaleContext'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
@@ -28,8 +27,6 @@ const BAND_TOP = 20
 const BAND_BOTTOM = 5
 const PAST_DAYS = 21
 
-interface EtaDay { date: string; ctl: number; atl: number; tsb: number; source: string }
-interface RecoveryEta { days: EtaDay[]; basis: string }
 
 interface RoadDay {
   date: string
@@ -48,11 +45,7 @@ export default function TheRoadCard({ ctlNow, atlNow, tsbNow, dCtl }: {
   const de = locale === 'de'
   const navigate = useNavigate()
   const { data: pmc } = usePMC(90)
-  const { data: eta } = useQuery<RecoveryEta>({
-    queryKey: ['training-load', 'recovery-eta'],
-    queryFn: async () => (await apiClient.get<RecoveryEta>('/training-load/recovery-eta')).data,
-    staleTime: 30 * 60 * 1000,
-  })
+  const { data: eta } = useRecoveryEta()
   const [hi, setHi] = useState<number | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 

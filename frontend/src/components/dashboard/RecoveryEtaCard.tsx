@@ -8,39 +8,12 @@
  * tokens; the band/line reuse the app's recovery hue.
  */
 import { useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
 import { BatteryCharging, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { apiClient } from '../../api/client'
 import { useLocale } from '../../contexts/LocaleContext'
-
-interface EtaDay {
-  date: string
-  ctl: number
-  atl: number
-  tsb: number
-  tsb_low: number
-  tsb_high: number
-  planned_tss: number
-  source: 'plan' | 'recent-average'
-}
-interface RecoveryEta {
-  days: EtaDay[]
-  fresh_on: string | null
-  race_sharp_on: string | null
-  already_fresh: boolean
-  basis: 'plan' | 'recent-average' | 'mixed'
-}
-
-function useRecoveryEta() {
-  return useQuery<RecoveryEta>({
-    queryKey: ['training-load', 'recovery-eta'],
-    queryFn: async () => (await apiClient.get<RecoveryEta>('/training-load/recovery-eta')).data,
-    staleTime: 30 * 60 * 1000,
-  })
-}
+import { useRecoveryEta } from '../../hooks/useRecoveryEta'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 

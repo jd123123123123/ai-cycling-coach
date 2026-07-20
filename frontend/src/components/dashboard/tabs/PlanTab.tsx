@@ -1,14 +1,14 @@
 /**
  * PlanTab (Train) — rebuilt 1:1 from pencil-new.pen "Screen · Train" (oww6S).
  * Card order matches the .pen: SportToggle → PlanCard → WeekStrip →
- * WorkoutOfDay (coral, interval-profile bars + chips + Start) → Upcoming →
+ * WorkoutOfDay (coral, interval-profile bars + chips + view link) → Upcoming →
  * PowerZones (Power/Pace toggle, Z1–Z7) → Cross-training.
  * Real week-plan, FTP, and activity data throughout.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
-import { Bike, Footprints, Infinity as InfinityIcon, Play, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp } from 'lucide-react'
+import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ListChecks, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp } from 'lucide-react'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
@@ -713,8 +713,10 @@ export default function PlanTab() {
             ))}
           </div>
 
+          {/* Honest verb: the app cannot execute a workout — this opens the
+              full session detail (user decision, Jul 2026). */}
           <Link to="/workout/today" className="inline-flex items-center justify-center gap-2 rounded-full py-3.5 min-h-[48px]" style={{ background: 'var(--color-accent)', color: '#FFFFFF', fontSize: 16, fontWeight: 700 }}>
-            <Play size={20} strokeWidth={2.4} fill="#FFFFFF" /> {de ? 'Einheit starten' : 'Start Workout'}
+            <ListChecks size={20} strokeWidth={2.4} /> {de ? 'Workout ansehen' : 'View workout'}
           </Link>
         </div>
       )}
@@ -815,7 +817,7 @@ export default function PlanTab() {
 
       {/* Upcoming — the selected week's remaining sessions. On a future week each
           row selects that day's inline preview (no live "start" for a future day);
-          this week keeps the Start-workout link. */}
+          this week keeps the workout link. */}
       {upcoming.length > 0 && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">

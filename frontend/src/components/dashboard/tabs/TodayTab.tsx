@@ -1,7 +1,7 @@
 /**
  * TodayTab — rebuilt 1:1 from pencil-new.pen "Screen · Today" (OwSbv).
  * Card order matches the .pen exactly: Greeting header (+avatar) → Race chip →
- * Recovery card (ring + 3 sub-scores) → Workout card (coral, 3-stat + Start) →
+ * Recovery card (ring + 3 sub-scores) → Workout card (coral, 3-stat + view link) →
  * Load card (CTL/ATL/TSB) → Activity card (rings + legend) → Metrics row
  * (Resting HR / HRV / Strain) → Streak card (weekday status dots).
  * Every value is real Garmin/backend data; no extra cards.
@@ -12,12 +12,13 @@ import { apiClient } from '../../../api/client'
 import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays, format, startOfWeek, addDays } from 'date-fns'
 import { Link } from 'react-router-dom'
-import { Flag, Heart, Activity, Zap, Target, Play, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
+import { Flag, Heart, Activity, Zap, Target, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Flame, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
 import type { Adaptations } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
 import RecoveryEtaCard from '../RecoveryEtaCard'
 import TheRoadCard from '../TheRoadCard'
+import WeatherNudge from '../WeatherNudge'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import AbsorptionCard from '../AbsorptionCard'
 import LevelStripCard from '../LevelStripCard'
@@ -940,14 +941,17 @@ export default function TodayTab() {
           {/* One-tap rails-safe alternates — the Go-Gentler choice architecture.
               Applied through the SAME audited path as the chat modifier. */}
           <AlternateRow de={de} indoor={false} />
-          <Link to="/workout/today" className="inline-flex items-center justify-center gap-1.5 rounded-full py-2.5 min-h-[44px]" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)', fontSize: 14, fontWeight: 700 }}>
-            <ListChecks size={16} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} /> {de ? 'Workout ansehen' : 'View full workout'} <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />
-          </Link>
+          {/* One CTA, honest verb: the app prescribes and reviews — it does not
+              execute workouts, so there is no "start" here (user decision, Jul 2026). */}
           <Link to="/workout/today" className="inline-flex items-center justify-center gap-2 rounded-full py-3.5 min-h-[48px]" style={{ background: 'var(--color-accent)', color: '#0A0C0F', fontSize: 15, fontWeight: 700, boxShadow: '0 6px 18px -4px color-mix(in srgb, var(--color-accent) 55%, transparent)' }}>
-            <Play size={18} strokeWidth={2.6} fill="#0A0C0F" /> {de ? 'Einheit starten' : 'Start Workout'}
+            <ListChecks size={18} strokeWidth={2.4} /> {de ? 'Workout ansehen' : 'View full workout'} <ChevronRight size={18} />
           </Link>
         </div>
       )}
+
+      {/* Weather nudge — when to take today's session outside (hidden on rest
+          days, when no forecast/GPS location exists, or late in the day). */}
+      <WeatherNudge hidden={isRestDay} />
 
       {/* The Road — load corridor: 21 days back, today, 10 days ahead (P1.1).
           Absorbs the old Training Load card's stat row + sparkline. */}

@@ -2,7 +2,7 @@
  * WorkoutDetailView — rebuilt 1:1 from Pencil "Screen · Workout Detail".
  * NavRow (back · title · share) → Hero (icon, title, sub, 4 summary chips) →
  * Interval Profile chart card → Structure steps card → Targets card →
- * Fueling card → Devices card → coral Start CTA (+ Edit). Reached from the
+ * Fueling card → Devices card → Edit affordance (no start CTA — the app cannot execute workouts). Reached from the
  * Today / Train workout cards at /workout/today and /workout/:date.
  * TODAY renders the real prescribed-workout blocks (ResolvedBlock[]) from the
  * coach brief (rich "why today" narrative). A FUTURE planned day resolves that
@@ -14,7 +14,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { format, parseISO, differenceInCalendarWeeks } from 'date-fns'
 import {
   ChevronLeft, Share2, Bike, Footprints, Dumbbell, Repeat, Zap, Heart, Gauge, Apple, Droplet,
-  Play, SlidersHorizontal, Sparkles, Target, BookOpen,
+  SlidersHorizontal, Sparkles, Target, BookOpen,
 } from 'lucide-react'
 import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
@@ -227,7 +227,6 @@ export default function WorkoutDetailView() {
     moves: de ? 'Übungen' : 'Movements',
     paired: de ? '3 verbunden' : '3 paired',
     send: de ? 'An Head Unit senden' : 'Send to head unit',
-    start: de ? 'Einheit starten' : 'Start Workout',
     edit: de ? 'Einheit bearbeiten' : 'Edit workout',
     dPower: de ? 'Leistung' : 'Power',
     dHr: de ? 'HR-Gurt' : 'HR Strap',
@@ -519,12 +518,10 @@ export default function WorkoutDetailView() {
             )}
           </div>
 
-          {/* ── Start CTA ─────────────────────────────────────────────────── */}
+          {/* No start CTA: the app prescribes and reviews — it cannot execute
+              a workout (user decision, Jul 2026). Export/push lives in the
+              header actions. */}
           <div className="flex flex-col gap-2.5">
-            <button type="button" className="inline-flex items-center justify-center gap-2 rounded-full py-4" style={{ background: 'var(--color-accent)', color: 'var(--color-paper)', boxShadow: '0 6px 20px -4px color-mix(in srgb, var(--color-accent) 33%, transparent)' }}>
-              <Play size={22} strokeWidth={0} fill="var(--color-paper)" />
-              <span style={{ fontSize: 16, fontWeight: 700 }}>{t.start}</span>
-            </button>
             <button type="button" className="inline-flex items-center justify-center gap-1.5 py-2">
               <SlidersHorizontal size={16} style={{ color: 'var(--color-ink-2)' }} />
               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink-2)' }}>{t.edit}</span>
