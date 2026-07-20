@@ -271,6 +271,31 @@ export default function WorkoutDetailView() {
   }
 
   const { blocks, totalS, minutes, main, peakPct, kj, zones } = s
+  // Session-average power (audit P2-14): NP isn't on the payload, so Ø derives
+  // from real prescribed work — kJ·1000 / duration = W. 0 → unknown, never
+  // fabricated. Headline chips stay SESSION-level so power and TSS reconcile.
+  const avgW = kj > 0 && totalS > 0 ? Math.round((kj * 1000) / totalS) : null
+  // Peak-interval detail as its own labeled sub-chip — the old chip row paired
+  // interval peak watts with session TSS ('276 W · 82 TSS'), which read like
+  // broken math. Peak = hardest watt-bearing block group.
+  const peakGroup = groups.reduce<{ block: ResolvedBlock; count: number } | null>((best, g) => {
+    if (g.block.target_watts_high <= 0 || g.block.target_pct_ftp <= 0) return best
+    if (!best || g.block.target_pct_ftp > best.block.target_pct_ftp) return g
+    return best
+  }, null)
+  const peakChip = (() => {
+    // Only meaningful for structured rides — a single-zone steady ride has no
+    // "peaks" to call out, and run/gym chips never paired watts with TSS.
+    if (sport !== 'cycling' || !peakGroup || zones.length < 2) return null
+    const b = peakGroup.block
+    const durStr = b.duration_s % 60 === 0 ? `${b.duration_s / 60}` : fmtMMSS(b.duration_s)
+    const wattsStr = b.target_watts_low === b.target_watts_high ? `${b.target_watts_low}` : `${b.target_watts_low}–${b.target_watts_high}`
+    const rep = peakGroup.count > 1 ? `${peakGroup.count}×` : ''
+    const pct = Math.round(b.target_pct_ftp * 100)
+    return de
+      ? `Spitzen: ${rep}${durStr} Min @ ${wattsStr} W (${pct} % FTP)`
+      : `Peaks: ${rep}${durStr} min @ ${wattsStr} W (${pct}% FTP)`
+  })()
   const gPerHr = minutes >= 150 ? 90 : 60
   const chartMax = Math.max(120, peakPct * 100)
   const PLOT_H = 150
@@ -327,28 +352,48 @@ export default function WorkoutDetailView() {
 
           {/* ── Hero chips ──────────────────────────────────────────────────── */}
           <div className="flex flex-col gap-4">
-            {/* summary chips — sport-aware 4th slot (bike %FTP · run pace · gym RPE) */}
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { v: `${Math.round(w.predicted_tss)}`, l: 'TSS' },
-                { v: `${minutes}`, l: 'min' },
-                sport === 'cycling'
-                  ? { v: kj > 0 ? `~${kj}` : '—', l: 'kJ' }
-                  : sport === 'running'
-                    ? { v: runPace ?? '—', l: runPace ? 'Pace' : 'Pace' }
+            {/* summary chips (audit P2-14) — cycling headline is SESSION-level
+                (Ø W · TSS · min) with the interval peak as a labeled sub-chip;
+                run/gym keep their sport-aware 4-slot row. */}
+            {sport === 'cycling' ? (
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { v: avgW != null ? `Ø ${avgW}` : '—', l: 'W' },
+                    { v: `${Math.round(w.predicted_tss)}`, l: 'TSS' },
+                    { v: `${minutes}`, l: 'min' },
+                  ].map((c, i) => (
+                    <div key={i} className="flex flex-col items-center gap-0.5 rounded-[16px] px-3 py-2.5" style={chipStyle}>
+                      <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{c.v}</span>
+                      <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{c.l}</span>
+                    </div>
+                  ))}
+                </div>
+                {peakChip && (
+                  <div className="rounded-[16px] px-3.5 py-2 text-center" style={chipStyle}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{peakChip}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { v: `${Math.round(w.predicted_tss)}`, l: 'TSS' },
+                  { v: `${minutes}`, l: 'min' },
+                  sport === 'running'
+                    ? { v: runPace ?? '—', l: 'Pace' }
                     : { v: main ? `${main.rpe}` : '—', l: 'RPE' },
-                sport === 'cycling'
-                  ? { v: peakPct > 0 ? `${Math.round(peakPct * 100)}%` : '—', l: 'FTP' }
-                  : sport === 'running'
+                  sport === 'running'
                     ? { v: hrVal, l: 'HR' }
                     : { v: main ? `${main.zone}` : '—', l: de ? 'Stufe' : 'Zone' },
-              ].map((c, i) => (
-                <div key={i} className="flex flex-col items-center gap-0.5 rounded-[16px] px-3 py-2.5" style={chipStyle}>
-                  <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{c.v}</span>
-                  <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{c.l}</span>
-                </div>
-              ))}
-            </div>
+                ].map((c, i) => (
+                  <div key={i} className="flex flex-col items-center gap-0.5 rounded-[16px] px-3 py-2.5" style={chipStyle}>
+                    <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{c.v}</span>
+                    <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{c.l}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── Interval Profile Card ─────────────────────────────────────── */}

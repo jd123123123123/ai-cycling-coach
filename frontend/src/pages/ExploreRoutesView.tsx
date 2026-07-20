@@ -64,18 +64,67 @@ function RouteSketch({ polyline, virtual }: { polyline: [number, number][]; virt
   )
 }
 
-/** Live conditions chip for outdoor routes — Open-Meteo, free, straight from the browser. */
-function WeatherChip({ lat, lng }: { lat: number; lng: number }) {
-  const [wx, setWx] = useState<{ t: number; wind: number } | null>(null)
-  useEffect(() => {
-    let alive = true
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m`)
-      .then((r) => r.json())
-      .then((j) => { if (alive && j?.current) setWx({ t: Math.round(j.current.temperature_2m), wind: Math.round(j.current.wind_speed_10m) }) })
-      .catch(() => undefined)
-    return () => { alive = false }
-  }, [lat, lng])
-  if (!wx) return null
+// ── Live conditions for outdoor routes — Open-Meteo, batched + session-cached. ──
+// Audit P2-16 (routes): the old per-card fetch fired one request per route and
+// open-meteo's 429 rate limit dropped chips with console noise. Now: routes are
+// grouped into location clusters (coords rounded to 2dp ≈ 1.1 km), ONE request
+// covers every cluster the view needs, and results live in a module-level map
+// for the session. On 429 / network failure the chip simply doesn't render —
+// no placeholder, no console spam, no fake zeros.
+
+interface Wx { t: number; wind: number }
+
+/** Cluster key: 2-decimal rounding — nearby starts share one forecast. */
+export const wxClusterKey = (lat: number, lng: number) => `${lat.toFixed(2)},${lng.toFixed(2)}`
+
+/** key → weather; null = fetch failed/absent this session (never retried, never rendered). */
+const wxCache = new Map<string, Wx | null>()
+
+/** Test hook — the session cache is module state. */
+export function __resetWxCacheForTests() {
+  wxCache.clear()
+}
+
+/**
+ * One batched request for every cluster key not already in the session cache
+ * (Open-Meteo accepts comma-separated coordinate lists). Missing/failed
+ * clusters resolve to null — callers drop the chip, silently.
+ */
+export async function fetchWeatherClusters(
+  keys: string[],
+  fetchFn: typeof fetch = fetch,
+): Promise<Map<string, Wx | null>> {
+  const missing = keys.filter((k) => !wxCache.has(k))
+  if (missing.length > 0) {
+    // Claim the keys up front so a re-render can never duplicate the request.
+    for (const k of missing) wxCache.set(k, null)
+    try {
+      const lats = missing.map((k) => k.split(',')[0]).join(',')
+      const lngs = missing.map((k) => k.split(',')[1]).join(',')
+      const r = await fetchFn(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}&current=temperature_2m,wind_speed_10m`,
+      )
+      if (r.ok) {
+        const j = await r.json()
+        // Single location answers an object, multiple answer an array.
+        const list: unknown[] = Array.isArray(j) ? j : [j]
+        missing.forEach((k, i) => {
+          const c = (list[i] as { current?: { temperature_2m?: unknown; wind_speed_10m?: unknown } } | undefined)?.current
+          if (c && Number.isFinite(c.temperature_2m) && Number.isFinite(c.wind_speed_10m)) {
+            wxCache.set(k, { t: Math.round(c.temperature_2m as number), wind: Math.round(c.wind_speed_10m as number) })
+          }
+        })
+      }
+      // !r.ok (429 etc.) → keys stay null: chip absent, no retry storm, no console error.
+    } catch {
+      // Network failure → same silent absence.
+    }
+  }
+  return new Map(keys.map((k) => [k, wxCache.get(k) ?? null]))
+}
+
+/** Presentational chip — only mounted when real weather exists for the cluster. */
+function WeatherChip({ wx }: { wx: Wx }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5" style={{ background: 'var(--color-surface-2)', fontSize: 10.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
       <Wind size={11} style={{ color: 'var(--color-strain)' }} /> {wx.t}° · {wx.wind} km/h
@@ -95,6 +144,25 @@ export default function ExploreRoutesView() {
   // ONE honest denominator (audit P0-5): shared GPS-ride count, label states it.
   const { data: rideCounts } = useRideCounts()
   const gpsRides = rideCounts?.rides_with_gps ?? data?.n_gps_rides ?? null
+
+  // ONE batched weather fetch for all distinct outdoor start clusters (see
+  // fetchWeatherClusters above) — chips read from the resolved map.
+  const clusterKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const r of data?.routes ?? []) {
+      if (!r.is_virtual && r.start_lat != null && r.start_lng != null) keys.add(wxClusterKey(r.start_lat, r.start_lng))
+    }
+    return Array.from(keys)
+  }, [data])
+  const [wxByCluster, setWxByCluster] = useState<Map<string, Wx | null> | null>(null)
+  useEffect(() => {
+    if (clusterKeys.length === 0) return
+    let alive = true
+    fetchWeatherClusters(clusterKeys)
+      .then((m) => { if (alive) setWxByCluster(m) })
+      .catch(() => undefined)
+    return () => { alive = false }
+  }, [clusterKeys])
 
   return (
     <DashboardShell>
@@ -125,7 +193,11 @@ export default function ExploreRoutesView() {
           </div>
         )}
 
-        {(data?.routes ?? []).map((r, i) => (
+        {(data?.routes ?? []).map((r, i) => {
+          const wx = !r.is_virtual && r.start_lat != null && r.start_lng != null
+            ? wxByCluster?.get(wxClusterKey(r.start_lat, r.start_lng)) ?? null
+            : null
+          return (
           <div key={i} className="flex gap-4 p-4" style={CARD}>
             <RouteSketch polyline={r.polyline} virtual={r.is_virtual} />
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
@@ -134,7 +206,7 @@ export default function ExploreRoutesView() {
                 {r.is_virtual ? (
                   <span className="rounded-full px-2 py-0.5" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--color-strain)', background: 'color-mix(in srgb, var(--color-strain) 14%, transparent)' }}>INDOOR</span>
                 ) : (
-                  r.start_lat != null && r.start_lng != null && <WeatherChip lat={r.start_lat} lng={r.start_lng} />
+                  wx && <WeatherChip wx={wx} />
                 )}
               </div>
               <div className="flex items-center gap-3 flex-wrap" style={{ fontSize: 11.5, color: 'var(--color-ink-2)', fontWeight: 600 }}>
@@ -149,7 +221,8 @@ export default function ExploreRoutesView() {
               </span>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </DashboardShell>
   )

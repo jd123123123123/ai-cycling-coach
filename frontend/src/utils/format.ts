@@ -55,17 +55,38 @@ export function formatTime24(d: Date | string | number, locale: UiLocale = 'en')
 
 /**
  * formatSigned(n, digits=0) — explicit sign, typographic minus (U+2212), tabular-friendly.
+ * Honest-dash rule (audit P2-16): a missing value is NOT zero — null/undefined/NaN
+ * render as "—", never as "0".
  *
  * @example
  * formatSigned(0, 0)    // "0"     (no sign on zero)
  * formatSigned(18, 0)   // "+18"
  * formatSigned(-3.4, 1) // "−3.4"  (NOTE: U+2212, not hyphen-minus)
+ * formatSigned(null)    // "—"     (untracked ≠ zero)
  */
-export function formatSigned(n: number, digits = 0): string {
+export function formatSigned(n: number | null | undefined, digits = 0): string {
+  if (n == null || !isFinite(n)) return '—'
   if (n === 0) return '0'
   if (n > 0) return '+' + n.toFixed(digits)
   // U+2212 MINUS SIGN (not ASCII hyphen-minus U+002D)
   return '−' + Math.abs(n).toFixed(digits)
+}
+
+/**
+ * honestPercent(value, tracked=true) — THE honest percent renderer (audit P2-16).
+ * An untracked series must NEVER read as "0%": null/undefined/NaN input, or an
+ * explicit tracked === false, yields the honest dash "—". A real 0 renders as
+ * "0%" only when the series is actually tracked.
+ *
+ * @example
+ * honestPercent(87.4)        // "87%"
+ * honestPercent(0)           // "0%"  (tracked zero is real)
+ * honestPercent(0, false)    // "—"   (untracked never renders as 0%)
+ * honestPercent(null)        // "—"
+ */
+export function honestPercent(value: number | null | undefined, tracked = true): string {
+  if (!tracked || value == null || !isFinite(value)) return '—'
+  return `${Math.round(value)}%`
 }
 
 /**

@@ -28,6 +28,23 @@ import { latestLoad } from '../utils/loadMetrics'
 
 const DASH = '—'
 
+// Header range control (display-only until range switching ships). The eyebrow
+// label and the highlighted chip both derive from ACTIVE_RANGE — one source,
+// so the header can never claim a different window than the active control
+// (audit P2-14: 'LETZTE 42 TAGE' beside an active 3M chip). The PMC series
+// behind the hero spans 90 days ⇒ 3M.
+const RANGES = [
+  { id: '6W', de: 'LETZTE 6 WOCHEN', en: 'LAST 6 WEEKS' },
+  { id: '3M', de: 'LETZTE 3 MONATE', en: 'LAST 3 MONTHS' },
+  { id: '1Y', de: 'LETZTE 12 MONATE', en: 'LAST 12 MONTHS' },
+] as const
+const ACTIVE_RANGE: (typeof RANGES)[number]['id'] = '3M'
+
+// Load-by-sport window — the caption derives its wording from this constant,
+// so the label always states the TRUE window (audit P2-14: 42-day totals were
+// captioned 'Wochenstress', reading as a 27-hour week).
+const SPORT_WINDOW_DAYS = 28
+
 /**
  * Audit P1-9 classifier. Ratio bands over week-elapsed pace vs the 4-week
  * average; 'quiet' plans get an explanation, never a shortfall label. The
@@ -210,11 +227,11 @@ export default function LoadFormView() {
     { key: 'hard', label: de ? 'Hart' : 'Hard', pct: mix.z3_pct, color: 'var(--color-move)' },
   ] : []
 
-  // ---- Load by sport (28d activity TSS + duration) ------------------------
+  // ---- Load by sport (SPORT_WINDOW_DAYS activity TSS + duration) -----------
   const sport = useMemo(() => {
     const acc = { ride: { tss: 0, sec: 0 }, run: { tss: 0, sec: 0 }, strength: { tss: 0, sec: 0 } }
     for (const a of activities) {
-      if (new Date(a.started_at ?? a.date ?? 0) < subDays(today, 28)) continue
+      if (new Date(a.started_at ?? a.date ?? 0) < subDays(today, SPORT_WINDOW_DAYS)) continue
       const bucket = a.sport === 'cycling' ? acc.ride : a.sport === 'running' ? acc.run : acc.strength
       bucket.tss += a.tss ?? 0
       bucket.sec += a.duration_seconds ?? 0
@@ -336,28 +353,30 @@ export default function LoadFormView() {
           <ArrowLeft size={15} /> {de ? 'Zurück' : 'Back'}
         </button>
 
-        {/* Header: LAST 42 DAYS / Training Load + range toggle */}
+        {/* Header + range toggle. Audit P2-14 label truth: the eyebrow derives
+            from the SAME active-range constant that highlights the chip — it
+            can never contradict the control again ('LETZTE 42 TAGE' vs 3M). */}
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-0.5">
             <span className="eyebrow" style={{ fontSize: 12, letterSpacing: 1, color: 'var(--color-muted)' }}>
-              {de ? 'LETZTE 42 TAGE' : 'LAST 42 DAYS'}
+              {RANGES.find((r) => r.id === ACTIVE_RANGE)?.[de ? 'de' : 'en']}
             </span>
             <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-ink)' }}>
               {de ? 'Trainingslast' : 'Training Load'}
             </span>
           </div>
           <div className="flex rounded-full p-[3px]" style={{ background: 'var(--color-surface-2)', gap: 2 }}>
-            {['6W', '3M', '1Y'].map((r) => (
+            {RANGES.map((r) => (
               <span
-                key={r}
+                key={r.id}
                 className="rounded-full"
                 style={{
                   padding: '6px 12px', fontSize: 12, fontWeight: 600,
-                  color: r === '3M' ? 'var(--color-ink)' : 'var(--color-ink-2)',
-                  background: r === '3M' ? 'var(--color-accent)' : 'transparent',
+                  color: r.id === ACTIVE_RANGE ? 'var(--color-ink)' : 'var(--color-ink-2)',
+                  background: r.id === ACTIVE_RANGE ? 'var(--color-accent)' : 'transparent',
                 }}
               >
-                {r}
+                {r.id}
               </span>
             ))}
           </div>
@@ -544,14 +563,20 @@ export default function LoadFormView() {
           )}
         </Card>
 
-        {/* 5. Load by Sport */}
+        {/* 5. Load by Sport — caption states the TRUE window (audit P2-14:
+            multi-week totals were captioned 'Wochenstress', reading as a
+            27-hour week). Window wording derives from SPORT_WINDOW_DAYS. */}
         <Card>
           <CardHead
             title={de ? 'Last nach Sportart' : 'Load by Sport'}
-            sub={de ? `Wochenstress je Disziplin · ${Math.round(sportGrand)} TSS` : `Weekly stress by discipline · ${Math.round(sportGrand)} TSS`}
-            right={sportSecs > 0 ? (
-              <span className="rounded-full" style={{ padding: '5px 10px', background: 'var(--color-surface-2)', fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{fmtDur(sportSecs)}</span>
-            ) : undefined}
+            sub={(() => {
+              const wks = Math.round(SPORT_WINDOW_DAYS / 7)
+              const win = de ? `Letzte ${wks} Wochen` : `Past ${wks} weeks`
+              if (sportGrand <= 0 && sportSecs <= 0) return win
+              const h = Math.floor(sportSecs / 3600)
+              const m = Math.floor((sportSecs % 3600) / 60)
+              return `${win} · ${Math.round(sportGrand)} TSS · ${h} h ${m} m`
+            })()}
           />
           {sportGrand > 0 ? (
             <>
@@ -661,12 +686,15 @@ export default function LoadFormView() {
             sub={compliancePct != null && !complianceOnPace
               ? (de ? 'Plan-Erfüllung · läuft noch' : 'Plan compliance · in progress')
               : (de ? 'Plan-Erfüllung' : 'Plan compliance')}
-            right={
+            right={compliancePct != null ? (
+              // Audit P2-14: never a dangling '—%' — without plan data the
+              // number slot disappears and the body's honest empty state
+              // ('Noch keine Plandaten diese Woche') carries the message.
               <div className="flex items-end gap-0.5">
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: complianceColor }}>{compliancePct != null ? compliancePct : DASH}</span>
+                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: complianceColor }}>{compliancePct}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: complianceColor, paddingBottom: 3 }}>%</span>
               </div>
-            }
+            ) : undefined}
           />
           {compliancePct != null ? (
             <div style={{ height: 10, borderRadius: 5, background: 'var(--color-surface-3)', overflow: 'hidden' }}>

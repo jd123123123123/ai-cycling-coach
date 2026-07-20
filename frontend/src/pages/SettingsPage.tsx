@@ -55,11 +55,10 @@ export default function SettingsPage() {
           </button>
         </div>
         <div>
-          <span className="eyebrow" style={{ color: 'var(--color-amber)', letterSpacing: '0.2em' }}>
-            {locale === 'de' ? 'Einstellungen' : 'Settings'}
-          </span>
+          {/* Audit P2-14: ONE heading — the duplicated EINSTELLUNGEN eyebrow
+              above the identical H1 wasted the page's first 90px. */}
           <h1
-            className="num-display mt-2 leading-tight"
+            className="num-display leading-tight"
             style={{ fontSize: 'clamp(28px, 4vw, 40px)', color: 'var(--color-ink)' }}
           >
             {locale === 'de'

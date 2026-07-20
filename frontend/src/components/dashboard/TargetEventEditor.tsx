@@ -24,12 +24,21 @@ export default function TargetEventEditor() {
   const [priority, setPriority] = useState<Priority>('A')
   const [saved, setSaved] = useState(false)
 
+  // Audit P2-14: GET /athletes/me/goals returns the raw goals JSON, where the
+  // event lives NESTED as target_event.{name,date} (see backend update_goals) —
+  // the flat target_event_name only exists on the PUT schema. Read both shapes
+  // so the stored goal ('Maratona dles Dolomites') actually pre-fills the form.
+  const nestedEvent = (goals as (typeof goals & { target_event?: { name?: string; date?: string } }) | undefined)
+    ?.target_event
+  const storedName = goals?.target_event_name ?? nestedEvent?.name ?? null
+  const storedDate = profile?.target_event_date ?? nestedEvent?.date ?? null
+
   useEffect(() => {
-    if (goals?.target_event_name != null) setName(goals.target_event_name)
-    if (profile?.target_event_date) setDate(String(profile.target_event_date).slice(0, 10))
+    if (storedName != null) setName(storedName)
+    if (storedDate) setDate(String(storedDate).slice(0, 10))
     if (profile?.target_event_type) setType(profile.target_event_type as EventType)
     if (profile?.target_priority) setPriority(profile.target_priority as Priority)
-  }, [goals?.target_event_name, profile?.target_event_date, profile?.target_event_type, profile?.target_priority])
+  }, [storedName, storedDate, profile?.target_event_type, profile?.target_priority])
 
   const save = useMutation({
     mutationFn: async () => {
