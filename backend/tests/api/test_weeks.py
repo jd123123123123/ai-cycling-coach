@@ -175,6 +175,12 @@ class TestAuthenticatedHappyPath:
         assert len(data["days"]) == 7
         assert data["preface"] != ""
         assert data["days"][0]["is_today"] is True
+        # One-producer weekly planned TSS: present in the payload; None (never
+        # a fabricated 0) when the mocked DB has no PlannedWorkout rows.
+        assert "planned_tss_total" in data
+        assert data["planned_tss_total"] is None
+        # Dual-sport secondary line item fields exist on every day.
+        assert all("secondary_target_tss" in d for d in data["days"])
 
     def test_language_simple_is_default(self, client: TestClient):
         profile = _make_profile()

@@ -451,6 +451,10 @@ async def ctl_atl_tsb_snapshot(db: AsyncSession, user_id: int) -> dict:
         -10..+5     → 'optimal'
         < -10       → 'grey'    (productive fatigue zone)
         < -30       → 'risk'    (overreach / injury-risk territory)
+
+    Rebased on the window-invariant PMC (usability audit P0-5): the EWMA always
+    runs from the athlete's first activity, so this snapshot and /training-load
+    /pmc can never disagree on today's CTL/ATL/TSB regardless of window length.
     """
     pmc = await compute_user_pmc(db, user_id, days=60)
     total = pmc.get("total") or []

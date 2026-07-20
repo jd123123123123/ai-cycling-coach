@@ -39,11 +39,19 @@ from app.schemas.weeks import (
     WeekResponse,
 )
 from app.services.advanced_metrics import ctl_atl_tsb_snapshot
+from app.services.athlete_time import (
+    day_local_window,
+    local_date_of,
+    set_athlete_tz_from_profile,
+    today_local,
+)
 from app.services.mesocycle_generator import (
     MESO_LENGTH_WEEKS,
     generate_mesocycle,
     issurin_block_for_week,
+    template_tss_estimate,
 )
+from app.services.weekly_recap import planned_week_total
 from app.services.performance_projection import (
     eftp_samples_from_activities,
     project_performance,
@@ -427,6 +435,28 @@ def _build_day_plan(
     )
 
 
+def deviation_window_start(today: date) -> date:
+    """Start of the plan-deviation lookback window.
+
+    Trailing 7 days, CLAMPED to the Monday of the current (athlete-local)
+    week — "You skipped Tuesday" must never reference last week (usability
+    audit P0-5). On a Monday the window is empty by design: everything the
+    detector could cite would belong to last week.
+    """
+    return max(today - timedelta(days=7), today - timedelta(days=today.weekday()))
+
+
+def _apply_secondary(dp: DayPlan, secondary: PlannedWorkout | None) -> None:
+    """Attach the day's dual-sport secondary session (title + planned TSS)."""
+    if secondary is None:
+        return
+    dp.secondary_title = secondary.title
+    est = template_tss_estimate(
+        secondary.template_id, secondary.duration_seconds_target
+    )
+    dp.secondary_target_tss = int(round(est)) if est is not None else None
+
+
 async def _future_week_preview(
     *,
     db: AsyncSession,
@@ -496,19 +526,20 @@ async def _future_week_preview(
     )
     _all_pws = pw_result.scalars().all()
     # Dual-sport: multiple rows can share a date (bike + run). The PRIMARY
-    # sport's row drives the day card; the other sport's title rides along as
-    # secondary_title instead of silently shadowing (July 2026 fix).
+    # sport's row drives the day card; the other sport's session rides along
+    # as secondary_title / secondary_target_tss instead of silently shadowing
+    # (July 2026 fix + usability audit P0-5).
     pw_by_date: dict[date, PlannedWorkout] = {}
-    secondary_by_date: dict[date, str] = {}
+    secondary_by_date: dict[date, PlannedWorkout] = {}
     for pw in _all_pws:
         cur = pw_by_date.get(pw.date)
         if cur is None:
             pw_by_date[pw.date] = pw
         elif (pw.sport or "cycling") == primary_sport and (cur.sport or "cycling") != primary_sport:
-            secondary_by_date[pw.date] = cur.title
+            secondary_by_date[pw.date] = cur
             pw_by_date[pw.date] = pw
         else:
-            secondary_by_date[pw.date] = pw.title
+            secondary_by_date[pw.date] = pw
 
     days: list[DayPlan] = []
     for i in range(7):
@@ -516,8 +547,12 @@ async def _future_week_preview(
         pw = pw_by_date.get(day_date)
         # today never falls inside a future week, so is_today is uniformly False.
         dp = _build_day_plan(day_date, pw, today, primary_sport, language)
-        dp.secondary_title = secondary_by_date.get(day_date)
+        _apply_secondary(dp, secondary_by_date.get(day_date))
         days.append(dp)
+
+    # Mon–Sun planned total across ALL rows (incl. secondary) — the number the
+    # frontend renders as the week's target.
+    planned_tss_total = planned_week_total(_all_pws)
 
     preface = build_weekly_rationale(
         phase=meso_phase,
@@ -552,6 +587,7 @@ async def _future_week_preview(
         plan_changes=None,
         projection=None,
         readiness=None,
+        planned_tss_total=planned_tss_total,
     )
 
 
@@ -596,16 +632,8 @@ async def get_current_week(
     Idempotent: repeat calls within the same week return the same plan.
     RLS-scoped: each user sees only their own workouts.
     """
-    # ── 1. Compute today + week_start (Monday anchor) ─────────────────────
-    today = date.today()
-    # current_monday = most recent Monday (Monday=0 in weekday())
-    current_monday = today - timedelta(days=today.weekday())
-    # For offset 0 the window anchors on today; the current-week code below
-    # keeps using `week_start` as that Monday anchor.
-    week_start = current_monday
-    week_end = week_start + timedelta(days=6)
-
-    # ── 2. Load athlete profile ───────────────────────────────────────────
+    # ── 1. Load athlete profile FIRST (it defines the athlete's timezone,
+    #      and therefore what "today" even is) ────────────────────────────
     profile_result = await db.execute(
         select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
     )
@@ -617,6 +645,16 @@ async def get_current_week(
             detail="Complete your profile setup first",
             headers={"X-Error-Code": "profile_required"},
         )
+
+    # ── 2. Compute today + week_start (Monday anchor) in ATHLETE-LOCAL time
+    set_athlete_tz_from_profile(athlete)
+    today = today_local()
+    # current_monday = most recent Monday (Monday=0 in weekday())
+    current_monday = today - timedelta(days=today.weekday())
+    # For offset 0 the window anchors on today; the current-week code below
+    # keeps using `week_start` as that Monday anchor.
+    week_start = current_monday
+    week_end = week_start + timedelta(days=6)
 
     # FTP guard — cycling primary only
     primary_sport = athlete.primary_sport or "cycling"
@@ -727,18 +765,19 @@ async def get_current_week(
     pws = pw_result.scalars().all()
 
     # Build a lookup: date → PlannedWorkout (for gap-filling). Dual-sport:
-    # primary sport wins the day card; the other sport's title rides along.
+    # primary sport wins the day card; the other sport's session rides along
+    # as secondary_title / secondary_target_tss.
     pw_by_date: dict[date, PlannedWorkout] = {}
-    secondary_by_date: dict[date, str] = {}
+    secondary_by_date: dict[date, PlannedWorkout] = {}
     for pw in pws:
         cur = pw_by_date.get(pw.date)
         if cur is None:
             pw_by_date[pw.date] = pw
         elif (pw.sport or "cycling") == primary_sport and (cur.sport or "cycling") != primary_sport:
-            secondary_by_date[pw.date] = cur.title
+            secondary_by_date[pw.date] = cur
             pw_by_date[pw.date] = pw
         else:
-            secondary_by_date[pw.date] = pw.title
+            secondary_by_date[pw.date] = pw
 
     # ── 8. Build DayPlan list — exactly 7, one per day ──────────────────
     days: list[DayPlan] = []
@@ -746,8 +785,21 @@ async def get_current_week(
         day_date = today + timedelta(days=i)
         pw = pw_by_date.get(day_date)
         dp = _build_day_plan(day_date, pw, today, primary_sport, language)
-        dp.secondary_title = secondary_by_date.get(day_date)
+        _apply_secondary(dp, secondary_by_date.get(day_date))
         days.append(dp)
+
+    # ── 8b. Weekly planned TSS — ONE producer (usability audit P0-5) ─────
+    # Sum of ALL PlannedWorkout rows Mon–Sun of the DISPLAYED week (not the
+    # today-anchored 7-day span), including dual-sport secondary rows, via
+    # the same template estimator the weekly recap uses.
+    week_rows_res = await db.execute(
+        select(PlannedWorkout).where(
+            PlannedWorkout.user_id == current_user.id,
+            PlannedWorkout.date >= week_start,
+            PlannedWorkout.date <= week_end,
+        )
+    )
+    planned_tss_total = planned_week_total(week_rows_res.scalars().all())
 
     # ── 9. Weekly preface from rationale service (deterministic default) ──
     preface = build_weekly_rationale(
@@ -816,7 +868,10 @@ async def get_current_week(
     planned_week_tss = 0.0
     activity_count_7d = 0
     try:
-        win_start = today - timedelta(days=7)
+        # Deviation window: trailing 7 days, CLAMPED to the Monday of the
+        # current athlete-local week — "You skipped Tuesday" must never
+        # reference last week (usability audit P0-5).
+        win_start = deviation_window_start(today)
         past_pw_res = await db.execute(
             select(PlannedWorkout).where(
                 PlannedWorkout.user_id == current_user.id,
@@ -835,18 +890,20 @@ async def get_current_week(
                 "planned_tss": float(tmpl.base_tss) if tmpl else 0.0,
             })
 
+        # Athlete-local day window: [win_start 00:00 local, today 00:00 local)
+        # as UTC bounds, and bucket each activity by its athlete-local day.
         act_res = await db.execute(
             select(Activity).where(
                 Activity.user_id == current_user.id,
-                Activity.started_at >= datetime(win_start.year, win_start.month, win_start.day, tzinfo=timezone.utc),
-                Activity.started_at < datetime(today.year, today.month, today.day, tzinfo=timezone.utc),
+                Activity.started_at >= day_local_window(win_start)[0],
+                Activity.started_at < day_local_window(today)[0],
             )
         )
         actual_by_date: dict[str, float] = {}
         for a in act_res.scalars().all():
             if a.started_at is None:
                 continue
-            key = a.started_at.date().isoformat()
+            key = local_date_of(a.started_at).isoformat()
             actual_by_date[key] = actual_by_date.get(key, 0.0) + float(a.tss or 0.0)
             activity_count_7d += 1
 
@@ -1055,6 +1112,7 @@ async def get_current_week(
         plan_changes=plan_changes,
         projection=projection_out,
         readiness=readiness_out,
+        planned_tss_total=planned_tss_total,
     )
 
 
@@ -1180,7 +1238,7 @@ async def select_program(
     with the next 14 days from the run skeleton. Ridden days and the past are
     never touched, and one sport's selection never wipes the other's rows.
     """
-    from datetime import date as _date, timedelta as _td
+    from datetime import timedelta as _td
 
     from sqlalchemy import delete as _delete
 
@@ -1213,7 +1271,10 @@ async def select_program(
     )
     flag_modified(prof, "goals")
 
-    today = _date.today()
+    # "Today" in the athlete's timezone — a 23:30 Berlin program switch must
+    # not plan tomorrow as if it were still today (UTC).
+    set_athlete_tz_from_profile(prof)
+    today = today_local()
 
     if payload.sport == "run":
         # Replace FUTURE run rows only — bike plan and history stay untouched.

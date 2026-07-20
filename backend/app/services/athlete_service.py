@@ -28,6 +28,20 @@ async def get_or_create_profile(db: AsyncSession, user_id: int) -> AthleteProfil
     return profile
 
 
+# Profile fields that feed TSS computation — changing any of them can turn a
+# previously-uncomputable activity into a computable one (or vice versa), so
+# we backfill NULL-tss rows afterwards.
+_TSS_THRESHOLD_FIELDS = (
+    "ftp_watts",
+    "lthr_cycling",
+    "lthr_running",
+    "running_threshold_pace_ms",
+    "max_heart_rate",
+    "resting_heart_rate",
+    "date_of_birth",
+)
+
+
 async def update_profile(
     db: AsyncSession,
     user_id: int,
@@ -36,6 +50,8 @@ async def update_profile(
     """Update athlete profile fields. Creates the profile if it doesn't exist.
 
     When FTP changes, appends the new value to ftp_history with a timestamp.
+    When any TSS-relevant threshold changes, backfills TSS for activities that
+    could not be computed before (recompute_missing_tss) — best-effort.
     """
     profile = await get_or_create_profile(db, user_id)
 
@@ -54,11 +70,33 @@ async def update_profile(
             ]
             profile.ftp_history = updated_history
 
+    thresholds_changed = any(
+        field in update_data and getattr(profile, field, None) != update_data[field]
+        for field in _TSS_THRESHOLD_FIELDS
+    )
+
     for field, value in update_data.items():
         setattr(profile, field, value)
 
     await db.commit()
     await db.refresh(profile)
+
+    if thresholds_changed:
+        # New thresholds may unlock TSS for previously-NULL activities (e.g.
+        # an HR-only run that had no LTHR anchor). Never break the profile
+        # update over the backfill.
+        try:
+            from app.services.activity_service import recompute_missing_tss
+
+            await recompute_missing_tss(db, user_id)
+        except Exception:  # noqa: BLE001 — best-effort backfill
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "recompute_missing_tss failed after profile update (user_id=%s)",
+                user_id,
+            )
+
     return profile
 
 

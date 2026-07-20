@@ -1,7 +1,8 @@
 from datetime import date, datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, field_validator
 
 
 class TrainingGoals(BaseModel):
@@ -45,6 +46,21 @@ class AthleteProfileUpdate(BaseModel):
     target_event_date: date | None = None
     target_event_type: Literal['race', 'fondo', 'audax', 'maintenance'] | None = None
     target_priority: Literal['A', 'B', 'C'] | None = None
+    # IANA timezone (e.g. "Europe/Berlin") — drives every "what day is it?"
+    # computation (athlete_time). Frontend sends
+    # Intl.DateTimeFormat().resolvedOptions().timeZone.
+    timezone: str | None = None
+
+    @field_validator("timezone")
+    @classmethod
+    def _validate_timezone(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            ZoneInfo(v)
+        except Exception as exc:
+            raise ValueError(f"Invalid IANA timezone: {v!r}") from exc
+        return v
 
 
 class AthleteProfileRead(BaseModel):
@@ -78,6 +94,9 @@ class AthleteProfileRead(BaseModel):
     target_event_date: date | None = None
     target_event_type: Literal['race', 'fondo', 'audax', 'maintenance'] | None = None
     target_priority: Literal['A', 'B', 'C'] | None = None
+
+    # IANA timezone of the athlete (None → backend default Europe/Berlin)
+    timezone: str | None = None
 
     # Timestamps
     created_at: datetime

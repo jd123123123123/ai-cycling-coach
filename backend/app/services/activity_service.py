@@ -2,15 +2,21 @@
 
 TSS is computed on creation based on sport type and athlete profile thresholds:
 - cycling: power-based (Coggan TSS) using NP or average_power as fallback
-- running: pace-based (rTSS) using distance/duration-derived speed
+- running: pace-based (rTSS) using distance/duration-derived speed; hrTSS
+  fallback when threshold pace is missing but HR data exists
 - gym: HR-based (hrTSS via Banister TRIMP)
 
-If the athlete profile lacks the required thresholds, TSS is left as None.
+hrTSS inputs are DERIVED when the profile lacks them (usability audit P0-5 —
+a 45-min HR-117 run must never count 0):
+- max HR: profile value, else Tanaka from date_of_birth (hr_zones.derive_max_hr)
+- LTHR:   measured value, else 0.90 × derived max HR
+- resting HR: profile value, else rolling 30d median from daily_metrics,
+  else 60 bpm default.
 """
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +25,12 @@ from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
 from app.models.coach_brief import CoachBrief
 from app.schemas.activity import ActivityCreate
+from app.services.athlete_time import (
+    day_local_window,
+    local_date_of,
+    set_athlete_tz_from_profile,
+)
+from app.services.hr_zones import derive_max_hr
 from app.services.training_load import (
     calculate_cycling_tss,
     calculate_hr_tss,
@@ -28,57 +40,80 @@ from app.services.training_load import (
 logger = logging.getLogger(__name__)
 
 # 0.90 × HRmax is a standard, widely-used estimate of lactate-threshold HR
-# (LTHR) when no measured threshold is available. This is the ONLY approximation
-# permitted in TSS computation — every other input uses real, measured values.
+# (LTHR) when no measured threshold is available.
 _LTHR_HRMAX_FRACTION = 0.90
 
+# Population-default resting HR — last resort when the profile has no resting
+# HR AND daily_metrics carries no wearable readings. A conservative middle
+# value; hrTSS is only mildly sensitive to it.
+_DEFAULT_RESTING_HR = 60.0
 
-def _resolve_lthr(profile: AthleteProfile, prefer_running: bool = False) -> float | None:
-    """Return a usable LTHR for hrTSS.
 
-    Prefers a measured threshold (lthr_running/lthr_cycling). When both are null
-    but max_heart_rate is set, falls back to the standard 0.90×HRmax estimate.
-    Returns None when neither a measured LTHR nor an HRmax is available.
-    """
-    if prefer_running:
-        measured = profile.lthr_running or profile.lthr_cycling
-    else:
-        measured = profile.lthr_cycling or profile.lthr_running
-    if measured:
-        return float(measured)
-    if profile.max_heart_rate:
-        # Standard LTHR estimate: 0.90 × HRmax.
-        return round(_LTHR_HRMAX_FRACTION * profile.max_heart_rate)
-    return None
+async def resting_hr_estimate(db: AsyncSession, user_id: int) -> float | None:
+    """Rolling 30-day median of the athlete's wearable resting HR, or None."""
+    from statistics import median
+
+    from app.models.daily_metric import DailyMetric
+
+    since = datetime.now(UTC) - timedelta(days=30)
+    res = await db.execute(
+        select(DailyMetric.resting_hr).where(
+            DailyMetric.user_id == user_id,
+            DailyMetric.recorded_at >= since,
+            DailyMetric.resting_hr.is_not(None),
+        )
+    )
+    vals = [float(v) for v in res.scalars().all() if v]
+    return float(median(vals)) if vals else None
 
 
 def _compute_hr_tss(
     duration: int | float,
     data: ActivityCreate,
     profile: AthleteProfile,
-    lthr: float | None,
+    measured_lthr: float | None,
     context: str,
+    resting_hr_fallback: float | None = None,
 ) -> float | None:
-    """Compute hrTSS from HR data, or None when HR data is genuinely absent.
+    """Compute hrTSS from HR data, deriving missing profile thresholds.
+
+    Derivation chain (only average_hr is strictly required):
+        max HR     — profile.max_heart_rate → Tanaka(date_of_birth) → give up
+        LTHR       — measured → 0.90 × max HR
+        resting HR — profile → daily-metrics median (caller-supplied) → 60 bpm
 
     Guards against division-by-zero (HRmax must exceed HRrest).
     """
-    if not all([data.average_hr, lthr, profile.resting_heart_rate, profile.max_heart_rate]):
+    if not data.average_hr:
+        logger.debug("Skipping %s hrTSS: no average_hr on activity", context)
+        return None
+
+    hr_max = derive_max_hr(
+        max_heart_rate=profile.max_heart_rate,
+        date_of_birth=getattr(profile, "date_of_birth", None),
+    )
+    if hr_max is None:
         logger.debug(
-            "Skipping %s hrTSS: average_hr=%s lthr=%s resting_hr=%s max_hr=%s",
+            "Skipping %s hrTSS: no max HR and no date_of_birth to derive one",
             context,
-            data.average_hr,
-            lthr,
-            profile.resting_heart_rate,
-            profile.max_heart_rate,
         )
         return None
-    if profile.max_heart_rate <= profile.resting_heart_rate:
+
+    lthr = (
+        float(measured_lthr)
+        if measured_lthr
+        else round(_LTHR_HRMAX_FRACTION * hr_max)
+    )
+    hr_rest = float(
+        profile.resting_heart_rate or resting_hr_fallback or _DEFAULT_RESTING_HR
+    )
+
+    if hr_max <= hr_rest:
         logger.warning(
             "Skipping %s hrTSS: max_hr (%s) <= resting_hr (%s)",
             context,
-            profile.max_heart_rate,
-            profile.resting_heart_rate,
+            hr_max,
+            hr_rest,
         )
         return None
     try:
@@ -87,8 +122,8 @@ def _compute_hr_tss(
             duration_seconds=duration,
             average_hr=float(data.average_hr),
             lthr=float(lthr),
-            hr_rest=float(profile.resting_heart_rate),
-            hr_max=float(profile.max_heart_rate),
+            hr_rest=hr_rest,
+            hr_max=float(hr_max),
             sex="male",
         )
     except (ValueError, ZeroDivisionError) as exc:
@@ -96,10 +131,15 @@ def _compute_hr_tss(
         return None
 
 
-def _compute_tss(data: ActivityCreate, profile: AthleteProfile) -> float | None:
+def _compute_tss(
+    data: ActivityCreate,
+    profile: AthleteProfile,
+    resting_hr_fallback: float | None = None,
+) -> float | None:
     """Compute TSS from activity data and athlete profile thresholds.
 
-    Returns None if the required thresholds are not set on the profile.
+    Returns None only when no usable signal exists (no power for cycling; no
+    HR anchor at all for the hrTSS paths).
     """
     duration = data.duration_seconds
     if not duration or duration <= 0:
@@ -130,16 +170,23 @@ def _compute_tss(data: ActivityCreate, profile: AthleteProfile) -> float | None:
             except ValueError as exc:
                 logger.warning("Running TSS calculation failed: %s", exc)
                 return None
-        # Fallback: HR-based TSS when threshold pace is missing but HR data exists.
-        # Prefer a measured running LTHR; estimate 0.90×HRmax only when unset.
-        lthr = _resolve_lthr(profile, prefer_running=True)
-        return _compute_hr_tss(duration, data, profile, lthr, context="running")
+        # Fallback: HR-based TSS when threshold pace is missing but HR data
+        # exists. A run with an average HR ALWAYS gets an hrTSS estimate as
+        # long as any max-HR anchor (measured or age-derived) exists.
+        measured = profile.lthr_running or profile.lthr_cycling
+        return _compute_hr_tss(
+            duration, data, profile, measured, context="running",
+            resting_hr_fallback=resting_hr_fallback,
+        )
 
     elif data.sport == "gym":
         # Prefer a measured LTHR (cycling, then running); estimate 0.90×HRmax
         # only when both measured thresholds are null.
-        lthr = _resolve_lthr(profile, prefer_running=False)
-        return _compute_hr_tss(duration, data, profile, lthr, context="gym")
+        measured = profile.lthr_cycling or profile.lthr_running
+        return _compute_hr_tss(
+            duration, data, profile, measured, context="gym",
+            resting_hr_fallback=resting_hr_fallback,
+        )
 
     return None
 
@@ -152,10 +199,20 @@ async def create_activity(
 ) -> Activity:
     """Create an activity with auto-computed TSS.
 
-    TSS is calculated from sport type + athlete profile thresholds. If the
-    required thresholds are missing on the profile, tss is stored as None.
+    TSS is calculated from sport type + athlete profile thresholds, deriving
+    missing HR thresholds (Tanaka max HR, daily-metrics resting HR) so
+    HR-only runs/gym sessions still earn an honest hrTSS estimate.
     """
-    tss = _compute_tss(data, profile)
+    # Resting-HR fallback only matters on the hrTSS paths — fetch lazily.
+    resting_hr_fallback: float | None = None
+    if (
+        data.sport in ("running", "gym")
+        and data.average_hr
+        and not profile.resting_heart_rate
+    ):
+        resting_hr_fallback = await resting_hr_estimate(db, user_id)
+
+    tss = _compute_tss(data, profile, resting_hr_fallback=resting_hr_fallback)
 
     activity = Activity(
         user_id=user_id,
@@ -178,12 +235,15 @@ async def create_activity(
     await db.flush()
     await db.refresh(activity)
 
-    # Invalidate any coach brief generated on the same day as this activity so
-    # the next /coach/brief read regenerates with the new ride in evidence.
+    # Invalidate any coach brief generated on the same ATHLETE-LOCAL day as
+    # this activity so the next /coach/brief read regenerates with the new
+    # ride in evidence. UTC-midnight windows attributed late-evening rides to
+    # the wrong day (usability audit P0-2).
     # Defensive: failure must not break activity creation.
     try:
-        activity_day = activity.started_at.date()
-        day_start_utc = datetime.combine(activity_day, time.min, tzinfo=UTC)
+        set_athlete_tz_from_profile(profile)
+        activity_day = local_date_of(activity.started_at)
+        day_start_utc, _ = day_local_window(activity_day)
         await db.execute(
             delete(CoachBrief).where(
                 CoachBrief.user_id == user_id,
@@ -227,14 +287,22 @@ async def list_activities(
     return list(result.scalars().all())
 
 
-async def recompute_missing_tss(db: AsyncSession, user_id: int) -> int:
+async def recompute_missing_tss(
+    db: AsyncSession, user_id: int, days: int | None = None
+) -> int:
     """Backfill TSS for the user's activities that currently have tss IS NULL.
 
     Loads the athlete profile once, then recomputes TSS for every NULL-tss
     activity by reconstructing the same input _compute_tss expects from the
     stored Activity fields. Only updates rows where a value could be computed
-    (e.g. HR data now yields hrTSS via the LTHR fallback). Returns the count
-    of rows updated.
+    (e.g. HR data now yields hrTSS via the derived-threshold fallback).
+    `days` limits the scan to the trailing window (sync uses 90).
+
+    NOTE: backfilled TSS deliberately shifts CTL history — that is the point.
+    It ships together with the window-invariant PMC so every surface moves
+    once, consistently.
+
+    Returns the count of rows updated.
     """
     profile = await db.execute(
         select(AthleteProfile).where(AthleteProfile.user_id == user_id)
@@ -244,13 +312,21 @@ async def recompute_missing_tss(db: AsyncSession, user_id: int) -> int:
         logger.info("recompute_missing_tss: no athlete profile for user_id=%s", user_id)
         return 0
 
-    result = await db.execute(
-        select(Activity).where(
-            Activity.user_id == user_id,
-            Activity.tss.is_(None),
-        )
+    query = select(Activity).where(
+        Activity.user_id == user_id,
+        Activity.tss.is_(None),
     )
+    if days is not None:
+        query = query.where(
+            Activity.started_at >= datetime.now(UTC) - timedelta(days=days)
+        )
+    result = await db.execute(query)
     activities = list(result.scalars().all())
+
+    # One resting-HR estimate for the whole batch (30d wearable median).
+    resting_hr_fallback: float | None = None
+    if not profile.resting_heart_rate:
+        resting_hr_fallback = await resting_hr_estimate(db, user_id)
 
     updated = 0
     for activity in activities:
@@ -269,7 +345,7 @@ async def recompute_missing_tss(db: AsyncSession, user_id: int) -> int:
             average_hr=activity.average_hr,
             max_hr=activity.max_hr,
         )
-        tss = _compute_tss(data, profile)
+        tss = _compute_tss(data, profile, resting_hr_fallback=resting_hr_fallback)
         if tss is not None:
             activity.tss = tss
             updated += 1

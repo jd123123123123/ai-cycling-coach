@@ -275,6 +275,9 @@ async def _sync_activity_streams(
             weather=weather,
             commit=False,
             store_power_model=is_ride,
+            # Tightens the corrupt-power ingest guard from the absolute 500 W
+            # bound to 5 W/kg when the athlete's weight is known.
+            weight_kg=float(profile.weight_kg) if profile and profile.weight_kg else None,
         )
         logger.info(
             "Ingested streams for activity id=%s (garmin %s): NP=%.0f, CP=%s",
@@ -580,6 +583,19 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         credential.last_sync_at = datetime.now(timezone.utc)
         credential.sync_status = "ok"
         await db.commit()
+
+        # Backfill TSS for the last 90 days of NULL-tss activities — a sync
+        # may have delivered HR-only sessions whose thresholds only now
+        # resolve (derived max HR / wearable resting HR). Best-effort.
+        try:
+            from app.services.activity_service import recompute_missing_tss
+
+            await recompute_missing_tss(db, user_id, days=90)
+        except Exception:  # noqa: BLE001 — backfill must never break a sync
+            logger.warning(
+                "recompute_missing_tss failed after sync (user_id=%s) — non-fatal",
+                user_id,
+            )
 
         # Absorb-and-replan (P1.4): unplanned/oversized rides get absorbed and
         # the week gently rebalanced. Best-effort by contract — never breaks sync.

@@ -32,6 +32,10 @@ class DayPlan(BaseModel):
     # Dual-sport: a same-day session in the OTHER sport (e.g. an easy run on a
     # bike day). Compact — title only; the run detail lives on its own row.
     secondary_title: str | None = None
+    # Planned TSS of that secondary session (template estimate with run/
+    # strength fallback) so the week list can render it as a visible line item
+    # instead of silently dropping its load (usability audit P0-5).
+    secondary_target_tss: int | None = None
 
 
 class MesoBlockContext(BaseModel):
@@ -126,6 +130,12 @@ class WeekResponse(BaseModel):
     # Today's readiness signal (illness/overreaching/amber/green). None when
     # there is no biometric history to judge.
     readiness: Readiness | None = None
+    # THE weekly planned-TSS number to render as the week's target: sum of ALL
+    # PlannedWorkout rows Mon–Sun of the displayed week, INCLUDING dual-sport
+    # shadowed secondary rows (template estimate with run/strength fallback).
+    # None when no plan rows exist. meso_block.weekly_tss_target remains
+    # advisory-only (the generator's budget), NOT the display target.
+    planned_tss_total: int | None = None
 
 
 __all__ = [

@@ -182,11 +182,15 @@ def update_ctl_atl(
         ATL: 7-day decay (short-term fatigue)
 
     Returns:
-        (new_ctl, new_atl) rounded to 1 decimal place.
+        (new_ctl, new_atl) at FULL precision. Rounding happens exactly once at
+        the presentation boundary (series emission / API response), never
+        inside the EWMA recursion — per-step rounding compounds over long
+        histories and made the same day's numbers depend on where the series
+        started (usability audit P0-5, July 2026).
     """
     new_ctl = ctl_yesterday + (tss_today - ctl_yesterday) * (1 / CTL_TIME_CONSTANT)
     new_atl = atl_yesterday + (tss_today - atl_yesterday) * (1 / ATL_TIME_CONSTANT)
-    return round(new_ctl, 1), round(new_atl, 1)
+    return new_ctl, new_atl
 
 
 # ---------------------------------------------------------------------------
@@ -199,9 +203,11 @@ def calculate_tsb(ctl: float, atl: float) -> float:
     Positive TSB = fresh/recovered (fitness > fatigue).
     Negative TSB = fatigued (acute load exceeds chronic load).
 
-    Per TrainingPeaks convention, TSB for a given day uses YESTERDAY's
-    CTL and ATL values — it is a leading indicator of form going into today,
-    not a measure of fatigue after today's training.
+    CONVENTION (app-wide, do not change): TSB for a given day uses the SAME
+    day's CTL and ATL — TSB_today = CTL_today − ATL_today, exactly as
+    compute_pmc_series emits it. (TrainingPeaks charts the yesterday-based
+    variant; we deliberately use same-day everywhere so every surface agrees.
+    Changing the convention would shift every number in the app by one day.)
 
     Returns:
         TSB rounded to 1 decimal place.
@@ -295,6 +301,9 @@ def compute_pmc_series(daily_tss_entries: list[dict]) -> list[dict]:
     Note:
         New athlete initialisation: CTL = ATL = 0.0 before first entry.
         The EWMA ensures CTL/ATL decay on rest days — they do NOT stay flat.
+        The running EWMA state is kept at FULL precision; emitted values are
+        rounded to 1 decimal exactly once (per-step rounding would make the
+        series depend on its start date).
     """
     if not daily_tss_entries:
         return []
@@ -316,8 +325,16 @@ def compute_pmc_series(daily_tss_entries: list[dict]) -> list[dict]:
     while current <= end_date:
         tss = tss_by_date.get(current, 0.0)  # rest days get 0 TSS
         ctl, atl = update_ctl_atl(ctl, atl, tss)
-        tsb = calculate_tsb(ctl, atl)
-        result.append({"date": current, "ctl": ctl, "atl": atl, "tsb": tsb})
+        # Round ONCE at emission; TSB from the emitted (displayed) values so
+        # displayed ctl - atl == displayed tsb always holds.
+        e_ctl = round(ctl, 1)
+        e_atl = round(atl, 1)
+        result.append({
+            "date": current,
+            "ctl": e_ctl,
+            "atl": e_atl,
+            "tsb": round(e_ctl - e_atl, 1),
+        })
         current += timedelta(days=1)
 
     return result

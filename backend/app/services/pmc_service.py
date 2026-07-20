@@ -2,20 +2,32 @@
 
 Bridges the database (activities table) with the pure sports science functions
 in training_load.py. Responsibilities:
-  - Aggregate daily TSS from the activities table (grouped by sport)
+  - Aggregate daily TSS from the activities table (grouped by sport),
+    bucketed by ATHLETE-LOCAL calendar day (usability audit P0-2)
   - Gap-fill rest days in Python (not time_bucket_gapfill — unreliable with multi-sport GROUP BY)
   - Fan out per-sport and total PMC series via compute_pmc_series()
   - Compute training zones from athlete profile thresholds
+
+WINDOW INVARIANCE (usability audit P0-4/P0-5): the CTL/ATL EWMA is ALWAYS run
+from the athlete's first activity (capped at HISTORY_CAP_DAYS) and the
+requested window is sliced from the tail. `days` only controls how much of the
+series is returned — never where the EWMA starts — so /pmc?days=60 and
+/pmc?days=90 report the identical TSB for the same calendar day.
 """
 from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.athlete_profile import AthleteProfile
+from app.services.athlete_time import (
+    athlete_tz,
+    set_athlete_tz_from_profile,
+    today_local,
+)
 from app.services.training_load import (
     coggan_power_zones,
     compute_pmc_series,
@@ -25,33 +37,43 @@ from app.services.training_load import (
 # Sports tracked independently in the PMC
 TRACKED_SPORTS = ("cycling", "running", "gym")
 
+# EWMA seed history cap — the CTL/ATL series always starts at the athlete's
+# first activity, but never further back than this (cost bound; 2 years is far
+# beyond the 42-day EWMA memory anyway).
+HISTORY_CAP_DAYS = 730
+
 
 async def get_daily_tss_by_sport(
     db: AsyncSession,
     user_id: int,
-    days: int = 90,
+    days: int = HISTORY_CAP_DAYS,
 ) -> list[dict]:
     """Query daily TSS aggregated by sport from the activities hypertable.
 
-    Uses date_trunc (not time_bucket_gapfill) — rest days are gap-filled
-    in Python after this query so multi-sport GROUP BY works correctly.
+    Buckets by ATHLETE-LOCAL calendar day (`started_at AT TIME ZONE tz`) so a
+    22:30 local ride never lands on the next UTC day. The athlete tz must be
+    bound via `athlete_time.set_athlete_tz_from_profile` before calling
+    (compute_user_pmc does this).
+
+    Rest days are gap-filled in Python after this query so multi-sport
+    GROUP BY works correctly.
 
     Args:
         db: Async SQLAlchemy session (already RLS-scoped to user_id).
         user_id: The authenticated user's ID.
-        days: Number of days to look back from today (server-side constant).
+        days: Number of days to look back from now (server-side constant).
 
     Returns:
         List of {"day": date, "sport": str, "daily_tss": float} for days
         where at least one activity with a non-null TSS was logged.
     """
     # f-string safe: `days` is a server-side integer constant, not user input
-    # that could contain SQL.  user_id is bound via :user_id parameter.
+    # that could contain SQL.  user_id / tz are bound parameters.
     sql = text(f"""
         SELECT
-            date_trunc('day', started_at)::date AS day,
+            (started_at AT TIME ZONE :tz)::date AS day,
             sport,
-            SUM(tss)                             AS daily_tss
+            SUM(tss)                            AS daily_tss
         FROM activities
         WHERE user_id = :user_id
           AND tss IS NOT NULL
@@ -59,7 +81,7 @@ async def get_daily_tss_by_sport(
         GROUP BY 1, 2
         ORDER BY 1, 2
     """)
-    result = await db.execute(sql, {"user_id": user_id})
+    result = await db.execute(sql, {"user_id": user_id, "tz": athlete_tz().key})
     rows = result.fetchall()
     return [
         {"day": row.day, "sport": row.sport, "daily_tss": float(row.daily_tss)}
@@ -85,10 +107,36 @@ def _gap_fill_series(
     return out
 
 
+def _series_for(
+    tss_by_date: dict[date, float],
+    window_start: date,
+    today: date,
+) -> list[dict]:
+    """Full-history EWMA, then slice the requested window from the tail.
+
+    The EWMA always starts at min(first activity day, window_start) so the
+    same calendar day carries the same CTL/ATL/TSB no matter which window the
+    caller asked for (window invariance). Zero-padding before the first
+    activity is harmless — the EWMA state is 0 there anyway.
+    """
+    if not tss_by_date:
+        return []
+    series_start = min(min(tss_by_date), window_start)
+    series_end = max(max(tss_by_date), today)
+    filled = _gap_fill_series(tss_by_date, series_start, series_end)
+    pmc_entries = compute_pmc_series(filled)
+    return [
+        {**e, "tss": tss_by_date.get(e["date"], 0.0)}
+        for e in pmc_entries
+        if e["date"] >= window_start
+    ]
+
+
 async def compute_user_pmc(
     db: AsyncSession,
     user_id: int,
     days: int = 90,
+    profile: AthleteProfile | None = None,
 ) -> dict:
     """Compute per-sport and combined-total PMC series for the authenticated user.
 
@@ -99,6 +147,11 @@ async def compute_user_pmc(
     Rest days cause CTL/ATL to decay — gaps are filled with TSS=0 before
     calling compute_pmc_series().
 
+    WINDOW-INVARIANT: the EWMA always runs from the athlete's first activity
+    (capped at HISTORY_CAP_DAYS); `days` only slices the returned window.
+    Days are bucketed in the ATHLETE-LOCAL timezone (the profile is loaded —
+    or passed via `profile` — and bound via set_athlete_tz_from_profile).
+
     Returns:
         {
             "total":   [{"date", "ctl", "atl", "tsb", "tss"}, ...],
@@ -108,7 +161,14 @@ async def compute_user_pmc(
         }
         Any sport with no activities returns an empty list.
     """
-    raw = await get_daily_tss_by_sport(db, user_id, days)
+    if profile is None:
+        prof_res = await db.execute(
+            select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+        )
+        profile = prof_res.scalar_one_or_none()
+    set_athlete_tz_from_profile(profile)
+
+    raw = await get_daily_tss_by_sport(db, user_id, days=HISTORY_CAP_DAYS)
 
     # Separate TSS by sport and build total (sum across all sports per day)
     sport_tss: dict[str, dict[date, float]] = {s: {} for s in TRACKED_SPORTS}
@@ -126,43 +186,15 @@ async def compute_user_pmc(
         # Always add to total regardless of sport
         total_tss[day] += tss
 
-    # Determine the date range to cover (the full window requested)
-    today = date.today()
+    # The returned window (athlete-local today, back `days` days)
+    today = today_local()
     window_start = today - timedelta(days=days - 1)
 
-    result: dict[str, list[dict]] = {}
-
-    # --- Total PMC (summed daily TSS → single EWMA) ---
-    if total_tss:
-        all_dates = list(total_tss.keys())
-        series_start = min(min(all_dates), window_start)
-        series_end = max(max(all_dates), today)
-        filled = _gap_fill_series(dict(total_tss), series_start, series_end)
-        pmc_entries = compute_pmc_series(filled)
-        # Attach daily TSS to each entry for charting
-        tss_lookup = dict(total_tss)
-        result["total"] = [
-            {**e, "tss": tss_lookup.get(e["date"], 0.0)}
-            for e in pmc_entries
-        ]
-    else:
-        result["total"] = []
-
-    # --- Per-sport PMC ---
+    result: dict[str, list[dict]] = {
+        "total": _series_for(dict(total_tss), window_start, today)
+    }
     for sport in TRACKED_SPORTS:
-        sport_dates = sport_tss[sport]
-        if sport_dates:
-            all_dates = list(sport_dates.keys())
-            series_start = min(min(all_dates), window_start)
-            series_end = max(max(all_dates), today)
-            filled = _gap_fill_series(sport_dates, series_start, series_end)
-            pmc_entries = compute_pmc_series(filled)
-            result[sport] = [
-                {**e, "tss": sport_dates.get(e["date"], 0.0)}
-                for e in pmc_entries
-            ]
-        else:
-            result[sport] = []
+        result[sport] = _series_for(sport_tss[sport], window_start, today)
 
     return result
 
@@ -219,8 +251,8 @@ async def project_pmc_forward(
     from sqlalchemy import select as _select
 
     from app.models.planned_workout import PlannedWorkout
+    from app.services.mesocycle_generator import template_tss_estimate
     from app.services.training_load import calculate_tsb, update_ctl_atl
-    from app.services.workout_templates import TEMPLATES
 
     history = await compute_user_pmc(db, user_id, days=90)
     rows = history.get("total") or []
@@ -236,7 +268,7 @@ async def project_pmc_forward(
     avg_daily = mean(recent_tss) if recent_tss else 0.0
     sd_daily = pstdev(recent_tss) if len(recent_tss) >= 7 else avg_daily * 0.5
 
-    today = date.today()
+    today = today_local()
     horizon = today + timedelta(days=days_ahead)
     plan_rows = await db.execute(
         _select(PlannedWorkout.date, PlannedWorkout.template_id)
@@ -248,10 +280,12 @@ async def project_pmc_forward(
     )
     planned_by_date: dict[date, float] = {}
     for d, template_id in plan_rows.all():
-        tmpl = TEMPLATES.get(template_id or "")
-        if tmpl is not None:
+        # Bike, run AND strength template ids all resolve — non-bike ids used
+        # to be silently dropped here (usability audit P0-5).
+        est = template_tss_estimate(template_id)
+        if est is not None:
             # A date may hold several planned sessions (e.g. ride + strength).
-            planned_by_date[d] = planned_by_date.get(d, 0.0) + float(tmpl.base_tss)
+            planned_by_date[d] = planned_by_date.get(d, 0.0) + float(est)
 
     sources: set[str] = set()
     days: list[dict] = []

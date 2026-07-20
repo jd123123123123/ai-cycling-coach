@@ -80,6 +80,14 @@ _RAMP_FACTOR: dict[str, float] = {
     "recovery":     0.65,
 }
 
+# Mujika taper volume factors — in taper/race phases the weekly target is a
+# straight volume CUT from CTL×7 (freshen, don't build); the Issurin block
+# ramp does not apply. Race week is mostly openers.
+_PHASE_VOLUME_FACTOR: dict[str, float] = {
+    "taper": 0.60,
+    "race": 0.45,
+}
+
 # Hard session session types
 _HARD_TYPES: frozenset[SessionType] = frozenset({"sweet_spot", "threshold", "vo2", "tempo"})
 
@@ -183,6 +191,39 @@ def _rest_dows_for_week(
 #  Exported helper functions
 # ──────────────────────────────────────────────────────────────────────────────
 
+def template_tss_estimate(
+    template_id: str | None,
+    duration_seconds: int | None = None,
+) -> float | None:
+    """Best-effort planned TSS for ANY template id — bike, run or unknown.
+
+    The single producer every planned-TSS consumer (weeks payload, weekly
+    recap, recovery ETA, race-day simulation) must go through, so run and
+    strength rows are never silently dropped from weekly totals (usability
+    audit P0-5, the 294-vs-284 gap).
+
+        1. Bike template     → its designed base_tss.
+        2. Run template      → duration × 1.1 TSS/min for quality categories
+                               (tempo/threshold/vo2), × 0.75 TSS/min otherwise
+                               (same constants the dual-sport planner uses).
+        3. Unknown id with a → duration × 0.75 TSS/min (conservative aerobic
+           planned duration     estimate — covers strength/custom sessions).
+        4. Nothing usable    → None (never a fabricated number).
+    """
+    if template_id:
+        tmpl = TEMPLATES.get(template_id)
+        if tmpl is not None:
+            return float(tmpl.base_tss)
+        run_tmpl = RUN_TEMPLATES.get(template_id)
+        if run_tmpl is not None:
+            quality = run_tmpl.category in ("tempo", "threshold", "vo2")
+            per_min = _RUN_TSS_PER_MIN_QUALITY if quality else _RUN_TSS_PER_MIN_EASY
+            return (run_tmpl.duration_s / 60.0) * per_min
+    if duration_seconds and duration_seconds > 0:
+        return (duration_seconds / 60.0) * _RUN_TSS_PER_MIN_EASY
+    return None
+
+
 def issurin_block_for_week(
     week_index: int,
     total_weeks: int = 4,
@@ -254,9 +295,13 @@ def weekly_tss_target(
     FRIEL_RAMP_CAP_PCT over the previous build week.  For recovery weeks
     the cap is irrelevant (we always drop to 65%).
 
+    TAPER/RACE phases override the block ramp with a Mujika volume cut
+    (60% / 45% of CTL×7) — you freshen into a race, you don't keep ramping.
+    This is also what makes the race-day forward simulation taper naturally.
+
     Args:
         ctl:            Athlete's current CTL (stress/day average).
-        phase:          Friel training phase (influences ramp range).
+        phase:          Friel training phase (taper/race cut volume).
         block_position: Issurin block ('accumulation', 'transmutation',
                         'realization', 'recovery').
 
@@ -264,6 +309,11 @@ def weekly_tss_target(
         Integer weekly TSS.
     """
     base_tss = ctl * 7.0
+
+    phase_factor = _PHASE_VOLUME_FACTOR.get(phase)
+    if phase_factor is not None:
+        return int(round(base_tss * phase_factor))
+
     ramp = _RAMP_FACTOR[block_position]
 
     if block_position == "recovery":
@@ -821,9 +871,11 @@ async def generate_mesocycle(
         phase = detect_training_phase(goal_date, effective_ctl, target_ctl=target_ctl)
 
     # ── 5. Build Issurin 3:1 weekly TSS targets ───────────────────────────
-    # Use athlete's CTL approximation for ramp calculation
-    # Default CTL assumption: 40 TSS/day (~mid-fitness recreational athlete)
-    ctl_for_ramp = 40.0
+    # Anchor the ramp to the athlete's LIVE CTL when the caller supplied it
+    # (weeks API always does). The old hardcoded 40.0 prescribed ~296 TSS/wk
+    # to a CTL-33 athlete (usability audit P0-4). Fall back to 40 TSS/day
+    # (~mid-fitness recreational) only when no live CTL is available.
+    ctl_for_ramp = float(current_ctl) if current_ctl is not None else 40.0
 
     tss_targets: list[int] = []
     prev_tss: int | None = None

@@ -185,16 +185,16 @@ class TestCalculateHRTSS:
 
 class TestUpdateCTLATL:
     def test_new_athlete_first_big_day(self):
-        """Starting from zero, 100 TSS day: CTL=2.4, ATL=14.3."""
+        """Starting from zero, 100 TSS day: CTL=100/42≈2.38, ATL=100/7≈14.29."""
         ctl, atl = update_ctl_atl(0.0, 0.0, 100.0)
-        assert ctl == 2.4
-        assert atl == 14.3
+        assert ctl == pytest.approx(100.0 / 42, abs=1e-9)
+        assert atl == pytest.approx(100.0 / 7, abs=1e-9)
 
     def test_rest_day_causes_decay(self):
         """Rest day (TSS=0) from established load: CTL and ATL decay."""
         ctl, atl = update_ctl_atl(50.0, 50.0, 0.0)
-        assert ctl == 48.8
-        assert atl == 42.9
+        assert ctl == pytest.approx(50.0 - 50.0 / 42, abs=1e-9)
+        assert atl == pytest.approx(50.0 - 50.0 / 7, abs=1e-9)
 
     def test_ctl_decays_slower_than_atl(self):
         """On a rest day, ATL drops more than CTL (ATL uses 1/7 vs CTL 1/42)."""
@@ -204,22 +204,22 @@ class TestUpdateCTLATL:
         atl_drop = atl_start - new_atl
         assert atl_drop > ctl_drop
 
-    def test_results_rounded_to_one_decimal(self):
-        """Output values are rounded to 1 decimal place."""
+    def test_full_precision_no_per_step_rounding(self):
+        """The EWMA state is NOT rounded per step (audit P0-5) — rounding
+        happens once at series emission. Values must match the exact formula."""
         ctl, atl = update_ctl_atl(42.567, 35.123, 80.0)
-        # check 1 decimal precision
-        assert ctl == round(ctl, 1)
-        assert atl == round(atl, 1)
+        assert ctl == pytest.approx(42.567 + (80.0 - 42.567) / 42, abs=1e-12)
+        assert atl == pytest.approx(35.123 + (80.0 - 35.123) / 7, abs=1e-12)
 
     def test_ewma_formula_correctness(self):
         """Verify EWMA formula: CTL = prev + (TSS - prev) * (1/42)."""
         prev_ctl, prev_atl = 40.0, 60.0
         tss = 70.0
-        expected_ctl = round(prev_ctl + (tss - prev_ctl) * (1 / 42), 1)
-        expected_atl = round(prev_atl + (tss - prev_atl) * (1 / 7), 1)
+        expected_ctl = prev_ctl + (tss - prev_ctl) * (1 / 42)
+        expected_atl = prev_atl + (tss - prev_atl) * (1 / 7)
         ctl, atl = update_ctl_atl(prev_ctl, prev_atl, tss)
-        assert ctl == expected_ctl
-        assert atl == expected_atl
+        assert ctl == pytest.approx(expected_ctl, abs=1e-12)
+        assert atl == pytest.approx(expected_atl, abs=1e-12)
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +398,15 @@ class TestComputePMCSeries:
         # After one day of 50 TSS from 0: CTL = 50 * (1/42) ≈ 1.2
         assert result[0]["ctl"] < 5.0  # starts near 0
         assert result[0]["atl"] < 15.0
+
+    def test_emitted_values_rounded_once(self):
+        """Series entries are rounded to 1 decimal at emission (and only there)."""
+        entries = [{"date": date(2026, 1, i), "tss": 77.7} for i in range(1, 15)]
+        result = compute_pmc_series(entries)
+        for entry in result:
+            assert entry["ctl"] == round(entry["ctl"], 1)
+            assert entry["atl"] == round(entry["atl"], 1)
+            assert entry["tsb"] == round(entry["tsb"], 1)
 
     def test_tsb_equals_ctl_minus_atl(self):
         """TSB = CTL - ATL for each day."""

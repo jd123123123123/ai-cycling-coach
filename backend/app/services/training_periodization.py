@@ -65,6 +65,7 @@ def detect_training_phase(
     current_ctl: float,
     weeks_of_history: int = 12,
     target_ctl: float | None = None,
+    today: date | None = None,
 ) -> Phase:
     """Pick the Friel phase based on goal proximity and fitness trajectory.
 
@@ -86,11 +87,15 @@ def detect_training_phase(
 
     `weeks_of_history` is not currently used but is reserved for future
     "second-year base" detection when we have multi-year CTL.
+
+    `today` overrides the reference date (defaults to date.today()) — used by
+    the race-day forward simulation to ask "what phase would week X be?" and
+    by athlete-local-timezone callers.
     """
     if goal_date is None:
         return "offseason" if current_ctl < 30 else "maintenance"
 
-    days_to_goal = (goal_date - date.today()).days
+    days_to_goal = (goal_date - (today or date.today())).days
 
     if days_to_goal < 0:
         # Goal is in the past — treat as maintenance until the profile is updated

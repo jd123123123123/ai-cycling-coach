@@ -310,22 +310,42 @@ class TestMountainSpecificity:
             )
 
     def test_non_fondo_athlete_keeps_flat_templates(self):
-        """Sanity: a non-mountain athlete is unaffected by the routing."""
+        """Sanity: a non-mountain athlete is unaffected by the routing.
+
+        NOTE: the plain rotation (_CATEGORY_CANDIDATES) legitimately contains
+        hill variants, so on some calendar weeks a non-mountain athlete can
+        rotate onto one — asserting "no climbing id ever" was date-flaky.
+        The invariant is that mountain ROUTING is off: the maintenance
+        athlete's week is identical to a no-event athlete's week.
+        """
+        from app.services.training_periodization import mountain_event_template
+
         week_start = _next_monday()
         athlete = _athlete(
             ftp_watts=280,
             target_event_date=week_start + timedelta(days=33),
             target_event_type="maintenance",
         )
-        drafts = build_week_drafts(
-            athlete=athlete,
+        control = _athlete(
+            ftp_watts=280,
+            target_event_date=None,
+            target_event_type=None,
+        )
+        kwargs = dict(
             week_start=week_start,
             phase="build2",
             weekly_tss_target_val=450,
             block_position="transmutation",
             ftp_w=280,
         )
-        assert not any(d.template_id in self._CLIMBING_IDS for d in drafts)
+        drafts = build_week_drafts(athlete=athlete, **kwargs)
+        control_drafts = build_week_drafts(athlete=control, **kwargs)
+        assert [d.template_id for d in drafts] == [
+            d.template_id for d in control_drafts
+        ]
+        # And the router itself declines non-mountain event types.
+        for st in ("tempo", "threshold", "vo2"):
+            assert mountain_event_template(st, "maintenance", 33, 2) is None
 
 
 # ──────────────────────────────────────────────────────────────────────────────

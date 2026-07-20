@@ -709,41 +709,39 @@ def build_load_dynamics(cur: WindowMetrics, lang: str = "en"):
 
 
 async def build_trajectory(db: AsyncSession, user_id: int, phase: str | None, lang: str = "en"):
-    """Banister projection toward the goal event — the same PMC + athlete goals
-    the live coach uses. Returns None only on hard failure; the underlying
-    projection degrades gracefully to a no-goal CTL-trend observation."""
+    """Race-day trajectory via the ONE producer (`compute_goal_trajectory`) —
+    identical goals normalization and plan simulation as the coach's
+    /goal-trajectory endpoint, so the period report can never disagree with
+    the live coach (the 271-vs-294 fork, usability audit P0-5).
+
+    Returns None on hard failure OR when the projection basis is 'none'
+    (no target event / not enough history) — an honest omitted panel beats a
+    fabricated zero."""
     from app.models.athlete_profile import AthleteProfile
     from app.schemas.period_report import Trajectory
-    from app.services.goal_trajectory import project as project_trajectory
-    from app.services.pmc_service import compute_user_pmc
+    from app.services.goal_trajectory import compute_goal_trajectory
 
     try:
-        pmc_full = await compute_user_pmc(db, user_id, days=90)
         profile = (
             await db.execute(
                 select(AthleteProfile).where(AthleteProfile.user_id == user_id)
             )
         ).scalar_one_or_none()
-        goals = profile.goals if profile and isinstance(profile.goals, dict) else None
-
-        tp = project_trajectory(
-            user_pmc=pmc_full.get("total") or [],
-            athlete_goals=goals,
-            phase=phase or "maintenance",
-            lang=lang,
-        )
+        payload = await compute_goal_trajectory(db, user_id, profile, lang=lang)
+        if payload is None or payload.get("projection_basis") == "none":
+            return None
         return Trajectory(
-            days_to_goal=tp.days_to_goal,
-            ctl_now=tp.ctl_now,
-            ctl_7d_delta=tp.ctl_7d_delta,
-            ctl_projected_at_goal=tp.ctl_projected_at_goal,
-            ctl_target=tp.ctl_target,
-            tsb_projected_at_goal=tp.tsb_projected_at_goal,
-            taper_window=tp.taper_window,
-            on_track=tp.on_track,
-            weekly_tss_required=tp.weekly_tss_required,
-            weekly_tss_actual=tp.weekly_tss_actual,
-            narrative=tp.narrative_hook,
+            days_to_goal=payload["days_to_goal"],
+            ctl_now=payload["ctl_now"],
+            ctl_7d_delta=payload["ctl_7d_delta"],
+            ctl_projected_at_goal=payload["ctl_projected_at_goal"],
+            ctl_target=payload["ctl_target"],
+            tsb_projected_at_goal=payload["tsb_projected_at_goal"],
+            taper_window=payload["taper_window"],
+            on_track=payload["on_track"],
+            weekly_tss_required=payload["weekly_tss_required"],
+            weekly_tss_actual=payload["weekly_tss_actual"],
+            narrative=payload["narrative_hook"],
         )
     except Exception:  # noqa: BLE001
         logger.exception("build_trajectory failed for user %s", user_id)

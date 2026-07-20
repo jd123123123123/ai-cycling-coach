@@ -7,6 +7,7 @@ by the client rather than faked.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
@@ -14,10 +15,40 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
+from app.models.athlete_profile import AthleteProfile
 from app.models.planned_workout import PlannedWorkout
+from app.services.athlete_time import (
+    local_date_of,
+    set_athlete_tz_from_profile,
+    today_local,
+)
 from app.services.breakthrough_detector import detect_breakthroughs
+from app.services.mesocycle_generator import template_tss_estimate
 from app.services.pmc_service import compute_user_pmc
 from app.services.streak import build_streak
+
+
+def planned_week_total(rows: Iterable[Any]) -> int | None:
+    """Planned TSS across ALL PlannedWorkout rows of a Mon–Sun week.
+
+    THE one producer for "weekly planned TSS" (usability audit P0-5): includes
+    dual-sport shadowed secondary rows (the 294-vs-284 gap) via
+    template_tss_estimate, which resolves bike, run AND unknown/strength
+    template ids (duration fallback). Rows accept anything with `template_id`
+    / `duration_seconds_target` attributes. None (never 0) when no row yields
+    an estimate.
+    """
+    vals = [
+        template_tss_estimate(
+            getattr(r, "template_id", None),
+            getattr(r, "duration_seconds_target", None),
+        )
+        for r in rows
+    ]
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        return None
+    return int(round(sum(vals)))
 
 
 def _week_bounds(anchor: date) -> tuple[date, date]:
@@ -34,7 +65,16 @@ def _dt(d: date, end: bool = False) -> datetime:
 async def build_weekly_recap(
     db: AsyncSession, user_id: int, lang: str = "en", anchor: date | None = None
 ) -> dict[str, Any]:
-    anchor = anchor or date.today()
+    # Bind the athlete tz so "last completed week" and per-day bucketing use
+    # athlete-local days, not server/UTC days.
+    profile = (
+        await db.execute(
+            select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+    set_athlete_tz_from_profile(profile)
+
+    anchor = anchor or today_local()
     start, end = _week_bounds(anchor)
     prev_start, prev_end = start - timedelta(days=7), start - timedelta(days=1)
 
@@ -48,7 +88,7 @@ async def build_weekly_recap(
     acts = list(rows.scalars().all())
 
     def _bucket(a: Activity) -> str:
-        d = a.started_at.date() if a.started_at else None
+        d = local_date_of(a.started_at) if a.started_at else None
         if d is None:
             return "other"
         return "week" if d >= start else "prev"
@@ -62,26 +102,23 @@ async def build_weekly_recap(
             "hours": round(sum((a.duration_seconds or 0) for a in items) / 3600, 1),
             "km": round(sum((a.distance_meters or 0) for a in items) / 1000, 1),
             "tss": round(sum((a.tss or 0) for a in items)),
-            "active_days": len({a.started_at.date() for a in items if a.started_at}),
+            "active_days": len({local_date_of(a.started_at) for a in items if a.started_at}),
         }
 
     totals = _totals(week)
     prev_totals = _totals(prev)
 
-    # Plan vs actual — planned TSS proxied via templates (same mapping the
-    # recovery-eta projection uses); absent plan rows → null, never 0.
+    # Plan vs actual — the ONE weekly planned-TSS producer (planned_week_total):
+    # all Mon–Sun rows including dual-sport secondary sessions, with run/
+    # strength template fallback. Absent plan rows → null, never 0.
     plan_rows = await db.execute(
-        select(PlannedWorkout.template_id).where(
+        select(PlannedWorkout).where(
             PlannedWorkout.user_id == user_id,
             PlannedWorkout.date >= start,
             PlannedWorkout.date <= end,
         )
     )
-    from app.services.workout_templates import TEMPLATES
-    planned_tss: float | None = None
-    tids = [r[0] for r in plan_rows.all()]
-    if tids:
-        planned_tss = round(sum(float(TEMPLATES[t].base_tss) for t in tids if t in TEMPLATES))
+    planned_tss: int | None = planned_week_total(plan_rows.scalars().all())
 
     # Fitness movement across the week (CTL at week end vs week start).
     pmc = (await compute_user_pmc(db, user_id, days=90)).get("total") or []
@@ -110,7 +147,7 @@ async def build_weekly_recap(
             {
                 "activity_id": best_ride.id,
                 "title": best_ride.title,
-                "date": best_ride.started_at.date().isoformat() if best_ride.started_at else None,
+                "date": local_date_of(best_ride.started_at).isoformat() if best_ride.started_at else None,
                 "tss": round(best_ride.tss or 0),
                 "km": round((best_ride.distance_meters or 0) / 1000, 1),
                 "hours": round((best_ride.duration_seconds or 0) / 3600, 1),
