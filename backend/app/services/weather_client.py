@@ -48,7 +48,7 @@ async def fetch_today_forecast(
     params = {
         "latitude": round(lat, 3),
         "longitude": round(lng, 3),
-        "hourly": "temperature_2m,precipitation_probability,wind_speed_10m,weather_code",
+        "hourly": "temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,weather_code",
         "wind_speed_unit": "kmh",
         "timezone": tz_name,
         "forecast_days": 1,

@@ -6,6 +6,7 @@ export interface WeatherHour {
   temp_c: number | null
   precip_prob: number | null
   wind_kmh: number | null
+  wind_dir_deg: number | null
   code: number | null // WMO weather code
 }
 
