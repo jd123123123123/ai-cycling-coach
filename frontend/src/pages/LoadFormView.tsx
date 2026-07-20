@@ -28,6 +28,44 @@ import { latestLoad } from '../utils/loadMetrics'
 
 const DASH = '—'
 
+/**
+ * Audit P1-9 classifier. Ratio bands over week-elapsed pace vs the 4-week
+ * average; 'quiet' plans get an explanation, never a shortfall label. The
+ * words Verletzung / Gefahr / Untertraining are banned from the UI.
+ */
+export function classifyLoadTrend(pace: number, fourWeekAvg: number, plannedQuiet: boolean, de: boolean): {
+  state: 'build' | 'rhythm' | 'rising'
+  headline: string
+  body: string | null
+  color: string
+} {
+  const ratio = fourWeekAvg > 0 ? pace / fourWeekAvg : 1
+  if (ratio > 1.2) {
+    return {
+      state: 'rising',
+      headline: de ? 'Schnell gestiegen — Erholung im Blick behalten' : 'Rising fast — keep an eye on recovery',
+      body: null,
+      color: 'var(--color-amber)',
+    }
+  }
+  if (ratio < 0.8) {
+    return {
+      state: 'build',
+      headline: de ? 'Luft nach oben' : 'Room to build',
+      body: plannedQuiet
+        ? (de ? 'Diese Woche ist bewusst ruhig — dein Plan baut ab nächster Woche wieder auf.' : 'This week is intentionally quiet — your plan builds again next week.')
+        : null,
+      color: 'var(--color-muted)',
+    }
+  }
+  return {
+    state: 'rhythm',
+    headline: de ? 'Im Rhythmus' : 'In rhythm',
+    body: null,
+    color: 'var(--color-recovery)',
+  }
+}
+
 function fmtDur(sec: number): string {
   const m = Math.round(sec / 60)
   const h = Math.floor(m / 60)
@@ -148,30 +186,22 @@ export default function LoadFormView() {
     ? Math.round(((lastComplete.tss - priorComplete.tss) / priorComplete.tss) * 100) : null
   const rampSafe = rampPct == null || Math.abs(rampPct) <= 15
 
-  // ---- Injury risk / ACWR (7d acute : 28d chronic weekly avg) -------------
-  const acwr = useMemo(() => {
-    const win = activities.filter((a) => new Date(a.started_at ?? a.date ?? 0) >= subDays(today, 28))
-    if (win.length === 0) return null
-    const d7 = subDays(today, 7)
-    let acute = 0, last28 = 0
-    for (const a of win) {
-      const t = a.tss ?? 0
-      last28 += t
-      if (new Date(a.started_at ?? a.date ?? 0) >= d7) acute += t
-    }
-    const chronic = last28 / 4
-    return { acute: Math.round(acute), chronic: Math.round(chronic), ratio: chronic > 0 ? acute / chronic : 0 }
-  }, [activities, today])
-  const R_MAX = 2
-  const posR = (r: number) => Math.max(0, Math.min(1, r / R_MAX))
-  const acwrState = (() => {
-    if (!acwr) return { label: DASH, color: 'var(--color-muted)' }
-    if (acwr.ratio < 0.8) return { label: de ? 'Untertraining' : 'Undertraining', color: 'var(--color-muted)' }
-    if (acwr.ratio <= 1.3) return { label: de ? 'Optimalbereich' : 'Sweet spot', color: 'var(--color-recovery)' }
-    if (acwr.ratio <= 1.5) return { label: de ? 'Vorsicht' : 'Caution', color: 'var(--color-amber)' }
-    return { label: de ? 'Gefahr' : 'Danger', color: 'var(--color-move)' }
-  })()
-  const ramp = report?.load_dynamics?.ramp_per_week
+  // ---- Load trend (audit P1-9): this week vs 4-week average ---------------
+  // Replaces the ACWR 'Verletzungsrisiko' gauge — injury-risk claims on a
+  // contested metric are on the project's own avoid list. Three NEUTRAL
+  // states; the low state explains instead of labeling. State classifies on
+  // week-elapsed PACE so Monday never reads as a failure.
+  const loadTrend = useMemo(() => {
+    const current = weeks.length ? weeks[weeks.length - 1] : null
+    const complete = weeks.slice(-5, -1).map((w) => w.tss).filter((t) => t > 0)
+    if (!current || complete.length === 0) return null
+    const fourWeekAvg = complete.reduce((a, b) => a + b, 0) / complete.length
+    const elapsedFrac = Math.max(1 / 7, ((today.getDay() + 6) % 7 + 1) / 7)
+    const pace = current.tss / elapsedFrac
+    const plannedTotal = (weekPlan as { planned_tss_total?: number | null } | undefined)?.planned_tss_total ?? null
+    const plannedQuiet = plannedTotal != null && fourWeekAvg > 0 && plannedTotal < 0.75 * fourWeekAvg
+    return { thisWeek: current.tss, fourWeekAvg: Math.round(fourWeekAvg), ...classifyLoadTrend(pace, fourWeekAvg, plannedQuiet, de) }
+  }, [weeks, weekPlan, today, de])
 
   // ---- Load by intensity (3-zone model from period report) ----------------
   const mix = report?.intensity ?? null
@@ -434,53 +464,38 @@ export default function LoadFormView() {
           </div>
         </Card>
 
-        {/* 3. Injury Risk — ACWR */}
-        <Card>
-          <CardHead
-            title={de ? 'Verletzungsrisiko' : 'Injury Risk'}
-            sub={de ? 'Akut : Chronisch Lastverhältnis' : 'Acute : Chronic workload ratio'}
-            right={
-              <div className="flex items-center gap-2">
-                <span className="num-display" style={{ fontSize: 26, fontWeight: 700, color: acwrState.color }}>{acwr ? acwr.ratio.toFixed(2) : DASH}</span>
-                <Pill color={acwrState.color} soft="rgba(22,224,138,0.12)">{acwrState.label}</Pill>
-              </div>
-            }
-          />
-          <div>
-            <div className="relative" style={{ height: 26 }}>
-              <div className="absolute flex overflow-hidden" style={{ top: 8, left: 0, right: 0, height: 10, borderRadius: 5, gap: 2 }}>
-                <div style={{ flex: '0 0 40%', background: 'var(--color-surface-3)' }} />
-                <div style={{ flex: '0 0 25%', background: 'var(--color-recovery)' }} />
-                <div style={{ flex: '0 0 10%', background: 'var(--color-amber)' }} />
-                <div style={{ flex: '1 1 auto', background: 'var(--color-move)' }} />
-              </div>
-              {acwr && (
-                <div className="absolute" style={{ top: 0, left: `calc(${posR(acwr.ratio) * 100}% - 3px)`, width: 6, height: 26, borderRadius: 3, background: 'var(--color-ink)', border: '2px solid var(--color-paper-2)' }} />
-              )}
+        {/* 3. Load trend — this week vs 4-week average (audit P1-9) */}
+        {loadTrend && (
+          <Card>
+            <CardHead
+              title={de ? 'Belastungs-Trend' : 'Load trend'}
+              sub={de ? 'Diese Woche vs. 4-Wochen-Schnitt' : 'This week vs 4-week average'}
+              right={<Pill color={loadTrend.color} soft={`color-mix(in srgb, ${loadTrend.color} 14%, transparent)`}>{loadTrend.headline}</Pill>}
+            />
+            <div className="flex flex-col gap-2.5">
+              {[
+                { l: de ? 'Diese Woche · läuft noch' : 'This week · in progress', v: loadTrend.thisWeek, inProgress: true },
+                { l: de ? '4-Wochen-Schnitt' : '4-week average', v: loadTrend.fourWeekAvg, inProgress: false },
+              ].map((row) => {
+                const maxV = Math.max(loadTrend.thisWeek, loadTrend.fourWeekAvg, 1)
+                return (
+                  <div key={row.l} className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{row.l}</span>
+                      <span className="num-display" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>{Math.round(row.v)} TSS</span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 4, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
+                      <div style={{ width: `${(row.v / maxV) * 100}%`, height: '100%', borderRadius: 4, background: row.inProgress ? 'color-mix(in srgb, var(--color-strain) 55%, transparent)' : 'var(--color-strain)' }} />
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <div className="flex justify-between" style={{ marginTop: 4 }}>
-              <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'Untertraining' : 'Undertraining'}</span>
-              <span style={{ fontSize: 11, color: 'var(--color-recovery)' }}>{de ? 'Optimal' : 'Sweet spot'}</span>
-              <span style={{ fontSize: 11, color: 'var(--color-move)' }}>{de ? 'Gefahr' : 'Danger'}</span>
-            </div>
-          </div>
-          <div style={{ height: 1, background: 'var(--color-rule)' }} />
-          <div className="flex justify-between">
-            {[
-              { l: de ? 'Akut · 7T' : 'Acute · 7d', v: acwr ? `${acwr.acute}` : DASH, u: 'TSS' },
-              { l: de ? 'Chronisch · 28T' : 'Chronic · 28d', v: acwr ? `${acwr.chronic}` : DASH, u: 'TSS/wk' },
-              { l: de ? 'Anstieg' : 'Ramp', v: ramp != null ? showTrend(Math.round(ramp)) : DASH, u: de ? 'pro Woche' : 'per week' },
-            ].map((s) => (
-              <div key={s.l} className="flex flex-col gap-1">
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{s.l}</span>
-                <div className="flex items-end gap-1">
-                  <span className="num-display" style={{ fontSize: 19, fontWeight: 700, color: 'var(--color-ink)' }}>{s.v}</span>
-                  <span style={{ fontSize: 11, color: 'var(--color-muted)', paddingBottom: 3 }}>{s.u}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+            {loadTrend.body && (
+              <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>{loadTrend.body}</span>
+            )}
+          </Card>
+        )}
 
         {/* 4. Load by Intensity */}
         <Card>

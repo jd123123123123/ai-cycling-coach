@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Zap, Footprints, Heart, BarChart3, Users, TrendingUp } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 
@@ -30,10 +30,18 @@ function resolveActive(raw: string | null): TabId {
 export default function MobileBottomNav() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { locale } = useLocale()
   const de = locale === 'de'
-  const onProgress = typeof window !== 'undefined' && window.location.pathname.startsWith('/progress')
-  const active: TabId = onProgress ? 'progress' : resolveActive(searchParams.get('tab'))
+  // Honest active state (audit P1-12): a tab only lights up on its own
+  // surface. /coach, /season, /load-form etc. previously kept 'Heute' lit —
+  // a false you-are-here on 7+ routes. Non-dashboard routes (except
+  // /progress) highlight nothing.
+  const active: TabId | null = location.pathname.startsWith('/progress')
+    ? 'progress'
+    : location.pathname.startsWith('/dashboard')
+      ? resolveActive(searchParams.get('tab'))
+      : null
 
   function handleTab(tab: { id: TabId; route?: string }) {
     if (tab.route) {

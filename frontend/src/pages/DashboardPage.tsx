@@ -13,7 +13,7 @@
  * back with `replace: true` so back-nav doesn't accumulate tab changes.
  */
 import { useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { useReducedMotion } from 'motion/react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import StickyReadinessBar from '../components/dashboard/StickyReadinessBar'
@@ -60,6 +60,13 @@ export default function DashboardPage() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [activeTab])
+
+  // Deep-link truth (audit P1-12): ?tab=progress previously rendered Today;
+  // Progress lives at /progress/bike like the nav icon says. After all hooks
+  // so the hook order is render-stable.
+  if (searchParams.get('tab') === 'progress') {
+    return <Navigate to="/progress/bike" replace />
+  }
 
   const tabContent = (() => {
     switch (activeTab) {
