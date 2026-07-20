@@ -1603,6 +1603,15 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     lthr_for_hr = int(lthr_for_hr) if isinstance(lthr_for_hr, (int, float)) and lthr_for_hr > 0 else None
 
     llm_workout = llm_payload.get("prescribed_workout") or {}
+    # Defensive (live-observed 2026-07-20): the LLM occasionally emits
+    # prescribed_workout as a bare template-id STRING instead of an object.
+    # Crashing here silently downgraded the athlete to the rule-based brief;
+    # coerce instead — the id is all the resolver needs (watts are rewritten
+    # server-side anyway).
+    if isinstance(llm_workout, str):
+        llm_workout = {"template_id": llm_workout}
+    elif not isinstance(llm_workout, dict):
+        llm_workout = {}
     template_id = str(llm_workout.get("template_id") or "")
     original_template_id = template_id
     why = llm_workout.get("why_this_workout")
