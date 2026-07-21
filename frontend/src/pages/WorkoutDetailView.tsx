@@ -12,7 +12,7 @@
  * it into the identical presentation. Honest "—" where sensor data is absent.
  */
 import { useEffect, useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, Navigate } from 'react-router-dom'
 import { format, parseISO, differenceInCalendarWeeks } from 'date-fns'
 import {
   ChevronLeft, ChevronRight, Share2, Bike, Repeat, Zap, Heart, Gauge, Droplet,
@@ -22,6 +22,7 @@ import { formatDate } from '../utils/format'
 import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
+import { useActivitiesRange } from '../hooks/useActivitiesRange'
 import { useLocale } from '../contexts/LocaleContext'
 import { workoutDisplayTitle, workoutDisplayPurpose, workoutDisplayRationale } from '../api/coach'
 import BlockBars, { zoneColor, zoneForPct } from '../components/workout/BlockBars'
@@ -224,6 +225,18 @@ export default function WorkoutDetailView() {
   const { data: week } = useCurrentWeek(weekOffset)
   const ftp = profile?.ftp_watts ?? null
 
+  // Today's completed ride (if any). Once you've trained, the coach drops the
+  // prescription (brief.prescribed_workout → null), which would otherwise leave
+  // this view on the "no workout / rest" message. If a ride exists for today,
+  // "view workout" should open the ride you actually did instead.
+  const { data: todayActs } = useActivitiesRange(new Date(), new Date())
+  const todayRide = useMemo(() => {
+    if (!isToday) return null
+    return (todayActs?.activities ?? []).find(
+      (a) => a.sport === 'cycling' && (a.started_at ?? '').slice(0, 10) === todayStr,
+    ) ?? null
+  }, [isToday, todayActs, todayStr])
+
   const dayPlan = useMemo(
     () => (isToday ? null : week?.days?.find((d) => d.date === targetDate) ?? null),
     [isToday, week, targetDate],
@@ -288,6 +301,8 @@ export default function WorkoutDetailView() {
   )
 
   if (!w || !s) {
+    // Trained today → show the ride you did, not the (now-consumed) prescription.
+    if (isToday && todayRide) return <Navigate to={`/activities/${todayRide.id}/ride`} replace />
     const isRest = !isToday && (!dayPlan || dayPlan.category === 'rest' || !dayHasSession(dayPlan))
     const dLabel = isToday ? null : formatDate(parseISO(targetDate), de ? 'EEEE, d. MMM' : 'EEEE, MMM d', locale)
     const msg = isToday
