@@ -889,7 +889,10 @@ export default function HistoryTab() {
         {recent.map((a) => {
           const Icon = sportIcon(a.sport)
           const col = sportColor(a.sport)
-          const route = a.sport === 'running' ? `/activities/${a.id}/run` : `/activities/${a.id}/ride`
+          // Cycling rides open the V3 Ride Recap (grade + planned-vs-actual RPE
+          // loop); the recap links onward to the deeper Ride Analysis. Runs keep
+          // their own analysis view (no recap surface for runs).
+          const route = a.sport === 'running' ? `/activities/${a.id}/run` : `/activities/${a.id}/recap`
           const hoverStats = recentHoverStats(a)
           return (
             <Link key={a.id} to={route} className="hover-card flex items-center gap-3 rounded-[24px] p-3" style={cardStyle}>
