@@ -50,6 +50,19 @@ _LTHR_HRMAX_FRACTION = 0.90
 # value; hrTSS is only mildly sensitive to it.
 _DEFAULT_RESTING_HR = 60.0
 
+# Absolute last-resort TSS: when a ride has NEITHER power NOR usable HR, estimate
+# load from duration at an assumed moderate-endurance intensity (IF≈0.70), so a
+# logged ride still carries a load instead of a blank. Deliberately rough — the
+# intensity is assumed, not measured — used only after power and hrTSS both fail.
+# TSS = hours × IF² × 100  (Coggan definition with an assumed IF).
+_ASSUMED_ENDURANCE_IF = 0.70
+
+
+def _estimate_ride_tss_from_duration(duration_seconds: int | float) -> float:
+    """Duration-only TSS estimate at an assumed endurance intensity."""
+    hours = float(duration_seconds) / 3600.0
+    return round(hours * (_ASSUMED_ENDURANCE_IF ** 2) * 100.0, 1)
+
 
 async def resting_hr_estimate(db: AsyncSession, user_id: int) -> float | None:
     """Rolling 30-day median of the athlete's wearable resting HR, or None."""
@@ -161,10 +174,15 @@ def _compute_tss(
         # an average HR should still earn an honest load instead of NULL. Anchor
         # on cycling LTHR, then running, then age-derived (handled downstream).
         measured = profile.lthr_cycling or profile.lthr_running
-        return _compute_hr_tss(
+        hr_tss = _compute_hr_tss(
             duration, data, profile, measured, context="cycling",
             resting_hr_fallback=resting_hr_fallback,
         )
+        if hr_tss is not None:
+            return hr_tss
+        # Neither power nor usable HR — assume load from duration so the ride is
+        # never blank (user directive). Rough estimate; see the helper.
+        return _estimate_ride_tss_from_duration(duration)
 
     elif data.sport == "running":
         # Preferred: pace-based rTSS when a real running threshold pace is set.

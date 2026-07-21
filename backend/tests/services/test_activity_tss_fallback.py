@@ -161,10 +161,14 @@ class TestCyclingHrTssFallback:
         with_power = _compute_tss(_ride(power=210), _profile(ftp_watts=240))
         assert with_power is not None and with_power > 0
 
-    def test_no_power_no_hr_stays_none(self):
-        # No power, no HR → honest None (nothing to estimate from).
-        assert _compute_tss(_ride(avg_hr=None), _profile()) is None
+    def test_no_power_no_hr_estimates_from_duration(self):
+        # No power, no HR → last-resort duration estimate (user directive: assume
+        # a load rather than leave it blank). 90 min = 1.5h × 0.70² × 100 ≈ 73.5.
+        tss = _compute_tss(_ride(avg_hr=None), _profile())
+        assert tss is not None and tss > 0
+        assert abs(tss - 73.5) < 0.6
 
-    def test_no_power_no_maxhr_anchor_stays_none(self):
-        # HR present but no max-HR anchor at all → no fabricated number.
-        assert _compute_tss(_ride(), _profile(date_of_birth=None)) is None
+    def test_no_power_no_maxhr_anchor_estimates_from_duration(self):
+        # HR present but no max-HR anchor → hrTSS can't compute → duration estimate.
+        tss = _compute_tss(_ride(), _profile(date_of_birth=None))
+        assert tss is not None and tss > 0
