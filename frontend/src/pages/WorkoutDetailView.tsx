@@ -170,6 +170,18 @@ function mapDayToWorkout(d: DayPlan, ftp: number | null, de: boolean): Prescribe
     }
   })
   const totalS = d.duration_seconds_target ?? blocks.reduce((s, b) => s + b.duration_s, 0)
+  // The weekly-plan preview leaves non-structured warm-up / cool-down blocks at
+  // 0 s. Rendering those as literal "0:00 · —" steps looks broken, so spread the
+  // session's leftover planned time across them — the structure then sums to the
+  // real total instead of dropping to just the main set. Any block still left at
+  // 0 s (no leftover to give) is filtered out rather than shown as a dead row.
+  const assigned = blocks.reduce((s, b) => s + b.duration_s, 0)
+  const zeros = blocks.filter((b) => b.duration_s <= 0)
+  if (zeros.length > 0 && totalS > assigned) {
+    const each = Math.floor((totalS - assigned) / zeros.length)
+    for (const b of blocks) if (b.duration_s <= 0) b.duration_s = each
+  }
+  const filledBlocks = blocks.filter((b) => b.duration_s > 0)
   return {
     template_id: d.template_id ?? '',
     title: d.title,
@@ -179,7 +191,7 @@ function mapDayToWorkout(d: DayPlan, ftp: number | null, de: boolean): Prescribe
     framework_cited: '',
     purpose: null,
     category: d.category,
-    blocks,
+    blocks: filledBlocks,
     why_this_workout: d.rationale || null,
   }
 }

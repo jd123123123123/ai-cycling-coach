@@ -12,6 +12,7 @@
  * phenotype) the UI renders an honest "—", never a fabricated value.
  */
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -366,6 +367,9 @@ function StatsEditSheet({ open, onClose, ftp, weight, de }: {
   })
 
   if (!open) return null
+  // Render into <body>: the page's <main class="paper-grain"> sets
+  // `isolation: isolate`, creating a stacking context that would otherwise trap
+  // this z-50 sheet UNDER the z-40 bottom nav and hide its Save button.
   const field = (label: string, unit: string, value: string, set: (v: string) => void, mode: string) => (
     <label className="flex flex-col gap-1.5">
       <span className="eyebrow" style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{label}</span>
@@ -381,7 +385,7 @@ function StatsEditSheet({ open, onClose, ftp, weight, de }: {
     </label>
   )
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true">
       <button type="button" aria-label={de ? 'Abbrechen' : 'Cancel'} onClick={onClose} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.55)' }} />
       <div className="relative w-full max-w-md rounded-t-[24px] p-5 flex flex-col gap-4" style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}>
@@ -404,7 +408,8 @@ function StatsEditSheet({ open, onClose, ftp, weight, de }: {
           {save.isPending ? (de ? 'Speichern…' : 'Saving…') : (de ? 'Speichern' : 'Save')}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

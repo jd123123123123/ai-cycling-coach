@@ -210,7 +210,10 @@ export function definingZone(ivs: IntervalBlockOut[], category?: string | null):
 export default function PlanTab() {
   const { locale, t } = useLocale()
   const de = locale === 'de'
-  const [sport, setSport] = useState<Sport>('bike')
+  // Bike-only product: the sport stays fixed to 'bike' (the Rad/Lauf/Alle
+  // toggle has been removed). The run/all branches below remain as harmless
+  // dormant code paths so the sport-scoped derivations keep type-checking.
+  const [sport] = useState<Sport>('bike')
   const [zoneMode, setZoneMode] = useState<ZoneMode>('power')
   // The zones card follows the active sport: run → pace/HR by default, else power.
   useEffect(() => { setZoneMode(sport === 'run' ? 'pace' : 'power') }, [sport])
@@ -359,7 +362,13 @@ export default function PlanTab() {
   const STRENGTH_TARGET = 2
   const strengthDone = useMemo(() => (acts?.activities ?? []).filter((a) => a.sport === 'gym' && parseISO(a.started_at ?? a.date ?? '') >= weekStart).length, [acts, weekStart])
 
-  const fmtDur = (s: number | null) => s == null ? '' : s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m` : `${Math.round(s / 60)} min`
+  const fmtDur = (s: number | null) => {
+    if (s == null) return ''
+    if (s < 3600) return `${Math.round(s / 60)} min`
+    const h = Math.floor(s / 3600)
+    const m = Math.round((s % 3600) / 60)
+    return m > 0 ? `${h}h ${m}m` : `${h}h`
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Plan-status card — plan position + projection + change/illness notes.
@@ -411,7 +420,7 @@ export default function PlanTab() {
       : blockHorizon != null
         ? [`${blockHorizon}`, de ? 'Wochen Aufbau' : 'Week block']
         : ['—', de ? 'Wochen übrig' : 'Weeks left'],
-    [weekHours > 0 ? `${weekHours.toFixed(1)}h` : '—', de ? 'Wochenstunden' : 'Week hours'],
+    [weekHours > 0 ? `${weekHours.toFixed(1)}h` : '—', de ? 'Std./Woche' : 'Week hours'],
     [`${sessionCount}`, de ? 'Einheiten' : 'Sessions'],
     [weeklyTarget > 0 ? `${Math.round(weeklyTarget)}` : '—', de ? 'Wochenlast' : 'Week load'],
   ]
@@ -622,7 +631,7 @@ export default function PlanTab() {
           {planStats.map(([v, l], i) => (
             <div key={i} className="flex-1 min-w-0 flex flex-col gap-0.5">
               <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{v}</span>
-              <span className="truncate" style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--color-muted)' }}>{l}</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.25 }}>{l}</span>
             </div>
           ))}
         </div>
@@ -634,16 +643,7 @@ export default function PlanTab() {
         )}
       </Link>
 
-      {/* Sport toggle */}
-      <div className="flex gap-1 rounded-full p-1" style={cardStyle}>
-        {([['bike', Bike, de ? 'Rad' : 'Bike'], ['run', Footprints, de ? 'Lauf' : 'Run'], ['all', InfinityIcon, de ? 'Alle' : 'All']] as const).map(([s, Icon, label]) => (
-          <button key={s} type="button" onClick={() => setSport(s)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full py-2.5"
-            style={{ background: sport === s ? 'var(--color-accent)' : 'transparent', color: sport === s ? '#FFFFFF' : 'var(--color-ink-2)', fontSize: 14, fontWeight: 600 }}>
-            <Icon size={18} strokeWidth={2} /> {label}
-          </button>
-        ))}
-      </div>
+      {/* Sport toggle removed — bike-only product (sport is fixed to 'bike'). */}
 
       {/* Week navigation — page between this week and future plan weeks.
           Prev is disabled at offset 0 (no paging into the past here); next is
@@ -1237,53 +1237,6 @@ export default function PlanTab() {
             </div>
             <span className="hover-arrow"><ChevronRight size={18} style={{ color: 'var(--color-muted)' }} /></span>
           </Link>
-        )
-      })()}
-
-      {/* Cross-training — strength progress + this-week count. No-guilt
-          framing (audit P1-8): on Monday/Tuesday with zero done the copy is
-          forward-looking ("planned — e.g. Wednesday & Friday"), never a
-          "0 of 2 — keep it up" nag; from mid-week it states plain facts.
-          Below-plan states keep NEUTRAL surface colors — no accent alarm. */}
-      {(() => {
-        const dowMon0 = (today.getDay() + 6) % 7 // 0 = Monday … 6 = Sunday
-        const weekYoung = dowMon0 <= 1
-        const strengthCopy = strengthDone >= STRENGTH_TARGET
-          ? (de
-            ? `${strengthDone} von ${STRENGTH_TARGET} Krafteinheiten diese Woche — stark.`
-            : `${strengthDone} of ${STRENGTH_TARGET} strength sessions done this week — nice.`)
-          : strengthDone === 0 && weekYoung
-            ? (de
-              ? `${STRENGTH_TARGET} Krafteinheiten diese Woche geplant — z. B. Mittwoch & Freitag`
-              : `${STRENGTH_TARGET} strength sessions planned this week — e.g. Wednesday & Friday`)
-            : strengthDone === 0
-              ? (de
-                ? `Noch ${STRENGTH_TARGET} Krafteinheiten diese Woche offen.`
-                : `${STRENGTH_TARGET} strength sessions still open this week.`)
-              : (de
-                ? `${strengthDone} von ${STRENGTH_TARGET} Krafteinheiten diese Woche.`
-                : `${strengthDone} of ${STRENGTH_TARGET} strength sessions done this week.`)
-        return (
-          <div className="rounded-[24px] p-4 flex items-center gap-3.5" style={cardStyle}>
-            <Link to="/progress/lift" className="shrink-0 grid place-items-center rounded-full hover-card" style={{ width: 44, height: 44, background: 'color-mix(in srgb, var(--color-amber) 18%, transparent)' }}>
-              <Dumbbell size={22} strokeWidth={2} style={{ color: 'var(--color-amber)' }} />
-            </Link>
-            <div className="flex-1 min-w-0">
-              <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Krafttraining' : 'Cross-training'}</div>
-              <div style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{strengthCopy}</div>
-            </div>
-            {strengthDone >= STRENGTH_TARGET ? (
-              <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 32, height: 32, background: 'color-mix(in srgb, var(--color-recovery) 18%, transparent)' }}>
-                <Check size={16} strokeWidth={3} style={{ color: 'var(--color-recovery)' }} />
-              </span>
-            ) : (
-              /* Neutral Add — surface tone, never the accent alarm while the
-                 athlete is merely below plan (audit no-guilt rule). */
-              <Link to="/workout/today" className="shrink-0 inline-flex items-center gap-1 rounded-full px-4 py-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)', fontSize: 13, fontWeight: 700 }}>
-                <Plus size={15} strokeWidth={2.6} /> {t('add_action')}
-              </Link>
-            )}
-          </div>
         )
       })()}
     </div>
