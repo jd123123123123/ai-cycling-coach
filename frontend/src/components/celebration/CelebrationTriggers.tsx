@@ -19,6 +19,7 @@ import {
   weeklyDedupKey,
   isoWeekKey,
 } from '../../lib/celebration'
+import StreakBreakWatcher from './StreakBreakWatcher'
 
 function StreakWatcher() {
   const { data } = useStreak()
@@ -77,6 +78,7 @@ export default function CelebrationTriggers() {
     <>
       <StreakWatcher />
       <WeeklyRhythmWatcher />
+      <StreakBreakWatcher />
     </>
   )
 }

@@ -76,6 +76,106 @@ export function isoWeekKey(d: Date): string {
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
 }
 
+// ── Streak break (Duolingo-style "streak lost") ─────────────────────────────
+// The server streak is already forgiving & plan-aware (services/streak.py): a
+// planned Ruhetag counts as adherence and only a *skipped planned session* or
+// an unplanned gap breaks it. So a genuine break shows up client-side as the
+// live streak dropping from a meaningful length back to 0/1. We only ever fire
+// the soft "streak lost" card on that real transition — never on first load
+// with no history, never on a normal continuing streak, and never when the gap
+// was a protected rest day (belt-and-suspenders check via the week states).
+
+/** Minimum length a streak must have reached for its loss to be worth marking. */
+export const STREAK_BREAK_MIN = 3
+
+/** Per-user store of the last-seen streak length, so a *drop* is detectable. */
+export function streakLastKey(userId: number | string): string {
+  return `streak:last:${userId}`
+}
+
+export function readStoredStreak(userId: number | string): number | null {
+  try {
+    if (typeof localStorage === 'undefined') return null
+    const raw = localStorage.getItem(streakLastKey(userId))
+    if (raw == null) return null
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : null
+  } catch {
+    return null
+  }
+}
+
+export function writeStoredStreak(userId: number | string, value: number): void {
+  try {
+    if (typeof localStorage === 'undefined') return
+    if (!Number.isFinite(value)) return
+    localStorage.setItem(streakLastKey(userId), String(Math.trunc(value)))
+  } catch {
+    /* ignore — the store is best-effort */
+  }
+}
+
+/** Local YYYY-MM-DD (athlete-local, matches the server's per-day attribution). */
+export function localDateKey(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * Dedup key for a single streak-break instance. Scoped to the user, the length
+ * that broke, AND the day it was detected — so re-renders/revisits on the same
+ * day no-op, but a genuinely new break later (even one of the same length)
+ * still gets its own card.
+ */
+export function streakBreakDedupKey(
+  userId: number | string,
+  brokenLength: number,
+  dateKey: string,
+): string {
+  return `streakbreak:${userId}:${brokenLength}:${dateKey}`
+}
+
+export interface StreakBreakResult {
+  broke: boolean
+  /** The length the streak had reached before it broke (0 when no break). */
+  brokenLength: number
+}
+
+/**
+ * Pure break detection from the stored previous streak and the live one.
+ * Fires only when a meaningful streak (≥ STREAK_BREAK_MIN) collapsed back to
+ * 0 or 1. `prev == null` (no history) never counts — we can't tell a break
+ * from a first visit, so we stay silent and just seed the store.
+ */
+export function detectStreakBreak(
+  prev: number | null | undefined,
+  current: number | null | undefined,
+): StreakBreakResult {
+  const none: StreakBreakResult = { broke: false, brokenLength: 0 }
+  if (typeof current !== 'number' || !Number.isFinite(current)) return none
+  if (typeof prev !== 'number' || !Number.isFinite(prev)) return none
+  if (prev >= STREAK_BREAK_MIN && current <= 1 && current < prev) {
+    return { broke: true, brokenLength: prev }
+  }
+  return none
+}
+
+/**
+ * True only if the recent week actually contains a break-causing day — a
+ * `missed` (planned session skipped) or `unplanned` gap. If every recent gap
+ * was a protected `rest`/`paused` day the streak could not honestly have
+ * broken, so this returns false and the card is suppressed. This mirrors the
+ * server's forgiving semantics on the client as a second, testable guard.
+ */
+export function hasGenuineBreakDay(
+  week: ReadonlyArray<{ state: string }> | null | undefined,
+): boolean {
+  if (!week || week.length === 0) return false
+  return week.some((d) => d.state === 'missed' || d.state === 'unplanned')
+}
+
 // ── localStorage "seen" gate ────────────────────────────────────────────────
 export function hasCelebrated(key: string): boolean {
   try {

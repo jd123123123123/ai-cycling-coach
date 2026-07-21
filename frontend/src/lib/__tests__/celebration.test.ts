@@ -11,6 +11,14 @@ import {
   isoWeekKey,
   hasCelebrated,
   markCelebrated,
+  STREAK_BREAK_MIN,
+  detectStreakBreak,
+  hasGenuineBreakDay,
+  streakLastKey,
+  streakBreakDedupKey,
+  localDateKey,
+  readStoredStreak,
+  writeStoredStreak,
   type PrEffortLike,
 } from '../celebration'
 
@@ -88,22 +96,24 @@ describe('isoWeekKey', () => {
   })
 })
 
+function mockLocalStorage() {
+  const store: Record<string, string> = {}
+  ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
+    getItem: (k: string) => (k in store ? store[k] : null),
+    setItem: (k: string, v: string) => {
+      store[k] = v
+    },
+    removeItem: (k: string) => {
+      delete store[k]
+    },
+    clear: () => {},
+    key: () => null,
+    length: 0,
+  } as Storage
+}
+
 describe('hasCelebrated / markCelebrated (dedup gate)', () => {
-  beforeEach(() => {
-    const store: Record<string, string> = {}
-    ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
-      getItem: (k: string) => (k in store ? store[k] : null),
-      setItem: (k: string, v: string) => {
-        store[k] = v
-      },
-      removeItem: (k: string) => {
-        delete store[k]
-      },
-      clear: () => {},
-      key: () => null,
-      length: 0,
-    } as Storage
-  })
+  beforeEach(mockLocalStorage)
   it('is false until marked, true after — fires once', () => {
     const key = pbDedupKey(1001)
     expect(hasCelebrated(key)).toBe(false)
@@ -111,5 +121,87 @@ describe('hasCelebrated / markCelebrated (dedup gate)', () => {
     expect(hasCelebrated(key)).toBe(true)
     // A second "instance" of the same achievement stays gated.
     expect(hasCelebrated(key)).toBe(true)
+  })
+})
+
+describe('detectStreakBreak', () => {
+  it('fires when a meaningful streak collapses back to 0 or 1', () => {
+    expect(detectStreakBreak(7, 0)).toEqual({ broke: true, brokenLength: 7 })
+    expect(detectStreakBreak(12, 1)).toEqual({ broke: true, brokenLength: 12 })
+    // Exactly at the threshold.
+    expect(detectStreakBreak(STREAK_BREAK_MIN, 0)).toEqual({
+      broke: true,
+      brokenLength: STREAK_BREAK_MIN,
+    })
+  })
+  it('never fires on first load with no history (prev == null)', () => {
+    expect(detectStreakBreak(null, 0)).toEqual({ broke: false, brokenLength: 0 })
+    expect(detectStreakBreak(undefined, 0)).toEqual({ broke: false, brokenLength: 0 })
+  })
+  it('never fires on a continuing or growing streak', () => {
+    expect(detectStreakBreak(7, 8).broke).toBe(false) // grew
+    expect(detectStreakBreak(7, 7).broke).toBe(false) // held
+    expect(detectStreakBreak(7, 5).broke).toBe(false) // dipped but still going (>1)
+  })
+  it('never fires for a short streak (below the meaningful threshold)', () => {
+    expect(detectStreakBreak(2, 0).broke).toBe(false)
+    expect(detectStreakBreak(1, 0).broke).toBe(false)
+  })
+  it('is tolerant of non-finite input', () => {
+    expect(detectStreakBreak(NaN, 0).broke).toBe(false)
+    expect(detectStreakBreak(7, NaN).broke).toBe(false)
+    expect(detectStreakBreak(7, undefined).broke).toBe(false)
+  })
+})
+
+describe('hasGenuineBreakDay (rest protection)', () => {
+  it('true only when a break-causing day is present', () => {
+    expect(hasGenuineBreakDay([{ state: 'trained' }, { state: 'missed' }])).toBe(true)
+    expect(hasGenuineBreakDay([{ state: 'unplanned' }])).toBe(true)
+  })
+  it('false when every recent gap was a protected rest or paused day', () => {
+    // A planned Ruhetag or a sick/injured pause must never trip a break.
+    expect(hasGenuineBreakDay([{ state: 'trained' }, { state: 'rest' }, { state: 'today' }])).toBe(
+      false,
+    )
+    expect(hasGenuineBreakDay([{ state: 'paused' }, { state: 'rest' }])).toBe(false)
+    expect(hasGenuineBreakDay([{ state: 'upcoming' }])).toBe(false)
+  })
+  it('is tolerant of empty/null week', () => {
+    expect(hasGenuineBreakDay(null)).toBe(false)
+    expect(hasGenuineBreakDay([])).toBe(false)
+  })
+})
+
+describe('streak-break dedup + store keys', () => {
+  beforeEach(mockLocalStorage)
+  it('namespaces the per-user last-streak store', () => {
+    expect(streakLastKey(8)).toBe('streak:last:8')
+  })
+  it('scopes the dedup key to user, broken length, and detection day', () => {
+    expect(streakBreakDedupKey(8, 7, '2026-07-21')).toBe('streakbreak:8:7:2026-07-21')
+  })
+  it('localDateKey is a stable local YYYY-MM-DD', () => {
+    expect(localDateKey(new Date(2026, 6, 5, 23, 30))).toBe('2026-07-05')
+  })
+  it('round-trips the stored streak, tolerating a missing/garbage value', () => {
+    expect(readStoredStreak(8)).toBeNull()
+    writeStoredStreak(8, 7)
+    expect(readStoredStreak(8)).toBe(7)
+    writeStoredStreak(8, 0)
+    expect(readStoredStreak(8)).toBe(0)
+  })
+  it('a real break end-to-end: fires once, then the store reflects the collapse', () => {
+    // Seed a peak, observe the collapse, dedup, then confirm the store moved.
+    writeStoredStreak(8, 7)
+    const prev = readStoredStreak(8)
+    const { broke, brokenLength } = detectStreakBreak(prev, 0)
+    expect(broke).toBe(true)
+    const key = streakBreakDedupKey(8, brokenLength, '2026-07-21')
+    expect(hasCelebrated(key)).toBe(false)
+    markCelebrated(key)
+    writeStoredStreak(8, 0)
+    expect(hasCelebrated(key)).toBe(true) // a re-render the same day no-ops
+    expect(readStoredStreak(8)).toBe(0)
   })
 })
