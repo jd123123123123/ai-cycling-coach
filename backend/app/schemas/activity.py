@@ -22,6 +22,13 @@ class ActivityCreate(BaseModel):
     title: str | None = None
     source: str = "manual"
     external_id: str | None = None
+    # Provider-supplied training load (e.g. COROS Training Load) used ONLY as a
+    # TSS fallback when the sport-based computation can't produce one (no FTP /
+    # no HR anchor). A computed Coggan/hrTSS always takes precedence.
+    external_tss: float | None = None
+    # Extra provider fields with no first-class column yet (elevation, cadence,
+    # zones, laps). Preserved verbatim so nothing is dropped.
+    raw_data: dict | None = None
 
 
 class ActivityRead(BaseModel):

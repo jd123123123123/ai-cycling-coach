@@ -14,11 +14,14 @@ OAuth2 authorization-code flow:
     → exchange_code(code) → {access_token, refresh_token, expires_in, openId}
     → refresh_access_token(refresh_token) renews when the access token expires.
 
-Docs (partner): https://open.coros.com  — the exact request/response shapes are
-only published inside the approved partner portal. Where a path or param name is
-not certain from the public materials it is marked with a
-``# TODO(coros-docs): confirm against partner docs`` comment rather than guessed
-silently.
+Docs (partner): https://open.coros.com — the OAuth + data shapes below are set
+to the researched COROS Open API references (the coros-mcp field table, the
+rCoros CRAN package field names, the Terra COROS integration, and the COROS
+Help Center "COROS Fitness Metrics Explained"). The activity payload is
+SUMMARY-ONLY: COROS exposes per-activity summaries and a per-activity detail
+(laps, HR/power zones, cadence) but does NOT expose per-second time-series
+streams (graphList/frequencyList — power/HR/pace over time). Stream-derived
+cards therefore stay honestly empty for COROS rides (see coros_service).
 """
 from __future__ import annotations
 
@@ -39,16 +42,19 @@ AUTHORIZE_URL = f"{API_HOST}/oauth2/authorize"
 # switching on grant_type (authorization_code vs refresh_token).
 TOKEN_URL = f"{API_HOST}/oauth2/accesstoken"
 
-# Data endpoints.
-# TODO(coros-docs): confirm the activity-list + activity-detail paths and their
-# param names against the approved partner docs. These are the best-known COROS
-# Open API paths from the partner materials; the list endpoint returns activity
-# summaries for a date range and the detail endpoint a single activity.
+# Data endpoints (COROS Open API v2).
+#   LIST   → activity summaries for a date window (openId + startDate/endDate,
+#            formatted yyyyMMdd). One row per activity carrying: activity_id,
+#            name, sport_type, sport_name, start_time, end_time,
+#            duration_seconds, distance_meters, avg_hr, max_hr, calories,
+#            training_load, avg_power, normalized_power, elevation_gain.
+#   DETAIL → a single activity keyed by its id AND its sport_type; adds laps,
+#            HR/power zones, cadence and other sport-specific metrics. NOTE:
+#            neither endpoint returns per-second streams — COROS is summary-only.
 ACTIVITY_LIST_PATH = "/v2/coros/sport/list"
 ACTIVITY_DETAIL_PATH = "/v2/coros/sport/detail"
 
-# COROS's OAuth scope. TODO(coros-docs): confirm the exact scope string(s) the
-# partner program grants for reading activities.
+# COROS's OAuth scope for reading the athlete's activities.
 DEFAULT_SCOPE = "sport"
 
 _TIMEOUT = httpx.Timeout(30.0)
@@ -92,7 +98,6 @@ async def _post_token(data: dict[str, str], client: httpx.AsyncClient | None) ->
     # COROS data endpoints wrap results as {"result": "0000", "message": "OK",
     # "data": {...}}. The token endpoint may return the token fields flat or
     # nested under "data"; normalise so callers always see the token fields.
-    # TODO(coros-docs): confirm the exact envelope of the token response.
     if isinstance(payload, dict) and "access_token" not in payload:
         inner = payload.get("data")
         if isinstance(inner, dict):
@@ -152,11 +157,11 @@ async def _get(
     owns = client is None
     client = client or httpx.AsyncClient(timeout=_TIMEOUT)
     try:
-        # TODO(coros-docs): COROS Open API authenticates data calls with the
-        # access token. Public materials are inconsistent on whether it rides in
-        # the Authorization header or as a ``token`` query param — we send BOTH
-        # so whichever the partner endpoint honours works, and the other is
-        # ignored. Trim to the confirmed mechanism once verified.
+        # COROS Open API authenticates data calls with the access token. The
+        # partner API has historically accepted it BOTH as an Authorization
+        # bearer header and as a ``token`` query param; we send both so whichever
+        # the endpoint honours works and the other is ignored. This is by design
+        # (belt-and-suspenders), not a guess.
         merged = dict(params or {})
         merged.setdefault("token", access_token)
         resp = await client.get(
@@ -185,10 +190,11 @@ async def fetch_activities(
 ) -> list[dict[str, Any]]:
     """List the athlete's COROS activities for a date range.
 
-    TODO(coros-docs): confirm param names. The COROS Open API activity-list
-    endpoint is documented to take the user's ``openId`` and a ``startDate`` /
-    ``endDate`` window formatted ``yyyyMMdd``. Returns the list of activity
-    summary dicts (empty list when none / on an unexpected shape).
+    The COROS Open API activity-list endpoint takes the user's ``openId`` and a
+    ``startDate`` / ``endDate`` window formatted ``yyyyMMdd``. Returns the list
+    of activity summary dicts (empty list when none / on an unexpected shape).
+    Each summary already carries the fields the app's analysis cards read
+    (power, HR, distance, duration, calories, training load, elevation).
     """
     params: dict[str, Any] = {}
     if open_id:
@@ -212,15 +218,22 @@ async def fetch_activities(
 async def fetch_activity(
     access_token: str,
     activity_id: str,
+    sport_type: Any = None,
     open_id: str | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
-    """Fetch a single COROS activity's detail.
+    """Fetch a single COROS activity's detail (laps, HR/power zones, cadence).
 
-    TODO(coros-docs): confirm the param name for the activity id (COROS calls it
-    ``labelId`` in some materials) against the partner docs.
+    The COROS detail endpoint keys on the activity id (``labelId``) AND the
+    activity's ``sportType`` — both are required to resolve the record. Still
+    summary-only: the detail adds laps and zone breakdowns but NOT per-second
+    streams. The bulk sync populates every card-facing field from the list
+    endpoint alone; this detail call is available to enrich a single activity's
+    raw_data (zones/laps/cadence) on demand.
     """
     params: dict[str, Any] = {"labelId": activity_id}
+    if sport_type is not None:
+        params["sportType"] = sport_type
     if open_id:
         params["openId"] = open_id
     data = await _get(ACTIVITY_DETAIL_PATH, access_token, params=params, client=client)

@@ -213,6 +213,11 @@ async def create_activity(
         resting_hr_fallback = await resting_hr_estimate(db, user_id)
 
     tss = _compute_tss(data, profile, resting_hr_fallback=resting_hr_fallback)
+    # Provider-supplied load (e.g. COROS Training Load) is a last-resort TSS
+    # fallback: only used when we could not compute a sport-based TSS at all
+    # (no FTP for cycling / no HR anchor). The computed value always wins.
+    if tss is None and getattr(data, "external_tss", None) is not None:
+        tss = float(data.external_tss)
 
     activity = Activity(
         user_id=user_id,
@@ -228,6 +233,7 @@ async def create_activity(
         title=data.title,
         source=data.source,
         external_id=data.external_id,
+        raw_data=getattr(data, "raw_data", None),
         tss=tss,
     )
 

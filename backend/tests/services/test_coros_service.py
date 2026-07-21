@@ -85,6 +85,111 @@ def test_map_activity_iso_start_time():
     assert act.started_at.year == 2026 and act.started_at.month == 7
 
 
+# ── Comprehensive documented-payload mapping (snake_case COROS Open API) ──────
+def _documented_activity(**over):
+    """A realistic COROS Open API activity summary using the DOCUMENTED
+    snake_case field names (as confirmed via COROS Open API research)."""
+    base = {
+        "activity_id": "coros-999",
+        "name": "Alpine Road Ride",
+        "sport_type": 200,            # Road Bike → cycling
+        "sport_name": "Road Bike",
+        "start_time": 1752129000,
+        "end_time": 1752136200,
+        "duration_seconds": 7200,     # 2h
+        "distance_meters": 60000,
+        "avg_power": 205,
+        "normalized_power": 230,
+        "avg_hr": 150,
+        "max_hr": 178,
+        "calories": 1500000,          # COROS reports cal → 1500 kcal
+        "training_load": 145,         # COROS Training Load
+        "elevation_gain": 1200,
+    }
+    base.update(over)
+    return base
+
+
+def test_map_documented_payload_fills_every_summary_column():
+    act = coros_service.map_activity(_documented_activity())
+    assert act is not None
+    # Sport + core summary
+    assert act.sport == "cycling"
+    assert act.duration_seconds == 7200
+    assert act.distance_meters == 60000.0
+    # Power: both avg and NP mapped (NP is what IF/EF/TSS key off)
+    assert act.average_power == 205.0
+    assert act.normalized_power == 230.0
+    # HR: both avg and max
+    assert act.average_hr == 150
+    assert act.max_hr == 178
+    # Calories normalised from cal → kcal (÷1000)
+    assert act.calories == 1500
+    # Provenance
+    assert act.source == "coros"
+    assert act.external_id == "coros-coros-999"
+    assert act.title == "Alpine Road Ride"
+
+
+def test_map_documented_payload_preserves_uncolumned_fields_in_raw_data():
+    """Fields COROS gives with no first-class column (elevation, training load)
+    are preserved honestly under raw_data — never silently dropped."""
+    act = coros_service.map_activity(_documented_activity())
+    assert act is not None
+    assert act.raw_data is not None
+    assert act.raw_data["elevation_gain"] == 1200
+    assert act.raw_data["coros_training_load"] == 145.0
+    # COROS Training Load is exposed as an explicit TSS fallback.
+    assert act.external_tss == 145.0
+
+
+def test_derived_if_tss_ef_computable_from_np_and_ftp():
+    """The IF / TSS / EF cards derive from the mapped NP + avg HR + athlete FTP.
+    COROS gives no streams, but these summary-based metrics still populate."""
+    from app.services.advanced_metrics import efficiency_factor
+    from app.services.training_load import calculate_cycling_tss
+
+    act = coros_service.map_activity(_documented_activity())
+    assert act is not None
+    ftp = 250.0
+
+    intensity_factor = act.normalized_power / ftp
+    assert round(intensity_factor, 3) == 0.92
+
+    tss = calculate_cycling_tss(act.duration_seconds, act.normalized_power, ftp)
+    # 2h at IF 0.92 → duration_h × IF² × 100 = 2 × 0.8464 × 100 ≈ 169.3
+    assert round(tss, 1) == 169.3
+
+    ef = efficiency_factor(act.normalized_power, act.average_hr)
+    assert ef == round(230 / 150, 3)
+
+
+def test_map_does_not_fabricate_streams():
+    """COROS is summary-only: the mapper must never invent per-second streams or
+    stream-derived fields (mmp_curve / decoupling). ActivityCreate carries none
+    of them, so no ActivityStream row is ever produced for a COROS ride."""
+    act = coros_service.map_activity(_documented_activity())
+    assert act is not None
+    for stream_field in ("streams", "mmp_curve", "decoupling_pct", "power_series"):
+        assert not hasattr(act, stream_field)
+    # raw_data holds only summary/detail scalars — no per-second arrays.
+    assert "power" not in (act.raw_data or {})
+
+
+def test_calories_already_kcal_pass_through():
+    """A small calorie value (already kcal, e.g. legacy/aliased payload) is not
+    divided — only implausibly large raw-cal values get the ÷1000."""
+    act = coros_service.map_activity(_documented_activity(calories=720))
+    assert act is not None
+    assert act.calories == 720
+
+
+def test_indoor_cycling_code_2_maps_to_cycling():
+    act = coros_service.map_activity(_documented_activity(sport_type=2))
+    assert act is not None
+    assert act.sport == "cycling"
+
+
 # ── OAuth token exchange / refresh via mocked httpx transport ────────────────
 def _mock_client(handler) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
