@@ -24,6 +24,7 @@ import MobileBottomNav from './MobileBottomNav'
 import SyncButton from './SyncButton'
 import LocaleSwitch from './LocaleSwitch'
 import { useLocale } from '../../contexts/LocaleContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface DashboardShellProps {
   children: ReactNode
@@ -40,6 +41,9 @@ export default function DashboardShell({
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [coachDraft, setCoachDraft] = useState<string | undefined>(undefined)
   const { locale } = useLocale()
+  const { user } = useAuth()
+  const de = locale === 'de'
+  const profileInitial = (user?.display_name || user?.email || 'A').charAt(0).toUpperCase()
 
   // Cmd+K (or Ctrl+K) — command palette
   useEffect(() => {
@@ -61,15 +65,31 @@ export default function DashboardShell({
         <div className="flex justify-end items-center gap-2 pt-3">
           <LocaleSwitch />
           <SyncButton compact />
-          {/* Profile & training settings — push intensity + target event live here */}
+          {/* Settings — detail level, connections, notifications */}
           <Link
             to="/settings"
-            aria-label={locale === 'de' ? 'Profil & Einstellungen' : 'Profile & settings'}
-            title={locale === 'de' ? 'Profil — Push-Intensität & Zielwettkampf' : 'Profile — push intensity & target event'}
+            aria-label={de ? 'Einstellungen' : 'Settings'}
+            title={de ? 'Einstellungen' : 'Settings'}
             className="inline-flex items-center justify-center rounded-full transition-colors min-h-[36px] min-w-[36px]"
             style={{ width: 36, height: 36, border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)', backgroundColor: 'var(--color-paper-2)' }}
           >
             <SlidersHorizontal size={16} strokeWidth={2} />
+          </Link>
+          {/* Rider profile — the primary, thumb-reachable way to "yourself" */}
+          <Link
+            to="/profile"
+            aria-label={de ? 'Mein Profil' : 'My profile'}
+            title={de ? 'Mein Profil' : 'My profile'}
+            className="inline-flex items-center justify-center rounded-full overflow-hidden transition-opacity active:opacity-80 min-h-[36px] min-w-[36px]"
+            style={{ width: 36, height: 36, backgroundColor: 'var(--color-accent)', border: '1px solid var(--color-rule)' }}
+          >
+            {user?.avatar_url ? (
+              <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span className="text-[14px] font-bold text-white" style={{ fontFamily: '"Sora", "Inter", ui-sans-serif, sans-serif' }}>
+                {profileInitial}
+              </span>
+            )}
           </Link>
         </div>
 

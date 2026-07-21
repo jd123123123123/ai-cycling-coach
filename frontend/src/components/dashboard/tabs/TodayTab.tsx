@@ -26,6 +26,7 @@ import WeatherWindowCard from '../WeatherWindowCard'
 import FitnessFreshnessCard from '../FitnessFreshnessCard'
 import ThisWeekCard from '../ThisWeekCard'
 import BreakthroughCelebration from '../BreakthroughCelebration'
+import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
 import AbsorptionCard from '../AbsorptionCard'
 import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
@@ -804,6 +805,10 @@ export default function TodayTab() {
           </Link>
         </div>
       </div>
+
+      {/* Weekly Wrapped — the once-a-week high-dopamine banner (localStorage-
+          gated per ISO week; self-hides when there's no ridden week to show). */}
+      <WeeklyWrappedBanner />
 
       {/* 2 · Race chip (pen m3IzG1) — compact goal countdown → /season */}
       {goalName && (

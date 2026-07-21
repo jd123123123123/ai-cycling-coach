@@ -27,6 +27,7 @@ const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'))
 const ProfileView = lazyWithRetry(() => import('./pages/ProfileView'))
 const DashboardsPage = lazyWithRetry(() => import('./pages/DashboardsPage'))
 const WeeklyRecapStory = lazyWithRetry(() => import('./pages/WeeklyRecapStory'))
+const WeeklyWrapped = lazyWithRetry(() => import('./pages/WeeklyWrapped'))
 const PowerProfileView = lazyWithRetry(() => import('./pages/PowerProfileView'))
 const ClimbCompanionView = lazyWithRetry(() => import('./pages/ClimbCompanionView'))
 const SeasonView = lazyWithRetry(() => import('./pages/SeasonView'))
@@ -219,6 +220,7 @@ function App() {
           <Route path="/recovery/trends" element={<ProtectedRoute checkOnboarding><RecoveryTrendsView /></ProtectedRoute>} />
 
           <Route path="/recap/week" element={<ProtectedRoute checkOnboarding><WeeklyRecapStory /></ProtectedRoute>} />
+          <Route path="/wrapped" element={<ProtectedRoute checkOnboarding><WeeklyWrapped /></ProtectedRoute>} />
 
           <Route path="/power-profile" element={<ProtectedRoute checkOnboarding><PowerProfileView /></ProtectedRoute>} />
           <Route path="/climbs" element={<ProtectedRoute checkOnboarding><ClimbCompanionView /></ProtectedRoute>} />

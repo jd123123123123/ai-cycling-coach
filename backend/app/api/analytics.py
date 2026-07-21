@@ -435,6 +435,21 @@ async def get_breakthroughs(
     return await detect_breakthroughs(db, current_user.id, recent_days=days, lang=locale)
 
 
+@router.get("/weekly-wrapped")
+async def get_weekly_wrapped(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    locale: Annotated[str, Query(pattern="^(en|de)$")] = "en",
+) -> dict:
+    """Weekly Wrapped payload — the seven WebGL story cards for last completed
+    week: distance, elevation, effort-by-day, ride of the week (self-referential
+    score), peak power (+ playful comparison), and a recap. Every number is real;
+    metrics the data can't back are null so the client skips that card."""
+    from app.services.weekly_wrapped import build_weekly_wrapped
+
+    return await build_weekly_wrapped(db, current_user.id, lang=locale)
+
+
 @router.get("/weekly-recap")
 async def get_weekly_recap(
     current_user: Annotated[User, Depends(get_current_active_user)],
