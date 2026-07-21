@@ -10,13 +10,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Sparkles, Send, Bot, Check, RotateCcw } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
+import ProposalCard from '../components/coach/ProposalCard'
 import { useChatStream, type ChatMessage } from '../hooks/useChatStream'
-import { useCoachBrief } from '../hooks/useCoachBrief'
+import { useCoachBrief, COACH_BRIEF_KEY_ROOT } from '../hooks/useCoachBrief'
 import { useDailyDecision } from '../hooks/useDailyDecision'
 import { usePMC } from '../hooks/usePMC'
 import { useLocale } from '../contexts/LocaleContext'
+import { previewPlan, applyPlan, type PlanProposal, type PlanChangeRequest } from '../api/coach'
 
 const CARD = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', borderRadius: 24 } as const
 
@@ -31,8 +34,59 @@ export default function CoachPage() {
   const { decision } = useDailyDecision()
   const { data: pmc } = usePMC(14)
   const chat = useChatStream()
+  const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
   const threadEndRef = useRef<HTMLDivElement>(null)
+  const askInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Propose-before-apply: a plan-change request PROPOSES first (concrete +
+  // visualised), and only persists on Accept. Driven directly by the chips so
+  // it works today without the LLM; the chat tool-use loop can call the same
+  // endpoints when credits return.
+  const [proposal, setProposal] = useState<PlanProposal | null>(null)
+  const [proposalReq, setProposalReq] = useState<PlanChangeRequest | null>(null)
+  const [proposalLoading, setProposalLoading] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [applied, setApplied] = useState(false)
+
+  const openProposal = async (req: PlanChangeRequest) => {
+    setApplied(false)
+    setProposalReq(req)
+    setProposalLoading(true)
+    setProposal(null)
+    try {
+      const p = await previewPlan(req)
+      setProposal(p)
+    } catch {
+      setProposal(null)
+      setProposalReq(null)
+    } finally {
+      setProposalLoading(false)
+    }
+  }
+
+  const acceptProposal = async () => {
+    if (!proposalReq || applying) return
+    setApplying(true)
+    try {
+      await applyPlan(proposalReq)
+      setApplied(true)
+      queryClient.invalidateQueries({ queryKey: ['planned-workouts'] })
+      queryClient.invalidateQueries({ queryKey: ['weeks'] })
+      queryClient.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
+    } catch {
+      /* leave the card open so the user can retry */
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  const tweakProposal = () => {
+    setProposal(null)
+    setProposalReq(null)
+    setApplied(false)
+    askInputRef.current?.focus()
+  }
 
   useEffect(() => {
     if (chat.messages.length > 0 || chat.partial) {
@@ -51,10 +105,21 @@ export default function CoachPage() {
     }))
   }, [pmc])
 
-  const chips = [
-    { label: de ? 'Plan anpassen' : 'Adjust plan', msg: de ? 'Passe meinen heutigen Plan an — ich habe weniger Zeit.' : 'Adjust today’s plan — I have less time.' },
-    { label: de ? 'Warum?' : 'Why?', msg: de ? 'Warum genau diese Einheit heute?' : 'Why exactly this session today?' },
-    { label: de ? 'Lockerere Woche' : 'Easier week', msg: de ? 'Mach mir diese Woche lockerer.' : 'Make this week easier.' },
+  // Chips wired to real actions. "Adjust plan" / "Easier week" open a visual
+  // PROPOSAL (preview endpoint); "Why?" asks the coach to explain today.
+  const chips: Array<{ label: string; onClick: () => void }> = [
+    {
+      label: de ? 'Plan anpassen' : 'Adjust plan',
+      onClick: () => void openProposal({ modification_type: 'shorten', params: { duration_min: 45 }, scope: 'day' }),
+    },
+    {
+      label: de ? 'Warum?' : 'Why?',
+      onClick: () => void chat.send(de ? 'Warum genau diese Einheit heute?' : 'Why exactly this session today?'),
+    },
+    {
+      label: de ? 'Lockerere Woche' : 'Easier week',
+      onClick: () => void openProposal({ modification_type: 'easier', scope: 'week' }),
+    },
   ]
 
   const sendDraft = () => {
@@ -79,7 +144,7 @@ export default function CoachPage() {
               <Bot size={20} style={{ color: 'var(--color-accent)' }} />
             </span>
             <div className="flex flex-col">
-              <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>Coach</span>
+              <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>Coach Nova</span>
               <span style={{ fontSize: 11.5, color: 'var(--color-recovery)', fontWeight: 600 }}>
                 {chat.isStreaming ? (de ? 'schreibt…' : 'typing…') : (de ? 'kennt deine echten Daten' : 'knows your real data')}
               </span>
@@ -149,16 +214,34 @@ export default function CoachPage() {
           </div>
 
           {/* ── Suggestion chips (.pen oFirb) ── */}
-          {!chat.isStreaming && !chat.disabled && (
+          {!chat.isStreaming && (
             <div className="flex items-center gap-2 flex-wrap">
               {chips.map((c) => (
-                <button key={c.label} type="button" onClick={() => void chat.send(c.msg)}
+                <button key={c.label} type="button" onClick={c.onClick}
                   className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2"
                   style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
                   <Sparkles size={13} style={{ color: 'var(--color-accent)' }} /> {c.label}
                 </button>
               ))}
             </div>
+          )}
+
+          {/* ── Proposal Card (.pen pyy3V) — propose-before-apply centerpiece ── */}
+          {proposalLoading && (
+            <div className="flex items-center gap-2 p-4 rounded-[24px]" style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
+              <Sparkles size={15} style={{ color: 'var(--color-accent)' }} />
+              <span style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? 'Coach rechnet die Auswirkung…' : 'Coach is computing the impact…'}</span>
+            </div>
+          )}
+          {proposal && !proposalLoading && (
+            <ProposalCard
+              proposal={proposal}
+              de={de}
+              applying={applying}
+              applied={applied}
+              onAccept={() => void acceptProposal()}
+              onTweak={tweakProposal}
+            />
           )}
 
           {/* ── Tomorrow in plain words (.pen y00Za analogue — real prose only) ── */}
@@ -185,9 +268,10 @@ export default function CoachPage() {
             >
               <Sparkles size={17} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
               <input
+                ref={askInputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder={de ? 'Frag deinen Coach…' : 'Ask your coach anything…'}
+                placeholder={de ? 'Frag Coach Nova…' : 'Ask Coach Nova anything…'}
                 disabled={chat.disabled}
                 className="flex-1 bg-transparent outline-none"
                 style={{ fontSize: 15, color: 'var(--color-ink)' }}

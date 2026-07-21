@@ -1194,6 +1194,11 @@ export default function PlanTab() {
           <FileUp size={14} style={{ color: 'var(--color-accent)' }} />
           {de ? 'Eigenen Plan importieren (PDF/Bild)' : 'Import your own plan (PDF/image)'}
         </Link>
+        {/* Custom structured-workout builder (Zwift-style block editor) */}
+        <Link to="/workouts/builder" className="hover-card inline-flex items-center gap-2 rounded-full px-4 py-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)', minHeight: 40 }}>
+          <Plus size={14} style={{ color: 'var(--color-accent)' }} />
+          {de ? 'Eigenes Workout erstellen' : 'Create custom workout'}
+        </Link>
       </div>
 
       <PlanChangeInterview open={interviewOpen} onClose={() => setInterviewOpen(false)} />

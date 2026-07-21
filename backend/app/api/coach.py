@@ -34,6 +34,9 @@ from app.schemas.coach import (
     ExternalWorkoutsRead,
     GoalTrajectoryRead,
     OutlookEntry,
+    PlanApplyRequest,
+    PlanPreviewRequest,
+    PlanProposal,
     PostRideReview,
     PrescribedWorkout,
     Regeneration,
@@ -490,6 +493,67 @@ async def chat(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",  # disable proxy buffering for SSE
         },
+    )
+
+
+# ----------------------------------------------------------------------
+# Propose-before-apply — the AI Coach Proposal Card (V3)
+# ----------------------------------------------------------------------
+# /coach/plan/preview returns a dry-run PlanProposal (before→after + deltas,
+# persists nothing). /coach/plan/apply runs the SAME intent through the audited
+# modify pipeline (rails, PlannedWorkout write, audit row, feed row, cache
+# invalidation) — reusing coach_tools, no new write path. Works without the LLM
+# so the "Easier week"/"Adjust plan" chips drive it directly today; when
+# ANTHROPIC credits return the chat tool-use loop can call the same functions.
+
+
+@router.post("/plan/preview", response_model=PlanProposal)
+async def preview_plan(
+    payload: PlanPreviewRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> PlanProposal:
+    from datetime import date as _date
+
+    from app.services.coach_tools import preview_modification_for_user
+
+    target = _date.fromisoformat(payload.date[:10]) if payload.date else _date.today()
+    proposal = await preview_modification_for_user(
+        user_id=current_user.id,
+        target=target,
+        modification_type=payload.modification_type,
+        params=payload.params or {},
+        db=db,
+        scope=payload.scope,
+    )
+    return PlanProposal(**proposal)
+
+
+@router.post("/plan/apply")
+async def apply_plan(
+    payload: PlanApplyRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Persist an accepted proposal via the shared audited pipeline."""
+    from datetime import date as _date
+
+    from app.services.coach_tools import (
+        apply_week_easier_for_user,
+        modify_planned_workout_for_user,
+    )
+
+    target = _date.fromisoformat(payload.date[:10]) if payload.date else _date.today()
+    if payload.scope == "week":
+        return await apply_week_easier_for_user(
+            user_id=current_user.id, target=target, db=db,
+        )
+    return await modify_planned_workout_for_user(
+        user_id=current_user.id,
+        target=target,
+        modification_type=payload.modification_type,
+        params=payload.params or {},
+        db=db,
     )
 
 

@@ -1,72 +1,119 @@
 /**
- * WorkoutDetailView — rebuilt 1:1 from Pencil "Screen · Workout Detail".
- * NavRow (back · title · share) → Hero (icon, title, sub, 4 summary chips) →
- * Interval Profile chart card → Structure steps card → Targets card →
- * Fueling card → Devices card → Edit affordance (no start CTA — the app cannot execute workouts). Reached from the
- * Today / Train workout cards at /workout/today and /workout/:date.
- * TODAY renders the real prescribed-workout blocks (ResolvedBlock[]) from the
- * coach brief (rich "why today" narrative). A FUTURE planned day resolves that
- * day's session from the weekly plan (useCurrentWeek) and renders the SAME
- * layout, mapping its DayPlan/intervals into the identical block visualization.
+ * WorkoutDetailView — rebuilt 1:1 from Pencil "V3 · Workout Detail" (node PloPg).
+ * NavRow (back · "Workout" · share) → Hero (sport icon, title, sub, why-line,
+ * 4 summary chips) → AI Coach card (why this session & why today, goal callout,
+ * ask-row) → Interval Profile (BlockBars) → Structure (warm-up · MAIN SET repeat
+ * block · cool-down) → Targets (power zone band + HR/cadence cells) → Fueling
+ * (estimate: carbs timeline + pack) → Swap row → Export CTA + destinations.
+ *
+ * BIKE-ONLY (cycling). Reached from Today / Train at /workout/today and
+ * /workout/:date. TODAY renders the coach brief's real prescribed workout; a
+ * FUTURE planned day resolves that day's session from the weekly plan and maps
+ * it into the identical presentation. Honest "—" where sensor data is absent.
  */
 import { useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { format, parseISO, differenceInCalendarWeeks } from 'date-fns'
 import {
-  ChevronLeft, Share2, Bike, Footprints, Dumbbell, Repeat, Zap, Heart, Gauge, Apple, Droplet,
-  SlidersHorizontal, Sparkles, Target, BookOpen,
+  ChevronLeft, ChevronRight, Share2, Bike, Repeat, Zap, Heart, Gauge, Droplet,
+  Cookie, SlidersHorizontal, Brain, Flag, MessageCircle, Home, CalendarClock,
+  Activity, MoreHorizontal, FileText,
 } from 'lucide-react'
 import { formatDate } from '../utils/format'
 import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
 import { useLocale } from '../contexts/LocaleContext'
-import { detectWorkoutSport, workoutDisplayTitle, workoutDisplayPurpose } from '../api/coach'
-import type { ResolvedBlock, PrescribedWorkout, WorkoutSport } from '../api/coach'
+import { workoutDisplayTitle, workoutDisplayPurpose, workoutDisplayRationale } from '../api/coach'
+import BlockBars, { zoneColor, zoneForPct } from '../components/workout/BlockBars'
+import type { ResolvedBlock, PrescribedWorkout } from '../api/coach'
 import type { DayPlan } from '../api/weeks'
 
-// Per-sport hero identity.
-const SPORT_META: Record<WorkoutSport, { Icon: typeof Bike; en: string; de: string }> = {
-  cycling: { Icon: Bike, en: 'Bike', de: 'Rad' },
-  running: { Icon: Footprints, en: 'Run', de: 'Lauf' },
-  gym: { Icon: Dumbbell, en: 'Strength', de: 'Kraft' },
-}
-// Running pace zones as %threshold-pace (speed) — used to derive a pace target
-// for a run block from its zone when a threshold pace is known. Never fabricated.
-const RUN_PACE_FRAC: Record<number, [number, number]> = {
-  1: [0, 0.76], 2: [0.76, 0.87], 3: [0.87, 0.94], 4: [0.94, 1.00], 5: [1.00, 1.06], 6: [1.06, 1.12], 7: [1.12, 1.20],
-}
-const fmtPace = (sPerKm: number) => `${Math.floor(sPerKm / 60)}:${String(Math.round(sPerKm % 60)).padStart(2, '0')}`
-
 // ── token helpers ───────────────────────────────────────────────────────────
-const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
-const innerStyle = { background: 'var(--color-surface-2)' } as const
-const chipStyle = { background: 'var(--color-paper)', border: '1px solid var(--color-rule)' } as const
-const zoneColor = (z: number) => `var(--color-zone-${Math.min(7, Math.max(1, z))})`
+const card = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
+const inner = { background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' } as const
+const chip = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 
 function fmtMMSS(s: number) {
   const m = Math.floor(s / 60)
   const sec = Math.round(s % 60)
   return `${m}:${String(sec).padStart(2, '0')}`
 }
+const wattsStr = (lo: number, hi: number) => (lo <= 0 ? '—' : lo === hi ? `${lo}` : `${lo}–${hi}`)
 
-// Group consecutive identical effort/rest blocks into "N× …" steps.
-function groupBlocks(blocks: ResolvedBlock[]) {
-  const groups: Array<{ block: ResolvedBlock; count: number }> = []
-  for (const b of blocks) {
-    const last = groups[groups.length - 1]
-    if (last && last.block.name === b.name && last.block.target_watts_low === b.target_watts_low && last.block.duration_s === b.duration_s) last.count++
-    else groups.push({ block: b, count: 1 })
+// German zone names (bike) — used when a block's own name is generic.
+const ZONE_NAME_DE: Record<number, string> = {
+  1: 'Erholung', 2: 'Grundlage', 3: 'Tempo', 4: 'Schwelle', 5: 'VO₂max', 6: 'Anaerob', 7: 'Neuromuskulär',
+}
+// Strip a trailing rep index from a block name ("VO2 3" → "VO2") for the repeat step.
+const baseName = (n: string) => n.replace(/\s*\d+\s*$/, '').trim() || n
+
+// ── Structure grouping ──────────────────────────────────────────────────────
+// Collapse a contiguous alternating effort/recovery run into ONE "N×" repeat
+// block (the pen's MAIN SET), and expand a single structured-set block
+// (reps/on_s/off_s) into the same repeat shape. Everything else is a 1:1 step.
+type StepItem =
+  | { kind: 'step'; b: ResolvedBlock }
+  | { kind: 'repeat'; count: number; effort: ResolvedBlock; rest: ResolvedBlock | null }
+
+const sig = (b: ResolvedBlock) =>
+  `${b.zone}|${b.duration_s}|${b.target_watts_low}|${b.target_watts_high}|${Math.round((b.target_pct_ftp || 0) * 100)}`
+
+function buildSteps(blocks: ResolvedBlock[]): StepItem[] {
+  const out: StepItem[] = []
+  let i = 0
+  while (i < blocks.length) {
+    const b = blocks[i]
+    // Alternating (effort, recovery) run repeated ≥2× → one MAIN SET repeat.
+    if (
+      i + 3 < blocks.length &&
+      sig(blocks[i]) === sig(blocks[i + 2]) &&
+      sig(blocks[i + 1]) === sig(blocks[i + 3]) &&
+      sig(blocks[i]) !== sig(blocks[i + 1])
+    ) {
+      const A = blocks[i]
+      const B = blocks[i + 1]
+      let j = i
+      let efforts = 0
+      while (j < blocks.length && sig(blocks[j]) === ((j - i) % 2 === 0 ? sig(A) : sig(B))) {
+        if ((j - i) % 2 === 0) efforts++
+        j++
+      }
+      out.push({ kind: 'repeat', count: efforts, effort: A, rest: B })
+      i = j
+      continue
+    }
+    // A single block that IS a structured set (reps/on_s/off_s).
+    if (b.reps != null && b.reps >= 2 && b.on_s != null && b.on_s > 0 && b.off_s != null && b.off_s > 0) {
+      const offPct = b.off_pct_ftp ?? 0
+      out.push({
+        kind: 'repeat',
+        count: b.reps,
+        effort: { ...b, duration_s: b.on_s },
+        rest: {
+          ...b,
+          name: 'Recovery',
+          duration_s: b.off_s,
+          target_pct_ftp: offPct,
+          zone: offPct > 0 ? zoneForPct(offPct) : 1,
+          target_watts_low: b.off_watts_low ?? 0,
+          target_watts_high: b.off_watts_high ?? 0,
+        },
+      })
+      i++
+      continue
+    }
+    out.push({ kind: 'step', b })
+    i++
   }
-  return groups
+  return out
 }
 
-// ── derived summaries from real blocks ───────────────────────────────────────
+// ── derived session summary from real blocks ────────────────────────────────
 function summarize(w: PrescribedWorkout) {
   const blocks = w.blocks ?? []
-  const totalS = w.total_duration_s ?? blocks.reduce((a, b) => a + b.duration_s, 0) ?? w.duration_minutes * 60
+  const totalS = w.total_duration_s ?? (blocks.reduce((a, b) => a + b.duration_s, 0) || w.duration_minutes * 60)
   const minutes = w.duration_minutes || Math.round(totalS / 60)
-  // main = highest-zone block (tie → highest %FTP) — drives hero/targets.
   const main = blocks.reduce<ResolvedBlock | null>((best, b) => {
     if (!best) return b
     if (b.zone > best.zone) return b
@@ -74,44 +121,37 @@ function summarize(w: PrescribedWorkout) {
     return best
   }, null)
   const peakPct = blocks.reduce((m, b) => Math.max(m, b.target_pct_ftp || 0), 0)
-  // kJ ≈ Σ avg-watts × seconds / 1000 — a real estimate, 0 → unknown.
-  const kj = blocks.reduce((a, b) => {
-    const avg = b.target_watts_high > 0 ? (b.target_watts_low + b.target_watts_high) / 2 : 0
-    return a + avg * b.duration_s
-  }, 0) / 1000
+  const kj = Math.round(
+    blocks.reduce((a, b) => {
+      const avg = b.target_watts_high > 0 ? (b.target_watts_low + b.target_watts_high) / 2 : 0
+      return a + avg * b.duration_s
+    }, 0) / 1000,
+  )
   const zones = Array.from(new Set(blocks.map((b) => Math.min(7, Math.max(1, b.zone))))).sort((a, b) => a - b)
-  return { blocks, totalS, minutes, main, peakPct, kj: Math.round(kj), zones }
+  return { blocks, totalS, minutes, main, peakPct, kj, zones }
 }
 
-// ── Future-day mapping: DayPlan → PrescribedWorkout ──────────────────────────
-// A planned week day carries interval blocks (duration + %FTP + zone) but no
-// resolved watts/names/RPE. We derive those the same way the today path does:
-// watts from the athlete FTP, a zone-labeled name, and a zone-approximated RPE —
-// so the identical block/interval visualization renders from real plan data.
-const ZONE_NAME: Record<number, { en: string; de: string }> = {
-  1: { en: 'Recovery', de: 'Erholung' },
-  2: { en: 'Endurance', de: 'Grundlage' },
-  3: { en: 'Tempo', de: 'Tempo' },
-  4: { en: 'Threshold', de: 'Schwelle' },
-  5: { en: 'VO₂ Max', de: 'VO₂max' },
-  6: { en: 'Anaerobic', de: 'Anaerob' },
-  7: { en: 'Neuromuscular', de: 'Neuromuskulär' },
-}
+// ── Future-day mapping: DayPlan → PrescribedWorkout ─────────────────────────
 const RPE_BY_ZONE: Record<number, number> = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 7, 6: 8, 7: 10 }
-
 function dayHasSession(d: DayPlan): boolean {
   const dur = d.duration_seconds_target ?? (d.intervals ?? []).reduce((s, iv) => s + (iv.duration_seconds ?? 0), 0)
   return d.category !== 'rest' && (dur > 0 || (d.intervals?.length ?? 0) > 0 || (d.target_tss ?? 0) > 0)
 }
-
 function mapDayToWorkout(d: DayPlan, ftp: number | null, de: boolean): PrescribedWorkout {
   const blocks: ResolvedBlock[] = (d.intervals ?? []).map((iv) => {
     const z = Math.min(7, Math.max(1, iv.zone))
     const pct = iv.power_target_pct_ftp ?? 0
     const watts = ftp != null && pct > 0 ? Math.round(pct * ftp) : 0
+    // Structured micro-set (reps/on_s/off_s) — propagate so BlockBars renders
+    // real on/off stripes and buildSteps forms a MAIN SET. The preview leaves
+    // duration_seconds 0, so derive it from the set math (reps × (on+off)).
+    const structured = iv.reps != null && iv.reps >= 2 && iv.on_s != null && iv.off_s != null
+    const offPct = iv.off_pct_ftp ?? 0
+    const offW = ftp != null && offPct > 0 ? Math.round(offPct * ftp) : 0
+    const durS = structured ? iv.reps! * (iv.on_s! + iv.off_s!) : iv.duration_seconds ?? 0
     return {
-      name: de ? ZONE_NAME[z].de : ZONE_NAME[z].en,
-      duration_s: iv.duration_seconds ?? 0,
+      name: de ? ZONE_NAME_DE[z] : `Zone ${z}`,
+      duration_s: durS,
       target_watts_low: watts,
       target_watts_high: watts,
       target_pct_ftp: pct,
@@ -121,6 +161,12 @@ function mapDayToWorkout(d: DayPlan, ftp: number | null, de: boolean): Prescribe
       cadence_high: null,
       target_hr_low: null,
       target_hr_high: null,
+      reps: structured ? iv.reps : null,
+      on_s: structured ? iv.on_s : null,
+      off_s: structured ? iv.off_s : null,
+      off_pct_ftp: structured ? iv.off_pct_ftp : null,
+      off_watts_low: structured ? offW : null,
+      off_watts_high: structured ? offW : null,
     }
   })
   const totalS = d.duration_seconds_target ?? blocks.reduce((s, b) => s + b.duration_s, 0)
@@ -138,17 +184,21 @@ function mapDayToWorkout(d: DayPlan, ftp: number | null, de: boolean): Prescribe
   }
 }
 
+// ── Power-zone band (Targets) — Coggan %FTP band edges on a 0..150% scale ────
+const ZONE_BANDS: Array<{ z: number; lo: number; hi: number }> = [
+  { z: 1, lo: 0, hi: 55 }, { z: 2, lo: 55, hi: 75 }, { z: 3, lo: 75, hi: 90 },
+  { z: 4, lo: 90, hi: 105 }, { z: 5, lo: 105, hi: 120 }, { z: 6, lo: 120, hi: 150 },
+]
+const SCALE_MAX = 150
+
 export default function WorkoutDetailView() {
   const navigate = useNavigate()
   const { locale } = useLocale()
   const de = locale === 'de'
   const { date: dateParam } = useParams<{ date?: string }>()
-  // Resolve the target day. "today" (or the /workout/today alias, i.e. no param)
-  // maps to today's date; any other param is a literal YYYY-MM-DD planned day.
   const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), [])
   const targetDate = !dateParam || dateParam === 'today' ? todayStr : dateParam
   const isToday = targetDate === todayStr
-  // Week offset from today's Monday-week to the target date's Monday-week (0..12).
   const weekOffset = useMemo(() => {
     if (isToday) return 0
     try {
@@ -156,104 +206,61 @@ export default function WorkoutDetailView() {
     } catch { return 0 }
   }, [isToday, targetDate])
 
-  // Always open at the very top (re-scroll when navigating between days).
   useEffect(() => { window.scrollTo(0, 0) }, [targetDate])
   const { data: brief } = useCoachBrief()
   const { data: profile } = useAthleteProfile()
   const { data: week } = useCurrentWeek(weekOffset)
   const ftp = profile?.ftp_watts ?? null
 
-  // Today → the coach brief's rich prescribed workout. A future day → its planned
-  // session from the weekly plan, mapped into the same PrescribedWorkout shape.
-  const dayPlan = useMemo(() => (isToday ? null : week?.days?.find((d) => d.date === targetDate) ?? null), [isToday, week, targetDate])
+  const dayPlan = useMemo(
+    () => (isToday ? null : week?.days?.find((d) => d.date === targetDate) ?? null),
+    [isToday, week, targetDate],
+  )
   const w: PrescribedWorkout | null = useMemo(() => {
     if (isToday) return brief?.prescribed_workout ?? null
     if (dayPlan && dayHasSession(dayPlan)) return mapDayToWorkout(dayPlan, ftp, de)
     return null
   }, [isToday, brief, dayPlan, ftp, de])
 
-  // Sport — future days carry an explicit sport; today's is inferred from the brief.
-  const sport: WorkoutSport = isToday
-    ? (w ? detectWorkoutSport(w) : 'cycling')
-    : ((dayPlan?.sport as WorkoutSport) ?? 'cycling')
-  const sportMeta = SPORT_META[sport] ?? SPORT_META.cycling
-  const thrPaceSPerKm = profile?.running_threshold_pace_ms ? 1000 / profile.running_threshold_pace_ms : null
-  const groups = useMemo(() => (w ? groupBlocks(w.blocks) : []), [w])
   const s = useMemo(() => (w ? summarize(w) : null), [w])
-  // Intensity terrain from the real interval blocks (x=time, y=effort). Declared
-  // BEFORE any early return (derives blocks from `s` with a null guard) so hook
-  // order never changes between the loading and loaded renders (React #310).
-  const terrain = useMemo(() => {
-    const blocks = s?.blocks ?? []
-    if (!blocks.length) return { area: '', line: '' }
-    const total = blocks.reduce((a, b) => a + b.duration_s, 0) || 1
-    let x = 0
-    const pts: Array<[number, number]> = []
-    for (const b of blocks) {
-      const bw = (b.duration_s / total) * 400
-      const eff = b.target_pct_ftp > 0 ? b.target_pct_ftp / 1.35 : b.zone / 7
-      const y = 120 - Math.min(114, Math.max(10, eff * 114))
-      pts.push([x, y]); pts.push([x + bw, y]); x += bw
-    }
-    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ')
-    return { area: `${line} L400 120 L0 120 Z`, line }
-  }, [s])
-  // "Why today & goal" inputs — the coach's real rationale + the target event.
-  // Adaptations are a live "now" concept, so they only apply to today.
+  const steps = useMemo(() => (w ? buildSteps(w.blocks) : []), [w])
+
+  // Coach rationale (today only — a "now" concept) + the training goal.
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
   const athlete = evidence.athlete as Record<string, unknown> | undefined
   const goalName = athlete?.goal_target as string | undefined
   const daysToGoal = athlete?.days_to_goal as number | undefined
-  const adaptSummary = isToday ? (brief as { adaptations?: { summary?: string } } | undefined)?.adaptations?.summary : undefined
+  const verdict = isToday ? (brief?.verdict as string | undefined) : undefined
+  const coachBody = isToday
+    ? (brief?.rationale as string | undefined) || (w ? workoutDisplayRationale(w, de) ?? undefined : undefined)
+    : (w ? workoutDisplayRationale(w, de) ?? undefined : undefined)
 
   const t = {
-    title: de ? 'Workout' : 'Workout',
-    none: de ? 'Keine Einheit für heute.' : 'No workout for today.',
+    title: 'Workout',
     profile: de ? 'INTERVALLPROFIL' : 'INTERVAL PROFILE',
     structure: de ? 'STRUKTUR' : 'STRUCTURE',
     targets: de ? 'ZIELWERTE' : 'TARGETS',
     fueling: de ? 'VERPFLEGUNG' : 'FUELING',
-    devices: de ? 'GERÄTE' : 'DEVICES',
-    steps: (n: number, m: number) => (de ? `${n} Schritte · ${m} min` : `${n} steps · ${m} min`),
-    forEffort: (m: number) => (de ? `für ${m} min Einheit` : `for ${m} min effort`),
-    carbs: de ? 'Kohlenhydrate / Std' : 'carbs / hr',
-    fluid: de ? 'Flüssigkeit / Std' : 'fluid / hr',
-    estimate: de ? 'geschätzt' : 'estimate',
-    power: de ? 'Leistung' : 'Power',
-    pace: 'Pace',
-    cadence: de ? 'Trittfrequenz' : 'Cadence',
-    reps: de ? 'Wdh.' : 'Reps',
-    load: de ? 'Last' : 'Load',
-    rpe: 'RPE',
-    moves: de ? 'Übungen' : 'Movements',
-    paired: de ? '3 verbunden' : '3 paired',
-    send: de ? 'An Head Unit senden' : 'Send to head unit',
-    edit: de ? 'Einheit bearbeiten' : 'Edit workout',
-    dPower: de ? 'Leistung' : 'Power',
-    dHr: de ? 'HR-Gurt' : 'HR Strap',
-    dHead: de ? 'Head Unit' : 'Head Unit',
   }
 
   // ── NavRow (shared across states) ──────────────────────────────────────────
   const nav = (
-    <div className="flex items-center justify-between px-4 py-1.5">
-      <button type="button" onClick={() => navigate(-1)} aria-label={de ? 'Zurück' : 'Back'} className="grid place-items-center rounded-full" style={{ width: 40, height: 40, ...chipStyle }}>
+    <div className="flex items-center justify-between px-4" style={{ paddingTop: 6, paddingBottom: 6 }}>
+      <button type="button" onClick={() => navigate(-1)} aria-label={de ? 'Zurück' : 'Back'} className="grid place-items-center" style={{ width: 40, height: 40, borderRadius: 100, ...chip }}>
         <ChevronLeft size={24} style={{ color: 'var(--color-ink)' }} />
       </button>
-      <span className="num-display" style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-ink)' }}>{t.title}</span>
-      <button type="button" aria-label={de ? 'Teilen' : 'Share'} className="grid place-items-center rounded-full" style={{ width: 40, height: 40, ...chipStyle }}>
+      <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 17, fontWeight: 700, color: 'var(--color-ink)' }}>{t.title}</span>
+      <button type="button" aria-label={de ? 'Teilen' : 'Share'} className="grid place-items-center" style={{ width: 40, height: 40, borderRadius: 100, ...chip }}>
         <Share2 size={20} style={{ color: 'var(--color-ink)' }} />
       </button>
     </div>
   )
 
   if (!w || !s) {
-    // Honest, date-aware empty state: today with no brief, or a planned rest /
-    // no-session day. A rest day (or content-less day) reads as recovery.
     const isRest = !isToday && (!dayPlan || dayPlan.category === 'rest' || !dayHasSession(dayPlan))
     const dLabel = isToday ? null : formatDate(parseISO(targetDate), de ? 'EEEE, d. MMM' : 'EEEE, MMM d', locale)
     const msg = isToday
-      ? t.none
+      ? (de ? 'Keine Einheit für heute.' : 'No workout for today.')
       : isRest
         ? (de ? 'Ruhetag — Erholung & Regeneration. Keine Einheit geplant.' : 'Rest day — recovery & regeneration. No session planned.')
         : (de ? 'Keine Einheit für diesen Tag.' : 'No session for this day.')
@@ -262,7 +269,7 @@ export default function WorkoutDetailView() {
         <div className="mx-auto w-full max-w-md">{nav}</div>
         <div className="grid place-items-center py-24 px-6 text-center">
           <div className="flex flex-col items-center gap-2">
-            {dLabel && <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{dLabel.toUpperCase()}</span>}
+            {dLabel && <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{dLabel.toUpperCase()}</span>}
             <p style={{ color: 'var(--color-ink-2)' }}>{msg}</p>
           </div>
         </div>
@@ -270,307 +277,346 @@ export default function WorkoutDetailView() {
     )
   }
 
-  const { blocks, totalS, minutes, main, peakPct, kj, zones } = s
-  // Session-average power (audit P2-14): NP isn't on the payload, so Ø derives
-  // from real prescribed work — kJ·1000 / duration = W. 0 → unknown, never
-  // fabricated. Headline chips stay SESSION-level so power and TSS reconcile.
-  const avgW = kj > 0 && totalS > 0 ? Math.round((kj * 1000) / totalS) : null
-  // Peak-interval detail as its own labeled sub-chip — the old chip row paired
-  // interval peak watts with session TSS ('276 W · 82 TSS'), which read like
-  // broken math. Peak = hardest watt-bearing block group.
-  const peakGroup = groups.reduce<{ block: ResolvedBlock; count: number } | null>((best, g) => {
-    if (g.block.target_watts_high <= 0 || g.block.target_pct_ftp <= 0) return best
-    if (!best || g.block.target_pct_ftp > best.block.target_pct_ftp) return g
-    return best
-  }, null)
-  const peakChip = (() => {
-    // Only meaningful for structured rides — a single-zone steady ride has no
-    // "peaks" to call out, and run/gym chips never paired watts with TSS.
-    if (sport !== 'cycling' || !peakGroup || zones.length < 2) return null
-    const b = peakGroup.block
-    const durStr = b.duration_s % 60 === 0 ? `${b.duration_s / 60}` : fmtMMSS(b.duration_s)
-    const wattsStr = b.target_watts_low === b.target_watts_high ? `${b.target_watts_low}` : `${b.target_watts_low}–${b.target_watts_high}`
-    const rep = peakGroup.count > 1 ? `${peakGroup.count}×` : ''
-    const pct = Math.round(b.target_pct_ftp * 100)
-    return de
-      ? `Spitzen: ${rep}${durStr} Min @ ${wattsStr} W (${pct} % FTP)`
-      : `Peaks: ${rep}${durStr} min @ ${wattsStr} W (${pct}% FTP)`
-  })()
-  const gPerHr = minutes >= 150 ? 90 : 60
-  const chartMax = Math.max(120, peakPct * 100)
-  const PLOT_H = 150
+  const { totalS, minutes, main, peakPct, kj, zones } = s
+  const mainZone = main?.zone ?? '—'
+  const peakPctInt = Math.round(peakPct * 100)
 
-  // targets — main block, graceful "—" where sensor data is unavailable.
-  const powerVal = main && main.target_watts_high > 0
-    ? (main.target_watts_low === main.target_watts_high ? `${main.target_watts_low}` : `${main.target_watts_low}–${main.target_watts_high}`)
-    : '—'
+  // Session-average power (kJ·1000 / duration). 0 → unknown.
+  const avgW = kj > 0 && totalS > 0 ? Math.round((kj * 1000) / totalS) : null
+
+  // Fueling estimate — a real heuristic from duration/intensity, clearly labeled.
+  const hrs = totalS / 3600
+  const gPerHr = peakPct >= 0.9 || minutes >= 120 ? 60 : 45
+  const totalCarbs = Math.round(gPerHr * hrs)
+  const bottles = Math.max(1, Math.round(hrs))
+  const gels = Math.max(0, Math.round((totalCarbs - bottles * 15) / 25))
+
+  // Targets — main block, honest "—" where sensor data is absent.
+  const powerVal = main && main.target_watts_high > 0 ? `${wattsStr(main.target_watts_low, main.target_watts_high)} W` : '—'
   const hrVal = main && main.target_hr_low != null && main.target_hr_high != null ? `${main.target_hr_low}–${main.target_hr_high}` : '—'
   const cadVal = main && main.cadence_low != null && main.cadence_high != null ? `${main.cadence_low}–${main.cadence_high}` : '—'
 
-  // Run pace target for the main block: %threshold-pace band → pace (only when a
-  // real threshold pace is known; never fabricated).
-  const runPace = (() => {
-    if (sport !== 'running' || !main || !thrPaceSPerKm) return null
-    const band = RUN_PACE_FRAC[main.zone]
-    if (!band) return null
-    const mid = (band[0] + band[1]) / 2 || 1
-    return `${fmtPace(thrPaceSPerKm / mid)}/km`
-  })()
+  const zoneLabel = (z: number) => (de ? ZONE_NAME_DE[z] : ZONE_NAME_DE[z] ? `Zone ${z}` : `Z${z}`)
+  const stepLabel = (b: ResolvedBlock) =>
+    b.target_pct_ftp > 0 ? `Zone ${b.zone} · ${Math.round(b.target_pct_ftp * 100)}% FTP` : `Zone ${b.zone}`
 
-  // ── Generated header art (in the .pen style, adapted to sport + intensity) ──
-  const sportColor = sport === 'running' ? 'var(--color-exercise)' : sport === 'gym' ? 'var(--color-amber)' : 'var(--color-strain)'
-  // Intensity accent: higher peak %FTP/zone → warmer (coral); easy → cool.
-  const intensity = Math.min(1, peakPct > 0 ? peakPct / 1.2 : (main?.zone ?? 2) / 7)
-  const headerGlow = `color-mix(in srgb, var(--color-accent) ${Math.round(18 + intensity * 34)}%, transparent)`
+  // Marker position on the zone band (0..1 along SCALE_MAX).
+  const markerFrac = Math.min(1, Math.max(0, (peakPctInt || (main?.zone ?? 2) * 20) / SCALE_MAX))
+
+  const eyebrow = { fontSize: 12, fontWeight: 700, letterSpacing: '1.5px', color: 'var(--color-ink-2)' } as const
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
       <div className="mx-auto w-full max-w-md">
-        {/* Generated header — .pen-style gradient + real intensity terrain, nav + title overlaid */}
-        <div className="relative overflow-hidden" style={{ borderBottomLeftRadius: 24, borderBottomRightRadius: 24, background: 'linear-gradient(160deg, color-mix(in srgb, var(--color-accent) 16%, var(--color-paper-2)) 0%, var(--color-paper) 72%)' }}>
-          <div className="absolute inset-0" style={{ background: `radial-gradient(120% 90% at 28% -10%, ${headerGlow} 0%, transparent 62%)` }} />
-          <svg viewBox="0 0 400 120" preserveAspectRatio="none" className="absolute left-0 right-0 bottom-0" style={{ width: '100%', height: 110 }}>
-            <defs>
-              <linearGradient id="wkterr" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor={sportColor} stopOpacity="0.5" />
-                <stop offset="1" stopColor={sportColor} stopOpacity="0.04" />
-              </linearGradient>
-            </defs>
-            {terrain.area && <path d={terrain.area} fill="url(#wkterr)" />}
-            {terrain.line && <path d={terrain.line} fill="none" stroke={sportColor} strokeWidth={2} opacity={0.85} />}
-          </svg>
-          <sportMeta.Icon size={128} style={{ position: 'absolute', right: -14, top: 24, opacity: 0.09 }} />
-          <div className="relative">
-            {nav}
-            <div className="px-4 pt-7 pb-4">
-              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: sportColor }}>{(de ? sportMeta.de : sportMeta.en).toUpperCase()} · {de ? 'ZONE' : 'ZONE'} {main?.zone ?? '—'} · {minutes} MIN</span>
-              <h1 className="num-display" style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.05, marginTop: 4 }}>{workoutDisplayTitle(w, de)}</h1>
+        {nav}
+        <div className="px-4 flex flex-col" style={{ paddingTop: 8, paddingBottom: 28, gap: 20 }}>
+
+          {/* ── Hero ──────────────────────────────────────────────────────── */}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-[14px]">
+              <span className="shrink-0 grid place-items-center" style={{ width: 52, height: 52, borderRadius: 100, background: 'var(--color-accent-soft)' }}>
+                <Bike size={26} style={{ color: 'var(--color-accent)' }} />
+              </span>
+              <div className="flex flex-col gap-[3px] min-w-0">
+                <h1 style={{ fontFamily: '"Sora", sans-serif', fontSize: 24, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.1 }}>{workoutDisplayTitle(w, de)}</h1>
+                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-ink-2)' }}>
+                  {(de ? 'Rad' : 'Bike')} · {de ? 'Zone' : 'Zone'} {mainZone} · {minutes} {de ? 'Min' : 'min'}
+                </span>
+              </div>
+            </div>
+            {(() => {
+              // Hero "why" line = the short template purpose ("what it is"). The
+              // coach card carries the longer "why today". Skip when it would
+              // duplicate the coach body, or when there is no coach card at all.
+              const purpose = workoutDisplayPurpose(w, de)
+              const line = purpose ?? (!coachBody ? workoutDisplayRationale(w, de) : null)
+              if (!line || line === coachBody) return null
+              return <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{line}</p>
+            })()}
+            {/* summary chips — TSS · min · kJ · peak %FTP (all real, "—" if 0) */}
+            <div className="flex gap-2">
+              {[
+                { v: `${Math.round(w.predicted_tss)}`, l: 'TSS' },
+                { v: `${minutes}`, l: de ? 'Min' : 'min' },
+                { v: kj > 0 ? `~${kj}` : '—', l: 'kJ' },
+                { v: peakPctInt > 0 ? `${peakPctInt}%` : '—', l: 'FTP' },
+              ].map((c, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5" style={{ borderRadius: 16, padding: '10px 12px', ...chip }}>
+                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{c.v}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{c.l}</span>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-        <div className="px-4 pt-5 pb-7 flex flex-col gap-5">
 
-          {/* ── Hero chips ──────────────────────────────────────────────────── */}
-          <div className="flex flex-col gap-4">
-            {/* summary chips (audit P2-14) — cycling headline is SESSION-level
-                (Ø W · TSS · min) with the interval peak as a labeled sub-chip;
-                run/gym keep their sport-aware 4-slot row. */}
-            {sport === 'cycling' ? (
-              <div className="flex flex-col gap-2">
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { v: avgW != null ? `Ø ${avgW}` : '—', l: 'W' },
-                    { v: `${Math.round(w.predicted_tss)}`, l: 'TSS' },
-                    { v: `${minutes}`, l: 'min' },
-                  ].map((c, i) => (
-                    <div key={i} className="flex flex-col items-center gap-0.5 rounded-[16px] px-3 py-2.5" style={chipStyle}>
-                      <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{c.v}</span>
-                      <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{c.l}</span>
-                    </div>
-                  ))}
+          {/* ── AI Coach card (why this session & why today) ──────────────── */}
+          {coachBody && (
+            <div className="flex flex-col" style={{ borderRadius: 24, padding: 18, gap: 14, background: 'var(--color-violet-soft)', border: '1px solid var(--color-violet)' }}>
+              <div className="flex items-center gap-[11px]">
+                <span className="shrink-0 grid place-items-center" style={{ width: 38, height: 38, borderRadius: 100, background: 'var(--color-violet)' }}>
+                  <Brain size={21} style={{ color: '#FFFFFF' }} />
+                </span>
+                <div className="flex flex-col gap-px min-w-0">
+                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Dein Coach' : 'Your coach'}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-violet)' }}>{isToday ? (de ? 'Warum diese Einheit — und warum heute' : 'Why this session — and why today') : (de ? 'Diese geplante Einheit' : 'This planned session')}</span>
                 </div>
-                {peakChip && (
-                  <div className="rounded-[16px] px-3.5 py-2 text-center" style={chipStyle}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{peakChip}</span>
-                  </div>
-                )}
               </div>
-            ) : (
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  { v: `${Math.round(w.predicted_tss)}`, l: 'TSS' },
-                  { v: `${minutes}`, l: 'min' },
-                  sport === 'running'
-                    ? { v: runPace ?? '—', l: 'Pace' }
-                    : { v: main ? `${main.rpe}` : '—', l: 'RPE' },
-                  sport === 'running'
-                    ? { v: hrVal, l: 'HR' }
-                    : { v: main ? `${main.zone}` : '—', l: de ? 'Stufe' : 'Zone' },
-                ].map((c, i) => (
-                  <div key={i} className="flex flex-col items-center gap-0.5 rounded-[16px] px-3 py-2.5" style={chipStyle}>
-                    <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{c.v}</span>
-                    <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{c.l}</span>
+              {verdict && <p style={{ fontFamily: '"Sora", sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.3 }}>{verdict}</p>}
+              <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.5 }}>{coachBody}</p>
+              {goalName && (
+                <div className="flex items-center gap-[10px]" style={{ borderRadius: 14, padding: '11px 12px', background: '#00000026' }}>
+                  <span className="shrink-0 grid place-items-center" style={{ width: 30, height: 30, borderRadius: 100, background: 'var(--color-violet)' }}>
+                    <Flag size={16} style={{ color: '#FFFFFF' }} />
+                  </span>
+                  <div className="flex flex-col gap-px min-w-0">
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? `Baut auf ${goalName} hin` : `Builds toward ${goalName}`}</span>
+                    {daysToGoal != null && <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-ink-2)' }}>{de ? `${daysToGoal} Tage` : `${daysToGoal} days`}</span>}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+              {isToday && (
+                <>
+                  <div style={{ height: 1, background: '#FFFFFF1A' }} />
+                  <button type="button" onClick={() => navigate('/coach')} className="flex items-center justify-between">
+                    <span className="flex items-center gap-[7px]">
+                      <MessageCircle size={16} style={{ color: 'var(--color-violet)' }} />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-violet)' }}>{de ? 'Zu dieser Einheit fragen' : 'Ask about this session'}</span>
+                    </span>
+                    <ChevronRight size={18} style={{ color: 'var(--color-violet)' }} />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
-          {/* ── Interval Profile Card ─────────────────────────────────────── */}
-          <div className="rounded-[24px] p-5 flex flex-col gap-[14px]" style={cardStyle}>
+          {/* ── Interval Profile ──────────────────────────────────────────── */}
+          <div className="flex flex-col" style={{ borderRadius: 24, padding: 20, gap: 14, ...card }}>
             <div className="flex items-center justify-between">
-              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '1.5px', color: 'var(--color-ink-2)' }}>{t.profile}</span>
+              <span style={eyebrow}>{t.profile}</span>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>% FTP</span>
             </div>
-            {/* plot: y-axis + bars */}
             <div className="flex gap-2">
-              <div className="flex flex-col justify-between items-end" style={{ width: 26, height: PLOT_H }}>
+              <div className="flex flex-col justify-between items-end" style={{ width: 26, height: 150 }}>
                 {[120, 90, 60].map((y) => (
                   <span key={y} style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-muted)' }}>{y}</span>
                 ))}
               </div>
-              <div className="flex-1 flex items-end gap-[3px]" style={{ height: PLOT_H }}>
-                {blocks.map((b, i) => {
-                  const h = Math.max(6, Math.round((((b.target_pct_ftp || 0) * 100) / chartMax) * PLOT_H))
-                  return <div key={i} className="flex-1 rounded-t-[3px]" style={{ height: h, background: zoneColor(b.zone) }} />
-                })}
+              <div className="flex-1" style={{ height: 150 }}>
+                <BlockBars blocks={w.blocks} height={150} />
               </div>
             </div>
-            {/* x-axis */}
             <div className="flex items-center justify-between" style={{ paddingLeft: 34 }}>
               <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-muted)' }}>0:00</span>
               <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-muted)' }}>{fmtMMSS(totalS)}</span>
             </div>
-            {/* zone legend */}
             <div className="flex items-center gap-[14px] flex-wrap">
               {zones.map((z) => (
                 <span key={z} className="inline-flex items-center gap-[5px]">
-                  <span className="rounded-full" style={{ width: 8, height: 8, background: zoneColor(z) }} />
+                  <span style={{ width: 8, height: 8, borderRadius: 100, background: zoneColor(z), border: '1px solid var(--color-rule)' }} />
                   <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)' }}>Z{z}</span>
                 </span>
               ))}
             </div>
           </div>
 
-          {/* ── Structure Card ────────────────────────────────────────────── */}
-          <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
+          {/* ── Structure ─────────────────────────────────────────────────── */}
+          <div className="flex flex-col" style={{ borderRadius: 24, padding: 20, gap: 16, ...card }}>
             <div className="flex items-center justify-between">
-              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '1.5px', color: 'var(--color-ink-2)' }}>{t.structure}</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{t.steps(groups.length, minutes)}</span>
+              <span style={eyebrow}>{t.structure}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{w.blocks.length} {de ? (w.blocks.length === 1 ? 'Schritt' : 'Schritte') : (w.blocks.length === 1 ? 'step' : 'steps')} · {minutes} {de ? 'Min' : 'min'}</span>
             </div>
-            <div className="flex flex-col gap-3">
-              {groups.map((g, i) => {
-                const b = g.block
-                const target = b.target_watts_high > 0
-                  ? (b.target_watts_low === b.target_watts_high ? `${b.target_watts_low} W` : `${b.target_watts_low}–${b.target_watts_high} W`)
-                  : b.target_hr_low != null ? `${b.target_hr_low}–${b.target_hr_high} bpm`
-                  : `Z${b.zone}`
+            {steps.map((it, i) => {
+              if (it.kind === 'step') {
+                const b = it.b
                 return (
                   <div key={i} className="flex items-center gap-3">
-                    <span className="shrink-0 rounded-[2px]" style={{ width: 4, height: 38, background: zoneColor(b.zone) }} />
-                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                      <span className="flex items-center gap-2">
-                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{b.name}</span>
-                        {g.count > 1 && (
-                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5" style={{ background: 'var(--color-accent-soft)' }}>
-                            <Repeat size={11} style={{ color: 'var(--color-accent)' }} />
-                            <span className="num-display" style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-accent)' }}>{g.count}×</span>
-                          </span>
-                        )}
-                      </span>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>
-                        {de ? 'Zone' : 'Zone'} {b.zone}{b.target_pct_ftp > 0 ? ` · ${Math.round(b.target_pct_ftp * 100)}% FTP` : ''}
-                      </span>
+                    <span className="shrink-0" style={{ width: 4, height: 38, borderRadius: 2, background: zoneColor(b.zone) }} />
+                    <div className="flex-1 min-w-0 flex flex-col gap-[2px]">
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{b.name}</span>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>{stepLabel(b)}</span>
                     </div>
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{fmtMMSS(b.duration_s)}</span>
-                      <span className="num-mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{target}</span>
+                    <div className="flex flex-col items-end gap-[2px]">
+                      <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{fmtMMSS(b.duration_s)}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{b.target_watts_high > 0 ? `${wattsStr(b.target_watts_low, b.target_watts_high)} W` : '—'}</span>
                     </div>
                   </div>
                 )
-              })}
-            </div>
-          </div>
-
-          {/* ── Targets Card ──────────────────────────────────────────────── */}
-          <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
-            <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '1.5px', color: 'var(--color-ink-2)' }}>{t.targets}</span>
-            <div className="flex items-stretch">
-              {[
-                { Icon: Zap, color: 'var(--color-accent)', val: powerVal, unit: 'W', lbl: t.power },
-                { Icon: Heart, color: 'var(--color-move)', val: hrVal, unit: 'bpm', lbl: main ? `HR · Z${main.zone}` : 'HR' },
-                { Icon: Gauge, color: 'var(--color-strain)', val: cadVal, unit: 'rpm', lbl: t.cadence },
-              ].map((tg, i) => (
-                <div key={i} className="flex-1 flex items-center" >
-                  {i > 0 && <span className="self-center" style={{ width: 1, height: 44, background: 'var(--color-rule)' }} />}
-                  <div className="flex-1 flex flex-col items-center gap-1.5">
-                    <tg.Icon size={20} style={{ color: tg.color }} />
-                    <span className="flex items-baseline gap-[3px]">
-                      <span className="num-display" style={{ fontSize: 19, fontWeight: 700, color: 'var(--color-ink)' }}>{tg.val}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{tg.unit}</span>
+              }
+              // repeat block — the pen's MAIN SET
+              const { effort, rest, count } = it
+              const rows = [{ b: effort, name: de && ZONE_NAME_DE[effort.zone] && /^(vo2|zone)/i.test(baseName(effort.name)) ? ZONE_NAME_DE[effort.zone] : baseName(effort.name) }]
+              if (rest) rows.push({ b: rest, name: rest.name })
+              return (
+                <div key={i} className="flex flex-col gap-3" style={{ borderRadius: 16, padding: 14, ...inner }}>
+                  <div className="flex items-center justify-between">
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1px', color: 'var(--color-muted)' }}>{de ? 'HAUPTTEIL' : 'MAIN SET'}</span>
+                    <span className="inline-flex items-center gap-1" style={{ borderRadius: 100, padding: '4px 10px', background: 'var(--color-surface-3)' }}>
+                      <Repeat size={13} style={{ color: 'var(--color-ink)' }} />
+                      <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>{count} ×</span>
                     </span>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-ink-2)' }}>{tg.lbl}</span>
                   </div>
+                  {rows.map((r, ri) => (
+                    <div key={ri}>
+                      {ri > 0 && <div style={{ height: 1, background: 'var(--color-rule)', marginBottom: 12 }} />}
+                      <div className="flex items-center gap-3">
+                        <span className="shrink-0" style={{ width: 4, height: 38, borderRadius: 2, background: zoneColor(r.b.zone) }} />
+                        <div className="flex-1 min-w-0 flex flex-col gap-[2px]">
+                          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{r.name}</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>{stepLabel(r.b)}</span>
+                        </div>
+                        <div className="flex flex-col items-end gap-[2px]">
+                          <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{fmtMMSS(r.b.duration_s)}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{r.b.target_watts_high > 0 ? `${wattsStr(r.b.target_watts_low, r.b.target_watts_high)} W` : '—'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )
+            })}
           </div>
 
-          {/* ── Fueling Card (estimate) ───────────────────────────────────── */}
-          <div className="rounded-[24px] p-5 flex flex-col gap-[14px]" style={cardStyle}>
-            <div className="flex items-center justify-between">
-              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '1.5px', color: 'var(--color-ink-2)' }}>{t.fueling}</span>
-              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{t.forEffort(minutes)} · {t.estimate}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { Icon: Apple, color: 'var(--color-amber)', val: `${gPerHr} g`, lbl: t.carbs },
-                { Icon: Droplet, color: 'var(--color-strain)', val: '~500 ml', lbl: t.fluid },
-              ].map((f, i) => (
-                <div key={i} className="flex items-center gap-2.5 rounded-[16px] px-3.5 py-3" style={innerStyle}>
-                  <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 34, height: 34, background: 'var(--color-surface-3)' }}>
-                    <f.Icon size={18} style={{ color: f.color }} />
-                  </span>
-                  <div className="flex flex-col">
-                    <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{f.val}</span>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-ink-2)' }}>{f.lbl}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Why today & goal ───────────────────────────────────────────── */}
-          <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
-            <div className="flex items-center gap-2">
-              <Sparkles size={16} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
-              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '1.5px', color: 'var(--color-ink-2)' }}>{isToday ? (de ? 'WARUM HEUTE' : 'WHY TODAY') : (de ? 'GEPLANTE EINHEIT' : 'PLANNED SESSION')}</span>
-            </div>
-
-            {/* the coach's rationale for prescribing this session today */}
-            {(w.why_this_workout || adaptSummary) && (
-              <p style={{ fontSize: 14, color: 'var(--color-ink)', lineHeight: 1.45 }}>{w.why_this_workout || adaptSummary}</p>
-            )}
-            {adaptSummary && w.why_this_workout && adaptSummary !== w.why_this_workout && (
-              <div className="flex items-start gap-2.5 rounded-[16px] p-3" style={innerStyle}>
-                <Sparkles size={15} strokeWidth={2.2} style={{ color: 'var(--color-accent)', marginTop: 1, flexShrink: 0 }} />
-                <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{adaptSummary}</span>
-              </div>
-            )}
-
-            {/* the training goal this session serves */}
-            <div className="flex items-start gap-2.5 rounded-[16px] p-3" style={innerStyle}>
-              <Target size={16} strokeWidth={2.2} style={{ color: 'var(--color-recovery)', marginTop: 1, flexShrink: 0 }} />
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{de ? 'DAS ZIEL' : 'THE GOAL'}</span>
-                <span style={{ fontSize: 13, color: 'var(--color-ink)', lineHeight: 1.4 }}>
-                  {workoutDisplayPurpose(w, de)
-                    ? workoutDisplayPurpose(w, de)
-                    : goalName
-                      ? (de
-                          ? `Baut gezielt auf ${goalName}${daysToGoal ? ` (in ${daysToGoal} Tagen)` : ''} hin.`
-                          : `Builds specifically toward ${goalName}${daysToGoal ? ` (in ${daysToGoal} days)` : ''}.`)
-                      : (de ? 'Ein gezielter Baustein deines periodisierten Aufbaus.' : 'A targeted block of your periodized build.')}
+          {/* ── Targets ───────────────────────────────────────────────────── */}
+          <div className="flex flex-col" style={{ borderRadius: 24, padding: 20, gap: 16, ...card }}>
+            <span style={eyebrow}>{t.targets}</span>
+            {/* power target + zone band */}
+            <div className="flex flex-col gap-[10px]">
+              <div className="flex items-center justify-between">
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Leistungsziel' : 'Power target'}</span>
+                <span className="flex items-center gap-2">
+                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{powerVal}</span>
+                  {main && (
+                    <span style={{ borderRadius: 100, padding: '3px 9px', background: `color-mix(in srgb, ${zoneColor(main.zone)} 18%, transparent)`, fontSize: 11, fontWeight: 700, color: zoneColor(main.zone) }}>{de ? 'Zone' : 'Zone'} {main.zone}</span>
+                  )}
                 </span>
               </div>
-            </div>
-
-            {/* the science this workout is built on */}
-            {w.framework_cited && (
-              <div className="flex items-center gap-2">
-                <BookOpen size={14} strokeWidth={2} style={{ color: 'var(--color-muted)' }} />
-                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Methode: ' : 'Framework: '}{w.framework_cited}</span>
+              <div className="relative" style={{ height: 22 }}>
+                <div className="absolute flex items-center gap-[2px]" style={{ left: 0, right: 0, top: 6, height: 10 }}>
+                  {ZONE_BANDS.map((zb) => (
+                    <span key={zb.z} style={{ flex: zb.hi - zb.lo, height: 10, borderRadius: 2, background: zoneColor(zb.z), opacity: 0.45 }} />
+                  ))}
+                </div>
+                <span className="absolute" style={{ left: `calc(${markerFrac * 100}% - 1px)`, top: -3, width: 2, height: 28, borderRadius: 1, background: 'var(--color-ink)' }} />
               </div>
-            )}
+              <div className="flex items-center justify-between">
+                {ZONE_BANDS.map((zb) => (
+                  <span key={zb.z} style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)' }}>Z{zb.z}</span>
+                ))}
+              </div>
+              {main && peakPctInt > 0 && ftp && (
+                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+                  {de
+                    ? `Ganz oben in Zone ${main.zone} — ${peakPctInt}% deiner ${ftp} W FTP.`
+                    : `Right at the top of Zone ${main.zone} — ${peakPctInt}% of your ${ftp} W FTP.`}
+                </span>
+              )}
+            </div>
+            <div style={{ height: 1, background: 'var(--color-rule)' }} />
+            {/* HR + cadence cells */}
+            <div className="flex gap-[10px]">
+              {[
+                { Icon: Heart, color: 'var(--color-move)', val: hrVal, unit: 'bpm', lbl: de ? 'Herzfrequenz' : 'Heart rate' },
+                { Icon: Gauge, color: 'var(--color-strain)', val: cadVal, unit: 'rpm', lbl: de ? 'Trittfrequenz' : 'Cadence' },
+              ].map((c, i) => (
+                <div key={i} className="flex-1 flex items-center gap-[9px]" style={{ borderRadius: 16, padding: 12, ...inner }}>
+                  <span className="shrink-0 grid place-items-center" style={{ width: 30, height: 30, borderRadius: 100, background: 'var(--color-surface-3)' }}>
+                    <c.Icon size={17} style={{ color: c.color }} />
+                  </span>
+                  <div className="flex flex-col gap-px min-w-0">
+                    <span className="flex items-end gap-[3px]">
+                      <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{c.val}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)' }}>{c.unit}</span>
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-ink-2)' }}>{c.lbl}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* No start CTA: the app prescribes and reviews — it cannot execute
-              a workout (user decision, Jul 2026). Export/push lives in the
-              header actions. */}
-          <div className="flex flex-col gap-2.5">
-            <button type="button" className="inline-flex items-center justify-center gap-1.5 py-2">
+          {/* ── Fueling (estimate) ────────────────────────────────────────── */}
+          <div className="flex flex-col" style={{ borderRadius: 24, padding: 20, gap: 14, ...card }}>
+            <div className="flex items-center justify-between">
+              <span style={eyebrow}>{t.fueling}</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{minutes} {de ? 'Min' : 'min'} · {de ? `${gPerHr} g KH/Std · Schätzung` : `${gPerHr} g carbs/hr · estimate`}</span>
+            </div>
+            {/* timeline: WU / main / CD proportional segments with sip + gel marks */}
+            <div className="relative" style={{ height: 26 }}>
+              <div className="absolute flex items-center gap-[3px]" style={{ left: 0, right: 0, top: 8, height: 12 }}>
+                {w.blocks.map((b, i) => (
+                  <span key={i} style={{ flex: Math.max(1, b.duration_s), height: 12, borderRadius: 3, background: b.zone >= 4 ? 'var(--color-accent)' : 'var(--color-surface-3)', opacity: b.zone >= 4 ? 0.5 : 1 }} />
+                ))}
+              </div>
+              {[0.22, 0.44, 0.66, 0.88].map((f, i) => (
+                <Droplet key={i} size={13} style={{ position: 'absolute', left: `calc(${f * 100}% - 6px)`, top: -4, color: 'var(--color-strain)' }} />
+              ))}
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="inline-flex items-center gap-[5px]">
+                <Droplet size={13} style={{ color: 'var(--color-strain)' }} />
+                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-ink-2)' }}>{de ? 'Alle 15 Min trinken' : 'Sip every 15 min'}</span>
+              </span>
+              <span className="inline-flex items-center gap-[5px]">
+                <Cookie size={13} style={{ color: 'var(--color-amber)' }} />
+                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-ink-2)' }}>{de ? 'Gel vor den Intervallen' : 'Gel before the intervals'}</span>
+              </span>
+            </div>
+            <div style={{ height: 1, background: 'var(--color-rule)' }} />
+            <div className="flex gap-[10px]">
+              {[
+                { Icon: Droplet, color: 'var(--color-strain)', v: `${bottles} ${bottles === 1 ? (de ? 'Flasche' : 'bottle') : (de ? 'Flaschen' : 'bottles')}`, l: `${bottles * 500} ml` },
+                { Icon: Cookie, color: 'var(--color-amber)', v: `${gels} ${de ? 'Gel' : gels === 1 ? 'gel' : 'gels'}`, l: de ? `${gels * 25} g KH` : `${gels * 25} g carbs` },
+                { Icon: Zap, color: 'var(--color-accent)', v: `~${totalCarbs} g`, l: de ? 'KH gesamt' : 'total carbs' },
+              ].map((p, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-[7px]" style={{ borderRadius: 16, padding: '13px 8px', ...inner }}>
+                  <span className="grid place-items-center" style={{ width: 34, height: 34, borderRadius: 100, background: 'var(--color-surface-3)' }}>
+                    <p.Icon size={18} style={{ color: p.color }} />
+                  </span>
+                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{p.v}</span>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{p.l}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Swap row ──────────────────────────────────────────────────── */}
+          <div className="flex gap-2">
+            {[
+              { Icon: Home, label: de ? 'Indoor-Variante' : 'Indoor version' },
+              { Icon: CalendarClock, label: de ? 'Tag verschieben' : 'Move day' },
+            ].map((b, i) => (
+              <button key={i} type="button" className="flex-1 flex items-center justify-center gap-[6px]" style={{ borderRadius: 100, padding: '10px 0', ...chip }}>
+                <b.Icon size={15} style={{ color: 'var(--color-ink-2)' }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{b.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ── Export CTA ────────────────────────────────────────────────── */}
+          <div className="flex flex-col gap-[10px]">
+            <button type="button" className="flex items-center justify-center gap-2" style={{ borderRadius: 100, padding: '16px 20px', background: 'var(--color-accent)', boxShadow: '0 6px 20px -4px #FF5A3C55' }}>
+              <Share2 size={20} style={{ color: '#FFFFFF' }} />
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF' }}>{de ? 'Workout exportieren' : 'Export workout'}</span>
+            </button>
+            <div className="flex items-center justify-center gap-2">
+              {[
+                { Icon: Bike, label: 'Zwift' },
+                { Icon: Activity, label: 'TrainingPeaks' },
+                { Icon: MoreHorizontal, label: de ? '12 weitere' : '12 more' },
+              ].map((d, i) => (
+                <span key={i} className="inline-flex items-center gap-[5px]" style={{ borderRadius: 100, padding: '9px 14px', ...inner }}>
+                  <d.Icon size={14} style={{ color: 'var(--color-ink-2)' }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{d.label}</span>
+                </span>
+              ))}
+            </div>
+            <div className="flex items-center justify-center gap-[5px]">
+              <FileText size={12} style={{ color: 'var(--color-muted)' }} />
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Als .fit · .zwo · .erg — überall importierbar' : 'Downloads as .fit · .zwo · .erg — import anywhere'}</span>
+            </div>
+            <button type="button" className="flex items-center justify-center gap-[6px]" style={{ padding: '8px 0' }}>
               <SlidersHorizontal size={16} style={{ color: 'var(--color-ink-2)' }} />
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink-2)' }}>{t.edit}</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Einheit bearbeiten' : 'Edit workout'}</span>
             </button>
           </div>
 

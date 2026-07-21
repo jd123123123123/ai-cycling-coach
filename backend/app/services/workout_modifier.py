@@ -272,7 +272,7 @@ class ModificationResult:
 # Core entry point
 # ======================================================================
 
-_ALLOWED_TYPES = ("shorten", "lengthen", "harder", "easier", "indoor")
+_ALLOWED_TYPES = ("shorten", "lengthen", "harder", "easier", "indoor", "soft_ease")
 
 
 def apply_modification(
@@ -341,6 +341,8 @@ def apply_modification(
         return _apply_harder(current_template_id, planned_workout, user_snapshot, ftp_w, before)
     if modification_type == "easier":
         return _apply_easier(current_template_id, planned_workout, ftp_w, before)
+    if modification_type == "soft_ease":
+        return _apply_soft_ease(current_template_id, planned_workout, ftp_w, before)
     if modification_type == "indoor":
         return _apply_indoor(current_template_id, planned_workout, ftp_w, before)
 
@@ -676,6 +678,43 @@ def _apply_easier(
         before=before,
         predicted_tss=predicted_tss,
         metadata=metadata,
+    )
+
+
+def _apply_soft_ease(
+    template_id: str,
+    pw: Any,
+    ftp_w: int,
+    before: dict,
+) -> ModificationResult:
+    """Soft-ease (recon-science R2 / the pen's 'Easier week' transform): take
+    the INTENSITY out of a hard session but keep the SLOT — substitute to the
+    Z2 endurance template closest to the current duration. Endurance/recovery/
+    rest days are already gentle → returned unchanged. This reliably LOWERS
+    both intensity and total load, unlike the intensity-ordered easier cascade
+    (which can trade a short tempo for a long endurance ride and raise TSS)."""
+    duration_min = before["duration_min"] or _base_template_minutes(TEMPLATES[template_id])
+    category = TEMPLATES[template_id].category if template_id in TEMPLATES else "endurance"
+    if category not in {"tempo", "sweet_spot", "threshold", "vo2"}:
+        # Already easy — no-op (materialise so blocks are canonical).
+        blocks, dur, tss, metadata = _materialize(
+            template_id, ftp_w, duration_min_target=duration_min or None, indoor=bool(pw.indoor),
+        )
+        return ModificationResult(
+            template_id=template_id, duration_min=dur, blocks=blocks,
+            indoor=bool(pw.indoor), rails_downgraded=False,
+            reason="already an easy session; left unchanged",
+            before=before, predicted_tss=tss, metadata=metadata,
+        )
+    target_id = endurance_for_duration(duration_min)
+    blocks, dur, tss, metadata = _materialize(
+        target_id, ftp_w, duration_min_target=duration_min or None, indoor=bool(pw.indoor),
+    )
+    return ModificationResult(
+        template_id=target_id, duration_min=dur, blocks=blocks,
+        indoor=bool(pw.indoor), rails_downgraded=False,
+        reason="softened to endurance at the same duration (intensity out, slot kept)",
+        before=before, predicted_tss=tss, metadata=metadata,
     )
 
 

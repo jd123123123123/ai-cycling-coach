@@ -395,3 +395,32 @@ class TestLibraryWideCascade:
             {"intensity_ceiling": "push", "injury_flag": False}, ftp_w=250,
         )
         assert res.template_id == "z2_endurance_60"
+
+
+class TestSoftEase:
+    """soft_ease (the pen's 'Easier week' transform): intensity out, slot kept —
+    substitute a hard day to endurance at the same duration, LOWERING load.
+    Endurance/recovery/rest days pass through unchanged."""
+
+    def _pw(self, template_id, duration_min=60, indoor=False):
+        from types import SimpleNamespace
+        return SimpleNamespace(template_id=template_id, duration_min=duration_min, indoor=indoor)
+
+    def test_intensity_day_softens_to_endurance_and_lowers_tss(self):
+        from app.services.workout_modifier import apply_modification, materialize_template
+        _b, _d, before_tss, _m = materialize_template("vo2_5x4", 250, 60, False)
+        res = apply_modification(
+            self._pw("vo2_5x4", duration_min=60), "soft_ease", {},
+            {"intensity_ceiling": "push", "injury_flag": False}, ftp_w=250,
+        )
+        assert res.template_id.startswith("z2_endurance")
+        assert res.rails_downgraded is False
+        assert res.predicted_tss <= before_tss
+
+    def test_endurance_day_is_left_unchanged(self):
+        from app.services.workout_modifier import apply_modification
+        res = apply_modification(
+            self._pw("z2_endurance_60", duration_min=60), "soft_ease", {},
+            {"intensity_ceiling": "push", "injury_flag": False}, ftp_w=250,
+        )
+        assert res.template_id == "z2_endurance_60"

@@ -145,6 +145,76 @@ class AlternateWorkout(BaseModel):
 
 
 # ======================================================================
+# Propose-before-apply — the AI Coach Proposal Card (V3)
+# ======================================================================
+#
+# A plan-change request PROPOSES first (concrete effect, visualised) and only
+# persists on Accept. preview_modification_for_user builds a PlanProposal
+# WITHOUT mutating state; the frontend renders the before→after diff (BlockBars
+# + TSS/intensity numbers + rationale); Accept applies via the SAME audited
+# pipeline (rails, PlannedWorkout write, audit row, feed row, cache invalidation).
+
+class ProposalSession(BaseModel):
+    """One resolved session (before or after) — carries BlockBars-ready blocks
+    plus the load/intensity numbers the diff visualises."""
+    date: str
+    template_id: str
+    title: str | None = None
+    label: str
+    duration_min: int
+    predicted_tss: float
+    intensity_factor: float | None = None
+    indoor: bool = False
+    blocks: list[ResolvedBlock] = Field(default_factory=list)
+
+
+class ProposalDayDiff(BaseModel):
+    """One day inside a week-scope proposal — before→after label + TSS."""
+    date: str
+    weekday: str
+    before_label: str
+    after_label: str
+    before_tss: float
+    after_tss: float
+    changed: bool
+
+
+class PlanProposal(BaseModel):
+    """A dry-run plan change. Persists NOTHING — Accept re-runs the same intent
+    through the audited apply pipeline."""
+    scope: Literal["day", "week"]
+    applicable: bool
+    modification_type: str
+    target_date: str
+    reason: str | None = None
+    rails_downgraded: bool = False
+    # Day scope: the single session before/after (with BlockBars blocks).
+    before: ProposalSession | None = None
+    after: ProposalSession | None = None
+    # Week scope: per-day before→after rows.
+    day_diffs: list[ProposalDayDiff] = Field(default_factory=list)
+    # Load impact (honest None where the week can't be resolved).
+    week_before_tss: float | None = None
+    week_after_tss: float | None = None
+    tss_delta: float | None = None
+    duration_delta_min: int | None = None
+    intensity_delta_pct: float | None = None
+    rationale: str
+    rationale_de: str
+
+
+class PlanPreviewRequest(BaseModel):
+    date: str | None = None
+    modification_type: Literal["shorten", "lengthen", "harder", "easier", "indoor"]
+    params: dict = Field(default_factory=dict)
+    scope: Literal["day", "week"] = "day"
+
+
+class PlanApplyRequest(PlanPreviewRequest):
+    pass
+
+
+# ======================================================================
 # Phase 5.3 — post-ride review
 # ======================================================================
 

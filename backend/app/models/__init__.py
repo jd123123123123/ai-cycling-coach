@@ -19,6 +19,7 @@ from app.models.crew_challenge import CrewChallenge  # noqa: F401
 from app.models.activity_stream import ActivityStream  # noqa: F401
 from app.models.plan_adaptation import PlanAdaptation  # noqa: F401
 from app.models.ride_feedback import RideFeedback  # noqa: F401
+from app.models.custom_workout import CustomWorkout  # noqa: F401
 from app.models.strength import (  # noqa: F401
     StrengthRoutine,
     RoutineExercise,
@@ -33,6 +34,6 @@ __all__ = [
     "PlanAdaptation",
     "UserDashboard", "UserTabLayout", "PeriodReportCache", "CoachRecommendation", "MesocyclePlan",
     "Crew", "CrewMembership", "CrewInvite", "CrewNudge", "CrewChallenge", "ActivityStream",
-    "RideFeedback",
+    "RideFeedback", "CustomWorkout",
     "StrengthRoutine", "RoutineExercise", "StrengthSession", "StrengthSetLog",
 ]

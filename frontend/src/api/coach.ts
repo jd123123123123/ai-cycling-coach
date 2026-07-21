@@ -44,6 +44,78 @@ export interface ResolvedBlock {
   off_watts_high?: number | null
 }
 
+// ── Propose-before-apply — the AI Coach Proposal Card (V3) ──────────────────
+
+export interface ProposalSession {
+  date: string
+  template_id: string
+  title: string | null
+  label: string
+  duration_min: number
+  predicted_tss: number
+  intensity_factor: number | null
+  indoor: boolean
+  blocks: ResolvedBlock[]
+}
+
+export interface ProposalDayDiff {
+  date: string
+  weekday: string
+  before_label: string
+  after_label: string
+  before_tss: number
+  after_tss: number
+  changed: boolean
+}
+
+export type PlanScope = 'day' | 'week'
+export type ModificationType = 'shorten' | 'lengthen' | 'harder' | 'easier' | 'indoor'
+
+export interface PlanProposal {
+  scope: PlanScope
+  applicable: boolean
+  modification_type: string
+  target_date: string
+  reason: string | null
+  rails_downgraded: boolean
+  before: ProposalSession | null
+  after: ProposalSession | null
+  day_diffs: ProposalDayDiff[]
+  week_before_tss: number | null
+  week_after_tss: number | null
+  tss_delta: number | null
+  duration_delta_min: number | null
+  intensity_delta_pct: number | null
+  rationale: string
+  rationale_de: string
+}
+
+export interface PlanChangeRequest {
+  date?: string
+  modification_type: ModificationType
+  params?: Record<string, number>
+  scope?: PlanScope
+}
+
+export async function previewPlan(req: PlanChangeRequest): Promise<PlanProposal> {
+  const res = await apiClient.post<PlanProposal>('/coach/plan/preview', req)
+  return res.data
+}
+
+export interface PlanApplyResult {
+  success?: boolean
+  scope?: PlanScope
+  applied_count?: number
+  rails_downgraded?: boolean
+  reason?: string | null
+  [k: string]: unknown
+}
+
+export async function applyPlan(req: PlanChangeRequest): Promise<PlanApplyResult> {
+  const res = await apiClient.post<PlanApplyResult>('/coach/plan/apply', req)
+  return res.data
+}
+
 export interface PrescribedWorkout {
   template_id: string
   title: string

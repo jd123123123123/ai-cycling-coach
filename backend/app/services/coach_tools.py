@@ -36,6 +36,7 @@ from app.services.analytical_aggregates import (
     recovery_trend_summary,
 )
 from app.services.workout_modifier import apply_modification, revert_from_audit
+from app.services.workout_templates import TEMPLATES
 
 
 # ======================================================================
@@ -703,6 +704,413 @@ async def modify_planned_workout_for_user(
         "predicted_tss": result.predicted_tss,
         "title": result.metadata.get("title"),
         "framework_cited": result.metadata.get("framework_cited"),
+    }
+
+
+# ======================================================================
+# Propose-before-apply — dry-run preview (V3 AI Coach Proposal Card)
+# ======================================================================
+#
+# preview_modification_for_user mirrors modify_planned_workout_for_user's
+# resolution (rails snapshot → apply_modification) but PERSISTS NOTHING. It
+# returns a concrete, visualisable before→after: both sessions materialised
+# with BlockBars-ready blocks, TSS / duration / intensity deltas, week-load
+# impact, and a plain bilingual rationale. Accept re-runs the intent through
+# the audited apply pipeline. apply_modification is pure and we operate on a
+# SimpleNamespace view, so the ORM row is never touched here.
+
+import math as _math
+
+# Intensity days the "easier week" sweep steps down (endurance/recovery/rest
+# are already gentle — leaving them keeps the week's shape, only trims the hard
+# efforts, matching the pen rationale "trims intensity, keeps the load").
+_INTENSITY_CATEGORIES = {"tempo", "sweet_spot", "threshold", "vo2"}
+
+
+def _if_from_tss(tss: float, duration_min: int) -> float | None:
+    """Intensity Factor back-computed from TSS + duration (TSS = hrs·IF²·100)."""
+    hours = (duration_min or 0) / 60.0
+    if hours <= 0 or tss <= 0:
+        return None
+    return round(_math.sqrt(tss / (100.0 * hours)), 2)
+
+
+def _session_label(title: str | None, template_id: str, duration_min: int) -> str:
+    base = title or template_id.replace("_", " ").title()
+    return f"{base} · {duration_min} min"
+
+
+def _materialize_session(
+    *, template_id: str, ftp_w: int, duration_min: int | None, indoor: bool,
+    date_iso: str, title_override: str | None = None,
+) -> dict:
+    """Materialise ONE session into the ProposalSession dict shape (blocks +
+    load numbers). Pure — reuses the modifier's template materialiser."""
+    from app.services.workout_modifier import materialize_template
+    tid = template_id if template_id in TEMPLATES else _SUCCESS_TEMPLATE_DEFAULT
+    blocks, dur, tss, metadata = materialize_template(tid, ftp_w, duration_min, indoor)
+    title = title_override or metadata.get("title")
+    return {
+        "date": date_iso,
+        "template_id": tid,
+        "title": title,
+        "label": _session_label(title, tid, dur),
+        "duration_min": dur,
+        "predicted_tss": round(float(tss), 1),
+        "intensity_factor": _if_from_tss(float(tss), dur),
+        "indoor": bool(indoor),
+        "blocks": blocks,
+    }
+
+
+async def _week_planned_tss(
+    user_id: int, monday: date, sunday: date, ftp_w: int, db: AsyncSession,
+) -> float | None:
+    """Best-effort sum of materialised planned TSS across [monday, sunday].
+    Returns None when the week can't be resolved (honest '—')."""
+    try:
+        rows = await db.execute(
+            select(PlannedWorkout).where(
+                PlannedWorkout.user_id == user_id,
+                PlannedWorkout.date >= monday,
+                PlannedWorkout.date <= sunday,
+            )
+        )
+        pws = list(rows.scalars().all())
+    except Exception:  # noqa: BLE001 — mocked/degenerate session: degrade gracefully
+        return None
+    if not pws:
+        return None
+    total = 0.0
+    for pw in pws:
+        dur = int(round((pw.duration_seconds_target or 0) / 60)) or 60
+        try:
+            _b, _d, tss, _m = _materialize_via_template(
+                pw.template_id or _SUCCESS_TEMPLATE_DEFAULT, ftp_w, dur, bool(pw.indoor)
+            )
+            total += float(tss)
+        except Exception:  # noqa: BLE001
+            continue
+    return round(total, 1)
+
+
+def _materialize_via_template(template_id, ftp_w, duration_min, indoor):
+    from app.services.workout_modifier import materialize_template
+    tid = template_id if template_id in TEMPLATES else _SUCCESS_TEMPLATE_DEFAULT
+    return materialize_template(tid, ftp_w, duration_min, indoor)
+
+
+def _proposal_rationale(
+    *, modification_type: str, before_tss: float, after_tss: float,
+    before_if: float | None, after_if: float | None,
+    before_dur: int, after_dur: int, rails_downgraded: bool,
+) -> tuple[str, str]:
+    """Rule-based bilingual rationale — concrete numbers, no-guilt register.
+    (When the LLM is live it can override this prose; the mechanics don't change.)"""
+    dtss = round(after_tss - before_tss)
+    parts_de: list[str] = []
+    parts_en: list[str] = []
+    if before_if and after_if and before_if > 0:
+        pct = round((after_if - before_if) / before_if * 100)
+        if pct <= -1:
+            parts_de.append(f"senkt die Intensität um ~{abs(pct)}%")
+            parts_en.append(f"trims intensity ~{abs(pct)}%")
+        elif pct >= 1:
+            parts_de.append(f"hebt die Intensität um ~{pct}%")
+            parts_en.append(f"lifts intensity ~{pct}%")
+    if after_dur != before_dur:
+        ddur = after_dur - before_dur
+        if ddur < 0:
+            parts_de.append(f"kürzt die Dauer um {abs(ddur)} min")
+            parts_en.append(f"cuts {abs(ddur)} min")
+        else:
+            parts_de.append(f"verlängert um {ddur} min")
+            parts_en.append(f"adds {ddur} min")
+    load_de = (
+        f"hält die Last bei ~{round(after_tss)} TSS" if abs(dtss) <= 5
+        else (f"senkt die Last um ~{abs(dtss)} TSS" if dtss < 0 else f"erhöht die Last um ~{dtss} TSS")
+    )
+    load_en = (
+        f"keeps load at ~{round(after_tss)} TSS" if abs(dtss) <= 5
+        else (f"drops load ~{abs(dtss)} TSS" if dtss < 0 else f"adds ~{dtss} TSS")
+    )
+    tail_de = "frische Beine ohne Formverlust." if dtss < 0 else "damit du den Reiz sauber setzt."
+    tail_en = "fresher legs without losing fitness." if dtss < 0 else "so the stimulus lands clean."
+    lead_de = ", ".join(parts_de) if parts_de else load_de
+    lead_en = ", ".join(parts_en) if parts_en else load_en
+    de = f"{lead_de[0].upper()}{lead_de[1:]} — {load_de if parts_de else tail_de}."
+    en = f"{lead_en[0].upper()}{lead_en[1:]} — {load_en if parts_en else tail_en}."
+    if parts_de:
+        de = f"{de[:-1]}, {tail_de}"
+        en = f"{en[:-1]}, {tail_en}"
+    if rails_downgraded:
+        de += " Angepasst an deinen heutigen Erholungszustand."
+        en += " Adjusted to today's recovery state."
+    return de, en
+
+
+async def _load_ftp_and_snapshot(user_id: int, db: AsyncSession):
+    profile_result = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+    )
+    profile = profile_result.scalar_one_or_none()
+    ftp_w = int((profile.ftp_watts if profile else 0) or 0)
+    snapshot = await _load_rails_context(user_id, profile, db)
+    return profile, ftp_w, snapshot
+
+
+async def preview_modification_for_user(
+    *,
+    user_id: int,
+    target: date,
+    modification_type: str,
+    params: dict,
+    db: AsyncSession,
+    scope: str = "day",
+) -> dict:
+    """Dry-run a plan change. PERSISTS NOTHING. Returns a PlanProposal dict."""
+    if scope == "week":
+        return await preview_week_easier_for_user(
+            user_id=user_id, target=target, db=db,
+        )
+
+    pw = await _get_planned_workout_for_user(user_id, target, db)
+    base = {
+        "scope": "day",
+        "applicable": False,
+        "modification_type": modification_type,
+        "target_date": target.isoformat(),
+        "rationale": "",
+        "rationale_de": "",
+    }
+    if pw is None:
+        base["reason"] = f"No planned workout on {target.isoformat()}."
+        return base
+
+    today = datetime.now(timezone.utc).date()
+    if target == today and await _has_activity_on(user_id, target, db):
+        base["reason"] = "Already trained today — nothing to change."
+        return base
+
+    _profile, ftp_w, snapshot = await _load_ftp_and_snapshot(user_id, db)
+    if ftp_w <= 0:
+        base["reason"] = "Set your FTP first — a proposal needs an FTP anchor."
+        return base
+
+    duration_min = int(round((pw.duration_seconds_target or 0) / 60)) or 60
+    from types import SimpleNamespace
+    pw_view = SimpleNamespace(
+        id=pw.id, user_id=pw.user_id,
+        template_id=pw.template_id or _SUCCESS_TEMPLATE_DEFAULT,
+        duration_min=duration_min, indoor=bool(pw.indoor),
+        blocks=pw.interval_structure, sport=pw.sport, title=pw.title,
+    )
+    try:
+        result = apply_modification(pw_view, modification_type, params, snapshot, ftp_w)
+    except ValueError as exc:
+        base["reason"] = str(exc)
+        return base
+
+    before = _materialize_session(
+        template_id=pw_view.template_id, ftp_w=ftp_w, duration_min=duration_min,
+        indoor=bool(pw.indoor), date_iso=target.isoformat(), title_override=pw.title,
+    )
+    after = _materialize_session(
+        template_id=result.template_id, ftp_w=ftp_w, duration_min=result.duration_min,
+        indoor=result.indoor, date_iso=target.isoformat(),
+        title_override=result.metadata.get("title"),
+    )
+
+    monday = target - timedelta(days=target.weekday())
+    sunday = monday + timedelta(days=6)
+    week_before = await _week_planned_tss(user_id, monday, sunday, ftp_w, db)
+    week_after = None
+    if week_before is not None:
+        week_after = round(
+            week_before - before["predicted_tss"] + after["predicted_tss"], 1
+        )
+
+    rationale_de, rationale_en = _proposal_rationale(
+        modification_type=modification_type,
+        before_tss=before["predicted_tss"], after_tss=after["predicted_tss"],
+        before_if=before["intensity_factor"], after_if=after["intensity_factor"],
+        before_dur=before["duration_min"], after_dur=after["duration_min"],
+        rails_downgraded=result.rails_downgraded,
+    )
+
+    return {
+        "scope": "day",
+        "applicable": True,
+        "modification_type": modification_type,
+        "target_date": target.isoformat(),
+        "reason": result.reason,
+        "rails_downgraded": result.rails_downgraded,
+        "before": before,
+        "after": after,
+        "day_diffs": [],
+        "week_before_tss": week_before,
+        "week_after_tss": week_after,
+        "tss_delta": round(after["predicted_tss"] - before["predicted_tss"], 1),
+        "duration_delta_min": after["duration_min"] - before["duration_min"],
+        "intensity_delta_pct": (
+            round((after["intensity_factor"] - before["intensity_factor"])
+                  / before["intensity_factor"] * 100, 1)
+            if before["intensity_factor"] and after["intensity_factor"] else None
+        ),
+        "rationale": rationale_en,
+        "rationale_de": rationale_de,
+    }
+
+
+async def preview_week_easier_for_user(
+    *, user_id: int, target: date, db: AsyncSession,
+) -> dict:
+    """Dry-run an 'easier week': step every intensity day down one notch,
+    leave endurance/recovery/rest untouched. PERSISTS NOTHING."""
+    from types import SimpleNamespace
+
+    monday = target - timedelta(days=target.weekday())
+    sunday = monday + timedelta(days=6)
+    base = {
+        "scope": "week",
+        "applicable": False,
+        "modification_type": "easier",
+        "target_date": target.isoformat(),
+        "day_diffs": [],
+        "rationale": "",
+        "rationale_de": "",
+    }
+
+    _profile, ftp_w, snapshot = await _load_ftp_and_snapshot(user_id, db)
+    if ftp_w <= 0:
+        base["reason"] = "Set your FTP first — a proposal needs an FTP anchor."
+        return base
+
+    rows = await db.execute(
+        select(PlannedWorkout).where(
+            PlannedWorkout.user_id == user_id,
+            PlannedWorkout.date >= monday,
+            PlannedWorkout.date <= sunday,
+        ).order_by(PlannedWorkout.date)
+    )
+    pws = list(rows.scalars().all())
+    if not pws:
+        base["reason"] = "No planned workouts this week to ease."
+        return base
+
+    _WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    day_diffs: list[dict] = []
+    week_before = 0.0
+    week_after = 0.0
+    changed_any = False
+    for pw in pws:
+        dur = int(round((pw.duration_seconds_target or 0) / 60)) or 60
+        tid = pw.template_id or _SUCCESS_TEMPLATE_DEFAULT
+        before_sess = _materialize_session(
+            template_id=tid, ftp_w=ftp_w, duration_min=dur, indoor=bool(pw.indoor),
+            date_iso=pw.date.isoformat(), title_override=pw.title,
+        )
+        week_before += before_sess["predicted_tss"]
+        category = TEMPLATES[before_sess["template_id"]].category
+        is_intensity = category in _INTENSITY_CATEGORIES
+        if is_intensity:
+            pw_view = SimpleNamespace(
+                template_id=before_sess["template_id"], duration_min=dur,
+                indoor=bool(pw.indoor),
+            )
+            res = apply_modification(pw_view, "soft_ease", {}, snapshot, ftp_w)
+            after_sess = _materialize_session(
+                template_id=res.template_id, ftp_w=ftp_w, duration_min=res.duration_min,
+                indoor=res.indoor, date_iso=pw.date.isoformat(),
+                title_override=res.metadata.get("title"),
+            )
+            changed = after_sess["template_id"] != before_sess["template_id"]
+            changed_any = changed_any or changed
+        else:
+            after_sess = before_sess
+            changed = False
+        week_after += after_sess["predicted_tss"]
+        day_diffs.append({
+            "date": pw.date.isoformat(),
+            "weekday": _WD[pw.date.weekday()],
+            "before_label": before_sess["label"],
+            "after_label": after_sess["label"],
+            "before_tss": before_sess["predicted_tss"],
+            "after_tss": after_sess["predicted_tss"],
+            "changed": changed,
+        })
+
+    if not changed_any:
+        base["reason"] = "Your week is already easy — no hard days to trim."
+        base["applicable"] = False
+        base["day_diffs"] = day_diffs
+        base["week_before_tss"] = round(week_before, 1)
+        base["week_after_tss"] = round(week_after, 1)
+        return base
+
+    week_before = round(week_before, 1)
+    week_after = round(week_after, 1)
+    dtss = round(week_after - week_before)
+    rationale_de = (
+        f"Nimmt {sum(1 for d in day_diffs if d['changed'])} harte Tage eine Stufe "
+        f"zurück — Wochenlast {round(week_before)} → {round(week_after)} TSS "
+        f"(~{abs(dtss)} TSS weniger). Frische Beine, gleiche Struktur."
+    )
+    rationale_en = (
+        f"Steps {sum(1 for d in day_diffs if d['changed'])} hard days down a notch — "
+        f"weekly load {round(week_before)} → {round(week_after)} TSS "
+        f"(~{abs(dtss)} TSS lighter). Fresher legs, same shape."
+    )
+    return {
+        "scope": "week",
+        "applicable": True,
+        "modification_type": "easier",
+        "target_date": target.isoformat(),
+        "reason": None,
+        "rails_downgraded": False,
+        "day_diffs": day_diffs,
+        "week_before_tss": week_before,
+        "week_after_tss": week_after,
+        "tss_delta": round(week_after - week_before, 1),
+        "rationale": rationale_en,
+        "rationale_de": rationale_de,
+    }
+
+
+async def apply_week_easier_for_user(
+    *, user_id: int, target: date, db: AsyncSession,
+) -> dict:
+    """Apply the 'easier week' by routing EACH intensity day through the shared
+    audited apply pipeline (rails, PlannedWorkout write, audit row, feed row,
+    cache invalidation). Endurance/recovery/rest days are left untouched."""
+    monday = target - timedelta(days=target.weekday())
+    sunday = monday + timedelta(days=6)
+
+    rows = await db.execute(
+        select(PlannedWorkout).where(
+            PlannedWorkout.user_id == user_id,
+            PlannedWorkout.date >= monday,
+            PlannedWorkout.date <= sunday,
+        ).order_by(PlannedWorkout.date)
+    )
+    pws = list(rows.scalars().all())
+    applied: list[dict] = []
+    for pw in pws:
+        tid = pw.template_id or _SUCCESS_TEMPLATE_DEFAULT
+        tmpl = TEMPLATES.get(tid)
+        if tmpl is None or tmpl.category not in _INTENSITY_CATEGORIES:
+            continue
+        res = await modify_planned_workout_for_user(
+            user_id=user_id, target=pw.date, modification_type="soft_ease",
+            params={}, db=db,
+        )
+        if res.get("success"):
+            applied.append({"date": pw.date.isoformat(), **res})
+    return {
+        "success": True,
+        "scope": "week",
+        "applied_count": len(applied),
+        "applied": applied,
     }
 
 

@@ -14,16 +14,17 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
-import { subDays, format, startOfWeek, addDays } from 'date-fns'
+import { subDays } from 'date-fns'
 import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
-import { Flag, Bike, MessageCircle, Zap, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Check, Moon, Sparkles, Pause, Minus, RefreshCw } from 'lucide-react'
+import { Flag, Bike, MessageCircle, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Moon, Sparkles, RefreshCw } from 'lucide-react'
 import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type ChatMessage } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
 import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
 import TheRoadCard from '../TheRoadCard'
+import ThisWeekCard from '../ThisWeekCard'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import AbsorptionCard from '../AbsorptionCard'
 import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
@@ -225,29 +226,9 @@ export default function TodayTab() {
   // days count as kept, sick/injured/break days pause, only skipped sessions
   // miss). Day dots fall back to client activity-presence while loading.
   const trainedSet = useMemo(() => new Set((acts?.activities ?? []).map((a) => localDayKey(a.started_at ?? a.date ?? ''))), [acts])
-  const weekDays = useMemo(() => {
-    const monday = startOfWeek(today, { weekStartsOn: 1 })
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = addDays(monday, i)
-      const key = format(d, 'yyyy-MM-dd')
-      const serverState = streakData?.week?.find((w) => w.date === key)?.state
-      const isToday = key === todayKey
-      const isPast = d < today && !isToday
-      const done = serverState === 'trained' || (serverState == null && trainedSet.has(key))
-      const state: 'done' | 'today' | 'rest' | 'paused' | 'missed' | 'upcoming' =
-        done ? 'done'
-        : isToday ? 'today'
-        : serverState === 'rest' ? 'rest'
-        : serverState === 'paused' ? 'paused'
-        : serverState === 'missed' || serverState === 'unplanned' ? (isPast ? 'missed' : 'upcoming')
-        : isPast ? 'missed' : 'upcoming'
-      return { key, label: formatDate(d, 'EEEEE', locale), state }
-    })
-  }, [today, todayKey, trainedSet, streakData])
   // P1-11: the daily streak number no longer renders on Today — the weekly
   // rhythm (consistency: met/planned days) is the honest cadence stat. The
-  // paused flag still explains amber day-dots without streak vocabulary.
-  const streakPaused = streakData?.paused ?? false
+  // full Mon→Sun day-dots now live in <ThisWeekCard /> (V3 · Load & Form).
   const consistency = streakData?.consistency ?? null
   const athleteState: AthleteState = streakData?.status?.state ?? 'healthy'
 
@@ -1037,42 +1018,18 @@ export default function TodayTab() {
           caption, load corridor 21 days back → 10 ahead (P1.1). */}
       <TheRoadCard ctlNow={ctl} atlNow={atl} tsbNow={tsb} dCtl={dCtl} />
 
+      {/* Diese Woche — the full V3 · Load & Form "This Week" card (compliance %
+          + TSS/sessions/left + Mon→Sun day-dots), mounted right after the load
+          snapshot per the V3 · Today rhythm. Same real hooks + numbers as
+          /load-form (one shared derivation). Supersedes the old slim day-dot
+          link row (P2 dedupe: one "Diese Woche" block, not two). */}
+      <ThisWeekCard />
+
       {/* Breakthrough celebration — only when the detector found a real one (P1.2) */}
       <BreakthroughCelebration />
 
       {/* Absorb-and-replan disclosure — the plan bent around your riding (P1.4) */}
       <AbsorptionCard />
-
-      {/* Diese Woche — ONE slim link row (P2 dedupe): forgiving, plan-aware
-          day dots inline; the full story lives on History. Planned rest days
-          count as kept; sick/injured/break days pause (never break) the week. */}
-      <Link to="/dashboard?tab=history" className="hover-card rounded-[20px] p-3.5 flex items-center gap-3" style={cardStyle}>
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Diese Woche' : 'This Week'}</span>
-          {streakPaused && (
-            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Pausiert — zählt nicht gegen dich' : 'Paused — never counts against you'}</span>
-          )}
-        </div>
-        <div className="flex-1 flex items-center justify-end gap-1.5">
-          {weekDays.map((d, i) => {
-            const bg = d.state === 'done' ? 'color-mix(in srgb, var(--color-recovery) 18%, transparent)'
-              : d.state === 'rest' ? 'color-mix(in srgb, var(--color-recovery) 10%, transparent)'
-              : d.state === 'paused' ? 'color-mix(in srgb, var(--color-amber) 12%, transparent)'
-              : d.state === 'today' ? 'var(--color-accent)' : 'var(--color-surface-2)'
-            const border = d.state === 'upcoming' ? '1px solid var(--color-rule)' : 'none'
-            return (
-              <span key={i} title={d.label} className="grid place-items-center rounded-full shrink-0" style={{ width: 24, height: 24, background: bg, border }}>
-                {d.state === 'done' && <Check size={13} strokeWidth={3} style={{ color: 'var(--color-recovery)' }} />}
-                {d.state === 'today' && <Zap size={13} strokeWidth={2.6} fill="#0A0C0F" style={{ color: '#0A0C0F' }} />}
-                {d.state === 'rest' && <Moon size={11} style={{ color: 'var(--color-recovery)' }} />}
-                {d.state === 'paused' && <Pause size={11} style={{ color: 'var(--color-amber)' }} />}
-                {d.state === 'missed' && <Minus size={11} style={{ color: 'var(--color-muted)' }} />}
-              </span>
-            )
-          })}
-        </div>
-        <ChevronRight size={16} className="hover-arrow shrink-0" style={{ color: 'var(--color-muted)' }} />
-      </Link>
 
       {/* Woche als Story — ONE slim link row, Monday + Tuesday (P1.3) */}
       {(today.getDay() === 1 || today.getDay() === 2) && (

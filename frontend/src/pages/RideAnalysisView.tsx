@@ -6,9 +6,16 @@
  *   1 Ride header · 2 Summary strip · 3 Route & elevation · 4 Power hero (coral)
  *   5 Power zones · 6 Power curve · 7 Heart rate · 8 Climbing & speed
  *   9 Fuel · 10 Segments & peak efforts · 11 Coach insights (coral)
- * The pen's "Cadence & Pedaling" card is omitted — the debrief API exposes no
- * cadence / pedal-balance / torque stream, and the rules forbid faked numbers.
- * Cards whose data is entirely null are likewise omitted.
+ * plus Cycling Dynamics (real pedal L/R, PCO, stamina — the pen's "Cadence &
+ * Pedaling" slot) and Environment (temp/wind from the stored Open-Meteo blob —
+ * the pen's last content card). Cards whose data is entirely null hide.
+ *
+ * Two pen cards have no honest backend source and are therefore not rendered:
+ *   • "Cadence & Pedaling" cadence viz — no cadence/torque stream is exposed
+ *     (the richer, real Cycling Dynamics card stands in its place).
+ *   • "vs last ride on this route" compare row — there is no per-activity
+ *     same-route delta endpoint (route_library only aggregates route summaries),
+ *     and the honest-data rule forbids fabricating +W / faster / same-HR deltas.
  */
 import { useMemo, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
@@ -17,7 +24,7 @@ import { de as deLocale } from 'date-fns/locale'
 import {
   Bike, Map as MapIcon, Mountain, TrendingUp, Zap, BarChart3, LineChart, Star,
   HeartPulse, Utensils, Flag, Award, Lightbulb, Heart, Clock, Gauge, Activity,
-  CheckCircle2, Scale, BatteryMedium, Route as RouteIcon,
+  CheckCircle2, Scale, BatteryMedium, Route as RouteIcon, Thermometer, Wind, Droplets,
 } from 'lucide-react'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import { usePowerProfile } from '../hooks/usePowerProfile'
@@ -169,6 +176,24 @@ function PowerCurveChart({ rows, ftp, de }: { rows: MmpPoint[]; ftp: number | nu
       </svg>
     </div>
   )
+}
+
+/** 8-point compass abbreviation for a bearing in degrees (localized). */
+function compass(deg: number, de: boolean): string {
+  const en = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  const dede = ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW']
+  const i = Math.round(((deg % 360) + 360) % 360 / 45) % 8
+  return (de ? dede : en)[i]
+}
+
+/** Raw Open-Meteo hourly blob stored per ride (UTC times, °C, m/s, degrees). */
+interface RideWeather {
+  hourly?: {
+    time?: string[]
+    temperature_2m?: (number | null)[]
+    wind_speed_10m?: (number | null)[]
+    wind_direction_10m?: (number | null)[]
+  }
 }
 
 function downsample<T>(arr: T[], target: number): T[] {
@@ -420,6 +445,48 @@ export default function RideAnalysisView() {
     const vam = climbs.length ? Math.max(...climbs.map((c) => c.vam_m_per_h ?? 0)) : null
     return { avgSpeed, maxSpeed, vam: vam || null, maxGrade }
   }, [story, header, climbs, maxGrade])
+
+  // Environment — real conditions from the stored Open-Meteo hourly blob
+  // (weather_client fetches temperature/wind for the ride window; virtual/indoor
+  // rides carry no weather so the card hides). Values are averaged across the
+  // ride's hours; wind direction uses a circular mean. No humidity is fetched,
+  // so that cell stays an honest "—" rather than a fabricated number.
+  const environment = useMemo(() => {
+    const h = (sa?.weather as RideWeather | null | undefined)?.hourly
+    const times = h?.time
+    if (!h || !Array.isArray(times) || times.length === 0) return null
+    // Open-Meteo returns UTC times without a trailing 'Z'; normalise for parsing.
+    const startMs = header?.date ? Date.parse(header.date) : NaN
+    const durMs = (header?.moving_time_s ?? 3600) * 1000
+    const pad = 30 * 60 * 1000
+    const idxs: number[] = []
+    if (Number.isFinite(startMs)) {
+      times.forEach((t, i) => {
+        const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : `${t}Z`
+        const ts = Date.parse(iso)
+        if (Number.isFinite(ts) && ts >= startMs - pad && ts <= startMs + durMs + pad) idxs.push(i)
+      })
+    }
+    const use = idxs.length ? idxs : times.map((_, i) => i)
+    const mean = (arr?: (number | null)[]): number | null => {
+      if (!arr) return null
+      const vals = use.map((i) => arr[i]).filter((v): v is number => typeof v === 'number')
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+    }
+    const tempC = mean(h.temperature_2m)
+    const windMs = mean(h.wind_speed_10m)
+    let windDir: number | null = null
+    if (h.wind_direction_10m) {
+      const dirs = use.map((i) => h.wind_direction_10m![i]).filter((v): v is number => typeof v === 'number')
+      if (dirs.length) {
+        const s = dirs.reduce((a, d) => a + Math.sin((d * Math.PI) / 180), 0)
+        const c = dirs.reduce((a, d) => a + Math.cos((d * Math.PI) / 180), 0)
+        windDir = (((Math.atan2(s, c) * 180) / Math.PI) + 360) % 360
+      }
+    }
+    if (tempC == null && windMs == null) return null
+    return { tempC, windMs, windDir }
+  }, [sa, header])
 
   // Segments & peak efforts — real power-duration peaks with PR flags.
   const efforts = useMemo(() => {
@@ -879,6 +946,41 @@ export default function RideAnalysisView() {
                     <MetricCell icon={<TrendingUp size={17} strokeWidth={2} />} iconColor="var(--color-exercise)" value={climbSpeed.vam != null ? nf(Math.round(climbSpeed.vam)) : '—'} unit="m/h" label="VAM" />
                     <MetricCell icon={<Mountain size={17} strokeWidth={2} />} iconColor="var(--color-accent)" value={climbSpeed.maxGrade != null ? `${Math.round(climbSpeed.maxGrade)}` : '—'} unit="%" label={de ? 'Max Steigung' : 'Max Gradient'} />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* 8b · Environment — pen's last content card (node hD7AU): real
+                 temperature + wind (with compass direction) from the stored
+                 Open-Meteo blob. Humidity has no backend source → honest "—".
+                 Hides entirely for virtual/indoor rides with no weather. */}
+            {environment && (
+              <div className={cardCls} style={cardStyle}>
+                <SectionHead icon={<Thermometer size={16} strokeWidth={2} />} label={de ? 'BEDINGUNGEN' : 'ENVIRONMENT'} />
+                <div className="flex gap-2.5">
+                  <MetricCell
+                    icon={<Thermometer size={17} strokeWidth={2} />}
+                    iconColor="var(--color-amber)"
+                    value={environment.tempC != null ? `${Math.round(environment.tempC)}` : '—'}
+                    unit="°C"
+                    label={de ? 'Temperatur' : 'Temperature'}
+                  />
+                  <MetricCell
+                    icon={<Wind size={17} strokeWidth={2} />}
+                    iconColor="var(--color-strain)"
+                    value={environment.windMs != null ? `${Math.round(environment.windMs * 3.6)}` : '—'}
+                    unit="km/h"
+                    label={environment.windDir != null
+                      ? `${de ? 'Wind' : 'Wind'} ${compass(environment.windDir, de)}`
+                      : (de ? 'Wind' : 'Wind')}
+                  />
+                  <MetricCell
+                    icon={<Droplets size={17} strokeWidth={2} />}
+                    iconColor="var(--color-exercise)"
+                    value="—"
+                    unit=""
+                    label={de ? 'Luftfeuchte' : 'Humidity'}
+                  />
                 </div>
               </div>
             )}
