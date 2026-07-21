@@ -25,6 +25,7 @@ import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
 import FitnessFreshnessCard from '../FitnessFreshnessCard'
 import ThisWeekCard from '../ThisWeekCard'
+import ShaderCanvas from '../../wrapped/ShaderCanvas'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
 import AbsorptionCard from '../AbsorptionCard'
@@ -52,6 +53,17 @@ function readinessColor(score: number | null): string {
   if (score >= 66) return 'var(--color-recovery)'
   if (score >= 34) return 'var(--color-amber)'
   return 'var(--color-move)'
+}
+
+// WebGL shader tint for the readiness hero — an iridescent flow over a dark
+// base, keyed to the readiness tier (green → teal/blue, amber → coral, low →
+// magenta/violet). Concrete hex (shaders can't read CSS vars). Kept dark +
+// low-opacity at the mount so the score/verdict text stays legible on top.
+function readinessShaderUniforms(score: number | null): { u_a: string; u_b: string; u_c: string } {
+  if (score == null) return { u_a: '#3A4450', u_b: '#2E6BFF', u_c: '#0A0E14' }
+  if (score >= 66) return { u_a: '#1FBF7A', u_b: '#2E6BFF', u_c: '#08130E' }
+  if (score >= 34) return { u_a: '#FFB020', u_b: '#FF5A3C', u_c: '#140F08' }
+  return { u_a: '#FF3B5C', u_b: '#8B5CF6', u_c: '#120810' }
 }
 
 // ── P1-11 / P1-8 weekly rhythm — pure, testable helpers ─────────────────────
@@ -835,13 +847,22 @@ export default function TodayTab() {
           score ring + verdict, morning read, momentum cues and moment tiles.
           Gradient + glow are keyed to the readiness color. */}
       <div
-        className="rounded-[28px] p-5 flex flex-col gap-5"
+        className="relative overflow-hidden rounded-[28px] p-5 flex flex-col gap-5"
         style={{
           background: `linear-gradient(150deg, color-mix(in srgb, ${rColor} 15%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)`,
           border: `1px solid color-mix(in srgb, ${rColor} 40%, var(--color-rule))`,
           boxShadow: `0 12px 34px -18px color-mix(in srgb, ${rColor} 70%, transparent)`,
+          isolation: 'isolate',
         }}
       >
+        {/* WebGL readiness backdrop — animated iridescent flow tinted by tier,
+            behind the content (z-index:-1 within the isolated stacking context;
+            reduced-motion freezes it, offscreen pauses it). */}
+        <ShaderCanvas
+          variant="iri"
+          uniforms={readinessShaderUniforms(score)}
+          style={{ position: 'absolute', inset: 0, zIndex: -1, opacity: 0.5, pointerEvents: 'none' }}
+        />
         {/* Readiness ring + headline state + personalized one-liner */}
         <Link to="/dashboard?tab=recovery" className="hover-card flex items-center gap-5">
           <ScoreRing score={score ?? 0} color={rColor} size={104}>
