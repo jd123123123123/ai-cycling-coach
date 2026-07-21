@@ -30,6 +30,7 @@ import ShaderCanvas from '../../wrapped/ShaderCanvas'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
 import AbsorptionCard from '../AbsorptionCard'
+import MorningHealthCard from '../MorningHealthCard'
 import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useTodaySession, sessionIntensity } from '../../../hooks/useTodaySession'
@@ -818,6 +819,13 @@ export default function TodayTab() {
           </Link>
         </div>
       </div>
+
+      {/* Morning-health early-warning — illness / significant-downturn cluster
+          from the morning wearable vitals (GET /health/morning-check). Renders
+          ONLY when the detector flags a real cluster vs the athlete's baseline;
+          a normal morning shows nothing. Placed high so a health warning is the
+          first thing seen. Self-contained — owns its own data + null-render. */}
+      <MorningHealthCard />
 
       {/* Weekly Wrapped — the once-a-week high-dopamine banner (localStorage-
           gated per ISO week; self-hides when there's no ridden week to show). */}
