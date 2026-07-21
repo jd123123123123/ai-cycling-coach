@@ -575,10 +575,12 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* Header — the drawer is position:fixed, so it bypasses the body's
+            safe-area-inset-top padding; add it here or the title/close button
+            tuck under the notch (reads "too high"). Matches the rest of the app. */}
         <div
-          className="flex items-center justify-between gap-3 px-5 py-4 flex-shrink-0"
-          style={{ borderBottom: '1px solid var(--color-rule)' }}
+          className="flex items-center justify-between gap-3 px-5 pb-4 flex-shrink-0"
+          style={{ borderBottom: '1px solid var(--color-rule)', paddingTop: 'calc(env(safe-area-inset-top) + 16px)' }}
         >
           <div className="flex items-center gap-2 min-w-0">
             <MessageSquare size={14} strokeWidth={1.8} style={{ color: 'var(--color-amber)' }} />
