@@ -264,7 +264,7 @@ async def post_summarize(
 
         client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         response = await client.messages.create(
-            model=settings.COACH_MODEL,
+            model=settings.COACH_LIGHT_MODEL,
             max_tokens=200,
             system=[
                 {
@@ -283,7 +283,7 @@ async def post_summarize(
         text = text.strip()
         if not text:
             raise RuntimeError("empty Claude response")
-        return SummarizeResponse(narrative=text, model_used=settings.COACH_MODEL)
+        return SummarizeResponse(narrative=text, model_used=settings.COACH_LIGHT_MODEL)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Chart summarise failed: %s", exc)
         # Same graceful fallback as the no-key path

@@ -92,11 +92,21 @@ class Settings(BaseSettings):
     # feature snapshot so /coach/brief always returns a structured payload.
     # ------------------------------------------------------------------
     ANTHROPIC_API_KEY: str | None = None
-    # Sonnet 4.6 — broadly available tier, ~5× cheaper than Opus, fast enough
-    # for daily briefs, plenty smart for structured tool-use output. Opus 4.7
-    # was overkill (and tier-gated → silent fallback to rule-based on many keys).
-    COACH_MODEL: str = "claude-opus-4-8"
-    COACH_CHAT_MODEL: str = "claude-sonnet-4-6"   # chat uses same model
+    # Model tiers — pick the smallest model each job actually needs, never more.
+    #   LIGHT  (Haiku 4.5): trivial one-liners / short extraction — the chart
+    #          summarise blurb (≤200 tok). Cheapest, fastest.
+    #   COACH  (Sonnet 4.6): the workhorse — daily brief, weekly plan, chart &
+    #          period-report narratives, plan-text parsing. The rules engine has
+    #          already made the training decision; the LLM narrates / rubber-
+    #          stamps / extracts, so Sonnet is plenty smart and ~5× cheaper than
+    #          Opus. (Sonnet also accepts temperature, which the Opus tier 400s —
+    #          e.g. chart_interpreter's temperature=0.)
+    #   CHAT   (Sonnet 4.6): interactive Q&A + tool use.
+    #   HEAVY  (Opus 4.8, see RACE_DEBRIEF_MODEL): only the deepest analytical
+    #          verdict, where the extra reasoning is worth the cost.
+    COACH_LIGHT_MODEL: str = "claude-haiku-4-5"
+    COACH_MODEL: str = "claude-sonnet-4-6"
+    COACH_CHAT_MODEL: str = "claude-sonnet-4-6"
     # Caching is refresh-on-demand: a brief regenerates ONLY on an explicit
     # refresh (force=True) or a Garmin sync (which busts the cache when new data
     # lands). Time alone never regenerates it — hence an effectively-infinite TTL.
