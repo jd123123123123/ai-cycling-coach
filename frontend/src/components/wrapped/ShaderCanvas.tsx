@@ -57,14 +57,14 @@ uniform vec3 u_a; uniform vec3 u_b; uniform vec3 u_c;
 void main(){
   vec2 uv=gl_FragCoord.xy/u_res;
   vec2 p=uv*2.4;
-  float t=u_time*0.06;
+  float t=u_time*0.12;
   vec2 q=vec2(fbm(p+t), fbm(p+vec2(5.2,1.3)-t));
   vec2 r=vec2(fbm(p+1.8*q+vec2(1.7,9.2)+t*0.7), fbm(p+1.8*q+vec2(8.3,2.8)-t*0.5));
   float f=fbm(p+2.4*r);
   vec3 col=mix(u_a,u_b,clamp(f*1.6,0.,1.));
   col=mix(col,u_c,clamp(length(r)*0.9,0.,1.));
   col=mix(col,u_a,clamp((q.x-0.4)*0.9,0.,1.));
-  col+=0.05*vec3(sin(uv.y*8.0+u_time*0.3), sin(uv.x*8.0+u_time*0.2), sin((uv.x+uv.y)*6.0-u_time*0.25));
+  col+=0.05*vec3(sin(uv.y*8.0+u_time*0.55), sin(uv.x*8.0+u_time*0.4), sin((uv.x+uv.y)*6.0-u_time*0.48));
   float vig=smoothstep(1.25,0.25,length(uv-0.5));
   col*=0.82+0.18*vig;
   col+=(hash(uv*u_res)-0.5)*0.02;
@@ -78,7 +78,7 @@ uniform vec3 u_base; uniform vec3 u_glow; uniform vec3 u_line;
 void main(){
   vec2 uv=gl_FragCoord.xy/u_res;
   vec2 p=uv*vec2(3.0,3.4);
-  float t=u_time*0.04;
+  float t=u_time*0.085;
   float h=fbm(p+vec2(t,t*0.6));
   h+=0.5*fbm(p*2.0-vec2(t*0.8,0.0));
   float bands=fract(h*6.0);
