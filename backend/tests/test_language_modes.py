@@ -357,23 +357,37 @@ class TestPrescribedWorkoutLocaleFields:
         assert out.get("title_de"), "title_de must be served to the client"
         assert out.get("purpose_de"), "purpose_de must be served to the client"
 
-    def test_de_fallback_why_uses_german_purpose(self):
-        """No bespoke why + de=True → the fallback speaks German (the
-        beginner-safe purpose_de), never the EN template purpose."""
-        from app.services.coach_service import _rewrite_prescribed_workout
+    def test_fallback_why_is_plain_language_both_locales(self):
+        """No bespoke why → the fallback speaks a plain-language sentence in the
+        request locale, and the EN side never serves the lab-register template
+        purpose ('canonical Z5 stimulus' belongs to the pro detail view)."""
+        from app.services.coach_service import _rewrite_prescribed_workout, _plain_why
         from app.services.workout_templates import TEMPLATES
 
         tpl = TEMPLATES["sweet_spot_2x20"]
         out_de = _rewrite_prescribed_workout("sweet_spot_2x20", 250, None, None, de=True)
-        assert out_de["why_this_workout"] == tpl.purpose_de
+        assert out_de["why_this_workout"] == _plain_why(tpl, True)
         out_en = _rewrite_prescribed_workout("sweet_spot_2x20", 250, None, None, de=False)
-        assert out_en["why_this_workout"] == tpl.purpose
+        assert out_en["why_this_workout"] == _plain_why(tpl, False)
+        # The EN fallback is NOT the jargon-heavy raw purpose.
+        assert out_en["why_this_workout"] != tpl.purpose
+        # The jargon purpose stays available on the dict for pro surfaces.
+        assert out_en["purpose"] == tpl.purpose
+
+    def test_vo2_en_fallback_is_not_lab_jargon(self):
+        """Regression for the round-3 residual: EN VO2 why must not be
+        'Raises VO2max ceiling; the canonical Z5 stimulus.'"""
+        from app.services.coach_service import _rewrite_prescribed_workout
+
+        out = _rewrite_prescribed_workout("vo2_5x4", 250, None, None, de=False)
+        assert "canonical" not in out["why_this_workout"].lower()
+        assert "z5 stimulus" not in out["why_this_workout"].lower()
 
     def test_zero_ftp_stub_still_carries_de_fields(self):
-        from app.services.coach_service import _rewrite_prescribed_workout
+        from app.services.coach_service import _rewrite_prescribed_workout, _plain_why
 
         out = _rewrite_prescribed_workout("z2_endurance_60", 0, None, None, de=True)
         assert out.get("title_de")
         assert out.get("purpose_de")
         from app.services.workout_templates import TEMPLATES
-        assert out["why_this_workout"] == TEMPLATES["z2_endurance_60"].purpose_de
+        assert out["why_this_workout"] == _plain_why(TEMPLATES["z2_endurance_60"], True)

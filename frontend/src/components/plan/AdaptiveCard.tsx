@@ -25,7 +25,7 @@ import { apiClient } from '../../api/client'
 import { useLocale } from '../../contexts/LocaleContext'
 import { usePlanAdaptations, PLAN_ADAPTATIONS_KEY } from '../../hooks/usePlanAdaptations'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
-import { WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
+import { WEEK_CURRENT_KEY_ROOT, useCurrentWeek } from '../../hooks/useCurrentWeek'
 import type { PlanAdaptation } from '../../api/plan'
 
 /** "Rückgängig" is offered on the NEWEST feed row when it is a user
@@ -91,6 +91,30 @@ function dayLabel(iso: string, de: boolean): string {
   if (diffDays === 0) return de ? 'Heute' : 'Today'
   if (diffDays === 1) return de ? 'Gestern' : 'Yesterday'
   return new Intl.DateTimeFormat(de ? 'de-DE' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'short' }).format(d)
+}
+
+/** A feed row is "superseded" when the session it announced for a date no
+ *  longer matches the plan currently scheduled for that date — a later
+ *  adaptation (or a plan rebuild) has overtaken it. History is append-only, so
+ *  the row stays; the marker just stops it masquerading as current truth.
+ *
+ *  Only judged for dates we can actually see (present in the loaded week map).
+ *  Rows outside the loaded window, or with no after-session identity, are never
+ *  marked — we don't guess. `currentByDate` maps ISO date → the day's current
+ *  template_id (preferred) and title. */
+export function isSuperseded(
+  a: PlanAdaptation,
+  currentByDate: Map<string, { template_id: string | null; title: string }>,
+): boolean {
+  const cur = a.target_date ? currentByDate.get(a.target_date) : undefined
+  if (!cur) return false
+  const after = a.after
+  if (!after) return false
+  const afterTid = typeof after.template_id === 'string' ? after.template_id : null
+  if (afterTid && cur.template_id) return afterTid !== cur.template_id
+  const afterTitle = typeof after.title === 'string' ? after.title : null
+  if (afterTitle && cur.title) return afterTitle.trim() !== cur.title.trim()
+  return false
 }
 
 /** Compact before→after diff line from the log row's JSON payloads. */
@@ -206,6 +230,17 @@ export function AdaptationTimelineSheet({ open, onClose, feed }: {
   const reduce = useReducedMotion()
   const titleId = useRef(`adapt-timeline-${Math.random().toString(36).slice(2)}`)
 
+  // Current plan by date — lets us flag feed rows the plan has since overtaken.
+  // Only fetched while the sheet is open; a miss just means nothing is marked.
+  const { data: week } = useCurrentWeek()
+  const currentByDate = useMemo(() => {
+    const m = new Map<string, { template_id: string | null; title: string }>()
+    for (const d of week?.days ?? []) {
+      m.set(d.date, { template_id: d.template_id ?? null, title: d.title })
+    }
+    return m
+  }, [week])
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -290,8 +325,9 @@ export function AdaptationTimelineSheet({ open, onClose, feed }: {
                   {g.items.map((a) => {
                     const Icon = signalIcon(a)
                     const diff = diffLine(a, de)
+                    const superseded = isSuperseded(a, currentByDate)
                     return (
-                      <div key={a.id} className="flex items-start rounded-2xl p-3.5" style={{ gap: 11, background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
+                      <div key={a.id} className="flex items-start rounded-2xl p-3.5" style={{ gap: 11, background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', opacity: superseded ? 0.72 : 1 }}>
                         <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 30, height: 30, background: VIOLET_SOFT, marginTop: 1 }}>
                           <Icon size={15} strokeWidth={2.2} style={{ color: VIOLET }} />
                         </span>
@@ -299,6 +335,11 @@ export function AdaptationTimelineSheet({ open, onClose, feed }: {
                           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink)', lineHeight: 1.4 }}>
                             {de ? a.message_de : a.message_en}
                           </span>
+                          {superseded && (
+                            <span className="inline-flex items-center self-start rounded-full" style={{ gap: 4, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-muted)', background: 'var(--color-surface-2)', padding: '2px 8px' }}>
+                              {de ? 'Überholt' : 'Superseded'}
+                            </span>
+                          )}
                           {diff && (
                             <span className="num-mono inline-flex items-center" style={{ gap: 5, fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)' }}>
                               <ArrowRight size={11} style={{ color: VIOLET }} /> {diff}

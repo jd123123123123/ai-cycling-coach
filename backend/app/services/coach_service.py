@@ -1566,6 +1566,15 @@ def _verdict_for_template(template_id: str, language: str, ceiling: str, de: boo
     return technical_by_session.get(category, tpl.name)
 
 
+def _plain_why(template, de: bool) -> str:
+    """Plain-language why fallback for the prescribed-workout card. Reuses the
+    register-aware _what_sentence in its plain ("numbers") register so the EN
+    side never serves the lab-register template.purpose ('canonical Z5
+    stimulus') — that jargon stays on the dict's separate `purpose` field for
+    the pro detail view. DE uses the beginner-safe purpose_de."""
+    return _what_sentence(template, "numbers", de)
+
+
 def _rewrite_prescribed_workout(
     template_id: str,
     ftp: int,
@@ -1618,9 +1627,7 @@ def _rewrite_prescribed_workout(
                 }
                 for b in template.blocks
             ],
-            "why_this_workout": why_this_workout or (
-                template.purpose_de if de and template.purpose_de else template.purpose
-            ),
+            "why_this_workout": why_this_workout or _plain_why(template, de),
         }
 
     prescribed: PrescribedWorkout = parametrize_template(
@@ -1630,9 +1637,7 @@ def _rewrite_prescribed_workout(
     # Locale-honest fallback: when the caller has no bespoke "why", the
     # template purpose must speak the athlete's language (round-2 review:
     # DE users saw raw EN template prose on Today / Einheit des Tages).
-    out["why_this_workout"] = why_this_workout or (
-        template.purpose_de if de and template.purpose_de else template.purpose
-    )
+    out["why_this_workout"] = why_this_workout or _plain_why(template, de)
     return out
 
 
