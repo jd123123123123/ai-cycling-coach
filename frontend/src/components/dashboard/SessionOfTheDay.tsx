@@ -272,22 +272,6 @@ export default function SessionOfTheDay() {
         </div>
       )}
 
-      {/* Why this? — inputs disclosure even when nothing was adapted today. */}
-      {!adaptations?.changes?.length && (whyInputs.length > 0 || frameworks.length > 0) && (
-        <div className="rounded-2xl p-3.5 flex flex-col gap-2.5" style={{ background: 'color-mix(in srgb, var(--color-paper) 55%, transparent)', border: '1px solid var(--color-rule)' }}>
-          <button type="button" onClick={() => setWhyOpen((o) => !o)} className="flex items-center gap-2 text-left">
-            <Sparkles size={15} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
-            <span className="flex-1 min-w-0" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Warum genau diese Einheit?' : 'Why this session?'}</span>
-            <ChevronDown size={16} style={{ color: 'var(--color-muted)', transform: whyOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }} />
-          </button>
-          {whyOpen && (
-            <div style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 10 }}>
-              <WhyInputChips whyInputs={whyInputs} frameworks={frameworks} de={de} />
-            </div>
-          )}
-        </div>
-      )}
-
       {/* The identical trio: TSS · duration · zone badge */}
       <div className="flex gap-5">
         {([
