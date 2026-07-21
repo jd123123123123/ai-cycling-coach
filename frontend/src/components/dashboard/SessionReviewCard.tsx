@@ -250,6 +250,13 @@ export default function SessionReviewCard({ review, de }: { review: PostRideRevi
     (a) => localDayKey(a.started_at ?? a.date ?? '') === todayKey && familyOf(a.sport) === primaryFam,
   )
   const avgHr = todaysFamActs.length === 1 ? todaysFamActs[0].average_hr : null
+  // The ride to "view": once you've trained, the coach drops today's
+  // prescription, so /workout/today no longer holds this session and would show
+  // a rest/"no workout" state. Link straight to the ride you actually did.
+  const todaysRide = (weekActs?.activities ?? []).find(
+    (a) => familyOf(a.sport) === 'cycling' && localDayKey(a.started_at ?? a.date ?? '') === todayKey,
+  ) ?? null
+  const reviewDest = todaysRide ? `/activities/${todaysRide.id}/ride` : '/workout/today'
   // Count clause: planned sessions of this family this week vs. done so far.
   const plannedFamCount = (plannedWeek?.planned_workouts ?? []).filter(
     (p) => familyOf(p.sport) === primaryFam,
@@ -428,12 +435,12 @@ export default function SessionReviewCard({ review, de }: { review: PostRideRevi
         </div>
       )}
 
-      {/* Open today's full workout detail — only meaningful when the review
-          actually compared against today's prescription. */}
+      {/* View the ride you did (once trained the prescription is gone), else
+          fall back to the planned workout detail. */}
       {!loggedOnly && (
-        <Link to="/workout/today" className="inline-flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)', padding: '11px 16px', fontSize: 13.5, fontWeight: 700 }}>
+        <Link to={reviewDest} className="inline-flex items-center justify-center gap-2 rounded-full" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)', padding: '11px 16px', fontSize: 13.5, fontWeight: 700 }}>
           <ListChecks size={16} style={{ color: gm.color }} />
-          {de ? 'Workout-Details ansehen' : 'View workout details'}
+          {todaysRide ? (de ? 'Fahrt ansehen' : 'View your ride') : (de ? 'Workout-Details ansehen' : 'View workout details')}
           <ChevronRight size={15} style={{ color: 'var(--color-muted)' }} />
         </Link>
       )}

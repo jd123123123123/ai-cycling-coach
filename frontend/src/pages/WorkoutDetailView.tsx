@@ -23,6 +23,7 @@ import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../hooks/useActivitiesRange'
+import { localDayKey } from '../utils/loadMetrics'
 import { useLocale } from '../contexts/LocaleContext'
 import { workoutDisplayTitle, workoutDisplayPurpose, workoutDisplayRationale } from '../api/coach'
 import BlockBars, { zoneColor, zoneForPct } from '../components/workout/BlockBars'
@@ -232,10 +233,13 @@ export default function WorkoutDetailView() {
   const { data: todayActs } = useActivitiesRange(new Date(), new Date())
   const todayRide = useMemo(() => {
     if (!isToday) return null
+    const todayKey = localDayKey(new Date())
     return (todayActs?.activities ?? []).find(
-      (a) => a.sport === 'cycling' && (a.started_at ?? '').slice(0, 10) === todayStr,
+      (a) =>
+        /(cycl|bike|ride|mtb|gravel|virtual)/.test((a.sport ?? '').toLowerCase()) &&
+        localDayKey(a.started_at ?? a.date ?? '') === todayKey,
     ) ?? null
-  }, [isToday, todayActs, todayStr])
+  }, [isToday, todayActs])
 
   const dayPlan = useMemo(
     () => (isToday ? null : week?.days?.find((d) => d.date === targetDate) ?? null),
