@@ -28,6 +28,7 @@ import { useCountUp } from '../hooks/useCountUp'
 interface DailyEffort { key: string; date: string; tss: number; km: number; sessions: number; peak: boolean }
 interface BestRide { activity_id: number; title: string; date: string | null; tss: number; km: number; hours: number; score: number | null; moving: string }
 interface PeakPower { watts: number; wkg: number | null; comparison: { key: string; label: string; watts: number; you: boolean }[] }
+export interface Route { points: [number, number][]; view: { w: number; h: number }; n_points: number; activity_id: number; title: string | null; km: number }
 export interface Wrapped {
   week_start: string
   week_end: string
@@ -35,6 +36,9 @@ export interface Wrapped {
   totals: { sessions: number; hours: number; km: number; tss: number; active_days: number; saddle_hm: string }
   planned_tss: number | null
   ctl_delta: number | null
+  route: Route | null
+  distance_comparison: string | null
+  saddle_line: string | null
   daily_effort: DailyEffort[]
   elevation_m: number | null
   peak_power: PeakPower | null
@@ -43,12 +47,21 @@ export interface Wrapped {
   zero_missed: boolean
 }
 
+/** SVG path `d` from projected route points. Pure — exported for tests. */
+export function routePathD(points: [number, number][]): string {
+  if (!points.length) return ''
+  return points
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`)
+    .join(' ')
+}
+
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 // Shader colour sets, verbatim from the pen frames.
 const SHADERS = {
   cover: { variant: 'iri' as const, u: { u_a: '#FF5A3C', u_b: '#B14BFF', u_c: '#2E6BFF' } },
   distance: { variant: 'topo' as const, u: { u_base: '#060A16', u_glow: '#8B5CF6', u_line: '#4D8CFF' } },
+  route: { variant: 'topo' as const, u: { u_base: '#04120C', u_glow: '#16E08A', u_line: '#4D8CFF' } },
   elevation: { variant: 'topo' as const, u: { u_base: '#0A0818', u_glow: '#2E6BFF', u_line: '#A98BFF' } },
   effort: { variant: 'iri' as const, u: { u_a: '#FF5A3C', u_b: '#FF2D6B', u_c: '#FF9E2C' } },
   ride: { variant: 'iri' as const, u: { u_a: '#FF8A3C', u_b: '#FFC24B', u_c: '#FF5A3C' } },
@@ -146,9 +159,84 @@ function DistanceCard({ w, de }: { w: Wrapped; de: boolean }) {
       </div>
       <Glass>
         <span style={{ fontSize: 16, fontWeight: 500, color: '#FFFFFFE6', lineHeight: 1.4 }}>
+          {w.distance_comparison
+            ? w.distance_comparison
+            : de
+              ? `${Math.round(w.totals.km)} km auf dem Rad — an ${w.totals.active_days} Tagen dieser Woche gesammelt.`
+              : `${Math.round(w.totals.km)} km on the bike — logged across ${w.totals.active_days} days this week.`}
+        </span>
+      </Glass>
+    </motion.div>
+  )
+}
+
+// The week's most notable ride, drawn from real GPS — the line traces itself
+// (stroke-dasharray/offset), or shows complete under reduced-motion.
+function RouteCard({ w, de }: { w: Wrapped; de: boolean }) {
+  const enter = useEnter()
+  const reduce = useReducedMotion()
+  const route = w.route!
+  const d = useMemo(() => routePathD(route.points), [route])
+  const pathRef = useRef<SVGPathElement>(null)
+  const [len, setLen] = useState(0)
+  const [drawn, setDrawn] = useState(false)
+
+  useEffect(() => {
+    const p = pathRef.current
+    if (!p) return
+    const total = p.getTotalLength()
+    setLen(total)
+    if (reduce) { setDrawn(true); return }
+    setDrawn(false)
+    const r1 = requestAnimationFrame(() => {
+      const r2 = requestAnimationFrame(() => setDrawn(true))
+      ;(pathRef.current as unknown as { _r2?: number })._r2 = r2
+    })
+    return () => cancelAnimationFrame(r1)
+  }, [d, reduce])
+
+  const [sx, sy] = route.points[0]
+  const [ex, ey] = route.points[route.points.length - 1]
+  const offset = reduce ? 0 : (drawn ? 0 : len)
+
+  return (
+    <motion.div key="route" {...enter} className="flex flex-col justify-between h-full">
+      <div className="flex flex-col gap-3">
+        <Kicker>{de ? 'DEINE STRECKE' : 'YOUR ROUTE'}</Kicker>
+        <span style={{ ...heroStyle, fontSize: 40, lineHeight: 1.05, textShadow: 'none' }}>{route.title || (de ? 'Fahrt der Woche' : 'Ride of the week')}</span>
+      </div>
+      <div className="relative flex-1 flex items-center justify-center" style={{ minHeight: 300 }}>
+        <svg viewBox={`0 0 ${route.view.w} ${route.view.h}`} width="100%" height="100%" style={{ maxHeight: 340 }} fill="none">
+          {/* Soft glow underlay of the full path. */}
+          <path d={d} stroke="#16E08A" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" opacity="0.35" style={{ filter: 'blur(9px)' }} />
+          {/* Faint full track so the shape reads while the bright line draws. */}
+          <path d={d} stroke="#FFFFFF26" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          {/* The self-drawing bright line. */}
+          <path
+            ref={pathRef}
+            d={d}
+            stroke="url(#routeg)"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={len || undefined}
+            strokeDashoffset={len ? offset : undefined}
+            style={{ transition: reduce ? undefined : 'stroke-dashoffset 2.3s cubic-bezier(0.4,0,0.2,1)' }}
+          />
+          <defs>
+            <linearGradient id="routeg" x1="0" y1="0" x2={route.view.w} y2={route.view.h} gradientUnits="userSpaceOnUse">
+              <stop stopColor="#16E08A" /><stop offset="0.5" stopColor="#4D8CFF" /><stop offset="1" stopColor="#FF7A4E" />
+            </linearGradient>
+          </defs>
+          <circle cx={sx} cy={sy} r="7" fill="#16E08A" stroke="#fff" strokeWidth="2.5" />
+          <circle cx={ex} cy={ey} r="7" fill="#FF5A3C" stroke="#fff" strokeWidth="2.5" style={{ opacity: drawn || reduce ? 1 : 0, transition: 'opacity 0.4s ease 2s' }} />
+        </svg>
+      </div>
+      <Glass>
+        <span style={{ fontSize: 16, fontWeight: 500, color: '#FFFFFFE6', lineHeight: 1.4 }}>
           {de
-            ? `${Math.round(w.totals.km)} km auf dem Rad — an ${w.totals.active_days} Tagen dieser Woche gesammelt.`
-            : `${Math.round(w.totals.km)} km on the bike — logged across ${w.totals.active_days} days this week.`}
+            ? `${route.km} km, Meter für Meter nachgezeichnet — so bist du diese Woche gefahren.`
+            : `${route.km} km, traced metre by metre — this is the way you rode this week.`}
         </span>
       </Glass>
     </motion.div>
@@ -218,7 +306,7 @@ function EffortCard({ w, de }: { w: Wrapped; de: boolean }) {
         </div>
       </div>
       <Glass>
-        <span style={{ fontSize: 16, fontWeight: 500, color: '#FFFFFFE6', lineHeight: 1.4 }}>{effortCaption(w, de)}</span>
+        <span style={{ fontSize: 16, fontWeight: 500, color: '#FFFFFFE6', lineHeight: 1.4 }}>{w.saddle_line || effortCaption(w, de)}</span>
       </Glass>
     </motion.div>
   )
@@ -381,6 +469,7 @@ export default function WeeklyWrapped() {
   const cards = useMemo(() => {
     if (!data) return [] as string[]
     const list = ['cover', 'distance']
+    if (data.route && data.route.points.length >= 2) list.push('route')
     if (data.elevation_m != null) list.push('elevation')
     list.push('effort')
     if (data.best_ride) list.push('ride')
@@ -496,6 +585,7 @@ export default function WeeklyWrapped() {
         <div className="flex-1 min-h-0" style={{ paddingTop: 20, paddingBottom: 8 }}>
           {kind === 'cover' && <CoverCard w={data} de={de} onStart={() => advance(1)} />}
           {kind === 'distance' && <DistanceCard w={data} de={de} />}
+          {kind === 'route' && <RouteCard w={data} de={de} />}
           {kind === 'elevation' && <ElevationCard w={data} de={de} />}
           {kind === 'effort' && <EffortCard w={data} de={de} />}
           {kind === 'ride' && <RideCard w={data} de={de} />}

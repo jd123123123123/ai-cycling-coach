@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isoWeekKey } from '../../dashboard/WeeklyWrappedBanner'
-import { effortCaption, type Wrapped } from '../../../pages/WeeklyWrapped'
+import { effortCaption, routePathD, type Wrapped } from '../../../pages/WeeklyWrapped'
 
 function makeWrapped(over: Partial<Wrapped> = {}): Wrapped {
   return {
@@ -10,6 +10,9 @@ function makeWrapped(over: Partial<Wrapped> = {}): Wrapped {
     totals: { sessions: 4, hours: 6, km: 240, tss: 500, active_days: 4, saddle_hm: '6h 00m' },
     planned_tss: null,
     ctl_delta: null,
+    route: null,
+    distance_comparison: null,
+    saddle_line: null,
     daily_effort: [
       { key: 'mon', date: '2026-07-13', tss: 60, km: 30, sessions: 1, peak: false },
       { key: 'tue', date: '2026-07-14', tss: 0, km: 0, sessions: 0, peak: false },
@@ -50,5 +53,17 @@ describe('effortCaption', () => {
     const flat = makeWrapped({ daily_effort: makeWrapped().daily_effort.map((d) => ({ ...d, tss: 0, peak: false })) })
     const cap = effortCaption(flat, false)
     expect(cap.toLowerCase()).toContain('quiet')
+  })
+})
+
+describe('routePathD', () => {
+  it('builds an SVG path with a single moveto then linetos', () => {
+    const d = routePathD([[10, 20], [30, 40], [50, 60]])
+    expect(d).toBe('M10 20 L30 40 L50 60')
+    expect((d.match(/M/g) ?? []).length).toBe(1)
+    expect((d.match(/L/g) ?? []).length).toBe(2)
+  })
+  it('is empty for no points', () => {
+    expect(routePathD([])).toBe('')
   })
 })

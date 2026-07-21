@@ -18,13 +18,17 @@ returned as ``None`` and the client SKIPS that card rather than faking a number
 """
 from __future__ import annotations
 
+import json
+import logging
 from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.activity import Activity
+from app.models.activity_stream import ActivityStream
 from app.models.athlete_profile import AthleteProfile
 from app.services.athlete_time import (
     local_date_of,
@@ -32,6 +36,8 @@ from app.services.athlete_time import (
     today_local,
 )
 from app.services.weekly_recap import _dt, _week_bounds, build_weekly_recap
+
+logger = logging.getLogger(__name__)
 
 # A fixed, self-contained "what could your watts run" scale (household draw in
 # watts). Purely illustrative flavour for the Peak Power card — never presented
@@ -143,6 +149,325 @@ def _fmt_hm(hours: float) -> str:
     return f"{total_min // 60}h {total_min % 60:02d}m"
 
 
+# ── Animated route projection ────────────────────────────────────────────────
+#
+# The most notable GPS ride of the week, projected from raw lat/lng into the
+# card's SVG viewbox. Pure + aspect-correct (never stretched), downsampled to a
+# bounded point count so the payload stays small and the client's stroke-draw
+# animation stays smooth. Mirrors RouteMap.tsx's projection maths.
+
+ROUTE_VIEW_W = 342
+ROUTE_VIEW_H = 300
+ROUTE_PAD = 26
+ROUTE_MAX_POINTS = 260
+
+
+def project_route(
+    lats: list[Any],
+    lngs: list[Any],
+    view_w: int = ROUTE_VIEW_W,
+    view_h: int = ROUTE_VIEW_H,
+    pad: int = ROUTE_PAD,
+    max_points: int = ROUTE_MAX_POINTS,
+) -> dict[str, Any] | None:
+    """Project a lat/lng track into ``[x, y]`` points inside a ``view_w×view_h``
+    box, keeping the geographic aspect ratio (no stretch) and centering the
+    shape. Non-finite/misaligned samples are dropped pairwise; the track is
+    stride-downsampled to ``max_points`` (the last point is always kept so the
+    finish marker lands on the real end). Returns ``None`` when fewer than two
+    usable points exist — the client then SKIPS the route card (honesty: no
+    fabricated route)."""
+    pts_ll: list[tuple[float, float]] = []
+    n = min(len(lats), len(lngs))
+    for i in range(n):
+        la, ln = lats[i], lngs[i]
+        if isinstance(la, (int, float)) and isinstance(ln, (int, float)):
+            fla, fln = float(la), float(ln)
+            if fla == fla and fln == fln and abs(fla) <= 90 and abs(fln) <= 180:
+                # Drop null-island (0,0) noise samples.
+                if fla != 0.0 or fln != 0.0:
+                    pts_ll.append((fla, fln))
+    if len(pts_ll) < 2:
+        return None
+
+    lats_f = [p[0] for p in pts_ll]
+    lngs_f = [p[1] for p in pts_ll]
+    min_lat, max_lat = min(lats_f), max(lats_f)
+    min_lng, max_lng = min(lngs_f), max(lngs_f)
+    lat_span = (max_lat - min_lat) or 1e-6
+    lng_span = (max_lng - min_lng) or 1e-6
+    scale = min((view_w - pad * 2) / lng_span, (view_h - pad * 2) / lat_span)
+    off_x = (view_w - lng_span * scale) / 2
+    off_y = (view_h - lat_span * scale) / 2
+
+    projected = [
+        [
+            round(off_x + (ln - min_lng) * scale, 1),
+            round(off_y + (max_lat - la) * scale, 1),
+        ]
+        for la, ln in pts_ll
+    ]
+
+    # Stride-downsample, always keeping first + last.
+    if len(projected) > max_points:
+        step = len(projected) / max_points
+        sampled = [projected[int(i * step)] for i in range(max_points)]
+        if sampled[-1] != projected[-1]:
+            sampled[-1] = projected[-1]
+        projected = sampled
+
+    return {
+        "points": projected,
+        "view": {"w": view_w, "h": view_h},
+        "n_points": len(projected),
+    }
+
+
+async def _notable_route(
+    db: AsyncSession, user_id: int, week: list[Activity]
+) -> dict[str, Any] | None:
+    """The week's most notable GPS ride, as a projected route. "Notable" = a
+    cycling ride first, then the richest raw track (most GPS samples). Ranking
+    uses the RAW sample count (not the downsampled count, which caps at
+    ``ROUTE_MAX_POINTS`` and would tie every long ride). Returns ``None`` when no
+    ride that week carries a usable lat/lng track."""
+    ids = [a.id for a in week]
+    if not ids:
+        return None
+    by_id = {a.id: a for a in week}
+    rows = await db.execute(
+        select(ActivityStream.activity_id, ActivityStream.streams).where(
+            ActivityStream.user_id == user_id,
+            ActivityStream.activity_id.in_(ids),
+        )
+    )
+    best: dict[str, Any] | None = None
+    best_rank: tuple[int, int] = (-1, -1)
+    for activity_id, streams in rows.all():
+        if not isinstance(streams, dict):
+            continue
+        lats = streams.get("latitude")
+        lngs = streams.get("longitude")
+        if not isinstance(lats, list) or not isinstance(lngs, list):
+            continue
+        act = by_id.get(activity_id)
+        is_cycling = 1 if getattr(act, "sport", None) == "cycling" else 0
+        raw_n = min(len(lats), len(lngs))
+        rank = (is_cycling, raw_n)
+        if rank <= best_rank:
+            continue
+        route = project_route(lats, lngs)
+        if route is None:
+            continue
+        route["activity_id"] = activity_id
+        route["title"] = getattr(act, "title", None)
+        route["km"] = round((getattr(act, "distance_meters", 0) or 0) / 1000, 1)
+        best, best_rank = route, rank
+    return best
+
+
+# ── AI flavour: distance→cities + saddle-time→witty one-liner ─────────────────
+#
+# Two short, warm German strings generated together in ONE Sonnet call, seeded
+# with the ISO week + the week's real numbers so each week reads differently.
+# Falls back to deterministic, still-nice copy when the API key is unset or the
+# call fails — the screens ALWAYS render. Cached per (user, ISO week, locale) so
+# a week is generated at most once per process.
+
+# Curated, roughly-correct real city-pair road distances (km) spanning the range
+# a week of riding covers. The fallback picks the closest pair to the athlete's
+# total — factually plausible without an LLM.
+CITY_PAIRS: list[tuple[str, str, int]] = [
+    ("Berlin", "Potsdam", 35),
+    ("Köln", "Düsseldorf", 47),
+    ("München", "Augsburg", 68),
+    ("Hamburg", "Bremen", 120),
+    ("Frankfurt", "Stuttgart", 205),
+    ("Berlin", "Hamburg", 290),
+    ("München", "Nürnberg", 170),
+    ("Köln", "Frankfurt", 190),
+    ("Berlin", "Dresden", 200),
+    ("Stuttgart", "München", 235),
+    ("Hamburg", "Berlin", 290),
+    ("Frankfurt", "München", 400),
+    ("Berlin", "Köln", 575),
+    ("München", "Berlin", 585),
+    ("Hamburg", "München", 775),
+]
+
+# Deterministic witty-and-kind saddle-time lines. Each takes the hours and
+# returns one warm German sentence; the week's ISO number selects one so the
+# copy rotates. English mirror below.
+_SADDLE_LINES_DE = [
+    lambda h: f"{h:.1f} Stunden im Sattel — so lange, dass dein Sitzpolster jetzt Familienmitglied ist.",
+    lambda h: (lambda n: f"{h:.1f} Stunden auf dem Rad — genug für {n} volle{'n' if n == 1 else ''} Spielfilm{'' if n == 1 else 'e'}, nur mit besserer Aussicht.")(max(1, round(h * 60 / 210))),
+    lambda h: f"{h:.1f} Stunden getreten — deine Beine haben mehr gearbeitet als so mancher Montag im Büro.",
+    lambda h: f"{h:.1f} Stunden Sattelzeit — das sind rund {round(h * 60)} Minuten reines Ich-Zeit-mit-Rückenwind.",
+    lambda h: f"{h:.1f} Stunden im Sattel — lang genug, um jeden Podcast-Stau abzubauen. Chapeau.",
+    lambda h: f"{h:.1f} Stunden gefahren — deine Wasserflasche hat diese Woche echte Überstunden gemacht.",
+    lambda h: f"{h:.1f} Stunden auf zwei Rädern — dein Sofa hat dich vermisst, dein Herz dankt dir trotzdem.",
+]
+_SADDLE_LINES_EN = [
+    lambda h: f"{h:.1f} hours in the saddle — long enough that your chamois is basically family now.",
+    lambda h: (lambda n: f"{h:.1f} hours riding — enough for {n} feature film{'' if n == 1 else 's'}, just with a better view.")(max(1, round(h * 60 / 210))),
+    lambda h: f"{h:.1f} hours turning the pedals — your legs did more than most Monday mornings.",
+    lambda h: f"{h:.1f} hours of saddle time — about {round(h * 60)} minutes of pure me-time-with-a-tailwind.",
+    lambda h: f"{h:.1f} hours in the saddle — long enough to clear the whole podcast backlog. Chapeau.",
+    lambda h: f"{h:.1f} hours ridden — your bottle pulled some serious overtime this week.",
+    lambda h: f"{h:.1f} hours on two wheels — your sofa missed you, your heart thanks you anyway.",
+]
+
+
+def fallback_city_comparison(distance_km: float, de: bool) -> str:
+    """Deterministic distance→landmark line: the real city pair whose road
+    distance is closest to the week's total."""
+    km = round(distance_km)
+    if km <= 0:
+        return (
+            "Noch keine Kilometer diese Woche — nächste Ausfahrt wartet."
+            if de
+            else "No kilometres logged yet this week — your next ride is waiting."
+        )
+    a, b, pair_km = min(CITY_PAIRS, key=lambda p: abs(p[2] - distance_km))
+    if de:
+        return f"Deine {km} km — ungefähr die Strecke von {a} nach {b} (~{pair_km} km)."
+    return f"Your {km} km — about the ride from {a} to {b} (~{pair_km} km)."
+
+
+def fallback_saddle_line(saddle_hours: float, iso_week: int, de: bool) -> str:
+    """Deterministic witty-and-kind saddle-time line; the ISO week rotates it."""
+    h = max(0.0, float(saddle_hours))
+    if h <= 0:
+        return (
+            "Diese Woche ruhte der Sattel — auch das gehört zum Plan."
+            if de
+            else "The saddle rested this week — that's part of the plan too."
+        )
+    lines = _SADDLE_LINES_DE if de else _SADDLE_LINES_EN
+    return lines[iso_week % len(lines)](h)
+
+
+_FLAVOR_SYSTEM_DE = (
+    "Du bist ein origineller, warmherziger Radsport-Coach mit trockenem Humor. "
+    "Du bekommst die Wochenwerte eines Radfahrers und schreibst ZWEI kurze deutsche "
+    "Texte. Antworte AUSSCHLIESSLICH mit gültigem JSON, exakt in dieser Form: "
+    '{"cities": "...", "saddle": "..."}. '
+    "cities: Vergleiche die gefahrene Gesamtdistanz mit einer realen, geografisch "
+    "plausiblen Strecke zwischen zwei bekannten Orten oder zu einem Wahrzeichen. Die "
+    "Distanz muss ungefähr stimmen (±15%). Ein Satz, motivierend, beginne mit der "
+    "Zahl. saddle: Vergleiche die Gesamtzeit im Sattel mit etwas Alltäglichem — "
+    "witzig, liebevoll, nie plump, nie gemein, ein Satz. Keine Emojis, keine "
+    "Anführungszeichen im Text, kein Text außerhalb des JSON. Sei jede Woche anders."
+)
+_FLAVOR_SYSTEM_EN = (
+    "You are an original, warm cycling coach with dry humour. You get a rider's "
+    "weekly numbers and write TWO short English texts. Reply ONLY with valid JSON, "
+    'exactly: {"cities": "...", "saddle": "..."}. '
+    "cities: compare the total distance ridden to a real, geographically plausible "
+    "route between two well-known places or to a landmark. The distance must be "
+    "roughly right (±15%). One sentence, motivating, start with the number. saddle: "
+    "compare total time in the saddle to something everyday — witty, kind, never "
+    "crude, one sentence. No emoji, no quotes inside the text, no text outside the "
+    "JSON. Be different every week."
+)
+
+# Per-process cache: (user_id, iso_week_key, lang) → {"cities","saddle"}.
+_FLAVOR_CACHE: dict[tuple[int, str, str], dict[str, str]] = {}
+_FLAVOR_CACHE_MAX = 512
+
+
+def _parse_flavor_json(text: str) -> dict[str, str] | None:
+    """Defensively pull the {cities, saddle} object out of a model reply."""
+    if not text:
+        return None
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    try:
+        obj = json.loads(text[start : end + 1])
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(obj, dict):
+        return None
+    cities = obj.get("cities")
+    saddle = obj.get("saddle")
+    out: dict[str, str] = {}
+    if isinstance(cities, str) and cities.strip():
+        out["cities"] = cities.strip()
+    if isinstance(saddle, str) and saddle.strip():
+        out["saddle"] = saddle.strip()
+    return out or None
+
+
+async def generate_wrapped_flavor(
+    user_id: int,
+    distance_km: float,
+    saddle_hours: float,
+    iso_week: int,
+    iso_week_key: str,
+    lang: str = "en",
+) -> dict[str, str]:
+    """Return ``{"cities": str, "saddle": str}`` — AI-generated when a key is
+    set, deterministic fallback otherwise. Cached per (user, ISO week, locale).
+
+    The fallback is always computed first so a missing field in the LLM reply
+    (or a total failure) still yields a complete, nice pair of strings."""
+    de = lang == "de"
+    fallback = {
+        "cities": fallback_city_comparison(distance_km, de),
+        "saddle": fallback_saddle_line(saddle_hours, iso_week, de),
+    }
+
+    cache_key = (user_id, iso_week_key, lang)
+    cached = _FLAVOR_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    if not settings.ANTHROPIC_API_KEY:
+        return fallback
+
+    user_msg = (
+        f"Kalenderwoche: {iso_week_key}\n"
+        f"Gesamtdistanz: {round(distance_km)} km\n"
+        f"Zeit im Sattel: {saddle_hours:.1f} Stunden\n"
+        "Schreibe beide Texte frisch und anders als in anderen Wochen."
+    )
+    try:
+        import anthropic
+
+        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        response = await client.messages.create(
+            # Sonnet tier: good wit at low cost. NO temperature (the Sonnet
+            # right-sizing tier 400s on sampling params here) — variety comes
+            # from seeding the prompt with the ISO week + the week's numbers.
+            model=settings.COACH_MODEL,
+            max_tokens=400,
+            system=[
+                {
+                    "type": "text",
+                    "text": _FLAVOR_SYSTEM_DE if de else _FLAVOR_SYSTEM_EN,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        text = ""
+        for block in getattr(response, "content", None) or []:
+            block_text = getattr(block, "text", None)
+            if block_text:
+                text += block_text
+        parsed = _parse_flavor_json(text.strip())
+        result = {**fallback, **(parsed or {})}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Weekly-wrapped flavour generation failed: %s", exc)
+        result = fallback
+
+    if len(_FLAVOR_CACHE) >= _FLAVOR_CACHE_MAX:
+        _FLAVOR_CACHE.clear()
+    _FLAVOR_CACHE[cache_key] = result
+    return result
+
+
 async def build_weekly_wrapped(
     db: AsyncSession, user_id: int, lang: str = "en", anchor: date | None = None
 ) -> dict[str, Any]:
@@ -222,6 +547,24 @@ async def build_weekly_wrapped(
         }
 
     totals = recap["totals"]
+
+    # Animated route — the week's most notable GPS ride, projected to the card's
+    # viewbox. None when no ride that week carries a track (client skips it).
+    route = await _notable_route(db, user_id, week)
+
+    # AI flavour (distance→cities, saddle→witty), seeded with the ISO week for
+    # week-to-week variety; deterministic fallback when no API key / on failure.
+    iso_year, iso_week, _ = start.isocalendar()
+    iso_week_key = f"{iso_year}-W{iso_week:02d}"
+    flavor = await generate_wrapped_flavor(
+        user_id,
+        distance_km=float(totals["km"]),
+        saddle_hours=float(totals["hours"]),
+        iso_week=iso_week,
+        iso_week_key=iso_week_key,
+        lang=lang,
+    )
+
     planned = recap.get("planned_tss")
     done_sessions = int(totals["sessions"])
     # "Zero missed" — every planned session has a matching completed ride. We
@@ -241,6 +584,9 @@ async def build_weekly_wrapped(
         "prev_totals": recap["prev_totals"],
         "planned_tss": planned,
         "ctl_delta": recap.get("ctl_delta"),
+        "route": route,
+        "distance_comparison": flavor["cities"],
+        "saddle_line": flavor["saddle"],
         "daily_effort": daily,
         "elevation_m": elevation_m,
         "peak_power": peak_power,
