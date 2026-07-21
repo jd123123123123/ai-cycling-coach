@@ -288,30 +288,16 @@ async def post_summarize(
     )
 
     try:
-        import anthropic
+        # Claude (primary) → OpenAI (fallback) → the rule-based except below.
+        from app.services.llm_client import complete_text
 
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        response = await client.messages.create(
-            model=settings.COACH_LIGHT_MODEL,
+        result = await complete_text(
+            system=_SUMMARY_SYSTEM,
+            user=user_msg,
             max_tokens=200,
-            system=[
-                {
-                    "type": "text",
-                    "text": _SUMMARY_SYSTEM,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-            messages=[{"role": "user", "content": user_msg}],
+            model=settings.COACH_LIGHT_MODEL,
         )
-        text = ""
-        for block in getattr(response, "content", None) or []:
-            block_text = getattr(block, "text", None)
-            if block_text:
-                text += block_text
-        text = text.strip()
-        if not text:
-            raise RuntimeError("empty Claude response")
-        return SummarizeResponse(narrative=text, model_used=settings.COACH_LIGHT_MODEL)
+        return SummarizeResponse(narrative=result.text, model_used=result.model)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Chart summarise failed: %s", exc)
         # Same graceful fallback as the no-key path

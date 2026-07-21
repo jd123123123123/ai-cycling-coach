@@ -116,6 +116,18 @@ class Settings(BaseSettings):
     # of the coach brief model. Opus 4.8: adaptive thinking, no sampling params.
     RACE_DEBRIEF_MODEL: str = "claude-opus-4-8"
 
+    # ------------------------------------------------------------------
+    # OpenAI FALLBACK provider. Claude stays PRIMARY always; OpenAI is only
+    # tried when a Claude call fails on a credit / quota / billing / auth /
+    # rate-limit / 5xx error (see services/llm_client.py). The app MUST boot and
+    # every text surface MUST work with OPENAI_API_KEY unset — the fallback
+    # simply skips OpenAI and each caller's deterministic rule-based path runs.
+    # OPENAI_MODEL default is a cheap, capable model sized for these short
+    # narration/extraction jobs.
+    # ------------------------------------------------------------------
+    OPENAI_API_KEY: str | None = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:

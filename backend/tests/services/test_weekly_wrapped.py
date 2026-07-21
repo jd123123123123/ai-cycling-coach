@@ -243,3 +243,44 @@ async def test_generate_flavor_ai_path_parses_and_caches(monkeypatch):
     )
     assert again == out
     assert calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_generate_flavor_falls_back_to_openai_on_claude_credit_error(monkeypatch):
+    """End-to-end: a Claude credit failure routes this wired text surface through
+    the OpenAI fallback (JSON mode), NOT the deterministic fallback."""
+    from unittest.mock import AsyncMock, MagicMock
+    import anthropic
+    import httpx
+    import openai
+    from app.services import llm_client
+
+    monkeypatch.setattr(ww.settings, "ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setattr(llm_client.settings, "ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setattr(llm_client.settings, "OPENAI_API_KEY", "sk-openai")
+    monkeypatch.setattr(llm_client.settings, "OPENAI_MODEL", "gpt-4o-mini")
+    ww._FLAVOR_CACHE.clear()
+
+    credit_err = anthropic.BadRequestError(
+        "Your credit balance is too low",
+        response=httpx.Response(400, request=httpx.Request("POST", "http://x")),
+        body=None,
+    )
+    anth = MagicMock()
+    anth.messages = MagicMock(create=AsyncMock(side_effect=credit_err))
+    monkeypatch.setattr(anthropic, "AsyncAnthropic", MagicMock(return_value=anth))
+
+    oai_msg = SimpleNamespace(
+        content='{"cities": "Deine 290 km via OpenAI.", "saddle": "6.0 h via OpenAI."}'
+    )
+    oai_resp = SimpleNamespace(choices=[SimpleNamespace(message=oai_msg)])
+    oai = MagicMock()
+    oai.chat = MagicMock(completions=MagicMock(create=AsyncMock(return_value=oai_resp)))
+    monkeypatch.setattr(openai, "AsyncOpenAI", MagicMock(return_value=oai))
+
+    out = await generate_wrapped_flavor(
+        user_id=11, distance_km=290, saddle_hours=6.0,
+        iso_week=12, iso_week_key="2026-W12", lang="de",
+    )
+    assert out["cities"].endswith("via OpenAI.")
+    assert out["saddle"].endswith("via OpenAI.")

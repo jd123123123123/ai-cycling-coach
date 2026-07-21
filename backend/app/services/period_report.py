@@ -1020,29 +1020,20 @@ async def _ai_verdict(
         f"Recommended next step: {step}\n"
     )
     try:
-        import anthropic
+        # Claude (primary) → OpenAI (fallback) → the rule-based return below.
+        from app.services.llm_client import complete_text
 
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        response = await client.messages.create(
-            model=settings.COACH_MODEL,
+        result = await complete_text(
+            system=_VERDICT_SYSTEM_DE if de else _VERDICT_SYSTEM,
+            user=user_msg,
             max_tokens=320,
+            model=settings.COACH_MODEL,
             # temperature=0 → stable wording across reloads for the same data, so
             # the verdict stops "changing between page loads" and is less prone to
-            # fabricating numbers.
+            # fabricating numbers. (Sonnet accepts it; OpenAI ignores it.)
             temperature=0,
-            system=[{"type": "text", "text": _VERDICT_SYSTEM_DE if de else _VERDICT_SYSTEM,
-                     "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": user_msg}],
         )
-        text = ""
-        for block in getattr(response, "content", None) or []:
-            block_text = getattr(block, "text", None)
-            if block_text:
-                text += block_text
-        text = text.strip()
-        if not text:
-            raise RuntimeError("empty Claude response")
-        return text[:600], settings.COACH_MODEL
+        return result.text[:600], result.model
     except Exception as exc:  # noqa: BLE001
         logger.exception("Period-report verdict failed: %s", exc)
         return fallback, "rule-based-fallback"

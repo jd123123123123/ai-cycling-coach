@@ -70,19 +70,18 @@ async def _ai_verdict(report: RaceDebrief, lang: str = "en") -> tuple[str, str]:
         f"Split {p.split_pct if p else 'n/a'}%, surges {p.surge_count if p else 'n/a'}\n"
     )
     try:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        resp = await client.messages.create(
-            model=settings.RACE_DEBRIEF_MODEL, max_tokens=1200,
+        # Claude (primary) → OpenAI (fallback) → the rule-based return below.
+        # `thinking` is Anthropic-only (Opus adaptive); OpenAI ignores it.
+        from app.services.llm_client import complete_text
+
+        result = await complete_text(
+            system=_VERDICT_SYSTEM_DE if de else _VERDICT_SYSTEM,
+            user=msg,
+            max_tokens=1200,
+            model=settings.RACE_DEBRIEF_MODEL,
             thinking={"type": "adaptive"},
-            system=[{"type": "text", "text": _VERDICT_SYSTEM_DE if de else _VERDICT_SYSTEM,
-                     "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": msg}],
         )
-        text = "".join(getattr(b, "text", "") or "" for b in (getattr(resp, "content", None) or [])).strip()
-        if not text:
-            raise RuntimeError("empty Claude response")
-        return text[:600], settings.RACE_DEBRIEF_MODEL
+        return result.text[:600], result.model
     except Exception as exc:  # noqa: BLE001
         logger.exception("Race-debrief verdict failed: %s", exc)
         return fallback, "rule-based-fallback"

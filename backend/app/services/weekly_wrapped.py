@@ -433,30 +433,22 @@ async def generate_wrapped_flavor(
         "Schreibe beide Texte frisch und anders als in anderen Wochen."
     )
     try:
-        import anthropic
+        # Claude (primary) → OpenAI (fallback) → deterministic fallback below.
+        # Sonnet tier: good wit at low cost. NO temperature (the Sonnet
+        # right-sizing tier 400s on sampling params here) — variety comes from
+        # seeding the prompt with the ISO week + the week's numbers. Both system
+        # prompts already demand strict JSON, so the OpenAI fallback uses JSON
+        # mode (response_json=True) for the same {cities, saddle} shape.
+        from app.services.llm_client import complete_text
 
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        response = await client.messages.create(
-            # Sonnet tier: good wit at low cost. NO temperature (the Sonnet
-            # right-sizing tier 400s on sampling params here) — variety comes
-            # from seeding the prompt with the ISO week + the week's numbers.
-            model=settings.COACH_MODEL,
+        llm = await complete_text(
+            system=_FLAVOR_SYSTEM_DE if de else _FLAVOR_SYSTEM_EN,
+            user=user_msg,
             max_tokens=400,
-            system=[
-                {
-                    "type": "text",
-                    "text": _FLAVOR_SYSTEM_DE if de else _FLAVOR_SYSTEM_EN,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-            messages=[{"role": "user", "content": user_msg}],
+            model=settings.COACH_MODEL,
+            response_json=True,
         )
-        text = ""
-        for block in getattr(response, "content", None) or []:
-            block_text = getattr(block, "text", None)
-            if block_text:
-                text += block_text
-        parsed = _parse_flavor_json(text.strip())
+        parsed = _parse_flavor_json(llm.text)
         result = {**fallback, **(parsed or {})}
     except Exception as exc:  # noqa: BLE001
         logger.exception("Weekly-wrapped flavour generation failed: %s", exc)
