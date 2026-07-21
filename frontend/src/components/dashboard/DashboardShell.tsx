@@ -20,6 +20,7 @@ import CoachChat from './CoachChat'
 import CommandPalette from '../ui/CommandPalette'
 import MobileBottomNav from './MobileBottomNav'
 import DashboardHeaderBar from './DashboardHeaderBar'
+import CoachFab from './CoachFab'
 
 interface DashboardShellProps {
   children: ReactNode
@@ -61,6 +62,9 @@ export default function DashboardShell({
       </main>
 
       <MobileBottomNav />
+
+      {/* Always-reachable AI coach (mobile) — the palette (Cmd+K) is desktop-only. */}
+      <CoachFab onOpen={() => setChatOpen(true)} />
 
       {workoutPreviewModal}
 
