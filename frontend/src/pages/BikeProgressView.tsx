@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Footprints, Bike, Dumbbell, Trophy, TrendingUp,
+  ArrowLeft, Bike, Trophy, TrendingUp,
   TrendingDown, Medal, ArrowUp, LineChart, Flag, ArrowRight,
 } from 'lucide-react'
 import { subDays } from 'date-fns'
@@ -381,20 +381,7 @@ export default function BikeProgressView() {
                 <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: C.ink }}>{T.title}</span>
               </div>
             </div>
-            {/* Sport toggle — navigates between the three progress pages. */}
-            <div className="flex rounded-full" style={{ gap: 3, padding: 3, background: C.surface2 }}>
-              {[
-                { key: 'run', Icon: Footprints, label: de ? 'Laufen' : 'Run', to: '/progress/run', active: false },
-                { key: 'bike', Icon: Bike, label: de ? 'Rad' : 'Bike', to: '/progress/bike', active: true },
-                { key: 'lift', Icon: Dumbbell, label: de ? 'Kraft' : 'Lift', to: '/progress/lift', active: false },
-              ].map(({ key, Icon, label, to, active }) => (
-                <button key={key} type="button" onClick={() => { if (!active) navigate(to) }}
-                  className="flex-1 inline-flex items-center justify-center rounded-full"
-                  style={{ gap: 7, padding: '9px 12px', border: 0, cursor: active ? 'default' : 'pointer', background: active ? C.accent : 'transparent', color: active ? C.ink : C.ink2 }}>
-                  <Icon size={17} /><span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
-                </button>
-              ))}
-            </div>
+            {/* Bike-only: run/lift progress pages archived — sport toggle removed. */}
           </div>
 
           {/* ── Range filter ──────────────────────────────────────────── */}

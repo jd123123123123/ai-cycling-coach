@@ -38,10 +38,9 @@ const RideAnalysisView = lazyWithRetry(() => import('./pages/RideAnalysisView'))
 const RideRecapView = lazyWithRetry(() => import('./pages/RideRecapView'))
 const LoadFormView = lazyWithRetry(() => import('./pages/LoadFormView'))
 const WorkoutDetailView = lazyWithRetry(() => import('./pages/WorkoutDetailView'))
-const RunProgressView = lazyWithRetry(() => import('./pages/RunProgressView'))
+// Bike-only: Run/Lift progress + Run analysis pages are archived (files kept on
+// disk, routes removed). See pen audit ESAbb 'App Map' — off-strategy.
 const BikeProgressView = lazyWithRetry(() => import('./pages/BikeProgressView'))
-const LiftProgressView = lazyWithRetry(() => import('./pages/LiftProgressView'))
-const RunAnalysisView = lazyWithRetry(() => import('./pages/RunAnalysisView'))
 const RecoveryTrendsView = lazyWithRetry(() => import('./pages/RecoveryTrendsView'))
 const WorkoutBuilderView = lazyWithRetry(() => import('./pages/WorkoutBuilderView'))
 
@@ -188,15 +187,6 @@ function App() {
           />
 
           <Route
-            path="/activities/:id/run"
-            element={
-              <ProtectedRoute checkOnboarding>
-                <RunAnalysisView />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
             path="/load-form"
             element={
               <ProtectedRoute checkOnboarding>
@@ -237,9 +227,7 @@ function App() {
           <Route path="/workouts/builder" element={<ProtectedRoute checkOnboarding><WorkoutBuilderView /></ProtectedRoute>} />
           <Route path="/workouts/builder/:id" element={<ProtectedRoute checkOnboarding><WorkoutBuilderView /></ProtectedRoute>} />
 
-          <Route path="/progress/run" element={<ProtectedRoute checkOnboarding><RunProgressView /></ProtectedRoute>} />
           <Route path="/progress/bike" element={<ProtectedRoute checkOnboarding><BikeProgressView /></ProtectedRoute>} />
-          <Route path="/progress/lift" element={<ProtectedRoute checkOnboarding><LiftProgressView /></ProtectedRoute>} />
 
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

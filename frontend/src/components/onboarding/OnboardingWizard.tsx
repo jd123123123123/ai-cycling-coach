@@ -822,12 +822,7 @@ function YouStep({ de, form, set, predicted, obsMaxHr, obsRestHr }: {
           <Field label={de ? 'Gewicht' : 'Weight'}>
             <NumInput value={form.weight} onChange={(v) => set('weight', v)} placeholder="72" suffix="kg" />
           </Field>
-          <Field label={de ? 'Primärsportart' : 'Primary sport'}>
-            <select value={form.primarySport} onChange={(e) => set('primarySport', e.target.value)} style={inputStyle}>
-              <option value="cycling">{de ? 'Radfahren' : 'Cycling'}</option>
-              <option value="running">{de ? 'Laufen' : 'Running'}</option>
-            </select>
-          </Field>
+          {/* Bike-only: primary-sport picker removed — cycling is implied. */}
           <Field label={de ? 'Maximalpuls' : 'Max heart rate'} hint={hrHint(de, obsMaxHr, predicted)}>
             <NumInput value={form.maxHr} onChange={(v) => set('maxHr', v)} placeholder={String(predicted ?? 188)} suffix="bpm" />
           </Field>

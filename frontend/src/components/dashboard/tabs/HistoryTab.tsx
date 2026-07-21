@@ -15,7 +15,7 @@ import {
 } from 'date-fns'
 import {
   Bike, Footprints, Dumbbell, SlidersHorizontal, ChevronLeft, ChevronRight,
-  Flame, Trophy, Mountain, Zap, ArrowUp, CalendarCheck, Timer, Heart, Gauge, Route,
+  Trophy, Mountain, Zap, ArrowUp, CalendarCheck, Gauge,
   type LucideIcon,
 } from 'lucide-react'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
@@ -190,7 +190,8 @@ export default function HistoryTab() {
   // truly shows all past workouts, not just the last few months.
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 365), [today]), today)
   const { data: power } = usePowerProfile()
-  const [filter, setFilter] = useState<Filter>('all')
+  // Bike-only: History is cycling-only. Run/Strength filters + PR cards archived.
+  const filter: Filter = 'cycling'
   // "See all" toggle for the Recent Activities list (collapsed → 5, expanded → all).
   const [showAll, setShowAll] = useState(false)
   // Active consistency-heatmap cell → floating tooltip (date + that day's TSS).
@@ -401,7 +402,6 @@ export default function HistoryTab() {
   // Strength / All. Real data only — honest "—" where a metric has no basis.
   const prRows = useMemo(() => {
     const dfmt = (a?: ActivityRead | null) => (a?.started_at ? formatDate(parseISO(a.started_at), de ? 'd. MMM yyyy' : 'MMM d, yyyy', locale) : '—')
-    const b5 = prs.best5k, b10 = prs.best10k, bp = prs.bestPace
 
     const rideRows = [
       {
@@ -418,62 +418,9 @@ export default function HistoryTab() {
       { icon: Zap, color: 'var(--color-accent)', title: de ? 'Max 20-Min-Leistung' : 'Max 20-min Power', date: '—', value: prs.p20 ? `${Math.round(prs.p20)} W` : '—', to: null },
     ]
 
-    if (filter === 'running') {
-      return [
-        {
-          icon: Footprints, color: 'var(--color-recovery)', title: de ? 'Schnellste 5K' : 'Fastest 5K',
-          date: dfmt(b5?.a), value: b5 ? mmss(b5.sec) : '—', to: b5?.a ? `/activities/${b5.a.id}/run` : null,
-        },
-        {
-          icon: Timer, color: 'var(--color-recovery)', title: de ? 'Schnellste 10K' : 'Fastest 10K',
-          date: dfmt(b10?.a), value: b10 ? mmss(b10.sec) : '—', to: b10?.a ? `/activities/${b10.a.id}/run` : null,
-        },
-        {
-          icon: Route, color: 'var(--color-strain)', title: de ? 'Längster Lauf' : 'Longest Run',
-          date: dfmt(prs.longestRun), value: prs.longestRun ? `${((prs.longestRun.distance_meters ?? 0) / 1000).toFixed(1)} km` : '—',
-          to: prs.longestRun ? `/activities/${prs.longestRun.id}/run` : null,
-        },
-        {
-          icon: Gauge, color: 'var(--color-accent)', title: de ? 'Bestes Tempo' : 'Best Pace',
-          date: dfmt(bp?.a), value: bp ? `${mmss(bp.spk)} /km` : '—', to: bp?.a ? `/activities/${bp.a.id}/run` : null,
-        },
-      ]
-    }
-
-    if (filter === 'gym') {
-      return [
-        {
-          icon: Dumbbell, color: 'var(--color-amber)', title: de ? 'Einheiten diesen Monat' : 'Sessions this month',
-          date: formatDate(today, 'MMMM yyyy', locale), value: `${prs.gymThisMonth}`, to: null,
-        },
-        {
-          icon: Timer, color: 'var(--color-strain)', title: de ? 'Längste Einheit' : 'Longest session',
-          date: dfmt(prs.longestGym), value: prs.longestGym?.duration_seconds != null ? durLabel(prs.longestGym.duration_seconds) : '—', to: null,
-        },
-        {
-          icon: Flame, color: 'var(--color-move)', title: de ? 'Meiste Kalorien' : 'Top calorie burn',
-          date: dfmt(prs.topCalGym), value: prs.topCalGym?.calories != null ? `${Math.round(prs.topCalGym.calories)} kcal` : '—', to: null,
-        },
-        {
-          icon: Heart, color: 'var(--color-recovery)', title: de ? 'Höchste Ø HF' : 'Highest avg HR',
-          date: dfmt(prs.topHrGym), value: prs.topHrGym?.average_hr != null ? `${Math.round(prs.topHrGym.average_hr)} bpm` : '—', to: null,
-        },
-      ]
-    }
-
-    if (filter === 'cycling') return rideRows
-
-    // 'all' — a sensible mixed set (Fastest 5K + core cycling records).
-    return [
-      {
-        icon: Footprints, color: 'var(--color-recovery)', title: de ? 'Schnellste 5K' : 'Fastest 5K',
-        date: dfmt(b5?.a), value: b5 ? mmss(b5.sec) : '—', to: b5?.a ? `/activities/${b5.a.id}/run` : null,
-      },
-      rideRows[0],
-      rideRows[2],
-      rideRows[3],
-    ]
-  }, [prs, de, locale, filter, today])
+    // Bike-only: cycling records only (run/gym PR cards archived).
+    return rideRows
+  }, [prs, de, locale])
 
   // Full filtered, newest-first list; the Recent card shows 5 unless expanded.
   const sortedActivities = useMemo(
@@ -543,17 +490,6 @@ export default function HistoryTab() {
           <button type="button" className="grid place-items-center rounded-full" style={{ width: 40, height: 40, ...cardStyle }}>
             <SlidersHorizontal size={20} style={{ color: 'var(--color-ink-2)' }} />
           </button>
-        </div>
-        <div className="flex gap-2">
-          {([['all', de ? 'Alle' : 'All'], ['cycling', de ? 'Rad' : 'Ride'], ['running', de ? 'Lauf' : 'Run'], ['gym', de ? 'Kraft' : 'Strength']] as const).map(([f, label]) => {
-            const on = filter === f
-            return (
-              <button key={f} type="button" onClick={() => setFilter(f)} className="rounded-full"
-                style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: on ? 'var(--color-accent)' : 'var(--color-paper-2)', border: `1px solid ${on ? 'var(--color-accent)' : 'var(--color-rule)'}`, color: on ? 'var(--color-paper)' : 'var(--color-ink-2)' }}>
-                {label}
-              </button>
-            )
-          })}
         </div>
       </div>
 
@@ -724,14 +660,7 @@ export default function HistoryTab() {
             )
           })}
         </div>
-        <div className="flex items-center gap-3.5">
-          {[[de ? 'Rad' : 'Ride', 'var(--color-strain)'], [de ? 'Lauf' : 'Run', 'var(--color-recovery)'], [de ? 'Kraft' : 'Strength', 'var(--color-amber)']].map(([l, c]) => (
-            <span key={l} className="flex items-center gap-[5px]">
-              <span style={{ width: 6, height: 6, borderRadius: 999, background: c }} />
-              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{l}</span>
-            </span>
-          ))}
-        </div>
+        {/* Bike-only: sport legend removed — every ride is cycling. */}
         <div className="hover-reveal" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</div>
       </Link>
 
@@ -889,10 +818,9 @@ export default function HistoryTab() {
         {recent.map((a) => {
           const Icon = sportIcon(a.sport)
           const col = sportColor(a.sport)
-          // Cycling rides open the V3 Ride Recap (grade + planned-vs-actual RPE
-          // loop); the recap links onward to the deeper Ride Analysis. Runs keep
-          // their own analysis view (no recap surface for runs).
-          const route = a.sport === 'running' ? `/activities/${a.id}/run` : `/activities/${a.id}/recap`
+          // Bike-only: every activity opens the V3 Ride Recap (grade +
+          // planned-vs-actual RPE loop); the recap links onward to Ride Analysis.
+          const route = `/activities/${a.id}/recap`
           const hoverStats = recentHoverStats(a)
           return (
             <Link key={a.id} to={route} className="hover-card flex items-center gap-3 rounded-[24px] p-3" style={cardStyle}>

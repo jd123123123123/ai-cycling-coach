@@ -23,7 +23,7 @@ import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
 import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
-import TheRoadCard from '../TheRoadCard'
+import FitnessFreshnessCard from '../FitnessFreshnessCard'
 import ThisWeekCard from '../ThisWeekCard'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import AbsorptionCard from '../AbsorptionCard'
@@ -791,10 +791,10 @@ export default function TodayTab() {
             <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>{formatDate(today, de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d', locale)}</span>
           </div>
           <Link
-            to="/profile"
+            to="/power-profile"
             className="shrink-0 grid place-items-center rounded-full overflow-hidden"
             style={{ width: 46, height: 46, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}
-            aria-label={de ? 'Profil öffnen' : 'Open profile'}
+            aria-label={de ? 'Power-Profil öffnen' : 'Open power profile'}
           >
             {user?.avatar_url ? (
               <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1014,9 +1014,10 @@ export default function TodayTab() {
           planned_session fallback, the "Anpassen" sheet and "Rückgängig". */}
       <SessionOfTheDay />
 
-      {/* 5 · Load snapshot — The Road: Fitness/Fatigue/Form trio + plain-words
-          caption, load corridor 21 days back → 10 ahead (P1.1). */}
-      <TheRoadCard ctlNow={ctl} atlNow={atl} tsbNow={tsb} dCtl={dCtl} />
+      {/* 5 · Fitness & Frische — the pen's TSB form gauge (from V3 · Load &
+          Form), bound to real CTL/ATL/TSB. Replaces the raw training-load card
+          on Today; the deeper load story lives on /load-form. */}
+      <FitnessFreshnessCard ctl={ctl} atl={atl} tsb={tsb} dCtl7={dCtl} />
 
       {/* Diese Woche — the full V3 · Load & Form "This Week" card (compliance %
           + TSS/sessions/left + Mon→Sun day-dots), mounted right after the load
@@ -1041,91 +1042,6 @@ export default function TodayTab() {
           <ChevronRight size={16} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />
         </Link>
       )}
-
-      {/* Athlete status — one honest tap. Feeds streak pause + the coach
-          (sick/injured → rest directive → competitive surfaces mute). */}
-      <div className="rounded-[20px] p-3.5 flex flex-col gap-2" style={cardStyle}>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--color-muted)', marginRight: 2 }}>
-            {de ? 'STATUS' : 'STATUS'}
-          </span>
-          {([
-            { s: 'healthy' as AthleteState, en: 'Healthy', deL: 'Gesund' },
-            { s: 'sick' as AthleteState, en: 'Sick', deL: 'Krank' },
-            { s: 'injured' as AthleteState, en: 'Injured', deL: 'Verletzt' },
-            { s: 'break' as AthleteState, en: 'On a break', deL: 'Pause' },
-          ]).map(({ s, en, deL }) => {
-            const active = athleteState === s
-            return (
-              <button
-                key={s}
-                type="button"
-                disabled={setStatus.isPending}
-                onClick={() => {
-                  if (active) return
-                  // Audit P1-12: taps that alter the plan get a confirm sheet;
-                  // returning to healthy is safe and applies directly.
-                  if (s === 'healthy') setStatus.mutate(s)
-                  else setConfirmStatus(s)
-                }}
-                className="rounded-full px-3.5"
-                style={{
-                  fontSize: 11.5, fontWeight: 600, minHeight: 44,
-                  background: active ? 'color-mix(in srgb, var(--color-amber) 16%, transparent)' : 'var(--color-surface-2)',
-                  border: `1px solid ${active ? 'var(--color-amber)' : 'var(--color-rule)'}`,
-                  color: active ? 'var(--color-amber)' : 'var(--color-ink-2)',
-                  opacity: setStatus.isPending ? 0.6 : 1,
-                }}
-              >
-                {de ? deL : en}
-              </button>
-            )
-          })}
-        </div>
-        {confirmStatus && (() => {
-          const COPY: Record<string, { de: string; en: string }> = {
-            sick: {
-              de: 'Als krank markieren? Dein Plan nimmt Intensität raus, bis du dich zurückmeldest.',
-              en: 'Mark yourself sick? Your plan backs off intensity until you check back in.',
-            },
-            injured: {
-              de: 'Als verletzt markieren? Dein Plan pausiert harte Einheiten, bis du dich zurückmeldest.',
-              en: 'Mark yourself injured? Your plan pauses hard sessions until you check back in.',
-            },
-            break: {
-              de: 'Pause einlegen? Plan und Rhythmus pausieren — ohne schlechtes Gewissen.',
-              en: 'Take a break? Plan and rhythm pause — guilt-free.',
-            },
-          }
-          const copy = COPY[confirmStatus]
-          return (
-            <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true">
-              <button type="button" aria-label={de ? 'Abbrechen' : 'Cancel'} onClick={() => setConfirmStatus(null)} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.55)' }} />
-              <div className="relative w-full max-w-md rounded-t-[24px] p-5 flex flex-col gap-4" style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}>
-                <span style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.5 }}>{de ? copy.de : copy.en}</span>
-                <div className="flex gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => { setStatus.mutate(confirmStatus); setConfirmStatus(null) }}
-                    className="flex-1 rounded-full"
-                    style={{ minHeight: 48, fontSize: 14, fontWeight: 700, background: 'var(--color-amber)', color: '#0A0C0F' }}
-                  >
-                    {de ? 'Ja, markieren' : 'Yes, mark it'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmStatus(null)}
-                    className="flex-1 rounded-full"
-                    style={{ minHeight: 48, fontSize: 14, fontWeight: 700, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink)' }}
-                  >
-                    {de ? 'Abbrechen' : 'Cancel'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        })()}
-      </div>
     </div>
   )
 }

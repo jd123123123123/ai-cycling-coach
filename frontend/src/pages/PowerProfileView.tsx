@@ -11,13 +11,17 @@
  * derived (no weight → no W/kg, no pedal-balance channel, too few rides → no
  * phenotype) the UI renders an honest "—", never a fabricated value.
  */
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Share2, LineChart, Zap, Trophy, TrendingUp, Info,
-  Bolt, BarChart3, Flag,
+  Bolt, BarChart3, Flag, Pencil, X,
 } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import { usePowerProfileView } from '../hooks/usePowerProfileView'
+import { useAthleteProfile } from '../hooks/useAthleteProfile'
+import { updateProfile } from '../api/athletes'
 import { useLocale } from '../contexts/LocaleContext'
 import { useGlossary } from '../components/ui/GlossarySheet'
 
@@ -34,6 +38,8 @@ export default function PowerProfileView() {
   const navigate = useNavigate()
   const glossary = useGlossary()
   const { data, isLoading } = usePowerProfileView()
+  const profileQ = useAthleteProfile()
+  const [editOpen, setEditOpen] = useState(false)
 
   const fmtInt = (v: number) => v.toLocaleString(de ? 'de-DE' : 'en-US', { maximumFractionDigits: 0 })
   const fmtWkg = (v: number) => (de ? v.toFixed(1).replace('.', ',') : v.toFixed(1))
@@ -50,7 +56,7 @@ export default function PowerProfileView() {
     return (
       <DashboardShell>
         <div className="mx-auto px-4 pt-6 pb-24" style={{ maxWidth: 640 }}>
-          <Header de={de} navigate={navigate} />
+          <Header de={de} navigate={navigate} onEdit={() => setEditOpen(true)} />
           <p className="mt-6" style={{ fontSize: 14, color: 'var(--color-muted)', lineHeight: 1.5 }}>
             {de
               ? 'Noch keine Fahrten mit Powermeter — fahre mit Leistungsmesser und synchronisiere, dann baut sich dein Power-Profil aus deinen echten Efforts auf.'
@@ -80,7 +86,7 @@ export default function PowerProfileView() {
   return (
     <DashboardShell>
       <div className="mx-auto flex flex-col gap-6 px-4 pb-24 pt-3" style={{ maxWidth: 640 }}>
-        <Header de={de} navigate={navigate} rides={data?.rides_with_power ?? null} />
+        <Header de={de} navigate={navigate} rides={data?.rides_with_power ?? null} onEdit={() => setEditOpen(true)} />
 
         {/* ── Power Curve card (accent border · pen mOAt3) ── */}
         <div className="flex flex-col gap-3.5" style={{ ...CARD, borderColor: 'var(--color-accent)', borderWidth: 1.5, padding: 18 }}>
@@ -313,20 +319,113 @@ export default function PowerProfileView() {
         )}
       </div>
       {glossary.sheet}
+      <StatsEditSheet
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        ftp={profileQ.data?.ftp_watts ?? null}
+        weight={profileQ.data?.weight_kg ?? null}
+        de={de}
+      />
     </DashboardShell>
   )
 }
 
-function Header({ de, navigate, rides }: { de: boolean; navigate: (n: number) => void; rides?: number | null }) {
+// Edit-stats sheet — FTP + weight, the two numbers the whole Power Profile is
+// built on. Saves via updateProfile and refetches the profile + power-profile
+// so every W/kg, zone and benchmark recomputes from the new stats.
+function StatsEditSheet({ open, onClose, ftp, weight, de }: {
+  open: boolean; onClose: () => void; ftp: number | null; weight: number | null; de: boolean
+}) {
+  const qc = useQueryClient()
+  const [ftpText, setFtpText] = useState('')
+  const [weightText, setWeightText] = useState('')
+
+  // Seed inputs from the current values each time the sheet opens.
+  useEffect(() => {
+    if (open) {
+      setFtpText(ftp != null ? String(ftp) : '')
+      setWeightText(weight != null ? String(weight).replace('.', de ? ',' : '.') : '')
+    }
+  }, [open, ftp, weight, de])
+
+  const save = useMutation({
+    mutationFn: () => {
+      const payload: { ftp_watts?: number; weight_kg?: number } = {}
+      const f = parseInt(ftpText, 10)
+      if (Number.isFinite(f) && f > 0) payload.ftp_watts = f
+      const w = parseFloat(weightText.replace(',', '.'))
+      if (Number.isFinite(w) && w > 0) payload.weight_kg = w
+      return updateProfile(payload)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
+      void qc.invalidateQueries({ queryKey: ['analytics', 'power-profile-view'] })
+      setFtpText(''); setWeightText('')
+      onClose()
+    },
+  })
+
+  if (!open) return null
+  const field = (label: string, unit: string, value: string, set: (v: string) => void, mode: string) => (
+    <label className="flex flex-col gap-1.5">
+      <span className="eyebrow" style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{label}</span>
+      <div className="flex items-center rounded-2xl" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', padding: '0 14px' }}>
+        <input
+          type="text" inputMode={mode as 'numeric' | 'decimal'} value={value}
+          onChange={(e) => set(e.target.value)}
+          className="flex-1 bg-transparent outline-none num-display"
+          style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-ink)', height: 52, minWidth: 0 }}
+        />
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-muted)' }}>{unit}</span>
+      </div>
+    </label>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true">
+      <button type="button" aria-label={de ? 'Abbrechen' : 'Cancel'} onClick={onClose} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.55)' }} />
+      <div className="relative w-full max-w-md rounded-t-[24px] p-5 flex flex-col gap-4" style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}>
+        <div className="flex items-center justify-between">
+          <span className="num-display" style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Werte bearbeiten' : 'Edit stats'}</span>
+          <button type="button" aria-label={de ? 'Schließen' : 'Close'} onClick={onClose} className="grid place-items-center rounded-full" style={{ width: 36, height: 36, background: 'var(--color-surface-2)' }}>
+            <X size={18} style={{ color: 'var(--color-muted)' }} />
+          </button>
+        </div>
+        {field(de ? 'FTP' : 'FTP', 'W', ftpText, setFtpText, 'numeric')}
+        {field(de ? 'Gewicht' : 'Weight', 'kg', weightText, setWeightText, 'decimal')}
+        <span style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+          {de ? 'W/kg, Zonen und Benchmark werden neu berechnet.' : 'W/kg, zones and benchmark recompute from these.'}
+        </span>
+        <button
+          type="button" disabled={save.isPending}
+          onClick={() => save.mutate()}
+          className="rounded-full" style={{ minHeight: 50, fontSize: 15, fontWeight: 700, background: 'var(--color-accent)', color: '#0A0C0F', opacity: save.isPending ? 0.6 : 1 }}
+        >
+          {save.isPending ? (de ? 'Speichern…' : 'Saving…') : (de ? 'Speichern' : 'Save')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function Header({ de, navigate, rides, onEdit }: { de: boolean; navigate: (n: number) => void; rides?: number | null; onEdit?: () => void }) {
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between">
         <button type="button" onClick={() => navigate(-1)} aria-label={de ? 'Zurück' : 'Back'} className="grid place-items-center rounded-full" style={{ width: 36, height: 36, background: 'var(--color-surface-2)' }}>
           <ArrowLeft size={20} style={{ color: 'var(--color-ink)' }} />
         </button>
-        <button type="button" aria-label={de ? 'Teilen' : 'Share'} className="grid place-items-center rounded-full" style={{ width: 36, height: 36, background: 'var(--color-surface-2)' }}>
-          <Share2 size={18} style={{ color: 'var(--color-ink)' }} />
-        </button>
+        <div className="flex items-center gap-2">
+          {onEdit && (
+            <button type="button" onClick={onEdit} aria-label={de ? 'Werte bearbeiten' : 'Edit stats'} className="inline-flex items-center gap-1.5 rounded-full" style={{ height: 36, padding: '0 14px', background: 'var(--color-surface-2)' }}>
+              <Pencil size={15} style={{ color: 'var(--color-accent)' }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Bearbeiten' : 'Edit'}</span>
+            </button>
+          )}
+          <button type="button" aria-label={de ? 'Teilen' : 'Share'} className="grid place-items-center rounded-full" style={{ width: 36, height: 36, background: 'var(--color-surface-2)' }}>
+            <Share2 size={18} style={{ color: 'var(--color-ink)' }} />
+          </button>
+        </div>
       </div>
       <h1 className="num-display" style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Power-Profil' : 'Power Profile'}</h1>
       <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>

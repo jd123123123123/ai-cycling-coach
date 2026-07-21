@@ -16,7 +16,6 @@ import SessionOfTheDay from '../../dashboard/SessionOfTheDay'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLocale } from '../../../contexts/LocaleContext'
-import FocusSection from '../../plan/FocusSection'
 import AdaptiveCard from '../../plan/AdaptiveCard'
 import PlanChangeInterview from '../../plan/PlanChangeInterview'
 import { detectWorkoutSport } from '../../../api/coach'
@@ -1177,18 +1176,34 @@ export default function PlanTab() {
         <span className="hover-arrow"><ChevronRight size={18} style={{ color: 'var(--color-muted)' }} /></span>
       </Link>
 
-      {/* Focus — per-sport builder-program picker (Bike + Run rows). */}
-      <FocusSection />
+      {/* Plan & goal — the natural way to reshape the plan or switch the goal.
+          The 3-step interview handles less time / new event / no event / "too
+          boring" / hours / days and rebuilds the weeks. Replaces the removed
+          per-sport Focus picker. */}
+      <button
+        type="button"
+        onClick={() => setInterviewOpen(true)}
+        className="hover-card rounded-[24px] p-5 flex items-center gap-4 text-left w-full"
+        style={{ ...cardStyle, cursor: 'pointer' }}
+      >
+        <span className="grid place-items-center rounded-full shrink-0" style={{ width: 48, height: 48, background: 'var(--color-accent-soft)' }}>
+          <SlidersHorizontal size={22} style={{ color: 'var(--color-accent)' }} />
+        </span>
+        <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+          <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>
+            {de ? 'Plan & Ziel ändern' : 'Change plan & goal'}
+          </span>
+          <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+            {de
+              ? 'Weniger Zeit, neues Event oder zu eintönig? Sag es dem Coach — er baut deine Wochen neu.'
+              : 'Less time, a new event, or too repetitive? Tell the coach — it rebuilds your weeks.'}
+          </span>
+        </span>
+        <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />
+      </button>
 
-      {/* Plan-change chips (pen RUAW1 "Chip-Adjust plan" styling): the 3-step
-          interview (credit → delta questions → new week) + BYO plan import. */}
+      {/* Secondary plan tools: BYO plan import + custom-workout builder. */}
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => setInterviewOpen(true)}
-          className="hover-card inline-flex items-center gap-2 rounded-full px-4 py-2"
-          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)', minHeight: 40, cursor: 'pointer' }}>
-          <SlidersHorizontal size={14} style={{ color: 'var(--color-accent)' }} />
-          {de ? 'Plan anpassen' : 'Adjust plan'}
-        </button>
         {/* Bring-your-own plan → PDF/image import + adaptation (P: plan-upload) */}
         <Link to="/plan/import" className="hover-card inline-flex items-center gap-2 rounded-full px-4 py-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)', minHeight: 40 }}>
           <FileUp size={14} style={{ color: 'var(--color-accent)' }} />
