@@ -11,7 +11,7 @@
  * The server's rails may downgrade or refuse; the returned reason is narrated
  * honestly. "Rückgängig" wires the same 60-min server-enforced undo window.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { subDays } from 'date-fns'
@@ -52,7 +52,7 @@ const ADAPT_OPTIONS: AdaptOption[] = [
   { key: 'indoor', modification_type: 'indoor', de: 'Indoor', en: 'Indoor', deSub: 'Rolle statt Straße, Watt unverändert', enSub: 'Trainer instead of road, watts unchanged' },
 ]
 
-interface ModifyResult {
+export interface ModifyResult {
   success: boolean
   found?: boolean
   reason: string
@@ -61,6 +61,38 @@ interface ModifyResult {
   predicted_tss?: number
   template_id?: string
   rails_downgraded?: boolean
+}
+
+/**
+ * Patch a cached coach-brief with an authoritative /workouts/today/modify
+ * result. The modify response already carries the full new session (title,
+ * duration, TSS, template) so the visible card updates INSTANTLY and STAYS
+ * updated — critical because the server brief read-path can hang or return a
+ * null prescribed_workout right after a plan mutation (it busts the cached
+ * brief and then tries to regenerate via the LLM). We therefore treat the
+ * modify response as source of truth and never let a slow/failed brief refetch
+ * blank the just-adapted card.
+ *
+ * Returns the same reference when there is nothing to patch (no workout on the
+ * brief) so react-query can skip a needless re-render.
+ */
+export function patchBriefWorkoutFromModify(old: unknown, res: ModifyResult): unknown {
+  const brief = old as { prescribed_workout?: Record<string, unknown> | null } | undefined
+  if (!brief?.prescribed_workout) return old
+  return {
+    ...brief,
+    prescribed_workout: {
+      ...brief.prescribed_workout,
+      // A shortened/eased session no longer matches its old interval blocks;
+      // drop them so the card shows the honest new numbers rather than a stale
+      // power profile. The blocks re-hydrate on the next natural brief refetch.
+      ...(res.template_id || res.duration_min != null ? { blocks: [] } : {}),
+      ...(res.title ? { title: res.title, title_de: null } : {}),
+      ...(res.duration_min != null ? { duration_minutes: res.duration_min } : {}),
+      ...(res.predicted_tss != null ? { predicted_tss: res.predicted_tss } : {}),
+      ...(res.template_id ? { template_id: res.template_id } : {}),
+    },
+  }
 }
 
 export default function SessionOfTheDay() {
@@ -292,11 +324,15 @@ function AdaptRow({ de }: { de: boolean }) {
   const qc = useQueryClient()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [result, setResult] = useState<{ text: string; sub?: string; ok: boolean; undone?: boolean } | null>(null)
+  // The ORIGINAL prescribed_workout, snapshotted before the first modify of
+  // this session. "Rückgängig" restores it directly from here rather than
+  // refetching the brief (which can hang / return null after a plan mutation),
+  // so undo is as instant and reliable as apply.
+  const originalWorkoutRef = useRef<Record<string, unknown> | null>(null)
 
-  const invalidateSessionQueries = () => {
-    // Brief (both tabs' card), week (header TSS + strip) and the adaptation
-    // feed — all three must re-render the adapted session immediately.
-    void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
+  // Week header TSS + strip and the adaptation feed refetch from CHEAP,
+  // deterministic endpoints (no LLM) — safe to invalidate eagerly.
+  const invalidateWeekAndFeed = () => {
     void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
     void qc.invalidateQueries({ queryKey: PLAN_ADAPTATIONS_KEY })
   }
@@ -317,23 +353,28 @@ function AdaptRow({ de }: { de: boolean }) {
           sub: res.rails_downgraded ? res.reason : undefined,
           ok: true,
         })
-        // Instant patch of the visible card, then hard invalidation so the
-        // server-coerced brief + week + feed all agree.
-        qc.setQueriesData({ queryKey: COACH_BRIEF_KEY_ROOT }, (old: unknown) => {
-          const brief = old as { prescribed_workout?: Record<string, unknown> | null } | undefined
-          if (!brief?.prescribed_workout) return old
-          return {
-            ...brief,
-            prescribed_workout: {
-              ...brief.prescribed_workout,
-              ...(res.title ? { title: res.title, title_de: null } : {}),
-              ...(res.duration_min != null ? { duration_minutes: res.duration_min } : {}),
-              ...(res.predicted_tss != null ? { predicted_tss: res.predicted_tss } : {}),
-              ...(res.template_id ? { template_id: res.template_id } : {}),
-            },
-          }
-        })
-        invalidateSessionQueries()
+        // Snapshot the untouched original once (before the first patch) so
+        // "Rückgängig" can restore it without a hanging brief refetch.
+        if (originalWorkoutRef.current == null) {
+          const cached = qc.getQueriesData({ queryKey: COACH_BRIEF_KEY_ROOT })
+            .map(([, d]) => (d as { prescribed_workout?: Record<string, unknown> | null } | undefined)?.prescribed_workout)
+            .find((w): w is Record<string, unknown> => w != null)
+          if (cached) originalWorkoutRef.current = cached
+        }
+        // Authoritative, INSTANT patch of the brief cache from the modify
+        // response — this is what makes the card visibly adapt on both tabs.
+        // We deliberately do NOT invalidate/refetch the coach brief here: the
+        // server brief read-path can hang (~2 min) or return a null
+        // prescribed_workout immediately after a plan mutation (it busts the
+        // cached brief, then blocks on LLM regeneration), which would blank or
+        // revert the just-adapted card. The modify response carries the full
+        // new session, so the patched cache is correct; the brief re-hydrates
+        // naturally on its next scheduled refetch. Week + feed are cheap and
+        // refetched so the Train tab strip and adaptation feed stay in sync.
+        qc.setQueriesData({ queryKey: COACH_BRIEF_KEY_ROOT }, (old: unknown) =>
+          patchBriefWorkoutFromModify(old, res),
+        )
+        invalidateWeekAndFeed()
       } else {
         setResult({ text: res.reason, ok: false })
       }
@@ -349,7 +390,21 @@ function AdaptRow({ de }: { de: boolean }) {
     onSuccess: (res) => {
       if (res.success) {
         setResult({ text: de ? 'Rückgängig gemacht — die Original-Einheit steht wieder.' : 'Undone — your original session is back.', ok: true, undone: true })
-        invalidateSessionQueries()
+        // Restore the snapshotted original directly (instant, no brief refetch
+        // to hang on). Fall back to a brief invalidation only if we never
+        // captured a snapshot (e.g. the page was reloaded between modify+undo).
+        const original = originalWorkoutRef.current
+        if (original) {
+          qc.setQueriesData({ queryKey: COACH_BRIEF_KEY_ROOT }, (old: unknown) => {
+            const brief = old as { prescribed_workout?: Record<string, unknown> | null } | undefined
+            if (!brief) return old
+            return { ...brief, prescribed_workout: original }
+          })
+          originalWorkoutRef.current = null
+        } else {
+          void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
+        }
+        invalidateWeekAndFeed()
       } else {
         setResult({ text: res.reason ?? '', ok: false })
       }

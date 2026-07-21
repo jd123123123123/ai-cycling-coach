@@ -510,6 +510,26 @@ export default function RideAnalysisView() {
               ))}
             </div>
 
+            {/* 2b · Coach insights — VERDICT-FIRST (pen eOR1S reorder): the
+                 plain-language verdict leads, the analytical detail follows.
+                 Surface card with accent kicker, matching the pen's InsightsCard. */}
+            {insightTakes.length > 0 && (
+              <div className={cardCls} style={cardStyle}>
+                <SectionHead icon={<Lightbulb size={17} strokeWidth={2.2} />} label={de ? 'COACH-EINSICHTEN' : 'COACH INSIGHTS'} color="var(--color-accent)" />
+                {insightTakes.map((t, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 34, height: 34, background: 'var(--color-paper)' }}>
+                      <span style={{ color: t.color, display: 'inline-flex' }}>{t.icon}</span>
+                    </span>
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{t.head}</span>
+                      <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{t.body}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* 3 · Route & elevation */}
             {((story?.route && story.route.length > 0) || elevBars || route || routeKind === 'zwift' || routeKind === 'rouvy') && (
               <div className={cardCls} style={cardStyle}>
@@ -602,6 +622,19 @@ export default function RideAnalysisView() {
                     </div>
                   )}
                 </div>
+                {(() => {
+                  const ref = athlete?.ftp_watts ?? powerStats.eftp
+                  if (powerStats.np == null || ref == null || ref <= 0) return null
+                  const pct = Math.round((powerStats.np / ref) * 100)
+                  const dur = header.moving_time_s != null ? fmtMin(header.moving_time_s) : null
+                  return (
+                    <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+                      {de
+                        ? `Du hast ${pct}% deiner FTP${dur ? ` über ${dur}` : ''} gehalten — ${pct >= 85 ? 'ein wirklich harter Tag.' : pct >= 70 ? 'eine solide, kontrollierte Belastung.' : 'ein ruhiger Grundlagentag.'}`
+                        : `You held ${pct}% of your FTP${dur ? ` for ${dur}` : ''} — ${pct >= 85 ? 'a genuinely hard day.' : pct >= 70 ? 'a solid, controlled effort.' : 'an easy endurance day.'}`}
+                    </p>
+                  )
+                })()}
                 <div style={{ height: 1, background: 'var(--color-rule)' }} />
                 <div className="grid grid-cols-3 gap-2.5">
                   {([
@@ -928,23 +961,6 @@ export default function RideAnalysisView() {
               </div>
             )}
 
-            {/* 11 · Coach insights (coral) */}
-            {insightTakes.length > 0 && (
-              <div className="rounded-[24px] p-5 flex flex-col gap-[14px]" style={{ background: 'var(--color-accent-soft)', border: '1px solid var(--color-accent)' }}>
-                <SectionHead icon={<Lightbulb size={17} strokeWidth={2.2} />} label={de ? 'COACH-EINSICHTEN' : 'COACH INSIGHTS'} color="var(--color-accent)" />
-                {insightTakes.map((t, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 34, height: 34, background: 'var(--color-paper)' }}>
-                      <span style={{ color: t.color, display: 'inline-flex' }}>{t.icon}</span>
-                    </span>
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{t.head}</span>
-                      <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{t.body}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </>
         )}
       </div>

@@ -35,6 +35,7 @@ const PlanImportView = lazyWithRetry(() => import('./pages/PlanImportView'))
 const DebriefView = lazyWithRetry(() => import('./pages/DebriefView'))
 const SessionReportView = lazyWithRetry(() => import('./pages/SessionReportView'))
 const RideAnalysisView = lazyWithRetry(() => import('./pages/RideAnalysisView'))
+const RideRecapView = lazyWithRetry(() => import('./pages/RideRecapView'))
 const LoadFormView = lazyWithRetry(() => import('./pages/LoadFormView'))
 const WorkoutDetailView = lazyWithRetry(() => import('./pages/WorkoutDetailView'))
 const RunProgressView = lazyWithRetry(() => import('./pages/RunProgressView'))
@@ -172,6 +173,15 @@ function App() {
             element={
               <ProtectedRoute checkOnboarding>
                 <RideAnalysisView />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/activities/:id/recap"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <RideRecapView />
               </ProtectedRoute>
             }
           />

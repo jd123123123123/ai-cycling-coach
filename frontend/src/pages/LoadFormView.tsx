@@ -1,96 +1,53 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, TrendingUp, TrendingDown, Zap, Check, Bike, Footprints,
-  Dumbbell, Calendar, CalendarOff, Shield, ArrowRight, Moon,
+  ArrowLeft, TrendingUp, TrendingDown, Zap, Check, ArrowRight, Moon, Bed,
 } from 'lucide-react'
-import { subDays, addDays, parseISO, format } from 'date-fns'
+import { subDays, subMonths, startOfMonth, format } from 'date-fns'
 import { useLocale } from '../contexts/LocaleContext'
-import HoverBars from '../components/ui/HoverBars'
 import { usePMC } from '../hooks/usePMC'
 import { useActivitiesRange } from '../hooks/useActivitiesRange'
 import { usePeriodReport } from '../hooks/usePeriodReport'
-import { usePowerProfile } from '../hooks/usePowerProfile'
-import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useAdaptive } from '../hooks/useAdaptive'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
-import { latestLoad } from '../utils/loadMetrics'
+import { latestLoad, localDayKey, classifyForm } from '../utils/loadMetrics'
 
 /**
- * Load & Form — the standalone /load-form analytics screen. A 1:1 rebuild of the
- * Pencil "Load & Form" design: header + TSB gauge, weekly load, injury-risk ACWR,
- * intensity split, sport split, fitness signals, monotony & strain, this-week
- * compliance, trajectory, and today's recommendation. Every figure is derived
- * from real hooks (PMC entries + activities + period report + power/athlete +
- * adaptive directive); where the backend can't supply a figure we render the
- * structure with a graceful "—" rather than fabricate.
+ * Load & Form — the standalone /load-form analysis screen. A 1:1 rebuild of the
+ * V3 · Load & Form Pencil frame (BIXRn): Recommendation, This Week, Weekly Load,
+ * Fitness & Freshness (CTL/ATL/TSB gauge — the pen's "load balance" gauge bound
+ * to the ONE canonical CTL/ATL/TSB series, NOT a contested ACWR/injury number),
+ * Load by Intensity and Monotony & Strain.
+ *
+ * Every figure is derived from real hooks (PMC entries + activities + period
+ * report + athlete + adaptive directive + week plan). Where the backend can't
+ * supply a figure we render the structure with a graceful "—" rather than
+ * fabricate. Language guardrails: the words Verletzung / Gefahr / Untertraining
+ * are never rendered (project science-methods avoid-list — the ACWR "injury
+ * risk" framing from the mock is replaced by the fitness/fatigue/form story).
  */
 
 const DASH = '—'
 
-// Header range control (display-only until range switching ships). The eyebrow
-// label and the highlighted chip both derive from ACTIVE_RANGE — one source,
-// so the header can never claim a different window than the active control
-// (audit P2-14: 'LETZTE 42 TAGE' beside an active 3M chip). The PMC series
-// behind the hero spans 90 days ⇒ 3M.
-const RANGES = [
-  { id: '6W', de: 'LETZTE 6 WOCHEN', en: 'LAST 6 WEEKS' },
-  { id: '3M', de: 'LETZTE 3 MONATE', en: 'LAST 3 MONTHS' },
-  { id: '1Y', de: 'LETZTE 12 MONATE', en: 'LAST 12 MONTHS' },
-] as const
-const ACTIVE_RANGE: (typeof RANGES)[number]['id'] = '3M'
-
-// Load-by-sport window — the caption derives its wording from this constant,
-// so the label always states the TRUE window (audit P2-14: 42-day totals were
-// captioned 'Wochenstress', reading as a 27-hour week).
-const SPORT_WINDOW_DAYS = 28
-
-/**
- * Audit P1-9 classifier. Ratio bands over week-elapsed pace vs the 4-week
- * average; 'quiet' plans get an explanation, never a shortfall label. The
- * words Verletzung / Gefahr / Untertraining are banned from the UI.
- */
-export function classifyLoadTrend(pace: number, fourWeekAvg: number, plannedQuiet: boolean, de: boolean): {
-  state: 'build' | 'rhythm' | 'rising'
-  headline: string
-  body: string | null
-  color: string
-} {
-  const ratio = fourWeekAvg > 0 ? pace / fourWeekAvg : 1
-  if (ratio > 1.2) {
-    return {
-      state: 'rising',
-      headline: de ? 'Schnell gestiegen — Erholung im Blick behalten' : 'Rising fast — keep an eye on recovery',
-      body: null,
-      color: 'var(--color-amber)',
-    }
-  }
-  if (ratio < 0.8) {
-    return {
-      state: 'build',
-      headline: de ? 'Luft nach oben' : 'Room to build',
-      body: plannedQuiet
-        ? (de ? 'Diese Woche ist bewusst ruhig — dein Plan baut ab nächster Woche wieder auf.' : 'This week is intentionally quiet — your plan builds again next week.')
-        : null,
-      color: 'var(--color-muted)',
-    }
-  }
-  return {
-    state: 'rhythm',
-    headline: de ? 'Im Rhythmus' : 'In rhythm',
-    body: null,
-    color: 'var(--color-recovery)',
-  }
-}
+// ---- Header range control — FUNCTIONAL (a control that looks clickable but
+// does nothing reads as a bug). The active range drives the activities-fetch
+// window, the Weekly-Load bucketing (weeks vs months) and the eyebrow label,
+// all from ONE source so the header can never contradict itself.
+type RangeId = '6W' | '3M' | '1Y'
+const RANGES: { id: RangeId; de: string; en: string; days: number; mode: 'week' | 'month'; count: number }[] = [
+  { id: '6W', de: 'LETZTE 6 WOCHEN', en: 'LAST 6 WEEKS', days: 48, mode: 'week', count: 6 },
+  { id: '3M', de: 'LETZTE 3 MONATE', en: 'LAST 3 MONTHS', days: 98, mode: 'week', count: 13 },
+  { id: '1Y', de: 'LETZTE 12 MONATE', en: 'LAST 12 MONTHS', days: 372, mode: 'month', count: 12 },
+]
 
 function fmtDur(sec: number): string {
   const m = Math.round(sec / 60)
   const h = Math.floor(m / 60)
   const mm = m % 60
-  return h > 0 ? `${h}h ${String(mm).padStart(2, '0')}m` : `${mm}m`
+  return h > 0 ? `${h} h ${String(mm).padStart(2, '0')} m` : `${mm} m`
 }
 
-// Monday-anchored ISO-week key (reused from WeeklyLoadCard).
+// Monday-anchored ISO-week key.
 function isoWeekKey(d: Date): string {
   const day = (d.getDay() + 6) % 7
   const monday = new Date(d)
@@ -146,38 +103,32 @@ export default function LoadFormView() {
   const navigate = useNavigate()
   const today = useMemo(() => new Date(), [])
 
+  const [rangeId, setRangeId] = useState<RangeId>('6W')
+  const range = RANGES.find((r) => r.id === rangeId)!
+
   const { data: pmc } = usePMC(90)
-  const { data: actData } = useActivitiesRange(subDays(today, 56), today)
+  const { data: actData } = useActivitiesRange(subDays(today, range.days), today)
   const { data: report } = usePeriodReport(90)
-  const { data: power } = usePowerProfile()
-  const { data: athlete } = useAthleteProfile()
   const { data: adaptive } = useAdaptive()
   const { data: weekPlan } = useCurrentWeek()
 
   const series = pmc?.entries ?? []
-  const activities = actData?.activities ?? []
+  const activities = useMemo(() => actData?.activities ?? [], [actData])
 
-  // ---- Hero: TSB / CTL / ATL (from PMC) -----------------------------------
-  // P0-5: the shared selector is the ONLY producer — displayed TSB must equal
-  // displayed CTL − ATL (the audit's '+1 vs +7' bug lived exactly here).
-  const latest = series.length ? series[series.length - 1] : null
-  const prevWeek = series.length >= 8 ? series[series.length - 8] : series[0] ?? null
+  // ---- Canonical load numbers (P0-5: ONE producer; TSB == CTL − ATL) -------
   const load = latestLoad(series)
   const tsb = load?.tsb ?? null
   const ctl = load?.ctl ?? null
   const atl = load?.atl ?? null
   const dCtl7 = load?.dCtl7 ?? null
-  const dAtl7 = latest && prevWeek ? Math.round(latest.atl - prevWeek.atl) : null
 
+  const ld = report?.load_dynamics ?? null
+  const rampWk = ld?.ramp_per_week ?? null
+
+  // ---- TSB → form state (neutral tone; no banned words) --------------------
   const TSB_MIN = -30, TSB_MAX = 25
   const posTsb = (v: number) => Math.max(0, Math.min(1, (v - TSB_MIN) / (TSB_MAX - TSB_MIN)))
-  const tsbState = (() => {
-    if (tsb == null) return { label: DASH, color: 'var(--color-muted)', Icon: TrendingUp }
-    if (tsb <= -15) return { label: de ? 'Überlastet' : 'Overreached', color: 'var(--color-move)', Icon: TrendingDown }
-    if (tsb <= -5) return { label: de ? 'Aufbauend' : 'Building', color: 'var(--color-amber)', Icon: Zap }
-    if (tsb <= 10) return { label: de ? 'Wettkampfbereit' : 'Race-ready', color: 'var(--color-recovery)', Icon: Check }
-    return { label: de ? 'Frisch' : 'Race-fresh', color: 'var(--color-recovery)', Icon: TrendingUp }
-  })()
+  const tsbState = classifyForm(tsb, de)
   const TSB_SEGS = [
     { color: 'var(--color-move)', to: -15 },
     { color: 'var(--color-amber)', to: -5 },
@@ -185,41 +136,56 @@ export default function LoadFormView() {
     { color: 'var(--color-strain)', to: TSB_MAX },
   ]
 
-  // ---- Weekly load bars (8 weeks, summed activity TSS) ---------------------
-  const weeks = useMemo(() => {
-    const buckets = new Map<string, number>()
-    for (let i = 7; i >= 0; i--) buckets.set(isoWeekKey(subDays(today, i * 7)), 0)
-    for (const a of activities) {
-      const iso = a.started_at ?? a.date
-      if (!iso) continue
-      const key = isoWeekKey(new Date(iso))
-      if (buckets.has(key)) buckets.set(key, (buckets.get(key) ?? 0) + (a.tss ?? 0))
+  // ---- Load-over-time buckets (weekly for 6W/3M, monthly for 1Y) ----------
+  const buckets = useMemo(() => {
+    const out: { key: string; label: string; tss: number; inProgress: boolean }[] = []
+    if (range.mode === 'week') {
+      for (let i = range.count - 1; i >= 0; i--) {
+        const monday = subDays(today, i * 7)
+        out.push({ key: isoWeekKey(monday), label: format(monday, de ? 'd.M.' : 'M/d'), tss: 0, inProgress: i === 0 })
+      }
+      for (const a of activities) {
+        const iso = a.started_at ?? a.date
+        if (!iso) continue
+        const b = out.find((x) => x.key === isoWeekKey(new Date(iso)))
+        if (b) b.tss += a.tss ?? 0
+      }
+    } else {
+      for (let i = range.count - 1; i >= 0; i--) {
+        const m = startOfMonth(subMonths(today, i))
+        out.push({ key: `${m.getFullYear()}-${m.getMonth()}`, label: format(m, 'LLL'), tss: 0, inProgress: i === 0 })
+      }
+      for (const a of activities) {
+        const iso = a.started_at ?? a.date
+        if (!iso) continue
+        const d = new Date(iso)
+        const b = out.find((x) => x.key === `${d.getFullYear()}-${d.getMonth()}`)
+        if (b) b.tss += a.tss ?? 0
+      }
     }
-    return [...buckets.entries()].sort((x, y) => x[0].localeCompare(y[0])).slice(-8).map(([key, tss]) => ({ key, tss: Math.round(tss) }))
-  }, [activities, today])
-  const lastComplete = weeks.length >= 2 ? weeks[weeks.length - 2] : null
-  const priorComplete = weeks.length >= 3 ? weeks[weeks.length - 3] : null
-  const rampPct = lastComplete && priorComplete && priorComplete.tss > 0
-    ? Math.round(((lastComplete.tss - priorComplete.tss) / priorComplete.tss) * 100) : null
+    return out.map((b) => ({ ...b, tss: Math.round(b.tss) }))
+  }, [activities, today, range, de])
+  const maxBucket = Math.max(1, ...buckets.map((b) => b.tss))
 
-  // ---- Load trend (audit P1-9): this week vs 4-week average ---------------
-  // Replaces the ACWR 'Verletzungsrisiko' gauge — injury-risk claims on a
-  // contested metric are on the project's own avoid list. Three NEUTRAL
-  // states; the low state explains instead of labeling. State classifies on
-  // week-elapsed PACE so Monday never reads as a failure.
-  const loadTrend = useMemo(() => {
-    const current = weeks.length ? weeks[weeks.length - 1] : null
-    const complete = weeks.slice(-5, -1).map((w) => w.tss).filter((t) => t > 0)
-    if (!current || complete.length === 0) return null
-    const fourWeekAvg = complete.reduce((a, b) => a + b, 0) / complete.length
-    const elapsedFrac = Math.max(1 / 7, ((today.getDay() + 6) % 7 + 1) / 7)
-    const pace = current.tss / elapsedFrac
-    const plannedTotal = (weekPlan as { planned_tss_total?: number | null } | undefined)?.planned_tss_total ?? null
-    const plannedQuiet = plannedTotal != null && fourWeekAvg > 0 && plannedTotal < 0.75 * fourWeekAvg
-    return { thisWeek: current.tss, fourWeekAvg: Math.round(fourWeekAvg), ...classifyLoadTrend(pace, fourWeekAvg, plannedQuiet, de) }
-  }, [weeks, weekPlan, today, de])
+  // ---- Ramp badge — prefer backend load_dynamics; else week-over-week % ----
+  const rampBadge = useMemo(() => {
+    if (rampWk != null) {
+      const high = ld?.flag === 'high' || ld?.flag === 'spike' || ld?.flag === 'ramp_high'
+      return {
+        text: `${rampWk >= 0 ? '+' : ''}${Math.round(rampWk)}${de ? '/Wo' : '/wk'}`,
+        ok: !high,
+        note: high ? (de ? 'zügig' : 'brisk') : (de ? 'sicher' : 'safe'),
+      }
+    }
+    const done = buckets.filter((b) => !b.inProgress)
+    const last = done[done.length - 1]
+    const prior = done[done.length - 2]
+    if (!last || !prior || prior.tss <= 0) return null
+    const pct = Math.round(((last.tss - prior.tss) / prior.tss) * 100)
+    return { text: `${pct >= 0 ? '+' : ''}${pct} %`, ok: pct <= 20, note: de ? 'ggü. Vorwoche' : 'vs prior' }
+  }, [rampWk, ld, buckets, de])
 
-  // ---- Load by intensity (3-zone model from period report) ----------------
+  // ---- Intensity (3-zone model from period report) ------------------------
   const mix = report?.intensity ?? null
   const intensitySegs = mix ? [
     { key: 'easy', label: de ? 'Leicht' : 'Easy', pct: mix.z1_pct, color: 'var(--color-recovery)' },
@@ -227,116 +193,65 @@ export default function LoadFormView() {
     { key: 'hard', label: de ? 'Hart' : 'Hard', pct: mix.z3_pct, color: 'var(--color-move)' },
   ] : []
 
-  // ---- Load by sport (SPORT_WINDOW_DAYS activity TSS + duration) -----------
-  const sport = useMemo(() => {
-    const acc = { ride: { tss: 0, sec: 0 }, run: { tss: 0, sec: 0 }, strength: { tss: 0, sec: 0 } }
-    for (const a of activities) {
-      if (new Date(a.started_at ?? a.date ?? 0) < subDays(today, SPORT_WINDOW_DAYS)) continue
-      const bucket = a.sport === 'cycling' ? acc.ride : a.sport === 'running' ? acc.run : acc.strength
-      bucket.tss += a.tss ?? 0
-      bucket.sec += a.duration_seconds ?? 0
-    }
-    return acc
-  }, [activities, today])
-  const sportGrand = sport.ride.tss + sport.run.tss + sport.strength.tss
-  const sportSecs = sport.ride.sec + sport.run.sec + sport.strength.sec
-  const sportRows = [
-    { key: 'ride', label: de ? 'Rad' : 'Ride', Icon: Bike, color: 'var(--color-strain)', ...sport.ride },
-    { key: 'run', label: de ? 'Lauf' : 'Run', Icon: Footprints, color: 'var(--color-accent)', ...sport.run },
-    { key: 'strength', label: de ? 'Kraft' : 'Strength', Icon: Dumbbell, color: 'var(--color-stand)', ...sport.strength },
-  ].map((s) => ({ ...s, pct: sportGrand > 0 ? (s.tss / sportGrand) * 100 : 0 }))
-
-  // ---- Fitness signals (power profile + athlete) --------------------------
-  // P0-1: ONE canonical number app-wide — never a raw CP that can disagree
-  // with the displayed FTP (audit: 'CP 363' here vs 'FTP 240' elsewhere).
-  const threshold = power?.threshold_watts ?? athlete?.ftp_watts ?? null
-  const thrLabel = 'FTP'
-  const weight = athlete?.weight_kg ?? null
-  const wkg = threshold != null && weight != null && weight > 0 ? threshold / weight : null
-  const lthr = athlete?.lthr_cycling ?? null
-  const fitnessTiles = [
-    { label: 'W/kg', value: wkg != null ? wkg.toFixed(1) : DASH, unit: 'W/kg', color: 'var(--color-strain)' },
-    { label: 'LTHR', value: lthr != null ? `${Math.round(lthr)}` : DASH, unit: 'bpm', color: 'var(--color-move)' },
-    { label: de ? 'Gewicht' : 'Weight', value: weight != null ? weight.toFixed(1) : DASH, unit: 'kg', color: 'var(--color-recovery)' },
-  ]
-
-  // ---- Monotony & strain (Foster, derived from daily activity TSS) --------
+  // ---- Monotony & Strain — backend load_dynamics, else Foster fallback ----
   const foster = useMemo(() => {
-    const days: number[] = []
-    for (let i = 6; i >= 0; i--) {
-      const dayStart = subDays(today, i)
-      const key = `${dayStart.getFullYear()}-${dayStart.getMonth()}-${dayStart.getDate()}`
-      days.push(activities.filter((a) => {
-        const d = new Date(a.started_at ?? a.date ?? 0)
-        return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` === key
-      }).reduce((s, a) => s + (a.tss ?? 0), 0))
+    if (ld && (ld.monotony != null || ld.strain != null)) {
+      return { monotony: ld.monotony, strain: ld.strain }
     }
-    const load = days.reduce((s, v) => s + v, 0)
-    if (load <= 0) return null
-    const mean = load / 7
-    const variance = days.reduce((s, v) => s + (v - mean) ** 2, 0) / 7
-    const sd = Math.sqrt(variance)
+    const dayLoads: number[] = []
+    for (let i = 6; i >= 0; i--) {
+      const key = localDayKey(subDays(today, i))
+      dayLoads.push(activities.filter((a) => localDayKey(new Date(a.started_at ?? a.date ?? 0)) === key).reduce((s, a) => s + (a.tss ?? 0), 0))
+    }
+    const total = dayLoads.reduce((s, v) => s + v, 0)
+    if (total <= 0) return null
+    const mean = total / 7
+    const sd = Math.sqrt(dayLoads.reduce((s, v) => s + (v - mean) ** 2, 0) / 7)
     const monotony = sd > 0 ? mean / sd : 0
-    return { monotony, strain: load * monotony, load: Math.round(load) }
-  }, [activities, today])
-  const monoOk = foster != null && foster.monotony < 2
+    return { monotony, strain: total * monotony }
+  }, [ld, activities, today])
+  const monoOk = foster?.monotony != null && foster.monotony < 2
 
-  // ---- This week (real done; planned target unavailable) ------------------
+  // ---- This week — done vs planned ----------------------------------------
+  const todayIdx = (today.getDay() + 6) % 7
   const thisWeek = useMemo(() => {
     const key = isoWeekKey(today)
     const inWeek = activities.filter((a) => isoWeekKey(new Date(a.started_at ?? a.date ?? 0)) === key)
     const tss = Math.round(inWeek.reduce((s, a) => s + (a.tss ?? 0), 0))
     const dayHas = Array.from({ length: 7 }, (_, i) => {
-      const d = subDays(today, ((today.getDay() + 6) % 7) - i)
-      return inWeek.some((a) => {
-        const ad = new Date(a.started_at ?? a.date ?? 0)
-        return ad.getFullYear() === d.getFullYear() && ad.getMonth() === d.getMonth() && ad.getDate() === d.getDate()
-      })
+      const d = subDays(today, todayIdx - i)
+      return inWeek.some((a) => localDayKey(new Date(a.started_at ?? a.date ?? 0)) === localDayKey(d))
     })
     return { tss, sessions: inWeek.length, dayHas }
-  }, [activities, today])
+  }, [activities, today, todayIdx])
   const weekdayLetters = de ? ['M', 'D', 'M', 'D', 'F', 'S', 'S'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S']
-  const todayIdx = (today.getDay() + 6) % 7
 
-  // Planned weekly TSS from the week plan (backend: planned_tss_total on
-  // GET /weeks/current). Tolerant read — the field may lag in the API type;
-  // absent → honest empty state, never a fake 0% bar.
-  const plannedWeekTss = (weekPlan as { planned_tss_total?: number | null } | undefined)?.planned_tss_total ?? null
+  const days = weekPlan?.days ?? []
+  const plannedSessions = days.filter((d) => d.category !== 'rest').length || null
+  const plannedWeekTss = weekPlan?.planned_tss_total ?? null
+  const tssLeft = plannedWeekTss != null ? Math.max(0, Math.round(plannedWeekTss - thisWeek.tss)) : null
   const compliancePct = plannedWeekTss != null && plannedWeekTss > 0
-    ? Math.round((thisWeek.tss / plannedWeekTss) * 100)
-    : null
-  // Audit P1-8: tone Plan-Erfüllung by progress vs the elapsed week — 0% on
-  // Monday morning means "the week is young", not failure. Accent only once
-  // done keeps pace with the days already elapsed; behind-pace stays neutral
-  // slate, never an alarm color.
-  const weekElapsedFrac = (((today.getDay() + 6) % 7) + 1) / 7
+    ? Math.round((thisWeek.tss / plannedWeekTss) * 100) : null
+  const weekElapsedFrac = (todayIdx + 1) / 7
   const complianceOnPace = compliancePct != null && compliancePct >= weekElapsedFrac * 100
-  const complianceColor = complianceOnPace ? 'var(--color-accent)' : 'var(--color-muted)'
+  const complianceColor = complianceOnPace ? 'var(--color-recovery)' : 'var(--color-muted)'
 
-  // ---- Trajectory (period report) -----------------------------------------
-  // Audit P0-5: the "Fitness 6wk" chip was removed — its 6-week CTL %change was
-  // seed-contaminated (read a different window of the same series and claimed
-  // "+69% rising" beside a negative CTL/wk tile). Do not re-add until it reads
-  // the same canonical CTL series as every other surface.
-  const traj = report?.trajectory ?? null
-
-  // ---- Recommendation — subordinate to the ONE Daily Decision (P0-3) ------
-  // The adaptive headline is rest-day-safe from the backend now — render it,
-  // don't override. Only the decision state steers the extra headline/CTA.
+  // ---- Recommendation — mirrors the ONE Daily Decision (P0-3) --------------
   const decision = adaptive?.daily_decision ?? null
   const dState = decision?.state ?? null
+  const restLike = dState === 'planned_rest' || dState === 'sick' || dState === 'injured' || dState === 'break'
   const recHeadline = dState === 'planned_rest'
     ? (de ? 'Grünes Licht für morgen' : 'Green light for tomorrow')
-    : adaptive?.headline ?? (de ? 'Empfehlung' : 'Recommendation')
+    : adaptive?.headline ?? (de ? 'Grünes Licht zum Trainieren' : 'Green light to train')
   const recBody = decision?.reason ?? adaptive?.signals?.[0]?.text ?? adaptive?.intensity_ceiling ?? null
-  const recCta = dState === 'planned_rest'
-    ? { to: '/dashboard?tab=recovery', label: de ? 'Ruhetag ansehen' : 'View rest day' }
+  const todayPlan = days.find((d) => d.is_today) ?? null
+  const showSession = !restLike && todayPlan != null && todayPlan.category !== 'rest'
+  const recCta = restLike
+    ? { to: '/dashboard?tab=recovery', label: de ? 'Erholung ansehen' : 'View recovery' }
     : dState === 'trained_already'
       ? { to: '/dashboard?tab=today', label: de ? 'Einheit ansehen' : 'View session' }
-      : dState === 'sick' || dState === 'injured' || dState === 'break'
-        ? { to: '/dashboard?tab=recovery', label: de ? 'Erholung ansehen' : 'View recovery' }
-        : { to: '/dashboard?tab=today', label: de ? 'Einheit öffnen' : 'Open session' }
-  const RecIcon = dState === 'planned_rest' || dState === 'sick' || dState === 'injured' || dState === 'break' ? Moon : Check
+      : { to: '/dashboard?tab=today', label: de ? 'Einheit öffnen' : 'Open session' }
+  const RecIcon = restLike ? Moon : Check
 
   const showTrend = (v: number | null, unit = '') =>
     v == null ? DASH : `${v >= 0 ? '+' : ''}${v}${unit}`
@@ -353,56 +268,186 @@ export default function LoadFormView() {
           <ArrowLeft size={15} /> {de ? 'Zurück' : 'Back'}
         </button>
 
-        {/* Header + range toggle. Audit P2-14 label truth: the eyebrow derives
-            from the SAME active-range constant that highlights the chip — it
-            can never contradict the control again ('LETZTE 42 TAGE' vs 3M). */}
-        <div className="flex items-center justify-between">
+        {/* Header + FUNCTIONAL range toggle */}
+        <div className="flex items-center justify-between gap-3">
           <div className="flex flex-col gap-0.5">
-            <span className="eyebrow" style={{ fontSize: 12, letterSpacing: 1, color: 'var(--color-muted)' }}>
-              {RANGES.find((r) => r.id === ACTIVE_RANGE)?.[de ? 'de' : 'en']}
+            <span className="eyebrow" style={{ fontSize: 12, letterSpacing: 1, fontWeight: 600, color: 'var(--color-muted)' }}>
+              {de ? range.de : range.en}
             </span>
             <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-ink)' }}>
-              {de ? 'Trainingslast' : 'Training Load'}
+              {de ? 'Belastung & Form' : 'Load & Form'}
             </span>
           </div>
           <div className="flex rounded-full p-[3px]" style={{ background: 'var(--color-surface-2)', gap: 2 }}>
             {RANGES.map((r) => (
-              <span
+              <button
                 key={r.id}
+                onClick={() => setRangeId(r.id)}
                 className="rounded-full"
                 style={{
-                  padding: '6px 12px', fontSize: 12, fontWeight: 600,
-                  color: r.id === ACTIVE_RANGE ? 'var(--color-ink)' : 'var(--color-ink-2)',
-                  background: r.id === ACTIVE_RANGE ? 'var(--color-accent)' : 'transparent',
+                  padding: '6px 12px', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
+                  color: r.id === rangeId ? 'var(--color-ink)' : 'var(--color-ink-2)',
+                  background: r.id === rangeId ? 'var(--color-accent)' : 'transparent',
                 }}
               >
                 {r.id}
-              </span>
+              </button>
             ))}
           </div>
         </div>
 
-        {/* 1. Form Hero — TSB gauge + CTL/ATL */}
-        <div
-          className="rounded-[24px] p-[22px] flex flex-col"
-          style={{ gap: 20, background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex flex-col gap-1">
-              <span className="eyebrow" style={{ fontSize: 12, letterSpacing: 1, color: 'var(--color-muted)' }}>{de ? 'FORM · TSB' : 'FORM · TSB'}</span>
-              <span className="num-display" style={{ fontSize: 52, fontWeight: 700, lineHeight: 1, color: tsbState.color }}>
-                {tsb == null ? DASH : showTrend(tsb)}
-              </span>
+        {/* 1. Recommendation — mirrors the daily decision (single source) */}
+        <Card accent>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-accent)', color: 'var(--color-ink)' }}>
+              <RecIcon size={22} />
+            </span>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="num-display" style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-ink)' }}>{recHeadline}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-accent)' }}>{decision?.verdict ?? (de ? 'Heutige Empfehlung' : "Today's recommendation")}</span>
             </div>
-            <Pill color={tsbState.color} soft="var(--color-recovery-soft, rgba(22,224,138,0.15))">
-              <tsbState.Icon size={16} /> {tsbState.label}
-            </Pill>
+          </div>
+          {recBody && (
+            <p style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--color-ink-2)' }}>{recBody}</p>
+          )}
+          {showSession && todayPlan && (
+            <div
+              className="flex items-center justify-between rounded-[16px]"
+              style={{ padding: 14, background: 'rgba(10,12,15,0.7)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }}
+            >
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{todayPlan.title}</span>
+                <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>
+                  {todayPlan.duration_seconds_target ? fmtDur(todayPlan.duration_seconds_target) : (de ? 'Einheit' : 'Session')}
+                </span>
+              </div>
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-accent)' }}>{todayPlan.target_tss != null ? Math.round(todayPlan.target_tss) : DASH}</span>
+                <span className="eyebrow" style={{ fontSize: 10, letterSpacing: 1, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'ZIEL TSS' : 'TARGET TSS'}</span>
+              </div>
+            </div>
+          )}
+          <Link
+            to={recCta.to}
+            className="flex items-center justify-center gap-2 rounded-full"
+            style={{ padding: 15, background: 'var(--color-accent)', color: 'var(--color-ink)', fontSize: 15, fontWeight: 700 }}
+          >
+            <span className="num-display" style={{ fontWeight: 700 }}>{recCta.label}</span>
+            <ArrowRight size={18} />
+          </Link>
+        </Card>
+
+        {/* 2. This Week — done vs planned */}
+        <Card>
+          <CardHead
+            title={de ? 'Diese Woche' : 'This Week'}
+            sub={plannedSessions != null
+              ? (de ? `${thisWeek.sessions} von ${plannedSessions} Einheiten erledigt` : `${thisWeek.sessions} of ${plannedSessions} sessions done`)
+              : (de ? `${thisWeek.sessions} Einheiten erledigt` : `${thisWeek.sessions} sessions done`)}
+            right={compliancePct != null ? (
+              <div className="flex items-end gap-0.5">
+                <span className="num-display" style={{ fontSize: 34, fontWeight: 700, lineHeight: 1, color: complianceColor }}>{compliancePct}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: complianceColor, paddingBottom: 4 }}>%</span>
+              </div>
+            ) : undefined}
+          />
+          {compliancePct != null ? (
+            <div style={{ height: 10, borderRadius: 5, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(100, Math.max(0, compliancePct))}%`, height: '100%', borderRadius: 5, background: complianceOnPace ? 'var(--color-recovery)' : 'color-mix(in srgb, var(--color-muted) 55%, transparent)' }} />
+            </div>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Noch keine Plandaten diese Woche' : 'No plan data yet this week'}</span>
+          )}
+          <div className="flex justify-between">
+            {[
+              { v: plannedWeekTss != null ? `${thisWeek.tss} / ${Math.round(plannedWeekTss)}` : `${thisWeek.tss}`, l: de ? 'TSS erledigt' : 'TSS done' },
+              { v: plannedSessions != null ? `${thisWeek.sessions} / ${plannedSessions}` : `${thisWeek.sessions}`, l: de ? 'Einheiten' : 'Sessions' },
+              { v: tssLeft != null ? `${tssLeft}` : DASH, l: de ? 'TSS übrig' : 'TSS left' },
+            ].map((s) => (
+              <div key={s.l} className="flex flex-col gap-0.5">
+                <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{s.v}</span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{s.l}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between">
+            {thisWeek.dayHas.map((has, i) => (
+              <div key={i} className="flex flex-col items-center gap-1.5">
+                <span
+                  className="flex items-center justify-center rounded-full"
+                  style={{
+                    width: 30, height: 30,
+                    background: has ? 'var(--color-recovery)' : i === todayIdx ? 'var(--color-accent-soft)' : 'var(--color-surface-2)',
+                    border: i === todayIdx ? '2px solid var(--color-accent)' : '1px solid var(--color-rule)',
+                    color: has ? '#fff' : i === todayIdx ? 'var(--color-accent)' : 'var(--color-muted)',
+                  }}
+                >
+                  {has ? <Check size={15} /> : i === todayIdx ? <Zap size={14} /> : <Bed size={13} />}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: i === todayIdx ? 'var(--color-accent)' : 'var(--color-muted)' }}>{weekdayLetters[i]}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* 3. Weekly Load — the load story over the selected range */}
+        <Card>
+          <CardHead
+            title={de ? 'Wöchentliche Last' : 'Weekly Load'}
+            sub={ld?.note || (de ? 'Trainingsstress pro Zeitraum' : 'Training stress per period')}
+            right={rampBadge ? (
+              <Pill color={rampBadge.ok ? 'var(--color-recovery)' : 'var(--color-amber)'} soft={rampBadge.ok ? 'var(--color-recovery-soft, rgba(22,224,138,0.15))' : 'rgba(255,176,32,0.15)'}>
+                {rampBadge.ok ? <Check size={13} /> : <TrendingUp size={13} />} {rampBadge.text} {rampBadge.note}
+              </Pill>
+            ) : undefined}
+          />
+          <div className="flex items-end" style={{ gap: 8, height: 130 }}>
+            {buckets.map((b) => (
+              <div key={b.key} className="flex-1 flex flex-col justify-end" style={{ height: '100%' }}>
+                <div
+                  title={`${b.label} · ${b.tss} TSS`}
+                  style={{
+                    height: Math.max(6, Math.round((b.tss / maxBucket) * 118)),
+                    borderRadius: 6,
+                    background: b.inProgress ? 'var(--color-ink)' : 'var(--color-strain)',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex" style={{ gap: 8 }}>
+            {buckets.map((b) => (
+              <span key={b.key} className="flex-1 text-center" style={{ fontSize: 11, fontWeight: b.inProgress ? 700 : 500, color: b.inProgress ? 'var(--color-ink)' : 'var(--color-muted)' }}>
+                {b.inProgress ? (de ? 'Jetzt' : 'Now') : b.label}
+              </span>
+            ))}
+          </div>
+          {ctl != null && tsb != null && (
+            <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'var(--color-ink-2)' }}>
+              {de
+                ? `Klartext: ${dCtl7 != null && dCtl7 >= 0 ? 'die Fitness steigt' : 'die Fitness konsolidiert'}, während die Frische ${tsb >= 0 ? 'positiv bleibt' : 'noch im Minus ist'} — ${tsb >= -5 ? 'du kannst die geplante Last aufnehmen.' : 'gönn dir zuerst etwas Erholung.'}`
+                : `In plain words: ${dCtl7 != null && dCtl7 >= 0 ? 'fitness is climbing' : 'fitness is consolidating'} while freshness stays ${tsb >= 0 ? 'positive' : 'negative'} — ${tsb >= -5 ? "you can absorb this week's plan." : 'take some recovery first.'}`}
+            </span>
+          )}
+        </Card>
+
+        {/* 4. Fitness & Freshness — the pen's gauge, bound to CTL/ATL/TSB */}
+        <Card>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Fitness & Frische' : 'Fitness & Freshness'}</span>
+              <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{tsbState.sub}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="num-display" style={{ fontSize: 26, fontWeight: 700, color: tsbState.color }}>{tsb == null ? DASH : showTrend(tsb)}</span>
+              <Pill color={tsbState.color} soft={`color-mix(in srgb, ${tsbState.color} 15%, transparent)`}>{tsbState.label}</Pill>
+            </div>
           </div>
 
           {/* Gauge */}
           <div>
-            <div className="relative" style={{ height: 28 }}>
-              <div className="absolute flex overflow-hidden" style={{ top: 9, left: 0, right: 0, height: 12, borderRadius: 6 }}>
+            <div className="relative" style={{ height: 26 }}>
+              <div className="absolute flex overflow-hidden" style={{ top: 8, left: 0, right: 0, height: 10, borderRadius: 5, gap: 2 }}>
                 {TSB_SEGS.map((s, i) => {
                   const from = i === 0 ? TSB_MIN : TSB_SEGS[i - 1].to
                   const w = (posTsb(s.to) - posTsb(from)) * 100
@@ -410,132 +455,64 @@ export default function LoadFormView() {
                 })}
               </div>
               {tsb != null && (
-                <div
-                  className="absolute"
-                  style={{ top: 0, left: `calc(${posTsb(tsb) * 100}% - 3px)`, width: 6, height: 28, borderRadius: 3, background: 'var(--color-ink)', border: '2px solid var(--color-paper-2)' }}
-                />
+                <div className="absolute" style={{ top: 0, left: `calc(${posTsb(tsb) * 100}% - 3px)`, width: 6, height: 26, borderRadius: 3, background: 'var(--color-ink)', border: '2px solid var(--color-paper-2)' }} />
               )}
             </div>
             <div className="flex justify-between" style={{ marginTop: 4 }}>
               <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'Überlastet' : 'Overreached'}</span>
-              <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'Optimal' : 'Optimal'}</span>
+              <span style={{ fontSize: 11, color: 'var(--color-recovery)' }}>{de ? 'Optimal' : 'Sweet spot'}</span>
               <span style={{ fontSize: 11, color: 'var(--color-strain)' }}>{de ? 'Frisch' : 'Fresh'}</span>
             </div>
           </div>
 
           <div style={{ height: 1, background: 'var(--color-rule)' }} />
 
-          {/* CTL / ATL */}
+          {/* CTL / ATL / Ramp */}
           <div className="flex justify-between">
-            <div className="flex flex-col gap-1">
-              <span className="eyebrow" style={{ fontSize: 11, letterSpacing: 1, color: 'var(--color-muted)' }}>{de ? 'FITNESS · CTL' : 'FITNESS · CTL'}</span>
-              <div className="flex items-center gap-2">
-                <span className="num-display" style={{ fontSize: 26, fontWeight: 700, color: 'var(--color-ink)' }}>{ctl ?? DASH}</span>
-                {/* Icon + tone follow the sign — a quiet week is not a failure,
-                    so a falling CTL reads muted/neutral, never red. */}
-                <span className="inline-flex items-center gap-1 rounded-full" style={{ padding: '3px 7px', background: 'var(--color-surface-2)', fontSize: 11, fontWeight: 600, color: dCtl7 != null && dCtl7 < 0 ? 'var(--color-muted)' : 'var(--color-strain)' }}>
-                  {dCtl7 != null && dCtl7 < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />} {showTrend(dCtl7)} {de ? 'Woche' : 'wk'}
-                </span>
+            {[
+              {
+                label: de ? 'FITNESS · CTL' : 'FITNESS · CTL', value: ctl ?? DASH,
+                chip: dCtl7 != null ? { text: `${showTrend(dCtl7)} ${de ? 'Wo' : 'wk'}`, color: dCtl7 < 0 ? 'var(--color-muted)' : 'var(--color-strain)', Icon: dCtl7 < 0 ? TrendingDown : TrendingUp } : null,
+              },
+              {
+                label: de ? 'ERMÜDUNG · ATL' : 'FATIGUE · ATL', value: atl ?? DASH,
+                chip: atl != null ? { text: de ? 'akut' : 'acute', color: 'var(--color-amber)', Icon: Zap } : null,
+              },
+              {
+                label: de ? 'AUFBAU/WO' : 'RAMP/WK', value: rampWk != null ? showTrend(Math.round(rampWk)) : DASH,
+                chip: null as { text: string; color: string; Icon: typeof Zap } | null,
+              },
+            ].map((c) => (
+              <div key={c.label} className="flex flex-col gap-1">
+                <span className="eyebrow" style={{ fontSize: 10.5, letterSpacing: 0.8, color: 'var(--color-muted)' }}>{c.label}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-ink)' }}>{c.value}</span>
+                  {c.chip && (
+                    <span className="inline-flex items-center gap-0.5 rounded-full" style={{ padding: '2px 6px', background: 'var(--color-surface-2)', fontSize: 10, fontWeight: 600, color: c.chip.color }}>
+                      <c.chip.Icon size={11} /> {c.chip.text}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="eyebrow" style={{ fontSize: 11, letterSpacing: 1, color: 'var(--color-muted)' }}>{de ? 'ERMÜDUNG · ATL' : 'FATIGUE · ATL'}</span>
-              <div className="flex items-center gap-2">
-                <span className="num-display" style={{ fontSize: 26, fontWeight: 700, color: 'var(--color-ink)' }}>{atl ?? DASH}</span>
-                <span className="inline-flex items-center gap-1 rounded-full" style={{ padding: '3px 7px', background: 'var(--color-surface-2)', fontSize: 11, fontWeight: 600, color: 'var(--color-amber)' }}>
-                  <Zap size={12} /> {showTrend(dAtl7)}
-                </span>
-              </div>
-            </div>
+            ))}
           </div>
-        </div>
-
-        {/* 2. Weekly Load */}
-        <Card>
-          <CardHead
-            title={de ? 'Wöchentliche Last' : 'Weekly Load'}
-            sub={de ? 'Trainingsstress pro Woche' : 'Training Stress Score per week'}
-            right={rampPct != null ? (
-              /* Audit P1-8: week-over-week delta is context, not a verdict —
-                 muted secondary text, no chip, no arrow, no amber shouting. */
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>
-                {showTrend(rampPct, ' %')} {de ? 'ggü. Vorwoche' : 'vs prior week'}
-              </span>
-            ) : undefined}
-          />
-          <HoverBars
-            height={118}
-            gap={8}
-            radius={6}
-            defaultColor="var(--color-strain)"
-            bars={weeks.map((w, i) => {
-              const monday = parseISO(w.key)
-              const sunday = addDays(monday, 6)
-              const inProgress = i === weeks.length - 1
-              return {
-                value: w.tss,
-                valueLabel: inProgress ? `${w.tss} TSS · ${de ? 'läuft noch' : 'in progress'}` : `${w.tss} TSS`,
-                label: `${format(monday, de ? 'd. MMM' : 'MMM d')} – ${format(sunday, de ? 'd. MMM' : 'MMM d')}`,
-                // Audit P1-8: the running week is unfinished, not underperforming —
-                // same reduced-opacity treatment as the Belastungs-Trend bar,
-                // never the accent/failure color on a Monday-short bar.
-                color: inProgress ? 'color-mix(in srgb, var(--color-strain) 55%, transparent)' : undefined,
-              }
-            })}
-          />
-          <div className="flex" style={{ gap: 8 }}>
-            {weeks.map((w, i) => {
-              const isNow = i === weeks.length - 1
-              return (
-                <span key={w.key} className="flex-1 text-center" style={{ fontSize: 11, fontWeight: isNow ? 600 : 500, color: isNow ? 'var(--color-ink-2)' : 'var(--color-muted)' }}>
-                  {isNow ? (de ? 'läuft noch' : 'in progress') : `W${i + 1}`}
-                </span>
-              )
-            })}
-          </div>
+          {ctl != null && atl != null && tsb != null && (
+            <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.4, color: 'var(--color-ink-2)' }}>
+              {de
+                ? `Form = Fitness − Ermüdung: ${ctl} − ${atl} = ${showTrend(tsb)}. ${tsb >= -5 ? 'Ein ausgewogenes Verhältnis.' : 'Die Ermüdung führt gerade — plane Erholung ein.'}`
+                : `Form = fitness − fatigue: ${ctl} − ${atl} = ${showTrend(tsb)}. ${tsb >= -5 ? 'A balanced ratio.' : 'Fatigue leads right now — plan recovery.'}`}
+            </span>
+          )}
         </Card>
 
-        {/* 3. Load trend — this week vs 4-week average (audit P1-9) */}
-        {loadTrend && (
-          <Card>
-            <CardHead
-              title={de ? 'Belastungs-Trend' : 'Load trend'}
-              sub={de ? 'Diese Woche vs. 4-Wochen-Schnitt' : 'This week vs 4-week average'}
-              right={<Pill color={loadTrend.color} soft={`color-mix(in srgb, ${loadTrend.color} 14%, transparent)`}>{loadTrend.headline}</Pill>}
-            />
-            <div className="flex flex-col gap-2.5">
-              {[
-                { l: de ? 'Diese Woche · läuft noch' : 'This week · in progress', v: loadTrend.thisWeek, inProgress: true },
-                { l: de ? '4-Wochen-Schnitt' : '4-week average', v: loadTrend.fourWeekAvg, inProgress: false },
-              ].map((row) => {
-                const maxV = Math.max(loadTrend.thisWeek, loadTrend.fourWeekAvg, 1)
-                return (
-                  <div key={row.l} className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{row.l}</span>
-                      <span className="num-display" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>{Math.round(row.v)} TSS</span>
-                    </div>
-                    <div style={{ height: 8, borderRadius: 4, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
-                      <div style={{ width: `${(row.v / maxV) * 100}%`, height: '100%', borderRadius: 4, background: row.inProgress ? 'color-mix(in srgb, var(--color-strain) 55%, transparent)' : 'var(--color-strain)' }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            {loadTrend.body && (
-              <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>{loadTrend.body}</span>
-            )}
-          </Card>
-        )}
-
-        {/* 4. Load by Intensity */}
+        {/* 5. Load by Intensity — the 3-zone model actually available */}
         <Card>
           <CardHead
             title={de ? 'Last nach Intensität' : 'Load by Intensity'}
-            sub={mix ? `${mix.model}${mix.model && mix.target_model ? ' · ' : ''}${de ? 'Ziel: ' : 'target: '}${mix.target_model}` : (de ? 'Woraus dein Stress kam · 28T' : 'Where your stress came from · 28d')}
+            sub={mix ? `${mix.model}${mix.model && mix.target_model ? ` · ${de ? 'Ziel ' : 'target '}${mix.target_model}` : ''}` : (de ? 'Woraus dein Stress kam' : 'Where your stress came from')}
             right={mix ? (
               <Pill color={mix.aligned ? 'var(--color-recovery)' : 'var(--color-amber)'} soft={mix.aligned ? 'rgba(22,224,138,0.15)' : 'rgba(255,176,32,0.15)'}>
-                <Check size={14} /> {mix.aligned ? (de ? 'Ausgerichtet' : 'On-target') : (de ? 'Daneben' : 'Off-target')}
+                <Check size={13} /> {mix.aligned ? (de ? 'Ausgerichtet' : 'On-target') : (de ? 'Daneben' : 'Off-target')}
               </Pill>
             ) : undefined}
           />
@@ -557,109 +534,38 @@ export default function LoadFormView() {
                   </div>
                 ))}
               </div>
+              {mix.fix && (
+                <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.4, color: 'var(--color-ink-2)' }}>{mix.fix}</span>
+              )}
             </>
           ) : (
-            <span style={{ fontSize: 13, color: 'var(--color-muted)' }}>{DASH}</span>
+            <span style={{ fontSize: 13, color: 'var(--color-muted)' }}>{de ? 'Noch keine Intensitätsdaten' : 'No intensity data yet'}</span>
           )}
         </Card>
 
-        {/* 5. Load by Sport — caption states the TRUE window (audit P2-14:
-            multi-week totals were captioned 'Wochenstress', reading as a
-            27-hour week). Window wording derives from SPORT_WINDOW_DAYS. */}
-        <Card>
-          <CardHead
-            title={de ? 'Last nach Sportart' : 'Load by Sport'}
-            sub={(() => {
-              const wks = Math.round(SPORT_WINDOW_DAYS / 7)
-              const win = de ? `Letzte ${wks} Wochen` : `Past ${wks} weeks`
-              if (sportGrand <= 0 && sportSecs <= 0) return win
-              const h = Math.floor(sportSecs / 3600)
-              const m = Math.floor((sportSecs % 3600) / 60)
-              return `${win} · ${Math.round(sportGrand)} TSS · ${h} h ${m} m`
-            })()}
-          />
-          {sportGrand > 0 ? (
-            <>
-              <div className="flex overflow-hidden" style={{ height: 16, borderRadius: 8, gap: 2 }}>
-                {sportRows.filter((s) => s.pct > 0).map((s) => (
-                  <div key={s.key} title={`${s.label} · ${Math.round(s.tss)} TSS · ${Math.round(s.pct)}%`} style={{ width: `${s.pct}%`, background: s.color }} />
-                ))}
-              </div>
-              <div className="flex flex-col gap-3">
-                {sportRows.map((s) => (
-                  <div key={s.key} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex items-center justify-center" style={{ width: 26, height: 26, borderRadius: 8, background: 'var(--color-surface-2)', color: s.color }}>
-                        <s.Icon size={15} />
-                      </span>
-                      <span style={{ fontSize: 13, color: 'var(--color-ink)' }}>{s.label}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{s.sec > 0 ? fmtDur(s.sec) : DASH}</span>
-                      <span className="num-display" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink-2)' }}>{Math.round(s.tss)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <span style={{ fontSize: 13, color: 'var(--color-muted)' }}>{DASH}</span>
-          )}
-        </Card>
-
-        {/* 6. Fitness Signals */}
-        <Card gap={14}>
-          <div className="flex flex-col gap-0.5">
-            <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Fitness-Signale' : 'Fitness Signals'}</span>
-            <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? 'Physiologische Benchmarks' : 'Physiological benchmarks'}</span>
-          </div>
-          {/* Threshold power tile */}
-          <div className="flex items-end justify-between rounded-[16px]" style={{ padding: 16, background: 'var(--color-surface-2)' }}>
-            <div className="flex flex-col gap-1.5">
-              <span className="inline-flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>
-                <Zap size={15} style={{ color: 'var(--color-accent)' }} /> {thrLabel}
-              </span>
-              <div className="flex items-end gap-1.5">
-                <span className="num-display" style={{ fontSize: 34, fontWeight: 700, lineHeight: 1, color: 'var(--color-ink)' }}>{threshold != null ? Math.round(threshold) : DASH}</span>
-                <span style={{ fontSize: 13, color: 'var(--color-muted)', paddingBottom: 5 }}>{wkg != null ? `W · ${wkg.toFixed(1)} W/kg` : 'W'}</span>
-              </div>
-            </div>
-          </div>
-          {/* 3-up grid */}
-          <div className="grid grid-cols-3" style={{ gap: 10 }}>
-            {fitnessTiles.map((tl) => (
-              <div key={tl.label} className="flex flex-col gap-1 rounded-[14px]" style={{ padding: 13, background: 'var(--color-surface-2)' }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{tl.label}</span>
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-ink)' }}>{tl.value}</span>
-                <span style={{ fontSize: 10, fontWeight: 500, color: tl.color }}>{tl.unit}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* 7. Monotony & Strain */}
+        {/* 6. Monotony & Strain */}
         <Card>
           <div className="flex flex-col gap-0.5">
             <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Monotonie & Strain' : 'Monotony & Strain'}</span>
-            <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? 'Übertrainings-Schutz · Foster-Methode' : 'Overtraining guard · Foster method'}</span>
+            <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? 'Genug Abwechslung schützt vor Überlastung' : 'Enough day-to-day variety guards against overload'}</span>
           </div>
           {[
             {
               label: de ? 'Monotonie' : 'Monotony',
-              value: foster ? foster.monotony.toFixed(1) : DASH,
-              fill: foster ? foster.monotony / 3 : 0,
+              value: foster?.monotony != null ? foster.monotony.toFixed(1) : DASH,
+              fill: foster?.monotony != null ? foster.monotony / 3 : 0,
               color: monoOk ? 'var(--color-recovery)' : 'var(--color-amber)',
-              badge: foster ? (monoOk ? (de ? 'Gut' : 'Good') : (de ? 'Hoch' : 'High')) : DASH,
+              badge: foster?.monotony != null ? (monoOk ? (de ? 'Gut' : 'Good') : (de ? 'Hoch' : 'High')) : DASH,
               badgeColor: monoOk ? 'var(--color-recovery)' : 'var(--color-amber)',
               note: de ? 'Ziel < 2,0 · variierte Last' : 'Target < 2.0 · varied load',
             },
             {
               label: de ? 'Wochen-Strain' : 'Weekly Strain',
-              value: foster ? Math.round(foster.strain).toLocaleString() : DASH,
-              fill: foster ? foster.strain / 4000 : 0,
+              value: foster?.strain != null ? Math.round(foster.strain).toLocaleString(de ? 'de-DE' : 'en-US') : DASH,
+              fill: foster?.strain != null ? foster.strain / 4000 : 0,
               color: 'var(--color-strain)',
-              badge: foster ? (foster.strain < 2500 ? (de ? 'Moderat' : 'Moderate') : (de ? 'Hoch' : 'High')) : DASH,
-              badgeColor: 'var(--color-amber)',
+              badge: foster?.strain != null ? (foster.strain < 2500 ? (de ? 'Moderat' : 'Moderate') : (de ? 'Hoch' : 'High')) : DASH,
+              badgeColor: foster?.strain != null && foster.strain < 2500 ? 'var(--color-recovery)' : 'var(--color-amber)',
               note: de ? 'Last × Monotonie' : 'Load × monotony',
             },
           ].map((r) => (
@@ -671,139 +577,12 @@ export default function LoadFormView() {
                 </div>
                 <span className="rounded-full" style={{ padding: '4px 9px', background: 'var(--color-paper)', fontSize: 11, fontWeight: 700, color: r.badgeColor }}>{r.badge}</span>
               </div>
-              <div title={`${r.label}: ${r.value}`} style={{ height: 6, borderRadius: 3, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
+              <div style={{ height: 6, borderRadius: 3, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
                 <div style={{ width: `${Math.max(0, Math.min(100, r.fill * 100))}%`, height: '100%', borderRadius: 3, background: r.color }} />
               </div>
               <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{r.note}</span>
             </div>
           ))}
-        </Card>
-
-        {/* 8. This Week — plan compliance (real done vs planned_tss_total) */}
-        <Card>
-          <CardHead
-            title={de ? 'Diese Woche' : 'This Week'}
-            sub={compliancePct != null && !complianceOnPace
-              ? (de ? 'Plan-Erfüllung · läuft noch' : 'Plan compliance · in progress')
-              : (de ? 'Plan-Erfüllung' : 'Plan compliance')}
-            right={compliancePct != null ? (
-              // Audit P2-14: never a dangling '—%' — without plan data the
-              // number slot disappears and the body's honest empty state
-              // ('Noch keine Plandaten diese Woche') carries the message.
-              <div className="flex items-end gap-0.5">
-                <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: complianceColor }}>{compliancePct}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: complianceColor, paddingBottom: 3 }}>%</span>
-              </div>
-            ) : undefined}
-          />
-          {compliancePct != null ? (
-            <div style={{ height: 10, borderRadius: 5, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
-              <div style={{ width: `${Math.min(100, Math.max(0, compliancePct))}%`, height: '100%', background: complianceOnPace ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-muted) 55%, transparent)' }} />
-            </div>
-          ) : (
-            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-              {de ? 'Noch keine Plandaten diese Woche' : 'No plan data yet this week'}
-            </span>
-          )}
-          <div className="flex justify-between">
-            {[
-              { v: `${thisWeek.tss}`, l: de ? 'TSS erledigt' : 'TSS done' },
-              { v: `${thisWeek.sessions}`, l: de ? 'Einheiten' : 'Sessions' },
-              { v: plannedWeekTss != null ? `${Math.round(plannedWeekTss)}` : DASH, l: de ? 'TSS geplant' : 'TSS target' },
-            ].map((s) => (
-              <div key={s.l} className="flex flex-col gap-1">
-                <span className="num-display" style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)' }}>{s.v}</span>
-                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{s.l}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between">
-            {thisWeek.dayHas.map((has, i) => (
-              <div key={i} className="flex flex-col items-center gap-1.5">
-                <span
-                  className="flex items-center justify-center rounded-full"
-                  style={{
-                    width: 30, height: 30,
-                    background: has ? 'var(--color-accent)' : 'var(--color-surface-2)',
-                    border: i === todayIdx ? '2px solid var(--color-accent)' : '1px solid var(--color-rule)',
-                    color: has ? 'var(--color-ink)' : 'var(--color-muted)',
-                  }}
-                >
-                  {has ? <Check size={15} /> : i === todayIdx ? <Zap size={14} /> : <Moon size={13} />}
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: i === todayIdx ? 'var(--color-accent)' : 'var(--color-muted)' }}>{weekdayLetters[i]}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* 9. Trajectory */}
-        <Card gap={14}>
-          <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Verlauf · nächste 7 Tage' : 'Trajectory · next 7 days'}</span>
-          {traj ? (
-            <div className="flex justify-between">
-              {[
-                {
-                  Icon: Calendar, iconColor: 'var(--color-strain)',
-                  label: de ? 'Peak-Form ETA' : 'Peak form ETA',
-                  value: traj?.days_to_goal != null ? `${traj.days_to_goal}${de ? 'T' : 'd'}` : DASH,
-                  sub: (() => {
-                    const TAPER: Record<string, [string, string]> = {
-                      ideal: ['Taper sitzt', 'taper on point'],
-                      too_fresh: ['sehr frisch', 'very fresh'],
-                      too_flat: ['noch flach', 'still flat'],
-                      overreached: ['noch müde', 'still fatigued'],
-                    }
-                    const t = traj?.taper_window ? TAPER[traj.taper_window] : null
-                    return t ? (de ? t[0] : t[1]) : (de ? 'bei Taper' : 'if you taper')
-                  })(),
-                },
-                {
-                  Icon: Shield, iconColor: 'var(--color-amber)',
-                  label: de ? 'Wochen-TSS' : 'Weekly TSS',
-                  value: traj ? `${Math.round(traj.weekly_tss_actual)}` : DASH,
-                  sub: traj ? `/ ${Math.round(traj.weekly_tss_required)} ${de ? 'Ziel' : 'target'}` : (de ? 'Ziel' : 'target'),
-                },
-              ].map((s) => (
-                <div key={s.label} className="flex flex-col gap-1.5">
-                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>
-                    <s.Icon size={14} style={{ color: s.iconColor }} /> {s.label}
-                  </span>
-                  <span className="num-display" style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-ink)' }}>{s.value}</span>
-                  <span style={{ fontSize: 11, color: 'var(--color-ink-2)' }}>{s.sub}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2" style={{ color: 'var(--color-muted)' }}>
-              <CalendarOff size={16} /> <span style={{ fontSize: 13 }}>{de ? 'Kein Event gesetzt' : 'No event set'}</span>
-            </div>
-          )}
-        </Card>
-
-        {/* 10. Recommendation — renders the DailyDecision first, never a
-            push-CTA on rest / trained / sick days. */}
-        <Card accent>
-          <div className="flex items-center gap-3">
-            <span className="flex items-center justify-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-accent)', color: 'var(--color-ink)' }}>
-              <RecIcon size={22} />
-            </span>
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="num-display" style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-ink)' }}>{recHeadline}</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-accent)' }}>{decision?.verdict ?? (de ? 'Heutige Empfehlung' : "Today's recommendation")}</span>
-            </div>
-          </div>
-          {recBody && (
-            <p style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--color-ink-2)' }}>{recBody}</p>
-          )}
-          <Link
-            to={recCta.to}
-            className="flex items-center justify-center gap-2 rounded-full"
-            style={{ padding: 15, background: 'var(--color-accent)', color: 'var(--color-ink)', fontSize: 15, fontWeight: 700 }}
-          >
-            <span className="num-display" style={{ fontWeight: 700 }}>{recCta.label}</span>
-            <ArrowRight size={18} />
-          </Link>
         </Card>
       </div>
     </div>

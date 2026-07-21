@@ -8,13 +8,17 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity_stream import ActivityStream
+from app.models.ride_feedback import RideFeedback
 from app.models.user import User
 from app.schemas.activity import ActivityCreate, ActivityListResponse, ActivityRead
+from app.schemas.ride_feedback import RideFeedbackIn, RideFeedbackRead
 from app.services import activity_service
 from app.services.activity_stream_analysis import analyze_stream_blob
 from app.services.athlete_service import get_or_create_profile
@@ -207,3 +211,71 @@ async def get_stream_analysis(
     else:
         result["route_kind"] = "indoor"
     return result
+
+
+# ── Post-ride RPE loop (V3 Ride Recap) ───────────────────────────────────────
+#
+# The athlete's 1-tap "how hard did that feel?" answer. Persisted per
+# (user, activity) so the recap re-hydrates its selected chip on reload and the
+# value is available to ride_compliance / next-week target tuning. RLS-scoped.
+
+@router.get(
+    "/{activity_id}/rpe",
+    response_model=RideFeedbackRead,
+    summary="Read the athlete's post-ride RPE for an activity",
+)
+async def get_ride_rpe(
+    activity_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> RideFeedbackRead:
+    row = (
+        await db.execute(
+            select(RideFeedback).where(
+                RideFeedback.user_id == current_user.id,
+                RideFeedback.activity_id == activity_id,
+            )
+        )
+    ).scalars().first()
+    if row is None:
+        return RideFeedbackRead(activity_id=activity_id, rpe=None, updated_at=None)
+    return RideFeedbackRead(
+        activity_id=activity_id, rpe=row.rpe, updated_at=row.updated_at,
+    )
+
+
+@router.put(
+    "/{activity_id}/rpe",
+    response_model=RideFeedbackRead,
+    summary="Record (or update) the athlete's post-ride RPE for an activity",
+)
+async def put_ride_rpe(
+    activity_id: int,
+    data: RideFeedbackIn,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> RideFeedbackRead:
+    # Guard: the activity must exist and belong to the caller (RLS also scopes,
+    # but a 404 is the honest answer for an unknown id).
+    activity = await activity_service.get_activity(
+        db=db, user_id=current_user.id, activity_id=activity_id
+    )
+    if activity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found")
+
+    stmt = (
+        pg_insert(RideFeedback)
+        .values(user_id=current_user.id, activity_id=activity_id, rpe=data.rpe)
+        .on_conflict_do_update(
+            constraint="uq_ride_feedback_user_activity",
+            set_={"rpe": data.rpe, "updated_at": func.now()},
+        )
+        .returning(RideFeedback.rpe, RideFeedback.updated_at)
+    )
+    result = (await db.execute(stmt)).first()
+    await db.commit()
+    return RideFeedbackRead(
+        activity_id=activity_id,
+        rpe=result[0] if result else data.rpe,
+        updated_at=result[1] if result else None,
+    )

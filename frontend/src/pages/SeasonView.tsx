@@ -433,6 +433,41 @@ export default function SeasonView() {
           </div>
         )}
 
+        {/* ── Upcoming Races (.pen yxV7s) — the app tracks ONE target event, so
+            this honestly lists the single A-race rather than fabricating a
+            multi-race calendar the backend doesn't hold. ── */}
+        {eventDate != null && (
+          <div className="flex flex-col gap-3.5 p-5" style={CARD}>
+            <div className="flex items-center justify-between">
+              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Nächste Rennen' : 'Upcoming Races'}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? '1 diese Saison' : '1 this season'}</span>
+            </div>
+            <div className="flex items-center gap-3.5">
+              <div className="flex flex-col items-center" style={{ width: 42 }}>
+                <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, color: 'var(--color-muted)' }}>
+                  {fmtDate(eventDate, { en: 'MMM', de: 'MMM' }).toUpperCase()}
+                </span>
+                <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>
+                  {fmtDate(eventDate, { en: 'd', de: 'd' })}
+                </span>
+              </div>
+              <div className="flex flex-col gap-0.5" style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)' }}>
+                  {eventName ?? (de ? 'Zielevent' : 'Target event')}
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>
+                  {[eventTypeLabel, daysToGo != null && daysToGo >= 0 ? (de ? `in ${daysToGo} Tg.` : `in ${daysToGo} days`) : null].filter(Boolean).join(' · ') || (de ? 'Zielrennen' : 'Goal race')}
+                </span>
+              </div>
+              {priority && prioChip && (
+                <span className="grid place-items-center rounded-full px-3 py-1" style={{ background: prioChip.bg }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: prioChip.fg }}>{priority}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Race Day Plan — draft pacing from the CANONICAL threshold (.pen H1DZl4) ── */}
         {eventDate != null && displayFtp != null && (
           <div className="flex flex-col gap-4 p-5" style={CARD}>

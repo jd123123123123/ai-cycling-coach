@@ -40,6 +40,7 @@ from app.services.period_report import get_or_build_report
 from app.services.race_debrief import get_or_build_debrief
 from app.services.ride_compare import build_comparison
 from app.services.detailed_power_profile import compute_detailed_power_profile
+from app.services.power_profile_view import compute_power_profile_view
 from app.services.tid_assessment import compute_training_distribution
 from app.services.wbal_trace import compute_wbal_trace
 
@@ -69,6 +70,25 @@ async def get_power_profile(
     if profile is None:
         return {"available": False}
     return profile
+
+
+@router.get(
+    "/power-profile-view",
+    summary="V3 Power Profile screen model — hero curve, zones, phenotype, cohort benchmark",
+)
+async def get_power_profile_view(
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    lang: str = "en",
+) -> dict:
+    """The V3 · Power Profile surface, card-for-card: hero mean-max curve with
+    recent-PR flags, canonical FTP + W/kg + monthly progression, Coggan power
+    zones, rider-type phenotype (+ training-consequence line), cohort benchmark
+    bands and sprint/pedaling (durability + left/right balance). Built from the
+    stored per-ride MMP curves (fast) with bounded raw-stream loads for
+    durability/balance only. `{available: false}` when no power rides exist.
+    `?lang=de` localizes athlete-facing prose (`phenotype.key` stays stable)."""
+    return await compute_power_profile_view(db, _user.id, lang=lang)
 
 
 @router.get(

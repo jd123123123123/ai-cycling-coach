@@ -63,3 +63,23 @@ export function localDayKey(ts: string | Date): string {
 export function isTodayLocal(isoTimestamp: string, now: Date = new Date()): boolean {
   return localDayKey(isoTimestamp) === localDayKey(now)
 }
+
+/**
+ * TSB → fitness/form state, used by the Load & Form hero. The ONLY place the
+ * form bands are defined so the hero number, the pill and the gauge can never
+ * disagree. Neutral tone by contract: the banned words Verletzung / Gefahr /
+ * Untertraining (project science-methods avoid-list) never appear.
+ */
+export interface FormState {
+  label: string
+  /** CSS custom-property reference for the band colour. */
+  color: string
+  sub: string
+}
+export function classifyForm(tsb: number | null, de: boolean): FormState {
+  if (tsb == null) return { label: '—', color: 'var(--color-muted)', sub: de ? 'Noch keine Lastdaten' : 'No load data yet' }
+  if (tsb <= -15) return { label: de ? 'Überlastet' : 'Overreached', color: 'var(--color-move)', sub: de ? 'Hohe Ermüdung — Erholung einplanen' : 'High fatigue — plan recovery' }
+  if (tsb <= -5) return { label: de ? 'Aufbauend' : 'Building', color: 'var(--color-amber)', sub: de ? 'Produktive Last — Fitness wächst' : 'Productive load — fitness rising' }
+  if (tsb <= 10) return { label: de ? 'Optimal' : 'Sweet spot', color: 'var(--color-recovery)', sub: de ? 'Ausgewogen — bereit für Qualität' : 'Balanced — ready for quality' }
+  return { label: de ? 'Frisch' : 'Fresh', color: 'var(--color-strain)', sub: de ? 'Sehr frisch — ideal für den Wettkampf' : 'Very fresh — ideal for racing' }
+}

@@ -24,7 +24,6 @@ import SessionReviewCard from '../SessionReviewCard'
 import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
 import TheRoadCard from '../TheRoadCard'
-import WeatherNudge from '../WeatherNudge'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import AbsorptionCard from '../AbsorptionCard'
 import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
@@ -798,9 +797,12 @@ export default function TodayTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
-      {/* 1 · Greeting Header (pen GyODe) — greeting + date + avatar, with the
-          V3 WeatherChip mounted full-width beneath. `hidden` is passed for
-          mount compatibility only — the chip ignores it. */}
+      {/* 1 · Greeting Header (pen GyODe) — greeting + date + avatar ONLY. The
+          V3 · Today frame (OwSbv → Greeting Header) carries NO weather chip
+          here; the single coherent weather element is the hourly
+          WeatherWindowCard mounted lower, near the session (below). The old
+          full-width WeatherNudge chip was a V2 remnant not present in the pen
+          and has been removed (user report: "old weather still on top"). */}
       <div className="flex flex-col gap-3.5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-0.5 min-w-0">
@@ -820,7 +822,6 @@ export default function TodayTab() {
             )}
           </Link>
         </div>
-        <WeatherNudge hidden={!isActiveTrainingDay} />
       </div>
 
       {/* 2 · Race chip (pen m3IzG1) — compact goal countdown → /season */}
@@ -1019,10 +1020,12 @@ export default function TodayTab() {
         </div>
       )}
 
-      {/* Hourly WeatherWindow (pen "V3 · Explore Routes" IgqyH) — mounted on
-          Today near the session card (explicit user decision, Jul 2026;
-          supersedes the challenge-doc "Routes only" verdict). Hides itself
-          without real forecast data; the greeting WeatherChip stays. */}
+      {/* Hourly WeatherWindow (pen "V3 · Explore Routes" IgqyH) — the SINGLE
+          weather element on Today, mounted near the session card (explicit user
+          decision, Jul 2026; supersedes the challenge-doc "Routes only"
+          verdict). Hides itself without real forecast data. The old greeting
+          WeatherChip has been removed, so this is now the one coherent
+          weather treatment on the page. */}
       {isActiveTrainingDay && <WeatherWindowCard />}
 
       {/* Einheit des Tages — the ONE shared session card (identical mount on

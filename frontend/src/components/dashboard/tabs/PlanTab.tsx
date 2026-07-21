@@ -336,10 +336,6 @@ export default function PlanTab() {
   // shadowed secondary sessions), reconciling header and list (audit P0-5).
   const sportTargetTss = sportDays.reduce((s, d) => s + (d.target_tss ?? 0), 0)
   const weeklyTarget = sport === 'all' ? (week?.planned_tss_total ?? sportTargetTss) : sportTargetTss
-  const weeklyDone = useMemo(() => (acts?.activities ?? [])
-    .filter((a) => sportMatch(a.sport ?? '') && parseISO(a.started_at ?? a.date ?? '') >= weekStart)
-    .reduce((s, a) => s + (a.tss ?? 0), 0), [acts, sport, weekStart])
-  const progressPct = weeklyTarget > 0 ? Math.min(100, (weeklyDone / weeklyTarget) * 100) : 0
   // Phase chip — localized stem + number ("base1" → DE "Grundlage 1"), raw
   // server value only as last-resort fallback.
   const phaseLabel = useMemo(() => {
@@ -398,6 +394,28 @@ export default function PlanTab() {
     .filter((a) => parseISO(a.started_at ?? a.date ?? '') >= weekStart)
     .reduce((s, a) => s + (a.tss ?? 0), 0), [acts, weekStart])
   const planPct = planTarget > 0 ? Math.min(100, (planDone / planTarget) * 100) : 0
+
+  // ── Top PlanCard (.pen TqTJw) — season summary that taps into the Season
+  // detail (.pen pTlXd / SeasonView). Week-of-block badge + block progress bar
+  // + Weeks-left / Week-hours / Sessions / Week-load stats. Real meso data;
+  // honest "—" where a figure is absent.
+  const blockHorizon = meso?.progression?.horizon_weeks ?? null
+  const blockBadge = weekOfMeso != null && blockHorizon != null && blockHorizon > 0
+    ? (de ? `Woche ${weekOfMeso} / ${blockHorizon}` : `Week ${weekOfMeso} / ${blockHorizon}`)
+    : phaseLabel
+  const blockPct = weekOfMeso != null && blockHorizon != null && blockHorizon > 0
+    ? Math.min(100, (weekOfMeso / blockHorizon) * 100)
+    : planPct
+  const planStats: [string, string][] = [
+    weeksLeft != null
+      ? [`${weeksLeft}`, de ? 'Wochen übrig' : 'Weeks left']
+      : blockHorizon != null
+        ? [`${blockHorizon}`, de ? 'Wochen Aufbau' : 'Week block']
+        : ['—', de ? 'Wochen übrig' : 'Weeks left'],
+    [weekHours > 0 ? `${weekHours.toFixed(1)}h` : '—', de ? 'Wochenstunden' : 'Week hours'],
+    [`${sessionCount}`, de ? 'Einheiten' : 'Sessions'],
+    [weeklyTarget > 0 ? `${Math.round(weeklyTarget)}` : '—', de ? 'Wochenlast' : 'Week load'],
+  ]
 
   // Zone 2 — projection chart geometry (50%/80% confidence bands + central path).
   // NaN-safe: the backend can (transiently) emit null current/projected and
@@ -582,6 +600,41 @@ export default function PlanTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
+      {/* Top PlanCard (.pen TqTJw) — the season-summary card the V3 · Train
+          frame leads with. Tapping it opens the Season & Race Day detail
+          (.pen pTlXd → /season). Real meso data; honest "—" where absent. */}
+      <Link to="/season" className="rounded-[24px] p-5 hover-card flex flex-col gap-4" style={cardStyle}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.11em', color: 'var(--color-muted)' }}>
+              {de ? 'TRAININGSPLAN' : 'TRAINING PLAN'}
+            </span>
+            <span className="num-display line-clamp-2" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{planName}</span>
+          </div>
+          <span className="shrink-0 inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center rounded-full px-3 py-1.5" style={{ background: 'color-mix(in srgb, var(--color-recovery) 16%, transparent)', color: 'var(--color-recovery)', fontSize: 12, fontWeight: 700 }}>{blockBadge}</span>
+            <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></span>
+          </span>
+        </div>
+        <div style={{ height: 8, borderRadius: 999, background: 'var(--color-surface-2)', overflow: 'hidden' }}>
+          <div style={{ width: `${blockPct}%`, height: '100%', borderRadius: 999, background: 'var(--color-recovery)' }} />
+        </div>
+        <div className="flex gap-3">
+          {planStats.map(([v, l], i) => (
+            <div key={i} className="flex-1 min-w-0 flex flex-col gap-0.5">
+              <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{v}</span>
+              <span className="truncate" style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--color-muted)' }}>{l}</span>
+            </div>
+          ))}
+        </div>
+        {/* Hours reconciliation — the CTL-anchored ramp explained (real data). */}
+        {meso?.hours_note != null && (
+          <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
+            {de ? meso.hours_note.de : meso.hours_note.en}
+          </span>
+        )}
+      </Link>
+
       {/* Sport toggle */}
       <div className="flex gap-1 rounded-full p-1" style={cardStyle}>
         {([['bike', Bike, de ? 'Rad' : 'Bike'], ['run', Footprints, de ? 'Lauf' : 'Run'], ['all', InfinityIcon, de ? 'Alle' : 'All']] as const).map(([s, Icon, label]) => (
@@ -1110,47 +1163,18 @@ export default function PlanTab() {
         </>
       )}
 
-      {/* Plan card → Load & Form drill-down */}
-      <Link to="/load-form" className="rounded-[24px] p-5 hover-card flex flex-col gap-4" style={cardStyle}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{de ? 'TRAININGSPLAN' : 'TRAINING PLAN'}{sport !== 'all' ? ` · ${sportWord}` : ''}</span>
-            {/* clamp-2 (textfit): long plan/goal names wrap, never truncate */}
-            <span className="num-display line-clamp-2" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{planName}</span>
-          </div>
-          <span className="shrink-0 inline-flex items-center gap-1">
-            <span className="inline-flex items-center rounded-full px-3 py-1.5" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 12, fontWeight: 700 }}>{phaseLabel}</span>
-            <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></span>
-          </span>
+      {/* Load & Form drill-down — a slim nav row (the plan summary now leads
+          the tab in the top PlanCard → /season, so this is no longer a second
+          full plan card, only the load/form deep-link). */}
+      <Link to="/load-form" className="rounded-[24px] p-4 flex items-center gap-3.5 hover-card" style={cardStyle}>
+        <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-accent-soft)' }}>
+          <TrendingUp size={22} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
         </div>
-        <div style={{ height: 8, borderRadius: 999, background: 'var(--color-surface-2)', overflow: 'hidden' }}>
-          <div style={{ width: `${progressPct}%`, height: '100%', borderRadius: 999, background: 'var(--color-accent)' }} />
+        <div className="flex-1 min-w-0">
+          <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{de ? 'BELASTUNG & FORM' : 'LOAD & FORM'}</span>
+          <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Fitness, Ermüdung & Form' : 'Fitness, fatigue & form'}</div>
         </div>
-        <div className="flex">
-          {[
-            // No event → the fitness-builder horizon replaces the dash: a
-            // rolling block is a real answer, "—" was an honest non-answer.
-            weeksLeft != null
-              ? [`${weeksLeft}`, de ? 'Wochen übrig' : 'Weeks left']
-              : meso?.progression != null
-                ? [`${meso.progression.horizon_weeks}`, de ? 'Wochen Aufbau' : 'Week block']
-                : ['—', de ? 'Wochen übrig' : 'Weeks left'],
-            [weekHours > 0 ? `${weekHours.toFixed(1)}h` : '—', de ? 'Wochenstunden' : 'Week hours'],
-            [`${sessionCount}`, de ? 'Einheiten' : 'Sessions'],
-          ].map(([v, l], i) => (
-            <div key={i} className="flex-1 flex flex-col gap-0.5">
-              <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{v}</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{l}</span>
-            </div>
-          ))}
-        </div>
-        {/* Hours reconciliation — the CTL-anchored ramp explained, so stated
-            vs delivered hours never diverge silently (review finding). */}
-        {meso?.hours_note != null && (
-          <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
-            {de ? meso.hours_note.de : meso.hours_note.en}
-          </span>
-        )}
+        <span className="hover-arrow"><ChevronRight size={18} style={{ color: 'var(--color-muted)' }} /></span>
       </Link>
 
       {/* Focus — per-sport builder-program picker (Bike + Run rows). */}
