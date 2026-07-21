@@ -237,6 +237,13 @@ def _brief_diverges_from_plan(pw: dict, planned: Any) -> bool:
     brief_tid = str(pw.get("template_id") or "")
     if plan_tid and brief_tid:
         return brief_tid != plan_tid
+    # A template-LESS plan row (a scheduled custom workout) can't be matched by
+    # id; compare titles. The brief showing a library template ("Z2 endurance")
+    # over a custom plan row ("VO2 4×3min Test") is a divergence.
+    plan_title = str(getattr(planned, "title", None) or "").strip()
+    brief_title = str(pw.get("title") or "").strip()
+    if plan_title and brief_title:
+        return plan_title != brief_title
     plan_tss = getattr(planned, "target_tss", None)
     brief_tss = pw.get("predicted_tss")
     if (
@@ -247,6 +254,86 @@ def _brief_diverges_from_plan(pw: dict, planned: Any) -> bool:
             _TSS_DIVERGENCE_FLOOR, 0.15 * float(plan_tss)
         )
     return False
+
+
+def _tss_from_dict_blocks(blocks: list[dict]) -> float:
+    """TSS from stored ResolvedBlock dicts: Σ duration_h × IF² × 100, honoring
+    on/off structured sets (the ON fraction at target, OFF at off_pct)."""
+    total = 0.0
+    for b in blocks:
+        dur = float(b.get("duration_s") or b.get("duration_seconds") or 0)
+        if dur <= 0:
+            continue
+        pct = float(b.get("target_pct_ftp") or b.get("power_target_pct_ftp") or 0)
+        reps, on_s, off_s = b.get("reps"), b.get("on_s"), b.get("off_s")
+        if reps and on_s:
+            off_pct = float(b.get("off_pct_ftp") or 0)
+            on_h = (reps * on_s) / 3600.0
+            off_h = (reps * (off_s or 0)) / 3600.0
+            total += on_h * pct * pct * 100 + off_h * off_pct * off_pct * 100
+        else:
+            total += (dur / 3600.0) * pct * pct * 100
+    return round(total, 1)
+
+
+async def _coerce_brief_to_custom_row(
+    db: AsyncSession,
+    brief: CoachBrief,
+    locale: str,
+) -> bool:
+    """Coerce the brief to a template-LESS planned row — a user-authored /
+    scheduled custom workout (blocks_source='user_plan'/'user_modified',
+    template_id empty). The row already carries fully-resolved blocks (watts
+    from FTP), so we render THOSE rather than substituting a library template
+    (which is what left a scheduled custom workout showing a wrong session on
+    Today). Returns False when no such row / no blocks exist."""
+    from app.models.planned_workout import PlannedWorkout
+    from app.services.athlete_time import today_local
+
+    row = (
+        await db.execute(
+            select(PlannedWorkout)
+            .where(
+                PlannedWorkout.user_id == brief.user_id,
+                PlannedWorkout.date == today_local(),
+            )
+            .order_by(PlannedWorkout.id.desc())
+        )
+    ).scalars().first()
+    if row is None:
+        return False
+    struct = row.interval_structure
+    blocks = struct.get("intervals") if isinstance(struct, dict) else struct
+    if not isinstance(blocks, list) or not blocks:
+        return False
+
+    dur_min = int(round((row.duration_seconds_target or 0) / 60)) or None
+    tss = _tss_from_dict_blocks(blocks)
+    title = row.title or "Eigenes Workout"
+    brief.prescribed_workout = {
+        "template_id": row.template_id or "custom",
+        "title": title,
+        "title_de": title,  # user-named — one name in every locale
+        "duration_minutes": dur_min,
+        "predicted_tss": tss,
+        "framework_cited": "custom",
+        "category": None,
+        "blocks": blocks,
+        "why_this_workout": (
+            "Dein eigenes Workout — genau so, wie du es geplant hast."
+            if locale == "de"
+            else "Your own workout — exactly as you built it."
+        ),
+        "purpose_de": None,
+    }
+    try:
+        await db.commit()
+    except Exception:  # noqa: BLE001 — mocked/readonly sessions must not 500
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+    return True
 
 
 async def _coerce_brief_to_plan(
@@ -271,7 +358,10 @@ async def _coerce_brief_to_plan(
 
     plan_tid = str(getattr(planned, "template_id", None) or "")
     if plan_tid not in _TEMPLATES:
-        return False
+        # Template-less planned row = a user-authored / scheduled custom
+        # workout. Render the row's OWN resolved blocks instead of giving up
+        # (which used to force a regeneration that re-picked a wrong template).
+        return await _coerce_brief_to_custom_row(db, brief, locale)
 
     ftp = int(getattr(profile, "ftp_watts", 0) or 0) if profile else 0
     lthr = None

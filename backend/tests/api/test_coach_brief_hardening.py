@@ -108,6 +108,38 @@ class TestBriefDivergesFromPlan:
     def test_missing_everything_no_divergence(self):
         assert _brief_diverges_from_plan({}, _planned(template_id=None, target_tss=None)) is False
 
+    def test_scheduled_custom_workout_diverges_by_title(self):
+        # A template-LESS custom plan row ("VO2 4×3min Test", no template_id,
+        # target_tss unresolved) vs a brief still showing a library template
+        # ("Z2 endurance") — matched by TITLE, must diverge so it coerces.
+        pw = {"template_id": "z2_endurance_60", "title": "Z2 endurance — 60min", "predicted_tss": 36}
+        plan = _planned(template_id=None, target_tss=None, title="VO2 4×3min Test")
+        assert _brief_diverges_from_plan(pw, plan) is True
+
+    def test_custom_workout_same_title_no_divergence(self):
+        pw = {"template_id": "custom", "title": "VO2 4×3min Test", "predicted_tss": 41}
+        plan = _planned(template_id=None, target_tss=None, title="VO2 4×3min Test")
+        assert _brief_diverges_from_plan(pw, plan) is False
+
+
+class TestTssFromDictBlocks:
+    def test_steady_block(self):
+        from app.api.coach import _tss_from_dict_blocks
+        # 1h at 100% FTP = 100 TSS.
+        assert _tss_from_dict_blocks([{"duration_s": 3600, "target_pct_ftp": 1.0}]) == 100.0
+
+    def test_structured_on_off_set_uses_both_phases(self):
+        from app.api.coach import _tss_from_dict_blocks
+        # 30×15s @150% ON / 45s @50% OFF → on 450s@1.5, off 1350s@0.5.
+        # (450×1.5² + 1350×0.5²)/3600 × 100 = (1012.5 + 337.5)/3600 ×100 = 37.5
+        blocks = [{"duration_s": 1800, "target_pct_ftp": 1.5, "reps": 30, "on_s": 15, "off_s": 45, "off_pct_ftp": 0.5}]
+        assert _tss_from_dict_blocks(blocks) == 37.5
+
+    def test_tolerates_formalized_shape_and_zero_duration(self):
+        from app.api.coach import _tss_from_dict_blocks
+        blocks = [{"duration_seconds": 1800, "power_target_pct_ftp": 1.0}, {"duration_s": 0, "target_pct_ftp": 2.0}]
+        assert _tss_from_dict_blocks(blocks) == 50.0
+
 
 # ---------------------------------------------------------------------------
 # Endpoint — mocked auth/db, patched service layer
