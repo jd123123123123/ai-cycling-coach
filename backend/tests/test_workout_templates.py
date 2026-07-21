@@ -30,9 +30,16 @@ from app.services.workout_templates import (
 
 class TestTemplateLibrary:
     def test_all_templates_registered(self):
-        # 55-template library: 13 originals + 7 first-batch + 30 second-batch
-        # + 2 plan-engine-v2 fun formats (tempo+bursts, playful-Z2 surges).
+        # 68-template library: 13 originals + 7 first-batch + 30 second-batch
+        # + 2 plan-engine-v2 fun formats (tempo+bursts, playful-Z2 surges)
+        # + 13 Aktivitus 14wk Power & Endurance imports (wk 13/14 merged).
         expected = {
+            # Aktivitus 14wk Power & Endurance (Zwift import; 13/14 merged)
+            "aktivitus_pe_1", "aktivitus_pe_2", "aktivitus_pe_3",
+            "aktivitus_pe_4", "aktivitus_pe_5", "aktivitus_pe_6",
+            "aktivitus_pe_7", "aktivitus_pe_8", "aktivitus_pe_9",
+            "aktivitus_pe_10", "aktivitus_pe_11", "aktivitus_pe_12",
+            "aktivitus_pe_13_14",
             # Plan-engine v2 fun formats (science-file archetypes 11 + 25)
             "tempo_bursts_3x10", "z2_endurance_surges_75",
             # Originals

@@ -631,6 +631,11 @@ _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
         "over_under_4x12", "threshold_descending",
         "threshold_pyramid", "lactate_shuttles_3x8",
         "threshold_2x15", "over_under_3x5",
+        # Aktivitus 14wk Power & Endurance — cadence-forced threshold sessions
+        # (appended: extra variety rotation, existing first-fit order intact).
+        "aktivitus_pe_1", "aktivitus_pe_2", "aktivitus_pe_3", "aktivitus_pe_4",
+        "aktivitus_pe_8", "aktivitus_pe_9", "aktivitus_pe_10",
+        "aktivitus_pe_11", "aktivitus_pe_12",
     ],
     # VO2: long polarized for big days, then highest-evidence short-intervals
     # (Rønnestad), then the long 3×6 and 5×4 reps, hill VO2, microbursts,
@@ -641,6 +646,8 @@ _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
         "vo2_hill_6x3", "vo2_microbursts_30x15_45",
         "vo2_map_5x3", "vo2_descending_5_4_3_2_1",
         "vo2_micro_30x30",
+        # Aktivitus 14wk Power & Endurance — VO2/microburst power-endurance days.
+        "aktivitus_pe_5", "aktivitus_pe_6", "aktivitus_pe_7", "aktivitus_pe_13_14",
     ],
     # Anaerobic / neuromuscular — peak power + capacity. Order is
     # taper-friendly first (short, fully-rested sprints preserve peak power
