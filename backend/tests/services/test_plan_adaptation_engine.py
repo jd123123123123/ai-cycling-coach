@@ -424,6 +424,49 @@ async def test_future_only_change_sends_no_push(monkeypatch):
     send.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_quiet_on_rest_days_suppresses_push_when_today_becomes_rest(monkeypatch):
+    """V3 Settings toggle ON: illness turns today into rest — the feed row
+    still lands, but no push goes out on a (now) rest day."""
+    _patch_directive(monkeypatch, _directive(directive="rest", ceiling="rest", hrv_state="unknown"))
+    monkeypatch.setattr("app.services.push_service.push_configured", lambda: True)
+    send = AsyncMock(return_value=1)
+    monkeypatch.setattr("app.services.push_service.send_user_push", send)
+
+    today_row = _pw(TODAY, "vo2_5x4")
+    profile = _profile(
+        goals={"athlete_status": {"state": "sick"}}, quiet_on_rest_days=True
+    )
+    db = _db(profile=profile, plans=[today_row], metrics=_baseline_metrics(), meso=_meso())
+
+    out = await engine.run_for_user(db, USER_ID, now_utc=NOW)
+
+    assert [c["rule"] for c in out["changes"]] == ["illness_interlock"]
+    assert today_row.template_id == "rest_day"
+    assert len(_logged_rows(db)) == 1  # adaptation is logged regardless
+    send.assert_not_awaited()  # …but the rest day stays quiet
+
+
+@pytest.mark.asyncio
+async def test_quiet_toggle_off_keeps_rest_day_push(monkeypatch):
+    """Toggle OFF: the same today-becomes-rest change still pushes."""
+    _patch_directive(monkeypatch, _directive(directive="rest", ceiling="rest", hrv_state="unknown"))
+    monkeypatch.setattr("app.services.push_service.push_configured", lambda: True)
+    send = AsyncMock(return_value=1)
+    monkeypatch.setattr("app.services.push_service.send_user_push", send)
+
+    today_row = _pw(TODAY, "vo2_5x4")
+    profile = _profile(
+        goals={"athlete_status": {"state": "sick"}}, quiet_on_rest_days=False
+    )
+    db = _db(profile=profile, plans=[today_row], metrics=_baseline_metrics(), meso=_meso())
+
+    out = await engine.run_for_user(db, USER_ID, now_utc=NOW)
+
+    assert [c["rule"] for c in out["changes"]] == ["illness_interlock"]
+    send.assert_awaited_once()
+
+
 # ─── Ordering / precedence ───────────────────────────────────────────────────
 
 @pytest.mark.asyncio

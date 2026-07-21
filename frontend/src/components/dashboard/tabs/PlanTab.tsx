@@ -8,13 +8,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
-import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ChevronDown, ListChecks, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp } from 'lucide-react'
+import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ChevronDown, ListChecks, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp, SlidersHorizontal } from 'lucide-react'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLocale } from '../../../contexts/LocaleContext'
 import FocusSection from '../../plan/FocusSection'
+import AdaptiveCard from '../../plan/AdaptiveCard'
+import PlanChangeInterview from '../../plan/PlanChangeInterview'
 import { detectWorkoutSport } from '../../../api/coach'
 import type { ResolvedBlock, WorkoutSport } from '../../../api/coach'
 import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
@@ -155,6 +157,8 @@ export default function PlanTab() {
   // P2-13: PROGNOSE + Leistungszonen + periodization chips live in ONE
   // collapsed accordion — closed by default, the session list leads the page.
   const [saisonOpen, setSaisonOpen] = useState(false)
+  // Plan-change interview (credit → delta questions → new week) — V3 flow.
+  const [interviewOpen, setInterviewOpen] = useState(false)
   const MAX_WEEK_OFFSET = 12
   const isFuture = weekOffset > 0
   const { data: week } = useCurrentWeek(weekOffset)
@@ -560,6 +564,11 @@ export default function PlanTab() {
           })}
         </div>
       )}
+
+      {/* Violet AdaptiveCard (pen JnlgK) — live adaptation feed, newest rows +
+          "Was sich geändert hat" timeline. Now-only: a future-week preview
+          shows the plan, not the adaptation chrome. */}
+      {!isFuture && <AdaptiveCard />}
 
       {/* Session Review lives on the Today tab ONLY (usability audit: one home
           per surface) — from here it's a one-line link, never a second mount. */}
@@ -1119,11 +1128,23 @@ export default function PlanTab() {
       {/* Focus — per-sport builder-program picker (Bike + Run rows). */}
       <FocusSection />
 
-      {/* Bring-your-own plan → PDF/image import + adaptation (P: plan-upload) */}
-      <Link to="/plan/import" className="hover-card flex items-center gap-2 self-start rounded-full px-4 py-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>
-        <FileUp size={14} style={{ color: 'var(--color-accent)' }} />
-        {de ? 'Eigenen Plan importieren (PDF/Bild)' : 'Import your own plan (PDF/image)'}
-      </Link>
+      {/* Plan-change chips (pen RUAW1 "Chip-Adjust plan" styling): the 3-step
+          interview (credit → delta questions → new week) + BYO plan import. */}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => setInterviewOpen(true)}
+          className="hover-card inline-flex items-center gap-2 rounded-full px-4 py-2"
+          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)', minHeight: 40, cursor: 'pointer' }}>
+          <SlidersHorizontal size={14} style={{ color: 'var(--color-accent)' }} />
+          {de ? 'Plan anpassen' : 'Adjust plan'}
+        </button>
+        {/* Bring-your-own plan → PDF/image import + adaptation (P: plan-upload) */}
+        <Link to="/plan/import" className="hover-card inline-flex items-center gap-2 rounded-full px-4 py-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)', minHeight: 40 }}>
+          <FileUp size={14} style={{ color: 'var(--color-accent)' }} />
+          {de ? 'Eigenen Plan importieren (PDF/Bild)' : 'Import your own plan (PDF/image)'}
+        </Link>
+      </div>
+
+      <PlanChangeInterview open={interviewOpen} onClose={() => setInterviewOpen(false)} />
 
       {/* Fortschritt & Potenzial — a single nav entry (not a second sport picker).
           Follows the toggle: it opens the progression screen for the active discipline. */}

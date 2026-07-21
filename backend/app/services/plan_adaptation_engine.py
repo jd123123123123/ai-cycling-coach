@@ -835,7 +835,17 @@ async def run_for_user(
 
     if changes:
         await db.commit()
-        await _push_today_change(db, profile, changes, snap.today)
+        # "Quiet on rest days" (V3 Settings): when today's plan is rest —
+        # including when THIS run just turned it into rest — the athlete asked
+        # for silence, so the feed row still lands but no push goes out.
+        from app.services.streak import _is_rest_planned  # shared rest semantics
+
+        today_rows = snap.bike_on(snap.today)
+        rest_today = not today_rows or all(
+            _is_rest_planned(r.template_id, r.title) for r in today_rows
+        )
+        if not (bool(getattr(profile, "quiet_on_rest_days", True)) and rest_today):
+            await _push_today_change(db, profile, changes, snap.today)
         return {"status": "adapted", "changes": changes}
 
     _LAST_QUIET[user_id] = (snap.today.isoformat(), snap.fingerprint)

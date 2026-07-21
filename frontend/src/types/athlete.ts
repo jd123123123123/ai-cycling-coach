@@ -22,6 +22,14 @@ export interface AthleteProfile {
   // can bucket days on the ATHLETE's calendar, not UTC. Optional until the
   // backend field lands everywhere.
   timezone?: string | null
+  // V3 Settings — suppress coach push notices on rest days (default ON)
+  quiet_on_rest_days?: boolean
+  // Plan-engine v2 inputs (nullable — unset means "not yet learned/asked")
+  days_available?: DaysAvailableFlags | null
+  motivation_style?: 'race_focused' | 'fitness_builder' | 'fun_variety' | null
+  variety_dial?: 'steady' | 'mixed' | 'adventurous' | null
+  experience_level?: 'new' | 'returning' | 'seasoned' | null
+  hard_day_blackouts?: string[] | null
   created_at: string
   updated_at: string | null
 }
@@ -57,4 +65,25 @@ export interface AthleteProfileUpdate {
   target_priority?: 'A' | 'B' | 'C' | null
   // P0-2 timezone handshake — IANA string reported by the browser
   timezone?: string | null
+  // V3 Settings — suppress coach push notices on rest days
+  quiet_on_rest_days?: boolean
+  // Plan-engine v2 inputs (V3 onboarding: hours + days are load-bearing;
+  // motivation_style defaults from the depth selector, never asked directly)
+  days_available?: DaysAvailableFlags | null
+  motivation_style?: 'race_focused' | 'fitness_builder' | 'fun_variety' | null
+  variety_dial?: 'steady' | 'mixed' | 'adventurous' | null
+  experience_level?: 'new' | 'returning' | 'seasoned' | null
+  hard_day_blackouts?: string[] | null
+}
+
+// Weekday availability flags + the athlete's long-ride day (plan-engine v2).
+export interface DaysAvailableFlags {
+  mon: boolean
+  tue: boolean
+  wed: boolean
+  thu: boolean
+  fri: boolean
+  sat: boolean
+  sun: boolean
+  long_day?: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun' | null
 }

@@ -4,6 +4,7 @@
   "src/components/dashboard/CoachChat.tsx::Loading",
   "src/components/dashboard/HRVTrend.tsx::unknown",
   "src/components/dashboard/tabs/TodayTab.tsx::Start",
+  "src/components/plan/PlanChangeInterview.tsx::unknown",
   "src/components/social/tabs/SocialTab.tsx::Best",
   "src/components/strength/LogSessionSheet.tsx::Loading",
   "src/components/strength/RoutineFormSheet.tsx::Add",

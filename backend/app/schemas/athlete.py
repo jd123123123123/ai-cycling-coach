@@ -114,6 +114,9 @@ class AthleteProfileUpdate(BaseModel):
     experience_level: ExperienceLevel | None = None
     hard_day_blackouts: list[str] | None = None
 
+    # V3 Settings — suppress coach push notices on rest days (default ON).
+    quiet_on_rest_days: bool | None = None
+
     @field_validator("hard_day_blackouts")
     @classmethod
     def _validate_hard_day_blackouts(cls, v: list[str] | None) -> list[str] | None:
@@ -172,6 +175,9 @@ class AthleteProfileRead(BaseModel):
     variety_dial: VarietyDial | None = None
     experience_level: ExperienceLevel | None = None
     hard_day_blackouts: list[str] | None = None
+
+    # V3 Settings — suppress coach push notices on rest days
+    quiet_on_rest_days: bool = True
 
     # Timestamps
     created_at: datetime

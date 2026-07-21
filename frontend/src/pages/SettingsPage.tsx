@@ -1,355 +1,400 @@
 /**
- * SettingsPage — route shell for /settings.
+ * SettingsPage — V3 "Profile & Settings" screen (pencil-new.pen, node iYLSd).
  *
- * Language toggle + Garmin connection link + placeholder sections.
- * TODO(06.1 Wave 3): explicit sync-status pill details.
- * TODO(06.2): density toggle.
+ * 1:1 with the pen frame: NavRow → ProfileCard → BODY & ENGINE →
+ * CONNECTIONS → PREFERENCES → footer links. Every value is real:
+ * weight/FTP from the athlete profile, Garmin/Wahoo from their status
+ * endpoints, morning briefing from the push subscription state, and the
+ * "Quiet on rest days" toggle persisted on the profile
+ * (quiet_on_rest_days — suppresses coach push notices on rest days).
+ * Integrations that don't exist (Strava, Whoop) show an honest "—".
  */
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
-import DashboardShell from '../components/dashboard/DashboardShell'
-import LanguageToggle from '../components/dashboard/LanguageToggle'
-import TargetEventEditor from '../components/dashboard/TargetEventEditor'
-import PushIntensityEditor from '../components/dashboard/PushIntensityEditor'
+import { useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  ArrowLeft,
+  Bell,
+  Bike,
+  ChevronRight,
+  CircleMinus,
+  Heart,
+  MonitorSmartphone,
+  PieChart,
+  Ruler,
+  Scale,
+  SlidersHorizontal,
+  Watch,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useLocale } from '../contexts/LocaleContext'
+import { useAthleteProfile } from '../hooks/useAthleteProfile'
+import { useGarminStatus } from '../hooks/useGarminStatus'
 import { useWahooStatus } from '../hooks/useWahooStatus'
+import { updateProfile } from '../api/athletes'
 import { getWahooConnectUrl, disconnectWahoo } from '../api/wahoo'
-import { enableMorningBrief, disableMorningBrief, pushSupported, sendTestPush } from '../lib/push'
+import { enableMorningBrief, disableMorningBrief, pushSupported } from '../lib/push'
+
+const DISPLAY_FONT = '"Sora", "Inter", ui-sans-serif, sans-serif'
+
+// ── Row primitives (pen: Row-* frames, padding [13,0], gap 12) ──────────────
+
+type RowValueTone = 'good' | 'accent' | 'muted'
+
+const TONE_COLOR: Record<RowValueTone, string> = {
+  good: 'var(--color-recovery)',
+  accent: 'var(--color-accent)',
+  muted: 'var(--color-muted)',
+}
+
+interface SettingsRowProps {
+  icon: LucideIcon
+  label: string
+  value: string
+  tone?: RowValueTone
+  onClick?: () => void
+  busy?: boolean
+}
+
+function SettingsRow({ icon: Icon, label, value, tone = 'muted', onClick, busy }: SettingsRowProps) {
+  const inner = (
+    <>
+      <Icon size={20} strokeWidth={2} style={{ color: 'var(--color-ink-2)', flexShrink: 0 }} />
+      <span
+        className="flex-1 text-left text-[14px] font-semibold"
+        style={{ color: 'var(--color-ink)' }}
+      >
+        {label}
+      </span>
+      <span className="text-[13px] font-semibold" style={{ color: TONE_COLOR[tone] }}>
+        {value}
+      </span>
+      {onClick && (
+        <ChevronRight size={18} strokeWidth={2} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+      )}
+    </>
+  )
+  if (!onClick) {
+    return <div className="flex items-center gap-3 py-[13px] w-full">{inner}</div>
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="flex items-center gap-3 py-[13px] w-full"
+      style={{ opacity: busy ? 0.55 : 1 }}
+    >
+      {inner}
+    </button>
+  )
+}
+
+function Divider() {
+  return <div className="h-px w-full" style={{ backgroundColor: 'var(--color-rule)' }} />
+}
+
+/** Pen: Sec-* — 11px/700 tracked label above a $surface card, rows divided. */
+function Section({ label, children }: { label: string; children: ReactNode[] }) {
+  return (
+    <section className="flex flex-col gap-2 w-full">
+      <span
+        className="text-[11px] font-bold"
+        style={{ color: '#5C6570', letterSpacing: '1.4px' }}
+      >
+        {label}
+      </span>
+      <div
+        className="flex flex-col w-full px-[18px] py-1 rounded-[24px]"
+        style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
+      >
+        {children.flatMap((child, i) =>
+          i === 0 ? [child] : [<Divider key={`div-${i}`} />, child],
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ── Page ────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const { language } = useLanguage()
-  const { locale } = useLocale()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { user, logout } = useAuth()
+  const { language, setLanguage } = useLanguage()
+  const { locale } = useLocale()
+  const de = locale === 'de'
+
+  const { data: profile } = useAthleteProfile()
+  const { data: garmin } = useGarminStatus()
+  const { data: wahoo } = useWahooStatus()
+
+  const [wahooBusy, setWahooBusy] = useState(false)
+  const [briefState, setBriefState] = useState<'on' | 'off' | 'busy' | 'unsupported'>(() =>
+    pushSupported() ? (Notification.permission === 'granted' ? 'on' : 'off') : 'unsupported',
+  )
+
+  // "Quiet on rest days" — persisted on the athlete profile (default ON).
+  const quiet = profile?.quiet_on_rest_days ?? true
+  const quietMutation = useMutation({
+    mutationFn: (next: boolean) => updateProfile({ quiet_on_rest_days: next }),
+    onSuccess: (next) => {
+      queryClient.setQueryData(['athlete', 'me'], next)
+    },
+  })
 
   const goBack = () => {
-    // Return to wherever they came from; fall back to the dashboard so mobile
-    // users are never trapped on this page with no way back.
     if (window.history.length > 1) navigate(-1)
     else navigate('/dashboard?tab=today')
   }
 
+  const name = user?.display_name || user?.email?.split('@')[0] || '—'
+  const initial = name.charAt(0).toUpperCase()
+
+  const weight = profile?.weight_kg != null ? `${profile.weight_kg} kg` : '—'
+  const ftp = profile?.ftp_watts != null ? `${profile.ftp_watts} W` : '—'
+  const zones = profile?.ftp_watts != null ? (de ? 'aus FTP' : 'from FTP') : '—'
+
+  const connectedLabel = de ? 'Verbunden' : 'Connected'
+  const connectLabel = de ? 'Verbinden' : 'Connect'
+  const on = de ? 'An' : 'On'
+  const off = de ? 'Aus' : 'Off'
+
+  const handleWahoo = async () => {
+    setWahooBusy(true)
+    try {
+      if (wahoo?.connected) {
+        const ok = window.confirm(de ? 'Wahoo-Verbindung trennen?' : 'Disconnect Wahoo?')
+        if (ok) {
+          await disconnectWahoo()
+          await queryClient.invalidateQueries({ queryKey: ['wahoo', 'status'] })
+        }
+      } else {
+        window.location.href = await getWahooConnectUrl()
+        return // navigating away
+      }
+    } catch {
+      // 409 → not configured on this server; leave the honest state as-is
+    } finally {
+      setWahooBusy(false)
+    }
+  }
+
+  const handleBrief = async () => {
+    if (briefState === 'unsupported' || briefState === 'busy') return
+    const was = briefState
+    setBriefState('busy')
+    try {
+      if (was === 'on') {
+        await disableMorningBrief()
+        setBriefState('off')
+      } else {
+        await enableMorningBrief()
+        setBriefState('on')
+      }
+    } catch {
+      setBriefState(was)
+    }
+  }
+
+  const handleDetailLevel = () => {
+    setLanguage(language === 'simple' ? 'technical' : 'simple')
+    void queryClient.invalidateQueries({ queryKey: ['coach'] })
+  }
+
+  const handleExport = () => {
+    if (!profile) return
+    const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' })
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: 'athlete-profile.json',
+    })
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const handleSignOut = async () => {
+    await logout()
+    navigate('/login')
+  }
+
   return (
-    <DashboardShell>
-      <div className="p-6 max-w-2xl mx-auto flex flex-col gap-8">
-        {/* Back / close — mobile users need an explicit way out */}
-        <div className="flex items-center justify-between -mb-2">
+    <div className="min-h-screen w-full" style={{ backgroundColor: 'var(--color-paper)' }}>
+      <div className="mx-auto flex flex-col" style={{ maxWidth: 430 }}>
+        {/* NavRow (pen Fb0TE) */}
+        <div className="flex items-center gap-2.5 px-4 py-1.5 pt-[max(6px,env(safe-area-inset-top))]">
           <button
             type="button"
             onClick={goBack}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 min-h-[40px] transition-colors"
-            style={{ fontSize: 13, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)', backgroundColor: 'var(--color-paper-2)' }}
+            aria-label={de ? 'Zurück' : 'Back'}
+            className="flex items-center justify-center -ml-1 p-1"
           >
-            <ArrowLeft size={15} strokeWidth={2} />
-            {locale === 'de' ? 'Zurück' : 'Back'}
+            <ArrowLeft size={24} strokeWidth={2} style={{ color: 'var(--color-ink)' }} />
           </button>
-          <button
-            type="button"
-            onClick={goBack}
-            className="rounded-full px-4 py-1.5 min-h-[40px] text-[13px] font-medium transition-opacity"
-            style={{ color: 'var(--color-paper)', backgroundColor: 'var(--color-ink)' }}
-          >
-            {locale === 'de' ? 'Fertig' : 'Done'}
-          </button>
-        </div>
-        <div>
-          {/* Audit P2-14: ONE heading — the duplicated EINSTELLUNGEN eyebrow
-              above the identical H1 wasted the page's first 90px. */}
           <h1
-            className="num-display leading-tight"
-            style={{ fontSize: 'clamp(28px, 4vw, 40px)', color: 'var(--color-ink)' }}
+            className="text-[20px] font-bold"
+            style={{ color: 'var(--color-ink)', fontFamily: DISPLAY_FONT }}
           >
-            {locale === 'de'
-              ? 'Einstellungen'
-              : (language === 'simple' ? 'Preferences' : 'Settings')}
+            {de ? 'Profil & Einstellungen' : 'Profile & Settings'}
           </h1>
         </div>
 
-        {/* Target event — drives the whole plan */}
-        <TargetEventEditor />
-
-        {/* How hard to push — modulates the adaptive engine's upside */}
-        <PushIntensityEditor />
-
-        {/* Coach language */}
-        <section
-          className="flex flex-col gap-3 p-5 rounded-[16px]"
-          style={{
-            backgroundColor: 'var(--color-paper-2)',
-            border: '1px solid var(--color-rule)',
-          }}
-        >
-          <div className="flex flex-col gap-1">
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}>
-              {locale === 'de'
-                ? (language === 'simple' ? 'COACH-STIL' : 'COACH-SPRACHE')
-                : (language === 'simple' ? 'COACH VOICE' : 'COACH LANGUAGE')}
-            </span>
-            <p className="text-[14px]" style={{ color: 'var(--color-ink-2)' }}>
-              {locale === 'de'
-                ? (language === 'simple'
-                    ? 'Wechsle zwischen einfachem Deutsch und technischen Trainingsbegriffen.'
-                    : 'Wechsle zwischen einfachem Deutsch und vollem Coggan/Seiler-Vokabular.')
-                : (language === 'simple'
-                    ? 'Switch between plain English and technical training terms.'
-                    : 'Switch between plain-English and full Coggan/Seiler vocabulary.')}
-            </p>
+        {/* Content (pen HW5v2) */}
+        <div className="flex flex-col gap-5 px-5 pt-2 pb-8">
+          {/* ProfileCard (pen bsy4b) */}
+          <div
+            className="flex items-center gap-3.5 w-full rounded-[24px] p-[18px]"
+            style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
+          >
+            <div
+              className="flex items-center justify-center rounded-full"
+              style={{ width: 56, height: 56, backgroundColor: 'var(--color-accent)', flexShrink: 0 }}
+            >
+              <span className="text-[24px] font-bold text-white" style={{ fontFamily: DISPLAY_FONT }}>
+                {initial}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+              <span
+                className="text-[18px] font-bold truncate"
+                style={{ color: 'var(--color-ink)', fontFamily: DISPLAY_FONT }}
+              >
+                {name}
+              </span>
+              <span className="text-[12px] font-medium truncate" style={{ color: 'var(--color-ink-2)' }}>
+                {user?.email ?? '—'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/profile')}
+              className="rounded-full px-3.5 py-2 text-[12px] font-bold"
+              style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-ink)' }}
+            >
+              {de ? 'Bearbeiten' : 'Edit'}
+            </button>
           </div>
-          <LanguageToggle />
-        </section>
 
-        {/* Garmin connection */}
-        <section
-          className="flex flex-col gap-3 p-5 rounded-[16px]"
-          style={{
-            backgroundColor: 'var(--color-paper-2)',
-            border: '1px solid var(--color-rule)',
-          }}
-        >
-          <div className="flex flex-col gap-1">
-            <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}>
-              GARMIN
-            </span>
-            <p className="text-[14px]" style={{ color: 'var(--color-ink-2)' }}>
-              {locale === 'de'
-                ? (language === 'simple'
-                    ? 'Verwalte deine Garmin-Verbindung, um Workouts und Körperdaten zu synchronisieren.'
-                    : 'Garmin-Connect-Integration — synchronisiert HRV, Body Battery, Schlaf und Aktivitäten.')
-                : (language === 'simple'
-                    ? 'Manage your Garmin connection for syncing workouts and body data.'
-                    : 'Garmin Connect integration — syncs HRV, body battery, sleep, and activities.')}
-            </p>
+          {/* BODY & ENGINE */}
+          <Section label={de ? 'KÖRPER & MOTOR' : 'BODY & ENGINE'}>
+            {[
+              <SettingsRow
+                key="weight"
+                icon={Scale}
+                label={de ? 'Gewicht' : 'Weight'}
+                value={weight}
+                onClick={() => navigate('/profile')}
+              />,
+              <SettingsRow
+                key="ftp"
+                icon={Zap}
+                label="FTP"
+                value={ftp}
+                tone={profile?.ftp_watts != null ? 'good' : 'muted'}
+                onClick={() => navigate('/profile')}
+              />,
+              <SettingsRow
+                key="zones"
+                icon={PieChart}
+                label={de ? 'Zonen' : 'Zones'}
+                value={zones}
+                onClick={() => navigate('/profile')}
+              />,
+            ]}
+          </Section>
+
+          {/* CONNECTIONS */}
+          <Section label={de ? 'VERBINDUNGEN' : 'CONNECTIONS'}>
+            {[
+              <SettingsRow
+                key="garmin"
+                icon={Watch}
+                label="Garmin"
+                value={garmin?.connected ? connectedLabel : connectLabel}
+                tone={garmin?.connected ? 'good' : 'accent'}
+                onClick={() => navigate('/garmin/connect')}
+              />,
+              // Strava / Whoop — no integration exists: honest "—", no chevron.
+              <SettingsRow key="strava" icon={Bike} label="Strava" value="—" />,
+              <SettingsRow key="whoop" icon={Heart} label="Whoop" value="—" />,
+              <SettingsRow
+                key="wahoo"
+                icon={MonitorSmartphone}
+                label="Wahoo Head Unit"
+                value={wahoo?.connected ? connectedLabel : connectLabel}
+                tone={wahoo?.connected ? 'good' : 'accent'}
+                onClick={() => void handleWahoo()}
+                busy={wahooBusy}
+              />,
+            ]}
+          </Section>
+
+          {/* PREFERENCES */}
+          <Section label={de ? 'EINSTELLUNGEN' : 'PREFERENCES'}>
+            {[
+              <SettingsRow
+                key="detail"
+                icon={SlidersHorizontal}
+                label={de ? 'Detailgrad' : 'Detail level'}
+                value={
+                  language === 'technical'
+                    ? (de ? 'Zahlen anzeigen' : 'Show numbers')
+                    : (de ? 'Einfach' : 'Simple')
+                }
+                onClick={handleDetailLevel}
+              />,
+              <SettingsRow
+                key="units"
+                icon={Ruler}
+                label={de ? 'Einheiten' : 'Units'}
+                value={de ? 'Metrisch' : 'Metric'}
+              />,
+              <SettingsRow
+                key="brief"
+                icon={Bell}
+                label={de ? 'Morgen-Briefing' : 'Morning briefing'}
+                value={briefState === 'unsupported' ? '—' : briefState === 'on' ? on : off}
+                tone={briefState === 'on' ? 'good' : 'muted'}
+                onClick={briefState === 'unsupported' ? undefined : () => void handleBrief()}
+                busy={briefState === 'busy'}
+              />,
+              <SettingsRow
+                key="quiet"
+                icon={CircleMinus}
+                label={de ? 'Ruhe an Ruhetagen' : 'Quiet on rest days'}
+                value={quiet ? on : off}
+                tone={quiet ? 'good' : 'muted'}
+                onClick={() => quietMutation.mutate(!quiet)}
+                busy={quietMutation.isPending}
+              />,
+            ]}
+          </Section>
+
+          {/* FooterLinks (pen ltpsB) */}
+          <div className="flex flex-col items-center gap-3.5 pt-1.5">
+            <button
+              type="button"
+              onClick={handleExport}
+              className="text-[13px] font-semibold"
+              style={{ color: 'var(--color-ink-2)' }}
+            >
+              {de ? 'Meine Daten exportieren' : 'Export my data'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              className="text-[13px] font-semibold"
+              style={{ color: 'var(--color-move)' }}
+            >
+              {de ? 'Abmelden' : 'Sign out'}
+            </button>
           </div>
-          <Link
-            to="/garmin/connect"
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium self-start"
-            style={{
-              backgroundColor: 'var(--color-ink)',
-              color: 'var(--color-paper)',
-            }}
-          >
-            {locale === 'de'
-              ? (language === 'simple' ? 'Garmin-Einstellungen' : 'Garmin-Verbindung verwalten')
-              : (language === 'simple' ? 'Garmin settings' : 'Manage Garmin connection')}
-          </Link>
-        </section>
-
-        {/* Wahoo connection */}
-        <WahooConnectSection />
-
-        {/* Morning brief push (P1.5) */}
-        <MorningBriefSection />
-
-        {/* Placeholder sections */}
-        {/* TODO(06.1 Wave 3): explicit sync-status pill details here */}
-        {/* TODO(06.2): density toggle (comfortable / compact) */}
-      </div>
-    </DashboardShell>
-  )
-}
-
-/**
- * WahooConnectSection — mirrors the Garmin affordance for Wahoo devices.
- *
- * Real states only:
- *   - connected      → shows "Connected" + a Disconnect button
- *   - disconnected   → a "Connect Wahoo" button that opens the OAuth authorize URL
- *   - not configured → 409 from /wahoo/connect → a clear "unavailable" note
- */
-function WahooConnectSection() {
-  const { language } = useLanguage()
-  const { locale } = useLocale()
-  const queryClient = useQueryClient()
-  const { data: status } = useWahooStatus()
-  const [busy, setBusy] = useState(false)
-  const [notConfigured, setNotConfigured] = useState(false)
-
-  const connected = status?.connected === true
-
-  const handleConnect = async () => {
-    setBusy(true)
-    try {
-      const url = await getWahooConnectUrl()
-      // Full navigation to Wahoo's OAuth consent screen; it redirects back to
-      // /wahoo/callback → /settings?wahoo=connected when done.
-      window.location.href = url
-    } catch (err: unknown) {
-      const anyErr = err as { response?: { status?: number } }
-      if (anyErr?.response?.status === 409) setNotConfigured(true)
-      setBusy(false)
-    }
-  }
-
-  const handleDisconnect = async () => {
-    setBusy(true)
-    try {
-      await disconnectWahoo()
-      await queryClient.invalidateQueries({ queryKey: ['wahoo', 'status'] })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <section
-      className="flex flex-col gap-3 p-5 rounded-[16px]"
-      style={{
-        backgroundColor: 'var(--color-paper-2)',
-        border: '1px solid var(--color-rule)',
-      }}
-    >
-      <div className="flex flex-col gap-1">
-        <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}>
-          WAHOO
-        </span>
-        <p className="text-[14px]" style={{ color: 'var(--color-ink-2)' }}>
-          {locale === 'de'
-            ? (language === 'simple'
-                ? 'Verbinde dein Wahoo-Gerät, um Workouts automatisch zu synchronisieren.'
-                : 'Wahoo-Cloud-Integration — synchronisiert Workouts (Leistung, Herzfrequenz, Distanz) von deinem ELEMNT/KICKR.')
-            : (language === 'simple'
-                ? 'Connect your Wahoo device to sync workouts automatically.'
-                : 'Wahoo Cloud integration — syncs workouts (power, heart rate, distance) from your ELEMNT/KICKR.')}
-        </p>
-      </div>
-
-      {notConfigured ? (
-        <p className="text-[13px]" style={{ color: 'var(--color-muted)' }}>
-          {locale === 'de'
-            ? 'Wahoo ist auf diesem Server nicht konfiguriert.'
-            : 'Wahoo is not configured on this server.'}
-        </p>
-      ) : connected ? (
-        <div className="flex items-center gap-3 flex-wrap">
-          <span
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-            style={{ color: 'var(--color-ink)' }}
-          >
-            <span
-              className="inline-block w-2 h-2 rounded-full"
-              style={{ backgroundColor: 'var(--color-amber)' }}
-            />
-            {locale === 'de' ? 'Verbunden' : 'Connected'}
-          </span>
-          <button
-            type="button"
-            onClick={handleDisconnect}
-            disabled={busy}
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium self-start"
-            style={{
-              border: '1px solid var(--color-rule)',
-              color: 'var(--color-ink-2)',
-              backgroundColor: 'var(--color-paper)',
-              opacity: busy ? 0.6 : 1,
-            }}
-          >
-            {locale === 'de' ? 'Trennen' : 'Disconnect'}
-          </button>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={handleConnect}
-          disabled={busy}
-          className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium self-start"
-          style={{
-            backgroundColor: 'var(--color-ink)',
-            color: 'var(--color-paper)',
-            opacity: busy ? 0.6 : 1,
-          }}
-        >
-          {locale === 'de' ? 'Wahoo verbinden' : 'Connect Wahoo'}
-        </button>
-      )}
-    </section>
-  )
-}
-
-/**
- * MorningBriefSection — web-push opt-in (roadmap P1.5). Real states only:
- * unsupported browser → honest note; server unconfigured (503) → hidden
- * feature note; enabled → test-push + disable. Never advertises a dead pipe.
- */
-function MorningBriefSection() {
-  const { locale } = useLocale()
-  const de = locale === 'de'
-  const [state, setState] = useState<'idle' | 'busy' | 'on' | 'unsupported' | 'unavailable'>(
-    () => (pushSupported() ? (Notification.permission === 'granted' ? 'on' : 'idle') : 'unsupported'),
-  )
-  const [note, setNote] = useState<string | null>(null)
-
-  async function enable() {
-    setState('busy'); setNote(null)
-    try {
-      await enableMorningBrief()
-      setState('on')
-      setNote(de ? 'Aktiviert — jeden Morgen ein Brief, nie mehr als einer.' : 'Enabled — one brief every morning, never more.')
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : ''
-      if (msg === 'denied') { setState('idle'); setNote(de ? 'Benachrichtigungen wurden blockiert — erlaube sie im Browser.' : 'Notifications are blocked — allow them in your browser.') }
-      else if ((e as { response?: { status?: number } })?.response?.status === 503) { setState('unavailable'); setNote(null) }
-      else { setState('idle'); setNote(de ? 'Aktivierung fehlgeschlagen — versuch es nochmal.' : 'Enabling failed — try again.') }
-    }
-  }
-
-  async function disable() {
-    setState('busy')
-    try { await disableMorningBrief() } finally { setState('idle'); setNote(de ? 'Deaktiviert.' : 'Disabled.') }
-  }
-
-  async function test() {
-    setState('busy')
-    try {
-      const n = await sendTestPush()
-      setNote(n > 0 ? (de ? 'Test gesendet — schau auf dein Gerät.' : 'Test sent — check your device.') : (de ? 'Kein aktives Gerät gefunden — aktiviere zuerst.' : 'No active device found — enable first.'))
-    } catch { setNote(de ? 'Test fehlgeschlagen.' : 'Test failed.') } finally { setState('on') }
-  }
-
-  const busy = state === 'busy'
-  const enabled = state === 'on'
-
-  if (state === 'unsupported' || state === 'unavailable') {
-    return (
-      <section className="flex flex-col gap-2 p-5 rounded-[16px]" style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
-        <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}>{de ? 'MORGEN-BRIEF' : 'MORNING BRIEF'}</span>
-        <p className="text-[13px]" style={{ color: 'var(--color-muted)' }}>
-          {state === 'unsupported'
-            ? (de ? 'Push wird von diesem Browser nicht unterstützt.' : 'Push isn’t supported by this browser.')
-            : (de ? 'Push ist auf diesem Server nicht eingerichtet.' : 'Push isn’t configured on this server.')}
-        </p>
-      </section>
-    )
-  }
-
-  return (
-    <section className="flex flex-col gap-3 p-5 rounded-[16px]" style={{ backgroundColor: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
-      <div className="flex flex-col gap-1">
-        <span className="eyebrow" style={{ color: 'var(--color-muted)', fontSize: 10, letterSpacing: '0.18em' }}>{de ? 'MORGEN-BRIEF' : 'MORNING BRIEF'}</span>
-        <p className="text-[14px]" style={{ color: 'var(--color-ink-2)' }}>
-          {de
-            ? 'Ein Push pro Morgen: Bereitschaft + die heutige Einheit, direkt zu Heute verlinkt. Ruhetags-bewusst — nie Druck.'
-            : 'One push each morning: readiness + today’s session, deep-linked to Today. Rest-day aware — never pressure.'}
-        </p>
       </div>
-      <div className="flex gap-2">
-        {!enabled ? (
-          <button type="button" onClick={() => void enable()} disabled={busy} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium" style={{ backgroundColor: 'var(--color-accent)', color: '#0A0C0F', opacity: busy ? 0.6 : 1 }}>
-            {de ? 'Aktivieren' : 'Enable'}
-          </button>
-        ) : (
-          <>
-            <button type="button" onClick={() => void test()} disabled={busy} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium" style={{ backgroundColor: 'var(--color-ink)', color: 'var(--color-paper)', opacity: busy ? 0.6 : 1 }}>
-            {de ? 'Test senden' : 'Send test'}
-            </button>
-            <button type="button" onClick={() => void disable()} disabled={busy} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)', opacity: busy ? 0.6 : 1 }}>
-              {de ? 'Deaktivieren' : 'Disable'}
-            </button>
-          </>
-        )}
-      </div>
-      {note && <p className="text-[12px]" style={{ color: 'var(--color-muted)' }}>{note}</p>}
-    </section>
+    </div>
   )
 }

@@ -69,6 +69,15 @@ class AthleteProfile(Base):
     #   stress is the classic silent-churn trigger.
     hard_day_blackouts: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
+    # quiet_on_rest_days — V3 Settings toggle: when True, coach push notices
+    #   (plan-adaptation pushes, morning brief) are suppressed on days whose
+    #   plan is rest. Default ON: the rest-day contract is "no pressure", and
+    #   a push on a rest day is pressure. The athlete can turn it off to keep
+    #   getting rest-day briefs.
+    quiet_on_rest_days: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true", default=True
+    )
+
     # Goals stored as JSON for flexibility
     # {"target_ftp": int, "target_event": {"name": str, "date": str}, "weekly_hours": float}
     goals: Mapped[dict | None] = mapped_column(JSON, default=dict, nullable=True)

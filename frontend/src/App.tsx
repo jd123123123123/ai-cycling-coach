@@ -15,7 +15,9 @@ import RegisterPage from './pages/RegisterPage'
 const DashboardPage = lazyWithRetry(() => import('./pages/DashboardPage'))
 const ConsentPage = lazyWithRetry(() => import('./pages/ConsentPage'))
 const ProfileSetupPage = lazyWithRetry(() => import('./pages/ProfileSetupPage'))
-const OnboardingWizard = lazyWithRetry(() => import('./components/onboarding/OnboardingWizard'))
+// V3 onboarding (pencil-new.pen · Connect / Your Numbers / Goal & Depth)
+// supersedes the legacy 8-step OnboardingWizard on /onboarding.
+const OnboardingWizard = lazyWithRetry(() => import('./components/onboarding/OnboardingV3'))
 const GarminConnectPage = lazyWithRetry(() => import('./pages/GarminConnectPage'))
 const CalendarPage = lazyWithRetry(() => import('./pages/CalendarPage'))
 const ActivitiesPage = lazyWithRetry(() => import('./pages/ActivitiesPage'))
