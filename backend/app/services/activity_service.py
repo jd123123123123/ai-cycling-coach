@@ -5,6 +5,8 @@ TSS is computed on creation based on sport type and athlete profile thresholds:
 - running: pace-based (rTSS) using distance/duration-derived speed; hrTSS
   fallback when threshold pace is missing but HR data exists
 - gym: HR-based (hrTSS via Banister TRIMP)
+- any other sport (padel, tennis, rowing, …): HR-based (hrTSS) whenever a
+  heart-rate anchor exists — cross-training the app doesn't plan is still load
 
 hrTSS inputs are DERIVED when the profile lacks them (usability audit P0-5 —
 a 45-min HR-117 run must never count 0):
@@ -192,7 +194,16 @@ def _compute_tss(
             resting_hr_fallback=resting_hr_fallback,
         )
 
-    return None
+    # Any OTHER sport (padel, tennis, rowing, hiking, an unrecognized one…)
+    # still earns an honest hrTSS estimate whenever it carries a heart-rate
+    # anchor. Cross-training the app doesn't plan is still real load on the
+    # body — a padel session logged with HR should never count 0. No HR anchor
+    # ⇒ None (never a fabricated load).
+    measured = profile.lthr_cycling or profile.lthr_running
+    return _compute_hr_tss(
+        duration, data, profile, measured, context=data.sport or "other",
+        resting_hr_fallback=resting_hr_fallback,
+    )
 
 
 async def create_activity(
@@ -208,12 +219,10 @@ async def create_activity(
     HR-only runs/gym sessions still earn an honest hrTSS estimate.
     """
     # Resting-HR fallback only matters on the hrTSS paths — fetch lazily.
+    # Any HR-bearing activity can take the hrTSS path now (incl. cross-training
+    # sports the app doesn't plan), so the gate is HR presence, not sport.
     resting_hr_fallback: float | None = None
-    if (
-        data.sport in ("cycling", "running", "gym")
-        and data.average_hr
-        and not profile.resting_heart_rate
-    ):
+    if data.average_hr and not profile.resting_heart_rate:
         resting_hr_fallback = await resting_hr_estimate(db, user_id)
 
     tss = _compute_tss(data, profile, resting_hr_fallback=resting_hr_fallback)

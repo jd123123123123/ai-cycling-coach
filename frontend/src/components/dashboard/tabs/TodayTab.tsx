@@ -25,6 +25,7 @@ import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
 import FitnessFreshnessCard from '../FitnessFreshnessCard'
 import ThisWeekCard from '../ThisWeekCard'
+import ExtraSessionsCard from '../ExtraSessionsCard'
 import ShaderCanvas from '../../wrapped/ShaderCanvas'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
@@ -1050,6 +1051,13 @@ export default function TodayTab() {
           /load-form (one shared derivation). Supersedes the old slim day-dot
           link row (P2 dedupe: one "Diese Woche" block, not two). */}
       <ThisWeekCard />
+
+      {/* Zusätzliche Einheiten — non-primary / cross-training sessions (2nd ride,
+          gym, run, padel-or-other) over the last 7 days, with the load they add
+          and its share of the window total. ThisWeekCard sums ALL sports into the
+          weekly TSS; this card breaks out the non-bike contribution so the full
+          training picture (load + recovery cost) is visible, not just the plan. */}
+      <ExtraSessionsCard />
 
       {/* Breakthrough celebration — only when the detector found a real one (P1.2) */}
       <BreakthroughCelebration />

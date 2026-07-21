@@ -95,6 +95,40 @@ class TestGymHrTssFallback:
         assert tss > 0
 
 
+class TestOtherSportHrTssFallback:
+    """Cross-training sports the app doesn't plan (padel, tennis, rowing…)
+    still earn an honest hrTSS when they carry a heart-rate anchor — a padel
+    session logged with HR must never count 0 load."""
+
+    def _other(self, sport: str = "padel", avg_hr: int | None = 132) -> SimpleNamespace:
+        # sport is outside ActivityCreate's Literal, so build the shape
+        # _compute_tss reads directly (schema can't express these yet).
+        return SimpleNamespace(
+            sport=sport,
+            duration_seconds=60 * 60,
+            distance_meters=None,
+            average_power=None,
+            normalized_power=None,
+            average_hr=avg_hr,
+        )
+
+    def test_padel_with_hr_gets_tss(self):
+        tss = _compute_tss(self._other(), _profile())
+        assert tss is not None
+        assert tss > 0
+
+    def test_tennis_with_hr_gets_tss(self):
+        tss = _compute_tss(self._other(sport="tennis"), _profile())
+        assert tss is not None and tss > 0
+
+    def test_other_sport_without_hr_stays_none(self):
+        # No HR anchor → honest None, never a fabricated load.
+        assert _compute_tss(self._other(avg_hr=None), _profile()) is None
+
+    def test_other_sport_no_maxhr_anchor_stays_none(self):
+        assert _compute_tss(self._other(), _profile(date_of_birth=None)) is None
+
+
 def _ride(
     avg_hr: int | None = 128,
     power: int | None = None,
