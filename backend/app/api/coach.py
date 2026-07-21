@@ -34,8 +34,11 @@ from app.schemas.coach import (
     ExternalWorkoutsRead,
     GoalTrajectoryRead,
     OutlookEntry,
+    PlanAdjustmentIntent,
     PlanApplyRequest,
     PlanPreviewRequest,
+    PlanPreviewTextRequest,
+    PlanPreviewTextResponse,
     PlanProposal,
     PostRideReview,
     PrescribedWorkout,
@@ -617,6 +620,56 @@ async def preview_plan(
         scope=payload.scope,
     )
     return PlanProposal(**proposal)
+
+
+@router.post("/plan/preview-text", response_model=PlanPreviewTextResponse)
+async def preview_plan_text(
+    payload: PlanPreviewTextRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> PlanPreviewTextResponse:
+    """Free-text → Proposal Card, WITHOUT the LLM.
+
+    Runs the rule-based intent parser over the typed request. When it resolves
+    to an adjustment (shorten / easier / harder / indoor / lengthen, day- or
+    week-scope) we run the SAME dry-run pipeline as /coach/plan/preview and
+    return the PlanProposal (persists nothing). When it doesn't, we return
+    actionable=False so the UI can fall back to plain chat (which honestly says
+    the coach is unavailable while Anthropic credits are out). Apply still goes
+    through the audited /coach/plan/apply path, threading the returned intent.
+    """
+    from datetime import date as _date
+
+    from app.services.coach_tools import (
+        parse_adjustment_intent,
+        preview_modification_for_user,
+    )
+
+    intent = parse_adjustment_intent(payload.text, locale=payload.locale)
+    if intent is None:
+        return PlanPreviewTextResponse(
+            actionable=False,
+            message=(
+                "Kein umsetzbarer Planwunsch erkannt."
+                if payload.locale == "de"
+                else "No actionable plan change recognized."
+            ),
+        )
+
+    target = _date.fromisoformat(payload.date[:10]) if payload.date else _date.today()
+    proposal = await preview_modification_for_user(
+        user_id=current_user.id,
+        target=target,
+        modification_type=intent["modification_type"],
+        params=intent.get("params") or {},
+        db=db,
+        scope=intent.get("scope", "day"),
+    )
+    return PlanPreviewTextResponse(
+        actionable=True,
+        intent=PlanAdjustmentIntent(**intent),
+        proposal=PlanProposal(**proposal),
+    )
 
 
 @router.post("/plan/apply")

@@ -102,6 +102,38 @@ export async function previewPlan(req: PlanChangeRequest): Promise<PlanProposal>
   return res.data
 }
 
+// ── Free-text plan adjustment (LLM-free fast-path) ──────────────────────────
+//
+// The "Ask Coach" bar posts typed requests here FIRST. A rule-based backend
+// parser maps DE + EN phrasing to a plan intent → a concrete PlanProposal,
+// WITHOUT the LLM. actionable=false → the UI falls back to plain chat.
+
+export interface PlanAdjustmentIntent {
+  modification_type: ModificationType
+  params: Record<string, number>
+  scope: PlanScope
+}
+
+export interface PlanPreviewTextResponse {
+  actionable: boolean
+  intent: PlanAdjustmentIntent | null
+  proposal: PlanProposal | null
+  message: string | null
+}
+
+export async function previewPlanText(
+  text: string,
+  locale: 'en' | 'de' = 'en',
+  date?: string,
+): Promise<PlanPreviewTextResponse> {
+  const res = await apiClient.post<PlanPreviewTextResponse>('/coach/plan/preview-text', {
+    text,
+    locale,
+    ...(date ? { date } : {}),
+  })
+  return res.data
+}
+
 export interface PlanApplyResult {
   success?: boolean
   scope?: PlanScope

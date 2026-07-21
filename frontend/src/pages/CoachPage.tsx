@@ -19,7 +19,7 @@ import { useCoachBrief, COACH_BRIEF_KEY_ROOT } from '../hooks/useCoachBrief'
 import { useDailyDecision } from '../hooks/useDailyDecision'
 import { usePMC } from '../hooks/usePMC'
 import { useLocale } from '../contexts/LocaleContext'
-import { previewPlan, applyPlan, type PlanProposal, type PlanChangeRequest } from '../api/coach'
+import { previewPlan, previewPlanText, applyPlan, type PlanProposal, type PlanChangeRequest } from '../api/coach'
 
 const CARD = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', borderRadius: 24 } as const
 
@@ -48,9 +48,13 @@ export default function CoachPage() {
   const [proposalLoading, setProposalLoading] = useState(false)
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState(false)
+  // The user's typed request, echoed as a chat bubble above a proposal that
+  // came from the Ask bar (chips don't set this — they have no typed text).
+  const [proposalUserText, setProposalUserText] = useState<string | null>(null)
 
   const openProposal = async (req: PlanChangeRequest) => {
     setApplied(false)
+    setProposalUserText(null)
     setProposalReq(req)
     setProposalLoading(true)
     setProposal(null)
@@ -84,6 +88,7 @@ export default function CoachPage() {
   const tweakProposal = () => {
     setProposal(null)
     setProposalReq(null)
+    setProposalUserText(null)
     setApplied(false)
     askInputRef.current?.focus()
   }
@@ -122,11 +127,42 @@ export default function CoachPage() {
     },
   ]
 
-  const sendDraft = () => {
+  // The Ask bar tries the rule-based text→proposal fast-path FIRST (works
+  // without the LLM). If the typed request resolves to a concrete plan change,
+  // render the Proposal Card inline; otherwise fall back to the chat stream
+  // (which honestly reports the coach is unavailable while credits are out).
+  // The user's message shows as a bubble either way.
+  const sendDraft = async () => {
     const text = draft.trim()
-    if (!text || chat.isStreaming) return
+    if (!text || chat.isStreaming || proposalLoading) return
     setDraft('')
-    void chat.send(text)
+    setApplied(false)
+    setProposal(null)
+    setProposalReq(null)
+    setProposalUserText(text)
+    setProposalLoading(true)
+    try {
+      const res = await previewPlanText(text, locale)
+      if (res.actionable && res.proposal && res.intent) {
+        setProposal(res.proposal)
+        setProposalReq({
+          modification_type: res.intent.modification_type,
+          params: res.intent.params,
+          scope: res.intent.scope,
+          date: res.proposal.target_date,
+        })
+        return
+      }
+      // Not an actionable plan change → hand off to plain chat.
+      setProposalUserText(null)
+      void chat.send(text)
+    } catch {
+      // Fast-path errored (offline / server) → let chat handle it honestly.
+      setProposalUserText(null)
+      void chat.send(text)
+    } finally {
+      setProposalLoading(false)
+    }
   }
 
   const tomorrow = brief?.tomorrow_plan?.description ?? null
@@ -209,7 +245,9 @@ export default function CoachPage() {
                 {de ? 'Chat braucht einen Anthropic-API-Key auf dem Server.' : 'Chat needs an Anthropic API key on the server.'}
               </p>
             )}
-            {chat.error && <p style={{ fontSize: 12.5, color: 'var(--color-strain)' }}>{chat.error}</p>}
+            {chat.error && (
+              <p style={{ fontSize: 12.5, color: 'var(--color-muted)' }}>{friendlyChatError(chat.error, de)}</p>
+            )}
             <div ref={threadEndRef} />
           </div>
 
@@ -224,6 +262,11 @@ export default function CoachPage() {
                 </button>
               ))}
             </div>
+          )}
+
+          {/* ── Typed request echoed as a user bubble (Ask-bar proposal path) ── */}
+          {proposalUserText && (
+            <Bubble m={{ role: 'user', content: proposalUserText }} de={de} onUndo={() => {}} />
           )}
 
           {/* ── Proposal Card (.pen pyy3V) — propose-before-apply centerpiece ── */}
@@ -262,7 +305,7 @@ export default function CoachPage() {
         <div className="fixed left-0 right-0" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 96px)', pointerEvents: 'none', zIndex: 30 }}>
           <div className="mx-auto px-4" style={{ maxWidth: 640 }}>
             <form
-              onSubmit={(e) => { e.preventDefault(); sendDraft() }}
+              onSubmit={(e) => { e.preventDefault(); void sendDraft() }}
               className="flex items-center gap-2.5 rounded-full pl-4 pr-2 py-2"
               style={{ background: 'color-mix(in srgb, var(--color-surface-2) 92%, transparent)', border: '1px solid var(--color-rule)', pointerEvents: 'auto', backdropFilter: 'blur(12px)' }}
             >
@@ -272,12 +315,11 @@ export default function CoachPage() {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder={de ? 'Frag Coach Nova…' : 'Ask Coach Nova anything…'}
-                disabled={chat.disabled}
                 className="flex-1 bg-transparent outline-none"
                 style={{ fontSize: 15, color: 'var(--color-ink)' }}
               />
-              <button type="submit" aria-label={de ? 'Senden' : 'Send'} disabled={chat.isStreaming || !draft.trim()} className="grid place-items-center rounded-full shrink-0"
-                style={{ width: 40, height: 40, background: 'var(--color-accent)', opacity: chat.isStreaming || !draft.trim() ? 0.5 : 1 }}>
+              <button type="submit" aria-label={de ? 'Senden' : 'Send'} disabled={chat.isStreaming || proposalLoading || !draft.trim()} className="grid place-items-center rounded-full shrink-0"
+                style={{ width: 40, height: 40, background: 'var(--color-accent)', opacity: chat.isStreaming || proposalLoading || !draft.trim() ? 0.5 : 1 }}>
                 <Send size={17} style={{ color: '#0A0C0F' }} />
               </button>
             </form>
@@ -286,6 +328,31 @@ export default function CoachPage() {
       </div>
     </DashboardShell>
   )
+}
+
+/**
+ * Keep the chat-error line honest but human. The free-text plan-change
+ * fast-path never needs the LLM, so a chat error here means the coach's
+ * conversational brain is offline (credits out / no API key) — say that
+ * plainly instead of dumping a raw provider error. Unknown errors pass
+ * through so real bugs stay visible.
+ */
+function friendlyChatError(error: string, de: boolean): string {
+  const e = error.toLowerCase()
+  const llmDown =
+    e.includes('credit') ||
+    e.includes('billing') ||
+    e.includes('anthropic') ||
+    e.includes('api key') ||
+    e.includes('invalid_request_error') ||
+    e.includes('unavailable') ||
+    e.includes('503')
+  if (llmDown) {
+    return de
+      ? 'Coach Nova kann gerade nicht frei chatten (KI offline) — konkrete Planwünsche wie „nur 45 min heute“ oder „mach die Woche leichter“ funktionieren aber weiterhin.'
+      : 'Coach Nova can’t free-chat right now (AI offline) — but concrete plan requests like “only 45 min today” or “make the week easier” still work.'
+  }
+  return error
 }
 
 function CoachAvatar() {

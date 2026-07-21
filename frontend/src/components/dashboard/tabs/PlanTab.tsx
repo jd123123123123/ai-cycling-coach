@@ -1,9 +1,10 @@
 /**
- * PlanTab (Train) — P2-13 session-first order: SportToggle → WeekNav →
- * WeekStrip → today's session cards → the week's session list → notes →
- * PlanCard → Focus → plan import → ONE collapsed "Saison-Details" accordion
- * (periodization chips + PROGNOSE + Leistungszonen) → progress → cross-training.
- * Real week-plan, FTP, and activity data throughout.
+ * PlanTab (Train) — session-first order: WeekNav → WeekStrip → today's session
+ * cards → the week's session list → notes → PlanCard (→ V3 Season detail) →
+ * "Plan & Ziel ändern" → plan import / custom-workout builder → Load & Form.
+ * Bike-only. Real week-plan, FTP, and activity data throughout. (The old
+ * per-sport Focus picker and the collapsed "Saison-Details" accordion —
+ * periodization/PROGNOSE/zones — were removed; the V3 Season screen owns that.)
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -232,9 +233,6 @@ export default function PlanTab() {
   // How many weeks ahead of the current week we're previewing. 0 = this week
   // (the today-anchored live view); >0 pages into the plan's future weeks.
   const [weekOffset, setWeekOffset] = useState(0)
-  // P2-13: PROGNOSE + Leistungszonen + periodization chips live in ONE
-  // collapsed accordion — closed by default, the session list leads the page.
-  const [saisonOpen, setSaisonOpen] = useState(false)
   // Plan-change interview (credit → delta questions → new week) — V3 flow.
   const [interviewOpen, setInterviewOpen] = useState(false)
   const MAX_WEEK_OFFSET = 12
@@ -944,222 +942,6 @@ export default function PlanTab() {
             </div>
           )}
         </div>
-      )}
-
-      {/* Saison-Details — ONE collapsed accordion (P2-13): periodization
-          chips + PROGNOSE + Leistungszonen live here, off the scroll path. */}
-      <button
-        type="button"
-        onClick={() => setSaisonOpen((o) => !o)}
-        aria-expanded={saisonOpen}
-        className="hover-card rounded-[20px] p-4 flex items-center gap-3 text-left"
-        style={cardStyle}
-      >
-        <MapIcon size={18} style={{ color: 'var(--color-accent)' }} />
-        <div className="flex-1 min-w-0">
-          <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Saison-Details' : 'Season details'}</div>
-          <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Periodisierung, Prognose & Leistungszonen' : 'Periodization, projection & power zones'}</div>
-        </div>
-        <ChevronDown size={18} style={{ color: 'var(--color-muted)', transform: saisonOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }} />
-      </button>
-      {saisonOpen && (
-        <>
-          {/* Periodisierung — phase stepper + block-position chips */}
-          {meso && (
-          <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 12 }}>
-            {/* Phase stepper */}
-            <div className="flex items-center" style={{ gap: 6 }}>
-              {PHASE_STEPS.map((p, i) => {
-                const active = i === activePhaseIdx
-                const past = activePhaseIdx >= 0 && i < activePhaseIdx
-                return (
-                  <div key={p.key} className="flex-1 flex flex-col" style={{ gap: 5 }}>
-                    <div style={{ height: 4, borderRadius: 999, background: active ? 'var(--color-accent)' : past ? 'var(--color-accent-soft)' : 'var(--color-surface-2)' }} />
-                    <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, color: active ? 'var(--color-accent)' : 'var(--color-muted)', letterSpacing: '0.02em' }}>{de ? p.de : p.en}</span>
-                  </div>
-                )
-              })}
-            </div>
-            {/* Block position + week of meso + days to event */}
-            <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
-              {blockPosLabel && (
-                <span className="inline-flex items-center rounded-full px-3 py-1" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 11.5, fontWeight: 600 }}>{blockPosLabel}</span>
-              )}
-              {weekOfMeso != null && (
-                <span className="inline-flex items-center rounded-full px-3 py-1" style={{ background: 'var(--color-surface-2)', color: 'var(--color-ink-2)', fontSize: 11.5, fontWeight: 600 }}>{de ? `Woche ${weekOfMeso}` : `Week ${weekOfMeso}`}</span>
-              )}
-              {daysToEventResolved != null && (
-                <span className="inline-flex items-center gap-1 rounded-full px-3 py-1" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 11.5, fontWeight: 700 }}>
-                  <Target size={12} /> {daysToEventResolved} {de ? 'Tage bis Event' : 'days to event'}
-                </span>
-              )}
-            </div>
-            {/* Weekly TSS target + progress-so-far */}
-            {planTarget > 0 && (
-              <div className="flex flex-col" style={{ gap: 6 }}>
-                <div className="flex items-baseline justify-between">
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Wochen-TSS' : 'Weekly TSS'}</span>
-                  <span className="num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>{Math.round(planDone)} / {Math.round(planTarget)}</span>
-                </div>
-                <div style={{ height: 6, borderRadius: 999, background: 'var(--color-surface-2)', overflow: 'hidden' }}>
-                  <div style={{ width: `${planPct}%`, height: '100%', borderRadius: 999, background: 'var(--color-accent)' }} />
-                </div>
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* PROGNOSE — now-only; hidden when previewing a future week */}
-          {!isFuture && (
-          <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 12 }}>
-            <div className="flex items-center gap-2">
-              <TrendingUp size={14} style={{ color: 'var(--color-muted)' }} />
-              <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'PROGNOSE' : 'PROJECTION'}</span>
-            </div>
-            {projection && projection.mode !== 'insufficient' && projChart ? (
-              <>
-                {/* Metric label + current → projected */}
-                <div className="flex items-end justify-between flex-wrap" style={{ gap: 8 }}>
-                  <div className="flex flex-col" style={{ gap: 2 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{projection.metric_label}</span>
-                    <div className="flex items-baseline" style={{ gap: 6 }}>
-                      <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink-2)' }}>{projCurrent != null ? projCurrent : '—'}</span>
-                      {/* Low confidence (<30%): the race-day end is a RANGE, never
-                          a point promise. Arrow only when both ends render. */}
-                      {projLowConf && projBand80 ? (
-                        <>
-                          {projCurrent != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
-                          <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>
-                            {Math.round(projBand80[0])}–{Math.round(projBand80[1])}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          {projCurrent != null && projProjected != null && <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
-                          {projProjected != null && <span className="num-display" style={{ fontSize: 26, color: 'var(--color-accent)' }}>{projProjected}</span>}
-                        </>
-                      )}
-                      <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-muted)' }}>{projection.unit}</span>
-                    </div>
-                  </div>
-                </div>
-                {/* Confidence-band chart */}
-                <svg viewBox={`0 0 ${projChart.W} ${projChart.H}`} className="w-full" style={{ display: 'block' }} role="img" aria-label={de ? 'Prognose mit Konfidenzband' : 'Projection with confidence band'}>
-                  <polygon points={projChart.band80} fill="var(--color-accent)" opacity="0.10" />
-                  <polygon points={projChart.band50} fill="var(--color-accent)" opacity="0.18" />
-                  <polyline points={projChart.line} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-                  <circle cx={projChart.startX} cy={projChart.startY} r="3" fill="var(--color-accent)" />
-                  <circle cx={projChart.endX} cy={projChart.endY} r="3.5" fill="var(--color-accent)" stroke="var(--color-paper-2)" strokeWidth="1.5" />
-                </svg>
-                <div className="flex items-center" style={{ gap: 12 }}>
-                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.18 }} /> {de ? '50% Band' : '50% band'}</span>
-                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10.5, color: 'var(--color-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-accent)', opacity: 0.10 }} /> {de ? '80% Band' : '80% band'}</span>
-                </div>
-                {/* Outcome headline + honest caveat. In low confidence the
-                    backend's central-number sentence is replaced by the range
-                    line — no single-number race-day promise. */}
-                {(projRangeHeadline ?? projection.projected_outcome) && (
-                  <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>{projRangeHeadline ?? projection.projected_outcome}</p>
-                )}
-                {projection.caveat && <p style={{ fontSize: 11.5, color: 'var(--color-muted)', lineHeight: 1.4 }}>{projection.caveat}</p>}
-              </>
-            ) : (
-              // Honest empty state — no fabricated numbers.
-              <div className="flex items-start gap-3 rounded-2xl p-3.5" style={{ background: 'var(--color-surface-2)' }}>
-                <Sparkles size={18} style={{ color: 'var(--color-muted)', flexShrink: 0, marginTop: 1 }} />
-                <div className="flex flex-col" style={{ gap: 2 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Prognose noch nicht freigeschaltet' : 'Projection not unlocked yet'}</span>
-                  <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{de ? 'Logge ein paar harte Einheiten, um deine Landing-Prognose freizuschalten.' : 'Log a few hard efforts to unlock your projection.'}</span>
-                </div>
-              </div>
-            )}
-          </div>
-          )}
-
-      {/* Zones — follows the active sport: run → Pace/HR, bike/all → Power/Pace. */}
-      <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>
-              {zoneMode === 'power' ? (de ? 'Leistungszonen' : 'Power Zones') : zoneMode === 'hr' ? (de ? 'HF-Zonen' : 'HR Zones') : (de ? 'Pace-Zonen' : 'Pace Zones')}
-            </span>
-            {zoneMode === 'power' && ftp != null && <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Basis FTP' : 'Based on FTP'} {ftp}W</span>}
-            {zoneMode === 'hr' && lthrRun != null && <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Basis LTHR' : 'Based on LTHR'} {lthrRun} bpm</span>}
-            {zoneMode === 'pace' && thrPaceSPerKm != null && <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Basis Schwellen-Pace' : 'Based on threshold pace'} {fmtPace(thrPaceSPerKm)}/km</span>}
-          </div>
-          <div className="flex gap-0.5 rounded-full p-0.5" style={{ background: 'var(--color-surface-2)' }}>
-            {(sport === 'run' ? (['pace', 'hr'] as const) : (['power', 'pace'] as const)).map((m) => (
-              <button key={m} type="button" onClick={() => setZoneMode(m)} className="rounded-full px-3 py-1.5"
-                style={{ background: zoneMode === m ? 'var(--color-accent-soft)' : 'transparent', color: zoneMode === m ? 'var(--color-accent)' : 'var(--color-muted)', fontSize: 12, fontWeight: zoneMode === m ? 700 : 600 }}>
-                {m === 'power' ? (de ? 'Leistung' : 'Power') : m === 'hr' ? 'HR' : 'Pace'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {zoneMode === 'power' && ftp != null ? (
-          <div className="flex flex-col gap-3">
-            {COGGAN.map((z) => {
-              const lo = Math.round(z.lo * ftp)
-              const hi = z.hi > 0 ? Math.round(z.hi * ftp) : null
-              return (
-                <div key={z.z} className="flex items-center gap-2.5">
-                  <span style={{ width: 3, height: 26, borderRadius: 2, background: z.color }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)', width: 22 }}>{z.z}</span>
-                  <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? z.name_de : z.name_en}</span>
-                  <span className="num-mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{hi ? `${lo}–${hi}` : `${lo}+`} W</span>
-                </div>
-              )
-            })}
-          </div>
-        ) : zoneMode === 'power' ? (
-          <p style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? 'Setze deine FTP, um Leistungszonen zu sehen.' : 'Set your FTP to see power zones.'}</p>
-        ) : zoneMode === 'hr' && lthrRun != null ? (
-          <div className="flex flex-col gap-3">
-            {RUN_HR.map((z) => {
-              const lo = Math.round(z.lo * lthrRun)
-              const hi = z.hi > 0 ? Math.round(z.hi * lthrRun) : null
-              return (
-                <div key={z.z} className="flex items-center gap-2.5">
-                  <span style={{ width: 3, height: 26, borderRadius: 2, background: z.color }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)', width: 22 }}>{z.z}</span>
-                  <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? z.de : z.en}</span>
-                  <span className="num-mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{hi ? `${lo}–${hi}` : `${lo}+`} bpm</span>
-                </div>
-              )
-            })}
-          </div>
-        ) : zoneMode === 'hr' ? (
-          <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{de ? 'HF-Zonen erscheinen, sobald deine Lauf-LTHR erfasst ist.' : 'HR zones appear once your running LTHR is set.'}</p>
-        ) : thrPaceSPerKm != null ? (
-          <div className="flex flex-col gap-3">
-            {RUN_PACE.map((z) => {
-              const faster = fmtPace(thrPaceSPerKm / z.hi)
-              const slower = z.lo > 0 ? fmtPace(thrPaceSPerKm / z.lo) : null
-              return (
-                <div key={z.z} className="flex items-center gap-2.5">
-                  <span style={{ width: 3, height: 26, borderRadius: 2, background: z.color }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)', width: 22 }}>{z.z}</span>
-                  <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? z.de : z.en}</span>
-                  <span className="num-mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>{slower ? `${faster}–${slower}` : `>${faster}`} /km</span>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{de ? 'Pace-Zonen erscheinen, sobald eine Schwellen-Pace aus deinen Läufen erkannt wurde.' : 'Pace zones appear once a threshold pace is detected from your runs.'}</p>
-        )}
-
-        <div className="flex items-center gap-2 rounded-[14px] px-3 py-2.5" style={{ background: 'var(--color-surface-2)' }}>
-          <Info size={15} style={{ color: 'var(--color-muted)' }} />
-          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)' }}>
-            {sport === 'run'
-              ? (de ? 'Lauf-Zonen aus Schwellen-Pace & LTHR.' : 'Run zones from threshold pace & LTHR.')
-              : (de ? 'Tippe „Pace“ für Lauf-Herzfrequenz & Pace-Zonen.' : 'Tap Pace to view run heart-rate & pace zones.')}
-          </span>
-        </div>
-      </div>
-        </>
       )}
 
       {/* Load & Form drill-down — a slim nav row (the plan summary now leads

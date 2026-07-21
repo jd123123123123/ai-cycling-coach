@@ -19,6 +19,7 @@ RLS-scoped via get_db_for_user).
 """
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
@@ -265,6 +266,194 @@ def _clamp(value: Any, lo: int, hi: int, default: int) -> int:
     except (TypeError, ValueError):
         n = default
     return max(lo, min(hi, n))
+
+
+# ======================================================================
+# Free-text → adjustment intent parser (LLM-free fast-path)
+# ======================================================================
+#
+# Maps DE + EN natural-language plan-change requests to the SAME structured
+# intents the /coach/plan/preview endpoint already understands (shorten /
+# easier / harder / indoor / lengthen, day- or week-scope). This is what lets a
+# typed request ("nur 45 min heute", "mach die Woche leichter", "make it
+# harder", "indoor") produce a concrete Proposal Card WITHOUT the LLM — and it
+# stays additive: when Anthropic credits return, the chat tool-use loop can
+# still drive the exact same functions.
+#
+# Returns a dict {modification_type, params, scope} or None when the text
+# carries no actionable adjustment (the caller then falls back to plain chat).
+
+# Duration clamp shared with the modify tool schema (10-360 min).
+_DURATION_MIN, _DURATION_MAX = 10, 360
+
+# Signal vocabularies — lowercased, accent-tolerant substrings. DE + EN.
+_WEEK_WORDS = ("woche", "wochen", "week", "this week", "diese woche")
+
+_EASIER_WORDS = (
+    # DE
+    "leichter", "lockerer", "locker", "einfacher", "ruhiger", "sanfter",
+    "weniger intensiv", "zu hart", "zu anstrengend", "zu schwer", "entspannter",
+    "schonen", "schonender", "runterfahren", "runter fahren", "reduzieren",
+    # EN
+    "easier", "lighter", "easy", "go light", "go easy", "take it easy",
+    "less intense", "too hard", "too tough", "tone it down", "ease off",
+    "ease up", "dial it back", "dial back", "back off", "recover",
+)
+
+_HARDER_WORDS = (
+    # DE
+    "härter", "harter", "schwerer", "intensiver", "anstrengender",
+    "mehr fordern", "fordere mich", "fordern", "gib mir mehr", "mehr gas",
+    "zu leicht", "zu einfach", "push mich",
+    # EN
+    "harder", "tougher", "more intense", "push me", "push harder",
+    "challenge me", "make it harder", "too easy", "step it up", "crank it up",
+)
+
+_INDOOR_WORDS = (
+    # DE
+    "drinnen", "auf der rolle", "auf die rolle", "rolle", "smart trainer",
+    "indoor", "in die halle", "drin", "zwift", "rollentrainer", "ergometer",
+    # EN
+    "indoor", "on the trainer", "on the turbo", "turbo", "trainer ride",
+    "smart trainer", "inside", "zwift", "rollers",
+)
+
+_SHORTEN_WORDS = (
+    # DE
+    "kürzer", "kurzer", "kürzen", "kurz", "weniger zeit", "keine zeit",
+    "wenig zeit", "nicht viel zeit", "schneller fertig", "abkürzen",
+    "verkürzen", "knapp zeit",
+    # EN
+    "shorter", "shorten", "less time", "no time", "short on time",
+    "not much time", "quick one", "quicker", "cut it short", "cut short",
+)
+
+_LENGTHEN_WORDS = (
+    # DE
+    "länger", "langer", "mehr zeit", "verlängern", "ausdehnen", "extra zeit",
+    # EN
+    "longer", "lengthen", "more time", "extend", "make it longer",
+)
+
+# Bare-shorten fallback duration when the user says "shorter"/"less time"
+# without a number — mirrors the "Adjust plan" chip default (45 min).
+_DEFAULT_SHORTEN_MIN = 45
+
+
+def _parse_duration_minutes(text: str) -> int | None:
+    """Best-effort minutes from a free-text phrase. Understands DE + EN:
+    '45 min', '45min', '90 minuten', '1h', '1 std', '1,5h', '1.5 hours',
+    'eine stunde', 'halbe stunde', 'half an hour'. Returns clamped minutes or
+    None."""
+    t = text.lower()
+
+    # Worded hours/half-hours first (no digit to key off).
+    if re.search(r"\b(halbe?\s+stunde|half\s+an?\s+hour|half\s+hour)\b", t):
+        return 30
+    if re.search(r"\b(anderthalb\s+stunden?|one\s+and\s+a\s+half\s+hours?)\b", t):
+        return 90
+    if re.search(r"\b(eine\s+stunde|an?\s+hour|one\s+hour)\b", t):
+        return 60
+    if re.search(r"\bzwei\s+stunden\b|\btwo\s+hours\b", t):
+        return 120
+
+    # Fractional hours: "1,5h" / "1.5 hours" / "1,5 std".
+    frac = re.search(r"(\d+)[.,](\d+)\s*(h|hr|hrs|std|stunden?|hours?)\b", t)
+    if frac:
+        whole, dec = int(frac.group(1)), frac.group(2)
+        minutes = whole * 60 + int(round(float(f"0.{dec}") * 60))
+        return max(_DURATION_MIN, min(_DURATION_MAX, minutes))
+
+    # Whole hours: "1h" / "2 hours" / "1 std".
+    hrs = re.search(r"(\d+)\s*(h|hr|hrs|std|stunden?|hours?)\b", t)
+    if hrs:
+        minutes = int(hrs.group(1)) * 60
+        return max(_DURATION_MIN, min(_DURATION_MAX, minutes))
+
+    # Minutes: "45 min" / "45min" / "90 minuten" / "30'".
+    mins = re.search(r"(\d+)\s*(min\b|min\.|mins\b|minute[ns]?\b|minutes\b|')", t)
+    if mins:
+        minutes = int(mins.group(1))
+        return max(_DURATION_MIN, min(_DURATION_MAX, minutes))
+
+    return None
+
+
+def _has_any(text: str, words: tuple[str, ...]) -> bool:
+    return any(w in text for w in words)
+
+
+def parse_adjustment_intent(text: str, locale: str = "en") -> dict | None:
+    """Rule-based free-text → plan-adjustment intent.
+
+    Returns {"modification_type", "params", "scope"} or None when the text
+    isn't an actionable adjustment. `locale` is accepted for symmetry with the
+    LLM path but the matcher is bilingual, so it only tips a couple of genuinely
+    ambiguous ties — the vocabularies cover DE + EN regardless.
+
+    Priority (first match wins):
+        1. week-scope easier  ("leichtere/ruhigere Woche", "make the week easier")
+        2. harder             ("härter", "make it harder", "push me")
+        3. indoor             ("drinnen", "auf der Rolle", "on the trainer")
+        4. shorten            (explicit duration, or "kürzer"/"weniger Zeit")
+        5. lengthen           ("länger", "more time")  — needs a duration
+        6. easier (day)       ("leichter", "lockerer", "too hard")
+    """
+    if not text or not isinstance(text, str):
+        return None
+    t = f" {text.lower().strip()} "  # pad so word-boundary substrings match at ends
+
+    week = _has_any(t, _WEEK_WORDS)
+    easier = _has_any(t, _EASIER_WORDS)
+    harder = _has_any(t, _HARDER_WORDS)
+    indoor = _has_any(t, _INDOOR_WORDS)
+    shorten = _has_any(t, _SHORTEN_WORDS)
+    lengthen = _has_any(t, _LENGTHEN_WORDS)
+    duration = _parse_duration_minutes(t)
+
+    # 1. Week-scope easier — a week word paired with any "ease" signal (or an
+    #    explicit "easier week" phrase). Whole-week trims outrank a day change.
+    if week and (easier or shorten):
+        return {"modification_type": "easier", "params": {}, "scope": "week"}
+
+    # 2. Harder — an explicit intensity bump.
+    if harder:
+        return {"modification_type": "harder", "params": {}, "scope": "day"}
+
+    # 3. Indoor — swap to the trainer without changing the session shape.
+    if indoor:
+        return {"modification_type": "indoor", "params": {}, "scope": "day"}
+
+    # 4. Shorten — either an explicit duration or a "less time" signal. A bare
+    #    duration ("nur 45 min heute") is read as shorten-to-that-duration.
+    if duration is not None and not lengthen:
+        return {
+            "modification_type": "shorten",
+            "params": {"duration_min": duration},
+            "scope": "day",
+        }
+    if shorten:
+        return {
+            "modification_type": "shorten",
+            "params": {"duration_min": duration or _DEFAULT_SHORTEN_MIN},
+            "scope": "day",
+        }
+
+    # 5. Lengthen — needs a target duration to be meaningful; a bare "länger"
+    #    with no number can't be materialised, so treat as non-actionable.
+    if lengthen and duration is not None:
+        return {
+            "modification_type": "lengthen",
+            "params": {"duration_min": duration},
+            "scope": "day",
+        }
+
+    # 6. Easier (day scope).
+    if easier:
+        return {"modification_type": "easier", "params": {}, "scope": "day"}
+
+    return None
 
 
 # ======================================================================

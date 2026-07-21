@@ -214,6 +214,38 @@ class PlanApplyRequest(PlanPreviewRequest):
     pass
 
 
+# ── Free-text plan adjustment (LLM-free fast-path) ──────────────────────────
+#
+# The "Ask Coach" bar sends typed requests here FIRST. A rule-based parser maps
+# DE + EN phrasing ("nur 45 min heute", "mach die Woche leichter", "make it
+# harder", "indoor") to the same intents /coach/plan/preview understands, so a
+# typed request yields a concrete Proposal Card without the LLM. When no
+# adjustment intent is found the response is actionable=False and the UI falls
+# back to plain chat.
+
+class PlanAdjustmentIntent(BaseModel):
+    """The structured intent a parsed free-text request resolved to. The
+    frontend threads this straight into /coach/plan/apply on Accept."""
+    modification_type: str
+    params: dict = Field(default_factory=dict)
+    scope: Literal["day", "week"] = "day"
+
+
+class PlanPreviewTextRequest(BaseModel):
+    text: str
+    date: str | None = None
+    locale: Literal["en", "de"] = "en"
+
+
+class PlanPreviewTextResponse(BaseModel):
+    """Either a concrete PlanProposal (actionable=True) or an honest no-change
+    result (actionable=False) so the caller can fall back to plain chat."""
+    actionable: bool
+    intent: PlanAdjustmentIntent | None = None
+    proposal: PlanProposal | None = None
+    message: str | None = None
+
+
 # ======================================================================
 # Phase 5.3 — post-ride review
 # ======================================================================
