@@ -225,14 +225,17 @@ export default function WorkoutBuilderView() {
             style={{ background: CARD_HI, border: RULE, borderRadius: 10, padding: '11px 12px', color: INK, fontSize: 13, resize: 'vertical' }} />
         </div>
 
-        {/* Block editors */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {blocks.map((b, i) => (
-            <BlockEditor key={i} block={b} index={i} total={blocks.length} de={de}
-              label={BLOCK_META[b.type].label} color={zoneColor(zoneForType(b))}
-              onPatch={(p) => patch(i, p)} onMove={(d) => move(i, d)} onRemove={() => remove(i)} />
-          ))}
-        </div>
+        {/* Block editors — only rendered when present so the empty state keeps
+            an even vertical rhythm (no phantom gap from an empty container). */}
+        {blocks.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {blocks.map((b, i) => (
+              <BlockEditor key={i} block={b} index={i} total={blocks.length} de={de}
+                label={BLOCK_META[b.type].label} color={zoneColor(zoneForType(b))}
+                onPatch={(p) => patch(i, p)} onMove={(d) => move(i, d)} onRemove={() => remove(i)} />
+            ))}
+          </div>
+        )}
 
         {/* Add-block palette */}
         <div className="rounded-2xl" style={{ background: CARD, padding: 14, border: RULE }}>
@@ -251,11 +254,17 @@ export default function WorkoutBuilderView() {
 
         {error && <div style={{ fontSize: 13, color: INK, background: CARD, border: RULE, borderRadius: 10, padding: '10px 12px' }}>{error}</div>}
 
-        {/* Save */}
-        <button type="button" onClick={save} disabled={saving}
-          className="rounded-xl" style={{ background: ACCENT, color: '#fff', fontWeight: 800, fontSize: 15, padding: '14px', minHeight: 50, opacity: saving ? 0.6 : 1 }}>
-          {editingId != null ? (de ? 'Änderungen speichern' : 'Save changes') : (de ? 'Workout speichern' : 'Save workout')}
-        </button>
+        {/* Save — disabled until the workout has a name and at least one block,
+            so the primary action never leads to a guaranteed validation error. */}
+        {(() => {
+          const canSave = name.trim().length > 0 && blocks.length > 0
+          return (
+            <button type="button" onClick={save} disabled={saving || !canSave}
+              className="rounded-xl" style={{ background: ACCENT, color: '#fff', fontWeight: 800, fontSize: 15, padding: '14px', minHeight: 50, opacity: saving || !canSave ? 0.5 : 1, cursor: canSave ? 'pointer' : 'not-allowed' }}>
+              {editingId != null ? (de ? 'Änderungen speichern' : 'Save changes') : (de ? 'Workout speichern' : 'Save workout')}
+            </button>
+          )
+        })()}
 
         {/* Saved workouts */}
         {saved.length > 0 && (

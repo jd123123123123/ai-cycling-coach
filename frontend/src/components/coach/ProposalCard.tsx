@@ -22,6 +22,23 @@ const CARD = {
   borderRadius: 24,
 } as const
 
+/** German-first: the backend emits the not-applicable `reason` in English only
+ *  (rationale_de is empty for these). Translate the known, finite set so a
+ *  German user never sees an English sentence. Unknown reasons pass through. */
+function localizeReason(reason: string | null | undefined, de: boolean): string | null {
+  if (!reason) return null
+  if (!de) return reason
+  const noWorkout = reason.match(/^No planned workout on (.+)\.$/)
+  if (noWorkout) return `Für ${noWorkout[1]} ist keine Einheit geplant.`
+  const map: Record<string, string> = {
+    'Already trained today — nothing to change.': 'Heute schon trainiert — nichts zu ändern.',
+    'Set your FTP first — a proposal needs an FTP anchor.': 'Setz zuerst deine FTP — ein Vorschlag braucht einen FTP-Anker.',
+    'No planned workouts this week to ease.': 'Diese Woche gibt es keine Einheiten zum Lockern.',
+    'Your week is already easy — no hard days to trim.': 'Deine Woche ist schon locker — keine harten Tage zum Kürzen.',
+  }
+  return map[reason] ?? reason
+}
+
 function TssChip({ tss, muted }: { tss: number; muted?: boolean }) {
   return (
     <span
@@ -109,7 +126,7 @@ export default function ProposalCard({
           {view.headline}
         </span>
         <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
-          {proposal.reason || (de ? 'Hier gibt es gerade nichts anzupassen.' : 'Nothing to adjust here right now.')}
+          {localizeReason(proposal.reason, de) || (de ? 'Hier gibt es gerade nichts anzupassen.' : 'Nothing to adjust here right now.')}
         </p>
       </div>
     )
