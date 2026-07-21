@@ -1,104 +1,99 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Bike, Trophy, TrendingUp,
-  TrendingDown, Medal, ArrowUp, LineChart, Flag, ArrowRight,
+  Brain, RefreshCw, Trophy, TrendingUp, TrendingDown, Flag, Bike,
+  BarChart3, Activity, ArrowRight, ArrowUp, ChevronRight, Share2, Gauge,
 } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { useLocale } from '../contexts/LocaleContext'
-import HoverBars from '../components/ui/HoverBars'
 import MobileBottomNav from '../components/dashboard/MobileBottomNav'
-import { usePowerProfile } from '../hooks/usePowerProfile'
 import { usePMC } from '../hooks/usePMC'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../hooks/useActivitiesRange'
 import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useGoalTrajectory } from '../hooks/useGoalTrajectory'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
-import type { ProjectionContext } from '../api/weeks'
-import {
-  granularityForDays, granularityLabel, pctChange,
-  bucketByGranularity, wkgPotential,
-} from '../utils/progression'
+import { usePowerProfileView } from '../hooks/usePowerProfileView'
+import { formatDate } from '../utils/format'
 
 /**
- * Bike Progress — a 1:1 rebuild of the Pencil "Bike Progress" (POWER · PROGRESS)
- * design: a deep progression / projection screen for cycling.
+ * V3 · Season Progress — a 1:1 rebuild of the Pencil "V3 · Season Progress"
+ * frame (node prfwd): the season-story screen behind the Progress / Fortschritt
+ * tab. It answers "how far you've come this season and where you're headed".
  *
- * Every headline figure comes from real hooks:
- *   • "Where you stand" — the canonical threshold_watts from
- *     /analytics/power-profile (audit P0-1: one FTP everywhere).
- *   • THE PROJECTION — the ONE forward forecast, the Bayesian /weeks/current
- *     projection with its p10–p90 band; below 30 % confidence it shows a range,
- *     never a point promise (audit P0-4: no 13-minute miracles).
- *   • Power curve / peaks — sanitized server-side; rendered as-is.
- * Where a figure genuinely needs a lab we render an honest "—" instead of
- * fabricating a number.
+ * Every figure is real:
+ *   • FTP / W/kg / monthly FTP progression — /analytics/power-profile-view
+ *     (ftp_progression is the app's only typed FTP-over-time series).
+ *   • Season fitness curve — the dated CTL history from /training-load/pmc.
+ *   • The forecast — the ONE Bayesian /weeks/current projection.
+ *   • Durability / decoupling — power-profile-view.sprint_pedal.
+ *   • Event context — /coach/trajectory.
+ * Where the pen shows a metric with no backend source (VO₂max, per-kJ fade
+ * curve, event distance / elevation / finish-time), we render an honest "—" or
+ * an honest empty state — never a fabricated number.
  */
 
 const DASH = '—'
 
-// hex→CSS-var token map from the .pen
 const C = {
-  paper: 'var(--color-paper)',
-  paper2: 'var(--color-paper-2)',
+  bg: 'var(--color-paper)',
+  surface: 'var(--color-paper-2)',
   surface2: 'var(--color-surface-2)',
   surface3: 'var(--color-surface-3)',
-  rule: 'var(--color-rule)',
+  border: 'var(--color-rule)',
   ink: 'var(--color-ink)',
   ink2: 'var(--color-ink-2)',
-  muted: 'var(--color-muted)',
+  tertiary: 'var(--color-muted)',
   accent: 'var(--color-accent)',
   recovery: 'var(--color-recovery)',
   strain: 'var(--color-strain)',
-  stand: 'var(--color-stand)',
+  gold: 'var(--color-gold)',
+  violet: 'var(--color-violet)',
   amber: 'var(--color-amber)',
   move: 'var(--color-move)',
-  exercise: 'var(--color-exercise)',
 }
 const soft = (v: string, pct = 15) => `color-mix(in srgb, ${v} ${pct}%, transparent)`
+const DISPLAY = 'num-display'
+
+// Approximation of the pen's warm "wrapped-iri" marble shader (coral→magenta→dark).
+const HERO_BG = 'radial-gradient(125% 125% at 12% 8%, #FF7A46 0%, #E0456B 44%, #7A1D3F 70%, #2A1024 100%)'
+const DURA_BG = 'radial-gradient(125% 125% at 18% 12%, #FF6A3C 0%, #D93E5C 46%, #3A0D16 76%, #160608 100%)'
 
 const n0 = (x: number | null | undefined) => (x == null || !isFinite(x) ? null : Math.round(x))
 const n1 = (x: number | null | undefined) => (x == null || !isFinite(x) ? null : Math.round(x * 10) / 10)
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-// ── shared shells ──────────────────────────────────────────────────────────
-function Card({ children, gap = 16, pad = 20, accent = false }: {
-  children: React.ReactNode; gap?: number; pad?: number; accent?: boolean
-}) {
-  return (
-    <div
-      className="rounded-[24px]"
-      style={{
-        display: 'flex', flexDirection: 'column', gap, padding: pad,
-        background: accent ? soft(C.accent, 15) : C.paper2,
-        border: `1px solid ${accent ? C.accent : C.rule}`,
-      }}
-    >
-      {children}
-    </div>
-  )
+/** Smooth-ish SVG polyline point string across a 0..W × 0..H box (padded). */
+function sparkPoints(vals: number[], w = 120, h = 26, pad = 3): string {
+  if (vals.length < 2) return ''
+  const lo = Math.min(...vals)
+  const hi = Math.max(...vals)
+  const span = Math.max(1e-6, hi - lo)
+  const x = (i: number) => (i / (vals.length - 1)) * w
+  const y = (v: number) => h - pad - ((v - lo) / span) * (h - pad * 2)
+  return vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
 }
 
-function CardHead({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) {
+// ── shared shells ───────────────────────────────────────────────────────────
+function Card({ children, gap = 16, pad = 20, style }: {
+  children: React.ReactNode; gap?: number; pad?: number; style?: React.CSSProperties
+}) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>{title}</span>
-        {sub && <span style={{ fontSize: 12, color: C.ink2 }}>{sub}</span>}
-      </div>
-      {right}
+    <div className="rounded-[24px]" style={{
+      display: 'flex', flexDirection: 'column', gap, padding: pad,
+      background: C.surface, border: `1px solid ${C.border}`, ...style,
+    }}>
+      {children}
     </div>
   )
 }
 
 function SectionHeader({ tick, title, sub }: { tick: string; title: string; sub: string }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center" style={{ gap: 11 }}>
       <span style={{ width: 3, height: 26, borderRadius: 2, background: tick, flex: 'none' }} />
       <div className="flex flex-col" style={{ gap: 1 }}>
-        <span className="num-display" style={{ fontSize: 17, fontWeight: 700, letterSpacing: 0.5, color: C.ink }}>{title}</span>
-        <span style={{ fontSize: 12, fontWeight: 500, color: C.muted }}>{sub}</span>
+        <span className={DISPLAY} style={{ fontSize: 17, fontWeight: 700, letterSpacing: 0.5, color: C.ink }}>{title}</span>
+        <span style={{ fontSize: 12, fontWeight: 500, color: C.tertiary }}>{sub}</span>
       </div>
     </div>
   )
@@ -107,662 +102,696 @@ function SectionHeader({ tick, title, sub }: { tick: string; title: string; sub:
 function Pill({ children, color, bg }: { children: React.ReactNode; color: string; bg?: string }) {
   return (
     <span className="inline-flex items-center rounded-full"
-      style={{ gap: 5, padding: '5px 10px', fontSize: 12, fontWeight: 700, color, background: bg ?? C.surface2 }}>
+      style={{ gap: 4, padding: '5px 10px', fontSize: 11, fontWeight: 700, color, background: bg ?? C.surface2 }}>
       {children}
     </span>
   )
 }
 
-/** Summary-card metric tile: big value + a period-over-period delta chip whose
- *  colour honours the metric's polarity (higherBetter=false → higher is worse,
- *  e.g. resting HR). Shows an honest "—" when the prior window has no data. */
-function MetricTile({ label, value, unit, cur, prev, higherBetter = true, digits = 0 }: {
-  label: string; value: string; unit?: string
-  cur: number | null; prev: number | null; higherBetter?: boolean; digits?: number
-}) {
-  const abs = cur != null && prev != null ? cur - prev : null
-  const pct = pctChange(cur, prev)
-  const good = abs == null ? null : higherBetter ? abs >= 0 : abs <= 0
-  const col = good == null ? C.muted : good ? C.recovery : C.move
-  return (
-    <div className="flex flex-col rounded-[16px]" style={{ gap: 6, padding: 14, background: C.surface2, minWidth: 0 }}>
-      <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: C.ink2 }}>{label}</span>
-      <div className="flex items-end" style={{ gap: 3, minWidth: 0 }}>
-        <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
-        {unit && <span style={{ fontSize: 11, color: C.muted, paddingBottom: 2, flex: 'none' }}>{unit}</span>}
-      </div>
-      {abs == null ? (
-        <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{DASH}</span>
-      ) : (
-        <span className="inline-flex items-center" style={{ gap: 3, fontSize: 11, fontWeight: 700, color: col, flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
-          {abs >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-          {abs >= 0 ? '+' : ''}{abs.toFixed(digits)}{pct != null ? ` · ${pct >= 0 ? '+' : ''}${Math.round(pct)}%` : ''}
-        </span>
-      )}
-    </div>
-  )
-}
-
-
-// ── page ───────────────────────────────────────────────────────────────────
-const RANGES = ['7D', '14D', '31D', '90D', '1Y', 'All'] as const
-type Range = typeof RANGES[number]
-const RANGE_DAYS: Record<Range, number> = { '7D': 7, '14D': 14, '31D': 31, '90D': 90, '1Y': 365, 'All': 760 }
-
+// ── page ─────────────────────────────────────────────────────────────────────
 export default function BikeProgressView() {
   const { locale } = useLocale()
   const de = locale === 'de'
   const navigate = useNavigate()
   const today = useMemo(() => new Date(), [])
+  const year = today.getFullYear()
+  const fmtD = useCallback(
+    (d: Date, p: { en: string; de: string }) => formatDate(d, de ? p.de : p.en, locale),
+    [de, locale],
+  )
 
-  const [range, setRange] = useState<Range>('90D')
-
-  // Active range → days → cutoff timestamp. Everything derived from `rides` honors this.
-  const rangeDays = RANGE_DAYS[range]
-  const cutoff = useMemo(() => +subDays(today, rangeDays), [today, rangeDays])
-  // Previous window [today - 2*rangeDays, today - rangeDays) for period-over-period deltas.
-  const prevCutoff = useMemo(() => +subDays(today, 2 * rangeDays), [today, rangeDays])
-  // API rejects windows > 366 days. Fetch enough to also cover the prior window, clamped to 365.
-  const fetchFrom = useMemo(() => subDays(today, Math.min(2 * rangeDays, 365)), [today, rangeDays])
-  const rangeLabel = de ? `letzte ${rangeDays} Tage` : `last ${rangeDays} days`
-
-  const { data: power } = usePowerProfile()
-  const { data: pmc } = usePMC(90)
+  const { data: ppv } = usePowerProfileView()
+  const { data: pmc } = usePMC(365)
   const { data: athlete } = useAthleteProfile()
-  const { data: actData } = useActivitiesRange(fetchFrom, today)
   const { data: brief } = useCoachBrief()
   const { data: traj } = useGoalTrajectory()
   const { data: week } = useCurrentWeek()
+  // A wide window for season milestones (longest ride etc.); clamped to API max.
+  const fetchFrom = useMemo(() => subDays(today, 365), [today])
+  const { data: actData } = useActivitiesRange(fetchFrom, today)
 
-  const pmcSeries = pmc?.entries ?? []
-  const latestCtl = pmcSeries.length ? Math.round(pmcSeries[pmcSeries.length - 1].ctl) : null
+  // ── Canonical FTP / W/kg / weight ──────────────────────────────────────────
+  const weight = ppv?.weight_kg ?? athlete?.weight_kg ?? null
+  const ftp = n0(ppv?.threshold_watts) ?? athlete?.ftp_watts ?? null
+  const ftpWkg = ppv?.threshold_wkg ?? (ftp != null && weight ? ftp / weight : null)
+
+  // ── Monthly FTP progression (the one typed FTP-over-time series) ───────────
+  // Anchor the current month to the canonical FTP so the hero, the trend, the
+  // gains and Then-vs-Now never disagree (audit P0-1: one FTP everywhere).
+  const prog = useMemo(() => {
+    const raw = ppv?.ftp_progression ?? []
+    if (!raw.length || ftp == null) return raw
+    return raw.map((p) => (p.is_current ? { ...p, watts: ftp } : p))
+  }, [ppv, ftp])
+  const progWatts = prog.map((p) => p.watts)
+  const firstFtp = prog.length ? prog[0].watts : null
+  const curFtp = prog.length ? prog[prog.length - 1].watts : ftp
+  const ftpGainW = firstFtp != null && curFtp != null ? Math.round(curFtp - firstFtp) : null
+  const firstWkg = firstFtp != null && weight ? firstFtp / weight : null
+  const curWkg = curFtp != null && weight ? curFtp / weight : ftpWkg
+  const wkgGain = firstWkg != null && curWkg != null ? curWkg - firstWkg : null
+  const monthsSpan = prog.length
+
+  // ── Percentile — the app's established honest W/kg ladder (audit: one FTP,
+  // one convention). We avoid benchmark.position_pct here: its "top X%" vs
+  // "Xth-percentile" polarity is ambiguous and could invert the framing. ──
+  const topPct = useMemo(() => {
+    if (ftpWkg == null) return null
+    return ftpWkg >= 4.5 ? 3 : ftpWkg >= 4.0 ? 8 : ftpWkg >= 3.5 ? 18 : ftpWkg >= 3.0 ? 35 : 55
+  }, [ftpWkg])
+
+  // ── Season CTL curve (dated PMC history, current year only) ───────────────
+  const ctlYear = useMemo(() => {
+    const entries = pmc?.entries ?? []
+    return entries
+      .filter((e) => new Date(e.date).getFullYear() === year && isFinite(e.ctl))
+      .map((e) => ({ t: +new Date(e.date), ctl: e.ctl }))
+      .sort((a, b) => a.t - b.t)
+  }, [pmc, year])
+  const ctlNow = ctlYear.length ? Math.round(ctlYear[ctlYear.length - 1].ctl) : null
+  const ctlMax = ctlYear.length ? Math.round(Math.max(...ctlYear.map((e) => e.ctl))) : null
+  const ctlFirst = ctlYear.length ? Math.round(ctlYear[0].ctl) : null
+  const ctlGain = ctlNow != null && ctlFirst != null ? ctlNow - ctlFirst : null
+  const ctlIsPeak = ctlNow != null && ctlMax != null && ctlNow >= ctlMax
+
+  // ── Season milestones — only the ones we can back with real dated data ────
   const activities = useMemo(() => actData?.activities ?? [], [actData])
-  const rideStart = (a: { started_at?: string | null; date?: string | null }) =>
-    +new Date(a.started_at ?? a.date ?? 0)
-  // All cycling rides with power in the FETCHED window (covers current + prior periods).
-  const ridesAll = useMemo(
-    () => activities.filter((a) => a.sport === 'cycling' && (a.normalized_power ?? 0) > 0),
+  const rides = useMemo(
+    () => activities.filter((a) => a.sport === 'cycling'),
     [activities],
   )
-  // Current-range rides: everything the range-scoped cards derive from.
-  const rides = useMemo(
-    () => ridesAll.filter((a) => rideStart(a) >= cutoff),
-    [ridesAll, cutoff],
-  )
-  // Prior-window rides for period-over-period comparison.
-  const ridesPrev = useMemo(
-    () => ridesAll.filter((a) => rideStart(a) >= prevCutoff && rideStart(a) < cutoff),
-    [ridesAll, prevCutoff, cutoff],
-  )
-  // Best-NP FTP proxy per window (max normalized power). Real data only → null when empty.
-  const bestNp = (rs: typeof ridesAll) =>
-    rs.length ? Math.round(Math.max(...rs.map((a) => a.normalized_power ?? 0))) : null
-  const ftpProxyNow = useMemo(() => bestNp(rides), [rides])
-  const ftpProxyPrev = useMemo(() => bestNp(ridesPrev), [ridesPrev])
-  // Δ vs prior period — only when prior window has rides. Never fabricated.
-  const ftpPeriodDelta = ftpProxyNow != null && ftpProxyPrev != null ? ftpProxyNow - ftpProxyPrev : null
-
-  // ── Period-over-period SUMMARY: current window vs prior equivalent window ──
-  // Every headline metric is the same span before/after `cutoff`; deltas are
-  // honest (null when the prior window is empty → "no prior data to compare").
-  const gran = granularityForDays(rangeDays)
-  const granTxt = granularityLabel(gran, de)
-  const sumRides = (rs: typeof ridesAll, pick: (a: (typeof ridesAll)[number]) => number) =>
-    rs.reduce((s, a) => s + (pick(a) || 0), 0)
-  const tssNow = sumRides(rides, (a) => a.tss ?? 0)
-  const tssPrev = sumRides(ridesPrev, (a) => a.tss ?? 0)
-  const hoursNow = sumRides(rides, (a) => (a.duration_seconds ?? 0) / 3600)
-  const hoursPrev = sumRides(ridesPrev, (a) => (a.duration_seconds ?? 0) / 3600)
-  const distNow = sumRides(rides, (a) => (a.distance_meters ?? 0) / 1000)
-  const distPrev = sumRides(ridesPrev, (a) => (a.distance_meters ?? 0) / 1000)
-  // Avg CTL (fitness) over each window, drawn from the PMC series' dated entries.
-  const ctlAvg = (from: number, to: number) => {
-    const xs = pmcSeries.filter((e) => { const t = +new Date(e.date); return t >= from && t < to }).map((e) => e.ctl)
-    return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null
-  }
-  const ctlNow = ctlAvg(cutoff, +today + 864e5)
-  const ctlPrev = ctlAvg(prevCutoff, cutoff)
-  const hasPrior = ridesPrev.length > 0
-  // Range-adaptive TSS trend: re-buckets daily / weekly / monthly by range.
-  const chartStart = useMemo(() => new Date(Math.max(cutoff, +fetchFrom)), [cutoff, fetchFrom])
-  const tssBuckets = useMemo(
-    () => bucketByGranularity(rides.map((a) => ({ t: rideStart(a), v: a.tss ?? 0 })), chartStart, today, gran, 'sum'),
-    [rides, chartStart, today, gran],
-  )
-  // Verdict from the real deltas (fitness = CTL, volume = TSS).
-  const fitPct = pctChange(ctlNow, ctlPrev)
-  const volPct = pctChange(tssNow, tssPrev)
-  const trendWord = (p: number | null, de_: boolean) =>
-    p == null ? (de_ ? 'stabil' : 'steady')
-      : p >= 4 ? (de_ ? `+${Math.round(p)} %` : `up ${Math.round(p)}%`)
-      : p <= -4 ? (de_ ? `−${Math.abs(Math.round(p))} %` : `down ${Math.abs(Math.round(p))}%`)
-      : (de_ ? 'stabil' : 'steady')
-  const verdict = !hasPrior
-    ? (de ? 'Keine Vorperiode zum Vergleichen — Basislinie im Aufbau' : 'No prior period to compare — building your baseline')
-    : de
-      ? `Fitness ${trendWord(fitPct, true)} vs. die letzten ${rangeDays} Tage · Volumen ${trendWord(volPct, true)}`
-      : `Fitness ${trendWord(fitPct, false)} vs the previous ${rangeDays} days · volume ${trendWord(volPct, false)}`
-  const weight = athlete?.weight_kg ?? 68.5
-  const hasWeight = athlete?.weight_kg != null
-  // THE canonical threshold (audit P0-1): manual FTP when set, else the
-  // sanitized model eFTP — served by /analytics/power-profile.
-  const currentFtp = n0(power?.threshold_watts) ?? athlete?.ftp_watts ?? null
-  const ftpIsManual = power?.threshold_source === 'manual'
-
-  // ── Range-scoped Power Profile: best NP per granularity bucket across the
-  // window's rides (per-ride normalized power is the only power figure the
-  // activity feed exposes, so it stands in as the range's mean-max signal). ──
-  const mmpBuckets = useMemo(
-    () => bucketByGranularity(rides.map((a) => ({ t: rideStart(a), v: a.normalized_power ?? 0 })), chartStart, today, gran, 'max'),
-    [rides, chartStart, today, gran],
-  )
-  const peakNp = ftpProxyNow // best NP in the selected window
-  const peakNpWkg = peakNp != null && hasWeight ? n1(peakNp / weight) : null
-
-  // ── FTP-over-time proxy: best NP per calendar month (real rides) ──────────
-  const monthly = useMemo(() => {
-    const buckets = new Map<string, { ym: string; label: string; ftp: number }>()
-    for (const a of rides) {
-      const iso = (a.started_at ?? a.date ?? '').slice(0, 10)
-      if (!iso) continue
-      const ym = iso.slice(0, 7)
-      const np = a.normalized_power ?? 0
-      const prev = buckets.get(ym)
-      if (!prev || np > prev.ftp) {
-        buckets.set(ym, { ym, label: MONTHS[Number(iso.slice(5, 7)) - 1] ?? ym, ftp: np })
-      }
+  const milestones = useMemo(() => {
+    type M = { key: string; icon: React.ReactNode; iconBg: string; title: string; date: string | null; value: string; highlight?: boolean }
+    const out: M[] = []
+    // New FTP record — the canonical FTP, dated to the current progression month.
+    if (curFtp != null) {
+      const curMonth = prog.find((p) => p.is_current)
+      out.push({
+        key: 'ftp', icon: <Trophy size={18} style={{ color: C.gold }} />, iconBg: soft(C.gold, 15),
+        title: de ? 'FTP-Rekord' : 'FTP record',
+        date: curMonth ? (de ? curMonth.month_de : curMonth.month_en) : null,
+        value: `${Math.round(curFtp)} W`, highlight: true,
+      })
     }
-    return Array.from(buckets.values()).sort((a, b) => a.ym.localeCompare(b.ym))
-  }, [rides])
+    // Longest ride this season — max distance among fetched cycling rides.
+    const longest = rides.reduce<typeof rides[number] | null>(
+      (best, a) => ((a.distance_meters ?? 0) > (best?.distance_meters ?? 0) ? a : best), null)
+    if (longest && (longest.distance_meters ?? 0) > 0) {
+      out.push({
+        key: 'long', icon: <Bike size={18} style={{ color: C.strain }} />, iconBg: soft(C.strain, 15),
+        title: de ? 'Längste Fahrt der Saison' : 'Longest ride this season',
+        date: fmtD(new Date(longest.started_at), { en: 'MMM d', de: 'd. MMM' }),
+        value: `${Math.round((longest.distance_meters ?? 0) / 1000)} km`,
+      })
+    }
+    // Peak fitness — the season CTL high-water mark, dated.
+    if (ctlMax != null) {
+      const peak = ctlYear.find((e) => Math.round(e.ctl) === ctlMax)
+      out.push({
+        key: 'ctl', icon: <TrendingUp size={18} style={{ color: C.accent }} />, iconBg: soft(C.accent, 15),
+        title: de ? 'Höchste Fitness' : 'Peak fitness',
+        date: peak ? fmtD(new Date(peak.t), { en: 'MMM d', de: 'd. MMM' }) : null,
+        value: `CTL ${ctlMax}`,
+      })
+    }
+    // Cohort percentile — real benchmark position, no crossing date.
+    if (topPct != null) {
+      out.push({
+        key: 'pct', icon: <BarChart3 size={18} style={{ color: C.violet }} />, iconBg: soft(C.violet, 15),
+        title: de ? `In den Top ${topPct} %` : `Into the top ${topPct}%`,
+        date: null, value: de ? 'Perzentil' : 'percentile',
+      })
+    }
+    return out
+  }, [curFtp, prog, rides, ctlMax, ctlYear, topPct, de, fmtD])
 
-  const ftpSeries = monthly.slice(-8)
-  const ftpGain = ftpSeries.length >= 2 ? n0(ftpSeries[ftpSeries.length - 1].ftp - ftpSeries[0].ftp) : null
-  const monthsSpan = monthly.length
+  // ── Durability (power fade / decoupling) ─────────────────────────────────
+  const durabilityPct = ppv?.sprint_pedal?.durability_best_pct ?? null
+  const decouplingPct = ppv?.sprint_pedal?.avg_decoupling_pct ?? null
 
-  // ── Potential vs W/kg standards (real, motivating — not current+20) ───────
-  // Map current W/kg onto a men's coaching W/kg ladder → current level + the
-  // next milestone band + a strong-amateur long-range target (~4.5 W/kg). The
-  // gauge shows genuine headroom.
-  const ftpWkgNow = currentFtp != null && hasWeight ? currentFtp / weight : null
-  const potential = ftpWkgNow != null ? wkgPotential(ftpWkgNow) : null
-  // Next-milestone watts (crossing into the next W/kg band) + Δ to it.
-  const nextWatts = potential != null ? Math.round(potential.nextValue * weight) : null
-  const nextDelta = nextWatts != null && currentFtp != null ? nextWatts - currentFtp : null
-  // Honest "how far along toward strong-amateur potential" — lands most rec
-  // athletes ~60–75% with real room to grow (NOT the old ~92% current+20 gauge).
-  const ceilPct = potential?.pctToTarget ?? null
-
-  // ── Power-curve peaks (sanitized server-side) ─────────────────────────────
-  const peakAt = (s: string) => n0(power?.peaks?.[s]) // seconds→watts
-  const CURVE: { s: string; label: string }[] = [
-    { s: '5', label: '5s' }, { s: '60', label: '1min' }, { s: '300', label: '5min' },
-    { s: '1200', label: '20min' }, { s: '3600', label: '60min' },
-  ]
-
-  // ── THE PROJECTION — the one forward forecast (audit P0-4) ───────────────
-  // The Bayesian /weeks/current projection with p10–p90 band. No client-side
-  // OLS forecast, no event-time claims: below 30 % confidence we show the
-  // range, never a point promise.
-  const goalName = ((brief?.evidence as Record<string, unknown> | undefined)?.athlete as
-    Record<string, unknown> | undefined)?.goal_target as string | undefined
-  const daysToGoal = traj?.days_to_goal ?? null
-  const proj: ProjectionContext | null = week?.projection ?? null
-  // Mirror the backend's confidence formula (band tightness × sample richness)
-  // when confidence_pct isn't in the payload; never invent a higher number.
-  const projConfPct = useMemo(() => {
-    if (!proj) return null
-    if (proj.confidence_pct != null) return proj.confidence_pct
-    if (proj.projected_central == null || !proj.band_80) return null
-    const bandW = proj.band_80[1] - proj.band_80[0]
-    const ratio = proj.projected_central > 0 ? bandW / proj.projected_central : 1
-    const sampleFactor = proj.samples_used != null ? Math.min(1, proj.samples_used / 10) : 1
-    return Math.round(100 * Math.max(0, Math.min(1, (1 - ratio) * sampleFactor)))
-  }, [proj])
-  const projTier = projConfPct == null
-    ? null
-    : projConfPct >= 70
-      ? { label: de ? 'hoch' : 'high', color: C.recovery }
-      : projConfPct >= 40
-        ? { label: de ? 'moderat' : 'moderate', color: C.ink2 }
-        : { label: de ? 'niedrig' : 'low', color: C.muted }
-  // Below 30 % (or unknown) confidence: range-only, no central point promise.
-  const projRangeOnly = projConfPct == null || projConfPct < 30
-  const projP10 = proj?.band_80 ? Math.round(proj.band_80[0]) : null
-  const projP90 = proj?.band_80 ? Math.round(proj.band_80[1]) : null
+  // ── The projection — /weeks/current Bayesian forecast ────────────────────
+  const proj = week?.projection ?? null
+  const projPerf = proj != null && proj.mode === 'performance'
   const projCentral = proj?.projected_central != null ? Math.round(proj.projected_central) : null
   const projCurrent = proj?.current_estimate != null ? Math.round(proj.current_estimate) : null
-  const projHorizonIso = proj?.path.length ? proj.path[proj.path.length - 1].date : null
+  const projDelta = projCentral != null && projCurrent != null ? projCentral - projCurrent : null
+  const projHorizonIso = proj?.path?.length ? proj.path[proj.path.length - 1].date : null
   const projHorizonLabel = projHorizonIso
-    ? new Date(`${projHorizonIso}T12:00:00`).toLocaleDateString(de ? 'de-DE' : 'en-US', { day: 'numeric', month: 'short' })
+    ? fmtD(new Date(`${projHorizonIso}T12:00:00`), { en: 'MMM', de: 'MMM' })
     : null
+  // Forecast bars: current (actual) + up to 4 sampled projected path points.
+  const forecastBars = useMemo(() => {
+    if (!projPerf || !proj || projCurrent == null) return []
+    const path = proj.path ?? []
+    const sampled: { label: string; value: number; projected: boolean }[] = [
+      { label: de ? 'jetzt' : 'now', value: projCurrent, projected: false },
+    ]
+    if (path.length) {
+      const step = Math.max(1, Math.floor(path.length / 4))
+      for (let i = step - 1; i < path.length && sampled.length < 5; i += step) {
+        const p = path[i]
+        sampled.push({
+          label: fmtD(new Date(`${p.date}T12:00:00`), { en: 'MMM', de: 'MMM' }),
+          value: Math.round(p.central), projected: true,
+        })
+      }
+    }
+    return sampled
+  }, [projPerf, proj, projCurrent, de, fmtD])
 
-  // ── Hero W/kg + percentile bucket ────────────────────────────────────────
-  const ftpWkg = currentFtp != null && weight ? n1(currentFtp / weight) : null
-  const pctTop = ftpWkg == null ? null : ftpWkg >= 4.5 ? 3 : ftpWkg >= 4.0 ? 8 : ftpWkg >= 3.5 ? 18 : ftpWkg >= 3.0 ? 35 : 55
-  const firstWkg = ftpSeries.length >= 2 && weight ? n1(ftpSeries[0].ftp / weight) : null
+  // ── Event context — /coach/trajectory ────────────────────────────────────
+  const eventName = traj?.event_name ?? athlete?.goals?.target_event_name ?? null
+  const eventDateStr = traj?.event_date ?? athlete?.target_event_date ?? null
+  const eventDate = eventDateStr ? new Date(`${eventDateStr}T12:00:00`) : null
+  const eventTypeRaw = traj?.event_type ?? athlete?.target_event_type ?? null
+  const daysToGoal = traj?.days_to_goal ?? null
+  const onTrackWord = traj?.on_track === 'ahead'
+    ? (de ? 'Vor dem Plan für' : 'Ahead of plan for')
+    : traj?.on_track === 'behind'
+      ? (de ? 'Im Rückstand für' : 'Behind for')
+      : (de ? 'Auf Kurs für' : 'On track for')
+  const projectionValid = traj != null && traj.projection_basis !== 'none' && traj.ctl_projected_at_goal != null
 
-  // Period-over-period chip (green up / red down). Renders "—" when prior window is empty.
-  const vsPeriodLabel = de ? 'vs. Vorperiode' : `vs. prior ${range}`
-  const PeriodDelta = () => (
-    <Pill
-      color={ftpPeriodDelta == null ? C.muted : ftpPeriodDelta >= 0 ? C.recovery : C.move}
-      bg={ftpPeriodDelta == null ? C.surface2 : soft(ftpPeriodDelta >= 0 ? C.recovery : C.move, 15)}
-    >
-      {ftpPeriodDelta != null && (ftpPeriodDelta >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />)}
-      {ftpPeriodDelta == null ? DASH : `${ftpPeriodDelta >= 0 ? '+' : ''}${ftpPeriodDelta} W`}
-      <span style={{ fontWeight: 500, opacity: 0.75 }}>{vsPeriodLabel}</span>
-    </Pill>
-  )
-
-  const noRides = rides.length === 0
-  const emptyMsg = de ? 'Keine Daten im Zeitraum' : 'No data in range'
-
-  // strings
-  const T = {
-    overline: 'POWER · PROGRESS',
-    title: de ? 'Radfahren' : 'Cycling',
-    synced: de ? 'Synchron' : 'Synced',
-  }
+  // ── Coach narrative ──────────────────────────────────────────────────────
+  const narrative = traj?.narrative_hook || brief?.verdict || null
 
   return (
-    <div className="min-h-screen overflow-x-hidden" style={{ background: C.paper, color: C.ink }}>
-      <div className="max-w-md mx-auto px-4 pb-28" style={{ paddingTop: 8 }}>
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 mb-3"
-          style={{ color: C.ink2, fontSize: 13, fontWeight: 600, background: 'none', border: 0, padding: '6px 0' }}>
-          <ArrowLeft size={18} /> {de ? 'Zurück' : 'Back'}
-        </button>
-
+    <div className="min-h-screen overflow-x-hidden" style={{ background: C.bg, color: C.ink }}>
+      <div className="max-w-md mx-auto" style={{ padding: '8px 20px 96px' }}>
         <div className="flex flex-col" style={{ gap: 20 }}>
+
           {/* ── Header ─────────────────────────────────────────────────── */}
-          <div className="flex flex-col" style={{ gap: 14 }}>
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col" style={{ gap: 2 }}>
-                <span className="eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1, color: C.muted }}>{T.overline}</span>
-                <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: C.ink }}>{T.title}</span>
+          <div className="flex items-center justify-between" style={{ gap: 12 }}>
+            <div className="flex flex-col" style={{ gap: 2 }}>
+              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1, color: C.tertiary }}>
+                {de ? `${year} · SEIT JANUAR` : `${year} · SINCE JANUARY`}
+              </span>
+              <span className={DISPLAY} style={{ fontSize: 28, fontWeight: 700, color: C.ink }}>
+                {de ? 'Saison-Fortschritt' : 'Season Progress'}
+              </span>
+            </div>
+            <span className="inline-flex items-center rounded-full" style={{ gap: 6, padding: '7px 12px', background: C.surface2 }}>
+              <RefreshCw size={13} style={{ color: C.ink2 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.ink2 }}>{de ? 'Synchron' : 'Synced'}</span>
+            </span>
+          </div>
+
+          {/* ── Coach's read on your season ─────────────────────────────── */}
+          <div className="rounded-[24px] flex flex-col" style={{ gap: 14, padding: 18, background: C.violet + '26', border: `1px solid ${C.violet}` }}>
+            <div className="flex items-center" style={{ gap: 11 }}>
+              <span className="flex items-center justify-center rounded-full" style={{ width: 38, height: 38, background: C.violet, flex: 'none' }}>
+                <Brain size={20} style={{ color: '#fff' }} />
+              </span>
+              <div className="flex flex-col" style={{ gap: 1 }}>
+                <span className={DISPLAY} style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>
+                  {de ? 'Coach-Einschätzung zur Saison' : "Coach's read on your season"}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: C.tertiary }}>
+                  {de ? 'Januar → heute' : 'January → today'}
+                </span>
               </div>
             </div>
-            {/* Bike-only: run/lift progress pages archived — sport toggle removed. */}
+            <span style={{ fontSize: 13, fontWeight: 500, color: C.ink2, lineHeight: 1.5 }}>
+              {narrative ?? (de
+                ? 'Noch keine Saison-Einschätzung — sie erscheint, sobald genug Trainingshistorie vorliegt.'
+                : 'No season read yet — it appears once there is enough training history.')}
+            </span>
+            {eventName && (
+              <div className="rounded-[14px] flex items-center" style={{ gap: 10, padding: '11px 12px', background: '#00000026' }}>
+                <span className="flex items-center justify-center rounded-full" style={{ width: 30, height: 30, background: C.accent, flex: 'none' }}>
+                  <Flag size={15} style={{ color: '#fff' }} />
+                </span>
+                <div className="flex flex-col" style={{ gap: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{onTrackWord} {eventName}</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: C.ink2 }}>
+                    {eventDate ? fmtD(eventDate, { en: 'MMM d', de: 'd. MMM' }) : DASH}
+                    {projPerf && projCentral != null && projectionValid
+                      ? ` · ${de ? 'proj. FTP' : 'projected FTP'} ${projCentral} ${proj?.unit ?? 'W'}`
+                      : ''}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* ── Range filter ──────────────────────────────────────────── */}
-          <div className="flex rounded-full" style={{ gap: 3, padding: 4, background: C.surface2 }}>
-            {RANGES.map((r) => (
-              <button key={r} onClick={() => setRange(r)}
-                className="flex-1 rounded-full" style={{
-                  minHeight: 40, padding: '8px 4px', fontSize: 12, fontWeight: 600, border: 0,
-                  background: range === r ? C.accent : 'transparent',
-                  color: range === r ? C.ink : C.ink2,
-                }}>
-                {r}
-              </button>
-            ))}
-          </div>
-
-          {/* ═══ 1 · WHERE YOU STAND ═══ */}
-          <SectionHeader tick={C.accent} title={de ? 'WO DU STEHST' : 'WHERE YOU STAND'}
-            sub={de ? 'Deine Radform genau jetzt' : 'Your cycling fitness right now'} />
-
-          {/* ── Hero: Functional Threshold Power (the headline number) ── */}
-          <Card gap={20} pad={22}>
+          {/* ── Hero · your engine ──────────────────────────────────────── */}
+          <div className="rounded-[24px] flex flex-col" style={{ gap: 20, padding: 22, background: HERO_BG }}>
             <div className="flex items-center justify-between">
-              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: C.muted }}>
-                {ftpIsManual
-                  ? (de ? 'FTP · AUS DEINEM PROFIL' : 'FTP · FROM YOUR PROFILE')
-                  : (de ? 'FTP (GESCHÄTZT)' : 'FTP (ESTIMATED)')}
+              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: '#FFFFFFCC' }}>
+                {de ? `${year} · DEIN MOTOR` : `${year} · YOUR ENGINE`}
               </span>
-              {pctTop != null && (
-                <Pill color={C.accent} bg={soft(C.accent, 15)}>
-                  <Trophy size={14} /> {de ? `Top ${pctTop}%` : `Top ${pctTop}%`}
+              {topPct != null && (
+                <span className="inline-flex items-center rounded-full" style={{ gap: 5, padding: '6px 11px', background: '#FFFFFF29' }}>
+                  <Trophy size={13} style={{ color: '#fff' }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>Top {topPct}%</span>
+                </span>
+              )}
+            </div>
+            <div className="flex items-center" style={{ gap: 18 }}>
+              <div className="flex items-end" style={{ gap: 5 }}>
+                <span className={DISPLAY} style={{ fontSize: 54, fontWeight: 700, color: '#fff', lineHeight: 1, textShadow: '0 0 22px #FFFFFF59' }}>{ftp ?? DASH}</span>
+                <span style={{ fontSize: 16, fontWeight: 500, color: '#FFFFFFB3', paddingBottom: 10 }}>W</span>
+              </div>
+              <span style={{ width: 1, height: 44, background: '#FFFFFF33', flex: 'none' }} />
+              <div className="flex flex-col" style={{ gap: 2 }}>
+                <div className="flex items-end" style={{ gap: 4 }}>
+                  <span className={DISPLAY} style={{ fontSize: 32, fontWeight: 700, color: '#fff', lineHeight: 1 }}>{n1(ftpWkg) ?? DASH}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#FFFFFF80', paddingBottom: 5 }}>W/kg</span>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 500, color: '#FFFFFFB3' }}>
+                  {weight != null ? `${de ? 'bei' : 'at'} ${n1(weight)} kg` : (de ? 'Gewicht ergänzen' : 'add weight')}
+                </span>
+              </div>
+            </div>
+            {ftpGainW != null && (
+              <span className="inline-flex items-center self-start rounded-full" style={{ gap: 6, padding: '7px 13px', background: '#0A0C0F59', backdropFilter: 'blur(14px)' }}>
+                <TrendingUp size={14} style={{ color: '#5EF0A8' }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
+                  {ftpGainW >= 0 ? '+' : ''}{ftpGainW} W{wkgGain != null ? ` · ${wkgGain >= 0 ? '+' : ''}${n1(wkgGain)} W/kg` : ''} {de ? 'seit Januar' : 'since January'}
+                </span>
+              </span>
+            )}
+            {prog.length >= 2 && (
+              <div className="flex flex-col" style={{ gap: 9 }}>
+                <div className="flex items-center justify-between">
+                  <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.5, color: '#FFFFFFB3' }}>
+                    {(de ? prog[0].month_de : prog[0].month_en).toUpperCase()} · {Math.round(firstFtp ?? 0)} W
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: '#fff' }}>
+                    {de ? 'JETZT' : 'NOW'} · {Math.round(curFtp ?? 0)} W ↗
+                  </span>
+                </div>
+                <div className="flex items-end" style={{ gap: 5, height: 70 }}>
+                  {(() => {
+                    const mx = Math.max(...progWatts, 1)
+                    return progWatts.map((w, i) => {
+                      const last = i === progWatts.length - 1
+                      return (
+                        <span key={i} className="flex-1" style={{
+                          height: Math.max(10, (w / mx) * 70),
+                          borderRadius: '4px 4px 0 0',
+                          background: last ? '#fff' : '#0A0C0F5C',
+                          boxShadow: last ? '0 0 14px #FFFFFFB3' : undefined,
+                        }} />
+                      )
+                    })
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ═══ PROGRESS ═══ */}
+          <SectionHeader tick={C.accent} title={de ? 'FORTSCHRITT' : 'PROGRESS'}
+            sub={de ? `Was du aufgebaut hast · ${monthsSpan || DASH} Monate` : `What you've built · ${monthsSpan || DASH} months`} />
+
+          {/* Season fitness curve (CTL) */}
+          <Card>
+            <div className="flex items-start justify-between" style={{ gap: 12 }}>
+              <div className="flex flex-col" style={{ gap: 3 }}>
+                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: C.tertiary }}>
+                  {de ? 'SAISON-FITNESS · CTL' : 'SEASON FITNESS · CTL'}
+                </span>
+                <div className="flex items-end" style={{ gap: 8 }}>
+                  <span className={DISPLAY} style={{ fontSize: 44, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{ctlNow ?? DASH}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: C.tertiary, paddingBottom: 6 }}>
+                    {ctlIsPeak ? (de ? 'Höchstwert des Jahres' : 'highest all year') : (de ? 'aktuell' : 'current')}
+                  </span>
+                </div>
+              </div>
+              {ctlGain != null && (
+                <Pill color={ctlGain >= 0 ? C.recovery : C.move} bg={soft(ctlGain >= 0 ? C.recovery : C.move, 15)}>
+                  {ctlGain >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                  {ctlGain >= 0 ? '+' : ''}{ctlGain} {de ? 'dieses Jahr' : 'this year'}
                 </Pill>
               )}
             </div>
-            <div className="flex items-center" style={{ gap: 18, flexWrap: 'wrap', rowGap: 12 }}>
-              <div className="flex items-end" style={{ gap: 5 }}>
-                <span className="num-display" style={{ fontSize: 54, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{currentFtp ?? DASH}</span>
-                <span style={{ fontSize: 16, fontWeight: 500, color: C.muted, paddingBottom: 10 }}>W</span>
-              </div>
-              <span style={{ width: 1, height: 44, background: C.rule }} />
-              <div className="flex flex-col" style={{ gap: 2 }}>
-                <div className="flex items-end" style={{ gap: 4 }}>
-                  <span className="num-display" style={{ fontSize: 32, fontWeight: 700, color: C.accent, lineHeight: 1 }}>{ftpWkg ?? DASH}</span>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: C.muted, paddingBottom: 5 }}>W/kg</span>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>{n1(weight)} kg</span>
-              </div>
-              <div style={{ flex: 1 }} />
-              <PeriodDelta />
-            </div>
-            <div style={{ height: 1, background: C.rule }} />
-            {/* Potential vs W/kg standards — motivating, honest headroom (not a fake ~92% cap). */}
-            <div className="flex flex-col" style={{ gap: 10 }}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-                  <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>
-                    {potential ? `${de ? potential.level_de : potential.level} · ${n1(ftpWkgNow)} W/kg` : (de ? 'Leistungspotenzial' : 'Power potential')}
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>
-                    {!potential
-                      ? (de ? 'Körpergewicht ergänzen, um dein W/kg-Potenzial zu sehen' : 'Add body weight to see your W/kg potential')
-                      : nextDelta != null && nextDelta > 0
-                        ? (de
-                            ? `Nächstes Ziel → ${n1(potential.nextValue)} W/kg · +${nextDelta} W`
-                            : `Next milestone → ${n1(potential.nextValue)} W/kg · +${nextDelta} W`)
-                        : (de ? 'Spitzenband erreicht — weiter halten' : 'Top band reached — hold it')}
-                  </span>
-                </div>
-                {ceilPct != null && (
-                  <div className="flex flex-col items-end" style={{ gap: 1, flex: 'none' }}>
-                    <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: C.accent, lineHeight: 1 }}>{ceilPct}%</span>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: C.muted }}>{de ? 'zum Ziel' : 'to target'}</span>
+            {ctlYear.length >= 2 ? (
+              <>
+                <div className="relative rounded-[14px] overflow-hidden" style={{ height: 150, background: C.surface2 }}>
+                  {/* periodization backdrop — Base / Build / Peak thirds (labels, not data) */}
+                  <div className="absolute inset-0 flex">
+                    <span style={{ flex: 1, background: soft(C.strain, 8) }} />
+                    <span style={{ flex: 1, background: soft(C.accent, 8) }} />
+                    <span style={{ flex: 1, background: soft(C.gold, 8) }} />
                   </div>
-                )}
+                  {(() => {
+                    const vals = ctlYear.map((e) => e.ctl)
+                    const W = 310, H = 150
+                    const pts = sparkPoints(vals, W, H, 12)
+                    const area = `0,${H} ${pts} ${W},${H}`
+                    return (
+                      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0" style={{ width: '100%', height: '100%' }} aria-hidden>
+                        <defs>
+                          <linearGradient id="ctlFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#FF5A3C" stopOpacity="0.42" />
+                            <stop offset="100%" stopColor="#FF5A3C" stopOpacity="0.02" />
+                          </linearGradient>
+                        </defs>
+                        <polygon points={area} fill="url(#ctlFill)" />
+                        <polyline points={pts} fill="none" stroke={C.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )
+                  })()}
+                </div>
+                <div className="flex">
+                  {[
+                    { t: de ? 'Basis' : 'Base', c: C.strain },
+                    { t: de ? 'Aufbau' : 'Build', c: C.accent },
+                    { t: 'Peak', c: C.gold },
+                  ].map((p) => (
+                    <span key={p.t} className="flex-1 text-center" style={{ fontSize: 11, fontWeight: 700, color: p.c }}>{p.t}</span>
+                  ))}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 500, color: C.ink2, lineHeight: 1.4 }}>
+                  {ctlGain != null && ctlGain > 0
+                    ? (de
+                        ? `Dein Motor war nie größer — Fitness ${ctlGain} Punkte höher als im Januar.`
+                        : `Your engine has never been bigger — fitness up ${ctlGain} points since January.`)
+                    : (de
+                        ? 'Deine Saison-Fitness aus der täglichen CTL-Historie.'
+                        : 'Your season fitness, from the daily CTL history.')}
+                </span>
+              </>
+            ) : (
+              <span style={{ fontSize: 12, color: C.tertiary, padding: '20px 0' }}>
+                {de ? 'Noch nicht genug Historie für die Saisonkurve' : 'Not enough history yet for the season curve'}
+              </span>
+            )}
+          </Card>
+
+          {/* What you built — gains rows */}
+          <div className="rounded-[24px] flex flex-col" style={{ padding: '6px 20px', background: C.surface, border: `1px solid ${C.border}` }}>
+            <div className="flex items-end justify-between" style={{ padding: '14px 0' }}>
+              <span className={DISPLAY} style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>{de ? 'Was du aufgebaut hast' : 'What you built'}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: C.tertiary }}>{de ? 'seit Januar' : 'since January'}</span>
+            </div>
+            {(() => {
+              const rows: {
+                key: string; name: string; value: string
+                spark: number[] | null; sparkColor: string
+                delta: string | null; deltaGood: boolean
+              }[] = [
+                {
+                  key: 'ftp', name: 'FTP', value: ftp != null ? `${ftp} W` : DASH,
+                  spark: progWatts.length >= 2 ? progWatts : null, sparkColor: C.accent,
+                  delta: ftpGainW != null ? `${ftpGainW >= 0 ? '+' : ''}${ftpGainW} W` : null, deltaGood: (ftpGainW ?? 0) >= 0,
+                },
+                {
+                  key: 'wkg', name: de ? 'Leistung / Gewicht' : 'Power / weight', value: n1(ftpWkg) != null ? `${n1(ftpWkg)} W/kg` : DASH,
+                  spark: progWatts.length >= 2 && weight ? progWatts.map((w) => w / weight) : null, sparkColor: C.recovery,
+                  delta: wkgGain != null ? `${wkgGain >= 0 ? '+' : ''}${n1(wkgGain)}` : null, deltaGood: (wkgGain ?? 0) >= 0,
+                },
+                {
+                  key: 'vo2', name: 'VO₂max', value: DASH,
+                  spark: null, sparkColor: C.violet, delta: null, deltaGood: true,
+                },
+                {
+                  key: 'p20', name: de ? '20-Min-Leistung' : '20-min power',
+                  value: ppv?.curve?.find((c) => c.seconds === 1200)?.watts != null ? `${ppv.curve.find((c) => c.seconds === 1200)!.watts} W` : DASH,
+                  spark: null, sparkColor: C.strain, delta: null, deltaGood: true,
+                },
+                {
+                  key: 'wt', name: de ? 'Gewicht' : 'Weight', value: n1(weight) != null ? `${n1(weight)} kg` : DASH,
+                  spark: null, sparkColor: C.gold, delta: null, deltaGood: true,
+                },
+                {
+                  key: 'dur', name: de ? 'Ausdauer-Abfall' : 'Durability drop',
+                  value: durabilityPct != null ? `${durabilityPct < 0 ? '−' : '+'}${Math.abs(n1(durabilityPct)!)}%` : DASH,
+                  spark: null, sparkColor: C.move, delta: null, deltaGood: true,
+                },
+              ]
+              return rows.map((r, i) => (
+                <div key={r.key}>
+                  {i > 0 && <div style={{ height: 1, background: C.border }} />}
+                  <div className="flex items-center" style={{ gap: 12, padding: '12px 0' }}>
+                    <div className="flex flex-col" style={{ gap: 2, width: 104, flex: 'none' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{r.name}</span>
+                      <span className={DISPLAY} style={{ fontSize: 15, fontWeight: 700, color: C.ink2 }}>{r.value}</span>
+                    </div>
+                    <div className="relative" style={{ flex: 1, height: 26 }}>
+                      {r.spark ? (
+                        <svg viewBox="0 0 120 26" preserveAspectRatio="none" style={{ width: '100%', height: 26 }} aria-hidden>
+                          <polyline points={sparkPoints(r.spark)} fill="none" stroke={r.sparkColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : null}
+                    </div>
+                    {r.delta != null ? (
+                      <span className="rounded-full text-center flex-none" style={{ padding: '4px 9px', fontSize: 11, fontWeight: 700, color: r.deltaGood ? C.recovery : C.move, background: soft(r.deltaGood ? C.recovery : C.move, 15) }}>{r.delta}</span>
+                    ) : (
+                      <span className="text-center flex-none" style={{ padding: '4px 9px', fontSize: 11, fontWeight: 700, color: C.tertiary }}>{DASH}</span>
+                    )}
+                  </div>
+                </div>
+              ))
+            })()}
+          </div>
+
+          {/* Then vs Now */}
+          {firstFtp != null && curFtp != null && ftpGainW != null && (
+            <Card gap={14}>
+              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.5, color: C.ink2 }}>
+                {de ? 'JANUAR-DU → JETZT' : 'JANUARY YOU → NOW'}
+              </span>
+              <div className="flex items-center" style={{ gap: 12 }}>
+                <div className="flex-1 flex flex-col items-center rounded-[16px]" style={{ gap: 3, padding: 14, background: C.surface2 }}>
+                  <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: C.tertiary }}>{(de ? prog[0].month_de : prog[0].month_en).toUpperCase()}</span>
+                  <span className={DISPLAY} style={{ fontSize: 24, fontWeight: 700, color: C.ink2 }}>{Math.round(firstFtp)} W</span>
+                  {firstWkg != null && <span style={{ fontSize: 11, color: C.tertiary }}>{n1(firstWkg)} W/kg</span>}
+                </div>
+                <div className="flex flex-col items-center" style={{ gap: 2, flex: 'none' }}>
+                  <TrendingUp size={20} style={{ color: C.recovery }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: C.recovery }}>{ftpGainW >= 0 ? '+' : ''}{ftpGainW} W</span>
+                  {wkgGain != null && <span style={{ fontSize: 11, fontWeight: 700, color: C.recovery }}>{wkgGain >= 0 ? '+' : ''}{n1(wkgGain)}</span>}
+                </div>
+                <div className="flex-1 flex flex-col items-center rounded-[16px]" style={{ gap: 3, padding: 14, background: soft(C.accent, 15), border: `1px solid ${C.accent}`, boxShadow: '0 4px 18px -2px #FF5A3C4D' }}>
+                  <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: C.accent }}>{de ? 'JETZT' : 'NOW'}</span>
+                  <span className={DISPLAY} style={{ fontSize: 24, fontWeight: 700, color: C.ink }}>{Math.round(curFtp)} W</span>
+                  {curWkg != null && <span style={{ fontSize: 11, color: C.ink2 }}>{n1(curWkg)} W/kg</span>}
+                </div>
               </div>
-              <div className="rounded-full overflow-hidden" style={{ height: 10, background: C.surface3 }}>
-                <div style={{ height: '100%', width: `${ceilPct ?? 0}%`, background: C.accent, borderRadius: 5 }} />
+              <span style={{ fontSize: 13, fontWeight: 500, color: C.ink2, lineHeight: 1.4 }}>
+                {de
+                  ? `+${ftpGainW} W seit Januar. Am Berg fährst du dem Januar-Ich davon.`
+                  : `+${ftpGainW} W since January. The January you gets dropped on every climb.`}
+              </span>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    const txt = de ? `+${ftpGainW} W FTP seit Januar` : `+${ftpGainW} W FTP since January`
+                    if (typeof navigator !== 'undefined' && navigator.share) navigator.share({ text: txt }).catch(() => {})
+                  }}
+                  className="inline-flex items-center rounded-full"
+                  style={{ gap: 6, padding: '8px 14px', background: C.surface2, border: 0, color: C.ink, fontSize: 12, fontWeight: 700 }}>
+                  <Share2 size={14} /> {de ? 'Teilen' : 'Share this'}
+                </button>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>
-                {potential
-                  ? (de
-                      ? `Fortschritt zur Amateur-Spitze (~${n1(potential.targetValue)} W/kg) · echter Spielraum zum Wachsen`
-                      : `Progress toward strong-amateur W/kg (~${n1(potential.targetValue)} W/kg) · real room to grow`)
-                  : (de ? `Jetzt · ${currentFtp ?? DASH} W` : `Now · ${currentFtp ?? DASH} W`)}
+            </Card>
+          )}
+
+          {/* Power Profile link */}
+          <button onClick={() => navigate('/power-profile')}
+            className="rounded-[24px] flex items-center text-left w-full"
+            style={{ gap: 12, padding: '14px 18px', background: C.surface, border: `1px solid ${C.border}` }}>
+            <span className="flex items-center justify-center rounded-full" style={{ width: 40, height: 40, background: soft(C.accent, 15), flex: 'none' }}>
+              <Gauge size={20} style={{ color: C.accent }} />
+            </span>
+            <div className="flex flex-col" style={{ gap: 2, flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{de ? 'Leistungsprofil' : 'Power Profile'}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: C.ink2 }}>
+                {de ? 'Alle Bestwerte, Kurve, Zonen & Benchmarks' : 'All power bests, curve, zones & benchmarks live here'}
               </span>
             </div>
-          </Card>
+            <ChevronRight size={20} style={{ color: C.tertiary, flex: 'none' }} />
+          </button>
 
-          {/* ── Summary: period-over-period verdict + training load ───── */}
-          <Card accent gap={16} pad={20}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
-                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.accent }}>
-                  {de ? `ZUSAMMENFASSUNG · ${rangeLabel.toUpperCase()}` : `SUMMARY · ${rangeLabel.toUpperCase()}`}
-                </span>
-                <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: C.ink, lineHeight: 1.35 }}>{verdict}</span>
-              </div>
-              <Pill color={C.accent} bg={soft(C.accent, 15)}>{de ? `${granTxt}` : `${granTxt} view`}</Pill>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-              <MetricTile label="TSS" value={noRides ? DASH : String(Math.round(tssNow))} cur={hasPrior ? tssNow : null} prev={hasPrior ? tssPrev : null} />
-              <MetricTile label={de ? 'STUNDEN' : 'HOURS'} value={noRides ? DASH : n1(hoursNow)?.toString() ?? DASH} unit="h" cur={hasPrior ? hoursNow : null} prev={hasPrior ? hoursPrev : null} digits={1} />
-              <MetricTile label={de ? 'DISTANZ' : 'DISTANCE'} value={noRides ? DASH : String(Math.round(distNow))} unit="km" cur={hasPrior ? distNow : null} prev={hasPrior ? distPrev : null} />
-              <MetricTile label={de ? 'Ø CTL' : 'AVG CTL'} value={ctlNow != null ? String(Math.round(ctlNow)) : DASH} cur={ctlNow} prev={ctlPrev} />
-            </div>
-            {/* Range-adaptive TSS trend — daily / weekly / monthly buckets */}
-            {tssBuckets.some((b) => b.value > 0) ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.ink2 }}>{de ? 'Belastung (TSS)' : 'Training load (TSS)'}</span>
-                  <span style={{ fontSize: 11, color: C.muted }}>{de ? `${granTxt} Buckets` : `${granTxt} buckets`}</span>
+          {/* ═══ SEASON WINS ═══ */}
+          <SectionHeader tick={C.gold} title={de ? 'SAISON-SIEGE' : 'SEASON WINS'}
+            sub={de ? 'Die Meilensteine, die du geknackt hast' : 'The milestones you unlocked'} />
+
+          <div className="rounded-[24px] flex flex-col" style={{ gap: 8, padding: 14, background: C.surface, border: `1px solid ${C.border}` }}>
+            {milestones.length ? milestones.map((m) => (
+              <div key={m.key} className="flex items-center rounded-[14px]" style={{
+                gap: 12, padding: '10px 12px',
+                background: m.highlight ? soft(C.gold, 15) : 'transparent',
+                border: m.highlight ? `1px solid ${soft(C.gold, 35)}` : '1px solid transparent',
+              }}>
+                <span className="flex items-center justify-center rounded-full" style={{ width: 38, height: 38, background: m.iconBg, flex: 'none' }}>{m.icon}</span>
+                <div className="flex flex-col" style={{ gap: 1, flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>{m.title}</span>
+                  {m.date && <span style={{ fontSize: 11, fontWeight: 500, color: C.tertiary }}>{m.date}</span>}
                 </div>
-                <HoverBars
-                  height={96}
-                  radius={5}
-                  defaultColor={C.accent}
-                  bars={tssBuckets.map((b, i) => ({
-                    value: b.value,
-                    valueLabel: `${Math.round(b.value)} TSS`,
-                    label: b.label,
-                    highlight: i === tssBuckets.length - 1,
-                  }))}
-                />
+                <span className={DISPLAY} style={{ fontSize: 16, fontWeight: 700, color: m.highlight ? C.gold : C.ink, flex: 'none' }}>{m.value}</span>
+              </div>
+            )) : (
+              <span style={{ fontSize: 12, color: C.tertiary, padding: '14px 4px' }}>
+                {de ? 'Noch keine Meilensteine erfasst in dieser Saison' : 'No milestones logged yet this season'}
+              </span>
+            )}
+          </div>
+
+          {/* ═══ DURABILITY ═══ */}
+          <SectionHeader tick={C.accent} title={de ? 'AUSDAUER' : 'DURABILITY'}
+            sub={de ? 'Leistung halten, wenn müde — der Profi-Unterschied' : 'Holding power when tired — the pro differentiator'} />
+
+          <div className="rounded-[24px] flex flex-col" style={{ gap: 14, padding: 20, background: durabilityPct != null ? DURA_BG : C.surface, border: `1px solid ${durabilityPct != null ? '#FFFFFF1F' : C.border}` }}>
+            <div className="flex items-center justify-between" style={{ gap: 12 }}>
+              <div className="flex flex-col" style={{ gap: 2 }}>
+                <span className={DISPLAY} style={{ fontSize: 16, fontWeight: 600, color: durabilityPct != null ? '#fff' : C.ink }}>{de ? 'Ausdauer' : 'Durability'}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: durabilityPct != null ? '#FFFFFFCC' : C.ink2 }}>
+                  {de ? 'Wie deine Leistung tief im Ritt hält' : 'How your power holds deep into a ride'}
+                </span>
+              </div>
+              {durabilityPct != null && (
+                <Pill color={C.recovery} bg={soft(C.recovery, 15)}>
+                  {Math.abs(durabilityPct) <= 5 ? (de ? 'Stark' : 'Strong') : Math.abs(durabilityPct) <= 10 ? (de ? 'Solide' : 'Solid') : (de ? 'Im Aufbau' : 'Building')}
+                </Pill>
+              )}
+            </div>
+            {durabilityPct != null ? (
+              <>
+                <div className="flex items-end" style={{ gap: 10 }}>
+                  <span className={DISPLAY} style={{ fontSize: 40, fontWeight: 800, color: '#fff', lineHeight: 1 }}>
+                    {durabilityPct < 0 ? '−' : '+'}{Math.abs(n1(durabilityPct)!)}%
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#FFFFFFCC', paddingBottom: 5 }}>
+                    {de ? 'nach 1.500 kJ' : 'after 1,500 kJ'}
+                  </span>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 500, color: '#FFFFFFD9', lineHeight: 1.4 }}>
+                  {decouplingPct != null
+                    ? (de
+                        ? `Dein Leistungsabfall über lange Fahrten. Entkopplung im Schnitt ${n1(decouplingPct)}% — je niedriger, desto besser hältst du.`
+                        : `Your power fade over long rides. Average decoupling ${n1(decouplingPct)}% — the lower, the deeper you hold.`)
+                    : (de
+                        ? 'Dein Leistungsabfall über lange Fahrten — je niedriger, desto besser hältst du die Wattzahl.'
+                        : 'Your power fade over long rides — the lower, the deeper you hold your watts.')}
+                </span>
               </>
             ) : (
-              <span style={{ fontSize: 12, color: C.muted }}>{emptyMsg}</span>
+              <span style={{ fontSize: 12, color: C.tertiary, padding: '8px 0' }}>
+                {de ? 'Braucht mehr lange Fahrten (>1.500 kJ), um die Ausdauer zu messen.' : 'Needs more long rides (>1,500 kJ) to measure durability.'}
+              </span>
             )}
-          </Card>
+          </div>
 
-          {/* ═══ 2 · THE TREND ═══ */}
-          <SectionHeader tick={C.recovery} title={de ? 'DER TREND' : 'THE TREND'}
-            sub={de ? `Wie du hierher kamst · ${monthsSpan} Monate` : `How you got here · ${monthsSpan} months`} />
+          {/* ═══ PROJECTION ═══ */}
+          <SectionHeader tick={C.strain} title={de ? 'PROGNOSE' : 'PROJECTION'}
+            sub={de ? 'Wohin es geht · Modellprognose' : "Where you're headed · model forecast"} />
 
-          {/* FTP Progression */}
+          {/* FTP / performance forecast */}
           <Card>
-            <CardHead title={de ? 'FTP-Verlauf' : 'FTP Progression'}
-              sub={de ? `Schwellenleistung · Watt · ${rangeLabel}` : `Threshold power · watts · ${rangeLabel}`}
-              right={
-                <div className="flex flex-col items-end" style={{ gap: 6 }}>
-                  {ftpGain != null && (
-                    <Pill color={ftpGain >= 0 ? C.recovery : C.move} bg={soft(ftpGain >= 0 ? C.recovery : C.move, 15)}>
-                      {ftpGain >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}{ftpGain >= 0 ? '+' : ''}{ftpGain} W
+            <div className="flex items-start justify-between" style={{ gap: 12 }}>
+              <div className="flex flex-col" style={{ gap: 2 }}>
+                <span className={DISPLAY} style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>
+                  {proj?.metric_label ?? (de ? 'Prognose' : 'Forecast')}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: C.ink2 }}>
+                  {de ? 'Projizierter Verlauf · nächste 90 Tage' : 'Projected trend · next 90 days'}
+                </span>
+              </div>
+              <div className="flex items-center" style={{ gap: 10 }}>
+                <span className="inline-flex items-center" style={{ gap: 4 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 2, background: C.accent }} />
+                  <span style={{ fontSize: 11, fontWeight: 500, color: C.tertiary }}>{de ? 'Aktuell' : 'Actual'}</span>
+                </span>
+                <span className="inline-flex items-center" style={{ gap: 4 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 2, border: `1.5px solid ${C.accent}` }} />
+                  <span style={{ fontSize: 11, fontWeight: 500, color: C.tertiary }}>{de ? 'Prognose' : 'Projected'}</span>
+                </span>
+              </div>
+            </div>
+            {projPerf && forecastBars.length >= 2 ? (
+              <>
+                <div className="flex items-end" style={{ gap: 10, height: 172 }}>
+                  {(() => {
+                    const mx = Math.max(...forecastBars.map((b) => b.value), 1)
+                    return forecastBars.map((b, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center justify-end" style={{ gap: 6, height: '100%' }}>
+                        <span className={DISPLAY} style={{ fontSize: 11, fontWeight: 700, color: b.projected ? C.accent : C.accent }}>{b.value}</span>
+                        <span className="w-full" style={{
+                          height: Math.max(20, (b.value / mx) * 140),
+                          borderRadius: 6,
+                          background: b.projected ? soft(C.accent, 15) : C.accent,
+                          border: b.projected ? `1.5px solid ${C.accent}` : undefined,
+                        }} />
+                      </div>
+                    ))
+                  })()}
+                </div>
+                <div className="flex" style={{ gap: 10 }}>
+                  {forecastBars.map((b, i) => (
+                    <span key={i} className="flex-1 text-center" style={{ fontSize: 10, fontWeight: b.projected ? 500 : 700, color: b.projected ? C.tertiary : C.accent }}>{b.label}</span>
+                  ))}
+                </div>
+                <div className="flex items-center rounded-[16px]" style={{ gap: 12, padding: 14, background: '#0A0C0FB3', border: `1px solid ${soft(C.strain, 20)}` }}>
+                  <span className="flex items-center justify-center rounded-full" style={{ width: 38, height: 38, background: C.strain, flex: 'none' }}>
+                    <Activity size={20} style={{ color: '#fff' }} />
+                  </span>
+                  <div className="flex flex-col" style={{ gap: 2, flex: 1, minWidth: 0 }}>
+                    <span className={DISPLAY} style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>
+                      {de ? 'Projizierte' : 'Projected'} {proj?.metric_label ?? 'FTP'} {projCentral ?? DASH} {proj?.unit ?? 'W'}
+                    </span>
+                    <span style={{ fontSize: 12, color: C.ink2 }}>
+                      {projHorizonLabel ? `${de ? 'bis' : 'by'} ${projHorizonLabel} · ` : ''}{de ? 'wenn du dranbleibst' : 'if you hold ramp'}
+                    </span>
+                  </div>
+                  {projDelta != null && (
+                    <Pill color={C.recovery} bg={soft(C.recovery, 15)}>
+                      <ArrowUp size={12} /> {projDelta >= 0 ? '+' : ''}{projDelta} {proj?.unit ?? 'W'}
                     </Pill>
                   )}
-                  <PeriodDelta />
-                </div>
-              } />
-            {ftpSeries.length >= 2 ? (
-              <HoverBars
-                height={150}
-                defaultColor={C.surface3}
-                radius={6}
-                bars={ftpSeries.map((m, i) => ({
-                  value: m.ftp,
-                  valueLabel: `${Math.round(m.ftp)} W`,
-                  label: m.label,
-                  highlight: i === ftpSeries.length - 1,
-                }))}
-              />
-            ) : (
-              <div style={{ fontSize: 12, color: C.muted, padding: '20px 0' }}>{noRides ? emptyMsg : (de ? 'Mehr Fahrten nötig für den Verlauf' : 'Needs more rides to chart a trend')}</div>
-            )}
-            <div className="flex" style={{ gap: 8 }}>
-              {ftpSeries.map((m, i) => (
-                <span key={i} className="flex-1 text-center" style={{ fontSize: 11, fontWeight: i === ftpSeries.length - 1 ? 700 : 500, color: i === ftpSeries.length - 1 ? C.accent : C.muted }}>{m.label}</span>
-              ))}
-            </div>
-            <div style={{ height: 1, background: C.rule }} />
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col" style={{ gap: 2 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.ink2 }}>{de ? 'Leistungsgewicht' : 'Power-to-weight'}</span>
-                <div className="flex items-end" style={{ gap: 6 }}>
-                  <span className="num-display" style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>{firstWkg ?? DASH}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>→</span>
-                  <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: C.accent }}>{ftpWkg ?? DASH} W/kg</span>
-                </div>
-              </div>
-              <div className="flex items-end" style={{ gap: 4, height: 40 }}>
-                {ftpSeries.slice(-6).map((m, i, a) => {
-                  const vals = a.map((x) => x.ftp / weight)
-                  const mx = Math.max(...vals, 1)
-                  return <span key={i} style={{ width: 7, height: Math.max(8, (m.ftp / weight / mx) * 40), borderRadius: 3, background: i === a.length - 1 ? C.accent : C.surface3 }} />
-                })}
-              </div>
-            </div>
-          </Card>
-
-          {/* ═══ 3 · THE PROJECTION ═══ */}
-          <SectionHeader tick={C.strain} title={de ? 'DIE PROGNOSE' : 'THE PROJECTION'}
-            sub={de ? 'Richtung Renntag · mit Unsicherheitsband' : 'Toward race day · with uncertainty band'} />
-
-          {/* THE one projection: /weeks/current Bayesian forecast, p10–p90 band */}
-          <Card>
-            <CardHead
-              title={de ? 'Renntag-Prognose' : 'Race-day projection'}
-              sub={proj
-                ? `${proj.metric_label}${projHorizonLabel ? ` · ${de ? 'bis' : 'to'} ${projHorizonLabel}` : ''}`
-                : (de ? 'Modellprognose' : 'Model forecast')}
-              right={projTier && projConfPct != null ? (
-                <Pill color={projTier.color} bg={soft(projTier.color, 15)}>
-                  {projConfPct}% · {projTier.label}
-                </Pill>
-              ) : undefined}
-            />
-            {!proj ? (
-              <div style={{ fontSize: 12, color: C.muted, padding: '12px 0' }}>
-                {de
-                  ? 'Noch keine belastbare Prognose — braucht mehr Trainingshistorie.'
-                  : 'No reliable projection yet — needs more training history.'}
-              </div>
-            ) : (
-              <>
-                {/* Goal context */}
-                {(goalName != null || daysToGoal != null) && (
-                  <div className="flex items-center" style={{ gap: 10 }}>
-                    <span className="flex items-center justify-center rounded-[12px]" style={{ width: 34, height: 34, background: C.surface2, flex: 'none' }}>
-                      <Flag size={18} style={{ color: C.amber }} />
-                    </span>
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: C.ink2 }}>
-                      {goalName ?? (de ? 'Zielevent' : 'Goal event')}
-                      {daysToGoal != null ? ` · ${daysToGoal} ${de ? 'Tage' : 'days'}` : ''}
-                    </span>
-                  </div>
-                )}
-                {projRangeOnly ? (
-                  /* Low/unknown confidence → range only, no point promise */
-                  <div className="flex flex-col" style={{ gap: 4 }}>
-                    <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink, lineHeight: 1.25 }}>
-                      {projP10 != null && projP90 != null
-                        ? (de
-                            ? `Richtung Renntag: ${projP10}–${projP90} W möglich`
-                            : `Trending toward ${projP10}–${projP90} W by race day`)
-                        : DASH}
-                    </span>
-                    <span style={{ fontSize: 12, color: C.muted }}>
-                      {de
-                        ? 'Das Band ist noch breit — je mehr Fahrten, desto enger wird es.'
-                        : 'The band is still wide — it tightens with every ride.'}
-                    </span>
-                  </div>
-                ) : (
-                  /* Central point + band */
-                  <div className="flex items-center justify-between rounded-[16px]" style={{ padding: 16, background: C.surface2 }}>
-                    <div className="flex flex-col" style={{ gap: 3 }}>
-                      <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.muted }}>{de ? 'AKTUELL' : 'CURRENT'}</span>
-                      <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink2 }}>{projCurrent != null ? `${projCurrent} W` : DASH}</span>
-                    </div>
-                    <ArrowRight size={20} style={{ color: C.muted }} />
-                    <div className="flex flex-col items-end" style={{ gap: 3 }}>
-                      <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.accent }}>{de ? 'RENNTAG' : 'RACE DAY'}</span>
-                      <span className="num-display" style={{ fontSize: 22, fontWeight: 700, color: C.ink }}>{projCentral != null ? `${projCentral} W` : DASH}</span>
-                      {projP10 != null && projP90 != null && (
-                        <span className="num-display" style={{ fontSize: 11, fontWeight: 600, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
-                          {projP10}–{projP90} W (80 %)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {/* Band chart from the projection path */}
-                {proj.path.length >= 2 && (() => {
-                  const pts = proj.path
-                  const lo = Math.min(...pts.map((p) => p.p10))
-                  const hi = Math.max(...pts.map((p) => p.p90))
-                  const span = Math.max(1, hi - lo)
-                  const W = 300, H = 96
-                  const x = (i: number) => (i / (pts.length - 1)) * W
-                  const y = (v: number) => H - ((v - lo) / span) * (H - 10) - 5
-                  const band = [
-                    ...pts.map((p, i) => `${x(i).toFixed(1)},${y(p.p90).toFixed(1)}`),
-                    ...[...pts].reverse().map((p, i) => `${x(pts.length - 1 - i).toFixed(1)},${y(p.p10).toFixed(1)}`),
-                  ].join(' ')
-                  const central = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.central).toFixed(1)}`).join(' ')
-                  return (
-                    <div className="flex flex-col" style={{ gap: 6 }}>
-                      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: 96, display: 'block' }} aria-hidden>
-                        <polygon points={band} fill={soft(C.accent, 14)} />
-                        <polyline points={central} fill="none" stroke={C.accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <div className="flex items-center justify-between">
-                        <span style={{ fontSize: 10.5, color: C.muted }}>{de ? 'Jetzt' : 'Now'}</span>
-                        <span style={{ fontSize: 10.5, color: C.muted }}>
-                          {de ? 'Band: p10–p90 (80 %)' : 'Band: p10–p90 (80%)'}
-                        </span>
-                        <span style={{ fontSize: 10.5, color: C.muted }}>{projHorizonLabel ?? ''}</span>
-                      </div>
-                    </div>
-                  )
-                })()}
-                {/* Honest narration straight from the model — no client re-spin */}
-                <div className="flex items-start rounded-[16px]" style={{ gap: 12, padding: 14, background: soft(C.paper, 70), border: `1px solid ${soft(C.strain, 20)}` }}>
-                  <span className="flex items-center justify-center rounded-full" style={{ width: 34, height: 34, background: C.strain, flex: 'none' }}>
-                    <LineChart size={19} style={{ color: C.ink }} />
-                  </span>
-                  <div className="flex flex-col" style={{ gap: 3, minWidth: 0, flex: 1 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: C.ink, lineHeight: 1.4 }}>{proj.projected_outcome}</span>
-                    <span style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4 }}>
-                      {proj.caveat}{latestCtl != null ? ` · CTL ${latestCtl}` : ''}
-                    </span>
-                  </div>
                 </div>
               </>
+            ) : (
+              <span style={{ fontSize: 12, color: C.tertiary, padding: '16px 0' }}>
+                {de
+                  ? 'Noch keine belastbare Leistungsprognose — braucht mehr Trainingshistorie.'
+                  : 'No reliable performance forecast yet — needs more training history.'}
+              </span>
             )}
           </Card>
 
-          {/* ═══ 4 · THE DETAIL ═══ */}
-          <SectionHeader tick={C.muted} title={de ? 'DIE DETAILS' : 'THE DETAIL'}
-            sub={de ? 'Belege im Detail · Bestleistungen & Kurve' : 'The supporting reference · efforts & curve'} />
-
-          {/* Power Profile — range-scoped best-effort power (best NP per bucket) */}
-          <Card gap={14}>
-            <CardHead title={de ? 'Leistungsprofil' : 'Power Profile'}
-              sub={de ? `Bestleistungen · ${rangeLabel}` : `Best efforts · ${rangeLabel}`}
-              right={<Pill color={C.ink2}><Medal size={14} style={{ color: C.amber }} /> {rides.length} {de ? 'Fahrten' : 'rides'}</Pill>} />
-            {noRides || !mmpBuckets.some((b) => b.value > 0) ? (
-              <div style={{ fontSize: 12, color: C.muted, padding: '20px 0' }}>
-                {de ? 'Keine Bestleistungen im Zeitraum' : 'No efforts in range'}
+          {/* Event prediction — honest CTL-toward-event readout (no finish-time source) */}
+          {eventName && (
+            <Card>
+              <div className="flex items-center" style={{ gap: 12 }}>
+                <span className="flex items-center justify-center rounded-[12px]" style={{ width: 40, height: 40, background: C.surface2, flex: 'none' }}>
+                  <Flag size={20} style={{ color: C.amber }} />
+                </span>
+                <div className="flex flex-col" style={{ gap: 2, flex: 1, minWidth: 0 }}>
+                  <span className={DISPLAY} style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{eventName}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: C.tertiary }}>
+                    {eventDate ? fmtD(eventDate, { en: 'MMM d', de: 'd. MMM' }) : DASH}
+                    {eventTypeRaw ? ` · ${eventTypeRaw}` : ''}
+                    {daysToGoal != null ? ` · ${daysToGoal} ${de ? 'Tage' : 'days'}` : ''}
+                  </span>
+                </div>
               </div>
-            ) : (
-              <>
-                <div className="flex items-end justify-between">
-                  <div className="flex flex-col" style={{ gap: 2 }}>
-                    <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: C.ink2 }}>
-                      {de ? 'SPITZEN-NP · ZEITRAUM' : 'PEAK NP · RANGE'}
-                    </span>
-                    <div className="flex items-end" style={{ gap: 4 }}>
-                      <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{peakNp ?? DASH}</span>
-                      <span style={{ fontSize: 12, color: C.muted, paddingBottom: 3 }}>W</span>
-                    </div>
+              {projectionValid ? (
+                <div className="flex items-center justify-between rounded-[16px]" style={{ padding: 16, background: C.surface2 }}>
+                  <div className="flex flex-col" style={{ gap: 3 }}>
+                    <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.tertiary }}>{de ? 'HEUTE' : 'CURRENT'}</span>
+                    <span className={DISPLAY} style={{ fontSize: 22, fontWeight: 700, color: C.ink2 }}>CTL {traj?.ctl_now != null ? Math.round(traj.ctl_now) : DASH}</span>
                   </div>
-                  {peakNpWkg != null && (
-                    <Pill color={C.recovery} bg={soft(C.recovery, 15)}><ArrowUp size={12} /> {peakNpWkg} W/kg</Pill>
+                  <ArrowRight size={20} style={{ color: C.tertiary }} />
+                  <div className="flex flex-col items-end" style={{ gap: 3 }}>
+                    <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, color: C.accent }}>{de ? 'RENNTAG' : 'RACE DAY'}</span>
+                    <span className={DISPLAY} style={{ fontSize: 22, fontWeight: 700, color: C.ink }}>CTL {traj?.ctl_projected_at_goal != null ? Math.round(traj.ctl_projected_at_goal) : DASH}</span>
+                  </div>
+                  {traj?.ctl_now != null && traj?.ctl_projected_at_goal != null && (
+                    <Pill color={C.recovery} bg={soft(C.recovery, 15)}>
+                      <TrendingUp size={12} /> {Math.round(traj.ctl_projected_at_goal - traj.ctl_now) >= 0 ? '+' : ''}{Math.round(traj.ctl_projected_at_goal - traj.ctl_now)}
+                    </Pill>
                   )}
                 </div>
-                <HoverBars
-                  height={120}
-                  radius={5}
-                  defaultColor={C.surface3}
-                  bars={mmpBuckets.map((b) => ({
-                    value: b.value,
-                    valueLabel: `${Math.round(b.value)} W`,
-                    label: b.label,
-                    highlight: peakNp != null && Math.round(b.value) === Math.round(peakNp),
-                  }))}
-                />
-                <div className="flex items-center justify-between">
-                  <span style={{ fontSize: 11, color: C.muted }}>{de ? `Beste NP je ${granTxt}-Bucket` : `Best NP per ${granTxt} bucket`}</span>
-                  <span style={{ fontSize: 11, color: C.muted }}>{rangeLabel}</span>
-                </div>
-              </>
-            )}
-          </Card>
-
-          {/* Power Curve — sanitized server-side bests, no projected ceiling */}
-          <Card>
-            <CardHead title={de ? 'Leistungskurve' : 'Power Curve'}
-              sub={de ? 'Deine besten Efforts je Dauer' : 'Your best efforts per duration'} />
-            {!power?.peaks || Object.keys(power.peaks).length === 0 ? (
-              <div style={{ fontSize: 12, color: C.muted, padding: '20px 0' }}>{emptyMsg}</div>
-            ) : (
-            <>
-            <div className="flex items-end" style={{ gap: 12, height: 150 }}>
-              {CURVE.map((c) => {
-                const now = peakAt(c.s)
-                const allNow = CURVE.map((x) => peakAt(x.s) ?? 0)
-                const mx = Math.max(...allNow, 1)
-                const curH = now != null ? (now / mx) * 120 : 0
-                return (
-                  <div key={c.s} className="flex-1 flex flex-col items-center justify-end" style={{ gap: 5, height: '100%' }}>
-                    <span className="w-full" style={{ height: curH, background: C.accent, borderRadius: 6 }} />
-                    <span className="num-display" style={{ fontSize: 11, fontWeight: 700, color: C.ink2 }}>{now ?? DASH}</span>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="flex" style={{ gap: 12 }}>
-              {CURVE.map((c) => <span key={c.s} className="flex-1 text-center" style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{c.label}</span>)}
-            </div>
-            </>
-            )}
-          </Card>
+              ) : (
+                <span style={{ fontSize: 12, color: C.tertiary, padding: '4px 0' }}>
+                  {de ? 'Renntag-Prognose noch nicht belastbar — braucht einen aktiven Plan.' : 'Race-day projection not reliable yet — needs an active plan.'}
+                </span>
+              )}
+            </Card>
+          )}
 
         </div>
       </div>
