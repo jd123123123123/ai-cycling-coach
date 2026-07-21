@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
         max_instances=1,
     )
     scheduler.start()
-    logger.info("APScheduler started with Garmin sync every 4 hours")
+    logger.info("APScheduler started with Garmin sync every 15 minutes")
     yield
     scheduler.shutdown()
     logger.info("APScheduler shut down")
