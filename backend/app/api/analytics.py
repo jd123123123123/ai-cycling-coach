@@ -22,6 +22,7 @@ from app.models.activity import Activity
 from app.models.activity_stream import ActivityStream
 from app.models.user import User
 from app.schemas.analytics import QueryResult, QuerySpec
+from app.schemas.season_trends import SeasonTrends
 from app.schemas.period_report import PeriodReport
 from app.schemas.race_debrief import RaceDebrief
 from app.schemas.ride_compare import RideComparison
@@ -41,6 +42,7 @@ from app.services.race_debrief import get_or_build_debrief
 from app.services.ride_compare import build_comparison
 from app.services.detailed_power_profile import compute_detailed_power_profile
 from app.services.power_profile_view import compute_power_profile_view
+from app.services.season_trends import compute_season_trends
 from app.services.tid_assessment import compute_training_distribution
 from app.services.wbal_trace import compute_wbal_trace
 
@@ -89,6 +91,32 @@ async def get_power_profile_view(
     durability/balance only. `{available: false}` when no power rides exist.
     `?lang=de` localizes athlete-facing prose (`phenotype.key` stays stable)."""
     return await compute_power_profile_view(db, _user.id, lang=lang)
+
+
+@router.get(
+    "/season-trends",
+    response_model=SeasonTrends,
+    summary="Season-long monthly trends: VO₂max, weight, durability, 20-min power",
+)
+async def get_season_trends(
+    _user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    year: int | None = None,
+) -> SeasonTrends:
+    """Monthly buckets for the four season series the Progress surface aggregates
+    from already-stored data: Garmin VO₂max (daily_metric.raw_data), body weight
+    (daily_metric.weight_kg), aerobic decoupling / durability
+    (activity_stream.decoupling_pct) and best 20-min power
+    (activity_stream.mmp_curve[1200]). Each metric carries a first-vs-latest
+    summary. A metric with no stored data for this athlete stays honestly empty
+    (n_points == 0); nothing is fabricated. `year` defaults to the current year."""
+    if year is not None and (year < 2000 or year > 2100):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="year must be between 2000 and 2100",
+        )
+    data = await compute_season_trends(db, _user.id, year)
+    return SeasonTrends(**data)
 
 
 @router.get(

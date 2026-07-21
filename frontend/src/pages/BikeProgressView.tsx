@@ -14,6 +14,7 @@ import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useGoalTrajectory } from '../hooks/useGoalTrajectory'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
 import { usePowerProfileView } from '../hooks/usePowerProfileView'
+import { useSeasonTrends } from '../hooks/useSeasonTrends'
 import { formatDate } from '../utils/format'
 
 /**
@@ -26,11 +27,16 @@ import { formatDate } from '../utils/format'
  *     (ftp_progression is the app's only typed FTP-over-time series).
  *   • Season fitness curve — the dated CTL history from /training-load/pmc.
  *   • The forecast — the ONE Bayesian /weeks/current projection.
- *   • Durability / decoupling — power-profile-view.sprint_pedal.
+ *   • Durability / decoupling — power-profile-view.sprint_pedal, plus the
+ *     season decoupling trend from /analytics/season-trends.
+ *   • VO₂max / weight / durability / 20-min-power season trends — the monthly
+ *     buckets from /analytics/season-trends, aggregated from already-stored
+ *     data (daily_metric.raw_data / weight_kg, activity_stream.decoupling_pct /
+ *     mmp_curve[1200]).
  *   • Event context — /coach/trajectory.
- * Where the pen shows a metric with no backend source (VO₂max, per-kJ fade
- * curve, event distance / elevation / finish-time), we render an honest "—" or
- * an honest empty state — never a fabricated number.
+ * Where a metric genuinely has no stored data for THIS athlete (e.g. no Garmin
+ * VO₂max, no daily weight, event distance / elevation / finish-time), we render
+ * an honest "—" or an honest empty state — never a fabricated number.
  */
 
 const DASH = '—'
@@ -121,6 +127,7 @@ export default function BikeProgressView() {
   )
 
   const { data: ppv } = usePowerProfileView()
+  const { data: trends } = useSeasonTrends()
   const { data: pmc } = usePMC(365)
   const { data: athlete } = useAthleteProfile()
   const { data: brief } = useCoachBrief()
@@ -228,6 +235,33 @@ export default function BikeProgressView() {
   // ── Durability (power fade / decoupling) ─────────────────────────────────
   const durabilityPct = ppv?.sprint_pedal?.durability_best_pct ?? null
   const decouplingPct = ppv?.sprint_pedal?.avg_decoupling_pct ?? null
+
+  // ── Season trends — real monthly series aggregated from stored data ───────
+  // (VO₂max, weight, durability/decoupling, best 20-min power). Each metric is
+  // honestly empty when THIS athlete has no stored data for it.
+  const trendPts = useMemo(() => trends?.points ?? [], [trends])
+  const trendVals = useCallback(
+    (key: 'vo2max' | 'weight_kg' | 'durability_pct' | 'p20min_w') =>
+      trendPts.map((p) => p[key]).filter((v): v is number => v != null),
+    [trendPts],
+  )
+  const vo2Sum = trends?.vo2max
+  const p20Sum = trends?.p20min_w
+  const wtSum = trends?.weight_kg
+  const duraSum = trends?.durability_pct
+  const vo2Vals = useMemo(() => trendVals('vo2max'), [trendVals])
+  const p20Vals = useMemo(() => trendVals('p20min_w'), [trendVals])
+  const wtVals = useMemo(() => trendVals('weight_kg'), [trendVals])
+  // Monthly decoupling trend for the Durability card (labelled months, lower =
+  // holds power deeper). Replaces the fabricated You/Jan/Elite fade chart.
+  const duraTrend = useMemo(
+    () =>
+      trendPts
+        .filter((p) => p.durability_pct != null)
+        .map((p) => ({ label: de ? p.month_de : p.month_en, v: p.durability_pct as number })),
+    [trendPts, de],
+  )
+  const hasDuraTrend = duraTrend.length >= 2
 
   // ── The projection — /weeks/current Bayesian forecast ────────────────────
   const proj = week?.projection ?? null
@@ -503,17 +537,27 @@ export default function BikeProgressView() {
                   delta: wkgGain != null ? `${wkgGain >= 0 ? '+' : ''}${n1(wkgGain)}` : null, deltaGood: (wkgGain ?? 0) >= 0,
                 },
                 {
-                  key: 'vo2', name: 'VO₂max', value: DASH,
-                  spark: null, sparkColor: C.violet, delta: null, deltaGood: true,
+                  key: 'vo2', name: 'VO₂max',
+                  value: vo2Sum?.latest != null ? `${n1(vo2Sum.latest)}` : DASH,
+                  spark: vo2Vals.length >= 2 ? vo2Vals : null, sparkColor: C.violet,
+                  delta: vo2Sum?.delta != null ? `${vo2Sum.delta >= 0 ? '+' : ''}${n1(vo2Sum.delta)}` : null,
+                  deltaGood: (vo2Sum?.delta ?? 0) >= 0,
                 },
                 {
                   key: 'p20', name: de ? '20-Min-Leistung' : '20-min power',
-                  value: ppv?.curve?.find((c) => c.seconds === 1200)?.watts != null ? `${ppv.curve.find((c) => c.seconds === 1200)!.watts} W` : DASH,
-                  spark: null, sparkColor: C.strain, delta: null, deltaGood: true,
+                  value: (p20Sum?.latest ?? ppv?.curve?.find((c) => c.seconds === 1200)?.watts) != null
+                    ? `${p20Sum?.latest ?? ppv!.curve!.find((c) => c.seconds === 1200)!.watts} W` : DASH,
+                  spark: p20Vals.length >= 2 ? p20Vals : null, sparkColor: C.strain,
+                  delta: p20Sum?.delta != null ? `${p20Sum.delta >= 0 ? '+' : ''}${p20Sum.delta} W` : null,
+                  deltaGood: (p20Sum?.delta ?? 0) >= 0,
                 },
                 {
-                  key: 'wt', name: de ? 'Gewicht' : 'Weight', value: n1(weight) != null ? `${n1(weight)} kg` : DASH,
-                  spark: null, sparkColor: C.gold, delta: null, deltaGood: true,
+                  key: 'wt', name: de ? 'Gewicht' : 'Weight',
+                  value: (wtSum?.latest ?? n1(weight)) != null ? `${n1(wtSum?.latest ?? weight)} kg` : DASH,
+                  spark: wtVals.length >= 2 ? wtVals : null, sparkColor: C.gold,
+                  // Lower weight is the good direction.
+                  delta: wtSum?.delta != null ? `${wtSum.delta >= 0 ? '+' : ''}${n1(wtSum.delta)} kg` : null,
+                  deltaGood: (wtSum?.delta ?? 0) <= 0,
                 },
                 {
                   key: 'dur', name: de ? 'Ausdauer-Abfall' : 'Durability drop',
@@ -634,11 +678,14 @@ export default function BikeProgressView() {
           <SectionHeader tick={C.accent} title={de ? 'AUSDAUER' : 'DURABILITY'}
             sub={de ? 'Leistung halten, wenn müde — der Profi-Unterschied' : 'Holding power when tired — the pro differentiator'} />
 
-          <div className="rounded-[24px] flex flex-col" style={{ gap: 14, padding: 20, background: durabilityPct != null ? DURA_BG : C.surface, border: `1px solid ${durabilityPct != null ? '#FFFFFF1F' : C.border}` }}>
+          {(() => {
+            const duraDeveloped = durabilityPct != null || hasDuraTrend
+            return (
+          <div className="rounded-[24px] flex flex-col" style={{ gap: 14, padding: 20, background: duraDeveloped ? DURA_BG : C.surface, border: `1px solid ${duraDeveloped ? '#FFFFFF1F' : C.border}` }}>
             <div className="flex items-center justify-between" style={{ gap: 12 }}>
               <div className="flex flex-col" style={{ gap: 2 }}>
-                <span className={DISPLAY} style={{ fontSize: 16, fontWeight: 600, color: durabilityPct != null ? '#fff' : C.ink }}>{de ? 'Ausdauer' : 'Durability'}</span>
-                <span style={{ fontSize: 12, fontWeight: 500, color: durabilityPct != null ? '#FFFFFFCC' : C.ink2 }}>
+                <span className={DISPLAY} style={{ fontSize: 16, fontWeight: 600, color: duraDeveloped ? '#fff' : C.ink }}>{de ? 'Ausdauer' : 'Durability'}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: duraDeveloped ? '#FFFFFFCC' : C.ink2 }}>
                   {de ? 'Wie deine Leistung tief im Ritt hält' : 'How your power holds deep into a ride'}
                 </span>
               </div>
@@ -648,7 +695,7 @@ export default function BikeProgressView() {
                 </Pill>
               )}
             </div>
-            {durabilityPct != null ? (
+            {durabilityPct != null && (
               <>
                 <div className="flex items-end" style={{ gap: 10 }}>
                   <span className={DISPLAY} style={{ fontSize: 40, fontWeight: 800, color: '#fff', lineHeight: 1 }}>
@@ -668,12 +715,68 @@ export default function BikeProgressView() {
                         : 'Your power fade over long rides — the lower, the deeper you hold your watts.')}
                 </span>
               </>
-            ) : (
+            )}
+            {/* Season decoupling trend — a REAL monthly series (activity_stream
+                .decoupling_pct), lower = holds power deeper. Replaces the pen's
+                fabricated You/Jan/Elite fade chart with the athlete's own data. */}
+            {hasDuraTrend ? (
+              <div className="flex flex-col" style={{ gap: 10, paddingTop: durabilityPct != null ? 6 : 0, borderTop: durabilityPct != null ? '1px solid #FFFFFF1F' : undefined }}>
+                <div className="flex items-center justify-between">
+                  <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: '#FFFFFFB3' }}>
+                    {de ? 'ENTKOPPLUNG · SAISON' : 'DECOUPLING · SEASON'}
+                  </span>
+                  {duraSum?.delta != null && (
+                    <span className="inline-flex items-center rounded-full" style={{ gap: 5, padding: '5px 10px', fontSize: 11, fontWeight: 700, color: '#fff', background: '#0A0C0F59' }}>
+                      {duraSum.delta <= 0 ? <TrendingDown size={13} style={{ color: '#5EF0A8' }} /> : <TrendingUp size={13} style={{ color: '#FFB86B' }} />}
+                      {duraSum.delta >= 0 ? '+' : ''}{n1(duraSum.delta)}% {de ? 'seit Jan.' : 'since Jan'}
+                    </span>
+                  )}
+                </div>
+                <div className="relative rounded-[12px] overflow-hidden" style={{ height: 96, background: '#0A0C0F40' }}>
+                  {(() => {
+                    const vals = duraTrend.map((d) => d.v)
+                    const W = 300, H = 96
+                    const pts = sparkPoints(vals, W, H, 14)
+                    const area = `0,${H} ${pts} ${W},${H}`
+                    return (
+                      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0" style={{ width: '100%', height: '100%' }} aria-hidden>
+                        <defs>
+                          <linearGradient id="duraFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.30" />
+                            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.02" />
+                          </linearGradient>
+                        </defs>
+                        <polygon points={area} fill="url(#duraFill)" />
+                        <polyline points={pts} fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                        {(() => {
+                          const lo = Math.min(...vals), hi = Math.max(...vals)
+                          const span = Math.max(1e-6, hi - lo)
+                          const cx = W, cy = H - 14 - ((vals[vals.length - 1] - lo) / span) * (H - 28)
+                          return <circle cx={cx - 3} cy={cy} r={3.5} fill="#fff" />
+                        })()}
+                      </svg>
+                    )
+                  })()}
+                </div>
+                <div className="flex">
+                  {duraTrend.map((d, i) => (
+                    <span key={i} className="flex-1 text-center" style={{ fontSize: 10, fontWeight: 600, color: '#FFFFFF99' }}>{d.label}</span>
+                  ))}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#FFFFFFCC', lineHeight: 1.4 }}>
+                  {de
+                    ? `Monatliche Herz-Leistungs-Entkopplung deiner Fahrten — zuletzt ${n1(duraSum?.latest ?? 0)}%. Je niedriger, desto besser hältst du die Leistung.`
+                    : `Monthly heart-rate-to-power decoupling across your rides — latest ${n1(duraSum?.latest ?? 0)}%. Lower means your power holds deeper into the ride.`}
+                </span>
+              </div>
+            ) : durabilityPct == null ? (
               <span style={{ fontSize: 12, color: C.tertiary, padding: '8px 0' }}>
                 {de ? 'Braucht mehr lange Fahrten (>1.500 kJ), um die Ausdauer zu messen.' : 'Needs more long rides (>1,500 kJ) to measure durability.'}
               </span>
-            )}
+            ) : null}
           </div>
+            )
+          })()}
 
           {/* ═══ PROJECTION ═══ */}
           <SectionHeader tick={C.strain} title={de ? 'PROGNOSE' : 'PROJECTION'}
