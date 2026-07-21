@@ -93,3 +93,44 @@ class TestGymHrTssFallback:
         tss = _compute_tss(data, _profile())
         assert tss is not None
         assert tss > 0
+
+
+def _ride(
+    avg_hr: int | None = 128,
+    power: int | None = None,
+    minutes: int = 90,
+    distance: float | None = 40000.0,
+) -> ActivityCreate:
+    """A cycling activity — power optional, distance present (the 'has km,
+    no power meter' case)."""
+    return ActivityCreate(
+        sport="cycling",
+        started_at=datetime(2026, 7, 18, 9, 0, tzinfo=UTC),
+        duration_seconds=minutes * 60,
+        distance_meters=distance,
+        average_power=power,
+        average_hr=avg_hr,
+    )
+
+
+class TestCyclingHrTssFallback:
+    """A distance-only ride with HR but no power meter must still earn TSS
+    (regression: the cycling branch used to return None without power)."""
+
+    def test_power_less_ride_with_hr_gets_hrtss(self):
+        tss = _compute_tss(_ride(), _profile())
+        assert tss is not None
+        assert tss > 0
+
+    def test_power_ride_uses_power_not_hr(self):
+        # With power + FTP, the power path wins (independent of HR anchors).
+        with_power = _compute_tss(_ride(power=210), _profile(ftp_watts=240))
+        assert with_power is not None and with_power > 0
+
+    def test_no_power_no_hr_stays_none(self):
+        # No power, no HR → honest None (nothing to estimate from).
+        assert _compute_tss(_ride(avg_hr=None), _profile()) is None
+
+    def test_no_power_no_maxhr_anchor_stays_none(self):
+        # HR present but no max-HR anchor at all → no fabricated number.
+        assert _compute_tss(_ride(), _profile(date_of_birth=None)) is None

@@ -146,19 +146,23 @@ def _compute_tss(
         return None
 
     if data.sport == "cycling":
-        # Prefer normalized_power; fall back to average_power as NP estimate
+        # Prefer power (normalized_power, else average_power as an NP estimate).
         np_value = data.normalized_power or data.average_power
-        if np_value is None:
-            logger.debug("Skipping cycling TSS: no power data provided")
-            return None
-        if not profile.ftp_watts:
-            logger.debug("Skipping cycling TSS: no FTP set on athlete profile")
-            return None
-        try:
-            return calculate_cycling_tss(duration, np_value, profile.ftp_watts)
-        except ValueError as exc:
-            logger.warning("Cycling TSS calculation failed: %s", exc)
-            return None
+        if np_value is not None and profile.ftp_watts:
+            try:
+                return calculate_cycling_tss(duration, np_value, profile.ftp_watts)
+            except ValueError as exc:
+                logger.warning("Cycling TSS calculation failed: %s", exc)
+                # fall through to the hrTSS estimate below
+        # No usable power (no power meter, or no FTP) → hrTSS when HR exists.
+        # Many riders record heart rate but not power; a distance-only ride with
+        # an average HR should still earn an honest load instead of NULL. Anchor
+        # on cycling LTHR, then running, then age-derived (handled downstream).
+        measured = profile.lthr_cycling or profile.lthr_running
+        return _compute_hr_tss(
+            duration, data, profile, measured, context="cycling",
+            resting_hr_fallback=resting_hr_fallback,
+        )
 
     elif data.sport == "running":
         # Preferred: pace-based rTSS when a real running threshold pace is set.
@@ -206,7 +210,7 @@ async def create_activity(
     # Resting-HR fallback only matters on the hrTSS paths — fetch lazily.
     resting_hr_fallback: float | None = None
     if (
-        data.sport in ("running", "gym")
+        data.sport in ("cycling", "running", "gym")
         and data.average_hr
         and not profile.resting_heart_rate
     ):
