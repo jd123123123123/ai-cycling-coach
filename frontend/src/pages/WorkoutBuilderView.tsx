@@ -12,7 +12,7 @@
  * materialised server-side from FTP only at schedule / export time.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import { ChevronLeft, ChevronUp, ChevronDown, Trash2, Plus, Clock, Zap, Download } from 'lucide-react'
 import { useLocale } from '../contexts/LocaleContext'
 import BlockBars from '../components/workout/BlockBars'
@@ -94,6 +94,7 @@ export default function WorkoutBuilderView() {
   const { locale } = useLocale()
   const de = locale === 'de'
   const navigate = useNavigate()
+  const location = useLocation()
   const { id } = useParams<{ id: string }>()
   const editingId = id ? Number(id) : null
 
@@ -109,14 +110,24 @@ export default function WorkoutBuilderView() {
 
   useEffect(() => { refreshSaved() }, [])
 
+  // A "seed" handed in via router state (e.g. Workout Detail → "Einheit
+  // bearbeiten") prefills the editor with the current workout as a NEW draft
+  // the athlete can tweak and save/schedule — without editing a saved id.
+  const seed = (location.state as { seed?: { name?: string; blocks?: CustomBlock[] } } | null)?.seed ?? null
+
   useEffect(() => {
     if (editingId == null) {
-      setName(''); setDescription(''); setBlocks([])
+      if (seed?.blocks?.length) {
+        setName(seed.name ?? ''); setDescription(''); setBlocks(seed.blocks)
+      } else {
+        setName(''); setDescription(''); setBlocks([])
+      }
       return
     }
     getCustomWorkout(editingId).then((w) => {
       setName(w.name); setDescription(w.description ?? ''); setBlocks(w.blocks)
     }).catch(() => setError(de ? 'Konnte Workout nicht laden.' : 'Could not load workout.'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId, de])
 
   const tss = useMemo(() => estimateTss(blocks), [blocks])

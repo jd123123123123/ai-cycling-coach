@@ -17,7 +17,6 @@ import { format, parseISO, differenceInCalendarWeeks } from 'date-fns'
 import {
   ChevronLeft, ChevronRight, Share2, Bike, Repeat, Zap, Heart, Gauge, Droplet,
   Cookie, SlidersHorizontal, Brain, Flag, MessageCircle, Home, CalendarClock,
-  Activity, MoreHorizontal, FileText,
 } from 'lucide-react'
 import { formatDate } from '../utils/format'
 import { useCoachBrief } from '../hooks/useCoachBrief'
@@ -27,6 +26,7 @@ import { useLocale } from '../contexts/LocaleContext'
 import { workoutDisplayTitle, workoutDisplayPurpose, workoutDisplayRationale } from '../api/coach'
 import BlockBars, { zoneColor, zoneForPct } from '../components/workout/BlockBars'
 import type { ResolvedBlock, PrescribedWorkout } from '../api/coach'
+import type { CustomBlock } from '../api/customWorkouts'
 import type { DayPlan } from '../api/weeks'
 
 // ── token helpers ───────────────────────────────────────────────────────────
@@ -236,6 +236,25 @@ export default function WorkoutDetailView() {
 
   const s = useMemo(() => (w ? summarize(w) : null), [w])
   const steps = useMemo(() => (w ? buildSteps(w.blocks) : []), [w])
+
+  // "Einheit bearbeiten" → open the workout builder seeded with THIS workout as
+  // an editable draft. ResolvedBlocks map straight onto CustomBlocks (both use
+  // %FTP as a fraction): an on/off set → interval, everything else → steady.
+  const onEditWorkout = () => {
+    if (!w) return
+    const seedBlocks: CustomBlock[] = (w.blocks ?? []).map((b) => {
+      if (b.reps && b.on_s) {
+        return {
+          type: 'interval', name: b.name,
+          reps: b.reps, on_s: b.on_s, off_s: b.off_s ?? 0,
+          on_pct: b.target_pct_ftp ?? null, off_pct: b.off_pct_ftp ?? null,
+        }
+      }
+      return { type: 'steady', name: b.name, duration_s: b.duration_s, power_pct: b.target_pct_ftp ?? null }
+    })
+    const seedName = (de ? w.title_de : w.title) || w.title || (de ? 'Eigenes Workout' : 'Custom workout')
+    navigate('/workouts/builder', { state: { seed: { name: seedName, blocks: seedBlocks } } })
+  }
 
   // Coach rationale (today only — a "now" concept) + the training goal.
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
@@ -610,23 +629,7 @@ export default function WorkoutDetailView() {
               <Share2 size={20} style={{ color: '#FFFFFF' }} />
               <span style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF' }}>{de ? 'Workout exportieren' : 'Export workout'}</span>
             </button>
-            <div className="flex items-center justify-center gap-2">
-              {[
-                { Icon: Bike, label: 'Zwift' },
-                { Icon: Activity, label: 'TrainingPeaks' },
-                { Icon: MoreHorizontal, label: de ? '12 weitere' : '12 more' },
-              ].map((d, i) => (
-                <span key={i} className="inline-flex items-center gap-[5px]" style={{ borderRadius: 100, padding: '9px 14px', ...inner }}>
-                  <d.Icon size={14} style={{ color: 'var(--color-ink-2)' }} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{d.label}</span>
-                </span>
-              ))}
-            </div>
-            <div className="flex items-center justify-center gap-[5px]">
-              <FileText size={12} style={{ color: 'var(--color-muted)' }} />
-              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Als .fit · .zwo · .erg — überall importierbar' : 'Downloads as .fit · .zwo · .erg — import anywhere'}</span>
-            </div>
-            <button type="button" className="flex items-center justify-center gap-[6px]" style={{ padding: '8px 0' }}>
+            <button type="button" onClick={onEditWorkout} className="flex items-center justify-center gap-[6px]" style={{ padding: '8px 0' }}>
               <SlidersHorizontal size={16} style={{ color: 'var(--color-ink-2)' }} />
               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Einheit bearbeiten' : 'Edit workout'}</span>
             </button>

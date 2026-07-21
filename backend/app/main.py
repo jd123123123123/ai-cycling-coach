@@ -167,6 +167,7 @@ from app.api.weeks import router as weeks_router  # noqa: E402
 from app.api.crews import router as crews_router  # noqa: E402
 from app.api.apple_health import router as apple_health_router  # noqa: E402
 from app.api.wahoo import router as wahoo_router  # noqa: E402
+from app.api.coros import router as coros_router  # noqa: E402
 from app.api.tab_layouts import router as tab_layouts_router  # noqa: E402
 from app.api.workouts import router as workouts_router  # noqa: E402
 from app.api.strength import router as strength_router  # noqa: E402
@@ -189,6 +190,7 @@ app.include_router(weeks_router)
 app.include_router(crews_router)
 app.include_router(apple_health_router)
 app.include_router(wahoo_router)
+app.include_router(coros_router)
 app.include_router(tab_layouts_router)
 app.include_router(workouts_router)
 app.include_router(strength_router)

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.consent import ConsentRecord
     from app.models.garmin_credential import GarminCredential
     from app.models.wahoo_credential import WahooCredential
+    from app.models.coros_credential import CorosCredential
     from app.models.daily_metric import DailyMetric
     from app.models.planned_workout import PlannedWorkout
     from app.models.daily_metric_sample import DailyMetricSample
@@ -65,6 +66,12 @@ class User(Base):
     )
     wahoo_credential: Mapped["WahooCredential | None"] = relationship(
         "WahooCredential",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    coros_credential: Mapped["CorosCredential | None"] = relationship(
+        "CorosCredential",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",

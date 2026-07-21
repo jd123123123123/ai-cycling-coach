@@ -23,6 +23,7 @@ import {
   Ruler,
   Scale,
   SlidersHorizontal,
+  Timer,
   Watch,
   Zap,
   type LucideIcon,
@@ -34,9 +35,11 @@ import { useLocale } from '../contexts/LocaleContext'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useGarminStatus } from '../hooks/useGarminStatus'
 import { useWahooStatus } from '../hooks/useWahooStatus'
+import { useCorosStatus } from '../hooks/useCorosStatus'
 import { updateProfile } from '../api/athletes'
 import type { DetailLevel } from '../types/athlete'
 import { getWahooConnectUrl, disconnectWahoo } from '../api/wahoo'
+import { getCorosConnectUrl, disconnectCoros } from '../api/coros'
 import { enableMorningBrief, disableMorningBrief, pushSupported } from '../lib/push'
 
 const DISPLAY_FONT = '"Sora", "Inter", ui-sans-serif, sans-serif'
@@ -133,8 +136,10 @@ export default function SettingsPage() {
   const { data: profile } = useAthleteProfile()
   const { data: garmin } = useGarminStatus()
   const { data: wahoo } = useWahooStatus()
+  const { data: coros } = useCorosStatus()
 
   const [wahooBusy, setWahooBusy] = useState(false)
+  const [corosBusy, setCorosBusy] = useState(false)
   const [briefState, setBriefState] = useState<'on' | 'off' | 'busy' | 'unsupported'>(() =>
     pushSupported() ? (Notification.permission === 'granted' ? 'on' : 'off') : 'unsupported',
   )
@@ -205,6 +210,26 @@ export default function SettingsPage() {
       // 409 → not configured on this server; leave the honest state as-is
     } finally {
       setWahooBusy(false)
+    }
+  }
+
+  const handleCoros = async () => {
+    setCorosBusy(true)
+    try {
+      if (coros?.connected) {
+        const ok = window.confirm(de ? 'COROS-Verbindung trennen?' : 'Disconnect COROS?')
+        if (ok) {
+          await disconnectCoros()
+          await queryClient.invalidateQueries({ queryKey: ['coros', 'status'] })
+        }
+      } else {
+        window.location.href = await getCorosConnectUrl()
+        return // navigating away
+      }
+    } catch {
+      // 409 → not configured on this server; leave the honest state as-is
+    } finally {
+      setCorosBusy(false)
     }
   }
 
@@ -374,6 +399,26 @@ export default function SettingsPage() {
                 tone={wahoo?.connected ? 'good' : 'accent'}
                 onClick={() => void handleWahoo()}
                 busy={wahooBusy}
+              />,
+              // COROS — partner API. Connectable only when the server has
+              // partner credentials (status.configured); otherwise an honest
+              // "Bald verfügbar" with no chevron, like Strava/Whoop.
+              <SettingsRow
+                key="coros"
+                icon={Timer}
+                label="COROS"
+                value={
+                  coros?.connected
+                    ? connectedLabel
+                    : coros?.configured
+                      ? connectLabel
+                      : de
+                        ? 'Bald verfügbar'
+                        : 'Coming soon'
+                }
+                tone={coros?.connected ? 'good' : coros?.configured ? 'accent' : 'muted'}
+                onClick={coros?.configured ? () => void handleCoros() : undefined}
+                busy={corosBusy}
               />,
             ]}
           </Section>

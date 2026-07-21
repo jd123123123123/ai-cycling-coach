@@ -63,6 +63,29 @@ class Settings(BaseSettings):
         return bool(self.WAHOO_CLIENT_ID and self.WAHOO_CLIENT_SECRET)
 
     # ------------------------------------------------------------------
+    # COROS Open API (OAuth2 authorization-code flow).
+    # COROS's official API is a PARTNER program (not self-serve). The COROS
+    # integration is "configured" only when both the client id and secret are
+    # present — otherwise /coros/connect returns 409, /coros/status reports
+    # configured=false (UI shows "Bald verfügbar"), and the app boots normally.
+    # Partner access is requested via the COROS Open API program (approval
+    # required) — see https://open.coros.com / coros.com developer contact.
+    # ------------------------------------------------------------------
+    COROS_CLIENT_ID: str = ""
+    COROS_CLIENT_SECRET: str = ""
+    # OAuth redirect URI (must match the one registered with COROS). When unset,
+    # /coros/connect derives it from the incoming request base URL.
+    COROS_REDIRECT_URI: str = ""
+    # COROS token encryption key. Falls back to GARMIN_ENCRYPTION_KEY when unset
+    # so a single Fernet key can protect every integration's tokens at rest.
+    COROS_ENCRYPTION_KEY: str = ""
+
+    @property
+    def coros_configured(self) -> bool:
+        """COROS is usable only when both client id and secret are set."""
+        return bool(self.COROS_CLIENT_ID and self.COROS_CLIENT_SECRET)
+
+    # ------------------------------------------------------------------
     # AI Coach (Phase 5) — Anthropic Claude integration.
     # App MUST boot when ANTHROPIC_API_KEY is unset — coach_service falls
     # back to a rule-based brief generated purely from safety_rails + the

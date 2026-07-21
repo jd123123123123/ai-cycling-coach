@@ -4,6 +4,7 @@ from app.models.consent import ConsentRecord
 from app.models.activity import Activity
 from app.models.garmin_credential import GarminCredential
 from app.models.wahoo_credential import WahooCredential
+from app.models.coros_credential import CorosCredential  # noqa: F401
 from app.models.daily_metric import DailyMetric
 from app.models.planned_workout import PlannedWorkout  # noqa: F401
 from app.models.daily_metric_sample import DailyMetricSample  # noqa: F401
@@ -29,7 +30,7 @@ from app.models.strength import (  # noqa: F401
 
 __all__ = [
     "User", "AthleteProfile", "ConsentRecord", "Activity", "GarminCredential",
-    "WahooCredential",
+    "WahooCredential", "CorosCredential",
     "DailyMetric", "PlannedWorkout", "DailyMetricSample", "CoachBrief",
     "PlanAdaptation",
     "UserDashboard", "UserTabLayout", "PeriodReportCache", "CoachRecommendation", "MesocyclePlan",
