@@ -10,8 +10,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
-import { BatteryCharging, ChevronRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { BatteryCharging } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useRecoveryEta } from '../../hooks/useRecoveryEta'
 
@@ -75,7 +74,7 @@ export default function RecoveryEtaCard() {
   const sel = hi != null ? days[hi] : null
 
   return (
-    <Link to="/load-form" className="rounded-[24px] p-5 hover-card flex flex-col gap-3" style={cardStyle}>
+    <div className="rounded-[24px] p-5 flex flex-col gap-3" style={cardStyle}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BatteryCharging size={16} style={{ color: 'var(--color-recovery)' }} />
@@ -83,7 +82,6 @@ export default function RecoveryEtaCard() {
             {de ? 'ERHOLUNGS-AUSBLICK' : 'RECOVERY OUTLOOK'}
           </span>
         </div>
-        <span className="hover-arrow"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></span>
       </div>
 
       <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.3 }}>{headline}</p>
@@ -128,6 +126,6 @@ export default function RecoveryEtaCard() {
       )}
 
       <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>{basisNote}</p>
-    </Link>
+    </div>
   )
 }

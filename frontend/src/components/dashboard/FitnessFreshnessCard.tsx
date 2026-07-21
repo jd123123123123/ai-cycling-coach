@@ -4,10 +4,9 @@
  *
  * A form/freshness gauge bound to real CTL/ATL/TSB: the marker sits on a
  * overreached→sweet-spot→fresh band, with the CTL/ATL/ramp numbers below.
- * Honest absence: with no PMC at all there is nothing to show. Whole card
- * links to /load-form for the deeper load story.
+ * Honest absence: with no PMC at all there is nothing to show. A static,
+ * self-contained snapshot — the deeper load story now lives inline on Today.
  */
-import { Link } from 'react-router-dom'
 import { TrendingUp, TrendingDown, Zap } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 import { classifyForm } from '../../utils/loadMetrics'
@@ -46,7 +45,7 @@ export default function FitnessFreshnessCard({ ctl, atl, tsb, dCtl7 }: {
   const atlDisp = atl != null ? Math.round(atl) : null
 
   return (
-    <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
+    <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
       {/* Head — title + TSB value + form pill */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5 min-w-0">
@@ -120,6 +119,6 @@ export default function FitnessFreshnessCard({ ctl, atl, tsb, dCtl7 }: {
           </div>
         ))}
       </div>
-    </Link>
+    </div>
   )
 }

@@ -38,7 +38,8 @@ const DebriefView = lazyWithRetry(() => import('./pages/DebriefView'))
 const SessionReportView = lazyWithRetry(() => import('./pages/SessionReportView'))
 const RideAnalysisView = lazyWithRetry(() => import('./pages/RideAnalysisView'))
 const RideRecapView = lazyWithRetry(() => import('./pages/RideRecapView'))
-const LoadFormView = lazyWithRetry(() => import('./pages/LoadFormView'))
+// Bike-only: the standalone Load & Form (/load-form) analysis page is archived
+// (file kept on disk, route removed) — its data lives inline on Today/Recovery.
 const WorkoutDetailView = lazyWithRetry(() => import('./pages/WorkoutDetailView'))
 // Bike-only: Run/Lift progress + Run analysis pages are archived (files kept on
 // disk, routes removed). See pen audit ESAbb 'App Map' — off-strategy.
@@ -185,15 +186,6 @@ function App() {
             element={
               <ProtectedRoute checkOnboarding>
                 <RideRecapView />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/load-form"
-            element={
-              <ProtectedRoute checkOnboarding>
-                <LoadFormView />
               </ProtectedRoute>
             }
           />

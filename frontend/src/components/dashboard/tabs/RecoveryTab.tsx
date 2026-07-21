@@ -541,10 +541,10 @@ export default function RecoveryTab() {
           Only train states carry a target; rest / trained / sick days get a slim
           confirmation row instead (no target, no progress bar). */}
       {tssTarget != null ? (
-        <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
+        <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
           <div className="flex items-end justify-between">
             <div className="flex flex-col" style={{ gap: 2 }}>
-              <span className="eyebrow flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'BELASTUNGSZIEL HEUTE' : "TODAY'S LOAD TARGET"}<ChevronRight size={14} className="hover-arrow" style={{ color: 'var(--color-muted)' }} /></span>
+              <span className="eyebrow flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'BELASTUNGSZIEL HEUTE' : "TODAY'S LOAD TARGET"}</span>
               <span className="flex items-end gap-1.5">
                 <span className="num-display" style={{ fontSize: 34, color: 'var(--color-recovery)' }}>~{tssTarget}</span>
                 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)', paddingBottom: 6 }}>TSS · {targetQualifier}</span>
@@ -565,15 +565,14 @@ export default function RecoveryTab() {
             <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-recovery)' }}>{de ? `Belastungsziel heute: ~${tssTarget} TSS (${targetQualifier})` : `Load target today: ~${tssTarget} TSS (${targetQualifier})`}</span>
             <span className="num-mono" style={{ fontSize: 10, color: 'var(--color-muted)' }}>~{tssTarget}</span>
           </div>
-          <div className="hover-reveal flex flex-col gap-1.5" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 10 }}>
-            {decision?.planned?.title && (
+          {decision?.planned?.title && (
+            <div className="flex flex-col gap-1.5" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 10 }}>
               <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? 'Geplant' : 'Planned'}: <span style={{ fontWeight: 600, color: 'var(--color-ink)' }}>{decision.planned.title}</span></span>
-            )}
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</span>
-          </div>
-        </Link>
+            </div>
+          )}
+        </div>
       ) : (
-        <Link to="/load-form" className="hover-card rounded-[24px] flex items-center justify-between" style={{ ...cardStyle, gap: 10, padding: '15px 20px' }}>
+        <div className="rounded-[24px] flex items-center" style={{ ...cardStyle, gap: 10, padding: '15px 20px' }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>
             {dState === 'planned_rest'
               ? (de ? 'Ruhetag — kein Belastungsziel heute' : 'Rest day — no load target today')
@@ -583,10 +582,9 @@ export default function RecoveryTab() {
                   : (de ? 'Erledigt für heute — kein weiteres Ziel' : 'Done for today — no further target'))
                 : dState === 'sick' || dState === 'injured' || dState === 'break'
                   ? (de ? 'Kein Belastungsziel — Erholung geht vor' : 'No load target — recovery comes first')
-                  : (de ? 'Belastung & Form ansehen' : 'View load & form')}
+                  : (de ? 'Kein Belastungsziel heute' : 'No load target today')}
           </span>
-          <ChevronRight size={16} className="hover-arrow shrink-0" style={{ color: 'var(--color-muted)' }} />
-        </Link>
+        </div>
       )}
 
       {/* 11 · Daytime Stress */}

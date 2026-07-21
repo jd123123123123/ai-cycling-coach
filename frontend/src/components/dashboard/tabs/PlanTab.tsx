@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
-import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ChevronDown, ListChecks, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp, SlidersHorizontal } from 'lucide-react'
+import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ChevronDown, ListChecks, Moon, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp, SlidersHorizontal } from 'lucide-react'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useTodaySession } from '../../../hooks/useTodaySession'
@@ -948,20 +948,6 @@ export default function PlanTab() {
           )}
         </div>
       )}
-
-      {/* Load & Form drill-down — a slim nav row (the plan summary now leads
-          the tab in the top PlanCard → /season, so this is no longer a second
-          full plan card, only the load/form deep-link). */}
-      <Link to="/load-form" className="rounded-[24px] p-4 flex items-center gap-3.5 hover-card" style={cardStyle}>
-        <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-accent-soft)' }}>
-          <TrendingUp size={22} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{de ? 'BELASTUNG & FORM' : 'LOAD & FORM'}</span>
-          <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Fitness, Ermüdung & Form' : 'Fitness, fatigue & form'}</div>
-        </div>
-        <span className="hover-arrow"><ChevronRight size={18} style={{ color: 'var(--color-muted)' }} /></span>
-      </Link>
 
       {/* Plan & goal — the natural way to reshape the plan or switch the goal.
           The 3-step interview handles less time / new event / no event / "too

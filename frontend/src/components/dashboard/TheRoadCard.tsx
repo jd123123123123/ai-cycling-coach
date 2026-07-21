@@ -4,15 +4,14 @@
  * Matches pencil-new.pen "V3 · Today" → Load Card (node mDpsp) 1:1: a
  * "TRAININGSLAST" header with a ramp pill, two horizontal Fitness/Fatigue
  * bars (CTL / ATL), a Form callout pill (TSB + a plain-words gloss) and a
- * one-line, real-data caption. Tapping the card opens the full load & form
- * detail (/load-form), where the forward-looking corridor lives.
+ * one-line, real-data caption. A self-contained Today snapshot — the deeper
+ * load & form detail is archived; its data now lives inline here and below.
  *
  * Renders whenever the athlete has real PMC — the numbers arrive as integers
  * from the shared latestLoad selector (props), so this card can never disagree
  * with the greeting's Form chip (displayed TSB = displayed CTL − ATL).
  */
-import { Link } from 'react-router-dom'
-import { BatteryCharging, ChevronRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
+import { BatteryCharging, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
@@ -104,8 +103,8 @@ export default function TheRoadCard({ ctlNow, atlNow, tsbNow, dCtl }: {
   ]
 
   return (
-    <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
-      {/* Head — TRAININGSLAST label + ramp pill + chevron (pen c6Ted) */}
+    <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
+      {/* Head — TRAININGSLAST label + ramp pill (pen c6Ted) */}
       <div className="flex items-center justify-between gap-2">
         <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>
           {de ? 'TRAININGSLAST' : 'TRAINING LOAD'}
@@ -117,7 +116,6 @@ export default function TheRoadCard({ ctlNow, atlNow, tsbNow, dCtl }: {
               <span style={{ fontSize: 12, fontWeight: 600, color: ramp.color }}>{ramp.label}</span>
             </span>
           )}
-          <ChevronRight size={18} className="hover-arrow" style={{ color: 'var(--color-muted)' }} />
         </div>
       </div>
 
@@ -152,6 +150,6 @@ export default function TheRoadCard({ ctlNow, atlNow, tsbNow, dCtl }: {
       {caption && (
         <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{caption}</p>
       )}
-    </Link>
+    </div>
   )
 }
