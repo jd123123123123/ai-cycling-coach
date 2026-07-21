@@ -357,3 +357,41 @@ class TestErrorHandling:
         pw = _pw("z2_endurance_60")
         with pytest.raises(ValueError):
             apply_modification(pw, "harder", {}, _snapshot(), ftp_w=0)
+
+
+# ---------------------------------------------------------------------------
+# Library-wide harder/easier (July 2026 fix): the cascade spine covers 12
+# templates but plans prescribe from the 50+ library — easier/harder must map
+# via nearest_anchor instead of silently returning the same session (live bug:
+# "Leichter" on sweet_spot_3x20 no-opped).
+# ---------------------------------------------------------------------------
+
+class TestLibraryWideCascade:
+    def _pw(self, template_id, duration_min=95, indoor=False):
+        from types import SimpleNamespace
+        return SimpleNamespace(template_id=template_id, duration_min=duration_min, indoor=indoor)
+
+    def test_easier_on_non_spine_template_actually_eases(self):
+        from app.services.workout_modifier import apply_modification
+        res = apply_modification(
+            self._pw("sweet_spot_3x20"), "easier", {},
+            {"intensity_ceiling": "push", "injury_flag": False}, ftp_w=250,
+        )
+        assert res.template_id != "sweet_spot_3x20"
+        assert res.template_id == "tempo_3x10"  # anchor sweet_spot_2x20 → one down
+
+    def test_harder_on_non_spine_template_actually_hardens(self):
+        from app.services.workout_modifier import apply_modification
+        res = apply_modification(
+            self._pw("sweet_spot_3x20"), "harder", {},
+            {"intensity_ceiling": "push", "injury_flag": False}, ftp_w=250,
+        )
+        assert res.template_id == "threshold_2x15"  # anchor → one up
+
+    def test_spine_templates_keep_their_exact_cascade(self):
+        from app.services.workout_modifier import apply_modification
+        res = apply_modification(
+            self._pw("z2_endurance_90", duration_min=90), "easier", {},
+            {"intensity_ceiling": "push", "injury_flag": False}, ftp_w=250,
+        )
+        assert res.template_id == "z2_endurance_60"

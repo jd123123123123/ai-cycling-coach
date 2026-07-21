@@ -21,7 +21,7 @@ import { useCoachBrief } from '../hooks/useCoachBrief'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
 import { useLocale } from '../contexts/LocaleContext'
-import { detectWorkoutSport } from '../api/coach'
+import { detectWorkoutSport, workoutDisplayTitle, workoutDisplayPurpose } from '../api/coach'
 import type { ResolvedBlock, PrescribedWorkout, WorkoutSport } from '../api/coach'
 import type { DayPlan } from '../api/weeks'
 
@@ -344,7 +344,7 @@ export default function WorkoutDetailView() {
             {nav}
             <div className="px-4 pt-7 pb-4">
               <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: sportColor }}>{(de ? sportMeta.de : sportMeta.en).toUpperCase()} · {de ? 'ZONE' : 'ZONE'} {main?.zone ?? '—'} · {minutes} MIN</span>
-              <h1 className="num-display" style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.05, marginTop: 4 }}>{w.title}</h1>
+              <h1 className="num-display" style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.05, marginTop: 4 }}>{workoutDisplayTitle(w, de)}</h1>
             </div>
           </div>
         </div>
@@ -544,8 +544,8 @@ export default function WorkoutDetailView() {
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{de ? 'DAS ZIEL' : 'THE GOAL'}</span>
                 <span style={{ fontSize: 13, color: 'var(--color-ink)', lineHeight: 1.4 }}>
-                  {w.purpose
-                    ? w.purpose
+                  {workoutDisplayPurpose(w, de)
+                    ? workoutDisplayPurpose(w, de)
                     : goalName
                       ? (de
                           ? `Baut gezielt auf ${goalName}${daysToGoal ? ` (in ${daysToGoal} Tagen)` : ''} hin.`

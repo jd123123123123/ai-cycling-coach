@@ -397,8 +397,21 @@ def _mock_modify_db(
     db.execute = AsyncMock(side_effect=_execute_side)
     db.add = MagicMock(side_effect=lambda obj: captured.append(obj))
     db.commit = AsyncMock()
+    db.flush = AsyncMock()  # log_adaptation(commit=False) flushes
     db._call_order = call_order  # for debugging
     return db, captured
+
+
+def _audit_rows(captured: list) -> list:
+    """CoachBrief audit rows among everything db.add captured (the pipeline
+    also appends a PlanAdaptation feed row per modification)."""
+    from app.models.coach_brief import CoachBrief
+    return [c for c in captured if isinstance(c, CoachBrief)]
+
+
+def _feed_rows(captured: list) -> list:
+    from app.models.plan_adaptation import PlanAdaptation
+    return [c for c in captured if isinstance(c, PlanAdaptation)]
 
 
 def _make_planned_workout(user_id=1, template_id="z2_endurance_60", duration_min=60):
@@ -471,9 +484,10 @@ class TestModifyPlannedWorkout:
         # PW was mutated
         assert pw.blocks_source == "user_modified"
         assert pw.template_id != "z2_endurance_60"  # cascade step up
-        # Audit row was added + committed
-        assert len(captured) == 1
-        audit = captured[0]
+        # Audit row + feed row were added + committed
+        assert len(_audit_rows(captured)) == 1
+        assert len(_feed_rows(captured)) == 1
+        audit = _audit_rows(captured)[0]
         assert audit.verdict == "modification"
         assert audit.evidence["modification"]["modification_type"] == "harder"
         assert audit.evidence["modification"]["before"]["template_id"] == "z2_endurance_60"
@@ -496,8 +510,8 @@ class TestModifyPlannedWorkout:
         assert "injury" in result["reason"].lower()
         assert result["template_id"] in ("recovery_30", "rest_day")
         # Audit row captures the downgrade
-        assert len(captured) == 1
-        audit = captured[0]
+        assert len(_audit_rows(captured)) == 1
+        audit = _audit_rows(captured)[0]
         assert audit.evidence["modification"]["rails_downgraded"] is True
         assert "injury" in audit.evidence["modification"]["reason"].lower()
 
@@ -615,8 +629,8 @@ class TestModifyPlannedWorkout:
             },
             user_id=1, db=db,
         )
-        assert len(captured) == 1
-        mod = captured[0].evidence["modification"]
+        assert len(_audit_rows(captured)) == 1
+        mod = _audit_rows(captured)[0].evidence["modification"]
         # Every field the audit contract promises
         assert mod["date"] == "2026-05-01"
         assert mod["modification_type"] == "shorten"
@@ -771,9 +785,9 @@ class TestUndoLastModification:
         assert pw.template_id == "vo2_5x4"
         assert 50 * 60 <= pw.duration_seconds_target <= 65 * 60
         assert pw.blocks_source == "user_undo"
-        # A new audit row was appended
-        assert len(captured) == 1
-        undo = captured[0]
+        # A new audit row was appended (plus the rule='revert' feed row)
+        assert len(_audit_rows(captured)) == 1
+        undo = _audit_rows(captured)[0]
         assert undo.verdict == "modification_undo"
         assert undo.evidence["modification_undo"]["original_audit_id"] == str(audit.id)
         assert undo.evidence["modification_undo"]["restored_to"]["template_id"] == "vo2_5x4"

@@ -587,7 +587,11 @@ def _apply_harder(
     ftp_w: int,
     before: dict,
 ) -> ModificationResult:
-    next_template = TEMPLATE_HARDER_CASCADE.get(template_id, template_id)
+    # Library-wide step (July 2026 fix): the cascade spine only covers the
+    # original 12 templates, but plans prescribe from the 50+ library —
+    # one_notch_harder_id maps via nearest_anchor so "harder" never silently
+    # no-ops on e.g. sweet_spot_3x20.
+    next_template = one_notch_harder_id(template_id)
     ceiling = str(snapshot.get("intensity_ceiling") or "push")
     at_top = next_template == template_id
 
@@ -648,7 +652,9 @@ def _apply_easier(
     ftp_w: int,
     before: dict,
 ) -> ModificationResult:
-    prev_template = TEMPLATE_EASIER_CASCADE.get(template_id, template_id)
+    # Library-wide step (July 2026 fix): map non-spine templates via
+    # nearest_anchor so "easier" never silently returns the same session.
+    prev_template = one_notch_easier_id(template_id)
     at_bottom = prev_template == template_id
 
     blocks, duration_min, predicted_tss, metadata = _materialize(

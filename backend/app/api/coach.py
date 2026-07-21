@@ -285,7 +285,7 @@ async def _coerce_brief_to_plan(
     duration_hint = int(duration_hint) if isinstance(duration_hint, (int, float)) and duration_hint > 0 else None
 
     brief.prescribed_workout = _rewrite_prescribed_workout(
-        plan_tid, ftp, duration_hint, None, lthr=lthr,
+        plan_tid, ftp, duration_hint, None, lthr=lthr, de=locale == "de",
     )
     realigned = _verdict_for_template(
         plan_tid,

@@ -37,15 +37,50 @@ export interface ResolvedBlock {
 export interface PrescribedWorkout {
   template_id: string
   title: string
+  /** German display title (template library i18n) — prefer under locale=de. */
+  title_de?: string | null
   duration_minutes: number
   total_duration_s?: number | null
   predicted_tss: number
   predicted_ef_range?: [number, number] | null
   framework_cited: string
   purpose?: string | null
+  /** Beginner-safe German purpose — prefer under locale=de. */
+  purpose_de?: string | null
   category?: string | null
   blocks: ResolvedBlock[]
   why_this_workout?: string | null
+}
+
+/** Locale-honest display title/purpose: German fields under de, EN fallback. */
+export function workoutDisplayTitle(w: Pick<PrescribedWorkout, 'title' | 'title_de'>, de: boolean): string {
+  return de && w.title_de ? w.title_de : w.title
+}
+export function workoutDisplayPurpose(w: Pick<PrescribedWorkout, 'purpose' | 'purpose_de'>, de: boolean): string | null {
+  return (de && w.purpose_de ? w.purpose_de : w.purpose) ?? null
+}
+
+/** Debug-register detector: internals like "Phase: base. TSB 0, CTL 42." must
+ *  never render on an athlete-facing card (display rule, Jul 2026). */
+export function looksLikeInternals(text: string): boolean {
+  return /^Phase\s*:/i.test(text.trim())
+    || /\bTSB\s*[+-]?\d/.test(text)
+    || /\bCTL\s*[+-]?\d/.test(text)
+    || /\bATL\s*[+-]?\d/.test(text)
+}
+
+/** The athlete-facing rationale for the session card: why_this_workout when
+ *  it reads as prose, else the localized template purpose, else null (render
+ *  nothing — never a metric dump). */
+export function workoutDisplayRationale(
+  w: Pick<PrescribedWorkout, 'why_this_workout' | 'purpose' | 'purpose_de'>,
+  de: boolean,
+): string | null {
+  const why = w.why_this_workout?.trim()
+  if (why && !looksLikeInternals(why)) return why
+  const purpose = workoutDisplayPurpose(w, de)
+  if (purpose && !looksLikeInternals(purpose)) return purpose
+  return null
 }
 
 export type WorkoutSport = 'cycling' | 'running' | 'gym'

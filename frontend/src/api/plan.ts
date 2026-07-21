@@ -89,6 +89,8 @@ export interface InterviewAnswers {
 }
 
 export interface PlanWeekDay {
+  /** German template title (additive) — prefer under locale=de. */
+  title_de?: string | null
   date: string
   sport: string
   title: string

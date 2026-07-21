@@ -11,6 +11,8 @@ import { subDays, format, parseISO } from 'date-fns'
 import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ChevronDown, ListChecks, Moon, TrendingUp, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp, SlidersHorizontal } from 'lucide-react'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
+import { useTodaySession } from '../../../hooks/useTodaySession'
+import SessionOfTheDay from '../../dashboard/SessionOfTheDay'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLocale } from '../../../contexts/LocaleContext'
@@ -18,7 +20,7 @@ import FocusSection from '../../plan/FocusSection'
 import AdaptiveCard from '../../plan/AdaptiveCard'
 import PlanChangeInterview from '../../plan/PlanChangeInterview'
 import { detectWorkoutSport } from '../../../api/coach'
-import type { ResolvedBlock, WorkoutSport } from '../../../api/coach'
+import type { WorkoutSport } from '../../../api/coach'
 import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
 import { daysToEvent } from '../../../utils/loadMetrics'
 import { formatDate } from '../../../utils/format'
@@ -234,19 +236,16 @@ export default function PlanTab() {
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
   const athleteEv = (evidence.athlete as Record<string, unknown> | undefined) ?? {}
   const goalName = athleteEv.goal_target as string | undefined
-  // Rest-day truth — the ONE daily decision (audit P0-3); the old client
-  // regex over the prescription could disagree with Today/Recovery whenever
-  // a cached brief carried a stale pick. Template shape stays as fallback
-  // only while the decision is loading.
+  // Rest-day truth + brief-failure fallback — the SHARED useTodaySession
+  // derivation (same producer as the Today tab; audit P0-3 / finding #1).
+  const { isRestDay: sharedIsRestDay, isActiveTrainingDay, fallback } = useTodaySession()
   const decisionState = brief?.daily_decision?.state ?? null
   const isRestDay = useMemo(() => {
-    if (decisionState) {
-      return !['recover', 'easy', 'quality', 'hard'].includes(decisionState)
-    }
+    if (decisionState || fallback === 'planned_rest') return sharedIsRestDay || !isActiveTrainingDay
     if (!workout) return true
     const id = (workout.template_id ?? '').toLowerCase()
     return /^(rest|recovery)/.test(id)
-  }, [decisionState, workout])
+  }, [decisionState, fallback, sharedIsRestDay, isActiveTrainingDay, workout])
 
   const weekStart = week?.week_start ? parseISO(week.week_start) : subDays(today, 7)
   const trainedDays = useMemo(() => new Set((acts?.activities ?? []).filter((a) => (a.tss ?? 0) > 0).map((a) => (a.started_at ?? a.date ?? '').slice(0, 10))), [acts])
@@ -322,38 +321,10 @@ export default function PlanTab() {
   }, [meso?.phase, de])
   const planName = goalName ?? (de ? 'Trainingsplan' : 'Training Plan')
 
-  // Workout-of-day — detect sport so meta/chips/profile follow the discipline.
+  // Workout-of-day — sport detection only gates the shared SessionOfTheDay
+  // mount (the card itself renders in the shared component; audit: one home).
   const wodSport = workout ? detectWorkoutSport(workout) : 'cycling'
-  const wodMeta = SPORT_META[wodSport]
-  // The WOD hero only shows when today's prescribed session matches the toggle.
   const wodMatches = !!workout && sportMatch(wodSport)
-  const blocks = workout?.blocks ?? []
-  // Peak = highest-zone block (tie → highest %FTP); works for runs w/o watts too.
-  const peakBlock = blocks.reduce<ResolvedBlock | null>((m, b) => {
-    if (!m) return b
-    if (b.zone > m.zone) return b
-    if (b.zone === m.zone && b.target_pct_ftp > m.target_pct_ftp) return b
-    return m
-  }, null)
-  // Bar height fraction: watts→%FTP for bike; zone-share for run/gym (no watts).
-  const barFrac = (b: ResolvedBlock) => b.target_pct_ftp > 0 ? Math.min(1, b.target_pct_ftp / 1.25) : Math.min(1, b.zone / 7)
-  const wodDur = workout ? `${Math.floor(workout.duration_minutes / 60)}h ${workout.duration_minutes % 60}m` : ''
-  // Pace chip for a running WOD — derive from the peak block's zone + threshold pace.
-  const wodPaceChip = wodSport === 'running' && thrPaceSPerKm != null && peakBlock
-    ? `${fmtPace(thrPaceSPerKm / RUN_PACE[Math.min(RUN_PACE.length - 1, Math.max(0, peakBlock.zone - 1))].hi)} /km`
-    : null
-  // Sport-appropriate "peak" chip label for the WOD hero.
-  const peakChip = peakBlock ? (
-    wodSport === 'cycling'
-      // Honest watts: zero/absent bounds drop the range ("Z2"), never "0–0W".
-      ? [`Z${peakBlock.zone}`, fmtWattRange(peakBlock.target_watts_low, peakBlock.target_watts_high)].filter(Boolean).join(' · ')
-      : wodSport === 'running'
-        ? [wodPaceChip, `Z${peakBlock.zone}`,
-            peakBlock.target_hr_low != null && peakBlock.target_hr_high != null
-              ? `${peakBlock.target_hr_low}–${peakBlock.target_hr_high} bpm`
-              : (wodPaceChip ? null : `RPE ${peakBlock.rpe}`)].filter(Boolean).join(' · ')
-        : `RPE ${peakBlock.rpe}`
-  ) : null
 
   // Cross-training — this-week strength sessions.
   const STRENGTH_TARGET = 2
@@ -673,86 +644,18 @@ export default function PlanTab() {
         </div>
       )}
 
-      {/* Workout of day (coral) — today selected + today's session matches the sport */}
-      {selectedIsToday && workout && !isRestDay && wodMatches && (
-        <div className="rounded-[24px] p-5 flex flex-col gap-4"
-          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-accent)', boxShadow: '0 10px 28px -10px color-mix(in srgb, var(--color-accent) 40%, transparent)' }}>
-          <div className="flex items-center justify-between">
-            <span className="inline-flex items-center rounded-full px-3 py-1.5" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em' }}>{de ? 'EINHEIT DES TAGES' : 'WORKOUT OF THE DAY'}</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: 'var(--color-surface-3)', fontSize: 12, color: 'var(--color-ink-2)' }}><wodMeta.Icon size={13} style={{ color: wodMeta.color }} /> {de ? wodMeta.de : wodMeta.en}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <h2 className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)' }}>{workout.title}</h2>
-            {workout.why_this_workout && <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{workout.why_this_workout}</p>}
-          </div>
-
-          {/* Effort profile — power bars for bike, HR/pace-zone bars for run,
-              movements list for gym (no power/pace bar chart). */}
-          {blocks.length > 0 && wodSport !== 'gym' && (
-            <div className="rounded-2xl p-3.5 flex flex-col gap-2.5" style={{ background: 'var(--color-paper)' }}>
-              <div className="flex items-center justify-between">
-                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-ink-2)' }}>
-                  {wodSport === 'running' ? (de ? 'PACE-/HF-PROFIL' : 'PACE / HR PROFILE') : (de ? 'LEISTUNGSPROFIL' : 'POWER PROFILE')}
-                </span>
-                {wodSport === 'cycling' && ftp != null && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)' }}>FTP {ftp}W</span>}
-                {wodSport === 'running' && lthrRun != null && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)' }}>LTHR {lthrRun} bpm</span>}
-              </div>
-              <div className="flex items-end gap-[3px]" style={{ height: 96 }}>
-                {blocks.map((b, i) => (
-                  <div key={i} className="flex-1 rounded-t"
-                    style={{ height: `${Math.max(14, Math.min(96, barFrac(b) * 96))}px`, background: zoneBarColor(b.zone) }} />
-                ))}
-              </div>
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-ink-2)' }}>{blocks[0]?.name ?? ''}</span>
-                {peakChip && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-ink-2)' }}>{peakChip}</span>}
-                <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-ink-2)' }}>{blocks[blocks.length - 1]?.name ?? ''}</span>
-              </div>
-            </div>
-          )}
-          {/* Gym — movements/blocks framing instead of a power chart. */}
-          {blocks.length > 0 && wodSport === 'gym' && (
-            <div className="rounded-2xl p-3.5 flex flex-col gap-2.5" style={{ background: 'var(--color-paper)' }}>
-              <div className="flex items-center justify-between">
-                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-ink-2)' }}>{de ? 'ÜBUNGEN' : 'MOVEMENTS'}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)' }}>{blocks.length} {de ? 'Blöcke' : 'blocks'}</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {blocks.map((b, i) => (
-                  <div key={i} className="flex items-center gap-2.5">
-                    <span style={{ width: 3, height: 20, borderRadius: 2, background: 'var(--color-amber)' }} />
-                    <span className="flex-1 min-w-0 truncate" style={{ fontSize: 12, color: 'var(--color-ink)' }}>{b.name}</span>
-                    <span className="num-mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)' }}>{Math.round(b.duration_s / 60)} min · RPE {b.rpe}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Hero chips — third chip is sport-appropriate (power / HR / RPE). */}
-          <div className="flex gap-2 flex-wrap">
-            {([
-              { icon: Clock, t: wodDur },
-              { icon: Zap, t: `${Math.round(workout.predicted_tss)} TSS` },
-              ...(peakChip ? [{ icon: wodSport === 'running' ? Heart : Target, t: peakChip }] : []),
-            ]).map((c, i) => (
-              <span key={i} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 num-mono" style={{ background: 'var(--color-paper-2)', fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>
-                <c.icon size={13} style={{ color: 'var(--color-accent)' }} /> {c.t}
-              </span>
-            ))}
-          </div>
-
-          {/* Honest verb: the app cannot execute a workout — this opens the
-              full session detail (user decision, Jul 2026). */}
-          <Link to="/workout/today" className="inline-flex items-center justify-center gap-2 rounded-full py-3.5 min-h-[48px]" style={{ background: 'var(--color-accent)', color: '#FFFFFF', fontSize: 16, fontWeight: 700 }}>
-            <ListChecks size={20} strokeWidth={2.4} /> {de ? 'Workout ansehen' : 'View workout'}
-          </Link>
-        </div>
+      {/* Einheit des Tages — the ONE shared session card (identical mount on
+          the Today tab): same data source, same pixels, same "Anpassen" +
+          "Rückgängig" flow. Mounted when today's session matches the sport
+          toggle, or when the brief is unavailable (honest week-plan fallback
+          renders inside the component). */}
+      {selectedIsToday && !isRestDay && (workout ? wodMatches : true) && (
+        <SessionOfTheDay />
       )}
 
       {/* No matching session today — sport-aware graceful state (never bike data under Lauf).
           Rest days are handled by their own card above, so exclude them here. */}
-      {selectedIsToday && !isRestDay && !(workout && wodMatches) && (
+      {selectedIsToday && !isRestDay && (workout ? !wodMatches : fallback !== 'planned_session') && (
         <div className="rounded-[24px] p-5 flex items-center gap-3.5" style={cardStyle}>
           <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
             {sport === 'run' ? <Footprints size={22} strokeWidth={2} style={{ color: 'var(--color-exercise)' }} />

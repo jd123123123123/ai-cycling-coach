@@ -340,3 +340,40 @@ class TestCacheKeyedOnLanguage:
         assert second is first
         # No additional insert
         assert db.add_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Locale-honest prescribed workout (round-2 review, Jul 2026): the day-card
+# pipeline must serve German template fields so DE surfaces never render raw
+# EN template prose ("High aerobic work at 88% FTP…").
+# ---------------------------------------------------------------------------
+
+
+class TestPrescribedWorkoutLocaleFields:
+    def test_rewrite_carries_title_de_and_purpose_de(self):
+        from app.services.coach_service import _rewrite_prescribed_workout
+
+        out = _rewrite_prescribed_workout("sweet_spot_2x20", 250, None, None)
+        assert out.get("title_de"), "title_de must be served to the client"
+        assert out.get("purpose_de"), "purpose_de must be served to the client"
+
+    def test_de_fallback_why_uses_german_purpose(self):
+        """No bespoke why + de=True → the fallback speaks German (the
+        beginner-safe purpose_de), never the EN template purpose."""
+        from app.services.coach_service import _rewrite_prescribed_workout
+        from app.services.workout_templates import TEMPLATES
+
+        tpl = TEMPLATES["sweet_spot_2x20"]
+        out_de = _rewrite_prescribed_workout("sweet_spot_2x20", 250, None, None, de=True)
+        assert out_de["why_this_workout"] == tpl.purpose_de
+        out_en = _rewrite_prescribed_workout("sweet_spot_2x20", 250, None, None, de=False)
+        assert out_en["why_this_workout"] == tpl.purpose
+
+    def test_zero_ftp_stub_still_carries_de_fields(self):
+        from app.services.coach_service import _rewrite_prescribed_workout
+
+        out = _rewrite_prescribed_workout("z2_endurance_60", 0, None, None, de=True)
+        assert out.get("title_de")
+        assert out.get("purpose_de")
+        from app.services.workout_templates import TEMPLATES
+        assert out["why_this_workout"] == TEMPLATES["z2_endurance_60"].purpose_de

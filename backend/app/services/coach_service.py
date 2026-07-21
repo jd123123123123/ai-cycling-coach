@@ -1568,6 +1568,7 @@ def _rewrite_prescribed_workout(
     duration_minutes_hint: int | None,
     why_this_workout: str | None,
     lthr: int | None = None,
+    de: bool = False,
 ) -> dict:
     """Re-derive watts from FTP for the given template, applying a duration
     nudge if the LLM's suggested duration_minutes differs by <= ±15% from the
@@ -1592,8 +1593,10 @@ def _rewrite_prescribed_workout(
         return {
             "template_id": template_id,
             "title": template.name,
+            "title_de": template.name_de,
             "framework_cited": template.framework_cited,
             "purpose": template.purpose,
+            "purpose_de": template.purpose_de,
             "category": template.category,
             "duration_minutes": default_minutes,
             "total_duration_s": default_minutes * 60,
@@ -1611,14 +1614,21 @@ def _rewrite_prescribed_workout(
                 }
                 for b in template.blocks
             ],
-            "why_this_workout": why_this_workout or template.purpose,
+            "why_this_workout": why_this_workout or (
+                template.purpose_de if de and template.purpose_de else template.purpose
+            ),
         }
 
     prescribed: PrescribedWorkout = parametrize_template(
         template, int(ftp), duration_scale=duration_scale, lthr=lthr,
     )
     out = prescribed_workout_to_dict(prescribed)
-    out["why_this_workout"] = why_this_workout or template.purpose
+    # Locale-honest fallback: when the caller has no bespoke "why", the
+    # template purpose must speak the athlete's language (round-2 review:
+    # DE users saw raw EN template prose on Today / Einheit des Tages).
+    out["why_this_workout"] = why_this_workout or (
+        template.purpose_de if de and template.purpose_de else template.purpose
+    )
     return out
 
 
@@ -1758,7 +1768,7 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     except (TypeError, ValueError):
         duration_hint = None
 
-    new_workout = _rewrite_prescribed_workout(template_id, ftp, duration_hint, why, lthr=lthr_for_hr)
+    new_workout = _rewrite_prescribed_workout(template_id, ftp, duration_hint, why, lthr=lthr_for_hr, de=snapshot.get("locale") == "de")
 
     # Step 5: alternates — validate ids, rewrite watts
     llm_alternates = llm_payload.get("alternates") or []
@@ -2693,7 +2703,7 @@ def _rule_based_brief(snapshot: dict) -> dict:
             why_parts.append(f"TSB {pmc['tsb']:.0f}, CTL {pmc['ctl']:.0f}.")
             if hrv.get("delta_pct") is not None:
                 why_parts.append(f"HRV {hrv['delta_pct']:+.0f}%.")
-            why_parts.append(template.purpose)
+            why_parts.append(template.purpose_de or template.purpose)
             why_this = " ".join(why_parts)[:300]
         else:
             why_parts = [f"Phase: {athlete.get('goal_phase', 'base')}."]
@@ -2838,6 +2848,7 @@ def _rule_based_brief(snapshot: dict) -> dict:
         ftp=ftp,
         duration_minutes_hint=None,
         why_this_workout=why_this,
+        de=de,
     )
 
     # In simple mode, overwrite the title with a plain-English one
@@ -2851,6 +2862,11 @@ def _rule_based_brief(snapshot: dict) -> dict:
                 template.category, "Ride today"
             )
         prescribed["title"] = simple_title
+        if de:
+            # Keep the DE display field in lockstep — clients prefer title_de
+            # under a German locale, and it must not regress a simple title
+            # back to the technical template name.
+            prescribed["title_de"] = simple_title
 
     # --------------------------------------------------------------
     # Alternates — shared label, different one-liners

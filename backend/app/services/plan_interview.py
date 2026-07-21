@@ -688,11 +688,29 @@ async def _week_summary(db: AsyncSession, user_id: int, monday: date) -> dict:
         .order_by(PlannedWorkout.date.asc())
     )
     rows = res.scalars().all()
+
+    def _title_de(template_id: str | None, fallback: str) -> str:
+        """German template title (additive) so the interview's new-week list
+        can render locale-honest rows — mirrors weeks._localized_title."""
+        from app.services.run_workout_templates import RUN_TEMPLATES
+        from app.services.workout_templates import TEMPLATES
+
+        if not template_id:
+            return fallback
+        t = TEMPLATES.get(template_id)
+        if t is not None and getattr(t, "name_de", ""):
+            return t.name_de
+        rt = RUN_TEMPLATES.get(template_id)
+        if rt is not None and getattr(rt, "name_de", ""):
+            return rt.name_de
+        return fallback
+
     week = [
         {
             "date": pw.date.isoformat(),
             "sport": pw.sport,
             "title": pw.title,
+            "title_de": _title_de(pw.template_id, pw.title),
             "template_id": pw.template_id,
             "blocks_source": pw.blocks_source,
             "duration_seconds_target": getattr(pw, "duration_seconds_target", None),

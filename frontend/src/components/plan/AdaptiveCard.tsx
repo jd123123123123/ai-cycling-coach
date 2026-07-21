@@ -19,9 +19,48 @@ import {
   SlidersHorizontal, Sparkles, HeartPulse, MessageCircle, ArrowRight,
 } from 'lucide-react'
 import { springs } from '../../utils/motion'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { RotateCcw } from 'lucide-react'
+import { apiClient } from '../../api/client'
 import { useLocale } from '../../contexts/LocaleContext'
-import { usePlanAdaptations } from '../../hooks/usePlanAdaptations'
+import { usePlanAdaptations, PLAN_ADAPTATIONS_KEY } from '../../hooks/usePlanAdaptations'
+import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
+import { WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import type { PlanAdaptation } from '../../api/plan'
+
+/** "Rückgängig" is offered on the NEWEST feed row when it is a user
+ *  modification inside the server's 60-min undo window (the server enforces
+ *  the window again — this only decides whether to show the affordance). */
+export function undoEligible(a: PlanAdaptation | undefined, newestId: number | undefined, now = Date.now()): boolean {
+  if (!a || a.id !== newestId) return false
+  if (a.rule !== 'user_modified') return false
+  return now - new Date(a.created_at).getTime() < 60 * 60 * 1000
+}
+
+function UndoFeedButton({ de }: { de: boolean }) {
+  const qc = useQueryClient()
+  const undo = useMutation({
+    mutationFn: async () => (await apiClient.post<{ success?: boolean; reason?: string }>('/workouts/today/modify/undo')).data,
+    onSuccess: (res) => {
+      if (res.success) {
+        void qc.invalidateQueries({ queryKey: PLAN_ADAPTATIONS_KEY })
+        void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
+        void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
+      }
+    },
+  })
+  return (
+    <button
+      type="button"
+      disabled={undo.isPending || undo.isSuccess}
+      onClick={() => undo.mutate()}
+      className="inline-flex items-center"
+      style={{ gap: 4, fontSize: 11, fontWeight: 700, color: VIOLET, background: 'none', border: 'none', padding: 0, cursor: 'pointer', minHeight: 24, opacity: undo.isPending ? 0.6 : 1 }}
+    >
+      <RotateCcw size={12} /> {undo.isPending ? (de ? 'Wird zurückgesetzt…' : 'Undoing…') : (de ? 'Rückgängig' : 'Undo')}
+    </button>
+  )
+}
 
 const VIOLET = 'var(--color-violet)'
 const VIOLET_SOFT = 'var(--color-violet-soft)'
@@ -128,9 +167,10 @@ export default function AdaptiveCard() {
           return (
             <div key={a.id} className="flex items-center" style={{ gap: 9 }}>
               <Icon size={15} strokeWidth={2.2} style={{ color: VIOLET, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
+              <span className="flex-1 min-w-0" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
                 {de ? a.message_de : a.message_en}
               </span>
+              {undoEligible(a, newest?.id) && <UndoFeedButton de={de} />}
             </div>
           )
         })}
@@ -269,9 +309,12 @@ export function AdaptationTimelineSheet({ open, onClose, feed }: {
                               {fmtTime(a.created_at, de)}
                             </span>
                             {/* Spec law #2 — every entry deep-links to the AI Coach. */}
-                            <Link to="/coach" onClick={onClose} className="inline-flex items-center" style={{ gap: 4, fontSize: 11, fontWeight: 700, color: VIOLET }}>
-                              <MessageCircle size={12} /> {de ? 'Coach fragen' : 'Ask coach'}
-                            </Link>
+                            <span className="inline-flex items-center" style={{ gap: 12 }}>
+                              {undoEligible(a, feed[0]?.id) && <UndoFeedButton de={de} />}
+                              <Link to="/coach" onClick={onClose} className="inline-flex items-center" style={{ gap: 4, fontSize: 11, fontWeight: 700, color: VIOLET }}>
+                                <MessageCircle size={12} /> {de ? 'Coach fragen' : 'Ask coach'}
+                              </Link>
+                            </span>
                           </div>
                         </div>
                       </div>

@@ -373,9 +373,12 @@ class TestUndoRoundTrip:
         assert pw.template_id == "vo2_5x4"
         assert 50 * 60 <= pw.duration_seconds_target <= 65 * 60
         assert pw.blocks_source == "user_undo"
-        # A NEW audit row was appended.
-        assert len(captured) == 1
-        undo_audit = captured[0]
+        # A NEW audit row was appended (plus the rule='revert' feed row the
+        # shared pipeline logs for the adaptation timeline).
+        from app.models.coach_brief import CoachBrief
+        audit_rows = [c for c in captured if isinstance(c, CoachBrief)]
+        assert len(audit_rows) == 1
+        undo_audit = audit_rows[0]
         assert undo_audit.verdict == "modification_undo"
         assert undo_audit.user_id == 1
         assert undo_audit.evidence["modification_undo"]["original_audit_id"] == str(audit.id)

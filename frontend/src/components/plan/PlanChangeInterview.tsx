@@ -522,7 +522,7 @@ export default function PlanChangeInterview({ open, onClose }: { open: boolean; 
                           </span>
                           <Icon size={15} style={{ color: col, flexShrink: 0 }} />
                           <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13, fontWeight: isRest ? 500 : 600, color: isRest ? 'var(--color-muted)' : 'var(--color-ink)' }}>
-                            {isRest ? (de ? 'Ruhetag' : 'Rest day') : d.title}
+                            {isRest ? (de ? 'Ruhetag' : 'Rest day') : (de && d.title_de ? d.title_de : d.title)}
                           </span>
                         </div>
                       )

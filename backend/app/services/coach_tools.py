@@ -450,11 +450,11 @@ async def _load_rails_context(
 async def _handle_modify_planned_workout(
     tool_input: dict, user_id: int, db: AsyncSession,
 ) -> dict:
-    """Apply a modification to the user's planned workout on ``date``.
-
-    Returns a dict the LLM narrates to the user. See the security invariants
-    block above for the guarantees this handler enforces.
-    """
+    """Chat-tool wrapper: parse tool_input, delegate to the ONE shared
+    modification pipeline (`modify_planned_workout_for_user`). The direct
+    REST endpoint (POST /workouts/today/modify) calls the same function —
+    rails, PlannedWorkout write, audit row, feed row and cache invalidation
+    are never copy-pasted."""
     target = _parse_date(tool_input.get("date"), "date")
     modification_type = tool_input.get("modification_type")
     if not modification_type:
@@ -462,7 +462,61 @@ async def _handle_modify_planned_workout(
     params = tool_input.get("params") or {}
     if not isinstance(params, dict):
         raise ValueError("params must be an object")
+    return await modify_planned_workout_for_user(
+        user_id=user_id,
+        target=target,
+        modification_type=modification_type,
+        params=params,
+        db=db,
+    )
 
+
+def _feed_messages(
+    *,
+    before_title: str | None,
+    before_duration_min: int,
+    after_title: str | None,
+    after_duration_min: int,
+) -> tuple[str, str]:
+    """No-guilt bilingual feed copy for a user-initiated modification.
+
+    Register (plan_adaptation_log contract): state the change plainly, the
+    plan works FOR the athlete — never scold, never warn."""
+    b = before_title or "Einheit"
+    a = after_title or "Einheit"
+    if b == a:
+        de = f"Du hast angepasst: {a} — jetzt {after_duration_min} min."
+        en = f"You adjusted: {a} — now {after_duration_min} min."
+    else:
+        de = (
+            f"Du hast angepasst: {b} → {a} ({after_duration_min} min). "
+            "Der Plan rechnet ab jetzt damit."
+        )
+        en = (
+            f"You adjusted: {b} → {a} ({after_duration_min} min). "
+            "The plan counts on it from here."
+        )
+    return de, en
+
+
+async def modify_planned_workout_for_user(
+    *,
+    user_id: int,
+    target: date,
+    modification_type: str,
+    params: dict,
+    db: AsyncSession,
+) -> dict:
+    """THE shared modification pipeline (chat tool + REST endpoint).
+
+    Applies a user-intent modification to the PlannedWorkout on ``target``:
+    rails context → apply_modification → PlannedWorkout write
+    (blocks_source='user_modified' — a PROTECTED source the hourly adaptation
+    engine never auto-mutates, D8) → CoachBrief audit row (undo window) →
+    plan_adaptations feed row (source='user_change') → personalized-week
+    cache invalidation. One transaction; see the security invariants block
+    above.
+    """
     # 1. Load the planned workout (user-scoped)
     pw = await _get_planned_workout_for_user(user_id, target, db)
     if pw is None:
@@ -536,7 +590,12 @@ async def _handle_modify_planned_workout(
             "reason": str(exc),
         }
 
-    # 5. Persist the mutation + the audit row in ONE transaction
+    # 5. Persist the mutation + the audit row + the feed row in ONE transaction
+    before_title = pw.title
+    before_tss = None
+    if isinstance(pw.interval_structure, dict):
+        # best-effort: some rows carry a predicted TSS in their structure
+        before_tss = pw.interval_structure.get("predicted_tss")
     pw.template_id = result.template_id
     pw.duration_seconds_target = int(result.duration_min * 60)
     pw.indoor = result.indoor
@@ -581,6 +640,50 @@ async def _handle_modify_planned_workout(
         model_used="tool-use-modify",
     )
     db.add(audit)
+
+    # Feed row — the athlete-visible adaptation timeline (Today slim card +
+    # Plan timeline render message_de/message_en verbatim, no-guilt register).
+    # source='user_change' per plan_adaptations vocabulary; same transaction
+    # as the PlannedWorkout write + audit row.
+    from app.services.plan_adaptation_log import log_adaptation
+
+    message_de, message_en = _feed_messages(
+        before_title=before_title,
+        before_duration_min=int(result.before.get("duration_min") or 0),
+        after_title=result.metadata.get("title") or before_title,
+        after_duration_min=result.duration_min,
+    )
+    await log_adaptation(
+        db,
+        user_id,
+        target_date=target,
+        source="user_change",
+        signal="user_change",
+        rule="user_modified",
+        message_de=message_de,
+        message_en=message_en,
+        before={
+            "date": target.isoformat(),
+            "template_id": result.before.get("template_id"),
+            "title": before_title,
+            "duration_min": result.before.get("duration_min"),
+            "target_tss": before_tss,
+        },
+        after={
+            "date": target.isoformat(),
+            "template_id": result.template_id,
+            "title": result.metadata.get("title"),
+            "duration_min": result.duration_min,
+            "target_tss": result.predicted_tss,
+        },
+        evidence={
+            "modification_type": modification_type,
+            "params": params,
+            "rails_downgraded": result.rails_downgraded,
+            "reason": result.reason,
+        },
+        commit=False,
+    )
     await db.commit()
     # The personalized-week cache still holds the pre-modification week.
     from app.api.weeks import invalidate_personalized_week_cache
@@ -626,10 +729,19 @@ _UNDO_WINDOW_MINUTES = 60
 async def _handle_undo_last_modification(
     tool_input: dict, user_id: int, db: AsyncSession,
 ) -> dict:
-    """Undo the most recent modification for this user (within the 60-min
-    window) by delegating to revert_from_audit. Returns found=False when
-    there is nothing eligible or when the row has already been undone."""
-    # tool_input is intentionally empty; ignore any keys the LLM supplied.
+    """Chat-tool wrapper — tool_input is intentionally empty; delegates to
+    the ONE shared undo pipeline (also used by the REST undo endpoints)."""
+    return await undo_last_modification_for_user(user_id=user_id, db=db)
+
+
+async def undo_last_modification_for_user(
+    *, user_id: int, db: AsyncSession,
+) -> dict:
+    """THE shared undo pipeline: undo the most recent modification for this
+    user (within the 60-min window) by delegating to revert_from_audit, then
+    append a `rule='revert'` feed row so the timeline tells the whole story.
+    Returns found=False when there is nothing eligible or when the row has
+    already been undone."""
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=_UNDO_WINDOW_MINUTES)
 
     # 1. Find the most-recent modification audit row for this user within window.
@@ -694,6 +806,46 @@ async def _handle_undo_last_modification(
         }
 
     mod = latest.evidence.get("modification", {}) if isinstance(latest.evidence, dict) else {}
+
+    # Feed row — the timeline shows the revert too (append-only; a reverted
+    # adaptation gets its own row with rule='revert' per the model contract).
+    from app.services.plan_adaptation_log import log_adaptation
+
+    restored_title = result.metadata.get("title") or result.template_id
+    try:
+        target_date = date.fromisoformat(str(mod.get("date"))[:10])
+    except (TypeError, ValueError):
+        target_date = datetime.now(timezone.utc).date()
+    await log_adaptation(
+        db,
+        user_id,
+        target_date=target_date,
+        source="user_change",
+        signal="user_change",
+        rule="revert",
+        message_de=(
+            f"Rückgängig gemacht — {restored_title} "
+            f"({result.duration_min} min) steht wieder im Plan."
+        ),
+        message_en=(
+            f"Undone — {restored_title} "
+            f"({result.duration_min} min) is back on the plan."
+        ),
+        before={
+            "date": target_date.isoformat(),
+            "template_id": (result.before or {}).get("template_id"),
+            "duration_min": (result.before or {}).get("duration_min"),
+        },
+        after={
+            "date": target_date.isoformat(),
+            "template_id": result.template_id,
+            "title": result.metadata.get("title"),
+            "duration_min": result.duration_min,
+            "target_tss": result.predicted_tss,
+        },
+        commit=True,
+    )
+
     return {
         "success": True,
         "found": True,

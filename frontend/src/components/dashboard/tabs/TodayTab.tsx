@@ -12,24 +12,24 @@
  * (Achievements/History own progress). Every value is real Garmin/backend data.
  */
 import { useMemo, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiClient } from '../../../api/client'
+import { useQueryClient } from '@tanstack/react-query'
 import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays, format, startOfWeek, addDays } from 'date-fns'
 import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
-import { Flag, Bike, MessageCircle, Zap, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, CalendarCheck, Check, Moon, Sparkles, Pause, Minus, RefreshCw, Clock } from 'lucide-react'
-import { loggedReviewFromEvidence, streamCoachChat, type Adaptations, type ChatMessage } from '../../../api/coach'
+import { Flag, Bike, MessageCircle, Zap, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Check, Moon, Sparkles, Pause, Minus, RefreshCw } from 'lucide-react'
+import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type ChatMessage } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
+import SessionOfTheDay from '../SessionOfTheDay'
+import WeatherWindowCard from '../WeatherWindowCard'
 import TheRoadCard from '../TheRoadCard'
 import WeatherNudge from '../WeatherNudge'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import AbsorptionCard from '../AbsorptionCard'
 import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
-import { useCoachBrief } from '../../../hooks/useCoachBrief'
-import { useDailyDecision, isActiveDecisionState, isSidelinedDecisionState } from '../../../hooks/useDailyDecision'
+import { useTodaySession, sessionIntensity } from '../../../hooks/useTodaySession'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
 import { usePMC } from '../../../hooks/usePMC'
@@ -99,42 +99,22 @@ export function shouldShowFitnessTrendChip(
 }
 
 // ── Brief-failure fallback (review finding #1, Jul 2026) ─────────────────────
-/** What Today renders when the brief carries NEITHER a decision NOR a
- *  prescription (failed request, or an empty payload):
- *  - 'none'            → normal render paths (decision/workout present, or
- *                        everything is still loading — say nothing yet)
- *  - 'planned_session' → the week plan says today has work → honest reduced
- *                        card from the week data, no invented coaching prose
- *  - 'planned_rest'    → the week plan itself says today is rest
- *  - 'degraded'        → nothing loads → honest "can't load your plan" + retry.
- *  The celebratory rest card must NEVER appear from this path — a fabricated
- *  "Geplante Pause" over an error told a day-1 athlete to skip a real session. */
-export type BriefFallback = 'none' | 'planned_session' | 'planned_rest' | 'degraded'
-export function briefFallbackState(o: {
-  briefFailed: boolean
-  briefLoaded: boolean
-  decisionState: string | null
-  hasWorkout: boolean
-  /** true/false = week plan knows today (has work / is rest); null = no week info (absent or still loading) */
-  weekTodayHasWork: boolean | null
-}): BriefFallback {
-  if (o.decisionState != null || o.hasWorkout) return 'none'
-  if (!o.briefFailed && !o.briefLoaded) return 'none' // still loading — no verdicts yet
-  if (o.weekTodayHasWork === true) return 'planned_session'
-  if (o.weekTodayHasWork === false) return 'planned_rest'
-  return 'degraded'
-}
+// The logic now lives in the SHARED useTodaySession hook (one source of truth
+// for both tabs' session card). Re-exported here so existing consumers/tests
+// keep importing from TodayTab — same function object, never a fork.
+export { briefFallbackState, type BriefFallback } from '../../../hooks/useTodaySession'
 
 export default function TodayTab() {
   const { locale } = useLocale()
   const { user } = useAuth()
   const de = locale === 'de'
   const today = useMemo(() => new Date(), [])
-  const { data: brief, isError: briefFailed, refetch: refetchBrief } = useCoachBrief()
-  // ONE Daily Decision (audit P0-3) — computed fresh server-side per brief
-  // request. Every day-state flag below keys off decision.state; the client
-  // never derives its own instruction from the brief's workout shape again.
-  const { decision } = useDailyDecision()
+  // ONE source of truth for the session of the day (shared with PlanTab):
+  // brief coerced to the plan row + ONE DailyDecision + honest week fallback.
+  const {
+    brief, workout, decision, decisionState, sidelined, isRestDay,
+    isActiveTrainingDay, fallback, weekToday, refetchBrief,
+  } = useTodaySession()
   const { data: metricsResp } = useDailyMetrics(useMemo(() => subDays(today, 30), [today]), today)
   const { data: snapshot } = useTodaySnapshot()
   const { data: pmc } = usePMC(90)
@@ -196,76 +176,17 @@ export default function TodayTab() {
   const tsb = load?.tsb ?? null
   const dCtl = load?.dCtl7 ?? null
 
-  const workout = brief?.prescribed_workout
-  // Day-state flags — keyed off DailyDecision.state, the single server-side
-  // producer (audit P0-3). The old client regex over the prescribed workout is
-  // gone; while the decision hasn't arrived yet we fall back to the weakest
-  // honest signal only (no prescription → nothing to view).
-  const decisionState = decision?.state ?? null
-  const sidelined = isSidelinedDecisionState(decisionState) // sick / injured / break
-  // Brief-failure fallback (finding #1): when neither decision nor workout
-  // exists, the WEEK PLAN is the honest source — never "no workout ⇒ rest".
-  const weekToday = weekPlan?.days?.find((d) => d.is_today) ?? null
-  const weekTodayHasWork = weekToday == null
-    ? null
-    : weekToday.category !== 'rest' && (
-      (weekToday.duration_seconds_target ?? 0) > 0 ||
-      (weekToday.intervals?.length ?? 0) > 0 ||
-      (weekToday.target_tss ?? 0) > 0)
-  const fallback = briefFallbackState({
-    briefFailed,
-    briefLoaded: brief !== undefined,
-    decisionState,
-    hasWorkout: !!workout,
-    weekTodayHasWork,
-  })
-  // Rest is only ever a PLAN statement: the decision says planned_rest, or —
-  // with the brief unavailable — the week plan itself carries a rest day.
-  const isRestDay = decisionState != null ? decisionState === 'planned_rest' : fallback === 'planned_rest'
-  // A session is still on today's menu (recover / easy / quality / hard) —
-  // gates the workout card and the outdoor-window nudge.
-  const isActiveTrainingDay = decisionState != null
-    ? isActiveDecisionState(decisionState)
-    : (!!workout && !isRestDay)
+  // Day-state flags (workout / decisionState / sidelined / isRestDay /
+  // isActiveTrainingDay / fallback / weekToday) all come from useTodaySession
+  // above — ONE derivation shared with PlanTab, never re-derived here.
   // Sport-honest review: graded reviews arrive typed; sport-gated "logged"
   // reviews are rescued from the raw evidence (their empty compliance pairs
   // fail server-side validation, but the facts are real and renderable).
   const review = brief?.post_ride_review ?? loggedReviewFromEvidence(evidence)
-  const adaptations = (brief as { adaptations?: Adaptations | null } | undefined)?.adaptations ?? null
-  const [whyOpen, setWhyOpen] = useState(false)
-  const wBlocks = workout?.blocks ?? []
-  const wBlockSummary = wBlocks.length > 0
-    ? wBlocks.slice(0, 5).map((b) => b.name).filter(Boolean).join(' → ')
-    : null
 
-  // Workout intensity badge — the session's DEFINING effort (finding #5):
-  // hardest zone held ≥90s across the prescribed blocks, so a 5×4' @ 115%
-  // VO₂ day is never labeled "Z3 · Tempo" by its duration-averaged IF. The
-  // IF derivation remains only as fallback when no block zones exist.
-  const wIntensity = useMemo(() => {
-    if (!workout) return null
-    const label = (z: number) =>
-      z >= 5 ? { z: `Z${Math.min(z, 7)}`, t: 'VO₂' }
-        : z === 4 ? { z: 'Z4', t: de ? 'Schwelle' : 'Threshold' }
-        : z === 3 ? { z: 'Z3', t: 'Tempo' }
-        : z === 2 ? { z: 'Z2', t: de ? 'Grundlage' : 'Endurance' }
-        : { z: 'Z1', t: de ? 'Erholung' : 'Recovery' }
-    const blocks = workout.blocks ?? []
-    if (blocks.length > 0) {
-      const perZone = new Map<number, number>()
-      blocks.forEach((b) => perZone.set(b.zone, (perZone.get(b.zone) ?? 0) + (b.duration_s ?? 0)))
-      const sustained = [...perZone.entries()].filter(([, s]) => s >= 90).map(([z]) => z)
-      const zDef = sustained.length > 0 ? Math.max(...sustained) : Math.max(...blocks.map((b) => b.zone))
-      if (Number.isFinite(zDef) && zDef >= 1) return label(zDef)
-    }
-    const durHr = (workout.duration_minutes ?? 0) / 60
-    if (durHr <= 0 || workout.predicted_tss == null) return null
-    const iff = Math.sqrt(workout.predicted_tss / (durHr * 100))
-    if (iff < 0.75) return label(2)
-    if (iff < 0.85) return label(3)
-    if (iff < 0.95) return label(4)
-    return label(5)
-  }, [workout, de])
+  // Workout intensity badge — the shared derivation (finding #5) from
+  // useTodaySession's module, so the badge here always equals the card's.
+  const wIntensity = useMemo(() => sessionIntensity(workout, de), [workout, de])
 
   // Today's training snapshot — real activity channels only (no steps).
   // P0-2: activities are bucketed onto BROWSER-LOCAL days via the shared
@@ -295,20 +216,8 @@ export default function TodayTab() {
     return athleteName ? `${base}, ${athleteName}` : base
   })()
 
-  // "Why this?" — the SPECIFIC inputs behind today's prescription (never a
-  // black box: every chip is a real signal the engine weighed) + the science
-  // frameworks the brief cites. All values come from the brief evidence /
-  // metrics already loaded — nothing fabricated, chips render only when real.
-  const whyInputs = useMemo(() => {
-    const chips: { l: string; v: string }[] = []
-    if (typeof tsb === 'number') chips.push({ l: 'Form', v: `${tsb >= 0 ? '+' : ''}${tsb} TSB` })
-    if (atl != null) chips.push({ l: de ? 'Ermüdung' : 'Fatigue', v: `${atl} ATL` })
-    if (typeof hrvDelta === 'number') chips.push({ l: 'HRV', v: `${hrvDelta >= 0 ? '+' : ''}${Math.round(hrvDelta)}% vs. Baseline` })
-    if (sleepScore != null) chips.push({ l: de ? 'Schlaf' : 'Sleep', v: `${Math.round(sleepScore)}/100` })
-    if (typeof daysToGoal === 'number' && goalName) chips.push({ l: de ? 'Event' : 'Event', v: `${daysToGoal} ${de ? 'Tage bis' : 'days to'} ${goalName.length > 18 ? goalName.slice(0, 17) + '…' : goalName}` })
-    return chips
-  }, [tsb, atl, hrvDelta, sleepScore, daysToGoal, goalName, de])
-  const frameworks = (brief?.frameworks_cited ?? []).slice(0, 3)
+  // "Why this?" input chips + science frameworks now render inside the shared
+  // <SessionOfTheDay> card (one derivation for both tabs).
 
   // Week rhythm dots — forgiving, plan-aware (server: trained + planned-rest
   // days count as kept, sick/injured/break days pause, only skipped sessions
@@ -358,7 +267,9 @@ export default function TodayTab() {
   const sleptShort = typeof sleepScore === 'number' && sleepScore < 65
   const green = tier === 'peak' || tier === 'ready'
   const roughRecovery = hrvDown || tier === 'rest' || sleptShort
-  const wTitle = workout?.title
+  // Locale-honest display title (German template field under de) — the hero
+  // prose must name the SAME session the shared card shows.
+  const wTitle = workout ? workoutDisplayTitle(workout, de) : undefined
   const hrvPct = typeof hrvDelta === 'number' ? `${hrvDelta >= 0 ? '+' : ''}${Math.round(hrvDelta)}%` : null
   // Sleep buckets for sleep-specific copy: >=85 earns a genuine compliment
   // naming the number, 65–84 is neutral-positive, <65 (sleptShort above) gets
@@ -1080,54 +991,7 @@ export default function TodayTab() {
           </div>
         </div>
       )}
-      {fallback === 'planned_session' && weekToday && (
-        <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <Zap size={16} strokeWidth={2.4} style={{ color: 'var(--color-accent)' }} />
-              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-accent)' }}>{de ? 'Geplante Einheit' : 'Planned session'}</span>
-            </div>
-            <span className="rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)', fontSize: 10.5, fontWeight: 600, color: 'var(--color-muted)' }}>
-              {de ? 'Aus dem Wochenplan' : 'From the week plan'}
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <h2 className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{weekToday.title}</h2>
-            <div className="flex items-center gap-3 flex-wrap">
-              {(weekToday.duration_seconds_target ?? 0) > 0 && (
-                <span className="inline-flex items-center gap-1 num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
-                  <Clock size={13} style={{ color: 'var(--color-muted)' }} /> {Math.round((weekToday.duration_seconds_target ?? 0) / 60)} min
-                </span>
-              )}
-              {(weekToday.target_tss ?? 0) > 0 && (
-                <span className="num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>{Math.round(weekToday.target_tss ?? 0)} TSS</span>
-              )}
-            </div>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.4 }}>
-            {de
-              ? 'Der Coach-Brief ist gerade nicht verfügbar — das hier ist dein Plan, unverändert.'
-              : 'The coach brief is unavailable right now — this is your plan, unchanged.'}
-          </p>
-          <div className="flex gap-2">
-            <Link
-              to="/workout/today"
-              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-3"
-              style={{ background: 'var(--color-accent)', color: '#FFFFFF', fontSize: 13, fontWeight: 700 }}
-            >
-              <ListChecks size={15} /> {de ? 'Workout ansehen' : 'View workout'}
-            </Link>
-            <button
-              type="button"
-              onClick={() => refetchBrief()}
-              className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-4"
-              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}
-            >
-              <RefreshCw size={14} style={{ color: 'var(--color-ink-2)' }} /> {de ? 'Neu laden' : 'Retry'}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* planned_session fallback now renders inside <SessionOfTheDay /> below. */}
       {fallback === 'degraded' && (
         <div className="rounded-[24px] p-5 flex flex-col items-center text-center gap-3" style={cardStyle}>
           <div className="grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
@@ -1152,104 +1016,16 @@ export default function TodayTab() {
         </div>
       )}
 
-      {/* Workout card (coral) — only while the decision says a session is
-          still on today's menu (recover/easy/quality/hard). On trained /
-          rest / sick days the review or rest card carries the day instead. */}
-      {isActiveTrainingDay && workout && (
-        <div
-          className="rounded-[24px] p-5 hover-card flex flex-col gap-[18px]"
-          style={{ background: 'linear-gradient(125deg, color-mix(in srgb, var(--color-accent) 16%, var(--color-paper-2)) 0%, var(--color-paper-2) 72%)', border: '1px solid var(--color-accent)' }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Zap size={16} strokeWidth={2.4} style={{ color: 'var(--color-accent)' }} />
-              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-accent)' }}>{de ? 'Heutiger Plan' : "Today's plan"}</span>
-            </div>
-            <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{(workout.category ?? '').toLowerCase().includes('run') ? (de ? 'Laufen' : 'Run') : (de ? 'Rad' : 'Bike')}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <h2 className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{workout.title}</h2>
-            {workout.why_this_workout && <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{workout.why_this_workout}</p>}
-          </div>
+      {/* Hourly WeatherWindow (pen "V3 · Explore Routes" IgqyH) — mounted on
+          Today near the session card (explicit user decision, Jul 2026;
+          supersedes the challenge-doc "Routes only" verdict). Hides itself
+          without real forecast data; the greeting WeatherChip stays. */}
+      {isActiveTrainingDay && <WeatherWindowCard />}
 
-          {/* What changed & why — transparent, data-driven adaptation */}
-          {adaptations && (adaptations.summary || adaptations.changes.length > 0) && (
-            <div className="rounded-2xl p-3.5 flex flex-col gap-2.5" style={{ background: 'color-mix(in srgb, var(--color-paper) 55%, transparent)', border: '1px solid var(--color-rule)' }}>
-              <button type="button" onClick={() => setWhyOpen((o) => !o)} className="flex items-center gap-2 text-left">
-                <Sparkles size={15} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
-                <span className="flex-1 min-w-0" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.35 }}>{adaptations.summary}</span>
-                {adaptations.changes.length > 0 && <ChevronDown size={16} style={{ color: 'var(--color-muted)', transform: whyOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }} />}
-              </button>
-              {whyOpen && adaptations.changes.length > 0 && (
-                <div className="flex flex-col gap-2.5" style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 10 }}>
-                  {adaptations.changes.map((c, i) => {
-                    const col = c.severity === 'boost' ? 'var(--color-recovery)' : c.severity === 'ease' ? 'var(--color-amber)' : 'var(--color-strain)'
-                    return (
-                      <div key={i} className="flex gap-2.5">
-                        <span className="shrink-0 mt-1" style={{ width: 7, height: 7, borderRadius: 999, background: col }} />
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink)' }}>
-                            {c.signal}{c.direction === 'up' ? ' ↑' : c.direction === 'down' ? ' ↓' : ''} · <span style={{ color: col, fontWeight: 600 }}>{c.action}</span>
-                          </span>
-                          <span style={{ fontSize: 11.5, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{c.detail}</span>
-                          <span style={{ fontSize: 11, color: 'var(--color-muted)', lineHeight: 1.35, fontStyle: 'italic' }}>{c.principle}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {(whyInputs.length > 0 || frameworks.length > 0) && (
-                    <WhyInputChips whyInputs={whyInputs} frameworks={frameworks} de={de} />
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Why this? — inputs disclosure even when nothing was adapted today.
-              The coach shows its work: the exact signals it weighed. */}
-          {!adaptations?.changes?.length && (whyInputs.length > 0 || frameworks.length > 0) && (
-            <div className="rounded-2xl p-3.5 flex flex-col gap-2.5" style={{ background: 'color-mix(in srgb, var(--color-paper) 55%, transparent)', border: '1px solid var(--color-rule)' }}>
-              <button type="button" onClick={() => setWhyOpen((o) => !o)} className="flex items-center gap-2 text-left">
-                <Sparkles size={15} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
-                <span className="flex-1 min-w-0" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Warum genau diese Einheit?' : 'Why this session?'}</span>
-                <ChevronDown size={16} style={{ color: 'var(--color-muted)', transform: whyOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }} />
-              </button>
-              {whyOpen && (
-                <div style={{ borderTop: '1px solid var(--color-rule)', paddingTop: 10 }}>
-                  <WhyInputChips whyInputs={whyInputs} frameworks={frameworks} de={de} />
-                </div>
-              )}
-            </div>
-          )}
-          <div className="flex gap-5">
-            {([
-              { l: de ? 'ZIEL-TSS' : 'TARGET TSS', v: workout.predicted_tss != null ? `${Math.round(workout.predicted_tss)}` : '—' },
-              { l: de ? 'DAUER' : 'DURATION', v: workout.duration_minutes != null ? `${workout.duration_minutes} min` : '—' },
-              { l: de ? 'INTENSITÄT' : 'INTENSITY', v: wIntensity ? `${wIntensity.z} · ${wIntensity.t}` : '—' },
-            ]).map((s, i) => (
-              <div key={i} className="flex flex-col gap-1">
-                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{s.l}</span>
-                <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{s.v}</span>
-              </div>
-            ))}
-          </div>
-          <div className="hover-reveal">
-            <div className="flex flex-col gap-1" style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
-              {/* clamp-2 (textfit): the block summary wraps to two lines, never truncates */}
-              <span className="line-clamp-2">{wBlockSummary ?? (wIntensity ? `${wIntensity.z} · ${wIntensity.t}` : (de ? 'Intervallprofil' : 'Interval profile'))}</span>
-              <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{de ? 'Komplettes Workout →' : 'Full workout →'}</span>
-            </div>
-          </div>
-          {/* One-tap rails-safe alternates — the Go-Gentler choice architecture.
-              Applied through the SAME audited path as the chat modifier. */}
-          <AlternateRow de={de} indoor={false} />
-          {/* One CTA, honest verb: the app prescribes and reviews — it does not
-              execute workouts, so there is no "start" here (user decision, Jul 2026). */}
-          <Link to="/workout/today" className="inline-flex items-center justify-center gap-2 rounded-full py-3.5 min-h-[48px]" style={{ background: 'var(--color-accent)', color: '#0A0C0F', fontSize: 15, fontWeight: 700, boxShadow: '0 6px 18px -4px color-mix(in srgb, var(--color-accent) 55%, transparent)' }}>
-            <ListChecks size={18} strokeWidth={2.4} /> {de ? 'Workout ansehen' : 'View full workout'} <ChevronRight size={18} />
-          </Link>
-        </div>
-      )}
+      {/* Einheit des Tages — the ONE shared session card (identical mount on
+          the Train tab). Owns the active-session card, the honest
+          planned_session fallback, the "Anpassen" sheet and "Rückgängig". */}
+      <SessionOfTheDay />
 
       {/* 5 · Load snapshot — The Road: Fitness/Fatigue/Form trio + plain-words
           caption, load corridor 21 days back → 10 ahead (P1.1). */}
@@ -1458,137 +1234,6 @@ function RideAnywayZ1({ de }: { de: boolean }) {
               ? (de ? 'Der Coach ist gerade nicht erreichbar — frag ihn direkt im Chat.' : 'The coach is unreachable right now — ask directly in chat.')
               : reply}
           </span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── One-tap alternates — rails-safe swaps for today's session ────────────────
-// Three honest options (45-min / gentler / indoor) applied through the same
-// audited modifier path the chat uses. The server's rails can downgrade or
-// refuse; the returned `reason` is narrated verbatim. Undo shares the chat
-// tool's 60-minute server-enforced window.
-function AlternateRow({ de, indoor }: { de: boolean; indoor: boolean }) {
-  const qc = useQueryClient()
-  const [result, setResult] = useState<{ reason: string; ok: boolean; undone?: boolean } | null>(null)
-  const apply = useMutation({
-    mutationFn: async (label: 'less_time' | 'recover' | 'indoor') =>
-      (await apiClient.post<{
-        success: boolean; reason: string; title?: string | null
-        duration_min?: number; predicted_tss?: number; template_id?: string
-      }>('/coach/brief/alternate', { label })).data,
-    onSuccess: (res) => {
-      setResult({ reason: res.reason, ok: !!res.success })
-      if (res.success) {
-        // The server's brief cache still holds the pre-swap prescription, so
-        // patch the visible card directly from the modification result.
-        qc.setQueriesData({ queryKey: COACH_BRIEF_KEY_ROOT }, (old: unknown) => {
-          const brief = old as { prescribed_workout?: Record<string, unknown> | null } | undefined
-          if (!brief?.prescribed_workout) return old
-          return {
-            ...brief,
-            prescribed_workout: {
-              ...brief.prescribed_workout,
-              ...(res.title ? { title: res.title } : {}),
-              ...(res.duration_min != null ? { duration_minutes: res.duration_min } : {}),
-              ...(res.predicted_tss != null ? { predicted_tss: res.predicted_tss } : {}),
-              ...(res.template_id ? { template_id: res.template_id } : {}),
-            },
-          }
-        })
-      }
-    },
-  })
-  const undo = useMutation({
-    mutationFn: async () => (await apiClient.post<{ success: boolean; reason?: string }>('/coach/brief/alternate/undo')).data,
-    onSuccess: (res) => {
-      setResult(res.success ? { reason: de ? 'Rückgängig gemacht — die Original-Einheit steht wieder.' : 'Undone — your original session is back.', ok: true, undone: true } : { reason: res.reason ?? '', ok: false })
-      if (res.success) qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
-    },
-  })
-  const busy = apply.isPending || undo.isPending
-  const OPTIONS: { label: 'less_time' | 'recover' | 'indoor'; text: string; hide?: boolean }[] = [
-    { label: 'less_time', text: de ? 'Nur 45 min' : '45-min version' },
-    { label: 'recover', text: de ? 'Sanfter' : 'Gentler' },
-    { label: 'indoor', text: 'Indoor', hide: indoor },
-  ]
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>
-          {de ? 'ODER PASS ES AN' : 'OR MAKE IT YOURS'}
-        </span>
-        {OPTIONS.filter((o) => !o.hide).map((o) => (
-          <button
-            key={o.label}
-            type="button"
-            disabled={busy}
-            onClick={() => apply.mutate(o.label)}
-            className="rounded-full px-2.5 py-1"
-            style={{
-              fontSize: 11.5, fontWeight: 600,
-              background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)',
-              color: 'var(--color-ink-2)', opacity: busy ? 0.6 : 1,
-            }}
-          >
-            {o.text}
-          </button>
-        ))}
-      </div>
-      {result?.reason && (
-        <div className="rounded-[12px] flex items-start gap-2" style={{ background: `color-mix(in srgb, ${result.ok ? 'var(--color-recovery)' : 'var(--color-amber)'} 12%, transparent)`, padding: '9px 11px' }}>
-          <Sparkles size={13} style={{ color: result.ok ? 'var(--color-recovery)' : 'var(--color-amber)', flexShrink: 0, marginTop: 2 }} />
-          <span className="flex-1 min-w-0" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{result.reason}</span>
-          {result.ok && !result.undone && (
-            <button type="button" disabled={busy} onClick={() => undo.mutate()} style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-accent)', flexShrink: 0 }}>
-              {de ? 'Rückgängig' : 'Undo'}
-            </button>
-          )}
-        </div>
-      )}
-      {apply.isError && (
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Anpassen fehlgeschlagen — versuch es nochmal.' : 'Change failed — try again.'}</span>
-      )}
-    </div>
-  )
-}
-
-// ── "Why this?" input chips — the coach shows its work ───────────────────────
-// Every chip is a REAL signal the engine weighed today; frameworks are the
-// science the brief cites. Text wears ink tokens; nothing is fabricated.
-function WhyInputChips({ whyInputs, frameworks, de }: {
-  whyInputs: { l: string; v: string }[]
-  frameworks: string[]
-  de: boolean
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      {whyInputs.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>
-            {de ? 'WAS DER COACH HEUTE GEWOGEN HAT' : 'WHAT THE COACH WEIGHED TODAY'}
-          </span>
-          <div className="flex flex-wrap gap-1.5">
-            {whyInputs.map((c, i) => (
-              <span key={i} className="inline-flex items-center gap-1 rounded-full px-2 py-1" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--color-muted)' }}>{c.l}</span>
-                <span className="num-mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink)' }}>{c.v}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-      {frameworks.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>
-            {de ? 'WISSENSCHAFT' : 'SCIENCE'}
-          </span>
-          {frameworks.map((f, i) => (
-            <span key={i} className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-recovery)', background: 'color-mix(in srgb, var(--color-recovery) 12%, transparent)' }}>
-              {f}
-            </span>
-          ))}
         </div>
       )}
     </div>
