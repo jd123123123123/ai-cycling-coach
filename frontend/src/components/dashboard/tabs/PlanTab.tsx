@@ -14,12 +14,13 @@ import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useTodaySession } from '../../../hooks/useTodaySession'
 import SessionOfTheDay from '../../dashboard/SessionOfTheDay'
+import SessionReviewCard from '../../dashboard/SessionReviewCard'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLocale } from '../../../contexts/LocaleContext'
 import AdaptiveCard from '../../plan/AdaptiveCard'
 import PlanChangeInterview from '../../plan/PlanChangeInterview'
-import { detectWorkoutSport } from '../../../api/coach'
+import { detectWorkoutSport, loggedReviewFromEvidence } from '../../../api/coach'
 import type { WorkoutSport } from '../../../api/coach'
 import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
 import { daysToEvent } from '../../../utils/loadMetrics'
@@ -264,11 +265,11 @@ export default function PlanTab() {
   const selectedIsToday = !isFuture && (selDay?.is_today ?? (selectedDate === todayStr))
   const workout = brief?.prescribed_workout
   // Session Review for the day trained — attached to the brief for TODAY only.
-  // When the selected strip day is today and the athlete has already logged a
-  // session, show the same Session Review card that appears on the Today tab.
-  const review = brief?.post_ride_review ?? null
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
   const athleteEv = (evidence.athlete as Record<string, unknown> | undefined) ?? {}
+  // Post-ride review — same resolution as Today, so a completed session is
+  // reviewed on the Train page too (not only on Today).
+  const review = brief?.post_ride_review ?? loggedReviewFromEvidence(evidence)
   const goalName = athleteEv.goal_target as string | undefined
   // Rest-day truth + brief-failure fallback — the SHARED useTodaySession
   // derivation (same producer as the Today tab; audit P0-3 / finding #1).
@@ -733,6 +734,10 @@ export default function PlanTab() {
           "Rückgängig" flow. Mounted when today's session matches the sport
           toggle, or when the brief is unavailable (honest week-plan fallback
           renders inside the component). */}
+      {/* Post-ride review — when today's selected and it's been trained, show
+          the same "Einheit im Rückblick" card as Today. */}
+      {selectedIsToday && review && <SessionReviewCard review={review} de={de} />}
+
       {selectedIsToday && !isRestDay && (workout ? wodMatches : true) && (
         <SessionOfTheDay />
       )}
