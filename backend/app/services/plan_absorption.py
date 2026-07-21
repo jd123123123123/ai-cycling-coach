@@ -189,6 +189,10 @@ async def _absorb(db: AsyncSession, user_id: int, window_days: int) -> list[dict
 
     if out:
         await db.commit()
+        # Absorption can move/replace planned rows — drop the stale cached week.
+        from app.api.weeks import invalidate_personalized_week_cache
+
+        invalidate_personalized_week_cache(user_id)
     return out
 
 

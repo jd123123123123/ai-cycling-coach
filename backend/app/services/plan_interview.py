@@ -58,6 +58,97 @@ _FELT_WRONG_OPTIONS = ("too_hard", "too_boring", "too_rigid", "life_changed")
 _VARIETY_BUMP = {None: "mixed", "steady": "mixed", "mixed": "adventurous",
                  "adventurous": "adventurous"}
 
+# German weekday abbreviations for the days_changed feed message.
+_WEEKDAY_DE = {"mon": "Mo", "tue": "Di", "wed": "Mi", "thu": "Do",
+               "fri": "Fr", "sat": "Sa", "sun": "So"}
+_WEEKDAY_EN = {"mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu",
+               "fri": "Fri", "sat": "Sat", "sun": "Sun"}
+
+
+def _plan_change_lead(signal: str, profile, live_ctl: float | None) -> tuple[str, str]:
+    """Signal-specific, no-guilt lead sentence (DE, EN) for the plan-change
+    feed — the generic 'Plan angepasst' template was signal-blind (review
+    finding 6). Each lead names WHAT the athlete said and WHAT changed.
+    """
+    ctl_de = f" (CTL {live_ctl:.0f})" if live_ctl is not None else ""
+    ctl_en = ctl_de
+
+    if signal == "too_boring":
+        return (
+            "Zu eintönig — verstanden: neue Einheiten-Formate und ein "
+            "anderer Wochenrhythmus, gleiche Fitnessbasis" + ctl_de + ".",
+            "Too samey — got it: new session formats and a different weekly "
+            "rhythm, same fitness base" + ctl_en + ".",
+        )
+    if signal == "too_hard":
+        return (
+            "Zu hart — der Plan startet jetzt bei deiner aktuellen Fitness"
+            + ctl_de + ", nichts wird nachgeholt.",
+            "Too hard — the plan now starts from your current fitness"
+            + ctl_en + ", nothing gets made up.",
+        )
+    if signal == "too_rigid":
+        return (
+            "Zu starr — die Woche folgt jetzt deinen Zeitfenstern, mit mehr "
+            "Spielraum in den Formaten.",
+            "Too rigid — the week now follows your time windows, with more "
+            "flexibility in the formats.",
+        )
+    if signal == "days_changed":
+        raw = getattr(profile, "days_available", None)
+        days_de = days_en = None
+        if isinstance(raw, dict):
+            keys = [k for k in _WEEKDAYS if raw.get(k, True)]
+            if 0 < len(keys) < 7:
+                days_de = "/".join(_WEEKDAY_DE[k] for k in keys)
+                days_en = "/".join(_WEEKDAY_EN[k] for k in keys)
+        if days_de:
+            return (
+                f"Neue Trainingstage übernommen — Einheiten liegen jetzt nur "
+                f"noch auf {days_de}.",
+                f"New training days applied — sessions now land only on "
+                f"{days_en}.",
+            )
+        return (
+            "Neue Trainingstage übernommen — harte und lange Einheiten "
+            "liegen jetzt auf deinen verfügbaren Tagen.",
+            "New training days applied — hard and long sessions now land on "
+            "your available days.",
+        )
+    if signal == "hours_changed":
+        hours = getattr(profile, "weekly_hours_available", None)
+        if hours:
+            return (
+                f"Wochenumfang auf {hours:g} h angepasst — der Plan hält "
+                "dieses Budget ein.",
+                f"Weekly volume set to {hours:g} h — the plan stays inside "
+                "that budget.",
+            )
+    if signal == "goal_removed":
+        return (
+            "Ohne Zieltermin trainierst du jetzt im Fitness-Aufbau — "
+            "Fortschritt ohne Countdown.",
+            "With no target date you're now on a fitness-builder progression "
+            "— progress without a countdown.",
+        )
+    if signal == "goal_changed":
+        return (
+            "Neues Ziel übernommen — Phasen und Schlüsseleinheiten richten "
+            "sich jetzt danach aus.",
+            "New goal applied — phases and key sessions now point at it.",
+        )
+    if signal == "life_changed":
+        return (
+            "Leben geht vor — der Plan passt sich deiner neuen Situation an"
+            + ctl_de + ".",
+            "Life comes first — the plan adapts to your new situation"
+            + ctl_en + ".",
+        )
+    return (
+        "Plan angepasst — verankert an deiner aktuellen Fitness" + ctl_de + ".",
+        "Plan updated — anchored to your current fitness" + ctl_en + ".",
+    )
+
 
 # ──────────────────────────────────────────────────────────────────────────
 #  1. Question selection (pure)
@@ -515,27 +606,37 @@ async def rebuild_plan(
     summary["preserved_sessions"] = preserved
     summary["ctl_anchor"] = live_ctl
 
+    # Hours reconciliation (review finding 4): the response must let the UI
+    # reconcile the delivered week with the stated hours — planned_hours from
+    # the actual rows, plus the generator's persisted anchor explanation.
+    summary["declared_hours"] = getattr(profile, "weekly_hours_available", None)
+    meso_evidence = getattr(meso, "evidence", None) or {}
+    summary["hours_note"] = meso_evidence.get("hours_note")
+    summary["progression"] = meso_evidence.get("progression")
+
     carried = carried or {}
     sessions_done = carried.get("sessions_done")
     n_sessions = sum(1 for d in summary["week"] if d.get("template_id") != "rest_day")
 
     if source == "plan_change":
+        # Signal-specific lead (review finding 6: 'too_boring' and
+        # 'days_changed' used to share one generic template), then the
+        # credit suffix — done work always counts, never guilt.
+        lead_de, lead_en = _plan_change_lead(signal, profile, live_ctl)
         done_de = (
-            f"{sessions_done} absolvierte Einheiten zählen weiter, "
+            f" Deine {sessions_done} absolvierten Einheiten zählen weiter."
             if sessions_done else ""
         )
         done_en = (
-            f"your {sessions_done} completed sessions still count, "
+            f" Your {sessions_done} completed sessions still count."
             if sessions_done else ""
         )
         message_de = (
-            f"Plan angepasst — {done_de}verankert an deiner aktuellen Fitness"
-            f"{f' (CTL {live_ctl:.0f})' if live_ctl is not None else ''}."
+            lead_de + done_de
             + (f" {preserved} eigene Einheiten bleiben unangetastet." if preserved else "")
         )
         message_en = (
-            f"Plan updated — {done_en}anchored to your current fitness"
-            f"{f' (CTL {live_ctl:.0f})' if live_ctl is not None else ''}."
+            lead_en + done_en
             + (f" {preserved} of your own sessions stay untouched." if preserved else "")
         )
     else:
@@ -586,6 +687,7 @@ async def _week_summary(db: AsyncSession, user_id: int, monday: date) -> dict:
         )
         .order_by(PlannedWorkout.date.asc())
     )
+    rows = res.scalars().all()
     week = [
         {
             "date": pw.date.isoformat(),
@@ -593,7 +695,17 @@ async def _week_summary(db: AsyncSession, user_id: int, monday: date) -> dict:
             "title": pw.title,
             "template_id": pw.template_id,
             "blocks_source": pw.blocks_source,
+            "duration_seconds_target": getattr(pw, "duration_seconds_target", None),
         }
-        for pw in res.scalars().all()
+        for pw in rows
     ]
-    return {"plan_start_date": monday.isoformat(), "week": week}
+    planned_hours = round(
+        sum(float(getattr(pw, "duration_seconds_target", None) or 0) for pw in rows)
+        / 3600.0,
+        1,
+    )
+    return {
+        "plan_start_date": monday.isoformat(),
+        "week": week,
+        "planned_hours": planned_hours,
+    }

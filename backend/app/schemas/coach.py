@@ -109,17 +109,20 @@ class ResolvedBlock(BaseModel):
     cadence_high: int | None = None
     target_hr_low: int | None = None   # bpm — None when LTHR is unknown
     target_hr_high: int | None = None  # bpm
+    open_effort: bool = False          # RPE-guided max effort — watt targets are 0 by design
 
 
 class PrescribedWorkout(BaseModel):
     template_id: str
     title: str
+    title_de: str | None = None
     duration_minutes: int
     total_duration_s: int | None = None
     predicted_tss: float
     predicted_ef_range: tuple[float, float] | None = None
     framework_cited: str
     purpose: str | None = None
+    purpose_de: str | None = None
     category: str | None = None
     blocks: list[ResolvedBlock]
     why_this_workout: str | None = None

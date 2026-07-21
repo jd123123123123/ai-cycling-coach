@@ -132,6 +132,46 @@ export function cyclingPeakLine(ivs: IntervalBlockOut[], ftp: number | null, de:
     : `Peaks: ${rep}${durStr} min @ ${watts} W (${pct}% FTP)`
 }
 
+/** 409 week-endpoint gate — the backend refuses to build a week without FTP
+ *  (X-Error-Code: ftp_required) or a profile (profile_required). Returns the
+ *  code, or null for any non-409/absent error. Pure + exported for vitest. */
+export function weekBlockCode(error: unknown): 'ftp_required' | 'profile_required' | null {
+  const e = error as {
+    response?: { status?: number; headers?: Record<string, unknown>; data?: { detail?: unknown } }
+  } | null | undefined
+  if (!e?.response || e.response.status !== 409) return null
+  const headers = e.response.headers ?? {}
+  const code = (headers['x-error-code'] ?? headers['X-Error-Code']) as string | undefined
+  if (code === 'ftp_required' || code === 'profile_required') return code
+  const detail = e.response.data?.detail
+  if (typeof detail === 'string' && /profil/i.test(detail)) return 'profile_required'
+  return 'ftp_required'
+}
+
+/** Honest watt-range chip fragment — null (render nothing) for zero/absent
+ *  bounds; "0–0W" must never reach the screen (review finding, Jul 2026). */
+export function fmtWattRange(lo: number | null | undefined, hi: number | null | undefined): string | null {
+  if (lo == null || hi == null || lo <= 0 || hi <= 0) return null
+  return `${lo}–${hi}W`
+}
+
+/** The session's DEFINING effort zone — the hardest zone held for a
+ *  meaningful total (≥90 s across its blocks), NOT the time-dominant zone:
+ *  a 6×3 min @ 115% VO₂ day is Z5 even though warm-up/recovery Z1 dominates
+ *  the clock (review finding, Jul 2026). Falls back to the hardest block,
+ *  then to the category's representative zone. Pure + exported for vitest. */
+export function definingZone(ivs: IntervalBlockOut[], category?: string | null): number | null {
+  const CAT: Record<string, number> = { recovery: 1, endurance: 2, tempo: 3, sweet_spot: 4, threshold: 4, vo2: 5 }
+  if (ivs.length > 0) {
+    const perZone = new Map<number, number>()
+    ivs.forEach((b) => perZone.set(b.zone, (perZone.get(b.zone) ?? 0) + b.duration_seconds))
+    const sustained = [...perZone.entries()].filter(([, s]) => s >= 90).map(([z]) => z)
+    if (sustained.length > 0) return Math.max(...sustained)
+    return Math.max(...ivs.map((b) => b.zone))
+  }
+  return category != null ? CAT[category] ?? null : null
+}
+
 export default function PlanTab() {
   const { locale, t } = useLocale()
   const de = locale === 'de'
@@ -161,7 +201,10 @@ export default function PlanTab() {
   const [interviewOpen, setInterviewOpen] = useState(false)
   const MAX_WEEK_OFFSET = 12
   const isFuture = weekOffset > 0
-  const { data: week } = useCurrentWeek(weekOffset)
+  const { data: week, error: weekError } = useCurrentWeek(weekOffset)
+  // 409 gate: the backend cannot build a week without FTP/profile. Never
+  // paper over it with placeholder numbers — render the honest CTA instead.
+  const weekBlocked = weekBlockCode(weekError)
   const { data: brief } = useCoachBrief()
   const { data: profile } = useAthleteProfile()
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 8), [today]), today)
@@ -302,7 +345,8 @@ export default function PlanTab() {
   // Sport-appropriate "peak" chip label for the WOD hero.
   const peakChip = peakBlock ? (
     wodSport === 'cycling'
-      ? `Z${peakBlock.zone} · ${peakBlock.target_watts_low}–${peakBlock.target_watts_high}W`
+      // Honest watts: zero/absent bounds drop the range ("Z2"), never "0–0W".
+      ? [`Z${peakBlock.zone}`, fmtWattRange(peakBlock.target_watts_low, peakBlock.target_watts_high)].filter(Boolean).join(' · ')
       : wodSport === 'running'
         ? [wodPaceChip, `Z${peakBlock.zone}`,
             peakBlock.target_hr_low != null && peakBlock.target_hr_high != null
@@ -427,13 +471,6 @@ export default function PlanTab() {
   const cap = (s: string) => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
   // Localized category word; unmapped categories fall back to capitalization.
   const catLabel = (c: string) => { const e = CAT_LABEL[c]; return e ? (de ? e.de : e.en) : cap(c) }
-  // Dominant zone — most time-in-zone. Drives run pace/HR framing.
-  const dominantZone = (ivs: DayPlan['intervals']): number | null => {
-    if (!ivs.length) return null
-    const acc = new Map<number, number>()
-    ivs.forEach((b) => acc.set(b.zone, (acc.get(b.zone) ?? 0) + b.duration_seconds))
-    return [...acc.entries()].sort((a, b) => b[1] - a[1])[0][0]
-  }
   // Run pace range for a zone, from threshold pace + RUN_PACE bands.
   const runPaceForZone = (z: number): string | null => {
     if (thrPaceSPerKm == null) return null
@@ -456,7 +493,7 @@ export default function PlanTab() {
       return [d.category && d.category !== 'rest' ? catLabel(d.category) : null, de ? 'Kraft' : 'Strength'].filter(Boolean).join(' · ')
     }
     if (d.sport === 'running') {
-      const z = dominantZone(d.intervals) ?? CAT_ZONE[d.category] ?? 2
+      const z = definingZone(d.intervals, d.category) ?? CAT_ZONE[d.category] ?? 2
       const pace = runPaceForZone(z)
       const hr = runHrForZone(z)
       const parts = pace
@@ -470,7 +507,9 @@ export default function PlanTab() {
     // interval peak lives in its own labeled sub-line (sessionPeakSub) so peak
     // watts are never paired with session TSS again (audit P2-14).
     const avgW = cyclingAvgWatts(d.intervals, ftp)
-    const z = dominantZone(d.intervals) ?? CAT_ZONE[d.category] ?? 2
+    // Badge = the session's defining effort (hardest sustained zone), never
+    // the time-dominant zone — a VO₂ day must not wear "Z1" (finding #5).
+    const z = definingZone(d.intervals, d.category) ?? CAT_ZONE[d.category] ?? 2
     return [avgW != null ? `Ø ${avgW} W` : null, `Z${z}`, d.target_tss ? `${Math.round(d.target_tss)} TSS` : null].filter(Boolean).join(' · ')
   }
   // Labeled peak sub-line for cycling sessions — WorkoutDetailView's peakChip
@@ -496,6 +535,45 @@ export default function PlanTab() {
   // Header target = the server's planned_tss_total (sum of every planned row
   // incl. shadowed secondaries) so header and day list always reconcile.
   const weekTssTarget = week?.planned_tss_total ?? meso?.weekly_tss_target ?? 0
+
+  // ── 409 gate (finding #2): no FTP/profile → the backend has NO week to
+  // show. Render the honest, actionable empty state — never a placeholder
+  // plan with fabricated zero-watt sessions. (After all hooks; safe return.)
+  if (weekBlocked && !week) {
+    return (
+      <div className="flex flex-col gap-6 pb-4">
+        <div className="rounded-[24px] flex flex-col items-center text-center" style={{ ...cardStyle, gap: 14, padding: '32px 24px' }}>
+          <div className="grid place-items-center rounded-full" style={{ width: 52, height: 52, background: 'var(--color-accent-soft)' }}>
+            <Zap size={26} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
+          </div>
+          <div className="flex flex-col" style={{ gap: 6 }}>
+            <h2 className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>
+              {de ? 'Noch kein Plan' : 'No plan yet'}
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
+              {weekBlocked === 'ftp_required'
+                ? (de
+                  ? 'Wir brauchen deine FTP, um deinen Trainingsplan zu bauen — Wattbereiche und Belastung hängen daran.'
+                  : 'We need your FTP to build your training plan — watt ranges and load depend on it.')
+                : (de
+                  ? 'Wir brauchen noch ein paar Angaben in deinem Profil, um deinen Trainingsplan zu bauen.'
+                  : 'We need a few more profile details to build your training plan.')}
+            </p>
+          </div>
+          <Link
+            to="/profile"
+            className="inline-flex items-center justify-center gap-1.5 rounded-full px-6 min-h-[48px]"
+            style={{ background: 'var(--color-accent)', color: '#FFFFFF', fontSize: 14, fontWeight: 700 }}
+          >
+            {weekBlocked === 'ftp_required'
+              ? (de ? 'FTP jetzt eintragen' : 'Enter your FTP')
+              : (de ? 'Profil vervollständigen' : 'Complete your profile')}
+            <ChevronRight size={16} />
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-4">
@@ -1113,7 +1191,13 @@ export default function PlanTab() {
         </div>
         <div className="flex">
           {[
-            [weeksLeft != null ? `${weeksLeft}` : '—', de ? 'Wochen übrig' : 'Weeks left'],
+            // No event → the fitness-builder horizon replaces the dash: a
+            // rolling block is a real answer, "—" was an honest non-answer.
+            weeksLeft != null
+              ? [`${weeksLeft}`, de ? 'Wochen übrig' : 'Weeks left']
+              : meso?.progression != null
+                ? [`${meso.progression.horizon_weeks}`, de ? 'Wochen Aufbau' : 'Week block']
+                : ['—', de ? 'Wochen übrig' : 'Weeks left'],
             [weekHours > 0 ? `${weekHours.toFixed(1)}h` : '—', de ? 'Wochenstunden' : 'Week hours'],
             [`${sessionCount}`, de ? 'Einheiten' : 'Sessions'],
           ].map(([v, l], i) => (
@@ -1123,6 +1207,13 @@ export default function PlanTab() {
             </div>
           ))}
         </div>
+        {/* Hours reconciliation — the CTL-anchored ramp explained, so stated
+            vs delivered hours never diverge silently (review finding). */}
+        {meso?.hours_note != null && (
+          <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
+            {de ? meso.hours_note.de : meso.hours_note.en}
+          </span>
+        )}
       </Link>
 
       {/* Focus — per-sport builder-program picker (Bike + Run rows). */}

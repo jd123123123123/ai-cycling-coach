@@ -19,6 +19,8 @@ import {
 } from 'lucide-react'
 import { subDays } from 'date-fns'
 import { useLocale } from '../../contexts/LocaleContext'
+import { useLanguage } from '../../contexts/LanguageContext'
+import LocaleSwitch from '../dashboard/LocaleSwitch'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useGarminStatus } from '../../hooks/useGarminStatus'
@@ -30,7 +32,7 @@ import { grantConsent } from '../../api/consent'
 import { CONSENT_TYPES } from '../../types/consent'
 import { updateProfile, updateGoals } from '../../api/athletes'
 import { buildPlan } from '../../api/plan'
-import { estimateFtp } from '../../utils/trainingScience'
+import { estimateFtp, starterFtp, type StarterFitness } from '../../utils/trainingScience'
 import type { DaysAvailableFlags } from '../../types/athlete'
 
 /**
@@ -101,6 +103,7 @@ export default function OnboardingV3() {
   const de = locale === 'de'
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { setLanguage } = useLanguage()
 
   const { data: profile } = useAthleteProfile()
   const today = useMemo(() => new Date(), [])
@@ -112,6 +115,9 @@ export default function OnboardingV3() {
   const [screen, setScreen] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 'ftp' → the plan build failed on the FTP gate; offer a jump back to the
+  // numbers screen instead of pretending the finish succeeded.
+  const [errorKind, setErrorKind] = useState<'ftp' | 'generic' | null>(null)
 
   // Screen 2 state — FTP/weight override (estimate is the default truth)
   const rides = useMemo(
@@ -122,14 +128,21 @@ export default function OnboardingV3() {
   const [ftpInput, setFtpInput] = useState('')
   const [weightInput, setWeightInput] = useState('')
   const [adjusting, setAdjusting] = useState(false)
+  // "Ich kenn meine FTP nicht" — self-assessed fitness feel; with weight it
+  // yields a conservative starter FTP so plan/build succeeds for everyone.
+  const [selfLevel, setSelfLevel] = useState<StarterFitness | null>(null)
 
-  const ftp = ftpInput !== ''
-    ? Math.round(Number(ftpInput)) || null
-    : profile?.ftp_watts ?? est?.watts ?? null
   const weight = weightInput !== ''
     ? Number(weightInput) || null
     : profile?.weight_kg ?? null
+  const starterEstimate = selfLevel ? starterFtp(weight, selfLevel) : null
+  const ftp = ftpInput !== ''
+    ? Math.round(Number(ftpInput)) || null
+    : profile?.ftp_watts ?? est?.watts ?? starterEstimate
   const wkg = ftp && weight ? ftp / weight : null
+  // The FTP is a self-assessment prior (not measured, not manually entered).
+  const ftpIsStarter =
+    ftpInput === '' && profile?.ftp_watts == null && est == null && starterEstimate != null
 
   // Screen 3 state — goal, depth, hours + days (challenge-doc rows)
   const hasKnownEvent = !!(profile?.target_event_date || profile?.goals?.target_event_name)
@@ -138,8 +151,10 @@ export default function OnboardingV3() {
   const [eventDate, setEventDate] = useState('')
   const [depth, setDepth] = useState<Depth>('numbers')
   const [hours, setHours] = useState(profile?.weekly_hours_available ?? 8)
+  // Sensible starter selection (Tue/Thu/Sat/Sun) — NOT all seven days; a
+  // 7-day default silently promised daily training (review finding 4c).
   const [days, setDays] = useState<Record<Weekday, boolean>>({
-    mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: true,
+    mon: false, tue: true, wed: false, thu: true, fri: false, sat: true, sun: true,
   })
   const daysCount = WEEKDAYS.filter((d) => days[d]).length
 
@@ -148,6 +163,7 @@ export default function OnboardingV3() {
   async function handleFinish() {
     setSubmitting(true)
     setError(null)
+    setErrorKind(null)
     try {
       // 1) Required consents (the V3 flow folds the consent notice into the
       //    footer of screen 1; granting happens once, here).
@@ -169,10 +185,14 @@ export default function OnboardingV3() {
         weekly_hours_available: hours,
         days_available: daysPayload,
         motivation_style: DEPTH_TO_MOTIVATION[depth],
+        // Depth follows the athlete across devices — Settings "Detailgrad"
+        // reads/writes the same profile field (was localStorage-only).
+        detail_level: depth,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }
       if (ftp) profileUpdate.ftp_watts = ftp
       if (weight) profileUpdate.weight_kg = weight
+      if (selfLevel) profileUpdate.experience_level = selfLevel
       if (goal === 'fitter') {
         profileUpdate.target_event_type = 'maintenance'
       } else if (goal === 'custom' && eventDate) {
@@ -190,22 +210,50 @@ export default function OnboardingV3() {
         ...(goal === 'custom' && eventDate ? { target_event_date: eventDate } : {}),
       })
 
-      // 4) Depth is a UI register, not a physiology fact — keep it client-side.
+      // 4) Depth also drives the local UI registers immediately: the legacy
+      //    localStorage key (same-device fast path) and the coach language
+      //    mode the dashboard reads ('guide' → plain language, otherwise
+      //    full vocabulary). The server-side truth is detail_level above.
       localStorage.setItem('onboarding.depth.v3', depth)
+      setLanguage(depth === 'guide' ? 'simple' : 'technical')
 
-      // 5) Build the plan. 409 = profile can't support one yet (no FTP) —
-      //    that's fine, the athlete lands on the dashboard and connects later.
+      // 5) Build the plan. This must NOT fail silently: a 409 means the
+      //    profile can't support a plan (FTP gate) — landing the athlete on
+      //    an empty dashboard as if everything worked was the review's
+      //    blocker finding. Show an honest error + a path to fix instead.
       try {
         await buildPlan('onboarding')
       } catch (e) {
         const status = (e as { response?: { status?: number } })?.response?.status
-        if (status !== 409) throw e
+        if (status === 409) {
+          setErrorKind('ftp')
+          setError(
+            de
+              ? 'Dein Profil ist gespeichert, aber wir konnten noch keinen Plan bauen — es fehlt ein gültiger FTP-Startwert. Geh zurück zu deinen Werten und setz eine Startschätzung.'
+              : 'Your profile is saved, but we couldn’t build a plan yet — a valid starting FTP is missing. Go back to your numbers and set a starting estimate.',
+          )
+        } else if (status === 401) {
+          setErrorKind('generic')
+          setError(
+            de ? 'Sitzung abgelaufen — bitte neu anmelden.' : 'Session expired — please sign in again.',
+          )
+        } else {
+          setErrorKind('generic')
+          setError(
+            de
+              ? 'Der Plan konnte nicht erstellt werden. Bitte versuch es gleich noch einmal.'
+              : 'We couldn’t build your plan. Please try again in a moment.',
+          )
+        }
+        setSubmitting(false)
+        return
       }
 
       await qc.invalidateQueries()
       navigate('/dashboard', { replace: true })
     } catch (e) {
       const status = (e as { response?: { status?: number } })?.response?.status
+      setErrorKind('generic')
       setError(
         status === 401
           ? de ? 'Sitzung abgelaufen — bitte neu anmelden.' : 'Session expired — please sign in again.'
@@ -221,7 +269,10 @@ export default function OnboardingV3() {
         className="mx-auto w-full flex flex-col"
         style={{ maxWidth: 430, padding: '16px 20px 32px', gap: 24, minHeight: '100dvh' }}
       >
-        <Dots active={screen} onJump={(i) => i < screen && setScreen(i)} />
+        <div className="flex items-center justify-between" style={{ gap: 12 }}>
+          <Dots active={screen} onJump={(i) => i < screen && setScreen(i)} />
+          <LocaleSwitch />
+        </div>
 
         <AnimatePresence mode="wait">
           <motion.div
@@ -250,6 +301,9 @@ export default function OnboardingV3() {
                 wkg={wkg}
                 weight={weight}
                 confidence={ftpInput !== '' ? null : profile?.ftp_watts ? 1 : est?.confidence ?? null}
+                ftpIsStarter={ftpIsStarter}
+                selfLevel={selfLevel}
+                setSelfLevel={setSelfLevel}
                 adjusting={adjusting}
                 setAdjusting={setAdjusting}
                 ftpInput={ftpInput}
@@ -289,6 +343,8 @@ export default function OnboardingV3() {
                   })
                 }}
                 error={error}
+                errorKind={errorKind}
+                onGoToNumbers={() => setScreen(1)}
                 submitting={submitting}
                 onFinish={handleFinish}
               />
@@ -783,6 +839,9 @@ function NumbersScreen({
   wkg,
   weight,
   confidence,
+  ftpIsStarter,
+  selfLevel,
+  setSelfLevel,
   adjusting,
   setAdjusting,
   ftpInput,
@@ -797,6 +856,9 @@ function NumbersScreen({
   wkg: number | null
   weight: number | null
   confidence: number | null
+  ftpIsStarter: boolean
+  selfLevel: StarterFitness | null
+  setSelfLevel: (v: StarterFitness | null) => void
   adjusting: boolean
   setAdjusting: (v: boolean) => void
   ftpInput: string
@@ -805,14 +867,25 @@ function NumbersScreen({
   setWeightInput: (v: string) => void
   onContinue: () => void
 }) {
+  // Honest no-data variant: without rides there is nothing "found", so the
+  // headline, chip and CTA all switch to "set your starting numbers" mode.
+  const hasData = rideCount > 0 || (confidence != null && confidence >= 1)
+
+  // Confidence chip: manual input → "set manually"; real rides → confidence
+  // tiers; self-assessment → amber "starter estimate". Never a green
+  // "high confidence" without actual data behind it (review finding 2).
   const conf =
     ftpInput !== ''
       ? { label: de ? 'Manuell gesetzt' : 'Set manually', color: T.strain, bg: '#38B6FF26' }
-      : confidence != null && confidence >= 0.8
-        ? { label: de ? 'Hohe Konfidenz' : 'High confidence', color: T.recovery, bg: T.recoverySoft }
-        : confidence != null && confidence > 0
-          ? { label: de ? 'Erste Schätzung' : 'Early estimate', color: T.amber, bg: T.amberSoft }
-          : { label: de ? 'Noch keine Daten' : 'No data yet', color: T.ink3, bg: T.surface2 }
+      : ftpIsStarter
+        ? { label: de ? 'Startschätzung' : 'Starter estimate', color: T.amber, bg: T.amberSoft }
+        : hasData && confidence != null && confidence >= 0.8
+          ? { label: de ? 'Hohe Konfidenz' : 'High confidence', color: T.recovery, bg: T.recoverySoft }
+          : hasData && confidence != null && confidence > 0
+            ? { label: de ? 'Erste Schätzung' : 'Early estimate', color: T.amber, bg: T.amberSoft }
+            : { label: de ? 'Noch keine Daten' : 'No data yet', color: T.ink3, bg: T.surface2 }
+
+  const needsStarter = !hasData && ftp == null
 
   return (
     <>
@@ -822,7 +895,18 @@ function NumbersScreen({
             ? de ? `AUS ${rideCount} FAHRTEN` : `FROM ${rideCount} RIDES`
             : de ? 'NOCH KEINE FAHRTEN' : 'NO RIDES YET'
         }
-        title={de ? 'Wir haben deine Werte gefunden' : 'We found your numbers'}
+        title={
+          hasData
+            ? de ? 'Wir haben deine Werte gefunden' : 'We found your numbers'
+            : de ? 'Lass uns deine Startwerte setzen' : 'Let’s set your starting numbers'
+        }
+        sub={
+          hasData
+            ? undefined
+            : de
+              ? 'Kein Problem ohne Historie — eine ehrliche Schätzung reicht, dein erster Plan startet damit.'
+              : 'No history needed — an honest estimate is enough to start your first plan.'
+        }
       />
 
       {/* FTP Hero */}
@@ -856,6 +940,13 @@ function NumbersScreen({
             {conf.label}
           </span>
         </div>
+
+        {/* Plain-language explainer — beginners don't know what "FTP" means. */}
+        <p style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.ink3, margin: '-8px 0 0' }}>
+          {de
+            ? 'FTP = die Leistung, die du etwa eine Stunde halten kannst. Daraus entstehen deine Trainingszonen.'
+            : 'FTP = the power you can hold for about an hour. Your training zones are built from it.'}
+        </p>
 
         <div className="flex items-center" style={{ gap: 18 }}>
           <div className="flex items-end" style={{ gap: 5 }}>
@@ -910,9 +1001,17 @@ function NumbersScreen({
 
         <p style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: T.ink2, margin: 0 }}>
           {de
-            ? 'Sechs Zonen aus deiner FTP — sie passen sich automatisch an, wenn du schneller wirst. Kein Rampentest, außer du willst einen.'
-            : 'Six zones set from your FTP — they update automatically as you get faster. No ramp test unless you want one.'}
+            ? 'Trainingszonen sind einfach Anstrengungsstufen (locker bis Vollgas), abgeleitet aus deiner FTP — sie passen sich automatisch an, wenn du schneller wirst. Kein Test nötig.'
+            : 'Training zones are simply effort levels (easy to all-out), derived from your FTP — they update automatically as you get faster. No test needed.'}
         </p>
+
+        {ftpIsStarter && (
+          <p style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: T.amber, margin: '-6px 0 0' }}>
+            {de
+              ? 'Startschätzung — wir kalibrieren, sobald du fährst.'
+              : 'Starter estimate — we calibrate as soon as you ride.'}
+          </p>
+        )}
 
         {adjusting && (
           <div className="flex" style={{ gap: 8 }}>
@@ -946,6 +1045,105 @@ function NumbersScreen({
         )}
       </div>
 
+      {/* "Ich kenn meine FTP nicht" — self-assessment starter path. Without
+          it the no-device athlete hits the backend FTP gate and lands on an
+          empty dashboard (the review's blocker finding). */}
+      {!hasData && ftpInput === '' && (
+        <div
+          className="flex flex-col"
+          style={{
+            backgroundColor: T.surface,
+            border: `1px solid ${T.border}`,
+            borderRadius: 24,
+            padding: '16px 16px 14px',
+            gap: 12,
+          }}
+        >
+          <div className="flex flex-col" style={{ gap: 2 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>
+              {de ? 'Ich kenn meine FTP nicht' : 'I don’t know my FTP'}
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.35, color: T.ink2 }}>
+              {de
+                ? 'Sag uns kurz, wie fit du dich fühlst — wir setzen eine vorsichtige Startschätzung.'
+                : 'Tell us how fit you feel — we’ll set a careful starting estimate.'}
+            </span>
+          </div>
+
+          <div className="flex flex-col" style={{ gap: 6 }}>
+            {(
+              [
+                {
+                  key: 'new' as StarterFitness,
+                  title: de ? 'Neu dabei' : 'Just starting',
+                  sub: de ? 'Wenig oder kein Radtraining bisher' : 'Little or no riding so far',
+                },
+                {
+                  key: 'returning' as StarterFitness,
+                  title: de ? 'Fahre ab und zu' : 'Ride now and then',
+                  sub: de ? 'Regelmäßig unterwegs, ohne Struktur' : 'Regular rides, no structure',
+                },
+                {
+                  key: 'seasoned' as StarterFitness,
+                  title: de ? 'Fahre viel' : 'Ride a lot',
+                  sub: de ? 'Fit, schon länger im Sattel' : 'Fit, been riding for a while',
+                },
+              ]
+            ).map((o) => {
+              const selected = selfLevel === o.key
+              return (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => setSelfLevel(selected ? null : o.key)}
+                  className="flex items-center w-full text-left"
+                  style={{
+                    gap: 10,
+                    padding: '11px 13px',
+                    borderRadius: 16,
+                    backgroundColor: selected ? T.accentSoft : T.surface2,
+                    border: `1px solid ${selected ? T.accent : T.border}`,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div className="flex flex-col flex-1 min-w-0" style={{ gap: 1 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: selected ? T.accent : T.ink }}>
+                      {o.title}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: T.ink3 }}>{o.sub}</span>
+                  </div>
+                  {selected && (
+                    <CheckCircle2 size={18} strokeWidth={2.2} className="shrink-0" style={{ color: T.accent }} />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="flex flex-col" style={{ gap: 4 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, color: T.ink3 }}>
+              {de ? 'GEWICHT (KG)' : 'WEIGHT (KG)'}
+            </span>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={weightInput}
+              placeholder={weight != null ? String(weight) : '72'}
+              onChange={(e) => setWeightInput(e.target.value)}
+              style={fieldStyle}
+            />
+          </div>
+
+          {selfLevel && weight == null && (
+            <span style={{ fontSize: 11.5, fontWeight: 500, color: T.amber }}>
+              {de
+                ? 'Trag noch dein Gewicht ein — daraus rechnen wir deine Startschätzung.'
+                : 'Add your weight — we compute your starting estimate from it.'}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Recovery baseline */}
       <div
         className="flex items-center"
@@ -976,7 +1174,25 @@ function NumbersScreen({
       </div>
 
       <div className="flex flex-col mt-auto" style={{ gap: 0 }}>
-        <Cta label={de ? 'Passt so' : 'Looks right'} onClick={onContinue} />
+        {needsStarter && (
+          <p
+            className="text-center"
+            style={{ fontSize: 11.5, fontWeight: 500, color: T.ink3, margin: '0 0 10px', lineHeight: 1.4 }}
+          >
+            {de
+              ? 'Wähle oben eine Einschätzung (plus Gewicht) oder trag deine FTP manuell ein — dann können wir deinen Plan bauen.'
+              : 'Pick a fitness level (plus weight) above or enter your FTP manually — then we can build your plan.'}
+          </p>
+        )}
+        <Cta
+          label={
+            ftpIsStarter
+              ? de ? 'Startwerte übernehmen' : 'Use starting numbers'
+              : de ? 'Passt so' : 'Looks right'
+          }
+          onClick={onContinue}
+          disabled={ftp == null}
+        />
         <button
           type="button"
           onClick={() => setAdjusting(!adjusting)}
@@ -1018,6 +1234,8 @@ function GoalDepthScreen({
   days,
   toggleDay,
   error,
+  errorKind,
+  onGoToNumbers,
   submitting,
   onFinish,
 }: {
@@ -1036,6 +1254,8 @@ function GoalDepthScreen({
   days: Record<Weekday, boolean>
   toggleDay: (d: Weekday) => void
   error: string | null
+  errorKind: 'ftp' | 'generic' | null
+  onGoToNumbers: () => void
   submitting: boolean
   onFinish: () => void
 }) {
@@ -1287,12 +1507,49 @@ function GoalDepthScreen({
       </div>
 
       {error && (
-        <p style={{ fontSize: 12.5, color: 'var(--color-bad)', margin: 0 }}>{error}</p>
+        <div
+          className="flex flex-col"
+          role="alert"
+          style={{
+            gap: 10,
+            padding: '12px 14px',
+            borderRadius: 16,
+            backgroundColor: 'rgba(255, 90, 60, 0.08)',
+            border: '1px solid rgba(255, 90, 60, 0.35)',
+          }}
+        >
+          <p style={{ fontSize: 12.5, lineHeight: 1.45, color: 'var(--color-bad)', margin: 0, fontWeight: 600 }}>
+            {error}
+          </p>
+          {errorKind === 'ftp' && (
+            <button
+              type="button"
+              onClick={onGoToNumbers}
+              className="self-start"
+              style={{
+                padding: '8px 14px',
+                borderRadius: 100,
+                backgroundColor: T.surface3,
+                color: T.ink,
+                fontSize: 12,
+                fontWeight: 700,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {de ? 'Zu meinen Startwerten' : 'Fix my starting numbers'}
+            </button>
+          )}
+        </div>
       )}
 
       <div className="mt-auto">
         <Cta
-          label={de ? 'Plan erstellen' : 'Build my plan'}
+          label={
+            error
+              ? de ? 'Erneut versuchen' : 'Try again'
+              : de ? 'Plan erstellen' : 'Build my plan'
+          }
           icon={<Rocket size={18} strokeWidth={2.2} />}
           onClick={onFinish}
           disabled={goal === null}

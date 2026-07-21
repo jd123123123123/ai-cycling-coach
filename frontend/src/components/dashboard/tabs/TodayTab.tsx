@@ -18,8 +18,8 @@ import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays, format, startOfWeek, addDays } from 'date-fns'
 import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
-import { Flag, Bike, MessageCircle, Zap, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, CalendarCheck, Check, Moon, Sparkles, Pause, Minus } from 'lucide-react'
-import { loggedReviewFromEvidence, type Adaptations } from '../../../api/coach'
+import { Flag, Bike, MessageCircle, Zap, ListChecks, ChevronRight, ChevronDown, TrendingUp, TrendingDown, CalendarCheck, Check, Moon, Sparkles, Pause, Minus, RefreshCw, Clock } from 'lucide-react'
+import { loggedReviewFromEvidence, streamCoachChat, type Adaptations, type ChatMessage } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
 import TheRoadCard from '../TheRoadCard'
@@ -98,12 +98,39 @@ export function shouldShowFitnessTrendChip(
   return true
 }
 
+// ── Brief-failure fallback (review finding #1, Jul 2026) ─────────────────────
+/** What Today renders when the brief carries NEITHER a decision NOR a
+ *  prescription (failed request, or an empty payload):
+ *  - 'none'            → normal render paths (decision/workout present, or
+ *                        everything is still loading — say nothing yet)
+ *  - 'planned_session' → the week plan says today has work → honest reduced
+ *                        card from the week data, no invented coaching prose
+ *  - 'planned_rest'    → the week plan itself says today is rest
+ *  - 'degraded'        → nothing loads → honest "can't load your plan" + retry.
+ *  The celebratory rest card must NEVER appear from this path — a fabricated
+ *  "Geplante Pause" over an error told a day-1 athlete to skip a real session. */
+export type BriefFallback = 'none' | 'planned_session' | 'planned_rest' | 'degraded'
+export function briefFallbackState(o: {
+  briefFailed: boolean
+  briefLoaded: boolean
+  decisionState: string | null
+  hasWorkout: boolean
+  /** true/false = week plan knows today (has work / is rest); null = no week info (absent or still loading) */
+  weekTodayHasWork: boolean | null
+}): BriefFallback {
+  if (o.decisionState != null || o.hasWorkout) return 'none'
+  if (!o.briefFailed && !o.briefLoaded) return 'none' // still loading — no verdicts yet
+  if (o.weekTodayHasWork === true) return 'planned_session'
+  if (o.weekTodayHasWork === false) return 'planned_rest'
+  return 'degraded'
+}
+
 export default function TodayTab() {
   const { locale } = useLocale()
   const { user } = useAuth()
   const de = locale === 'de'
   const today = useMemo(() => new Date(), [])
-  const { data: brief } = useCoachBrief()
+  const { data: brief, isError: briefFailed, refetch: refetchBrief } = useCoachBrief()
   // ONE Daily Decision (audit P0-3) — computed fresh server-side per brief
   // request. Every day-state flag below keys off decision.state; the client
   // never derives its own instruction from the brief's workout shape again.
@@ -176,7 +203,25 @@ export default function TodayTab() {
   // honest signal only (no prescription → nothing to view).
   const decisionState = decision?.state ?? null
   const sidelined = isSidelinedDecisionState(decisionState) // sick / injured / break
-  const isRestDay = decisionState != null ? decisionState === 'planned_rest' : !workout
+  // Brief-failure fallback (finding #1): when neither decision nor workout
+  // exists, the WEEK PLAN is the honest source — never "no workout ⇒ rest".
+  const weekToday = weekPlan?.days?.find((d) => d.is_today) ?? null
+  const weekTodayHasWork = weekToday == null
+    ? null
+    : weekToday.category !== 'rest' && (
+      (weekToday.duration_seconds_target ?? 0) > 0 ||
+      (weekToday.intervals?.length ?? 0) > 0 ||
+      (weekToday.target_tss ?? 0) > 0)
+  const fallback = briefFallbackState({
+    briefFailed,
+    briefLoaded: brief !== undefined,
+    decisionState,
+    hasWorkout: !!workout,
+    weekTodayHasWork,
+  })
+  // Rest is only ever a PLAN statement: the decision says planned_rest, or —
+  // with the brief unavailable — the week plan itself carries a rest day.
+  const isRestDay = decisionState != null ? decisionState === 'planned_rest' : fallback === 'planned_rest'
   // A session is still on today's menu (recover / easy / quality / hard) —
   // gates the workout card and the outdoor-window nudge.
   const isActiveTrainingDay = decisionState != null
@@ -193,16 +238,33 @@ export default function TodayTab() {
     ? wBlocks.slice(0, 5).map((b) => b.name).filter(Boolean).join(' → ')
     : null
 
-  // Workout intensity zone, derived from real prescribed TSS + duration (IF).
+  // Workout intensity badge — the session's DEFINING effort (finding #5):
+  // hardest zone held ≥90s across the prescribed blocks, so a 5×4' @ 115%
+  // VO₂ day is never labeled "Z3 · Tempo" by its duration-averaged IF. The
+  // IF derivation remains only as fallback when no block zones exist.
   const wIntensity = useMemo(() => {
     if (!workout) return null
+    const label = (z: number) =>
+      z >= 5 ? { z: `Z${Math.min(z, 7)}`, t: 'VO₂' }
+        : z === 4 ? { z: 'Z4', t: de ? 'Schwelle' : 'Threshold' }
+        : z === 3 ? { z: 'Z3', t: 'Tempo' }
+        : z === 2 ? { z: 'Z2', t: de ? 'Grundlage' : 'Endurance' }
+        : { z: 'Z1', t: de ? 'Erholung' : 'Recovery' }
+    const blocks = workout.blocks ?? []
+    if (blocks.length > 0) {
+      const perZone = new Map<number, number>()
+      blocks.forEach((b) => perZone.set(b.zone, (perZone.get(b.zone) ?? 0) + (b.duration_s ?? 0)))
+      const sustained = [...perZone.entries()].filter(([, s]) => s >= 90).map(([z]) => z)
+      const zDef = sustained.length > 0 ? Math.max(...sustained) : Math.max(...blocks.map((b) => b.zone))
+      if (Number.isFinite(zDef) && zDef >= 1) return label(zDef)
+    }
     const durHr = (workout.duration_minutes ?? 0) / 60
     if (durHr <= 0 || workout.predicted_tss == null) return null
     const iff = Math.sqrt(workout.predicted_tss / (durHr * 100))
-    if (iff < 0.75) return { z: 'Z2', t: de ? 'Grundlage' : 'Endurance' }
-    if (iff < 0.85) return { z: 'Z3', t: 'Tempo' }
-    if (iff < 0.95) return { z: 'Z4', t: de ? 'Schwelle' : 'Threshold' }
-    return { z: 'Z5', t: 'VO₂' }
+    if (iff < 0.75) return label(2)
+    if (iff < 0.85) return label(3)
+    if (iff < 0.95) return label(4)
+    return label(5)
   }, [workout, de])
 
   // Today's training snapshot — real activity channels only (no steps).
@@ -353,6 +415,19 @@ export default function TodayTab() {
         `The work's done and ${goodReason}. Sofa earned, form pending.`,
         `Boxes ticked, ${goodReason} — let the adaptation work the night shift.`,
       ])
+    }
+    // Brief-failure fallbacks (finding #1) — plain, honest lines only; the
+    // witty rest-day prose below is reserved for a REAL planned_rest decision.
+    if (fallback === 'planned_session') {
+      return de
+        ? 'Der Coach-Brief lädt gerade nicht — unten steht deine geplante Einheit aus dem Wochenplan.'
+        : "The coach brief isn't loading — your planned session from the week plan is below."
+    }
+    if (fallback === 'planned_rest') {
+      return de ? 'Laut Wochenplan ist heute Ruhetag.' : 'Per the week plan, today is a rest day.'
+    }
+    if (fallback === 'degraded') {
+      return de ? 'Wir können deinen Plan gerade nicht laden.' : "We can't load your plan right now."
     }
     if (isRestDay) {
       // Sleep-specific rest-day lines: a great night doubles the recovery win,
@@ -544,7 +619,19 @@ export default function TodayTab() {
   // now guarantees agreement on fresh generations; this guard catches a stale
   // cached brief). On disagreement the decision's verdict wins — chat, Today
   // and the pill can never tell different stories.
-  const verdictLine = brief?.verdict?.trim()
+  // Canned EN verdicts from the backend's simple-mode fallback maps — a cached
+  // brief can serve them into a German UI ("Rest day — legs up" under German
+  // chrome, finding #6). In de mode they're dropped so the localized
+  // deterministic heroLine speaks instead.
+  const CANNED_EN_VERDICTS = new Set([
+    'Hard intervals — you’re fresh', "Hard intervals — you're fresh",
+    'Hard ride — quality day', 'Focused effort today', 'Steady push today',
+    'Easy hour on the bike', 'Easy spin — just move', 'Rest day — legs up',
+    'Rest up — let your body heal', 'Take it easy today',
+    'Steady effort — nothing crazy', "You're good to go", 'You’re good to go',
+  ])
+  const rawVerdict = brief?.verdict?.trim()
+  const verdictLine = de && rawVerdict && CANNED_EN_VERDICTS.has(rawVerdict) ? undefined : rawVerdict
   const briefAgreesWithDecision = (() => {
     if (!decision) return true
     if (decision.state === 'trained_already') return !!review
@@ -594,6 +681,9 @@ export default function TodayTab() {
     if (tier === 'peak' || tier === 'ready') return { pillWord: tFor(locale, 'dd_pill_hard'), pillColor: rColor }
     if (tier === 'caution') return { pillWord: de ? 'Kontrolliert trainieren' : 'Train controlled', pillColor: rColor }
     if (tier === 'rest') return { pillWord: tFor(locale, 'dd_pill_recover'), pillColor: rColor }
+    // Brief unavailable + no readiness signal: say what we know, never "Loading…" forever.
+    if (fallback === 'planned_session') return { pillWord: de ? 'Einheit geplant' : 'Session planned', pillColor: 'var(--color-accent)' }
+    if (fallback === 'degraded') return { pillWord: '—', pillColor: 'var(--color-muted)' }
     return { pillWord: de ? 'Lade…' : 'Loading…', pillColor: rColor }
   })()
 
@@ -687,6 +777,14 @@ export default function TodayTab() {
     }
     // morning
     if (isActiveTrainingDay && wTitle) return `${de ? 'Fokus heute' : "Today's focus"}: ${wTitle}`
+    // Brief unavailable: name the week plan's session (real data) or stay quiet —
+    // never claim "recovery is the assignment" over an error (finding #1).
+    if (fallback === 'planned_session') {
+      return weekToday?.title
+        ? `${de ? 'Laut Wochenplan' : 'Per the week plan'}: ${weekToday.title}`
+        : null
+    }
+    if (fallback === 'degraded') return null
     return de ? 'Fokus heute: Erholung ist die Aufgabe.' : "Today's focus: recovery is the assignment."
   })()
 
@@ -927,7 +1025,7 @@ export default function TodayTab() {
       {/* 4 · V3 Rest Card (pen JhT2g / iBIGi) — green, never punitive: the
           decision's own reason, tomorrow preview, "Warum Pause?" → AI coach and
           a manual-override link to the workout view, no-guilt footer. */}
-      {isRestDay && (
+      {decisionState === 'planned_rest' && (
         <div
           className="rounded-[24px] p-5 flex flex-col gap-4"
           style={{
@@ -958,25 +1056,99 @@ export default function TodayTab() {
               })()}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link
-              to="/coach"
-              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-3"
-              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}
-            >
-              <MessageCircle size={15} style={{ color: 'var(--color-ink-2)' }} /> {de ? 'Warum Pause?' : 'Why rest?'}
-            </Link>
-            <Link
-              to="/workout/today"
-              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-3"
-              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}
-            >
-              <Bike size={15} style={{ color: 'var(--color-ink-2)' }} /> {de ? 'Trotzdem fahren · Z1' : 'Ride anyway · Z1'}
-            </Link>
-          </div>
+          <RideAnywayZ1 de={de} />
           <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>
             {de ? 'Kein schlechtes Gewissen, nichts ausgegraut — der Plan hat diesen Tag mitgezählt.' : 'No guilt, no grey-outs — the plan already counted this day.'}
           </p>
+        </div>
+      )}
+
+      {/* Brief-failure fallbacks (finding #1) — the honest reduced states.
+          (a) week plan says rest → slim factual rest row (no celebratory prose)
+          (b) week plan has a session → render THAT session from real week data
+          (c) nothing loads → degraded state + retry. Never the green rest card. */}
+      {fallback === 'planned_rest' && (
+        <div className="rounded-[24px] p-5 flex items-center gap-3.5" style={cardStyle}>
+          <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
+            <Moon size={22} strokeWidth={2} style={{ color: 'var(--color-recovery)' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Ruhetag' : 'Rest day'}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
+              {de ? 'Laut Wochenplan — Erholung & Regeneration.' : 'Per the week plan — recovery & regeneration.'}
+            </div>
+          </div>
+        </div>
+      )}
+      {fallback === 'planned_session' && weekToday && (
+        <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <Zap size={16} strokeWidth={2.4} style={{ color: 'var(--color-accent)' }} />
+              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-accent)' }}>{de ? 'Geplante Einheit' : 'Planned session'}</span>
+            </div>
+            <span className="rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)', fontSize: 10.5, fontWeight: 600, color: 'var(--color-muted)' }}>
+              {de ? 'Aus dem Wochenplan' : 'From the week plan'}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <h2 className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{weekToday.title}</h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              {(weekToday.duration_seconds_target ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-1 num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
+                  <Clock size={13} style={{ color: 'var(--color-muted)' }} /> {Math.round((weekToday.duration_seconds_target ?? 0) / 60)} min
+                </span>
+              )}
+              {(weekToday.target_tss ?? 0) > 0 && (
+                <span className="num-mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>{Math.round(weekToday.target_tss ?? 0)} TSS</span>
+              )}
+            </div>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+            {de
+              ? 'Der Coach-Brief ist gerade nicht verfügbar — das hier ist dein Plan, unverändert.'
+              : 'The coach brief is unavailable right now — this is your plan, unchanged.'}
+          </p>
+          <div className="flex gap-2">
+            <Link
+              to="/workout/today"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-3"
+              style={{ background: 'var(--color-accent)', color: '#FFFFFF', fontSize: 13, fontWeight: 700 }}
+            >
+              <ListChecks size={15} /> {de ? 'Workout ansehen' : 'View workout'}
+            </Link>
+            <button
+              type="button"
+              onClick={() => refetchBrief()}
+              className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-4"
+              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}
+            >
+              <RefreshCw size={14} style={{ color: 'var(--color-ink-2)' }} /> {de ? 'Neu laden' : 'Retry'}
+            </button>
+          </div>
+        </div>
+      )}
+      {fallback === 'degraded' && (
+        <div className="rounded-[24px] p-5 flex flex-col items-center text-center gap-3" style={cardStyle}>
+          <div className="grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
+            <RefreshCw size={20} strokeWidth={2.2} style={{ color: 'var(--color-muted)' }} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>
+              {de ? 'Wir können deinen Plan gerade nicht laden' : "We can't load your plan right now"}
+            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+              {de ? 'Kurz durchatmen und neu versuchen — deine Daten sind sicher.' : 'Take a breath and retry — your data is safe.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => refetchBrief()}
+            className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-6"
+            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}
+          >
+            <RefreshCw size={14} /> {de ? 'Neu versuchen' : 'Try again'}
+          </button>
         </div>
       )}
 
@@ -1215,6 +1387,79 @@ export default function TodayTab() {
           )
         })()}
       </div>
+    </div>
+  )
+}
+
+// ── Rest-card actions: "Warum Pause?" + "Trotzdem fahren · Z1" ───────────────
+// Finding #4: the Z1 button was a dead-end Link to /workout/today ("No workout
+// for today."). It now flows through the AUDITED modifier path: one request to
+// the coach chat tool loop (the same modify_planned_workout rails + audit row
+// + undo window as every chat modification), asking for a short Z1 spin. The
+// coach's streamed answer is narrated verbatim — rails may refuse; that
+// refusal is honest and shown. On success the brief cache is invalidated so
+// the day re-renders with the audited alternate.
+function RideAnywayZ1({ de }: { de: boolean }) {
+  const qc = useQueryClient()
+  const [phase, setPhase] = useState<'idle' | 'busy' | 'done' | 'error'>('idle')
+  const [reply, setReply] = useState('')
+
+  const request = async () => {
+    if (phase === 'busy') return
+    setPhase('busy')
+    setReply('')
+    const msg: ChatMessage = {
+      role: 'user',
+      content: de
+        ? 'Heute ist laut Plan Ruhetag, aber ich möchte trotzdem ganz locker fahren. Bitte plane mir für heute eine kurze Z1-Ausfahrt (ca. 30–45 Minuten) ein — nur, wenn das aus Coach-Sicht vertretbar ist.'
+        : "Today is a planned rest day, but I'd like an easy spin anyway. Please schedule a short Z1 ride (about 30–45 minutes) for today — only if that's defensible from a coaching standpoint.",
+    }
+    try {
+      let text = ''
+      for await (const chunk of streamCoachChat([msg])) {
+        if (chunk.type === 'delta') text += chunk.text ?? ''
+        else if (chunk.type === 'replace') text = chunk.text ?? ''
+        else if (chunk.type === 'error') throw new Error(chunk.message)
+        setReply(text)
+      }
+      setPhase('done')
+      // The chat tool may have mutated today's plan — refresh brief + decision.
+      qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
+    } catch {
+      setPhase('error')
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <Link
+          to="/coach"
+          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-3"
+          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}
+        >
+          <MessageCircle size={15} style={{ color: 'var(--color-ink-2)' }} /> {de ? 'Warum Pause?' : 'Why rest?'}
+        </Link>
+        <button
+          type="button"
+          disabled={phase === 'busy'}
+          onClick={request}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-3"
+          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 600, color: 'var(--color-ink)', opacity: phase === 'busy' ? 0.6 : 1, cursor: phase === 'busy' ? 'default' : 'pointer' }}
+        >
+          <Bike size={15} style={{ color: 'var(--color-ink-2)' }} /> {phase === 'busy' ? (de ? 'Coach prüft…' : 'Coach is checking…') : (de ? 'Trotzdem fahren · Z1' : 'Ride anyway · Z1')}
+        </button>
+      </div>
+      {(reply || phase === 'error') && (
+        <div className="rounded-[12px] flex items-start gap-2" style={{ background: `color-mix(in srgb, ${phase === 'error' ? 'var(--color-amber)' : 'var(--color-recovery)'} 12%, transparent)`, padding: '9px 11px' }}>
+          <Sparkles size={13} style={{ color: phase === 'error' ? 'var(--color-amber)' : 'var(--color-recovery)', flexShrink: 0, marginTop: 2 }} />
+          <span className="flex-1 min-w-0" style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
+            {phase === 'error'
+              ? (de ? 'Der Coach ist gerade nicht erreichbar — frag ihn direkt im Chat.' : 'The coach is unreachable right now — ask directly in chat.')
+              : reply}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

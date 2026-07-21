@@ -825,6 +825,10 @@ async def revert_from_audit(
     )
     db.add(undo_audit)
     await db.commit()
+    # The personalized-week cache still holds the pre-undo week.
+    from app.api.weeks import invalidate_personalized_week_cache
+
+    invalidate_personalized_week_cache(audit_row.user_id)
 
     return ModificationResult(
         template_id=before_template_id,

@@ -3,6 +3,7 @@ import { Link, useNavigate, Navigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocale } from '../contexts/LocaleContext'
+import LocaleSwitch from '../components/dashboard/LocaleSwitch'
 
 const ACTIVE_STEP = 0
 
@@ -110,15 +111,18 @@ export default function RegisterPage() {
             border: '1px solid var(--color-rule)',
           }}
         >
-          {/* Eyebrow */}
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles size={14} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)' }} />
-            <span
-              className="eyebrow"
-              style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
-            >
-              {locale === 'de' ? 'Konto erstellen' : 'Create account'}
-            </span>
+          {/* Eyebrow + language toggle (visible before the dashboard) */}
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} strokeWidth={1.8} style={{ color: 'var(--color-forest-2)' }} />
+              <span
+                className="eyebrow"
+                style={{ color: 'var(--color-forest-2)', letterSpacing: '0.22em' }}
+              >
+                {locale === 'de' ? 'Konto erstellen' : 'Create account'}
+              </span>
+            </div>
+            <LocaleSwitch />
           </div>
 
           {/* Headline */}

@@ -19,6 +19,7 @@ import { useDailyDecision } from '../../../hooks/useAdaptive'
 import { isTrainState } from '../../../api/adaptive'
 import { computeReadiness, readinessTier } from '../../../utils/metrics'
 import { localDayKey } from '../../../utils/loadMetrics'
+import { formatDate } from '../../../utils/format'
 import ScoreRing from '../../ui/ScoreRing'
 import MetricCard from '../../ui/MetricCard'
 import StatValue from '../../ui/StatValue'
@@ -163,6 +164,16 @@ export default function RecoveryTab() {
     if ((dState === 'sick' || dState === 'injured' || dState === 'break') && decision) {
       return { t: decision.verdict, s: decision.reason }
     }
+    // No-data branch (finding #3): with zero signals there is NO verdict —
+    // a fatigue call requires actual data, never the fallthrough default.
+    if (score == null) {
+      return {
+        t: de ? 'Noch keine Erholungsdaten' : 'No recovery data yet',
+        s: de
+          ? 'Verbinde ein Gerät oder trag deinen Schlaf ein — dann bewerten wir deine Erholung.'
+          : 'Connect a device or log your sleep — then we can read your recovery.',
+      }
+    }
     return readinessGreen
       ? { t: de ? 'Du bist bereit für Leistung' : "You're primed to perform", s: de ? 'HRV und Ruhepuls sind im gesunden Bereich. Ziel: höhere Belastung heute.' : 'HRV and resting heart rate are in a healthy range. Aim for a higher strain today.' }
       : tier === 'caution'
@@ -252,8 +263,8 @@ export default function RecoveryTab() {
     const key = format(d, 'yyyy-MM-dd')
     const m = byDate.get(key)
     const s = m ? computeReadiness(m.hrv_status ?? null, m.body_battery ?? null, m.sleep_score ?? null) : null
-    return { key, day: d.getDate(), dateLabel: format(d, de ? 'EEEE, d. MMM' : 'EEEE, MMM d'), score: s, weekday: (d.getDay() + 6) % 7, isToday: key === todayKey }
-  }), [byDate, today, todayKey, de])
+    return { key, day: d.getDate(), dateLabel: formatDate(d, de ? 'EEEE, d. MMM' : 'EEEE, MMM d', locale), score: s, weekday: (d.getDay() + 6) % 7, isToday: key === todayKey }
+  }), [byDate, today, todayKey, de, locale])
   const greenDays = calDays.filter((c) => c.score != null && c.score >= 66).length
   const calLead = calDays.length ? calDays[0].weekday : 0
 
@@ -275,7 +286,7 @@ export default function RecoveryTab() {
     const strain = tss > 0 ? Math.min(21, tss / 8) : null
     return {
       key: calSheet,
-      dateLabel: format(parseISO(calSheet), de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d'),
+      dateLabel: formatDate(parseISO(calSheet), de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d', locale),
       hasData: m != null,
       score: s,
       tier: readinessTier(s ?? null),
@@ -292,11 +303,11 @@ export default function RecoveryTab() {
       resp: dsd?.respiration_avg ?? null,
       spo2: dsd?.spo2_avg ?? null,
     }
-  }, [calSheet, byDate, tssByDate, de])
+  }, [calSheet, byDate, tssByDate, de, locale])
 
-  // recommendation zone
-  const zoneColor = tier === 'peak' || tier === 'ready' ? 'var(--color-recovery)' : tier === 'caution' ? 'var(--color-amber)' : 'var(--color-move)'
-  const zoneLabel = tier === 'peak' || tier === 'ready' ? (de ? 'grüne Zone' : 'green zone') : tier === 'caution' ? (de ? 'gelbe Zone' : 'yellow zone') : (de ? 'rote Zone' : 'red zone')
+  // recommendation zone — no score ⇒ no zone (never a fabricated red).
+  const zoneColor = score == null ? 'var(--color-muted)' : tier === 'peak' || tier === 'ready' ? 'var(--color-recovery)' : tier === 'caution' ? 'var(--color-amber)' : 'var(--color-move)'
+  const zoneLabel = score == null ? (de ? 'keine Daten' : 'no data') : tier === 'peak' || tier === 'ready' ? (de ? 'grüne Zone' : 'green zone') : tier === 'caution' ? (de ? 'gelbe Zone' : 'yellow zone') : (de ? 'rote Zone' : 'red zone')
   // Decision first: on rest / trained / sick days the recommendation never
   // pushes training, however green the readiness ring looks.
   const recTitle = dState === 'planned_rest'
@@ -305,10 +316,12 @@ export default function RecoveryTab() {
       ? (de ? 'Erledigt — Erholung ist jetzt der Gewinn' : 'Done — recovery is the win now')
       : (dState === 'sick' || dState === 'injured' || dState === 'break') && decision
         ? decision.verdict
-        : tier === 'peak' || tier === 'ready'
-          ? (de ? 'Erholt — trainiere mit Absicht' : 'Recovered — train with intent')
-          : tier === 'caution' ? (de ? 'Halb erholt — dosiere' : 'Half recovered — pace it')
-            : (de ? 'Erschöpft — regeneriere' : 'Depleted — recover')
+        : score == null
+          ? (de ? 'Noch keine Erholungsdaten' : 'No recovery data yet')
+          : tier === 'peak' || tier === 'ready'
+            ? (de ? 'Erholt — trainiere mit Absicht' : 'Recovered — train with intent')
+            : tier === 'caution' ? (de ? 'Halb erholt — dosiere' : 'Half recovered — pace it')
+              : (de ? 'Erschöpft — regeneriere' : 'Depleted — recover')
   const recBody = dState === 'planned_rest'
     ? (readinessGreen
       ? (de ? 'Gut erholt — und heute ist Ruhetag geplant. Nimm die Frische mit in die morgige Einheit.' : "Well recovered — and today is a planned rest day. Bank it for tomorrow's quality session.")
@@ -317,9 +330,13 @@ export default function RecoveryTab() {
       ? (decision?.reason ?? (de ? 'Das war die Arbeit für heute. Jetzt zählt Erholung: tanken, trinken, schlafen.' : "That's today's work. Recovery is the win now: fuel, hydrate, sleep."))
       : (dState === 'sick' || dState === 'injured' || dState === 'break') && decision
         ? decision.reason
-        : tier === 'peak' || tier === 'ready'
-          ? (de ? 'HRV liegt über der Basislinie und der Schlaf war stark. Nutze das Fenster für eine Qualitätseinheit — schütze danach den Schlaf.' : 'HRV is above baseline and sleep was strong. Use the window for a quality session, then protect recovery tonight.')
-          : (de ? 'Deine Signale zeigen Ermüdung. Halte es locker und ziele auf 7,5 h+ Schlaf, damit HRV und Anpassung zurückkommen.' : 'Your signals point to fatigue. Keep it easy and aim for 7.5h+ sleep so HRV and adaptation rebound.')
+        : score == null
+          ? (de
+            ? 'Verbinde ein Gerät oder trag deinen Schlaf ein — ohne Signale gibt es keine ehrliche Empfehlung.'
+            : 'Connect a device or log your sleep — without signals there is no honest recommendation.')
+          : tier === 'peak' || tier === 'ready'
+            ? (de ? 'HRV liegt über der Basislinie und der Schlaf war stark. Nutze das Fenster für eine Qualitätseinheit — schütze danach den Schlaf.' : 'HRV is above baseline and sleep was strong. Use the window for a quality session, then protect recovery tonight.')
+            : (de ? 'Deine Signale zeigen Ermüdung. Halte es locker und ziele auf 7,5 h+ Schlaf, damit HRV und Anpassung zurückkommen.' : 'Your signals point to fatigue. Keep it easy and aim for 7.5h+ sleep so HRV and adaptation rebound.')
 
   // Sleep Quality tiles — every value renders through the honest-dash
   // primitive (StatValue, audit P2-16): an untracked series can NEVER read as
@@ -339,7 +356,7 @@ export default function RecoveryTab() {
       {/* 1 · Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col" style={{ gap: 2 }}>
-          <span className="eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>{format(today, de ? 'EEEE, d. MMM' : 'EEEE, MMM d').toUpperCase()}</span>
+          <span className="eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>{formatDate(today, de ? 'EEEE, d. MMM' : 'EEEE, MMM d', locale).toUpperCase()}</span>
           <h1 className="num-display" style={{ fontSize: 28, color: 'var(--color-ink)' }}>{de ? 'Erholung' : 'Recovery'}</h1>
         </div>
         <Link to="/recovery/trends" className="hover-card inline-flex items-center rounded-full" style={{ gap: 7, padding: '9px 14px', background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
@@ -367,7 +384,11 @@ export default function RecoveryTab() {
       <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
         <div className="flex flex-col" style={{ gap: 2 }}>
           <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Erholungs-Treiber' : 'Recovery Drivers'}</span>
-          <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? `Was den ${scoreTxt ?? DASH}%-Wert heute prägt` : `What shaped today's ${scoreTxt ?? DASH}% score`}</span>
+          <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>
+            {scoreTxt != null
+              ? (de ? `Was den ${scoreTxt}%-Wert heute prägt` : `What shaped today's ${scoreTxt}% score`)
+              : (de ? 'Noch kein Score — es fehlen Signale' : 'No score yet — signals missing')}
+          </span>
         </div>
         <Driver icon={Activity} label="HRV"
           value={hrvNow != null ? `${Math.round(hrvNow)} ms` : DASH}

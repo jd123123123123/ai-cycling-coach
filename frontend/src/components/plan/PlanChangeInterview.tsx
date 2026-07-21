@@ -18,7 +18,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   X, ChevronRight, Check, Medal, TrendingUp, CalendarCheck2, Sparkles,
-  Bike, Footprints, Dumbbell, Moon, ShieldCheck, Anchor, Loader2,
+  Bike, Footprints, Dumbbell, Moon, ShieldCheck, Anchor, Loader2, Clock,
 } from 'lucide-react'
 import { springs } from '../../utils/motion'
 import { useLocale } from '../../contexts/LocaleContext'
@@ -479,6 +479,26 @@ export default function PlanChangeInterview({ open, onClose }: { open: boolean; 
                             {de
                               ? `${result.preserved_sessions} eigene ${result.preserved_sessions === 1 ? 'Einheit bleibt' : 'Einheiten bleiben'} unangetastet.`
                               : `${result.preserved_sessions} of your own ${result.preserved_sessions === 1 ? 'session stays' : 'sessions stay'} untouched.`}
+                          </span>
+                        </span>
+                      )}
+                      {/* Hours reconciliation — why the delivered week can start
+                          below the stated hours (CTL-anchored ramp). */}
+                      {result.hours_note != null && (
+                        <span className="inline-flex items-start" style={{ gap: 9 }}>
+                          <Clock size={14} style={{ color: 'var(--color-recovery)', flexShrink: 0, marginTop: 2 }} />
+                          <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+                            {de ? result.hours_note.de : result.hours_note.en}
+                          </span>
+                        </span>
+                      )}
+                      {result.hours_note == null && result.planned_hours != null && (
+                        <span className="inline-flex items-start" style={{ gap: 9 }}>
+                          <Clock size={14} style={{ color: 'var(--color-recovery)', flexShrink: 0, marginTop: 2 }} />
+                          <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+                            {de
+                              ? `Geplant: ~${result.planned_hours.toFixed(1).replace('.', ',')} h diese Woche.`
+                              : `Planned: ~${result.planned_hours.toFixed(1)} h this week.`}
                           </span>
                         </span>
                       )}

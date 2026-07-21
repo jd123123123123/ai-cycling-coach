@@ -113,6 +113,42 @@ _ENDURANCE_VARIETY: list[str] = [
     "z2_endurance_60",              # steady 0.65, 60min
 ]
 
+# ── variety_dial consumption (review finding: dial had NO consumer) ──────────
+# The dial shifts the deterministic rotations so the SAME calendar week
+# rebuilds to a visibly different plan when the athlete says "too boring"
+# (None→mixed→adventurous). 'adventurous' additionally widens the filler pool
+# with the playful/alternative Z2 formats (MAF, fasted ride) so the week's
+# character changes, not just its ordering.
+_VARIETY_DIAL_SHIFT: dict[str | None, int] = {
+    None: 0, "steady": 0, "mixed": 3, "adventurous": 5,
+}
+# 'mixed' keeps the standard rotation but swaps the plain 60-min ride for the
+# fasted 60-min alternate, so even a tightly time-boxed athlete (60-min
+# windows, where only one 60-min template fits) sees a different texture after
+# the too_boring bump.
+_ENDURANCE_VARIETY_MIXED: list[str] = [
+    tid if tid != "z2_endurance_60" else "z2_fasted_60"
+    for tid in _ENDURANCE_VARIETY
+]
+_ENDURANCE_VARIETY_ADVENTUROUS: list[str] = [
+    "z2_endurance_surges_75",       # playful surges open the adventurous week
+    "z2_progressive_90",
+    "maf_aerobic_90",               # HR-capped MAF alternative format
+    "z2_endurance_tempo_touch_75",
+    "z2_fasted_60",                 # fasted-metabolism alternative format
+    "z2_endurance_upper_75",
+    "z2_endurance_low_100",
+]
+
+# Weekday keys shared with the profile's days_available / hard_day_blackouts
+# JSON (Monday-first, matching date.weekday()).
+_WEEKDAY_KEYS: tuple[str, ...] = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+# Hard ceiling on the week's total planned DURATION vs the athlete's declared
+# hours (review finding: 2 h/Woche in → 3 h 10 out). Small tolerance so a
+# 2h athlete can still get a coherent 2h05 week, never a 160% week.
+_WEEK_HOURS_TOLERANCE = 1.05
+
 # How far past the weekly TSS target a filler endurance day may push before the
 # builder trims it. Key sessions (Sunday long, phase quality, climbing) are
 # never trimmed — only the aerobic filler absorbs the cap.
@@ -169,53 +205,202 @@ _RUNS_PER_WEEK_HIGH_VOLUME = 3    # when weekly_hours_available >= 8h
 _HIGH_VOLUME_HOURS = 8.0
 
 
+def _pick_variety_filler(
+    pool: list[str], idx: int, ftp_w: int, available_min: int
+) -> str:
+    """First pool entry (scanning from the rotation index) that fits the day's
+    time window + FTP gate. Falls back to the raw rotation entry (the picker
+    then resolves best-fit) when nothing in the pool fits."""
+    n = len(pool)
+    for off in range(n):
+        tid = pool[(idx + off) % n]
+        t = TEMPLATES.get(tid)
+        if t is None:
+            continue
+        if t.min_ftp_required is not None and (not ftp_w or ftp_w < t.min_ftp_required):
+            continue
+        if sum(b.duration_s for b in t.blocks) / 60.0 <= max(1, available_min):
+            return tid
+    return pool[idx % n]
+
+
+def _athlete_availability(athlete) -> tuple[set[int], int, set[int]]:
+    """Parse the profile's days_available / hard_day_blackouts JSON.
+
+    Returns ``(available_dows, long_dow, blackout_dows)``:
+      - available_dows: day-of-week indices (Mon=0) the athlete can train.
+        Defaults to all 7 when the profile has no days_available.
+      - long_dow: the athlete's long-ride day. Their explicit long_day when
+        set and available; else Sunday, else Saturday, else the last
+        available day.
+      - blackout_dows: days on which HARD sessions must never land.
+    """
+    available: set[int] = set(range(7))
+    raw = getattr(athlete, "days_available", None)
+    if isinstance(raw, dict):
+        parsed = {
+            i for i, key in enumerate(_WEEKDAY_KEYS) if bool(raw.get(key, True))
+        }
+        if parsed:  # an all-false dict would make the week impossible — ignore
+            available = parsed
+
+    long_dow = 6
+    if isinstance(raw, dict):
+        ld = raw.get("long_day")
+        if isinstance(ld, str) and ld in _WEEKDAY_KEYS:
+            long_dow = _WEEKDAY_KEYS.index(ld)
+    if long_dow not in available:
+        if 6 in available:
+            long_dow = 6
+        elif 5 in available:
+            long_dow = 5
+        else:
+            long_dow = max(available)
+
+    blackouts: set[int] = set()
+    raw_blackouts = getattr(athlete, "hard_day_blackouts", None)
+    if isinstance(raw_blackouts, (list, tuple)):
+        blackouts = {
+            _WEEKDAY_KEYS.index(d) for d in raw_blackouts if d in _WEEKDAY_KEYS
+        }
+    return available, long_dow, blackouts
+
+
 def _rest_dows_for_week(
     phase: Phase,
     block_position: Literal["accumulation", "transmutation", "realization", "recovery"],
+    available: set[int] | None = None,
+    long_dow: int = 6,
 ) -> set[int]:
     """Designate which day-of-week indices are scheduled rest days.
 
     Rest count is driven by ``_PHASE_MIX[phase]["rest_days"]`` (base1 → 2), +1 on
-    a recovery week (mirrors ``weekly_intensity_quota``). Rest is placed
-    deterministically on the least-disruptive days first — Monday (post-weekend),
-    then Friday (pre-weekend) — while *protecting* the phase's key days so the
-    cap/rest logic composes with, rather than overrides, the session picker:
+    a recovery week (mirrors ``weekly_intensity_quota``). Days the athlete marked
+    UNAVAILABLE in days_available are always rest — the plan must never schedule
+    a session on a day the athlete said they cannot train (review finding:
+    Di/Do/Fr/Sa/So selected, plan trained Mittwoch and rested Freitag/Samstag).
+    Additional rest (when the phase wants more than the unavailable days supply)
+    is placed deterministically on the least-disruptive AVAILABLE days first,
+    while *protecting* the phase's key days:
 
-        - Sunday (6)                 always protected — the long ride.
-        - Saturday (5)               protected in base/build/peak — 2nd weekend day.
-        - Wednesday (2)              protected in base2/build/peak — keystone quality.
-        - Tuesday (1) / Thursday (3) protected in build2/peak — the two quality days.
+        - the long-ride day (athlete's long_day, default Sunday)  always
+        - the available day before the long day                   base/build/peak
+        - a keystone quality day (Wed when available)             base2/build/peak
+        - two more quality days                                   build2/peak
 
     Taper and race manage their own rest/quality cadence inside
-    ``session_type_for_today`` (Mujika sharpening, race-week opener), so we return
-    an empty set for them and leave that untouched.
+    ``session_type_for_today`` — for them only the unavailable days are forced
+    to rest.
     """
+    if available is None:
+        available = set(range(7))
+    unavailable = set(range(7)) - available
+
     if phase in ("taper", "race"):
-        return set()
+        return set(unavailable)
 
     n_rest = int(round(_PHASE_MIX[phase]["rest_days"]))
     if block_position == "recovery":
         n_rest = min(6, n_rest + 1)
+    n_rest = max(n_rest, len(unavailable))
 
-    protected: set[int] = {6}  # Sunday long ride is sacred
+    rest: set[int] = set(unavailable)
+    if len(rest) >= n_rest:
+        return rest
+
+    protected: set[int] = {long_dow}
+
+    def _prev_available(d: int) -> int | None:
+        for step in range(1, 7):
+            c = (d - step) % 7
+            if c in available and c not in protected:
+                return c
+        return None
+
     if phase in ("base1", "base2", "build1", "build2", "peak"):
-        protected.add(5)  # Saturday — second weekend endurance day
+        second = _prev_available(long_dow)  # 2nd weekend/endurance day
+        if second is not None:
+            protected.add(second)
     if phase in ("base2", "build1", "build2", "peak"):
-        protected.add(2)  # Wednesday keystone quality
+        for cand in (2, 1, 3, 0, 4, 5, 6):  # keystone quality — Wed preferred
+            if cand in available and cand not in protected:
+                protected.add(cand)
+                break
     if phase in ("build2", "peak"):
-        protected.update({1, 3})  # Tue/Thu quality days
+        added = 0
+        for cand in (1, 3, 0, 4, 2, 5, 6):  # Tue/Thu quality days preferred
+            if cand in available and cand not in protected:
+                protected.add(cand)
+                added += 1
+                if added >= 2:
+                    break
 
     # Priority: rest Monday first, then Friday, then mid/late-week fillers,
-    # never a protected key day.
-    priority = [0, 4, 3, 1, 2, 5]
-    rest: set[int] = set()
+    # never a protected key day (unless nothing else is left).
+    priority = [0, 4, 3, 1, 2, 5, 6]
     for d in priority:
         if len(rest) >= n_rest:
             break
-        if d in protected:
+        if d not in available or d in protected or d in rest:
             continue
         rest.add(d)
+    if len(rest) < n_rest:  # small availability — take protected, long day last
+        for d in priority:
+            if len(rest) >= n_rest:
+                break
+            if d in available and d != long_dow and d not in rest:
+                rest.add(d)
     return rest
+
+
+# Canonical "virtual" weekday roles handed to the phase logic, by how many
+# non-long training days the week has. The k-th training day AFTER the long
+# ride (cyclic order) receives the k-th slot, so the phase-protection /
+# quality-day rules keep composing while the ACTUAL days follow the athlete's
+# availability. With all 7 days available this is the identity mapping.
+#   0=Mon-ish endurance opener · 1/3=Tue/Thu quality · 2=Wed keystone ·
+#   4=Fri recovery · 5=Sat second-weekend/tempo-touch · 6=long ride
+_VIRTUAL_SLOTS: dict[int, list[int]] = {
+    0: [],
+    1: [2],
+    2: [2, 5],
+    3: [1, 2, 5],       # canonical recovery-week pattern (rest Mon/Thu/Fri)
+    4: [1, 2, 3, 5],    # canonical base/build week (rest Mon/Fri) → identity
+    5: [1, 2, 3, 4, 5],
+    6: [0, 1, 2, 3, 4, 5],
+}
+_QUALITY_VIRTUAL_DOWS: frozenset[int] = frozenset({1, 2, 3})
+
+
+def _assign_virtual_dows(
+    training_dows: list[int],
+    long_dow: int,
+    blackout_dows: set[int],
+) -> dict[int, int]:
+    """Map actual training days → canonical weekday roles (see _VIRTUAL_SLOTS).
+
+    Blackout fix-up: when a quality role lands on a hard-day-blackout day it is
+    swapped with a non-blackout training day holding an easy role, so the
+    athlete's hard sessions move rather than vanish. (The generator's pick loop
+    additionally enforces the blackout as a hard guarantee.)
+    """
+    others = sorted(
+        (d for d in training_dows if d != long_dow),
+        key=lambda d: (d - long_dow - 1) % 7,
+    )
+    slots = _VIRTUAL_SLOTS.get(len(others), [0, 1, 2, 3, 4, 5])[: len(others)]
+    mapping: dict[int, int] = dict(zip(others, slots))
+    for day in list(mapping):
+        if mapping[day] in _QUALITY_VIRTUAL_DOWS and day in blackout_dows:
+            for other_day in mapping:
+                if (
+                    other_day not in blackout_dows
+                    and mapping[other_day] not in _QUALITY_VIRTUAL_DOWS
+                ):
+                    mapping[day], mapping[other_day] = mapping[other_day], mapping[day]
+                    break
+    mapping[long_dow] = 6
+    return mapping
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -620,13 +805,24 @@ def build_week_drafts(
         # (Matters for the primary-running + secondary-cycling direction.)
         sport = "cycling"
 
+    # ── Availability (days_available / long_day / hard_day_blackouts) ─────
+    # The athlete's declared days are LAW: unavailable days are forced rest,
+    # the long ride lands on their long_day, and hard sessions never land on
+    # a blacked-out day (review findings 2 + 3).
+    available_dows, long_dow, blackout_dows = _athlete_availability(athlete)
+
     # ── Rest-day skeleton ─────────────────────────────────────────────────
     # Real rest days are placed deterministically from the phase's rest_days
     # count (base1 → 2). At generation time we have no load history, so the
     # picker's history-based Monday-rest rule can never fire — we own the week
     # shape here instead.  On a rest DOW we emit the rest_day template (tss 0)
     # rather than yet another Z2 session.
-    rest_dows = _rest_dows_for_week(phase, block_position)
+    rest_dows = _rest_dows_for_week(phase, block_position, available_dows, long_dow)
+
+    # Actual training days → canonical weekday roles for the phase logic.
+    virtual_dow = _assign_virtual_dows(
+        [d for d in range(7) if d not in rest_dows], long_dow, blackout_dows
+    )
 
     # Riding days drive a realistic per-day time window (weekly hours spread
     # over the days we actually ride, not all 7), so variety templates fit.
@@ -635,25 +831,41 @@ def build_week_drafts(
     base_available_min = max(30, int(weekly_hours * 60 / riding_days))
 
     # Day-type-aware long-day window (Z2-degeneration cause 3): the LONG day
-    # gets ~45% of the declared weekly hours — a 12h athlete's Sunday can be a
-    # genuine 3h+ ride — additionally capped so the long ride doesn't swallow
-    # more than ~45% of the weekly TSS budget. Floor of 120 preserves the
-    # historical minimum long-ride window.
-    long_window_min = max(120, int(weekly_hours * 60 * _LONG_DAY_HOURS_SHARE))
+    # gets ~45% of the declared weekly hours — a 12h athlete's long day can be
+    # a genuine 3h+ ride — additionally capped so the long ride doesn't swallow
+    # more than ~45% of the weekly TSS budget. The historical 120-min floor now
+    # only applies when the declared hours can actually carry it (review
+    # finding 4: a 2 h/Woche athlete must never receive a 2h long ride).
+    long_floor_min = min(120, max(30, int(weekly_hours * 60 * 0.5)))
+    long_window_min = max(
+        long_floor_min, int(weekly_hours * 60 * _LONG_DAY_HOURS_SHARE)
+    )
     budget_cap_min = int(
         (_LONG_DAY_TSS_SHARE * max(0, weekly_tss_target_val)) / _Z2_TSS_PER_MIN_PLAN
     )
-    long_day_min = max(120, min(long_window_min, budget_cap_min))
+    long_day_min = max(long_floor_min, min(long_window_min, budget_cap_min))
 
     # ── Pass 1: resolve session type + template for each riding day ────────
     hard_sessions_done = 0
     vo2_sessions_done = 0
     cumulative_tss = 0.0
+    # variety_dial consumption (review finding 3): the dial shifts every
+    # deterministic rotation, so bumping it ("too boring") rebuilds the SAME
+    # calendar week into a visibly different plan; 'adventurous' additionally
+    # swaps in the playful/alternative Z2 formats.
+    dial = getattr(athlete, "variety_dial", None)
+    variety_shift = _VARIETY_DIAL_SHIFT.get(dial, 0)
+    if dial == "adventurous":
+        variety_pool = _ENDURANCE_VARIETY_ADVENTUROUS
+    elif dial == "mixed":
+        variety_pool = _ENDURANCE_VARIETY_MIXED
+    else:
+        variety_pool = _ENDURANCE_VARIETY
     # Week-shifted variety start (plan-engine v2): the rotation index used to
     # reset to 0 every week, so week after week Tuesday was the SAME texture.
     # Offsetting by the calendar week makes consecutive weeks open on a
     # different Z2 variant — deterministic, no randomness.
-    variety_idx = (week_start.toordinal() // 7) % len(_ENDURANCE_VARIETY)
+    variety_idx = (week_start.toordinal() // 7 + variety_shift) % len(variety_pool)
 
     # Per-day plan entries: dict with date/session_type/template/flags.
     plan: list[dict] = []
@@ -669,6 +881,7 @@ def build_week_drafts(
                 plan.append({
                     "date": day_date, "session_type": "rest",
                     "template": TEMPLATES["rest_day"], "kind": "rest",
+                    "vdow": dow,
                 })
                 continue
             assert not isinstance(pd, str)
@@ -698,20 +911,29 @@ def build_week_drafts(
             cumulative_tss += float(template.base_tss)
             plan.append({
                 "date": day_date, "session_type": pd.session_type,
-                "template": template, "kind": kind,
+                "template": template, "kind": kind, "vdow": dow,
             })
             continue
 
         # Scheduled rest — skip the picker entirely so we never spend load or
-        # advance the quality counters on a rest day.
+        # advance the quality counters on a rest day. Unavailable days are
+        # always in rest_dows, so the plan NEVER trains a day the athlete
+        # said they don't have.
         if dow in rest_dows:
             plan.append({
                 "date": day_date,
                 "session_type": "rest",
                 "template": TEMPLATES["rest_day"],
                 "kind": "rest",
+                "vdow": dow,
             })
             continue
+
+        # Canonical weekday role for the phase logic — with all 7 days
+        # available this is the identity, otherwise the athlete's actual
+        # training days take on the canonical week's roles (long ride on
+        # their long_day, quality on their free mid-week days, …).
+        vdow = virtual_dow.get(dow, dow)
 
         weekly_progress = {
             "hard_sessions_done": hard_sessions_done,
@@ -727,20 +949,26 @@ def build_week_drafts(
             weekly_progress=weekly_progress,
             tsb=synthetic_tsb,
             intensity_ceiling="push",  # no readiness ceiling at generation time
-            day_of_week=dow,
+            day_of_week=vdow,
             training_model=training_model,
             is_recovery_week=(block_position == "recovery"),
         )
 
-        available_min = base_available_min
-        # For long ride (Sunday) or key sessions: use a longer window
-        if dow == 6:  # Sunday long ride — day-type-aware window (cause 3)
-            available_min = max(available_min, long_day_min)
-        elif session_type in _HARD_TYPES and dow == 2:  # Wed key session
-            available_min = max(available_min, 75)
+        # hard_day_blackouts are a hard guarantee: if a hard session would
+        # still land on a blacked-out day (e.g. no easy day was available to
+        # swap roles with), it becomes endurance instead.
+        if dow in blackout_dows and session_type in _HARD_TYPES:
+            session_type = "endurance"
 
-        # Mountain-event specificity — route quality days (and the Saturday
-        # long ride) to climbing / low-cadence variants when the athlete
+        available_min = base_available_min
+        # For the long ride or key sessions: use a longer window
+        if vdow == 6:  # long ride — day-type-aware window (cause 3)
+            available_min = max(available_min, long_day_min)
+        elif session_type in _HARD_TYPES and vdow == 2:  # keystone session
+            available_min = max(available_min, min(75, int(weekly_hours * 60)))
+
+        # Mountain-event specificity — route quality days (and the second
+        # weekend day) to climbing / low-cadence variants when the athlete
         # targets a fondo / hilly race inside the specificity window.
         preferred_id = None
         if athlete.target_event_date is not None:
@@ -748,32 +976,35 @@ def build_week_drafts(
                 session_type=session_type,
                 event_type=athlete.target_event_type,
                 days_to_event=(athlete.target_event_date - day_date).days,
-                day_of_week=dow,
+                day_of_week=vdow,
             )
-        # The Saturday climbing keystone (z2_climbing_long, 3h) needs the
+        # The Saturday-role climbing keystone (z2_climbing_long, 3h) needs the
         # long-day window or it silently never fits a time-crunched athlete.
-        if dow == 5 and preferred_id == "z2_climbing_long":
+        if vdow == 5 and preferred_id == "z2_climbing_long":
             available_min = max(available_min, long_window_min)
 
         # Variety: rotate the mid-week aerobic *filler* among distinct Z2
-        # templates so the week isn't the identical ride 6×. The Sunday long
-        # ride (longest-fit) and any climbing-preferred day keep their own
-        # pick and are exempt from the rotation.
+        # templates so the week isn't the identical ride 6×. The long ride
+        # (longest-fit) and any climbing-preferred day keep their own pick
+        # and are exempt from the rotation.
         is_filler = (
-            session_type == "endurance" and dow != 6 and preferred_id is None
+            session_type == "endurance" and vdow != 6 and preferred_id is None
         )
         if is_filler:
-            preferred_id = _ENDURANCE_VARIETY[variety_idx % len(_ENDURANCE_VARIETY)]
+            preferred_id = _pick_variety_filler(
+                variety_pool, variety_idx, ftp_w, available_min
+            )
             variety_idx += 1
 
         template = pick_template(
             session_type, ftp_w, available_min, preferred_template_id=preferred_id,
             # Deterministic anti-monotony: rotate quality/endurance variants by
-            # calendar day so consecutive weeks never repeat the same picks.
-            # The Sunday LONG slot is genuinely exempt now (rotation_key=0 →
+            # calendar day (+ the variety-dial shift) so consecutive weeks —
+            # and a "too boring" rebuild of the SAME week — never repeat the
+            # same picks. The LONG slot is genuinely exempt (rotation_key=0 →
             # longest-fit): rotating it was Z2-degeneration cause 3, demoting
             # the long ride to z2_endurance_60.
-            rotation_key=0 if dow == 6 else day_date.toordinal(),
+            rotation_key=0 if vdow == 6 else day_date.toordinal() + variety_shift,
         )
 
         # Classify the day: filler endurance can be trimmed to hit the weekly
@@ -785,6 +1016,7 @@ def build_week_drafts(
             "session_type": session_type,
             "template": template,
             "kind": kind,
+            "vdow": vdow,
         })
 
         # Advance synthetic weekly counters (rest days already skipped above).
@@ -874,6 +1106,63 @@ def build_week_drafts(
         victim = min(swappable, key=lambda e: e["template"].base_tss)
         victim["template"] = TEMPLATES["rest_day"]
 
+    # ── Pass 2.7: declared-hours DURATION ceiling (review finding 4) ──────
+    # Stated hours are a hard ceiling on total planned time, always: a
+    # 2 h/Woche beginner must never receive a 3h10 week. TSS trimming above
+    # cannot guarantee this (rest-day floors, ramp factors), so we enforce it
+    # on minutes directly: shrink the longest shrinkable days — fillers
+    # first, then fixed endurance, the long ride last before quality — until
+    # the BIKE week fits declared_hours × 1.05. Interleaved runs are deducted
+    # through the shared TSS budget above, not here — dual-sport must never
+    # reshape the bike week beyond that budget (cycling-only invariant).
+    declared_hours = getattr(athlete, "weekly_hours_available", None)
+    if declared_hours and declared_hours > 0:
+        cap_min = declared_hours * 60.0 * _WEEK_HOURS_TOLERANCE
+
+        def _minutes(entry: dict) -> float:
+            return sum(b.duration_s for b in entry["template"].blocks) / 60.0
+
+        def _week_minutes() -> float:
+            return sum(_minutes(e) for e in plan)
+
+        def _shrink_rank(entry: dict) -> tuple:
+            # Lower rank shrinks first: fillers → recovery → fixed endurance
+            # → long ride → quality. Longest first within a rank.
+            st = entry["session_type"]
+            if entry["kind"] == "filler":
+                rank = 0
+            elif st in ("recovery",):
+                rank = 1
+            elif st == "endurance":
+                rank = 2 if entry.get("vdow") != 6 else 3
+            else:
+                rank = 4
+            return (rank, -_minutes(entry))
+
+        for entry in sorted(
+            (e for e in plan if e["session_type"] != "rest"), key=_shrink_rank
+        ):
+            over = _week_minutes() - cap_min
+            if over <= 0.5:
+                break
+            cur_min = _minutes(entry)
+            target_min = int(cur_min - over)
+            if target_min >= 20:
+                shorter = pick_template(
+                    entry["session_type"], ftp_w, target_min, rotation_key=0
+                )
+                if sum(b.duration_s for b in shorter.blocks) / 60.0 < cur_min:
+                    entry["template"] = shorter
+                    continue
+            # Nothing shorter fits in this category — drop the day.
+            rec30 = TEMPLATES["recovery_30"]
+            if target_min >= 30 and cur_min > 30:
+                entry["template"] = rec30
+                entry["session_type"] = "recovery"
+            else:
+                entry["template"] = TEMPLATES["rest_day"]
+                entry["session_type"] = "rest"
+
     for e in plan:
         template = e["template"]
 
@@ -919,6 +1208,36 @@ def build_week_drafts(
 # ──────────────────────────────────────────────────────────────────────────────
 #  Public generator
 # ──────────────────────────────────────────────────────────────────────────────
+
+def _fitness_builder_phase(ctl: float) -> Phase:
+    """CTL-keyed phase for the no-event fitness-builder path.
+
+    Mirrors detect_training_phase's far-from-goal CTL splits so a goal-less
+    athlete still gets a phase with real quality (base1 carries VO2 + tempo,
+    base2 adds threshold, build1 runs the full quality quota) instead of a
+    literal maintenance plan.
+    """
+    if ctl < 40.0:
+        return "base1"
+    if ctl < 55.0:
+        return "base2"
+    return "build1"
+
+
+def fitness_builder_progression(ctl: float, weekly_hours: float | None) -> dict:
+    """Progression horizon for the no-event path — the honest replacement for
+    the '— Wochen übrig' dash: a rolling 12-week fitness block with a
+    deterministic CTL target derived from the Friel-capped ramp."""
+    # ~8%/wk load ramp sustained over 12 weeks moves CTL by roughly a third,
+    # bounded so low-CTL starters see a meaningful but honest number.
+    target_ctl = round(min(ctl + 15.0, max(ctl * 1.30, ctl + 6.0)), 1)
+    return {
+        "mode": "fitness_builder",
+        "horizon_weeks": 12,
+        "start_ctl": round(ctl, 1),
+        "target_ctl": target_ctl,
+    }
+
 
 def _next_monday(from_date: date | None = None) -> date:
     """Return the next Monday on or after from_date (defaults to today)."""
@@ -1015,9 +1334,14 @@ async def generate_mesocycle(
     goal_date = athlete.target_event_date
     event_type = athlete.target_event_type
 
-    # maintenance override: explicit maintenance type OR no goal date
+    # No-event / "einfach fitter werden" path (review finding 5): this used to
+    # collapse into a literal 'maintenance' plan — one sweet-spot touch, no
+    # VO2/threshold, no horizon. A fitness builder deserves a real CTL-keyed
+    # base→build progression instead; the progression horizon is written into
+    # the evidence below so the UI can render it instead of a dash.
     if event_type == "maintenance" or goal_date is None:
-        phase: Phase = "maintenance"
+        ctl_ref = float(current_ctl) if current_ctl is not None else 40.0
+        phase = _fitness_builder_phase(ctl_ref)
     else:
         if not isinstance(goal_date, date):
             raise ValueError(f"target_event_date must be a date, got {type(goal_date)}")
@@ -1095,6 +1419,39 @@ async def generate_mesocycle(
             ),
         },
     }
+
+    # No-event athletes get a real progression horizon (review finding 5) —
+    # persisted here so the plan/interview responses and UI can render it.
+    if event_type == "maintenance" or goal_date is None:
+        evidence["progression"] = fitness_builder_progression(
+            ctl_for_ramp, declared_hours
+        )
+
+    # Hours transparency (review finding 4b): when the CTL anchor floors the
+    # plan well below the stated hours, say so — bilingual, renderable, and
+    # persisted with the plan so the ramp intent survives.
+    if declared_hours and declared_hours > 0:
+        implied = hours_implied_tss(declared_hours)
+        week1_tss = tss_targets[0] if tss_targets else 0
+        if implied > 0 and week1_tss < 0.8 * implied:
+            start_hours = round(week1_tss / _TSS_PER_DECLARED_HOUR, 1)
+            evidence["hours_note"] = {
+                "declared_hours": float(declared_hours),
+                "start_hours": start_hours,
+                "reason": "ctl_anchor",
+                "de": (
+                    f"Wir starten bei ~{start_hours:g} h/Woche und bauen "
+                    f"Richtung {declared_hours:g} h auf — dein bisheriges "
+                    "Training trägt sicher erst dieses Startvolumen, der Plan "
+                    "steigert es Woche für Woche (max. +8 %)."
+                ),
+                "en": (
+                    f"We start at ~{start_hours:g} h/week and build toward "
+                    f"{declared_hours:g} h — your recent training safely "
+                    "supports this starting volume, and the plan ramps it "
+                    "week over week (max +8%)."
+                ),
+            }
 
     # ── 9. Create MesocyclePlan ─────────────────────────────────────────────
     meso = MesocyclePlan(

@@ -508,10 +508,19 @@ class TestUnderbuiltKeepsBuilding:
 # ──────────────────────────────────────────────────────────────────────────────
 
 class TestMaintenanceMode:
-    """Athletes with maintenance type or no goal get polarized 80/20 indefinitely."""
+    """Fitness-builder path (review finding 5): a no-event / 'einfach fitter
+    werden' athlete gets a CTL-keyed base→build progression with a real
+    horizon — NOT a literal maintenance plan with zero VO2/threshold."""
+
+    def _plan_obj(self, db):
+        for c in db.add.call_args_list:
+            obj = c.args[0] if c.args else c.kwargs.get("instance")
+            if obj is not None and hasattr(obj, "weekly_tss_targets"):
+                return obj
+        return None
 
     @pytest.mark.asyncio
-    async def test_maintenance_type_sets_phase(self):
+    async def test_maintenance_type_routes_to_builder_progression(self):
         athlete = _athlete(
             ftp_watts=220,
             target_event_date=None,
@@ -519,39 +528,75 @@ class TestMaintenanceMode:
         )
         db = _mock_db(athlete)
 
-        plan = await generate_mesocycle(db, user_id=1, plan_start_date=_next_monday())
-
-        # Find the MesocyclePlan object that was added
-        plan_obj = None
-        for c in db.add.call_args_list:
-            obj = c.args[0] if c.args else c.kwargs.get("instance")
-            if obj is not None and hasattr(obj, "weekly_tss_targets"):
-                plan_obj = obj
-                break
-
+        await generate_mesocycle(
+            db, user_id=1, plan_start_date=_next_monday(), current_ctl=30.0
+        )
+        plan_obj = self._plan_obj(db)
         assert plan_obj is not None, "MesocyclePlan was not added to session"
-        assert plan_obj.phase == "maintenance"
+        # CTL 30 → base1 (quality quota: VO2 + tempo), never literal maintenance
+        assert plan_obj.phase == "base1"
 
     @pytest.mark.asyncio
-    async def test_no_goal_date_sets_maintenance(self):
+    async def test_no_goal_date_gets_ctl_keyed_phase(self):
         athlete = _athlete(
             ftp_watts=220,
             target_event_date=None,
             target_event_type=None,
         )
         db = _mock_db(athlete)
-
-        await generate_mesocycle(db, user_id=1, plan_start_date=_next_monday())
-
-        plan_obj = None
-        for c in db.add.call_args_list:
-            obj = c.args[0] if c.args else c.kwargs.get("instance")
-            if obj is not None and hasattr(obj, "weekly_tss_targets"):
-                plan_obj = obj
-                break
-
+        await generate_mesocycle(
+            db, user_id=1, plan_start_date=_next_monday(), current_ctl=60.0
+        )
+        plan_obj = self._plan_obj(db)
         assert plan_obj is not None
-        assert plan_obj.phase == "maintenance"
+        assert plan_obj.phase == "build1"  # CTL 60 → real build stimulus
+
+    @pytest.mark.asyncio
+    async def test_no_event_week_contains_real_quality(self):
+        """The fitness-builder week must contain VO2/threshold/tempo work —
+        the review verified live weeks with ZERO intensity anywhere."""
+        from app.services.workout_templates import TEMPLATES
+
+        athlete = _athlete(
+            ftp_watts=240,
+            target_event_date=None,
+            target_event_type="maintenance",
+            weekly_hours=10.0,
+        )
+        db = _mock_db(athlete)
+        await generate_mesocycle(
+            db, user_id=1, plan_start_date=_next_monday(), current_ctl=35.0
+        )
+        categories = set()
+        for c in db.add.call_args_list:
+            obj = c.args[0] if c.args else None
+            tid = getattr(obj, "template_id", None)
+            if tid and tid in TEMPLATES:
+                categories.add(TEMPLATES[tid].category)
+        assert categories & {"vo2", "threshold", "tempo", "sweet_spot"}, (
+            f"no-event plan has zero quality anywhere: {categories}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_event_evidence_carries_progression_horizon(self):
+        """The '— Wochen übrig' dash gets a real replacement: a persisted
+        12-week fitness-builder horizon with start/target CTL."""
+        athlete = _athlete(
+            ftp_watts=220,
+            target_event_date=None,
+            target_event_type=None,
+        )
+        db = _mock_db(athlete)
+        await generate_mesocycle(
+            db, user_id=1, plan_start_date=_next_monday(), current_ctl=32.0
+        )
+        plan_obj = self._plan_obj(db)
+        prog = plan_obj.evidence.get("progression")
+        assert prog is not None
+        assert prog["mode"] == "fitness_builder"
+        assert prog["horizon_weeks"] == 12
+        assert prog["start_ctl"] == 32.0
+        assert prog["target_ctl"] > prog["start_ctl"]
 
     @pytest.mark.asyncio
     async def test_maintenance_seiler_distribution_is_80_20(self):
@@ -1068,6 +1113,275 @@ class TestTemplateMetadata:
         assert TEMPLATES["z2_endurance_surges_75"].fun_factor == 3
         assert "run_fartlek_40" in RUN_TEMPLATES
         assert "run_hill_reps_8x60" in RUN_TEMPLATES
+
+
+class TestDaysAvailablePlacement:
+    """Review finding 2: days_available was captured but NEVER consumed —
+    the live athlete selected Di/Do/Fr/Sa/So and the plan trained Mittwoch
+    while resting Freitag+Samstag. Placement must respect the flags."""
+
+    def _drafts(self, days_available, phase="base1", weekly_hours=8.0,
+                block="accumulation", week_start=None):
+        a = _athlete(ftp_watts=240, weekly_hours=weekly_hours)
+        a.days_available = days_available
+        return build_week_drafts(
+            athlete=a,
+            week_start=week_start or _next_monday(),
+            phase=phase,
+            weekly_tss_target_val=350,
+            block_position=block,
+            ftp_w=240,
+        )
+
+    def test_unavailable_days_are_never_trained(self):
+        """The live reviewer case: Di/Do/Fr/Sa/So available, Mo+Mi not."""
+        days = {"mon": False, "tue": True, "wed": False, "thu": True,
+                "fri": True, "sat": True, "sun": True, "long_day": "sun"}
+        for phase in ("base1", "base2", "build1", "build2", "peak", "taper"):
+            drafts = self._drafts(days, phase=phase)
+            for d in drafts:
+                if d.date.weekday() in (0, 2):  # Mon, Wed unavailable
+                    assert d.template_id == "rest_day", (
+                        f"{phase}: trained on unavailable dow "
+                        f"{d.date.weekday()} ({d.template_id})"
+                    )
+
+    def test_available_days_actually_train(self):
+        """Selected days must carry the sessions — Freitag/Samstag were
+        available yet rested in the live case."""
+        days = {"mon": False, "tue": True, "wed": False, "thu": True,
+                "fri": True, "sat": True, "sun": True, "long_day": "sun"}
+        drafts = self._drafts(days, phase="base1")
+        riding_dows = {
+            d.date.weekday() for d in drafts
+            if d.sport != "running" and d.template_id != "rest_day"
+        }
+        # 5 available days, base1 wants 2 rest → both unavailable days absorb
+        # the rest quota, so ALL five selected days ride.
+        assert riding_dows == {1, 3, 4, 5, 6}, riding_dows
+
+    def test_long_day_preference_is_honored(self):
+        days = {"mon": True, "tue": True, "wed": True, "thu": True,
+                "fri": True, "sat": True, "sun": True, "long_day": "sat"}
+        drafts = self._drafts(days, phase="base1", weekly_hours=12.0)
+        by_dow = {
+            d.date.weekday(): d for d in drafts if d.sport != "running"
+        }
+        longest = max(
+            (d for d in by_dow.values() if d.template_id != "rest_day"),
+            key=lambda d: d.duration_seconds_target,
+        )
+        assert longest.date.weekday() == 5, (
+            f"long ride landed on dow {longest.date.weekday()}, not Saturday"
+        )
+
+    def test_fewer_days_than_sessions_drops_sessions(self):
+        """3 available days → 3 riding days max, never a session on an
+        unavailable day."""
+        days = {"mon": False, "tue": True, "wed": False, "thu": True,
+                "fri": False, "sat": False, "sun": True, "long_day": "sun"}
+        drafts = self._drafts(days, phase="build1")
+        riding = [
+            d for d in drafts
+            if d.sport != "running" and d.template_id != "rest_day"
+        ]
+        assert len(riding) <= 3
+        assert all(d.date.weekday() in (1, 3, 6) for d in riding), (
+            [(d.date.weekday(), d.template_id) for d in riding]
+        )
+
+    def test_default_athlete_keeps_canonical_week(self):
+        """No days_available on the profile → the historical canonical week
+        (rest Mon/Fri, long Sunday) is unchanged."""
+        a = _athlete(ftp_watts=240, weekly_hours=12.0)
+        drafts_default = build_week_drafts(
+            athlete=a, week_start=_next_monday(), phase="base1",
+            weekly_tss_target_val=369, block_position="accumulation", ftp_w=240,
+        )
+        rest_dows = {
+            d.date.weekday() for d in drafts_default
+            if d.sport != "running" and d.template_id == "rest_day"
+        }
+        assert rest_dows == {0, 4}
+        sunday = next(d for d in drafts_default if d.date.weekday() == 6)
+        assert sunday.duration_seconds_target >= 120 * 60
+
+
+class TestVarietyDialConsumption:
+    """Review finding 3: variety_dial had NO consumer — a 'too boring' rebuild
+    produced a byte-identical week. The dial must visibly change the week."""
+
+    def _template_ids(self, dial, week_start=None):
+        a = _athlete(ftp_watts=240, weekly_hours=10.0)
+        a.variety_dial = dial
+        drafts = build_week_drafts(
+            athlete=a,
+            week_start=week_start or _next_monday(),
+            phase="base1",
+            weekly_tss_target_val=350,
+            block_position="accumulation",
+            ftp_w=240,
+        )
+        return [d.template_id for d in sorted(drafts, key=lambda x: x.date)]
+
+    def test_bumping_the_dial_changes_the_same_week(self):
+        """None→mixed (the too_boring bump) rebuilds the SAME calendar week
+        to a different plan — the review verified byte-identical sessions."""
+        monday = _next_monday()
+        assert self._template_ids(None, monday) != self._template_ids("mixed", monday)
+
+    def test_adventurous_differs_from_mixed(self):
+        monday = _next_monday()
+        assert self._template_ids("mixed", monday) != self._template_ids("adventurous", monday)
+
+    def test_adventurous_unlocks_playful_formats(self):
+        """The adventurous pool includes the playful/alternative Z2 formats
+        (surges / MAF / fasted) that the fixed rotation never reached."""
+        playful = {"z2_endurance_surges_75", "maf_aerobic_90", "z2_fasted_60",
+                   "z2_endurance_tempo_touch_75", "z2_progressive_90"}
+        monday = _next_monday()
+        seen: set[str] = set()
+        for w in range(4):
+            seen.update(self._template_ids("adventurous", monday + timedelta(weeks=w)))
+        assert seen & playful, f"adventurous weeks never used a playful format: {seen}"
+
+    def test_dial_bump_is_visible_even_for_time_crunched_athletes(self):
+        """A 5h athlete's windows fit only one 60-min Z2 template — the mixed
+        pool must still swap in an alternate so 'too boring' visibly changes
+        the week (the live case rebuilt byte-identical)."""
+        monday = _next_monday()
+
+        def ids(dial):
+            a = _athlete(ftp_watts=220, weekly_hours=5.0)
+            a.variety_dial = dial
+            drafts = build_week_drafts(
+                athlete=a, week_start=monday, phase="base2",
+                weekly_tss_target_val=230, block_position="accumulation",
+                ftp_w=220,
+            )
+            return [d.template_id for d in sorted(drafts, key=lambda x: x.date)]
+
+        assert ids(None) != ids("mixed")
+
+    def test_steady_matches_default(self):
+        """'steady' (and unset) keep the historical deterministic picks."""
+        monday = _next_monday()
+        assert self._template_ids(None, monday) == self._template_ids("steady", monday)
+
+
+class TestHardDayBlackouts:
+    """Review finding 3: hard_day_blackouts had NO consumer. No hard session
+    may land on a blacked-out day."""
+
+    def test_no_hard_sessions_on_blackout_days(self):
+        from app.services.workout_templates import TEMPLATES
+
+        hard = {"tempo", "sweet_spot", "threshold", "vo2", "anaerobic"}
+        for phase in ("base1", "base2", "build1", "build2", "peak"):
+            a = _athlete(ftp_watts=240, weekly_hours=10.0)
+            a.hard_day_blackouts = ["tue", "wed"]
+            drafts = build_week_drafts(
+                athlete=a, week_start=_next_monday(), phase=phase,
+                weekly_tss_target_val=380, block_position="accumulation",
+                ftp_w=240,
+            )
+            for d in drafts:
+                if d.sport == "running" or d.date.weekday() not in (1, 2):
+                    continue
+                tmpl = TEMPLATES.get(d.template_id)
+                cat = tmpl.category if tmpl else "endurance"
+                assert cat not in hard, (
+                    f"{phase}: hard session '{d.template_id}' on blacked-out "
+                    f"dow {d.date.weekday()}"
+                )
+
+    def test_blackout_moves_quality_instead_of_deleting_it(self):
+        """When easy days exist to swap with, the week keeps its quality —
+        it moves off the blacked-out day rather than vanishing."""
+        from app.services.workout_templates import TEMPLATES
+
+        a = _athlete(ftp_watts=240, weekly_hours=10.0)
+        a.hard_day_blackouts = ["wed"]
+        drafts = build_week_drafts(
+            athlete=a, week_start=_next_monday(), phase="build1",
+            weekly_tss_target_val=380, block_position="accumulation", ftp_w=240,
+        )
+        hard = {"tempo", "sweet_spot", "threshold", "vo2", "anaerobic"}
+        quality_days = [
+            d.date.weekday() for d in drafts
+            if d.sport != "running" and TEMPLATES.get(d.template_id)
+            and TEMPLATES[d.template_id].category in hard
+        ]
+        assert quality_days, "blackout deleted every quality session"
+        assert 2 not in quality_days
+
+
+class TestWeeklyHoursCeiling:
+    """Review finding 4: stated hours must be a HARD ceiling in both
+    directions — a 2 h/Woche beginner got a 3h10 (160%) week live."""
+
+    def _total_hours(self, weekly_hours, ctl, phase="base1"):
+        from app.services.mesocycle_generator import weekly_tss_target
+
+        a = _athlete(ftp_watts=200, weekly_hours=weekly_hours)
+        tss = weekly_tss_target(ctl, phase, "accumulation", weekly_hours=weekly_hours)
+        drafts = build_week_drafts(
+            athlete=a, week_start=_next_monday(), phase=phase,
+            weekly_tss_target_val=tss, block_position="accumulation", ftp_w=200,
+        )
+        return sum(d.duration_seconds_target for d in drafts) / 3600.0
+
+    def test_two_hour_beginner_never_exceeds_two_hours(self):
+        """The live case: asked 2 h/Woche, got 3 h 10."""
+        total = self._total_hours(2.0, ctl=15.0)
+        assert total <= 2.0 * 1.05 + 1e-6, f"2h athlete got a {total:.2f}h week"
+        assert total > 0.5, "ceiling must trim, not delete the week"
+
+    def test_ceiling_holds_across_phases_and_hours(self):
+        for hours in (2.0, 3.0, 5.0, 8.0, 12.0):
+            for phase in ("base1", "base2", "build1"):
+                total = self._total_hours(hours, ctl=hours * 4.0, phase=phase)
+                assert total <= hours * 1.05 + 1e-6, (
+                    f"{hours}h/{phase}: planned {total:.2f}h breaks the ceiling"
+                )
+
+    @pytest.mark.asyncio
+    async def test_hours_note_explains_ctl_floored_start(self):
+        """(b) the pro case: 10-12h asked, ~55% delivered because the CTL
+        anchor floors the plan — the plan must SAY so, bilingually, and
+        persist the ramp intent."""
+        athlete = _athlete(ftp_watts=280, weekly_hours=10.0)
+        db = _mock_db(athlete)
+        await generate_mesocycle(
+            db, user_id=1, plan_start_date=_next_monday(), current_ctl=25.0
+        )
+        plan_obj = None
+        for c in db.add.call_args_list:
+            obj = c.args[0] if c.args else None
+            if obj is not None and hasattr(obj, "weekly_tss_targets"):
+                plan_obj = obj
+                break
+        note = plan_obj.evidence.get("hours_note")
+        assert note is not None, "CTL-floored plan carries no hours_note"
+        assert note["declared_hours"] == 10.0
+        assert 0 < note["start_hours"] < 10.0
+        assert "bauen" in note["de"] and "build toward" in note["en"]
+        assert note["reason"] == "ctl_anchor"
+
+    @pytest.mark.asyncio
+    async def test_no_hours_note_when_plan_matches_hours(self):
+        athlete = _athlete(ftp_watts=280, weekly_hours=6.0)
+        db = _mock_db(athlete)
+        await generate_mesocycle(
+            db, user_id=1, plan_start_date=_next_monday(), current_ctl=70.0
+        )
+        plan_obj = None
+        for c in db.add.call_args_list:
+            obj = c.args[0] if c.args else None
+            if obj is not None and hasattr(obj, "weekly_tss_targets"):
+                plan_obj = obj
+                break
+        assert plan_obj.evidence.get("hours_note") is None
 
 
 class TestCurrentBlockPosition:

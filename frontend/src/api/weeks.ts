@@ -32,6 +32,10 @@ export interface MesoBlockContext {
   weekly_tss_target: number
   days_to_event: number | null
   target_event_type: string | null
+  // Why the delivered week can start below the declared hours (CTL ramp).
+  hours_note: { declared_hours: number; start_hours: number; reason: string; de: string; en: string } | null
+  // No-event fitness-builder horizon — replaces the "— weeks left" dash.
+  progression: { mode: string; horizon_weeks: number; start_ctl: number; target_ctl: number } | null
 }
 
 // Projection — "where we can land" decision-support forecast.

@@ -582,6 +582,10 @@ async def _handle_modify_planned_workout(
     )
     db.add(audit)
     await db.commit()
+    # The personalized-week cache still holds the pre-modification week.
+    from app.api.weeks import invalidate_personalized_week_cache
+
+    invalidate_personalized_week_cache(user_id)
 
     return {
         "success": True,

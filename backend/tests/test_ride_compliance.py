@@ -57,9 +57,9 @@ def _activity(
 
 class TestGrading:
     def test_perfect_both_within_10pct(self):
-        # z2_endurance_60 → 60 min, 45 TSS
+        # z2_endurance_60 → 60 min, 42.3 TSS (block-derived)
         tpl = TEMPLATES["z2_endurance_60"]
-        act = _activity(duration_minutes=62, tss=47)  # +3%, +4%
+        act = _activity(duration_minutes=62, tss=44)  # +3%, +4%
         rc = score_ride(act, tpl, ftp=280, phase="build1", session_type="endurance")
         assert rc.grade == "perfect"
         assert rc.duration.band == "match"
@@ -67,8 +67,8 @@ class TestGrading:
 
     def test_strong_one_tight_one_loose(self):
         tpl = TEMPLATES["z2_endurance_60"]
-        # duration +5%, TSS +22% — strong (one <=10, other <=25)
-        act = _activity(duration_minutes=63, tss=55)
+        # duration +5%, TSS +21% — strong (one <=10, other <=25)
+        act = _activity(duration_minutes=63, tss=51)
         rc = score_ride(act, tpl, ftp=280, phase="build1", session_type="endurance")
         assert rc.grade == "strong"
 
@@ -104,7 +104,7 @@ class TestGrading:
     def test_perfect_boundary_at_exactly_10pct(self):
         tpl = TEMPLATES["z2_endurance_60"]
         # Exactly ±10% on both axes — should be perfect (inclusive boundary)
-        act = _activity(duration_minutes=66, tss=49.5)  # +10%, +10%
+        act = _activity(duration_minutes=66, tss=46.5)  # +10%, +10% of 42.3
         rc = score_ride(act, tpl, ftp=280, phase="build1", session_type="endurance")
         assert rc.grade == "perfect"
 
@@ -319,7 +319,7 @@ def _mock_session_with_rec(rec):
 @pytest.mark.asyncio
 async def test_score_falls_back_to_template_when_no_recommendation():
     tpl = TEMPLATES["z2_endurance_60"]
-    act = _activity_with_date(duration_minutes=62, tss=47)
+    act = _activity_with_date(duration_minutes=62, tss=44)
     session = _mock_session_with_rec(None)
 
     rc = await score(

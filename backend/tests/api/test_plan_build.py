@@ -248,6 +248,131 @@ def test_apply_rejects_invalid_answers(client_factory):
     assert res.status_code == 422
 
 
+# ──────────────────────────────────────────────────────────────────────────
+#  Personalized-week cache invalidation (review BLOCKER: /plan/change/apply
+#  rebuilt the DB week but the UI kept serving the OLD cached week for ~6h)
+# ──────────────────────────────────────────────────────────────────────────
+
+def _seed_week_cache(user_id: int = 1):
+    from app.api import weeks as weeks_mod
+
+    key = (user_id, "2026-07-20", "simple", "de")
+    weeks_mod._personalized_cache_put(key, {"days": [], "preface": "old plan"})
+    other_key = (user_id + 1, "2026-07-20", "simple", "de")
+    weeks_mod._personalized_cache_put(other_key, {"days": [], "preface": "other user"})
+    return weeks_mod, key, other_key
+
+
+def test_invalidate_helper_clears_only_that_user():
+    weeks_mod, key, other_key = _seed_week_cache()
+    weeks_mod._personalized_week_inflight.add(key)
+    gen_before = weeks_mod._personalized_week_generation.get(1, 0)
+
+    weeks_mod.invalidate_personalized_week_cache(1)
+
+    assert weeks_mod._personalized_cache_get(key) is None
+    assert key not in weeks_mod._personalized_week_inflight
+    assert weeks_mod._personalized_week_generation[1] == gen_before + 1
+    # Other users' cache entries survive.
+    assert weeks_mod._personalized_cache_get(other_key) is not None
+    weeks_mod._personalized_week_cache.pop(other_key, None)
+
+
+def test_stale_inflight_personalization_never_lands_after_invalidation():
+    """A background LLM refresh of the OLD plan that finishes after the
+    rebuild must not repopulate the cache with the stale week."""
+    import asyncio
+
+    from app.api import weeks as weeks_mod
+
+    key = (1, "2026-07-20", "simple", "de")
+    weeks_mod._personalized_week_cache.pop(key, None)
+    stale_generation = weeks_mod._personalized_week_generation.get(1, 0)
+
+    # Plan is rebuilt while the refresh runs → generation bumps.
+    weeks_mod.invalidate_personalized_week_cache(1)
+
+    with patch(
+        "app.api.weeks.personalize_week",
+        AsyncMock(return_value={"days": [], "preface": "STALE"}),
+    ):
+        asyncio.run(
+            weeks_mod._refresh_personalized_week(
+                key, [], {}, "simple", "de", 300, generation=stale_generation
+            )
+        )
+    assert weeks_mod._personalized_cache_get(key) is None
+
+
+def test_apply_invalidates_week_cache(client_factory):
+    weeks_mod, key, other_key = _seed_week_cache()
+    prof = _profile()
+    client, _db = client_factory(prof)
+    rebuild = AsyncMock(return_value=dict(_SUMMARY))
+    with patch("app.api.plan.rebuild_plan", rebuild), \
+         patch("app.api.plan.interview_state", AsyncMock(return_value=dict(_STATE))):
+        res = client.post(
+            "/plan/change/apply", json={"answers": {"felt_wrong": "too_boring"}}
+        )
+    assert res.status_code == 200
+    assert weeks_mod._personalized_cache_get(key) is None, (
+        "apply left the stale personalized week in the cache — the UI would "
+        "keep serving the OLD plan"
+    )
+    weeks_mod._personalized_week_cache.pop(other_key, None)
+
+
+def test_build_invalidates_week_cache_when_rebuilt(client_factory):
+    weeks_mod, key, other_key = _seed_week_cache()
+    client, _db = client_factory(_profile())
+    rebuild = AsyncMock(return_value=dict(_SUMMARY))  # rebuilt=True
+    with patch("app.api.plan.rebuild_plan", rebuild):
+        res = client.post("/plan/build", json={})
+    assert res.status_code == 200
+    assert weeks_mod._personalized_cache_get(key) is None
+    weeks_mod._personalized_week_cache.pop(other_key, None)
+
+
+def test_idempotent_build_keeps_cache(client_factory):
+    """A same-day no-op build (rebuilt=False) changes nothing — the cached
+    personalization is still valid and stays."""
+    weeks_mod, key, other_key = _seed_week_cache()
+    client, _db = client_factory(_profile())
+    summary = {**_SUMMARY, "rebuilt": False}
+    with patch("app.api.plan.rebuild_plan", AsyncMock(return_value=summary)):
+        res = client.post("/plan/build", json={})
+    assert res.status_code == 200
+    assert weeks_mod._personalized_cache_get(key) is not None
+    weeks_mod._personalized_week_cache.pop(key, None)
+    weeks_mod._personalized_week_cache.pop(other_key, None)
+
+
+def test_apply_response_carries_hours_reconciliation(client_factory):
+    """Review finding 4: the interview result screen must receive the data to
+    reconcile delivered vs stated hours."""
+    summary = {
+        **_SUMMARY,
+        "planned_hours": 6.2,
+        "declared_hours": 12.0,
+        "hours_note": {"start_hours": 6.0, "declared_hours": 12.0,
+                       "de": "Wir starten bei ~6 h…", "en": "We start at ~6 h…",
+                       "reason": "ctl_anchor"},
+        "progression": {"mode": "fitness_builder", "horizon_weeks": 12,
+                        "start_ctl": 30.0, "target_ctl": 39.0},
+    }
+    client, _db = client_factory(_profile())
+    with patch("app.api.plan.rebuild_plan", AsyncMock(return_value=summary)), \
+         patch("app.api.plan.interview_state", AsyncMock(return_value=dict(_STATE))):
+        res = client.post(
+            "/plan/change/apply", json={"answers": {"felt_wrong": "too_hard"}}
+        )
+    body = res.json()
+    assert body["planned_hours"] == 6.2
+    assert body["declared_hours"] == 12.0
+    assert body["hours_note"]["start_hours"] == 6.0
+    assert body["progression"]["horizon_weeks"] == 12
+
+
 def test_apply_no_event_clears_goal(client_factory):
     prof = _profile()
     client, _db = client_factory(prof)

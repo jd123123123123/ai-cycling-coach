@@ -30,6 +30,9 @@ export interface AthleteProfile {
   variety_dial?: 'steady' | 'mixed' | 'adventurous' | null
   experience_level?: 'new' | 'returning' | 'seasoned' | null
   hard_day_blackouts?: string[] | null
+  // UI depth register — onboarding depth selector ↔ Settings "Detailgrad".
+  // Persisted server-side so the choice follows the athlete across devices.
+  detail_level?: DetailLevel | null
   created_at: string
   updated_at: string | null
 }
@@ -74,7 +77,12 @@ export interface AthleteProfileUpdate {
   variety_dial?: 'steady' | 'mixed' | 'adventurous' | null
   experience_level?: 'new' | 'returning' | 'seasoned' | null
   hard_day_blackouts?: string[] | null
+  // UI depth register — persisted so Settings on another device matches.
+  detail_level?: DetailLevel | null
 }
+
+// UI depth register values (onboarding: Begleite mich / Zeig Zahlen / Voll Pro).
+export type DetailLevel = 'guide' | 'numbers' | 'pro'
 
 // Weekday availability flags + the athlete's long-ride day (plan-engine v2).
 export interface DaysAvailableFlags {

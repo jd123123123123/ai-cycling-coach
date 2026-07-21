@@ -59,6 +59,7 @@ from app.services.performance_projection import (
 from app.services.plan_change_explainer import detect_plan_changes, explain_plan_changes
 from app.services.readiness_detector import detect_readiness
 from app.services.training_periodization import _CATEGORY_CANDIDATES
+from app.services.run_workout_templates import RUN_TEMPLATES
 from app.services.weekly_plan_llm import personalize_week
 from app.services.weekly_rationale import build_weekly_rationale
 from app.services.workout_templates import TEMPLATES, get_template
@@ -92,6 +93,38 @@ _PersonalizedKey = tuple[int, str, str, str]  # (user_id, week_start_iso, langua
 _personalized_week_cache: dict[_PersonalizedKey, tuple[float, dict]] = {}
 _personalized_week_inflight: set[_PersonalizedKey] = set()
 _personalized_week_bg_tasks: set[asyncio.Task] = set()
+# Per-user cache generation — bumped by invalidate_personalized_week_cache so
+# an in-flight background personalization of the OLD plan can never land its
+# stale overlay after a rebuild.
+_personalized_week_generation: dict[int, int] = {}
+
+
+def _meso_evidence_dict(meso, key: str) -> dict | None:
+    """Pull a dict payload (hours_note / progression) from meso evidence,
+    tolerating None, non-dict evidence, and mocked meso objects."""
+    evidence = getattr(meso, "evidence", None)
+    if not isinstance(evidence, dict):
+        return None
+    value = evidence.get(key)
+    return value if isinstance(value, dict) else None
+
+
+def invalidate_personalized_week_cache(user_id: int) -> None:
+    """Drop every cached/in-flight personalized week for this user.
+
+    MUST be called by every server-side plan mutation (POST /plan/build,
+    POST /plan/change/apply, POST /weeks/program, plan-adaptation engine
+    writes): the cached overlay carries the OLD week's titles/templates/
+    intervals keyed by date, so without this the UI keeps serving the old
+    plan for up to 6h after the DB changed (review BLOCKER).
+    """
+    _personalized_week_generation[user_id] = (
+        _personalized_week_generation.get(user_id, 0) + 1
+    )
+    for key in [k for k in _personalized_week_cache if k[0] == user_id]:
+        _personalized_week_cache.pop(key, None)
+    for key in [k for k in _personalized_week_inflight if k[0] == user_id]:
+        _personalized_week_inflight.discard(key)
 
 
 def _personalized_cache_get(key: _PersonalizedKey) -> dict | None:
@@ -117,12 +150,14 @@ async def _refresh_personalized_week(
     language: Language,
     locale: str,
     weekly_tss_target: int,
+    generation: int | None = None,
 ) -> None:
     """Background task: run the LLM personalization and cache it for the next open.
 
     Never awaited by the request — a failure or slow LLM only means the next open
     stays deterministic. `personalize_week` takes plain data (no DB), so this is
-    safe to run detached from the request's DB session.
+    safe to run detached from the request's DB session. If the user's plan was
+    invalidated while we ran (generation bumped), the stale result is dropped.
     """
     try:
         result = await personalize_week(
@@ -132,7 +167,8 @@ async def _refresh_personalized_week(
             locale=locale,
             weekly_tss_target=weekly_tss_target,
         )
-        if result is not None:
+        current_gen = _personalized_week_generation.get(key[0], 0)
+        if result is not None and (generation is None or generation == current_gen):
             _personalized_cache_put(key, result)
     except Exception:  # pragma: no cover — background best-effort
         logger.exception("background week personalization failed for key=%s", key)
@@ -378,12 +414,32 @@ def _per_day_rationale(
     return sentences[day_index % len(sentences)]
 
 
+def _localized_title(template_id: str | None, fallback: str, locale: str) -> str:
+    """German template title for de-locale responses (read-time, additive).
+
+    PlannedWorkout rows store the English template name (no locale exists at
+    write time); the templates library carries ``name_de``, so de responses
+    localize at serialization. Unknown ids / empty name_de keep the stored
+    title unchanged.
+    """
+    if locale != "de" or not template_id:
+        return fallback
+    t = TEMPLATES.get(template_id)
+    if t is not None and getattr(t, "name_de", ""):
+        return t.name_de
+    rt = RUN_TEMPLATES.get(template_id)
+    if rt is not None and getattr(rt, "name_de", ""):
+        return rt.name_de
+    return fallback
+
+
 def _build_day_plan(
     day_date: date,
     pw: PlannedWorkout | None,
     today: date,
     primary_sport: str,
     language: Language,
+    locale: str = "en",
 ) -> DayPlan:
     """Build one DayPlan from a PlannedWorkout row (or a rest/gap day when None).
 
@@ -410,7 +466,7 @@ def _build_day_plan(
         return DayPlan(
             date=day_date,
             sport=pw.sport,
-            title=pw.title,
+            title=_localized_title(template_id, pw.title, locale),
             template_id=template_id,
             duration_seconds_target=pw.duration_seconds_target,
             target_tss=target_tss_val,
@@ -424,7 +480,7 @@ def _build_day_plan(
     return DayPlan(
         date=day_date,
         sport=primary_sport,
-        title="Rest",
+        title="Ruhetag" if locale == "de" else "Rest",
         template_id=None,
         duration_seconds_target=None,
         target_tss=None,
@@ -446,11 +502,15 @@ def deviation_window_start(today: date) -> date:
     return max(today - timedelta(days=7), today - timedelta(days=today.weekday()))
 
 
-def _apply_secondary(dp: DayPlan, secondary: PlannedWorkout | None) -> None:
+def _apply_secondary(
+    dp: DayPlan, secondary: PlannedWorkout | None, locale: str = "en"
+) -> None:
     """Attach the day's dual-sport secondary session (title + planned TSS)."""
     if secondary is None:
         return
-    dp.secondary_title = secondary.title
+    dp.secondary_title = _localized_title(
+        secondary.template_id, secondary.title, locale
+    )
     est = template_tss_estimate(
         secondary.template_id, secondary.duration_seconds_target
     )
@@ -546,8 +606,8 @@ async def _future_week_preview(
         day_date = target_week_start + timedelta(days=i)
         pw = pw_by_date.get(day_date)
         # today never falls inside a future week, so is_today is uniformly False.
-        dp = _build_day_plan(day_date, pw, today, primary_sport, language)
-        _apply_secondary(dp, secondary_by_date.get(day_date))
+        dp = _build_day_plan(day_date, pw, today, primary_sport, language, locale)
+        _apply_secondary(dp, secondary_by_date.get(day_date), locale)
         days.append(dp)
 
     # Mon–Sun planned total across ALL rows (incl. secondary) — the number the
@@ -575,6 +635,8 @@ async def _future_week_preview(
         weekly_tss_target=week_tss_target,
         days_to_event=days_to_event,
         target_event_type=target_event_type,
+        hours_note=_meso_evidence_dict(meso, "hours_note"),
+        progression=_meso_evidence_dict(meso, "progression"),
     )
 
     return WeekResponse(
@@ -784,8 +846,8 @@ async def get_current_week(
     for i in range(7):
         day_date = today + timedelta(days=i)
         pw = pw_by_date.get(day_date)
-        dp = _build_day_plan(day_date, pw, today, primary_sport, language)
-        _apply_secondary(dp, secondary_by_date.get(day_date))
+        dp = _build_day_plan(day_date, pw, today, primary_sport, language, locale)
+        _apply_secondary(dp, secondary_by_date.get(day_date), locale)
         days.append(dp)
 
     # ── 8b. Weekly planned TSS — ONE producer (usability audit P0-5) ─────
@@ -1027,6 +1089,7 @@ async def get_current_week(
                 language,
                 locale,
                 week_tss_target,
+                generation=_personalized_week_generation.get(current_user.id, 0),
             )
         )
         _personalized_week_bg_tasks.add(_bg_task)
@@ -1100,6 +1163,8 @@ async def get_current_week(
         weekly_tss_target=week_tss_target,
         days_to_event=days_to_event,
         target_event_type=target_event_type,
+        hours_note=_meso_evidence_dict(meso, "hours_note"),
+        progression=_meso_evidence_dict(meso, "progression"),
     )
 
     return WeekResponse(
@@ -1288,6 +1353,7 @@ async def select_program(
         if not clearing:
             await _schedule_run_program(db, current_user.id, payload.program, today)
         await db.commit()
+        invalidate_personalized_week_cache(current_user.id)
         return {"ok": True, "program": payload.program, "sport": "run",
                 **_program_state(prof.goals)}
 
@@ -1322,5 +1388,6 @@ async def select_program(
     # generate_mesocycle leaves the commit to its caller (get_current_week does
     # the same) — without this the fresh plan silently rolls back.
     await db.commit()
+    invalidate_personalized_week_cache(current_user.id)
     return {"ok": True, "program": payload.program, "sport": "bike",
             **_program_state(prof.goals)}

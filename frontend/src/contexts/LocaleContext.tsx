@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { type Locale, type StringKey, tFor } from '../i18n/strings'
+import { browserDefaultLocale } from '../i18n/browserLocale'
 
 /**
  * LocaleContext — UI-string locale (EN / DE). Independent of LanguageContext
@@ -29,6 +30,12 @@ function readInitial(): Locale {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (raw === 'en' || raw === 'de') return raw
+  } catch {
+    /* ignore */
+  }
+  // No stored choice yet — follow the browser language (navigator.language).
+  try {
+    return browserDefaultLocale(window.navigator?.language)
   } catch {
     /* ignore */
   }

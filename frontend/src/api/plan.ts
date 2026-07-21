@@ -96,6 +96,24 @@ export interface PlanWeekDay {
   blocks_source: string | null
 }
 
+// Hours reconciliation — present when the CTL anchor floors week 1 below the
+// athlete's declared hours; the message explains the ramp (de + en variants).
+export interface HoursNote {
+  declared_hours: number
+  start_hours: number
+  reason: string
+  de: string
+  en: string
+}
+
+// No-event fitness-builder horizon — the honest replacement for "— weeks left".
+export interface PlanProgression {
+  mode: string
+  horizon_weeks: number
+  start_ctl: number
+  target_ctl: number
+}
+
 export interface PlanChangeApplyResponse {
   rebuilt: boolean
   plan_start_date: string
@@ -104,6 +122,10 @@ export interface PlanChangeApplyResponse {
   weekly_tss_targets: number[] | null
   preserved_sessions: number | null
   ctl_anchor: number | null
+  planned_hours: number | null
+  declared_hours: number | null
+  hours_note: HoursNote | null
+  progression: PlanProgression | null
   profile_updates: Record<string, unknown>
   carried: Record<string, unknown>
 }
@@ -125,6 +147,10 @@ export interface PlanBuildResponse {
   weekly_tss_targets: number[] | null
   preserved_sessions: number | null
   ctl_anchor: number | null
+  planned_hours: number | null
+  declared_hours: number | null
+  hours_note: HoursNote | null
+  progression: PlanProgression | null
 }
 
 export async function buildPlan(

@@ -129,6 +129,40 @@ export function estimateFtp(activities: ActivityRead[]): { watts: number; confid
   return { watts: Math.round(bestNp * FTP_FACTOR), confidence: Math.min(candidates.length / 5, 1) }
 }
 
+// ─── Starter FTP (no ride data) ─────────────────────────────────────────────
+
+export type StarterFitness = 'new' | 'returning' | 'seasoned'
+
+/**
+ * Conservative W/kg priors for a self-assessed starting FTP when no ride
+ * history exists. Standard coaching heuristics (e.g. Coggan power-profile
+ * "untrained"–"fair" bands): a true beginner sits around 1.8–2.2 W/kg at
+ * threshold, a regular unstructured rider ~2.5–2.8, a fit long-time rider
+ * ~3.0+. We pick the conservative middle of each band — the plan engine
+ * calibrates upward from real rides, and undershooting is safe while
+ * overshooting prescribes intervals the athlete can't hold.
+ */
+const STARTER_WKG: Record<StarterFitness, number> = {
+  new: 2.0,
+  returning: 2.6,
+  seasoned: 3.0,
+}
+
+/** Floor: the plan engine requires a plausible FTP (backend gate ftp ≥ 100 W). */
+const STARTER_FTP_MIN_W = 100
+const STARTER_FTP_MAX_W = 350
+
+/**
+ * Self-assessment starter FTP: weight × conservative W/kg prior, clamped to a
+ * plausible range. Returns null without a usable weight. Explicitly labeled
+ * in the UI as "Startschätzung — wir kalibrieren, sobald du fährst".
+ */
+export function starterFtp(weightKg: number | null, fitness: StarterFitness): number | null {
+  if (!weightKg || !Number.isFinite(weightKg) || weightKg < 30 || weightKg > 200) return null
+  const watts = Math.round(weightKg * STARTER_WKG[fitness])
+  return Math.min(STARTER_FTP_MAX_W, Math.max(STARTER_FTP_MIN_W, watts))
+}
+
 /** Highest max-HR observed across synced activities (a real-world max proxy). */
 export function observedMaxHr(activities: ActivityRead[]): number | null {
   const hrs = activities.map((a) => a.max_hr ?? 0).filter((v) => v > 0)

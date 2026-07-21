@@ -835,6 +835,11 @@ async def run_for_user(
 
     if changes:
         await db.commit()
+        # The personalized-week cache still holds the pre-adaptation week;
+        # without this the UI serves the old plan until the TTL expires.
+        from app.api.weeks import invalidate_personalized_week_cache
+
+        invalidate_personalized_week_cache(user_id)
         # "Quiet on rest days" (V3 Settings): when today's plan is rest —
         # including when THIS run just turned it into rest — the athlete asked
         # for silence, so the feed row still lands but no push goes out.

@@ -517,6 +517,40 @@ async def _weekly_progress(db: AsyncSession, user_id: int) -> dict:
     }
 
 
+# Review 2026-07-21: the block-opener FTP-test override must never fire when
+# the FTP anchor is already fresh (live case: an all-out test prescribed 3
+# minutes after the athlete manually entered their FTP).
+_FTP_FRESHNESS_DAYS = 21
+
+
+def _ftp_is_fresh(
+    profile: AthleteProfile | None,
+    today: date,
+    max_age_days: int = _FTP_FRESHNESS_DAYS,
+) -> bool:
+    """True when the most recent ftp_history entry (manual or measured) is
+    within `max_age_days` of `today`. Malformed entries are skipped; no
+    history → not fresh."""
+    history = getattr(profile, "ftp_history", None) if profile is not None else None
+    if not isinstance(history, list):
+        return False
+    latest: date | None = None
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        raw = entry.get("measured_at")
+        if not isinstance(raw, str):
+            continue
+        try:
+            measured = datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+        except ValueError:
+            continue
+        if latest is None or measured > latest:
+            latest = measured
+    # Future-dated entries (clock skew) count as fresh — a test is pointless.
+    return latest is not None and (today - latest).days <= max_age_days
+
+
 async def build_snapshot(
     db: AsyncSession,
     user_id: int,
@@ -781,6 +815,11 @@ async def build_snapshot(
         and int((weekly_prog or {}).get("hard_sessions_done", 0)) == 0
         and int((weekly_prog or {}).get("last_72h_quality_count", 0)) == 0
         and int((weekly_prog or {}).get("total_tss_this_week", 0)) < 50
+        # Review 2026-07-21: never prescribe an all-out test when the FTP
+        # anchor is already FRESH — live case fired the test 3 minutes after
+        # the athlete manually entered their FTP. A manual/measured
+        # ftp_history entry within the window makes a test pointless pain.
+        and not _ftp_is_fresh(profile, today_local_date)
     ):
         # Block-opener test. Quietly skipped when the athlete already has
         # a recent quality session or any meaningful week-load — i.e. the
@@ -1583,6 +1622,33 @@ def _rewrite_prescribed_workout(
     return out
 
 
+def sanitize_outlook_7d(raw: object) -> list[dict] | None:
+    """Coerce an LLM-emitted outlook_7d into a clean list of OutlookEntry-shaped
+    dicts, or None. Drops anything that isn't a well-formed entry (strings,
+    fragments, out-of-range offsets, non-numeric TSS) — garbage must never be
+    persisted; a brief without an outlook is fine, a poisoned one 500s reads."""
+    if not isinstance(raw, list):
+        return None
+    entries: list[dict] = []
+    for e in raw:
+        if not isinstance(e, dict):
+            continue
+        try:
+            day_offset = int(e.get("day_offset"))  # type: ignore[arg-type]
+            suggested_tss = float(e.get("suggested_tss"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if not 0 <= day_offset <= 6:
+            continue
+        note = e.get("note")
+        entries.append({
+            "day_offset": day_offset,
+            "suggested_tss": suggested_tss,
+            "note": note if isinstance(note, str) else "",
+        })
+    return entries or None
+
+
 def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     """Validate the LLM's prescribed workout against the template library and
     rewrite watts from the athlete's FTP.
@@ -1741,6 +1807,13 @@ def resolve_and_prescribe(snapshot: dict, llm_payload: dict) -> dict:
     out = dict(llm_payload)
     out["prescribed_workout"] = new_workout
     out["alternates"] = resolved_alternates[:2]
+    # Defensive (live-observed 2026-07-21, same class as the bare-string
+    # prescribed_workout above): the LLM occasionally emits outlook_7d as a
+    # raw unparsed tool-call fragment (a STRING like
+    # '\n<parameter name="day_offset">6'). Persisting it verbatim poisoned
+    # the cache and 500'd every subsequent /coach/brief read. Sanitize here
+    # so garbage never reaches the row.
+    out["outlook_7d"] = sanitize_outlook_7d(llm_payload.get("outlook_7d"))
 
     # Post-ride review — if the snapshot carries post_ride data, ensure the
     # payload has a complete review. Take the LLM's narrative fields when
@@ -3104,7 +3177,9 @@ async def get_or_generate_brief(
         options=None,
         prescribed_workout=brief_payload.get("prescribed_workout"),
         alternates=brief_payload.get("alternates") or [],
-        outlook_7d=brief_payload.get("outlook_7d"),
+        # Belt-and-braces re-sanitize at the write boundary — no code path may
+        # persist a non-list / malformed outlook (poisoned rows 500'd reads).
+        outlook_7d=sanitize_outlook_7d(brief_payload.get("outlook_7d")),
         frameworks_cited=brief_payload.get("frameworks_cited") or [],
         raw_prompt=system_prompt_for_language(language, locale=locale),  # type: ignore[arg-type]
         model_used=brief_payload["model_used"],

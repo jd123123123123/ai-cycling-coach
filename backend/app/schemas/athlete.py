@@ -12,6 +12,8 @@ Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 MotivationStyle = Literal["race_focused", "fitness_builder", "fun_variety"]
 VarietyDial = Literal["steady", "mixed", "adventurous"]
 ExperienceLevel = Literal["new", "returning", "seasoned"]
+# UI depth register (onboarding depth selector ↔ Settings "Detailgrad").
+DetailLevel = Literal["guide", "numbers", "pro"]
 
 
 class DaysAvailable(BaseModel):
@@ -117,6 +119,9 @@ class AthleteProfileUpdate(BaseModel):
     # V3 Settings — suppress coach push notices on rest days (default ON).
     quiet_on_rest_days: bool | None = None
 
+    # UI depth register — onboarding depth selector / Settings "Detailgrad".
+    detail_level: DetailLevel | None = None
+
     @field_validator("hard_day_blackouts")
     @classmethod
     def _validate_hard_day_blackouts(cls, v: list[str] | None) -> list[str] | None:
@@ -178,6 +183,9 @@ class AthleteProfileRead(BaseModel):
 
     # V3 Settings — suppress coach push notices on rest days
     quiet_on_rest_days: bool = True
+
+    # UI depth register — onboarding depth selector / Settings "Detailgrad"
+    detail_level: DetailLevel | None = None
 
     # Timestamps
     created_at: datetime

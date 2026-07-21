@@ -7,9 +7,9 @@
  * endpoints, morning briefing from the push subscription state, and the
  * "Quiet on rest days" toggle persisted on the profile
  * (quiet_on_rest_days — suppresses coach push notices on rest days).
- * Integrations that don't exist (Strava, Whoop) show an honest "—".
+ * Integrations that don't exist (Strava, Whoop) say "Bald verfügbar".
  */
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -35,6 +35,7 @@ import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useGarminStatus } from '../hooks/useGarminStatus'
 import { useWahooStatus } from '../hooks/useWahooStatus'
 import { updateProfile } from '../api/athletes'
+import type { DetailLevel } from '../types/athlete'
 import { getWahooConnectUrl, disconnectWahoo } from '../api/wahoo'
 import { enableMorningBrief, disableMorningBrief, pushSupported } from '../lib/push'
 
@@ -147,6 +148,29 @@ export default function SettingsPage() {
     },
   })
 
+  // "Detailgrad" — the onboarding depth register, persisted server-side so it
+  // follows the athlete across devices. Same three levels as onboarding
+  // (Begleite mich / Zeig Zahlen / Voll Pro); legacy profiles without the
+  // field fall back to the local coach-language mode.
+  const detailLevel: DetailLevel =
+    profile?.detail_level ?? (language === 'technical' ? 'numbers' : 'guide')
+  const detailMutation = useMutation({
+    mutationFn: (next: DetailLevel) => updateProfile({ detail_level: next }),
+    onSuccess: (next) => {
+      queryClient.setQueryData(['athlete', 'me'], next)
+    },
+  })
+
+  // Cross-device sync: when the server-side depth arrives, align the local
+  // coach-language mode (guide → simple prose, numbers/pro → full vocabulary).
+  const serverDetail = profile?.detail_level ?? null
+  useEffect(() => {
+    if (!serverDetail) return
+    const wanted = serverDetail === 'guide' ? 'simple' : 'technical'
+    if (language !== wanted) setLanguage(wanted)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverDetail])
+
   const goBack = () => {
     if (window.history.length > 1) navigate(-1)
     else navigate('/dashboard?tab=today')
@@ -201,8 +225,18 @@ export default function SettingsPage() {
     }
   }
 
+  // Cycle guide → numbers → pro → guide; persist to the profile and keep the
+  // coach-language mode (the simple-mode flag the dashboard reads) in sync.
+  const DETAIL_ORDER: DetailLevel[] = ['guide', 'numbers', 'pro']
+  const DETAIL_LABEL: Record<DetailLevel, string> = {
+    guide: de ? 'Begleite mich' : 'Guide me',
+    numbers: de ? 'Zeig Zahlen' : 'Show numbers',
+    pro: de ? 'Voll Pro' : 'Full pro',
+  }
   const handleDetailLevel = () => {
-    setLanguage(language === 'simple' ? 'technical' : 'simple')
+    const next = DETAIL_ORDER[(DETAIL_ORDER.indexOf(detailLevel) + 1) % DETAIL_ORDER.length]
+    detailMutation.mutate(next)
+    setLanguage(next === 'guide' ? 'simple' : 'technical')
     void queryClient.invalidateQueries({ queryKey: ['coach'] })
   }
 
@@ -318,9 +352,20 @@ export default function SettingsPage() {
                 tone={garmin?.connected ? 'good' : 'accent'}
                 onClick={() => navigate('/garmin/connect')}
               />,
-              // Strava / Whoop — no integration exists: honest "—", no chevron.
-              <SettingsRow key="strava" icon={Bike} label="Strava" value="—" />,
-              <SettingsRow key="whoop" icon={Heart} label="Whoop" value="—" />,
+              // Strava / Whoop — no integration exists yet: say so honestly
+              // instead of a dead "—" (review finding 5), still no chevron.
+              <SettingsRow
+                key="strava"
+                icon={Bike}
+                label="Strava"
+                value={de ? 'Bald verfügbar' : 'Coming soon'}
+              />,
+              <SettingsRow
+                key="whoop"
+                icon={Heart}
+                label="Whoop"
+                value={de ? 'Bald verfügbar' : 'Coming soon'}
+              />,
               <SettingsRow
                 key="wahoo"
                 icon={MonitorSmartphone}
@@ -340,18 +385,16 @@ export default function SettingsPage() {
                 key="detail"
                 icon={SlidersHorizontal}
                 label={de ? 'Detailgrad' : 'Detail level'}
-                value={
-                  language === 'technical'
-                    ? (de ? 'Zahlen anzeigen' : 'Show numbers')
-                    : (de ? 'Einfach' : 'Simple')
-                }
+                value={DETAIL_LABEL[detailLevel]}
                 onClick={handleDetailLevel}
+                busy={detailMutation.isPending}
               />,
               <SettingsRow
                 key="units"
                 icon={Ruler}
                 label={de ? 'Einheiten' : 'Units'}
                 value={de ? 'Metrisch' : 'Metric'}
+                onClick={() => navigate('/profile')}
               />,
               <SettingsRow
                 key="brief"

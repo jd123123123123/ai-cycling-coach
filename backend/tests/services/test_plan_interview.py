@@ -384,6 +384,93 @@ def test_rebuild_plan_plan_change_message_credits_done_work():
     assert kwargs["evidence"]["sessions_done"] == 9
 
 
+def _run_rebuild_for_signal(signal: str, profile=None):
+    """Run rebuild_plan with the standard mocks and return log kwargs + summary."""
+    monday = date.today() - timedelta(days=date.today().weekday())
+    db = _rebuild_db(week_rows=[_pw(monday, "vo2_5x4")])
+    meso = SimpleNamespace(
+        phase="base1",
+        weekly_tss_targets=[246, 253, 253, 152],
+        evidence={"hours_note": {"start_hours": 6.0, "declared_hours": 12.0,
+                                 "de": "…", "en": "…", "reason": "ctl_anchor"}},
+    )
+    log = AsyncMock()
+    with patch("app.services.mesocycle_generator.generate_mesocycle",
+               AsyncMock(return_value=meso)), \
+         patch("app.services.pmc_service.compute_user_pmc",
+               AsyncMock(return_value={"total": [{"date": "2026-07-01", "ctl": 41.2}]})), \
+         patch("app.services.plan_interview.log_adaptation", log), \
+         patch("app.services.plan_interview.already_adapted", AsyncMock(return_value=False)):
+        summary = asyncio.run(
+            rebuild_plan(
+                db, 1, profile or _profile(), source="plan_change", signal=signal,
+                carried={"sessions_done": 4},
+            )
+        )
+    return log.await_args.kwargs, summary
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Signal-specific plan-change messages (review finding 6)
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_too_boring_and_days_changed_get_distinct_messages():
+    """The generic 'Plan angepasst' template was signal-blind — every signal
+    must produce its own lead."""
+    boring, _ = _run_rebuild_for_signal("too_boring")
+    days, _ = _run_rebuild_for_signal("days_changed")
+    assert boring["message_de"] != days["message_de"]
+    assert boring["message_en"] != days["message_en"]
+
+
+def test_too_boring_message_names_the_signal_and_change():
+    kwargs, _ = _run_rebuild_for_signal("too_boring")
+    assert "eintönig" in kwargs["message_de"].lower()
+    assert "formate" in kwargs["message_de"].lower()
+    # no-guilt credit suffix survives
+    assert "4 absolvierten Einheiten zählen weiter" in kwargs["message_de"]
+    assert "4 completed sessions still count" in kwargs["message_en"]
+
+
+def test_days_changed_message_names_the_actual_days():
+    prof = _profile(days_available={
+        "mon": False, "tue": True, "wed": False, "thu": True,
+        "fri": True, "sat": True, "sun": True, "long_day": "sun",
+    })
+    kwargs, _ = _run_rebuild_for_signal("days_changed", profile=prof)
+    assert "Di/Do/Fr/Sa/So" in kwargs["message_de"]
+    assert "Tue/Thu/Fri/Sat/Sun" in kwargs["message_en"]
+
+
+def test_hours_changed_message_names_the_hours():
+    prof = _profile(weekly_hours_available=6.0)
+    kwargs, _ = _run_rebuild_for_signal("hours_changed", profile=prof)
+    assert "6 h" in kwargs["message_de"]
+    assert "6 h" in kwargs["message_en"]
+
+
+def test_too_hard_message_is_never_guilt_framed():
+    kwargs, _ = _run_rebuild_for_signal("too_hard")
+    de = kwargs["message_de"].lower()
+    assert "nachgeholt" in de           # 'nichts wird nachgeholt'
+    for guilt in ("verpasst", "versäumt", "leider", "solltest"):
+        assert guilt not in de
+
+
+def test_unknown_signal_falls_back_to_generic_message():
+    kwargs, _ = _run_rebuild_for_signal("plan_change")
+    assert "Plan angepasst" in kwargs["message_de"]
+
+
+def test_rebuild_summary_carries_hours_reconciliation():
+    """Review finding 4: the apply/build response must let the UI reconcile
+    delivered hours vs stated hours (hours_note from the meso evidence)."""
+    _, summary = _run_rebuild_for_signal("hours_changed")
+    assert summary["declared_hours"] == 12.0
+    assert summary["hours_note"]["start_hours"] == 6.0
+    assert "planned_hours" in summary
+
+
 def test_engine_owned_sources_exclude_user_rows():
     """The delete filter must never cover athlete-owned rows."""
     assert "user_plan" not in ENGINE_OWNED_SOURCES

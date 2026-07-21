@@ -103,6 +103,14 @@ class PlanBuildResponse(BaseModel):
     weekly_tss_targets: list[int] | None = None
     preserved_sessions: int | None = None
     ctl_anchor: float | None = None
+    # Hours reconciliation (review finding 4): what the delivered week actually
+    # costs vs what the athlete declared, plus the bilingual anchor explanation
+    # when the CTL floor starts the plan below the stated hours.
+    planned_hours: float | None = None
+    declared_hours: float | None = None
+    hours_note: dict | None = None
+    # No-event fitness-builder progression horizon (review finding 5).
+    progression: dict | None = None
 
 
 async def _load_profile(db: AsyncSession, user_id: int) -> AthleteProfile:
@@ -142,6 +150,12 @@ async def build_plan(
         )
     except ValueError as exc:  # generator guards (FTP, profile)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if summary.get("rebuilt"):
+        # The personalized-week cache still holds the OLD plan's overlay —
+        # without this the Train tab serves the stale week for up to 6h.
+        from app.api.weeks import invalidate_personalized_week_cache
+
+        invalidate_personalized_week_cache(user.id)
     return PlanBuildResponse(**summary)
 
 
@@ -249,6 +263,13 @@ async def apply_change(
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    # BLOCKER fix: the DB now holds the new week but the server-side
+    # personalized-week cache still serves the old one — invalidate it so the
+    # very next GET /weeks/current reflects the applied change.
+    from app.api.weeks import invalidate_personalized_week_cache
+
+    invalidate_personalized_week_cache(user.id)
 
     return PlanChangeApplyResponse(
         **summary,

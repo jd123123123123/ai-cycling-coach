@@ -166,7 +166,7 @@ def _brief_to_read(
         prescribed_workout=prescribed,
         alternates=alternates,
         options=legacy_options,
-        outlook_7d=[OutlookEntry(**e) for e in (brief.outlook_7d or [])] if brief.outlook_7d else None,
+        outlook_7d=_parse_outlook_7d(brief.outlook_7d),
         frameworks_cited=list(brief.frameworks_cited or []),
         model_used=brief.model_used,
         from_cache=from_cache,
@@ -184,12 +184,125 @@ def _brief_to_read(
     )
 
 
+def _parse_outlook_7d(raw: Any) -> list[OutlookEntry] | None:
+    """Tolerant reader for persisted outlook_7d.
+
+    Live-observed (2026-07-21, same bug class as the bare-string
+    prescribed_workout fixed in 6adb040): the LLM occasionally emits
+    outlook_7d as a raw unparsed tool-call fragment (a STRING like
+    '\\n<parameter name="day_offset">6') and old rows persisted it verbatim.
+    Iterating a string yields characters and OutlookEntry(**'c') 500s the
+    whole brief. A brief with a broken outlook must still serve its core
+    decision — skip anything malformed, never raise.
+    """
+    if not isinstance(raw, list):
+        return None
+    entries: list[OutlookEntry] = []
+    for e in raw:
+        if not isinstance(e, dict):
+            continue
+        try:
+            entries.append(OutlookEntry(**e))
+        except Exception:  # noqa: BLE001 — tolerate malformed entries
+            continue
+    return entries or None
+
+
 def _evidence_is_de(evidence: Any) -> bool:
     """Best-effort locale flag for the adaptation copy (evidence carries locale)."""
     if isinstance(evidence, dict):
         loc = evidence.get("locale") or evidence.get("lang") or evidence.get("language_locale")
         return str(loc).lower().startswith("de")
     return False
+
+
+# States in which daily_decision.planned describes an active session the
+# brief's prescription must agree with (One Daily Decision law).
+_ACTIVE_DECISION_STATES = {"recover", "easy", "quality", "hard"}
+
+# Material TSS divergence: more than max(this floor, 15% of planned TSS).
+# Calibrated on the live case: plan 108 TSS vs invented FTP test 88 TSS
+# (diff 20) must trip the guard.
+_TSS_DIVERGENCE_FLOOR = 10.0
+
+
+def _brief_diverges_from_plan(pw: dict, planned: Any) -> bool:
+    """True when the brief's prescribed workout contradicts the planned
+    session — different template identity, or (when identity can't be
+    compared) a materially different TSS."""
+    plan_tid = str(getattr(planned, "template_id", None) or "")
+    brief_tid = str(pw.get("template_id") or "")
+    if plan_tid and brief_tid:
+        return brief_tid != plan_tid
+    plan_tss = getattr(planned, "target_tss", None)
+    brief_tss = pw.get("predicted_tss")
+    if (
+        isinstance(plan_tss, (int, float)) and plan_tss > 0
+        and isinstance(brief_tss, (int, float))
+    ):
+        return abs(float(brief_tss) - float(plan_tss)) > max(
+            _TSS_DIVERGENCE_FLOOR, 0.15 * float(plan_tss)
+        )
+    return False
+
+
+async def _coerce_brief_to_plan(
+    db: AsyncSession,
+    brief: CoachBrief,
+    planned: Any,
+    profile: AthleteProfile | None,
+    language: str,
+    locale: str,
+) -> bool:
+    """Rewrite the brief's prescription to the PLAN's session (rule-based
+    template parametrization — watts from FTP, HR from LTHR) and realign the
+    verdict. Persists best-effort so subsequent reads/exports agree. Returns
+    False when the planned template is unknown to the library (can't rebuild
+    blocks)."""
+    from app.services.coach_service import (
+        TEMPLATES as _TEMPLATES,
+        _rewrite_prescribed_workout,
+        _verdict_for_template,
+    )
+    from app.services.hr_zones import derive_lthr
+
+    plan_tid = str(getattr(planned, "template_id", None) or "")
+    if plan_tid not in _TEMPLATES:
+        return False
+
+    ftp = int(getattr(profile, "ftp_watts", 0) or 0) if profile else 0
+    lthr = None
+    try:
+        lthr = derive_lthr(
+            lthr=getattr(profile, "lthr_cycling", None) if profile else None,
+            max_heart_rate=getattr(profile, "max_heart_rate", None) if profile else None,
+            date_of_birth=getattr(profile, "date_of_birth", None) if profile else None,
+        )
+    except Exception:  # noqa: BLE001 — HR targets are a nice-to-have
+        lthr = None
+
+    duration_hint = getattr(planned, "duration_minutes", None)
+    duration_hint = int(duration_hint) if isinstance(duration_hint, (int, float)) and duration_hint > 0 else None
+
+    brief.prescribed_workout = _rewrite_prescribed_workout(
+        plan_tid, ftp, duration_hint, None, lthr=lthr,
+    )
+    realigned = _verdict_for_template(
+        plan_tid,
+        "technical" if language == "technical" else "simple",
+        ceiling="push",
+        de=locale == "de",
+    )
+    if realigned:
+        brief.verdict = realigned
+    try:
+        await db.commit()
+    except Exception:  # noqa: BLE001 — mocked/readonly sessions must not 500
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+    return True
 
 
 @router.get("/brief", response_model=BriefRead)
@@ -270,7 +383,46 @@ async def get_brief(
             )
             from_cache = False
 
-    return _brief_to_read(brief, from_cache=from_cache, daily_decision=daily_decision)
+    # Identity guard (review 2026-07-21): the rest-shape check above missed
+    # briefs that prescribe a *different active session* than the plan (live
+    # case: plan + daily_decision said "Sweet spot 3×20" @108 TSS while the
+    # LLM brief invented an FTP test @88 TSS). The plan/daily_decision is the
+    # single source of truth per the One Daily Decision law — when the brief's
+    # prescription doesn't match the planned session identity (template) or
+    # its TSS materially diverges, coerce the brief to the plan's session
+    # (rule-based content is fine). Regeneration wouldn't help here: the LLM
+    # could invent again.
+    if (
+        daily_decision is not None
+        and daily_decision.state in _ACTIVE_DECISION_STATES
+        and daily_decision.planned is not None
+    ):
+        pw = brief.prescribed_workout if isinstance(brief.prescribed_workout, dict) else {}
+        if pw and _brief_diverges_from_plan(pw, daily_decision.planned):
+            coerced = await _coerce_brief_to_plan(
+                db, brief, daily_decision.planned, profile,
+                language=language, locale=locale,
+            )
+            if not coerced and from_cache:
+                # Unknown template — can't rebuild blocks; one forced
+                # regeneration is the best remaining realignment lever.
+                brief = await coach_service.get_or_generate_brief(
+                    db, current_user.id, force=True, language=language, locale=locale,
+                )
+                from_cache = False
+
+    # Defensive sweep (review 2026-07-21 blocker): a poisoned persisted brief
+    # must NEVER 500 the endpoint — the frontend dressed that 500 up as a fake
+    # rest day. If serialization still fails after the tolerant parsers, burn
+    # the row with one forced regeneration and serve that (the regeneration
+    # path falls back to the rule-based brief when the LLM misbehaves).
+    try:
+        return _brief_to_read(brief, from_cache=from_cache, daily_decision=daily_decision)
+    except Exception:  # noqa: BLE001 — bad persisted data, not a code path we accept
+        brief = await coach_service.get_or_generate_brief(
+            db, current_user.id, force=True, language=language, locale=locale,
+        )
+        return _brief_to_read(brief, from_cache=False, daily_decision=daily_decision)
 
 
 @router.post("/brief/refresh", response_model=BriefRead)

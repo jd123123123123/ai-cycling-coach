@@ -45,6 +45,11 @@ class MesoBlockContext(BaseModel):
     weekly_tss_target: int
     days_to_event: int | None
     target_event_type: str | None
+    # Hours reconciliation + no-event progression horizon (review round 1):
+    # surfaced from the meso's generation evidence so the plan card can explain
+    # a CTL-floored start and replace the "— Wochen übrig" dash.
+    hours_note: dict | None = None
+    progression: dict | None = None
 
 
 class PlanChangeItem(BaseModel):

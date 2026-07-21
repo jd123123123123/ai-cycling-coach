@@ -22,6 +22,7 @@ import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { usePowerProfile } from '../../../hooks/usePowerProfile'
 import { useStreak } from '../../../hooks/useStreak'
 import { useLocale } from '../../../contexts/LocaleContext'
+import { formatDate, formatTime24 } from '../../../utils/format'
 import HoverBars from '../../ui/HoverBars'
 import InsightsSection from '../InsightsSection'
 import type { ActivityRead } from '../../../api/dashboard'
@@ -251,13 +252,18 @@ export default function HistoryTab() {
   const summaryStats = useMemo(() => {
     const c = summary.cur, p = summary.prev
     const loc = de ? 'de' : 'en'
-    return [
-      { label: de ? 'Distanz' : 'Distance', value: Math.round(c.km).toLocaleString(loc), unit: 'km', delta: pctDelta(c.km, p.km) },
-      { label: de ? 'Zeit' : 'Time', value: fmtHm(c.sec), unit: 'h', delta: pctDelta(c.sec, p.sec) },
+    // Honest-dash sweep (finding #6): a month with zero sessions has no
+    // distance/time/TSS to report — "—" everywhere, never a fake "0 km"
+    // beside "— m". Units render only next to real values.
+    const empty = c.n === 0
+    const rows = [
+      { label: de ? 'Distanz' : 'Distance', value: empty ? '—' : Math.round(c.km).toLocaleString(loc), unit: 'km', delta: empty ? null : pctDelta(c.km, p.km) },
+      { label: de ? 'Zeit' : 'Time', value: empty ? '—' : fmtHm(c.sec), unit: 'h', delta: empty ? null : pctDelta(c.sec, p.sec) },
       { label: de ? 'Höhenmeter' : 'Elevation', value: '—', unit: 'm', delta: null },
-      { label: 'TSS', value: Math.round(c.tss).toLocaleString(loc), unit: '', delta: pctDelta(c.tss, p.tss) },
+      { label: 'TSS', value: empty ? '—' : Math.round(c.tss).toLocaleString(loc), unit: '', delta: empty ? null : pctDelta(c.tss, p.tss) },
       { label: de ? 'Einheiten' : 'Sessions', value: `${c.n}`, unit: '', delta: countDelta(c.n - p.n) },
     ]
+    return rows.map((r) => (r.value === '—' ? { ...r, unit: '' } : r))
   }, [summary, de])
 
   // Raw TSS delta % (numeric) drives the at-a-glance verdict headline.
@@ -394,7 +400,7 @@ export default function HistoryTab() {
   // Row set is keyed to the active sport filter so the card matches Ride / Run /
   // Strength / All. Real data only — honest "—" where a metric has no basis.
   const prRows = useMemo(() => {
-    const dfmt = (a?: ActivityRead | null) => (a?.started_at ? format(parseISO(a.started_at), 'MMM d, yyyy') : '—')
+    const dfmt = (a?: ActivityRead | null) => (a?.started_at ? formatDate(parseISO(a.started_at), de ? 'd. MMM yyyy' : 'MMM d, yyyy', locale) : '—')
     const b5 = prs.best5k, b10 = prs.best10k, bp = prs.bestPace
 
     const rideRows = [
@@ -438,7 +444,7 @@ export default function HistoryTab() {
       return [
         {
           icon: Dumbbell, color: 'var(--color-amber)', title: de ? 'Einheiten diesen Monat' : 'Sessions this month',
-          date: format(today, 'MMMM yyyy'), value: `${prs.gymThisMonth}`, to: null,
+          date: formatDate(today, 'MMMM yyyy', locale), value: `${prs.gymThisMonth}`, to: null,
         },
         {
           icon: Timer, color: 'var(--color-strain)', title: de ? 'Längste Einheit' : 'Longest session',
@@ -467,7 +473,7 @@ export default function HistoryTab() {
       rideRows[2],
       rideRows[3],
     ]
-  }, [prs, de, filter, today])
+  }, [prs, de, locale, filter, today])
 
   // Full filtered, newest-first list; the Recent card shows 5 unless expanded.
   const sortedActivities = useMemo(
@@ -480,8 +486,8 @@ export default function HistoryTab() {
     const d = dateOf(a)
     if (isNaN(d.getTime())) return '—'
     const diff = differenceInCalendarDays(today, d)
-    const day = diff === 0 ? (de ? 'Heute' : 'Today') : diff === 1 ? (de ? 'Gestern' : 'Yesterday') : format(d, 'MMM d')
-    return `${day} · ${format(d, 'h:mm a')}`
+    const day = diff === 0 ? (de ? 'Heute' : 'Today') : diff === 1 ? (de ? 'Gestern' : 'Yesterday') : formatDate(d, de ? 'd. MMM' : 'MMM d', locale)
+    return `${day} · ${formatTime24(d, locale)}`
   }
 
   const recentStats = (a: ActivityRead): { v: string; l: string }[] => {
@@ -556,7 +562,7 @@ export default function HistoryTab() {
       <div className="rounded-[24px] p-5 flex flex-col gap-5" style={{ ...cardStyle, background: `linear-gradient(160deg, color-mix(in srgb, ${verdict.color} 12%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)` }}>
         <div className="flex items-center justify-between">
           <span className="eyebrow">{de ? 'Monat im Überblick' : 'Month in review'}</span>
-          <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{format(today, 'MMMM yyyy')}</span>
+          <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{formatDate(today, 'MMMM yyyy', locale)}</span>
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="flex items-center gap-2">
@@ -605,7 +611,7 @@ export default function HistoryTab() {
               bars={monthDaily.map((d) => ({
                 value: d.future ? 0 : d.v,
                 valueLabel: d.v > 0 ? `${d.v} TSS` : (de ? 'Ruhetag' : 'Rest day'),
-                label: format(parseISO(d.key), de ? 'EEE, d. MMM' : 'EEE, MMM d'),
+                label: formatDate(parseISO(d.key), de ? 'EEE, d. MMM' : 'EEE, MMM d', locale),
                 highlight: d.isToday,
               }))}
             />
@@ -615,8 +621,8 @@ export default function HistoryTab() {
             </div>
           )}
           <div className="flex items-center justify-between">
-            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{format(startOfMonth(today), de ? 'd. MMM' : 'MMM d')}</span>
-            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{format(today, de ? 'd. MMM' : 'MMM d')}</span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{formatDate(startOfMonth(today), de ? 'd. MMM' : 'MMM d', locale)}</span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{formatDate(today, de ? 'd. MMM' : 'MMM d', locale)}</span>
           </div>
         </div>
 
@@ -664,7 +670,7 @@ export default function HistoryTab() {
                   return {
                     value: w.v,
                     valueLabel: `${w.v} TSS`,
-                    label: `${format(monday, de ? 'd. MMM' : 'MMM d')} – ${format(addDays(monday, 6), de ? 'd. MMM' : 'MMM d')}`,
+                    label: `${formatDate(monday, de ? 'd. MMM' : 'MMM d', locale)} – ${formatDate(addDays(monday, 6), de ? 'd. MMM' : 'MMM d', locale)}`,
                     color: sportColor(filter),
                   }
                 })}
@@ -684,7 +690,7 @@ export default function HistoryTab() {
       <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5">
-            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{format(today, 'MMMM')}</span>
+            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{formatDate(today, 'MMMM', locale)}</span>
             <ChevronRight size={16} className="hover-arrow" style={{ color: 'var(--color-muted)' }} />
           </span>
           <span className="flex items-center gap-3.5">
@@ -756,7 +762,7 @@ export default function HistoryTab() {
                 style={{ background: 'var(--color-surface-3)', border: '1px solid var(--color-rule)', boxShadow: '0 6px 18px rgba(0,0,0,0.45)' }}
               >
                 <span className="num-display" style={{ fontSize: 14, lineHeight: 1, color: heatCell.t > 0 ? 'var(--color-recovery)' : 'var(--color-muted)' }}>{heatCell.t > 0 ? `${heatCell.t} TSS` : (de ? 'Ruhetag' : 'Rest day')}</span>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-muted)' }}>{format(parseISO(heatCell.key), de ? 'EEE, d. MMM' : 'EEE, MMM d')}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-muted)' }}>{formatDate(parseISO(heatCell.key), de ? 'EEE, d. MMM' : 'EEE, MMM d', locale)}</span>
               </div>
               <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid var(--color-surface-3)' }} />
             </div>
@@ -794,29 +800,38 @@ export default function HistoryTab() {
             <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'TSS · letzte 12 Wochen · Balken antippen' : 'TSS · last 12 weeks · tap a bar'}</span>
           </div>
           <div className="flex flex-col items-end gap-0.5">
-            <span className="num-display" style={{ fontSize: 18, color: 'var(--color-strain)' }}>{weeklyAvg}</span>
+            <span className="num-display" style={{ fontSize: 18, color: weekly.some((w) => w.v > 0) ? 'var(--color-strain)' : 'var(--color-muted)' }}>{weekly.some((w) => w.v > 0) ? weeklyAvg : '—'}</span>
             <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Ø / volle Woche' : 'avg / full wk'}</span>
           </div>
         </div>
-        <InProgressWeekBars
-          height={130}
-          gap={6}
-          bars={weekly.map((w, i) => {
-            const monday = parseISO(w.key)
-            const sunday = addDays(monday, 6)
-            const inProgress = i === weekly.length - 1
-            return {
-              value: w.v,
-              valueLabel: `${w.v} TSS${inProgress ? (de ? ' · läuft noch' : ' · in progress') : ''}`,
-              label: `${format(monday, de ? 'd. MMM' : 'MMM d')} – ${format(sunday, de ? 'd. MMM' : 'MMM d')}`,
-              inProgress,
-            }
-          })}
-        />
-        <div className="flex items-center justify-between">
-          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'vor 12 Wochen' : '12 wks ago'}</span>
-          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Diese Woche · läuft noch' : 'This week · in progress'}</span>
-        </div>
+        {weekly.some((w) => w.v > 0) ? (
+          <>
+            <InProgressWeekBars
+              height={130}
+              gap={6}
+              bars={weekly.map((w, i) => {
+                const monday = parseISO(w.key)
+                const sunday = addDays(monday, 6)
+                const inProgress = i === weekly.length - 1
+                return {
+                  value: w.v,
+                  valueLabel: `${w.v} TSS${inProgress ? (de ? ' · läuft noch' : ' · in progress') : ''}`,
+                  label: `${formatDate(monday, de ? 'd. MMM' : 'MMM d', locale)} – ${formatDate(sunday, de ? 'd. MMM' : 'MMM d', locale)}`,
+                  inProgress,
+                }
+              })}
+            />
+            <div className="flex items-center justify-between">
+              <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'vor 12 Wochen' : '12 wks ago'}</span>
+              <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'Diese Woche · läuft noch' : 'This week · in progress'}</span>
+            </div>
+          </>
+        ) : (
+          // Honest empty state (finding #6): no fake floor bars under a "0".
+          <div className="grid place-items-center rounded-[14px]" style={{ height: 130, background: 'var(--color-surface-2)', fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>
+            {de ? 'Noch keine Einheiten in den letzten 12 Wochen' : 'No sessions logged in the last 12 weeks yet'}
+          </div>
+        )}
         <Link to="/load-form" className="hover-reveal inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</Link>
       </div>
 

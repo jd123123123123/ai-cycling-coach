@@ -68,6 +68,17 @@ class IntervalBlock:
     # Override with 60-75 for climbing-specific strength-endurance blocks.
     cadence_low: int | None = None
     cadence_high: int | None = None
+    # Effective intensity for TSS accounting. Composite on/off blocks (e.g.
+    # "8×15s sprints with 3-min easy between" encoded as ONE block) carry the
+    # ON-effort %FTP in `target_pct_ftp` for display, which would wildly
+    # overstate TSS if used raw. `tss_pct_ftp` is the duration-weighted
+    # sqrt-mean of IF² across the on/off structure; None = block is steady,
+    # use target_pct_ftp.
+    tss_pct_ftp: float | None = None
+    # Open / max-effort block (field tests): no fixed watt band is derived
+    # from current FTP — guidance is RPE only. Resolved watts are emitted as
+    # 0/0 with open_effort=True so consumers render "max effort", not a band.
+    open_effort: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,7 +89,8 @@ class WorkoutTemplate:
     purpose: str                 # short prose ("Builds VO2 ceiling")
     framework_cited: str         # "Coggan Z5 · Friel Build 2"
     blocks: list[IntervalBlock]
-    base_tss: float              # approximate TSS at the template's designed volume
+    base_tss: float              # TSS at designed volume — MUST equal compute_template_tss(blocks)
+                                 # (enforced by tests; never hand-tune this number)
     min_ftp_required: int | None = None  # skip if athlete FTP < this (safety)
     # ── Adaptation metadata (plan-engine v2) ──────────────────────────────
     # physiological_target: what the session develops, in one machine-usable
@@ -93,6 +105,12 @@ class WorkoutTemplate:
     min_readiness: MinReadiness = "medium"
     indoor_ok: bool = True
     fun_factor: int = 2
+    # ── Localization (de) ────────────────────────────────────────────────
+    # German display strings, applied from _I18N_DE below. `purpose_de` is
+    # deliberately plain-German and beginner-safe (no LT1 / lab jargon) so it
+    # can be served verbatim in SIMPLE language mode.
+    name_de: str = ""
+    purpose_de: str = ""
 
 
 @dataclass(frozen=True)
@@ -115,6 +133,7 @@ class ResolvedBlock:
     cadence_high: int | None = None
     target_hr_low: int | None = None  # bpm
     target_hr_high: int | None = None # bpm
+    open_effort: bool = False        # True → 0/0 watts, RPE-only guidance
 
 
 @dataclass
@@ -128,6 +147,8 @@ class PrescribedWorkout:
     predicted_tss: float
     predicted_ef_range: tuple[float, float]  # (low, high) EF expectation
     blocks: list[ResolvedBlock] = field(default_factory=list)
+    title_de: str = ""                       # German display title
+    purpose_de: str = ""                     # beginner-safe German purpose
 
     @property
     def duration_minutes(self) -> int:
@@ -199,7 +220,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
                 target_pct_ftp=0.50, target_rpe=2, zone=1,
             ),
         ],
-        base_tss=15.0,
+        base_tss=12.5,
     ),
 
     # ---- Z2 endurance stack (San Millán backbone) ------------------------
@@ -215,7 +236,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
                 target_pct_ftp=0.65, target_rpe=4, zone=2,
             ),
         ],
-        base_tss=45.0,
+        base_tss=42.3,
     ),
     "z2_endurance_90": WorkoutTemplate(
         id="z2_endurance_90",
@@ -229,7 +250,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
                 target_pct_ftp=0.65, target_rpe=4, zone=2,
             ),
         ],
-        base_tss=68.0,
+        base_tss=63.4,
     ),
     "z2_long_120": WorkoutTemplate(
         id="z2_long_120",
@@ -243,7 +264,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
                 target_pct_ftp=0.65, target_rpe=4, zone=2,
             ),
         ],
-        base_tss=90.0,
+        base_tss=84.5,
     ),
     "z2_long_180": WorkoutTemplate(
         id="z2_long_180",
@@ -260,7 +281,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
                 target_pct_ftp=0.65, target_rpe=5, zone=2,
             ),
         ],
-        base_tss=135.0,
+        base_tss=126.8,
     ),
 
     "z2_climbing_long": WorkoutTemplate(
@@ -306,7 +327,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
                 cadence_low=80, cadence_high=90,
             ),
         ],
-        base_tss=160.0,
+        base_tss=139.6,
         min_ftp_required=180,
     ),
 
@@ -326,7 +347,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Tempo 3", duration_s=10 * 60, target_pct_ftp=0.85, target_rpe=6, zone=3),
             _cd(),
         ],
-        base_tss=70.0,
+        base_tss=50.4,
     ),
     "sweet_spot_2x20": WorkoutTemplate(
         id="sweet_spot_2x20",
@@ -341,7 +362,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Sweet spot 2", duration_s=20 * 60, target_pct_ftp=0.88, target_rpe=7, zone=3),
             _cd(),
         ],
-        base_tss=85.0,
+        base_tss=65.4,
     ),
     "threshold_2x15": WorkoutTemplate(
         id="threshold_2x15",
@@ -356,7 +377,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Threshold 2", duration_s=15 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
             _cd(),
         ],
-        base_tss=78.0,
+        base_tss=64.2,
     ),
     "over_under_3x5": WorkoutTemplate(
         id="over_under_3x5",
@@ -374,7 +395,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="OU set 3 (5×1/1min)", duration_s=5 * 120, target_pct_ftp=1.00, target_rpe=8, zone=4),
             _cd(),
         ],
-        base_tss=78.0,
+        base_tss=65.9,
     ),
 
     # ---- VO2 / anaerobic -------------------------------------------------
@@ -397,7 +418,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="VO2 5", duration_s=4 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5),
             _cd(),
         ],
-        base_tss=72.0,
+        base_tss=60.8,
         min_ftp_required=180,
     ),
     "vo2_micro_30x30": WorkoutTemplate(
@@ -409,10 +430,10 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         blocks=[
             _wu(),
             # 30 × (30s ON + 30s OFF) = 30min of work+recovery alternation, averaged into one block
-            IntervalBlock(name="30×30/30 micro set", duration_s=30 * 60, target_pct_ftp=1.20, target_rpe=9, zone=5),
+            IntervalBlock(name="30×30/30 micro set", duration_s=30 * 60, target_pct_ftp=1.20, target_rpe=9, zone=5, tss_pct_ftp=0.92),
             _cd(),
         ],
-        base_tss=65.0,
+        base_tss=54.0,
         min_ftp_required=180,
     ),
 
@@ -433,14 +454,14 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Rønnestad 2015 · Bossi 2020 short-interval VO2",
         blocks=[
             _wu(),
-            IntervalBlock(name="Set 1 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            IntervalBlock(name="Set 1 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5, tss_pct_ftp=0.94),
             _rec(3 * 60),
-            IntervalBlock(name="Set 2 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            IntervalBlock(name="Set 2 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5, tss_pct_ftp=0.94),
             _rec(3 * 60),
-            IntervalBlock(name="Set 3 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5),
+            IntervalBlock(name="Set 3 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5, tss_pct_ftp=0.94),
             _cd(),
         ],
-        base_tss=78.0,
+        base_tss=57.3,
         min_ftp_required=180,
     ),
 
@@ -466,7 +487,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="MAP 5", duration_s=3 * 60, target_pct_ftp=1.10, target_rpe=9, zone=5),
             _cd(),
         ],
-        base_tss=62.0,
+        base_tss=47.0,
         min_ftp_required=180,
     ),
 
@@ -496,7 +517,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Seiler 4", duration_s=8 * 60, target_pct_ftp=0.92, target_rpe=8, zone=4),
             _cd(),
         ],
-        base_tss=88.0,
+        base_tss=59.4,
     ),
 
     # ---- Longer SST — Allen/Coggan classic durability builder -----------
@@ -521,7 +542,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="SST 4", duration_s=15 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
             _cd(),
         ],
-        base_tss=120.0,
+        base_tss=99.0,
     ),
 
     # ---- Anaerobic / neuromuscular ---------------------------------------
@@ -540,10 +561,10 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Mujika neuromuscular · Coggan NM",
         blocks=[
             _wu(),
-            IntervalBlock(name="Sprint set (8×15s · 3-min easy between)", duration_s=8 * (15 + 3 * 60), target_pct_ftp=1.80, target_rpe=10, zone=6),
+            IntervalBlock(name="Sprint set (8×15s · 3-min easy between)", duration_s=8 * (15 + 3 * 60), target_pct_ftp=1.80, target_rpe=10, zone=6, tss_pct_ftp=0.69),
             _cd(),
         ],
-        base_tss=45.0,
+        base_tss=32.4,
     ),
 
     # Tabata 8×20/10s @ ~170% — anaerobic capacity. Classic. Lactate-tolerance
@@ -560,12 +581,12 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Tabata 1996 · Coggan anaerobic capacity",
         blocks=[
             _wu(),
-            IntervalBlock(name="Tabata set 1 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6),
+            IntervalBlock(name="Tabata set 1 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6, tss_pct_ftp=1.42),
             _rec(5 * 60),
-            IntervalBlock(name="Tabata set 2 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6),
+            IntervalBlock(name="Tabata set 2 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6, tss_pct_ftp=1.42),
             _cd(),
         ],
-        base_tss=55.0,
+        base_tss=40.7,
         min_ftp_required=180,
     ),
 
@@ -595,7 +616,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="VO2 4 @ 115%", duration_s=4 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5),
             _cd(15 * 60),
         ],
-        base_tss=180.0,
+        base_tss=144.4,
         min_ftp_required=200,
     ),
 
@@ -621,7 +642,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         blocks=[
             IntervalBlock(name="MAF aerobic", duration_s=90 * 60, target_pct_ftp=0.60, target_rpe=3, zone=2),
         ],
-        base_tss=60.0,
+        base_tss=54.0,
     ),
     "z2_progressive_90": WorkoutTemplate(
         id="z2_progressive_90",
@@ -638,7 +659,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Mid Z2", duration_s=30 * 60, target_pct_ftp=0.66, target_rpe=5, zone=2),
             IntervalBlock(name="High Z2", duration_s=30 * 60, target_pct_ftp=0.72, target_rpe=6, zone=2),
         ],
-        base_tss=78.0,
+        base_tss=65.7,
     ),
 
     # ---- Within-Z2 texture variants -------------------------------------
@@ -664,7 +685,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
                 target_pct_ftp=0.60, target_rpe=3, zone=2,
             ),
         ],
-        base_tss=62.0,
+        base_tss=60.0,
     ),
     "z2_endurance_upper_75": WorkoutTemplate(
         id="z2_endurance_upper_75",
@@ -682,7 +703,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
                 target_pct_ftp=0.70, target_rpe=5, zone=2,
             ),
         ],
-        base_tss=63.0,
+        base_tss=61.2,
     ),
     "z2_endurance_tempo_touch_75": WorkoutTemplate(
         id="z2_endurance_tempo_touch_75",
@@ -704,7 +725,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Tempo touch 3", duration_s=6 * 60, target_pct_ftp=0.76, target_rpe=6, zone=3),
             IntervalBlock(name="Z2 cool", duration_s=13 * 60, target_pct_ftp=0.60, target_rpe=3, zone=2),
         ],
-        base_tss=58.0,
+        base_tss=54.2,
     ),
     "z2_long_240": WorkoutTemplate(
         id="z2_long_240",
@@ -719,7 +740,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         blocks=[
             IntervalBlock(name="Long endurance", duration_s=240 * 60, target_pct_ftp=0.65, target_rpe=5, zone=2),
         ],
-        base_tss=180.0,
+        base_tss=169.0,
     ),
     "z2_fasted_60": WorkoutTemplate(
         id="z2_fasted_60",
@@ -734,7 +755,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         blocks=[
             IntervalBlock(name="Fasted Z2", duration_s=60 * 60, target_pct_ftp=0.60, target_rpe=4, zone=2),
         ],
-        base_tss=42.0,
+        base_tss=36.0,
     ),
     "z2_endurance_surges_75": WorkoutTemplate(
         id="z2_endurance_surges_75",
@@ -753,10 +774,11 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(
                 name="Surge play (6×15s sprints · long easy spins between)",
                 duration_s=15 * 60, target_pct_ftp=0.70, target_rpe=6, zone=2,
+                tss_pct_ftp=0.75,
             ),
             IntervalBlock(name="Z2 close", duration_s=30 * 60, target_pct_ftp=0.65, target_rpe=4, zone=2),
         ],
-        base_tss=58.0,
+        base_tss=56.3,
     ),
     "recovery_60": WorkoutTemplate(
         id="recovery_60",
@@ -767,7 +789,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         blocks=[
             IntervalBlock(name="Easy spin", duration_s=60 * 60, target_pct_ftp=0.50, target_rpe=2, zone=1, cadence_low=90, cadence_high=100),
         ],
-        base_tss=28.0,
+        base_tss=25.0,
     ),
 
     # ---- Tempo / sub-threshold (5) --------------------------------------
@@ -787,7 +809,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Tempo 2 (30min @ 80%)", duration_s=30 * 60, target_pct_ftp=0.80, target_rpe=6, zone=3),
             _cd(),
         ],
-        base_tss=98.0,
+        base_tss=79.1,
     ),
     "tempo_4x15": WorkoutTemplate(
         id="tempo_4x15",
@@ -806,7 +828,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Tempo 4", duration_s=15 * 60, target_pct_ftp=0.83, target_rpe=6, zone=3),
             _cd(),
         ],
-        base_tss=92.0,
+        base_tss=85.6,
     ),
     "tempo_progression_60": WorkoutTemplate(
         id="tempo_progression_60",
@@ -824,7 +846,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Progression 90%", duration_s=20 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
             _cd(),
         ],
-        base_tss=88.0,
+        base_tss=77.4,
     ),
     "tempo_bursts_3x10": WorkoutTemplate(
         id="tempo_bursts_3x10",
@@ -846,7 +868,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Tempo+bursts 3 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.85, target_rpe=7, zone=3),
             _cd(),
         ],
-        base_tss=72.0,
+        base_tss=51.2,
     ),
     "sub_threshold_2x40": WorkoutTemplate(
         id="sub_threshold_2x40",
@@ -865,7 +887,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Sub-LT 2 (40min @ 88%)", duration_s=40 * 60, target_pct_ftp=0.88, target_rpe=7, zone=3),
             _cd(),
         ],
-        base_tss=145.0,
+        base_tss=119.1,
     ),
     "sweet_spot_3x20": WorkoutTemplate(
         id="sweet_spot_3x20",
@@ -882,7 +904,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="SST 3", duration_s=20 * 60, target_pct_ftp=0.90, target_rpe=7, zone=3),
             _cd(),
         ],
-        base_tss=108.0,
+        base_tss=96.9,
     ),
 
     # ---- Threshold / LT2 (5) --------------------------------------------
@@ -913,7 +935,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="1 min", duration_s=60, target_pct_ftp=1.00, target_rpe=8, zone=4),
             _cd(),
         ],
-        base_tss=68.0,
+        base_tss=43.4,
     ),
     "threshold_hill_4x10": WorkoutTemplate(
         id="threshold_hill_4x10",
@@ -936,7 +958,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Hill 4", duration_s=10 * 60, target_pct_ftp=0.98, target_rpe=8, zone=4, cadence_low=65, cadence_high=80),
             _cd(),
         ],
-        base_tss=105.0,
+        base_tss=82.0,
     ),
     "over_under_4x12": WorkoutTemplate(
         id="over_under_4x12",
@@ -959,7 +981,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="OU set 4 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
             _cd(),
         ],
-        base_tss=110.0,
+        base_tss=98.0,
         min_ftp_required=180,
     ),
     "threshold_descending": WorkoutTemplate(
@@ -982,7 +1004,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="8 min @ 102%", duration_s=8 * 60, target_pct_ftp=1.02, target_rpe=9, zone=4),
             _cd(),
         ],
-        base_tss=98.0,
+        base_tss=90.3,
     ),
     "lactate_shuttles_3x8": WorkoutTemplate(
         id="lactate_shuttles_3x8",
@@ -1003,7 +1025,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Shuttle 3 (2/2/2/2 @ 85/105%)", duration_s=8 * 60, target_pct_ftp=0.95, target_rpe=8, zone=4),
             _cd(),
         ],
-        base_tss=70.0,
+        base_tss=52.0,
     ),
 
     # ---- VO2 (4 additional) ---------------------------------------------
@@ -1032,7 +1054,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Hill VO2 6", duration_s=3 * 60, target_pct_ftp=1.15, target_rpe=9, zone=5, cadence_low=70, cadence_high=85),
             _cd(),
         ],
-        base_tss=82.0,
+        base_tss=57.7,
         min_ftp_required=180,
     ),
     "vo2_microbursts_30x15_45": WorkoutTemplate(
@@ -1047,10 +1069,10 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Stepto & Hawley HIT · Coggan Z5+",
         blocks=[
             _wu(),
-            IntervalBlock(name="Microburst set (30×15/45s)", duration_s=30 * 60, target_pct_ftp=1.20, target_rpe=9, zone=5),
+            IntervalBlock(name="Microburst set (30×15/45s)", duration_s=30 * 60, target_pct_ftp=1.20, target_rpe=9, zone=5, tss_pct_ftp=0.87),
             _cd(),
         ],
-        base_tss=70.0,
+        base_tss=49.6,
         min_ftp_required=180,
     ),
     "vo2_3x6": WorkoutTemplate(
@@ -1072,7 +1094,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="VO2 long 3", duration_s=6 * 60, target_pct_ftp=1.08, target_rpe=9, zone=5),
             _cd(),
         ],
-        base_tss=72.0,
+        base_tss=50.1,
         min_ftp_required=180,
     ),
     "vo2_descending_5_4_3_2_1": WorkoutTemplate(
@@ -1098,7 +1120,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="1 min @ 130%", duration_s=60, target_pct_ftp=1.30, target_rpe=10, zone=6),
             _cd(),
         ],
-        base_tss=72.0,
+        base_tss=49.9,
         min_ftp_required=180,
     ),
 
@@ -1126,7 +1148,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="AC 5", duration_s=3 * 60, target_pct_ftp=1.30, target_rpe=10, zone=6),
             _cd(),
         ],
-        base_tss=68.0,
+        base_tss=62.3,
         min_ftp_required=180,
     ),
     "anaerobic_8x90s": WorkoutTemplate(
@@ -1157,7 +1179,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="LT 8", duration_s=90, target_pct_ftp=1.35, target_rpe=10, zone=6),
             _cd(),
         ],
-        base_tss=60.0,
+        base_tss=56.9,
         min_ftp_required=180,
     ),
     "neuromuscular_spinup_6x30": WorkoutTemplate(
@@ -1172,10 +1194,10 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Mujika neuromuscular · Hansen cadence",
         blocks=[
             _wu(),
-            IntervalBlock(name="Spin-up set (6×30s · 4-min easy between)", duration_s=6 * (30 + 4 * 60), target_pct_ftp=1.30, target_rpe=10, zone=6, cadence_low=110, cadence_high=125),
+            IntervalBlock(name="Spin-up set (6×30s · 4-min easy between)", duration_s=6 * (30 + 4 * 60), target_pct_ftp=1.30, target_rpe=10, zone=6, cadence_low=110, cadence_high=125, tss_pct_ftp=0.64),
             _cd(),
         ],
-        base_tss=50.0,
+        base_tss=30.2,
     ),
     "neuromuscular_standing_6x10": WorkoutTemplate(
         id="neuromuscular_standing_6x10",
@@ -1189,10 +1211,10 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Coggan NM · track sprint methodology",
         blocks=[
             _wu(),
-            IntervalBlock(name="Standing-start set (6×10s · 4-min easy)", duration_s=6 * (10 + 4 * 60), target_pct_ftp=2.00, target_rpe=10, zone=7, cadence_low=50, cadence_high=85),
+            IntervalBlock(name="Standing-start set (6×10s · 4-min easy)", duration_s=6 * (10 + 4 * 60), target_pct_ftp=2.00, target_rpe=10, zone=7, cadence_low=50, cadence_high=85, tss_pct_ftp=0.63),
             _cd(),
         ],
-        base_tss=42.0,
+        base_tss=28.3,
     ),
 
     # ---- Specialty / drills (4) -----------------------------------------
@@ -1213,10 +1235,10 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Carmichael CTS FastPedal · Friel skill",
         blocks=[
             _wu(),
-            IntervalBlock(name="FSR set (6×3min @ 110rpm)", duration_s=6 * (3 * 60 + 2 * 60), target_pct_ftp=0.65, target_rpe=5, zone=2, cadence_low=105, cadence_high=120),
+            IntervalBlock(name="FSR set (6×3min @ 110rpm)", duration_s=6 * (3 * 60 + 2 * 60), target_pct_ftp=0.65, target_rpe=5, zone=2, cadence_low=105, cadence_high=120, tss_pct_ftp=0.59),
             _cd(),
         ],
-        base_tss=45.0,
+        base_tss=29.1,
     ),
     "cadence_low_lcf_4x6": WorkoutTemplate(
         id="cadence_low_lcf_4x6",
@@ -1239,7 +1261,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="LCF 4", duration_s=6 * 60, target_pct_ftp=0.85, target_rpe=7, zone=3, cadence_low=55, cadence_high=65),
             _cd(),
         ],
-        base_tss=58.0,
+        base_tss=44.4,
     ),
     "crit_simulation_stochastic": WorkoutTemplate(
         id="crit_simulation_stochastic",
@@ -1256,7 +1278,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Crit set (60min variable, base Z3, surges 130%)", duration_s=60 * 60, target_pct_ftp=0.90, target_rpe=8, zone=4),
             _cd(),
         ],
-        base_tss=92.0,
+        base_tss=92.7,
         min_ftp_required=180,
     ),
     "group_ride_variable": WorkoutTemplate(
@@ -1274,7 +1296,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Group ride (90min variable)", duration_s=90 * 60, target_pct_ftp=0.75, target_rpe=6, zone=3),
             _cd(),
         ],
-        base_tss=85.0,
+        base_tss=96.1,
     ),
 
     # ---- Field tests (2) -------------------------------------------------
@@ -1292,10 +1314,18 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             _wu(20 * 60),
             IntervalBlock(name="5-min openers @ 100%", duration_s=5 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
             _rec(10 * 60),
-            IntervalBlock(name="20-min ALL-OUT test", duration_s=20 * 60, target_pct_ftp=1.05, target_rpe=10, zone=4),
+            # The test rep is an OPEN max effort: prescribing a watt band from
+            # the athlete's *current* FTP would pre-print the result. Guidance
+            # is pacing/RPE only; tss_pct_ftp=1.05 is the typical 20-min-max
+            # intensity used purely for load accounting.
+            IntervalBlock(
+                name="20-min max-effort test (RPE 10 — pace by feel, no power target)",
+                duration_s=20 * 60, target_pct_ftp=1.05, target_rpe=10, zone=4,
+                tss_pct_ftp=1.05, open_effort=True,
+            ),
             _cd(),
         ],
-        base_tss=88.0,
+        base_tss=63.5,
     ),
     "ftp_ramp_test": WorkoutTemplate(
         id="ftp_ramp_test",
@@ -1309,10 +1339,12 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Coggan ramp test · MAP→FTP regression",
         blocks=[
             _wu(15 * 60),
-            IntervalBlock(name="Ramp to failure (1-min steps)", duration_s=25 * 60, target_pct_ftp=1.00, target_rpe=10, zone=4),
+            # Ramp averages far below its endpoint: linear ~40→130% FTP gives a
+            # duration-weighted mean IF² of ≈0.79 → effective IF ≈0.89.
+            IntervalBlock(name="Ramp to failure (1-min steps)", duration_s=25 * 60, target_pct_ftp=1.00, target_rpe=10, zone=4, tss_pct_ftp=0.89),
             _cd(),
         ],
-        base_tss=55.0,
+        base_tss=44.7,
     ),
 
     # ---- Taper / race-pace confidence (1) -------------------------------
@@ -1331,7 +1363,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
             IntervalBlock(name="Race-pace 60min @ 95%", duration_s=60 * 60, target_pct_ftp=0.95, target_rpe=8, zone=4),
             _cd(),
         ],
-        base_tss=95.0,
+        base_tss=102.0,
         min_ftp_required=180,
     ),
 }
@@ -1430,6 +1462,252 @@ for _tid, (_target, _placement, _readiness, _indoor, _fun) in _META.items():
 
 
 # ======================================================================
+#  Localization (de) — populated for EVERY template
+# ======================================================================
+# (name_de, purpose_de). purpose_de is deliberately plain, beginner-safe
+# German (no "LT1", no "mitochondriale Dichte") so it can be served verbatim
+# in SIMPLE language mode. Same bilingual pattern as message_de/message_en in
+# plan_adaptation_engine / plan_interview.
+
+_I18N_DE: dict[str, tuple[str, str]] = {
+    # rest / recovery / skills
+    "rest_day": (
+        "Ruhetag",
+        "Komplette Erholung — schlafen, spazieren, lockeres Dehnen. Heute kein Training.",
+    ),
+    "recovery_30": (
+        "Lockeres Ausfahren — 30 min",
+        "Ganz lockeres Kurbeln, damit sich dein Körper erholt und die Beine wieder frisch werden.",
+    ),
+    "recovery_60": (
+        "Lockeres Ausfahren — 60 min",
+        "Längere, ganz lockere Ausfahrt mit leichtem Gang und flüssigem Tritt — reine Erholung.",
+    ),
+    "cadence_high_fsr_6x3": (
+        "Frequenz-Übungen — 6×3 min bei 110 U/min",
+        "Schnelles, rundes Pedalieren bei lockerer Leistung — Technik-Training für einen geschmeidigen Tritt.",
+    ),
+    # endurance / aerobic base
+    "z2_endurance_60": (
+        "Grundlagenausdauer — 60 min",
+        "Lockeres, gleichmäßiges Fahren bringt deinem Körper bei, Fett als Treibstoff zu nutzen, und baut deine Ausdauer-Basis auf.",
+    ),
+    "z2_endurance_90": (
+        "Grundlagenausdauer — 90 min",
+        "Längeres lockeres Fahren im Wohlfühltempo — baut deine aerobe Grundlage weiter aus.",
+    ),
+    "z2_long_120": (
+        "Lange Grundlagenfahrt — 2 h",
+        "Zwei Stunden gleichmäßig und locker — macht dich ausdauernder und zeigt, wie stabil dein Puls bleibt.",
+    ),
+    "z2_long_180": (
+        "Lange Grundlagenfahrt — 3 h",
+        "Die klassische lange, lockere Ausfahrt. Bleibt dein Puls bei gleicher Leistung stabil, wirkt dein Training.",
+    ),
+    "z2_long_240": (
+        "Lange Grundlagenfahrt — 4 h",
+        "Vier Stunden ruhiges Fahren — trainiert Ausdauer, Sitzposition und dein Gefühl fürs Essen und Trinken unterwegs.",
+    ),
+    "z2_climbing_long": (
+        "Berg-Grundlagenfahrt — 3 h mit Kraftblöcken",
+        "Lange lockere Fahrt mit zwei kräftigen Bergabschnitten bei niedriger Trittfrequenz — bereitet deine Beine auf lange Anstiege vor.",
+    ),
+    "maf_aerobic_90": (
+        "Ruhige Pulsfahrt — 90 min",
+        "Fahre streng nach Puls statt nach Watt — schön ruhig. So wird dein Ausdauermotor Schritt für Schritt größer.",
+    ),
+    "z2_progressive_90": (
+        "Steigerungsfahrt — 90 min",
+        "Locker starten, ruhig steigern, kontrolliert zügig enden — übt gleichmäßiges Fahren, auch wenn die Beine müde werden.",
+    ),
+    "z2_endurance_low_100": (
+        "Ganz lockere Ausdauerfahrt — 100 min",
+        "Extra locker und dafür etwas länger — dein Körper lernt, Fett als Treibstoff zu nutzen, ohne dass du ermüdest.",
+    ),
+    "z2_endurance_upper_75": (
+        "Zügige Ausdauerfahrt — 75 min",
+        "Etwas flotter als die gewohnte lockere Runde, aber immer noch gut durchzuhalten — mehr Reiz pro Minute.",
+    ),
+    "z2_endurance_tempo_touch_75": (
+        "Ausdauerfahrt mit Tempo-Akzenten — 75 min",
+        "Lockere Fahrt mit drei kurzen, etwas zügigeren Abschnitten — bringt Abwechslung, bleibt aber ein leichter Tag.",
+    ),
+    "z2_endurance_surges_75": (
+        "Verspielte Ausdauerfahrt — 75 min mit 6 Antritten",
+        "Lockere Runde mit sechs kurzen, spielerischen Antritten aus dem Sattel — macht Spaß und kostet fast keine Kraft.",
+    ),
+    "z2_fasted_60": (
+        "Nüchternfahrt — 60 min locker",
+        "Lockere Fahrt vor dem Frühstück — bringt deinem Körper bei, Fett als Treibstoff zu nutzen. Bitte wirklich locker bleiben.",
+    ),
+    # tempo / sub-threshold
+    "tempo_3x10": (
+        "Tempo — 3×10 min",
+        "Drei zügige Abschnitte knapp unter deinem Wettkampftempo — macht dich ausdauernder bei höherem Tempo.",
+    ),
+    "tempo_2x30": (
+        "Langes Tempo — 2×30 min",
+        "Zwei lange, zügige Blöcke — trainieren deine Muskeln, hohes Tempo lange durchzuhalten.",
+    ),
+    "tempo_4x15": (
+        "Tempo — 4×15 min",
+        "Vier zügige Abschnitte — viel Training knapp unter der Schwelle, ohne dich komplett zu leeren.",
+    ),
+    "tempo_progression_60": (
+        "Tempo-Steigerung — 60 min",
+        "Eine Stunde, in der es alle 20 Minuten etwas schneller wird — vom lockeren Fahren bis kurz unter dein Limit-Tempo.",
+    ),
+    "tempo_bursts_3x10": (
+        "Tempo mit Antritten — 3×10 min",
+        "Zügige Abschnitte mit einem kurzen Antritt alle zwei Minuten — wie in einer Gruppenausfahrt; hält wach und macht spritzig.",
+    ),
+    "cadence_low_lcf_4x6": (
+        "Kraft am Berg — 4×6 min bei 60 U/min",
+        "Langsam und kraftvoll kurbeln wie an einem steilen Anstieg — Krafttraining direkt auf dem Rad.",
+    ),
+    "group_ride_variable": (
+        "Gruppenfahrt-Simulation — 90 min",
+        "Wechselhaftes Fahren wie in einer schnellen Gruppe — mal locker, mal kurz hart. Trainiert dein Stehvermögen im Feld.",
+    ),
+    # sweet spot
+    "sweet_spot_2x20": (
+        "Sweetspot — 2×20 min",
+        "Zwei fordernde 20-Minuten-Blöcke knapp unter deiner Schwelle — sehr effektiv, um stärker zu werden.",
+    ),
+    "sweet_spot_3x20": (
+        "Sweetspot — 3×20 min",
+        "Drei fordernde 20-Minuten-Blöcke knapp unter deiner Schwelle — der Klassiker, um Form für lange Events aufzubauen.",
+    ),
+    "sweet_spot_4x15": (
+        "Sweetspot — 4×15 min",
+        "Eine Stunde Arbeit knapp unter der Schwelle, in vier Portionen — baut Form auf, ohne dich tagelang müde zu machen.",
+    ),
+    "sub_threshold_2x40": (
+        "Lange Sweetspot-Blöcke — 2×40 min",
+        "Zwei sehr lange, fordernde Blöcke knapp unter deiner Schwelle — die härteste Form von Ausdauer-Aufbau für lange Anstiege.",
+    ),
+    # threshold
+    "threshold_2x15": (
+        "Schwelle — 2×15 min",
+        "Zwei harte 15-Minuten-Blöcke an deiner Leistungsgrenze — hebt dein Dauerleistungs-Limit an.",
+    ),
+    "over_under_3x5": (
+        "Über-Unter-Intervalle — 3×(5×1 min)",
+        "Im Wechsel knapp über und unter deiner Grenze fahren — dein Körper lernt, sich von harten Momenten während der Fahrt zu erholen.",
+    ),
+    "threshold_seiler_4x8": (
+        "Norwegische Schwelle — 4×8 min",
+        "Vier Blöcke knapp unter deiner Grenze — fordernd, aber Woche für Woche gut wiederholbar.",
+    ),
+    "threshold_pyramid": (
+        "Schwellen-Pyramide — 1/2/3/4/3/2/1 min",
+        "Erst länger werdende, dann wieder kürzere harte Abschnitte an deiner Grenze — abwechslungsreich und wettkampfnah.",
+    ),
+    "threshold_hill_4x10": (
+        "Berg-Schwelle — 4×10 min",
+        "Vier lange, harte Bergabschnitte — genau das, was lange Anstiege am Event von dir verlangen.",
+    ),
+    "over_under_4x12": (
+        "Lange Über-Unter-Intervalle — 4×12 min",
+        "Lange Wechsel-Blöcke knapp über und unter deiner Grenze — hartes Training fürs Erholen während der Fahrt.",
+    ),
+    "threshold_descending": (
+        "Kürzer und härter — 15/12/10/8 min",
+        "Die Abschnitte werden kürzer, dafür etwas schneller — du lernst, am Ende noch einen Gang zuzulegen.",
+    ),
+    "lactate_shuttles_3x8": (
+        "Wechselintervalle — 3×8 min",
+        "Innerhalb jedes Blocks im Wechsel zügig und hart fahren — dein Körper lernt, harte Momente schneller wegzustecken.",
+    ),
+    "crit_simulation_stochastic": (
+        "Rennsimulation — 60 min mit Attacken",
+        "Eine Stunde wie im Rennen: immer wieder unvorhersehbare kurze Antritte auf zügiger Grundfahrt.",
+    ),
+    "ftp_test_20min": (
+        "FTP-Test — 20 min Maximaltest",
+        "Fahr 20 Minuten so hart, wie du es gleichmäßig durchhalten kannst — nach Gefühl, ohne Wattvorgabe. Daraus berechnen wir deinen neuen Referenzwert.",
+    ),
+    "ftp_ramp_test": (
+        "FTP-Rampentest",
+        "Jede Minute wird es ein Stück schwerer, bis nichts mehr geht — kürzer und weniger ermüdend als der 20-Minuten-Test.",
+    ),
+    "race_pace_60_95": (
+        "Renntempo-Check — 60 min",
+        "Eine Stunde knapp unter Wettkampftempo — gibt dir vor dem Event Sicherheit, ohne dich zu verheizen.",
+    ),
+    # vo2
+    "vo2_5x4": (
+        "VO2max — 5×4 min",
+        "Fünf sehr harte 4-Minuten-Intervalle — bringen deinen Motor an die Obergrenze und vergrößern ihn.",
+    ),
+    "vo2_micro_30x30": (
+        "VO2max kurz-kurz — 30×30/30 s",
+        "Viele kurze harte Antritte mit kurzen Pausen — sehr wirksames Training für deine maximale Ausdauerleistung.",
+    ),
+    "vo2_ronnestad_3x13": (
+        "VO2max kurz-kurz — 3×(13×30/15 s)",
+        "Drei Sätze mit vielen 30-Sekunden-Antritten und Mini-Pausen — viel Wirkung, gefühlt weniger quälend als lange Intervalle.",
+    ),
+    "vo2_map_5x3": (
+        "VO2max — 5×3 min",
+        "Fünf harte 3-Minuten-Intervalle — etwas kürzer und leichter sauber zu treffen als die 4-Minuten-Variante.",
+    ),
+    "polarized_long_z2_4x4": (
+        "Lange Fahrt mit hartem Finale — 3 h + 4×4 min",
+        "Lange lockere Fahrt, und erst am Ende vier harte Intervalle auf müden Beinen — macht dich haltbar und schnell zugleich.",
+    ),
+    "vo2_hill_6x3": (
+        "Berg-Intervalle — 6×3 min",
+        "Sechs harte 3-Minuten-Anstiege mit kräftigem Tritt — bergspezifisches Training für deine Obergrenze.",
+    ),
+    "vo2_microbursts_30x15_45": (
+        "Antritts-Intervalle — 30×15/45 s",
+        "30 kurze, sehr harte Antritte mit lockeren Pausen — trainiert genau die Tempowechsel, die Rennen entscheiden.",
+    ),
+    "vo2_3x6": (
+        "Lange VO2max-Intervalle — 3×6 min",
+        "Drei lange, sehr harte Intervalle — eines der härtesten Trainings; hebt deine Obergrenze deutlich.",
+    ),
+    "vo2_descending_5_4_3_2_1": (
+        "VO2max-Leiter — 5/4/3/2/1 min",
+        "Die Intervalle werden kürzer, aber immer härter — du lernst, am Ende noch einmal alles zu geben.",
+    ),
+    # anaerobic / neuromuscular
+    "anaerobic_capacity_5x3_130": (
+        "Anaerobe Intervalle — 5×3 min",
+        "Fünf Intervalle deutlich über deiner Grenze — trainiert wiederholte harte Attacken.",
+    ),
+    "anaerobic_8x90s": (
+        "Stehvermögen — 8×90 s",
+        "Acht sehr harte 90-Sekunden-Intervalle — du lernst, das Brennen in den Beinen auszuhalten.",
+    ),
+    "anaerobic_tabata_8x20_10": (
+        "Tabata — 8×(20 s hart / 10 s locker)",
+        "Vier Minuten im schnellen Wechsel Vollgas und Mini-Pause — kurz, aber sehr anstrengend. Nur alle ein bis zwei Wochen.",
+    ),
+    "neuromuscular_sprints_8x15": (
+        "Sprints — 8×15 s voll",
+        "Acht kurze Vollsprints mit langen Pausen — erhält und schärft deine maximale Endgeschwindigkeit.",
+    ),
+    "neuromuscular_spinup_6x30": (
+        "Frequenz-Sprints — 6×30 s",
+        "Kurze schnelle Antritte mit sehr hoher Trittfrequenz — macht deinen Tritt schneller und runder.",
+    ),
+    "neuromuscular_standing_6x10": (
+        "Antritte aus dem Stand — 6×10 s",
+        "Sechs maximale Antritte fast aus dem Stand im schweren Gang — pure Kraft für den Sprint.",
+    ),
+}
+
+_missing_i18n = set(TEMPLATES) - set(_I18N_DE)
+assert not _missing_i18n, f"templates missing German localization: {_missing_i18n}"
+for _tid, (_name_de, _purpose_de) in _I18N_DE.items():
+    _t = TEMPLATES.get(_tid)
+    if _t is not None:
+        TEMPLATES[_tid] = replace(_t, name_de=_name_de, purpose_de=_purpose_de)
+
+
+# ======================================================================
 #  Endurance trim ladder — duration-first trimming (plan-engine v2)
 # ======================================================================
 # When a week runs over its TSS budget, the plan trims the DURATION of an
@@ -1439,14 +1717,14 @@ for _tid, (_target, _placement, _readiness, _indoor, _fun) in _META.items():
 # base_tss; deliberately excludes special-purpose variants (fasted, MAF).
 
 ENDURANCE_TRIM_LADDER: tuple[str, ...] = (
-    "z2_long_120",              # 90 TSS · 120 min
-    "z2_progressive_90",        # 78 TSS · 90 min
-    "z2_endurance_90",          # 68 TSS · 90 min
-    "z2_endurance_upper_75",    # 63 TSS · 75 min
-    "z2_endurance_low_100",     # 62 TSS · 100 min
-    "z2_endurance_surges_75",   # 58 TSS · 75 min
-    "z2_endurance_tempo_touch_75",  # 58 TSS · 75 min
-    "z2_endurance_60",          # 45 TSS · 60 min
+    "z2_long_120",              # 84.5 TSS · 120 min
+    "z2_progressive_90",        # 65.7 TSS · 90 min
+    "z2_endurance_90",          # 63.4 TSS · 90 min
+    "z2_endurance_upper_75",    # 61.2 TSS · 75 min
+    "z2_endurance_low_100",     # 60.0 TSS · 100 min
+    "z2_endurance_surges_75",   # 56.3 TSS · 75 min
+    "z2_endurance_tempo_touch_75",  # 54.2 TSS · 75 min
+    "z2_endurance_60",          # 42.3 TSS · 60 min
 )
 
 
@@ -1471,6 +1749,25 @@ def pick_trim_variant(
         if t.base_tss <= max_tss and minutes <= max_minutes:
             return t
     return None
+
+
+def compute_template_tss(blocks: list[IntervalBlock]) -> float:
+    """Derive TSS from the interval blocks: Σ duration_h × IF² × 100.
+
+    IF per block is `tss_pct_ftp` when set (composite on/off blocks encode
+    the ON-target in target_pct_ftp, which would overstate load), otherwise
+    `target_pct_ftp`. This is the single source of truth for `base_tss` —
+    the number an athlete sees must survive recomputation from the structure.
+    """
+    return round(
+        sum(
+            (b.duration_s / 3600.0)
+            * ((b.tss_pct_ftp if b.tss_pct_ftp is not None else b.target_pct_ftp) ** 2)
+            * 100.0
+            for b in blocks
+        ),
+        1,
+    )
 
 
 def get_template(template_id: str) -> WorkoutTemplate | None:
@@ -1582,7 +1879,13 @@ def parametrize_template(
             scaled_work_seconds += duration
             base_work_seconds += block.duration_s
         tol = _tolerance_for_zone(block.zone)
-        low, high = _watts_band(ftp, block.target_pct_ftp, tolerance_pct=tol)
+        if block.open_effort:
+            # Field-test / max-effort block: no watt band derived from the
+            # current FTP (the band would pre-print the test result). 0/0 +
+            # open_effort=True → consumers render "max effort / RPE".
+            low, high = 0, 0
+        else:
+            low, high = _watts_band(ftp, block.target_pct_ftp, tolerance_pct=tol)
         # Cadence: prefer block-level override, else fall back to a sensible
         # zone-based default (Friel / Coggan conventions).
         c_low, c_high = block.cadence_low, block.cadence_high
@@ -1599,13 +1902,14 @@ def parametrize_template(
                 duration_s=duration,
                 target_watts_low=low,
                 target_watts_high=high,
-                target_pct_ftp=round(block.target_pct_ftp, 3),
+                target_pct_ftp=0.0 if block.open_effort else round(block.target_pct_ftp, 3),
                 zone=block.zone,
                 rpe=block.target_rpe,
                 cadence_low=c_low,
                 cadence_high=c_high,
                 target_hr_low=hr_low,
                 target_hr_high=hr_high,
+                open_effort=block.open_effort,
             )
         )
 
@@ -1631,6 +1935,8 @@ def parametrize_template(
         predicted_tss=predicted_tss,
         predicted_ef_range=ef_range,
         blocks=resolved,
+        title_de=template.name_de,
+        purpose_de=template.purpose_de,
     )
 
 
@@ -1639,8 +1945,10 @@ def prescribed_workout_to_dict(pw: PrescribedWorkout) -> dict:
     return {
         "template_id": pw.template_id,
         "title": pw.title,
+        "title_de": pw.title_de,
         "framework_cited": pw.framework_cited,
         "purpose": pw.purpose,
+        "purpose_de": pw.purpose_de,
         "category": pw.category,
         "duration_minutes": pw.duration_minutes,
         "total_duration_s": pw.total_duration_s,
@@ -1659,6 +1967,7 @@ def prescribed_workout_to_dict(pw: PrescribedWorkout) -> dict:
                 "cadence_high": b.cadence_high,
                 "target_hr_low": b.target_hr_low,
                 "target_hr_high": b.target_hr_high,
+                "open_effort": b.open_effort,
             }
             for b in pw.blocks
         ],

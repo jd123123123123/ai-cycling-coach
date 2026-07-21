@@ -13,10 +13,15 @@ from __future__ import annotations
 
 import pytest
 
+from app.services.run_workout_templates import (
+    RUN_TEMPLATES,
+    run_interval_structure,
+)
 from app.services.workout_templates import (
     TEMPLATES,
     PrescribedWorkout,
     ResolvedBlock,
+    compute_template_tss,
     get_template,
     parametrize_template,
     prescribed_workout_to_dict,
@@ -175,8 +180,8 @@ class TestParametrize:
         pw_base = parametrize_template(TEMPLATES["vo2_5x4"], ftp=250, duration_scale=1.0)
         pw_long = parametrize_template(TEMPLATES["vo2_5x4"], ftp=250, duration_scale=1.15)
         pw_short = parametrize_template(TEMPLATES["vo2_5x4"], ftp=250, duration_scale=0.85)
-        # Base = 72.0 TSS at scale=1.0
-        assert pw_base.predicted_tss == 72.0
+        # Base = block-derived TSS at scale=1.0 (wu 7.6 + 5×8.8 + 4×1.25 + cd 4.2)
+        assert pw_base.predicted_tss == 60.8
         assert pw_long.predicted_tss > pw_base.predicted_tss
         assert pw_short.predicted_tss < pw_base.predicted_tss
 
@@ -192,6 +197,123 @@ class TestParametrize:
         pw = parametrize_template(TEMPLATES["vo2_5x4"], ftp=250)
         # 15 + 5×4 + 4×3 + 10 = 15+20+12+10 = 57 min
         assert pw.duration_minutes == 57
+
+
+class TestTssIntegrity:
+    """base_tss must survive independent recomputation from the blocks.
+
+    TSS = Σ duration_hours × IF² × 100 per block, where IF is the block's
+    effective intensity (`tss_pct_ftp` for composite on/off blocks, else
+    `target_pct_ftp`). The number shown to athletes may never contradict
+    the interval structure it sits next to.
+    """
+
+    @pytest.mark.parametrize("template_id", sorted(TEMPLATES.keys()))
+    def test_base_tss_matches_blocks(self, template_id):
+        t = TEMPLATES[template_id]
+        recomputed = sum(
+            (b.duration_s / 3600.0)
+            * ((b.tss_pct_ftp if b.tss_pct_ftp is not None else b.target_pct_ftp) ** 2)
+            * 100.0
+            for b in t.blocks
+        )
+        tolerance = max(1.0, recomputed * 0.05)
+        assert abs(t.base_tss - recomputed) <= tolerance, (
+            f"{template_id}: base_tss={t.base_tss} but blocks compute "
+            f"{recomputed:.1f} (|Δ| > {tolerance:.1f})"
+        )
+
+    def test_compute_template_tss_helper_agrees(self):
+        for t in TEMPLATES.values():
+            assert t.base_tss == compute_template_tss(t.blocks)
+
+    def test_composite_blocks_declare_effective_intensity(self):
+        """On/off blocks encoded at their ON-target must carry tss_pct_ftp —
+        otherwise a 180%-FTP sprint set would book ~138 TSS for 26 min."""
+        sprint_set = TEMPLATES["neuromuscular_sprints_8x15"].blocks[1]
+        assert sprint_set.tss_pct_ftp is not None
+        assert sprint_set.tss_pct_ftp < sprint_set.target_pct_ftp
+
+
+class TestLocalization:
+    """Every template ships German name/purpose; purpose_de is beginner-safe."""
+
+    _JARGON = ("LT1", "LT2", "mitochondri", "Mitochondri", "MCT", "PGC")
+
+    @pytest.mark.parametrize("template_id", sorted(TEMPLATES.keys()))
+    def test_bike_template_has_german_fields(self, template_id):
+        t = TEMPLATES[template_id]
+        assert t.name_de.strip(), f"{template_id}: empty name_de"
+        assert t.purpose_de.strip(), f"{template_id}: empty purpose_de"
+
+    @pytest.mark.parametrize("template_id", sorted(TEMPLATES.keys()))
+    def test_bike_purpose_de_is_beginner_safe(self, template_id):
+        purpose_de = TEMPLATES[template_id].purpose_de
+        for token in self._JARGON:
+            assert token not in purpose_de, (
+                f"{template_id}: purpose_de contains lab jargon {token!r}"
+            )
+
+    @pytest.mark.parametrize("template_id", sorted(RUN_TEMPLATES.keys()))
+    def test_run_template_has_german_fields(self, template_id):
+        t = RUN_TEMPLATES[template_id]
+        assert t.name_de.strip(), f"{template_id}: empty name_de"
+        assert t.purpose_de.strip(), f"{template_id}: empty purpose_de"
+        for token in self._JARGON:
+            assert token not in t.purpose_de
+        for b in t.blocks:
+            assert b.description_de.strip(), (
+                f"{template_id}: block {b.name!r} missing description_de"
+            )
+
+    def test_parametrize_carries_german_strings(self):
+        pw = parametrize_template(TEMPLATES["z2_endurance_60"], ftp=250)
+        assert pw.title_de == TEMPLATES["z2_endurance_60"].name_de
+        assert pw.purpose_de == TEMPLATES["z2_endurance_60"].purpose_de
+        d = prescribed_workout_to_dict(pw)
+        assert d["title_de"] == pw.title_de
+        assert d["purpose_de"] == pw.purpose_de
+
+    def test_run_interval_structure_carries_german_cues(self):
+        payload = run_interval_structure(RUN_TEMPLATES["run_tempo_20"])
+        for row in payload["intervals"]:
+            assert row["description_de"].strip()
+
+
+class TestFtpTestOpenEffort:
+    """The 20-min FTP test must not pre-print its own result: the test rep is
+    an open max effort (RPE guidance), never a watt band derived from the
+    athlete's current FTP."""
+
+    def _test_block(self, pw):
+        return next(b for b in pw.blocks if "20-min" in b.name)
+
+    def test_test_rep_has_no_fixed_watt_band(self):
+        pw = parametrize_template(TEMPLATES["ftp_test_20min"], ftp=340)
+        b = self._test_block(pw)
+        assert b.open_effort is True
+        assert b.target_watts_low == 0
+        assert b.target_watts_high == 0
+        assert b.target_pct_ftp == 0.0
+        assert b.rpe == 10
+
+    def test_warmup_and_openers_keep_structure(self):
+        pw = parametrize_template(TEMPLATES["ftp_test_20min"], ftp=340)
+        wu = next(b for b in pw.blocks if b.name == "Warm-up")
+        openers = next(b for b in pw.blocks if "openers" in b.name)
+        assert wu.target_watts_high > wu.target_watts_low > 0
+        assert openers.target_watts_high > openers.target_watts_low > 0
+        assert not wu.open_effort and not openers.open_effort
+
+    def test_serialized_block_flags_open_effort(self):
+        pw = parametrize_template(TEMPLATES["ftp_test_20min"], ftp=340)
+        d = prescribed_workout_to_dict(pw)
+        row = next(r for r in d["blocks"] if "20-min" in r["name"])
+        assert row["open_effort"] is True
+        assert row["target_watts_low"] == 0 and row["target_watts_high"] == 0
+        # Non-test blocks stay backward-compatible int bands.
+        others = [r for r in d["blocks"] if "20-min" not in r["name"]]
+        assert all(isinstance(r["target_watts_low"], int) for r in others)
 
 
 class TestPrescribedWorkoutSerialiser:

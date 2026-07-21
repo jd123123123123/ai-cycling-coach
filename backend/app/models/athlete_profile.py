@@ -78,6 +78,13 @@ class AthleteProfile(Base):
         Boolean, nullable=False, server_default="true", default=True
     )
 
+    # detail_level — 'guide' | 'numbers' | 'pro'. The onboarding depth selector
+    #   ("Begleite mich" / "Zeig Zahlen" / "Voll Pro") persisted server-side so
+    #   the choice follows the athlete across devices (Settings "Detailgrad"
+    #   reads/writes the same field). UI register only — never a physiology
+    #   input. Nullable: unset means "not chosen yet" (legacy accounts).
+    detail_level: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
     # Goals stored as JSON for flexibility
     # {"target_ftp": int, "target_event": {"name": str, "date": str}, "weekly_hours": float}
     goals: Mapped[dict | None] = mapped_column(JSON, default=dict, nullable=True)
