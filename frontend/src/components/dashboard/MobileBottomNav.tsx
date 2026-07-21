@@ -62,11 +62,12 @@ export default function MobileBottomNav() {
       className="fixed bottom-0 inset-x-0 z-40 flex justify-center px-4 pointer-events-none"
       style={{
         paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)',
-        // Promote to its own compositing layer so iOS Safari keeps it rock-solid
-        // during momentum scroll (a plain fixed bar can lag/detach otherwise).
+        // translateZ(0) promotes it to its own layer (fixes the earlier scroll
+        // *lag*). Do NOT add `will-change: transform` here: on a position:fixed
+        // element iOS Safari then couples the bar to the scroll layer and it
+        // detaches / "sticks" in mid-screen during momentum scroll.
         transform: 'translateZ(0)',
         WebkitTransform: 'translateZ(0)',
-        willChange: 'transform',
       }}
     >
       <nav
