@@ -17,6 +17,7 @@
 import { type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { X, Flame, ChevronRight } from 'lucide-react'
+import { type CelebrationProgress } from './CelebrationOverlay'
 
 const EMBER = '#FF8A3C'
 const EMBER_DIM = '#6B5140'
@@ -35,9 +36,11 @@ export interface StreakBreakContent {
 
 export default function StreakBreakOverlay({
   content,
+  progress,
   onClose,
 }: {
   content: StreakBreakContent
+  progress?: CelebrationProgress
   onClose: () => void
 }) {
   const reduce = useReducedMotion()
@@ -73,17 +76,35 @@ export default function StreakBreakOverlay({
       transition={{ duration: reduce ? 0 : 0.24 }}
       onClick={onClose}
     >
-      {/* Top row: close */}
+      {/* Top row: close (+ progress) */}
       <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="grid place-items-center rounded-full"
-          style={{ width: 36, height: 36, background: '#ffffff12', color: '#ffffffa6' }}
-        >
-          <X size={20} />
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="grid place-items-center rounded-full"
+            style={{ width: 36, height: 36, background: '#ffffff12', color: '#ffffffa6' }}
+          >
+            <X size={20} />
+          </button>
+          {progress && progress.total > 1 && (
+            <span
+              className="num-display rounded-full"
+              aria-label={`${progress.index} von ${progress.total}`}
+              style={{
+                padding: '5px 11px',
+                fontSize: 13,
+                letterSpacing: 0.5,
+                color: '#F4E9E2cc',
+                background: '#ffffff10',
+                border: '1px solid #ffffff1f',
+              }}
+            >
+              {progress.index}/{progress.total}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Center */}

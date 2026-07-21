@@ -15,15 +15,19 @@
  *   • First load with no history seeds the store silently (never fires).
  *   • Deduped per break instance (streakBreakDedupKey) so it shows once, ever.
  *
- * This owns its own overlay slot (separate AnimatePresence) rather than the
- * celebration overlay, because a break is a soft moment with no confetti.
+ * The break is a soft moment (no confetti), but it rides the SAME sequential
+ * celebration queue as the happy cards — enqueued via `enqueueStreakBreak` — so
+ * a celebration and a break can never overlap on screen, and a break simply
+ * plays after any happy card that fired in the same tick (it sorts lowest, so
+ * we never open on a downer). This watcher is pure signal: it detects the real
+ * break and enqueues; the provider owns the overlay slot.
  */
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AnimatePresence } from 'motion/react'
 import { useStreak } from '../../hooks/useStreak'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
+import { useCelebrate } from '../../contexts/CelebrationContext'
 import {
   detectStreakBreak,
   hasGenuineBreakDay,
@@ -34,15 +38,14 @@ import {
   hasCelebrated,
   markCelebrated,
 } from '../../lib/celebration'
-import StreakBreakOverlay, { type StreakBreakContent } from './StreakBreakOverlay'
 
 export default function StreakBreakWatcher() {
   const { data } = useStreak()
   const { user } = useAuth()
   const { locale } = useLocale()
   const navigate = useNavigate()
+  const { enqueueStreakBreak } = useCelebrate()
   const de = locale === 'de'
-  const [content, setContent] = useState<StreakBreakContent | null>(null)
 
   const userId = user?.id
   const streak = data?.streak
@@ -67,7 +70,7 @@ export default function StreakBreakWatcher() {
     if (hasCelebrated(key)) return
     markCelebrated(key)
 
-    setContent({
+    enqueueStreakBreak({
       brokenLength,
       unit: de ? 'Tage' : 'days',
       kicker: de ? 'Serie gerissen' : 'Streak lost',
@@ -75,10 +78,8 @@ export default function StreakBreakWatcher() {
         ? 'Kein Drama — die beste Zeit für eine neue Serie ist heute.'
         : 'No drama — the best day to start a new streak is today.',
       ctaLabel: de ? 'Neue Serie starten' : 'Start a new streak',
-      onCta: () => {
-        setContent(null)
-        navigate('/workout/today')
-      },
+      // The provider drains the queue after this runs.
+      onCta: () => navigate('/workout/today'),
       dismissLabel: de ? 'Später' : 'Later',
     })
     // We deliberately depend only on the live streak + identity. `week` is read
@@ -86,11 +87,5 @@ export default function StreakBreakWatcher() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, streak, de])
 
-  return (
-    <AnimatePresence>
-      {content && (
-        <StreakBreakOverlay key="streak-break" content={content} onClose={() => setContent(null)} />
-      )}
-    </AnimatePresence>
-  )
+  return null
 }

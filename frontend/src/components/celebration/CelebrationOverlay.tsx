@@ -40,6 +40,12 @@ export interface CelebrationPayload {
   dismissLabel?: string
 }
 
+/** Position of this card within a multi-card celebration run (drives "2/3"). */
+export interface CelebrationProgress {
+  index: number
+  total: number
+}
+
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3)
 }
@@ -69,9 +75,11 @@ const RAINBOW =
 
 export default function CelebrationOverlay({
   payload,
+  progress,
   onClose,
 }: {
   payload: CelebrationPayload
+  progress?: CelebrationProgress
   onClose: () => void
 }) {
   const reduce = useReducedMotion()
@@ -108,17 +116,35 @@ export default function CelebrationOverlay({
       transition={{ duration: reduce ? 0 : 0.22 }}
       onClick={onClose}
     >
-      {/* Top row: close + rarity */}
+      {/* Top row: close (+ progress) + rarity */}
       <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="grid place-items-center rounded-full"
-          style={{ width: 36, height: 36, background: '#ffffff14', color: '#ffffffb3' }}
-        >
-          <X size={20} />
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="grid place-items-center rounded-full"
+            style={{ width: 36, height: 36, background: '#ffffff14', color: '#ffffffb3' }}
+          >
+            <X size={20} />
+          </button>
+          {progress && progress.total > 1 && (
+            <span
+              className="num-display rounded-full"
+              aria-label={`${progress.index} von ${progress.total}`}
+              style={{
+                padding: '5px 11px',
+                fontSize: 13,
+                letterSpacing: 0.5,
+                color: '#ffffffcc',
+                background: '#ffffff14',
+                border: '1px solid #ffffff26',
+              }}
+            >
+              {progress.index}/{progress.total}
+            </span>
+          )}
+        </div>
         {payload.rarity && (
           <div
             className="flex items-center gap-1.5 rounded-full"

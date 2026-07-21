@@ -205,3 +205,133 @@ describe('streak-break dedup + store keys', () => {
     expect(readStoredStreak(8)).toBe(0)
   })
 })
+
+// ── Sequential celebration queue ────────────────────────────────────────────
+import {
+  celebrationPriority,
+  emptyQueue,
+  enqueueCelebration,
+  advanceCelebration,
+  type QueueEntry,
+} from '../celebration'
+
+interface TestCard extends QueueEntry {
+  label: string
+}
+
+let seqCounter = 0
+function card(kind: string, label: string): TestCard {
+  return { seq: seqCounter++, priority: celebrationPriority(kind), label }
+}
+
+describe('celebration queue', () => {
+  beforeEach(() => {
+    seqCounter = 0
+  })
+
+  it('empty queue has no head and no run', () => {
+    const q = emptyQueue<TestCard>()
+    expect(q.head).toBeNull()
+    expect(q.pending).toEqual([])
+    expect(q.index).toBe(0)
+    expect(q.total).toBe(0)
+  })
+
+  it('first enqueue becomes the head and starts a 1/1 run', () => {
+    const q = enqueueCelebration(emptyQueue<TestCard>(), card('pb', 'PB'))
+    expect(q.head?.label).toBe('PB')
+    expect(q.index).toBe(1)
+    expect(q.total).toBe(1)
+    expect(q.pending).toEqual([])
+  })
+
+  it('enqueues in the same tick queue behind the head, biggest-first', () => {
+    // Weekly fires first, then a PB and a streak land while weekly is showing.
+    let q = enqueueCelebration(emptyQueue<TestCard>(), card('weekly', 'weekly'))
+    q = enqueueCelebration(q, card('streak', 'streak'))
+    q = enqueueCelebration(q, card('pb', 'pb'))
+    // Head stays the one already on screen (never reordered out from under the user).
+    expect(q.head?.label).toBe('weekly')
+    expect(q.total).toBe(3)
+    // Pending is priority-ordered: pb (5) before streak (3).
+    expect(q.pending.map((c) => c.label)).toEqual(['pb', 'streak'])
+  })
+
+  it('advances sequentially through the whole run, then drains to empty', () => {
+    let q = enqueueCelebration(emptyQueue<TestCard>(), card('weekly', 'weekly'))
+    q = enqueueCelebration(q, card('streak', 'streak'))
+    q = enqueueCelebration(q, card('pb', 'pb'))
+
+    // 1/3: weekly (was already playing)
+    expect(q.head?.label).toBe('weekly')
+    expect(q.index).toBe(1)
+    expect(q.total).toBe(3)
+
+    // 2/3: highest-priority pending → pb
+    q = advanceCelebration(q)
+    expect(q.head?.label).toBe('pb')
+    expect(q.index).toBe(2)
+    expect(q.total).toBe(3)
+
+    // 3/3: streak
+    q = advanceCelebration(q)
+    expect(q.head?.label).toBe('streak')
+    expect(q.index).toBe(3)
+    expect(q.total).toBe(3)
+
+    // drain → empty, run resets so the next burst starts clean
+    q = advanceCelebration(q)
+    expect(q.head).toBeNull()
+    expect(q.index).toBe(0)
+    expect(q.total).toBe(0)
+  })
+
+  it('within equal priority, FIFO (seq) order is preserved (stable sort)', () => {
+    let q = enqueueCelebration(emptyQueue<TestCard>(), card('pb', 'head'))
+    // three generics enqueued in order a, b, c — all priority 1
+    q = enqueueCelebration(q, card('generic', 'a'))
+    q = enqueueCelebration(q, card('generic', 'b'))
+    q = enqueueCelebration(q, card('generic', 'c'))
+    expect(q.pending.map((c) => c.label)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('a break card sorts after any happy card in the same burst', () => {
+    let q = enqueueCelebration(emptyQueue<TestCard>(), card('pb', 'pb'))
+    q = enqueueCelebration(q, card('break', 'break'))
+    q = enqueueCelebration(q, card('streak', 'streak'))
+    // pb already on screen; pending ordered streak (3) before break (0)
+    expect(q.head?.label).toBe('pb')
+    expect(q.pending.map((c) => c.label)).toEqual(['streak', 'break'])
+  })
+
+  it('advancing an empty queue is a no-op (stays empty)', () => {
+    const q = advanceCelebration(emptyQueue<TestCard>())
+    expect(q.head).toBeNull()
+    expect(q.total).toBe(0)
+  })
+
+  it('a card enqueued mid-run grows the total and still plays', () => {
+    let q = enqueueCelebration(emptyQueue<TestCard>(), card('pb', 'pb'))
+    // one card shown so far
+    q = advanceCelebration(q) // drains to empty (nothing pending)
+    expect(q.head).toBeNull()
+    // a fresh, separate burst starts a new 1/1 run
+    q = enqueueCelebration(q, card('streak', 'streak'))
+    expect(q.head?.label).toBe('streak')
+    expect(q.total).toBe(1)
+    expect(q.index).toBe(1)
+  })
+})
+
+describe('celebrationPriority', () => {
+  it('orders pb > ftp > streak > weekly > generic > break', () => {
+    expect(celebrationPriority('pb')).toBeGreaterThan(celebrationPriority('ftp'))
+    expect(celebrationPriority('ftp')).toBeGreaterThan(celebrationPriority('streak'))
+    expect(celebrationPriority('streak')).toBeGreaterThan(celebrationPriority('weekly'))
+    expect(celebrationPriority('weekly')).toBeGreaterThan(celebrationPriority('generic'))
+    expect(celebrationPriority('generic')).toBeGreaterThan(celebrationPriority('break'))
+  })
+  it('unknown kinds fall back to the generic weight', () => {
+    expect(celebrationPriority('mystery')).toBe(celebrationPriority('generic'))
+  })
+})

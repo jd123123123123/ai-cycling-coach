@@ -176,6 +176,104 @@ export function hasGenuineBreakDay(
   return week.some((d) => d.state === 'missed' || d.state === 'unplanned')
 }
 
+// ── Sequential celebration queue (pure, React-free) ─────────────────────────
+// Several real wins can land in the same tick — a ride can set a PB *and* close
+// the weekly rhythm *and* hit a streak milestone. The overlay can only show one
+// card at a time, so instead of colliding (last-writer-wins) we QUEUE them and
+// play one after another until the queue drains. This is the pure state machine
+// behind CelebrationProvider; keeping it here makes enqueue / advance / drain /
+// ordering fully unit-testable with no DOM.
+
+/**
+ * Priority weight per celebration kind — higher plays FIRST. Rationale: lead
+ * with the biggest, rarest dopamine hit (a new power PB), then the streak
+ * milestone, then the weekly-rhythm nod; a `break` (soft "streak lost") is the
+ * quietest and always trails any happy card in the same burst so we never open
+ * on a downer. Within the same priority, insertion order (FIFO) is preserved.
+ */
+export const CELEBRATION_PRIORITY: Record<string, number> = {
+  pb: 5,
+  ftp: 4,
+  streak: 3,
+  weekly: 2,
+  generic: 1,
+  break: 0,
+}
+
+export function celebrationPriority(kind: string): number {
+  return CELEBRATION_PRIORITY[kind] ?? 1
+}
+
+/** Minimum shape the queue needs: a monotonic seq (stable tiebreak) + priority. */
+export interface QueueEntry {
+  /** Monotonic enqueue order — the stable tiebreak within equal priority. */
+  seq: number
+  /** Higher plays first (see CELEBRATION_PRIORITY). */
+  priority: number
+}
+
+export interface QueueState<T extends QueueEntry> {
+  /** The card currently on screen, or null when nothing is playing. */
+  head: T | null
+  /** Waiting cards, always kept sorted: priority desc, then seq asc. */
+  pending: T[]
+  /** 1-based position of `head` within the current run (for a "2/3" chip). */
+  index: number
+  /** Total cards seen in the current run (grows as more enqueue mid-run). */
+  total: number
+}
+
+export function emptyQueue<T extends QueueEntry>(): QueueState<T> {
+  return { head: null, pending: [], index: 0, total: 0 }
+}
+
+function sortPending<T extends QueueEntry>(items: T[]): T[] {
+  return [...items].sort((a, b) => b.priority - a.priority || a.seq - b.seq)
+}
+
+/**
+ * Enqueue a card. If nothing is playing it becomes the head immediately and a
+ * fresh run starts (index 1 / total 1). Otherwise it joins `pending`, sorted by
+ * priority (biggest-first) with seq as a stable FIFO tiebreak, and the run's
+ * total grows so the progress chip stays honest.
+ */
+export function enqueueCelebration<T extends QueueEntry>(
+  state: QueueState<T>,
+  item: T,
+): QueueState<T> {
+  if (state.head == null) {
+    return { head: item, pending: [], index: 1, total: 1 }
+  }
+  return {
+    ...state,
+    pending: sortPending([...state.pending, item]),
+    total: state.total + 1,
+  }
+}
+
+/**
+ * Advance to the next card. Drains the highest-priority pending item into the
+ * head and bumps the index; when nothing remains the run ends and the queue
+ * resets to empty (so the next burst starts a clean 1/N run).
+ */
+export function advanceCelebration<T extends QueueEntry>(
+  state: QueueState<T>,
+): QueueState<T> {
+  if (state.pending.length === 0) return emptyQueue<T>()
+  const [next, ...rest] = state.pending
+  return { head: next, pending: rest, index: state.index + 1, total: state.total }
+}
+
+/** True when the viewer asked for reduced motion (safe in non-DOM envs). */
+export function prefersReducedMotion(): boolean {
+  try {
+    if (typeof window === 'undefined' || !window.matchMedia) return false
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  } catch {
+    return false
+  }
+}
+
 // ── localStorage "seen" gate ────────────────────────────────────────────────
 export function hasCelebrated(key: string): boolean {
   try {
