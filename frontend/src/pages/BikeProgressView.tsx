@@ -1,10 +1,12 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Brain, RefreshCw, Trophy, TrendingUp, TrendingDown, Flag, Bike,
   BarChart3, Activity, ArrowRight, ArrowUp, ChevronRight, Share2, Gauge,
+  ChevronDown, Clock, Mountain,
 } from 'lucide-react'
 import { subDays } from 'date-fns'
+import { prefersReducedMotion } from '../utils/motion'
 import { useLocale } from '../contexts/LocaleContext'
 import MobileBottomNav from '../components/dashboard/MobileBottomNav'
 import DashboardHeaderBar from '../components/dashboard/DashboardHeaderBar'
@@ -115,6 +117,143 @@ function Pill({ children, color, bg }: { children: React.ReactNode; color: strin
   )
 }
 
+// ── Season fitness curve — scrubbable CTL line ──────────────────────────────
+// The dated CTL history rendered as an SVG area+line, with a movable marker:
+// touch/drag (or hover on desktop) reads the fitness value + date at that point.
+// Reuses the app's tap-tooltip pattern (HoverBars / PMCChart) rather than uPlot,
+// since the honest data here is a single sparse yearly series.
+function SeasonFitnessChart({
+  data, de, fmtD, phases,
+}: {
+  data: { t: number; ctl: number }[]
+  de: boolean
+  fmtD: (d: Date, p: { en: string; de: string }) => string
+  phases: { t: string; c: string }[]
+}) {
+  const [active, setActive] = useState<number | null>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const reduce = prefersReducedMotion()
+  const W = 310, H = 150, PAD = 12
+  const vals = data.map((e) => e.ctl)
+  const lo = Math.min(...vals)
+  const hi = Math.max(...vals)
+  const span = Math.max(1e-6, hi - lo)
+  const xFrac = (i: number) => (data.length < 2 ? 0 : i / (data.length - 1))
+  const yPx = (v: number) => H - PAD - ((v - lo) / span) * (H - PAD * 2)
+  const pts = data.map((e, i) => `${(xFrac(i) * W).toFixed(1)},${yPx(e.ctl).toFixed(1)}`).join(' ')
+  const area = `0,${H} ${pts} ${W},${H}`
+
+  // Month markers — first index of each calendar month, thinned to ≤ 6 labels.
+  const months = useMemo(() => {
+    const seen = new Set<string>()
+    const out: { i: number; label: string }[] = []
+    data.forEach((e, i) => {
+      const d = new Date(e.t)
+      const key = `${d.getFullYear()}-${d.getMonth()}`
+      if (!seen.has(key)) { seen.add(key); out.push({ i, label: fmtD(d, { en: 'MMM', de: 'MMM' }) }) }
+    })
+    if (out.length > 6) { const step = Math.ceil(out.length / 6); return out.filter((_, k) => k % step === 0) }
+    return out
+  }, [data, fmtD])
+
+  const setFromClientX = (clientX: number) => {
+    const el = wrapRef.current
+    if (!el || data.length < 2) return
+    const rect = el.getBoundingClientRect()
+    const frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+    setActive(Math.round(frac * (data.length - 1)))
+  }
+
+  const act = active != null ? data[active] : null
+  const actFrac = active != null ? xFrac(active) : 0
+  const actY = act ? yPx(act.ctl) : 0
+  const tipLeft = Math.min(86, Math.max(14, actFrac * 100)) // clamp so the tooltip never overflows
+
+  return (
+    <div className="flex flex-col" style={{ gap: 8 }}>
+      <div
+        ref={wrapRef}
+        className="relative select-none"
+        style={{ height: H, touchAction: 'none', cursor: 'crosshair' }}
+        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setFromClientX(e.clientX) }}
+        onPointerMove={(e) => { if (e.pressure > 0 || e.pointerType === 'mouse') setFromClientX(e.clientX) }}
+        onPointerLeave={(e) => { if (e.pointerType === 'mouse') setActive(null) }}
+      >
+        {/* clipped chart body: phase bands + area + line */}
+        <div className="absolute inset-0 rounded-[14px] overflow-hidden" style={{ background: C.surface2 }}>
+          <div className="absolute inset-0 flex">
+            {phases.map((p) => (
+              <span key={p.t} style={{ flex: 1, background: soft(p.c, 8) }} />
+            ))}
+          </div>
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0" style={{ width: '100%', height: '100%' }} aria-hidden>
+            <defs>
+              <linearGradient id="ctlFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FF5A3C" stopOpacity="0.42" />
+                <stop offset="100%" stopColor="#FF5A3C" stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+            <polygon points={area} fill="url(#ctlFill)" />
+            <polyline points={pts} fill="none" stroke={C.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+
+        {/* movable marker + dot (unclipped overlay) */}
+        {act && (
+          <>
+            <span className="absolute" style={{
+              left: `${actFrac * 100}%`, top: 0, bottom: 0, width: 1,
+              background: soft(C.accent, 55), transform: 'translateX(-0.5px)',
+              transition: reduce ? undefined : 'left 90ms linear',
+            }} />
+            <span className="absolute rounded-full" style={{
+              left: `${actFrac * 100}%`, top: actY, width: 11, height: 11,
+              background: C.accent, border: '2px solid var(--color-paper)',
+              transform: 'translate(-50%, -50%)', boxShadow: '0 0 10px #FF5A3C99',
+              transition: reduce ? undefined : 'left 90ms linear, top 90ms linear',
+            }} />
+            {(() => {
+              const below = actY < H / 2 // flip tooltip below the dot when the point sits high
+              return (
+                <div className="absolute z-10 pointer-events-none flex flex-col items-center" style={{
+                  left: `${tipLeft}%`,
+                  top: below ? actY + 14 : actY - 14,
+                  transform: `translate(-50%, ${below ? '0' : '-100%'})`,
+                  transition: reduce ? undefined : 'left 90ms linear, top 90ms linear',
+                }}>
+                  {below && <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: `5px solid ${C.surface3}` }} />}
+                  <div className="rounded-[10px] flex flex-col items-center whitespace-nowrap" style={{
+                    gap: 1, padding: '6px 10px', background: C.surface3,
+                    border: `1px solid ${C.border}`, boxShadow: '0 6px 18px rgba(0,0,0,0.45)',
+                  }}>
+                    <span className={DISPLAY} style={{ fontSize: 15, lineHeight: 1, fontWeight: 700, color: C.accent }}>
+                      CTL {Math.round(act.ctl)}
+                    </span>
+                    <span style={{ fontSize: 10.5, fontWeight: 600, color: C.tertiary }}>
+                      {fmtD(new Date(act.t), { en: 'MMM d', de: 'd. MMM' })}
+                    </span>
+                  </div>
+                  {!below && <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: `5px solid ${C.surface3}` }} />}
+                </div>
+              )
+            })()}
+          </>
+        )}
+      </div>
+
+      {/* month markers */}
+      <div className="relative" style={{ height: 13 }}>
+        {months.map((m) => (
+          <span key={m.i} className="absolute" style={{
+            left: `${Math.min(94, Math.max(2, xFrac(m.i) * 100))}%`,
+            transform: 'translateX(-50%)', fontSize: 10, fontWeight: 600, color: C.tertiary,
+          }}>{m.label}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── page ─────────────────────────────────────────────────────────────────────
 export default function BikeProgressView() {
   const { locale } = useLocale()
@@ -167,6 +306,24 @@ export default function BikeProgressView() {
     if (ftpWkg == null) return null
     return ftpWkg >= 4.5 ? 3 : ftpWkg >= 4.0 ? 8 : ftpWkg >= 3.5 ? 18 : ftpWkg >= 3.0 ? 35 : 55
   }, [ftpWkg])
+
+  // ── Dein Motor interactivity — tap a metric tile to reveal what it means ──
+  const [motorTile, setMotorTile] = useState<'ftp' | 'wkg' | null>(null)
+  const fadeReveal: React.CSSProperties = prefersReducedMotion() ? {} : { animation: 'bpvReveal 240ms cubic-bezier(.22,1,.36,1)' }
+  const phenType = ppv?.phenotype?.type ?? null
+  // The app's honest W/kg tier ladder (mirrors the topPct thresholds above), so
+  // the rider can see exactly which rung their power-to-weight sits on.
+  const wkgTiers = useMemo(() => ([
+    { label: 'Elite', min: 4.5, pct: 3 },
+    { label: de ? 'Sehr stark' : 'Very strong', min: 4.0, pct: 8 },
+    { label: de ? 'Stark' : 'Strong', min: 3.5, pct: 18 },
+    { label: de ? 'Solide' : 'Solid', min: 3.0, pct: 35 },
+    { label: de ? 'Im Aufbau' : 'Building', min: 0, pct: 55 },
+  ]), [de])
+  const curTierIdx = useMemo(() => {
+    if (ftpWkg == null) return -1
+    return wkgTiers.findIndex((t) => ftpWkg >= t.min)
+  }, [ftpWkg, wkgTiers])
 
   // ── Season CTL curve (dated PMC history, current year only) ───────────────
   const ctlYear = useMemo(() => {
@@ -312,6 +469,7 @@ export default function BikeProgressView() {
 
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.bg, color: C.ink }}>
+      <style>{`@keyframes bpvReveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}`}</style>
       <div className="max-w-md mx-auto" style={{ padding: '8px 20px 96px' }}>
         {/* Shared utility header — locale / sync / settings / profile, same as
             the other main tabs (this is a standalone root route, not in DashboardShell). */}
@@ -385,13 +543,31 @@ export default function BikeProgressView() {
                 </span>
               )}
             </div>
-            <div className="flex items-center" style={{ gap: 18 }}>
-              <div className="flex items-end" style={{ gap: 5 }}>
+            <div className="flex items-stretch" style={{ gap: 14 }}>
+              <button
+                type="button"
+                onClick={() => setMotorTile((v) => (v === 'ftp' ? null : 'ftp'))}
+                aria-expanded={motorTile === 'ftp'}
+                className="flex items-end text-left rounded-[12px]"
+                style={{
+                  gap: 5, padding: '4px 10px 4px 8px', border: 0,
+                  background: motorTile === 'ftp' ? '#FFFFFF24' : 'transparent',
+                  outline: motorTile === 'ftp' ? '1px solid #FFFFFF4D' : 'none', minHeight: 44,
+                }}>
                 <span className={DISPLAY} style={{ fontSize: 54, fontWeight: 700, color: '#fff', lineHeight: 1, textShadow: '0 0 22px #FFFFFF59' }}>{ftp ?? DASH}</span>
                 <span style={{ fontSize: 16, fontWeight: 500, color: '#FFFFFFB3', paddingBottom: 10 }}>W</span>
-              </div>
-              <span style={{ width: 1, height: 44, background: '#FFFFFF33', flex: 'none' }} />
-              <div className="flex flex-col" style={{ gap: 2 }}>
+              </button>
+              <span style={{ width: 1, background: '#FFFFFF33', flex: 'none', margin: '8px 0' }} />
+              <button
+                type="button"
+                onClick={() => setMotorTile((v) => (v === 'wkg' ? null : 'wkg'))}
+                aria-expanded={motorTile === 'wkg'}
+                className="flex flex-col justify-center text-left rounded-[12px]"
+                style={{
+                  gap: 2, padding: '4px 10px', border: 0,
+                  background: motorTile === 'wkg' ? '#FFFFFF24' : 'transparent',
+                  outline: motorTile === 'wkg' ? '1px solid #FFFFFF4D' : 'none', minHeight: 44,
+                }}>
                 <div className="flex items-end" style={{ gap: 4 }}>
                   <span className={DISPLAY} style={{ fontSize: 32, fontWeight: 700, color: '#fff', lineHeight: 1 }}>{n1(ftpWkg) ?? DASH}</span>
                   <span style={{ fontSize: 13, fontWeight: 500, color: '#FFFFFF80', paddingBottom: 5 }}>W/kg</span>
@@ -399,7 +575,13 @@ export default function BikeProgressView() {
                 <span style={{ fontSize: 11, fontWeight: 500, color: '#FFFFFFB3' }}>
                   {weight != null ? `${de ? 'bei' : 'at'} ${n1(weight)} kg` : (de ? 'Gewicht ergänzen' : 'add weight')}
                 </span>
-              </div>
+              </button>
+              <span className="flex items-center" style={{ marginLeft: 'auto' }}>
+                <ChevronDown size={18} strokeWidth={2.4} style={{
+                  color: '#FFFFFFB3', transform: motorTile ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 200ms cubic-bezier(.22,1,.36,1)',
+                }} />
+              </span>
             </div>
             {ftpGainW != null && (
               <span className="inline-flex items-center self-start rounded-full" style={{ gap: 6, padding: '7px 13px', background: '#0A0C0F59', backdropFilter: 'blur(14px)' }}>
@@ -437,6 +619,71 @@ export default function BikeProgressView() {
                 </div>
               </div>
             )}
+
+            {/* Reveal — plain-language meaning of the tapped metric */}
+            {motorTile === 'ftp' && (
+              <div className="rounded-[14px] flex items-start" style={{ gap: 10, padding: '12px 13px', background: '#0A0C0F5C', backdropFilter: 'blur(14px)', ...fadeReveal }}>
+                <span className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: '#FFFFFF1F', flex: 'none' }}>
+                  <Clock size={15} style={{ color: '#fff' }} />
+                </span>
+                <div className="flex flex-col" style={{ gap: 3 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{de ? 'FTP — deine Stundenleistung' : 'FTP — your one-hour power'}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: '#FFFFFFCC', lineHeight: 1.45 }}>
+                    {de
+                      ? `Die Leistung, die du etwa eine Stunde am Stück treten kannst. Je höher, desto größer dein Motor. Deiner liegt bei ${ftp ?? DASH} W.`
+                      : `The power you can hold for roughly an hour straight. The higher it is, the bigger your engine. Yours is ${ftp ?? DASH} W.`}
+                  </span>
+                </div>
+              </div>
+            )}
+            {motorTile === 'wkg' && (
+              <div className="rounded-[14px] flex flex-col" style={{ gap: 11, padding: '13px', background: '#0A0C0F5C', backdropFilter: 'blur(14px)', ...fadeReveal }}>
+                <div className="flex items-start" style={{ gap: 10 }}>
+                  <span className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: '#FFFFFF1F', flex: 'none' }}>
+                    <Mountain size={15} style={{ color: '#fff' }} />
+                  </span>
+                  <div className="flex flex-col" style={{ gap: 3 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{de ? 'W/kg — was am Berg zählt' : 'W/kg — what matters on climbs'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: '#FFFFFFCC', lineHeight: 1.45 }}>
+                      {de
+                        ? 'Deine Leistung pro Kilogramm Körpergewicht. Am Anstieg entscheidet sie, wie schnell du hochkommst.'
+                        : 'Your power per kilogram of body weight. On a climb it decides how fast you get to the top.'}
+                    </span>
+                  </div>
+                </div>
+                {/* W/kg tier ladder — where the rider sits */}
+                {ftpWkg != null && (
+                  <div className="flex flex-col" style={{ gap: 5 }}>
+                    {wkgTiers.map((t, i) => {
+                      const cur = i === curTierIdx
+                      return (
+                        <div key={t.label} className="flex items-center rounded-[9px]" style={{
+                          gap: 8, padding: '6px 9px',
+                          background: cur ? '#FFFFFF26' : 'transparent',
+                          outline: cur ? '1px solid #FFFFFF4D' : 'none',
+                        }}>
+                          <span style={{ fontSize: 12, fontWeight: cur ? 800 : 600, color: cur ? '#fff' : '#FFFFFF99', flex: 1 }}>{t.label}</span>
+                          {cur && <span style={{ fontSize: 11, fontWeight: 700, color: '#5EF0A8' }}>{de ? 'du' : 'you'} · {n1(ftpWkg)}</span>}
+                          <span className={DISPLAY} style={{ fontSize: 11, fontWeight: 700, color: cur ? '#fff' : '#FFFFFF80' }}>{t.min > 0 ? `≥ ${n1(t.min)}` : `< 3.0`} W/kg</span>
+                        </div>
+                      )
+                    })}
+                    {phenType && (
+                      <span style={{ fontSize: 12, fontWeight: 500, color: '#FFFFFFCC', lineHeight: 1.4, marginTop: 2 }}>
+                        {de ? 'Dein Fahrertyp: ' : 'Your rider type: '}
+                        <span style={{ fontWeight: 700, color: '#fff' }}>{phenType}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!motorTile && (
+              <span style={{ fontSize: 10.5, fontWeight: 500, color: '#FFFFFF80' }}>
+                {de ? 'FTP oder W/kg antippen — was die Zahlen bedeuten' : 'Tap FTP or W/kg — what the numbers mean'}
+              </span>
+            )}
           </div>
 
           {/* ═══ PROGRESS ═══ */}
@@ -448,7 +695,7 @@ export default function BikeProgressView() {
             <div className="flex items-start justify-between" style={{ gap: 12 }}>
               <div className="flex flex-col" style={{ gap: 3 }}>
                 <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: C.tertiary }}>
-                  {de ? 'SAISON-FITNESS · CTL' : 'SEASON FITNESS · CTL'}
+                  {de ? 'SAISON-FITNESS' : 'SEASON FITNESS'}
                 </span>
                 <div className="flex items-end" style={{ gap: 8 }}>
                   <span className={DISPLAY} style={{ fontSize: 44, fontWeight: 700, color: C.ink, lineHeight: 1 }}>{ctlNow ?? DASH}</span>
@@ -466,49 +713,56 @@ export default function BikeProgressView() {
             </div>
             {ctlYear.length >= 2 ? (
               <>
-                <div className="relative rounded-[14px] overflow-hidden" style={{ height: 150, background: C.surface2 }}>
-                  {/* periodization backdrop — Base / Build / Peak thirds (labels, not data) */}
-                  <div className="absolute inset-0 flex">
-                    <span style={{ flex: 1, background: soft(C.strain, 8) }} />
-                    <span style={{ flex: 1, background: soft(C.accent, 8) }} />
-                    <span style={{ flex: 1, background: soft(C.gold, 8) }} />
-                  </div>
-                  {(() => {
-                    const vals = ctlYear.map((e) => e.ctl)
-                    const W = 310, H = 150
-                    const pts = sparkPoints(vals, W, H, 12)
-                    const area = `0,${H} ${pts} ${W},${H}`
-                    return (
-                      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0" style={{ width: '100%', height: '100%' }} aria-hidden>
-                        <defs>
-                          <linearGradient id="ctlFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#FF5A3C" stopOpacity="0.42" />
-                            <stop offset="100%" stopColor="#FF5A3C" stopOpacity="0.02" />
-                          </linearGradient>
-                        </defs>
-                        <polygon points={area} fill="url(#ctlFill)" />
-                        <polyline points={pts} fill="none" stroke={C.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )
-                  })()}
-                </div>
-                <div className="flex">
-                  {[
+                {/* Plain-language explainer — what the curve actually is */}
+                <span style={{ fontSize: 12.5, fontWeight: 500, color: C.ink2, lineHeight: 1.45 }}>
+                  {de
+                    ? 'Deine „Fitness“ ist deine rollende Trainingslast (CTL) — die Summe deines Trainings der letzten Wochen. Steigt sie, wächst dein Motor; fällt sie, baust du ab.'
+                    : 'Your "fitness" is your rolling training load (CTL) — the sum of your training over recent weeks. Rising means your engine is growing; falling means you\'re detraining.'}
+                </span>
+
+                <SeasonFitnessChart
+                  data={ctlYear}
+                  de={de}
+                  fmtD={fmtD}
+                  phases={[
                     { t: de ? 'Basis' : 'Base', c: C.strain },
                     { t: de ? 'Aufbau' : 'Build', c: C.accent },
                     { t: 'Peak', c: C.gold },
-                  ].map((p) => (
-                    <span key={p.t} className="flex-1 text-center" style={{ fontSize: 11, fontWeight: 700, color: p.c }}>{p.t}</span>
-                  ))}
+                  ]}
+                />
+
+                {/* Legend for the phase bands + scrub hint */}
+                <div className="flex items-center justify-between" style={{ gap: 8 }}>
+                  <div className="flex items-center" style={{ gap: 12, flexWrap: 'wrap' }}>
+                    {[
+                      { t: de ? 'Basis' : 'Base', c: C.strain },
+                      { t: de ? 'Aufbau' : 'Build', c: C.accent },
+                      { t: 'Peak', c: C.gold },
+                    ].map((p) => (
+                      <span key={p.t} className="inline-flex items-center" style={{ gap: 5 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 3, background: soft(p.c, 45) }} />
+                        <span style={{ fontSize: 11, fontWeight: 600, color: C.ink2 }}>{p.t}</span>
+                      </span>
+                    ))}
+                  </div>
                 </div>
+                <span style={{ fontSize: 10.5, fontWeight: 500, color: C.tertiary }}>
+                  {de ? 'Kurve antippen & ziehen für Wert und Datum' : 'Tap & drag the curve for the value and date'}
+                </span>
+
+                {/* One-line "what this means for you" read */}
                 <span style={{ fontSize: 13, fontWeight: 500, color: C.ink2, lineHeight: 1.4 }}>
                   {ctlGain != null && ctlGain > 0
                     ? (de
-                        ? `Dein Motor war nie größer — Fitness ${ctlGain} Punkte höher als im Januar.`
-                        : `Your engine has never been bigger — fitness up ${ctlGain} points since January.`)
-                    : (de
-                        ? 'Deine Saison-Fitness aus der täglichen CTL-Historie.'
-                        : 'Your season fitness, from the daily CTL history.')}
+                        ? `Deine Fitness ist seit Januar um ${ctlGain} Punkte gestiegen${ctlIsPeak ? ' — Höchststand der Saison.' : '.'}`
+                        : `Your fitness is up ${ctlGain} points since January${ctlIsPeak ? ' — the highest of the season.' : '.'}`)
+                    : ctlGain != null && ctlGain < 0
+                      ? (de
+                          ? `Deine Fitness liegt ${Math.abs(ctlGain)} Punkte unter Januar — eine ruhigere Phase.`
+                          : `Your fitness is ${Math.abs(ctlGain)} points below January — a quieter stretch.`)
+                      : (de
+                          ? 'Deine Saison-Fitness aus der täglichen CTL-Historie.'
+                          : 'Your season fitness, from the daily CTL history.')}
                 </span>
               </>
             ) : (
