@@ -55,6 +55,98 @@ function gradeMeta(grade: RideGrade | null, de: boolean): { color: string; label
 const bandColor = (band: CompliancePair['band']) =>
   band === 'match' ? 'var(--color-recovery)' : band === 'over' ? 'var(--color-amber)' : 'var(--color-muted)'
 
+// ── Alignment (adherence) ────────────────────────────────────────────────────
+// Transparent, no hidden weighting: per-metric adherence = clamp(100 − |Δ%|, 0,
+// 100), then averaged across the prescribed dimensions actually scored
+// (duration, TSS, and IF when present). Each dimension counts equally.
+// Direction is the overall band: all-match → on plan; else the sign of the mean
+// Δ decides over (amber) vs. under (slate) — never red for under.
+export type AlignDir = 'match' | 'over' | 'under'
+export function computeAlignment(pairs: (CompliancePair | null | undefined)[]): { pct: number; dir: AlignDir } | null {
+  const scored = pairs.filter(
+    (p): p is CompliancePair => !!p && Number.isFinite(p.target) && p.target > 0 && Number.isFinite(p.actual),
+  )
+  if (scored.length === 0) return null
+  const pct = Math.round(
+    scored.reduce((s, p) => s + Math.max(0, Math.min(100, 100 - Math.abs(p.delta_pct))), 0) / scored.length,
+  )
+  const allMatch = scored.every((p) => p.band === 'match')
+  const avgDelta = scored.reduce((s, p) => s + p.delta_pct, 0) / scored.length
+  const dir: AlignDir = allMatch ? 'match' : avgDelta >= 0 ? 'over' : 'under'
+  return { pct, dir }
+}
+
+export function alignLabel(dir: AlignDir, de: boolean): string {
+  return dir === 'match'
+    ? (de ? 'genau nach Plan' : 'right on plan')
+    : dir === 'over'
+      ? (de ? 'etwas drüber' : 'a touch over')
+      : (de ? 'etwas darunter' : 'a touch under')
+}
+
+// Human one-liner for "how it changed" — spells out the deltas against the
+// prescription across the SAME dimensions the alignment chip scores (duration,
+// TSS, and intensity/IF when present), so the sentence and the chip never
+// disagree. Comparatives ("20 Min länger … als empfohlen") are grouped;
+// spot-on dimensions are named separately, so it reads like a sentence.
+export function changeLine(review: PostRideReview, de: boolean): string {
+  const d = review.duration
+  const t = review.tss
+  const ifp = review.intensity_factor
+  const dMin = Math.round(d.actual - d.target)
+  const tD = Math.round(t.actual - t.target)
+  const dSpot = d.band === 'match' || dMin === 0
+  const tSpot = t.band === 'match' || tD === 0
+  const ifPresent = !!ifp && Number.isFinite(ifp.target) && ifp.target > 0
+  const ifSpot = !ifPresent || ifp!.band === 'match'
+
+  if (dSpot && tSpot && ifSpot) {
+    return de
+      ? 'Genau nach Plan — punktgenau getroffen.'
+      : 'Right on plan — spot on all round.'
+  }
+
+  const comp: string[] = []
+  if (!dSpot) {
+    comp.push(
+      dMin > 0
+        ? (de ? `${dMin} Min länger` : `${dMin} min longer`)
+        : (de ? `${-dMin} Min kürzer` : `${-dMin} min shorter`),
+    )
+  }
+  if (!tSpot) {
+    comp.push(
+      tD > 0
+        ? (de ? `${tD} TSS mehr` : `${tD} TSS more`)
+        : (de ? `${-tD} TSS weniger` : `${-tD} TSS less`),
+    )
+  }
+  if (!ifSpot) {
+    comp.push(
+      ifp!.band === 'over'
+        ? (de ? 'die Intensität etwas höher' : 'intensity a touch higher')
+        : (de ? 'die Intensität etwas niedriger' : 'intensity a touch lower'),
+    )
+  }
+  const spot: string[] = []
+  if (dSpot) spot.push(de ? 'Dauer' : 'duration')
+  if (tSpot) spot.push('TSS')
+  if (ifPresent && ifSpot) spot.push(de ? 'Intensität' : 'intensity')
+
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+  let out = ''
+  if (comp.length) {
+    out = cap(comp.join(de ? ' und ' : ' and ')) + (de ? ' als empfohlen' : ' than prescribed')
+  }
+  if (spot.length) {
+    const spotPhrase = de
+      ? `${spot.join(' und ')} punktgenau`
+      : `${spot.join(' and ')} spot on`
+    out = out ? `${out}, ${spotPhrase}` : cap(spotPhrase)
+  }
+  return `${out}.`
+}
+
 function CompRow({ label, pair, fmt }: { label: string; pair: CompliancePair; fmt: (v: number) => string }) {
   const col = bandColor(pair.band)
   const sign = pair.delta_pct >= 0 ? '+' : ''
@@ -71,6 +163,47 @@ function CompRow({ label, pair, fmt }: { label: string; pair: CompliancePair; fm
   )
 }
 
+// The prescribed session, promoted to a legible block near the top. Shows the
+// coach's target numbers (the `.target` side of each compliance pair). Renders
+// in graded mode AND — as honest context, no verdict — in logged mode when a
+// session was actually recommended that day (`logged` toggles the label only).
+function RecommendedBlock({ review, de, logged }: { review: PostRideReview; de: boolean; logged: boolean }) {
+  const tiles: { l: string; v: string }[] = []
+  if (Number.isFinite(review.duration?.target) && review.duration.target > 0)
+    tiles.push({ l: de ? 'DAUER' : 'DURATION', v: `${Math.round(review.duration.target)} min` })
+  if (Number.isFinite(review.tss?.target) && review.tss.target > 0)
+    tiles.push({ l: 'TSS', v: `${Math.round(review.tss.target)}` })
+  if (review.intensity_factor && Number.isFinite(review.intensity_factor.target) && review.intensity_factor.target > 0)
+    tiles.push({ l: de ? 'INTENSITÄT (IF)' : 'INTENSITY (IF)', v: review.intensity_factor.target.toFixed(2) })
+
+  return (
+    <div
+      className="rounded-2xl p-3.5 flex flex-col gap-2.5"
+      style={{ background: 'color-mix(in srgb, var(--color-recovery) 9%, var(--color-paper))', border: '1px solid color-mix(in srgb, var(--color-recovery) 30%, var(--color-rule))' }}
+    >
+      <div className="flex items-center gap-1.5">
+        <Target size={13} strokeWidth={2.4} style={{ color: 'var(--color-recovery)' }} />
+        <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-recovery)' }}>
+          {logged ? (de ? 'Empfohlen war' : 'Recommended was') : (de ? 'Empfohlen' : 'Recommended')}
+        </span>
+      </div>
+      {review.target_template_title && (
+        <span className="num-display" style={{ fontSize: 15.5, color: 'var(--color-ink)', lineHeight: 1.25 }}>{review.target_template_title}</span>
+      )}
+      {tiles.length > 0 && (
+        <div className="flex gap-5 flex-wrap">
+          {tiles.map((s, i) => (
+            <div key={i} className="flex flex-col gap-0.5">
+              <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{s.l}</span>
+              <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{s.v}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SessionReviewCard({ review, de }: { review: PostRideReview; de: boolean }) {
   const locale: Locale = de ? 'de' : 'en'
   const activities = review.activities ?? []
@@ -83,6 +216,16 @@ export default function SessionReviewCard({ review, de }: { review: PostRideRevi
   const hasComplianceInputs =
     Number.isFinite(review.duration?.target) && Number.isFinite(review.tss?.target)
     && (review.duration.target > 0 || review.tss.target > 0)
+
+  // A session was actually prescribed that day → we can surface "Empfohlen".
+  // Same signal as compliance inputs plus a real template title to name it.
+  const hadRecommended = hasComplianceInputs && !!review.target_template_title
+  // Alignment read (adherence) — computed from the SAME target/actual pairs the
+  // rows show, so the chip and the numbers can never disagree.
+  const alignment = useMemo(
+    () => (hasComplianceInputs ? computeAlignment([review.duration, review.tss, review.intensity_factor]) : null),
+    [hasComplianceInputs, review.duration, review.tss, review.intensity_factor],
+  )
 
   const gm = loggedOnly ? gradeMeta(null, de) : gradeMeta(review.grade, de)
   const multi = review.grade == null && activities.length >= 2
@@ -165,10 +308,11 @@ export default function SessionReviewCard({ review, de }: { review: PostRideRevi
 
       <div className="flex flex-col gap-1">
         <h2 className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)', lineHeight: 1.2 }}>{review.headline}</h2>
-        {!loggedOnly && review.target_template_title && (
-          <p style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>{de ? 'Vorgabe' : 'Prescribed'}: {review.target_template_title}</p>
-        )}
       </div>
+
+      {/* Recommended session — promoted from a caption to a legible block. In
+          logged mode it stays honest context ("Empfohlen war …"), no verdict. */}
+      {hadRecommended && <RecommendedBlock review={review} de={de} logged={loggedOnly} />}
 
       {/* ── Logged mode: facts only — sport, duration, avg HR (when known) ── */}
       {loggedOnly && primary && (
@@ -211,10 +355,23 @@ export default function SessionReviewCard({ review, de }: { review: PostRideRevi
       {/* Recommendation vs. actual — only when compliance was actually scored */}
       {!loggedOnly && hasComplianceInputs && (
         <div className="rounded-2xl p-3.5 flex flex-col gap-2.5" style={{ background: 'color-mix(in srgb, var(--color-paper) 55%, transparent)', border: '1px solid var(--color-rule)' }}>
-          <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'Vorgabe → Ist' : 'Target → actual'}</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="eyebrow" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)' }}>{de ? 'Vorgabe → Ist' : 'Target → actual'}</span>
+            {alignment && (
+              <span className="inline-flex items-center gap-1.5 rounded-full" style={{ padding: '3px 9px', background: `color-mix(in srgb, ${bandColor(alignment.dir)} 15%, transparent)` }}>
+                <span style={{ width: 6, height: 6, borderRadius: 999, background: bandColor(alignment.dir) }} />
+                <span className="num-mono" style={{ fontSize: 11, fontWeight: 700, color: bandColor(alignment.dir) }}>{alignment.pct}%</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: bandColor(alignment.dir) }}>{alignLabel(alignment.dir, de)}</span>
+              </span>
+            )}
+          </div>
           <CompRow label={de ? 'Dauer' : 'Duration'} pair={review.duration} fmt={fmtMin} />
           <CompRow label="TSS" pair={review.tss} fmt={fmtTss} />
           {review.intensity_factor && <CompRow label={de ? 'Intensität (IF)' : 'Intensity (IF)'} pair={review.intensity_factor} fmt={fmtIf} />}
+          {/* How it changed — human one-liner, not just numbers. */}
+          <p style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)', lineHeight: 1.4, marginTop: 2, paddingTop: 10, borderTop: '1px solid var(--color-rule)' }}>
+            {changeLine(review, de)}
+          </p>
         </div>
       )}
 
