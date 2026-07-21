@@ -7,6 +7,7 @@ import {
 import { subDays } from 'date-fns'
 import { useLocale } from '../contexts/LocaleContext'
 import MobileBottomNav from '../components/dashboard/MobileBottomNav'
+import DashboardHeaderBar from '../components/dashboard/DashboardHeaderBar'
 import { usePMC } from '../hooks/usePMC'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../hooks/useActivitiesRange'
@@ -312,7 +313,10 @@ export default function BikeProgressView() {
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.bg, color: C.ink }}>
       <div className="max-w-md mx-auto" style={{ padding: '8px 20px 96px' }}>
-        <div className="flex flex-col" style={{ gap: 20 }}>
+        {/* Shared utility header — locale / sync / settings / profile, same as
+            the other main tabs (this is a standalone root route, not in DashboardShell). */}
+        <DashboardHeaderBar />
+        <div className="flex flex-col" style={{ gap: 20, marginTop: 12 }}>
 
           {/* ── Header ─────────────────────────────────────────────────── */}
           <div className="flex items-center justify-between" style={{ gap: 12 }}>
