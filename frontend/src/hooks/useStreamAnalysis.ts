@@ -9,6 +9,9 @@ export function useStreamAnalysis(activityId: number | string | undefined) {
     queryKey: ['stream-analysis', String(activityId)],
     queryFn: () => fetchStreamAnalysis(activityId!),
     enabled: activityId != null,
-    staleTime: 5 * 60 * 1000,
+    // A past activity's stored streams are immutable — cache per-activity so
+    // reopening a ride's recap/analysis is instant (no refetch, no flash).
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
   })
 }

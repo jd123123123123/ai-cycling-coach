@@ -20,7 +20,7 @@ import { parseISO, format } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
 import {
   ChevronLeft, Share2, Sparkles, Activity, TrendingUp, Gauge, Zap, Award, Star,
-  ChevronRight, Flag,
+  ChevronRight, Flag, LineChart, Trophy,
 } from 'lucide-react'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import { useStreamAnalysis } from '../hooks/useStreamAnalysis'
@@ -83,6 +83,13 @@ function zoneOf(watts: number, ftp: number): number {
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 const cardCls = 'rounded-[24px] p-5 flex flex-col gap-[14px]'
+
+// Canonical effort lengths for the recap mean-maximal power card (pen E71iR).
+const REC_MMP_DURS: { s: number; en: string; de: string }[] = [
+  { s: 5, en: '5 s', de: '5 s' }, { s: 15, en: '15 s', de: '15 s' },
+  { s: 60, en: '1 min', de: '1 Min' }, { s: 300, en: '5 min', de: '5 Min' },
+  { s: 1200, en: '20 min', de: '20 Min' }, { s: 3600, en: '60 min', de: '60 Min' },
+]
 
 export default function RideRecapView() {
   const { id } = useParams()
@@ -149,6 +156,38 @@ export default function RideRecapView() {
       terrain,
     }
   }, [story, ftp])
+
+  // Ride mean-maximal power (pen "Mean-max power" card): the best rolling-average
+  // watts this ride held for each canonical duration, from this ride's own power
+  // stream (O(n) prefix-sum sliding window). Bars are zone-colored; durations that
+  // set a season best (efforts.is_pr) get a PR marker. Honest empty when the ride
+  // carries no real power — the whole Power & Effort section hides in that case.
+  const mmp = useMemo(() => {
+    const p = story?.power
+    if (!p || p.length < 2 || !ftp || ftp <= 0) return null
+    if (!p.some((v) => typeof v === 'number' && v > 0)) return null
+    const n = p.length
+    const t = story?.t
+    const span = t && t.length === n && t[n - 1] > t[0] ? t[n - 1] - t[0] : n - 1
+    const dt = span > 0 ? span / (n - 1) : 1
+    const rideLen = span > 0 ? span : n
+    const prefix = new Float64Array(n + 1)
+    for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i] + (typeof p[i] === 'number' ? (p[i] as number) : 0)
+    const prSet = new Set(efforts.filter((e) => e.is_pr).map((e) => e.duration_s))
+    const rows: { s: number; label: string; w: number; pr: boolean; zone: number }[] = []
+    for (const d of REC_MMP_DURS) {
+      if (d.s > rideLen + 0.5) break
+      const win = Math.max(1, Math.round(d.s / dt))
+      if (win > n) continue
+      let best = -Infinity
+      for (let i = win; i <= n; i++) {
+        const avg = (prefix[i] - prefix[i - win]) / win
+        if (avg > best) best = avg
+      }
+      if (best > 0) rows.push({ s: d.s, label: de ? d.de : d.en, w: best, pr: prSet.has(d.s), zone: zoneOf(best, ftp) })
+    }
+    return rows.length ? rows : null
+  }, [story, ftp, efforts, de])
 
   // Zone distribution track from pacing.zone_time_pct
   const zoneDist = useMemo(() => {
@@ -511,6 +550,64 @@ export default function RideRecapView() {
                     </div>
                   ))}
                 </div>
+
+                {/* 7b · Mean-max power (pen E71iR) — ride power-duration curve as
+                     zone-colored bars, with PR markers + a records callout. */}
+                {mmp && (() => {
+                  const maxW = Math.max(...mmp.map((r) => r.w)) || 1
+                  const prRows = mmp.filter((r) => r.pr)
+                  const prLabels = prRows.map((r) => r.label)
+                  const joined = prLabels.length <= 1
+                    ? (prLabels[0] ?? '')
+                    : prLabels.slice(0, -1).join(', ') + (de ? ' und ' : ' and ') + prLabels[prLabels.length - 1]
+                  const n = prRows.length
+                  return (
+                    <div className={cardCls} style={{ background: 'var(--color-paper-2)', border: '1.5px solid var(--color-accent)' }}>
+                      <div className="flex items-center gap-[7px]">
+                        <LineChart size={18} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
+                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Mean-Max-Leistung' : 'Mean-max power'}</span>
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+                        {de ? 'Deine beste Durchschnittsleistung je Dauer — vom Sprint bis zum langen Anstieg.' : 'Your best average power for each effort length — sprint to steady climb.'}
+                      </span>
+                      <div className="flex items-end gap-2" style={{ height: 214 }}>
+                        {mmp.map((r) => (
+                          <div key={r.s} className="flex-1 flex flex-col items-center gap-1.5 justify-end">
+                            {r.pr && (
+                              <span className="inline-flex items-center gap-0.5 rounded-full" style={{ padding: '2px 7px', background: 'var(--color-gold-soft)' }}>
+                                <Star size={9} strokeWidth={2.4} style={{ color: 'var(--color-gold)' }} />
+                                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-gold)' }}>PR</span>
+                              </span>
+                            )}
+                            <span className="num-display" style={{ fontSize: 12, fontWeight: 700, color: r.pr ? 'var(--color-gold)' : 'var(--color-ink)', lineHeight: 1 }}>{nf(Math.round(r.w))}</span>
+                            <div className="w-full" style={{ height: Math.max(6, Math.round((r.w / maxW) * 150)), borderRadius: '8px 8px 3px 3px', background: ZONE_VARS[r.zone] }} />
+                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{r.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {n > 0 && (
+                        <>
+                          <div style={{ height: 1, background: 'var(--color-rule)' }} />
+                          <div className="flex items-center gap-[11px] rounded-[14px]" style={{ background: 'var(--color-gold-soft)', border: '1px solid var(--color-gold)', padding: '12px 13px' }}>
+                            <Trophy size={22} strokeWidth={2} style={{ color: 'var(--color-gold)', flexShrink: 0 }} />
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-gold)' }}>
+                                {de
+                                  ? (n === 1 ? 'Neuer Rekord heute!' : `${n} neue Rekorde heute!`)
+                                  : (n === 1 ? 'New record today!' : `${n} new records today!`)}
+                              </span>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
+                                {de
+                                  ? `Deine Bestleistung über ${joined} ${n === 1 ? 'war die beste' : 'waren die besten'}, die du je gefahren bist.`
+                                  : `Your ${joined} power ${n === 1 ? 'is the best' : 'are the best'} you’ve ever ridden.`}
+                              </span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )}
 
