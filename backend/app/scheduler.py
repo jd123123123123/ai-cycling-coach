@@ -20,6 +20,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
 from app.database import async_session_maker
+from app.models.athlete_profile import AthleteProfile
 from app.models.garmin_credential import GarminCredential
 from app.models.planned_workout import PlannedWorkout
 from app.services.garmin_sync_service import sync_user_garmin
@@ -106,6 +107,45 @@ async def run_hourly_plan_adaptation() -> None:
 
     if adapted or failed:
         logger.info("Plan adaptation sweep done: %d adapted, %d failed", adapted, failed)
+
+
+async def run_brief_refresh_sweep() -> None:
+    """Hourly: regenerate each athlete's coach brief on the scheduler-owned
+    refresh triggers — local morning, local evening, and a missed planned
+    session (coach-brief 4-trigger policy, July 2026). The fourth trigger, a
+    completed workout, is handled inline by the Garmin sync. Each trigger is
+    deduped per athlete-local day, so this fires at most three cheap
+    regenerations per athlete per day and no-ops the rest of the time.
+
+    System-level job — RLS intentionally bypassed, same as the sync job.
+    Per-user try/except so one failure never blocks the rest."""
+    from app.services.coach_service import refresh_brief_scheduled_triggers
+
+    refreshed = 0
+    async with async_session_maker() as db:
+        profiles = (await db.execute(select(AthleteProfile))).scalars().all()
+        for profile in profiles:
+            try:
+                fired = await refresh_brief_scheduled_triggers(db, profile)
+                if fired:
+                    refreshed += 1
+                    logger.info(
+                        "Coach brief refreshed for user %d: %s",
+                        profile.user_id,
+                        fired,
+                    )
+            except Exception:
+                logger.exception(
+                    "Brief refresh failed for user %d — continuing", profile.user_id
+                )
+                try:
+                    await db.rollback()  # keep the shared session usable
+                except Exception:  # noqa: BLE001 — rollback failure is terminal
+                    logger.exception("Session rollback failed — aborting brief sweep")
+                    break
+
+    if refreshed:
+        logger.info("Brief refresh sweep done: %d athletes refreshed", refreshed)
 
 
 async def run_morning_push_briefs() -> None:

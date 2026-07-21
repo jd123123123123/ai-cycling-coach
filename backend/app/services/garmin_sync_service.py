@@ -490,6 +490,37 @@ async def _refresh_period_report_cache(db, user_id, today, new_activities, tz_na
 # ---------------------------------------------------------------------------
 
 
+async def invalidate_coach_brief_cache(db: AsyncSession, user_id: int) -> None:
+    """Bust the athlete's cached coach briefs — the "completed workout" refresh
+    trigger. Called from the sync ONLY when a new activity landed, so the next
+    read of /coach/brief rebuilds the post-ride review. Defensive: a delete
+    failure must NEVER break the sync return.
+
+    AUDIT rows are NOT cache and are preserved: absorption dedup keys off
+    verdict='absorption' rows and the undo window off 'modification' /
+    'modification_undo'. Deleting them made every sync re-absorb the same rides
+    and eat the week's biggest planned session (the Z2 death-spiral,
+    plan-engine recon 2026-07-20).
+    """
+    try:
+        await db.execute(
+            delete(CoachBrief).where(
+                CoachBrief.user_id == user_id,
+                CoachBrief.verdict.notin_(
+                    ("absorption", "modification", "modification_undo")
+                ),
+            )
+        )
+        await db.commit()
+    except Exception as exc:
+        logger.warning(
+            "Failed to invalidate coach_briefs for user_id=%s after sync (non-fatal): %s",
+            user_id,
+            exc,
+        )
+        await db.rollback()
+
+
 async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> dict:
     """Orchestrate full Garmin data sync for a single user.
 
@@ -634,35 +665,17 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
             dates_touched.append(cursor)
             cursor += timedelta(days=1)
 
-        # Invalidate ALL cached coach briefs for this user. Briefs now use an
-        # effectively-infinite TTL (refresh-on-demand), so a date-scoped delete
-        # would leave a prior-day brief stuck forever. A Garmin sync is exactly
-        # the "new data arrived" signal that should regenerate it — the next read
-        # of /coach/brief rebuilds against the freshly-synced activities/metrics.
-        # Defensive: a delete failure must NOT break the sync return.
-        try:
-            await db.execute(
-                delete(CoachBrief).where(
-                    CoachBrief.user_id == user_id,
-                    # AUDIT rows are NOT cache: absorption dedup keys off
-                    # verdict='absorption' rows and the undo window off
-                    # 'modification'/'modification_undo'. Deleting them here
-                    # made every 15-min sync re-absorb the same rides and eat
-                    # the week's biggest planned session (the Z2 death-spiral,
-                    # plan-engine recon 2026-07-20).
-                    CoachBrief.verdict.notin_(
-                        ("absorption", "modification", "modification_undo")
-                    ),
-                )
-            )
-            await db.commit()
-        except Exception as exc:
-            logger.warning(
-                "Failed to invalidate coach_briefs for user_id=%s after sync (non-fatal): %s",
-                user_id,
-                exc,
-            )
-            await db.rollback()
+        # Coach-brief refresh policy (July 2026): the brief regenerates on
+        # exactly four triggers (morning / evening / missed / completed-workout).
+        # The "completed workout" trigger is HERE — bust the cache ONLY when a
+        # NEW activity landed (total_activities > 0), so the next read of
+        # /coach/brief flips to the post-ride review. A metrics-only sync
+        # (sleep/HRV/RHR, no ride) must NOT regenerate the brief — that used to
+        # fire on every 15-min sync and burned LLM cost all day. Morning /
+        # evening / missed are handled by the hourly scheduler sweep
+        # (coach_service.refresh_brief_scheduled_triggers).
+        if total_activities > 0:
+            await invalidate_coach_brief_cache(db, user_id)
 
         # Keep the period-report cache fresh (mirror coach_briefs). Reads the
         # athlete's timezone for the once-a-day morning gate.

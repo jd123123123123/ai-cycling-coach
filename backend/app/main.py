@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.scheduler import (
     run_all_user_syncs,
+    run_brief_refresh_sweep,
     run_hourly_plan_adaptation,
     run_morning_push_briefs,
     scheduler,
@@ -82,6 +83,19 @@ async def lifespan(app: FastAPI):
         "interval",
         hours=1,
         id="plan_adaptation",
+        misfire_grace_time=600,
+        coalesce=True,
+        max_instances=1,
+    )
+    # Coach-brief refresh sweep (4-trigger policy): hourly, regenerates each
+    # athlete's brief in their local morning / evening / after a missed session.
+    # Deduped per local day; the completed-workout trigger is handled by the
+    # Garmin sync busting the cache only when a new activity lands.
+    scheduler.add_job(
+        run_brief_refresh_sweep,
+        "interval",
+        hours=1,
+        id="brief_refresh",
         misfire_grace_time=600,
         coalesce=True,
         max_instances=1,

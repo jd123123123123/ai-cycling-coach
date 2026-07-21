@@ -31,7 +31,7 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -3576,6 +3576,124 @@ async def get_or_generate_brief(
         )
 
     return brief
+
+
+# ======================================================================
+#  Coach-brief refresh POLICY (July 2026)
+#
+#  The brief regenerates on exactly FOUR triggers — never on every 15-min
+#  Garmin sync (LLM cost + churn). Three are scheduler-owned and live here
+#  (morning, evening, missed-session); the fourth (a completed workout) is
+#  the Garmin sync deleting the cached brief only when a NEW activity landed.
+#  Each scheduler trigger is deduped per athlete-local day via a marker in
+#  AthleteProfile.goals["brief_refresh"] — same JSONB-marker pattern as the
+#  morning-push "last_sent". Cheap: nothing regenerates when no trigger fired.
+# ======================================================================
+
+# Athlete-local hours (24h) at/after which each scheduler trigger may fire.
+MORNING_BRIEF_HOUR = 6      # local morning refresh (brief ready before the day)
+EVENING_BRIEF_HOUR = 18     # local wind-down refresh
+MISSED_BRIEF_HOUR = 21      # after this, an unridden planned session is a miss
+
+
+def _brief_refresh_state(profile: AthleteProfile) -> dict:
+    """Read the per-athlete brief-refresh dedup markers from goals JSONB."""
+    goals = profile.goals or {}
+    state = goals.get("brief_refresh")
+    return dict(state) if isinstance(state, dict) else {}
+
+
+def _save_brief_refresh_state(profile: AthleteProfile, state: dict) -> None:
+    from sqlalchemy.orm.attributes import flag_modified
+
+    goals = dict(profile.goals or {})
+    goals["brief_refresh"] = state
+    profile.goals = goals
+    flag_modified(profile, "goals")
+
+
+async def _has_missed_session_today(
+    db: AsyncSession, user_id: int, today: date
+) -> bool:
+    """True when today has a planned non-rest cycling session whose window has
+    passed with no matching ride — a genuine miss the brief should acknowledge.
+
+    Reuses existing signals: streak._is_rest_planned for rest semantics and the
+    plan-engine's MISSED_DONE_TSS threshold for "did they actually train".
+    """
+    from app.models.planned_workout import PlannedWorkout
+    from app.services.plan_adaptation_engine import MISSED_DONE_TSS
+    from app.services.streak import _is_rest_planned
+
+    rows = (
+        await db.execute(
+            select(PlannedWorkout).where(
+                PlannedWorkout.user_id == user_id,
+                PlannedWorkout.date == today,
+                func.coalesce(PlannedWorkout.sport, "cycling") == "cycling",
+            )
+        )
+    ).scalars().all()
+    sessions = [r for r in rows if not _is_rest_planned(r.template_id, r.title)]
+    if not sessions:
+        return False
+
+    start_utc, end_utc = _today_local_window()
+    acts = (
+        await db.execute(
+            select(Activity).where(
+                Activity.user_id == user_id,
+                Activity.sport == "cycling",
+                Activity.started_at >= start_utc,
+                Activity.started_at < end_utc,
+            )
+        )
+    ).scalars().all()
+    done_tss = sum(float(a.tss or 0.0) for a in acts)
+    return done_tss < MISSED_DONE_TSS
+
+
+async def refresh_brief_scheduled_triggers(
+    db: AsyncSession,
+    profile: AthleteProfile,
+    now_utc: datetime | None = None,
+) -> list[str]:
+    """Force-regenerate the coach brief for the scheduler-owned triggers that
+    fired in the athlete's LOCAL time — morning, evening, missed-session —
+    deduped once per local day per trigger. Returns the trigger names that
+    fired (empty when none did → no LLM cost).
+
+    Called hourly by the scheduler for every athlete. Force=True keeps the
+    rule-based fallback available with no API keys; a per-user try/except in
+    the caller isolates failures.
+    """
+    set_athlete_tz_from_profile(profile)
+    now_local = (now_utc or datetime.now(timezone.utc)).astimezone(_athlete_tz())
+    today = now_local.date()
+    today_iso = today.isoformat()
+    state = _brief_refresh_state(profile)
+    fired: list[str] = []
+
+    if now_local.hour >= MORNING_BRIEF_HOUR and state.get("morning") != today_iso:
+        await get_or_generate_brief(db, profile.user_id, force=True)
+        state["morning"] = today_iso
+        fired.append("morning")
+
+    if now_local.hour >= EVENING_BRIEF_HOUR and state.get("evening") != today_iso:
+        await get_or_generate_brief(db, profile.user_id, force=True)
+        state["evening"] = today_iso
+        fired.append("evening")
+
+    if now_local.hour >= MISSED_BRIEF_HOUR and state.get("missed") != today_iso:
+        if await _has_missed_session_today(db, profile.user_id, today):
+            await get_or_generate_brief(db, profile.user_id, force=True)
+            state["missed"] = today_iso
+            fired.append("missed")
+
+    if fired:
+        _save_brief_refresh_state(profile, state)
+        await db.commit()
+    return fired
 
 
 async def _upsert_recommendation_for_today(

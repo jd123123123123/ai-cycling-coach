@@ -107,9 +107,19 @@ class Settings(BaseSettings):
     COACH_LIGHT_MODEL: str = "claude-haiku-4-5"
     COACH_MODEL: str = "claude-sonnet-4-6"
     COACH_CHAT_MODEL: str = "claude-sonnet-4-6"
-    # Caching is refresh-on-demand: a brief regenerates ONLY on an explicit
-    # refresh (force=True) or a Garmin sync (which busts the cache when new data
-    # lands). Time alone never regenerates it — hence an effectively-infinite TTL.
+    # Caching is trigger-based, not time-based (hence an effectively-infinite
+    # TTL). A brief regenerates ONLY on these events:
+    #   1. Morning   — hourly scheduler sweep, once in the athlete's LOCAL
+    #                  morning (coach_service.refresh_brief_scheduled_triggers).
+    #   2. Workout   — a Garmin sync that lands a NEW activity busts the cache
+    #                  so the next read flips to the post-ride review. A
+    #                  metrics-only sync (sleep/HRV/RHR) does NOT regenerate.
+    #   3. Missed    — same scheduler sweep: a planned session whose window
+    #                  passed unridden triggers one regeneration.
+    #   4. Evening   — scheduler sweep, once in the athlete's LOCAL evening.
+    #   + force=True — the manual /coach/brief/refresh always regenerates.
+    # Each scheduler trigger is deduped per athlete-local day via a marker in
+    # AthleteProfile.goals["brief_refresh"]; time alone never regenerates it.
     COACH_BRIEF_CACHE_HOURS: int = 24 * 365
 
     # Race Debrief uses the strongest model for the analytical verdict, independent
