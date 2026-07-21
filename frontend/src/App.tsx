@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
+import { CelebrationProvider } from './contexts/CelebrationContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import ScrollToTop from './components/ScrollToTop'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -53,6 +54,7 @@ function App() {
       <ScrollToTop />
       <AuthProvider>
         <LocaleProvider>
+        <CelebrationProvider>
         <ErrorBoundary>
         <Suspense fallback={<AppSplash />}>
         <Routes>
@@ -233,6 +235,7 @@ function App() {
         </Routes>
         </Suspense>
         </ErrorBoundary>
+        </CelebrationProvider>
         </LocaleProvider>
       </AuthProvider>
     </BrowserRouter>

@@ -14,7 +14,7 @@
  * data this surface doesn't own; fabricating avatars would break the honesty
  * rule. Every missing stream renders an honest "—" or the card self-hides.
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { parseISO, format } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
@@ -28,6 +28,9 @@ import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useRideRpe, useSetRideRpe } from '../hooks/useRideRpe'
 import type { RpeValue } from '../api/rideFeedback'
 import { useLocale } from '../contexts/LocaleContext'
+import { useCelebrate } from '../contexts/CelebrationContext'
+import { bestPrEffort, pbDedupKey } from '../lib/celebration'
+import { hapticTick } from '../lib/haptics'
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 function routePath(poly: [number, number][], w: number, h: number, pad = 16): { d: string; pts: [number, number][] } | null {
@@ -106,6 +109,7 @@ export default function RideRecapView() {
   const { data: athlete } = useAthleteProfile()
   const { data: rpeData } = useRideRpe(idOk ? activityId : undefined)
   const setRpe = useSetRideRpe(idOk ? activityId : undefined)
+  const { celebrateOnce } = useCelebrate()
 
   const header = data?.header ?? null
   const verdict = data?.verdict ?? null
@@ -244,6 +248,27 @@ export default function RideRecapView() {
       navigator.share({ title, url: window.location.href }).catch(() => {})
     }
   }
+
+  // Micro-dopamine: a viewed ride that set a season best earns ONE celebration,
+  // ever — the highest-wattage is_pr effort drives the pen "NEW PERSONAL RECORD"
+  // moment. Deduped by activity so a revisit/re-render never re-fires. Honest:
+  // no PB in the real efforts → no celebration.
+  const bestPr = useMemo(() => bestPrEffort(efforts), [efforts])
+  useEffect(() => {
+    if (!idOk || !bestPr) return
+    celebrateOnce(pbDedupKey(activityId), 'pb', {
+      kicker: de ? 'NEUER REKORD' : 'NEW PERSONAL RECORD',
+      value: Math.round(bestPr.ride_watts),
+      unit: 'W',
+      rarity: prCount > 1 ? (de ? `${prCount} BESTWERTE` : `${prCount} PBs`) : undefined,
+      detail: de
+        ? `Deine beste ${durLabel(bestPr.duration_s)}-Leistung aller Zeiten.`
+        : `Your best ${durLabel(bestPr.duration_s)} power ever.`,
+      onShare,
+      shareLabel: de ? 'Diesen Erfolg teilen' : 'Share this win',
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idOk, activityId, bestPr, prCount, de])
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
@@ -482,7 +507,7 @@ export default function RideRecapView() {
                   return (
                     <button
                       key={o.key}
-                      onClick={() => setRpe.mutate(o.key)}
+                      onClick={() => { hapticTick(); setRpe.mutate(o.key) }}
                       disabled={setRpe.isPending}
                       className="flex-1 grid place-items-center rounded-full"
                       style={{
