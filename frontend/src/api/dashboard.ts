@@ -49,6 +49,8 @@ export interface ActivityRead {
   sport: 'cycling' | 'running' | 'gym'
   duration_seconds: number | null
   distance_meters: number | null
+  /** Total ascent in metres (Höhenmeter). Cycling-only; null for indoor/no-GPS. */
+  elevation_gain_m: number | null
   tss: number | null
   average_hr: number | null
   max_hr: number | null

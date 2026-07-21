@@ -44,6 +44,10 @@ class Activity(Base):
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     distance_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Elevation gain / total ascent in metres (Höhenmeter). Cycling-only concept;
+    # left NULL for indoor/no-GPS rides — an honest "—" beats a fabricated 0.
+    elevation_gain_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Training load
     tss: Mapped[float | None] = mapped_column(Float, nullable=True)
 

@@ -14,6 +14,8 @@ class ActivityCreate(BaseModel):
     started_at: datetime
     duration_seconds: int = Field(..., gt=0, description="Activity duration in seconds")
     distance_meters: float | None = None
+    # Total ascent in metres (Höhenmeter). Cycling-only; null for indoor/no-GPS.
+    elevation_gain_m: float | None = None
     average_power: float | None = None
     normalized_power: float | None = None
     average_hr: int | None = None
@@ -42,6 +44,7 @@ class ActivityRead(BaseModel):
     sport: str
     duration_seconds: int | None
     distance_meters: float | None
+    elevation_gain_m: float | None
     tss: float | None
     normalized_power: float | None
     average_power: float | None

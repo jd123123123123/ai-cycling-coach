@@ -250,12 +250,21 @@ async def create_activity(
     if tss is None and getattr(data, "external_tss", None) is not None:
         tss = float(data.external_tss)
 
+    # Elevation gain: prefer the explicitly-mapped value; self-heal from a
+    # preserved raw_data blob (e.g. COROS rides that only carry it there).
+    from app.services.garmin_mapper import extract_elevation_gain_m
+
+    elevation_gain_m = data.elevation_gain_m
+    if elevation_gain_m is None:
+        elevation_gain_m = extract_elevation_gain_m(getattr(data, "raw_data", None))
+
     activity = Activity(
         user_id=user_id,
         sport=data.sport,
         started_at=data.started_at,
         duration_seconds=data.duration_seconds,
         distance_meters=data.distance_meters,
+        elevation_gain_m=elevation_gain_m,
         average_power=data.average_power,
         normalized_power=data.normalized_power,
         average_hr=data.average_hr,
@@ -392,6 +401,52 @@ async def recompute_missing_tss(
 
     logger.info(
         "recompute_missing_tss: user_id=%s scanned=%d updated=%d",
+        user_id,
+        len(activities),
+        updated,
+    )
+    return updated
+
+
+async def backfill_missing_elevation(
+    db: AsyncSession, user_id: int, days: int | None = None
+) -> int:
+    """Backfill elevation_gain_m for rows that have it NULL but carry a raw_data
+    blob with an ascent figure (seeded/synthetic + COROS-preserved rides).
+
+    Idempotent and self-healing: only touches rows where elevation is currently
+    NULL and a positive ascent can be extracted from the stored raw_data. Mirrors
+    ``recompute_missing_tss`` — wired into the post-sync path so historical rows
+    fill in once their raw payload is present. `days` limits the trailing scan.
+
+    Returns the count of rows updated.
+    """
+    from app.services.garmin_mapper import extract_elevation_gain_m
+
+    query = select(Activity).where(
+        Activity.user_id == user_id,
+        Activity.elevation_gain_m.is_(None),
+        Activity.raw_data.isnot(None),
+    )
+    if days is not None:
+        query = query.where(
+            Activity.started_at >= datetime.now(UTC) - timedelta(days=days)
+        )
+    result = await db.execute(query)
+    activities = list(result.scalars().all())
+
+    updated = 0
+    for activity in activities:
+        elev = extract_elevation_gain_m(activity.raw_data)
+        if elev is not None:
+            activity.elevation_gain_m = elev
+            updated += 1
+
+    if updated:
+        await db.commit()
+
+    logger.info(
+        "backfill_missing_elevation: user_id=%s scanned=%d updated=%d",
         user_id,
         len(activities),
         updated,

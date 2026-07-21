@@ -597,6 +597,18 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
                 user_id,
             )
 
+        # Backfill elevation gain (Höhenmeter) for NULL rows that carry a raw_data
+        # blob — self-heals historical/COROS rides. Best-effort, never breaks sync.
+        try:
+            from app.services.activity_service import backfill_missing_elevation
+
+            await backfill_missing_elevation(db, user_id, days=90)
+        except Exception:  # noqa: BLE001 — backfill must never break a sync
+            logger.warning(
+                "backfill_missing_elevation failed after sync (user_id=%s) — non-fatal",
+                user_id,
+            )
+
         # Absorb-and-replan (P1.4): unplanned/oversized rides get absorbed and
         # the week gently rebalanced. Best-effort by contract — never breaks sync.
         if total_activities > 0:

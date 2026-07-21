@@ -10,15 +10,16 @@
  *   2. Heatmap Card      — "Dieses Jahr auf dem Rad": streak pill, 3 hero
  *                          stats, 26-week consistency heatmap, legend, caption
  *   3. Summary Card      — "Dieser Monat": distance-by-week big number + delta,
- *                          weekly distance bars, stat strip, momentum row
+ *                          weekly distance bars, stat strip (incl. real month
+ *                          elevation), momentum row
  *   4. Calendar Card     — month grid coloured by outdoor/indoor, legend, caption
  *   5. PR Card           — all-time bests (Top Speed · Longest Ride · Biggest Climb)
  *   6. Recent Activities — last rides, generative thumb, → ride recap
- *   7. Deep Dives Card   — Load & Form · Power Profile · Season Progress
+ *   7. Deep Dives Card   — Power Profile · Season Progress
  *
  * All values come from the existing activity + power-profile + streak hooks.
- * Fields the backend lacks (elevation / climbing / GPS route) render the pen
- * structure with a graceful "—" per the app's honest-dash rule.
+ * Elevation (Höhenmeter) is sourced from Activity.elevation_gain_m; rows that
+ * genuinely lack it render a graceful "—" per the app's honest-dash rule.
  */
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -27,8 +28,8 @@ import {
   getDaysInMonth, getDay, differenceInCalendarDays,
 } from 'date-fns'
 import {
-  Bike, SlidersHorizontal, ChevronLeft, ChevronRight, Flame, TrendingUp,
-  Mountain, Clock, Gauge, Trophy, Activity, Zap,
+  Bike, SlidersHorizontal, ChevronRight, Flame, TrendingUp,
+  Mountain, Clock, Gauge, Trophy, Zap,
 } from 'lucide-react'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useStreak } from '../../../hooks/useStreak'
@@ -231,6 +232,10 @@ export default function HistoryTab() {
         km: win.reduce((s, a) => s + (a.distance_meters ?? 0) / 1000, 0),
         sec: win.reduce((s, a) => s + (a.duration_seconds ?? 0), 0),
         tss: win.reduce((s, a) => s + (a.tss ?? 0), 0),
+        // Sum ONLY rides that actually carry an ascent figure — honest "—" when
+        // none do (indoor month / elevation never synced), never a fake 0.
+        elev: win.reduce((s, a) => s + (a.elevation_gain_m ?? 0), 0),
+        elevN: win.filter((a) => a.elevation_gain_m != null).length,
         n: win.length,
       }
     }
@@ -301,7 +306,11 @@ export default function HistoryTab() {
       .filter((a) => (a.distance_meters ?? 0) > 3000 && (a.duration_seconds ?? 0) > 0)
       .map((a) => ({ a, kmh: (a.distance_meters! / 1000) / (a.duration_seconds! / 3600) }))
       .sort((x, y) => y.kmh - x.kmh)[0]
-    return { longestRide, fastest }
+    // Biggest single-ride climb — honest, only across rides that carry ascent.
+    const biggestClimb = all
+      .filter((a) => (a.elevation_gain_m ?? 0) > 0)
+      .reduce<ActivityRead | null>((b, a) => ((a.elevation_gain_m ?? 0) > (b?.elevation_gain_m ?? -1) ? a : b), null)
+    return { longestRide, fastest, biggestClimb }
   }, [all])
 
   const prRows = useMemo(() => {
@@ -322,11 +331,12 @@ export default function HistoryTab() {
         to: prs.longestRide ? `/activities/${prs.longestRide.id}/recap` : null,
       },
       {
-        // Elevation is not in the payload → honest dash, no PR pill.
+        // Real ascent when a ride carries elevation; honest dash otherwise.
         icon: Mountain, color: 'var(--color-amber)',
         title: de ? 'Größter Anstieg' : 'Biggest Climb',
-        sub: de ? 'Höhendaten fehlen' : 'No elevation data',
-        value: '—', to: null,
+        sub: prs.biggestClimb ? dfmt(prs.biggestClimb) : (de ? 'Höhendaten fehlen' : 'No elevation data'),
+        value: prs.biggestClimb ? `${Math.round(prs.biggestClimb.elevation_gain_m ?? 0).toLocaleString(loc)} hm` : '—',
+        to: prs.biggestClimb ? `/activities/${prs.biggestClimb.id}/recap` : null,
       },
     ]
   }, [prs, de, locale])
@@ -383,7 +393,6 @@ export default function HistoryTab() {
 
   // ── Deep dives ────────────────────────────────────────────────────────────
   const deepDives = [
-    { icon: Activity, color: 'var(--color-strain)', to: '/load-form', title: de ? 'Belastung & Form' : 'Load & Form', sub: de ? 'Fitness, Ermüdung & Ramp-Risiko' : 'Fitness, fatigue & ramp risk' },
     { icon: Gauge, color: 'var(--color-accent)', to: '/power-profile', title: de ? 'Leistungsprofil' : 'Power Profile', sub: de ? 'FTP, Leistungskurve & Benchmarks' : 'FTP, power curve & benchmarks' },
     { icon: TrendingUp, color: 'var(--color-gold)', to: '/season', title: de ? 'Saisonfortschritt' : 'Season Progress', sub: de ? 'FTP-Verlauf, Prognose & Rennziel' : 'FTP arc, forecast & race projection' },
   ]
@@ -561,7 +570,7 @@ export default function HistoryTab() {
         {/* Stat strip */}
         <div className="flex gap-2">
           {[
-            { icon: Mountain, color: 'var(--color-strain)', v: '—', l: de ? 'Hm gesamt' : 'm climbed' },
+            { icon: Mountain, color: 'var(--color-strain)', v: summary.cur.elevN > 0 ? Math.round(summary.cur.elev).toLocaleString(loc) : '—', l: de ? 'Hm gesamt' : 'm climbed' },
             { icon: Clock, color: 'var(--color-ink-2)', v: summary.cur.n > 0 ? fmtHm(summary.cur.sec) : '—', l: de ? 'Stunden' : 'hours' },
             { icon: Bike, color: 'var(--color-accent)', v: `${summary.cur.n}`, l: de ? 'Fahrten' : 'rides' },
             { icon: Zap, color: 'var(--color-move)', v: summary.cur.n > 0 ? Math.round(summary.cur.tss).toLocaleString(loc) : '—', l: 'TSS' },
@@ -582,7 +591,9 @@ export default function HistoryTab() {
       </div>
 
       {/* ── 4. Calendar Card ── */}
-      <Link to="/load-form" className="hover-card rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
+      {/* De-linked: was a <Link to="/load-form">; Load & Form is archived, so this
+          is now a plain, non-navigating calendar card (no hover-card, no CTA). */}
+      <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-0.5">
             <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{formatDate(today, 'MMMM', locale)}</span>
@@ -590,10 +601,6 @@ export default function HistoryTab() {
               {de ? `${calStats.rides} Fahrten · ${calStats.rest} Ruhetage` : `${calStats.rides} rides · ${calStats.rest} rest days`}
             </span>
           </div>
-          <span className="flex items-center gap-3.5">
-            <ChevronLeft size={20} style={{ color: 'var(--color-muted)' }} />
-            <ChevronRight size={20} style={{ color: 'var(--color-ink-2)' }} />
-          </span>
         </div>
         <div className="grid grid-cols-7 gap-1">
           {(de ? ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] : ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']).map((d, i) => (
@@ -631,8 +638,7 @@ export default function HistoryTab() {
             </span>
           ))}
         </div>
-        <div className="hover-reveal" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Belastung & Form ansehen →' : 'View load & form →'}</div>
-      </Link>
+      </div>
 
       {/* ── 5. Personal Records ── */}
       <div className="rounded-[24px] flex flex-col" style={{ ...cardStyle, padding: '6px 20px' }}>

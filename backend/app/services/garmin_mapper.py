@@ -36,6 +36,55 @@ GARMIN_SPORT_MAP: dict[str, str] = {
 }
 
 
+# Elevation-gain keys seen across providers/payloads, most-specific first.
+# Garmin activity summaries use camelCase `elevationGain`; our seeded/synthetic
+# rows and COROS-preserved rows use snake_case `total_ascent` / `elevation_gain`;
+# stream-derived enrichment uses `elev_gain_m` / `ascent_m`.
+_ELEVATION_KEYS = (
+    "elevationGain",
+    "elevation_gain",
+    "totalAscent",
+    "total_ascent",
+    "elev_gain_m",
+    "ascent_m",
+)
+
+
+def extract_elevation_gain_m(raw) -> float | None:
+    """Pull total ascent (Höhenmeter, metres) out of an activity raw_data blob.
+
+    Mirrors the ``crew_score._extract_vo2max`` pattern: one place that tolerates
+    a JSON-string blob, a missing/None blob, and the several key spellings
+    Garmin/COROS/synthetic payloads use. Returns None (never a fabricated 0) for
+    indoor/no-GPS rides or any non-positive/unparseable value — the caller keeps
+    an honest "—".
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            import json  # noqa: PLC0415 — lazy, only on the rare string path
+
+            raw = json.loads(raw)
+        except Exception:
+            return None
+    if not isinstance(raw, dict):
+        return None
+    for key in _ELEVATION_KEYS:
+        val = raw.get(key)
+        if val is None:
+            continue
+        try:
+            num = float(val)
+        except (TypeError, ValueError):
+            continue
+        # Non-positive ascent is treated as "no elevation" — an indoor/trainer
+        # ride reports 0, which we must not surface as a real climb.
+        if num > 0:
+            return num
+    return None
+
+
 def map_garmin_activity(raw: dict) -> ActivityCreate | None:
     """Transform a raw Garmin activity dict into an ActivityCreate schema.
 
@@ -106,11 +155,16 @@ def map_garmin_activity(raw: dict) -> ActivityCreate | None:
     distance_raw = raw.get("distance")
     distance_meters = float(distance_raw) if distance_raw is not None else None
 
+    # Total ascent (Höhenmeter) straight from the Garmin activity summary —
+    # None for indoor/trainer rides that report no elevation.
+    elevation_gain_m = extract_elevation_gain_m(raw)
+
     return ActivityCreate(
         sport=sport,
         started_at=started_at,
         duration_seconds=duration_seconds,
         distance_meters=distance_meters,
+        elevation_gain_m=elevation_gain_m,
         average_power=average_power,
         normalized_power=normalized_power,
         average_hr=average_hr,
