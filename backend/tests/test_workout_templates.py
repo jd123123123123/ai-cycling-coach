@@ -30,10 +30,35 @@ from app.services.workout_templates import (
 
 class TestTemplateLibrary:
     def test_all_templates_registered(self):
-        # 68-template library: 13 originals + 7 first-batch + 30 second-batch
+        # 111-template library: 13 originals + 7 first-batch + 30 second-batch
         # + 2 plan-engine-v2 fun formats (tempo+bursts, playful-Z2 surges)
-        # + 13 Aktivitus 14wk Power & Endurance imports (wk 13/14 merged).
+        # + 13 Aktivitus 14wk Power & Endurance imports (wk 13/14 merged)
+        # + 43 curated whatsonzwift imports (VO2/SST/threshold/endurance/HIIT/sprint).
         expected = {
+            # Curated whatsonzwift import — VO2 (8)
+            "vo2_40_20_ronnestad", "vo2_pyramid_ganna", "vo2_5x2_120",
+            "vo2_surges_45_30", "vo2_micro_3x10_130", "vo2_15_15_3x20",
+            "vo2_ac_2x4x30", "vo2_descending_within_set",
+            # Curated whatsonzwift import — endurance (5)
+            "endurance_cadence_bursts_60", "endurance_aerobic_builds_90",
+            "endurance_long_ride_tempo_85", "endurance_sustainability_50",
+            "endurance_pops_70",
+            # Curated whatsonzwift import — sweet spot (8)
+            "sst_pyramid_50", "sst_ramps_3x10", "sst_2x20_surges",
+            "sst_2x12_over_4x1", "sst_low_cadence_kuss", "sst_primed_3x15",
+            "sst_3x12_91", "sst_rolling_roads",
+            # Curated whatsonzwift import — threshold (8)
+            "thr_at_over_under", "thr_cruise_criss_cross", "thr_descending_ladder",
+            "thr_supra_4x5", "thr_over_under_2_1", "thr_exemplar_8_2",
+            "thr_criss_cross_2x20", "thr_3x12_100",
+            # Curated whatsonzwift import — HIIT 30-45min (8)
+            "hiit_balance_point_30", "hiit_burn_notice_30", "hiit_ghost_pepper_30",
+            "hiit_pop_rocks_30", "hiit_spark_plug_30", "hiit_turn_the_screw_30",
+            "hiit_red_shift_30", "hiit_microburst_pyramid_40",
+            # Curated whatsonzwift import — anaerobic / sprint (6)
+            "sprint_max_5x20_250", "sprint_fun_8x10_225", "sprint_clusters_3x6x15",
+            "anaerobic_descending_ladder", "sprint_microbursts_2x12",
+            "sprint_openers_ladder",
             # Aktivitus 14wk Power & Endurance (Zwift import; 13/14 merged)
             "aktivitus_pe_1", "aktivitus_pe_2", "aktivitus_pe_3",
             "aktivitus_pe_4", "aktivitus_pe_5", "aktivitus_pe_6",

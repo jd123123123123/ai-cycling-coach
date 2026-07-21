@@ -502,14 +502,14 @@ class TestPickTemplate:
         assert t.id == "vo2_ronnestad_3x13"
 
     def test_vo2_picks_short_when_window_tiny(self):
-        # 45-min window — every VO2 template needs ~50+ min once warm-up and
-        # cool-down are counted. Picker falls into the "nothing fits" branch
-        # and returns the shortest allowed VO2 protocol.
+        # 45-min window — with the curated whatsonzwift import the library now
+        # ships genuinely short VO2 protocols (pyramids, 5×2, 30-min HIIT), so a
+        # time-crunched VO2 day resolves to a real VO2 session that fits rather
+        # than a truncated fallback. The invariant: a VO2-category template that
+        # fits the window.
         t = pick_template("vo2", athlete_ftp=280, available_minutes=45)
-        assert t.id in (
-            "vo2_3x6", "vo2_map_5x3", "vo2_descending_5_4_3_2_1",
-            "vo2_micro_30x30", "vo2_microbursts_30x15_45",
-        )
+        assert t.category == "vo2"
+        assert sum(b.duration_s for b in t.blocks) <= 45 * 60
 
     def test_vo2_requires_ftp_180(self):
         """Low FTP → no VO2 available → falls back to sweet_spot."""

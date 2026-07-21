@@ -564,8 +564,12 @@ def _cascade_toward_duration(
             # Only drop to recovery when the target is genuinely tiny (<30min)
             if target_minutes < 30:
                 return "recovery_30"
-            # Otherwise pick the shortest in-category candidate
-            return ranked[0]
+            # Otherwise pick the shortest in-category candidate, preferring a
+            # cascade-spine anchor so the below-floor substitution stays on the
+            # predictable ORDERED_TEMPLATES chain rather than an arbitrary
+            # newly-imported variant of the same category.
+            spine = [t for t in ranked if t in ORDERED_TEMPLATES]
+            return (spine or ranked)[0]
         return best
 
     # direction == "longer"

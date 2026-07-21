@@ -609,6 +609,10 @@ _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
     "endurance":  [
         "z2_long_240", "z2_long_180", "z2_long_120",
         "z2_progressive_90", "z2_endurance_90", "z2_endurance_60",
+        # Curated whatsonzwift import — cadence / progressive / surge variants.
+        "endurance_long_ride_tempo_85", "endurance_aerobic_builds_90",
+        "endurance_pops_70", "endurance_cadence_bursts_60",
+        "endurance_sustainability_50",
     ],
     # Tempo includes the low-cadence force drill (still Z3 power, but a
     # strength-biased rep that targets Type-IIa recruitment via cadence)
@@ -622,6 +626,10 @@ _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
     "sweet_spot": [
         "sub_threshold_2x40", "sweet_spot_4x15", "sweet_spot_3x20",
         "sweet_spot_2x20",
+        # Curated whatsonzwift import — pyramids, ramps, surges, primed blocks.
+        "sst_primed_3x15", "sst_pyramid_50", "sst_3x12_91",
+        "sst_2x20_surges", "sst_rolling_roads", "sst_2x12_over_4x1",
+        "sst_ramps_3x10", "sst_low_cadence_kuss",
     ],
     # Threshold: Norwegian 4×8 (highest tolerance) + heavy hill / pyramid /
     # descending variants for race specificity, then the classic 2×15 +
@@ -636,6 +644,10 @@ _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
         "aktivitus_pe_1", "aktivitus_pe_2", "aktivitus_pe_3", "aktivitus_pe_4",
         "aktivitus_pe_8", "aktivitus_pe_9", "aktivitus_pe_10",
         "aktivitus_pe_11", "aktivitus_pe_12",
+        # Curated whatsonzwift import — at/over/under, criss-cross, ladders.
+        "thr_3x12_100", "thr_criss_cross_2x20", "thr_over_under_2_1",
+        "thr_descending_ladder", "thr_exemplar_8_2", "thr_supra_4x5",
+        "thr_cruise_criss_cross", "thr_at_over_under",
     ],
     # VO2: long polarized for big days, then highest-evidence short-intervals
     # (Rønnestad), then the long 3×6 and 5×4 reps, hill VO2, microbursts,
@@ -648,6 +660,12 @@ _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
         "vo2_micro_30x30",
         # Aktivitus 14wk Power & Endurance — VO2/microburst power-endurance days.
         "aktivitus_pe_5", "aktivitus_pe_6", "aktivitus_pe_7", "aktivitus_pe_13_14",
+        # Curated whatsonzwift import — VO2 variants + VO2-dominant HIIT.
+        "vo2_15_15_3x20", "vo2_micro_3x10_130", "vo2_pyramid_ganna",
+        "vo2_40_20_ronnestad", "vo2_5x2_120", "vo2_ac_2x4x30",
+        "vo2_descending_within_set", "vo2_surges_45_30",
+        "hiit_burn_notice_30", "hiit_ghost_pepper_30", "hiit_red_shift_30",
+        "hiit_turn_the_screw_30", "hiit_balance_point_30",
     ],
     # Anaerobic / neuromuscular — peak power + capacity. Order is
     # taper-friendly first (short, fully-rested sprints preserve peak power
@@ -661,6 +679,11 @@ _CATEGORY_CANDIDATES: dict[SessionType, list[str]] = {
         "anaerobic_capacity_5x3_130",
         "anaerobic_8x90s",
         "anaerobic_tabata_8x20_10",
+        # Curated whatsonzwift import — sprint ladders + anaerobic-dominant HIIT.
+        "sprint_openers_ladder", "sprint_max_5x20_250", "sprint_fun_8x10_225",
+        "sprint_clusters_3x6x15", "sprint_microbursts_2x12",
+        "anaerobic_descending_ladder", "hiit_microburst_pyramid_40",
+        "hiit_pop_rocks_30", "hiit_spark_plug_30",
     ],
 }
 
