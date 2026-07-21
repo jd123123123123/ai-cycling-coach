@@ -100,19 +100,40 @@ function zoneBarColor(z: number): string {
 // sub-line, mirroring WorkoutDetailView's landed `peakChip` pattern.
 // Both are pure + exported for node-env vitest.
 
+/** Effective work-seconds and mean %FTP of one block, honoring structured
+ *  on/off sets: a "30×15/45s" block spends reps×on_s at power_target_pct_ftp
+ *  and reps×off_s at off_pct_ftp — averaging the whole 30 min at the on-power
+ *  overstates the load (the merged-block bug: "Ø 215 W", "30 Min @ 120% FTP"). */
+function blockPctSeconds(iv: IntervalBlockOut): { pctSeconds: number; seconds: number } {
+  const onPct = iv.power_target_pct_ftp ?? 0
+  if (iv.reps && iv.on_s && iv.on_s > 0) {
+    const offPct = iv.off_pct_ftp ?? 0
+    const offS = iv.off_s ?? 0
+    const onSeconds = iv.reps * iv.on_s
+    const offSeconds = iv.reps * offS
+    return {
+      pctSeconds: onSeconds * onPct + offSeconds * offPct,
+      seconds: onSeconds + offSeconds,
+    }
+  }
+  return { pctSeconds: iv.duration_seconds * onPct, seconds: iv.duration_seconds }
+}
+
 /** Duration-weighted session-average watts from a day's intervals. */
 export function cyclingAvgWatts(ivs: IntervalBlockOut[], ftp: number | null): number | null {
   if (ftp == null) return null
-  const withPct = ivs.filter((iv) => (iv.power_target_pct_ftp ?? 0) > 0 && iv.duration_seconds > 0)
-  const tot = withPct.reduce((s, iv) => s + iv.duration_seconds, 0)
+  const powered = ivs.filter((iv) => (iv.power_target_pct_ftp ?? 0) > 0 && iv.duration_seconds > 0)
+  const tot = powered.reduce((s, iv) => s + iv.duration_seconds, 0)
   if (tot <= 0) return null
-  const avgPct = withPct.reduce((s, iv) => s + iv.duration_seconds * (iv.power_target_pct_ftp as number), 0) / tot
-  return Math.round(avgPct * ftp)
+  const pctSeconds = powered.reduce((s, iv) => s + blockPctSeconds(iv).pctSeconds, 0)
+  return Math.round((pctSeconds / tot) * ftp)
 }
 
-/** "Spitzen: 4×15 Min @ 276 W (92 % FTP)" — the hardest repeated interval,
- *  labeled as peaks. Null for steady single-zone rides (nothing to call out)
- *  or when no FTP/powered interval exists — never fabricated. */
+/** "Spitzen: 30×15 s @ 288 W (120 % FTP)" for structured micro-sets, or
+ *  "Spitzen: 4×15 Min @ 276 W (92 % FTP)" for steady interval blocks — the
+ *  hardest repeated effort, labeled as peaks. Null for steady single-zone
+ *  rides or when no FTP/powered interval exists — never fabricated, and never
+ *  the physiologically-impossible merged form ("30 Min @ 120% FTP"). */
 export function cyclingPeakLine(ivs: IntervalBlockOut[], ftp: number | null, de: boolean): string | null {
   if (ftp == null) return null
   if (new Set(ivs.map((iv) => iv.zone)).size < 2) return null
@@ -122,13 +143,26 @@ export function cyclingPeakLine(ivs: IntervalBlockOut[], ftp: number | null, de:
     return m
   }, null)
   if (!peak) return null
+  const watts = Math.round((peak.power_target_pct_ftp as number) * ftp)
+  const pct = Math.round((peak.power_target_pct_ftp as number) * 100)
+
+  // Structured micro-set: the ON interval is the real effort, not the merged
+  // block duration. Render "reps × on-seconds" so we never claim 30 continuous
+  // minutes at 120% FTP.
+  if (peak.reps && peak.on_s && peak.on_s > 0) {
+    const onS = peak.on_s
+    const onStr = onS % 60 === 0 ? `${onS / 60} Min` : `${onS} s`
+    const onStrEn = onS % 60 === 0 ? `${onS / 60} min` : `${onS} s`
+    return de
+      ? `Spitzen: ${peak.reps}×${onStr} @ ${watts} W (${pct} % FTP)`
+      : `Peaks: ${peak.reps}×${onStrEn} @ ${watts} W (${pct}% FTP)`
+  }
+
   const count = ivs.filter((iv) =>
     iv.power_target_pct_ftp === peak.power_target_pct_ftp && iv.duration_seconds === peak.duration_seconds).length
   const dur = peak.duration_seconds
   const durStr = dur % 60 === 0 ? `${dur / 60}` : `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, '0')}`
   const rep = count > 1 ? `${count}×` : ''
-  const watts = Math.round((peak.power_target_pct_ftp as number) * ftp)
-  const pct = Math.round((peak.power_target_pct_ftp as number) * 100)
   return de
     ? `Spitzen: ${rep}${durStr} Min @ ${watts} W (${pct} % FTP)`
     : `Peaks: ${rep}${durStr} min @ ${watts} W (${pct}% FTP)`

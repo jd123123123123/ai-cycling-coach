@@ -212,11 +212,24 @@ def _planned_from_row(row) -> dict:
     return {
         "sport": getattr(row, "sport", None) or "cycling",
         "title": getattr(row, "title", None) or (template_id or "Planned session"),
+        # German title from the template so the decision verdict never embeds a
+        # raw English name in the DE UI ("Harter Tag — VO2 — 5×4min at 115% FTP").
+        "title_de": _template_title_de(template_id),
         "template_id": template_id,
         "target_tss": _template_base_tss(template_id),
         "duration_minutes": int(round(duration_s / 60)) if duration_s else None,
         "category": _template_category(template_id),
     }
+
+
+def _template_title_de(template_id: str | None) -> str | None:
+    try:
+        from app.services.workout_templates import get_template
+
+        tpl = get_template(template_id) if template_id else None
+        return getattr(tpl, "name_de", None) if tpl is not None else None
+    except Exception:  # pragma: no cover
+        return None
 
 
 def _template_base_tss(template_id: str | None) -> float | None:
@@ -318,18 +331,44 @@ async def _readiness_summary(db: AsyncSession, user_id: int) -> DailyDecisionRea
         rhr = await rhr_trend(db, user_id, days=7) or {}
         sleep = await sleep_debt(db, user_id, days=14) or {}
         pmc = await ctl_atl_tsb_snapshot(db, user_id) or {}
+
+        # Pull today's sleep score + wake body-battery so this readiness matches
+        # the coach brief's inputs EXACTLY — both call compute_readiness, and if
+        # one omits these signals the scores diverge (e.g. 79 here vs 76 in the
+        # brief on the same morning). The daily decision is the single producer;
+        # every surface must see one score. Both are best-effort (nullable).
+        from app.models.daily_metric import DailyMetric
+
+        today_metric_q = await db.execute(
+            select(DailyMetric)
+            .where(DailyMetric.user_id == user_id, DailyMetric.date == today_local())
+            .order_by(DailyMetric.recorded_at.desc())
+            .limit(1)
+        )
+        today_metric_row = today_metric_q.scalar_one_or_none()
+        sleep_score_last_night = today_metric_row.sleep_score if today_metric_row else None
+        body_battery_wake_val = today_metric_row.body_battery_wake if today_metric_row else None
+        try:
+            from app.services.biometrics_snapshot import compute_today_snapshot
+
+            today_snap = await compute_today_snapshot(db, user_id, today_local())
+            if today_snap.body_battery.wake is not None:
+                body_battery_wake_val = today_snap.body_battery.wake
+        except Exception:  # pragma: no cover — snapshot is best-effort
+            pass
+
         report = compute_readiness(ReadinessInputs(
             hrv_7d_mean=hrv.get("current_mean"),
             hrv_28d_baseline=hrv.get("baseline_28d_mean"),
             hrv_cv_pct=None,
             rhr_7d_mean=rhr.get("current_mean"),
             rhr_28d_baseline=rhr.get("baseline_28d_mean"),
-            sleep_score_last_night=None,
+            sleep_score_last_night=sleep_score_last_night,
             avg_nightly_debt_h=sleep.get("avg_nightly_debt"),
             tsb=pmc.get("tsb"),
             ctl=float(pmc.get("ctl") or 0.0),
             atl=float(pmc.get("atl") or 0.0),
-            body_battery_wake=None,
+            body_battery_wake=body_battery_wake_val,
         ))
         score = report.overall
         return DailyDecisionReadiness(
@@ -381,8 +420,13 @@ def decide(
 
     planned_model: DailyDecisionPlanned | None = None
     if ctx.planned:
+        planned_title = str(
+            (ctx.planned.get("title_de") if de else None)
+            or ctx.planned.get("title")
+            or "Session"
+        )
         planned_model = DailyDecisionPlanned(
-            title=str(ctx.planned.get("title") or "Session"),
+            title=planned_title,
             template_id=ctx.planned.get("template_id"),
             target_tss=ctx.planned.get("target_tss"),
             duration_minutes=ctx.planned.get("duration_minutes"),
@@ -526,7 +570,13 @@ def decide(
     # actually sees on Today.
     tss_target = (float(planned_tss) * min(vol, 1.0)) if planned_tss else None
 
-    title = str(ctx.planned.get("title") or ("Einheit" if de else "Session"))
+    # Prefer the template's German title in the DE UI so the verdict never
+    # embeds a raw English session name.
+    title = str(
+        (ctx.planned.get("title_de") if de else None)
+        or ctx.planned.get("title")
+        or ("Einheit" if de else "Session")
+    )
     if state == "recover":
         verdict = "Locker erholen — Plan bleibt, Umfang runter." if de \
             else "Recover easy — the plan stays, the load comes down."

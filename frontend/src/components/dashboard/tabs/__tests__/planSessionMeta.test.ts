@@ -8,6 +8,17 @@ const iv = (duration_seconds: number, pct: number | null, zone: number): Interva
   zone,
 })
 
+// A structured micro-set: "30×15/45s" stored as ONE 30-min block carrying the
+// real on/off structure (reps × on_s @ pct + off_s @ off_pct).
+const microSet = (
+  reps: number, on_s: number, off_s: number, pct: number, off_pct: number, zone: number,
+): IntervalBlockOut => ({
+  duration_seconds: reps * (on_s + off_s),
+  power_target_pct_ftp: pct,
+  zone,
+  reps, on_s, off_s, off_pct_ftp: off_pct,
+})
+
 // A classic 4×15' sweet-spot day: warm-up, 4 reps @ 92%, cool-down.
 const sweetSpot4x15: IntervalBlockOut[] = [
   iv(600, 0.55, 1),
@@ -51,6 +62,24 @@ describe('cyclingPeakLine (textfit handoff — labeled peaks, never peak-W·sess
     const steady = [iv(1800, 0.65, 2), iv(1800, 0.65, 2)]
     expect(cyclingPeakLine(steady, 300, true)).toBeNull()
     expect(cyclingPeakLine(sweetSpot4x15, null, true)).toBeNull()
+  })
+
+  it('renders a structured micro-set as reps×on-seconds, never the merged block minutes', () => {
+    // Antritts-Intervalle: 30×15/45s @ 150% FTP over a 30-min block. The peak
+    // line must say 30×15 s, NOT "30 Min @ 150% FTP" (physiologically impossible).
+    const antritt = [iv(600, 0.55, 1), microSet(30, 15, 45, 1.5, 0.5, 6), iv(300, 0.5, 1)]
+    expect(cyclingPeakLine(antritt, 210, true)).toBe('Spitzen: 30×15 s @ 315 W (150 % FTP)')
+    expect(cyclingPeakLine(antritt, 210, false)).toBe('Peaks: 30×15 s @ 315 W (150% FTP)')
+  })
+})
+
+describe('cyclingAvgWatts with structured sets (merged-block guard)', () => {
+  it('weights on/off seconds so a sprint set does not inflate the average', () => {
+    // 30×15/45s @150% on, 50% off: on = 450s @1.5, off = 1350s @0.5 → mean pct
+    // = (450×1.5 + 1350×0.5) / 1800 = 0.75 → ×210 ≈ 158 W. Averaging the whole
+    // block at 150% would wrongly report 315 W.
+    const antritt = [microSet(30, 15, 45, 1.5, 0.5, 6)]
+    expect(cyclingAvgWatts(antritt, 210)).toBe(158)
   })
 })
 
