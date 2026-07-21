@@ -79,6 +79,26 @@ async def recent_adaptations(
     return list(res.scalars().all())
 
 
+async def last_adaptation(
+    db: AsyncSession,
+    user_id: int,
+) -> PlanAdaptation | None:
+    """The athlete's newest adaptation row, or None.
+
+    Used by the plan-rebuild double-log guard: a second identical
+    plan_built row (same signal, same day, no intervening change) is
+    suppressed rather than appended — the feed must never show the same
+    change twice minutes apart (review NEW-3).
+    """
+    res = await db.execute(
+        select(PlanAdaptation)
+        .where(PlanAdaptation.user_id == user_id)
+        .order_by(PlanAdaptation.created_at.desc())
+        .limit(1)
+    )
+    return res.scalars().first()
+
+
 async def already_adapted(
     db: AsyncSession,
     user_id: int,

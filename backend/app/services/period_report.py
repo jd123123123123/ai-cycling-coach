@@ -1181,12 +1181,17 @@ async def build_report(db: AsyncSession, user_id: int, days: int, lang: str = "e
         target_ctl: float | None = None
         if profile is not None:
             goals_dict = profile.goals if isinstance(profile.goals, dict) else {}
-            te = goals_dict.get("target_event")
-            if isinstance(te, dict) and te.get("date"):
-                try:
-                    goal_date_obj = date.fromisoformat(te["date"])
-                except (ValueError, TypeError):
-                    goal_date_obj = None
+            # First-class column BEATS the JSONB copy (2a3ecb1) — the JSONB
+            # date can be stale (live-observed 2026-07-05 vs real 2026-12-05).
+            if profile.target_event_date:
+                goal_date_obj = profile.target_event_date
+            else:
+                te = goals_dict.get("target_event")
+                if isinstance(te, dict) and te.get("date"):
+                    try:
+                        goal_date_obj = date.fromisoformat(te["date"])
+                    except (ValueError, TypeError):
+                        goal_date_obj = None
             raw_target = goals_dict.get("target_ctl")
             if isinstance(raw_target, (int, float)):
                 target_ctl = float(raw_target)

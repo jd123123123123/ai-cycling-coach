@@ -235,6 +235,151 @@ class TestTssIntegrity:
         assert sprint_set.tss_pct_ftp < sprint_set.target_pct_ftp
 
 
+# Composite-set block names: "30×30/30", "13×30/15s", "5×1/1min", "8×15s",
+# "6×3min". Group 1 = reps; group 2 = on; group 3 = off (optional); group 4 =
+# unit (seconds when absent).
+_SET_NAME_RE = __import__("re").compile(
+    r"(\d+)\s*×\s*\(?\s*(\d+)(?:\s*\/\s*(\d+))?\s*(min|s)?"
+)
+
+
+def _parse_set_name(name: str):
+    m = _SET_NAME_RE.search(name)
+    if not m:
+        return None
+    unit = 60 if m.group(4) == "min" else 1
+    reps = int(m.group(1))
+    on_s = int(m.group(2)) * unit
+    off_s = int(m.group(3)) * unit if m.group(3) else None
+    return reps, on_s, off_s
+
+
+class TestStructuredSets:
+    """Composite on/off sets must carry explicit structure — the block NAME is
+    display, reps/on_s/off_s/off_pct_ftp are the truth. This kills the
+    '30 continuous minutes @ 120% FTP' class of impossible claims (Jonas N-1):
+    any N×on/off in a name that doesn't match the fields fails here."""
+
+    def _structured_blocks(self):
+        for t in TEMPLATES.values():
+            for b in t.blocks:
+                if b.reps is not None:
+                    yield t.id, b
+
+    def test_name_pattern_implies_structure(self):
+        """Every bike block whose name reads N×on[/off] MUST carry matching
+        reps/on_s — no name-vs-structure drift, ever again."""
+        checked = 0
+        for t in TEMPLATES.values():
+            for b in t.blocks:
+                parsed = _parse_set_name(b.name)
+                if parsed is None:
+                    continue
+                reps, on_s, off_s = parsed
+                checked += 1
+                assert b.reps == reps, f"{t.id} · {b.name!r}: reps {b.reps} != name {reps}"
+                assert b.on_s == on_s, f"{t.id} · {b.name!r}: on_s {b.on_s} != name {on_s}"
+                if off_s is not None:
+                    assert b.off_s == off_s, (
+                        f"{t.id} · {b.name!r}: off_s {b.off_s} != name {off_s}"
+                    )
+        # The library currently ships 19 named composite set blocks across 11
+        # templates — a regression that stops parsing/matching must not pass
+        # silently by matching zero names.
+        assert checked >= 19
+
+    def test_rep_math_fits_block_duration(self):
+        """reps × (on_s + off_s) must equal the block's duration exactly."""
+        count = 0
+        for tid, b in self._structured_blocks():
+            count += 1
+            assert b.on_s is not None and b.off_s is not None and b.off_pct_ftp is not None, (
+                f"{tid} · {b.name!r}: structured block missing on/off fields"
+            )
+            assert b.reps * (b.on_s + b.off_s) == b.duration_s, (
+                f"{tid} · {b.name!r}: {b.reps}×({b.on_s}+{b.off_s}) != {b.duration_s}s"
+            )
+        assert count >= 19
+
+    def test_structured_blocks_carry_load_honest_intensity(self):
+        """Composite sets must keep tss_pct_ftp for load accounting AND an
+        off intensity strictly below the on intensity."""
+        for tid, b in self._structured_blocks():
+            assert b.tss_pct_ftp is not None, f"{tid} · {b.name!r}: no tss_pct_ftp"
+            assert b.off_pct_ftp < b.target_pct_ftp, f"{tid} · {b.name!r}"
+
+    def test_name_percent_matches_block_target(self):
+        """A '@ NNN% FTP' in a template or block name must agree with the ON
+        target — kills the microbursts '@ 150%' name vs 1.20 block mismatch."""
+        import re
+        pct_re = re.compile(r"@\s*~?(\d+)%")
+        for t in TEMPLATES.values():
+            for b in t.blocks:
+                m = pct_re.search(b.name)
+                if m and not b.open_effort:
+                    assert abs(b.target_pct_ftp - int(m.group(1)) / 100.0) < 1e-9, (
+                        f"{t.id} · {b.name!r}: name % != target_pct_ftp {b.target_pct_ftp}"
+                    )
+            m = pct_re.search(t.name)
+            if m:
+                pct = int(m.group(1)) / 100.0
+                assert any(abs(b.target_pct_ftp - pct) < 1e-9 for b in t.blocks), (
+                    f"{t.id}: template name says {pct:.0%} but no block targets it"
+                )
+
+    def test_microbursts_on_intensity_is_150(self):
+        """The Stepto/Hawley microburst set is 15s @ 150% FTP — the block must
+        say so (it used to claim a merged 120%)."""
+        b = TEMPLATES["vo2_microbursts_30x15_45"].blocks[1]
+        assert b.target_pct_ftp == 1.50
+        assert (b.reps, b.on_s, b.off_s) == (30, 15, 45)
+
+    def test_parametrize_resolves_on_and_off_watts(self):
+        """FTP=240: 30×15/45 @ 150% → ON ≈ 360W band, OFF ≈ 120W band."""
+        pw = parametrize_template(TEMPLATES["vo2_microbursts_30x15_45"], ftp=240)
+        b = next(x for x in pw.blocks if x.reps is not None)
+        assert (b.reps, b.on_s, b.off_s) == (30, 15, 45)
+        assert b.target_watts_low <= 360 <= b.target_watts_high
+        assert b.off_watts_low is not None and b.off_watts_high is not None
+        assert b.off_watts_low <= 120 <= b.off_watts_high
+        # Steady blocks stay unstructured.
+        wu = next(x for x in pw.blocks if x.name == "Warm-up")
+        assert wu.reps is None and wu.off_watts_low is None
+
+    def test_duration_scale_scales_whole_reps(self):
+        """Scaling a structured set drops whole reps — the invariant
+        reps × (on+off) == duration_s survives duration_scale."""
+        pw = parametrize_template(
+            TEMPLATES["vo2_ronnestad_3x13"], ftp=250, duration_scale=0.8
+        )
+        sets = [b for b in pw.blocks if b.reps is not None]
+        assert len(sets) == 3
+        for b in sets:
+            assert b.reps == 10  # round(13 × 0.8)
+            assert b.duration_s == b.reps * (b.on_s + b.off_s) == 450
+
+    def test_serialized_dict_carries_structure(self):
+        """prescribed_workout_to_dict emits the additive structured keys —
+        the exact field names the Plan tab renders '30×15s @ 288 W' from."""
+        pw = parametrize_template(TEMPLATES["vo2_micro_30x30"], ftp=250)
+        d = prescribed_workout_to_dict(pw)
+        row = next(r for r in d["blocks"] if r["reps"] is not None)
+        assert row["reps"] == 30 and row["on_s"] == 30 and row["off_s"] == 30
+        assert row["off_pct_ftp"] == 0.50
+        assert row["off_watts_low"] is not None and row["off_watts_high"] is not None
+        steady = next(r for r in d["blocks"] if r["name"] == "Warm-up")
+        assert steady["reps"] is None and steady["on_s"] is None
+
+    def test_run_blocks_have_no_merged_composites(self):
+        """Run templates encode reps as explicit alternating blocks — no run
+        BLOCK name may smuggle an unexpanded N×on/off set."""
+        for t in RUN_TEMPLATES.values():
+            for b in t.blocks:
+                assert _parse_set_name(b.name) is None, (
+                    f"{t.id} · {b.name!r}: merged composite in a run block"
+                )
+
+
 class TestLocalization:
     """Every template ships German name/purpose; purpose_de is beginner-safe."""
 

@@ -14,6 +14,7 @@ const ONTRACK: Record<string, { en: string; de: string; color: string }> = {
   ahead: { en: 'Ahead of plan', de: 'Vor dem Plan', color: 'var(--color-good)' },
   behind: { en: 'Behind plan', de: 'Hinter dem Plan', color: 'var(--color-caution)' },
   no_goal: { en: 'No event set', de: 'Kein Ziel gesetzt', color: 'var(--color-muted)' },
+  unknown: { en: 'No projection yet', de: 'Noch keine Prognose', color: 'var(--color-muted)' },
 }
 
 /** Banister projection toward the goal event — frames "why these actions."

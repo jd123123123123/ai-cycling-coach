@@ -83,6 +83,7 @@ from app.services.training_periodization import (
 from app.services.workout_templates import (
     TEMPLATES,
     PrescribedWorkout,
+    WorkoutTemplate,
     get_template,
     parametrize_template,
     prescribed_workout_to_dict,
@@ -1405,6 +1406,9 @@ async def build_snapshot(
             "resting_hr": (
                 profile.resting_heart_rate if profile and profile.resting_heart_rate else None
             ),
+            # UI depth register ('guide' | 'numbers' | 'pro') — drives how much
+            # evidence the rule-based reasoning layer weaves into its prose.
+            "detail_level": profile.detail_level if profile else None,
         },
         "readiness": {
             "score": readiness_report.overall,
@@ -2384,153 +2388,535 @@ def _build_post_ride_review(
     }
 
 
-def _simple_rationale(
-    pmc: dict,
-    hrv: dict,
-    sleep: dict,
-    zones: dict,
-    ceiling: str,
-    injury_flag: bool,
-    de: bool = False,
-) -> str:
-    """Build a plain-English rationale that avoids FTP/TSS/CTL/Z-jargon entirely.
+# ======================================================================
+# Reasoning layer — coach-voice daily explanation (guide | numbers | pro)
+# ======================================================================
+#
+# The rule-based brief must read like a coach explaining, never a system
+# reporting. Every register produces a coherent 2-4 sentence narrative:
+#   1. WHAT the session does physiologically (plain language, woven from the
+#      template's purpose/purpose_de — never raw EN prose in a DE brief),
+#   2. WHY today (actual recovery signals when present; honest "no signals
+#      yet" for day-1 accounts — never a fabricated "stable since yesterday"),
+#   3. what it builds toward (humanized phase name + goal countdown; estimated
+#      fitness framed as estimated).
+#
+# Registers (profile.detail_level, falling back to the language mode):
+#   guide   — plain German/English, zero acronyms or raw metrics.
+#   numbers — the same narrative with the key numbers embedded in prose.
+#   pro     — full evidence chain (readiness, TSB/CTL, ramp, phase, goal
+#             countdown) still as flowing prose — never a "TSB 0, CTL 0"
+#             fragment dump.
 
-    Draws from the same signals as the technical path, but phrases them the
-    way a friend would ("your sleep's been light", "you're catching up from
-    last week's rides").
+_PHASE_WORDS_EN: dict[str, str] = {
+    "base": "Base", "build": "Build", "peak": "Peak", "taper": "Taper",
+    "race": "Race", "offseason": "Off-season", "maintenance": "Maintenance",
+}
+_PHASE_WORDS_DE: dict[str, str] = {
+    "base": "Grundlage", "build": "Aufbau", "peak": "Peak", "taper": "Taper",
+    "race": "Rennen", "offseason": "Nebensaison", "maintenance": "Erhaltung",
+}
+
+
+def _phase_human(phase: object, de: bool = False) -> str | None:
+    """Humanize a phase code ('base2' → 'Grundlage 2' / 'Base 2').
+
+    Mirrors the frontend phaseLabel convention — raw codes like 'base2' or
+    'offseason' must never reach athlete-facing copy.
     """
-    hrv_delta = hrv.get("delta_pct") if hrv else None
-    sleep_debt = sleep.get("total_debt_hours") if sleep else None
-    tsb = pmc.get("tsb")
+    if not phase:
+        return None
+    raw = str(phase).strip()
+    m = re.match(r"^([a-z]+)\s*(\d+)?$", raw, re.IGNORECASE)
+    stem = (m.group(1) if m else raw).lower()
+    words = _PHASE_WORDS_DE if de else _PHASE_WORDS_EN
+    label = next((v for k, v in words.items() if stem.startswith(k)), None)
+    if label is None:
+        label = raw.capitalize()
+    if m and m.group(2):
+        label = f"{label} {m.group(2)}"
+    return label
 
+
+def _phase_stem(phase: object) -> str:
+    if not phase:
+        return ""
+    m = re.match(r"^([a-z]+)", str(phase).strip(), re.IGNORECASE)
+    return (m.group(1).lower() if m else str(phase).lower())
+
+
+def _detail_register(snapshot: dict) -> str:
+    """Resolve the reasoning register: profile detail_level wins; the request
+    language is the fallback for accounts that never chose a depth."""
+    dl = (snapshot.get("athlete") or {}).get("detail_level")
+    if dl in ("guide", "numbers", "pro"):
+        return str(dl)
+    return "pro" if snapshot.get("language") == "technical" else "guide"
+
+
+def _signal_state(snapshot: dict) -> dict:
+    """Honesty flags derived from the same decision inputs the brief builder
+    already receives — never recomputed elsewhere.
+
+    day_one           — no recovery signals AND no training history: every
+                        claim about "your signals" would be fabricated.
+    fitness_estimated — an FTP exists but no ride history backs it: the
+                        number is a self-assessment, and copy must say so.
+    """
+    hrv = (snapshot.get("biometrics") or {}).get("hrv") or {}
+    acts = snapshot.get("activities_14d") or {}
+    pmc = snapshot.get("pmc") or {}
+    athlete = snapshot.get("athlete") or {}
+    hrv_n = int(hrv.get("samples_n") or 0)
+    act_n = int(acts.get("count") or 0)
+    ctl = float(pmc.get("ctl") or 0.0)
+    has_recovery_signals = hrv_n > 0 and hrv.get("delta_pct") is not None
+    has_training_history = act_n > 0 or ctl >= 5.0
+    return {
+        "has_recovery_signals": has_recovery_signals,
+        "has_training_history": has_training_history,
+        "day_one": not has_recovery_signals and not has_training_history,
+        "fitness_estimated": (
+            not has_training_history and int(athlete.get("ftp") or 0) > 0
+        ),
+    }
+
+
+# Plain-English WHAT sentences by template category — used in EN guide mode
+# where the template's own `purpose` is too technical ("Raises VO2max
+# ceiling; the canonical Z5 stimulus"). German uses purpose_de, which is
+# beginner-safe by construction.
+_GUIDE_WHAT_EN: dict[str, str] = {
+    "rest": "A full day off — recovery is where your body actually turns training into fitness.",
+    "recovery": "A really easy spin that helps your legs flush out fatigue without adding any new strain.",
+    "endurance": "A relaxed, steady ride that teaches your body to burn fat for fuel and grows your endurance engine.",
+    "tempo": "Brisk, controlled stretches a notch below race effort — they build your staying power at speed.",
+    "sweet_spot": "Strong but controlled efforts just under your limit — a lot of fitness gain without wrecking you.",
+    "threshold": "Hard, steady efforts right at the edge of what you can hold — the kind of work that raises that edge.",
+    "vo2": "Short, very hard efforts that push your engine right to its ceiling — that's what makes the ceiling rise.",
+    "anaerobic": "Short sprints with full recovery in between — they build your top-end punch.",
+}
+
+
+def _what_sentence(template: WorkoutTemplate, register: str, de: bool) -> str:
+    """Sentence 1 — what the session does physiologically, in the athlete's
+    language. Consumes the template's purpose; never restates EN in a DE brief."""
     if de:
-        if injury_flag:
+        return template.purpose_de or template.purpose
+    if register in ("guide", "numbers"):
+        # numbers = the plain narrative WITH numbers woven in elsewhere — the
+        # raw template purpose ("canonical Z5 stimulus") is pro-only register.
+        return _GUIDE_WHAT_EN.get(
+            template.category,
+            "A session picked to move your fitness forward one solid step.",
+        )
+    return template.purpose
+
+
+def _reasoning_facts(snapshot: dict) -> dict:
+    """Collect the shared fact pack for the reasoning sentences — all values
+    come straight off the snapshot (the canonical decision inputs)."""
+    pmc = snapshot.get("pmc") or {}
+    hrv = (snapshot.get("biometrics") or {}).get("hrv") or {}
+    sleep = (snapshot.get("biometrics") or {}).get("sleep") or {}
+    readiness = snapshot.get("readiness") or {}
+    return {
+        "tsb": pmc.get("tsb"),
+        "ctl": pmc.get("ctl"),
+        "ramp": pmc.get("ctl_7d_delta"),
+        "hrv_delta": hrv.get("delta_pct"),
+        "sleep_debt": sleep.get("total_debt_hours"),
+        "readiness_score": readiness.get("score"),
+    }
+
+
+def _fatigue_key(facts: dict, state: dict) -> str:
+    """Pick the strongest honest signal narrative. HRV claims only when HRV
+    data exists; load claims only when training history exists."""
+    hrv_delta = facts.get("hrv_delta")
+    sleep_debt = facts.get("sleep_debt")
+    tsb = facts.get("tsb")
+    if state["has_recovery_signals"] and isinstance(hrv_delta, (int, float)) and hrv_delta < -8:
+        return "hrv_low"
+    if isinstance(sleep_debt, (int, float)) and sleep_debt > 3:
+        return "sleep_short"
+    if state["has_training_history"] and isinstance(tsb, (int, float)):
+        if tsb < -15:
+            return "deep_fatigue"
+        if tsb < -5:
+            return "carrying_fatigue"
+        if tsb > 15:
+            return "very_fresh"
+    if state["has_recovery_signals"]:
+        return "signals_normal"
+    return "load_normal"
+
+
+_SIGNAL_PHRASE_DE: dict[str, str] = {
+    "hrv_low": "Deine Erholungswerte liegen diese Woche unter deinem üblichen Niveau",
+    "sleep_short": "Dein Schlaf war zuletzt knapp, und das summiert sich",
+    "deep_fatigue": "Die letzten Fahrten stecken dir noch deutlich in den Beinen",
+    "carrying_fatigue": "Du trägst noch etwas Ermüdung aus den letzten Tagen mit dir",
+    "very_fresh": "Du bist gut erholt und hast richtig Frische im Tank",
+    "signals_normal": "Deine Erholungswerte liegen in deinem normalen Bereich",
+    "load_normal": "Deine Belastung der letzten Tage lässt heute Spielraum",
+}
+_SIGNAL_PHRASE_EN: dict[str, str] = {
+    "hrv_low": "Your recovery readings have sat below your usual level this week",
+    "sleep_short": "Sleep has been short lately, and that adds up",
+    "deep_fatigue": "Your recent rides are still sitting deep in your legs",
+    "carrying_fatigue": "You're carrying a bit of fatigue from the last few days",
+    "very_fresh": "You're well rested with real freshness in the tank",
+    "signals_normal": "Your recovery readings are inside your normal range",
+    "load_normal": "Your recent training load leaves room today",
+}
+
+_CEILING_ACTION_DE: dict[str, str] = {
+    "rest": "deshalb ist heute bewusst frei",
+    "easy": "deshalb bleibt es heute ganz locker, damit dein Körper aufholen kann",
+    "moderate": "solide Arbeit geht heute, aber ohne Ausreißer nach oben",
+    "push": "genau der Tag, an dem eine fordernde Einheit ihre volle Wirkung entfaltet",
+}
+_CEILING_ACTION_EN: dict[str, str] = {
+    "rest": "so today is deliberately off",
+    "easy": "so today stays properly easy so your body can catch up",
+    "moderate": "solid work is fine today, just without spikes",
+    # NOTE: no "exactly"/"directly" here — simple-mode hygiene tests ban the
+    # substring "ctl", which hides inside those words.
+    "push": "just the kind of day a demanding session does its best work",
+}
+
+
+def _day_one_sentence(register: str, de: bool, planned_tss: int) -> str:
+    """Honest day-1 copy — no fabricated signal claims, ever."""
+    if de:
+        base = (
+            "Noch keine Signale von dir — wir starten nach Plan "
+            "und lernen dich mit jeder Fahrt besser kennen."
+        )
+        if register == "numbers" and planned_tss > 0:
+            return base + f" Als Startpunkt stehen heute rund {planned_tss} TSS im Plan."
+        if register == "pro":
+            extra = (
+                f" Die Steuerung startet planbasiert (~{planned_tss} TSS)"
+                if planned_tss > 0 else " Die Steuerung startet planbasiert"
+            )
             return (
-                "Dein Körper braucht eine Pause, solange die Verletzung heilt. "
-                "Ein freier Tag heute zahlt sich nächste Woche aus — versprochen."
+                "Noch keine Datenbasis — keine HRV-, Schlaf- oder Belastungshistorie."
+                + extra + " und kalibriert, sobald Signale eintreffen."
             )
-
-        parts: list[str] = []
-
-        # Opener — set the tone
-        if ceiling == "rest":
-            parts.append("Dein Körper hisst heute die weiße Fahne.")
-        elif ceiling == "easy":
-            parts.append("Du läufst auf Reserve — nehmen wir's locker.")
-        elif ceiling == "moderate":
-            parts.append("Du bist gut in Form, aber nicht ganz frisch.")
-        else:
-            parts.append("Die Beine fühlen sich gut an, lass es zählen.")
-
-        # Cite something the athlete actually did or feels
-        if isinstance(hrv_delta, (int, float)) and hrv_delta < -8:
-            parts.append("Dein Körper zeigt in der letzten Woche Zeichen von Ermüdung.")
-        elif isinstance(sleep_debt, (int, float)) and sleep_debt > 3:
-            parts.append("Der Schlaf war zuletzt knapp — das summiert sich.")
-        elif isinstance(tsb, (int, float)) and tsb < -15:
-            parts.append("Du bist hart gefahren — die Ermüdung holt dich ein.")
-        elif isinstance(tsb, (int, float)) and tsb > 15:
-            parts.append("Du hast dich gut ausgeruht und die Beine sind bereit.")
-        elif zones and zones.get("grey_zone_flag"):
-            parts.append(
-                "Du bist viel in den mittleren Gängen unterwegs — fahren wir locker oder hart, nicht dazwischen."
-            )
-
-        # Close with what the workout is for
-        if ceiling in ("rest", "easy"):
-            parts.append("Heute geht's um Erholung.")
-        elif ceiling == "moderate":
-            parts.append("Heute geht's um solide Zeit, ohne ein Loch zu graben.")
-        else:
-            parts.append("Heute geht's darum, die gute Art von müde aufzubauen.")
-
-        return " ".join(parts)
-
-    if injury_flag:
+        return base
+    base = (
+        "No training signals from you yet — we start on plan "
+        "and get to know you with every ride."
+    )
+    if register == "numbers" and planned_tss > 0:
+        return base + f" Today's starting point is about {planned_tss} TSS."
+    if register == "pro":
+        extra = (
+            f" Prescription starts plan-based (~{planned_tss} TSS)"
+            if planned_tss > 0 else " Prescription starts plan-based"
+        )
         return (
-            "Your body's asking for a break while that injury heals. "
-            "A day off today pays off next week — promise."
+            "No data baseline yet — no HRV, sleep or load history."
+            + extra + " and calibrates as signals arrive."
         )
-
-    parts = []
-
-    # Opener — set the tone
-    if ceiling == "rest":
-        parts.append("Your body's waving the white flag today.")
-    elif ceiling == "easy":
-        parts.append("You're running on empty — let's keep it chill.")
-    elif ceiling == "moderate":
-        parts.append("You're in decent shape but not fully fresh.")
-    else:
-        parts.append("Legs feel good, let's make it count.")
-
-    # Cite something the athlete actually did or feels
-    if isinstance(hrv_delta, (int, float)) and hrv_delta < -8:
-        parts.append("Your body's showing signs of fatigue the last week.")
-    elif isinstance(sleep_debt, (int, float)) and sleep_debt > 3:
-        parts.append("Sleep's been short lately — that adds up.")
-    elif isinstance(tsb, (int, float)) and tsb < -15:
-        parts.append("You've been riding hard — fatigue's catching up.")
-    elif isinstance(tsb, (int, float)) and tsb > 15:
-        parts.append("You've rested plenty and your legs are ready.")
-    elif zones and zones.get("grey_zone_flag"):
-        parts.append(
-            "You've been riding the middle gears a lot — let's go easy or hard, not in-between."
-        )
-
-    # Close with what the workout is for
-    if ceiling in ("rest", "easy"):
-        parts.append("Today's about recovery.")
-    elif ceiling == "moderate":
-        parts.append("Today's about putting in solid time without digging a hole.")
-    else:
-        parts.append("Today's about building the good kind of tired.")
-
-    return " ".join(parts)
+    return base
 
 
-def _technical_rationale(
-    pmc: dict,
-    hrv: dict,
-    zones: dict,
-    ceiling: str,
-    max_tss: float,
-    phase: str,
-    de: bool = False,
+def _why_today_sentence(
+    snapshot: dict, ceiling: str, register: str, de: bool, planned_tss: int,
 ) -> str:
-    """The current (pre-5.2) rationale, kept for technical mode."""
-    parts: list[str] = []
-    if de:
-        parts.append(
-            f"TSB ist {pmc['tsb']:.1f}, CTL {pmc['ctl']:.1f} (Banister Fitness-Ermüdung)."
-        )
-        if hrv.get("delta_pct") is not None:
-            parts.append(
-                f"7-Tage-HRV {hrv['delta_pct']:+.1f}% vs. 28-Tage-Baseline."
-            )
-        if zones.get("grey_zone_flag"):
-            parts.append(
-                f"Z2-Schleichen: {zones['z2_pct']}% der jüngsten Zeit — über Seilers Grauzonen-Schwelle."
-            )
-        parts.append(
-            f"Obergrenze: '{ceiling}', TSS-Cap {max_tss:.0f}. Friel-Phase: {phase}."
-        )
-        return " ".join(parts)
-    parts.append(
-        f"TSB is {pmc['tsb']:.1f}, CTL {pmc['ctl']:.1f} (Banister fitness-fatigue)."
+    """Sentence 2 — why today, from the actual signals (or honestly without)."""
+    state = _signal_state(snapshot)
+    facts = _reasoning_facts(snapshot)
+    if state["day_one"]:
+        return _day_one_sentence(register, de, planned_tss)
+
+    key = _fatigue_key(facts, state)
+    signal = (_SIGNAL_PHRASE_DE if de else _SIGNAL_PHRASE_EN)[key]
+    action = (_CEILING_ACTION_DE if de else _CEILING_ACTION_EN).get(
+        ceiling, (_CEILING_ACTION_DE if de else _CEILING_ACTION_EN)["moderate"]
     )
-    if hrv.get("delta_pct") is not None:
-        parts.append(
-            f"7-day HRV {hrv['delta_pct']:+.1f}% vs 28-day baseline."
+
+    if register == "guide":
+        return f"{signal} — {action}."
+
+    hrv_delta = facts.get("hrv_delta")
+    tsb = facts.get("tsb")
+    ctl = facts.get("ctl")
+    ramp = facts.get("ramp")
+    score = facts.get("readiness_score")
+
+    if register == "numbers":
+        clauses: list[str] = []
+        if state["has_recovery_signals"] and isinstance(hrv_delta, (int, float)):
+            clauses.append(
+                f"dein HRV liegt {hrv_delta:+.0f} % zu deiner Baseline" if de
+                else f"your HRV sits {hrv_delta:+.0f}% vs your baseline"
+            )
+        if state["has_training_history"] and isinstance(tsb, (int, float)):
+            clauses.append(
+                f"deine Frische bei {tsb:+.0f}" if de
+                else f"your freshness at {tsb:+.0f}"
+            )
+        lead = signal if not clauses else (
+            (" und ".join(clauses) if de else " and ".join(clauses))
         )
-    if zones.get("grey_zone_flag"):
-        parts.append(
-            f"Z2 creep: {zones['z2_pct']}% of recent time — above Seiler grey-zone threshold."
+        if clauses:
+            lead = lead[0].upper() + lead[1:]
+        tss_tail = ""
+        if planned_tss > 0:
+            tss_tail = (
+                f"; geplant sind heute rund {planned_tss} TSS" if de
+                else f"; today's plan is about {planned_tss} TSS"
+            )
+        return f"{lead} — {action}{tss_tail}."
+
+    # pro — full evidence chain, still flowing prose.
+    ev: list[str] = []
+    if isinstance(score, (int, float)):
+        ev.append(f"Readiness {score:.0f}/100")
+    if state["has_training_history"] and isinstance(tsb, (int, float)) and isinstance(ctl, (int, float)):
+        ramp_txt = (
+            (f", 7-Tage-Ramp {ramp:+.1f}" if de else f", 7-day ramp {ramp:+.1f}")
+            if isinstance(ramp, (int, float)) else ""
         )
-    parts.append(
-        f"Ceiling: '{ceiling}', TSS cap {max_tss:.0f}. Friel phase: {phase}."
+        ev.append(
+            f"TSB {tsb:+.1f} bei CTL {ctl:.0f}{ramp_txt}" if de
+            else f"TSB {tsb:+.1f} on CTL {ctl:.0f}{ramp_txt}"
+        )
+    if state["has_recovery_signals"] and isinstance(hrv_delta, (int, float)):
+        ev.append(
+            f"HRV {hrv_delta:+.1f} % zur 28-Tage-Baseline" if de
+            else f"HRV {hrv_delta:+.1f}% vs the 28-day baseline"
+        )
+    pro_action_de = {
+        "rest": "die Signale verlangen einen vollständigen Ruhetag; nach Banister wirkt der letzte Reiz erst in der Entlastung",
+        "easy": "die Erholung hinkt der Belastung hinterher, also wird heute bewusst entlastet, damit die Banister-Bilanz nicht kippt",
+        "moderate": "genug Substanz für kontrollierte Arbeit, aber kein Fenster für maximale Reize — die Banister-Bilanz bleibt so im Gleichgewicht",
+        "push": "das Qualitätsfenster ist offen, und nach Banister-Logik ist genau jetzt der Moment, den Reiz zu setzen",
+    }
+    pro_action_en = {
+        "rest": "the signals call for a full rest day; per Banister the last stimulus only lands during the unload",
+        "easy": "recovery is lagging the load, so today unloads deliberately to keep the Banister balance from tipping",
+        "moderate": "enough in the tank for controlled work, but no window for maximal stimulus — that keeps the Banister balance intact",
+        "push": "the quality window is open, and by Banister logic this is exactly the moment to place the stimulus",
+    }
+    action_pro = (pro_action_de if de else pro_action_en).get(
+        ceiling, (pro_action_de if de else pro_action_en)["moderate"]
     )
-    return " ".join(parts)
+    ev_txt = ", ".join(ev)
+    tss_tail = ""
+    if planned_tss > 0:
+        tss_tail = (
+            f" Die Einheit bringt ~{planned_tss} TSS." if de
+            else f" The session lands ~{planned_tss} TSS."
+        )
+    if ev_txt:
+        return f"{ev_txt} — {action_pro}.{tss_tail}"
+    return f"{signal} — {action_pro}.{tss_tail}"
+
+
+_EVENT_WORD: dict[str, tuple[str, str]] = {
+    # goal_event_type → (en, de)
+    "race": ("race", "Rennen"),
+    "fondo": ("big ride", "Marathon"),
+    "audax": ("long-distance ride", "Brevet"),
+}
+
+
+def _builds_toward_sentence(snapshot: dict, register: str, de: bool) -> str | None:
+    """Sentence 3 — what today builds toward: humanized phase + honest goal
+    countdown, plus the estimated-fitness disclosure when it applies."""
+    athlete = snapshot.get("athlete") or {}
+    state = _signal_state(snapshot)
+    phase_label = _phase_human(athlete.get("goal_phase"), de)
+    stem = _phase_stem(athlete.get("goal_phase"))
+    days = athlete.get("days_to_goal")
+    days = int(days) if isinstance(days, (int, float)) else None
+    ev_en, ev_de = _EVENT_WORD.get(
+        str(athlete.get("goal_event_type") or ""), ("goal event", "Ziel-Event")
+    )
+    event = ev_de if de else ev_en
+
+    sentence: str | None = None
+    if days is not None and 0 <= days <= 7:
+        sentence = (
+            f"Dein {event} ist diese Woche — jetzt zählt Frische mehr als jeder zusätzliche Reiz."
+            if de else
+            f"Your {event} is this week — freshness now matters more than any extra stimulus."
+        )
+    elif days is not None and 7 < days <= 180 and phase_label:
+        weeks = max(1, round(days / 7))
+        if register == "pro":
+            sentence = (
+                f"Du stehst in {phase_label} der Friel-Periodisierung, {days} Tage vor deinem {event} — genau darauf zahlt die heutige Einheit ein."
+                if de else
+                f"You're in {phase_label} of the Friel periodization, {days} days out from your {event} — today's session feeds exactly that."
+            )
+        elif register == "numbers":
+            sentence = (
+                f"Jede dieser Einheiten zahlt auf deine Phase {phase_label} ein — noch {days} Tage ({weeks} Wochen) bis zu deinem {event}."
+                if de else
+                f"Each of these sessions feeds your {phase_label} phase — {days} days ({weeks} weeks) to go until your {event}."
+            )
+        else:
+            sentence = (
+                f"Jede dieser Einheiten zahlt auf deine Phase {phase_label} ein — noch {weeks} Wochen bis zu deinem {event}."
+                if de else
+                f"Each of these sessions feeds your {phase_label} phase — {weeks} weeks to go until your {event}."
+            )
+    elif phase_label:
+        by_stem_de = {
+            "base": f"Du bist in der Phase {phase_label} — hier entsteht das Fundament, auf dem die härteren Wochen später aufbauen.",
+            "build": f"Du bist mitten in {phase_label} — aus der Grundlage wird jetzt Wettkampfhärte.",
+            "peak": "In der Peak-Phase geht es um Feinschliff — die Qualität bleibt hoch, der Umfang sinkt.",
+            "taper": "Im Taper sammelst du Frische — die Arbeit ist getan, jetzt lässt du sie wirken.",
+            "race": "Wettkampfwoche — Frische ist jetzt das ganze Spiel.",
+            "offseason": "Gerade ist Nebensaison — lockere Bewegung hält den Motor warm, ohne Substanz zu kosten.",
+            "maintenance": "Du hältst gerade dein Niveau — Kontinuität ist das, was deine Fitness trägt.",
+        }
+        by_stem_en = {
+            "base": f"You're in your {phase_label} phase — building the foundation the harder weeks will stand on.",
+            "build": f"You're deep in {phase_label} — base fitness is turning into race readiness now.",
+            "peak": "Peak phase is about fine-tuning — quality stays high while volume comes down.",
+            "taper": "The taper is where you bank freshness — the work is done, now you let it land.",
+            "race": "Race week — freshness is the whole game now.",
+            "offseason": "It's the off-season — easy movement keeps the engine warm without draining you.",
+            "maintenance": "You're in maintenance — consistency is what carries your fitness.",
+        }
+        sentence = (by_stem_de if de else by_stem_en).get(stem)
+
+    if state["fitness_estimated"]:
+        estimate = (
+            "Dein Ausgangsniveau ist dabei aus deiner Selbsteinschätzung geschätzt — wir kalibrieren es mit jeder aufgezeichneten Fahrt."
+            if de else
+            "Your starting level is estimated from your self-assessment — we calibrate it with every recorded ride."
+        )
+        return f"{sentence} {estimate}" if sentence else estimate
+    return sentence
+
+
+def _day_link_sentence(
+    snapshot: dict, ceiling: str, register: str, de: bool, planned_tss: int,
+) -> str:
+    """The why-this-workout bridge: why THIS session fits TODAY."""
+    state = _signal_state(snapshot)
+    facts = _reasoning_facts(snapshot)
+    if state["day_one"]:
+        return (
+            "Für heute starten wir nach Plan — die Signale zum Feinjustieren sammeln wir ab jetzt."
+            if de else
+            "For today we start on plan — the signals for fine-tuning start collecting now."
+        )
+    if register == "guide":
+        link_de = {
+            "rest": "Heute ist bewusst frei, damit die letzte Arbeit einsickern kann.",
+            "easy": "Heute passt sie, weil dein Körper gerade vor allem Erholung verwerten kann.",
+            "moderate": "Heute passt sie, weil solide Arbeit drin ist, ohne dich zu leeren.",
+            "push": "Heute passt sie, weil du die nötige Frische dafür mitbringst.",
+        }
+        link_en = {
+            "rest": "Today is deliberately off so the recent work can sink in.",
+            "easy": "It fits today because what your body can use most right now is recovery.",
+            "moderate": "It fits today because there's room for solid work without emptying you.",
+            "push": "It fits today because you bring the freshness it needs.",
+        }
+        return (link_de if de else link_en).get(
+            ceiling, (link_de if de else link_en)["moderate"]
+        )
+
+    hrv_delta = facts.get("hrv_delta")
+    tsb = facts.get("tsb")
+    bits: list[str] = []
+    if state["has_recovery_signals"] and isinstance(hrv_delta, (int, float)):
+        bits.append(
+            f"HRV {hrv_delta:+.0f} % zur Baseline" if de else f"HRV {hrv_delta:+.0f}% vs baseline"
+        )
+    if state["has_training_history"] and isinstance(tsb, (int, float)):
+        bits.append(f"TSB {tsb:+.0f}" if register == "pro" else (
+            f"Frische {tsb:+.0f}" if de else f"freshness {tsb:+.0f}"
+        ))
+    ev = ", ".join(bits)
+    fit_de = {
+        "rest": "heute zahlt Ruhe mehr ein als jeder weitere Reiz",
+        "easy": "heute verwertet dein Körper Entlastung besser als Reiz",
+        "moderate": "kontrollierte Arbeit ist heute gut verkraftbar",
+        "push": "heute darf Qualität rein",
+    }
+    fit_en = {
+        "rest": "rest returns more today than any further stimulus",
+        "easy": "your body converts unloading better than stimulus today",
+        "moderate": "controlled work is well within reach today",
+        "push": "quality belongs in today",
+    }
+    fit = (fit_de if de else fit_en).get(ceiling, (fit_de if de else fit_en)["moderate"])
+    tss_txt = (
+        (f" — die Einheit bringt ~{planned_tss} TSS" if de else f" — the session lands ~{planned_tss} TSS")
+        if planned_tss > 0 else ""
+    )
+    if ev:
+        return (
+            f"Heute passt sie: {ev} — {fit}{tss_txt}." if de
+            else f"It fits today: {ev} — {fit}{tss_txt}."
+        )
+    return (f"{fit[0].upper()}{fit[1:]}{tss_txt}.")
+
+
+def _daily_reasoning(
+    snapshot: dict,
+    template: WorkoutTemplate,
+    ceiling: str,
+    register: str,
+    de: bool,
+) -> tuple[str, str]:
+    """Build (rationale, why_this_workout) as coherent coach prose.
+
+    rationale       — the day explanation: why today looks like this, and
+                      where it leads (2-3 sentences).
+    why_this_workout — the session explanation: what it does physiologically,
+                      why it fits today, what it builds toward (2-3 sentences).
+    """
+    injury = bool((snapshot.get("rails_context") or {}).get("injury_flag"))
+    if injury:
+        if de:
+            rationale = (
+                "Dein Körper braucht gerade eine Pause, damit die Verletzung heilen kann. "
+                "Ein freier Tag heute zahlt sich nächste Woche doppelt aus."
+            )
+            why_this = (
+                "Erst heilen, dann trainieren — die heutige Pause schützt den ganzen Block, "
+                "nicht nur diesen einen Tag."
+            )
+            if register == "pro":
+                rationale += (
+                    " Die Sicherheits-Rails halten die Intensität auf Ruhe, bis die Verletzung abgeklungen ist."
+                )
+        else:
+            rationale = (
+                "Your body needs a break while that injury heals. "
+                "A day off today pays back double next week."
+            )
+            why_this = (
+                "Heal first, train second — today's pause protects the whole block, "
+                "not just this one day."
+            )
+            if register == "pro":
+                rationale += (
+                    " Safety rails hold intensity at rest until the injury clears."
+                )
+        return rationale, why_this
+
+    planned_tss = 0 if template.category == "rest" else int(round(template.base_tss))
+    what = _what_sentence(template, register, de)
+    why_today = _why_today_sentence(snapshot, ceiling, register, de, planned_tss)
+    toward = _builds_toward_sentence(snapshot, register, de)
+    day_link = _day_link_sentence(snapshot, ceiling, register, de, planned_tss)
+
+    rationale = " ".join(s for s in (why_today, toward) if s)
+    why_this = " ".join(s for s in (what, day_link, toward) if s)
+    return rationale, why_this
 
 
 def _rule_based_brief(snapshot: dict) -> dict:
@@ -2649,69 +3035,14 @@ def _rule_based_brief(snapshot: dict) -> dict:
                 verdict = label_by_session.get(session_type, template.name)
 
     # --------------------------------------------------------------
-    # Rationale
+    # Rationale + why_this_workout — the reasoning layer. One coherent
+    # coach-voice narrative per register (guide | numbers | pro); the raw
+    # "Phase: offseason. TSB 0, CTL 0." debug fragments are gone for good.
     # --------------------------------------------------------------
-    if language == "simple":
-        rationale = _simple_rationale(
-            pmc=pmc, hrv=hrv, sleep=sleep, zones=zones,
-            ceiling=ceiling, injury_flag=ctx.injury_flag, de=de,
-        )
-    else:
-        rationale = _technical_rationale(
-            pmc=pmc, hrv=hrv, zones=zones,
-            ceiling=ceiling, max_tss=max_tss,
-            phase=athlete.get("goal_phase", "base"), de=de,
-        )
-
-    # --------------------------------------------------------------
-    # Prescribed workout — shared shape, different why_this_workout + title
-    # --------------------------------------------------------------
-    if language == "simple":
-        if de:
-            if ctx.injury_flag:
-                why_this = (
-                    "Machen wir's nicht schlimmer — ein Ruhetag jetzt zahlt sich später aus."
-                )
-            elif ceiling in ("rest", "easy"):
-                why_this = (
-                    "Dein Körper ist müde von dem, was du zuletzt gemacht hast. "
-                    "Heute locker heißt, du erholst dich schneller."
-                )
-            else:
-                why_this = (
-                    "Du warst konstant — heute geht's darum, etwas Qualität hinzuzufügen, "
-                    "ohne ein Streichholz zu verbrennen."
-                )
-        elif ctx.injury_flag:
-            why_this = (
-                "Let's not make things worse — a rest day now pays off later."
-            )
-        elif ceiling in ("rest", "easy"):
-            why_this = (
-                "Your body's tired from what you've been doing. "
-                "Easy today means you bounce back faster."
-            )
-        else:
-            why_this = (
-                "You've been consistent — today's about adding a bit of quality "
-                "without burning a match."
-            )
-        why_this = why_this[:300]
-    else:
-        if de:
-            why_parts: list[str] = [f"Phase: {athlete.get('goal_phase', 'base')}."]
-            why_parts.append(f"TSB {pmc['tsb']:.0f}, CTL {pmc['ctl']:.0f}.")
-            if hrv.get("delta_pct") is not None:
-                why_parts.append(f"HRV {hrv['delta_pct']:+.0f}%.")
-            why_parts.append(template.purpose_de or template.purpose)
-            why_this = " ".join(why_parts)[:300]
-        else:
-            why_parts = [f"Phase: {athlete.get('goal_phase', 'base')}."]
-            why_parts.append(f"TSB {pmc['tsb']:.0f}, CTL {pmc['ctl']:.0f}.")
-            if hrv.get("delta_pct") is not None:
-                why_parts.append(f"HRV {hrv['delta_pct']:+.0f}%.")
-            why_parts.append(template.purpose)
-            why_this = " ".join(why_parts)[:300]
+    register = _detail_register(snapshot)
+    rationale, why_this = _daily_reasoning(
+        snapshot, template, ceiling, register, de,
+    )
 
     # --------------------------------------------------------------
     # "Already rode today" override — acknowledge the completed session

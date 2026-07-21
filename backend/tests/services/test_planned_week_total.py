@@ -72,3 +72,19 @@ class TestPlannedWeekTotal:
     def test_rest_day_rows_count_as_zero_but_not_none(self):
         # A week of only rest rows is a real (0-TSS) plan, not "no plan".
         assert planned_week_total([_row("rest_day")]) == 0
+
+
+class TestHeaderMatchesDisplayedSessionSum:
+    def test_rounds_per_session_not_once_at_the_sum(self):
+        """Review finding: header 290 vs visible session sum 289. The UI shows
+        each session as a rounded integer, so the header total must equal the
+        sum of those integers — Σ round(v), never round(Σ v)."""
+        # Two rows whose estimates end in .3/.3: round(Σ)=round(x.6) rounds up,
+        # Σ round() keeps them down — the exact off-by-one class.
+        rows = [_row("strength_a", int(41.3 / 1.0 * 60)), _row("strength_b", int(41.3 * 60))]
+        vals = [
+            template_tss_estimate(r.template_id, r.duration_seconds_target)
+            for r in rows
+        ]
+        expected = sum(int(round(v)) for v in vals if v is not None)
+        assert planned_week_total(rows) == expected

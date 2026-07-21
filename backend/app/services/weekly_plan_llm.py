@@ -72,6 +72,12 @@ def _intervals_from_prescribed(prescribed: dict) -> list[dict]:
             "duration_seconds": int(b.get("duration_s", 0)),
             "power_target_pct_ftp": b.get("target_pct_ftp"),
             "zone": int(b.get("zone", 1)),
+            # Structured-set truth for composite on/off blocks (additive; None
+            # on steady blocks) — %FTP-relative like the rest of this shape.
+            "reps": b.get("reps"),
+            "on_s": b.get("on_s"),
+            "off_s": b.get("off_s"),
+            "off_pct_ftp": b.get("off_pct_ftp"),
         })
     return out
 

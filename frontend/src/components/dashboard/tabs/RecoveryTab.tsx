@@ -17,7 +17,7 @@ import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
 import { useDailyDecision } from '../../../hooks/useAdaptive'
 import { isTrainState } from '../../../api/adaptive'
-import { computeReadiness, readinessTier } from '../../../utils/metrics'
+import { canonicalReadiness, computeReadiness, readinessTier } from '../../../utils/metrics'
 import { localDayKey } from '../../../utils/loadMetrics'
 import { formatDate } from '../../../utils/format'
 import ScoreRing from '../../ui/ScoreRing'
@@ -125,10 +125,17 @@ export default function RecoveryTab() {
   const timeInBed = sd?.total_s != null ? sd.total_s + (sd.awake_s ?? 0) : null
   const efficiency = sd?.total_s != null && timeInBed ? Math.round((sd.total_s / timeInBed) * 100) : null
 
-  const score = snapshot?.training_readiness
-    ?? computeReadiness(latest?.hrv_status ?? null, latest?.body_battery ?? null, latest?.sleep_score ?? null)
+  // ONE readiness score (5-reviewer gate, Jul 2026): the same canonical
+  // selector Today uses — DailyDecision.readiness (backend multi-factor
+  // engine, identical to GET /coach/adaptive) first, device/composite chain
+  // only while the decision loads. Hero, zone chip and recommendation all
+  // read THIS score/tier, so Recovery can never disagree with Today again.
+  const { score, tier } = canonicalReadiness(
+    decision?.readiness,
+    snapshot?.training_readiness
+      ?? computeReadiness(latest?.hrv_status ?? null, latest?.body_battery ?? null, latest?.sleep_score ?? null),
+  )
   const rColor = tierColor(score ?? null)
-  const tier = readinessTier(score ?? null)
   const scoreTxt = score != null ? Math.round(score) : null
 
   // baselines
@@ -144,8 +151,15 @@ export default function RecoveryTab() {
 
   const readinessGreen = tier === 'peak' || tier === 'ready'
 
-  // Hero status — the Daily Decision branches FIRST (never contradict the
-  // plan); only on train states fall through to the readiness-tier copy.
+  // Recovery-specific NUANCE (allowed): an observation, never a directive —
+  // it may accompany a push verdict but can never contradict it.
+  const sleepNuance = sleepNow != null && sleepAvg != null && sleepNow <= sleepAvg - 10
+    ? (de ? ' Schlaf war kürzer als sonst — beobachten.' : ' Sleep ran shorter than usual — keep an eye on it.')
+    : ''
+
+  // Hero status — the ONE Daily Decision speaks FIRST on every day-state.
+  // Train states render the decision's own verdict/reason (identical tone to
+  // Today's card); readiness-tier copy is only the fallback while it loads.
   const status = (() => {
     if (dState === 'planned_rest') {
       return {
@@ -163,6 +177,11 @@ export default function RecoveryTab() {
     }
     if ((dState === 'sick' || dState === 'injured' || dState === 'break') && decision) {
       return { t: decision.verdict, s: decision.reason }
+    }
+    // Train states: the decision's verdict IS the hero — same words, same
+    // tone as Today. Recovery only adds a non-directive sleep observation.
+    if (trainDay && decision) {
+      return { t: decision.verdict, s: decision.reason + sleepNuance }
     }
     // No-data branch (finding #3): with zero signals there is NO verdict —
     // a fatigue call requires actual data, never the fallthrough default.
@@ -316,12 +335,16 @@ export default function RecoveryTab() {
       ? (de ? 'Erledigt — Erholung ist jetzt der Gewinn' : 'Done — recovery is the win now')
       : (dState === 'sick' || dState === 'injured' || dState === 'break') && decision
         ? decision.verdict
-        : score == null
-          ? (de ? 'Noch keine Erholungsdaten' : 'No recovery data yet')
-          : tier === 'peak' || tier === 'ready'
-            ? (de ? 'Erholt — trainiere mit Absicht' : 'Recovered — train with intent')
-            : tier === 'caution' ? (de ? 'Halb erholt — dosiere' : 'Half recovered — pace it')
-              : (de ? 'Erschöpft — regeneriere' : 'Depleted — recover')
+        : trainDay && decision
+          // Train states: the decision's verdict, verbatim — the same words
+          // Today shows. Recovery never issues its own training directive.
+          ? decision.verdict
+          : score == null
+            ? (de ? 'Noch keine Erholungsdaten' : 'No recovery data yet')
+            : tier === 'peak' || tier === 'ready'
+              ? (de ? 'Erholt — trainiere mit Absicht' : 'Recovered — train with intent')
+              : tier === 'caution' ? (de ? 'Halb erholt — dosiere' : 'Half recovered — pace it')
+                : (de ? 'Erschöpft — regeneriere' : 'Depleted — recover')
   const recBody = dState === 'planned_rest'
     ? (readinessGreen
       ? (de ? 'Gut erholt — und heute ist Ruhetag geplant. Nimm die Frische mit in die morgige Einheit.' : "Well recovered — and today is a planned rest day. Bank it for tomorrow's quality session.")
@@ -330,13 +353,15 @@ export default function RecoveryTab() {
       ? (decision?.reason ?? (de ? 'Das war die Arbeit für heute. Jetzt zählt Erholung: tanken, trinken, schlafen.' : "That's today's work. Recovery is the win now: fuel, hydrate, sleep."))
       : (dState === 'sick' || dState === 'injured' || dState === 'break') && decision
         ? decision.reason
-        : score == null
-          ? (de
-            ? 'Verbinde ein Gerät oder trag deinen Schlaf ein — ohne Signale gibt es keine ehrliche Empfehlung.'
-            : 'Connect a device or log your sleep — without signals there is no honest recommendation.')
-          : tier === 'peak' || tier === 'ready'
-            ? (de ? 'HRV liegt über der Basislinie und der Schlaf war stark. Nutze das Fenster für eine Qualitätseinheit — schütze danach den Schlaf.' : 'HRV is above baseline and sleep was strong. Use the window for a quality session, then protect recovery tonight.')
-            : (de ? 'Deine Signale zeigen Ermüdung. Halte es locker und ziele auf 7,5 h+ Schlaf, damit HRV und Anpassung zurückkommen.' : 'Your signals point to fatigue. Keep it easy and aim for 7.5h+ sleep so HRV and adaptation rebound.')
+        : trainDay && decision
+          ? decision.reason + sleepNuance
+          : score == null
+            ? (de
+              ? 'Verbinde ein Gerät oder trag deinen Schlaf ein — ohne Signale gibt es keine ehrliche Empfehlung.'
+              : 'Connect a device or log your sleep — without signals there is no honest recommendation.')
+            : tier === 'peak' || tier === 'ready'
+              ? (de ? 'HRV liegt über der Basislinie und der Schlaf war stark. Nutze das Fenster für eine Qualitätseinheit — schütze danach den Schlaf.' : 'HRV is above baseline and sleep was strong. Use the window for a quality session, then protect recovery tonight.')
+              : (de ? 'Deine Signale zeigen Ermüdung. Halte es locker und ziele auf 7,5 h+ Schlaf, damit HRV und Anpassung zurückkommen.' : 'Your signals point to fatigue. Keep it easy and aim for 7.5h+ sleep so HRV and adaptation rebound.')
 
   // Sleep Quality tiles — every value renders through the honest-dash
   // primitive (StatValue, audit P2-16): an untracked series can NEVER read as
@@ -371,7 +396,9 @@ export default function RecoveryTab() {
         <ScoreRing score={score ?? 0} color={rColor} size={208} stroke={14}>
           <div className="flex flex-col items-center">
             <span className="num-display" style={{ fontSize: 64, color: 'var(--color-ink)', lineHeight: 1 }}>{scoreTxt ?? DASH}</span>
-            <span className="eyebrow" style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.07em', color: rColor }}>{de ? '% ERHOLT' : '% RECOVERED'}</span>
+            {/* One score, one label: this is the canonical READINESS the daily
+                decision uses — not a separate "% recovered" look-alike. */}
+            <span className="eyebrow" style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.07em', color: rColor }}>{de ? 'BEREITSCHAFT' : 'READINESS'}</span>
           </div>
         </ScoreRing>
         <div className="flex flex-col items-center gap-1 text-center">
@@ -386,7 +413,7 @@ export default function RecoveryTab() {
           <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Erholungs-Treiber' : 'Recovery Drivers'}</span>
           <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>
             {scoreTxt != null
-              ? (de ? `Was den ${scoreTxt}%-Wert heute prägt` : `What shaped today's ${scoreTxt}% score`)
+              ? (de ? `Was den Score von ${scoreTxt} heute prägt` : `What shaped today's ${scoreTxt} score`)
               : (de ? 'Noch kein Score — es fehlen Signale' : 'No score yet — signals missing')}
           </span>
         </div>
@@ -595,7 +622,7 @@ export default function RecoveryTab() {
           <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 40, height: 40, background: zoneColor }}><Zap size={22} strokeWidth={2.2} style={{ color: 'var(--color-paper)' }} /></span>
           <div className="flex flex-col min-w-0" style={{ gap: 1 }}>
             <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{recTitle}</span>
-            <span style={{ fontSize: 12, fontWeight: 500, color: zoneColor }}>{scoreTxt != null ? `${scoreTxt}% ${de ? 'Erholung' : 'recovery'} · ${zoneLabel}` : zoneLabel}</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: zoneColor }}>{scoreTxt != null ? `${de ? 'Bereitschaft' : 'Readiness'} ${scoreTxt} · ${zoneLabel}` : zoneLabel}</span>
           </div>
           <ChevronRight size={20} className="hover-arrow shrink-0" style={{ marginLeft: 'auto', color: zoneColor }} />
         </div>
@@ -630,7 +657,7 @@ export default function RecoveryTab() {
           {(de ? ['M', 'D', 'M', 'D', 'F', 'S', 'S'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S']).map((d, i) => <span key={i} className="text-center" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{d}</span>)}
           {Array.from({ length: calLead }).map((_, i) => <div key={`b${i}`} style={{ height: 34, borderRadius: 8, background: 'var(--color-surface-2)' }} />)}
           {calDays.map((c) => (
-            <button key={c.key} type="button" onClick={() => setCalSheet(c.key)} title={`${c.dateLabel} · ${c.score != null ? `${Math.round(c.score)}% ${de ? 'Bereitschaft' : 'readiness'}` : (de ? 'keine Daten' : 'no data')}`} className="grid place-items-center" style={{ height: 34, borderRadius: 8, padding: 0, background: c.score != null ? `color-mix(in srgb, ${tierColor(c.score)} 15%, transparent)` : 'var(--color-surface-2)', border: c.isToday ? '1.5px solid var(--color-accent)' : '1px solid transparent', cursor: 'pointer' }}>
+            <button key={c.key} type="button" onClick={() => setCalSheet(c.key)} title={`${c.dateLabel} · ${c.score != null ? `${Math.round(c.score)}% ${de ? 'Erholung' : 'recovery'}` : (de ? 'keine Daten' : 'no data')}`} className="grid place-items-center" style={{ height: 34, borderRadius: 8, padding: 0, background: c.score != null ? `color-mix(in srgb, ${tierColor(c.score)} 15%, transparent)` : 'var(--color-surface-2)', border: c.isToday ? '1.5px solid var(--color-accent)' : '1px solid transparent', cursor: 'pointer' }}>
               <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: c.score != null ? tierColor(c.score) : 'var(--color-muted)' }}>{c.day}</span>
             </button>
           ))}
@@ -674,7 +701,7 @@ export default function RecoveryTab() {
               <div className="flex items-center justify-between rounded-[16px] p-4" style={{ background: 'var(--color-surface-2)' }}>
                 <div className="flex flex-col" style={{ gap: 2 }}>
                   <span className="eyebrow" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{de ? 'ERHOLUNG' : 'RECOVERY'}</span>
-                  <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{calDetail.tier ? (de ? 'Bereitschaft' : 'Readiness') : (de ? 'keine Bewertung' : 'no score')}</span>
+                  <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{calDetail.tier ? (de ? 'Erholung' : 'Recovery') : (de ? 'keine Bewertung' : 'no score')}</span>
                 </div>
                 <div className="flex items-end" style={{ gap: 4 }}>
                   <span className="num-display" style={{ fontSize: 40, lineHeight: 1, color: tierColor(calDetail.score ?? null) }}>{calDetail.score != null ? Math.round(calDetail.score) : DASH}</span>

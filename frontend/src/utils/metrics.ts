@@ -41,6 +41,47 @@ export function readinessTier(score: number | null): ReadinessTier | null {
   return 'rest'
 }
 
+// ── ONE readiness score across surfaces (5-reviewer gate, Jul 2026) ──────────
+// The canonical readiness is the one the daily decision actually consumes:
+// DailyDecision.readiness {score, tier} from the backend multi-factor engine
+// (readiness_score.py). Surfaces display THAT score and map THAT tier — the
+// Garmin snapshot / client composite are only the fallback while the decision
+// loads. Never apply the frontend 70/85 thresholds to a backend score: the
+// backend tier ('rest'|'easy'|'moderate'|'push', cut at 30/45/68) already
+// carries the verdict band.
+
+/** Backend DailyDecisionReadiness.tier → UI tier vocabulary. */
+export function tierFromDecision(
+  tier: string | null | undefined,
+  score: number | null,
+): ReadinessTier | null {
+  switch (tier) {
+    case 'push': return score != null && score >= 85 ? 'peak' : 'ready'
+    case 'moderate': return 'caution'
+    case 'easy': return 'caution'
+    case 'rest': return 'rest'
+    default: return null
+  }
+}
+
+/**
+ * Resolve the ONE readiness {score, tier} a surface may display.
+ * Decision readiness first; device/composite chain only as loading fallback.
+ */
+export function canonicalReadiness(
+  decisionReadiness: { score?: number | null; tier?: string | null } | null | undefined,
+  fallbackScore: number | null,
+): { score: number | null; tier: ReadinessTier | null } {
+  const dScore = decisionReadiness?.score ?? null
+  if (dScore != null) {
+    return {
+      score: dScore,
+      tier: tierFromDecision(decisionReadiness?.tier, dScore) ?? readinessTier(dScore),
+    }
+  }
+  return { score: fallbackScore, tier: readinessTier(fallbackScore) }
+}
+
 export interface TierMeta {
   label: string        // 2-3 word
   verb: string         // action-oriented coach word

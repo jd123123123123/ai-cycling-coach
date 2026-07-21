@@ -174,11 +174,15 @@ def assess_adaptation(
             sig.append(Signal("Keine HRV-Daten — nutze TSB als Näherung." if de else "No HRV data — using TSB as a proxy.", "neutral", "expert"))
 
     # ── Transparency: surface the athlete's chosen push level on upside days ──
+    # No "volume ×1.25" here (5-reviewer gate, Jul 2026): nothing downstream
+    # scales the served session up, so advertising a multiplier invents a
+    # second daily load number that contradicts the plan's TSS. The push level
+    # is named; the load number stays the daily decision's.
     if d.directive in ("escalate", "push") and push_level != "balanced":
         en_lbl, de_lbl = _AMBITION_LABEL.get(push_level, ("Balanced push", "Ausgewogener Push"))
         sig.append(Signal(
-            f"{de_lbl} aktiv — Volumen ×{d.volume_modifier:.2f}." if de
-            else f"{en_lbl} on — volume ×{d.volume_modifier:.2f}.",
+            f"{de_lbl} aktiv — Eskalation kommt bei dir früher." if de
+            else f"{en_lbl} on — escalation comes sooner for you.",
             "neutral", "expert"))
 
     # ── Ramp guardrail (warning only — ACWR discredited) ─────────────────

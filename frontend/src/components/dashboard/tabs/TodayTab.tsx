@@ -36,7 +36,7 @@ import { usePMC } from '../../../hooks/usePMC'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useGoalTrajectory } from '../../../hooks/useGoalTrajectory'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
-import { computeReadiness, readinessTier } from '../../../utils/metrics'
+import { canonicalReadiness, computeReadiness } from '../../../utils/metrics'
 import { latestLoad, daysToEvent, localDayKey } from '../../../utils/loadMetrics'
 import ScoreRing from '../../ui/ScoreRing'
 import { useLocale } from '../../../contexts/LocaleContext'
@@ -132,16 +132,19 @@ export default function TodayTab() {
   const metrics = metricsResp?.metrics ?? []
   const latest = [...metrics].reverse().find((m) => m.hrv_status != null || m.resting_hr != null || m.sleep_score != null) ?? null
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
-  // ONE readiness story across surfaces: derive the headline with the EXACT
-  // same chain the Recovery tab uses (live Garmin training-readiness snapshot →
-  // deterministic composite of HRV/battery/sleep). Both tabs read the same
-  // snapshot + the same 30-day metrics window, so the hero number here and the
-  // "% recovered" number on Recovery are guaranteed to be the same value —
-  // never two look-alike numbers that silently disagree.
-  const score = snapshot?.training_readiness
-    ?? computeReadiness(latest?.hrv_status ?? null, latest?.body_battery ?? null, latest?.sleep_score ?? null)
+  // ONE readiness story across surfaces (5-reviewer gate, Jul 2026): the
+  // canonical score is the one the daily decision actually consumes —
+  // DailyDecision.readiness from the backend multi-factor engine, the same
+  // number GET /coach/adaptive reports. Recovery resolves through the exact
+  // same selector, so Today, Recovery and the adaptive endpoint can never
+  // show three different readiness numbers again. The Garmin snapshot /
+  // client composite are only the fallback while the decision loads.
+  const { score, tier } = canonicalReadiness(
+    decision?.readiness,
+    snapshot?.training_readiness
+      ?? computeReadiness(latest?.hrv_status ?? null, latest?.body_battery ?? null, latest?.sleep_score ?? null),
+  )
   const rColor = readinessColor(score ?? null)
-  const tier = readinessTier(score ?? null)
 
   const athlete = evidence.athlete as Record<string, unknown> | undefined
   const goalName = athlete?.goal_target as string | undefined

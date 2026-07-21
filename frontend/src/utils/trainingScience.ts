@@ -64,13 +64,24 @@ const POWER_BANDS: Array<{ name: string; nameDe: string; lo: number; hi: number 
 
 export function powerZones(ftp: number | null): Zone[] | null {
   if (!ftp || ftp <= 0) return null
-  return POWER_BANDS.map((b, i) => ({
-    z: i + 1,
-    name: b.name,
-    nameDe: b.nameDe,
-    low: Math.round(ftp * b.lo),
-    high: b.hi == null ? null : Math.round(ftp * b.hi),
-  }))
+  // Contiguous integer bands, in lockstep with the backend's
+  // coggan_power_zones (app/services/training_load.py): round each zone's
+  // UPPER bound once; the next zone starts at exactly upper+1. Rounding lo
+  // and hi independently left watts unassigned between zones (e.g. 188–189 W
+  // between Z1/Z2) and made Z7's floor disagree with the API.
+  let prevHigh = -1
+  return POWER_BANDS.map((b, i) => {
+    const high = b.hi == null ? null : Math.round(ftp * b.hi)
+    const zone: Zone = {
+      z: i + 1,
+      name: b.name,
+      nameDe: b.nameDe,
+      low: prevHigh + 1,
+      high,
+    }
+    if (high != null) prevHigh = high
+    return zone
+  })
 }
 
 // ─── Heart-rate zones (Karvonen / %HRR) ─────────────────────────────────────

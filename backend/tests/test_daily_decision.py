@@ -198,7 +198,23 @@ class TestDirectiveCap:
         ctx = TodayContext(planned=_bike_plan(category="vo2", target_tss=78.0))
         d = _decide(ctx=ctx, directive=_directive("escalate", "push", 1.12))
         assert d.state == "hard"
-        assert d.tss_target == pytest.approx(78.0 * 1.12, abs=0.1)
+        # ONE load number (5-reviewer gate, Jul 2026): nothing downstream scales
+        # the served workout UP, so the day's target must equal the prescription
+        # — never planned × an upside modifier the athlete will never ride.
+        assert d.tss_target == pytest.approx(78.0, abs=0.1)
+
+    def test_upside_volume_never_inflates_load_target(self):
+        # All-in ambition (×1.25) — Recovery's "Belastungsziel heute" must still
+        # equal the session Today shows, not an independently computed +25%.
+        ctx = TodayContext(planned=_bike_plan(category="sweet_spot", target_tss=61.0))
+        d = _decide(ctx=ctx, directive=_directive("escalate", "push", 1.25))
+        assert d.tss_target == pytest.approx(61.0, abs=0.1)
+        assert "~61 TSS" in d.reason
+
+    def test_downside_volume_still_caps_load_target(self):
+        ctx = TodayContext(planned=_bike_plan(target_tss=68.0))
+        d = _decide(ctx=ctx, directive=_directive("hold", "easy", 0.8))
+        assert d.tss_target == pytest.approx(68.0 * 0.8, abs=0.1)
 
     def test_load_target_line_on_training_days(self):
         ctx = TodayContext(planned=_bike_plan(category="endurance", target_tss=45.0))

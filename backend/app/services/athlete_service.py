@@ -131,6 +131,17 @@ async def update_goals(
             target_event["name"] = goals_data["target_event_name"]
         if "target_event_date" in goals_data:
             target_event["date"] = goals_data["target_event_date"]
+            # Keep the FIRST-CLASS column in sync — it is authoritative
+            # (2a3ecb1); writing only the JSONB copy is how the two diverged
+            # (live-observed: JSONB 2026-07-05 vs column 2026-12-05).
+            try:
+                from datetime import date as _date
+
+                profile.target_event_date = _date.fromisoformat(
+                    str(goals_data["target_event_date"])[:10]
+                )
+            except (ValueError, TypeError):
+                pass
         current_goals["target_event"] = target_event
 
     profile.goals = current_goals

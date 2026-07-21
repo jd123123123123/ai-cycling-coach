@@ -4,6 +4,14 @@ export interface IntervalBlockOut {
   duration_seconds: number
   power_target_pct_ftp: number | null
   zone: number // 1..7
+  // Structured-set fields (composite on/off blocks, Jul 2026): a "30×15/45s"
+  // set is ONE row for load purposes but physically reps × (on_s @
+  // power_target_pct_ftp + off_s @ off_pct_ftp). All absent/null for steady
+  // blocks — additive, older payloads simply omit them.
+  reps?: number | null
+  on_s?: number | null
+  off_s?: number | null
+  off_pct_ftp?: number | null
 }
 
 export interface DayPlan {

@@ -263,10 +263,21 @@ class TestCogganPowerZones:
         zones = coggan_power_zones(280)
         assert zones["zone1"]["max"] == int(280 * 0.55)  # 154
 
-    def test_zone4_min_at_91_percent_ftp(self):
-        """Zone 4 min = floor(FTP * 0.91) = 255 for FTP 280."""
+    def test_zone4_min_is_contiguous_with_zone3_max(self):
+        """Zone 4 starts exactly 1 W above zone 3's max (contiguous bands)."""
         zones = coggan_power_zones(280)
-        assert zones["zone4"]["min"] == int(280 * 0.91)  # 254 or 255
+        assert zones["zone4"]["min"] == zones["zone3"]["max"] + 1
+
+    def test_zones_are_contiguous_no_gaps_no_overlap(self):
+        """Every watt from 0 upward belongs to exactly one zone (review
+        finding: 188–189 W fell between Z1 and Z2), and Z7's floor is exactly
+        Z6's ceiling + 1 (was: UI '513+' vs API min 510)."""
+        for ftp in (200, 280, 340, 341, 342):
+            zones = coggan_power_zones(ftp)
+            keys = [f"zone{i}" for i in range(1, 8)]
+            assert zones["zone1"]["min"] == 0
+            for a, b in zip(keys, keys[1:]):
+                assert zones[b]["min"] == zones[a]["max"] + 1, (ftp, a, b)
 
     def test_zone4_max_at_105_percent_ftp(self):
         """Zone 4 max = floor(FTP * 1.05) = 294 for FTP 280."""

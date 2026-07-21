@@ -154,9 +154,20 @@ def explain_adaptations(evidence: dict | None, *, de: bool = False) -> dict:
             "ease")
 
     # ── Summary ────────────────────────────────────────────────────────────
+    # Day-1 honesty (reviewer Jonas S-2): "Signale stabil seit gestern" may
+    # only render when at least one real signal was actually read. A brand-new
+    # athlete with zero history has nothing to be "stable since yesterday".
+    signals_seen = any(
+        v is not None
+        for v in (hrv_delta, tsb, ctl_ramp, acwr, sleep)
+    ) or isinstance(y_intensity, str)
     eases = [c for c in changes if c["severity"] == "ease"]
     boosts = [c for c in changes if c["severity"] == "boost"]
-    if not changes:
+    if not changes and not signals_seen:
+        summary = ("Noch keine Vergleichsdaten — der Plan folgt dem periodisierten Aufbau."
+                   if de else
+                   "No history to compare yet — the plan follows the periodized build.")
+    elif not changes:
         summary = ("Signale stabil seit gestern — der Plan folgt dem periodisierten Aufbau."
                    if de else
                    "Signals steady since yesterday — the plan follows the periodized build.")

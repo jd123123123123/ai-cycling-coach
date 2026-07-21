@@ -201,6 +201,10 @@ def _apply_personalization(days: list[DayPlan], preface: str, personalized: dict
                     duration_seconds=blk.get("duration_seconds", 0),
                     power_target_pct_ftp=blk.get("power_target_pct_ftp"),
                     zone=blk.get("zone", 1),
+                    reps=blk.get("reps"),
+                    on_s=blk.get("on_s"),
+                    off_s=blk.get("off_s"),
+                    off_pct_ftp=blk.get("off_pct_ftp"),
                 )
                 for blk in intervals
             ]
@@ -455,14 +459,35 @@ def _build_day_plan(
 
         interval_structure = pw.interval_structure or {}
         raw_intervals = interval_structure.get("intervals", [])
-        intervals_out = [
-            IntervalBlockOut(
-                duration_seconds=blk.get("duration_seconds", 0),
-                power_target_pct_ftp=blk.get("power_target_pct_ftp"),
-                zone=blk.get("zone", 1),
+        # Structured-set backfill: persisted rows written before the composite
+        # blocks carried reps/on_s/off_s (or by writers that project only
+        # duration/pct/zone) still map 1:1 onto the template's block list, so
+        # the real on/off structure can be re-attached from the library.
+        tmpl_blocks = (
+            tmpl.blocks if tmpl and len(tmpl.blocks) == len(raw_intervals) else None
+        )
+        intervals_out = []
+        for i, blk in enumerate(raw_intervals):
+            tb = tmpl_blocks[i] if tmpl_blocks else None
+            pct = blk.get("power_target_pct_ftp")
+            zone = blk.get("zone", 1)
+            if tb is not None and tb.reps is not None:
+                # %FTP is template-authoritative (never LLM/user data) — a
+                # stored composite row may carry the old merged "average
+                # watts" pct/zone; the library's ON-intensity is the truth.
+                pct = tb.target_pct_ftp
+                zone = tb.zone
+            intervals_out.append(
+                IntervalBlockOut(
+                    duration_seconds=blk.get("duration_seconds", 0),
+                    power_target_pct_ftp=pct,
+                    zone=zone,
+                    reps=blk.get("reps", tb.reps if tb else None),
+                    on_s=blk.get("on_s", tb.on_s if tb else None),
+                    off_s=blk.get("off_s", tb.off_s if tb else None),
+                    off_pct_ftp=blk.get("off_pct_ftp", tb.off_pct_ftp if tb else None),
+                )
             )
-            for blk in raw_intervals
-        ]
         return DayPlan(
             date=day_date,
             sport=pw.sport,
@@ -1110,11 +1135,14 @@ async def get_current_week(
             for r in (_pmc_full.get("total") or [])
         ]
 
-        # Forward plan: spread the week's TSS target evenly, out to the goal
-        # (capped at 84 days) or a 12-week default horizon.
+        # Forward plan: spread the week's TSS target evenly. When a goal event
+        # exists the horizon runs TO THE EVENT DATE — the "N Tage" chip and the
+        # projection end must never contradict (review finding: event 137 days
+        # out, projection stopping at a fixed 12 weeks). No event → 12-week
+        # default. Safety cap: one year.
         horizon_days = 84
-        if days_to_event is not None and 0 < days_to_event <= 84:
-            horizon_days = days_to_event
+        if days_to_event is not None and days_to_event > 0:
+            horizon_days = min(days_to_event, 365)
         daily_target = (week_tss_target / 7.0) if week_tss_target else 0.0
         future_daily_tss = [
             {"date": today + timedelta(days=i + 1), "tss": daily_target}

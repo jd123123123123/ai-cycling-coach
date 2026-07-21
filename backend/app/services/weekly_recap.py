@@ -48,7 +48,11 @@ def planned_week_total(rows: Iterable[Any]) -> int | None:
     vals = [v for v in vals if v is not None]
     if not vals:
         return None
-    return int(round(sum(vals)))
+    # Round PER SESSION, then sum: the UI shows each session as a rounded
+    # integer, so the header must equal the sum of those displayed integers.
+    # round(Σ floats) drifts off by one vs Σ round(float) (review finding:
+    # header 290 vs visible session sum 289).
+    return sum(int(round(v)) for v in vals)
 
 
 def _week_bounds(anchor: date) -> tuple[date, date]:

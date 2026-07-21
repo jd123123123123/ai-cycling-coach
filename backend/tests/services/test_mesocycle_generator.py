@@ -1407,3 +1407,103 @@ class TestCurrentBlockPosition:
         start = date(2026, 6, 1)
         db = _FakeDB(self._plan(start))
         assert await current_block_position(db, 1, start + timedelta(days=40)) == "recovery"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Recovery-week variety (review NEW-4) + materialized hours_note (finding 4)
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TestRecoveryWeekVariety:
+    """User 5's deload week rendered 'Lockeres Ausfahren — 60 min' four times:
+    the program path pinned recovery_60 on every downgraded quality slot.
+    Recovery-week easy days must draw varied flavors from the easy pool —
+    and stay strictly easy (deload is sacred)."""
+
+    _EASY_CATEGORIES = ("endurance", "recovery", "rest")
+
+    def _recovery_week(self, program: str | None, weekly_hours: float,
+                       week_start: date | None = None):
+        goals = {"program": {"id": program, "started": "2026-07-27"}} if program else {}
+        athlete = _athlete(ftp_watts=210, weekly_hours=weekly_hours)
+        athlete.goals = goals
+        athlete.days_available = None
+        athlete.hard_day_blackouts = None
+        athlete.variety_dial = None
+        tss = weekly_tss_target(45.0, "base1", "recovery", weekly_hours=weekly_hours)
+        return build_week_drafts(
+            athlete=athlete,
+            week_start=week_start or _next_monday(),
+            phase="base1",
+            weekly_tss_target_val=tss,
+            block_position="recovery",
+            ftp_w=210,
+        )
+
+    def test_program_recovery_week_never_repeats_a_spin_four_times(self):
+        """The live NEW-4 case: vo2_builder recovery week was recovery_60 ×4."""
+        for program in ("ftp_builder", "vo2_builder", "endurance_200k", None):
+            for hours in (6.0, 8.0):
+                drafts = self._recovery_week(program, hours)
+                riding = [d.template_id for d in drafts if d.template_id != "rest_day"]
+                worst = max((riding.count(t) for t in set(riding)), default=0)
+                assert worst <= 2, (
+                    f"{program}/{hours}h recovery week repeats a session "
+                    f"{worst}×: {riding}"
+                )
+
+    def test_recovery_week_variety_stays_strictly_easy(self):
+        """Variety must respect the deload intent — every drafted day is an
+        endurance/recovery/rest template, no quality sneaks in."""
+        from app.services.workout_templates import TEMPLATES
+
+        for program in ("ftp_builder", "vo2_builder", None):
+            drafts = self._recovery_week(program, 8.0)
+            for d in drafts:
+                cat = TEMPLATES[d.template_id].category
+                assert cat in self._EASY_CATEGORIES, (
+                    f"{program}: {d.template_id} ({cat}) on a deload week"
+                )
+
+    def test_recovery_week_titles_are_varied(self):
+        """At least three DISTINCT session flavors across the riding days
+        (the old week had exactly one)."""
+        drafts = self._recovery_week("vo2_builder", 8.0)
+        riding = {d.template_id for d in drafts if d.template_id != "rest_day"}
+        assert len(riding) >= 3, f"deload week too samey: {sorted(riding)}"
+
+
+class TestHoursNoteMatchesMaterializedWeek:
+    """Review finding 4: the plan card showed '5.9h Wochenstunden' while the
+    note promised '~6,4 h' — the note was derived from TSS, not from the week
+    that was actually built. start_hours must equal the materialized week-0
+    hours."""
+
+    @pytest.mark.asyncio
+    async def test_start_hours_equals_week0_planned_hours(self):
+        athlete = _athlete(ftp_watts=280, weekly_hours=10.0)
+        db = _mock_db(athlete)
+        monday = _next_monday()
+        await generate_mesocycle(db, user_id=1, plan_start_date=monday, current_ctl=25.0)
+
+        plan_obj = None
+        drafts_week0: list = []
+        for c in db.add.call_args_list:
+            obj = c.args[0] if c.args else None
+            if obj is None:
+                continue
+            if hasattr(obj, "weekly_tss_targets"):
+                plan_obj = obj
+            elif hasattr(obj, "duration_seconds_target") and obj.date < monday + timedelta(days=7):
+                drafts_week0.append(obj)
+
+        note = plan_obj.evidence.get("hours_note")
+        assert note is not None
+        materialized = round(
+            sum(d.duration_seconds_target or 0 for d in drafts_week0) / 3600.0, 1
+        )
+        assert note["start_hours"] == materialized, (
+            f"note says ~{note['start_hours']}h but the built week is "
+            f"{materialized}h — the card would show two truths again"
+        )
+        # The note only fires when the start is genuinely below the ask.
+        assert materialized < 0.8 * 10.0

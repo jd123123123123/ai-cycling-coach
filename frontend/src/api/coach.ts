@@ -32,6 +32,16 @@ export interface ResolvedBlock {
   cadence_high: number | null
   target_hr_low: number | null    // bpm — null when LTHR unknown
   target_hr_high: number | null
+  /** Structured-set fields (composite on/off blocks, Jul 2026). A "30×15/45s"
+   *  set is ONE block for load purposes but physically reps × (on_s at
+   *  target_watts_* + off_s at off_watts_*). All null/absent on steady blocks.
+   *  Invariant: reps × (on_s + off_s) === duration_s. */
+  reps?: number | null
+  on_s?: number | null
+  off_s?: number | null
+  off_pct_ftp?: number | null
+  off_watts_low?: number | null
+  off_watts_high?: number | null
 }
 
 export interface PrescribedWorkout {
@@ -420,7 +430,9 @@ export async function fetchTransparency(): Promise<TransparencyResponse> {
 // track for your A-event?" Mirrors backend's GoalTrajectoryRead.
 
 export type TaperWindow = 'too_flat' | 'ideal' | 'too_fresh' | 'overreached' | 'unknown'
-export type OnTrack = 'ahead' | 'on_track' | 'behind' | 'no_goal'
+// 'unknown' = backend honesty guard: insufficient history for a projection
+// (distinct from 'no_goal' = no target event set).
+export type OnTrack = 'ahead' | 'on_track' | 'behind' | 'no_goal' | 'unknown'
 
 // Mirrors backend GoalTrajectoryRead (audit P0-4): every projection field is
 // Optional — when the data can't support an honest projection the backend

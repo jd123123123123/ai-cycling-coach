@@ -16,6 +16,14 @@ class IntervalBlockOut(BaseModel):
     duration_seconds: int
     power_target_pct_ftp: float | None
     zone: int  # 1..7
+    # ── Structured-set fields (composite on/off blocks, Jul 2026) ─────────
+    # "30×15/45s" sets are ONE row for load purposes but physically
+    # reps × (on_s @ power_target_pct_ftp + off_s @ off_pct_ftp). All None
+    # for steady blocks — additive, older clients ignore them.
+    reps: int | None = None
+    on_s: int | None = None
+    off_s: int | None = None
+    off_pct_ftp: float | None = None
 
 
 class DayPlan(BaseModel):

@@ -149,7 +149,13 @@ function buildPotential(
   // Current band = highest ladder entry whose threshold ≤ value.
   let idx = 0
   for (let i = 0; i < ladder.length; i++) if (value >= ladder[i].v) idx = i
-  const next = ladder[Math.min(idx + 1, ladder.length - 1)]
+  // Next milestone must be STRICTLY greater at display precision (1 decimal):
+  // at 3.46 W/kg the UI shows "3.5" — a "next goal → 3.5" chip would read as
+  // already reached. Skip bands that round to ≤ the displayed current value.
+  const r1 = (x: number) => Math.round(x * 10) / 10
+  let nextIdx = Math.min(idx + 1, ladder.length - 1)
+  while (nextIdx < ladder.length - 1 && r1(ladder[nextIdx].v) <= r1(value)) nextIdx += 1
+  const next = ladder[nextIdx]
   // Long-range target: the strong-amateur band top, bumped up a band if already met.
   let targetIdx = strongAmateurIdx
   while (targetIdx < ladder.length - 1 && value >= ladder[targetIdx].v * 0.97) targetIdx += 1

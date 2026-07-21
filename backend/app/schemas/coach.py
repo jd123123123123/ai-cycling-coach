@@ -110,6 +110,16 @@ class ResolvedBlock(BaseModel):
     target_hr_low: int | None = None   # bpm — None when LTHR is unknown
     target_hr_high: int | None = None  # bpm
     open_effort: bool = False          # RPE-guided max effort — watt targets are 0 by design
+    # ── Structured-set fields (composite on/off blocks, Jul 2026) ─────────
+    # A "30×15/45s" set is stored as ONE block; these carry the real
+    # structure: reps × (on_s @ target_watts_* + off_s @ off_watts_*).
+    # All None for steady blocks. Invariant: reps × (on_s + off_s) == duration_s.
+    reps: int | None = None            # number of on/off repetitions
+    on_s: int | None = None            # seconds ON per rep (at target_pct_ftp)
+    off_s: int | None = None           # seconds OFF per rep (at off_pct_ftp)
+    off_pct_ftp: float | None = None   # recovery/under intensity as %FTP
+    off_watts_low: int | None = None   # resolved off-band watts
+    off_watts_high: int | None = None
 
 
 class PrescribedWorkout(BaseModel):
@@ -355,7 +365,10 @@ class GoalTrajectoryRead(BaseModel):
     ctl_target: float | None = None
     tsb_projected_at_goal: float | None = None
     taper_window: Literal["too_flat", "ideal", "too_fresh", "overreached", "unknown"] = "unknown"
-    on_track: Literal["ahead", "on_track", "behind", "no_goal"] = "no_goal"
+    # 'unknown' is the producer's honesty guard (insufficient history / no
+    # projectable basis) — distinct from 'no_goal' (no target event at all).
+    # Missing it here made every honest-null projection a 500 (carried minor).
+    on_track: Literal["ahead", "on_track", "behind", "no_goal", "unknown"] = "no_goal"
     weekly_tss_required: float | None = None
     weekly_tss_actual: float | None = None
     narrative_hook: str = ""

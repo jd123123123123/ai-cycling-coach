@@ -202,6 +202,18 @@ def project_performance(
 
     # Full timeline: past then future (future strictly after past).
     timeline = past + [f for f in future if f[0] > past[-1][0]]
+    # Horizon coherence: when a goal event exists, the projection must run TO
+    # the event date — a load series ending earlier must not silently shorten
+    # the horizon (review finding: "137 Tage" chip vs a 12-week projection
+    # end). Pad forward with the recent average daily load (last 28 days of
+    # the timeline) as an honest steady-state continuation.
+    if goal_date is not None and goal_date > today and goal_date > timeline[-1][0]:
+        tail = [t for _, t in timeline[-28:]]
+        pad_tss = (sum(tail) / len(tail)) if tail else 0.0
+        d = timeline[-1][0] + timedelta(days=1)
+        while d <= goal_date:
+            timeline.append((d, pad_tss))
+            d += timedelta(days=1)
     dates = [d for d, _ in timeline]
     tss = [t for _, t in timeline]
     g1, g2 = _decay_convolutions(tss)

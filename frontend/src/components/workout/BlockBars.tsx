@@ -21,16 +21,42 @@ export interface BarSegment {
   zone: number
 }
 
-/** "30×30/30 micro set" / "3×(13×30/15s)" style composite names → reps. */
+/** LEGACY fallback only — "30×30/30 micro set" style composite names → reps.
+ *  Old persisted rows predate the explicit reps/on_s/off_s fields; new data
+ *  always carries real structure and never goes through name parsing. */
 const MICRO_RE = /(\d+)\s*×\s*(\d+)\s*\/\s*(\d+)/
 
-/** Expand prescribed blocks into drawable segments. Composite micro-interval
- *  blocks (name pattern N×on/off whose rep math fits the block duration)
- *  become alternating on/off stripes; everything else maps 1:1. */
+/** Coggan zone from a %FTP fraction — colors the OFF stripes honestly
+ *  (a 95% "under" is Z4 work, a 50% recovery spin is Z1). */
+export const zoneForPct = (pct: number): number => {
+  if (pct <= 0.55) return 1
+  if (pct <= 0.75) return 2
+  if (pct <= 0.9) return 3
+  if (pct <= 1.05) return 4
+  if (pct <= 1.2) return 5
+  if (pct <= 1.5) return 6
+  return 7
+}
+
+/** Expand prescribed blocks into drawable segments. Blocks carrying explicit
+ *  set structure (reps/on_s/off_s from the backend) become alternating on/off
+ *  stripes at their real intensities; legacy rows without the fields fall back
+ *  to name parsing (N×on/off whose rep math fits the duration); everything
+ *  else maps 1:1. */
 export function expandBlocks(blocks: ResolvedBlock[]): BarSegment[] {
   const out: BarSegment[] = []
   for (const b of blocks) {
     const pct = b.target_pct_ftp > 0 ? b.target_pct_ftp : b.zone / 7
+    // Real structure first — the serialized truth, no guessing.
+    if (b.reps != null && b.reps >= 2 && b.on_s != null && b.on_s > 0 && b.off_s != null && b.off_s > 0) {
+      const offPct = b.off_pct_ftp ?? Math.min(0.5, pct * 0.45)
+      const offZone = b.off_pct_ftp != null ? zoneForPct(b.off_pct_ftp) : 1
+      for (let i = 0; i < b.reps; i++) {
+        out.push({ duration_s: b.on_s, pct, zone: b.zone })
+        out.push({ duration_s: b.off_s, pct: offPct, zone: offZone })
+      }
+      continue
+    }
     const m = (b.name ?? '').match(MICRO_RE)
     if (m) {
       const reps = parseInt(m[1], 10)

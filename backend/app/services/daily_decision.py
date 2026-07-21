@@ -16,10 +16,12 @@ Precedence (first match wins):
     3. planned_rest — today's PlannedWorkout row says rest, or no row exists
        and the session picker resolves today to a rest day
     4. readiness + adaptive directive → recover / easy / quality / hard with
-       tss_target = planned TSS × directive volume_modifier. When the
-       directive says deload/rest but a session is planned, the plan wins the
-       SHAPE and the directive caps the LOAD (state='recover', reduced
-       tss_target) — never a contradiction.
+       tss_target = planned TSS × min(volume_modifier, 1.0). The directive can
+       only CAP the load — an upside modifier (escalate) never inflates the
+       target past the session actually served. When the directive says
+       deload/rest but a session is planned, the plan wins the SHAPE and the
+       directive caps the LOAD (state='recover', reduced tss_target) — never a
+       contradiction.
 
 `strain_target` is ALWAYS tss_target / 8 on the 0-21 scale. This is the only
 place that derivation exists; null on rest / trained / sick days.
@@ -517,7 +519,12 @@ def decide(
         state = base_state
 
     planned_tss = ctx.planned.get("target_tss")
-    tss_target = (float(planned_tss) * vol) if planned_tss else None
+    # ONE load number (5-reviewer gate, Jul 2026): the directive's volume
+    # modifier may only REDUCE the target (deload/hold caps). Nothing downstream
+    # scales the served workout up, so an upside modifier (escalate ×1.25) must
+    # never inflate the "Belastungsziel heute" past the session the athlete
+    # actually sees on Today.
+    tss_target = (float(planned_tss) * min(vol, 1.0)) if planned_tss else None
 
     title = str(ctx.planned.get("title") or ("Einheit" if de else "Session"))
     if state == "recover":

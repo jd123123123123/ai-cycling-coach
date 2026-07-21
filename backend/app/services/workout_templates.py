@@ -75,6 +75,17 @@ class IntervalBlock:
     # sqrt-mean of IF² across the on/off structure; None = block is steady,
     # use target_pct_ftp.
     tss_pct_ftp: float | None = None
+    # ── Structured-set fields (composite on/off blocks) ──────────────────
+    # A composite set ("30×15/45s") is ONE block for storage/TSS purposes but
+    # physically N reps of on_s seconds at target_pct_ftp (the ON intensity)
+    # with off_s seconds at off_pct_ftp between. All four are None for steady
+    # blocks. Invariant (test-enforced): reps × (on_s + off_s) == duration_s,
+    # and any N×on/off in the block NAME must match these numbers — the name
+    # is display, these fields are the truth consumers render from.
+    reps: int | None = None
+    on_s: int | None = None
+    off_s: int | None = None
+    off_pct_ftp: float | None = None
     # Open / max-effort block (field tests): no fixed watt band is derived
     # from current FTP — guidance is RPE only. Resolved watts are emitted as
     # 0/0 with open_effort=True so consumers render "max effort", not a band.
@@ -134,6 +145,16 @@ class ResolvedBlock:
     target_hr_low: int | None = None  # bpm
     target_hr_high: int | None = None # bpm
     open_effort: bool = False        # True → 0/0 watts, RPE-only guidance
+    # Structured-set passthrough (composite on/off blocks). target_watts_*
+    # is the ON band; off_watts_* is resolved from off_pct_ftp. All None for
+    # steady blocks. reps × (on_s + off_s) == duration_s always holds (reps
+    # are re-scaled together with duration by parametrize_template).
+    reps: int | None = None
+    on_s: int | None = None
+    off_s: int | None = None
+    off_pct_ftp: float | None = None
+    off_watts_low: int | None = None
+    off_watts_high: int | None = None
 
 
 @dataclass
@@ -387,12 +408,14 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Coggan Z4 overunders · Seiler HIT",
         blocks=[
             _wu(),
-            # 3 sets × (5 × (1min over / 1min under)) — encoded as one grouped block each
-            IntervalBlock(name="OU set 1 (5×1/1min)", duration_s=5 * 120, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            # 3 sets × (5 × (1min over @ 105% / 1min under @ 95%)) — one grouped
+            # block each; target_pct_ftp carries the OVER ("on") intensity,
+            # off_pct_ftp the under. tss_pct_ftp 1.00 = duration-weighted IF.
+            IntervalBlock(name="OU set 1 (5×1/1min)", duration_s=5 * 120, target_pct_ftp=1.05, target_rpe=8, zone=4, tss_pct_ftp=1.00, reps=5, on_s=60, off_s=60, off_pct_ftp=0.95),
             _rec(5 * 60),
-            IntervalBlock(name="OU set 2 (5×1/1min)", duration_s=5 * 120, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            IntervalBlock(name="OU set 2 (5×1/1min)", duration_s=5 * 120, target_pct_ftp=1.05, target_rpe=8, zone=4, tss_pct_ftp=1.00, reps=5, on_s=60, off_s=60, off_pct_ftp=0.95),
             _rec(5 * 60),
-            IntervalBlock(name="OU set 3 (5×1/1min)", duration_s=5 * 120, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            IntervalBlock(name="OU set 3 (5×1/1min)", duration_s=5 * 120, target_pct_ftp=1.05, target_rpe=8, zone=4, tss_pct_ftp=1.00, reps=5, on_s=60, off_s=60, off_pct_ftp=0.95),
             _cd(),
         ],
         base_tss=65.9,
@@ -429,8 +452,9 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Coggan Z5 · Billat micro-intervals",
         blocks=[
             _wu(),
-            # 30 × (30s ON + 30s OFF) = 30min of work+recovery alternation, averaged into one block
-            IntervalBlock(name="30×30/30 micro set", duration_s=30 * 60, target_pct_ftp=1.20, target_rpe=9, zone=5, tss_pct_ftp=0.92),
+            # 30 × (30s ON @ 120% + 30s OFF @ 50%) — one storage block, real
+            # structure in reps/on_s/off_s (Billat 30/30 @ ~vVO2max ≈ 120% FTP).
+            IntervalBlock(name="30×30/30 micro set", duration_s=30 * 60, target_pct_ftp=1.20, target_rpe=9, zone=5, tss_pct_ftp=0.92, reps=30, on_s=30, off_s=30, off_pct_ftp=0.50),
             _cd(),
         ],
         base_tss=54.0,
@@ -454,11 +478,11 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Rønnestad 2015 · Bossi 2020 short-interval VO2",
         blocks=[
             _wu(),
-            IntervalBlock(name="Set 1 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5, tss_pct_ftp=0.94),
+            IntervalBlock(name="Set 1 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5, tss_pct_ftp=0.94, reps=13, on_s=30, off_s=15, off_pct_ftp=0.50),
             _rec(3 * 60),
-            IntervalBlock(name="Set 2 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5, tss_pct_ftp=0.94),
+            IntervalBlock(name="Set 2 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5, tss_pct_ftp=0.94, reps=13, on_s=30, off_s=15, off_pct_ftp=0.50),
             _rec(3 * 60),
-            IntervalBlock(name="Set 3 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5, tss_pct_ftp=0.94),
+            IntervalBlock(name="Set 3 — 13×30/15s @ 110% FTP", duration_s=13 * 45, target_pct_ftp=1.10, target_rpe=9, zone=5, tss_pct_ftp=0.94, reps=13, on_s=30, off_s=15, off_pct_ftp=0.50),
             _cd(),
         ],
         base_tss=57.3,
@@ -561,7 +585,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Mujika neuromuscular · Coggan NM",
         blocks=[
             _wu(),
-            IntervalBlock(name="Sprint set (8×15s · 3-min easy between)", duration_s=8 * (15 + 3 * 60), target_pct_ftp=1.80, target_rpe=10, zone=6, tss_pct_ftp=0.69),
+            IntervalBlock(name="Sprint set (8×15s · 3-min easy between)", duration_s=8 * (15 + 3 * 60), target_pct_ftp=1.80, target_rpe=10, zone=6, tss_pct_ftp=0.69, reps=8, on_s=15, off_s=3 * 60, off_pct_ftp=0.50),
             _cd(),
         ],
         base_tss=32.4,
@@ -581,9 +605,9 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Tabata 1996 · Coggan anaerobic capacity",
         blocks=[
             _wu(),
-            IntervalBlock(name="Tabata set 1 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6, tss_pct_ftp=1.42),
+            IntervalBlock(name="Tabata set 1 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6, tss_pct_ftp=1.42, reps=8, on_s=20, off_s=10, off_pct_ftp=0.50),
             _rec(5 * 60),
-            IntervalBlock(name="Tabata set 2 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6, tss_pct_ftp=1.42),
+            IntervalBlock(name="Tabata set 2 (8×20/10s @ 170%)", duration_s=4 * 60, target_pct_ftp=1.70, target_rpe=10, zone=6, tss_pct_ftp=1.42, reps=8, on_s=20, off_s=10, off_pct_ftp=0.50),
             _cd(),
         ],
         base_tss=40.7,
@@ -771,10 +795,14 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Seiler LIT · González-Cutre novelty · Ekkekakis affect",
         blocks=[
             IntervalBlock(name="Z2 base", duration_s=30 * 60, target_pct_ftp=0.65, target_rpe=4, zone=2),
+            # 6 × (15s playful sprint @ ~135% + 135s easy Z2 spin). The ON
+            # intensity lives in target_pct_ftp (a merged 0.70 "average watts"
+            # line claimed a steady Z2 grind — impossible reading of a sprint
+            # set); tss_pct_ftp 0.75 keeps the load honest.
             IntervalBlock(
                 name="Surge play (6×15s sprints · long easy spins between)",
-                duration_s=15 * 60, target_pct_ftp=0.70, target_rpe=6, zone=2,
-                tss_pct_ftp=0.75,
+                duration_s=15 * 60, target_pct_ftp=1.35, target_rpe=6, zone=6,
+                tss_pct_ftp=0.75, reps=6, on_s=15, off_s=135, off_pct_ftp=0.65,
             ),
             IntervalBlock(name="Z2 close", duration_s=30 * 60, target_pct_ftp=0.65, target_rpe=4, zone=2),
         ],
@@ -861,11 +889,13 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Friel tempo · Allen variable-power · CTS tempo+surges",
         blocks=[
             _wu(),
-            IntervalBlock(name="Tempo+bursts 1 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.85, target_rpe=6, zone=3),
+            # Base sits at 83% (matching the name); the 10s surges lift the
+            # duration-weighted load intensity to ~0.85 → tss_pct_ftp.
+            IntervalBlock(name="Tempo+bursts 1 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.83, target_rpe=6, zone=3, tss_pct_ftp=0.85),
             _rec(4 * 60),
-            IntervalBlock(name="Tempo+bursts 2 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.85, target_rpe=6, zone=3),
+            IntervalBlock(name="Tempo+bursts 2 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.83, target_rpe=6, zone=3, tss_pct_ftp=0.85),
             _rec(4 * 60),
-            IntervalBlock(name="Tempo+bursts 3 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.85, target_rpe=7, zone=3),
+            IntervalBlock(name="Tempo+bursts 3 (10min @ 83% · 10s surge each 2min)", duration_s=10 * 60, target_pct_ftp=0.83, target_rpe=7, zone=3, tss_pct_ftp=0.85),
             _cd(),
         ],
         base_tss=51.2,
@@ -972,13 +1002,13 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Coggan over-unders · Bishop lactate clearance",
         blocks=[
             _wu(),
-            IntervalBlock(name="OU set 1 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            IntervalBlock(name="OU set 1 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.05, target_rpe=8, zone=4, tss_pct_ftp=1.00, reps=6, on_s=60, off_s=60, off_pct_ftp=0.95),
             _rec(5 * 60),
-            IntervalBlock(name="OU set 2 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            IntervalBlock(name="OU set 2 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.05, target_rpe=8, zone=4, tss_pct_ftp=1.00, reps=6, on_s=60, off_s=60, off_pct_ftp=0.95),
             _rec(5 * 60),
-            IntervalBlock(name="OU set 3 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            IntervalBlock(name="OU set 3 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.05, target_rpe=8, zone=4, tss_pct_ftp=1.00, reps=6, on_s=60, off_s=60, off_pct_ftp=0.95),
             _rec(5 * 60),
-            IntervalBlock(name="OU set 4 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.00, target_rpe=8, zone=4),
+            IntervalBlock(name="OU set 4 (6×1/1min)", duration_s=12 * 60, target_pct_ftp=1.05, target_rpe=8, zone=4, tss_pct_ftp=1.00, reps=6, on_s=60, off_s=60, off_pct_ftp=0.95),
             _cd(),
         ],
         base_tss=98.0,
@@ -1069,7 +1099,11 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Stepto & Hawley HIT · Coggan Z5+",
         blocks=[
             _wu(),
-            IntervalBlock(name="Microburst set (30×15/45s)", duration_s=30 * 60, target_pct_ftp=1.20, target_rpe=9, zone=5, tss_pct_ftp=0.87),
+            # 30 × (15s @ 150% + 45s @ 50%) — the ON target is 150% FTP per the
+            # template name and the Stepto & Hawley microburst prescription (a
+            # merged 1.20 here contradicted both; tss_pct_ftp 0.87 was already
+            # the weighted IF of 15s@1.50/45s@0.50). Zone 6 — 150% is Z6 power.
+            IntervalBlock(name="Microburst set (30×15/45s)", duration_s=30 * 60, target_pct_ftp=1.50, target_rpe=9, zone=6, tss_pct_ftp=0.87, reps=30, on_s=15, off_s=45, off_pct_ftp=0.50),
             _cd(),
         ],
         base_tss=49.6,
@@ -1194,7 +1228,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Mujika neuromuscular · Hansen cadence",
         blocks=[
             _wu(),
-            IntervalBlock(name="Spin-up set (6×30s · 4-min easy between)", duration_s=6 * (30 + 4 * 60), target_pct_ftp=1.30, target_rpe=10, zone=6, cadence_low=110, cadence_high=125, tss_pct_ftp=0.64),
+            IntervalBlock(name="Spin-up set (6×30s · 4-min easy between)", duration_s=6 * (30 + 4 * 60), target_pct_ftp=1.30, target_rpe=10, zone=6, cadence_low=110, cadence_high=125, tss_pct_ftp=0.64, reps=6, on_s=30, off_s=4 * 60, off_pct_ftp=0.50),
             _cd(),
         ],
         base_tss=30.2,
@@ -1211,7 +1245,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Coggan NM · track sprint methodology",
         blocks=[
             _wu(),
-            IntervalBlock(name="Standing-start set (6×10s · 4-min easy)", duration_s=6 * (10 + 4 * 60), target_pct_ftp=2.00, target_rpe=10, zone=7, cadence_low=50, cadence_high=85, tss_pct_ftp=0.63),
+            IntervalBlock(name="Standing-start set (6×10s · 4-min easy)", duration_s=6 * (10 + 4 * 60), target_pct_ftp=2.00, target_rpe=10, zone=7, cadence_low=50, cadence_high=85, tss_pct_ftp=0.63, reps=6, on_s=10, off_s=4 * 60, off_pct_ftp=0.50),
             _cd(),
         ],
         base_tss=28.3,
@@ -1235,7 +1269,7 @@ TEMPLATES: dict[str, WorkoutTemplate] = {
         framework_cited="Carmichael CTS FastPedal · Friel skill",
         blocks=[
             _wu(),
-            IntervalBlock(name="FSR set (6×3min @ 110rpm)", duration_s=6 * (3 * 60 + 2 * 60), target_pct_ftp=0.65, target_rpe=5, zone=2, cadence_low=105, cadence_high=120, tss_pct_ftp=0.59),
+            IntervalBlock(name="FSR set (6×3min @ 110rpm)", duration_s=6 * (3 * 60 + 2 * 60), target_pct_ftp=0.65, target_rpe=5, zone=2, cadence_low=105, cadence_high=120, tss_pct_ftp=0.59, reps=6, on_s=3 * 60, off_s=2 * 60, off_pct_ftp=0.50),
             _cd(),
         ],
         base_tss=29.1,
@@ -1874,7 +1908,21 @@ def parametrize_template(
 
     for block in template.blocks:
         is_fixed = block.name in ("Warm-up", "Cool-down")
-        duration = block.duration_s if is_fixed else int(round(block.duration_s * scale))
+        # Structured on/off sets scale by whole REPS so the invariant
+        # reps × (on_s + off_s) == duration_s survives duration_scale — a
+        # "30×15/45" block scaled to 0.8 becomes 24×15/45, never 30×0.8-length
+        # reps of some fictional in-between structure.
+        reps = block.reps
+        if (
+            not is_fixed
+            and reps is not None
+            and block.on_s is not None
+            and block.off_s is not None
+        ):
+            reps = max(1, int(round(reps * scale)))
+            duration = reps * (block.on_s + block.off_s)
+        else:
+            duration = block.duration_s if is_fixed else int(round(block.duration_s * scale))
         if not is_fixed:
             scaled_work_seconds += duration
             base_work_seconds += block.duration_s
@@ -1896,6 +1944,12 @@ def parametrize_template(
         from app.services.hr_zones import hr_band_for_zone
         hr_band = hr_band_for_zone(block.zone, lthr)
         hr_low, hr_high = (hr_band[0], hr_band[1]) if hr_band else (None, None)
+        # Off-intensity watts for structured sets — derived from FTP exactly
+        # like the ON band so the consumer never invents recovery watts.
+        off_low: int | None = None
+        off_high: int | None = None
+        if block.off_pct_ftp is not None and not block.open_effort:
+            off_low, off_high = _watts_band(ftp, block.off_pct_ftp, tolerance_pct=tol)
         resolved.append(
             ResolvedBlock(
                 name=block.name,
@@ -1910,6 +1964,12 @@ def parametrize_template(
                 target_hr_low=hr_low,
                 target_hr_high=hr_high,
                 open_effort=block.open_effort,
+                reps=reps,
+                on_s=block.on_s,
+                off_s=block.off_s,
+                off_pct_ftp=block.off_pct_ftp,
+                off_watts_low=off_low,
+                off_watts_high=off_high,
             )
         )
 
@@ -1968,6 +2028,15 @@ def prescribed_workout_to_dict(pw: PrescribedWorkout) -> dict:
                 "target_hr_low": b.target_hr_low,
                 "target_hr_high": b.target_hr_high,
                 "open_effort": b.open_effort,
+                # Structured-set truth (composite on/off blocks) — None on
+                # steady blocks. target_watts_* is the ON band; off watts are
+                # resolved from off_pct_ftp. Additive keys (Jul 2026).
+                "reps": b.reps,
+                "on_s": b.on_s,
+                "off_s": b.off_s,
+                "off_pct_ftp": b.off_pct_ftp,
+                "off_watts_low": b.off_watts_low,
+                "off_watts_high": b.off_watts_high,
             }
             for b in pw.blocks
         ],

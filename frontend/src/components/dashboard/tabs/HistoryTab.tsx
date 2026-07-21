@@ -515,15 +515,17 @@ export default function HistoryTab() {
     ]
   }
 
-  // Extra stats revealed on hover — only real, populated fields (no fabrication)
+  // Extra stats revealed on hover — only real, populated fields (no
+  // fabrication), and NEVER a field the base row already shows (review
+  // finding: gym entries rendered "111 Ø HF" twice — base + hover both
+  // carried avg HR/kcal; running duplicated pace the same way).
   const recentHoverStats = (a: ActivityRead): { v: string; l: string }[] => {
     const out: { v: string; l: string }[] = []
-    if (a.average_hr != null) out.push({ v: `${Math.round(a.average_hr)}`, l: de ? 'Ø HF' : 'avg HR' })
+    if (a.sport !== 'gym' && a.average_hr != null) out.push({ v: `${Math.round(a.average_hr)}`, l: de ? 'Ø HF' : 'avg HR' })
     if (a.max_hr != null) out.push({ v: `${Math.round(a.max_hr)}`, l: de ? 'Max HF' : 'max HR' })
     if (a.sport === 'cycling' && a.average_power != null) out.push({ v: `${Math.round(a.average_power)}`, l: de ? 'Ø W' : 'avg W' })
-    if (a.sport === 'running' && a.distance_meters) out.push({ v: paceStr(a.duration_seconds ?? 0, a.distance_meters), l: '/km' })
     if (a.tss != null) out.push({ v: `${Math.round(a.tss)}`, l: 'TSS' })
-    if (a.calories != null) out.push({ v: `${Math.round(a.calories)}`, l: 'kcal' })
+    if (a.sport !== 'gym' && a.calories != null) out.push({ v: `${Math.round(a.calories)}`, l: 'kcal' })
     return out
   }
 
@@ -851,7 +853,12 @@ export default function HistoryTab() {
               </span>
               <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>{p.title}</span>
-                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{p.date}</span>
+                {/* No date basis (e.g. 20-min power comes from the sanitized
+                    power-duration envelope, not one ride) → drop the slot
+                    instead of rendering a dash next to a real value. */}
+                {p.date !== '—' && (
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>{p.date}</span>
+                )}
               </div>
               <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{p.value}</span>
               {p.to && <ChevronRight size={16} className="hover-arrow" style={{ color: 'var(--color-muted)' }} />}

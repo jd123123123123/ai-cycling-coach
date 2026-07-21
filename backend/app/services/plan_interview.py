@@ -25,6 +25,7 @@ answer. Three pieces live here:
 from __future__ import annotations
 
 import logging
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -42,7 +43,11 @@ from app.services.athlete_time import (
     today_local,
     today_local_window,
 )
-from app.services.plan_adaptation_log import already_adapted, log_adaptation
+from app.services.plan_adaptation_log import (
+    already_adapted,
+    last_adaptation,
+    log_adaptation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +68,36 @@ _WEEKDAY_DE = {"mon": "Mo", "tue": "Di", "wed": "Mi", "thu": "Do",
                "fri": "Fr", "sat": "Sa", "sun": "So"}
 _WEEKDAY_EN = {"mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu",
                "fri": "Fri", "sat": "Sat", "sun": "Sun"}
+
+# Localized phase words for the plan_built feed message — the raw meso key
+# ("base2") is engine vocabulary and must never leak into athlete copy
+# (review polish: "Phase base2" in the feed).
+_PHASE_WORDS: dict[str, tuple[str, str]] = {
+    "base": ("Grundlage", "Base"),
+    "build": ("Aufbau", "Build"),
+    "peak": ("Peak", "Peak"),
+    "taper": ("Taper", "Taper"),
+    "race": ("Rennen", "Race"),
+}
+
+
+def phase_label(phase: str | None) -> tuple[str, str]:
+    """(de, en) athlete-facing label for a meso phase key: 'base2' →
+    ('Grundlage 2', 'Base 2'). Unknown keys pass through capitalized."""
+    raw = (phase or "").strip()
+    if not raw:
+        return ("", "")
+    m = re.match(r"^([a-z]+)\s*(\d+)?$", raw, re.IGNORECASE)
+    stem = (m.group(1) if m else raw).lower()
+    num = m.group(2) if m else None
+    words = next(
+        (v for k, v in _PHASE_WORDS.items() if stem.startswith(k)), None
+    )
+    if words is None:
+        cap = raw[:1].upper() + raw[1:]
+        return (cap, cap)
+    de, en = words
+    return (f"{de} {num}", f"{en} {num}") if num else (de, en)
 
 
 def _plan_change_lead(signal: str, profile, live_ctl: float | None) -> tuple[str, str]:
@@ -640,38 +675,53 @@ async def rebuild_plan(
             + (f" {preserved} of your own sessions stay untouched." if preserved else "")
         )
     else:
+        phase_de, phase_en = phase_label(meso.phase)
         message_de = (
-            f"Plan erstellt: Phase {meso.phase}, {n_sessions} Einheiten diese Woche — "
+            f"Plan erstellt: Phase {phase_de}, {n_sessions} Einheiten diese Woche — "
             f"aufgebaut auf deiner aktuellen Fitness"
             f"{f' (CTL {live_ctl:.0f})' if live_ctl is not None else ''}."
         )
         message_en = (
-            f"Plan built: phase {meso.phase}, {n_sessions} sessions this week — "
+            f"Plan built: phase {phase_en}, {n_sessions} sessions this week — "
             f"built on your current fitness"
             f"{f' (CTL {live_ctl:.0f})' if live_ctl is not None else ''}."
         )
 
-    await log_adaptation(
-        db,
-        user_id,
-        target_date=today,
-        source=source,
-        signal=signal,
-        rule="plan_built",
-        message_de=message_de,
-        message_en=message_en,
-        before=None,
-        after={
-            "plan_start_date": monday.isoformat(),
-            "phase": meso.phase,
-            "weekly_tss_targets": list(meso.weekly_tss_targets or []),
-        },
-        evidence={
-            "ctl_anchor": live_ctl,
-            "preserved_sessions": preserved,
-            **{k: v for k, v in carried.items() if v is not None},
-        },
+    # Double-log guard (review NEW-3): a double rebuild minutes apart wrote
+    # two IDENTICAL "Plan angepasst" rows. When the NEWEST feed row already
+    # says exactly this (same signal, same athlete-local day, identical
+    # message, nothing logged in between), suppress the duplicate — an
+    # idempotency guard on the append-only stream, never a delete.
+    newest = await last_adaptation(db, user_id)
+    duplicate = (
+        newest is not None
+        and newest.rule == "plan_built"
+        and newest.signal == signal
+        and newest.target_date == today
+        and newest.message_de == message_de
     )
+    if not duplicate:
+        await log_adaptation(
+            db,
+            user_id,
+            target_date=today,
+            source=source,
+            signal=signal,
+            rule="plan_built",
+            message_de=message_de,
+            message_en=message_en,
+            before=None,
+            after={
+                "plan_start_date": monday.isoformat(),
+                "phase": meso.phase,
+                "weekly_tss_targets": list(meso.weekly_tss_targets or []),
+            },
+            evidence={
+                "ctl_anchor": live_ctl,
+                "preserved_sessions": preserved,
+                **{k: v for k, v in carried.items() if v is not None},
+            },
+        )
 
     return summary
 

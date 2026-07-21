@@ -330,14 +330,16 @@ def _de_preface(
         "base1": "Grundlage 1", "base2": "Grundlage 2",
         "build1": "Aufbau 1", "build2": "Aufbau 2",
         "peak": "Peak", "taper": "Taper", "race": "Wettkampfwoche",
-        "maintenance": "Erhaltung",
+        "offseason": "Nebensaison", "maintenance": "Erhaltung",
     }.get(phase, phase.capitalize())
-    position_label = {
-        "accumulation": "Akkumulation",
-        "transmutation": "Transmutation",
-        "realization": "Realisation",
-        "recovery": "Erholungswoche",
-    }.get(block_position, block_position)
+    # Humanized block-position clause — never the raw Issurin labels
+    # ("Akkumulation"/"Transmutation") in athlete-facing copy.
+    position_clause = {
+        "accumulation": "die Belastung wächst gerade Schritt für Schritt",
+        "transmutation": "die gesammelte Arbeit wird jetzt in gezielte Härte übersetzt",
+        "realization": "die anspruchsvollste Woche des Blocks, bevor es wieder leichter wird",
+        "recovery": "eine bewusst leichtere Woche, damit dein Körper das Training verarbeitet",
+    }.get(block_position, "strukturierte Arbeit diese Woche")
 
     if phase == "race":
         sentences = [
@@ -345,7 +347,7 @@ def _de_preface(
             "Ein kurzer Race-Pace-Eröffner am Tag vor dem Event hält die Beine wach.",
         ]
     else:
-        s1 = f"{phase_label} · Woche {week_n} · {position_label}."
+        s1 = f"Du bist in {phase_label}, Woche {week_n} — {position_clause}."
         if ctl_delta_7d > 1.0:
             s2 = "Die Fitness steigt diese Woche solide — wir halten den Aufbau überschaubar."
         elif ctl_delta_7d > 0:

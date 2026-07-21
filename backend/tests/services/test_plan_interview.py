@@ -27,6 +27,7 @@ from app.services.plan_interview import (
     apply_answers,
     build_interview_questions,
     interview_state,
+    phase_label,
     rebuild_plan,
 )
 
@@ -294,7 +295,8 @@ def test_rebuild_plan_anchors_live_ctl_and_logs_adaptation():
     with patch("app.services.mesocycle_generator.generate_mesocycle", gen), \
          patch("app.services.pmc_service.compute_user_pmc", pmc), \
          patch("app.services.plan_interview.log_adaptation", log), \
-         patch("app.services.plan_interview.already_adapted", AsyncMock(return_value=False)):
+         patch("app.services.plan_interview.already_adapted", AsyncMock(return_value=False)), \
+         patch("app.services.plan_interview.last_adaptation", AsyncMock(return_value=None)):
         summary = asyncio.run(
             rebuild_plan(db, 1, _profile(), source="onboarding", signal="plan_build")
         )
@@ -366,7 +368,8 @@ def test_rebuild_plan_plan_change_message_credits_done_work():
          patch("app.services.pmc_service.compute_user_pmc",
                AsyncMock(return_value={"total": [{"date": "2026-07-01", "ctl": 41.2}]})), \
          patch("app.services.plan_interview.log_adaptation", log), \
-         patch("app.services.plan_interview.already_adapted", AsyncMock(return_value=False)):
+         patch("app.services.plan_interview.already_adapted", AsyncMock(return_value=False)), \
+         patch("app.services.plan_interview.last_adaptation", AsyncMock(return_value=None)):
         summary = asyncio.run(
             rebuild_plan(
                 db, 1, _profile(), source="plan_change", signal="too_boring",
@@ -400,7 +403,8 @@ def _run_rebuild_for_signal(signal: str, profile=None):
          patch("app.services.pmc_service.compute_user_pmc",
                AsyncMock(return_value={"total": [{"date": "2026-07-01", "ctl": 41.2}]})), \
          patch("app.services.plan_interview.log_adaptation", log), \
-         patch("app.services.plan_interview.already_adapted", AsyncMock(return_value=False)):
+         patch("app.services.plan_interview.already_adapted", AsyncMock(return_value=False)), \
+         patch("app.services.plan_interview.last_adaptation", AsyncMock(return_value=None)):
         summary = asyncio.run(
             rebuild_plan(
                 db, 1, profile or _profile(), source="plan_change", signal=signal,
@@ -460,6 +464,105 @@ def test_too_hard_message_is_never_guilt_framed():
 def test_unknown_signal_falls_back_to_generic_message():
     kwargs, _ = _run_rebuild_for_signal("plan_change")
     assert "Plan angepasst" in kwargs["message_de"]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  plan_built message: localized phase words (polish: "Phase base2" leak)
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_phase_label_localizes_engine_keys():
+    assert phase_label("base2") == ("Grundlage 2", "Base 2")
+    assert phase_label("build1") == ("Aufbau 1", "Build 1")
+    assert phase_label("peak") == ("Peak", "Peak")
+    assert phase_label("race") == ("Rennen", "Race")
+    # Unknown keys pass through capitalized — never crash, never invent.
+    assert phase_label("transition") == ("Transition", "Transition")
+
+
+def _run_plan_build(meso_phase: str = "base2", newest=None):
+    """Run rebuild_plan on the onboarding/plan_build path and return the log
+    mock (for double-log-guard + message assertions)."""
+    monday = date.today() - timedelta(days=date.today().weekday())
+    db = _rebuild_db(week_rows=[_pw(monday, "vo2_5x4")])
+    meso = SimpleNamespace(phase=meso_phase, weekly_tss_targets=[246, 253, 253, 152])
+    log = AsyncMock()
+    with patch("app.services.mesocycle_generator.generate_mesocycle",
+               AsyncMock(return_value=meso)), \
+         patch("app.services.pmc_service.compute_user_pmc",
+               AsyncMock(return_value={"total": [{"date": "2026-07-01", "ctl": 41.2}]})), \
+         patch("app.services.plan_interview.log_adaptation", log), \
+         patch("app.services.plan_interview.already_adapted", AsyncMock(return_value=False)), \
+         patch("app.services.plan_interview.last_adaptation", AsyncMock(return_value=newest)):
+        asyncio.run(
+            rebuild_plan(db, 1, _profile(), source="onboarding", signal="plan_build")
+        )
+    return log
+
+
+def test_plan_built_message_uses_localized_phase_words():
+    """'Phase base2' is engine vocabulary — the feed must say Grundlage 2 /
+    Base 2 (review polish)."""
+    log = _run_plan_build("base2")
+    kwargs = log.await_args.kwargs
+    assert "Phase Grundlage 2" in kwargs["message_de"]
+    assert "phase Base 2" in kwargs["message_en"]
+    assert "base2" not in kwargs["message_de"]
+    assert "base2" not in kwargs["message_en"]
+    # The machine-readable after-payload keeps the raw key (API contract).
+    assert kwargs["after"]["phase"] == "base2"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Double-log guard (review NEW-3): identical rebuild minutes apart
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_double_rebuild_suppresses_identical_feed_row():
+    """A second rebuild that would write the EXACT same plan_built row (same
+    signal, same day, identical message, nothing in between) must not append
+    a duplicate — idempotency guard, not a delete."""
+    first = _run_plan_build("base2")
+    assert first.await_count == 1
+    message_de = first.await_args.kwargs["message_de"]
+
+    newest = SimpleNamespace(
+        rule="plan_built",
+        signal="plan_build",
+        target_date=date.today(),
+        message_de=message_de,
+    )
+    second = _run_plan_build("base2", newest=newest)
+    second.assert_not_awaited()
+
+
+def test_intervening_change_defeats_the_double_log_guard():
+    """When ANY other adaptation landed in between (newest row differs), the
+    rebuild logs normally — history stays honest."""
+    first = _run_plan_build("base2")
+    message_de = first.await_args.kwargs["message_de"]
+
+    # Same message text exists in history, but the NEWEST row is a different
+    # change — the guard only compares against the newest row.
+    newest = SimpleNamespace(
+        rule="workout_eased",
+        signal="low_sleep",
+        target_date=date.today(),
+        message_de=message_de,
+    )
+    again = _run_plan_build("base2", newest=newest)
+    assert again.await_count == 1
+
+
+def test_changed_message_is_not_suppressed():
+    """Same signal + day but a DIFFERENT resulting plan (message differs) —
+    that's a real change and must appear in the feed."""
+    newest = SimpleNamespace(
+        rule="plan_built",
+        signal="plan_build",
+        target_date=date.today(),
+        message_de="Plan erstellt: Phase Grundlage 1, 3 Einheiten diese Woche.",
+    )
+    log = _run_plan_build("base2", newest=newest)
+    assert log.await_count == 1
 
 
 def test_rebuild_summary_carries_hours_reconciliation():

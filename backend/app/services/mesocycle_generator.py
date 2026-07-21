@@ -140,6 +140,27 @@ _ENDURANCE_VARIETY_ADVENTUROUS: list[str] = [
     "z2_endurance_low_100",
 ]
 
+# Recovery-week easy rotation (review NEW-4: 'Lockeres Ausfahren — 60 min' ×4).
+# On the deload week every downgraded quality slot and aerobic filler draws
+# from this pool so the week reads as varied easy riding, not the same spin
+# repeated. STRICTLY easy variants only — no surges, no tempo touches: low/
+# steady Z2, HR-capped MAF, the sub-LT1 fast-pedal skill drill, recovery spins.
+_RECOVERY_WEEK_VARIETY: list[str] = [
+    "recovery_60",
+    "z2_endurance_60",
+    "cadence_high_fsr_6x3",
+    "z2_endurance_low_100",
+    "maf_aerobic_90",
+    "recovery_30",
+]
+
+# Recovery-SPIN dedupe ladder for the budget-trim cascade — tried in order,
+# preferring a variant the week doesn't already contain (same easy intent,
+# different flavor) before repeating a title.
+_RECOVERY_SPIN_LADDER: tuple[str, ...] = (
+    "recovery_60", "cadence_high_fsr_6x3", "recovery_30",
+)
+
 # Weekday keys shared with the profile's days_available / hard_day_blackouts
 # JSON (Monday-first, matching date.weekday()).
 _WEEKDAY_KEYS: tuple[str, ...] = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -206,21 +227,30 @@ _HIGH_VOLUME_HOURS = 8.0
 
 
 def _pick_variety_filler(
-    pool: list[str], idx: int, ftp_w: int, available_min: int
+    pool: list[str],
+    idx: int,
+    ftp_w: int,
+    available_min: int,
+    exclude: set[str] | None = None,
 ) -> str:
     """First pool entry (scanning from the rotation index) that fits the day's
-    time window + FTP gate. Falls back to the raw rotation entry (the picker
-    then resolves best-fit) when nothing in the pool fits."""
+    time window + FTP gate. ``exclude`` (recovery-week dedupe, review NEW-4)
+    skips template ids the week already contains — relaxed on a second pass
+    when nothing unused fits. Falls back to the raw rotation entry (the picker
+    then resolves best-fit) when nothing in the pool fits at all."""
     n = len(pool)
-    for off in range(n):
-        tid = pool[(idx + off) % n]
-        t = TEMPLATES.get(tid)
-        if t is None:
-            continue
-        if t.min_ftp_required is not None and (not ftp_w or ftp_w < t.min_ftp_required):
-            continue
-        if sum(b.duration_s for b in t.blocks) / 60.0 <= max(1, available_min):
-            return tid
+    for pass_exclude in (exclude, None) if exclude else (None,):
+        for off in range(n):
+            tid = pool[(idx + off) % n]
+            t = TEMPLATES.get(tid)
+            if t is None:
+                continue
+            if pass_exclude and tid in pass_exclude:
+                continue
+            if t.min_ftp_required is not None and (not ftp_w or ftp_w < t.min_ftp_required):
+                continue
+            if sum(b.duration_s for b in t.blocks) / 60.0 <= max(1, available_min):
+                return tid
     return pool[idx % n]
 
 
@@ -866,6 +896,14 @@ def build_week_drafts(
     # Offsetting by the calendar week makes consecutive weeks open on a
     # different Z2 variant — deterministic, no randomness.
     variety_idx = (week_start.toordinal() // 7 + variety_shift) % len(variety_pool)
+    # Recovery weeks swap the filler pool for the strictly-easy rotation and
+    # keep their own rotating index (review NEW-4 — no identical spins ×4).
+    if block_position == "recovery":
+        variety_pool = _RECOVERY_WEEK_VARIETY
+        variety_idx = variety_idx % len(variety_pool)
+    recovery_variety_idx = (
+        week_start.toordinal() // 7 + variety_shift
+    ) % len(_RECOVERY_WEEK_VARIETY)
 
     # Per-day plan entries: dict with date/session_type/template/flags.
     plan: list[dict] = []
@@ -885,6 +923,19 @@ def build_week_drafts(
                 })
                 continue
             assert not isinstance(pd, str)
+            # Recovery-week deload slots: the program downgrades every quality
+            # day to the SAME pinned recovery_60 — which rendered as four
+            # identical "Lockeres Ausfahren — 60 min" rows (review NEW-4).
+            # Draw varied easy flavors from the recovery pool instead; the
+            # deload intent holds — the pool is strictly easy variants.
+            preferred_prog_id = pd.template_id
+            if block_position == "recovery" and pd.session_type == "recovery":
+                preferred_prog_id = _pick_variety_filler(
+                    _RECOVERY_WEEK_VARIETY, recovery_variety_idx, ftp_w,
+                    base_available_min,
+                    exclude={p["template"].id for p in plan},
+                )
+                recovery_variety_idx += 1
             # Weekend endurance slots are the program's long-ride anchors.
             # Pinned templates (the 200k Saturday ladder) get the full
             # hours-derived window so z2_long_180/240 actually fit; unpinned
@@ -900,7 +951,7 @@ def build_week_drafts(
                 rotation = day_date.toordinal()
             template = pick_template(
                 pd.session_type, ftp_w, available_min,
-                preferred_template_id=pd.template_id,
+                preferred_template_id=preferred_prog_id,
                 rotation_key=rotation,
             )
             if pd.session_type in ("vo2", "threshold", "sweet_spot", "tempo"):
@@ -992,7 +1043,13 @@ def build_week_drafts(
         )
         if is_filler:
             preferred_id = _pick_variety_filler(
-                variety_pool, variety_idx, ftp_w, available_min
+                variety_pool, variety_idx, ftp_w, available_min,
+                # Recovery weeks additionally dedupe against the days already
+                # placed (review NEW-4 — no identical easy rides ×4).
+                exclude=(
+                    {p["template"].id for p in plan}
+                    if block_position == "recovery" else None
+                ),
             )
             variety_idx += 1
 
@@ -1067,15 +1124,25 @@ def build_week_drafts(
             e["template"] = shorter
             filler_running += shorter.base_tss
             continue
-        rec = TEMPLATES["recovery_60"]
-        if filler_running + rec.base_tss <= filler_budget * _FILLER_RECOVERY_OVERSHOOT:
-            e["template"] = rec
-            filler_running += rec.base_tss
-            continue
-        rec30 = TEMPLATES["recovery_30"]
-        if filler_running + rec30.base_tss <= filler_budget * _FILLER_RECOVERY_OVERSHOOT:
-            e["template"] = rec30
-            filler_running += rec30.base_tss
+        # Recovery-spin swap with title dedupe (review NEW-4): prefer an easy
+        # variant the week doesn't already contain — same deload intent,
+        # different flavor — before repeating an identical row.
+        used_ids = {p["template"].id for p in plan if p is not e}
+        spin = None
+        spin_fallback = None
+        for tid in _RECOVERY_SPIN_LADDER:
+            t = TEMPLATES[tid]
+            if filler_running + t.base_tss > filler_budget * _FILLER_RECOVERY_OVERSHOOT:
+                continue
+            if tid not in used_ids:
+                spin = t
+                break
+            if spin_fallback is None:
+                spin_fallback = t
+        spin = spin or spin_fallback
+        if spin is not None:
+            e["template"] = spin
+            filler_running += spin.base_tss
         else:
             e["template"] = TEMPLATES["rest_day"]
 
@@ -1427,32 +1494,6 @@ async def generate_mesocycle(
             ctl_for_ramp, declared_hours
         )
 
-    # Hours transparency (review finding 4b): when the CTL anchor floors the
-    # plan well below the stated hours, say so — bilingual, renderable, and
-    # persisted with the plan so the ramp intent survives.
-    if declared_hours and declared_hours > 0:
-        implied = hours_implied_tss(declared_hours)
-        week1_tss = tss_targets[0] if tss_targets else 0
-        if implied > 0 and week1_tss < 0.8 * implied:
-            start_hours = round(week1_tss / _TSS_PER_DECLARED_HOUR, 1)
-            evidence["hours_note"] = {
-                "declared_hours": float(declared_hours),
-                "start_hours": start_hours,
-                "reason": "ctl_anchor",
-                "de": (
-                    f"Wir starten bei ~{start_hours:g} h/Woche und bauen "
-                    f"Richtung {declared_hours:g} h auf — dein bisheriges "
-                    "Training trägt sicher erst dieses Startvolumen, der Plan "
-                    "steigert es Woche für Woche (max. +8 %)."
-                ),
-                "en": (
-                    f"We start at ~{start_hours:g} h/week and build toward "
-                    f"{declared_hours:g} h — your recent training safely "
-                    "supports this starting volume, and the plan ramps it "
-                    "week over week (max +8%)."
-                ),
-            }
-
     # ── 9. Create MesocyclePlan ─────────────────────────────────────────────
     meso = MesocyclePlan(
         user_id=user_id,
@@ -1482,6 +1523,7 @@ async def generate_mesocycle(
 
     inserted_count = 0
     planned_monotony: list[float] = []
+    week0_hours: float = 0.0
     for week_idx in range(MESO_LENGTH_WEEKS):
         week_start = plan_start_date + timedelta(weeks=week_idx)
         block_pos = issurin_block_for_week(week_idx)
@@ -1495,6 +1537,9 @@ async def generate_mesocycle(
             block_position=block_pos,
             ftp_w=ftp_w if ftp_w >= 100 else 200,  # running fallback
         )
+
+        if week_idx == 0:
+            week0_hours = sum(d.duration_seconds_target for d in drafts) / 3600.0
 
         # Planned Foster monotony per week (transparency — the guard inside
         # build_week_drafts already enforces < 2.0 where fillers allow).
@@ -1529,6 +1574,32 @@ async def generate_mesocycle(
             )
             db.add(pw)
             inserted_count += 1
+
+    # Hours transparency (review finding 4): when the plan's ACTUAL first
+    # week lands well below the stated hours, say so — computed AFTER the
+    # week is materialized, so start_hours always equals the hours the plan
+    # card shows (the old TSS-derived estimate drifted: "5.9h" stat next to a
+    # "~6,4 h" note on the same card). Bilingual strings stay as fallback;
+    # the UI renders the numeric fields with its own locale formatter.
+    if declared_hours and declared_hours > 0 and week0_hours < 0.8 * declared_hours:
+        start_hours = round(week0_hours, 1)
+        evidence["hours_note"] = {
+            "declared_hours": float(declared_hours),
+            "start_hours": start_hours,
+            "reason": "ctl_anchor",
+            "de": (
+                f"Wir starten bei ~{start_hours:g} h/Woche und bauen "
+                f"Richtung {declared_hours:g} h auf — dein bisheriges "
+                "Training trägt sicher erst dieses Startvolumen, der Plan "
+                "steigert es Woche für Woche (max. +8 %)."
+            ),
+            "en": (
+                f"We start at ~{start_hours:g} h/week and build toward "
+                f"{declared_hours:g} h — your recent training safely "
+                "supports this starting volume, and the plan ramps it "
+                "week over week (max +8%)."
+            ),
+        }
 
     # Expose the planned-week monotony in the meso evidence (task: monotony
     # guard transparency) — assign a NEW dict so the JSON column dirties.

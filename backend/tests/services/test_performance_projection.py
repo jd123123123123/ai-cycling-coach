@@ -245,3 +245,19 @@ def test_eftp_sample_gate():
     samples = eftp_samples_from_activities(acts, ftp_watts=250)
     assert len(samples) == 1
     assert samples[0]["value"] == 240
+
+
+def test_goal_beyond_supplied_load_series_still_reaches_event():
+    """Review finding: event 137 days out but the projection stopped at the
+    12-week load series end ("bis 13. Okt." vs "137 Tage"). When a goal event
+    exists the horizon must run to the event date even if the forward load
+    series ends earlier — the service pads with recent average load."""
+    past = _ramp_past()
+    goal = TODAY + timedelta(days=137)
+    proj = project_performance(
+        past, _future(84), ftp_watts=250, observations=_obs_from(past, 8),
+        today=TODAY, goal_date=goal,
+    )
+    assert proj["horizon_date"] == goal.isoformat()
+    assert proj["days_out"] == 137
+    assert proj["path"][-1]["date"] == goal.isoformat()

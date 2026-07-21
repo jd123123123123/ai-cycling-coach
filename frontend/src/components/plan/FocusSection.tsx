@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bike, Crosshair, Footprints, Loader2, RefreshCw } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { useLocale } from '../../contexts/LocaleContext'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 
@@ -63,6 +64,10 @@ export default function FocusSection() {
   const { locale } = useLocale()
   const de = locale === 'de'
   const qc = useQueryClient()
+  // Focus-card honesty (craft review): "periodisiert auf dein Zielevent" is
+  // only true when a target event actually exists on the profile.
+  const { data: profile } = useAthleteProfile()
+  const hasEvent = !!profile?.target_event_date
 
   const { data, isLoading, isError, refetch } = useQuery<ProgramsResponse>({
     queryKey: [...PROGRAMS_KEY],
@@ -146,7 +151,15 @@ export default function FocusSection() {
             const selectedMeta = current !== 'race' ? metas[current] : undefined
             const week = selectedMeta ? weekOf(state?.started ?? null, selectedMeta.weeks) : null
             const chips: { id: string; label: string }[] = [
-              { id: 'race', label: de ? 'Rennplan' : 'Race plan' },
+              // Event-less athletes ride the same default plan, but calling
+              // it a "Rennplan" without a race would be a lie — it's their
+              // base/fitness plan (craft review, Jul 2026).
+              {
+                id: 'race',
+                label: hasEvent
+                  ? (de ? 'Rennplan' : 'Race plan')
+                  : (de ? 'Basisplan' : 'Base plan'),
+              },
               ...Object.entries(metas).map(([id, m]) => ({ id, label: de ? m.name_de : m.name_en })),
             ]
             return (
@@ -191,9 +204,15 @@ export default function FocusSection() {
                 <p style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.45 }}>
                   {selectedMeta
                     ? (de ? selectedMeta.tagline_de : selectedMeta.tagline_en)
-                    : de
-                      ? 'Dein Rennplan führt — periodisiert auf dein Zielevent.'
-                      : 'Your race plan leads — periodized toward your goal event.'}
+                    : hasEvent
+                      ? (de
+                        ? 'Dein Rennplan führt — periodisiert auf dein Zielevent.'
+                        : 'Your race plan leads — periodized toward your goal event.')
+                      // No event on file → progression-horizon framing, never
+                      // a phantom "Zielevent" (craft review, Jul 2026).
+                      : (de
+                        ? 'Fitness-Aufbau führt — dein Plan steigert die Basis Woche für Woche, ohne Event-Countdown.'
+                        : 'Fitness building leads — your plan grows the base week over week, no event countdown.')}
                   {sport === 'run' && selectedMeta && (
                     <> {de ? '· Lauftage: Di · Do · Sa' : '· Run days: Tue · Thu · Sat'}</>
                   )}

@@ -236,12 +236,21 @@ def coggan_power_zones(ftp_watts: int | float) -> dict:
     """
     w = int(ftp_watts)
     result = {}
-    for zone_key, name, lower_frac, upper_frac in _COGGAN_ZONES:
+    # Contiguous integer bands (review finding: independent int() truncation of
+    # lower/upper fractions left watts unassigned between zones, e.g. 188–189 W
+    # between Z1/Z2). Round the UPPER bound once per zone; the next zone starts
+    # at exactly upper+1. Must stay in lockstep with the frontend's powerZones
+    # (src/utils/trainingScience.ts).
+    prev_max = -1
+    for zone_key, name, _lower_frac, upper_frac in _COGGAN_ZONES:
+        zone_max = round(w * upper_frac) if upper_frac is not None else None
         result[zone_key] = {
             "name": name,
-            "min": int(w * lower_frac),
-            "max": int(w * upper_frac) if upper_frac is not None else None,
+            "min": prev_max + 1,
+            "max": zone_max,
         }
+        if zone_max is not None:
+            prev_max = zone_max
     return result
 
 
