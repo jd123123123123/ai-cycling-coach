@@ -514,7 +514,7 @@ export default function HistoryTab() {
 
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-0.5">
-            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: 'var(--color-muted)' }}>{de ? 'DISTANZ PRO WOCHE' : 'DISTANCE BY WEEK'}</span>
+            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: 'var(--color-muted)' }}>{de ? 'DISTANZ DIESEN MONAT' : 'DISTANCE THIS MONTH'}</span>
             <span className="flex items-end gap-1">
               <span className="num-display" style={{ fontSize: 28, color: 'var(--color-ink)' }}>{summary.cur.n > 0 ? Math.round(summary.cur.km).toLocaleString(loc) : '—'}</span>
               {summary.cur.n > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 4 }}>km</span>}
