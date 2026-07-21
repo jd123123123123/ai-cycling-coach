@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import ScrollToTop from './components/ScrollToTop'
 import ErrorBoundary from './components/ErrorBoundary'
 import AppSplash from './components/AppSplash'
 import { lazyWithRetry } from './lib/lazyWithRetry'
@@ -47,6 +48,7 @@ const WorkoutBuilderView = lazyWithRetry(() => import('./pages/WorkoutBuilderVie
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <LocaleProvider>
         <ErrorBoundary>

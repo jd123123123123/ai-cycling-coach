@@ -1002,12 +1002,11 @@ export default function TodayTab() {
       )}
 
       {/* Hourly WeatherWindow (pen "V3 · Explore Routes" IgqyH) — the SINGLE
-          weather element on Today, mounted near the session card (explicit user
-          decision, Jul 2026; supersedes the challenge-doc "Routes only"
-          verdict). Hides itself without real forecast data. The old greeting
-          WeatherChip has been removed, so this is now the one coherent
-          weather treatment on the page. */}
-      {isActiveTrainingDay && <WeatherWindowCard />}
+          weather element on Today, mounted near the session card. Shown on
+          EVERY day incl. rest days (explicit user decision, Jul 2026 — a rest
+          day still wants to know the dry window if you ride anyway). Hides
+          itself only when there's no real forecast data (honest absence). */}
+      <WeatherWindowCard />
 
       {/* Einheit des Tages — the ONE shared session card (identical mount on
           the Train tab). Owns the active-session card, the honest
