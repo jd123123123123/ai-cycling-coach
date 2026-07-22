@@ -1,18 +1,10 @@
 import logging
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.scheduler import (
-    run_all_user_syncs,
-    run_brief_refresh_sweep,
-    run_hourly_plan_adaptation,
-    run_morning_push_briefs,
-    scheduler,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -50,68 +42,15 @@ _SECURITY_HEADERS = {
 }
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Register Garmin sync job — every 15 minutes (user directive, July 2026:
-    # near-live data). Incremental syncs are cheap (last_sync_at − 2h window);
-    # the client's per-request delays + rate-limit handling protect the
-    # unofficial API, and coalesce/max_instances stop overlapping runs from
-    # piling up when a sync takes longer than the interval.
-    scheduler.add_job(
-        run_all_user_syncs,
-        "interval",
-        minutes=15,
-        id="garmin_sync",
-        misfire_grace_time=300,
-        coalesce=True,
-        max_instances=1,
-    )
-    # Morning-brief push (P1.5): hourly sweep; each athlete gets at most one
-    # push per day, inside their local morning hour. No-ops without VAPID keys.
-    scheduler.add_job(
-        run_morning_push_briefs,
-        "interval",
-        hours=1,
-        id="morning_push",
-        misfire_grace_time=600,
-    )
-    # Hourly plan-adaptation loop (plan-engine v2): fresh signals reshape the
-    # upcoming week within rails; every change lands in the adaptation feed.
-    # Cheap when signals are unchanged (snapshot fingerprint short-circuit).
-    scheduler.add_job(
-        run_hourly_plan_adaptation,
-        "interval",
-        hours=1,
-        id="plan_adaptation",
-        misfire_grace_time=600,
-        coalesce=True,
-        max_instances=1,
-    )
-    # Coach-brief refresh sweep (4-trigger policy): hourly, regenerates each
-    # athlete's brief in their local morning / evening / after a missed session.
-    # Deduped per local day; the completed-workout trigger is handled by the
-    # Garmin sync busting the cache only when a new activity lands.
-    scheduler.add_job(
-        run_brief_refresh_sweep,
-        "interval",
-        hours=1,
-        id="brief_refresh",
-        misfire_grace_time=600,
-        coalesce=True,
-        max_instances=1,
-    )
-    scheduler.start()
-    logger.info("APScheduler started with Garmin sync every 15 minutes")
-    yield
-    scheduler.shutdown()
-    logger.info("APScheduler shut down")
-
-
+# Background scheduled jobs (Garmin sync, plan adaptation, brief refresh, morning
+# push) no longer run in-process here — the FastAPI web container is idled by
+# Railway between requests, so an in-process scheduler never fired reliably. They
+# now run from a Railway cron service via `python -m app.jobs.run_scheduled_jobs`
+# (see backend/railway.cron.json). No app lifespan is needed as a result.
 app = FastAPI(
     title="AI Cycling Coach",
     description="AI-powered multi-sport training platform",
     version="0.1.0",
-    lifespan=lifespan,
 )
 
 app.add_middleware(
