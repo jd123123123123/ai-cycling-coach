@@ -122,20 +122,22 @@ void main(){
 uniform vec3 u_aura; uniform vec3 u_bg;
 void main(){
   vec2 uv=gl_FragCoord.xy/u_res;
-  vec2 center=vec2(0.5,0.72);
+  vec2 center=vec2(0.5,0.70);
   vec2 p=uv*2.1;
-  float t=u_time*0.07;
+  float t=u_time*0.14;
+  float breathe=0.9+0.1*sin(u_time*0.55);
   vec2 q=vec2(fbm(p+t), fbm(p+vec2(3.1,1.7)-t*0.8));
   float flow=fbm(p+1.7*q+vec2(2.2,4.4)+t*0.5);
   float d=distance(uv,center);
-  float bloom=smoothstep(0.95,0.0,d)*(0.45+0.8*flow);
-  float halo=pow(smoothstep(0.55,0.0,d),2.4);
+  float bloom=smoothstep(1.05,0.0,d)*(0.5+0.75*flow)*breathe;
+  float halo=pow(smoothstep(0.62,0.0,d),2.2)*breathe;
   vec3 col=u_bg;
-  col=mix(col,u_aura,clamp(bloom*0.5,0.0,1.0));
-  col+=u_aura*halo*0.32;
-  col+=0.028*u_aura*sin((uv.x+uv.y)*7.0-u_time*0.5);
-  float vig=smoothstep(1.15,0.15,length(uv-0.5));
-  col*=0.55+0.45*vig;
+  col=mix(col,u_aura,clamp(bloom*0.55,0.0,1.0));
+  col+=u_aura*halo*0.34;
+  col+=0.06*u_aura*flow;
+  col+=0.03*u_aura*sin((uv.x+uv.y)*6.0-u_time*0.6);
+  float vig=smoothstep(1.35,0.35,length(uv-0.5));
+  col*=0.80+0.20*vig;
   col+=(hash(uv*u_res)-0.5)*0.015;
   gl_FragColor=vec4(col,1.0);
 }

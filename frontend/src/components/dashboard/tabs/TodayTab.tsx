@@ -904,7 +904,11 @@ export default function TodayTab() {
   // athlete's language; else the localized focus line; else the wrap line.
   const rationaleMatches = !!brief?.rationale?.trim() &&
     ((de && brief?.language === 'de') || (!de && brief?.language === 'en'))
-  const coachMessage = (rationaleMatches ? brief!.rationale.trim() : null) ?? focusLine ?? wrapLine
+  // Drop the robotic "Fokus heute:" / "Focus today:" label — the coach card's
+  // own header already frames it; a human sentence (or just the session) reads
+  // warmer than a data label.
+  const humanFocus = focusLine?.replace(/^\s*(Fokus heute|Focus today)\s*[:·—-]\s*/i, '').trim() || null
+  const coachMessage = (rationaleMatches ? brief!.rationale.trim() : null) ?? humanFocus ?? wrapLine
 
   return (
     <div className="relative flex flex-col gap-6 pb-4">
@@ -1123,13 +1127,8 @@ export default function TodayTab() {
             </div>
           )}
 
-          {/* Focus line — the one thing that matters right now (real signal). */}
-          {focusLine && (
-            <div className="flex items-start gap-2">
-              <Sparkles size={14} strokeWidth={2.2} style={{ color: auraColor, marginTop: 1, flexShrink: 0 }} />
-              <p style={{ fontSize: 12.5, fontWeight: 500, color: '#FFFFFFB3', lineHeight: 1.4 }}>{focusLine}</p>
-            </div>
-          )}
+          {/* (The standalone "Fokus heute:" line was removed — its content now
+              lives once, humanised, inside the coach card above.) */}
 
           {/* Section kicker — introduces the session / rest block below. */}
           <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{sessionKicker}</span>
