@@ -20,7 +20,7 @@ import { parseISO, format } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
 import {
   ChevronLeft, Share2, Sparkles, Activity, TrendingUp, Gauge, Zap, Award, Star,
-  ChevronRight, Flag, LineChart, Trophy,
+  ChevronRight, Flag, LineChart, Trophy, CheckCircle2,
 } from 'lucide-react'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import { useStreamAnalysis } from '../hooks/useStreamAnalysis'
@@ -28,6 +28,8 @@ import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useRideRpe, useSetRideRpe } from '../hooks/useRideRpe'
 import type { RpeValue } from '../api/rideFeedback'
 import { useLocale } from '../contexts/LocaleContext'
+import { useLanguage } from '../hooks/useLanguage'
+import { rideVerdict, rideVerdictColor } from '../lib/rideVerdict'
 import { useCelebrate } from '../contexts/CelebrationContext'
 import { bestPrEffort, pbDedupKey } from '../lib/celebration'
 import { hapticTick } from '../lib/haptics'
@@ -100,6 +102,7 @@ export default function RideRecapView() {
   const idOk = Number.isFinite(activityId)
   const navigate = useNavigate()
   const { locale } = useLocale()
+  const { language } = useLanguage()
   const de = locale === 'de'
   const dfLocale = de ? { locale: deLocale } : undefined
   const nf = (n: number) => n.toLocaleString(de ? 'de' : 'en')
@@ -141,6 +144,25 @@ export default function RideRecapView() {
     const ifr = header?.if_ ?? (np && ftp ? np / ftp : null)
     return { avg, max, np, ifr, wkg: avg && weight ? avg / weight : null }
   }, [story, header, ftp, weight])
+
+  // "Did I do well?" — the warm plain-language verdict that LEADS the recap
+  // (backlog 01·D3). Deterministic from the REAL ride outcome: debrief score,
+  // intensity (IF), and load. Honest by design — an easy day reads as a win,
+  // a rough hard day reads kindly. The dense grade/numbers stay below.
+  const wellVerdict = useMemo(
+    () =>
+      rideVerdict(
+        {
+          score: verdict?.grade_score ?? null,
+          if_: power.ifr ?? header?.if_ ?? null,
+          tss: header?.tss ?? null,
+          durationS: header?.moving_time_s ?? null,
+        },
+        language,
+        locale,
+      ),
+    [verdict, power.ifr, header, language, locale],
+  )
 
   // Power-over-time bars (zone-colored), plus terrain area behind.
   const graph = useMemo(() => {
@@ -315,6 +337,45 @@ export default function RideRecapView() {
 
         {data && header && (
           <div className="flex flex-col gap-[18px] px-4 pt-1">
+            {/* 1b · "Did I do well?" verdict — leads the recap (backlog D3) */}
+            {(() => {
+              const c = rideVerdictColor(wellVerdict.tone)
+              return (
+                <div
+                  className="rounded-[22px] flex items-center gap-3.5"
+                  style={{
+                    padding: '15px 17px',
+                    background: 'var(--color-paper-2)',
+                    border: `1px solid color-mix(in srgb, ${c} 38%, var(--color-rule))`,
+                    boxShadow: `inset 3px 0 0 ${c}`,
+                  }}
+                >
+                  <span
+                    className="grid place-items-center rounded-full shrink-0"
+                    style={{ width: 38, height: 38, background: `color-mix(in srgb, ${c} 16%, transparent)` }}
+                  >
+                    <CheckCircle2 size={21} strokeWidth={2.3} style={{ color: c }} />
+                  </span>
+                  <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                    <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.15 }}>
+                      {wellVerdict.headline}
+                    </span>
+                    <span style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
+                      {wellVerdict.sub}
+                    </span>
+                  </div>
+                  {wellVerdict.metricTail && (
+                    <span
+                      className="num-mono shrink-0 rounded-full"
+                      style={{ padding: '4px 9px', background: 'var(--color-surface-2)', fontSize: 11, fontWeight: 700, color: 'var(--color-muted)' }}
+                    >
+                      {wellVerdict.metricTail}
+                    </span>
+                  )}
+                </div>
+              )
+            })()}
+
             {/* 2 · Gradient hero */}
             <div
               className="relative rounded-[24px] overflow-hidden flex flex-col justify-between"
