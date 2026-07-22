@@ -18,15 +18,18 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { getAccessToken } from '../api/client'
+import { getAccessToken, API_BASE_URL } from '../api/client'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useLocale } from '../contexts/LocaleContext'
 import { parseCoachStream, type ChatStreamEvent } from '../lib/coach-chat-stream'
 import { COACH_BRIEF_KEY_ROOT } from './useCoachBrief'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-const BASE_URL =
-  (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8000'
+// Same-origin in prod, :8042 in dev — shared with axios so the streaming
+// fetch can never diverge onto a dead port / CSP-blocked origin (the "Load
+// failed" root cause).
+const BASE_URL = API_BASE_URL
 
 export type ToolName =
   | 'fetch_pmc_window'
@@ -35,7 +38,25 @@ export type ToolName =
   | 'fetch_ftp_history'
   | 'fetch_planned_workout'
   | 'modify_planned_workout'
+  | 'present_answer'
   | string
+
+/** Tone drives a fact chip's colour in CoachAnswerCard. */
+export type FactTone = 'good' | 'caution' | 'neutral'
+
+/** One grounded stat chip in a `present_answer` structured result. */
+export interface AnswerFact {
+  label: string
+  value: string | number
+  unit?: string
+  tone: FactTone
+}
+
+/** Normalized `present_answer` tool result — the coach's structured answer. */
+export interface PresentAnswerResult {
+  facts: AnswerFact[]
+  summary: string
+}
 
 export interface WorkoutModificationResult {
   success?: boolean
@@ -163,6 +184,7 @@ const INITIAL: Omit<
 
 export function useChatStream(opts: ChatStreamOptions = {}): ChatStreamState {
   const { language } = useLanguage()
+  const { locale } = useLocale()
   const queryClient = useQueryClient()
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL.messages)
   const [partial, setPartial] = useState('')
@@ -225,19 +247,29 @@ export function useChatStream(opts: ChatStreamOptions = {}): ChatStreamState {
         if (response.status === 503) {
           setDisabled(true)
           setError(
-            'AI chat unavailable. Set ANTHROPIC_API_KEY to enable.',
+            locale === 'de'
+              ? 'KI-Chat nicht verfügbar. Setze ANTHROPIC_API_KEY, um ihn zu aktivieren.'
+              : 'AI chat unavailable. Set ANTHROPIC_API_KEY to enable.',
           )
           // Roll the user message back on total send failure.
           setMessages((prev) => prev.slice(0, -1))
           return
         }
         if (response.status === 429) {
-          setError('Rate limited — 20 messages per minute per user.')
+          setError(
+            locale === 'de'
+              ? 'Zu viele Anfragen — max. 20 Nachrichten pro Minute. Warte kurz.'
+              : 'Rate limited — 20 messages per minute per user.',
+          )
           setMessages((prev) => prev.slice(0, -1))
           return
         }
         if (!response.ok) {
-          setError(`Coach chat failed with HTTP ${response.status}`)
+          setError(
+            locale === 'de'
+              ? `Coach-Chat fehlgeschlagen (HTTP ${response.status}). Versuche es erneut.`
+              : `Coach chat failed with HTTP ${response.status}`,
+          )
           setMessages((prev) => prev.slice(0, -1))
           return
         }
@@ -251,7 +283,21 @@ export function useChatStream(opts: ChatStreamOptions = {}): ChatStreamState {
           return
         }
         gotError = true
-        setError((err as Error)?.message || 'Chat stream errored')
+        // A network-level fetch failure (connection refused, DNS, CSP block)
+        // throws a TypeError whose message is an unhelpful browser string
+        // ("Load failed" on WebKit, "Failed to fetch" on Chromium). Never show
+        // that raw — surface an honest, actionable message instead.
+        const raw = (err as Error)?.message || ''
+        const isNetworkFailure =
+          err instanceof TypeError ||
+          /load failed|failed to fetch|networkerror/i.test(raw)
+        setError(
+          isNetworkFailure
+            ? locale === 'de'
+              ? 'Coach nicht erreichbar — prüfe deine Verbindung und versuche es erneut.'
+              : "Couldn't reach the coach — check your connection and try again."
+            : raw || (locale === 'de' ? 'Chat-Stream fehlgeschlagen' : 'Chat stream errored'),
+        )
       } finally {
         if (!gotError) {
           // Commit the final accumulated assistant text as a completed message.
@@ -351,7 +397,7 @@ export function useChatStream(opts: ChatStreamOptions = {}): ChatStreamState {
         }
       }
     },
-    [isStreaming, messages, language, queryClient],
+    [isStreaming, messages, language, locale, queryClient],
   )
 
   const reset = useCallback(() => {

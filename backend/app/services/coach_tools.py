@@ -236,6 +236,61 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "present_answer",
+        "description": (
+            "Emit your FINAL analytical answer as a structured card and END the "
+            "turn. Call this INSTEAD of writing a prose paragraph once you have "
+            "the numbers you need. It takes a short row of grounded fact chips "
+            "(0-4) plus a 1-2 sentence verdict. Every chip value MUST come from "
+            "a data tool you already called this turn — never invent numbers. "
+            "When you have no data, pass facts:[] and an honest summary "
+            "(keep the '—' ethic — do not fabricate). Do NOT call this when the "
+            "user explicitly asks WHY / for the reasoning — answer those as "
+            "normal streamed prose instead."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "facts": {
+                    "type": "array",
+                    "maxItems": 4,
+                    "description": (
+                        "0-4 grounded stat chips chosen for THIS question. "
+                        "Empty when no data is available."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "required": ["label", "value"],
+                        "properties": {
+                            "label": {
+                                "type": "string",
+                                "description": "Short chip label, e.g. 'Ruhepuls', 'Schlaf'.",
+                            },
+                            "value": {
+                                "description": "String or number, e.g. 48 or '33/100'.",
+                                "type": ["number", "string"],
+                            },
+                            "unit": {
+                                "type": "string",
+                                "description": "Optional unit, e.g. 'bpm', 'h', '/100'.",
+                            },
+                            "tone": {
+                                "type": "string",
+                                "enum": ["good", "caution", "neutral"],
+                                "description": "Drives chip colour. Default neutral.",
+                            },
+                        },
+                    },
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "1-2 sentence verdict. Terse. No prose blob.",
+                },
+            },
+            "required": ["summary"],
+        },
+    },
 ]
 
 
@@ -1455,6 +1510,82 @@ async def undo_last_modification_for_user(
 
 
 # ======================================================================
+# present_answer — terminal structured-answer tool (no DB writes)
+# ======================================================================
+#
+# Pure pass-through: the coach hands us its final fact-chips + verdict and we
+# normalize the shape before it renders as a card. NO reads, NO writes — the
+# grounding contract (chip values must come from real data tools) is enforced
+# by the prompt, not here; we only sanitise the envelope. The loop treats a
+# present_answer call as turn-terminating (see run_tool_use_loop_events) and
+# runs `summary` through validate_chat_response there.
+
+_FACT_TONES = ("good", "caution", "neutral")
+_MAX_FACTS = 4
+
+
+def _normalize_fact(raw: Any) -> dict | None:
+    """Coerce one chip into {label, value, tone[, unit]} or None if unusable.
+
+    Drops facts missing a non-empty label or a value. `value` keeps its
+    number-ness when numeric, else is stringified. `tone` falls back to
+    'neutral' for anything outside the allowed set.
+    """
+    if not isinstance(raw, dict):
+        return None
+    label = raw.get("label")
+    label = str(label).strip() if label is not None else ""
+    if not label:
+        return None
+    if "value" not in raw or raw.get("value") is None:
+        return None
+    value = raw.get("value")
+    if isinstance(value, bool):
+        # bool is an int subclass — stringify so it never renders as a chip number
+        value = str(value)
+    elif not isinstance(value, (int, float)):
+        value = str(value)
+    tone = raw.get("tone")
+    tone = tone if tone in _FACT_TONES else "neutral"
+    fact: dict[str, Any] = {"label": label, "value": value, "tone": tone}
+    unit = raw.get("unit")
+    if unit is not None:
+        unit_str = str(unit).strip()
+        if unit_str:
+            fact["unit"] = unit_str
+    # Order keys for a stable payload: label, value, unit, tone.
+    ordered: dict[str, Any] = {"label": fact["label"], "value": fact["value"]}
+    if "unit" in fact:
+        ordered["unit"] = fact["unit"]
+    ordered["tone"] = fact["tone"]
+    return ordered
+
+
+async def _handle_present_answer(
+    tool_input: dict, user_id: int, db: AsyncSession,
+) -> dict:
+    """Validate/normalize the coach's structured answer. Pure — no DB access.
+
+    Caps facts at 4, coerces types, trims the summary. user_id + db are
+    accepted for dispatcher-signature uniformity but intentionally unused.
+    """
+    raw_facts = tool_input.get("facts")
+    facts: list[dict] = []
+    if isinstance(raw_facts, list):
+        for raw in raw_facts:
+            normalized = _normalize_fact(raw)
+            if normalized is not None:
+                facts.append(normalized)
+            if len(facts) >= _MAX_FACTS:
+                break
+
+    summary = tool_input.get("summary")
+    summary = str(summary).strip() if summary is not None else ""
+
+    return {"facts": facts, "summary": summary}
+
+
+# ======================================================================
 # Registry + dispatcher
 # ======================================================================
 
@@ -1468,6 +1599,7 @@ TOOL_REGISTRY: dict[str, ToolHandler] = {
     "fetch_planned_workout": _handle_fetch_planned_workout,
     "modify_planned_workout": _handle_modify_planned_workout,
     "undo_last_modification": _handle_undo_last_modification,
+    "present_answer": _handle_present_answer,
 }
 
 

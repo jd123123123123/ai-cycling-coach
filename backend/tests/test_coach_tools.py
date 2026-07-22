@@ -84,8 +84,9 @@ class TestToolSchemas:
 
     def test_seven_tools_registered(self):
         """5 read-only (Phase 6-01) + 1 write (modify_planned_workout, 6-02)
-        + 1 compensating write (undo_last_modification, 6-04)."""
-        assert len(TOOL_SCHEMAS) == 7
+        + 1 compensating write (undo_last_modification, 6-04)
+        + 1 terminal structured-answer tool (present_answer)."""
+        assert len(TOOL_SCHEMAS) == 8
         expected = {
             "fetch_pmc_window",
             "fetch_recovery_trend",
@@ -94,6 +95,7 @@ class TestToolSchemas:
             "fetch_planned_workout",
             "modify_planned_workout",
             "undo_last_modification",
+            "present_answer",
         }
         assert {s["name"] for s in TOOL_SCHEMAS} == expected
 

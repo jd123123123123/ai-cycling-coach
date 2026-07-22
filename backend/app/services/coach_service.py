@@ -4233,6 +4233,34 @@ async def run_tool_use_loop_events(
             # the tool runs.
             yield {"type": "tool_use_start", "name": name, "input": tool_input}
 
+            # present_answer is TERMINAL: the model's final structured answer.
+            # Dispatch (pure normalize), run the ED-safety filter on the summary
+            # exactly like assembled prose, emit the result, and END the turn —
+            # no further model round-trip, no trailing text event (the card IS
+            # the answer, so the frontend suppresses the empty AssistantBubble).
+            if name == "present_answer":
+                try:
+                    result = await dispatch_tool(name, tool_input, user_id=user_id, db=db)
+                    summary = result.get("summary", "") if isinstance(result, dict) else ""
+                    allowed, safe_summary = validate_chat_response(summary)
+                    if not allowed and isinstance(result, dict):
+                        result = {**result, "summary": safe_summary}
+                    yield {
+                        "type": "tool_use_result",
+                        "name": name,
+                        "result": result,
+                        "is_error": False,
+                    }
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("dispatch_tool(present_answer) raised: %s", exc)
+                    yield {
+                        "type": "tool_use_result",
+                        "name": name,
+                        "result": {"error": str(exc)},
+                        "is_error": True,
+                    }
+                return
+
             try:
                 result = await dispatch_tool(name, tool_input, user_id=user_id, db=db)
                 yield {

@@ -1,4 +1,4 @@
-import { apiClient, getAccessToken } from './client'
+import { apiClient, getAccessToken, API_BASE_URL } from './client'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -634,7 +634,9 @@ export async function downloadWorkoutExport(format: WorkoutFormat): Promise<void
 
 // ─── Streaming chat ──────────────────────────────────────────────────────────
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8000'
+// Reuse the canonical axios base (same-origin in prod, :8042 in dev) so the
+// raw streaming fetch never diverges onto a dead port / CSP-blocked origin.
+const BASE_URL = API_BASE_URL
 
 export interface StreamChunk {
   type: 'delta' | 'replace' | 'done' | 'error'

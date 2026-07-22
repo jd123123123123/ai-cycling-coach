@@ -25,15 +25,22 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { MessageSquare, X, Sparkles, CheckCircle2 } from 'lucide-react'
+import { X, Sparkles, CheckCircle2 } from 'lucide-react'
 import { useChatStream, type ChatMessage, type ToolName } from '../../hooks/useChatStream'
 import { setToolUseLogSnapshot } from '../../lib/chatToolUseLog'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useLocale } from '../../contexts/LocaleContext'
 import WorkoutModifiedCard from '../coach/WorkoutModifiedCard'
 import AnalyticalAnswerCard from '../coach/AnalyticalAnswerCard'
+import CoachAnswerCard from '../coach/CoachAnswerCard'
+import type { PresentAnswerResult } from '../../hooks/useChatStream'
 
-// ─── Inline-data mono wrapping (unchanged from 05-02) ────────────────────────
+// ─── Design tokens shared with pencil-new.pen "V3 · AI Coach" (wQf0h) ─────────
+// The coach persona avatar is a coral→pink gradient orb (pen CoachAvatar /
+// MiniAvatar). Reused for the header identity + every assistant bubble.
+const COACH_GRADIENT = 'linear-gradient(135deg, #FF7A4C 0%, #FF2D6E 100%)'
+
+// ─── Inline-data mono wrapping ───────────────────────────────────────────────
 
 function highlightData(text: string): React.ReactNode[] {
   const pattern = /([+-]?\d+(?:\.\d+)?(?:ms|bpm|TSS|\s?TSS|W|%|h|kg|mi|km|min))/g
@@ -46,8 +53,8 @@ function highlightData(text: string): React.ReactNode[] {
     nodes.push(
       <span
         key={`d${key++}`}
-        className="num-mono text-[12.5px] px-1 rounded-sm"
-        style={{ backgroundColor: 'rgba(20,24,17,0.05)', color: 'var(--color-ink)' }}
+        className="num-mono text-[12.5px] px-1 rounded-[4px]"
+        style={{ backgroundColor: 'rgba(255,90,60,0.14)', color: 'var(--color-accent)' }}
       >
         {match[0]}
       </span>,
@@ -56,6 +63,24 @@ function highlightData(text: string): React.ReactNode[] {
   }
   if (lastIdx < text.length) nodes.push(text.slice(lastIdx))
   return nodes
+}
+
+/** Coach-persona gradient orb (sparkles). Sizes: 48 header, 30 message rows. */
+function CoachAvatar({ size }: { size: number }) {
+  return (
+    <div
+      className="flex-shrink-0 rounded-full flex items-center justify-center"
+      style={{
+        width: size,
+        height: size,
+        background: COACH_GRADIENT,
+        boxShadow: size >= 40 ? '0 6px 18px -4px rgba(255,90,60,0.4)' : undefined,
+      }}
+      aria-hidden
+    >
+      <Sparkles size={Math.round(size * 0.42)} strokeWidth={1.9} color="#FFFFFF" />
+    </div>
+  )
 }
 
 // ─── Tool-use indicator copy ─────────────────────────────────────────────────
@@ -140,14 +165,18 @@ function toolIndicatorCopy(
 
 // ─── Message bubbles ─────────────────────────────────────────────────────────
 
+// User bubble — pen UserBubble (MIHA1): accent-soft fill, coral border, sharp
+// bottom-right corner, right-aligned, left-inset so it never spans full width.
 function UserBubble({ text }: { text: string }) {
   return (
-    <div className="flex justify-end">
+    <div className="flex justify-end pl-[44px]">
       <div
-        className="max-w-[85%] px-3.5 py-2.5 rounded-[14px] rounded-br-[4px] text-[14px] leading-relaxed dashboard-break-words"
+        className="px-3.5 py-3 text-[14px] leading-snug dashboard-break-words"
         style={{
-          backgroundColor: 'var(--color-ink)',
-          color: 'var(--color-paper)',
+          backgroundColor: 'var(--color-accent-soft)',
+          border: '1px solid var(--color-accent)',
+          color: 'var(--color-ink)',
+          borderRadius: '16px 16px 5px 16px',
         }}
       >
         {text}
@@ -156,25 +185,19 @@ function UserBubble({ text }: { text: string }) {
   )
 }
 
+// Assistant bubble — pen CoachBubble (v6j66): gradient MiniAvatar + surface-2
+// bubble, sharp bottom-left corner, right-inset from the edge.
 function AssistantBubble({ text }: { text: string }) {
   return (
-    <div className="flex gap-2.5 items-start">
+    <div className="flex gap-2 items-end pr-[36px]">
+      <CoachAvatar size={30} />
       <div
-        className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center mt-0.5"
+        className="flex-1 min-w-0 px-3.5 py-3 text-[14px] leading-snug dashboard-break-words"
         style={{
-          backgroundColor: 'rgba(176, 74, 12, 0.12)',
-          border: '1px solid rgba(176, 74, 12, 0.25)',
-        }}
-        aria-hidden
-      >
-        <Sparkles size={12} strokeWidth={1.8} style={{ color: 'var(--color-amber)' }} />
-      </div>
-      <div
-        className="flex-1 min-w-0 px-3.5 py-2.5 rounded-[14px] rounded-tl-[4px] text-[14px] leading-relaxed dashboard-break-words"
-        style={{
-          backgroundColor: 'var(--color-paper)',
+          backgroundColor: 'var(--color-surface-2)',
           border: '1px solid var(--color-rule)',
           color: 'var(--color-ink)',
+          borderRadius: '16px 16px 16px 5px',
         }}
       >
         {highlightData(text)}
@@ -192,23 +215,15 @@ function StreamingBubble({
 }) {
   const { locale } = useLocale()
   return (
-    <div className="flex gap-2.5 items-start">
+    <div className="flex gap-2 items-end pr-[36px]">
+      <CoachAvatar size={30} />
       <div
-        className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center mt-0.5"
+        className="flex-1 min-w-0 px-3.5 py-3 text-[14px] leading-snug dashboard-break-words"
         style={{
-          backgroundColor: 'rgba(176, 74, 12, 0.12)',
-          border: '1px solid rgba(176, 74, 12, 0.25)',
-        }}
-        aria-hidden
-      >
-        <Sparkles size={12} strokeWidth={1.8} style={{ color: 'var(--color-amber)' }} />
-      </div>
-      <div
-        className="flex-1 min-w-0 px-3.5 py-2.5 rounded-[14px] rounded-tl-[4px] text-[14px] leading-relaxed dashboard-break-words"
-        style={{
-          backgroundColor: 'var(--color-paper)',
+          backgroundColor: 'var(--color-surface-2)',
           border: '1px solid var(--color-rule)',
           color: 'var(--color-ink)',
+          borderRadius: '16px 16px 16px 5px',
         }}
       >
         {indicatorCopy ? (
@@ -324,6 +339,16 @@ function ToolBubble({
         />
         <span>{reason}</span>
       </div>
+    )
+  }
+  // Terminal structured answer — the coach's fact-chips + verdict. This IS the
+  // answer (no AssistantBubble follows, since the turn ended with no text), so
+  // render the card in place of prose.
+  if (toolName === 'present_answer') {
+    return (
+      <CoachAnswerCard
+        result={result as unknown as PresentAnswerResult}
+      />
     )
   }
   if (
@@ -570,7 +595,7 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
       <div
         className="paper-grain flex flex-col w-full md:w-[480px] h-full shadow-2xl animate-slide-in"
         style={{
-          backgroundColor: 'var(--color-paper-2)',
+          backgroundColor: 'var(--color-paper)',
           borderLeft: '1px solid var(--color-rule)',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -582,37 +607,53 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
           className="flex items-center justify-between gap-3 px-5 pb-4 flex-shrink-0"
           style={{ borderBottom: '1px solid var(--color-rule)', paddingTop: 'calc(env(safe-area-inset-top) + 16px)' }}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <MessageSquare size={14} strokeWidth={1.8} style={{ color: 'var(--color-amber)' }} />
-            <span
-              id="coach-chat-title"
-              className="eyebrow"
-              style={{ color: 'var(--color-amber)' }}
-            >
-              {locale === 'de' ? 'Coach · Chat' : 'Coach · chat'}
-            </span>
+          {/* Identity — pen Coach Header (ZJpOZ): gradient avatar + name (Sora) +
+              status line. */}
+          <div className="flex items-center gap-3 min-w-0">
+            <CoachAvatar size={44} />
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span
+                id="coach-chat-title"
+                className="num-display truncate"
+                style={{ fontSize: 19, lineHeight: 1.1, color: 'var(--color-ink)' }}
+              >
+                Coach Nova
+              </span>
+              <span className="flex items-center gap-1.5 min-w-0">
+                <span
+                  className="inline-block rounded-full flex-shrink-0"
+                  style={{ width: 6, height: 6, backgroundColor: 'var(--color-recovery)' }}
+                  aria-hidden
+                />
+                <span className="text-[12px] truncate" style={{ color: 'var(--color-ink-2)' }}>
+                  {locale === 'de' ? 'Dein KI-Radcoach' : 'Your AI cycling coach'}
+                </span>
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
             {messages.length > 0 && !disabled && (
               <button
                 onClick={reset}
-                className="eyebrow opacity-60 hover:opacity-100 transition-opacity ml-1"
+                className="eyebrow opacity-60 hover:opacity-100 transition-opacity"
                 aria-label={locale === 'de' ? 'Unterhaltung löschen' : 'Clear conversation'}
               >
                 {locale === 'de' ? 'löschen' : 'clear'}
               </button>
             )}
+            <button
+              onClick={onClose}
+              className="rounded-full min-w-[40px] min-h-[40px] flex items-center justify-center transition-colors"
+              style={{
+                color: 'var(--color-ink-2)',
+                border: '1px solid var(--color-rule)',
+                backgroundColor: 'var(--color-surface-2)',
+              }}
+              aria-label={locale === 'de' ? 'Coach-Chat schließen' : 'Close coach chat'}
+            >
+              <X size={15} strokeWidth={2} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-full min-w-[40px] min-h-[40px] flex items-center justify-center transition-colors"
-            style={{
-              color: 'var(--color-ink-2)',
-              border: '1px solid var(--color-rule)',
-              backgroundColor: 'var(--color-paper)',
-            }}
-            aria-label={locale === 'de' ? 'Coach-Chat schließen' : 'Close coach chat'}
-          >
-            <X size={15} strokeWidth={2} />
-          </button>
         </div>
 
         {/* Transient flash — "Workout updated" etc. Soft, non-blocking. */}
@@ -636,34 +677,33 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
           className="flex-1 overflow-y-auto overscroll-contain px-5 py-5 flex flex-col gap-4 min-w-0"
         >
           {messages.length === 0 && !isStreaming && (
-            <div className="flex flex-col gap-5 mt-4">
-              <div>
-                <h3
-                  className="num-display leading-tight"
-                  style={{
-                    fontSize: 24,
-                    color: 'var(--color-ink)',
-                    fontStyle: 'italic',
-                  }}
-                >
-                  {locale === 'de'
-                    ? 'Frag nach deinem Training, deiner Erholung oder was du heute tun solltest.'
-                    : 'Ask about your training, recovery, or what to do today.'}
-                </h3>
-                <p
-                  className="mt-3 text-[13px] leading-relaxed"
-                  style={{ color: 'var(--color-ink-2)' }}
-                >
-                  {locale === 'de'
-                    ? (simpleMode
-                        ? 'Der Coach liest deine letzten Fahrten, deine Erholung und deine geplanten Workouts — und kann sogar das morgige Workout anpassen, wenn sich deine Pläne ändern.'
-                        : 'Der Coach kann deine HRV, TSB, letzten Fahrten, dein Schlafdefizit und deinen Zonen-Mix zitieren — und das morgige geplante Workout direkt im Chat anpassen (kürzen, härter, leichter, drinnen).')
-                    : (simpleMode
-                        ? "The coach reads your recent rides, recovery, and planned workouts — and can even update tomorrow's workout if life changes your plans."
-                        : "The coach can cite your HRV, TSB, recent rides, sleep debt, and zone mix — and can modify tomorrow's planned workout in-chat (shorten, harder, easier, indoor).")}
-                </p>
+            <div className="flex flex-col gap-6 mt-2">
+              <div className="flex flex-col gap-4">
+                <CoachAvatar size={56} />
+                <div>
+                  <h3
+                    className="num-display leading-tight"
+                    style={{ fontSize: 23, color: 'var(--color-ink)' }}
+                  >
+                    {locale === 'de'
+                      ? 'Frag mich nach deinem Training, deiner Erholung oder was heute ansteht.'
+                      : 'Ask me about your training, recovery, or what to do today.'}
+                  </h3>
+                  <p
+                    className="mt-3 text-[13px] leading-relaxed"
+                    style={{ color: 'var(--color-ink-2)' }}
+                  >
+                    {locale === 'de'
+                      ? (simpleMode
+                          ? 'Ich lese deine letzten Fahrten, deine Erholung und deine geplanten Workouts — und kann sogar das morgige Workout anpassen, wenn sich deine Pläne ändern.'
+                          : 'Ich kann deine HRV, TSB, letzten Fahrten, dein Schlafdefizit und deinen Zonen-Mix zitieren — und das morgige geplante Workout direkt im Chat anpassen (kürzen, härter, leichter, drinnen).')
+                      : (simpleMode
+                          ? "I read your recent rides, recovery, and planned workouts — and can even update tomorrow's workout if life changes your plans."
+                          : "I can cite your HRV, TSB, recent rides, sleep debt, and zone mix — and can modify tomorrow's planned workout in-chat (shorten, harder, easier, indoor).")}
+                  </p>
+                </div>
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2.5">
                 <span className="eyebrow">{locale === 'de' ? 'Versuche' : 'Try'}</span>
                 {suggestions.map((s) => (
                   <button
@@ -674,14 +714,20 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
                       void send(s)
                       setInput('')
                     }}
-                    className="text-left text-[13px] leading-snug px-3 py-2 rounded-[10px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2.5 text-left text-[13px] font-medium leading-snug px-3.5 py-3 rounded-[14px] transition-colors hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{
-                      color: 'var(--color-ink-2)',
-                      backgroundColor: 'var(--color-paper)',
+                      color: 'var(--color-ink)',
+                      backgroundColor: 'var(--color-surface-2)',
                       border: '1px solid var(--color-rule)',
                     }}
                   >
-                    &ldquo;{s}&rdquo;
+                    <Sparkles
+                      size={14}
+                      strokeWidth={1.9}
+                      style={{ color: 'var(--color-accent)', flexShrink: 0 }}
+                      aria-hidden
+                    />
+                    <span className="min-w-0">{s}</span>
                   </button>
                 ))}
               </div>
@@ -719,11 +765,11 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
 
           {error && (
             <div
-              className="rounded-[10px] px-3 py-2 text-[12px] leading-snug"
+              className="rounded-[12px] px-3.5 py-2.5 text-[12.5px] leading-snug"
               style={{
                 color: 'var(--color-alert)',
-                backgroundColor: 'rgba(138, 29, 29, 0.06)',
-                border: '1px solid rgba(138, 29, 29, 0.25)',
+                backgroundColor: 'rgba(250, 30, 85, 0.10)',
+                border: '1px solid rgba(250, 30, 85, 0.35)',
               }}
             >
               {error}
@@ -741,18 +787,26 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
               The .ai-gradient keyframes already short-circuit under
               prefers-reduced-motion (Wave 1 index.css) — no extra work here. */}
           <div
-            className={isStreaming ? 'ai-gradient ai-gradient-rim rounded-[16px] p-[2px]' : ''}
+            className={isStreaming ? 'ai-gradient ai-gradient-rim rounded-[24px] p-[2px]' : ''}
             style={isStreaming ? { transition: 'padding 200ms var(--ease-apple-default)' } : {}}
           >
+          {/* Ask bar — pen "Ask Coach Bar" (JNx2U): pill, surface-2, coral
+              sparkles glyph left, coral round send button right. */}
           <div
-            className="flex items-end gap-2 rounded-[14px] px-3 py-2"
+            className="flex items-end gap-2.5 rounded-[24px] pl-4 pr-2 py-2"
             style={{
-              backgroundColor: 'var(--color-paper)',
+              backgroundColor: 'var(--color-surface-2)',
               border: isStreaming ? 'none' : '1px solid var(--color-rule)',
               opacity: disabled ? 0.55 : 1,
             }}
             title={disabled ? (locale === 'de' ? 'Setze ANTHROPIC_API_KEY in backend/.env, um den Chat zu aktivieren' : 'Set ANTHROPIC_API_KEY in backend/.env to enable chat') : undefined}
           >
+            <Sparkles
+              size={18}
+              strokeWidth={1.9}
+              style={{ color: 'var(--color-accent)', flexShrink: 0, marginBottom: 9 }}
+              aria-hidden
+            />
             <textarea
               ref={textareaRef}
               value={input}
@@ -763,13 +817,13 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
                 locale === 'de'
                   ? (disabled
                       ? 'Chat deaktiviert — setze ANTHROPIC_API_KEY in backend/.env'
-                      : 'Frag den Coach… ⌘/Strg+Enter zum Senden')
+                      : 'Frag Coach Nova…')
                   : (disabled
                       ? 'Chat disabled — set ANTHROPIC_API_KEY in backend/.env'
-                      : 'Ask the coach… ⌘/Ctrl+Enter to send')
+                      : 'Ask Coach Nova…')
               }
               rows={1}
-              className="flex-1 bg-transparent outline-none resize-none text-[14px] leading-relaxed min-w-0 disabled:cursor-not-allowed"
+              className="flex-1 bg-transparent outline-none resize-none text-[15px] leading-relaxed min-w-0 disabled:cursor-not-allowed py-2"
               style={{
                 color: 'var(--color-ink)',
                 minHeight: 24,
@@ -779,15 +833,15 @@ export default function CoachChat({ open, onClose, initialDraft }: CoachChatProp
             <button
               onClick={() => void handleSubmit()}
               disabled={disabled || isStreaming || !input.trim()}
-              className="flex-shrink-0 rounded-full min-w-[36px] min-h-[36px] flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-shrink-0 rounded-full w-10 h-10 flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
-                backgroundColor: 'var(--color-ink)',
+                backgroundColor: 'var(--color-accent)',
                 color: 'var(--color-paper)',
               }}
               aria-label={locale === 'de' ? 'Senden' : 'Send'}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           </div>

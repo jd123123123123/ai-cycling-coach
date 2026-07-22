@@ -15,6 +15,17 @@ const BASE_URL =
       ? ''
       : 'http://localhost:8042'
 
+/**
+ * Canonical resolved API base — the SINGLE source of truth for every request
+ * origin, axios or raw `fetch`. The streaming chat endpoints (/coach/chat)
+ * bypass axios and must import THIS rather than re-deriving their own base:
+ * a divergent fallback (the old `|| 'http://localhost:8000'`) resolves to a
+ * dead port in a production build (VITE_API_URL unset) AND violates the strict
+ * `connect-src 'self'` CSP — the fetch never lands and WebKit surfaces a bare
+ * "Load failed". Same-origin '' in PROD is what makes cookies + CSP just work.
+ */
+export const API_BASE_URL: string = BASE_URL
+
 // Access token stored in memory only — never in localStorage
 let _accessToken: string | null = null
 
