@@ -7,11 +7,22 @@
  * bottom-right, on every dashboard surface.
  */
 import { Sparkles } from 'lucide-react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useLocale } from '../../contexts/LocaleContext'
 
 export default function CoachFab({ onOpen }: { onOpen: () => void }) {
   const { locale } = useLocale()
   const de = locale === 'de'
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  // The flagship Today screen carries its own prominent Coach card (→ /coach)
+  // and — like the pen frames — shows no floating action button. Hiding the FAB
+  // here also stops it colliding with the readiness hero / workout card. It
+  // stays on every other surface, where it's the only always-on coach entry.
+  const onToday =
+    location.pathname.startsWith('/dashboard') &&
+    (searchParams.get('tab') ?? 'today') === 'today'
+  if (onToday) return null
   return (
     <button
       type="button"

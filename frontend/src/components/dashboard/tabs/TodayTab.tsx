@@ -17,7 +17,7 @@ import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays } from 'date-fns'
 import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
-import { Flag, Bike, MessageCircle, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Moon, Sparkles, RefreshCw, Sun, Activity, HeartPulse, BrainCircuit } from 'lucide-react'
+import { Bike, MessageCircle, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Moon, Sparkles, RefreshCw, Sun, Activity, HeartPulse, BrainCircuit } from 'lucide-react'
 import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type ChatMessage } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
@@ -83,16 +83,25 @@ export function flagshipState(opts: {
   return 'controlled'
 }
 
-/** Aura (full-screen shader tint) + ring stroke colour per flagship state,
- *  matching the pen frames' u_aura + ring gradients. */
-export function flagshipColors(state: FlagshipState): { aura: string; ring: string } {
+/** Aura (full-screen shader tint) + ring colours per flagship state, matching
+ *  the pen frames' u_aura + RingFill angular gradients. `ring` is the flat
+ *  fallback colour; `gradient` is the pen's multi-stop angular sweep (the
+ *  signature element) and `glow` the arc's outer-glow colour. */
+export function flagshipColors(state: FlagshipState): {
+  aura: string; ring: string; gradient: string[]; glow: string
+} {
   switch (state) {
-    case 'ready': return { aura: '#16E08A', ring: '#16E08A' }
-    case 'controlled': return { aura: '#FFB020', ring: '#FFB020' }
-    case 'rest': return { aura: '#FF9E3D', ring: '#FF7A3C' }
-    case 'post': return { aura: '#FF5A3C', ring: '#FF5A3C' }
-    case 'planned-rest': return { aura: '#3E9BFF', ring: '#38B6FF' }
-    case 'pending': return { aura: '#3A4450', ring: '#5C6570' }
+    // ZnwNp — ready (green→blue→teal)
+    case 'ready': return { aura: '#16E08A', ring: '#16E08A', gradient: ['#16E08A', '#38B6FF', '#7CF5C0'], glow: '#16E08A' }
+    // amber controlled (no dedicated pen frame — amber family)
+    case 'controlled': return { aura: '#FFB020', ring: '#FFB020', gradient: ['#FFB020', '#FF9E3D', '#FFD166'], glow: '#FFB020' }
+    // w3oJHa — stats rest (amber→coral→pink, cautionary)
+    case 'rest': return { aura: '#FF9E3D', ring: '#FF7A3C', gradient: ['#FFB020', '#FF7A3C', '#FA1E55'], glow: '#FF9E3D' }
+    // ci0e7 — post-ride (coral→amber→gold)
+    case 'post': return { aura: '#FF5A3C', ring: '#FF5A3C', gradient: ['#FF5A3C', '#FFB020', '#FFD166'], glow: '#FF5A3C' }
+    // MPMY2 — planned rest (blue→green→blue, reassuring)
+    case 'planned-rest': return { aura: '#3E9BFF', ring: '#38B6FF', gradient: ['#38B6FF', '#16E08A', '#59C3FF'], glow: '#3E9BFF' }
+    case 'pending': return { aura: '#3A4450', ring: '#5C6570', gradient: ['#5C6570', '#3A4450', '#5C6570'], glow: '#3A4450' }
   }
 }
 
@@ -845,6 +854,8 @@ export default function TodayTab() {
   const fColors = flagshipColors(fState)
   const auraColor = fColors.aura
   const ringColor = fColors.ring
+  const ringGradient = fColors.gradient
+  const ringGlow = fColors.glow
 
   // Gate kicker — the question the screen answers.
   const gateKicker = fState === 'post' ? tFor(locale, 'gate_how_today')
@@ -991,7 +1002,7 @@ export default function TodayTab() {
               centre with the state label; two status pills beneath. */}
           <div className="flex flex-col items-center gap-4">
             <Link to="/dashboard?tab=recovery" className="grid place-items-center" aria-label={de ? 'Erholung öffnen' : 'Open recovery'}>
-              <ScoreRing score={score ?? 0} color={ringColor} size={224} stroke={14} trackColor="#FFFFFF14">
+              <ScoreRing score={score ?? 0} color={ringColor} gradient={ringGradient} glow={ringGlow} size={224} stroke={14} trackColor="#FFFFFF14">
                 <div className="flex flex-col items-center gap-1">
                   <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.22em', color: `color-mix(in srgb, ${ringColor} 55%, #FFFFFF)` }}>{ringLabel}</span>
                   <span className="num-display" style={{ fontSize: 62, fontWeight: 800, color: '#FFFFFF', lineHeight: 0.95 }}>{score != null ? Math.round(score) : '—'}</span>
@@ -1029,25 +1040,9 @@ export default function TodayTab() {
             </div>
           )}
 
-          {/* Race chip (pen Race Chip) — compact goal countdown → /season. */}
-          {goalName && (
-            <Link to="/season" className="hover-card flex items-center gap-3.5 rounded-[24px] p-4" style={{ background: '#14181D', border: '1px solid #262C34' }}>
-              <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 40, height: 40, background: '#1E242B' }}>
-                <Flag size={20} strokeWidth={2} style={{ color: '#9BA4AF' }} />
-              </div>
-              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: '#9BA4AF' }}>{de ? 'Nächstes Ziel' : 'Next goal'}</span>
-                <span className="num-display line-clamp-2" style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF' }}>{goalName}</span>
-              </div>
-              {daysToGoal != null && daysToGoal > 0 && (
-                <div className="flex flex-col items-end">
-                  <span className="num-display" style={{ fontSize: 24, fontWeight: 700, color: '#FFFFFF' }}>{Math.abs(daysToGoal)}</span>
-                  <span style={{ fontSize: 11, color: '#5C6570' }}>{de ? 'Tage' : 'days'}</span>
-                </div>
-              )}
-              <span className="hover-arrow"><ChevronRight size={18} style={{ color: '#5C6570' }} /></span>
-            </Link>
-          )}
+          {/* (Pen keeps "race in N days" in the header line and the race card
+              at the BOTTOM as "WHERE THIS LEADS" — no duplicate mid-flow race
+              chip here.) */}
 
           {/* Drivers (pen Drivers) — the overnight signals moving the score, as
               honest chips; morning moment. Post/evening keep the adaptive tile
@@ -1239,17 +1234,17 @@ export default function TodayTab() {
           planned_session fallback, the "Anpassen" sheet and "Rückgängig". */}
       <SessionOfTheDay />
 
-      {/* 5 · Fitness & Frische — the pen's TSB form gauge (from V3 · Load &
-          Form), bound to real CTL/ATL/TSB. Replaces the raw training-load card
-          on Today; the deeper load story lives on /load-form. */}
-      <FitnessFreshnessCard ctl={ctl} atl={atl} tsb={tsb} dCtl7={dCtl} />
-
-      {/* Diese Woche — the full V3 · Load & Form "This Week" card (compliance %
-          + TSS/sessions/left + Mon→Sun day-dots), mounted right after the load
-          snapshot per the V3 · Today rhythm. Same real hooks + numbers as
-          /load-form (one shared derivation). Supersedes the old slim day-dot
-          link row (P2 dedupe: one "Diese Woche" block, not two). */}
+      {/* Diese Woche (pen WeekProgress) — mounted directly after the WorkoutCard
+          to match the pen's FlowColumn order (WorkoutCard → WeekProgress → Load
+          → RaceLeads). Full V3 · Load & Form "This Week" card (compliance % +
+          TSS/sessions/left + Mon→Sun day-dots). Same real hooks + numbers as
+          /load-form (one shared derivation). */}
       <ThisWeekCard />
+
+      {/* 5 · Fitness & Frische (pen Load Card) — the pen's TSB form gauge (from
+          V3 · Load & Form), bound to real CTL/ATL/TSB. Replaces the raw
+          training-load card on Today; the deeper load story lives on /load-form. */}
+      <FitnessFreshnessCard ctl={ctl} atl={atl} tsb={tsb} dCtl7={dCtl} />
 
       {/* WHERE THIS LEADS (pen RaceLeads) — amber gradient card tying today's
           work to the target event. All real trajectory data: event name, days
