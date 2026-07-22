@@ -921,7 +921,7 @@ export default function TodayTab() {
       <ShaderCanvas
         variant="aura"
         uniforms={{ u_aura: auraColor, u_bg: '#0A0C0F' }}
-        style={{ position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none' }}
+        style={{ position: 'absolute', top: 0, left: '-1rem', width: 'calc(100% + 2rem)', height: '100%', zIndex: -1, pointerEvents: 'none' }}
       />
 
       {/* 1 · Header (pen Header) — greeting + date (+ race-in-N-days) + weather
