@@ -550,7 +550,20 @@ export default function SocialTab() {
       {/* ── YOUR CREW — the one crew card. Name + member count + a single
           invite CTA when a crew exists; a single create-crew card when not. ── */}
       {crewInfo.exists ? (
-        <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
+        <div
+          className="rounded-[24px] p-5 flex flex-col gap-3.5"
+          style={{
+            // Pen CrewCard mesh-gradient hero (SAO8Y/UW6SW B6LAHE): purple/blue
+            // top fading to near-black — CSS radial layers approximate the 3×3 mesh.
+            background:
+              'radial-gradient(130% 85% at 8% -12%, #3E2A6B 0%, rgba(62,42,107,0) 58%),' +
+              'radial-gradient(120% 85% at 92% -12%, #4A2E3A 0%, rgba(74,46,58,0) 58%),' +
+              'radial-gradient(120% 100% at 50% -22%, #2E3A7A 0%, rgba(46,58,122,0) 55%),' +
+              'linear-gradient(178deg, #241A4A 0%, #1A2044 34%, #14102A 66%, #0A0C0F 100%)',
+            border: '1px solid rgba(255,255,255,0.16)',
+            boxShadow: '0 10px 28px -8px rgba(46,58,122,0.45)',
+          }}
+        >
           <div className="flex items-center gap-3">
             <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'var(--color-accent)' }}><Users size={26} style={{ color: 'var(--color-ink)' }} /></span>
             <div className="flex flex-col gap-0.5 flex-1 min-w-0">
@@ -567,7 +580,7 @@ export default function SocialTab() {
             <span className="num-display" style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Fahrer einladen' : 'Invite riders'}</span>
           </button>
           {/* Deep-link to the Crew Week Highlights surface (?tab=crew). */}
-          <button type="button" onClick={() => navigate('/dashboard?tab=crew')} className="inline-flex items-center gap-2 rounded-[12px] w-full" style={{ background: 'var(--color-surface-2)', padding: '10px 12px' }}>
+          <button type="button" onClick={() => navigate('/dashboard?tab=crew')} className="inline-flex items-center gap-2 rounded-[12px] w-full" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', backdropFilter: 'blur(8px)', padding: '10px 12px' }}>
             <Sparkles size={16} style={{ color: 'var(--color-gold)', flexShrink: 0 }} />
             <span className="flex-1 text-left" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>
               {combinedKm > 0
