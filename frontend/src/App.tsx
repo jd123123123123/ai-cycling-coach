@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
 import { CelebrationProvider } from './contexts/CelebrationContext'
@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import ScrollToTop from './components/ScrollToTop'
 import ErrorBoundary from './components/ErrorBoundary'
 import AppSplash from './components/AppSplash'
+import PageTransition from './components/PageTransition'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 
 // Auth entry points stay eager so first paint is instant.
@@ -56,8 +57,27 @@ function App() {
         <LocaleProvider>
         <CelebrationProvider>
         <ErrorBoundary>
-        <Suspense fallback={<AppSplash />}>
-        <Routes>
+        <AppRoutes />
+        </ErrorBoundary>
+        </CelebrationProvider>
+        </LocaleProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}
+
+// Routed content lives in its own component so it can read the active location
+// (hooks can't run in <App> — that renders <BrowserRouter> itself). Wrapping
+// the Suspense/Routes in <PageTransition> keyed on the pathname gives every
+// navigation a quick, subtle crossfade. ScrollToTop still resets scroll per
+// route, and the CelebrationProvider overlay + all fixed chrome stay OUTSIDE
+// this wrapper (or are position:fixed and untouched by an opacity-only fade).
+function AppRoutes() {
+  const location = useLocation()
+  return (
+    <PageTransition routeKey={location.pathname}>
+      <Suspense fallback={<AppSplash />}>
+        <Routes location={location}>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -233,12 +253,8 @@ function App() {
           {/* Catch-all: redirect unknown paths to dashboard (ProtectedRoute handles auth check) */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-        </Suspense>
-        </ErrorBoundary>
-        </CelebrationProvider>
-        </LocaleProvider>
-      </AuthProvider>
-    </BrowserRouter>
+      </Suspense>
+    </PageTransition>
   )
 }
 
