@@ -113,6 +113,45 @@ export function shouldShowFitnessTrendChip(
   return true
 }
 
+// ── Honest readiness gating — "today's overnight data exists?" ───────────────
+// (readiness-timing fix, Jul 2026) At local midnight the training day rolls
+// over (the daily decision buckets by athlete-local date), but the athlete
+// hasn't slept yet — so there is NO overnight recovery signal for the new day.
+// A recovery metric only counts as "today's overnight data" when it is DATED to
+// the athlete's current local day AND carries an overnight signal (sleep score,
+// overnight HRV, or resting HR). A metric from a PREVIOUS local day (yesterday's
+// morning sync) must NEVER be presented as today's readiness.
+
+/** True when a recovery metric dated to the current local day carries an
+ *  overnight signal. `todayKey` is the athlete-local yyyy-MM-dd (localDayKey). */
+export function hasTodayOvernightRecovery(
+  metrics:
+    | { date?: string | null; sleep_score?: number | null; hrv_status?: number | null; resting_hr?: number | null }[]
+    | null
+    | undefined,
+  todayKey: string,
+): boolean {
+  if (!metrics) return false
+  return metrics.some(
+    (m) => m.date === todayKey && (m.sleep_score != null || m.hrv_status != null || m.resting_hr != null),
+  )
+}
+
+/** Whether the readiness card must show the calm PENDING state instead of a
+ *  score. True ONLY in the "new local day, overnight sync hasn't landed yet"
+ *  window: no today-overnight data, the athlete HAS a wearable history (an
+ *  athlete with no wearable at all keeps the honest empty '—' state instead),
+ *  they haven't trained today (a late/early session shows its post-ride review),
+ *  and they're not self-reported sidelined (that card carries its own reason). */
+export function isReadinessPending(opts: {
+  hasTodayOvernight: boolean
+  hasRecoveryHistory: boolean
+  trainedToday: boolean
+  sidelined: boolean
+}): boolean {
+  return !opts.hasTodayOvernight && opts.hasRecoveryHistory && !opts.trainedToday && !opts.sidelined
+}
+
 // ── Brief-failure fallback (review finding #1, Jul 2026) ─────────────────────
 // The logic now lives in the SHARED useTodaySession hook (one source of truth
 // for both tabs' session card). Re-exported here so existing consumers/tests
@@ -259,6 +298,19 @@ export default function TodayTab() {
   const trainedToday = decisionState != null
     ? decisionState === 'trained_already'
     : (!!review || hasSessionToday)
+  // Honest readiness gating (readiness-timing fix): does TODAY (athlete-local)
+  // have overnight recovery data yet? Pre-dawn on a new day the answer is no —
+  // yesterday's morning sync does NOT count — so the readiness card shows a
+  // calm "updates after you sleep" PENDING state instead of fabricating a fresh
+  // score from stale/partial inputs. Once the morning sync lands today's sleep /
+  // overnight-HRV / RHR (the normal case), the real score returns.
+  const hasTodayOvernight = useMemo(() => hasTodayOvernightRecovery(metrics, todayKey), [metrics, todayKey])
+  const readinessPending = isReadinessPending({
+    hasTodayOvernight,
+    hasRecoveryHistory: latest != null, // wearable history exists (else keep empty '—')
+    trainedToday,
+    sidelined,
+  })
   const hrvDown = typeof hrvDelta === 'number' && hrvDelta <= -3
   const hrvUp = typeof hrvDelta === 'number' && hrvDelta >= 3
   const sleptWell = typeof sleepScore === 'number' && sleepScore >= 80
@@ -858,21 +910,45 @@ export default function TodayTab() {
       <div
         className="relative overflow-hidden rounded-[28px] p-5 flex flex-col gap-5"
         style={{
-          background: `linear-gradient(150deg, color-mix(in srgb, ${rColor} 15%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)`,
-          border: `1px solid color-mix(in srgb, ${rColor} 40%, var(--color-rule))`,
-          boxShadow: `0 12px 34px -18px color-mix(in srgb, ${rColor} 70%, transparent)`,
+          background: `linear-gradient(150deg, color-mix(in srgb, ${readinessPending ? 'var(--color-muted)' : rColor} 15%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)`,
+          border: `1px solid color-mix(in srgb, ${readinessPending ? 'var(--color-muted)' : rColor} 40%, var(--color-rule))`,
+          boxShadow: `0 12px 34px -18px color-mix(in srgb, ${readinessPending ? 'var(--color-muted)' : rColor} 70%, transparent)`,
           isolation: 'isolate',
         }}
       >
         {/* WebGL readiness backdrop — animated iridescent flow tinted by tier,
             behind the content (z-index:-1 within the isolated stacking context;
-            reduced-motion freezes it, offscreen pauses it). */}
+            reduced-motion freezes it, offscreen pauses it). Pending → the calm
+            neutral flow (null uniforms), never a tier-colored hint of a score. */}
         <ShaderCanvas
           variant="iri"
-          uniforms={readinessShaderUniforms(score)}
+          uniforms={readinessShaderUniforms(readinessPending ? null : score)}
           style={{ position: 'absolute', inset: 0, zIndex: -1, opacity: 0.5, pointerEvents: 'none' }}
         />
-        {/* Readiness ring + headline state + personalized one-liner */}
+        {readinessPending ? (
+          /* PENDING — new local day, overnight sync hasn't landed yet. No score
+             ring, no fabricated number; a calm "nach dem Schlaf" line. Keeps the
+             card's place + shader background. The real score returns the moment
+             today's overnight sleep / HRV / RHR lands (normal morning case). */
+          <div className="flex items-center gap-5">
+            <div
+              className="shrink-0 grid place-items-center rounded-full"
+              style={{ width: 104, height: 104, border: '1px solid var(--color-rule)', background: 'color-mix(in srgb, var(--color-muted) 10%, transparent)' }}
+            >
+              <Moon size={34} strokeWidth={1.8} style={{ color: 'var(--color-muted)' }} />
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col gap-2">
+              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Bereitschaft' : 'Readiness'}</span>
+              <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)', lineHeight: 1.15 }}>{de ? 'Noch keine Nacht-Werte' : 'No overnight data yet'}</span>
+              <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
+                {de
+                  ? 'Deine Bereitschaft aktualisiert sich nach deinem Schlaf — für heute liegen noch keine Über-Nacht-Werte vor.'
+                  : 'Your readiness updates after you sleep — no overnight data has landed for today yet.'}
+              </p>
+            </div>
+          </div>
+        ) : (
+        /* Readiness ring + headline state + personalized one-liner */
         <Link to="/dashboard?tab=recovery" className="hover-card flex items-center gap-5">
           <ScoreRing score={score ?? 0} color={rColor} size={104}>
             <div className="flex flex-col items-center">
@@ -889,10 +965,12 @@ export default function TodayTab() {
             <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.4 }}>{wrapLine}</p>
           </div>
         </Link>
+        )}
 
         {/* Morning read — compact deterministic synthesis of last night + today.
-            Only renders in the morning moment and only from real signals. */}
-        {morningRead && (
+            Only renders in the morning moment and only from real signals. Never
+            in the pending window (it would assert a stale sleep/HRV number). */}
+        {!readinessPending && morningRead && (
           <div className="flex flex-col gap-1">
             <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{tFor(locale, 'morning_read')}</span>
             <p style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.5 }}>{morningRead}</p>
@@ -918,12 +996,15 @@ export default function TodayTab() {
           </div>
         )}
 
-        <div style={{ height: 1, background: 'var(--color-rule)' }} />
+        {!readinessPending && <div style={{ height: 1, background: 'var(--color-rule)' }} />}
 
         {/* Moment-adaptive metric row — the RIGHT signals for right now:
             morning = overnight recovery (HRV Δ / Sleep / RHR / on-deck);
             post-session = wrap-up (Duration / TSS / IF / Grade);
-            evening = wind-down (Recovery / Tomorrow / Sleep target). */}
+            evening = wind-down (Recovery / Tomorrow / Sleep target).
+            Suppressed in the pending window — these tiles would show yesterday's
+            overnight numbers as today's. */}
+        {!readinessPending && (
         <div className="flex flex-col gap-2.5">
           <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{momentLabel}</span>
           <div className="flex">
@@ -948,6 +1029,7 @@ export default function TodayTab() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* 4 · Session Review — recommendation vs. what the athlete actually did */}
