@@ -17,7 +17,7 @@ import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays } from 'date-fns'
 import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
-import { Flag, Bike, MessageCircle, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Moon, Sparkles, RefreshCw } from 'lucide-react'
+import { Flag, Bike, MessageCircle, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Moon, Sparkles, RefreshCw, Sun, Activity, HeartPulse, BrainCircuit } from 'lucide-react'
 import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type ChatMessage } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
@@ -34,6 +34,7 @@ import MorningHealthCard from '../MorningHealthCard'
 import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useTodaySession, sessionIntensity } from '../../../hooks/useTodaySession'
+import { useTodayWeather } from '../../../hooks/useTodayWeather'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
 import { usePMC } from '../../../hooks/usePMC'
@@ -47,25 +48,52 @@ import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import { tFor } from '../../../i18n/strings'
 
-const CARD = 'rounded-[24px] p-5'
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 
-function readinessColor(score: number | null): string {
-  if (score == null) return 'var(--color-muted)'
-  if (score >= 66) return 'var(--color-recovery)'
-  if (score >= 34) return 'var(--color-amber)'
-  return 'var(--color-move)'
+// ── Flagship "Morning Readiness Moment" — state resolution ───────────────────
+// The Today tab is a single screen with FIVE faces (pencil-new.pen flagship
+// frames): ready (green) / controlled (amber) / rest-recommended (orange) /
+// post-ride (coral) / planned-rest (teal), plus the existing pending face. The
+// face is derived from the SAME real signals the rest of the tab already uses
+// (decision state, readiness tier/score, trained-today, planned-rest) — never
+// hardcoded. Pure + exported so it's unit-testable.
+export type FlagshipState = 'ready' | 'controlled' | 'rest' | 'post' | 'planned-rest' | 'pending'
+
+export function flagshipState(opts: {
+  readinessPending: boolean
+  trainedToday: boolean
+  isPlannedRest: boolean
+  sidelined: boolean
+  decisionState: string | null
+  tier: string | null
+  score: number | null
+}): FlagshipState {
+  if (opts.readinessPending) return 'pending'
+  if (opts.trainedToday) return 'post'
+  if (opts.isPlannedRest) return 'planned-rest'
+  if (opts.sidelined) return 'rest'
+  if (opts.decisionState === 'recover' || opts.tier === 'rest') return 'rest'
+  if (
+    opts.decisionState === 'hard' || opts.decisionState === 'quality' ||
+    opts.tier === 'peak' || opts.tier === 'ready'
+  ) return 'ready'
+  if (opts.decisionState === 'easy' || opts.tier === 'caution') return 'controlled'
+  if (opts.score != null && opts.score >= 66) return 'ready'
+  if (opts.score != null && opts.score < 34) return 'rest'
+  return 'controlled'
 }
 
-// WebGL shader tint for the readiness hero — an iridescent flow over a dark
-// base, keyed to the readiness tier (green → teal/blue, amber → coral, low →
-// magenta/violet). Concrete hex (shaders can't read CSS vars). Kept dark +
-// low-opacity at the mount so the score/verdict text stays legible on top.
-function readinessShaderUniforms(score: number | null): { u_a: string; u_b: string; u_c: string } {
-  if (score == null) return { u_a: '#3A4450', u_b: '#2E6BFF', u_c: '#0A0E14' }
-  if (score >= 66) return { u_a: '#1FBF7A', u_b: '#2E6BFF', u_c: '#08130E' }
-  if (score >= 34) return { u_a: '#FFB020', u_b: '#FF5A3C', u_c: '#140F08' }
-  return { u_a: '#FF3B5C', u_b: '#8B5CF6', u_c: '#120810' }
+/** Aura (full-screen shader tint) + ring stroke colour per flagship state,
+ *  matching the pen frames' u_aura + ring gradients. */
+export function flagshipColors(state: FlagshipState): { aura: string; ring: string } {
+  switch (state) {
+    case 'ready': return { aura: '#16E08A', ring: '#16E08A' }
+    case 'controlled': return { aura: '#FFB020', ring: '#FFB020' }
+    case 'rest': return { aura: '#FF9E3D', ring: '#FF7A3C' }
+    case 'post': return { aura: '#FF5A3C', ring: '#FF5A3C' }
+    case 'planned-rest': return { aura: '#3E9BFF', ring: '#38B6FF' }
+    case 'pending': return { aura: '#3A4450', ring: '#5C6570' }
+  }
 }
 
 // ── P1-11 / P1-8 weekly rhythm — pure, testable helpers ─────────────────────
@@ -198,8 +226,6 @@ export default function TodayTab() {
     snapshot?.training_readiness
       ?? computeReadiness(latest?.hrv_status ?? null, latest?.body_battery ?? null, latest?.sleep_score ?? null),
   )
-  const rColor = readinessColor(score ?? null)
-
   const athlete = evidence.athlete as Record<string, unknown> | undefined
   const goalName = athlete?.goal_target as string | undefined
   // P0-5: days-to-event comes from the shared selector over the LIVE profile
@@ -284,7 +310,6 @@ export default function TodayTab() {
   // rhythm (consistency: met/planned days) is the honest cadence stat. The
   // full Mon→Sun day-dots now live in <ThisWeekCard /> (V3 · Load & Form).
   const consistency = streakData?.consistency ?? null
-  const athleteState: AthleteState = streakData?.status?.state ?? 'healthy'
 
   // Refreshingly-funny, always-true day wrap-up — synthesizes today's move
   // (already-trained / rest / prescribed session) against the real readiness
@@ -605,49 +630,6 @@ export default function TodayTab() {
     ? decision.verdict
     : (verdictLine && verdictLine.length > 0 ? verdictLine : heroLine)
 
-  // DAY-STATE-AWARE decision pill — the one-glance "today's move". It must never
-  // contradict the wrap-up line (or tell an athlete to "train" after they've
-  // already trained). Priority: already trained today → session logged (+ a
-  // recover nuance when depleted); rest day prescribed → rest day; otherwise the
-  // readiness tier decides go-hard / go-controlled / recover.
-  const { pillWord, pillColor } = (() => {
-    // ONE decision, one pill — keyed 1:1 off DailyDecision.state (audit P0-3).
-    if (decisionState != null) {
-      switch (decisionState) {
-        case 'sick': return { pillWord: tFor(locale, 'dd_pill_sick'), pillColor: 'var(--color-amber)' }
-        case 'injured': return { pillWord: tFor(locale, 'dd_pill_injured'), pillColor: 'var(--color-amber)' }
-        case 'break': return { pillWord: tFor(locale, 'dd_pill_break'), pillColor: 'var(--color-recovery)' }
-        case 'trained_already':
-          return roughRecovery
-            ? { pillWord: tFor(locale, 'dd_pill_trained_recover'), pillColor: 'var(--color-amber)' }
-            : { pillWord: tFor(locale, 'dd_pill_trained'), pillColor: 'var(--color-recovery)' }
-        case 'planned_rest': return { pillWord: tFor(locale, 'dd_pill_rest'), pillColor: 'var(--color-recovery)' }
-        case 'recover': return { pillWord: tFor(locale, 'dd_pill_recover'), pillColor: 'var(--color-amber)' }
-        case 'easy': return { pillWord: tFor(locale, 'dd_pill_easy'), pillColor: rColor }
-        case 'quality': return { pillWord: tFor(locale, 'dd_pill_quality'), pillColor: rColor }
-        case 'hard': return { pillWord: tFor(locale, 'dd_pill_hard'), pillColor: rColor }
-      }
-    }
-    // Fallback while the decision loads — self-reported status outranks every
-    // readiness signal, then the client's weakest-honest-signal chain.
-    if (athleteState === 'sick') return { pillWord: tFor(locale, 'dd_pill_sick'), pillColor: 'var(--color-amber)' }
-    if (athleteState === 'injured') return { pillWord: tFor(locale, 'dd_pill_injured'), pillColor: 'var(--color-amber)' }
-    if (athleteState === 'break') return { pillWord: tFor(locale, 'dd_pill_break'), pillColor: 'var(--color-recovery)' }
-    if (trainedToday) {
-      return roughRecovery
-        ? { pillWord: tFor(locale, 'dd_pill_trained_recover'), pillColor: 'var(--color-amber)' }
-        : { pillWord: tFor(locale, 'dd_pill_trained'), pillColor: 'var(--color-recovery)' }
-    }
-    if (isRestDay) return { pillWord: tFor(locale, 'dd_pill_rest'), pillColor: 'var(--color-recovery)' }
-    if (tier === 'peak' || tier === 'ready') return { pillWord: tFor(locale, 'dd_pill_hard'), pillColor: rColor }
-    if (tier === 'caution') return { pillWord: de ? 'Kontrolliert trainieren' : 'Train controlled', pillColor: rColor }
-    if (tier === 'rest') return { pillWord: tFor(locale, 'dd_pill_recover'), pillColor: rColor }
-    // Brief unavailable + no readiness signal: say what we know, never "Loading…" forever.
-    if (fallback === 'planned_session') return { pillWord: de ? 'Einheit geplant' : 'Session planned', pillColor: 'var(--color-accent)' }
-    if (fallback === 'degraded') return { pillWord: '—', pillColor: 'var(--color-muted)' }
-    return { pillWord: de ? 'Lade…' : 'Loading…', pillColor: rColor }
-  })()
-
   // ── MOMENT-ADAPTIVE HERO ───────────────────────────────────────────────────
   // The hero surfaces DIFFERENT, moment-relevant signals. Detected from real
   // data: whether a session is already logged today, and the wall-clock hour.
@@ -843,30 +825,117 @@ export default function TodayTab() {
     fourWeekAvgWeeklyTss(pmc?.entries),
   )
 
+  // ── FLAGSHIP "Morning Readiness Moment" derivations ────────────────────────
+  const { data: weather } = useTodayWeather()
+  // Nearest real hourly temp at the athlete's riding location (honest absence:
+  // no forecast → no weather pill). Matches the current wall-clock hour first.
+  const currentTemp = (() => {
+    if (!weather?.available || !weather.hours?.length) return null
+    const target = today.getHours()
+    const atHour = weather.hours.find((h) => new Date(h.time).getHours() === target && h.temp_c != null)
+    const anyTemp = weather.hours.find((h) => h.temp_c != null)
+    return (atHour ?? anyTemp)?.temp_c ?? null
+  })()
+
+  // The face of the screen — one of five, from real signals (never hardcoded).
+  const fState = flagshipState({
+    readinessPending, trainedToday, isPlannedRest: isRestDay, sidelined,
+    decisionState, tier, score: score ?? null,
+  })
+  const fColors = flagshipColors(fState)
+  const auraColor = fColors.aura
+  const ringColor = fColors.ring
+
+  // Gate kicker — the question the screen answers.
+  const gateKicker = fState === 'post' ? tFor(locale, 'gate_how_today')
+    : fState === 'planned-rest' ? tFor(locale, 'gate_rest_day')
+    : tFor(locale, 'gate_ride_today')
+  // Ring centre label.
+  const ringLabel = fState === 'post' ? tFor(locale, 'ring_execution')
+    : fState === 'planned-rest' ? tFor(locale, 'ring_recovered')
+    : tFor(locale, 'ring_readiness')
+  // Big verdict headline (short) — the wittier, data-driven wrapLine is the
+  // supporting sentence beneath it.
+  const verdictHead = fState === 'ready' ? tFor(locale, 'verdict_go_ride')
+    : fState === 'controlled' ? tFor(locale, 'verdict_controlled')
+    : fState === 'rest' ? tFor(locale, 'verdict_rest')
+    : fState === 'post' ? tFor(locale, 'verdict_banked')
+    : fState === 'planned-rest' ? tFor(locale, 'verdict_rest_session')
+    : null
+  // Section kicker above the session/rest block.
+  const sessionKicker = fState === 'rest' ? tFor(locale, 'kicker_instead')
+    : fState === 'post' ? tFor(locale, 'kicker_recover')
+    : fState === 'planned-rest' ? tFor(locale, 'kicker_rest')
+    : tFor(locale, 'kicker_session')
+  // First readiness pill (state word) — colour keyed to state.
+  const statePill = fState === 'ready' ? { word: tFor(locale, 'pill_primed'), color: '#16E08A' }
+    : fState === 'controlled' ? { word: tFor(locale, 'pill_strong'), color: '#FFB020' }
+    : fState === 'rest' ? { word: tFor(locale, 'pill_ease'), color: '#FF7A3C' }
+    : fState === 'post' ? { word: tFor(locale, 'pill_banked'), color: '#16E08A' }
+    : { word: tFor(locale, 'pill_fresh'), color: '#38B6FF' }
+  // Readiness drivers — real overnight signals, honest "—" when absent.
+  const driverChips: { icon: typeof HeartPulse; label: string; value: string; unit?: string; delta?: string | null; deltaColor?: string }[] = [
+    {
+      icon: Activity, label: tFor(locale, 'driver_hrv'),
+      value: hrvNow != null ? `${Math.round(hrvNow)}` : '—', unit: hrvNow != null ? 'ms' : undefined,
+      delta: hrvPct, deltaColor: typeof hrvDelta === 'number' ? (hrvDelta >= 0 ? '#16E08A' : '#FF9E3D') : undefined,
+    },
+    {
+      icon: HeartPulse, label: tFor(locale, 'driver_rhr'),
+      value: restingHr != null ? `${Math.round(restingHr)}` : '—', unit: restingHr != null ? 'bpm' : undefined,
+    },
+    {
+      icon: Moon, label: tFor(locale, 'driver_sleep'),
+      value: sleepScore != null ? `${Math.round(sleepScore)}` : '—',
+    },
+  ]
+  // Coach card message — prefer the brief's own rationale WHEN it's in the
+  // athlete's language; else the localized focus line; else the wrap line.
+  const rationaleMatches = !!brief?.rationale?.trim() &&
+    ((de && brief?.language === 'de') || (!de && brief?.language === 'en'))
+  const coachMessage = (rationaleMatches ? brief!.rationale.trim() : null) ?? focusLine ?? wrapLine
+
   return (
-    <div className="flex flex-col gap-6 pb-4">
-      {/* 1 · Greeting Header (pen GyODe) — greeting + date + avatar ONLY. The
-          V3 · Today frame (OwSbv → Greeting Header) carries NO weather chip
-          here; the single coherent weather element is the hourly
-          WeatherWindowCard mounted lower, near the session (below). The old
-          full-width WeatherNudge chip was a V2 remnant not present in the pen
-          and has been removed (user report: "old weather still on top"). */}
-      <div className="flex flex-col gap-3.5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <h1 className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)', lineHeight: 1.1 }}>{greeting}</h1>
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)' }}>{formatDate(today, de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d', locale)}</span>
-          </div>
+    <div className="relative flex flex-col gap-6 pb-4">
+      {/* FLAGSHIP AURA — the "Morning Readiness Moment" backdrop (pen frames'
+          readiness-aura.glsl fill). A full-bleed, state-keyed WebGL aura fixed
+          to the viewport behind ALL Today content; the page bg (#0A0C0F) equals
+          the shader's u_bg so it blends seamlessly with the app chrome. Pending
+          → the calm muted aura. Freezes under reduced-motion, pauses offscreen
+          (ShaderCanvas contract). */}
+      <ShaderCanvas
+        variant="aura"
+        uniforms={{ u_aura: auraColor, u_bg: '#0A0C0F' }}
+        style={{ position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none' }}
+      />
+
+      {/* 1 · Header (pen Header) — greeting + date (+ race-in-N-days) + weather
+          pill. Avatar → power-profile is kept as a real nav affordance. */}
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <h1 className="num-display" style={{ fontSize: 20, fontWeight: 800, color: '#FFFFFF', lineHeight: 1.15 }}>{greeting}</h1>
+          <span style={{ fontSize: 12, fontWeight: 500, color: '#FFFFFF99' }}>
+            {formatDate(today, de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d', locale)}
+            {daysToGoal != null && daysToGoal > 0 ? ` · ${de ? `Rennen in ${daysToGoal} Tagen` : `race in ${daysToGoal} days`}` : ''}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {currentTemp != null && (
+            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: '#FFFFFF12', border: '1px solid #FFFFFF1F' }}>
+              <Sun size={15} style={{ color: '#FFD166' }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFFE6' }}>{Math.round(currentTemp)}°</span>
+            </span>
+          )}
           <Link
             to="/power-profile"
-            className="shrink-0 grid place-items-center rounded-full overflow-hidden"
-            style={{ width: 46, height: 46, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}
+            className="grid place-items-center rounded-full overflow-hidden"
+            style={{ width: 40, height: 40, background: '#FFFFFF12', border: '1px solid #FFFFFF1F' }}
             aria-label={de ? 'Power-Profil öffnen' : 'Open power profile'}
           >
             {user?.avatar_url ? (
               <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{(athleteName ?? 'A').charAt(0).toUpperCase()}</span>
+              <span className="num-display" style={{ fontSize: 16, color: '#FFFFFF' }}>{(athleteName ?? 'A').charAt(0).toUpperCase()}</span>
             )}
           </Link>
         </div>
@@ -883,154 +952,194 @@ export default function TodayTab() {
           gated per ISO week; self-hides when there's no ridden week to show). */}
       <WeeklyWrappedBanner />
 
-      {/* 2 · Race chip (pen m3IzG1) — compact goal countdown → /season */}
-      {goalName && (
-        <Link to="/season" className={`${CARD} hover-card flex items-center gap-3.5`} style={cardStyle}>
-          <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-surface-2)' }}>
-            <Flag size={20} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Nächstes Ziel' : 'Next goal'}</div>
-            {/* clamp-2 (textfit): long event names wrap to two lines, never truncate */}
-            <div className="num-display line-clamp-2" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{goalName}</div>
-          </div>
-          {daysToGoal != null && daysToGoal > 0 && (
-            <div className="flex flex-col items-end">
-              <span className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)' }}>{Math.abs(daysToGoal)}</span>
-              <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{de ? 'Tage' : 'days'}</span>
-            </div>
-          )}
-          <span className="hover-arrow"><ChevronRight size={18} style={{ color: 'var(--color-muted)' }} /></span>
-        </Link>
-      )}
+      {/* Race chip moved into the flagship flow, below the verdict. */}
 
       {/* 3 · Recovery/readiness card — "here's exactly where you stand" hero:
           score ring + verdict, morning read, momentum cues and moment tiles.
           Gradient + glow are keyed to the readiness color. */}
-      <div
-        className="relative overflow-hidden rounded-[28px] p-5 flex flex-col gap-5"
-        style={{
-          background: `linear-gradient(150deg, color-mix(in srgb, ${readinessPending ? 'var(--color-muted)' : rColor} 15%, var(--color-paper-2)) 0%, var(--color-paper-2) 62%)`,
-          border: `1px solid color-mix(in srgb, ${readinessPending ? 'var(--color-muted)' : rColor} 40%, var(--color-rule))`,
-          boxShadow: `0 12px 34px -18px color-mix(in srgb, ${readinessPending ? 'var(--color-muted)' : rColor} 70%, transparent)`,
-          isolation: 'isolate',
-        }}
-      >
-        {/* WebGL readiness backdrop — animated iridescent flow tinted by tier,
-            behind the content (z-index:-1 within the isolated stacking context;
-            reduced-motion freezes it, offscreen pauses it). Pending → the calm
-            neutral flow (null uniforms), never a tier-colored hint of a score. */}
-        <ShaderCanvas
-          variant="iri"
-          uniforms={readinessShaderUniforms(readinessPending ? null : score)}
-          style={{ position: 'absolute', inset: 0, zIndex: -1, opacity: 0.5, pointerEvents: 'none' }}
-        />
-        {readinessPending ? (
-          /* PENDING — new local day, overnight sync hasn't landed yet. No score
-             ring, no fabricated number; a calm "nach dem Schlaf" line. Keeps the
-             card's place + shader background. The real score returns the moment
-             today's overnight sleep / HRV / RHR lands (normal morning case). */
-          <div className="flex items-center gap-5">
-            <div
-              className="shrink-0 grid place-items-center rounded-full"
-              style={{ width: 104, height: 104, border: '1px solid var(--color-rule)', background: 'color-mix(in srgb, var(--color-muted) 10%, transparent)' }}
-            >
-              <Moon size={34} strokeWidth={1.8} style={{ color: 'var(--color-muted)' }} />
-            </div>
-            <div className="flex-1 min-w-0 flex flex-col gap-2">
-              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Bereitschaft' : 'Readiness'}</span>
-              <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)', lineHeight: 1.15 }}>{de ? 'Noch keine Nacht-Werte' : 'No overnight data yet'}</span>
-              <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
-                {de
-                  ? 'Deine Bereitschaft aktualisiert sich nach deinem Schlaf — für heute liegen noch keine Über-Nacht-Werte vor.'
-                  : 'Your readiness updates after you sleep — no overnight data has landed for today yet.'}
-              </p>
-            </div>
+      {readinessPending ? (
+        /* PENDING — new local day, overnight sync hasn't landed yet. No score
+           ring, no fabricated number; a calm "nach dem Schlaf" line over the
+           muted aura. The real score returns the moment today's overnight
+           sleep / HRV / RHR lands (normal morning case). */
+        <div className="flex flex-col items-center text-center gap-4 pt-4 pb-2">
+          <div
+            className="grid place-items-center rounded-full"
+            style={{ width: 140, height: 140, border: '1px solid #FFFFFF1F', background: 'color-mix(in srgb, var(--color-muted) 12%, transparent)' }}
+          >
+            <Moon size={44} strokeWidth={1.6} style={{ color: '#9BA4AF' }} />
           </div>
-        ) : (
-        /* Readiness ring + headline state + personalized one-liner */
-        <Link to="/dashboard?tab=recovery" className="hover-card flex items-center gap-5">
-          <ScoreRing score={score ?? 0} color={rColor} size={104}>
-            <div className="flex flex-col items-center">
-              <span className="num-display" style={{ fontSize: 32, color: rColor, lineHeight: 1 }}>{score != null ? Math.round(score) : '—'}</span>
-              <span className="eyebrow" style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>/ 100</span>
-            </div>
-          </ScoreRing>
-          <div className="flex-1 min-w-0 flex flex-col gap-2">
-            <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-ink-2)' }}>{de ? 'Bereitschaft' : 'Readiness'}</span>
-            <span className="inline-flex items-center gap-1.5 self-start rounded-full px-2.5 py-1" style={{ background: `color-mix(in srgb, ${pillColor} 15%, transparent)` }}>
-              <span style={{ width: 7, height: 7, borderRadius: 999, background: pillColor }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: pillColor }}>{pillWord}</span>
-            </span>
-            <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.4 }}>{wrapLine}</p>
+          <div className="flex flex-col items-center gap-1.5 px-3">
+            <span className="eyebrow" style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.16em', color: '#9BA4AF' }}>{tFor(locale, 'ring_readiness')}</span>
+            <span className="num-display" style={{ fontSize: 24, fontWeight: 800, color: '#FFFFFF', lineHeight: 1.15 }}>{de ? 'Noch keine Nacht-Werte' : 'No overnight data yet'}</span>
+            <p style={{ fontSize: 14, fontWeight: 500, color: '#FFFFFFB3', lineHeight: 1.45 }}>
+              {de
+                ? 'Deine Bereitschaft aktualisiert sich nach deinem Schlaf — für heute liegen noch keine Über-Nacht-Werte vor.'
+                : 'Your readiness updates after you sleep — no overnight data has landed for today yet.'}
+            </p>
           </div>
-        </Link>
-        )}
-
-        {/* Morning read — compact deterministic synthesis of last night + today.
-            Only renders in the morning moment and only from real signals. Never
-            in the pending window (it would assert a stale sleep/HRV number). */}
-        {!readinessPending && morningRead && (
-          <div className="flex flex-col gap-1">
-            <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{tFor(locale, 'morning_read')}</span>
-            <p style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.5 }}>{morningRead}</p>
+        </div>
+      ) : (
+        <>
+          {/* GateKicker — the question the screen answers, glowing in the state
+              colour (pen GateKicker). */}
+          <div className="flex justify-center -mb-1">
+            <span className="eyebrow" style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.18em', color: auraColor, textAlign: 'center', textShadow: `0 0 14px ${auraColor}66` }}>{gateKicker}</span>
           </div>
-        )}
 
-        {/* Momentum cues — weekly rhythm (consistency vs plan) + 7-day fitness
-            trend, small neutral chips. No daily-streak framing (P1-11). */}
-        {(consistencyText != null || showFitnessTrend) && (
-          <div className="flex flex-wrap items-center gap-2">
-            {consistencyText != null && (
-              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
-                <CalendarCheck size={13} style={{ color: consistency != null && consistency.met > 0 ? 'var(--color-recovery)' : 'var(--color-muted)' }} />
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>{consistencyText}</span>
-              </span>
-            )}
-            {showFitnessTrend && (
-              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}>
-                {dCtl! >= 0 ? <TrendingUp size={13} style={{ color: 'var(--color-recovery)' }} /> : <TrendingDown size={13} style={{ color: 'var(--color-muted)' }} />}
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>{de ? 'Fitness' : 'Fitness'} {dCtl! >= 0 ? '+' : ''}{dCtl} <span style={{ color: 'var(--color-muted)', fontWeight: 600 }}>(7d)</span></span>
-              </span>
-            )}
-          </div>
-        )}
-
-        {!readinessPending && <div style={{ height: 1, background: 'var(--color-rule)' }} />}
-
-        {/* Moment-adaptive metric row — the RIGHT signals for right now:
-            morning = overnight recovery (HRV Δ / Sleep / RHR / on-deck);
-            post-session = wrap-up (Duration / TSS / IF / Grade);
-            evening = wind-down (Recovery / Tomorrow / Sleep target).
-            Suppressed in the pending window — these tiles would show yesterday's
-            overnight numbers as today's. */}
-        {!readinessPending && (
-        <div className="flex flex-col gap-2.5">
-          <span className="eyebrow" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{momentLabel}</span>
-          <div className="flex">
-            {momentTiles.map((t, i) => (
-              <div key={i} className="flex-1 flex items-stretch">
-                {i > 0 && <div style={{ width: 1, background: 'var(--color-rule)' }} />}
-                <div className="flex-1 flex flex-col items-center gap-1 px-1">
-                  <span className="flex items-baseline gap-0.5">
-                    <span className="num-display" style={{ fontSize: 19, color: t.color ?? 'var(--color-ink)', lineHeight: 1 }}>{t.value}</span>
-                    {t.unit && <span style={{ fontSize: 10, color: 'var(--color-muted)' }}>{t.unit}</span>}
-                  </span>
-                  <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--color-muted)', textAlign: 'center' }}>{t.label}</span>
-                  {t.sub && <span style={{ fontSize: 10, fontWeight: 700, color: t.subColor ?? 'var(--color-ink-2)', lineHeight: 1 }}>{t.sub}</span>}
+          {/* Readiness ring (pen Ring) — big gauge, state-coloured, score in the
+              centre with the state label; two status pills beneath. */}
+          <div className="flex flex-col items-center gap-4">
+            <Link to="/dashboard?tab=recovery" className="grid place-items-center" aria-label={de ? 'Erholung öffnen' : 'Open recovery'}>
+              <ScoreRing score={score ?? 0} color={ringColor} size={224} stroke={14} trackColor="#FFFFFF14">
+                <div className="flex flex-col items-center gap-1">
+                  <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.22em', color: `color-mix(in srgb, ${ringColor} 55%, #FFFFFF)` }}>{ringLabel}</span>
+                  <span className="num-display" style={{ fontSize: 62, fontWeight: 800, color: '#FFFFFF', lineHeight: 0.95 }}>{score != null ? Math.round(score) : '—'}</span>
                 </div>
-              </div>
-            ))}
+              </ScoreRing>
+            </Link>
+            {/* Status pills — state word + real form (TSB). */}
+            <div className="flex items-center justify-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: `color-mix(in srgb, ${statePill.color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${statePill.color} 45%, transparent)` }}>
+                <span style={{ width: 7, height: 7, borderRadius: 999, background: statePill.color, boxShadow: `0 0 8px ${statePill.color}` }} />
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: statePill.color }}>{statePill.word}</span>
+              </span>
+              {tsb != null && (
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: `color-mix(in srgb, ${tsb >= 0 ? '#38B6FF' : '#FF9E3D'} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${tsb >= 0 ? '#38B6FF' : '#FF9E3D'} 45%, transparent)` }}>
+                  {tsb >= 0 ? <TrendingUp size={12} style={{ color: '#8ED0FF' }} /> : <TrendingDown size={12} style={{ color: '#FFC080' }} />}
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: tsb >= 0 ? '#8ED0FF' : '#FFC080' }}>{tFor(locale, 'form_label')} {tsb >= 0 ? '+' : ''}{Math.round(tsb)}</span>
+                </span>
+              )}
+            </div>
           </div>
-          {focusLine && (
-            <div className="flex items-start gap-2" style={{ marginTop: 2 }}>
-              <Sparkles size={13} strokeWidth={2.2} style={{ color: rColor, marginTop: 2, flexShrink: 0 }} />
-              <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{focusLine}</p>
+
+          {/* Verdict (pen Verdict) — big state headline + the real, data-driven
+              supporting sentence (wrapLine). */}
+          <div className="flex flex-col items-center text-center gap-1.5 px-2">
+            {verdictHead && <h2 className="num-display" style={{ fontSize: 26, fontWeight: 800, color: '#FFFFFF', lineHeight: 1.1 }}>{verdictHead}</h2>}
+            <p style={{ fontSize: 14, fontWeight: 500, color: '#FFFFFFB3', lineHeight: 1.4 }}>{wrapLine}</p>
+          </div>
+
+          {/* Morning read — deterministic synthesis of last night + today (real
+              signals only; morning moment only). */}
+          {morningRead && (
+            <div className="flex flex-col gap-1">
+              <span className="eyebrow" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF80' }}>{tFor(locale, 'morning_read')}</span>
+              <p style={{ fontSize: 12.5, fontWeight: 500, color: '#FFFFFFB3', lineHeight: 1.5 }}>{morningRead}</p>
             </div>
           )}
-        </div>
-        )}
-      </div>
+
+          {/* Race chip (pen Race Chip) — compact goal countdown → /season. */}
+          {goalName && (
+            <Link to="/season" className="hover-card flex items-center gap-3.5 rounded-[24px] p-4" style={{ background: '#14181D', border: '1px solid #262C34' }}>
+              <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 40, height: 40, background: '#1E242B' }}>
+                <Flag size={20} strokeWidth={2} style={{ color: '#9BA4AF' }} />
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: '#9BA4AF' }}>{de ? 'Nächstes Ziel' : 'Next goal'}</span>
+                <span className="num-display line-clamp-2" style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF' }}>{goalName}</span>
+              </div>
+              {daysToGoal != null && daysToGoal > 0 && (
+                <div className="flex flex-col items-end">
+                  <span className="num-display" style={{ fontSize: 24, fontWeight: 700, color: '#FFFFFF' }}>{Math.abs(daysToGoal)}</span>
+                  <span style={{ fontSize: 11, color: '#5C6570' }}>{de ? 'Tage' : 'days'}</span>
+                </div>
+              )}
+              <span className="hover-arrow"><ChevronRight size={18} style={{ color: '#5C6570' }} /></span>
+            </Link>
+          )}
+
+          {/* Drivers (pen Drivers) — the overnight signals moving the score, as
+              honest chips; morning moment. Post/evening keep the adaptive tile
+              row (session wrap-up / wind-down). */}
+          {moment === 'morning' ? (
+            <div className="flex flex-col gap-2.5">
+              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{tFor(locale, 'drivers_label')}</span>
+              <div className="grid grid-cols-3 gap-2.5">
+                {driverChips.map((d, i) => {
+                  const Icon = d.icon
+                  return (
+                    <div key={i} className="flex flex-col gap-1.5 rounded-[16px] p-3" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14', backdropFilter: 'blur(10px)' }}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Icon size={12} style={{ color: '#9BA4AF' }} />
+                        <span className="eyebrow" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: '#9BA4AF' }}>{d.label}</span>
+                      </span>
+                      <span className="flex items-baseline gap-1">
+                        <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>{d.value}</span>
+                        {d.unit && <span style={{ fontSize: 10, color: '#5C6570' }}>{d.unit}</span>}
+                      </span>
+                      {d.delta && <span style={{ fontSize: 10.5, fontWeight: 700, color: d.deltaColor ?? '#9BA4AF' }}>{d.delta}</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{momentLabel}</span>
+              <div className="flex rounded-[16px] p-3" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14', backdropFilter: 'blur(10px)' }}>
+                {momentTiles.map((t, i) => (
+                  <div key={i} className="flex-1 flex items-stretch">
+                    {i > 0 && <div style={{ width: 1, background: '#FFFFFF14' }} />}
+                    <div className="flex-1 flex flex-col items-center gap-1 px-1">
+                      <span className="flex items-baseline gap-0.5">
+                        <span className="num-display" style={{ fontSize: 19, fontWeight: 700, color: t.color ?? '#FFFFFF', lineHeight: 1 }}>{t.value}</span>
+                        {t.unit && <span style={{ fontSize: 10, color: '#5C6570' }}>{t.unit}</span>}
+                      </span>
+                      <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', color: '#9BA4AF', textAlign: 'center' }}>{t.label}</span>
+                      {t.sub && <span style={{ fontSize: 10, fontWeight: 700, color: t.subColor ?? '#9BA4AF', lineHeight: 1 }}>{t.sub}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Coach card (pen CoachCard) — the coach's read for today, purple
+              tint + gradient avatar orb. → /coach. */}
+          {coachMessage && (
+            <Link to="/coach" className="hover-card flex gap-3 rounded-[20px] p-3.5" style={{ background: '#8B5CF61A', border: '1px solid #8B5CF63D' }}>
+              <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 38, height: 38, background: 'linear-gradient(45deg, #8B5CF6, #59C3FF)', boxShadow: '0 0 12px #8B5CF666' }}>
+                <BrainCircuit size={20} strokeWidth={2} style={{ color: '#FFFFFF' }} />
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col gap-1">
+                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: '#C4B5FD' }}>{tFor(locale, 'coach_label')}</span>
+                <p style={{ fontSize: 13.5, fontWeight: 500, color: '#FFFFFFF2', lineHeight: 1.4 }}>{coachMessage}</p>
+              </div>
+            </Link>
+          )}
+
+          {/* Momentum cues — weekly rhythm (consistency vs plan) + 7-day fitness
+              trend, small neutral chips. No daily-streak framing (P1-11). */}
+          {(consistencyText != null || showFitnessTrend) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {consistencyText != null && (
+                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14' }}>
+                  <CalendarCheck size={13} style={{ color: consistency != null && consistency.met > 0 ? '#16E08A' : '#9BA4AF' }} />
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#9BA4AF' }}>{consistencyText}</span>
+                </span>
+              )}
+              {showFitnessTrend && (
+                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14' }}>
+                  {dCtl! >= 0 ? <TrendingUp size={13} style={{ color: '#16E08A' }} /> : <TrendingDown size={13} style={{ color: '#9BA4AF' }} />}
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#9BA4AF' }}>{de ? 'Fitness' : 'Fitness'} {dCtl! >= 0 ? '+' : ''}{dCtl} <span style={{ color: '#5C6570', fontWeight: 600 }}>(7d)</span></span>
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Focus line — the one thing that matters right now (real signal). */}
+          {focusLine && (
+            <div className="flex items-start gap-2">
+              <Sparkles size={14} strokeWidth={2.2} style={{ color: auraColor, marginTop: 1, flexShrink: 0 }} />
+              <p style={{ fontSize: 12.5, fontWeight: 500, color: '#FFFFFFB3', lineHeight: 1.4 }}>{focusLine}</p>
+            </div>
+          )}
+
+          {/* Section kicker — introduces the session / rest block below. */}
+          <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{sessionKicker}</span>
+        </>
+      )}
 
       {/* 4 · Session Review — recommendation vs. what the athlete actually did */}
       {review && <SessionReviewCard review={review} de={de} />}
@@ -1141,6 +1250,41 @@ export default function TodayTab() {
           /load-form (one shared derivation). Supersedes the old slim day-dot
           link row (P2 dedupe: one "Diese Woche" block, not two). */}
       <ThisWeekCard />
+
+      {/* WHERE THIS LEADS (pen RaceLeads) — amber gradient card tying today's
+          work to the target event. All real trajectory data: event name, days
+          out, weekly-load progress toward what the goal requires, and the
+          backend's own narrative hook. Hidden when there's no goal to lead to. */}
+      {goalName && trajectory && (() => {
+        const req = trajectory.weekly_tss_required ?? null
+        const act = trajectory.weekly_tss_actual ?? null
+        const pct = req != null && req > 0 && act != null ? Math.max(0, Math.min(100, Math.round((act / req) * 100))) : null
+        const line = trajectory.narrative_hook?.trim() || null
+        return (
+          <Link
+            to="/season"
+            className="hover-card flex flex-col gap-2.5 rounded-[18px] p-4"
+            style={{ background: 'linear-gradient(60deg, #14181DCC 0%, #2A2010CC 100%)', border: '1px solid #FFD1662E' }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="eyebrow" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', color: '#FFD166' }}>{tFor(locale, 'raceleads_label')}</span>
+              <ChevronRight size={16} className="hover-arrow" style={{ color: '#FFD166' }} />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFFE6' }} className="line-clamp-1">{trajectory.event_name ?? goalName}</span>
+              {daysToGoal != null && daysToGoal > 0 && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#FFD166', whiteSpace: 'nowrap' }}>{daysToGoal} {de ? 'Tage' : 'days'}</span>
+              )}
+            </div>
+            {pct != null && (
+              <div className="rounded-full overflow-hidden" style={{ height: 8, background: '#FFFFFF1A' }}>
+                <div style={{ width: `${pct}%`, height: '100%', background: '#FFD166', boxShadow: '0 0 6px #FFD16666', borderRadius: 999 }} />
+              </div>
+            )}
+            {line && <p style={{ fontSize: 13, fontWeight: 500, color: '#FFFFFFD9', lineHeight: 1.35 }}>{line}</p>}
+          </Link>
+        )
+      })()}
 
       {/* Zusätzliche Einheiten — non-primary / cross-training sessions (2nd ride,
           gym, run, padel-or-other) over the last 7 days, with the load they add

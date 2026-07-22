@@ -18,7 +18,7 @@
 import { useEffect, useRef } from 'react'
 import { prefersReducedMotion } from '../../utils/motion'
 
-export type ShaderVariant = 'iri' | 'topo' | 'burst'
+export type ShaderVariant = 'iri' | 'topo' | 'burst' | 'aura'
 
 export interface ShaderUniforms {
   [name: string]: string | number
@@ -114,6 +114,32 @@ void main(){
   gl_FragColor=vec4(col,1.0);
 }
 `,
+  // Aura: the flagship "Morning Readiness" backdrop (mirrors readiness-aura.glsl
+  // in the pen). A near-black base with a single state-keyed aura blooming from
+  // the upper-centre (behind the readiness ring), gently flowing via domain-
+  // warped fbm. One colour (u_aura) so the whole screen re-tints per state.
+  aura: `${COMMON}
+uniform vec3 u_aura; uniform vec3 u_bg;
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_res;
+  vec2 center=vec2(0.5,0.72);
+  vec2 p=uv*2.1;
+  float t=u_time*0.07;
+  vec2 q=vec2(fbm(p+t), fbm(p+vec2(3.1,1.7)-t*0.8));
+  float flow=fbm(p+1.7*q+vec2(2.2,4.4)+t*0.5);
+  float d=distance(uv,center);
+  float bloom=smoothstep(0.95,0.0,d)*(0.45+0.8*flow);
+  float halo=pow(smoothstep(0.55,0.0,d),2.4);
+  vec3 col=u_bg;
+  col=mix(col,u_aura,clamp(bloom*0.5,0.0,1.0));
+  col+=u_aura*halo*0.32;
+  col+=0.028*u_aura*sin((uv.x+uv.y)*7.0-u_time*0.5);
+  float vig=smoothstep(1.15,0.15,length(uv-0.5));
+  col*=0.55+0.45*vig;
+  col+=(hash(uv*u_res)-0.5)*0.015;
+  gl_FragColor=vec4(col,1.0);
+}
+`,
 }
 
 // Which colour uniforms each variant consumes, in declaration order.
@@ -121,6 +147,7 @@ const COLOR_UNIFORMS: Record<ShaderVariant, string[]> = {
   iri: ['u_a', 'u_b', 'u_c'],
   topo: ['u_base', 'u_glow', 'u_line'],
   burst: ['u_accent', 'u_base', 'u_core', 'u_glow'],
+  aura: ['u_aura', 'u_bg'],
 }
 
 function hexToRgb(hex: string): [number, number, number] {

@@ -385,6 +385,42 @@ export const STRINGS = {
   review_sport_label: { en: 'Sport', de: 'Sport' },
   review_avg_hr_label: { en: 'Avg HR', de: 'Ø HF' },
   // ── END AGENT-MARKER: daily-decision + sport-honest review ──
+
+  // ── Flagship "Morning Readiness Moment" (Today redesign) ──
+  // Gate kicker — the question the screen answers, keyed to state.
+  gate_ride_today: { en: 'SHOULD I RIDE TODAY?', de: 'SOLL ICH HEUTE FAHREN?' },
+  gate_how_today: { en: 'HOW DID TODAY GO?', de: 'WIE LIEF HEUTE?' },
+  gate_rest_day: { en: 'TODAY IS A REST DAY', de: 'HEUTE IST RUHETAG' },
+  // Ring centre label per state.
+  ring_readiness: { en: 'READINESS', de: 'BEREITSCHAFT' },
+  ring_execution: { en: 'EXECUTION', de: 'AUSFÜHRUNG' },
+  ring_recovered: { en: 'RECOVERED', de: 'ERHOLT' },
+  // Big verdict headline per state.
+  verdict_go_ride: { en: 'Yes — go ride.', de: 'Ja — fahr los.' },
+  verdict_controlled: { en: 'Yes — keep it controlled.', de: 'Ja — aber kontrolliert.' },
+  verdict_rest: { en: 'Not today — rest.', de: 'Heute nicht — ruh dich aus.' },
+  verdict_banked: { en: 'Session banked.', de: 'Einheit im Kasten.' },
+  verdict_rest_session: { en: 'Rest is the session.', de: 'Ruhe ist die Einheit.' },
+  // Section kicker above the session/rest block, keyed to state.
+  kicker_session: { en: "SO HERE'S TODAY'S SESSION", de: 'DEINE HEUTIGE EINHEIT' },
+  kicker_instead: { en: 'SO INSTEAD, TODAY', de: 'STATTDESSEN HEUTE' },
+  kicker_recover: { en: 'NOW, RECOVER', de: 'JETZT ERHOLEN' },
+  kicker_rest: { en: 'SO TODAY, GENUINELY REST', de: 'HEUTE WIRKLICH RUHEN' },
+  // Drivers row — what's moving the score.
+  drivers_label: { en: "WHAT'S DRIVING IT", de: 'WAS DAHINTER STECKT' },
+  driver_hrv: { en: 'HRV', de: 'HRV' },
+  driver_rhr: { en: 'Resting HR', de: 'Ruhepuls' },
+  driver_sleep: { en: 'Sleep', de: 'Schlaf' },
+  form_label: { en: 'FORM', de: 'FORM' },
+  coach_label: { en: 'YOUR COACH', de: 'DEIN COACH' },
+  // Readiness state pills.
+  pill_primed: { en: 'PRIMED', de: 'BEREIT' },
+  pill_strong: { en: 'STRONG', de: 'STARK' },
+  pill_ease: { en: 'EASE OFF', de: 'RUHIGER' },
+  pill_fresh: { en: 'FRESH', de: 'FRISCH' },
+  pill_banked: { en: 'BANKED', de: 'ERLEDIGT' },
+  // Race-leads card.
+  raceleads_label: { en: 'WHERE THIS LEADS', de: 'WOHIN DAS FÜHRT' },
 } as const satisfies Record<string, StringSet>
 
 export type StringKey = keyof typeof STRINGS
