@@ -128,14 +128,17 @@ void main(){
   vec2 p=(uv-c)*vec2(aspect,1.0);
   float r=length(p);
   vec3 col=u_bg;
+  // Pen's exact soft field, but dialled DOWN: the app's Today canvas is much
+  // taller than the pen's 2042px frame so the same glow floods brighter — a
+  // lower intensity + darker floor matches the pen's dark, subtle aura.
   float breath=0.5+0.5*sin(u_time*1.15);
-  float glow=smoothstep(0.72,0.0,r)*(0.34+0.24*breath);
+  float glow=smoothstep(0.72,0.0,r)*(0.15+0.09*breath);
   col+=u_aura*glow;
   float wave=sin(r*13.0-u_time*2.0);
-  float rings=smoothstep(0.55,1.0,wave)*smoothstep(0.95,0.18,r)*0.05;
+  float rings=smoothstep(0.55,1.0,wave)*smoothstep(0.95,0.18,r)*0.028;
   col+=u_aura*rings;
-  col*=smoothstep(1.25,0.15,uv.y)*0.45+0.62;
-  col+=(hash(gl_FragCoord.xy+u_time)-0.5)*0.028;
+  col*=smoothstep(1.25,0.15,uv.y)*0.40+0.5;
+  col+=(hash(gl_FragCoord.xy+u_time)-0.5)*0.026;
   gl_FragColor=vec4(col,1.0);
 }
 `,
