@@ -7,7 +7,8 @@
  *   - trends → the evidence (PMC, distribution, biometrics, estimates, history)
  *
  * Legacy `?tab=bike|run` redirect to `today`; `?tab=week` aliases `train`;
- * `?tab=crew` still renders the Crew surface (not in the nav until it's real).
+ * `?tab=crew` renders the Crew Week Highlights surface (deep-link only —
+ * not in the bottom nav yet; Social remains the fifth nav surface).
  *
  * Tab state lives in the `?tab` URL search param (default 'today'), written
  * back with `replace: true` so back-nav doesn't accumulate tab changes.
@@ -23,8 +24,9 @@ import PlanTab from '../components/dashboard/tabs/PlanTab'
 import RecoveryTab from '../components/dashboard/tabs/RecoveryTab'
 import HistoryTab from '../components/dashboard/tabs/HistoryTab'
 import SocialTab from '../components/social/tabs/SocialTab'
+import CrewHighlights from '../components/social/tabs/CrewHighlights'
 
-type TabId = 'today' | 'plan' | 'recovery' | 'analyze' | 'social'
+type TabId = 'today' | 'plan' | 'recovery' | 'analyze' | 'social' | 'crew'
 
 function resolveTab(raw: string | null): TabId {
   switch (raw) {
@@ -41,9 +43,10 @@ function resolveTab(raw: string | null): TabId {
     case 'history':
     case 'trends':
     case 'report': return 'analyze'
-    // Social is the fifth surface; legacy ?tab=crew aliases into it
-    case 'social':
-    case 'crew': return 'social'
+    // Social is the fifth surface
+    case 'social': return 'social'
+    // Crew Week Highlights — its own surface (deep-linked via ?tab=crew)
+    case 'crew': return 'crew'
     // legacy sport tabs collapsed into Today
     case 'bike':
     case 'run':
@@ -75,6 +78,7 @@ export default function DashboardPage() {
       case 'recovery': return <RecoveryTab />
       case 'analyze':  return <HistoryTab />
       case 'social':   return <SocialTab />
+      case 'crew':     return <CrewHighlights />
     }
   })()
 
