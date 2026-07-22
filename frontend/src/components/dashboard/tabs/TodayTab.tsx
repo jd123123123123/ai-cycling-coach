@@ -17,7 +17,7 @@ import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays } from 'date-fns'
 import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
-import { Bike, MessageCircle, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Moon, Sparkles, RefreshCw, Sun, Activity, HeartPulse, BrainCircuit } from 'lucide-react'
+import { Bike, MessageCircle, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Moon, Sparkles, RefreshCw, Sun, Activity, HeartPulse, BrainCircuit, Info } from 'lucide-react'
 import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type ChatMessage } from '../../../api/coach'
 import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
@@ -47,6 +47,8 @@ import ScoreRing from '../../ui/ScoreRing'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import { tFor } from '../../../i18n/strings'
+import { useMethods } from '../../ui/MethodsDrawer'
+import { buildReadinessMethod } from '../../../utils/methodsContent'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 
@@ -199,6 +201,10 @@ export default function TodayTab() {
   const { locale } = useLocale()
   const { user } = useAuth()
   const de = locale === 'de'
+  // Methods drawer — the "how is this calculated?" transparency sheet for the
+  // readiness score (backlog 02·K3). Tiny isolated affordance; owns its own
+  // portal, so it never perturbs the flagship aura.
+  const methods = useMethods()
   const today = useMemo(() => new Date(), [])
   // ONE source of truth for the session of the day (shared with PlanTab):
   // brief coerced to the plan row + ONE DailyDecision + honest week fallback.
@@ -1058,7 +1064,19 @@ export default function TodayTab() {
               row (session wrap-up / wind-down). */}
           {moment === 'morning' ? (
             <div className="flex flex-col gap-2.5">
-              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{tFor(locale, 'drivers_label')}</span>
+              <div className="flex items-center justify-between">
+                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{tFor(locale, 'drivers_label')}</span>
+                <button
+                  type="button"
+                  onClick={() => methods.open(buildReadinessMethod(locale, { hrv: hrvNow, rhr: restingHr, sleep: sleepScore, tsb, score: score ?? null }))}
+                  aria-label={de ? 'Wie wird das berechnet?' : 'How is this calculated?'}
+                  className="inline-flex items-center gap-1 rounded-full"
+                  style={{ padding: '4px 10px', background: '#FFFFFF10', border: '1px solid #FFFFFF1F', color: '#FFFFFFB3' }}
+                >
+                  <Info size={12} />
+                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em' }}>{de ? 'Wie berechnet?' : 'How?'}</span>
+                </button>
+              </div>
               <div className="grid grid-cols-3 gap-2.5">
                 {driverChips.map((d, i) => {
                   const Icon = d.icon
@@ -1308,6 +1326,9 @@ export default function TodayTab() {
           <ChevronRight size={16} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />
         </Link>
       )}
+
+      {/* Methods drawer — "Wie wird das berechnet?" for the readiness score. */}
+      {methods.sheet}
     </div>
   )
 }

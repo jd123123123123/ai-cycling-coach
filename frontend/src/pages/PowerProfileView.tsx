@@ -25,6 +25,8 @@ import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { updateProfile } from '../api/athletes'
 import { useLocale } from '../contexts/LocaleContext'
 import { useGlossary } from '../components/ui/GlossarySheet'
+import { useMethods } from '../components/ui/MethodsDrawer'
+import { buildCpMethod } from '../utils/methodsContent'
 
 const DASH = '—'
 const RADIUS = 24
@@ -38,6 +40,7 @@ export default function PowerProfileView() {
   const de = locale === 'de'
   const navigate = useNavigate()
   const glossary = useGlossary()
+  const methods = useMethods()
   const { data, isLoading } = usePowerProfileView()
   const profileQ = useAthleteProfile()
   const [editOpen, setEditOpen] = useState(false)
@@ -167,7 +170,31 @@ export default function PowerProfileView() {
         <div className="flex flex-col gap-3.5" style={{ ...CARD, padding: 18 }}>
           <div className="flex items-center justify-between">
             {sectionHead(<Gauge size={18} style={{ color: 'var(--color-accent)' }} />, de ? 'Dein Motor' : 'Your engine')}
-            {cp != null && <ConfidenceChip confidence={confidence} de={de} />}
+            <div className="flex items-center gap-2">
+              {cp != null && <ConfidenceChip confidence={confidence} de={de} />}
+              {cp != null && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    methods.open(
+                      buildCpMethod(locale, {
+                        cp,
+                        wPrimeJ,
+                        eftp,
+                        rSquared: data?.r_squared ?? null,
+                        confidence,
+                        ridesN,
+                      }),
+                    )
+                  }
+                  aria-label={de ? 'Wie wird das berechnet?' : 'How is this calculated?'}
+                  className="grid place-items-center rounded-full"
+                  style={{ width: 30, height: 30, border: '1px solid var(--color-rule)', background: 'var(--color-paper-2)', color: 'var(--color-muted)' }}
+                >
+                  <Info size={15} />
+                </button>
+              )}
+            </div>
           </div>
           {cp != null ? (
             <>
@@ -410,6 +437,7 @@ export default function PowerProfileView() {
         )}
       </div>
       {glossary.sheet}
+      {methods.sheet}
       <StatsEditSheet
         open={editOpen}
         onClose={() => setEditOpen(false)}
