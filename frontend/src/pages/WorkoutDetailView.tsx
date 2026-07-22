@@ -16,7 +16,7 @@ import { useNavigate, useParams, Navigate } from 'react-router-dom'
 import { format, parseISO, differenceInCalendarWeeks } from 'date-fns'
 import {
   ChevronLeft, ChevronRight, Share2, Bike, Repeat, Zap, Heart, Gauge, Droplet,
-  Cookie, SlidersHorizontal, Brain, Flag, MessageCircle, Home, CalendarClock,
+  Cookie, Brain, Flag, MessageCircle, Home, CalendarClock,
 } from 'lucide-react'
 import { formatDate } from '../utils/format'
 import { useCoachBrief } from '../hooks/useCoachBrief'
@@ -27,6 +27,7 @@ import { localDayKey } from '../utils/loadMetrics'
 import { useLocale } from '../contexts/LocaleContext'
 import { workoutDisplayTitle, workoutDisplayPurpose, workoutDisplayRationale } from '../api/coach'
 import BlockBars, { zoneColor, zoneForPct } from '../components/workout/BlockBars'
+import WorkoutExportCard, { type ExportBlockReason } from '../components/workout/WorkoutExportCard'
 import type { ResolvedBlock, PrescribedWorkout } from '../api/coach'
 import type { CustomBlock } from '../api/customWorkouts'
 import type { DayPlan } from '../api/weeks'
@@ -355,6 +356,20 @@ export default function WorkoutDetailView() {
 
   const eyebrow = { fontSize: 12, fontWeight: 700, letterSpacing: '1.5px', color: 'var(--color-ink-2)' } as const
 
+  // ── Export gating (backlog 02·I1) ──────────────────────────────────────────
+  // Only structured power workouts export. The endpoint serves TODAY's brief,
+  // so a future planned day is honestly disabled; today without an FTP anchor
+  // (endpoint would 400) is disabled too.
+  const structured = w.blocks.length > 0 && w.blocks.some((b) => (b.target_pct_ftp ?? 0) > 0 || b.target_watts_high > 0)
+  const exportAvailable = isToday && structured && ftp != null && ftp > 0
+  const exportReason: ExportBlockReason = !structured
+    ? 'no_structure'
+    : !isToday
+      ? 'future'
+      : ftp == null || ftp <= 0
+        ? 'no_ftp'
+        : null
+
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
       <div className="mx-auto w-full max-w-md">
@@ -642,17 +657,8 @@ export default function WorkoutDetailView() {
             ))}
           </div>
 
-          {/* ── Export CTA ────────────────────────────────────────────────── */}
-          <div className="flex flex-col gap-[10px]">
-            <button type="button" className="flex items-center justify-center gap-2" style={{ borderRadius: 100, padding: '16px 20px', background: 'var(--color-accent)', boxShadow: '0 6px 20px -4px #FF5A3C55' }}>
-              <Share2 size={20} style={{ color: '#FFFFFF' }} />
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF' }}>{de ? 'Workout exportieren' : 'Export workout'}</span>
-            </button>
-            <button type="button" onClick={onEditWorkout} className="flex items-center justify-center gap-[6px]" style={{ padding: '8px 0' }}>
-              <SlidersHorizontal size={16} style={{ color: 'var(--color-ink-2)' }} />
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Einheit bearbeiten' : 'Edit workout'}</span>
-            </button>
-          </div>
+          {/* ── Export CTA (backlog 02·I1 — .zwo/.erg/.mrc/.fit) ──────────── */}
+          <WorkoutExportCard available={exportAvailable} reason={exportReason} onEditWorkout={onEditWorkout} />
 
         </div>
       </div>

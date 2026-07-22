@@ -265,7 +265,40 @@ export const STRINGS = {
 
   // WorkoutExportRow
   export_workout_eyebrow: { en: 'Export workout', de: 'Workout exportieren' },
-  export_failed: { en: 'Export failed.', de: 'Export fehlgeschlagen.' },
+  export_failed: { en: 'Export failed. Try again.', de: 'Export fehlgeschlagen. Nochmal versuchen.' },
+  export_head_unit_sub: { en: 'Get it on your head unit', de: 'Auf deinen Radcomputer laden' },
+  export_pick_format: { en: 'Choose a format', de: 'Format wählen' },
+  export_fmt_zwo_app: { en: 'Zwift', de: 'Zwift' },
+  export_fmt_erg_app: { en: 'Wahoo · TrainerRoad', de: 'Wahoo · TrainerRoad' },
+  export_fmt_mrc_app: { en: 'MRC · % FTP by time', de: 'MRC · % FTP nach Zeit' },
+  export_fmt_fit_app: { en: 'Garmin Edge · Karoo', de: 'Garmin Edge · Karoo' },
+  export_guide_title: { en: 'How to load it', de: 'So lädst du es' },
+  export_guide_garmin: {
+    en: 'Garmin Edge / Karoo — drop the .FIT into the /Workouts folder.',
+    de: 'Garmin Edge / Karoo — die .FIT in den /Workouts-Ordner kopieren.',
+  },
+  export_guide_wahoo: {
+    en: 'Wahoo / TrainerRoad — import the .ERG or .ZWO in the app.',
+    de: 'Wahoo / TrainerRoad — die .ERG oder .ZWO in der App importieren.',
+  },
+  export_guide_zwift: {
+    en: 'Zwift — put the .ZWO in your Documents/Zwift/Workouts folder.',
+    de: 'Zwift — die .ZWO in den Ordner Dokumente/Zwift/Workouts legen.',
+  },
+  export_downloading: { en: 'Preparing…', de: 'Wird vorbereitet…' },
+  export_edit_workout: { en: 'Edit workout', de: 'Einheit bearbeiten' },
+  export_unavailable_future: {
+    en: 'Export unlocks on the training day, once the coach finalizes the session.',
+    de: 'Export ist am Trainingstag verfügbar, sobald der Coach die Einheit finalisiert.',
+  },
+  export_needs_ftp: {
+    en: 'Set your FTP to export — it anchors the power targets.',
+    de: 'FTP festlegen, um zu exportieren — sie verankert die Leistungsziele.',
+  },
+  export_no_structure: {
+    en: 'This session has no structured power blocks to export.',
+    de: 'Diese Einheit hat keine strukturierten Leistungsblöcke zum Exportieren.',
+  },
   snooze_one_day: { en: 'Snooze 1 day', de: '1 Tag verschieben' },
   back_to_prescribed: { en: 'Back to prescribed', de: 'Zurück zum Plan' },
   metric_duration: { en: 'DURATION', de: 'DAUER' },
