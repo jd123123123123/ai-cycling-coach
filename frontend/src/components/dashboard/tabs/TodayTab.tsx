@@ -11,7 +11,7 @@
  * them), RecoveryEtaCard (Recovery owns the outlook), LevelStripCard
  * (Achievements/History own progress). Every value is real Garmin/backend data.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { COACH_BRIEF_KEY_ROOT } from '../../../hooks/useCoachBrief'
 import { subDays } from 'date-fns'
@@ -26,7 +26,7 @@ import WeatherWindowCard from '../WeatherWindowCard'
 import FitnessFreshnessCard from '../FitnessFreshnessCard'
 import ThisWeekCard from '../ThisWeekCard'
 import ExtraSessionsCard from '../ExtraSessionsCard'
-import ShaderCanvas from '../../wrapped/ShaderCanvas'
+import { useAura } from '../AuraContext'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
 import AbsorptionCard from '../AbsorptionCard'
@@ -853,6 +853,14 @@ export default function TodayTab() {
   })
   const fColors = flagshipColors(fState)
   const auraColor = fColors.aura
+  // Publish the state-keyed aura colour up to DashboardShell, which paints it
+  // full-screen behind <main> (header bar included). Cleared on unmount so the
+  // aura only shows on Today.
+  const { setAura } = useAura()
+  useEffect(() => {
+    setAura(auraColor)
+    return () => setAura(null)
+  }, [auraColor, setAura])
   const ringColor = fColors.ring
   const ringGradient = fColors.gradient
   const ringGlow = fColors.glow
@@ -918,11 +926,8 @@ export default function TodayTab() {
           the shader's u_bg so it blends seamlessly with the app chrome. Pending
           → the calm muted aura. Freezes under reduced-motion, pauses offscreen
           (ShaderCanvas contract). */}
-      <ShaderCanvas
-        variant="aura"
-        uniforms={{ u_aura: auraColor, u_bg: '#0A0C0F' }}
-        style={{ position: 'absolute', top: 0, left: '-1rem', width: 'calc(100% + 2rem)', height: '100%', zIndex: -1, pointerEvents: 'none' }}
-      />
+      {/* The readiness aura is painted full-screen by DashboardShell (behind the
+          header bar too); TodayTab just publishes its state colour via useAura. */}
 
       {/* 1 · Header (pen Header) — greeting + date (+ race-in-N-days) + weather
           pill. Avatar → power-profile is kept as a real nav affordance. */}

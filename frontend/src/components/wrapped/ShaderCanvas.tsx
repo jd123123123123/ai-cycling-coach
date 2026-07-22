@@ -122,23 +122,20 @@ void main(){
 uniform vec3 u_aura; uniform vec3 u_bg;
 void main(){
   vec2 uv=gl_FragCoord.xy/u_res;
-  vec2 center=vec2(0.5,0.70);
-  vec2 p=uv*2.1;
-  float t=u_time*0.14;
-  float breathe=0.9+0.1*sin(u_time*0.55);
-  vec2 q=vec2(fbm(p+t), fbm(p+vec2(3.1,1.7)-t*0.8));
-  float flow=fbm(p+1.7*q+vec2(2.2,4.4)+t*0.5);
-  float d=distance(uv,center);
-  float bloom=smoothstep(1.05,0.0,d)*(0.5+0.75*flow)*breathe;
-  float halo=pow(smoothstep(0.62,0.0,d),2.2)*breathe;
+  uv.y=1.0-uv.y;
+  float aspect=u_res.x/u_res.y;
+  vec2 c=vec2(0.5,0.34);
+  vec2 p=(uv-c)*vec2(aspect,1.0);
+  float r=length(p);
   vec3 col=u_bg;
-  col=mix(col,u_aura,clamp(bloom*0.55,0.0,1.0));
-  col+=u_aura*halo*0.34;
-  col+=0.06*u_aura*flow;
-  col+=0.03*u_aura*sin((uv.x+uv.y)*6.0-u_time*0.6);
-  float vig=smoothstep(1.35,0.35,length(uv-0.5));
-  col*=0.80+0.20*vig;
-  col+=(hash(uv*u_res)-0.5)*0.015;
+  float breath=0.5+0.5*sin(u_time*1.15);
+  float glow=smoothstep(0.72,0.0,r)*(0.34+0.24*breath);
+  col+=u_aura*glow;
+  float wave=sin(r*13.0-u_time*2.0);
+  float rings=smoothstep(0.55,1.0,wave)*smoothstep(0.95,0.18,r)*0.05;
+  col+=u_aura*rings;
+  col*=smoothstep(1.25,0.15,uv.y)*0.45+0.62;
+  col+=(hash(gl_FragCoord.xy+u_time)-0.5)*0.028;
   gl_FragColor=vec4(col,1.0);
 }
 `,
