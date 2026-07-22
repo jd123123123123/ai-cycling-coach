@@ -17,6 +17,7 @@ from app.models.mesocycle_plan import MesocyclePlan  # noqa: F401
 from app.models.crew import Crew, CrewInvite, CrewMembership  # noqa: F401
 from app.models.crew_nudge import CrewNudge  # noqa: F401
 from app.models.crew_challenge import CrewChallenge  # noqa: F401
+from app.models.crew_event import CrewEvent, CrewEventAttendee  # noqa: F401
 from app.models.activity_stream import ActivityStream  # noqa: F401
 from app.models.plan_adaptation import PlanAdaptation  # noqa: F401
 from app.models.ride_feedback import RideFeedback  # noqa: F401
@@ -34,7 +35,8 @@ __all__ = [
     "DailyMetric", "PlannedWorkout", "DailyMetricSample", "CoachBrief",
     "PlanAdaptation",
     "UserDashboard", "UserTabLayout", "PeriodReportCache", "CoachRecommendation", "MesocyclePlan",
-    "Crew", "CrewMembership", "CrewInvite", "CrewNudge", "CrewChallenge", "ActivityStream",
+    "Crew", "CrewMembership", "CrewInvite", "CrewNudge", "CrewChallenge",
+    "CrewEvent", "CrewEventAttendee", "ActivityStream",
     "RideFeedback", "CustomWorkout",
     "StrengthRoutine", "RoutineExercise", "StrengthSession", "StrengthSetLog",
 ]

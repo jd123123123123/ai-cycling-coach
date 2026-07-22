@@ -218,6 +218,7 @@ from app.api.weather import router as weather_router  # noqa: E402
 from app.api.plan import router as plan_router  # noqa: E402
 from app.api.custom_workouts import router as custom_workouts_router  # noqa: E402
 from app.api.health import router as health_router  # noqa: E402
+from app.api.crew_events import router as crew_events_router  # noqa: E402
 
 app.include_router(push_router)
 app.include_router(climbs_router)
@@ -228,6 +229,7 @@ app.include_router(weather_router)
 app.include_router(plan_router)
 app.include_router(custom_workouts_router)
 app.include_router(health_router)
+app.include_router(crew_events_router)
 
 
 @app.get("/healthz", tags=["health"])

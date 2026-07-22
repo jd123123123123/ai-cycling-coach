@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     # read-only on bare-metal macOS dev — override via env var when running natively.
     GARMIN_TOKEN_STORE_ROOT: str = "/data/garmin_tokens"
 
+    # Root directory for uploaded crew-event GPX tours (one {event_id}.gpx per
+    # event). Container default is /data/crew_tours (Railway volume-mounted);
+    # override to a local writable path in dev (backend/.env) since /data is
+    # read-only on bare-metal macOS. The API os.makedirs(..., exist_ok=True)s
+    # this before writing.
+    CREW_TOURS_ROOT: str = "/data/crew_tours"
+
     # ------------------------------------------------------------------
     # Wahoo Cloud API (OAuth2 authorization-code flow).
     # The Wahoo integration is "configured" only when both the client id

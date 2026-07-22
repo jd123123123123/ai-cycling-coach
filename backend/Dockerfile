@@ -20,6 +20,9 @@ COPY . .
 # Garmin OAuth token store lives here; back it with a Railway volume mounted at /data.
 ENV GARMIN_TOKEN_STORE_ROOT=/data/garmin_tokens
 
+# Uploaded crew-event GPX tours live here; same /data Railway volume.
+ENV CREW_TOURS_ROOT=/data/crew_tours
+
 # Run migrations, then boot the API on Railway's injected $PORT.
 RUN chmod +x start.sh
 CMD ["./start.sh"]
