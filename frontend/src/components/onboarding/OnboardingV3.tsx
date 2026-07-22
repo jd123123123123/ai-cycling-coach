@@ -1,4 +1,12 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'motion/react'
@@ -149,7 +157,47 @@ export default function OnboardingV3() {
   const [goalMode, setGoalMode] = useState<GoalMode | null>(null)
   const [eventName, setEventName] = useState('')
   const [eventDate, setEventDate] = useState('')
+  // Depth defaults to the plain-language "Guide me" mode for self-identified
+  // beginners (backlog A1) — the single biggest churn-killer for casual,
+  // non-power riders. A beginner is signalled two ways: the "Just starting"
+  // self-assessment card on the Numbers screen (selfLevel === 'new'), or —
+  // when they never open that card — the total absence of power data to coach
+  // from (no power-meter FTP estimate and no saved FTP). Advanced/returning
+  // riders keep 'numbers'. This is a DEFAULT, never a lock: an explicit depth
+  // tap on this screen, or a returning athlete's saved detail_level, wins.
   const [depth, setDepth] = useState<Depth>('numbers')
+  const [depthTouched, setDepthTouched] = useState(false)
+
+  const isBeginner =
+    selfLevel === 'new' ||
+    (selfLevel == null && est == null && profile?.ftp_watts == null)
+
+  // A returning athlete who already chose a detail level keeps it verbatim —
+  // seeded once, and marked "touched" so the beginner default never silently
+  // downgrades their explicit prior choice.
+  const seededFromProfile = useRef(false)
+  useEffect(() => {
+    if (seededFromProfile.current) return
+    const saved = profile?.detail_level
+    if (saved === 'guide' || saved === 'numbers' || saved === 'pro') {
+      seededFromProfile.current = true
+      setDepth(saved)
+      setDepthTouched(true)
+    }
+  }, [profile?.detail_level])
+
+  // Follow the beginner signal until the athlete makes an explicit choice.
+  useEffect(() => {
+    if (depthTouched) return
+    setDepth(isBeginner ? 'guide' : 'numbers')
+  }, [isBeginner, depthTouched])
+
+  // Any tap on the depth selector is an explicit choice — stop auto-defaulting.
+  const chooseDepth = useCallback((next: Depth) => {
+    setDepthTouched(true)
+    setDepth(next)
+  }, [])
+
   const [hours, setHours] = useState(profile?.weekly_hours_available ?? 8)
   // Sensible starter selection (Tue/Thu/Sat/Sun) — NOT all seven days; a
   // 7-day default silently promised daily training (review finding 4c).
@@ -332,7 +380,7 @@ export default function OnboardingV3() {
                 eventDate={eventDate}
                 setEventDate={setEventDate}
                 depth={depth}
-                setDepth={setDepth}
+                setDepth={chooseDepth}
                 hours={hours}
                 setHours={setHours}
                 days={days}
