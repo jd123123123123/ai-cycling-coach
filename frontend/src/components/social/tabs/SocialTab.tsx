@@ -10,12 +10,19 @@
  * structure with honest "—"/empty notes — never fabricated.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Swords, Trophy, Flame, Check, Users, UserPlus, Bell, Clock,
   Hand, Scale, Info, BarChart3, Bike, MessageCircle, Share2, ChevronRight,
   Mountain, Search, X, Send, LogOut, Plus, Sparkles, Inbox, Target, Trash2,
+  Calendar, MapPin, Upload, Download, Route as RouteIcon, Sunrise, Zap, Flag,
 } from 'lucide-react'
+import {
+  useCrewEvents, useCreateCrewEvent, useRsvpCrewEvent, useUploadCrewEventTour,
+} from '../../../hooks/useCrewEvents'
+import type { CrewEvent, EventKind, RsvpStatus, CreateEventInput } from '../../../api/crewEvents'
+import RouteMini from '../RouteMini'
 import {
   useDuel, useCrewStandings, useMyCrew, useCreateCrew, useLeaveCrew,
 } from '../../../hooks/useCrew'
@@ -224,6 +231,16 @@ export default function SocialTab() {
   // ── Crew membership mutations ──
   const leaveCrew = useLeaveCrew()
   const [leaveConfirm, setLeaveConfirm] = useState(false)
+  const navigate = useNavigate()
+
+  // ── Crew events (group rides / chaingangs / races the crew plans together) ──
+  const { data: crewEventsData } = useCrewEvents()
+  const crewEvents = crewEventsData ?? []
+  const createEvent = useCreateCrewEvent()
+  const rsvpEvent = useRsvpCrewEvent()
+  const uploadTour = useUploadCrewEventTour()
+  const [eventFormOpen, setEventFormOpen] = useState(false)
+  const eventsRef = useRef<HTMLDivElement>(null)
 
   // ── Inbox (bell) + battle details toggles ──
   const [inboxOpen, setInboxOpen] = useState(false)
@@ -549,6 +566,16 @@ export default function SocialTab() {
             <UserPlus size={16} style={{ color: 'var(--color-ink)' }} />
             <span className="num-display" style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Fahrer einladen' : 'Invite riders'}</span>
           </button>
+          {/* Deep-link to the Crew Week Highlights surface (?tab=crew). */}
+          <button type="button" onClick={() => navigate('/dashboard?tab=crew')} className="inline-flex items-center gap-2 rounded-[12px] w-full" style={{ background: 'var(--color-surface-2)', padding: '10px 12px' }}>
+            <Sparkles size={16} style={{ color: 'var(--color-gold)', flexShrink: 0 }} />
+            <span className="flex-1 text-left" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>
+              {combinedKm > 0
+                ? (de ? `${combinedKm.toLocaleString('de')} km zusammen — Highlights ansehen` : `${combinedKm.toLocaleString('en')} km together — see highlights`)
+                : (de ? 'Crew-Highlights ansehen' : 'See crew highlights')}
+            </span>
+            <ChevronRight size={16} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+          </button>
           {leaveConfirm ? (
             <div className="flex items-center gap-2.5 rounded-full" style={{ background: 'var(--color-surface-3)', padding: '8px 8px 8px 14px' }}>
               <span className="flex-1 min-w-0" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Crew wirklich verlassen?' : 'Leave this crew?'}</span>
@@ -829,6 +856,75 @@ export default function SocialTab() {
         ) : (
           <p style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>{de ? 'Sammle diese Woche Trainingslast, um Challenges zu starten.' : 'Bank some training load this week to start challenges.'}</p>
         )}
+      </div>
+
+      {/* ── CREW EVENTS — group rides / chaingangs / races the crew plans
+          together. Real backend (/crews/me/events): list, create, RSVP, and an
+          uploaded GPX tour rendered as a route on the card. ── */}
+      <div ref={eventsRef} className="rounded-[24px] p-5 flex flex-col gap-3" style={cardStyle}>
+        <div className="flex items-center justify-between">
+          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Crew-Events' : 'Crew events'}</span>
+          <button type="button" onClick={() => setEventFormOpen((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full shrink-0" style={{ background: eventFormOpen ? 'var(--color-surface-2)' : 'color-mix(in srgb, var(--color-accent) 15%, transparent)', border: `1px solid ${eventFormOpen ? 'var(--color-rule)' : 'var(--color-accent)'}`, padding: '5px 11px' }}>
+            {eventFormOpen ? <X size={14} style={{ color: 'var(--color-ink-2)' }} /> : <Plus size={14} style={{ color: 'var(--color-accent)' }} />}
+            <span style={{ fontSize: 12, fontWeight: 700, color: eventFormOpen ? 'var(--color-ink-2)' : 'var(--color-accent)' }}>{eventFormOpen ? (de ? 'Abbrechen' : 'Cancel') : (de ? 'Neu' : 'New')}</span>
+          </button>
+        </div>
+
+        {eventFormOpen && (
+          <NewEventForm
+            de={de}
+            pending={createEvent.isPending}
+            error={createEvent.isError}
+            onSubmit={(input) => createEvent.mutate(input, { onSuccess: () => setEventFormOpen(false) })}
+          />
+        )}
+
+        {crewInfo.exists ? (
+          crewEvents.length > 0 ? (
+            crewEvents.map((ev) => (
+              <EventCard
+                key={ev.id}
+                ev={ev}
+                de={de}
+                canUploadTour={myId != null && ev.creator_user_id === myId}
+                onRsvp={(status) => rsvpEvent.mutate({ eventId: ev.id, status })}
+                rsvpPending={rsvpEvent.isPending && rsvpEvent.variables?.eventId === ev.id}
+                onUploadTour={(file) => uploadTour.mutate({ eventId: ev.id, file })}
+                uploading={uploadTour.isPending && uploadTour.variables?.eventId === ev.id}
+                uploadError={uploadTour.isError && uploadTour.variables?.eventId === ev.id}
+              />
+            ))
+          ) : (
+            <div className="flex items-center gap-2.5 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: 14 }}>
+              <span className="grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, background: 'var(--color-surface-3)' }}><Calendar size={19} style={{ color: 'var(--color-muted)' }} /></span>
+              <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.35 }}>
+                {de ? 'Noch keine Events geplant — leg das erste Crew-Ride an.' : 'No events planned yet — create the first crew ride.'}
+              </span>
+            </div>
+          )
+        ) : (
+          <div className="flex items-center gap-2.5 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: 14 }}>
+            <span className="grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, background: 'var(--color-surface-3)' }}><Calendar size={19} style={{ color: 'var(--color-muted)' }} /></span>
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.35 }}>
+              {de ? 'Tritt einer Crew bei, um gemeinsame Rides zu planen.' : 'Join a crew to plan rides together.'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── CREW CHAT — no chat backend exists yet: an honest coming-soon
+          preview rather than fabricated messages. ── */}
+      <div className="rounded-[24px] p-5 flex flex-col gap-3" style={cardStyle}>
+        <div className="flex items-center justify-between">
+          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Crew-Chat' : 'Crew chat'}</span>
+          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'BALD' : 'SOON'}</span>
+        </div>
+        <div className="flex items-center gap-2.5 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: 14 }}>
+          <span className="grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, background: 'var(--color-surface-3)' }}><MessageCircle size={19} style={{ color: 'var(--color-muted)' }} /></span>
+          <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.35 }}>
+            {de ? 'Crew-Chat ist noch nicht verbunden — bis dahin stupse deine Crew über die Duelle an.' : "Crew chat isn't connected yet — nudge your crew from the duels until it lands."}
+          </span>
+        </div>
       </div>
 
       {/* ── FEED ── */}
@@ -1513,6 +1609,229 @@ function NudgeCard({ n, de, onDismiss, dismissing }: { n: IncomingNudge; de: boo
       <button type="button" onClick={onDismiss} disabled={dismissing} aria-label={de ? 'Erledigt' : 'Dismiss'} className="grid place-items-center rounded-full shrink-0" style={{ width: 32, height: 32, background: 'var(--color-surface-2)', opacity: dismissing ? 0.6 : 1 }}>
         <Check size={16} style={{ color: 'var(--color-ink-2)' }} />
       </button>
+    </div>
+  )
+}
+
+// ── Crew events ───────────────────────────────────────────────────────
+
+// kind → accent colour, icon, and localized label for the date chip + tag.
+const EVENT_KINDS: Array<{ value: EventKind; icon: typeof Bike; color: string; en: string; de: string }> = [
+  { value: 'group_ride', icon: Bike, color: 'var(--color-accent)', en: 'Group ride', de: 'Gruppenausfahrt' },
+  { value: 'sunrise_ride', icon: Sunrise, color: 'var(--color-gold)', en: 'Sunrise ride', de: 'Sunrise-Ride' },
+  { value: 'chaingang', icon: Zap, color: 'var(--color-strain)', en: 'Chaingang', de: 'Chaingang' },
+  { value: 'race', icon: Flag, color: 'var(--color-recovery)', en: 'Race', de: 'Rennen' },
+]
+function eventKindDef(kind: string) {
+  return EVENT_KINDS.find((k) => k.value === kind) ?? EVENT_KINDS[0]
+}
+
+function EventCard({ ev, de, canUploadTour, onRsvp, rsvpPending, onUploadTour, uploading, uploadError }: {
+  ev: CrewEvent
+  de: boolean
+  canUploadTour: boolean
+  onRsvp: (status: RsvpStatus) => void
+  rsvpPending: boolean
+  onUploadTour: (file: File) => void
+  uploading: boolean
+  uploadError: boolean
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [downloading, setDownloading] = useState(false)
+  const kind = eventKindDef(ev.kind)
+  const start = new Date(ev.starts_at)
+  const loc = de ? 'de-DE' : 'en-GB'
+  const weekday = start.toLocaleDateString(loc, { weekday: 'short' }).toUpperCase()
+  const time = start.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' })
+  const dateLong = start.toLocaleDateString(loc, { day: 'numeric', month: 'short' })
+
+  const km = ev.tour_distance_m != null ? Math.round(ev.tour_distance_m / 1000) : null
+  const elev = ev.tour_elevation_m != null ? Math.round(ev.tour_elevation_m) : null
+  const goingLabel = de ? `${ev.going_count} dabei` : `${ev.going_count} going`
+  const meta = [
+    km != null ? `${km} km` : null,
+    elev != null ? `${elev} m` : null,
+    goingLabel,
+  ].filter(Boolean).join(' · ')
+
+  const going = ev.my_status === 'going'
+  const maybe = ev.my_status === 'maybe'
+
+  async function onDownload() {
+    setDownloading(true)
+    try {
+      const { downloadCrewEventTour } = await import('../../../api/crewEvents')
+      await downloadCrewEventTour(ev.id, ev.tour_filename)
+    } catch {
+      /* ignore — network/permission surfaced by the browser */
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: 10 }}>
+      {/* Head: date chip · name/meta · RSVP */}
+      <div className="flex items-center gap-3">
+        <div className="grid place-items-center rounded-[12px] shrink-0" style={{ width: 48, height: 48, background: `color-mix(in srgb, ${kind.color} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${kind.color} 40%, transparent)` }}>
+          <span className="num-display" style={{ fontSize: 13, color: kind.color, lineHeight: 1 }}>{weekday}</span>
+          <span className="num-mono" style={{ fontSize: 10, fontWeight: 600, color: kind.color, marginTop: 2 }}>{time}</span>
+        </div>
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+          <span className="truncate" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{ev.name}</span>
+          <span className="truncate" style={{ fontSize: 12, color: 'var(--color-muted)' }}>{meta}</span>
+        </div>
+        <div className="flex flex-col gap-1 shrink-0">
+          <button type="button" onClick={() => onRsvp(going ? 'out' : 'going')} disabled={rsvpPending} aria-pressed={going}
+            className="inline-flex items-center justify-center gap-1 rounded-full"
+            style={{ background: going ? 'color-mix(in srgb, var(--color-recovery) 16%, transparent)' : 'var(--color-accent)', border: going ? '1px solid var(--color-recovery)' : '1px solid var(--color-accent)', padding: '6px 12px', opacity: rsvpPending ? 0.6 : 1 }}>
+            {going && <Check size={13} strokeWidth={3} style={{ color: 'var(--color-recovery)' }} />}
+            <span style={{ fontSize: 12, fontWeight: 800, color: going ? 'var(--color-recovery)' : 'var(--color-ink)' }}>{going ? (de ? 'Dabei' : 'Going') : (de ? 'Mitfahren' : 'Join')}</span>
+          </button>
+          <button type="button" onClick={() => onRsvp(maybe ? 'out' : 'maybe')} disabled={rsvpPending} aria-pressed={maybe}
+            className="inline-flex items-center justify-center rounded-full"
+            style={{ background: maybe ? 'color-mix(in srgb, var(--color-amber) 18%, transparent)' : 'transparent', border: `1px solid ${maybe ? 'var(--color-amber)' : 'var(--color-rule)'}`, padding: '4px 12px', opacity: rsvpPending ? 0.6 : 1 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: maybe ? 'var(--color-amber)' : 'var(--color-muted)' }}>{de ? 'Vielleicht' : 'Maybe'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Meeting point */}
+      {ev.meeting_point && (
+        <div className="flex items-center gap-1.5">
+          <MapPin size={13} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+          <span className="truncate" style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{ev.meeting_point}</span>
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{dateLong}</span>
+        </div>
+      )}
+
+      {/* Tour route visualization */}
+      {ev.has_tour && ev.tour_polyline && ev.tour_polyline.length > 1 && (
+        <div className="rounded-[12px] overflow-hidden" style={{ background: 'var(--color-paper)', border: '1px solid var(--color-rule)' }}>
+          <RouteMini polyline={ev.tour_polyline} ariaLabel={de ? `Route für ${ev.name}` : `Route for ${ev.name}`} />
+          <div className="flex items-center gap-3 flex-wrap" style={{ padding: '8px 12px', borderTop: '1px solid var(--color-rule)' }}>
+            <div className="flex items-center gap-1.5">
+              <RouteIcon size={13} style={{ color: 'var(--color-accent)' }} />
+              <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-ink)' }}>{km ?? '—'} km</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Mountain size={13} style={{ color: 'var(--color-gold)' }} />
+              <span className="num-mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-ink)' }}>{elev ?? '—'} m</span>
+            </div>
+            <span style={{ flex: 1 }} />
+            <button type="button" onClick={onDownload} disabled={downloading} className="inline-flex items-center gap-1.5 rounded-full" style={{ background: 'var(--color-surface-2)', padding: '6px 12px', opacity: downloading ? 0.6 : 1 }}>
+              <Download size={13} style={{ color: 'var(--color-ink-2)' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)' }}>{de ? 'GPX' : 'GPX'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tour upload (creator only, when no tour yet) */}
+      {canUploadTour && !ev.has_tour && (
+        <>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".gpx,application/gpx+xml,application/xml,text/xml"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) onUploadTour(f)
+              e.target.value = ''
+            }}
+          />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center justify-center gap-1.5 rounded-full w-full" style={{ background: 'var(--color-surface-3)', border: '1px dashed var(--color-rule)', padding: 10, opacity: uploading ? 0.6 : 1 }}>
+            <Upload size={14} style={{ color: 'var(--color-accent)' }} />
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--color-ink-2)' }}>{uploading ? (de ? 'Lädt hoch…' : 'Uploading…') : (de ? 'Tour hochladen (GPX)' : 'Upload tour (GPX)')}</span>
+          </button>
+        </>
+      )}
+      {uploadError && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Upload fehlgeschlagen — nur GPX bis 10 MB.' : 'Upload failed — GPX only, up to 10 MB.'}</span>
+      )}
+    </div>
+  )
+}
+
+function NewEventForm({ de, pending, error, onSubmit }: {
+  de: boolean; pending: boolean; error: boolean; onSubmit: (input: CreateEventInput) => void
+}) {
+  const [name, setName] = useState('')
+  const [kind, setKind] = useState<EventKind>('group_ride')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('07:00')
+  const [meeting, setMeeting] = useState('')
+  const trimmed = name.trim()
+  const valid = trimmed.length > 0 && date.length > 0 && time.length > 0
+
+  function submit() {
+    if (!valid || pending) return
+    // Combine the local date + time into an ISO instant.
+    const startsAt = new Date(`${date}T${time}`).toISOString()
+    onSubmit({
+      name: trimmed,
+      kind,
+      starts_at: startsAt,
+      meeting_point: meeting.trim() || null,
+    })
+  }
+
+  const fieldStyle = { background: 'var(--color-paper)', border: '1px solid var(--color-rule)', fontSize: 13, color: 'var(--color-ink)' } as const
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: 14 }}>
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
+        placeholder={de ? 'Event-Name…' : 'Event name…'}
+        className="w-full rounded-full outline-none"
+        style={{ ...fieldStyle, padding: '10px 14px' }}
+      />
+      {/* Kind chips */}
+      <div className="flex gap-1.5 flex-wrap">
+        {EVENT_KINDS.map((k) => {
+          const active = k.value === kind
+          const KIcon = k.icon
+          return (
+            <button key={k.value} type="button" onClick={() => setKind(k.value)} aria-pressed={active}
+              className="inline-flex items-center gap-1.5 rounded-full"
+              style={{ background: active ? `color-mix(in srgb, ${k.color} 18%, transparent)` : 'var(--color-paper)', border: `1px solid ${active ? k.color : 'var(--color-rule)'}`, padding: '6px 11px' }}>
+              <KIcon size={13} style={{ color: active ? k.color : 'var(--color-muted)' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: active ? k.color : 'var(--color-ink-2)' }}>{de ? k.de : k.en}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex gap-2">
+        <label className="flex flex-col gap-1 flex-1 min-w-0">
+          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'DATUM' : 'DATE'}</span>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-full outline-none num-mono" style={{ ...fieldStyle, padding: '9px 12px' }} />
+        </label>
+        <label className="flex flex-col gap-1" style={{ width: 110 }}>
+          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'ZEIT' : 'TIME'}</span>
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full rounded-full outline-none num-mono" style={{ ...fieldStyle, padding: '9px 12px' }} />
+        </label>
+      </div>
+      <input
+        type="text"
+        value={meeting}
+        onChange={(e) => setMeeting(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
+        placeholder={de ? 'Treffpunkt (optional)…' : 'Meeting point (optional)…'}
+        className="w-full rounded-full outline-none"
+        style={{ ...fieldStyle, padding: '10px 14px' }}
+      />
+      <button type="button" onClick={submit} disabled={!valid || pending} className="inline-flex items-center justify-center gap-1.5 rounded-full w-full" style={{ background: 'var(--color-accent)', padding: 12, opacity: !valid || pending ? 0.5 : 1 }}>
+        <Calendar size={15} style={{ color: 'var(--color-ink)' }} />
+        <span className="num-display" style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Event erstellen' : 'Create event'}</span>
+      </button>
+      {error && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Erstellen fehlgeschlagen — versuch es nochmal.' : 'Could not create — try again.'}</span>
+      )}
     </div>
   )
 }
