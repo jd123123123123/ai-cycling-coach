@@ -1,20 +1,22 @@
-"""Scheduled background sweeps (Garmin sync, plan adaptation, brief refresh,
-morning push).
+"""APScheduler setup for background Garmin sync.
 
-Each ``run_*`` coroutine iterates the relevant users and does its work, logging
-and skipping individual failures so one bad user never blocks the rest. These are
-invoked once per run by the Railway cron entrypoint
-(``app.jobs.run_scheduled_jobs``); they no longer run inside the FastAPI process.
+Runs a job every 15 minutes that iterates over all users with sync_enabled=True
+and calls sync_user_garmin for each one.  Individual user failures are logged
+and skipped so one bad credential never blocks the rest.
 
 Design notes:
+- Uses AsyncIOScheduler (same event loop as FastAPI).
 - DB sessions are opened with async_session_maker directly — this is a system-level
   job, not a user request, so RLS is intentionally bypassed.  All queries inside
   sync_user_garmin are already scoped by user_id (WHERE user_id = ...).
+- misfire_grace_time=600 allows the job to run up to 10 minutes late after a
+  server restart without being counted as a missed execution.
 """
 
 import logging
 from datetime import date, timedelta
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
 from app.database import async_session_maker
@@ -24,6 +26,8 @@ from app.models.planned_workout import PlannedWorkout
 from app.services.garmin_sync_service import sync_user_garmin
 
 logger = logging.getLogger(__name__)
+
+scheduler = AsyncIOScheduler(timezone="UTC")
 
 
 async def run_all_user_syncs() -> None:
