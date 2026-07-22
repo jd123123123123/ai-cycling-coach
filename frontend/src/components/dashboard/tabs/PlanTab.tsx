@@ -968,8 +968,8 @@ export default function PlanTab() {
           </span>
           <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
             {de
-              ? 'Weniger Zeit, neues Event oder zu eintönig? Sag es dem Coach — er baut deine Wochen neu.'
-              : 'Less time, a new event, or too repetitive? Tell the coach — it rebuilds your weeks.'}
+              ? 'Neues Ziel-Event oder andere Präferenzen? Wähle deinen Weg — der Coach baut deine Wochen neu.'
+              : 'A new target event or different preferences? Pick your path — the coach rebuilds your weeks.'}
           </span>
         </span>
         <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />

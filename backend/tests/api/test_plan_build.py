@@ -373,6 +373,44 @@ def test_apply_response_carries_hours_reconciliation(client_factory):
     assert body["progression"]["horizon_weeks"] == 12
 
 
+def test_apply_prefs_only_persists_days_and_hours(client_factory):
+    """Präferenzen-anpassen path: the direct form sends only days_available +
+    weekly_hours (no felt_wrong / goal) and both must persist + regenerate in
+    one call."""
+    prof = _profile(weekly_hours_available=12.0)
+    client, _db = client_factory(prof)
+    rebuild = AsyncMock(return_value=dict(_SUMMARY))
+    update = AsyncMock(return_value=prof)
+    with patch("app.api.plan.rebuild_plan", rebuild), \
+         patch("app.api.plan.interview_state", AsyncMock(return_value=dict(_STATE))), \
+         patch("app.services.athlete_service.update_profile", update):
+        res = client.post(
+            "/plan/change/apply",
+            json={"answers": {
+                "weekly_hours": 6.5,
+                "days_available": {
+                    "mon": True, "tue": False, "wed": True, "thu": False,
+                    "fri": False, "sat": True, "sun": True, "long_day": "sat",
+                },
+            }},
+        )
+    assert res.status_code == 200
+    body = res.json()
+
+    # Both preferences landed on the profile in the SAME call.
+    assert body["profile_updates"]["weekly_hours_available"] == 6.5
+    assert body["profile_updates"]["days_available"]["long_day"] == "sat"
+    assert body["profile_updates"]["days_available"]["tue"] is False
+    update.assert_awaited_once()
+
+    # A prefs-only change still regenerates through the shared path; with no
+    # felt_wrong the driving signal comes from the changed preferences.
+    kwargs = rebuild.await_args.kwargs
+    assert kwargs["source"] == "plan_change"
+    assert kwargs["signal"] in ("hours_changed", "days_changed")
+    assert len(body["week"]) == 2
+
+
 def test_apply_no_event_clears_goal(client_factory):
     prof = _profile()
     client, _db = client_factory(prof)
