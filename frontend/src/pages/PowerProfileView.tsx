@@ -16,8 +16,8 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, Share2, LineChart, Zap, Trophy, TrendingUp, Info,
-  Bolt, BarChart3, Flag, Pencil, X,
+  ArrowLeft, Share2, LineChart, Zap, Trophy, TrendingUp, TrendingDown, Info,
+  Bolt, BarChart3, Flag, Pencil, X, Gauge, Check,
 } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import { usePowerProfileView } from '../hooks/usePowerProfileView'
@@ -84,6 +84,29 @@ export default function PowerProfileView() {
   const bench = data?.benchmark ?? null
   const sp = data?.sprint_pedal
 
+  // ── Engine · CP / W′ / eFTP (backlog 02·A2) ──
+  // The athlete-level "this is your engine" model, fit from the athlete's own
+  // MMP envelope. Honest "—" when there aren't enough hard efforts to fit CP.
+  const cp = data?.cp_watts ?? null
+  const wPrimeJ = data?.w_prime_j ?? null
+  const eftp = data?.eftp_watts ?? null
+  const cpWkg = data?.cp_wkg ?? null
+  const confidence = data?.confidence ?? 0
+  const ridesN = data?.rides_with_power ?? null
+
+  // FTP-drift prompt: fire only when the fitted eFTP meaningfully disagrees with
+  // the athlete's *stored* FTP (≥4%) and the fit is trustworthy enough not to
+  // nag. Never auto-changes FTP — the prompt is a one-tap offer, always opt-in.
+  const storedFtp = profileQ.data?.ftp_watts ?? null
+  const eftpRounded = eftp != null ? Math.round(eftp) : null
+  const driftPct =
+    storedFtp != null && storedFtp > 0 && eftpRounded != null
+      ? Math.abs(eftpRounded - storedFtp) / storedFtp
+      : null
+  const showDrift =
+    storedFtp != null && storedFtp > 0 && eftpRounded != null &&
+    confidence >= 0.35 && driftPct != null && driftPct >= 0.04
+
   return (
     <DashboardShell>
       <div className="mx-auto flex flex-col gap-6 px-4 pb-24 pt-3" style={{ maxWidth: 640 }}>
@@ -139,6 +162,73 @@ export default function PowerProfileView() {
             </p>
           )}
         </div>
+
+        {/* ── Engine · CP / W′ / eFTP headline (backlog 02·A2) ── */}
+        <div className="flex flex-col gap-3.5" style={{ ...CARD, padding: 18 }}>
+          <div className="flex items-center justify-between">
+            {sectionHead(<Gauge size={18} style={{ color: 'var(--color-accent)' }} />, de ? 'Dein Motor' : 'Your engine')}
+            {cp != null && <ConfidenceChip confidence={confidence} de={de} />}
+          </div>
+          {cp != null ? (
+            <>
+              <div className="flex items-end justify-between">
+                <button
+                  type="button"
+                  onClick={() => glossary.open('cp', `${fmtInt(cp)} W`)}
+                  className="flex items-end gap-1.5"
+                  style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
+                >
+                  <span className="num-display" style={{ fontSize: 44, lineHeight: 1, color: 'var(--color-ink)' }}>{fmtInt(cp)}</span>
+                  <span className="pb-2" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-muted)', ...TAPPABLE }}>W · CP</span>
+                </button>
+                {cpWkg != null && (
+                  <div className="flex flex-col items-end pb-1.5">
+                    <span className="num-display" style={{ fontSize: 20, color: 'var(--color-recovery)' }}>{fmtWkg(cpWkg)} W/kg</span>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{de ? 'kritische Leistung fürs Gewicht' : 'critical power for your weight'}</span>
+                  </div>
+                )}
+              </div>
+              <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.5 }}>
+                {de
+                  ? 'Die höchste Leistung, die dein Motor dauerhaft hält — modelliert aus deinen eigenen Volleistungen, nicht geschätzt.'
+                  : 'The highest power your engine holds indefinitely — modelled from your own max efforts, not guessed.'}
+              </p>
+              <div style={{ height: 1, background: 'var(--color-rule)' }} />
+              <div className="flex items-stretch gap-3">
+                <EngineStat
+                  label={de ? "W′ · Reserve" : "W′ · reserve"}
+                  value={wPrimeJ != null ? `${fmtWkg(wPrimeJ / 1000)} kJ` : DASH}
+                  onTap={() => glossary.open('w_prime', wPrimeJ != null ? `${fmtWkg(wPrimeJ / 1000)} kJ` : null)}
+                />
+                <div style={{ width: 1, background: 'var(--color-rule)' }} />
+                <EngineStat
+                  label={de ? 'eFTP · geschätzt' : 'eFTP · estimated'}
+                  value={eftp != null ? `${fmtInt(eftp)} W` : DASH}
+                  onTap={() => glossary.open('eftp', eftp != null ? `${fmtInt(eftp)} W` : null)}
+                />
+              </div>
+              {ridesN != null && (
+                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>
+                  {de ? `Angepasst an ${ridesN} Fahrten mit Power.` : `Fitted across ${ridesN} rides with power.`}
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="num-display" style={{ fontSize: 44, lineHeight: 1, color: 'var(--color-muted)' }}>{DASH}</span>
+              <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.5 }}>
+                {de
+                  ? 'Noch nicht genug harte Efforts, um deine kritische Leistung zu modellieren — fahre ein paar kurze und lange Volleistungen (z. B. 1 Min & 5–20 Min), dann rechnet sich dein Motor heraus.'
+                  : "Not enough hard efforts yet to model your critical power — ride a few short and long maximal efforts (e.g. 1 min & 5–20 min) and your engine number falls out."}
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* ── FTP-drift prompt (backlog 02·A2) — gentle, dismissible, opt-in ── */}
+        {showDrift && (
+          <FtpDriftPrompt eftp={eftpRounded!} storedFtp={storedFtp!} de={de} />
+        )}
 
         {/* ── FTP · Threshold card (pen CEBwA) ── */}
         <div className="flex flex-col gap-3.5" style={{ ...CARD, padding: 18 }}>
@@ -410,6 +500,133 @@ function StatsEditSheet({ open, onClose, ftp, weight, de }: {
       </div>
     </div>,
     document.body,
+  )
+}
+
+// Confidence chip for the engine model (backlog 02·A2). Fit quality × data
+// richness (0–1) → an honest, non-numeric label so a weak fit never reads as
+// gospel. Green when solid, gold while it firms up, muted when still building.
+function ConfidenceChip({ confidence, de }: { confidence: number; de: boolean }) {
+  const level = confidence >= 0.7 ? 'high' : confidence >= 0.4 ? 'mid' : 'low'
+  const color =
+    level === 'high' ? 'var(--color-recovery)' : level === 'mid' ? 'var(--color-gold)' : 'var(--color-muted)'
+  const label = de
+    ? level === 'high' ? 'Sichere Schätzung' : level === 'mid' ? 'Solide Schätzung' : 'Baut sich auf'
+    : level === 'high' ? 'High confidence' : level === 'mid' ? 'Solid estimate' : 'Building'
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full"
+      style={{ padding: '3px 10px', background: `color-mix(in srgb, ${color} 15%, transparent)` }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: 3, background: color }} />
+      <span style={{ fontSize: 11, fontWeight: 600, color }}>{label}</span>
+    </span>
+  )
+}
+
+// One of the two secondary engine numbers (W′, eFTP) under the CP headline.
+function EngineStat({ label, value, onTap }: { label: string; value: string; onTap: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onTap}
+      className="flex flex-1 flex-col gap-1 text-left"
+      style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', minWidth: 0 }}
+    >
+      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)', ...TAPPABLE }}>{label}</span>
+      <span className="num-display" style={{ fontSize: 20, color: 'var(--color-ink)' }}>{value}</span>
+    </button>
+  )
+}
+
+// FTP-drift prompt (backlog 02·A2). When the fitted eFTP diverges from the
+// stored FTP, offer a one-tap update — never auto-changing FTP. Dismissal is
+// remembered per eFTP value, so accepting a drift or brushing it off doesn't
+// re-nag until the estimate itself moves to a new value.
+const DRIFT_DISMISS_KEY = 'ppv-ftp-drift-dismissed'
+
+function FtpDriftPrompt({ eftp, storedFtp, de }: { eftp: number; storedFtp: number; de: boolean }) {
+  const qc = useQueryClient()
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(DRIFT_DISMISS_KEY) === String(eftp)
+    } catch {
+      return false
+    }
+  })
+
+  const save = useMutation({
+    mutationFn: () => updateProfile({ ftp_watts: eftp }),
+    onSuccess: () => {
+      try {
+        localStorage.setItem(DRIFT_DISMISS_KEY, String(eftp))
+      } catch { /* storage unavailable — non-fatal */ }
+      void qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
+      void qc.invalidateQueries({ queryKey: ['analytics', 'power-profile-view'] })
+    },
+  })
+
+  if (dismissed || save.isSuccess) return null
+
+  const up = eftp > storedFtp
+  const deltaPct = Math.round((Math.abs(eftp - storedFtp) / storedFtp) * 100)
+  const dismiss = () => {
+    try {
+      localStorage.setItem(DRIFT_DISMISS_KEY, String(eftp))
+    } catch { /* storage unavailable — non-fatal */ }
+    setDismissed(true)
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-3"
+      style={{
+        borderRadius: RADIUS,
+        background: 'color-mix(in srgb, var(--color-accent) 10%, var(--color-paper-2))',
+        border: '1px solid var(--color-accent)',
+        padding: 18,
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="grid place-items-center rounded-full" style={{ width: 34, height: 34, flexShrink: 0, background: 'color-mix(in srgb, var(--color-accent) 22%, transparent)' }}>
+          {up
+            ? <TrendingUp size={18} style={{ color: 'var(--color-accent)' }} />
+            : <TrendingDown size={18} style={{ color: 'var(--color-accent)' }} />}
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="num-display" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>
+            {de ? `Deine eFTP liegt bei ${eftp} W` : `Your eFTP is now ${eftp} W`}
+          </span>
+          <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>
+            {de
+              ? `Das sind ${deltaPct}% ${up ? 'über' : 'unter'} deiner gespeicherten FTP von ${storedFtp} W. Deine Zonen und Vorgaben richten sich nach dieser Zahl — aktualisieren?`
+              : `That's ${deltaPct}% ${up ? 'above' : 'below'} your saved FTP of ${storedFtp} W. Your zones and targets key off this number — update it?`}
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          disabled={save.isPending}
+          onClick={() => save.mutate()}
+          className="inline-flex items-center justify-center gap-1.5 rounded-full"
+          style={{ flex: 1, minHeight: 44, fontSize: 14, fontWeight: 700, background: 'var(--color-accent)', color: '#0A0C0F', opacity: save.isPending ? 0.6 : 1 }}
+        >
+          <Check size={16} />
+          {save.isPending
+            ? (de ? 'Aktualisiere…' : 'Updating…')
+            : (de ? `Auf ${eftp} W setzen` : `Set to ${eftp} W`)}
+        </button>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="inline-flex items-center justify-center rounded-full"
+          style={{ minHeight: 44, padding: '0 18px', fontSize: 14, fontWeight: 600, color: 'var(--color-ink-2)', background: 'var(--color-surface-2)' }}
+        >
+          {de ? 'Behalten' : 'Keep mine'}
+        </button>
+      </div>
+    </div>
   )
 }
 
