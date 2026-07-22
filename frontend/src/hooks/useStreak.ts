@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getStreak, setAthleteStatus, type AthleteState, type StreakRead } from '../api/athletes'
+import {
+  getStreak,
+  repairStreak,
+  setAthleteStatus,
+  type AthleteState,
+  type StreakRead,
+  type StreakRepairResult,
+} from '../api/athletes'
 
 // P1-11: weekly rhythm — how many of the current athlete-local week's PLANNED
 // days were met. This is the stat surfaces show instead of a daily streak.
@@ -21,6 +28,22 @@ export function useStreak() {
     queryKey: ['athlete', 'streak'],
     queryFn: getStreak,
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+// Morning-after one-tap streak repair (backlog 03·C2). Re-checks the just-broken
+// day against real activities after a fresh sync; on a genuine restore it
+// invalidates the streak so every surface reflects the recovered chain.
+export function useRepairStreak() {
+  const qc = useQueryClient()
+  return useMutation<StreakRepairResult>({
+    mutationFn: () => repairStreak(),
+    onSuccess: (res) => {
+      if (res.repaired) {
+        qc.invalidateQueries({ queryKey: ['athlete', 'streak'] })
+        qc.invalidateQueries({ queryKey: ['coach'] })
+      }
+    },
   })
 }
 

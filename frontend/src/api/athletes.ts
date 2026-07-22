@@ -47,10 +47,32 @@ export interface StreakRead {
   paused: boolean
   status: { state: AthleteState; since: string } | null
   week: { date: string; state: StreakDayState }[]
+  /** Most recent past day that broke the streak (ISO date), or null if intact. */
+  break_day?: string | null
 }
 
 export async function getStreak(): Promise<StreakRead> {
   const { data } = await apiClient.get<StreakRead>('/athletes/me/streak')
+  return data
+}
+
+// ── One-tap morning-after streak repair (backlog 03·C2) ─────────────────────
+// The soft streak-break card offers an HONEST recovery: the most common false
+// break is a ride the athlete really did but Garmin hadn't synced yet when the
+// break was computed. This triggers a fresh sync + re-evaluation and restores
+// the streak ONLY when a qualifying ride for the missed day now exists.
+
+export interface StreakRepairResult {
+  repaired: boolean
+  reason: 'restored' | 'nothing_to_repair'
+  streak: number
+  repaired_date: string | null
+  /** Whether a fresh Garmin sync actually ran during this check. */
+  synced: boolean
+}
+
+export async function repairStreak(): Promise<StreakRepairResult> {
+  const { data } = await apiClient.post<StreakRepairResult>('/athletes/me/streak/repair')
   return data
 }
 

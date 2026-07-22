@@ -24,7 +24,7 @@
  */
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useStreak } from '../../hooks/useStreak'
+import { useStreak, useRepairStreak } from '../../hooks/useStreak'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useCelebrate } from '../../contexts/CelebrationContext'
@@ -45,6 +45,7 @@ export default function StreakBreakWatcher() {
   const { locale } = useLocale()
   const navigate = useNavigate()
   const { enqueueStreakBreak } = useCelebrate()
+  const repair = useRepairStreak()
   const de = locale === 'de'
 
   const userId = user?.id
@@ -81,6 +82,29 @@ export default function StreakBreakWatcher() {
       // The provider drains the queue after this runs.
       onCta: () => navigate('/workout/today'),
       dismissLabel: de ? 'Später' : 'Later',
+      // One-tap morning-after repair (backlog 03·C2): a fresh sync + honest
+      // re-evaluation. Restores the streak ONLY when a real ride for the missed
+      // day now exists — never a manipulative free undo.
+      repair: {
+        run: async () => {
+          const res = await repair.mutateAsync()
+          return { repaired: res.repaired, streak: res.streak }
+        },
+        checkLabel: de ? 'Ich bin gefahren — prüfen' : "I did ride — check",
+        checkingLabel: de ? 'Prüfe deine Fahrten …' : 'Checking your rides …',
+        restoredKicker: de ? 'Serie gerettet' : 'Streak saved',
+        restoredDetail: de
+          ? 'Deine Fahrt war da — nur noch nicht synchronisiert. Deine Serie läuft weiter.'
+          : 'Your ride was there — just not synced yet. Your streak lives on.',
+        doneLabel: de ? 'Weiter' : 'Continue',
+        nomatchDetail: de
+          ? 'Keine Fahrt für den Tag gefunden — alles gut. Kein Tag definiert deine Form.'
+          : 'No ride found for that day — all good. No single day defines your fitness.',
+        errorDetail: de
+          ? 'Prüfung gerade nicht möglich. Versuch es gleich nochmal.'
+          : "Couldn't check right now. Give it another try in a moment.",
+        retryLabel: de ? 'Erneut prüfen' : 'Check again',
+      },
     })
     // We deliberately depend only on the live streak + identity. `week` is read
     // at fire time; `de` re-labels a live card, which is fine.

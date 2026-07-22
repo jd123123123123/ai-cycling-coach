@@ -108,7 +108,12 @@ async def build_streak(db: AsyncSession, user_id: int, today: date | None = None
         return "unplanned"
 
     # Walk back from today. Today never breaks (may be unlogged yet).
+    # `break_day` records the most recent PAST day that actually broke the
+    # streak — the "missed"/"unplanned" day the athlete supposedly failed. It is
+    # the anchor the one-tap morning-after repair re-checks against (C2): if a
+    # late Garmin sync later delivers a ride for that day, the break dissolves.
     streak = 0
+    break_day: date | None = None
     for i in range(LOOKBACK_DAYS):
         d = today - timedelta(days=i)
         state = day_state(d)
@@ -119,6 +124,7 @@ async def build_streak(db: AsyncSession, user_id: int, today: date | None = None
         elif i == 0:
             continue  # today, nothing logged yet — don't break
         else:
+            break_day = d
             break
 
     # Current week (Mon→Sun) day states for the UI dots.
@@ -162,4 +168,53 @@ async def build_streak(db: AsyncSession, user_id: int, today: date | None = None
             else None
         ),
         "week": week,
+        "break_day": break_day.isoformat() if break_day is not None else None,
+    }
+
+
+async def repair_streak(
+    db: AsyncSession,
+    user_id: int,
+    prior_break_day: str | None,
+    today: date | None = None,
+) -> dict:
+    """Morning-after one-tap streak repair (backlog 03·C2).
+
+    Re-evaluates the forgiving streak against the athlete's REAL activities and
+    decides whether the day that broke the streak — ``prior_break_day``, captured
+    just before this check — is now covered by a genuine ride. Meant to run right
+    after a fresh activity sync, so a ride Garmin hadn't delivered when the break
+    was first shown is finally counted.
+
+    Honest by construction — it never invents adherence. Because a sync only ever
+    ADDS activities, the streak's break can only move *earlier* (or vanish) when a
+    real ride fills the gap:
+
+    - ``prior_break_day is None`` → nothing was broken server-side; the streak
+      stands as-is → ``repaired=True, reason="restored"``.
+    - the break has moved off ``prior_break_day`` → a real ride now covers that
+      missed day → ``repaired=True, reason="restored"`` with the true streak.
+    - the break still sits on ``prior_break_day`` → the missed day has NO
+      qualifying ride; nothing to buy back →
+      ``repaired=False, reason="nothing_to_repair"``.
+    """
+    result = await build_streak(db, user_id, today=today)
+    now_break = result.get("break_day")
+
+    if prior_break_day is None or now_break != prior_break_day:
+        # The streak was never broken, or the previously-missed day now has a
+        # real ride — either way the streak honestly stands.
+        return {
+            "repaired": True,
+            "reason": "restored",
+            "streak": result["streak"],
+            "repaired_date": prior_break_day,
+        }
+
+    # The break still sits on the same day: no qualifying ride arrived.
+    return {
+        "repaired": False,
+        "reason": "nothing_to_repair",
+        "streak": result["streak"],
+        "repaired_date": now_break,
     }

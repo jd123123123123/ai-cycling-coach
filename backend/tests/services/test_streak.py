@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.streak import build_streak
+from app.services.streak import LOOKBACK_DAYS, build_streak, repair_streak
 
 TODAY = date(2026, 7, 17)  # a Friday
 
@@ -212,3 +212,52 @@ async def test_consistency_trained_through_pause_still_counts():
     db = _db([mon, wed], planned, goals)
     out = await build_streak(db, 1, today=TODAY)
     assert out["consistency"] == {"met": 2, "planned": 2}
+
+
+# ─── break_day anchor + morning-after repair (backlog 03·C2) ─────────────────
+# `break_day` marks the most recent PAST day that broke the streak — the anchor
+# the one-tap repair re-checks after a fresh sync. `repair_streak` restores only
+# when a real qualifying ride now covers that day; otherwise it is honest.
+
+
+@pytest.mark.asyncio
+async def test_break_day_marks_the_missed_day():
+    gap = TODAY - timedelta(days=2)
+    activity_days = [d for d in _days(5) if d != gap]
+    db = _db(activity_days, [], None)
+    out = await build_streak(db, 1, today=TODAY)
+    assert out["break_day"] == gap.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_break_day_none_when_fully_trained_window():
+    # Every day in the lookback trained → no break anywhere.
+    db = _db(_days(LOOKBACK_DAYS + 1), [], None)
+    out = await build_streak(db, 1, today=TODAY)
+    assert out["break_day"] is None
+
+
+@pytest.mark.asyncio
+async def test_repair_nothing_when_gap_still_empty():
+    # The missed day still has no ride after the re-check: honest, no restore.
+    gap = TODAY - timedelta(days=2)
+    activity_days = [d for d in _days(5) if d != gap]
+    db = _db(activity_days, [], None)
+    out = await repair_streak(db, 1, gap.isoformat(), today=TODAY)
+    assert out["repaired"] is False
+    assert out["reason"] == "nothing_to_repair"
+    assert out["repaired_date"] == gap.isoformat()
+    assert out["streak"] == 2  # unchanged, still broken at the gap
+
+
+@pytest.mark.asyncio
+async def test_repair_restores_when_late_ride_now_present():
+    # The break was on `gap`; a late-synced ride has now arrived for that day, so
+    # the streak's break has moved earlier → restored, longer streak stands.
+    gap = TODAY - timedelta(days=2)
+    filled = _days(5)  # every day incl. the previously-missed one
+    db = _db(filled, [], None)
+    out = await repair_streak(db, 1, gap.isoformat(), today=TODAY)
+    assert out["repaired"] is True
+    assert out["reason"] == "restored"
+    assert out["streak"] == 5
