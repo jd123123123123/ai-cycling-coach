@@ -128,6 +128,25 @@ class Readiness(BaseModel):
     suggest_easy: bool
 
 
+class MissedRide(BaseModel):
+    """Yesterday's planned bike session that went unridden — planned as a real
+    ride, and yesterday's actual bike TSS below the "attempted" threshold.
+
+    Surfaced honestly and NON-punitively on Today + Plan (no guilt: the plan
+    works for the athlete, not the other way round). This object only says
+    *what* was missed; the authoritative outcome — the key session reflowed to
+    a free day, or an easy ride simply absorbed with no make-up — lives in the
+    plan-adaptation feed (GET /plan/adaptations), keyed by evidence.missed_date.
+    """
+    date: str  # ISO YYYY-MM-DD (athlete-local)
+    title: str
+    title_de: str | None = None
+    target_tss: int | None = None
+    template_id: str | None = None
+    category: str
+    is_quality: bool  # a quality day (reflows) vs endurance/recovery (absorbs)
+
+
 class WeekResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     week_start: date
@@ -152,6 +171,11 @@ class WeekResponse(BaseModel):
     # None when no plan rows exist. meso_block.weekly_tss_target remains
     # advisory-only (the generator's budget), NOT the display target.
     planned_tss_total: int | None = None
+    # Yesterday's planned bike ride that went unridden — None when yesterday was
+    # a planned rest day, was ridden, or had no plan. Lets Today/Plan tell the
+    # athlete honestly that a ride was missed (and, via the adaptation feed, how
+    # the plan absorbs it). Never punitive — the plan waits for the athlete.
+    missed_yesterday: MissedRide | None = None
 
 
 __all__ = [
@@ -164,5 +188,6 @@ __all__ = [
     "ProjectionPoint",
     "Projection",
     "Readiness",
+    "MissedRide",
     "WeekResponse",
 ]

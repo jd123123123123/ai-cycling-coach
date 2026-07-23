@@ -754,6 +754,72 @@ async def _rule_green_upgrade(
     return None
 
 
+async def _rule_missed_absorbed(db: AsyncSession, snap: _Snapshot) -> dict | None:
+    """A missed EASY/endurance (non-quality) planned ride isn't reflowed — it
+    is simply absorbed: the load is skipped, the week rolls on, no make-up.
+
+    R3 (``_rule_missed_key``) already re-slots a missed QUALITY day; this rule
+    covers the rides R3 stays silent on, so a no-show never passes unseen.
+    Purely informational — it logs a feed row but mutates no PlannedWorkout.
+    Capped at ONE absorbed acknowledgment per week, and suppressed when a key
+    session was reflowed this week (one missed-message per week keeps the feed
+    calm, never punitive)."""
+    missed = [
+        r for r in snap.bike_rows
+        if snap.monday <= r.date < snap.today
+        and (r.template_id or "") != "rest_day"
+        and r.template_id in TEMPLATES
+        and not _is_quality(r)
+        and _category_of(r.template_id) in ("endurance", "recovery")
+        and _tss_of(r.template_id) > 0
+        and snap.day_actual.get(r.date, 0.0) < MISSED_DONE_TSS
+    ]
+    if not missed:
+        return None
+    # One missed-message per week: don't stack an "absorbed" note on top of a
+    # key-session reflow, and don't repeat the absorbed note itself.
+    if await _signal_fired_since(
+        db, snap.user_id, "missed_ride_absorbed", snap.week_start_utc
+    ):
+        return None
+    if await _signal_fired_since(
+        db, snap.user_id, "missed_key_session", snap.week_start_utc
+    ):
+        return None
+
+    missed_row = max(missed, key=lambda r: r.date)
+    title = missed_row.title or (TEMPLATES[missed_row.template_id].name)
+    missed_de = _wd(missed_row.date, snap.today, "de")
+    missed_en = _wd(missed_row.date, snap.today, "en")
+    message_de = (
+        f"{missed_de.capitalize()} ausgefallen — kein Nachholen nötig: "
+        f"{title} wird einfach absorbiert, die Woche läuft weiter."
+    )
+    message_en = (
+        f"{missed_en.capitalize()}'s ride slipped — no make-up needed: "
+        f"{title} is simply absorbed and the week rolls on."
+    )
+    await log_adaptation(
+        db, snap.user_id,
+        target_date=missed_row.date, source="hourly", signal="missed_ride_absorbed",
+        rule="missed_ride_absorbed",
+        message_de=message_de, message_en=message_en,
+        before=_day_diff(missed_row), after=None,
+        evidence={
+            "missed_date": missed_row.date.isoformat(),
+            "missed_template_id": missed_row.template_id,
+            "absorbed": True,
+            "skipped_tss": round(_tss_of(missed_row.template_id)),
+        },
+        commit=False,
+    )
+    return {
+        "rule": "missed_ride_absorbed", "signal": "missed_ride_absorbed",
+        "dates": [missed_row.date.isoformat()],
+        "message_de": message_de, "message_en": message_en,
+    }
+
+
 # ─── Push (reuses the existing web-push path; send_user_push is immediate) ──
 
 async def _push_today_change(
@@ -832,6 +898,13 @@ async def run_for_user(
     give = await _rule_green_upgrade(db, snap, directive)
     if give is not None:
         changes.append(give)
+
+    # MISSED (non-quality) — informational only: log that an easy ride was
+    # absorbed (no plan mutation). R3 above already handles a missed key day;
+    # this makes sure an easy no-show is still surfaced, honestly and calmly.
+    absorbed = await _rule_missed_absorbed(db, snap)
+    if absorbed is not None:
+        changes.append(absorbed)
 
     if changes:
         await db.commit()

@@ -33,6 +33,7 @@ import AbsorptionCard from '../AbsorptionCard'
 import MorningHealthCard from '../MorningHealthCard'
 import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
+import { usePlanAdaptations } from '../../../hooks/usePlanAdaptations'
 import { useTodaySession, sessionIntensity } from '../../../hooks/useTodaySession'
 import { useTodayWeather } from '../../../hooks/useTodayWeather'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
@@ -222,6 +223,10 @@ export default function TodayTab() {
   // Current week's plan — only read for planned_tss_total (quiet-week detection
   // gating the fitness-trend chip, audit P1-8). Shares PlanTab's query cache.
   const { data: weekPlan } = useCurrentWeek()
+  // Live adaptation feed — the authoritative source for HOW a missed ride is
+  // absorbed (key session reflowed to a free day / easy ride absorbed). Shares
+  // the AdaptiveCard's query cache.
+  const { data: adaptationsFeed } = usePlanAdaptations()
   const setStatus = useSetAthleteStatus()
   // Status changes that alter coaching (sick/injured/break) confirm first.
   const [confirmStatus, setConfirmStatus] = useState<Exclude<AthleteState, 'healthy'> | null>(null)
@@ -755,6 +760,38 @@ export default function TodayTab() {
   // deterministically with the same day-of-month `pick` as the hero line.
   const yKey = localDayKey(subDays(today, 1))
   const yesterdayTrained = trainedSet.has(yKey)
+  // Yesterday's planned-but-MISSED bike ride — the backend flags a real planned
+  // ride whose actual TSS fell below the "attempted" floor (planned rest days
+  // and ridden days never surface). Non-guilt: the plan works FOR the athlete.
+  const missedYesterday = weekPlan?.missed_yesterday ?? null
+  const missedTitle = de ? (missedYesterday?.title_de || missedYesterday?.title) : missedYesterday?.title
+  // How the plan absorbs it — the real outcome from the adaptation feed (key
+  // session reflowed to {day} / easy ride absorbed). Falls back to an honest
+  // by-kind default until the hourly engine has logged the outcome row.
+  const weekdayLabel = (iso: string): string => {
+    const d = new Date(`${iso}T00:00:00`)
+    return d.toLocaleDateString(de ? 'de-DE' : 'en-US', { weekday: 'long' })
+  }
+  const missedOutcome: string | null = (() => {
+    if (!missedYesterday) return null
+    const row = (adaptationsFeed?.adaptations ?? []).find(
+      (a) => (a.evidence?.missed_date as string | undefined) === missedYesterday.date
+        && (a.signal === 'missed_key_session' || a.signal === 'missed_ride_absorbed'),
+    )
+    if (row?.signal === 'missed_key_session') {
+      const movedTo = row.evidence?.moved_to as string | undefined
+      return movedTo
+        ? (de ? `auf ${weekdayLabel(movedTo)} verschoben` : `moved to ${weekdayLabel(movedTo)}`)
+        : (de ? 'auf einen freien Tag verschoben' : 'moved to a free day')
+    }
+    if (row?.signal === 'missed_ride_absorbed') {
+      return de ? 'absorbiert — kein Nachholen nötig' : 'absorbed — no make-up needed'
+    }
+    // No feed row yet: honest default keyed to the ride kind.
+    return missedYesterday.is_quality
+      ? (de ? 'wird auf einen freien Tag gelegt' : 'moves to a free day')
+      : (de ? 'absorbiert — kein Nachholen nötig' : 'absorbed — no make-up needed')
+  })()
   const yesterdayTss = Math.round(
     (acts?.activities ?? [])
       .filter((a) => localDayKey(a.started_at ?? a.date ?? '') === yKey)
@@ -769,7 +806,9 @@ export default function TodayTab() {
       ? (yesterdayTss > 0
           ? (de ? ` nach ${yesterdayTss} TSS gestern` : ` after yesterday's ${yesterdayTss} TSS`)
           : (de ? ' nach der gestrigen Einheit' : " after yesterday's session"))
-      : (de ? ' nach dem gestrigen Ruhetag' : " after yesterday's rest day")
+      : missedYesterday
+        ? (de ? ' nach dem gestern ausgefallenen Training' : " after yesterday's missed session")
+        : (de ? ' nach dem gestrigen Ruhetag' : " after yesterday's rest day")
 
     // Sentence 1 — sleep in context of yesterday (falls back to yesterday-only
     // when no sleep data landed).
@@ -779,7 +818,9 @@ export default function TodayTab() {
           ? (yesterdayTss > 0
               ? (de ? `${yesterdayTss} TSS von gestern stecken in den Beinen.` : `${yesterdayTss} TSS from yesterday are in the legs.`)
               : (de ? 'Die gestrige Einheit steckt noch in den Beinen.' : "Yesterday's session is still in the legs."))
-          : (de ? 'Gestern war Ruhetag — die Beine sollten ruhig sein.' : 'Yesterday was a rest day — the legs should be quiet.')
+          : missedYesterday
+            ? (de ? 'Gestern ist die Einheit ausgefallen — der Plan fängt es ruhig auf.' : "Yesterday's ride slipped — the plan absorbs it calmly.")
+            : (de ? 'Gestern war Ruhetag — die Beine sollten ruhig sein.' : 'Yesterday was a rest day — the legs should be quiet.')
       }
       const base = hStr
         ? (de ? `${hStr} Schlaf (Score ${sN})` : `Slept ${hStr} (${sN})`)
@@ -1052,6 +1093,19 @@ export default function TodayTab() {
             <div className="flex flex-col gap-1">
               <span className="eyebrow" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF80' }}>{tFor(locale, 'morning_read')}</span>
               <p style={{ fontSize: 12.5, fontWeight: 500, color: '#FFFFFFB3', lineHeight: 1.5 }}>{morningRead}</p>
+            </div>
+          )}
+
+          {/* Missed yesterday — honest, non-guilt acknowledgment that a planned
+              ride went unridden, tied to the real plan outcome (reflowed to a
+              free day / absorbed). Adaptation is never hidden (spec law). */}
+          {missedYesterday && (
+            <div className="flex flex-col gap-1 rounded-[14px] p-3" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14', backdropFilter: 'blur(10px)' }}>
+              <span className="eyebrow" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF80' }}>{de ? 'Gestern ausgefallen' : 'Missed yesterday'}</span>
+              <p style={{ fontSize: 12.5, fontWeight: 500, color: '#FFFFFFB3', lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 700, color: '#FFFFFF' }}>{missedTitle}</span>
+                {missedOutcome ? ` — ${missedOutcome}.` : ''}
+              </p>
             </div>
           )}
 

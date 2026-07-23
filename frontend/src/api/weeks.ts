@@ -93,6 +93,20 @@ export interface PlanChangesContext {
   changes: PlanChangeItem[]
 }
 
+// Yesterday's planned bike ride that went unridden — null when yesterday was a
+// planned rest day, was ridden, or had no plan. The authoritative outcome
+// (reflowed to a free day / absorbed with no make-up) lives in the adaptation
+// feed (GET /plan/adaptations), keyed by evidence.missed_date.
+export interface MissedRide {
+  date: string // ISO YYYY-MM-DD
+  title: string
+  title_de: string | null
+  target_tss: number | null
+  template_id: string | null
+  category: string
+  is_quality: boolean
+}
+
 export interface WeekResponse {
   week_start: string
   week_end: string
@@ -108,6 +122,8 @@ export interface WeekResponse {
   // meso_block.weekly_tss_target remains advisory-only (the generator's
   // budget), NOT the display target. Null when no plan rows exist.
   planned_tss_total: number | null
+  // Yesterday's planned-but-unridden bike ride (honest, non-guilt), or null.
+  missed_yesterday: MissedRide | null
 }
 
 export async function fetchCurrentWeek(

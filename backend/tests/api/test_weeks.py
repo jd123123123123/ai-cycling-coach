@@ -478,3 +478,86 @@ class TestPersonalizedWeekCache:
         # Cached preface + today's title overlaid onto the deterministic skeleton.
         assert data["preface"] == "CACHED PREFACE"
         assert data["days"][0]["title"] == "Cached Title"
+
+
+# ---------------------------------------------------------------------------
+# _detect_missed_yesterday — yesterday's planned-but-unridden bike ride
+# ---------------------------------------------------------------------------
+
+def _routed_missed_db(plans: list, acts: list):
+    """Mock session routing planned_workouts vs activities on statement text."""
+    from types import SimpleNamespace  # noqa: F401 — used by callers' rows
+
+    db = AsyncMock()
+
+    async def _execute(query, *args, **kwargs):  # noqa: ANN001
+        text = str(query).lower()
+        result = MagicMock()
+        if "planned_workouts" in text:
+            result.scalars.return_value.all.return_value = list(plans)
+        elif "activities" in text:
+            result.scalars.return_value.all.return_value = list(acts)
+        else:  # pragma: no cover
+            result.scalars.return_value.all.return_value = []
+        return result
+
+    db.execute = _execute
+    return db
+
+
+class TestDetectMissedYesterday:
+    TODAY = date(2026, 7, 22)
+    YESTERDAY = date(2026, 7, 21)
+
+    def _pw(self, template_id: str, sport: str = "cycling"):
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            user_id=1, date=self.YESTERDAY, sport=sport,
+            title=template_id, template_id=template_id,
+        )
+
+    def _act(self, tss: float):
+        from datetime import datetime, timezone
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            sport="cycling", tss=tss,
+            started_at=datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc),
+        )
+
+    @pytest.mark.asyncio
+    async def test_missed_endurance_ride_is_detected(self):
+        from app.api.weeks import _detect_missed_yesterday
+        db = _routed_missed_db(plans=[self._pw("z2_endurance_90")], acts=[])
+        missed = await _detect_missed_yesterday(db, 1, self.TODAY, "de")
+        assert missed is not None
+        assert missed.date == self.YESTERDAY.isoformat()
+        assert missed.template_id == "z2_endurance_90"
+        assert missed.category == "endurance"
+        assert missed.is_quality is False
+        assert missed.title_de  # de locale populates the German title
+
+    @pytest.mark.asyncio
+    async def test_missed_quality_ride_flags_is_quality(self):
+        from app.api.weeks import _detect_missed_yesterday
+        db = _routed_missed_db(plans=[self._pw("vo2_5x4")], acts=[])
+        missed = await _detect_missed_yesterday(db, 1, self.TODAY, "en")
+        assert missed is not None
+        assert missed.is_quality is True
+
+    @pytest.mark.asyncio
+    async def test_ridden_yesterday_returns_none(self):
+        from app.api.weeks import _detect_missed_yesterday
+        db = _routed_missed_db(plans=[self._pw("z2_endurance_90")], acts=[self._act(70.0)])
+        assert await _detect_missed_yesterday(db, 1, self.TODAY, "de") is None
+
+    @pytest.mark.asyncio
+    async def test_planned_rest_returns_none(self):
+        from app.api.weeks import _detect_missed_yesterday
+        db = _routed_missed_db(plans=[self._pw("rest_day")], acts=[])
+        assert await _detect_missed_yesterday(db, 1, self.TODAY, "de") is None
+
+    @pytest.mark.asyncio
+    async def test_no_plan_returns_none(self):
+        from app.api.weeks import _detect_missed_yesterday
+        db = _routed_missed_db(plans=[], acts=[])
+        assert await _detect_missed_yesterday(db, 1, self.TODAY, "de") is None

@@ -258,6 +258,48 @@ async def test_reflow_never_stacks_two_hard_days(monkeypatch):
     assert thu.template_id == "z2_endurance_90"
 
 
+# ─── Missed non-quality ride → informational "absorbed" log entry ───────────
+
+@pytest.mark.asyncio
+async def test_missed_easy_ride_logs_absorbed_without_mutation(monkeypatch):
+    _patch_directive(monkeypatch, _directive())
+    # Tuesday endurance was planned; no ride landed Tuesday. Not a quality day,
+    # so R3 stays silent — the absorbed rule must still surface the no-show.
+    tue = _pw(MONDAY + timedelta(days=1), "z2_endurance_90")
+    wed = _pw(TODAY, "recovery_60")
+    db = _db(profile=_profile(), plans=[tue, wed],
+             metrics=_baseline_metrics(), meso=_meso())
+
+    out = await engine.run_for_user(db, USER_ID, now_utc=NOW)
+
+    assert [c["rule"] for c in out["changes"]] == ["missed_ride_absorbed"]
+    rows = _logged_rows(db)
+    assert rows[0].signal == "missed_ride_absorbed"
+    assert rows[0].evidence["absorbed"] is True
+    assert rows[0].evidence["missed_date"] == tue.date.isoformat()
+    assert "ausgefallen" in rows[0].message_de
+    # Informational only — neither the missed row nor today's plan is rewritten.
+    assert tue.template_id == "z2_endurance_90"
+    assert tue.blocks_source == "ai_prescribed"
+    assert wed.template_id == "recovery_60"
+
+
+@pytest.mark.asyncio
+async def test_ridden_easy_day_logs_no_absorbed(monkeypatch):
+    _patch_directive(monkeypatch, _directive())
+    # Same planned Tuesday endurance, but it WAS ridden (≥ MISSED_DONE_TSS) —
+    # nothing to absorb, no feed entry.
+    tue = _pw(MONDAY + timedelta(days=1), "z2_endurance_90")
+    wed = _pw(TODAY, "recovery_60")
+    db = _db(profile=_profile(), plans=[tue, wed],
+             metrics=_baseline_metrics(),
+             acts=[_act(MONDAY + timedelta(days=1), 70.0)], meso=_meso())
+
+    out = await engine.run_for_user(db, USER_ID, now_utc=NOW)
+
+    assert out["changes"] == []
+
+
 # ─── R8: extra load trims filler ─────────────────────────────────────────────
 
 @pytest.mark.asyncio

@@ -33,6 +33,7 @@ from app.schemas.weeks import (
     IntervalBlockOut,
     Language,
     MesoBlockContext,
+    MissedRide,
     PlanChanges,
     Projection,
     Readiness,
@@ -516,6 +517,83 @@ def _build_day_plan(
     )
 
 
+async def _detect_missed_yesterday(
+    db: AsyncSession, user_id: int, today: date, locale: str
+) -> MissedRide | None:
+    """Yesterday's planned bike ride that went unridden.
+
+    A ride is "missed" when yesterday held a real (non-rest) cycling
+    PlannedWorkout AND yesterday's actual cycling TSS stayed below the same
+    "attempted" floor the adaptation engine uses (``MISSED_DONE_TSS``). Planned
+    rest days and ridden days both return None — only a genuine no-show
+    surfaces, so the Today/Plan acknowledgment is honest, never punitive.
+    """
+    from app.services.plan_adaptation_engine import (
+        MISSED_DONE_TSS,
+        QUALITY_CATEGORIES,
+    )
+
+    yesterday = today - timedelta(days=1)
+    rows = (
+        await db.execute(
+            select(PlannedWorkout).where(
+                PlannedWorkout.user_id == user_id,
+                PlannedWorkout.date == yesterday,
+            )
+        )
+    ).scalars().all()
+    bike_rows = [
+        r for r in rows
+        if (r.sport or "cycling") == "cycling"
+        and (r.template_id or "") != "rest_day"
+    ]
+    # A planned real ride must carry a known template with non-trivial load.
+    planned = None
+    best_tss = -1.0
+    for r in bike_rows:
+        tmpl = get_template(r.template_id) if r.template_id else None
+        if tmpl is None or tmpl.category == "rest":
+            continue
+        tss = float(tmpl.base_tss or 0.0)
+        if tss > best_tss:
+            best_tss, planned = tss, r
+    if planned is None:
+        return None
+
+    # Yesterday's actual cycling load (athlete-local day window).
+    start_utc, end_utc = day_local_window(yesterday)
+    acts = (
+        await db.execute(
+            select(Activity).where(
+                Activity.user_id == user_id,
+                Activity.sport == "cycling",
+                Activity.started_at >= start_utc,
+                Activity.started_at < end_utc,
+                Activity.tss.isnot(None),
+            )
+        )
+    ).scalars().all()
+    actual_tss = sum(float(a.tss or 0.0) for a in acts)
+    if actual_tss >= MISSED_DONE_TSS:
+        return None  # ridden (or close enough) — not a miss
+
+    tmpl = get_template(planned.template_id)
+    category = tmpl.category if tmpl else "endurance"
+    target_tss = int(round(tmpl.base_tss)) if tmpl else None
+    return MissedRide(
+        date=yesterday.isoformat(),
+        title=planned.title,
+        title_de=(
+            _localized_title(planned.template_id, planned.title, "de")
+            if locale == "de" else None
+        ),
+        target_tss=target_tss,
+        template_id=planned.template_id,
+        category=category,
+        is_quality=category in QUALITY_CATEGORIES,
+    )
+
+
 def deviation_window_start(today: date) -> date:
     """Start of the plan-deviation lookback window.
 
@@ -888,6 +966,15 @@ async def get_current_week(
     )
     planned_tss_total = planned_week_total(week_rows_res.scalars().all())
 
+    # ── 8c. Yesterday's planned-but-missed bike ride (honest, non-guilt) ──
+    try:
+        missed_yesterday = await _detect_missed_yesterday(
+            db, current_user.id, today, locale
+        )
+    except Exception:  # pragma: no cover — a miss check must never break the week
+        logger.exception("missed-yesterday detection failed for user_id=%s", current_user.id)
+        missed_yesterday = None
+
     # ── 9. Weekly preface from rationale service (deterministic default) ──
     preface = build_weekly_rationale(
         phase=meso_phase,
@@ -1206,6 +1293,7 @@ async def get_current_week(
         projection=projection_out,
         readiness=readiness_out,
         planned_tss_total=planned_tss_total,
+        missed_yesterday=missed_yesterday,
     )
 
 

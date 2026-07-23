@@ -258,6 +258,17 @@ export default function PlanTab() {
   const thrPaceSPerKm = profile?.running_threshold_pace_ms ? 1000 / profile.running_threshold_pace_ms : null
   const meso = week?.meso_block
   const days = week?.days ?? []
+  // Yesterday's planned-but-missed bike ride — the week strip only spans
+  // today→+6, so yesterday's row can't carry the marker; a small honest chip
+  // (non-guilt) surfaces the miss instead. The AdaptiveCard below carries the
+  // full reflow/absorb outcome from the live feed.
+  const missedYesterday = !isFuture ? (week?.missed_yesterday ?? null) : null
+  const missedTitle = de ? (missedYesterday?.title_de || missedYesterday?.title) : missedYesterday?.title
+  const missedHint = missedYesterday
+    ? (missedYesterday.is_quality
+        ? (de ? 'auf einen freien Tag verlegt' : 'moved to a free day')
+        : (de ? 'absorbiert — kein Nachholen' : 'absorbed — no make-up'))
+    : null
   // Inline day panel — the day the user tapped in the strip.
   const selDay = days.find((d) => d.date === selectedDate) ?? null
   // A future week never contains today, so its today-only surfaces (WOD, session
@@ -696,6 +707,18 @@ export default function PlanTab() {
               </button>
             )
           })}
+        </div>
+      )}
+
+      {/* Missed yesterday — small honest marker (the strip can't hold yesterday's
+          row). Non-guilt; the AdaptiveCard below shows how the plan absorbs it. */}
+      {missedYesterday && (
+        <div className="flex items-center gap-2.5 rounded-2xl px-3.5 py-3" style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
+          <span className="shrink-0 rounded-full px-2 py-0.5" style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-amber)', background: 'color-mix(in srgb, var(--color-amber) 16%, transparent)' }}>{de ? 'Ausgefallen' : 'Missed'}</span>
+          <span className="flex-1 min-w-0" style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-ink)', lineHeight: 1.35 }}>
+            <span style={{ fontWeight: 700 }}>{missedTitle}</span>
+            <span style={{ color: 'var(--color-muted)' }}>{de ? ' gestern' : ' yesterday'}{missedHint ? ` — ${missedHint}` : ''}</span>
+          </span>
         </div>
       )}
 
