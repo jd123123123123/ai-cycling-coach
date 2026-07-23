@@ -192,7 +192,13 @@ function Stat({ value, unit, label, color }: { value: string; unit?: string; lab
   )
 }
 
-const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
+// Pen card treatment (V3 · Ride Detail): #14181D, hairline white border, soft
+// drop shadow, 24-radius — matches every content card frame in the pen.
+const cardStyle = {
+  background: 'var(--color-paper-2)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+} as const
 
 function fmtDuration(s: number): string {
   const h = Math.floor(s / 3600)
@@ -289,7 +295,7 @@ export default function CrewRideDetailView() {
           </button>
           {/* title overlay */}
           <div className="absolute" style={{ left: 20, right: 20, bottom: 18 }}>
-            <h1 className="num-display" style={{ fontSize: 25, color: '#FFFFFF', lineHeight: 1.1 }}>
+            <h1 className="num-display" style={{ fontSize: 26, color: '#FFFFFF', lineHeight: 1.1 }}>
               {header?.title ?? (isLoading ? (de ? 'Lädt…' : 'Loading…') : (de ? 'Fahrt' : 'Ride'))}
             </h1>
             {dateLabel && <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>{dateLabel}</span>}
@@ -308,19 +314,43 @@ export default function CrewRideDetailView() {
             </div>
           )}
 
-          {/* ── STAT STRIP ── */}
+          {/* ── STAT STRIP (pen cH82w: 4 centered columns w/ hairline dividers
+              + a route/effort caption) ── */}
           {header && (
-            <div className="rounded-[20px] p-4 grid grid-cols-4 gap-y-4" style={cardStyle}>
-              <Stat value={`${header.distance_km.toFixed(1)}`} unit="km" label={de ? 'DISTANZ' : 'DISTANCE'} />
-              <Stat value={`${Math.round(header.elevation_m)}`} unit="m" label={de ? 'HÖHE' : 'ELEV'} />
-              <Stat value={fmtDuration(header.moving_time_s)} label={de ? 'ZEIT' : 'TIME'} />
-              <Stat value={`${header.avg_speed_kmh.toFixed(1)}`} unit="km/h" label={de ? 'SCHNITT' : 'AVG SPD'} />
+            <div className="rounded-[24px] flex flex-col gap-3" style={{ ...cardStyle, padding: '16px 14px' }}>
+              <div className="flex items-stretch">
+                {[
+                  { value: `${header.distance_km.toFixed(1)}`, unit: 'km', label: de ? 'Distanz' : 'Distance' },
+                  { value: `${Math.round(header.elevation_m)}`, unit: 'm', label: de ? 'Höhe' : 'Climbing' },
+                  { value: fmtDuration(header.moving_time_s), unit: '', label: de ? 'Zeit' : 'Time' },
+                  { value: `${header.avg_speed_kmh.toFixed(1)}`, unit: 'km/h', label: de ? 'Schnitt' : 'Avg spd' },
+                ].map((s, i) => (
+                  <div key={s.label} className="flex items-stretch flex-1">
+                    {i > 0 && <span style={{ width: 1, background: 'rgba(255,255,255,0.08)', alignSelf: 'center', height: 34 }} />}
+                    <div className="flex flex-col items-center gap-[3px] flex-1">
+                      <div className="flex items-end gap-0.5">
+                        <span className="num-display" style={{ fontSize: 21, color: 'var(--color-ink)' }}>{s.value}</span>
+                        {s.unit && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 3 }}>{s.unit}</span>}
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{s.label}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <Circle size={5} style={{ color: 'var(--color-muted)', fill: 'var(--color-muted)' }} />
+                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>
+                  {de
+                    ? `${fmtDuration(header.moving_time_s)} bewegt · Ø ${header.avg_speed_kmh.toFixed(1)} km/h`
+                    : `${fmtDuration(header.moving_time_s)} moving · avg ${header.avg_speed_kmh.toFixed(1)} km/h`}
+                </span>
+              </div>
             </div>
           )}
 
           {/* ── POWER / HR STATS ── */}
           {header && (
-            <div className="rounded-[20px] p-4 flex flex-col gap-3.5" style={cardStyle}>
+            <div className="rounded-[24px] p-4 flex flex-col gap-3.5" style={cardStyle}>
               <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Leistung & Puls' : 'Power & Heart Rate'}</span>
               <div className="grid grid-cols-4 gap-y-4">
                 <Stat value={avgPower != null ? `${Math.round(avgPower)}` : '—'} unit="W" label={de ? 'Ø LEISTUNG' : 'AVG PWR'} />
@@ -343,7 +373,7 @@ export default function CrewRideDetailView() {
 
           {/* ── ELEVATION + GRADIENT PROFILE ── */}
           {story && (
-            <div className="rounded-[20px] p-4 flex flex-col gap-3" style={cardStyle}>
+            <div className="rounded-[24px] p-4 flex flex-col gap-3" style={cardStyle}>
               <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Höhenprofil' : 'Elevation'}</span>
               <ElevationProfile
                 altitude={story.altitude ?? []}
@@ -355,7 +385,7 @@ export default function CrewRideDetailView() {
 
           {/* ── POWER ZONES ── */}
           {powerZones.length > 0 && (
-            <div className="rounded-[20px] p-4 flex flex-col gap-3" style={cardStyle}>
+            <div className="rounded-[24px] p-4 flex flex-col gap-3" style={cardStyle}>
               <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Leistungszonen' : 'Power Zones'}</span>
               <ZoneBars entries={powerZones} color="var(--color-accent)" />
             </div>
@@ -363,7 +393,7 @@ export default function CrewRideDetailView() {
 
           {/* ── HR ZONES ── */}
           {hrZones.length > 0 && (
-            <div className="rounded-[20px] p-4 flex flex-col gap-3" style={cardStyle}>
+            <div className="rounded-[24px] p-4 flex flex-col gap-3" style={cardStyle}>
               <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Pulszonen' : 'Heart Rate Zones'}</span>
               <ZoneBars entries={hrZones} color="var(--color-strain)" />
             </div>
@@ -371,7 +401,7 @@ export default function CrewRideDetailView() {
 
           {/* ── REACTIONS + BACK TO CREW ── */}
           {activityId != null && (
-            <div className="rounded-[20px] p-4 flex flex-col gap-3" style={cardStyle}>
+            <div className="rounded-[24px] p-4 flex flex-col gap-3" style={cardStyle}>
               <div className="flex items-center gap-2">
                 <Circle size={8} style={{ color: 'var(--color-accent)', fill: 'var(--color-accent)' }} />
                 <span className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Anfeuern' : 'Cheer this ride'}</span>

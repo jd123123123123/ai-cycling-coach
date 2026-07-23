@@ -16,7 +16,7 @@ import {
   Swords, Trophy, Flame, Check, Users, UserPlus, Bell, Clock,
   Hand, Scale, Info, BarChart3, Bike, MessageCircle, Share2, ChevronRight,
   Mountain, Search, X, Send, LogOut, Plus, Sparkles, Inbox, Target, Trash2,
-  Calendar, MapPin, Upload, Download, Route as RouteIcon, Sunrise, Zap, Flag,
+  Calendar, MapPin, Upload, Download, Route as RouteIcon, Sunrise, Zap, Flag, Lock,
 } from 'lucide-react'
 import {
   useCrewEvents, useCreateCrewEvent, useRsvpCrewEvent, useUploadCrewEventTour,
@@ -55,7 +55,13 @@ import { celebrate } from '../../../lib/confetti'
 import { useAdaptiveGate, type GateMode } from '../../../hooks/useAdaptiveGate'
 import CoachSafetyBanner from '../CoachSafetyBanner'
 
-const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
+// Pen card treatment (V3 · Social): #14181D surface, hairline white border,
+// soft drop shadow, 24-radius. Matches every card frame in the pen 1:1.
+const cardStyle = {
+  background: 'var(--color-paper-2)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+} as const
 
 // Crew-leaderboard window options + their copy (subtitle prefix + row suffix).
 const BOARD_PERIODS: { id: CrewPeriod; en: string; de: string; phraseEn: string; phraseDe: string }[] = [
@@ -437,13 +443,13 @@ export default function SocialTab() {
       {/* ── HEADER ── */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
-          <span className="eyebrow" style={{ fontSize: 12, letterSpacing: '0.08em', color: 'var(--color-muted)' }}>
+          <span className="eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-accent)' }}>
             {hasCrew ? (de ? `DEINE CREW · ${crewSize} FREUNDE` : `YOUR CREW · ${crewSize} FRIENDS`) : (de ? 'DEINE CREW' : 'YOUR CREW')}
           </span>
           <h1 className="num-display" style={{ fontSize: 28, color: 'var(--color-ink)' }}>Community</h1>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={onOpenFinder} aria-label={de ? 'Fahrer einladen' : 'Invite riders'} className="grid place-items-center rounded-full" style={{ width: 44, height: 44, ...cardStyle }}>
+          <button type="button" onClick={onOpenFinder} aria-label={de ? 'Fahrer einladen' : 'Invite riders'} className="grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}>
             <UserPlus size={20} style={{ color: 'var(--color-ink-2)' }} />
           </button>
           <button type="button" onClick={onBellClick} aria-label={de ? 'Postfach' : 'Inbox'} className="relative grid place-items-center rounded-full" style={{ width: 44, height: 44, background: inboxOpen ? 'var(--color-accent)' : 'var(--color-paper-2)', border: `1px solid ${inboxOpen ? 'var(--color-accent)' : 'var(--color-rule)'}` }}>
@@ -565,65 +571,107 @@ export default function SocialTab() {
           invite CTA when a crew exists; a single create-crew card when not. ── */}
       {crewInfo.exists ? (
         <div
-          className="rounded-[24px] p-5 flex flex-col gap-3.5"
+          className="rounded-[24px] flex flex-col gap-3.5"
           style={{
-            // Pen CrewCard mesh-gradient hero (SAO8Y/UW6SW B6LAHE): purple/blue
-            // top fading to near-black — CSS radial layers approximate the 3×3 mesh.
+            // Pen CrewCard mesh-gradient hero (UW6SW B6LAHE): a 3×3 mesh of
+            // purple/blue/plum vertices fading to near-black. CSS radial layers
+            // reproduce the mesh vertex colors row-by-row.
             background:
-              'radial-gradient(130% 85% at 8% -12%, #3E2A6B 0%, rgba(62,42,107,0) 58%),' +
-              'radial-gradient(120% 85% at 92% -12%, #4A2E3A 0%, rgba(74,46,58,0) 58%),' +
-              'radial-gradient(120% 100% at 50% -22%, #2E3A7A 0%, rgba(46,58,122,0) 55%),' +
-              'linear-gradient(178deg, #241A4A 0%, #1A2044 34%, #14102A 66%, #0A0C0F 100%)',
-            border: '1px solid rgba(255,255,255,0.16)',
-            boxShadow: '0 10px 28px -8px rgba(46,58,122,0.45)',
+              'radial-gradient(120% 80% at 8% -8%, #3E2A6B 0%, rgba(62,42,107,0) 60%),' +
+              'radial-gradient(120% 80% at 50% -12%, #2E3A7A 0%, rgba(46,58,122,0) 58%),' +
+              'radial-gradient(120% 80% at 92% -8%, #4A2E3A 0%, rgba(74,46,58,0) 60%),' +
+              'radial-gradient(130% 90% at 12% 48%, #2A2050 0%, rgba(42,32,80,0) 62%),' +
+              'radial-gradient(130% 90% at 88% 48%, #3A2A46 0%, rgba(58,42,70,0) 62%),' +
+              'linear-gradient(180deg, #1E2848 0%, #120E24 52%, #0E1220 78%, #0A0C0F 100%)',
+            border: '1px solid rgba(255,255,255,0.14)',
+            boxShadow: '0 8px 24px rgba(46,58,122,0.40)',
+            padding: '16px 18px',
           }}
         >
-          <div className="flex items-center gap-3">
-            <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'var(--color-accent)' }}><Users size={26} style={{ color: 'var(--color-ink)' }} /></span>
-            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-              <span className="num-display truncate" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{crewInfo.name ?? (de ? 'Deine Crew' : 'Your crew')}</span>
-              <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-                {de
-                  ? `${crewInfo.memberCount} ${crewInfo.memberCount === 1 ? 'Mitglied' : 'Mitglieder'}${combinedKm > 0 ? ` · ${combinedKm.toLocaleString('de')} km diese Woche` : ''}`
-                  : `${crewInfo.memberCount} ${crewInfo.memberCount === 1 ? 'member' : 'members'}${combinedKm > 0 ? ` · ${combinedKm.toLocaleString('en')} km this week` : ''}`}
+          {/* CTop — overline + crew name, private pill */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: 'var(--color-accent)' }}>{de ? 'DEINE CREW' : 'YOUR CREW'}</span>
+              <span className="num-display truncate" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{crewInfo.name ?? (de ? 'Deine Crew' : 'Your crew')}</span>
+            </div>
+            <span className="inline-flex items-center gap-[5px] rounded-full shrink-0" style={{ background: 'var(--color-surface-2)', padding: '5px 10px' }}>
+              <Lock size={13} style={{ color: 'var(--color-ink-2)' }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Privat' : 'Private'}</span>
+            </span>
+          </div>
+
+          {/* MemRow — overlapping member avatars + summary line */}
+          {(() => {
+            const faces = [you?.handle, ...(duel?.crew?.map((c) => c.handle) ?? [])].filter((h): h is string => !!h).slice(0, 5)
+            const rings = ['var(--color-accent)', 'var(--color-move)', 'var(--color-strain)', 'var(--color-recovery)', 'var(--color-gold)']
+            return (
+              <div className="flex items-center gap-3">
+                {faces.length > 0 && (
+                  <div className="flex items-center">
+                    {faces.map((h, i) => (
+                      <span key={h + i} className="num-display grid place-items-center rounded-full" style={{ width: 30, height: 30, fontSize: 12, color: 'var(--color-ink)', background: avColor(h), border: `2px solid ${rings[i % rings.length]}`, marginLeft: i === 0 ? 0 : -11, zIndex: faces.length - i }}>{initial(h)}</span>
+                    ))}
+                  </div>
+                )}
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.80)' }}>
+                  {de
+                    ? `${crewInfo.memberCount} ${crewInfo.memberCount === 1 ? 'Fahrer' : 'Fahrer'}${combinedKm > 0 ? ` · ${combinedKm.toLocaleString('de')} km diese Woche` : ''}`
+                    : `${crewInfo.memberCount} ${crewInfo.memberCount === 1 ? 'rider' : 'riders'}${combinedKm > 0 ? ` · ${combinedKm.toLocaleString('en')} km this week` : ''}`}
+                </span>
+              </div>
+            )
+          })()}
+
+          {/* Momentum chip — real combined distance (green), when present */}
+          {combinedKm > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-[5px] rounded-full" style={{ background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)', padding: '4px 10px' }}>
+                <Zap size={13} style={{ color: 'var(--color-recovery)' }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-recovery)' }}>{de ? `${combinedKm.toLocaleString('de')} km zusammen` : `${combinedKm.toLocaleString('en')} km together`}</span>
               </span>
             </div>
-          </div>
-          <button type="button" onClick={onOpenFinder} className="inline-flex items-center justify-center gap-1.5 rounded-full w-full" style={{ background: 'var(--color-accent)', padding: 12 }}>
-            <UserPlus size={16} style={{ color: 'var(--color-ink)' }} />
-            <span className="num-display" style={{ fontSize: 13, color: 'var(--color-ink)' }}>{de ? 'Fahrer einladen' : 'Invite riders'}</span>
-          </button>
-          {/* Deep-link to the Crew Week Highlights surface (?tab=crew). */}
-          <button type="button" onClick={() => navigate('/dashboard?tab=crew')} className="inline-flex items-center gap-2 rounded-[12px] w-full" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', backdropFilter: 'blur(8px)', padding: '10px 12px' }}>
+          )}
+
+          {/* HLink — highlights deep-link (glassy blurred pill) */}
+          <button type="button" onClick={() => navigate('/dashboard?tab=crew')} className="inline-flex items-center gap-2 rounded-[12px] w-full" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', backdropFilter: 'blur(14px)', padding: '10px 12px' }}>
             <Sparkles size={16} style={{ color: 'var(--color-gold)', flexShrink: 0 }} />
-            <span className="flex-1 text-left" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink)' }}>
+            <span className="flex-1 text-left" style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink)' }}>
               {combinedKm > 0
-                ? (de ? `${combinedKm.toLocaleString('de')} km zusammen — Highlights ansehen` : `${combinedKm.toLocaleString('en')} km together — see highlights`)
+                ? (de ? `${combinedKm.toLocaleString('de')} km zusammen — Highlights` : `${combinedKm.toLocaleString('en')} km together — see highlights`)
                 : (de ? 'Crew-Highlights ansehen' : 'See crew highlights')}
             </span>
-            <ChevronRight size={16} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+            <ChevronRight size={16} style={{ color: 'rgba(255,255,255,0.45)', flexShrink: 0 }} />
           </button>
+
           {/* Cheer the crew's week (target_type=crew_week, no target_id) */}
           <div className="flex items-center gap-2 flex-wrap">
             <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>{de ? 'Woche feiern' : 'Cheer the week'}</span>
             <ReactionBar targetType="crew_week" de={de} />
           </div>
+
+          {/* CrewManage — Invite / Leave (glassy blurred pills, pen treatment) */}
           {leaveConfirm ? (
-            <div className="flex items-center gap-2.5 rounded-full" style={{ background: 'var(--color-surface-3)', padding: '8px 8px 8px 14px' }}>
+            <div className="flex items-center gap-2.5 rounded-full" style={{ background: 'rgba(255,255,255,0.10)', padding: '8px 8px 8px 14px' }}>
               <span className="flex-1 min-w-0" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Crew wirklich verlassen?' : 'Leave this crew?'}</span>
-              <button type="button" onClick={() => leaveCrew.mutate(undefined, { onSuccess: () => setLeaveConfirm(false) })} disabled={leaveCrew.isPending} className="inline-flex items-center gap-1.5 rounded-full shrink-0" style={{ background: 'var(--color-strain)', padding: '7px 13px', opacity: leaveCrew.isPending ? 0.6 : 1 }}>
-                <LogOut size={14} style={{ color: 'var(--color-ink)' }} />
-                <span className="num-display" style={{ fontSize: 12, color: 'var(--color-ink)' }}>{de ? 'Verlassen' : 'Leave'}</span>
+              <button type="button" onClick={() => leaveCrew.mutate(undefined, { onSuccess: () => setLeaveConfirm(false) })} disabled={leaveCrew.isPending} className="inline-flex items-center gap-1.5 rounded-full shrink-0" style={{ background: 'color-mix(in srgb, var(--color-move) 24%, transparent)', border: '1px solid color-mix(in srgb, var(--color-move) 40%, transparent)', padding: '7px 13px', opacity: leaveCrew.isPending ? 0.6 : 1 }}>
+                <LogOut size={14} style={{ color: '#FF9BB0' }} />
+                <span className="num-display" style={{ fontSize: 12, color: '#FF9BB0' }}>{de ? 'Verlassen' : 'Leave'}</span>
               </button>
-              <button type="button" onClick={() => setLeaveConfirm(false)} className="inline-flex items-center rounded-full shrink-0" style={{ background: 'var(--color-surface-2)', padding: '7px 13px' }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Abbrechen' : 'Cancel'}</span>
+              <button type="button" onClick={() => setLeaveConfirm(false)} className="inline-flex items-center rounded-full shrink-0" style={{ background: 'rgba(255,255,255,0.10)', padding: '7px 13px' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Abbrechen' : 'Cancel'}</span>
               </button>
             </div>
           ) : (
-            <button type="button" onClick={() => setLeaveConfirm(true)} className="self-start inline-flex items-center gap-1.5" style={{ background: 'transparent', padding: '2px 4px' }}>
-              <LogOut size={13} style={{ color: 'var(--color-muted)' }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'Crew verlassen' : 'Leave crew'}</span>
-            </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={onOpenFinder} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', backdropFilter: 'blur(12px)', padding: '9px 0' }}>
+                <UserPlus size={15} style={{ color: 'var(--color-ink)' }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Einladen' : 'Invite'}</span>
+              </button>
+              <button type="button" onClick={() => setLeaveConfirm(true)} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full" style={{ background: 'color-mix(in srgb, var(--color-move) 15%, transparent)', border: '1px solid color-mix(in srgb, var(--color-move) 30%, transparent)', padding: '9px 0' }}>
+                <LogOut size={15} style={{ color: '#FF9BB0' }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#FF9BB0' }}>{de ? 'Verlassen' : 'Leave'}</span>
+              </button>
+            </div>
           )}
           {leaveCrew.isError && (
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Verlassen fehlgeschlagen — versuch es nochmal.' : 'Could not leave — try again.'}</span>
@@ -747,20 +795,33 @@ export default function SocialTab() {
               const valueColor = metricRaw == null || metricRaw === 0
                 ? 'var(--color-muted)'
                 : s.is_you ? 'var(--color-accent)' : 'var(--color-ink)'
+              // Medal-coloured rank badge (gold/silver/bronze, then slate).
+              const medal = i === 0 ? '#FFD166' : i === 1 ? '#C7CDD6' : i === 2 ? '#E0A46B' : 'var(--color-surface-3)'
+              const medalInk = i < 3 ? '#0A0C0F' : 'var(--color-ink-2)'
+              const ring = ['var(--color-accent)', 'var(--color-move)', 'var(--color-strain)', 'var(--color-recovery)', 'var(--color-gold)'][i % 5]
+              // Mini value bar — this row's value as a share of the leader's.
+              const barPct = leadRaw != null && leadRaw > 0 && metricRaw != null ? Math.max(6, Math.min(100, (metricRaw / leadRaw) * 100)) : 0
               return (
-              <div key={s.user_id} className="hover-card flex flex-col rounded-[12px]" style={{ background: s.is_you ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : 'transparent', padding: '8px 10px' }}>
+              <div key={s.user_id} className="hover-card flex flex-col gap-2 rounded-[12px]" style={{
+                background: s.is_you ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)' : 'var(--color-surface-2)',
+                border: `1px solid ${s.is_you ? 'var(--color-accent)' : 'rgba(255,255,255,0.08)'}`,
+                boxShadow: s.is_you ? '0 0 16px rgba(255,90,60,0.27)' : 'none',
+                padding: '7px 8px',
+              }}>
                 <div className="flex items-center gap-2.5">
-                  <span className="num-display" style={{ fontSize: 14, width: 18, color: s.is_you ? 'var(--color-accent)' : 'var(--color-muted)' }}>{i + 1}</span>
-                  <span className="num-display grid place-items-center rounded-full shrink-0" style={{ width: 34, height: 34, fontSize: 14, color: 'var(--color-ink)', background: avColor(s.handle) }}>{initial(s.handle)}</span>
-                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                    <span className="truncate" style={{ fontSize: 14, fontWeight: s.is_you ? 700 : 600, color: 'var(--color-ink)' }}>{s.handle}{s.is_you && <span style={{ fontWeight: 500, color: 'var(--color-muted)' }}> · {de ? 'du' : 'you'}</span>}</span>
-                    <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{Math.round(s.weekly_tss)} TSS · {de ? boardPhrase.phraseDe : boardPhrase.phraseEn}</span>
+                  <span className="num-display grid place-items-center rounded-full shrink-0" style={{ width: 24, height: 24, fontSize: 12, color: medalInk, background: medal }}>{i + 1}</span>
+                  <span className="num-display grid place-items-center rounded-full shrink-0" style={{ width: 32, height: 32, fontSize: 13, color: 'var(--color-ink)', background: avColor(s.handle), border: `2px solid ${ring}` }}>{initial(s.handle)}</span>
+                  <span className="truncate flex-1 min-w-0" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{s.handle}{s.is_you && <span style={{ fontWeight: 500, color: 'var(--color-muted)' }}> · {de ? 'du' : 'you'}</span>}</span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <div className="flex items-end gap-[3px]">
+                      <span className="num-display" style={{ fontSize: 18, color: valueColor }}>{metricShown}</span>
+                      {metricRaw != null && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 2 }}>{metricUnit}</span>}
+                    </div>
+                    <div className="rounded-full overflow-hidden" style={{ width: 72, height: 5, background: 'var(--color-surface-3)' }}>
+                      <div style={{ width: `${barPct}%`, height: '100%', background: s.is_you ? 'var(--color-accent)' : 'var(--color-ink-2)', transition: 'width 400ms var(--ease-apple-default)' }} />
+                    </div>
                   </div>
-                  <div className="flex items-end gap-[3px]">
-                    <span className="num-display" style={{ fontSize: 19, color: valueColor }}>{metricShown}</span>
-                    {metricRaw != null && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 3 }}>{metricUnit}</span>}
-                  </div>
-                  <span className="hover-arrow"><ChevronRight size={15} style={{ color: 'var(--color-muted)' }} /></span>
+                  <span className="hover-arrow shrink-0"><ChevronRight size={16} style={{ color: 'var(--color-muted)' }} /></span>
                 </div>
                 {/* Hover: extra weekly stats + rank context */}
                 <div className="hover-reveal">
@@ -1677,16 +1738,25 @@ function CrewChallengeCard({ c, myId, de, onDelete, deleting }: {
 }) {
   const [confirm, setConfirm] = useState(false)
   const targetLabel = fmtChallengeValue(c.metric, c.target, de)
+  // Combined crew progress toward the shared target (pen ProgRow + segmented
+  // Stack + Contrib): each participant is one coloured segment of one bar.
+  const SEG_COLORS = ['var(--color-accent)', '#8B5CF6', 'var(--color-strain)', 'var(--color-recovery)', 'var(--color-gold)', 'var(--color-move)']
+  const combined = c.participants.reduce((s, p) => s + Math.max(0, p.value), 0)
+  const combinedPct = c.target > 0 ? Math.min(100, Math.round((combined / c.target) * 100)) : 0
+  const leader = [...c.participants].sort((a, b) => b.value - a.value)[0]
+  const segs = [...c.participants]
+    .sort((a, b) => b.value - a.value)
+    .map((p, i) => ({ p, color: SEG_COLORS[i % SEG_COLORS.length], w: c.target > 0 ? Math.min(100, (p.value / c.target) * 100) : 0 }))
   return (
     <div className="hover-card rounded-[14px] flex flex-col gap-3" style={{ background: 'var(--color-surface-2)', padding: 14 }}>
-      {/* Head */}
-      <div className="flex items-center gap-2.5">
-        <span className="grid place-items-center rounded-[11px] shrink-0" style={{ width: 38, height: 38, background: 'var(--color-paper)' }}>
-          <Target size={20} style={{ color: 'var(--color-accent)' }} />
+      {/* Head — gold gradient icon + Sora title (pen TitleBlock) */}
+      <div className="flex items-center gap-3">
+        <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 44, height: 44, background: 'linear-gradient(45deg, #FFD166, #FFB020)', boxShadow: '0 0 12px rgba(255,209,102,0.5)' }}>
+          <Mountain size={22} style={{ color: '#0A0C0F' }} />
         </span>
         <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-          <span className="num-display truncate" style={{ fontSize: 14, color: 'var(--color-ink)' }}>{c.name}</span>
-          <span className="truncate" style={{ fontSize: 11, color: 'var(--color-muted)' }}>
+          <span className="num-display truncate" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{c.name}</span>
+          <span className="truncate" style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>
             {metricLabel(c.metric, de)} · {targetLabel} · {de ? 'von' : 'by'} {c.creator_handle}
           </span>
         </div>
@@ -1706,6 +1776,36 @@ function CrewChallengeCard({ c, myId, de, onDelete, deleting }: {
           </button>
         )}
       </div>
+
+      {/* ProgRow — combined value + percent (pen aQkSE) */}
+      <div className="flex items-end justify-between">
+        <div className="flex items-end gap-1">
+          <span className="num-display" style={{ fontSize: 24, color: 'var(--color-ink)' }}>{fmtChallengeValue(c.metric, combined, de)}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 4 }}>/ {targetLabel}</span>
+        </div>
+        <span className="num-display" style={{ fontSize: 22, color: 'var(--color-gold)' }}>{combinedPct}%</span>
+      </div>
+
+      {/* Segmented stack — one coloured segment per contributor (pen YVULv) */}
+      {segs.length > 0 && (
+        <div className="flex rounded-full overflow-hidden" style={{ height: 14, background: 'var(--color-surface-3)' }}>
+          {segs.map(({ p, color, w }) => (
+            <span key={p.user_id} style={{ width: `${w}%`, height: '100%', background: color }} />
+          ))}
+        </div>
+      )}
+
+      {/* Contrib — top contributor line (pen K1zLwf) */}
+      {leader && (
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-full shrink-0" style={{ width: 10, height: 10, background: 'var(--color-accent)' }} />
+          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
+            {de
+              ? `${leader.handle}${leader.user_id === myId ? ' (du)' : ''} führt mit ${fmtChallengeValue(c.metric, leader.value, de)} ${metricLabel(c.metric, de)}.`
+              : `${leader.handle}${leader.user_id === myId ? ' (you)' : ''} leads with ${fmtChallengeValue(c.metric, leader.value, de)} ${metricLabel(c.metric, de)}.`}
+          </span>
+        </div>
+      )}
 
       {/* Leaderboard */}
       <div className="flex flex-col gap-2">
