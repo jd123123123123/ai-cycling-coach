@@ -48,6 +48,9 @@ import type {
 } from '../../../api/challenges'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useCrewChat, useSendChatMessage } from '../../../hooks/useCrewChat'
+import { useCrewRides } from '../../../hooks/useCrewRides'
+import ReactionBar from '../ReactionBar'
 import { celebrate } from '../../../lib/confetti'
 import { useAdaptiveGate, type GateMode } from '../../../hooks/useAdaptiveGate'
 import CoachSafetyBanner from '../CoachSafetyBanner'
@@ -241,6 +244,17 @@ export default function SocialTab() {
   const uploadTour = useUploadCrewEventTour()
   const [eventFormOpen, setEventFormOpen] = useState(false)
   const eventsRef = useRef<HTMLDivElement>(null)
+
+  // ── Crew chat (real thread, polls ~15s) + composer ──
+  const { data: chatData } = useCrewChat()
+  const chatMessages = chatData ?? []
+  const sendChat = useSendChatMessage()
+  const [chatDraft, setChatDraft] = useState('')
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // ── All-crew rides (every member's recent activities, newest first) ──
+  const { data: crewRidesData } = useCrewRides()
+  const crewRides = crewRidesData ?? []
 
   // ── Inbox (bell) + battle details toggles ──
   const [inboxOpen, setInboxOpen] = useState(false)
@@ -589,6 +603,11 @@ export default function SocialTab() {
             </span>
             <ChevronRight size={16} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
           </button>
+          {/* Cheer the crew's week (target_type=crew_week, no target_id) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>{de ? 'Woche feiern' : 'Cheer the week'}</span>
+            <ReactionBar targetType="crew_week" de={de} />
+          </div>
           {leaveConfirm ? (
             <div className="flex items-center gap-2.5 rounded-full" style={{ background: 'var(--color-surface-3)', padding: '8px 8px 8px 14px' }}>
               <span className="flex-1 min-w-0" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Crew wirklich verlassen?' : 'Leave this crew?'}</span>
@@ -925,20 +944,135 @@ export default function SocialTab() {
         )}
       </div>
 
-      {/* ── CREW CHAT — no chat backend exists yet: an honest coming-soon
-          preview rather than fabricated messages. ── */}
-      <div className="rounded-[24px] p-5 flex flex-col gap-3" style={cardStyle}>
-        <div className="flex items-center justify-between">
-          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Crew-Chat' : 'Crew chat'}</span>
-          <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-muted)' }}>{de ? 'BALD' : 'SOON'}</span>
+      {/* ── CREW CHAT — real shared thread (/crews/me/chat), polls ~15s.
+          Avatars derive from the handle; each message carries tap-to-toggle
+          emoji reactions. ── */}
+      {crewInfo.exists && (
+        <div className="rounded-[24px] p-5 flex flex-col gap-3" style={cardStyle}>
+          <div className="flex items-center gap-2">
+            <MessageCircle size={17} style={{ color: 'var(--color-accent)' }} />
+            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Crew-Chat' : 'Crew chat'}</span>
+          </div>
+
+          <div className="flex flex-col gap-3" style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {chatMessages.length > 0 ? (
+              chatMessages.map((m) => {
+                const mine = myId != null && m.user_id === myId
+                const name = m.display_name || m.handle
+                const time = (() => {
+                  try {
+                    return new Date(m.created_at).toLocaleTimeString(de ? 'de-DE' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
+                  } catch { return '' }
+                })()
+                return (
+                  <div key={m.id} className="flex gap-2.5">
+                    <span className="num-display grid place-items-center rounded-full shrink-0" style={{ width: 34, height: 34, fontSize: 14, color: 'var(--color-ink)', background: avColor(m.handle) }}>{initial(m.handle)}</span>
+                    <div className="flex flex-col gap-1 flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: mine ? 'var(--color-accent)' : 'var(--color-ink)' }}>{name}{mine && <span style={{ fontWeight: 500, color: 'var(--color-muted)' }}> · {de ? 'du' : 'you'}</span>}</span>
+                        {time && <span className="num-mono shrink-0" style={{ fontSize: 10, color: 'var(--color-muted)' }}>{time}</span>}
+                      </div>
+                      <div className="rounded-[14px] rounded-tl-[4px]" style={{ background: 'var(--color-surface-2)', padding: '8px 12px' }}>
+                        <span style={{ fontSize: 13.5, color: 'var(--color-ink)', lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</span>
+                      </div>
+                      <ReactionBar targetType="message" targetId={m.id} seed={m.reactions} de={de} />
+                    </div>
+                  </div>
+                )
+              })
+            ) : (
+              <div className="flex items-center gap-2.5 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: 14 }}>
+                <span className="grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, background: 'var(--color-surface-3)' }}><MessageCircle size={19} style={{ color: 'var(--color-muted)' }} /></span>
+                <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.35 }}>
+                  {de ? 'Noch keine Nachrichten — schreib der Crew als Erste:r.' : 'No messages yet — be the first to write to your crew.'}
+                </span>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Composer */}
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={chatDraft}
+              onChange={(e) => setChatDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && chatDraft.trim() && !sendChat.isPending) {
+                  sendChat.mutate(chatDraft.trim(), { onSuccess: () => setChatDraft('') })
+                }
+              }}
+              placeholder={de ? 'Nachricht an die Crew…' : 'Message your crew…'}
+              maxLength={500}
+              className="flex-1 rounded-full"
+              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', padding: '10px 14px', fontSize: 13.5, color: 'var(--color-ink)' }}
+            />
+            <button
+              type="button"
+              onClick={() => { if (chatDraft.trim() && !sendChat.isPending) sendChat.mutate(chatDraft.trim(), { onSuccess: () => setChatDraft('') }) }}
+              disabled={!chatDraft.trim() || sendChat.isPending}
+              aria-label={de ? 'Senden' : 'Send'}
+              className="grid place-items-center rounded-full shrink-0"
+              style={{ width: 42, height: 42, background: 'var(--color-accent)', opacity: !chatDraft.trim() || sendChat.isPending ? 0.5 : 1 }}
+            >
+              <Send size={18} style={{ color: 'var(--color-ink)' }} />
+            </button>
+          </div>
+          {sendChat.isError && (
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Konnte nicht gesendet werden — nochmal versuchen.' : 'Could not send — try again.'}</span>
+          )}
         </div>
-        <div className="flex items-center gap-2.5 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: 14 }}>
-          <span className="grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, background: 'var(--color-surface-3)' }}><MessageCircle size={19} style={{ color: 'var(--color-muted)' }} /></span>
-          <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.35 }}>
-            {de ? 'Crew-Chat ist noch nicht verbunden — bis dahin stupse deine Crew über die Duelle an.' : "Crew chat isn't connected yet — nudge your crew from the duels until it lands."}
-          </span>
+      )}
+
+      {/* ── ALL-CREW RIDES — every member's recent activities (/crews/me/rides),
+          newest first. Each row links to the ride-detail page + carries
+          tap-to-toggle reactions (target_type=ride). ── */}
+      {crewInfo.exists && (
+        <div className="rounded-[24px] p-5 flex flex-col gap-3" style={cardStyle}>
+          <div className="flex items-center gap-2">
+            <Bike size={17} style={{ color: 'var(--color-accent)' }} />
+            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Crew-Fahrten' : 'Crew rides'}</span>
+          </div>
+          {crewRides.length > 0 ? (
+            crewRides.map((r) => {
+              const km = (r.distance_m / 1000).toFixed(1)
+              const elev = Math.round(r.elevation_gain_m)
+              const h = Math.floor(r.duration_seconds / 3600)
+              const min = Math.floor((r.duration_seconds % 3600) / 60)
+              const dur = h > 0 ? `${h}:${String(min).padStart(2, '0')} h` : `${min} min`
+              const when = (() => {
+                try { return new Date(r.started_at).toLocaleDateString(de ? 'de-DE' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) } catch { return '' }
+              })()
+              const name = r.display_name || r.handle
+              return (
+                <div key={r.id} className="flex flex-col gap-2.5 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: 12 }}>
+                  <button type="button" onClick={() => navigate(`/crew-ride/${r.id}`)} className="flex items-center gap-2.5 text-left">
+                    <span className="num-display grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, fontSize: 15, color: 'var(--color-ink)', background: avColor(r.handle) }}>{initial(r.handle)}</span>
+                    <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                      <span className="truncate" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{r.title}</span>
+                      <span className="truncate" style={{ fontSize: 11.5, color: 'var(--color-muted)' }}>{name} · {when}</span>
+                    </div>
+                    <ChevronRight size={16} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+                  </button>
+                  <div className="flex items-center gap-5" style={{ paddingLeft: 2 }}>
+                    <FeedStat v={km} u="km" />
+                    <FeedStat v={`${elev}`} u="m" />
+                    <FeedStat v={dur} u={de ? 'Zeit' : 'time'} />
+                  </div>
+                  <ReactionBar targetType="ride" targetId={r.id} seed={r.reactions} de={de} />
+                </div>
+              )
+            })
+          ) : (
+            <div className="flex items-center gap-2.5 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: 14 }}>
+              <span className="grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, background: 'var(--color-surface-3)' }}><Bike size={19} style={{ color: 'var(--color-muted)' }} /></span>
+              <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.35 }}>
+                {de ? 'Sobald deine Crew fährt, erscheinen ihre Fahrten hier.' : "Once your crew rides, their activities show up here."}
+              </span>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* ── FEED ── */}
       <div ref={feedRef} className="flex flex-col gap-3">
@@ -1764,6 +1898,10 @@ function EventCard({ ev, de, canUploadTour, onRsvp, rsvpPending, onUploadTour, u
       {uploadError && (
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-strain)' }}>{de ? 'Upload fehlgeschlagen — nur GPX bis 10 MB.' : 'Upload failed — GPX only, up to 10 MB.'}</span>
       )}
+
+      {/* Crew reactions on this event (target_type=event) */}
+      <div style={{ height: 1, background: 'var(--color-rule)' }} />
+      <ReactionBar targetType="event" targetId={ev.id} de={de} />
     </div>
   )
 }

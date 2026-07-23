@@ -40,6 +40,7 @@ const DebriefView = lazyWithRetry(() => import('./pages/DebriefView'))
 const SessionReportView = lazyWithRetry(() => import('./pages/SessionReportView'))
 const RideAnalysisView = lazyWithRetry(() => import('./pages/RideAnalysisView'))
 const RideRecapView = lazyWithRetry(() => import('./pages/RideRecapView'))
+const CrewRideDetailView = lazyWithRetry(() => import('./pages/CrewRideDetailView'))
 // Bike-only: the standalone Load & Form (/load-form) analysis page is archived
 // (file kept on disk, route removed) — its data lives inline on Today/Recovery.
 const WorkoutDetailView = lazyWithRetry(() => import('./pages/WorkoutDetailView'))
@@ -208,6 +209,15 @@ function AppRoutes() {
             element={
               <ProtectedRoute checkOnboarding>
                 <RideRecapView />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/crew-ride/:activityId"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <CrewRideDetailView />
               </ProtectedRoute>
             }
           />
