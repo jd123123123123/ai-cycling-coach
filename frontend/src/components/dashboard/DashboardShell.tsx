@@ -22,7 +22,8 @@ import MobileBottomNav from './MobileBottomNav'
 import DashboardHeaderBar from './DashboardHeaderBar'
 import CoachFab from './CoachFab'
 import ShaderCanvas from '../wrapped/ShaderCanvas'
-import { AuraContext } from './AuraContext'
+import TodayRoad from './today/TodayRoad'
+import { AuraContext, type RoadPayload } from './AuraContext'
 
 interface DashboardShellProps {
   children: ReactNode
@@ -43,6 +44,11 @@ export default function DashboardShell({
   // other tab → no aura. Stable setter so consumers' effects don't re-run.
   const [aura, setAuraState] = useState<string | null>(null)
   const setAura = useCallback((c: string | null) => setAuraState(c), [])
+  // The day's road (Today's Road), when the Today tab has published one.
+  // Wins over the plain aura backdrop when present. Stable setter for the
+  // same reason as setAura above.
+  const [road, setRoadState] = useState<RoadPayload | null>(null)
+  const setRoad = useCallback((r: RoadPayload | null) => setRoadState(r), [])
 
   // Cmd+K (or Ctrl+K) — command palette
   useEffect(() => {
@@ -57,7 +63,7 @@ export default function DashboardShell({
   }, [])
 
   return (
-    <AuraContext.Provider value={{ setAura }}>
+    <AuraContext.Provider value={{ setAura, setRoad }}>
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-paper)' }}>
       {stickyBar}
 
@@ -66,7 +72,18 @@ export default function DashboardShell({
             (header bar + tab content), matching the pen. Only present when the
             Today tab has published a colour; freezes under reduced-motion and
             pauses offscreen (ShaderCanvas contract). */}
-        {aura && (
+        {road ? (
+          // zIndex: -1 (not 0) is deliberate: DashboardHeaderBar and the tab
+          // content below are non-positioned (position: static), so per CSS
+          // painting order a fixed z-index:0 layer would paint ON TOP of them
+          // (step 6 beats step 3), inverting the "cards over the road" glass
+          // treatment. -1 matches the old aura backdrop's convention — behind
+          // all in-flow content — while pointerEvents stays 'auto' so drag-to-
+          // scrub still works in the gaps around the (opaque-enough) cards.
+          <div style={{ position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'auto' }}>
+            <TodayRoad profile={road.profile} mode={road.mode} auraColor={road.color} />
+          </div>
+        ) : aura && (
           <ShaderCanvas
             variant="aura"
             uniforms={{ u_aura: aura, u_bg: '#0A0C0F' }}

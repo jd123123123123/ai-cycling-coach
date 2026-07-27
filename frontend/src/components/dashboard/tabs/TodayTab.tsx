@@ -26,6 +26,9 @@ import FitnessFreshnessCard from '../FitnessFreshnessCard'
 import ThisWeekCard from '../ThisWeekCard'
 import ExtraSessionsCard from '../ExtraSessionsCard'
 import { useAura } from '../AuraContext'
+import { buildRoadProfile, steadyBlock } from '../../../utils/roadProfile'
+import { roadMode } from '../../../utils/roadMode'
+import { usePowerProfile } from '../../../hooks/usePowerProfile'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
 import AbsorptionCard from '../AbsorptionCard'
@@ -50,7 +53,17 @@ import { tFor } from '../../../i18n/strings'
 import { useMethods } from '../../ui/MethodsDrawer'
 import { buildReadinessMethod } from '../../../utils/methodsContent'
 
-const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
+// Glass, not solid: Today's Road sits behind these cards (DashboardShell),
+// so the terrain reads through. --color-paper-2 is a plain hex (#14181D,
+// see index.css), which color-mix(in srgb, ...) can consume directly. This
+// const is LOCAL to TodayTab — every other tab/card file defines its own
+// `cardStyle` and stays solid; only Today gets glass.
+const cardStyle = {
+  background: 'color-mix(in srgb, var(--color-paper-2) 72%, transparent)',
+  backdropFilter: 'blur(14px) saturate(1.2)',
+  WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
+  border: '1px solid var(--color-rule)',
+} as const
 
 // ── Flagship "Morning Readiness Moment" — state resolution ───────────────────
 // The Today tab is a single screen with FIVE faces (pencil-new.pen flagship
@@ -105,6 +118,17 @@ export function flagshipColors(state: FlagshipState): {
     case 'planned-rest': return { aura: '#3E9BFF', ring: '#38B6FF', gradient: ['#38B6FF', '#16E08A', '#59C3FF'], glow: '#3E9BFF' }
     case 'pending': return { aura: '#3A4450', ring: '#5C6570', gradient: ['#5C6570', '#3A4450', '#5C6570'], glow: '#3A4450' }
   }
+}
+
+/** CP/W′ may only be used when the power model is valid (audit rule: a manual
+ *  FTP that disagrees with the model by >10% invalidates the model). Without a
+ *  valid model the road draws terrain but no waterline and no matches. */
+export function roadPowerInputs(
+  p: { model_valid?: boolean; cp_watts?: number; w_prime_j?: number } | null | undefined,
+): { cp: number | null; wPrime: number | null } {
+  if (!p || p.model_valid !== true) return { cp: null, wPrime: null }
+  if (p.cp_watts == null || p.w_prime_j == null) return { cp: null, wPrime: null }
+  return { cp: p.cp_watts, wPrime: p.w_prime_j }
 }
 
 // ── P1-11 / P1-8 weekly rhythm — pure, testable helpers ─────────────────────
@@ -218,6 +242,7 @@ export default function TodayTab() {
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 8), [today]), today)
   const { data: trajectory } = useGoalTrajectory()
   const { data: profile } = useAthleteProfile()
+  const { data: powerProfile } = usePowerProfile()
   const { data: streakData } = useStreak()
   // Current week's plan — only read for planned_tss_total (quiet-week detection
   // gating the fitness-trend chip, audit P1-8). Shares PlanTab's query cache.
@@ -898,11 +923,47 @@ export default function TodayTab() {
   // Publish the state-keyed aura colour up to DashboardShell, which paints it
   // full-screen behind <main> (header bar included). Cleared on unmount so the
   // aura only shows on Today.
-  const { setAura } = useAura()
+  const { setAura, setRoad } = useAura()
   useEffect(() => {
     setAura(auraColor)
     return () => setAura(null)
   }, [auraColor, setAura])
+
+  // Today's Road — the day's terrain, ground level at Critical Power.
+  // Real blocks when the plan has them; otherwise a single honest steady block
+  // synthesized from the planned duration and an average target derived the
+  // same way sessionIntensity() already derives IF (IF = √(TSS / (hours×100)),
+  // watts = IF × threshold). Needs duration, TSS and a threshold — missing any
+  // of them yields no road at all rather than a guessed one (spec §6).
+  const roadBlocks = useMemo(() => {
+    const blocks = workout?.blocks ?? []
+    if (blocks.length > 0) return blocks
+    const hours = (workout?.duration_minutes ?? 0) / 60
+    const threshold = powerProfile?.threshold_watts
+    if (!workout || hours <= 0 || workout.predicted_tss == null || threshold == null) return []
+    const iff = Math.sqrt(workout.predicted_tss / (hours * 100))
+    const synth = steadyBlock(workout.duration_minutes, Math.round(iff * threshold))
+    return synth ? [synth] : []
+  }, [workout, powerProfile])
+
+  const roadProfile = useMemo(
+    () => buildRoadProfile(roadBlocks, roadPowerInputs(powerProfile)),
+    [roadBlocks, powerProfile],
+  )
+  const roadModeValue = useMemo(
+    () => roadMode(fState, { hasProfile: roadProfile.samples.length > 0, hasRidden: false }),
+    [fState, roadProfile],
+  )
+
+  // hasRidden: false is deliberate — the 'ridden' mode needs a real power
+  // stream and is out of scope for this plan (spec §10 keeps stream-backed
+  // post-ride terrain for a follow-up). 'flat-done' is the honest post-ride
+  // landscape until then.
+  useEffect(() => {
+    setRoad({ profile: roadProfile, mode: roadModeValue, color: fColors.aura })
+    return () => setRoad(null)
+  }, [setRoad, roadProfile, roadModeValue, fColors.aura])
+
   const ringColor = fColors.ring
   const ringGradient = fColors.gradient
   const ringGlow = fColors.glow
