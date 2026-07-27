@@ -958,7 +958,7 @@ export default function TodayTab() {
     const threshold = powerProfile?.threshold_watts
     if (!workout || hours <= 0 || workout.predicted_tss == null || threshold == null) return []
     const iff = Math.sqrt(workout.predicted_tss / (hours * 100))
-    const synth = steadyBlock(workout.duration_minutes, Math.round(iff * threshold))
+    const synth = steadyBlock(workout.duration_minutes, Math.round(iff * threshold), threshold)
     return synth ? [synth] : []
   }, [workout, powerProfile])
 

@@ -101,7 +101,9 @@ void main(){
     vec3 hot  = mix(u_aura, vec3(1.0, 0.42, 0.24), 0.55);
     vec3 land = mix(cool, hot, smoothstep(0.35, 0.75, zone));
     // W′ remaining dims the road: an emptying tank literally darkens the way.
-    land *= mix(0.42, 1.0, bal);
+    // Gated on u_waterline (not just packRoadTexture's neutral bal=1.0 when
+    // CP is unknown) so the road carries no reserve signal at all in that case.
+    land *= mix(1.0, mix(0.42, 1.0, bal), u_waterline);
     land *= mix(1.0, 0.55, depth);            // falls into shadow with depth
     land += 0.05 * fbm(vec2(uv.x * 34.0, uv.y * 12.0)); // road grain
 

@@ -36,8 +36,10 @@ const HEIGHT_RANGE = 2
  *   R = watts / CP over 0..2   (1.0 → 128 = the CP waterline)
  *   G = zone / 7               (terrain tint)
  *   B = W′bal / W′             (255 when CP/W′ unknown — a full tank is the
- *                               honest neutral; the shader hides the battery
- *                               entirely in that case via u_waterline = 0)
+ *                               honest neutral value to pack; the shader
+ *                               ALSO gates its W′ dimming term on u_waterline,
+ *                               which is 0 whenever CP is unknown, so no
+ *                               reserve signal reaches the road in that case)
  *   A = blockIndex / 255       (scrub → block mapping)
  * With no CP, height falls back to watts against the session's own peak so the
  * terrain still shows relative effort — but never against an invented CP.
@@ -199,7 +201,12 @@ void main(){
     vec3 cool = mix(u_bg, u_aura, 0.35);
     vec3 hot  = mix(u_aura, vec3(1.0, 0.42, 0.24), 0.55);
     vec3 land = mix(cool, hot, smoothstep(0.35, 0.75, zone));
-    land *= mix(0.42, 1.0, bal);
+    // W' dimming is gated on u_waterline: with no CP, packRoadTexture packs a
+    // neutral B=255 (bal=1.0) so mix(0.42,1.0,bal) alone would already read
+    // as "full", but this term must ALSO vanish when CP is unknown rather
+    // than rely on that coincidence — mix(1.0, mix(0.42,1.0,bal), u_waterline)
+    // makes the road carry no reserve signal at all in that case.
+    land *= mix(1.0, mix(0.42, 1.0, bal), u_waterline);
     land *= mix(1.0, 0.55, depth);
     land += 0.05 * fbm(vec2(uv.x * 34.0, uv.y * 12.0));
     land = mix(land, mix(u_bg, land, 0.30), step(3.5, u_mode) * step(u_mode, 4.5));
@@ -314,6 +321,12 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
   gl.shaderSource(s, src)
   gl.compileShader(s)
   if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    // A GLSL error otherwise ships as a silent blank canvas — log it so the
+    // next reserved-word-style bug is diagnosable in seconds, not a review cycle.
+    console.error(
+      `ShaderCanvas: ${type === gl.VERTEX_SHADER ? 'vertex' : 'fragment'} shader compile failed:`,
+      gl.getShaderInfoLog(s),
+    )
     gl.deleteShader(s)
     return null
   }
@@ -336,6 +349,13 @@ export default function ShaderCanvas({ variant, uniforms, texture, className, st
   uniformsRef.current = uniforms
   const textureRef = useRef(texture)
   textureRef.current = texture
+  // Under prefers-reduced-motion there is no RAF loop (see below), so a
+  // scalar-uniform change (e.g. the road's scrub position, u_travel) would
+  // otherwise never reach the GPU. This ref lets the effect below draw a
+  // single frame on demand whenever `uniforms` changes, without starting any
+  // continuous animation — the WCAG 2.3.3 freeze only stops ambient motion,
+  // the road must stay scrubbable.
+  const renderNowRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -351,7 +371,10 @@ export default function ShaderCanvas({ variant, uniforms, texture, className, st
     gl.attachShader(prog, vs)
     gl.attachShader(prog, fs)
     gl.linkProgram(prog)
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error('ShaderCanvas: program link failed:', gl.getProgramInfoLog(prog))
+      return
+    }
     gl.useProgram(prog)
 
     const buf = gl.createBuffer()
@@ -452,7 +475,13 @@ export default function ShaderCanvas({ variant, uniforms, texture, className, st
     // (pre-layout) frame can't leave us with a stale/blank buffer.
     const ro = new ResizeObserver(() => render(performance.now()))
     ro.observe(canvas)
-    if (!reduce) raf = requestAnimationFrame(loop)
+    if (reduce) {
+      // No continuous RAF loop under reduced motion — only redraw on demand
+      // (resize above, or a scalar-uniform change via renderNowRef below).
+      renderNowRef.current = () => render(performance.now())
+    } else {
+      raf = requestAnimationFrame(loop)
+    }
 
     const io = new IntersectionObserver((entries) => {
       visible = entries[0]?.isIntersecting ?? true
@@ -462,6 +491,7 @@ export default function ShaderCanvas({ variant, uniforms, texture, className, st
     io.observe(canvas)
 
     return () => {
+      renderNowRef.current = null
       if (raf) cancelAnimationFrame(raf)
       ro.disconnect()
       io.disconnect()
@@ -472,6 +502,16 @@ export default function ShaderCanvas({ variant, uniforms, texture, className, st
       gl.deleteTexture(tex)
     }
   }, [variant])
+
+  // Reduced-motion has no running RAF loop to pick up prop changes on its
+  // own, so drive one on-demand frame whenever the uniforms object changes
+  // (e.g. TodayRoad publishing a new u_travel while the athlete scrubs).
+  // `uniformsRef.current` is already updated above by the time this runs.
+  // A no-op when the GL effect hasn't set renderNowRef (non-reduced-motion,
+  // or before the effect above has run).
+  useEffect(() => {
+    renderNowRef.current?.()
+  }, [uniforms])
 
   return (
     <canvas

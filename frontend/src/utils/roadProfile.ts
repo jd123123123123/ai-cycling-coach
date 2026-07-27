@@ -55,7 +55,9 @@ export function expandBlocks(blocks: ResolvedBlock[]): PowerStep[] {
       return
     }
     const offWatts = mid(offLo, offHi)
-    const offZone = b.off_pct_ftp != null ? zoneForPctFtp(b.off_pct_ftp) : b.zone
+    // off_pct_ftp is a FRACTION on the wire (backend/app/services/workout_templates.py
+    // emits e.g. 0.95, 0.50) but zoneForPctFtp expects a PERCENT — convert before lookup.
+    const offZone = b.off_pct_ftp != null ? zoneForPctFtp(b.off_pct_ftp * 100) : b.zone
     for (let i = 0; i < reps; i++) {
       steps.push({ watts: onWatts, zone: b.zone, durationS: onS, blockIndex })
       steps.push({ watts: offWatts, zone: offZone, durationS: offS, blockIndex })
@@ -178,17 +180,26 @@ export function buildRoadProfile(
  * BOTH values are real — a road is never invented from a guess.
  * The terrain reads as a gentle rolling road because the shader's fbm grain is
  * the only relief on a constant-power profile.
+ *
+ * `thresholdWatts` is the same threshold the caller used to derive
+ * `targetWatts` from its intensity factor (watts = IF × threshold), so
+ * `targetWatts / thresholdWatts` recovers that IF here and feeds it through
+ * `zoneForPctFtp` for an honest zone — never the substituted zone-2 default.
+ * Without a real threshold there is no honest way to know the intensity, so
+ * (per the same no-guessing rule) this returns null rather than fabricate one.
  */
 export function steadyBlock(
   durationMin: number | null | undefined,
   targetWatts: number | null | undefined,
+  thresholdWatts: number | null | undefined,
 ): ResolvedBlock | null {
-  if (durationMin == null || targetWatts == null) return null
-  if (!(durationMin > 0) || !(targetWatts > 0)) return null
+  if (durationMin == null || targetWatts == null || thresholdWatts == null) return null
+  if (!(durationMin > 0) || !(targetWatts > 0) || !(thresholdWatts > 0)) return null
+  const pctFraction = targetWatts / thresholdWatts
   return {
     name: '', duration_s: Math.round(durationMin * 60),
     target_watts_low: targetWatts, target_watts_high: targetWatts,
-    target_pct_ftp: 0, zone: 2, rpe: 4,
+    target_pct_ftp: pctFraction, zone: zoneForPctFtp(pctFraction * 100), rpe: 4,
     cadence_low: null, cadence_high: null,
     target_hr_low: null, target_hr_high: null,
   }

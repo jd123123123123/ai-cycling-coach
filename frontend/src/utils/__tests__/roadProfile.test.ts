@@ -23,6 +23,15 @@ describe('zoneForPctFtp', () => {
     expect(zoneForPctFtp(140)).toBe(6)
     expect(zoneForPctFtp(200)).toBe(7)
   })
+
+  it('pins the exact boundary values to the lower zone', () => {
+    expect(zoneForPctFtp(55)).toBe(1)
+    expect(zoneForPctFtp(75)).toBe(2)
+    expect(zoneForPctFtp(90)).toBe(3)
+    expect(zoneForPctFtp(105)).toBe(4)
+    expect(zoneForPctFtp(120)).toBe(5)
+    expect(zoneForPctFtp(150)).toBe(6)
+  })
 })
 
 describe('expandBlocks', () => {
@@ -35,16 +44,38 @@ describe('expandBlocks', () => {
   })
 
   it('expands a structured set into reps × (on, off) steps', () => {
+    // off_pct_ftp is a FRACTION on the wire (as the backend actually emits it —
+    // see backend/app/services/workout_templates.py:457's off_pct_ftp=0.50),
+    // not the 0-150+ percent zoneForPctFtp expects.
     const steps = expandBlocks([block({
       duration_s: 600, target_watts_low: 400, target_watts_high: 420, zone: 6,
       reps: 10, on_s: 15, off_s: 45,
-      off_watts_low: 100, off_watts_high: 120, off_pct_ftp: 40,
+      off_watts_low: 100, off_watts_high: 120, off_pct_ftp: 0.50,
     })])
     expect(steps).toHaveLength(20)
     expect(steps[0]).toEqual({ watts: 410, zone: 6, durationS: 15, blockIndex: 0 })
     expect(steps[1]).toEqual({ watts: 110, zone: 1, durationS: 45, blockIndex: 0 })
     // Invariant from the ResolvedBlock docs: reps × (on_s + off_s) === duration_s
     expect(steps.reduce((s, x) => s + x.durationS, 0)).toBe(600)
+  })
+
+  it('converts off_pct_ftp fraction → zone correctly (the unit-mismatch regression)', () => {
+    // An over/under session: unders at 0.95 IF are genuinely threshold (zone 4)
+    // work, not recovery. workout_templates.py:414 emits off_pct_ftp=0.95.
+    const overUnder = expandBlocks([block({
+      duration_s: 300, target_watts_low: 300, target_watts_high: 320, zone: 5,
+      reps: 5, on_s: 30, off_s: 30,
+      off_watts_low: 230, off_watts_high: 250, off_pct_ftp: 0.95,
+    })])
+    expect(overUnder[1].zone).toBe(4)
+
+    // workout_templates.py:457 emits off_pct_ftp=0.50 for a true recovery spin.
+    const recovery = expandBlocks([block({
+      duration_s: 300, target_watts_low: 300, target_watts_high: 320, zone: 5,
+      reps: 5, on_s: 30, off_s: 30,
+      off_watts_low: 100, off_watts_high: 120, off_pct_ftp: 0.50,
+    })])
+    expect(recovery[1].zone).toBe(1)
   })
 
   it('falls back to a steady step when a set lacks off watts', () => {
@@ -155,22 +186,37 @@ describe('buildRoadProfile', () => {
 
 describe('steadyBlock', () => {
   it('builds one honest steady block from a duration and a target', () => {
-    const b = steadyBlock(90, 200)!
+    const b = steadyBlock(90, 200, 250)!
     expect(b.duration_s).toBe(5400)
     expect(b.target_watts_low).toBe(200)
     expect(b.target_watts_high).toBe(200)
     expect(b.reps ?? null).toBeNull()
   })
 
-  it('refuses to invent a road without both a duration and a target', () => {
-    expect(steadyBlock(90, null)).toBeNull()
-    expect(steadyBlock(null, 200)).toBeNull()
-    expect(steadyBlock(0, 200)).toBeNull()
+  it('refuses to invent a road without a duration, a target, or a threshold', () => {
+    expect(steadyBlock(90, null, 250)).toBeNull()
+    expect(steadyBlock(null, 200, 250)).toBeNull()
+    expect(steadyBlock(0, 200, 250)).toBeNull()
+    expect(steadyBlock(90, 200, null)).toBeNull()
+    expect(steadyBlock(90, 200, 0)).toBeNull()
   })
 
   it('feeds a profile that still drains nothing below CP', () => {
-    const p = buildRoadProfile([steadyBlock(60, 200)!], { cp: 250, wPrime: 20000 })
+    const p = buildRoadProfile([steadyBlock(60, 200, 250)!], { cp: 250, wPrime: 20000 })
     expect(p.samples.length).toBeGreaterThan(1)
     expect(p.minWbal).toBeCloseTo(20000, 0)
+  })
+
+  it('derives zone from the actual intensity factor, never the substituted zone-2 default', () => {
+    // 320W against a 300W threshold is ~107% IF — genuinely a VO2/zone-5 push,
+    // not the old hardcoded endurance-blue zone 2.
+    const highIf = steadyBlock(20, 320, 300)!
+    expect(highIf.zone).not.toBe(2)
+    expect(highIf.zone).toBe(5)
+    expect(highIf.target_pct_ftp).toBeCloseTo(320 / 300, 6)
+
+    // A genuinely easy target should still land in zone 2.
+    const endurance = steadyBlock(60, 195, 300)!
+    expect(endurance.zone).toBe(2)
   })
 })
