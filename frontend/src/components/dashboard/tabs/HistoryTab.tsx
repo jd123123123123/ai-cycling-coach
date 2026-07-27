@@ -451,7 +451,10 @@ export default function HistoryTab() {
           {streak > 0 && (
             <span className="flex items-center gap-[5px] rounded-full shrink-0" style={{ padding: '6px 12px', background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)' }}>
               <Flame size={15} style={{ color: 'var(--color-recovery)' }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-recovery)' }}>{de ? `${streak}-Tage-Serie` : `${streak}-day streak`}</span>
+              {/* Singular/plural: "1-Tage-Serie" was wrong in German. */}
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-recovery)' }}>
+                {de ? (streak === 1 ? '1 Tag in Folge' : `${streak} Tage in Folge`) : (streak === 1 ? '1-day streak' : `${streak}-day streak`)}
+              </span>
             </span>
           )}
         </div>
@@ -506,7 +509,18 @@ export default function HistoryTab() {
         </div>
         {streak > 0 && (
           <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: 'var(--color-ink-2)' }}>
-            {de ? `${streak} Tage in Folge — fahr morgen weiter, um die Serie am Leben zu halten.` : `${streak} days in a row — ride tomorrow to keep the fire alive.`}
+            {/* Was: "fahr morgen weiter, um die Serie am Leben zu halten." /
+                "ride tomorrow to keep the fire alive." That is loss aversion —
+                the thing the athlete stands to LOSE by resting — on a product
+                that promises no streak mechanics, and it contradicts the Today
+                tab, which already replaced the daily streak with a
+                non-punitive weekly-rhythm stat (P1-11). The count stays,
+                because consistency is genuinely worth seeing; the threat does
+                not. Also fixes "1 Tage in Folge", which was ungrammatical in
+                the app's first language on a headline stat. */}
+            {de
+              ? (streak === 1 ? 'Ein Tag in Folge — der Anfang zählt schon.' : `${streak} Tage in Folge — schöner Rhythmus.`)
+              : (streak === 1 ? 'One day in a row — that already counts.' : `${streak} days in a row — nice rhythm.`)}
           </span>
         )}
       </div>
