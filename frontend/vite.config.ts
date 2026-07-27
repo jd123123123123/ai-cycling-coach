@@ -7,10 +7,20 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   test: {
-    // Pure-utility tests only for now (no jsdom): node environment keeps the
-    // runner dependency-free. Add jsdom when component tests arrive.
-    environment: 'node',
-    include: ['src/**/__tests__/**/*.test.ts'],
+    // Component tests arrived (Today's Road), so the runner now needs a DOM.
+    // Pure-utility tests are unaffected by running under jsdom.
+    environment: 'jsdom',
+    include: ['src/**/__tests__/**/*.test.{ts,tsx}'],
+    // Pre-existing PENDING stubs from phase 06.1: written as fully
+    // commented-out bodies while test infra was absent, so they collect as
+    // "no test suite found". The infra they asked for now exists — activating
+    // them is real work, tracked separately. Remove an entry when activated.
+    exclude: [
+      '**/node_modules/**',
+      'src/components/ui/__tests__/CommandPalette.test.tsx',
+      'src/components/ui/__tests__/SegmentedTabs.test.tsx',
+      'src/components/ui/__tests__/SideSheet.test.tsx',
+    ],
   },
   build: {
     // Keep a sensible warning threshold now that heavy deps live in their own
