@@ -24,6 +24,7 @@ import { detectWorkoutSport, loggedReviewFromEvidence } from '../../../api/coach
 import type { WorkoutSport } from '../../../api/coach'
 import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
 import { daysToEvent } from '../../../utils/loadMetrics'
+import { intensityStep, intensityLabel } from '../../../utils/intensityScale'
 import { formatDate } from '../../../utils/format'
 
 type Sport = 'bike' | 'run' | 'all'
@@ -789,16 +790,27 @@ export default function PlanTab() {
             const isRun = d.sport === 'running'
             const isGym = d.sport === 'gym'
             const Icon = isGym ? Dumbbell : isRun ? Footprints : Bike
-            const col = isGym ? 'var(--color-amber)' : isRun ? 'var(--color-exercise)' : 'var(--color-strain)'
+            // Colour by INTENSITY, not by sport. Sport was the old key, which
+            // in a bike-only app painted all five rows the same colour and hid
+            // the only axis that distinguishes them. The sport still shows —
+            // in the glyph — but the eye now reads the week's shape.
+            const step = intensityStep(d.category)
+            const col = step.color
+            const zoneName = intensityLabel(d.category, de)
             const RowBody = (
               <>
                 <div className="flex items-center gap-3.5">
-                  <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: `color-mix(in srgb, ${col} 18%, transparent)` }}>
+                  <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: `color-mix(in srgb, ${col} 18%, transparent)`, border: `1px solid color-mix(in srgb, ${col} 40%, transparent)` }}>
                     <Icon size={20} strokeWidth={2} style={{ color: col }} />
                   </div>
                   <div className="flex-1 min-w-0">
                     {/* clamp-2 (textfit): session titles wrap, never truncate */}
                     <div className="num-display line-clamp-2" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{d.title}</div>
+                    {zoneName && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full mt-1 mb-0.5" style={{ padding: '2px 8px', background: `color-mix(in srgb, ${col} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${col} 35%, transparent)` }}>
+                        <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.04em', color: col }}>{step.zone ? `${step.zone} · ` : ''}{zoneName}</span>
+                      </span>
+                    )}
                     <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>{sessionMeta(d)}</div>
                     {sessionPeakSub(d) && (
                       <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{sessionPeakSub(d)}</div>
@@ -824,7 +836,20 @@ export default function PlanTab() {
             // detail inline — never navigates to today's workout.
             return (
               <button key={d.date} type="button" onClick={() => selectDay(d.date)}
-                className="flex flex-col rounded-[20px] p-3.5 hover-card text-left" style={cardStyle}>
+                className="flex flex-col rounded-[20px] p-3.5 hover-card text-left relative overflow-hidden" style={cardStyle}>
+                {/* Intensity spine — a 3 px bar down the leading edge in the
+                    session's colour. Scanning the stack top-to-bottom, these
+                    spines ARE the week's shape: where the hard days fall, how
+                    they're spaced, whether two sit back-to-back. No text can
+                    be read that fast. */}
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+                    background: col,
+                    opacity: 0.9,
+                  }}
+                />
                 {RowBody}
               </button>
             )
