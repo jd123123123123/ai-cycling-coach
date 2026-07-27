@@ -17,11 +17,53 @@
  */
 import { useEffect, useRef } from 'react'
 import { prefersReducedMotion } from '../../utils/motion'
+import type { RoadProfile } from '../../utils/roadProfile'
 
-export type ShaderVariant = 'iri' | 'topo' | 'burst' | 'aura'
+export type ShaderVariant = 'iri' | 'topo' | 'burst' | 'aura' | 'road'
 
 export interface ShaderUniforms {
   [name: string]: string | number
+}
+
+/** Packed RGBA bytes for a width×1 data texture (GL texture unit 0). */
+export interface ShaderTexture { data: Uint8Array; width: number }
+
+/** Height scale: R encodes watts/CP across 0..2, so CP lands mid-scale. */
+const HEIGHT_RANGE = 2
+
+/**
+ * Pack a road profile into a width×1 RGBA texture:
+ *   R = watts / CP over 0..2   (1.0 → 128 = the CP waterline)
+ *   G = zone / 7               (terrain tint)
+ *   B = W′bal / W′             (255 when CP/W′ unknown — a full tank is the
+ *                               honest neutral; the shader hides the battery
+ *                               entirely in that case via u_waterline = 0)
+ *   A = blockIndex / 255       (scrub → block mapping)
+ * With no CP, height falls back to watts against the session's own peak so the
+ * terrain still shows relative effort — but never against an invented CP.
+ */
+// (Pure data helper colocated with the component per the ShaderCanvas
+// texture-transport contract; it has no component state to lose on a
+// fast-refresh remount.)
+// eslint-disable-next-line react-refresh/only-export-components
+export function packRoadTexture(profile: RoadProfile): ShaderTexture {
+  const n = profile.samples.length
+  if (n === 0) return { data: new Uint8Array([128, 0, 255, 0]), width: 1 }
+
+  const peak = Math.max(...profile.samples.map((s) => s.watts), 1)
+  const ref = profile.cp ?? peak
+  const wPrime = profile.wPrime
+  const data = new Uint8Array(n * 4)
+
+  profile.samples.forEach((s, i) => {
+    const h = Math.min(s.watts / ref, HEIGHT_RANGE) / HEIGHT_RANGE
+    const bal = s.wbal != null && wPrime != null ? Math.max(0, Math.min(1, s.wbal / wPrime)) : 1
+    data[i * 4 + 0] = Math.round(h * 255)
+    data[i * 4 + 1] = Math.round((Math.min(s.zone, 7) / 7) * 255)
+    data[i * 4 + 2] = Math.round(bal * 255)
+    data[i * 4 + 3] = Math.min(255, s.blockIndex)
+  })
+  return { data, width: n }
 }
 
 const VERT = `
@@ -48,6 +90,58 @@ float fbm(vec2 p){
   return v;
 }
 `
+
+// Aura: the flagship "Morning Readiness" backdrop — a warm, joyful *sunrise
+// bloom* of the state colour blooming from behind the readiness ring.
+// INTENTIONALLY departs from the pen's dim, sonar-ring aura (product call:
+// the old one read subtle + weird, not happy): two companion tones are
+// derived in-shader from the single u_aura so the light is multi-tonal and
+// vivid instead of a flat dim tint; motion is a gentle domain-warped fbm
+// flow + slow breath (no technical pulse rings); it lifts bright up top and
+// settles into the app-dark (u_bg) toward the bottom so content keeps
+// contrast. One colour in (u_aura) still re-tints the whole screen per state.
+const FRAG_AURA = `${COMMON}
+uniform vec3 u_aura; uniform vec3 u_bg;
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_res;
+  uv.y=1.0-uv.y;
+  float aspect=u_res.x/u_res.y;
+  vec2 c=vec2(0.5,0.34);
+  vec2 p=(uv-c)*vec2(aspect,1.0);
+  float r=length(p);
+
+  // Sunlit companion tones from the state colour → a happy, multi-tonal bloom.
+  vec3 light=mix(u_aura,vec3(1.0,0.98,0.94),0.60); // airy highlight
+  vec3 deep=mix(u_aura,u_bg,0.30);                 // rich shoulder
+
+  // Living light: gentle domain-warped flow + a slow breath (no sonar rings).
+  float t=u_time*0.05;
+  vec2 q=vec2(fbm(p*1.7+t),fbm(p*1.7+vec2(2.7,1.9)-t));
+  float flow=fbm(p*1.7+1.3*q);
+  float breath=0.5+0.5*sin(u_time*0.6);
+
+  // Soft radial bloom: a wide field + a brighter crown right behind the ring.
+  float field=pow(smoothstep(1.02,0.0,r),1.3);
+  float crown=smoothstep(0.60,0.0,r);
+  float intensity=(0.60+0.20*breath)*field;
+
+  vec3 col=u_bg;
+  vec3 aura=mix(deep,u_aura,clamp(flow*1.2+0.18,0.0,1.0));
+  aura=mix(aura,light,clamp(crown*0.9+flow*0.22,0.0,1.0));
+  col=mix(col,aura,intensity);
+  col+=light*crown*(0.16+0.10*breath);            // luminous halo behind the ring
+
+  // Settle into the app chrome toward the bottom so cards/text keep contrast.
+  col*=smoothstep(1.25,0.10,uv.y)*0.42+0.58;
+
+  // Fine dithering against banding on the smooth gradient.
+  col+=(hash(gl_FragCoord.xy+u_time)-0.5)*0.016;
+  gl_FragColor=vec4(col,1.0);
+}
+`
+
+// Replaced with the real terrain shader in the next task.
+const FRAG_ROAD = FRAG_AURA
 
 const FRAG: Record<ShaderVariant, string> = {
   // Iridescent: two-level domain warp, then blend three brand colours by the
@@ -114,54 +208,8 @@ void main(){
   gl_FragColor=vec4(col,1.0);
 }
 `,
-  // Aura: the flagship "Morning Readiness" backdrop — a warm, joyful *sunrise
-  // bloom* of the state colour blooming from behind the readiness ring.
-  // INTENTIONALLY departs from the pen's dim, sonar-ring aura (product call:
-  // the old one read subtle + weird, not happy): two companion tones are
-  // derived in-shader from the single u_aura so the light is multi-tonal and
-  // vivid instead of a flat dim tint; motion is a gentle domain-warped fbm
-  // flow + slow breath (no technical pulse rings); it lifts bright up top and
-  // settles into the app-dark (u_bg) toward the bottom so content keeps
-  // contrast. One colour in (u_aura) still re-tints the whole screen per state.
-  aura: `${COMMON}
-uniform vec3 u_aura; uniform vec3 u_bg;
-void main(){
-  vec2 uv=gl_FragCoord.xy/u_res;
-  uv.y=1.0-uv.y;
-  float aspect=u_res.x/u_res.y;
-  vec2 c=vec2(0.5,0.34);
-  vec2 p=(uv-c)*vec2(aspect,1.0);
-  float r=length(p);
-
-  // Sunlit companion tones from the state colour → a happy, multi-tonal bloom.
-  vec3 light=mix(u_aura,vec3(1.0,0.98,0.94),0.60); // airy highlight
-  vec3 deep=mix(u_aura,u_bg,0.30);                 // rich shoulder
-
-  // Living light: gentle domain-warped flow + a slow breath (no sonar rings).
-  float t=u_time*0.05;
-  vec2 q=vec2(fbm(p*1.7+t),fbm(p*1.7+vec2(2.7,1.9)-t));
-  float flow=fbm(p*1.7+1.3*q);
-  float breath=0.5+0.5*sin(u_time*0.6);
-
-  // Soft radial bloom: a wide field + a brighter crown right behind the ring.
-  float field=pow(smoothstep(1.02,0.0,r),1.3);
-  float crown=smoothstep(0.60,0.0,r);
-  float intensity=(0.60+0.20*breath)*field;
-
-  vec3 col=u_bg;
-  vec3 aura=mix(deep,u_aura,clamp(flow*1.2+0.18,0.0,1.0));
-  aura=mix(aura,light,clamp(crown*0.9+flow*0.22,0.0,1.0));
-  col=mix(col,aura,intensity);
-  col+=light*crown*(0.16+0.10*breath);            // luminous halo behind the ring
-
-  // Settle into the app chrome toward the bottom so cards/text keep contrast.
-  col*=smoothstep(1.25,0.10,uv.y)*0.42+0.58;
-
-  // Fine dithering against banding on the smooth gradient.
-  col+=(hash(gl_FragCoord.xy+u_time)-0.5)*0.016;
-  gl_FragColor=vec4(col,1.0);
-}
-`,
+  aura: FRAG_AURA,
+  road: FRAG_ROAD,
 }
 
 // Which colour uniforms each variant consumes, in declaration order.
@@ -170,6 +218,7 @@ const COLOR_UNIFORMS: Record<ShaderVariant, string[]> = {
   topo: ['u_base', 'u_glow', 'u_line'],
   burst: ['u_accent', 'u_base', 'u_core', 'u_glow'],
   aura: ['u_aura', 'u_bg'],
+  road: ['u_aura', 'u_bg'],
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -196,15 +245,19 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
 interface Props {
   variant: ShaderVariant
   uniforms: ShaderUniforms
+  /** Optional width×1 RGBA data texture, bound to unit 0 as `u_data`. */
+  texture?: ShaderTexture | null
   className?: string
   style?: React.CSSProperties
 }
 
-export default function ShaderCanvas({ variant, uniforms, className, style }: Props) {
+export default function ShaderCanvas({ variant, uniforms, texture, className, style }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // Keep the latest colours without re-initialising the GL program.
   const uniformsRef = useRef(uniforms)
   uniformsRef.current = uniforms
+  const textureRef = useRef(texture)
+  textureRef.current = texture
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -234,8 +287,27 @@ export default function ShaderCanvas({ variant, uniforms, className, style }: Pr
     const uTime = gl.getUniformLocation(prog, 'u_time')
     const colorLocs = COLOR_UNIFORMS[variant].map((n) => gl.getUniformLocation(prog, n))
 
+    // Every non-colour numeric uniform is uploaded as a float by name.
+    const scalarLocs = new Map<string, WebGLUniformLocation | null>()
+    const scalarNames = Object.keys(uniformsRef.current).filter(
+      (n) => !COLOR_UNIFORMS[variant].includes(n) && typeof uniformsRef.current[n] === 'number',
+    )
+    scalarNames.forEach((n) => scalarLocs.set(n, gl.getUniformLocation(prog, n)))
+
+    const uData = gl.getUniformLocation(prog, 'u_data')
+    const uDataW = gl.getUniformLocation(prog, 'u_dataW')
+    const tex = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    let uploadedWidth = -1
+
     const reduce = prefersReducedMotion()
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    // The terrain pass is heavier per-fragment than the gradient variants, so
+    // it renders at a lower DPR cap to hold 60 fps on a phone.
+    const dpr = Math.min(window.devicePixelRatio || 1, variant === 'road' ? 1.5 : 2)
 
     const resize = () => {
       const w = Math.max(1, Math.floor(canvas.clientWidth * dpr))
@@ -261,6 +333,24 @@ export default function ShaderCanvas({ variant, uniforms, className, style }: Pr
         const v = uniformsRef.current[n]
         if (typeof v === 'string') gl.uniform3fv(colorLocs[i], hexToRgb(v))
       })
+      scalarNames.forEach((n) => {
+        const v = uniformsRef.current[n]
+        const loc = scalarLocs.get(n)
+        if (typeof v === 'number' && loc) gl.uniform1f(loc, v)
+      })
+      const t = textureRef.current
+      if (t && uData) {
+        gl.activeTexture(gl.TEXTURE0)
+        gl.bindTexture(gl.TEXTURE_2D, tex)
+        // Re-upload only when the profile itself changed, not every frame.
+        if (uploadedWidth !== t.width) {
+          gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, t.width, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, t.data)
+          uploadedWidth = t.width
+        }
+        gl.uniform1i(uData, 0)
+        if (uDataW) gl.uniform1f(uDataW, t.width)
+      }
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
 
@@ -293,6 +383,7 @@ export default function ShaderCanvas({ variant, uniforms, className, style }: Pr
       gl.deleteShader(vs)
       gl.deleteShader(fs)
       gl.deleteBuffer(buf)
+      gl.deleteTexture(tex)
     }
   }, [variant])
 
