@@ -2577,13 +2577,20 @@ _SIGNAL_PHRASE_EN: dict[str, str] = {
 }
 
 _CEILING_ACTION_DE: dict[str, str] = {
+    # 'rest' = the safety rails forced the day off (ACWR spike, injury flag) —
+    # the signals really are the cause, so "deshalb" is right.
     "rest": "deshalb ist heute bewusst frei",
+    # 'planned_rest' = the plan scheduled the day off. The signals did not cause
+    # it, and the causal connector produced a small nonsense ("du bist gut
+    # erholt — deshalb ist heute bewusst frei"): being fresh is not why you rest.
+    "planned_rest": "und heute steht trotzdem ein freier Tag im Plan, damit die letzte Arbeit einsickert",
     "easy": "deshalb bleibt es heute ganz locker, damit dein Körper aufholen kann",
     "moderate": "solide Arbeit geht heute, aber ohne Ausreißer nach oben",
     "push": "genau der Tag, an dem eine fordernde Einheit ihre volle Wirkung entfaltet",
 }
 _CEILING_ACTION_EN: dict[str, str] = {
     "rest": "so today is deliberately off",
+    "planned_rest": "and today is still a scheduled day off, so the recent work can sink in",
     "easy": "so today stays properly easy so your body can catch up",
     "moderate": "solid work is fine today, just without spikes",
     # NOTE: no "exactly"/"directly" here — simple-mode hygiene tests ban the
@@ -2731,9 +2738,15 @@ _EVENT_WORD: dict[str, tuple[str, str]] = {
 }
 
 
-def _builds_toward_sentence(snapshot: dict, register: str, de: bool) -> str | None:
+def _builds_toward_sentence(
+    snapshot: dict, register: str, de: bool, is_rest: bool = False,
+) -> str | None:
     """Sentence 3 — what today builds toward: humanized phase + honest goal
-    countdown, plus the estimated-fitness disclosure when it applies."""
+    countdown, plus the estimated-fitness disclosure when it applies.
+
+    `is_rest` swaps the phrasings that presuppose a session today ("each of
+    these sessions feeds your Base 1 phase") for ones that hold on a rest day,
+    where the phase progresses through recovery rather than through work."""
     athlete = snapshot.get("athlete") or {}
     state = _signal_state(snapshot)
     phase_label = _phase_human(athlete.get("goal_phase"), de)
@@ -2751,6 +2764,13 @@ def _builds_toward_sentence(snapshot: dict, register: str, de: bool) -> str | No
             f"Dein {event} ist diese Woche — jetzt zählt Frische mehr als jeder zusätzliche Reiz."
             if de else
             f"Your {event} is this week — freshness now matters more than any extra stimulus."
+        )
+    elif days is not None and 7 < days <= 180 and phase_label and is_rest:
+        weeks = max(1, round(days / 7))
+        sentence = (
+            f"Auch dieser freie Tag gehört zu deiner Phase {phase_label} — noch {days} Tage ({weeks} Wochen) bis zu deinem {event}."
+            if de else
+            f"This day off is part of your {phase_label} phase too — {days} days ({weeks} weeks) to go until your {event}."
         )
     elif days is not None and 7 < days <= 180 and phase_label:
         weeks = max(1, round(days / 7))
@@ -2818,12 +2838,14 @@ def _day_link_sentence(
     if register == "guide":
         link_de = {
             "rest": "Heute ist bewusst frei, damit die letzte Arbeit einsickern kann.",
+            "planned_rest": "Heute ist bewusst frei, damit die letzte Arbeit einsickern kann.",
             "easy": "Heute passt sie, weil dein Körper gerade vor allem Erholung verwerten kann.",
             "moderate": "Heute passt sie, weil solide Arbeit drin ist, ohne dich zu leeren.",
             "push": "Heute passt sie, weil du die nötige Frische dafür mitbringst.",
         }
         link_en = {
             "rest": "Today is deliberately off so the recent work can sink in.",
+            "planned_rest": "Today is deliberately off so the recent work can sink in.",
             "easy": "It fits today because what your body can use most right now is recovery.",
             "moderate": "It fits today because there's room for solid work without emptying you.",
             "push": "It fits today because you bring the freshness it needs.",
@@ -2846,12 +2868,14 @@ def _day_link_sentence(
     ev = ", ".join(bits)
     fit_de = {
         "rest": "heute zahlt Ruhe mehr ein als jeder weitere Reiz",
+        "planned_rest": "heute zahlt Ruhe mehr ein als jeder weitere Reiz",
         "easy": "heute verwertet dein Körper Entlastung besser als Reiz",
         "moderate": "kontrollierte Arbeit ist heute gut verkraftbar",
         "push": "heute darf Qualität rein",
     }
     fit_en = {
         "rest": "rest returns more today than any further stimulus",
+        "planned_rest": "rest returns more today than any further stimulus",
         "easy": "your body converts unloading better than stimulus today",
         "moderate": "controlled work is well within reach today",
         "push": "quality belongs in today",
@@ -2862,6 +2886,11 @@ def _day_link_sentence(
         if planned_tss > 0 else ""
     )
     if ev:
+        # "Heute passt sie" / "It fits today" both point at a session. On a rest
+        # day there is no "sie" to fit, so the evidence is stated plainly
+        # instead of being hung off a pronoun with no referent.
+        if ceiling in ("rest", "planned_rest"):
+            return (f"{ev} — {fit}." if de else f"{ev} — {fit}.")
         return (
             f"Heute passt sie: {ev} — {fit}{tss_txt}." if de
             else f"It fits today: {ev} — {fit}{tss_txt}."
@@ -2914,10 +2943,32 @@ def _daily_reasoning(
         return rationale, why_this
 
     planned_tss = 0 if template.category == "rest" else int(round(template.base_tss))
+    # The safety ceiling is a LIMIT — "nothing harder than this is permitted
+    # today" — not a prescription. On a rest or recovery day it can legitimately
+    # sit at 'push': nothing about the athlete is dangerous, there simply isn't a
+    # session. Handing the raw ceiling to the narrative helpers made them read it
+    # as the plan, and the brief contradicted itself inside a single payload:
+    #
+    #   verdict:   "Rest day — legs up"
+    #   rationale: "Your freshness at +18 — just the kind of day a demanding
+    #               session does its best work."
+    #
+    # The prose describes the DAY, so it takes the narrower of ceiling and what
+    # is actually prescribed. Rest and recovery templates are the two categories
+    # that carry no session for the 'push'/'moderate' copy to be about.
+    # 'planned_rest' keeps a scheduled day off distinct from a rails-forced one
+    # (the rails still win when THEY say rest — an injury day is not "as
+    # planned"). The narrative maps carry entries for both.
+    narrative_ceiling = (
+        ("rest" if ceiling == "rest" else "planned_rest") if template.category == "rest"
+        else "easy" if template.category == "recovery"
+        else ceiling
+    )
+    is_rest = template.category == "rest"
     what = _what_sentence(template, register, de)
-    why_today = _why_today_sentence(snapshot, ceiling, register, de, planned_tss)
-    toward = _builds_toward_sentence(snapshot, register, de)
-    day_link = _day_link_sentence(snapshot, ceiling, register, de, planned_tss)
+    why_today = _why_today_sentence(snapshot, narrative_ceiling, register, de, planned_tss)
+    toward = _builds_toward_sentence(snapshot, register, de, is_rest=is_rest)
+    day_link = _day_link_sentence(snapshot, narrative_ceiling, register, de, planned_tss)
 
     rationale = " ".join(s for s in (why_today, toward) if s)
     why_this = " ".join(s for s in (what, day_link, toward) if s)

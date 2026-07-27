@@ -318,6 +318,60 @@ class TestRestDay:
         assert not re.search(r"rund \d+ TSS", rationale), rationale
         assert not re.search(r"~\d+ TSS", why), why
 
+    # A safety CEILING of "push" means "nothing harder than this is permitted",
+    # not "go hard today". When the plan prescribes rest, that ceiling used to
+    # reach the narrative helpers untouched and the brief contradicted itself in
+    # one payload — verdict "Rest day — legs up" over rationale "just the kind
+    # of day a demanding session does its best work". These pin the day's prose
+    # to the day's prescription, with the safety ceiling left at its real value.
+    @pytest.mark.parametrize("locale,banned", [
+        ("en", ("demanding session", "quality belongs", "solid work is fine")),
+        ("de", ("fordernde Einheit", "solide Arbeit", "darf Qualität rein")),
+    ])
+    def test_rest_day_never_prescribes_a_hard_session(self, locale, banned):
+        brief = _rule_based_brief(_snapshot(
+            detail_level="numbers", locale=locale, ceiling="push",
+            picked="rest_day", session_type="rest",
+        ))
+        combined = " ".join(_prose(brief))
+        for phrase in banned:
+            assert phrase not in combined, f"{phrase!r} in rest-day brief: {combined}"
+
+    def test_rest_day_phase_line_does_not_presuppose_a_session(self):
+        # "Each of these sessions feeds your Base 1 phase" is false on a day
+        # with no session; the phase still progresses, through recovery.
+        brief = _rule_based_brief(_snapshot(
+            detail_level="numbers", locale="en", ceiling="push",
+            picked="rest_day", session_type="rest",
+        ))
+        combined = " ".join(_prose(brief))
+        assert "Each of these sessions feeds" not in combined, combined
+        assert "day off is part of your" in combined, combined
+
+    # These two drive `_daily_reasoning` directly: `_rule_based_brief`
+    # recomputes the ceiling from `rails_context`, so the fixture's `ceiling`
+    # knob (which only sets `readiness.ceiling`) cannot force a rails-rest day.
+    def test_rails_forced_rest_keeps_its_causal_wording(self):
+        # When the RAILS say rest, the signals genuinely are the cause, so the
+        # causal connector is correct and must survive the planned-rest split.
+        from app.services.workout_templates import TEMPLATES
+        rationale, _ = _daily_reasoning(
+            _snapshot(detail_level="guide", locale="en"),
+            TEMPLATES["rest_day"], "rest", "guide", de=False,
+        )
+        assert "so today is deliberately off" in rationale, rationale
+
+    def test_planned_rest_drops_the_false_causality(self):
+        # Being fresh is not the reason you rest. With the rails at 'push' and
+        # the plan at rest, the connector must be additive, not causal.
+        from app.services.workout_templates import TEMPLATES
+        rationale, _ = _daily_reasoning(
+            _snapshot(detail_level="guide", locale="en"),
+            TEMPLATES["rest_day"], "push", "guide", de=False,
+        )
+        assert "scheduled day off" in rationale, rationale
+        assert "so today is deliberately off" not in rationale, rationale
+
 
 # ---------------------------------------------------------------------------
 # Weekly rationale (DE preface) — humanized, no raw Issurin labels
