@@ -1337,7 +1337,14 @@ export default function TodayTab() {
           {/* Coach card (pen CoachCard) — the coach's read for today, purple
               tint + gradient avatar orb. → /coach. */}
           {coachMessage && (
-            <Link to="/coach" className="hover-card flex gap-3 rounded-[20px] p-3.5" style={{ background: '#8B5CF61A', border: '1px solid #8B5CF63D' }}>
+            /* A 10 %-purple wash (#8B5CF61A) let the aura through, which on the
+               light faces — planned-rest blue, ready green — turned the card
+               into pale lavender with near-white body text and a #C4B5FD
+               eyebrow that vanished completely. This card carries the coach's
+               actual voice, the thing the whole product is for, so it gets a
+               dark glass ground that holds on every aura. The purple identity
+               moves to the border, the orb and the eyebrow, where it reads. */
+            <Link to="/coach" className="hover-card flex gap-3 rounded-[20px] p-3.5" style={{ background: 'color-mix(in srgb, #8B5CF6 12%, #0A0C0FCC)', border: '1px solid #8B5CF659', backdropFilter: 'blur(10px)' }}>
               <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 38, height: 38, background: 'linear-gradient(45deg, #8B5CF6, #59C3FF)', boxShadow: '0 0 12px #8B5CF666' }}>
                 <BrainCircuit size={20} strokeWidth={2} style={{ color: '#FFFFFF' }} />
               </div>

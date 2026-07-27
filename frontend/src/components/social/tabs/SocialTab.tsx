@@ -337,6 +337,13 @@ export default function SocialTab() {
   const crewSize = hasCrew ? duel!.crew.length + 1 : 0
   // One unambiguous crew state (merges /crews/me with the duel roster).
   const crewInfo = resolveCrewInfo(myCrew, duel?.crew?.length ?? 0)
+  // A crew of one. Several sections below are structurally empty in this state
+  // — the chat, the all-crew ride list and the weekly feed all describe OTHER
+  // people — and each rendered its own "once your crew rides…" box, so a solo
+  // rider met a stack of four or five near-identical grey rectangles telling
+  // them nothing is here. Collapsed into one invitation, which is the single
+  // action that resolves all of them at once.
+  const crewIsSolo = crewInfo.exists && crewInfo.memberCount <= 1
 
   // ── Views: the tab LANDS ON CREW; Duelle is a secondary, opt-in tab. ──
   const [view, setView] = useState<'crew' | 'duels'>('crew')
@@ -1007,8 +1014,9 @@ export default function SocialTab() {
 
       {/* ── CREW CHAT — real shared thread (/crews/me/chat), polls ~15s.
           Avatars derive from the handle; each message carries tap-to-toggle
-          emoji reactions. ── */}
-      {crewInfo.exists && (
+          emoji reactions. Hidden for a crew of one: "schreib der Crew als
+          Erste:r" invites the athlete to talk to nobody. ── */}
+      {crewInfo.exists && !crewIsSolo && (
         <div className="rounded-[24px] p-5 flex flex-col gap-3" style={cardStyle}>
           <div className="flex items-center gap-2">
             <MessageCircle size={17} style={{ color: 'var(--color-accent)' }} />
@@ -1087,8 +1095,10 @@ export default function SocialTab() {
 
       {/* ── ALL-CREW RIDES — every member's recent activities (/crews/me/rides),
           newest first. Each row links to the ride-detail page + carries
-          tap-to-toggle reactions (target_type=ride). ── */}
-      {crewInfo.exists && (
+          tap-to-toggle reactions (target_type=ride). Hidden for a crew of one,
+          where it can only ever show the athlete their own rides back — the
+          History tab's job — or its empty box. ── */}
+      {crewInfo.exists && !crewIsSolo && (
         <div className="rounded-[24px] p-5 flex flex-col gap-3" style={cardStyle}>
           <div className="flex items-center gap-2">
             <Bike size={17} style={{ color: 'var(--color-accent)' }} />
@@ -1135,7 +1145,34 @@ export default function SocialTab() {
         </div>
       )}
 
-      {/* ── FEED ── */}
+      {/* ── FEED ── The one place the solo state speaks, and it speaks once:
+          instead of a fourth "nothing here" box it names why the section is
+          empty and offers the single action that fills every section above and
+          below it. ── */}
+      {crewIsSolo && feed.length === 0 ? (
+        <div ref={feedRef} className="rounded-[24px] p-6 flex flex-col items-center text-center gap-3" style={cardStyle}>
+          <span className="grid place-items-center rounded-full" style={{ width: 52, height: 52, background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)' }}>
+            <Users size={24} strokeWidth={1.9} style={{ color: 'var(--color-accent)' }} />
+          </span>
+          <h2 className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>
+            {de ? 'Du fährst hier noch allein' : "You're riding solo in here"}
+          </h2>
+          <p style={{ fontSize: 13.5, color: 'var(--color-ink-2)', lineHeight: 1.45, maxWidth: '34ch' }}>
+            {de
+              ? 'Chat, Crew-Fahrten und die Wochenübersicht wachen auf, sobald eine zweite Person dabei ist. Eine reicht.'
+              : 'Chat, crew rides and the weekly feed all wake up the moment a second rider joins. One is enough.'}
+          </p>
+          <button
+            type="button"
+            onClick={onOpenFinder}
+            className="inline-flex items-center gap-2 rounded-full"
+            style={{ padding: '10px 18px', background: 'var(--color-accent)', color: 'var(--color-paper)' }}
+          >
+            <UserPlus size={16} strokeWidth={2.2} />
+            <span style={{ fontSize: 13.5, fontWeight: 800 }}>{de ? 'Fahrer einladen' : 'Invite a rider'}</span>
+          </button>
+        </div>
+      ) : (
       <div ref={feedRef} className="flex flex-col gap-3">
         <h2 className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{de ? 'Aus deiner Crew' : 'From your crew'}</h2>
         {feed.length > 0 ? (
@@ -1191,25 +1228,17 @@ export default function SocialTab() {
           </div>
         )}
       </div>
+      )}
 
-      {/* ── SEGMENTS ── */}
-      <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={cardStyle}>
-        <div className="flex items-center justify-between">
-          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>Segments</span>
-          <div className="inline-flex items-center gap-[5px] rounded-full" style={{ background: 'var(--color-surface-3)', padding: '4px 9px' }}>
-            <Mountain size={12} style={{ color: 'var(--color-ink-2)' }} />
-            <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.05em', color: 'var(--color-ink-2)' }}>{de ? 'GPS-SEGMENTE' : 'GPS SEGMENTS'}</span>
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-2.5 rounded-[14px] text-center" style={{ background: 'var(--color-surface-2)', padding: 18 }}>
-          <span className="grid place-items-center rounded-full" style={{ width: 40, height: 40, background: 'var(--color-surface-3)' }}><BarChart3 size={20} style={{ color: 'var(--color-muted)' }} /></span>
-          <p style={{ fontSize: 13, color: 'var(--color-ink-2)', maxWidth: '34ch' }}>
-            {de
-              ? 'Segment-Rennen sind noch nicht verbunden — Bestzeiten & KOM-Duelle folgen, sobald GPS-Segmente live sind.'
-              : "Segment racing isn't connected yet — your PRs and KOM duels appear once GPS segments go live."}
-          </p>
-        </div>
-      </div>
+      {/* ── SEGMENTS — removed (Jul 2026) ──
+          This was a full-size card whose entire content was a promise: "Segment
+          racing isn't connected yet — your PRs and KOM duels appear once GPS
+          segments go live." It shipped no data, took a card slot on every
+          visit, and sat at the bottom of a screen that already stacked several
+          "nothing here yet" boxes. A roadmap item advertised in the product is
+          a permanent reminder of what the app cannot do; it belongs in the
+          backlog, not on the athlete's screen. Restore this block when segments
+          actually land and it has real PRs to show. */}
 
       </>)}
 

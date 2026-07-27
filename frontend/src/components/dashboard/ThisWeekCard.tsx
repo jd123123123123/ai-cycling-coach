@@ -89,7 +89,12 @@ export default function ThisWeekCard() {
           ?? (w.plannedSessions != null
             ? (de ? `${w.sessions} von ${w.plannedSessions} Einheiten erledigt` : `${w.sessions} of ${w.plannedSessions} sessions done`)
             : (de ? `${w.sessions} Einheiten erledigt` : `${w.sessions} sessions done`))}
-        right={w.compliancePct != null ? (
+        /* The big % is share-of-the-week-banked, which is legitimately 0 before
+           the plan has asked for anything — but a 34px green "0 %" next to
+           "Genau im Plan" reads as a contradiction, and green-for-zero reads as
+           sarcasm. Nothing due and nothing done is a state the subtitle already
+           states in words, so the number sits this one out. */
+        right={w.compliancePct != null && !(w.plannedToDateTss === 0 && w.tss === 0) ? (
           <div className="flex items-end gap-0.5">
             <span className="num-display" style={{ fontSize: 34, fontWeight: 700, lineHeight: 1, color: complianceColor }}>{w.compliancePct}</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: complianceColor, paddingBottom: 4 }}>%</span>
