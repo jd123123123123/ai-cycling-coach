@@ -18,16 +18,16 @@ import { subDays } from 'date-fns'
 import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
 import { Bike, MessageCircle, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Moon, Sparkles, RefreshCw, Sun, Activity, HeartPulse, BrainCircuit, Info } from 'lucide-react'
-import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type ChatMessage } from '../../../api/coach'
+import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type ChatMessage, type ResolvedBlock } from '../../../api/coach'
 import SessionReviewCard from '../SessionReviewCard'
 import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
 import FitnessFreshnessCard from '../FitnessFreshnessCard'
 import ThisWeekCard from '../ThisWeekCard'
 import ExtraSessionsCard from '../ExtraSessionsCard'
-import { useAura } from '../AuraContext'
-import { buildRoadProfile, steadyBlock } from '../../../utils/roadProfile'
-import { roadMode } from '../../../utils/roadMode'
+import { useAura, type RoadPayload } from '../AuraContext'
+import { buildRoadProfile, steadyBlock, type RoadProfile } from '../../../utils/roadProfile'
+import { roadMode, type RoadMode } from '../../../utils/roadMode'
 import { usePowerProfile } from '../../../hooks/usePowerProfile'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
@@ -128,6 +128,23 @@ export function roadPowerInputs(
   if (!p || p.model_valid !== true) return { cp: null, wPrime: null }
   if (p.cp_watts == null || p.w_prime_j == null) return { cp: null, wPrime: null }
   return { cp: p.cp_watts, wPrime: p.w_prime_j }
+}
+
+/** finding 5: the aura-vs-road gate. 'bare' is the pending/loading state and
+ *  the ready/controlled state with no real profile — nothing honest to draw.
+ *  Publishing a road unconditionally would permanently retire DashboardShell's
+ *  plain-aura branch (TodayTab is the only setAura caller), silently deleting
+ *  readiness-aura.glsl's warm sunrise bloom from every state. Returning null
+ *  here lets the aura (published unconditionally, separately) remain the
+ *  visible backdrop whenever the road has nothing to show. */
+export function buildRoadPayload(
+  mode: RoadMode,
+  profile: RoadProfile,
+  blocks: ResolvedBlock[],
+  color: string,
+): RoadPayload | null {
+  if (mode === 'bare') return null
+  return { profile, mode, color, blocks }
 }
 
 // ── P1-11 / P1-8 weekly rhythm — pure, testable helpers ─────────────────────
@@ -959,20 +976,12 @@ export default function TodayTab() {
   // post-ride terrain for a follow-up). 'flat-done' is the honest post-ride
   // landscape until then.
   //
-  // Gate on 'bare' (finding 5): 'bare' is the pending/loading state and the
-  // ready/controlled state with no profile — i.e. nothing honest to draw.
-  // Publishing a road unconditionally would permanently retire
-  // DashboardShell's plain-aura branch (this is the only setAura caller),
-  // silently deleting the readiness-aura's warm sunrise bloom from every
-  // state. Withholding setRoad here lets the aura (published above,
+  // buildRoadPayload (finding 5, unit-tested in roadPayload.test.ts) is the
+  // aura-vs-road gate: null on 'bare' lets the aura (published above,
   // unconditionally) remain the visible backdrop whenever the road has
-  // nothing to show.
+  // nothing honest to show.
   useEffect(() => {
-    if (roadModeValue === 'bare') {
-      setRoad(null)
-      return
-    }
-    setRoad({ profile: roadProfile, mode: roadModeValue, color: fColors.aura, blocks: roadBlocks })
+    setRoad(buildRoadPayload(roadModeValue, roadProfile, roadBlocks, fColors.aura))
     return () => setRoad(null)
   }, [setRoad, roadProfile, roadModeValue, fColors.aura, roadBlocks])
 

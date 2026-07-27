@@ -15,7 +15,7 @@
  * The previous masthead + left IconRail were removed per product decision
  * to maximize content density. CoachChat is still reachable via Cmd+K.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import CoachChat from './CoachChat'
 import CommandPalette from '../ui/CommandPalette'
 import MobileBottomNav from './MobileBottomNav'
@@ -23,9 +23,8 @@ import DashboardHeaderBar from './DashboardHeaderBar'
 import CoachFab from './CoachFab'
 import ShaderCanvas from '../wrapped/ShaderCanvas'
 import TodayRoad, { type TodayRoadHandle } from './today/TodayRoad'
-import RoadReadout from './today/RoadReadout'
+import RoadHud from './today/RoadHud'
 import { AuraContext, type RoadPayload } from './AuraContext'
-import { glassCardStyle } from './glassCard'
 import { useLocale } from '../../contexts/LocaleContext'
 
 interface DashboardShellProps {
@@ -47,9 +46,24 @@ interface DashboardShellProps {
  * `gap-6` seams, `px-4` gutters, `pb-28` tail, and anywhere a card doesn't
  * reach. `data-glass-card` (set by every glass-card consumer of
  * `glassCard.ts`) is checked first as the fast, explicit path.
+ *
+ * UNENFORCED INVARIANT — read this before adding a new dashboard card:
+ * the inline-background fallback above only works because no card in
+ * dashboard/* paints its surface with a Tailwind `bg-*` class. Nothing in
+ * the type system or a lint rule guards this. A future card styled with
+ * `className="bg-..."` and NOT carrying `data-glass-card` becomes silent
+ * scrub-start territory: this shell takes pointer capture on that
+ * pointerdown, so the card's own click is retargeted to `<main>` and lost —
+ * no error, no warning, just a card that quietly stops responding to taps.
+ * Any new card MUST paint its surface via inline `style` (matching the rest
+ * of dashboard/*) OR carry `{...GLASS_CARD_MARKER}` / a manually-added
+ * `data-glass-card="true"`. `DashboardShell.test.tsx` pins the `<button>` and
+ * `data-glass-card` cases so a regression there fails a test, but it cannot
+ * catch a brand-new card that violates the invariant — that part is still on
+ * code review.
  */
 const INTERACTIVE_TAGS = new Set(['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'])
-function isOnCardOrControl(target: EventTarget | null, boundary: HTMLElement | null): boolean {
+export function isOnCardOrControl(target: EventTarget | null, boundary: HTMLElement | null): boolean {
   let el = target as HTMLElement | null
   while (el) {
     if (el.dataset?.glassCard === 'true') return true
@@ -181,15 +195,31 @@ export default function DashboardShell({
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  // Both setters are useCallback([]) (stable across the shell's lifetime), so
+  // this memo genuinely holds — without it, `travel` updating every animation
+  // frame during a scrub (it's state on THIS component) would recreate the
+  // context value object every frame, defeating React's element-identity
+  // bailout for {children} and re-rendering the entire useAura() consumer
+  // tree (TodayTab + ~12 cards and all their hooks) at 60fps alongside the
+  // WebGL render loop.
+  const auraContextValue = useMemo(() => ({ setAura, setRoad }), [setAura, setRoad])
+
   return (
-    <AuraContext.Provider value={{ setAura, setRoad }}>
+    <AuraContext.Provider value={auraContextValue}>
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-paper)' }}>
       {stickyBar}
 
       <main
         ref={mainRef}
         className="paper-grain max-w-md mx-auto px-4 pb-28 flex flex-col gap-6 min-w-0 relative isolate"
-        style={{ touchAction: road ? 'pan-y' : undefined }}
+        // 'pan-y pinch-zoom' (not bare 'pan-y'): pan-y alone permits vertical
+        // panning but disables pinch-zoom entirely (WCAG 1.4.4) across the
+        // whole page whenever a road is mounted. Adding pinch-zoom back to
+        // the touch-action value list (valid grammar: touch-action accepts a
+        // space-separated combination of pan-x/pan-y/pinch-zoom) restores
+        // zoom while the scrub gesture (a single-finger drag, not a pinch)
+        // keeps working exactly as before.
+        style={{ touchAction: road ? 'pan-y pinch-zoom' : undefined }}
         onPointerDown={onMainPointerDown}
         onPointerMove={onMainPointerMove}
         onPointerUp={endMainScrub}
@@ -228,17 +258,13 @@ export default function DashboardShell({
             reader gets and what a scrubbing athlete actually reads —
             elapsed/watts/zone/RPE under the scrub position, plus the
             honest matches readout ("—" / "matches unknown" when CP is
-            unknown). `position: sticky` keeps it on-screen while scrolled,
-            since a drag can start anywhere the delegated listener above
-            reaches, not just near the top of the page. */}
-        {road && road.profile.samples.length > 0 && (
-          <div
-            className="rounded-full px-4 py-2"
-            style={{ ...glassCardStyle, position: 'sticky', top: 8, zIndex: 5, alignSelf: 'flex-start' }}
-          >
-            <RoadReadout profile={road.profile} blocks={road.blocks} travel={travel} de={de} />
-          </div>
-        )}
+            unknown). `position: sticky` (inside RoadHud) keeps it on-screen
+            while scrolled, since a drag can start anywhere the delegated
+            listener above reaches, not just near the top of the page.
+            Mounting/absence/travel-passthrough is unit-tested directly on
+            RoadHud (today/__tests__/RoadHud.test.tsx) rather than through
+            this whole shell. */}
+        <RoadHud road={road} travel={travel} de={de} />
 
         <section className="min-w-0">
           {children}
