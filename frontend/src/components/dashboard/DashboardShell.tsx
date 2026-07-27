@@ -25,6 +25,7 @@ import ShaderCanvas from '../wrapped/ShaderCanvas'
 import TodayRoad, { type TodayRoadHandle } from './today/TodayRoad'
 import RoadHud from './today/RoadHud'
 import { AuraContext, type RoadPayload } from './AuraContext'
+import type { RoadProfile } from '../../utils/roadProfile'
 import { useLocale } from '../../contexts/LocaleContext'
 
 interface DashboardShellProps {
@@ -62,6 +63,23 @@ interface DashboardShellProps {
  * catch a brand-new card that violates the invariant — that part is still on
  * code review.
  */
+/**
+ * Has the day's road profile changed identity since the last render?
+ *
+ * Both sides MUST be normalized to null: `road?.profile` is `undefined` when
+ * there is no road, whereas the stored value is `?? null`. Comparing them raw
+ * is true forever, which turns the render-phase state adjustment below into an
+ * infinite re-render — React gives render-phase updates no equality bailout,
+ * so it climbs to the re-render limit and throws into the ErrorBoundary.
+ * (Production incident, 2026-07-27.)
+ */
+export function roadProfileChanged(
+  road: RoadPayload | null | undefined,
+  lastProfile: RoadProfile | null,
+): boolean {
+  return (road?.profile ?? null) !== lastProfile
+}
+
 const INTERACTIVE_TAGS = new Set(['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'])
 export function isOnCardOrControl(target: EventTarget | null, boundary: HTMLElement | null): boolean {
   let el = target as HTMLElement | null
@@ -117,9 +135,16 @@ export default function DashboardShell({
   // incidental re-renders (TodayTab memoizes it), so comparing references
   // here is exactly as reliable as an effect dependency array would be,
   // without the extra render-then-cascade an effect would cost.
-  const [lastProfile, setLastProfile] = useState(road?.profile ?? null)
-  if (road?.profile !== lastProfile) {
-    setLastProfile(road?.profile ?? null)
+  // BOTH sides must be normalized to null. `road?.profile` is `undefined` when
+  // there is no road, while `lastProfile` stores `?? null` — so comparing them
+  // raw was true on EVERY render, the render-phase setState never converged,
+  // and React threw "Too many re-renders" into the top-level ErrorBoundary.
+  // Render-phase updates get no equality bailout, so this never self-corrects.
+  // Pure + exported so the invariant is pinned by roadProfileChanged.test.ts.
+  const currentProfile = road?.profile ?? null
+  const [lastProfile, setLastProfile] = useState(currentProfile)
+  if (roadProfileChanged(road, lastProfile)) {
+    setLastProfile(currentProfile)
     if (travel !== 0) setTravel(0)
   }
 
