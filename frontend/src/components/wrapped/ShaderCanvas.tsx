@@ -114,10 +114,15 @@ void main(){
   gl_FragColor=vec4(col,1.0);
 }
 `,
-  // Aura: the flagship "Morning Readiness" backdrop (mirrors readiness-aura.glsl
-  // in the pen). A near-black base with a single state-keyed aura blooming from
-  // the upper-centre (behind the readiness ring), gently flowing via domain-
-  // warped fbm. One colour (u_aura) so the whole screen re-tints per state.
+  // Aura: the flagship "Morning Readiness" backdrop — a warm, joyful *sunrise
+  // bloom* of the state colour blooming from behind the readiness ring.
+  // INTENTIONALLY departs from the pen's dim, sonar-ring aura (product call:
+  // the old one read subtle + weird, not happy): two companion tones are
+  // derived in-shader from the single u_aura so the light is multi-tonal and
+  // vivid instead of a flat dim tint; motion is a gentle domain-warped fbm
+  // flow + slow breath (no technical pulse rings); it lifts bright up top and
+  // settles into the app-dark (u_bg) toward the bottom so content keeps
+  // contrast. One colour in (u_aura) still re-tints the whole screen per state.
   aura: `${COMMON}
 uniform vec3 u_aura; uniform vec3 u_bg;
 void main(){
@@ -127,18 +132,33 @@ void main(){
   vec2 c=vec2(0.5,0.34);
   vec2 p=(uv-c)*vec2(aspect,1.0);
   float r=length(p);
+
+  // Sunlit companion tones from the state colour → a happy, multi-tonal bloom.
+  vec3 light=mix(u_aura,vec3(1.0,0.98,0.94),0.60); // airy highlight
+  vec3 deep=mix(u_aura,u_bg,0.30);                 // rich shoulder
+
+  // Living light: gentle domain-warped flow + a slow breath (no sonar rings).
+  float t=u_time*0.05;
+  vec2 q=vec2(fbm(p*1.7+t),fbm(p*1.7+vec2(2.7,1.9)-t));
+  float flow=fbm(p*1.7+1.3*q);
+  float breath=0.5+0.5*sin(u_time*0.6);
+
+  // Soft radial bloom: a wide field + a brighter crown right behind the ring.
+  float field=pow(smoothstep(1.02,0.0,r),1.3);
+  float crown=smoothstep(0.60,0.0,r);
+  float intensity=(0.60+0.20*breath)*field;
+
   vec3 col=u_bg;
-  // Pen's exact soft field, but dialled DOWN: the app's Today canvas is much
-  // taller than the pen's 2042px frame so the same glow floods brighter — a
-  // lower intensity + darker floor matches the pen's dark, subtle aura.
-  float breath=0.5+0.5*sin(u_time*1.15);
-  float glow=smoothstep(0.72,0.0,r)*(0.15+0.09*breath);
-  col+=u_aura*glow;
-  float wave=sin(r*13.0-u_time*2.0);
-  float rings=smoothstep(0.55,1.0,wave)*smoothstep(0.95,0.18,r)*0.028;
-  col+=u_aura*rings;
-  col*=smoothstep(1.25,0.15,uv.y)*0.40+0.5;
-  col+=(hash(gl_FragCoord.xy+u_time)-0.5)*0.026;
+  vec3 aura=mix(deep,u_aura,clamp(flow*1.2+0.18,0.0,1.0));
+  aura=mix(aura,light,clamp(crown*0.9+flow*0.22,0.0,1.0));
+  col=mix(col,aura,intensity);
+  col+=light*crown*(0.16+0.10*breath);            // luminous halo behind the ring
+
+  // Settle into the app chrome toward the bottom so cards/text keep contrast.
+  col*=smoothstep(1.25,0.10,uv.y)*0.42+0.58;
+
+  // Fine dithering against banding on the smooth gradient.
+  col+=(hash(gl_FragCoord.xy+u_time)-0.5)*0.016;
   gl_FragColor=vec4(col,1.0);
 }
 `,
