@@ -109,6 +109,7 @@ export default function CoachPage() {
       h: Math.max(3, Math.round(((r.tss ?? r.daily_tss ?? 0) / max) * 56)),
     }))
   }, [pmc])
+  const weekTotalTss = useMemo(() => weekBars.reduce((sum, b) => sum + b.tss, 0), [weekBars])
 
   // Chips wired to real actions. "Adjust plan" / "Easier week" open a visual
   // PROPOSAL (preview endpoint); "Why?" asks the coach to explain today.
@@ -206,22 +207,45 @@ export default function CoachPage() {
                 <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)', lineHeight: 1.45 }}>{decision.verdict}</p>
               )}
               <p style={{ fontSize: 14.5, fontWeight: 500, color: 'var(--color-ink)', lineHeight: 1.5 }}>{brief.rationale}</p>
+              {/* Last-7-days load. Two fixes: the strip carried no heading, no
+                  unit and no total, so seven bars over "D M D F S S M" could
+                  have been TSS, km, planned or done — unreadable even with
+                  data. And when every day is zero it collapsed to seven 3px
+                  grey stubs, which does not read as "you didn't ride", it
+                  reads as a broken chart. An all-zero week now says so in
+                  words, which is the more useful information anyway. */}
               {weekBars.length >= 2 && (
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex items-end gap-1.5" style={{ height: 60 }}>
-                    {weekBars.map((b) => (
-                      <div key={b.date} className="flex-1 flex flex-col items-center justify-end" title={`${b.tss} TSS`}>
-                        <div className="w-full rounded-[4px]" style={{ height: b.h, background: b.tss > 0 ? 'var(--color-accent)' : 'var(--color-surface-2)', opacity: b.tss > 0 ? 0.9 : 1 }} />
+                  <div className="flex items-baseline justify-between">
+                    <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.12em', fontWeight: 700, color: 'var(--color-muted)' }}>
+                      {de ? 'LETZTE 7 TAGE' : 'LAST 7 DAYS'}
+                    </span>
+                    <span className="num-display" style={{ fontSize: 12, fontWeight: 700, color: weekTotalTss > 0 ? 'var(--color-ink-2)' : 'var(--color-muted)' }}>
+                      {weekTotalTss} TSS
+                    </span>
+                  </div>
+                  {weekTotalTss > 0 ? (
+                    <>
+                      <div className="flex items-end gap-1.5" style={{ height: 60 }}>
+                        {weekBars.map((b) => (
+                          <div key={b.date} className="flex-1 flex flex-col items-center justify-end" title={`${b.tss} TSS`}>
+                            <div className="w-full rounded-[4px]" style={{ height: b.h, background: b.tss > 0 ? 'var(--color-accent)' : 'var(--color-surface-2)', opacity: b.tss > 0 ? 0.9 : 1 }} />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-1.5">
-                    {weekBars.map((b) => (
-                      <span key={b.date} className="flex-1 text-center eyebrow" style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>
-                        {format(parseISO(b.date), 'EEEEE', { locale: de ? deLocale : undefined })}
-                      </span>
-                    ))}
-                  </div>
+                      <div className="flex gap-1.5">
+                        {weekBars.map((b) => (
+                          <span key={b.date} className="flex-1 text-center eyebrow" style={{ fontSize: 9.5, color: 'var(--color-muted)' }}>
+                            {format(parseISO(b.date), 'EEEEE', { locale: de ? deLocale : undefined })}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+                      {de ? 'Keine aufgezeichneten Fahrten in den letzten 7 Tagen.' : 'No recorded rides in the last 7 days.'}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
