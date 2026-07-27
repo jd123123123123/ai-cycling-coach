@@ -7,7 +7,6 @@
 import { Link } from 'react-router-dom'
 import { SlidersHorizontal } from 'lucide-react'
 import SyncButton from './SyncButton'
-import LocaleSwitch from './LocaleSwitch'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -19,7 +18,12 @@ export default function DashboardHeaderBar() {
 
   return (
     <div className="flex justify-end items-center gap-2 pt-3">
-      <LocaleSwitch />
+      {/* The EN/DE LocaleSwitch used to sit here, on every dashboard screen.
+          App language is set roughly once in a user's lifetime, and it was
+          holding permanent prime chrome directly above the readiness hero —
+          the single most valuable strip on the page — which read as an
+          unfinished demo build rather than a product. It now lives in
+          Settings › Preferences, beside every other set-and-forget choice. */}
       <SyncButton compact />
       {/* Settings — detail level, connections, notifications */}
       <Link

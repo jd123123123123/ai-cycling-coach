@@ -19,6 +19,7 @@ import {
   CircleMinus,
   Heart,
   MonitorSmartphone,
+  Languages,
   PieChart,
   Ruler,
   Scale,
@@ -130,7 +131,7 @@ export default function SettingsPage() {
   const queryClient = useQueryClient()
   const { user, logout } = useAuth()
   const { language, setLanguage } = useLanguage()
-  const { locale } = useLocale()
+  const { locale, setLocale } = useLocale()
   const de = locale === 'de'
 
   const { data: profile } = useAthleteProfile()
@@ -426,6 +427,20 @@ export default function SettingsPage() {
           {/* PREFERENCES */}
           <Section label={de ? 'EINSTELLUNGEN' : 'PREFERENCES'}>
             {[
+              // App language. This lived ONLY as an EN/DE segmented control
+              // pinned to the masthead of every dashboard screen — a
+              // once-a-lifetime setting occupying permanent prime chrome next
+              // to the readiness hero, which no consumer fitness app does and
+              // which made the product read like a demo build. Settings had no
+              // equivalent, so the toggle could not simply be removed; it moves
+              // here, where every other once-set preference already lives.
+              <SettingsRow
+                key="locale"
+                icon={Languages}
+                label={de ? 'App-Sprache' : 'App language'}
+                value={de ? 'Deutsch' : 'English'}
+                onClick={() => setLocale(de ? 'en' : 'de')}
+              />,
               <SettingsRow
                 key="detail"
                 icon={SlidersHorizontal}

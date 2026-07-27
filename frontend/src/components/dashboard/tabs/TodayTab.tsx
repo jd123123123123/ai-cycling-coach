@@ -1096,7 +1096,10 @@ export default function TodayTab() {
           pill. Avatar → power-profile is kept as a real nav affordance. */}
       <div className="flex items-center justify-between gap-3 pt-1">
         <div className="flex flex-col gap-0.5 min-w-0">
-          <h1 className="num-display" style={{ fontSize: 20, fontWeight: 800, color: '#FFFFFF', lineHeight: 1.15 }}>{greeting}</h1>
+          {/* nowrap on the greeting: it is the athlete's name and must not
+              break across lines to make room for two utility chips. The date
+              line below is allowed to wrap instead. */}
+          <h1 className="num-display" style={{ fontSize: 20, fontWeight: 800, color: '#FFFFFF', lineHeight: 1.15, whiteSpace: 'nowrap' }}>{greeting}</h1>
           <span style={{ fontSize: 12, fontWeight: 500, color: '#FFFFFF99' }}>
             {formatDate(today, de ? 'EEEE, d. MMMM' : 'EEEE, MMMM d', locale)}
             {daysToGoal != null && daysToGoal > 0 ? ` · ${de ? `Rennen in ${daysToGoal} Tagen` : `race in ${daysToGoal} days`}` : ''}
@@ -1104,22 +1107,28 @@ export default function TodayTab() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {currentTemp != null && (
-            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: '#FFFFFF12', border: '1px solid #FFFFFF1F' }}>
-              <Sun size={15} style={{ color: '#FFD166' }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFFE6' }}>{Math.round(currentTemp)}°</span>
+            <span className="inline-flex items-center gap-1 rounded-full px-2.5" style={{ height: 34, background: '#FFFFFF12', border: '1px solid #FFFFFF1F' }}>
+              <Sun size={14} style={{ color: '#FFD166' }} />
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#FFFFFFE6' }}>{Math.round(currentTemp)}°</span>
             </span>
           )}
+          {/* Entry to the power profile. This was a SECOND avatar — the same
+              circle, the same initial, the same size as the profile avatar
+              sitting 40px above it in the masthead — pointing somewhere
+              completely different. Two identical affordances, two
+              destinations, is a coin flip every time the athlete reaches for
+              one. It now shows what actually lives behind it: the threshold
+              the whole plan is prescribed against. Honest "—" when the power
+              model has nothing to report. */}
           <Link
             to="/power-profile"
-            className="grid place-items-center rounded-full overflow-hidden"
-            style={{ width: 40, height: 40, background: '#FFFFFF12', border: '1px solid #FFFFFF1F' }}
+            className="inline-flex items-center justify-center rounded-full px-2.5"
+            style={{ height: 34, background: '#FFFFFF12', border: '1px solid #FFFFFF1F' }}
             aria-label={de ? 'Power-Profil öffnen' : 'Open power profile'}
           >
-            {user?.avatar_url ? (
-              <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <span className="num-display" style={{ fontSize: 16, color: '#FFFFFF' }}>{(athleteName ?? 'A').charAt(0).toUpperCase()}</span>
-            )}
+            <span className="num-display" style={{ fontSize: 12.5, fontWeight: 700, color: '#FFFFFFE6', whiteSpace: 'nowrap' }}>
+              {powerProfile?.threshold_watts != null ? `${Math.round(powerProfile.threshold_watts)} W` : '— W'}
+            </span>
           </Link>
         </div>
       </div>
