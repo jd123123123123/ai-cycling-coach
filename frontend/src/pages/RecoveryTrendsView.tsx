@@ -65,6 +65,32 @@ function avg(nums: number[]): number | null {
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null
 }
 
+/** One plotted point of a baseline row: a real reading, the day it belongs to,
+ *  and whether that day is today. */
+export interface BaselinePoint { v: number; day: string; today: boolean }
+
+/** Split a baseline series into "the value that belongs to TODAY" and "the
+ *  newest value that exists at all".
+ *
+ *  These used to be the same expression — `vals[vals.length - 1]`, taken after
+ *  the null filter — so the headline number was simply the last day the watch
+ *  recorded anything. Everything around it insisted otherwise: the right-hand
+ *  axis tick reads "Heute"/"Today" in accent colour and the final bar carries
+ *  the highlight, so an athlete who last synced on the 20th read a week-old
+ *  HRV as this morning's, and tapping the label handed the same stale number
+ *  to the glossary sheet as their current reading.
+ *
+ *  The two answers are now separate: `todayVal` drives the headline (null →
+ *  "—"), and `last` drives a dated "Zuletzt gemessen" note underneath, so the
+ *  real measurement is still visible without being backdated onto today. */
+export function baselineHeadline(pts: BaselinePoint[]): {
+  todayVal: number | null
+  last: BaselinePoint | null
+} {
+  const todayPt = pts.find((p) => p.today) ?? null
+  return { todayVal: todayPt?.v ?? null, last: pts.length ? pts[pts.length - 1] : null }
+}
+
 function Card({ children, gap = 18 }: { children: React.ReactNode; gap?: number }) {
   return <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap }}>{children}</div>
 }
@@ -135,13 +161,17 @@ export default function RecoveryTrendsView() {
   // becomes a tappable chip that opens the glossary sheet with the latest
   // reading (P1: jargon as an invitation).
   const baselineRow = (label: string, sel: (d: typeof days[number]) => number | null, color: string, unit: string, glossaryKey?: GlossaryKey) => {
-    const pts = days.map((d) => ({ v: sel(d), day: d.dateLabel, today: d.isToday })).filter((x): x is { v: number; day: string; today: boolean } => x.v != null)
+    const pts = days.map((d) => ({ v: sel(d), day: d.dateLabel, today: d.isToday })).filter((x): x is BaselinePoint => x.v != null)
+    // Freshness gate — see `baselineHeadline` for what this stops claiming.
+    const { todayVal, last: lastPt } = baselineHeadline(pts)
     const labelEl = glossaryKey ? (
       <button
         type="button"
         onClick={() => {
-          const latest = pts.length ? pts[pts.length - 1].v : null
-          glossary.open(glossaryKey, latest != null ? `${Math.round(latest)} ${unit}` : null)
+          // The glossary sheet frames its value as the athlete's current
+          // reading, so it gets the same gate — no value rather than a
+          // stale one presented as live.
+          glossary.open(glossaryKey, todayVal != null ? `${Math.round(todayVal)} ${unit}` : null)
         }}
         style={{ fontSize: 12, fontWeight: 600, color: C.ink2, background: 'none', border: 0, padding: '14px 0', margin: '-14px 0', cursor: 'pointer', textAlign: 'left', ...TAPPABLE_LABEL }}
       >
@@ -164,18 +194,33 @@ export default function RecoveryTrendsView() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           {labelEl}
-          <span className="flex items-end gap-1"><span className="num-mono" style={{ fontSize: 16, fontWeight: 700, color }}>{Math.round(vals[vals.length - 1])}</span><span style={{ fontSize: 10, fontWeight: 500, color: C.muted, paddingBottom: 2 }}>{unit}</span></span>
+          <span className="flex items-end gap-1">
+            <span className="num-mono" style={{ fontSize: 16, fontWeight: 700, color: todayVal != null ? color : C.muted }}>
+              {todayVal != null ? Math.round(todayVal) : DASH}
+            </span>
+            {todayVal != null && <span style={{ fontSize: 10, fontWeight: 500, color: C.muted, paddingBottom: 2 }}>{unit}</span>}
+          </span>
         </div>
+        {todayVal == null && lastPt && (
+          <span style={{ fontSize: 10.5, color: C.muted }}>
+            {de
+              ? `Zuletzt gemessen — ${lastPt.day}: ${Math.round(lastPt.v)} ${unit}`
+              : `Last reading — ${lastPt.day}: ${Math.round(lastPt.v)} ${unit}`}
+          </span>
+        )}
         <HoverBars
           height={72}
           gap={pts.length > 24 ? 2 : 4}
           defaultColor={color}
-          bars={pts.map((p, i) => ({
+          bars={pts.map((p) => ({
             value: 20 + ((p.v - mn) / span) * 80,
             valueLabel: `${Math.round(p.v)} ${unit}`,
             label: p.day,
             color,
-            highlight: i === pts.length - 1,
+            // Highlight the bar that IS today, not merely the last bar drawn.
+            // With days missing at the tail those are different bars, and the
+            // highlight was the visual half of the "this is today's number" lie.
+            highlight: p.today,
           }))}
         />
         <div className="flex justify-between"><span style={{ fontSize: 10, color: C.muted }}>{de ? `vor ${range} T` : `${range}d ago`}</span><span style={{ fontSize: 10, fontWeight: 600, color: C.accent }}>{de ? 'Heute' : 'Today'}</span></div>

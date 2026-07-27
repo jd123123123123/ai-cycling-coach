@@ -48,12 +48,13 @@ def _snapshot(
 ) -> dict:
     if with_data:
         pmc = {"ctl": 60.0, "atl": 55.0, "tsb": 5.0, "ctl_7d_delta": 2.0}
-        hrv = {"delta_pct": 1.5, "samples_n": 7, "direction": "stable"}
+        # latest_age_days mirrors production: a synced watch reports 0.
+        hrv = {"delta_pct": 1.5, "samples_n": 7, "latest_age_days": 0, "direction": "stable"}
         acts = {"count": 8, "total_tss": 600.0}
         readiness = {"score": 78, "ceiling": ceiling, "flags": []}
     else:
         pmc = {"ctl": 0.0, "atl": 0.0, "tsb": 0.0, "ctl_7d_delta": 0.0}
-        hrv = {"delta_pct": None, "samples_n": 0, "direction": None}
+        hrv = {"delta_pct": None, "samples_n": 0, "latest_age_days": None, "direction": None}
         acts = {"count": 0, "total_tss": 0.0}
         readiness = {"score": None, "ceiling": ceiling, "flags": []}
     return {
@@ -401,3 +402,80 @@ class TestWeeklyRationaleDe:
         )
         assert "Nebensaison" in text
         assert "offseason" not in text.lower().replace("nebensaison", "")
+
+
+# ---------------------------------------------------------------------------
+# Recovery-reading recency (stale-wearable fix, Jul 2026)
+# ---------------------------------------------------------------------------
+# "Deine Erholungswerte liegen in deinem normalen Bereich" / "Your recovery
+# readings are inside your normal range" is present tense. `hrv_trend`'s 7-day
+# window already zeroes `samples_n` past a week, but days 1–6 of a dead watch
+# slipped through: on Friday the brief spoke about Tuesday's HRV as if it were
+# this morning's. The claim is now withheld and the paragraph falls through to
+# the load-based narrative, which is built from rides and stays true.
+
+from app.services.coach_service import (  # noqa: E402
+    _fatigue_key,
+    _reasoning_facts,
+    _SIGNAL_PHRASE_DE,
+    _SIGNAL_PHRASE_EN,
+)
+
+
+def _hrv_snapshot(*, age_days, delta_pct=1.5):
+    snap = _snapshot()
+    snap["biometrics"]["hrv"] = {
+        "delta_pct": delta_pct, "samples_n": 7,
+        "latest_age_days": age_days, "direction": "stable",
+    }
+    # Neutral load so the narrative can't be decided by TSB/sleep instead.
+    snap["pmc"] = {"ctl": 60.0, "atl": 55.0, "tsb": 0.0, "ctl_7d_delta": 2.0}
+    snap["biometrics"]["sleep"] = {"total_debt_hours": 0.0, "samples_n": 7}
+    return snap
+
+
+class TestRecoveryReadingRecency:
+    def test_todays_reading_still_claims_normal_range(self):
+        snap = _hrv_snapshot(age_days=0)
+        state = _signal_state(snap)
+        assert _fatigue_key(_reasoning_facts(snap), state) == "signals_normal"
+
+    def test_yesterdays_reading_still_counts_as_current(self):
+        """The morning sync hasn't landed yet — last night's reading is still
+        'your recovery readings'. Only 2+ days breaks the present tense."""
+        snap = _hrv_snapshot(age_days=1)
+        state = _signal_state(snap)
+        assert _fatigue_key(_reasoning_facts(snap), state) == "signals_normal"
+
+    def test_stale_reading_falls_through_to_load_narrative(self):
+        snap = _hrv_snapshot(age_days=5)
+        state = _signal_state(snap)
+        key = _fatigue_key(_reasoning_facts(snap), state)
+        assert key == "load_normal"
+        assert "Erholungswerte" not in _SIGNAL_PHRASE_DE[key]
+        assert "recovery readings" not in _SIGNAL_PHRASE_EN[key]
+
+    def test_stale_reading_cannot_claim_hrv_low(self):
+        """A suppressed HRV from five days ago is not a statement about today
+        — it used to produce 'Deine Erholungswerte liegen diese Woche unter
+        deinem üblichen Niveau' and cap the session on stale evidence."""
+        snap = _hrv_snapshot(age_days=5, delta_pct=-20.0)
+        assert _fatigue_key(_reasoning_facts(snap), _signal_state(snap)) == "load_normal"
+
+    def test_fresh_suppressed_hrv_still_claims_hrv_low(self):
+        snap = _hrv_snapshot(age_days=0, delta_pct=-20.0)
+        assert _fatigue_key(_reasoning_facts(snap), _signal_state(snap)) == "hrv_low"
+
+    def test_missing_age_is_treated_as_uncurrent(self):
+        """Every production snapshot carries the age; absence means we can't
+        vouch for the reading, so the claim is withheld rather than guessed."""
+        snap = _hrv_snapshot(age_days=0)
+        del snap["biometrics"]["hrv"]["latest_age_days"]
+        assert _fatigue_key(_reasoning_facts(snap), _signal_state(snap)) == "load_normal"
+
+    def test_load_narrative_still_wins_when_it_should(self):
+        """The gate must not swallow the fatigue narratives, which come from
+        rides and are unaffected by a quiet watch."""
+        snap = _hrv_snapshot(age_days=5)
+        snap["pmc"]["tsb"] = -20.0
+        assert _fatigue_key(_reasoning_facts(snap), _signal_state(snap)) == "deep_fatigue"

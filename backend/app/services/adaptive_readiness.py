@@ -22,11 +22,37 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ActivityStream, DailyMetric
+from app.services.athlete_time import today_local
 from app.services.goal_trajectory import _ctl_7d_delta
 from app.services.pmc_service import compute_user_pmc
 
 # Nuuttila 2022 validated band.
 HRV_BAND_SD = 0.5
+
+# ── Recency gates (stale-wearable fix, Jul 2026) ─────────────────────────────
+# A directive is a PRESENT-TENSE claim — "Heute zurückschalten." / "Grünes
+# Licht — belaste hart." — and it does not just talk: plan_adaptation_engine
+# reads `hrv_state` and rewrites real plan rows off it.
+#
+# Until this fix the inputs had a LOWER date bound and no upper one:
+#   * `_hrv_series` pulled the last 35 days and `hrv_recent = mean(ln[-7:])`
+#     took the seven newest READINGS — which, for an athlete whose watch last
+#     synced nine days ago, were seven nine-day-old mornings. The engine read
+#     that as "HRV im Band — bereit für Qualität" and green-lit today.
+#   * `hrv_below_days` counted `ln[-3:]` positionally, so three readings from
+#     last month could be reported as "HRV 3 Tage unter deiner Basislinie".
+#   * The sleep query had NO date filter at all (ORDER BY recorded_at DESC
+#     LIMIT 1), so one bad night latched `poor_sleep` on indefinitely.
+#
+# When the wearable has gone quiet the honest HRV state is "unknown", which
+# routes to the TSB-only fallback. "unknown" is deliberately inert downstream:
+# `_rule_sleep_hrv` only fires on "below", and `_rule_green_upgrade` needs
+# `_green_streak`, which already requires HRV readings inside the last 3 days.
+# So an unknown state can neither downgrade nor upgrade a plan row.
+HRV_MAX_AGE_DAYS = 1          # today's or yesterday's morning; 2+ days is stale
+HRV_RECENT_WINDOW_DAYS = 7    # the "recent" mean is 7 CALENDAR days, not 7 rows
+HRV_BELOW_WINDOW_DAYS = 3     # "below the band N days running" = N calendar days
+SLEEP_MAX_AGE_DAYS = 1        # last night, or the night before if today hasn't synced
 # Aggressive default: how many clean in-band blocks widen the push.
 DEFAULT_AMBITION = 1.0
 
@@ -89,6 +115,7 @@ def assess_adaptation(
     lang: str = "en",
     ambition: float = 1.0,          # athlete push preference — upside only
     push_level: str = "balanced",
+    hrv_age_days: int | None = None,  # age of the newest HRV reading; None = never any
 ) -> Directive:
     """Pure core. See module docstring for the grounding of each rule.
 
@@ -163,15 +190,29 @@ def assess_adaptation(
         sig.append(Signal(
             "HRV im Band — bereit für Qualität." if de else "HRV in-band — ready for quality.", "good", "RCT"))
     else:
-        # No HRV data — fall back to freshness (expert), stay bold but honest.
+        # No USABLE HRV — fall back to freshness (expert), stay bold but honest.
+        # Two different reasons land here and the athlete deserves to know
+        # which: no wearable readings at all (nothing to do), versus readings
+        # that exist but are too old to describe today (go sync your watch).
+        # Before the recency gate the second case never reached this branch —
+        # it produced a confident in-band green light off week-old mornings.
+        hrv_is_stale = hrv_age_days is not None and hrv_age_days > HRV_MAX_AGE_DAYS
+        if hrv_is_stale:
+            hrv_note = (
+                f"Letzte HRV-Messung vor {hrv_age_days} Tagen — zu alt für heute, wir gehen nach TSB." if de
+                else f"Last HRV reading was {hrv_age_days} days ago — too old to speak for today, going by TSB."
+            )
+        else:
+            hrv_note = "Keine HRV-Daten — nutze TSB als Näherung." if de else "No HRV data — using TSB as a proxy."
         if deep_neg_tsb:
             d = Directive("hold", "moderate", 0.85, hrv_state,
                           "Etwas Ermüdung tragen — moderat halten." if de else "Carrying fatigue — keep it moderate.")
             sig.append(Signal(f"TSB {tsb:.0f} — tiefe Ermüdungslast." if de else f"TSB {tsb:.0f} — deep fatigue load.", "warn", "expert"))
+            sig.append(Signal(hrv_note, "neutral", "expert"))
         else:
             d = Directive("push", "hard", min(1.0 * ambition, _VOL_CAP), hrv_state,
                           "Belaste hart." if de else "Load hard.")
-            sig.append(Signal("Keine HRV-Daten — nutze TSB als Näherung." if de else "No HRV data — using TSB as a proxy.", "neutral", "expert"))
+            sig.append(Signal(hrv_note, "neutral", "expert"))
 
     # ── Transparency: surface the athlete's chosen push level on upside days ──
     # No "volume ×1.25" here (5-reviewer gate, Jul 2026): nothing downstream
@@ -198,15 +239,35 @@ def assess_adaptation(
     return d
 
 
-async def _hrv_series(db: AsyncSession, user_id: int, days: int = 35) -> list[float]:
-    since = date.today() - timedelta(days=days)
+async def _hrv_rows(
+    db: AsyncSession, user_id: int, *, today: date, days: int = 35
+) -> list[tuple[date, float]]:
+    """(calendar day, lnRMSSD) pairs, oldest first.
+
+    The DAY has to travel with the value. The previous version returned a bare
+    list of floats, which is exactly why the callers could only slice it
+    positionally ("the last 7 readings", "the last 3 readings") and could not
+    tell a reading from this morning apart from one from last month.
+    """
+    since = today - timedelta(days=days)
     rows = await db.execute(
-        select(DailyMetric.recorded_at, DailyMetric.hrv_status)
+        select(DailyMetric.recorded_at, DailyMetric.hrv_status, DailyMetric.date)
         .where(DailyMetric.user_id == user_id, DailyMetric.recorded_at >= since)
         .order_by(DailyMetric.recorded_at.asc())
     )
-    vals = [float(r[1]) for r in rows.all() if r[1] is not None and r[1] > 0]
-    return [math.log(v) for v in vals]  # lnRMSSD-style stabilisation
+    out: list[tuple[date, float]] = []
+    for recorded_at, hrv, day in rows.all():
+        if hrv is None or float(hrv) <= 0:
+            continue
+        # `date` is the athlete-facing calendar day; `recorded_at` is the
+        # hypertable partition key. Prefer the former, fall back to the latter
+        # for any historic row that predates the column being populated.
+        d = day or (recorded_at.date() if recorded_at is not None else None)
+        if d is None:
+            continue
+        out.append((d, math.log(float(hrv))))  # lnRMSSD-style stabilisation
+    out.sort(key=lambda t: t[0])
+    return out
 
 
 async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "en") -> Directive:
@@ -260,16 +321,38 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
             confidence="high",
         )
 
-    ln = await _hrv_series(db, user_id)
-    hrv_recent = mean(ln[-7:]) if len(ln) >= 3 else None
+    today = today_local()
+    rows = await _hrv_rows(db, user_id, today=today)
+    ln = [v for _, v in rows]
+    hrv_age_days = (today - rows[-1][0]).days if rows else None
+
+    # The baseline is a 4-week rolling mean — a slow-moving reference, still
+    # meaningful when the last few days are missing — so it keeps using every
+    # reading in the window. `hrv_recent` is the opposite: it is the value the
+    # band comparison turns into TODAY's verdict, so it is built from readings
+    # inside the last HRV_RECENT_WINDOW_DAYS calendar days AND only when the
+    # newest of them is at most HRV_MAX_AGE_DAYS old. Fail either test and it
+    # stays None → hrv_state "unknown" → TSB fallback, never a green light.
     baseline_window = ln[-28:] if len(ln) >= 10 else ln
     hrv_baseline = mean(baseline_window) if len(baseline_window) >= 10 else None
     hrv_sd = pstdev(baseline_window) if len(baseline_window) >= 10 else None
 
+    hrv_recent = None
+    if hrv_age_days is not None and hrv_age_days <= HRV_MAX_AGE_DAYS:
+        recent_window = [v for d, v in rows if (today - d).days < HRV_RECENT_WINDOW_DAYS]
+        if len(recent_window) >= 3:
+            hrv_recent = mean(recent_window[-7:])
+
+    # "HRV N Tage unter deiner Basislinie" must count CALENDAR days, not rows:
+    # `ln[-3:]` on a sparse series happily reported three readings spread over
+    # three weeks as a three-day fatigue streak, which deloads the athlete.
     below_days = 0
-    if hrv_baseline is not None and hrv_sd:
+    if hrv_recent is not None and hrv_baseline is not None and hrv_sd:
         low = hrv_baseline - HRV_BAND_SD * hrv_sd
-        below_days = sum(1 for v in ln[-3:] if v < low)
+        below_days = sum(
+            1 for d, v in rows
+            if (today - d).days < HRV_BELOW_WINDOW_DAYS and v < low
+        )
 
     pmc = (await compute_user_pmc(db, user_id, days=90)).get("total") or []
     tsb = float(pmc[-1].get("tsb", 0.0)) if pmc else 0.0
@@ -281,9 +364,18 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
         load_ramp = acute / chronic if chronic > 0 else None
     _ = _ctl_7d_delta([{**p} for p in pmc]) if pmc else 0.0  # available if needed
 
-    # Sleep (most recent).
+    # Sleep — most recent, but only if it is actually a RECENT night. This
+    # query used to have no date filter whatsoever: the athlete's worst night
+    # of the month stayed the engine's `poor_sleep` input until a newer row
+    # landed, so a watch that stopped syncing froze "schlecht geschlafen" in
+    # place and kept capping intensity for days on a night long since slept off.
+    sleep_cutoff = today - timedelta(days=SLEEP_MAX_AGE_DAYS)
     srow = await db.execute(
-        select(DailyMetric.sleep_score).where(DailyMetric.user_id == user_id, DailyMetric.sleep_score.isnot(None))
+        select(DailyMetric.sleep_score).where(
+            DailyMetric.user_id == user_id,
+            DailyMetric.sleep_score.isnot(None),
+            DailyMetric.recorded_at >= sleep_cutoff,
+        )
         .order_by(DailyMetric.recorded_at.desc()).limit(1)
     )
     sleep_score = srow.scalar_one_or_none()
@@ -306,6 +398,7 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
         hrv_recent=hrv_recent, hrv_baseline=hrv_baseline, hrv_sd=hrv_sd, hrv_below_days=below_days,
         tsb=tsb, decoupling_delta=decoupling_delta, sleep_score=(float(sleep_score) if sleep_score is not None else None),
         load_ramp=load_ramp, lang=lang, ambition=ambition, push_level=push_level,
+        hrv_age_days=hrv_age_days,
     )
     return await _apply_day_gates(db, user_id, directive, lang)
 

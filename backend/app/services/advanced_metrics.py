@@ -221,8 +221,16 @@ async def hrv_trend(db: AsyncSession, user_id: int, days: int = 7) -> dict:
             "baseline_28d_mean": float | None,   # mean of last 28 days
             "delta_pct":         float | None,   # (current - baseline) / baseline * 100
             "samples_n":         int,            # how many readings in `days`
+            "latest_age_days":   int | None,     # whole days since the newest reading
             "direction":         'up'|'down'|'stable'|'unknown',
         }
+
+    `latest_age_days` exists so downstream copy can tell "measured this
+    morning" from "measured five days ago". The 7-day `samples_n` window
+    already stops readings older than a week from being described in the
+    present tense, but says nothing about days 1–6: an athlete whose watch
+    last synced on Tuesday still got "Deine Erholungswerte liegen in deinem
+    normalen Bereich" on Friday, present tense, off Tuesday's numbers.
     """
     # 28-day pull covers both the current window and the baseline.
     metrics_28 = await _fetch_daily_metrics(db, user_id, max(28, days))
@@ -246,8 +254,32 @@ async def hrv_trend(db: AsyncSession, user_id: int, days: int = 7) -> dict:
         "baseline_28d_mean": round(baseline_mean, 2) if baseline_mean is not None else None,
         "delta_pct": delta_pct,
         "samples_n": len(current_values),
+        "latest_age_days": _latest_hrv_age_days(metrics_28),
         "direction": _trend_direction(current_mean, baseline_mean),
     }
+
+
+def _latest_hrv_age_days(metrics: list) -> int | None:
+    """Whole athlete-local days since the newest row that carries an HRV
+    reading. 0 = measured today, 1 = yesterday, None = no reading at all.
+
+    Deliberately measured off the calendar `date` column rather than the
+    `recorded_at` timestamp: a sync that lands at 04:00 and one that lands at
+    23:00 describe the same night, and an hours-based age would flip the
+    "is this today's reading" answer purely on sync timing.
+    """
+    from app.services.athlete_time import today_local
+
+    days = [
+        (getattr(m, "date", None)
+         or (m.recorded_at.date() if getattr(m, "recorded_at", None) is not None else None))
+        for m in metrics
+        if m.hrv_status is not None
+    ]
+    days = [d for d in days if d is not None]
+    if not days:
+        return None
+    return max(0, (today_local() - max(days)).days)
 
 
 async def rhr_trend(db: AsyncSession, user_id: int, days: int = 7) -> dict:

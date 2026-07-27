@@ -4,6 +4,7 @@ import { de } from 'date-fns/locale'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { hrvBaselineBand } from '../../utils/advanced-metrics'
 import { useCountUp } from '../../hooks/useCountUp'
+import { localDayKey } from '../../utils/loadMetrics'
 import { useLocale } from '../../contexts/LocaleContext'
 
 type Loc = 'en' | 'de'
@@ -23,6 +24,47 @@ interface BandPoint {
   value: number | null
   lower: number | null
   upper: number | null
+}
+
+export interface HrvHeadlineRow { date?: string | null; hrv_status?: number | null }
+export interface HrvHeadline {
+  current: number | null
+  currentDateKey: string | null
+  currentIsToday: boolean
+  status: 'above' | 'within' | 'below' | 'unknown'
+}
+
+/** Resolve the 36px HRV headline and its verdict chip.
+ *
+ *  `current` is the newest reading that EXISTS, which is not the same thing as
+ *  the newest reading. On a watch that stopped syncing it is whatever morning
+ *  happened to be the last one recorded — and it was rendered next to a
+ *  present-tense verdict ("Innerhalb Baseline" / "Within baseline") computed
+ *  against `lastBand`, the band at the last CALENDAR slot. A reading from the
+ *  20th does not belong to a band drawn for the 27th, so the chip compared two
+ *  different days and reported the result as today's recovery status.
+ *
+ *  The measurement itself is still true and stays on screen — blanking real
+ *  data the athlete might want is the worse outcome. Only the verdict is
+ *  withheld: `status` goes 'unknown' unless the reading is today's, and the
+ *  caller renders the reading's date in the chip's place. */
+export function hrvHeadline(
+  metrics: HrvHeadlineRow[],
+  todayKey: string,
+  lastBand: { lower: number | null; upper: number | null } | undefined,
+): HrvHeadline {
+  const lastWithValue = [...metrics].reverse().find((m) => m.hrv_status != null)
+  const current = lastWithValue?.hrv_status ?? null
+  const currentDateKey = (lastWithValue?.date ?? '').slice(0, 10) || null
+  const currentIsToday = currentDateKey != null && currentDateKey === todayKey
+
+  let status: HrvHeadline['status'] = 'unknown'
+  if (currentIsToday && current != null && lastBand?.upper != null && lastBand?.lower != null) {
+    if (current > lastBand.upper) status = 'above'
+    else if (current < lastBand.lower) status = 'below'
+    else status = 'within'
+  }
+  return { current, currentDateKey, currentIsToday, status }
 }
 
 /** Catmull-Rom → cubic Bezier, handles null breaks by splitting into runs. */
@@ -366,7 +408,7 @@ export default function HRVTrend() {
   const start = subDays(today, DAYS)
   const { data, isLoading } = useDailyMetrics(start, today)
 
-  const { values, bands, dates, current, baseline, status } = useMemo(() => {
+  const { values, bands, dates, current, currentDateKey, currentIsToday, baseline, status } = useMemo(() => {
     const metrics = (data?.metrics ?? [])
       .filter((m) => m.date)
       .sort((a, b) => (a.date! > b.date! ? 1 : -1))
@@ -376,24 +418,31 @@ export default function HRVTrend() {
     const bds = hrvBaselineBand(vals, 7)
     const dts = metrics.map((m) => m.date!)
 
-    const lastWithValue = [...metrics].reverse().find((m) => m.hrv_status != null)
-    const cur = lastWithValue?.hrv_status ?? null
-    const lastBand = bds[bds.length - 1]
-
-    let st: 'above' | 'within' | 'below' | 'unknown' = 'unknown'
-    if (cur != null && lastBand?.upper != null && lastBand?.lower != null) {
-      if (cur > lastBand.upper) st = 'above'
-      else if (cur < lastBand.lower) st = 'below'
-      else st = 'within'
-    }
+    // Freshness gate — see `hrvHeadline` for what the verdict chip used to
+    // claim off a reading that predates the band it was compared against.
+    const {
+      current: cur, currentDateKey: curKey, currentIsToday: curIsToday, status: st,
+    } = hrvHeadline(metrics, localDayKey(new Date()), bds[bds.length - 1])
 
     const baselineVals = bds.map((b) => b.value).filter((v): v is number => v != null)
     const bl = baselineVals.length > 0
       ? Math.round(baselineVals.slice(-7).reduce((s, v) => s + v, 0) / Math.min(7, baselineVals.length))
       : null
 
-    return { values: vals, bands: bds, dates: dts, current: cur, baseline: bl, status: st }
+    return {
+      values: vals, bands: bds, dates: dts,
+      current: cur, currentDateKey: curKey, currentIsToday: curIsToday,
+      baseline: bl, status: st,
+    }
   }, [data])
+
+  // "Gemessen am 20. Juli" — the honest stand-in for the withheld verdict.
+  const currentDateLabel = useMemo(() => {
+    if (currentDateKey == null || currentIsToday) return null
+    const d = new Date(`${currentDateKey}T00:00:00`)
+    if (Number.isNaN(d.getTime())) return null
+    return format(d, locale === 'de' ? 'd. MMMM' : 'MMMM d', locale === 'de' ? { locale: de } : undefined)
+  }, [currentDateKey, currentIsToday, locale])
 
   // useCountUp has no `enabled` option — when `current` is null the target is 0
   // and the hook's skipZero default renders it statically without animating.
@@ -453,11 +502,15 @@ export default function HRVTrend() {
             >
               {current != null ? countedCurrent : '—'}
             </span>
-            {current != null && (
+            {current != null && (currentIsToday ? (
               <span className="num-mono text-[11px]" style={{ color: statusColor }}>
                 {statusLabel}
               </span>
-            )}
+            ) : currentDateLabel && (
+              <span className="num-mono text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                {locale === 'de' ? `gemessen ${currentDateLabel}` : `measured ${currentDateLabel}`}
+              </span>
+            ))}
           </div>
         </div>
         <div className="flex items-center gap-4 flex-wrap">

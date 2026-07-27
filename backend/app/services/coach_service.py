@@ -2532,16 +2532,46 @@ def _reasoning_facts(snapshot: dict) -> dict:
         "hrv_delta": hrv.get("delta_pct"),
         "sleep_debt": sleep.get("total_debt_hours"),
         "readiness_score": readiness.get("score"),
+        # Age of the newest HRV reading, so the narrative can refuse to speak
+        # about recovery in the present tense off a reading from Tuesday.
+        "hrv_age_days": hrv.get("latest_age_days"),
     }
+
+
+# How old the newest HRV reading may be before the recovery narrative stops
+# describing it in the present tense. 1 = this morning's sync hasn't landed
+# yet but last night's has, which is still "your recovery readings".
+_RECOVERY_CLAIM_MAX_AGE_DAYS = 1
+
+
+def _recovery_claim_is_current(facts: dict) -> bool:
+    """Whether the recovery readings are fresh enough to be spoken about now.
+
+    `_signal_state.has_recovery_signals` already goes false once the newest
+    reading falls out of `hrv_trend`'s 7-day window — but that leaves days 1
+    through 6 wide open. An athlete whose watch last synced five days ago read
+    "Deine Erholungswerte liegen in deinem normalen Bereich" / "Your recovery
+    readings are inside your normal range" as a statement about this morning,
+    when it was a statement about last Tuesday. There is no honest way to date
+    a sentence in this position (it is the opening clause of a flowing daily
+    paragraph), so the claim is WITHHELD and the paragraph falls through to
+    the load-based narrative, which is built from rides and stays true.
+
+    A missing age is treated as stale: every production snapshot carries it,
+    so absence means we cannot vouch for the reading's currency.
+    """
+    age = facts.get("hrv_age_days")
+    return isinstance(age, int) and not isinstance(age, bool) and age <= _RECOVERY_CLAIM_MAX_AGE_DAYS
 
 
 def _fatigue_key(facts: dict, state: dict) -> str:
     """Pick the strongest honest signal narrative. HRV claims only when HRV
-    data exists; load claims only when training history exists."""
+    data exists AND is current; load claims only when training history exists."""
     hrv_delta = facts.get("hrv_delta")
     sleep_debt = facts.get("sleep_debt")
     tsb = facts.get("tsb")
-    if state["has_recovery_signals"] and isinstance(hrv_delta, (int, float)) and hrv_delta < -8:
+    recovery_current = state["has_recovery_signals"] and _recovery_claim_is_current(facts)
+    if recovery_current and isinstance(hrv_delta, (int, float)) and hrv_delta < -8:
         return "hrv_low"
     if isinstance(sleep_debt, (int, float)) and sleep_debt > 3:
         return "sleep_short"
@@ -2552,7 +2582,7 @@ def _fatigue_key(facts: dict, state: dict) -> str:
             return "carrying_fatigue"
         if tsb > 15:
             return "very_fresh"
-    if state["has_recovery_signals"]:
+    if recovery_current:
         return "signals_normal"
     return "load_normal"
 

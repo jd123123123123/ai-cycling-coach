@@ -28,7 +28,7 @@ import { useTodaySession, sessionIntensity } from '../../hooks/useTodaySession'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { usePMC } from '../../hooks/usePMC'
-import { daysToEvent, latestLoad } from '../../utils/loadMetrics'
+import { daysToEvent, latestLoad, localDayKey } from '../../utils/loadMetrics'
 import { useLocale } from '../../contexts/LocaleContext'
 import BlockBars from '../workout/BlockBars'
 import { glassCardStyle, GLASS_CARD_MARKER, GLASS_PAPER_2, GLASS_BLUR } from './glassCard'
@@ -101,6 +101,25 @@ export function patchBriefWorkoutFromModify(old: unknown, res: ModifyResult): un
   }
 }
 
+/** The sleep score that may appear in the "Warum diese Einheit?" evidence list.
+ *
+ *  That list is presented as the inputs the engine weighed for TODAY's
+ *  session. The row it reads from is the newest one carrying ANY overnight
+ *  field, so on a watch that stopped syncing it served a nine-day-old
+ *  "Schlaf 78/100" as a reason for today's prescription.
+ *
+ *  Unlike a sleep card, this chip cannot simply be dated: its entire claim is
+ *  "this is what today's decision was built on", and a dated chip would state
+ *  something that is still false. So a non-current row yields null, the
+ *  evidence list is one chip shorter, and every chip that remains is true. */
+export function sleepEvidenceScore(
+  latest: { date?: string | null; sleep_score?: number | null } | null | undefined,
+  todayKey: string,
+): number | null {
+  if (!latest) return null
+  return (latest.date ?? '').slice(0, 10) === todayKey ? (latest.sleep_score ?? null) : null
+}
+
 export default function SessionOfTheDay() {
   const { locale } = useLocale()
   const de = locale === 'de'
@@ -127,7 +146,9 @@ export default function SessionOfTheDay() {
   const hrvDelta = hrv?.delta_pct as number | null | undefined
   const metrics = metricsResp?.metrics ?? []
   const latest = [...metrics].reverse().find((m) => m.hrv_status != null || m.resting_hr != null || m.sleep_score != null) ?? null
-  const sleepScore = latest?.sleep_score ?? null
+  // Freshness gate — see `sleepEvidenceScore`: a stale overnight row must not
+  // be listed as an input to today's session pick.
+  const sleepScore = sleepEvidenceScore(latest, localDayKey(today))
   const load = latestLoad(pmc?.entries)
   const tsb = load?.tsb ?? null
   const atl = load?.atl ?? null
