@@ -1,18 +1,37 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createCrewEvent,
+  fetchCrewEvent,
   fetchCrewEvents,
   rsvpCrewEvent,
+  updateCrewEvent,
   uploadCrewEventTour,
   type CreateEventInput,
   type CrewEvent,
   type RsvpStatus,
+  type UpdateEventInput,
 } from '../api/crewEvents'
 
 // Server-backed crew-events hooks. Mirrors the patterns in hooks/useCrew.ts.
 // Every endpoint is crew-scoped; not in a crew → the list endpoint returns [].
 
 const EVENTS_KEY = ['crew', 'events'] as const
+const eventKey = (id: number) => ['crew', 'event', id] as const
+
+export function useCrewEvent(eventId: number | null) {
+  return useQuery<CrewEvent>({
+    queryKey: eventKey(eventId ?? -1),
+    queryFn: () => fetchCrewEvent(eventId as number),
+    enabled: eventId != null,
+    staleTime: 60 * 1000,
+    retry: (failureCount, error: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const status = (error as any)?.response?.status
+      if (status === 401 || status === 403 || status === 404) return false
+      return failureCount < 1
+    },
+  })
+}
 
 export function useCrewEvents(includePast = false) {
   return useQuery<CrewEvent[]>({

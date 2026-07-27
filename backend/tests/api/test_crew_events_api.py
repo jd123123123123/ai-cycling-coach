@@ -291,6 +291,101 @@ def test_rsvp_event_from_other_crew_404(client_for):
     assert res.status_code == 404
 
 
+# ── single GET + edit (PATCH) ─────────────────────────────────────────────
+
+
+def test_get_single_event_returns_event(client_for):
+    ev = CrewEvent(crew_id=1, creator_user_id=5, name="Group Ride", kind="group_ride",
+                   starts_at=NOW + timedelta(days=3))
+    ev.id = 80
+    ev.created_at = NOW
+    a = CrewEventAttendee(event_id=80, user_id=5, status="going")
+    a.created_at = NOW
+    db = _base_db(events={80: ev}, attendees=[a])
+    res = client_for(db).get("/crews/me/events/80")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["id"] == 80
+    assert body["name"] == "Group Ride"
+    assert body["my_status"] == "going"
+
+
+def test_get_single_event_other_crew_404(client_for):
+    ev = CrewEvent(crew_id=99, creator_user_id=6, name="Other", kind="race",
+                   starts_at=NOW + timedelta(days=1))
+    ev.id = 81
+    ev.created_at = NOW
+    db = _base_db(events={81: ev})
+    res = client_for(db).get("/crews/me/events/81")
+    assert res.status_code == 404
+
+
+def test_patch_event_persists_edits(client_for):
+    ev = CrewEvent(crew_id=1, creator_user_id=5, name="Old Name", kind="group_ride",
+                   starts_at=NOW + timedelta(days=3), meeting_point="Old spot")
+    ev.id = 82
+    ev.created_at = NOW
+    db = _base_db(events={82: ev})
+    new_start = (NOW + timedelta(days=6)).isoformat()
+    res = client_for(db).patch(
+        "/crews/me/events/82",
+        json={"name": "New Name", "kind": "chaingang", "starts_at": new_start,
+              "meeting_point": "New spot", "description": "Bring lights"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["name"] == "New Name"
+    assert body["kind"] == "chaingang"
+    assert body["meeting_point"] == "New spot"
+    assert body["description"] == "Bring lights"
+    # Persisted on the row
+    assert db.events[82].name == "New Name"
+    assert db.events[82].kind == "chaingang"
+
+
+def test_patch_event_partial_leaves_others(client_for):
+    ev = CrewEvent(crew_id=1, creator_user_id=5, name="Keep Kind", kind="race",
+                   starts_at=NOW + timedelta(days=3), meeting_point="Café")
+    ev.id = 83
+    ev.created_at = NOW
+    db = _base_db(events={83: ev})
+    res = client_for(db).patch("/crews/me/events/83", json={"name": "Renamed"})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["name"] == "Renamed"
+    assert body["kind"] == "race"  # untouched
+    assert body["meeting_point"] == "Café"  # untouched
+
+
+def test_patch_event_forbidden_for_non_creator_non_owner(client_for):
+    # Event by user 6, crew owned by user 6; caller (5) is a plain member.
+    ev = CrewEvent(crew_id=1, creator_user_id=6, name="Not Mine", kind="group_ride",
+                   starts_at=NOW + timedelta(days=2))
+    ev.id = 84
+    ev.created_at = NOW
+    db = FakeDB(
+        memberships={5: _membership(5, 1)},
+        users={5: _user(5, "jannis@evori.ai"), 6: _user(6, "luca@gmail.com")},
+        crews={1: _crew(1, owner=6)},
+        events={84: ev},
+    )
+    res = client_for(db).patch("/crews/me/events/84", json={"name": "Hijack"})
+    assert res.status_code == 403
+    assert db.events[84].name == "Not Mine"  # unchanged
+
+
+def test_patch_event_owner_can_edit_others_event(client_for):
+    # Event by user 6, but crew owned by caller (5) → owner may edit.
+    ev = CrewEvent(crew_id=1, creator_user_id=6, name="Members Event", kind="group_ride",
+                   starts_at=NOW + timedelta(days=2))
+    ev.id = 85
+    ev.created_at = NOW
+    db = _base_db(events={85: ev})  # crew owner is 5 (the caller)
+    res = client_for(db).patch("/crews/me/events/85", json={"name": "Owner Edited"})
+    assert res.status_code == 200, res.text
+    assert res.json()["name"] == "Owner Edited"
+
+
 # ── tour upload + download ────────────────────────────────────────────────
 
 

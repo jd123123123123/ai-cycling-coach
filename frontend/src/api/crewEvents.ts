@@ -50,6 +50,15 @@ export interface CreateEventInput {
   meeting_point?: string | null
 }
 
+// Partial edit — only the present fields change (mirrors EventUpdate).
+export interface UpdateEventInput {
+  name?: string
+  kind?: EventKind
+  starts_at?: string // ISO
+  description?: string | null
+  meeting_point?: string | null
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Endpoint wrappers — all crew-scoped under /crews/me/events
 // ──────────────────────────────────────────────────────────────────────
@@ -63,6 +72,19 @@ export async function fetchCrewEvents(includePast = false): Promise<CrewEvent[]>
 
 export async function createCrewEvent(input: CreateEventInput): Promise<CrewEvent> {
   const res = await apiClient.post<CrewEvent>('/crews/me/events', input)
+  return res.data
+}
+
+export async function fetchCrewEvent(eventId: number): Promise<CrewEvent> {
+  const res = await apiClient.get<CrewEvent>(`/crews/me/events/${eventId}`)
+  return res.data
+}
+
+export async function updateCrewEvent(
+  eventId: number,
+  patch: UpdateEventInput,
+): Promise<CrewEvent> {
+  const res = await apiClient.patch<CrewEvent>(`/crews/me/events/${eventId}`, patch)
   return res.data
 }
 

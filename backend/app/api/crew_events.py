@@ -65,6 +65,16 @@ class EventCreate(BaseModel):
     meeting_point: str | None = None
 
 
+class EventUpdate(BaseModel):
+    """Partial edit — only the fields present are changed. Creator/owner only."""
+
+    name: str | None = Field(None, min_length=1, max_length=120)
+    kind: str | None = Field(None, max_length=32)
+    starts_at: datetime | None = None
+    description: str | None = None
+    meeting_point: str | None = None
+
+
 class RsvpRequest(BaseModel):
     status: Literal["going", "maybe", "out"]
 
@@ -262,6 +272,62 @@ async def list_events(
         await _serialize_with_attendees(db, event, current_user.id)
         for event in events
     ]
+
+
+@router.get("/{event_id}", response_model=EventRead)
+async def get_event(
+    event_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> EventRead:
+    """Fetch a single event in the caller's crew (with counts, my_status, tour
+    metadata). 403 if not in a crew, 404 if the event isn't theirs."""
+    mem = await _require_membership(db, current_user.id)
+    event = await _get_crew_event(db, event_id, mem.crew_id)
+    return await _serialize_with_attendees(db, event, current_user.id)
+
+
+@router.patch("/{event_id}", response_model=EventRead)
+async def update_event(
+    event_id: int,
+    payload: EventUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> EventRead:
+    """Edit an event's core fields. Only the event creator or the crew owner may
+    edit (mirrors the tour-upload permission). 403 otherwise, 404 wrong crew."""
+    mem = await _require_membership(db, current_user.id)
+    event = await _get_crew_event(db, event_id, mem.crew_id)
+
+    crew = (
+        await db.execute(select(Crew).where(Crew.id == event.crew_id))
+    ).scalar_one_or_none()
+    is_owner = crew is not None and crew.owner_user_id == current_user.id
+    if event.creator_user_id != current_user.id and not is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="only the event creator or crew owner can edit this event",
+        )
+
+    fields = payload.model_dump(exclude_unset=True)
+    if "name" in fields and fields["name"] is not None:
+        event.name = fields["name"].strip()
+    if "kind" in fields and fields["kind"] is not None:
+        kind = (fields["kind"] or "").strip()
+        if kind:
+            event.kind = kind
+    if "starts_at" in fields and fields["starts_at"] is not None:
+        event.starts_at = fields["starts_at"]
+    if "description" in fields:
+        desc = fields["description"]
+        event.description = (desc or None) if desc is not None else None
+    if "meeting_point" in fields:
+        mp = fields["meeting_point"]
+        event.meeting_point = (mp or None) if mp is not None else None
+
+    await db.commit()
+    await db.refresh(event)
+    return await _serialize_with_attendees(db, event, current_user.id)
 
 
 @router.post("/{event_id}/rsvp", response_model=EventRead)
