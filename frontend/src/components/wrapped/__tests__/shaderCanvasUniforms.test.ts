@@ -40,4 +40,11 @@ describe('packRoadTexture', () => {
     expect(tex.width).toBe(1)
     expect(tex.data).toHaveLength(4)
   })
+
+  it('clamps a negative-watts sample to a ground floor instead of wrapping to a bright value', () => {
+    const p = buildRoadProfile([block()], { cp: 250, wPrime: 20000 })
+    p.samples[0] = { ...p.samples[0], watts: -100 }
+    const tex = packRoadTexture(p)
+    expect(tex.data[0]).toBe(0)
+  })
 })

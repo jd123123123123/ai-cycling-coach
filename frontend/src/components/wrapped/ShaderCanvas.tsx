@@ -56,7 +56,7 @@ export function packRoadTexture(profile: RoadProfile): ShaderTexture {
   const data = new Uint8Array(n * 4)
 
   profile.samples.forEach((s, i) => {
-    const h = Math.min(s.watts / ref, HEIGHT_RANGE) / HEIGHT_RANGE
+    const h = Math.max(0, Math.min(s.watts / ref, HEIGHT_RANGE)) / HEIGHT_RANGE
     const bal = s.wbal != null && wPrime != null ? Math.max(0, Math.min(1, s.wbal / wPrime)) : 1
     data[i * 4 + 0] = Math.round(h * 255)
     data[i * 4 + 1] = Math.round((Math.min(s.zone, 7) / 7) * 255)
@@ -342,7 +342,15 @@ export default function ShaderCanvas({ variant, uniforms, texture, className, st
       if (t && uData) {
         gl.activeTexture(gl.TEXTURE0)
         gl.bindTexture(gl.TEXTURE_2D, tex)
-        // Re-upload only when the profile itself changed, not every frame.
+        // CONTRACT: this guard keys on t.width ONLY — it re-uploads when the
+        // sample COUNT changes, not when sample CONTENT changes. A new
+        // RoadProfile that resamples to the same width (e.g. both hit
+        // MAX_SAMPLES, or an edited plan keeps the same block count) will
+        // NOT trigger a re-upload here, and the GPU will keep rendering the
+        // previous profile's texture. Callers MUST force a fresh upload by
+        // remounting ShaderCanvas with a React `key` derived from the
+        // profile's identity (not just its width) whenever the profile
+        // changes.
         if (uploadedWidth !== t.width) {
           gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, t.width, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, t.data)
