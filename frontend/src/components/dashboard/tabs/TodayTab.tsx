@@ -980,10 +980,29 @@ export default function TodayTab() {
   // aura-vs-road gate: null on 'bare' lets the aura (published above,
   // unconditionally) remain the visible backdrop whenever the road has
   // nothing honest to show.
+  // KILL SWITCH (2026-07-27): Today's Road is disabled in production after a
+  // client-side render crash on the Today tab (top-level ErrorBoundary, "the
+  // app hit an unexpected error"). Root cause NOT yet identified — the
+  // exception is only console.error'd, with no external reporting, so the
+  // stack exists solely in the reporting user's browser. Three hypotheses were
+  // tested and disproved: Math.min spread over the 1 Hz W'bal array (21 600
+  // elements spread fine), an unstable powerProfile identity driving the
+  // render-time travel reset into an infinite loop (it reads react-query
+  // `.data`, which is reference-stable), and a negative String.repeat count in
+  // the matches pip bar (wPrimeBalance caps bal at W', so matches <= 1).
+  //
+  // Setting ROAD_ENABLED = false makes setRoad publish null, which unmounts
+  // BOTH <TodayRoad> and <RoadHud> in DashboardShell and restores the plain
+  // readiness aura — the exact backdrop that shipped on 2026-07-24. Everything
+  // else in this build stays live. Flip back to true once the crash is
+  // reproduced and fixed; the feature code is otherwise untouched.
+  const ROAD_ENABLED = false
   useEffect(() => {
-    setRoad(buildRoadPayload(roadModeValue, roadProfile, roadBlocks, fColors.aura))
+    setRoad(
+      ROAD_ENABLED ? buildRoadPayload(roadModeValue, roadProfile, roadBlocks, fColors.aura) : null,
+    )
     return () => setRoad(null)
-  }, [setRoad, roadProfile, roadModeValue, fColors.aura, roadBlocks])
+  }, [ROAD_ENABLED, setRoad, roadProfile, roadModeValue, fColors.aura, roadBlocks])
 
   const ringColor = fColors.ring
   const ringGradient = fColors.gradient
