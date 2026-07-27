@@ -11,6 +11,7 @@
 import { AlertTriangle, Thermometer, Activity } from 'lucide-react'
 import { useMorningHealthCheck, type MorningHealthCheck } from '../../hooks/useMorningHealthCheck'
 import { useLocale } from '../../contexts/LocaleContext'
+import { GLASS_CARD_MARKER, GLASS_PAPER_2, GLASS_BLUR } from './glassCard'
 
 type Level = MorningHealthCheck['level']
 
@@ -60,11 +61,13 @@ export default function MorningHealthCard() {
     <div
       className="relative overflow-hidden rounded-[24px] p-5 flex flex-col gap-4"
       style={{
-        background: `linear-gradient(150deg, color-mix(in srgb, ${color} 16%, var(--color-paper-2)) 0%, var(--color-paper-2) 66%)`,
+        background: `linear-gradient(150deg, color-mix(in srgb, ${color} 16%, ${GLASS_PAPER_2}) 0%, ${GLASS_PAPER_2} 66%)`,
         border: `1px solid color-mix(in srgb, ${color} 45%, var(--color-rule))`,
         boxShadow: `0 12px 34px -18px color-mix(in srgb, ${color} 70%, transparent)`,
+        ...GLASS_BLUR,
       }}
       role="alert"
+      {...GLASS_CARD_MARKER}
     >
       <div className="flex items-start gap-3.5">
         <div

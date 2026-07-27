@@ -11,6 +11,7 @@ import { format, parseISO } from 'date-fns'
 import { CheckCircle2 } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { useLocale } from '../../contexts/LocaleContext'
+import { GLASS_CARD_MARKER, GLASS_PAPER_2, GLASS_BLUR } from './glassCard'
 
 interface Absorption {
   rationale: string
@@ -46,7 +47,15 @@ export default function AbsorptionCard() {
     : (de ? 'Die Woche passt weiterhin — nichts weiter geändert.' : 'The week still fits — nothing else changed.')
 
   return (
-    <div className="rounded-[24px] p-5 flex items-start gap-3.5" style={{ background: 'color-mix(in srgb, var(--color-recovery) 8%, var(--color-paper-2))', border: '1px solid color-mix(in srgb, var(--color-recovery) 45%, var(--color-rule))' }}>
+    <div
+      className="rounded-[24px] p-5 flex items-start gap-3.5"
+      style={{
+        background: `color-mix(in srgb, var(--color-recovery) 8%, ${GLASS_PAPER_2})`,
+        border: '1px solid color-mix(in srgb, var(--color-recovery) 45%, var(--color-rule))',
+        ...GLASS_BLUR,
+      }}
+      {...GLASS_CARD_MARKER}
+    >
       <span className="grid place-items-center rounded-full shrink-0" style={{ width: 40, height: 40, background: 'color-mix(in srgb, var(--color-recovery) 16%, transparent)' }}>
         <CheckCircle2 size={20} style={{ color: 'var(--color-recovery)' }} />
       </span>

@@ -19,6 +19,7 @@ import { usePlannedWorkouts } from '../../hooks/usePlannedWorkouts'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { localDayKey } from '../../utils/loadMetrics'
 import { tFor, type Locale } from '../../i18n/strings'
+import { GLASS_CARD_MARKER, GLASS_PAPER_2, GLASS_BLUR } from './glassCard'
 
 // ── Sport families (mirror of backend services/sport.py semantics) ──────────
 type SportFamily = 'cycling' | 'running' | 'strength' | 'other'
@@ -296,7 +297,12 @@ export default function SessionReviewCard({ review, de }: { review: PostRideRevi
   return (
     <div
       className="rounded-[24px] p-5 flex flex-col gap-[18px]"
-      style={{ background: `linear-gradient(125deg, color-mix(in srgb, ${gm.color} 14%, var(--color-paper-2)) 0%, var(--color-paper-2) 72%)`, border: `1px solid color-mix(in srgb, ${gm.color} 55%, var(--color-rule))` }}
+      style={{
+        background: `linear-gradient(125deg, color-mix(in srgb, ${gm.color} 14%, ${GLASS_PAPER_2}) 0%, ${GLASS_PAPER_2} 72%)`,
+        border: `1px solid color-mix(in srgb, ${gm.color} 55%, var(--color-rule))`,
+        ...GLASS_BLUR,
+      }}
+      {...GLASS_CARD_MARKER}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">

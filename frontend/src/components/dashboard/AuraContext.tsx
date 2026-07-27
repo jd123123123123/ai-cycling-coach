@@ -13,9 +13,13 @@
 import { createContext, useContext } from 'react'
 import type { RoadProfile } from '../../utils/roadProfile'
 import type { RoadMode } from '../../utils/roadMode'
+import type { ResolvedBlock } from '../../api/coach'
 
-/** What the Today tab publishes so the shell can draw the landscape. */
-export interface RoadPayload { profile: RoadProfile; mode: RoadMode; color: string }
+/** What the Today tab publishes so the shell can draw the landscape.
+ *  `blocks` is the same block list `profile` was built from — carried along
+ *  so the shell can mount <RoadReadout>, which resolves a scrub position
+ *  back to its source block (name, RPE) the way <TodayRoad> alone cannot. */
+export interface RoadPayload { profile: RoadProfile; mode: RoadMode; color: string; blocks: ResolvedBlock[] }
 
 export interface AuraContextValue {
   /** Set the current aura colour (hex), or null to clear it. */

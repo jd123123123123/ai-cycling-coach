@@ -10,9 +10,10 @@
 import { TrendingUp, TrendingDown, Zap } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 import { classifyForm } from '../../utils/loadMetrics'
+import { glassCardStyle, GLASS_CARD_MARKER } from './glassCard'
 
 const DASH = '—'
-const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
+const cardStyle = glassCardStyle
 
 // Gauge scale — matches the Load & Form gauge exactly.
 const TSB_MIN = -30
@@ -45,7 +46,7 @@ export default function FitnessFreshnessCard({ ctl, atl, tsb, dCtl7 }: {
   const atlDisp = atl != null ? Math.round(atl) : null
 
   return (
-    <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle}>
+    <div className="rounded-[24px] p-5 flex flex-col gap-4" style={cardStyle} {...GLASS_CARD_MARKER}>
       {/* Head — title + TSB value + form pill */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5 min-w-0">

@@ -31,8 +31,14 @@ import { usePMC } from '../../hooks/usePMC'
 import { daysToEvent, latestLoad } from '../../utils/loadMetrics'
 import { useLocale } from '../../contexts/LocaleContext'
 import BlockBars from '../workout/BlockBars'
+import { glassCardStyle, GLASS_CARD_MARKER, GLASS_PAPER_2, GLASS_BLUR } from './glassCard'
 
-const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
+// Also mounted on the Train (Plan) tab, which has no road behind it — glass
+// there is a harmless, near-imperceptible tone shift (blurring a solid page
+// background is a no-op; the 72%-paper-2 mix still reads as a distinct card
+// against var(--color-paper)), so this stays ONE shared style rather than a
+// per-tab special case (finding 3: one glass system, not a patchwork).
+const cardStyle = glassCardStyle
 
 // ── The audited modifier's exposed subset (workout_modifier vocabulary) ──────
 interface AdaptOption {
@@ -148,7 +154,7 @@ export default function SessionOfTheDay() {
   // ── Honest week-plan fallback card (brief unavailable, finding #1) ─────────
   if (fallback === 'planned_session' && weekToday) {
     return (
-      <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
+      <div className="rounded-[24px] p-5 flex flex-col gap-3.5" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }} {...GLASS_CARD_MARKER}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <Zap size={16} strokeWidth={2.4} style={{ color: 'var(--color-accent)' }} />
@@ -204,7 +210,12 @@ export default function SessionOfTheDay() {
   return (
     <div
       className="rounded-[24px] p-5 hover-card flex flex-col gap-[18px]"
-      style={{ background: 'linear-gradient(125deg, color-mix(in srgb, var(--color-accent) 16%, var(--color-paper-2)) 0%, var(--color-paper-2) 72%)', border: '1px solid var(--color-accent)' }}
+      style={{
+        background: `linear-gradient(125deg, color-mix(in srgb, var(--color-accent) 16%, ${GLASS_PAPER_2}) 0%, ${GLASS_PAPER_2} 72%)`,
+        border: '1px solid var(--color-accent)',
+        ...GLASS_BLUR,
+      }}
+      {...GLASS_CARD_MARKER}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
@@ -428,7 +439,7 @@ function AdaptRow({ de }: { de: boolean }) {
       {sheetOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true">
           <button type="button" aria-label={de ? 'Abbrechen' : 'Cancel'} onClick={() => setSheetOpen(false)} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.55)' }} />
-          <div className="relative w-full max-w-md rounded-t-[24px] p-5 flex flex-col gap-3" style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}>
+          <div className="relative w-full max-w-md rounded-t-[24px] p-5 flex flex-col gap-3" style={{ ...cardStyle, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }} {...GLASS_CARD_MARKER}>
             <div className="flex flex-col gap-0.5">
               <span className="num-display" style={{ fontSize: 17, color: 'var(--color-ink)' }}>{de ? 'Einheit anpassen' : 'Adjust the session'}</span>
               <span style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.4 }}>

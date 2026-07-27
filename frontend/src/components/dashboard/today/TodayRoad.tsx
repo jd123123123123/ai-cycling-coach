@@ -10,7 +10,7 @@
  * terrain and the CP waterline, and is still scrubbable. The information
  * survives; only the atmosphere is lost.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import ShaderCanvas, { packRoadTexture } from '../../wrapped/ShaderCanvas'
 import type { RoadProfile } from '../../../utils/roadProfile'
 import { roadModeIndex, type RoadMode } from '../../../utils/roadMode'
@@ -20,6 +20,18 @@ export interface TodayRoadProps {
   mode: RoadMode
   auraColor: string
   onTravel?: (t: number) => void
+}
+
+/** Imperative escape hatch for a pointer gesture that starts OUTSIDE this
+ *  component's own hitbox — e.g. DashboardShell's delegated scrub listener
+ *  on <main>, which is what actually receives most real-world drags (see
+ *  DashboardShell.tsx's onPointerDown for why: this component's own hitbox
+ *  sits at z-index -1 behind every card, so it is only ever the browser's
+ *  hit-test target in the thin strips where no card paints). Routes through
+ *  the exact same rAF-coalesced `publish` path as a native pointer gesture
+ *  on this component's own hitbox, so both paths behave identically. */
+export interface TodayRoadHandle {
+  scrubTo: (t: number) => void
 }
 
 /** Whether a WebGL context can be created at all. */
@@ -99,7 +111,10 @@ export function roadRemountKey(profile: RoadProfile, textureWidth: number): stri
 
 const BOX = { width: '100%', height: '100%' } as const
 
-export default function TodayRoad({ profile, mode, auraColor, onTravel }: TodayRoadProps) {
+const TodayRoad = forwardRef<TodayRoadHandle, TodayRoadProps>(function TodayRoad(
+  { profile, mode, auraColor, onTravel },
+  ref,
+) {
   const hostRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef(0)
   // Coalesces multiple pointermove events that land in the same animation
@@ -135,6 +150,18 @@ export default function TodayRoad({ profile, mode, auraColor, onTravel }: TodayR
     pendingTravelRef.current = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
     if (!rafRef.current) rafRef.current = requestAnimationFrame(publish)
   }, [hasRoad, publish])
+
+  // External scrub source (DashboardShell's delegated <main> listener) feeds
+  // in an already-computed 0..1 fraction — same rAF-coalescing guard as a
+  // native pointer gesture, so a flurry of forwarded calls in one frame still
+  // costs at most one React render.
+  useImperativeHandle(ref, () => ({
+    scrubTo: (t: number) => {
+      if (!hasRoad) return
+      pendingTravelRef.current = Math.min(1, Math.max(0, t))
+      if (!rafRef.current) rafRef.current = requestAnimationFrame(publish)
+    },
+  }), [hasRoad, publish])
 
   // Capture the pointer on down so a fast drag that leaves the div bounds
   // keeps delivering pointermove (clamped at 0/1 by onPointer above) instead
@@ -205,4 +232,6 @@ export default function TodayRoad({ profile, mode, auraColor, onTravel }: TodayR
       )}
     </div>
   )
-}
+})
+
+export default TodayRoad

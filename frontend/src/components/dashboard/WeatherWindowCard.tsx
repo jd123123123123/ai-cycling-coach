@@ -14,6 +14,7 @@ import { CloudRain, CloudSun, Wind } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useTodayWeather } from '../../hooks/useTodayWeather'
 import { computeWeatherWindow, type WeatherWindow } from './WeatherNudge'
+import { glassCardStyle, GLASS_CARD_MARKER } from './glassCard'
 
 const TEAL = 'var(--color-stand)'
 
@@ -64,7 +65,8 @@ export default function WeatherWindowCard() {
   return (
     <div
       className="rounded-[24px] p-5 flex flex-col gap-3.5"
-      style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
+      style={glassCardStyle}
+      {...GLASS_CARD_MARKER}
     >
       {/* Head — icon pill + titles | temp chip (pen jt54q) */}
       <div className="flex items-center justify-between gap-3">

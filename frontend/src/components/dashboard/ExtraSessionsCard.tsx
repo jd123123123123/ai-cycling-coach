@@ -21,9 +21,10 @@ import { useLocale } from '../../contexts/LocaleContext'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { formatDate } from '../../utils/format'
 import { deriveExtraSessions, type ExtraKind } from './extraSessions'
+import { glassCardStyle, GLASS_CARD_MARKER } from './glassCard'
 
 const DASH = '—'
-const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
+const cardStyle = glassCardStyle
 
 const KIND_ICON: Record<ExtraKind, LucideIcon> = {
   ride: Bike,
@@ -87,7 +88,7 @@ export default function ExtraSessionsCard() {
   })()
 
   return (
-    <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
+    <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }} {...GLASS_CARD_MARKER}>
       {/* Head */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">

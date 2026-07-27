@@ -52,18 +52,17 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { tFor } from '../../../i18n/strings'
 import { useMethods } from '../../ui/MethodsDrawer'
 import { buildReadinessMethod } from '../../../utils/methodsContent'
+import { glassCardStyle, GLASS_CARD_MARKER } from '../glassCard'
 
 // Glass, not solid: Today's Road sits behind these cards (DashboardShell),
-// so the terrain reads through. --color-paper-2 is a plain hex (#14181D,
-// see index.css), which color-mix(in srgb, ...) can consume directly. This
-// const is LOCAL to TodayTab — every other tab/card file defines its own
-// `cardStyle` and stays solid; only Today gets glass.
-const cardStyle = {
-  background: 'color-mix(in srgb, var(--color-paper-2) 72%, transparent)',
-  backdropFilter: 'blur(14px) saturate(1.2)',
-  WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
-  border: '1px solid var(--color-rule)',
-} as const
+// so the terrain reads through. `glassCardStyle` is the ONE shared token
+// (frontend/src/components/dashboard/glassCard.ts) also used by every other
+// Today card component (SessionOfTheDay, FitnessFreshnessCard,
+// WeatherWindowCard, ExtraSessionsCard, MorningHealthCard, AbsorptionCard,
+// ThisWeekCard, SessionReviewCard) so the whole page reads as one glass
+// system, not a patchwork of a few translucent cards among solid ones. Falls
+// back to a solid surface when backdrop-filter isn't supported.
+const cardStyle = glassCardStyle
 
 // ── Flagship "Morning Readiness Moment" — state resolution ───────────────────
 // The Today tab is a single screen with FIVE faces (pencil-new.pen flagship
@@ -959,10 +958,23 @@ export default function TodayTab() {
   // stream and is out of scope for this plan (spec §10 keeps stream-backed
   // post-ride terrain for a follow-up). 'flat-done' is the honest post-ride
   // landscape until then.
+  //
+  // Gate on 'bare' (finding 5): 'bare' is the pending/loading state and the
+  // ready/controlled state with no profile — i.e. nothing honest to draw.
+  // Publishing a road unconditionally would permanently retire
+  // DashboardShell's plain-aura branch (this is the only setAura caller),
+  // silently deleting the readiness-aura's warm sunrise bloom from every
+  // state. Withholding setRoad here lets the aura (published above,
+  // unconditionally) remain the visible backdrop whenever the road has
+  // nothing to show.
   useEffect(() => {
-    setRoad({ profile: roadProfile, mode: roadModeValue, color: fColors.aura })
+    if (roadModeValue === 'bare') {
+      setRoad(null)
+      return
+    }
+    setRoad({ profile: roadProfile, mode: roadModeValue, color: fColors.aura, blocks: roadBlocks })
     return () => setRoad(null)
-  }, [setRoad, roadProfile, roadModeValue, fColors.aura])
+  }, [setRoad, roadProfile, roadModeValue, fColors.aura, roadBlocks])
 
   const ringColor = fColors.ring
   const ringGradient = fColors.gradient
@@ -1318,7 +1330,7 @@ export default function TodayTab() {
           (b) week plan has a session → render THAT session from real week data
           (c) nothing loads → degraded state + retry. Never the green rest card. */}
       {fallback === 'planned_rest' && (
-        <div className="rounded-[24px] p-5 flex items-center gap-3.5" style={cardStyle}>
+        <div className="rounded-[24px] p-5 flex items-center gap-3.5" style={cardStyle} {...GLASS_CARD_MARKER}>
           <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
             <Moon size={22} strokeWidth={2} style={{ color: 'var(--color-recovery)' }} />
           </div>
@@ -1332,7 +1344,7 @@ export default function TodayTab() {
       )}
       {/* planned_session fallback now renders inside <SessionOfTheDay /> below. */}
       {fallback === 'degraded' && (
-        <div className="rounded-[24px] p-5 flex flex-col items-center text-center gap-3" style={cardStyle}>
+        <div className="rounded-[24px] p-5 flex flex-col items-center text-center gap-3" style={cardStyle} {...GLASS_CARD_MARKER}>
           <div className="grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
             <RefreshCw size={20} strokeWidth={2.2} style={{ color: 'var(--color-muted)' }} />
           </div>
@@ -1429,7 +1441,7 @@ export default function TodayTab() {
 
       {/* Woche als Story — ONE slim link row, Monday + Tuesday (P1.3) */}
       {(today.getDay() === 1 || today.getDay() === 2) && (
-        <Link to="/recap/week" className="hover-card rounded-[20px] p-3.5 flex items-center gap-3" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
+        <Link to="/recap/week" className="hover-card rounded-[20px] p-3.5 flex items-center gap-3" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }} {...GLASS_CARD_MARKER}>
           <Sparkles size={18} className="shrink-0" style={{ color: 'var(--color-accent)' }} />
           <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--color-ink)' }}>
             {de ? 'Deine Woche als Story' : 'Your week, as a story'}

@@ -16,6 +16,7 @@ import { useLocale } from '../../contexts/LocaleContext'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useCurrentWeek } from '../../hooks/useCurrentWeek'
 import { deriveThisWeek } from './thisWeek'
+import { glassCardStyle, GLASS_CARD_MARKER } from './glassCard'
 
 const DASH = '—'
 
@@ -23,10 +24,8 @@ function Card({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="rounded-[24px] p-5"
-      style={{
-        display: 'flex', flexDirection: 'column', gap: 16,
-        background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)',
-      }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 16, ...glassCardStyle }}
+      {...GLASS_CARD_MARKER}
     >
       {children}
     </div>
