@@ -21,7 +21,7 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Share2, Route, Mountain, Zap, CheckCircle2, Medal, Trophy, ChevronRight,
-  Heart, SmilePlus, ArrowUp, Users, Lock, MessageCircle, Sparkles, UserPlus,
+  SmilePlus, ArrowUp, Users, Lock, MessageCircle, Sparkles, UserPlus,
 } from 'lucide-react'
 import { useDuel, useMyCrew } from '../../../hooks/useCrew'
 import type { DuelStats } from '../../../api/crew'

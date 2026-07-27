@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { subDays, format, parseISO } from 'date-fns'
-import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ChevronDown, ListChecks, Moon, AlertTriangle, Thermometer, Flame, Map as MapIcon, Sparkles, FileUp, SlidersHorizontal } from 'lucide-react'
+import { Bike, Footprints, Infinity as InfinityIcon, Check, Dumbbell, Plus, Clock, Zap, Target, Heart, Info, ChevronRight, ChevronLeft, ListChecks, Moon, AlertTriangle, Thermometer, Flame, FileUp, SlidersHorizontal } from 'lucide-react'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { useCoachBrief } from '../../../hooks/useCoachBrief'
 import { useTodaySession } from '../../../hooks/useTodaySession'
@@ -53,17 +53,6 @@ const RUN_PACE = [
   { z: 'Z5', en: 'VO₂ Max', de: 'VO₂max', lo: 1.00, hi: 1.06, color: 'var(--color-amber)' },
 ]
 const fmtPace = (sPerKm: number) => `${Math.floor(sPerKm / 60)}:${String(Math.round(sPerKm % 60)).padStart(2, '0')}`
-
-// Coggan 7-zone power bands (%FTP) + .pen swatch colors.
-const COGGAN = [
-  { z: 'Z1', name_en: 'Active Recovery', name_de: 'Aktive Erholung', lo: 0, hi: 0.55, color: 'var(--color-recovery)' },
-  { z: 'Z2', name_en: 'Endurance', name_de: 'Grundlage', lo: 0.56, hi: 0.75, color: 'var(--color-stand)' },
-  { z: 'Z3', name_en: 'Tempo', name_de: 'Tempo', lo: 0.76, hi: 0.90, color: 'var(--color-strain)' },
-  { z: 'Z4', name_en: 'Threshold', name_de: 'Schwelle', lo: 0.91, hi: 1.05, color: 'var(--color-accent)' },
-  { z: 'Z5', name_en: 'VO₂ Max', name_de: 'VO₂max', lo: 1.06, hi: 1.20, color: 'var(--color-amber)' },
-  { z: 'Z6', name_en: 'Anaerobic', name_de: 'Anaerob', lo: 1.21, hi: 1.50, color: 'var(--color-move)' },
-  { z: 'Z7', name_en: 'Neuromuscular', name_de: 'Neuromuskulär', lo: 1.51, hi: 0, color: 'var(--color-exercise)' },
-]
 
 // Localized phase words for the raw meso phase key ("base1" → "Grundlage 1").
 const PHASE_WORDS: Record<string, { en: string; de: string }> = {
@@ -210,13 +199,13 @@ export function definingZone(ivs: IntervalBlockOut[], category?: string | null):
 }
 
 export default function PlanTab() {
-  const { locale, t } = useLocale()
+  const { locale } = useLocale()
   const de = locale === 'de'
   // Bike-only product: the sport stays fixed to 'bike' (the Rad/Lauf/Alle
   // toggle has been removed). The run/all branches below remain as harmless
   // dormant code paths so the sport-scoped derivations keep type-checking.
   const [sport] = useState<Sport>('bike')
-  const [zoneMode, setZoneMode] = useState<ZoneMode>('power')
+  const [, setZoneMode] = useState<ZoneMode>('power')
   // The zones card follows the active sport: run → pace/HR by default, else power.
   useEffect(() => { setZoneMode(sport === 'run' ? 'pace' : 'power') }, [sport])
   const today = useMemo(() => new Date(), [])
@@ -368,10 +357,6 @@ export default function PlanTab() {
   const wodSport = workout ? detectWorkoutSport(workout) : 'cycling'
   const wodMatches = !!workout && sportMatch(wodSport)
 
-  // Cross-training — this-week strength sessions.
-  const STRENGTH_TARGET = 2
-  const strengthDone = useMemo(() => (acts?.activities ?? []).filter((a) => a.sport === 'gym' && parseISO(a.started_at ?? a.date ?? '') >= weekStart).length, [acts, weekStart])
-
   const fmtDur = (s: number | null) => {
     if (s == null) return ''
     if (s < 3600) return `${Math.round(s / 60)} min`
@@ -384,26 +369,9 @@ export default function PlanTab() {
   // Plan-status card — plan position + projection + change/illness notes.
   // Plan-level (not sport-scoped): meso weekly target + all-sport completed TSS.
   // ─────────────────────────────────────────────────────────────────────────
-  const projection = week?.projection ?? null
   const readiness = week?.readiness ?? null
   const planChanges = week?.plan_changes ?? null
 
-  // Zone 1 — where we are. Phase stepper base→build→peak→taper.
-  const PHASE_STEPS = [
-    { key: 'base', en: 'Base', de: 'Grundlage' },
-    { key: 'build', en: 'Build', de: 'Aufbau' },
-    { key: 'peak', en: 'Peak', de: 'Peak' },
-    { key: 'taper', en: 'Taper', de: 'Taper' },
-  ] as const
-  const phaseKey = (meso?.phase ?? '').toLowerCase()
-  const activePhaseIdx = PHASE_STEPS.findIndex((p) => phaseKey.includes(p.key))
-  const BLOCK_POS: Record<string, { en: string; de: string }> = {
-    accumulation: { en: 'Accumulation', de: 'Akkumulation' },
-    transmutation: { en: 'Transmutation', de: 'Transmutation' },
-    realization: { en: 'Realization', de: 'Realisierung' },
-    recovery: { en: 'Recovery', de: 'Erholung' },
-  }
-  const blockPosLabel = meso?.block_position ? (de ? BLOCK_POS[meso.block_position]?.de : BLOCK_POS[meso.block_position]?.en) ?? meso.block_position : null
   const weekOfMeso = meso?.block_index_in_meso != null ? meso.block_index_in_meso + 1 : null
   // planned_tss_total is THE weekly display target (sum of all planned rows
   // incl. shadowed secondaries); the meso figure is advisory-only fallback.
@@ -434,62 +402,6 @@ export default function PlanTab() {
     [`${sessionCount}`, de ? 'Einheiten' : 'Sessions'],
     [weeklyTarget > 0 ? `${Math.round(weeklyTarget)}` : '—', de ? 'Wochenlast' : 'Week load'],
   ]
-
-  // Zone 2 — projection chart geometry (50%/80% confidence bands + central path).
-  // NaN-safe: the backend can (transiently) emit null current/projected and
-  // non-finite band values. We filter to finite-only points, guard a zero range,
-  // and bail to the honest empty state rather than feed NaN to any SVG attribute.
-  const projChart = useMemo(() => {
-    if (!projection || projection.mode === 'insufficient') return null
-    const W = 320, H = 116, PL = 4, PR = 4, PT = 10, PB = 16
-    // Keep only points where EVERY band value is a finite number.
-    const pts = (projection.path ?? []).filter((p) =>
-      Number.isFinite(p.central) && Number.isFinite(p.p25) && Number.isFinite(p.p75) &&
-      Number.isFinite(p.p10) && Number.isFinite(p.p90))
-    if (pts.length < 2) return null
-    const xs = pts.map((_, i) => PL + (i / (pts.length - 1)) * (W - PL - PR))
-    const allLow = Math.min(...pts.map((p) => p.p10))
-    const allHigh = Math.max(...pts.map((p) => p.p90))
-    const range = allHigh - allLow
-    // Degenerate (zero/negative/non-finite) range → nothing meaningful to draw.
-    if (!Number.isFinite(range) || range <= 0) return null
-    const y = (v: number) => PT + (1 - (v - allLow) / range) * (H - PT - PB)
-    const line = pts.map((p, i) => `${xs[i].toFixed(1)},${y(p.central).toFixed(1)}`).join(' ')
-    const band = (lo: 'p10' | 'p25', hi: 'p75' | 'p90') => {
-      const top = pts.map((p, i) => `${xs[i].toFixed(1)},${y(p[hi]).toFixed(1)}`)
-      const bot = pts.map((p, i) => `${xs[i].toFixed(1)},${y(p[lo]).toFixed(1)}`).reverse()
-      return [...top, ...bot].join(' ')
-    }
-    return {
-      W, H, line, band80: band('p10', 'p90'), band50: band('p25', 'p75'),
-      startX: xs[0], startY: y(pts[0].central), endX: xs[xs.length - 1], endY: y(pts[pts.length - 1].central),
-    }
-  }, [projection])
-  // Current → projected headline numbers — only finite values become real digits.
-  const projCurrent = projection && Number.isFinite(projection.current_estimate as number) ? Math.round(projection.current_estimate as number) : null
-  const projProjected = projection && Number.isFinite(projection.projected_central as number) ? Math.round(projection.projected_central as number) : null
-  // Confidence (0-100). The backend computes confidence_pct (band tightness ×
-  // sample richness) but the /weeks schema doesn't pass it through yet — when
-  // absent, derive it with the identical formula from band_80 + samples_used.
-  const projConfidence = useMemo(() => {
-    if (!projection) return null
-    if (typeof projection.confidence_pct === 'number') return projection.confidence_pct
-    const b80 = projection.band_80
-    const central = projection.projected_central
-    if (!b80 || central == null || !Number.isFinite(central) || central <= 0) return 0
-    const ratio = (b80[1] - b80[0]) / central
-    const sampleFactor = Math.min(1, (projection.samples_used ?? 0) / 10)
-    return Math.round(100 * Math.max(0, Math.min(1, (1 - ratio) * sampleFactor)))
-  }, [projection])
-  // < 30% ⇒ a point forecast would be a promise the data can't keep (audit
-  // P0-1): render the 80% RANGE and drop every single-number race-day claim.
-  const projLowConf = projConfidence != null && projConfidence < 30
-  const projBand80 = projection?.band_80 ?? null
-  const projRangeHeadline = projLowConf && projBand80
-    ? (de
-      ? `Richtung Renntag: ${Math.round(projBand80[0])}–${Math.round(projBand80[1])} W möglich`
-      : `Trending toward ${Math.round(projBand80[0])}–${Math.round(projBand80[1])} W by race day`)
-    : null
 
   // Zone 3 — notes. Color + icon keyed off readiness status (falls back to plan_changes).
   // 'none' sentinel = no readiness signal (never rendered as text).

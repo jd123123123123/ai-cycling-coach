@@ -48,7 +48,7 @@ function kindLabel(kind: ExtraKind, de: boolean): string {
 }
 
 // h:mm or Nmin from seconds — compact ("1:05 h" for ≥60min, "44 min" else).
-function fmtDuration(sec: number | null, de: boolean): string {
+function fmtDuration(sec: number | null): string {
   if (sec == null || sec <= 0) return DASH
   const totalMin = Math.round(sec / 60)
   if (totalMin < 60) return `${totalMin} min`
@@ -147,7 +147,7 @@ export default function ExtraSessionsCard() {
                       {kindLabel(s.kind, de)}{showTitle ? <span style={{ fontWeight: 500, color: 'var(--color-ink-2)' }}> · {s.title}</span> : null}
                     </span>
                     <span style={{ fontSize: 11.5, color: 'var(--color-muted)' }}>
-                      {dayLabel} · {fmtDuration(s.durationSec, de)}
+                      {dayLabel} · {fmtDuration(s.durationSec)}
                     </span>
                   </div>
                   <div className="flex flex-col items-end shrink-0" style={{ gap: 1 }}>

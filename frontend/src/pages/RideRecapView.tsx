@@ -118,7 +118,6 @@ export default function RideRecapView() {
   const verdict = data?.verdict ?? null
   const story = data?.story ?? null
   const pacing = data?.pacing ?? null
-  const efficiency = data?.efficiency ?? null
   const efforts = data?.efforts ?? []
   const ftp = athlete?.ftp_watts ?? data?.wko?.mftp_watts ?? null
   const weight = athlete?.weight_kg ?? null

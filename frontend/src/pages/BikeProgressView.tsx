@@ -123,10 +123,9 @@ function Pill({ children, color, bg }: { children: React.ReactNode; color: strin
 // Reuses the app's tap-tooltip pattern (HoverBars / PMCChart) rather than uPlot,
 // since the honest data here is a single sparse yearly series.
 function SeasonFitnessChart({
-  data, de, fmtD, phases,
+  data, fmtD, phases,
 }: {
   data: { t: number; ctl: number }[]
-  de: boolean
   fmtD: (d: Date, p: { en: string; de: string }) => string
   phases: { t: string; c: string }[]
 }) {
@@ -722,7 +721,6 @@ export default function BikeProgressView() {
 
                 <SeasonFitnessChart
                   data={ctlYear}
-                  de={de}
                   fmtD={fmtD}
                   phases={[
                     { t: de ? 'Basis' : 'Base', c: C.strain },

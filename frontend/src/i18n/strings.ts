@@ -444,7 +444,6 @@ export const STRINGS = {
   driver_hrv: { en: 'HRV', de: 'HRV' },
   driver_rhr: { en: 'Resting HR', de: 'Ruhepuls' },
   driver_sleep: { en: 'Sleep', de: 'Schlaf' },
-  form_label: { en: 'FORM', de: 'FORM' },
   coach_label: { en: 'YOUR COACH', de: 'DEIN COACH' },
   // Readiness state pills.
   pill_primed: { en: 'PRIMED', de: 'BEREIT' },

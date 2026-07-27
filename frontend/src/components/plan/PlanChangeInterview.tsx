@@ -14,7 +14,7 @@
  * No-guilt register throughout (SDT autonomy support): completed work counts
  * forward — the rebuild anchors to live CTL on the server, nothing is slashed.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'

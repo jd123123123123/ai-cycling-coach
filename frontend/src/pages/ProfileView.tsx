@@ -17,7 +17,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Activity,
   ArrowLeft,
   Camera,
   Check,
@@ -27,11 +26,9 @@ import {
   Loader2,
   MonitorSmartphone,
   Pencil,
-  Scale,
   SlidersHorizontal,
   Timer,
   Watch,
-  Zap,
   type LucideIcon,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'

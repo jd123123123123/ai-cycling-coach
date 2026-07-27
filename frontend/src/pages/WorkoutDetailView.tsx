@@ -332,9 +332,6 @@ export default function WorkoutDetailView() {
   const mainZone = main?.zone ?? '—'
   const peakPctInt = Math.round(peakPct * 100)
 
-  // Session-average power (kJ·1000 / duration). 0 → unknown.
-  const avgW = kj > 0 && totalS > 0 ? Math.round((kj * 1000) / totalS) : null
-
   // Fueling estimate — a real heuristic from duration/intensity, clearly labeled.
   const hrs = totalS / 3600
   const gPerHr = peakPct >= 0.9 || minutes >= 120 ? 60 : 45
@@ -347,7 +344,6 @@ export default function WorkoutDetailView() {
   const hrVal = main && main.target_hr_low != null && main.target_hr_high != null ? `${main.target_hr_low}–${main.target_hr_high}` : '—'
   const cadVal = main && main.cadence_low != null && main.cadence_high != null ? `${main.cadence_low}–${main.cadence_high}` : '—'
 
-  const zoneLabel = (z: number) => (de ? ZONE_NAME_DE[z] : ZONE_NAME_DE[z] ? `Zone ${z}` : `Z${z}`)
   const stepLabel = (b: ResolvedBlock) =>
     b.target_pct_ftp > 0 ? `Zone ${b.zone} · ${Math.round(b.target_pct_ftp * 100)}% FTP` : `Zone ${b.zone}`
 

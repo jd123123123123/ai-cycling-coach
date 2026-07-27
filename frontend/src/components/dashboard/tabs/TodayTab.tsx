@@ -19,7 +19,6 @@ import { formatDate } from '../../../utils/format'
 import { Link } from 'react-router-dom'
 import { Bike, MessageCircle, ChevronRight, TrendingUp, TrendingDown, CalendarCheck, Moon, Sparkles, RefreshCw, Sun, Activity, HeartPulse, BrainCircuit, Info } from 'lucide-react'
 import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type ChatMessage } from '../../../api/coach'
-import type { AthleteState } from '../../../api/athletes'
 import SessionReviewCard from '../SessionReviewCard'
 import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
@@ -31,7 +30,7 @@ import BreakthroughCelebration from '../BreakthroughCelebration'
 import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
 import AbsorptionCard from '../AbsorptionCard'
 import MorningHealthCard from '../MorningHealthCard'
-import { useStreak, useSetAthleteStatus, type WeekConsistency } from '../../../hooks/useStreak'
+import { useStreak, type WeekConsistency } from '../../../hooks/useStreak'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { usePlanAdaptations } from '../../../hooks/usePlanAdaptations'
 import { useTodaySession, sessionIntensity } from '../../../hooks/useTodaySession'
@@ -227,10 +226,6 @@ export default function TodayTab() {
   // absorbed (key session reflowed to a free day / easy ride absorbed). Shares
   // the AdaptiveCard's query cache.
   const { data: adaptationsFeed } = usePlanAdaptations()
-  const setStatus = useSetAthleteStatus()
-  // Status changes that alter coaching (sick/injured/break) confirm first.
-  const [confirmStatus, setConfirmStatus] = useState<Exclude<AthleteState, 'healthy'> | null>(null)
-
   const metrics = metricsResp?.metrics ?? []
   const latest = [...metrics].reverse().find((m) => m.hrv_status != null || m.resting_hr != null || m.sleep_score != null) ?? null
   const evidence = (brief?.evidence as Record<string, unknown> | undefined) ?? {}
@@ -955,10 +950,11 @@ export default function TodayTab() {
       value: sleepScore != null ? `${Math.round(sleepScore)}` : '—',
     },
   ]
-  // Coach card message — prefer the brief's own rationale WHEN it's in the
-  // athlete's language; else the localized focus line; else the wrap line.
-  const rationaleMatches = !!brief?.rationale?.trim() &&
-    ((de && brief?.language === 'de') || (!de && brief?.language === 'en'))
+  // Coach card message — prefer the brief's own rationale; else the
+  // localized focus line; else the wrap line. The brief is fetched with an
+  // explicit locale param and the query is keyed on it, so a returned brief
+  // is already in the requested locale — no separate locale check needed.
+  const rationaleMatches = !!brief?.rationale?.trim()
   // Drop the robotic "Fokus heute:" / "Focus today:" label — the coach card's
   // own header already frames it; a human sentence (or just the session) reads
   // warmer than a data label.

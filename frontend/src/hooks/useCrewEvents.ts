@@ -4,12 +4,10 @@ import {
   fetchCrewEvent,
   fetchCrewEvents,
   rsvpCrewEvent,
-  updateCrewEvent,
   uploadCrewEventTour,
   type CreateEventInput,
   type CrewEvent,
   type RsvpStatus,
-  type UpdateEventInput,
 } from '../api/crewEvents'
 
 // Server-backed crew-events hooks. Mirrors the patterns in hooks/useCrew.ts.
