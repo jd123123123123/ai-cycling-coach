@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { expandBlocks, zoneForPctFtp, type PowerStep } from '../roadProfile'
+import { expandBlocks, zoneForPctFtp, buildRoadProfile, wPrimeBalance, MAX_SAMPLES, steadyBlock, type PowerStep } from '../roadProfile'
 import type { ResolvedBlock } from '../../api/coach'
 
 /** Minimal steady block; override what a test cares about. */
@@ -55,5 +55,94 @@ describe('expandBlocks', () => {
   it('drops non-positive durations and returns [] for no blocks', () => {
     expect(expandBlocks([])).toEqual([])
     expect(expandBlocks([block({ duration_s: 0 })])).toEqual([])
+  })
+})
+
+describe('wPrimeBalance', () => {
+  it('spends W above CP, joule for joule', () => {
+    // 10 s at 350 W with CP 250 spends 10 × 100 J = 1000 J.
+    const out = wPrimeBalance(Array(10).fill(350), 250, 20000)
+    expect(out).toHaveLength(10)
+    expect(out[9]).toBeCloseTo(19000, 6)
+  })
+
+  it('reconstitutes below CP without ever exceeding W prime', () => {
+    const spent = wPrimeBalance(Array(60).fill(400), 250, 20000)
+    const recovered = wPrimeBalance(Array(600).fill(100), 250, 20000)
+    expect(spent[59]).toBeLessThan(20000)
+    // Starting full and soft-pedalling can never overfill the tank.
+    expect(Math.max(...recovered)).toBeLessThanOrEqual(20000)
+  })
+
+  it('goes negative on exhaustion (models task failure)', () => {
+    const out = wPrimeBalance(Array(400).fill(400), 250, 20000)
+    expect(out[399]).toBeLessThan(0)
+  })
+})
+
+describe('buildRoadProfile', () => {
+  const hard = [block({ duration_s: 300, target_watts_low: 200, target_watts_high: 200, zone: 2 }),
+                block({ duration_s: 240, target_watts_low: 330, target_watts_high: 330, zone: 4 }),
+                block({ duration_s: 300, target_watts_low: 150, target_watts_high: 150, zone: 1 })]
+
+  it('reports total duration and caps sample count', () => {
+    const p = buildRoadProfile(hard, { cp: 250, wPrime: 20000 })
+    expect(p.totalDurationS).toBe(840)
+    expect(p.samples.length).toBeGreaterThan(1)
+    expect(p.samples.length).toBeLessThanOrEqual(MAX_SAMPLES)
+    expect(p.samples[0].t).toBe(0)
+    expect(p.samples[p.samples.length - 1].t).toBeCloseTo(1, 6)
+  })
+
+  it('drains W prime on the threshold block and refills it after', () => {
+    const p = buildRoadProfile(hard, { cp: 250, wPrime: 20000 })
+    expect(p.minWbal).not.toBeNull()
+    expect(p.minWbal!).toBeLessThan(20000)
+    const last = p.samples[p.samples.length - 1].wbal!
+    expect(last).toBeGreaterThan(p.minWbal!)
+  })
+
+  it('preserves the deepest W prime point through resampling', () => {
+    const p = buildRoadProfile(hard, { cp: 250, wPrime: 20000 })
+    const lowest = Math.min(...p.samples.map((s) => s.wbal!))
+    expect(lowest).toBeCloseTo(p.minWbal!, 6)
+  })
+
+  it('still renders terrain but no W prime when CP is unknown', () => {
+    const p = buildRoadProfile(hard, { cp: null, wPrime: null })
+    expect(p.samples.length).toBeGreaterThan(1)
+    expect(p.samples.every((s) => s.wbal === null)).toBe(true)
+    expect(p.minWbal).toBeNull()
+    expect(p.cp).toBeNull()
+    expect(p.samples.some((s) => s.watts === 330)).toBe(true)
+  })
+
+  it('returns an empty profile for no blocks', () => {
+    const p = buildRoadProfile([], { cp: 250, wPrime: 20000 })
+    expect(p.samples).toEqual([])
+    expect(p.totalDurationS).toBe(0)
+    expect(p.minWbal).toBeNull()
+  })
+})
+
+describe('steadyBlock', () => {
+  it('builds one honest steady block from a duration and a target', () => {
+    const b = steadyBlock(90, 200)!
+    expect(b.duration_s).toBe(5400)
+    expect(b.target_watts_low).toBe(200)
+    expect(b.target_watts_high).toBe(200)
+    expect(b.reps ?? null).toBeNull()
+  })
+
+  it('refuses to invent a road without both a duration and a target', () => {
+    expect(steadyBlock(90, null)).toBeNull()
+    expect(steadyBlock(null, 200)).toBeNull()
+    expect(steadyBlock(0, 200)).toBeNull()
+  })
+
+  it('feeds a profile that still drains nothing below CP', () => {
+    const p = buildRoadProfile([steadyBlock(60, 200)!], { cp: 250, wPrime: 20000 })
+    expect(p.samples.length).toBeGreaterThan(1)
+    expect(p.minWbal).toBeCloseTo(20000, 0)
   })
 })
