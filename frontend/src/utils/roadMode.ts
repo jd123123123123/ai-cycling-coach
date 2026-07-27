@@ -27,9 +27,19 @@ export function roadMode(
   }
 }
 
-const ORDER: RoadMode[] = ['prescribed', 'ridden', 'flat-calm', 'flat-done', 'flat-unlit', 'bare']
+// Compiler-enforced mapping: TypeScript requires every RoadMode member as a key.
+// Without all modes, tsc raises TS2345. This prevents -1 values reaching the shader's
+// u_mode uniform, which would silently select the wrong landscape.
+const ROAD_MODE_INDEX: Record<RoadMode, number> = {
+  'prescribed': 0,
+  'ridden': 1,
+  'flat-calm': 2,
+  'flat-done': 3,
+  'flat-unlit': 4,
+  'bare': 5,
+}
 
 /** Stable float index handed to the shader as u_mode. */
 export function roadModeIndex(mode: RoadMode): number {
-  return ORDER.indexOf(mode)
+  return ROAD_MODE_INDEX[mode]
 }
