@@ -55,4 +55,24 @@ describe('RoadReadout', () => {
     render(<RoadReadout profile={p} blocks={blocks} travel={0.5} de={false} />)
     expect(screen.getByTestId('road-matches').textContent).toBe('—')
   })
+
+  it('exposes the pip bar to assistive tech as a spoken count, in both languages', () => {
+    const p = buildRoadProfile(blocks, { cp: 250, wPrime: 20000 })
+    const { rerender } = render(<RoadReadout profile={p} blocks={blocks} travel={0} de={false} />)
+    expect(screen.getByLabelText('7 of 7 matches left')).toBeTruthy()
+
+    rerender(<RoadReadout profile={p} blocks={blocks} travel={0} de />)
+    expect(screen.getByLabelText('7 von 7 Streichhölzern übrig')).toBeTruthy()
+  })
+
+  it('explains WHY matches are unknown to a screen reader, not just a bare dash', () => {
+    const p = buildRoadProfile(blocks, { cp: null, wPrime: null })
+    const { rerender } = render(<RoadReadout profile={p} blocks={blocks} travel={0.5} de={false} />)
+    expect(screen.getByLabelText('matches unknown — no CP estimate')).toBeTruthy()
+    // The decorative glyphs themselves must not be announced as glyph soup.
+    expect(screen.getByTestId('road-matches').getAttribute('aria-hidden')).toBe('true')
+
+    rerender(<RoadReadout profile={p} blocks={blocks} travel={0.5} de />)
+    expect(screen.getByLabelText('Streichhölzer unbekannt — keine CP-Schätzung')).toBeTruthy()
+  })
 })

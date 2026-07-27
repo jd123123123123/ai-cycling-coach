@@ -80,17 +80,33 @@ export default function RoadReadout({ profile, blocks, travel, de }: {
   if (!d) return null
 
   const filled = d.matches != null ? Math.round(d.matches * MATCH_PIPS) : 0
+  const zone = Math.min(d.zone, 7)
+  const elapsedLabel = de ? `${mmss(d.elapsedS)} verstrichen` : `${mmss(d.elapsedS)} elapsed`
+  const wattsLabel = de ? `${d.watts} Watt` : `${d.watts} watts`
+  const zoneLabel = de ? `Zone ${zone}` : `zone ${zone}`
+  const rpeLabel = d.rpe != null ? `RPE ${d.rpe}` : null
+  // Screen reader gets WHY the value is unknown, not just a bare dash — the
+  // honest-data rule applies to the accessible surface exactly as much as it
+  // applies to the visible one.
+  const matchesLabel = d.matches == null
+    ? (de ? 'Streichhölzer unbekannt — keine CP-Schätzung' : 'matches unknown — no CP estimate')
+    : (de ? `${filled} von ${MATCH_PIPS} Streichhölzern übrig` : `${filled} of ${MATCH_PIPS} matches left`)
+
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-      <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>{mmss(d.elapsedS)}</span>
-      <strong>{d.watts} W</strong>
-      <span>{`Z${Math.min(d.zone, 7)}`}</span>
-      {d.rpe != null && <span style={{ opacity: 0.7 }}>{`RPE ${d.rpe}`}</span>}
-      {d.blockName && <span style={{ opacity: 0.7 }}>{d.blockName}</span>}
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', minWidth: 0 }}>
+      <span aria-label={elapsedLabel} style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>{mmss(d.elapsedS)}</span>
+      <strong aria-label={wattsLabel}>{d.watts} W</strong>
+      <span aria-label={zoneLabel}>{`Z${zone}`}</span>
+      {rpeLabel != null && <span aria-label={rpeLabel} style={{ opacity: 0.7 }}>{rpeLabel}</span>}
+      {d.blockName && (
+        <span style={{ opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere' }}>{d.blockName}</span>
+      )}
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         <span style={{ opacity: 0.7 }}>{de ? 'Streichhölzer' : 'Matches'}</span>
-        <span data-testid="road-matches" style={{ letterSpacing: 1 }}>
-          {d.matches == null ? '—' : '▮'.repeat(filled) + '▯'.repeat(MATCH_PIPS - filled)}
+        <span aria-label={matchesLabel} style={{ letterSpacing: 1 }}>
+          <span data-testid="road-matches" aria-hidden="true">
+            {d.matches == null ? '—' : '▮'.repeat(filled) + '▯'.repeat(MATCH_PIPS - filled)}
+          </span>
         </span>
       </span>
     </div>
