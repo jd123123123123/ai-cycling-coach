@@ -123,6 +123,34 @@ describe('buildRoadProfile', () => {
     expect(p.totalDurationS).toBe(0)
     expect(p.minWbal).toBeNull()
   })
+
+  it('never substitutes a default CP or W prime when either is zero or negative', () => {
+    for (const power of [
+      { cp: 0, wPrime: 20000 },
+      { cp: 250, wPrime: 0 },
+      { cp: -250, wPrime: 20000 },
+      { cp: 250, wPrime: -20000 },
+    ]) {
+      const p = buildRoadProfile(hard, power)
+      expect(p.samples.length).toBeGreaterThan(1)
+      expect(p.samples.every((s) => s.wbal === null)).toBe(true)
+      expect(p.minWbal).toBeNull()
+      // A non-positive value is sanitized to null; it is never substituted
+      // with a default, and it never lets a *valid* companion value through
+      // to the W'bal integration (checked above via wbal === null).
+      expect(p.cp).toBe(power.cp > 0 ? power.cp : null)
+      expect(p.wPrime).toBe(power.wPrime > 0 ? power.wPrime : null)
+    }
+  })
+
+  it('caps totalDurationS to the span actually integrated when a session exceeds MAX_SECONDS', () => {
+    const MAX_SECONDS = 21600
+    const long = [block({ duration_s: MAX_SECONDS + 3600, target_watts_low: 200, target_watts_high: 200, zone: 2 })]
+    const p = buildRoadProfile(long, { cp: 250, wPrime: 20000 })
+    expect(p.totalDurationS).toBe(MAX_SECONDS)
+    expect(p.samples.length).toBeLessThanOrEqual(MAX_SAMPLES)
+    expect(p.samples[p.samples.length - 1].t).toBeCloseTo(1, 6)
+  })
 })
 
 describe('steadyBlock', () => {

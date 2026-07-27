@@ -129,13 +129,16 @@ export function buildRoadProfile(
   const steps = expandBlocks(blocks)
   const cp = power.cp != null && power.cp > 0 ? power.cp : null
   const wPrime = power.wPrime != null && power.wPrime > 0 ? power.wPrime : null
-  const totalDurationS = steps.reduce((s, x) => s + x.durationS, 0)
+  const rawDurationS = steps.reduce((s, x) => s + x.durationS, 0)
 
-  if (steps.length === 0 || totalDurationS <= 0) {
+  if (steps.length === 0 || rawDurationS <= 0) {
     return { samples: [], cp, wPrime, minWbal: null, totalDurationS: 0 }
   }
 
   // Flatten to 1 Hz so the W′ integration matches the backend's assumptions.
+  // MAX_SECONDS is a hard cap on how much this function will ever integrate;
+  // `totalDurationS` below reflects exactly what got integrated (and thus
+  // rendered), never the longer, untruncated `rawDurationS`.
   const watts: number[] = []
   const zones: number[] = []
   const owners: number[] = []
@@ -147,6 +150,7 @@ export function buildRoadProfile(
       owners.push(s.blockIndex)
     }
   }
+  const totalDurationS = watts.length
 
   const wbal = cp != null && wPrime != null ? wPrimeBalance(watts, cp, wPrime) : null
   const minWbal = wbal != null && wbal.length > 0 ? Math.min(...wbal) : null
