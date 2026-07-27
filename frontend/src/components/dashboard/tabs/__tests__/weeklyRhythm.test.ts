@@ -5,6 +5,14 @@ import { monthVerdict, completedWeekMax } from '../HistoryTab'
 describe('consistencyLabel (audit P1-11)', () => {
   it('renders the exact audit copy in both locales', () => {
     expect(consistencyLabel({ met: 3, planned: 5 }, true)).toBe('Konstanz: 3 von 5 geplanten Tagen')
+    // Early-week forward framing: 0-of-n on Mon/Tue is unwinnable by
+    // construction, so the same two numbers are stated as the week ahead.
+    expect(consistencyLabel({ met: 0, planned: 5 }, true, 0)).toBe('5 Trainingstage diese Woche geplant')
+    expect(consistencyLabel({ met: 0, planned: 5 }, false, 1)).toBe('5 training days planned this week')
+    // Midweek 0-of-n is a real report and stays a ratio.
+    expect(consistencyLabel({ met: 0, planned: 5 }, true, 3)).toBe('Konstanz: 0 von 5 geplanten Tagen')
+    // Any progress at all is worth showing, even on Monday.
+    expect(consistencyLabel({ met: 1, planned: 5 }, true, 0)).toBe('Konstanz: 1 von 5 geplanten Tagen')
     expect(consistencyLabel({ met: 3, planned: 5 }, false)).toBe('Consistency: 3 of 5 planned days')
   })
 

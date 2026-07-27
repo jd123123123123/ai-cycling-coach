@@ -35,6 +35,32 @@ describe('classifyForm (Load & Form hero)', () => {
     expect(classifyForm(15, true).label).toBe('Frisch')
   })
 
+  // TSB > 10 is produced by a taper and by a week off the bike alike, and the
+  // copy used to congratulate both ("Very fresh — ideal for racing"). The CTL
+  // trend is what separates them.
+  describe('high TSB: taper vs detraining', () => {
+    it('keeps the racing read when fitness is being held through the taper', () => {
+      const r = classifyForm(18, false, -2)
+      expect(r.sub).toBe('Very fresh — ideal for racing')
+      expect(r.color).toBe('var(--color-strain)')
+    })
+
+    it('calls out slipping fitness when CTL is falling hard', () => {
+      const r = classifyForm(18, false, -6)
+      expect(r.sub).toBe('Rested, but fitness is slipping — time to get back on')
+      expect(r.color).toBe('var(--color-amber)')
+      expect(classifyForm(18, true, -6).sub).toContain('Fitness fällt')
+    })
+
+    it('is unchanged when the CTL trend is unknown', () => {
+      expect(classifyForm(18, false, null).sub).toBe('Very fresh — ideal for racing')
+    })
+
+    it('does not fire below the top band — building days keep their own copy', () => {
+      expect(classifyForm(-8, false, -9).label).toBe('Building')
+    })
+  })
+
   it('bands are monotone across the boundaries', () => {
     const order = ['var(--color-move)', 'var(--color-amber)', 'var(--color-recovery)', 'var(--color-strain)']
     const seen = [-15, -5, 10, 25].map((t) => classifyForm(t, false).color)

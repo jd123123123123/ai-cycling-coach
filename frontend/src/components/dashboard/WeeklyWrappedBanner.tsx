@@ -86,8 +86,14 @@ export default function WeeklyWrappedBanner() {
           <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>
             {de ? 'Deine Woche ist da ✨' : 'Your week is here ✨'}
           </div>
-          <div className="truncate" style={{ fontSize: 13, fontWeight: 500, color: '#FFFFFFE0' }}>
-            {de ? `${km} km, ${data.rides} Fahrten — dein Weekly Wrapped wartet.` : `${km} km, ${data.rides} rides — your Weekly Wrapped awaits.`}
+          {/* Two lines, not `truncate`. At 390 px the German string clipped to
+              "37 km, 2 Fahrten — dein Week…", cutting the payoff off the app's
+              single most celebratory element. The week's numbers are the reward
+              here, so they lead and are emphasised; the sentence is allowed to
+              wrap rather than lose its ending. */}
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#FFFFFFE0', lineHeight: 1.35 }}>
+            <strong style={{ fontWeight: 800, color: '#fff' }}>{km} km · {data.rides} {de ? 'Fahrten' : 'rides'}</strong>
+            {de ? ' — dein Weekly Wrapped wartet.' : ' — your Weekly Wrapped awaits.'}
           </div>
         </div>
         <ChevronRight size={20} className="shrink-0" style={{ color: '#fff' }} />

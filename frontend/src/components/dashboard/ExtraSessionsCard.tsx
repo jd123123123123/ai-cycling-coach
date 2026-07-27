@@ -67,6 +67,16 @@ export default function ExtraSessionsCard() {
 
   const m = useMemo(() => deriveExtraSessions(actData?.activities ?? [], today, 7), [actData, today])
 
+  // Cross-training is opt-in behaviour, not a metric every athlete has. A
+  // bike-only rider has zero extra sessions every single week, so the empty
+  // state ("Keine zusätzlichen Einheiten in den letzten 7 Tagen") was a
+  // permanent full-size card on Today saying nothing had happened — one of
+  // several dead cards competing with the day's actual answer for the scroll.
+  // It self-hides now (Today is its only mount, so there is no grid to leave a
+  // hole in); the moment a real cross-training session lands, the card appears
+  // with something to say.
+  if (m.count === 0) return null
+
   // One explainable analysis line — added load, its share, and what it means
   // for the training picture (total load + recovery cost). Never bare numbers.
   const analysis = (() => {
@@ -100,22 +110,12 @@ export default function ExtraSessionsCard() {
             <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? 'Letzte 7 Tage · neben dem Radplan' : 'Last 7 days · beyond the bike plan'}</span>
           </div>
         </div>
-        {m.count > 0 && (
-          <div className="flex items-end gap-0.5 shrink-0">
-            <span className="num-display" style={{ fontSize: 34, fontWeight: 700, lineHeight: 1, color: 'var(--color-accent)' }}>{m.count}</span>
-          </div>
-        )}
+        <div className="flex items-end gap-0.5 shrink-0">
+          <span className="num-display" style={{ fontSize: 34, fontWeight: 700, lineHeight: 1, color: 'var(--color-accent)' }}>{m.count}</span>
+        </div>
       </div>
 
-      {m.count === 0 ? (
-        <div className="grid place-items-center rounded-[14px]" style={{ minHeight: 72, background: 'var(--color-surface-2)', padding: '14px 16px' }}>
-          <span style={{ fontSize: 12.5, color: 'var(--color-muted)', textAlign: 'center', lineHeight: 1.4 }}>
-            {de
-              ? 'Keine zusätzlichen Einheiten in den letzten 7 Tagen — nur deine geplanten Radeinheiten.'
-              : 'No extra sessions in the last 7 days — just your planned bike rides.'}
-          </span>
-        </div>
-      ) : (
+      {(
         <>
           {/* Summary stat row — added load, share of window total, session count. */}
           <div className="flex justify-between">

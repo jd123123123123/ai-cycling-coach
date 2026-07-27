@@ -76,10 +76,35 @@ export interface FormState {
   color: string
   sub: string
 }
-export function classifyForm(tsb: number | null, de: boolean): FormState {
+/** CTL lost per week below which high freshness is detraining, not a taper.
+ *  A taper sheds ~2–4 CTL/week while holding the engine; a genuine layoff
+ *  sheds more, and keeps shedding. */
+export const DETRAINING_CTL_DROP = 4
+
+export function classifyForm(
+  tsb: number | null,
+  de: boolean,
+  /** CTL change over the last 7 days, when known. High TSB means opposite
+   *  things depending on this sign, so the top band cannot be read off TSB
+   *  alone — see below. */
+  dCtl7: number | null = null,
+): FormState {
   if (tsb == null) return { label: '—', color: 'var(--color-muted)', sub: de ? 'Noch keine Lastdaten' : 'No load data yet' }
   if (tsb <= -15) return { label: de ? 'Überlastet' : 'Overreached', color: 'var(--color-move)', sub: de ? 'Hohe Ermüdung — Erholung einplanen' : 'High fatigue — plan recovery' }
   if (tsb <= -5) return { label: de ? 'Aufbauend' : 'Building', color: 'var(--color-amber)', sub: de ? 'Produktive Last — Fitness wächst' : 'Productive load — fitness rising' }
   if (tsb <= 10) return { label: de ? 'Optimal' : 'Sweet spot', color: 'var(--color-recovery)', sub: de ? 'Ausgewogen — bereit für Qualität' : 'Balanced — ready for quality' }
+  // TSB > 10 has two completely different causes and the number cannot tell
+  // them apart. Shed fatigue on top of a held CTL is a taper — race sharpness.
+  // Shed fatigue because no training happened is detraining, and calling that
+  // "ideal for racing" congratulates an athlete for a week off the bike. The
+  // CTL trend is the discriminator, so when it is known and clearly falling,
+  // the band says so instead.
+  if (dCtl7 != null && dCtl7 <= -DETRAINING_CTL_DROP) {
+    return {
+      label: de ? 'Frisch' : 'Fresh',
+      color: 'var(--color-amber)',
+      sub: de ? 'Ausgeruht, aber die Fitness fällt — Zeit zurückzukommen' : 'Rested, but fitness is slipping — time to get back on',
+    }
+  }
   return { label: de ? 'Frisch' : 'Fresh', color: 'var(--color-strain)', sub: de ? 'Sehr frisch — ideal für den Wettkampf' : 'Very fresh — ideal for racing' }
 }

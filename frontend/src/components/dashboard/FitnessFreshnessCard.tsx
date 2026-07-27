@@ -41,7 +41,9 @@ export default function FitnessFreshnessCard({ ctl, atl, tsb, dCtl7 }: {
   // Honest absence: a single real number (CTL or ATL) is enough to render.
   if (ctl == null && atl == null) return null
 
-  const form = classifyForm(tsb, de)
+  // dCtl7 is passed so the top band can tell a taper from a layoff — see
+  // classifyForm; high TSB alone reads the same in both cases.
+  const form = classifyForm(tsb, de, dCtl7)
   const ctlDisp = ctl != null ? Math.round(ctl) : null
   const atlDisp = atl != null ? Math.round(atl) : null
 

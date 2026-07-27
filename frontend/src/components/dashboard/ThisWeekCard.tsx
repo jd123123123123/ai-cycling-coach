@@ -58,13 +58,37 @@ export default function ThisWeekCard() {
   const complianceColor = w.complianceOnPace ? 'var(--color-recovery)' : 'var(--color-muted)'
   const weekdayLetters = de ? ['M', 'D', 'M', 'D', 'F', 'S', 'S'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
+  // A bare "0 von 5 Einheiten erledigt · 0 %" is the whole card on a Monday,
+  // and it reads as a reprimand for a week that has barely started — worse, on
+  // a Monday the plan scheduled as rest it reprimands the athlete for
+  // complying. The subtitle now states the athlete's position against what was
+  // actually asked of them so far, which on that Monday is "exactly on plan".
+  const paceLine: string | null = (() => {
+    if (w.plannedToDateTss == null) return null
+    if (w.plannedToDateTss === 0) {
+      return w.tss > 0
+        ? (de ? `${w.tss} TSS im Plus — der Plan verlangte bisher nichts` : `${w.tss} TSS ahead — the plan asked for nothing yet`)
+        : (de ? 'Genau im Plan — bis heute war nichts angesetzt' : 'Exactly on plan — nothing was scheduled yet')
+    }
+    if (w.complianceOnPace) {
+      return de
+        ? `Genau im Plan — ${w.tss} von ${w.plannedToDateTss} TSS bis heute`
+        : `On plan — ${w.tss} of ${w.plannedToDateTss} TSS due so far`
+    }
+    const gap = w.plannedToDateTss - w.tss
+    return de
+      ? `Noch ${gap} TSS offen aus dem, was bis heute anstand`
+      : `${gap} TSS still open from what was due by today`
+  })()
+
   return (
     <Card>
       <CardHead
         title={de ? 'Diese Woche' : 'This Week'}
-        sub={w.plannedSessions != null
-          ? (de ? `${w.sessions} von ${w.plannedSessions} Einheiten erledigt` : `${w.sessions} of ${w.plannedSessions} sessions done`)
-          : (de ? `${w.sessions} Einheiten erledigt` : `${w.sessions} sessions done`)}
+        sub={paceLine
+          ?? (w.plannedSessions != null
+            ? (de ? `${w.sessions} von ${w.plannedSessions} Einheiten erledigt` : `${w.sessions} of ${w.plannedSessions} sessions done`)
+            : (de ? `${w.sessions} Einheiten erledigt` : `${w.sessions} sessions done`))}
         right={w.compliancePct != null ? (
           <div className="flex items-end gap-0.5">
             <span className="num-display" style={{ fontSize: 34, fontWeight: 700, lineHeight: 1, color: complianceColor }}>{w.compliancePct}</span>

@@ -68,6 +68,52 @@ describe('deriveThisWeek', () => {
     expect(m.tssLeft).toBe(200)
   })
 
+  // On-pace is measured against what the plan SCHEDULED through today. The old
+  // rule used the elapsed fraction of the calendar week, which assumes an even
+  // Mon→Sun spread and therefore marked a correctly-observed rest day as
+  // "behind" — the app scolding an athlete for following its own plan.
+  describe('on-pace against the plan, not the calendar', () => {
+    // Dated plan: Mon rest, Tue 60, Wed 40, Thu 80 (200 total).
+    const datedPlan = {
+      planned_tss_total: 200,
+      days: [
+        { category: 'rest', date: '2026-07-13', target_tss: 0 },
+        { category: 'endurance', date: '2026-07-14', target_tss: 60 },
+        { category: 'tempo', date: '2026-07-15', target_tss: 40 },
+        { category: 'threshold', date: '2026-07-16', target_tss: 80 },
+      ],
+    }
+    const MON = new Date(2026, 6, 13, 20, 0, 0)
+
+    it('a rest Monday with nothing ridden is ON pace, not behind', () => {
+      const m = deriveThisWeek([], datedPlan, MON)
+      expect(m.plannedToDateTss).toBe(0)
+      expect(m.complianceOnPace).toBe(true)
+      // The headline % is still share-of-week and legitimately reads 0.
+      expect(m.compliancePct).toBe(0)
+    })
+
+    it('counts only days dated up to and including today', () => {
+      // By Wednesday the plan has asked for 0 + 60 + 40 = 100.
+      const m = deriveThisWeek([at(14, 60), at(15, 40)], datedPlan, WED)
+      expect(m.plannedToDateTss).toBe(100)
+      expect(m.complianceOnPace).toBe(true)
+    })
+
+    it('is behind when the work actually due has not been done', () => {
+      const m = deriveThisWeek([at(14, 20)], datedPlan, WED)
+      expect(m.plannedToDateTss).toBe(100)
+      expect(m.complianceOnPace).toBe(false)
+    })
+
+    it('falls back to the calendar rule when plan rows carry no dates', () => {
+      const undated = { planned_tss_total: 100, days: [{ category: 'endurance' }] }
+      const m = deriveThisWeek([at(13, 20)], undated, WED)
+      expect(m.plannedToDateTss).toBeNull()
+      expect(m.complianceOnPace).toBe(false) // 20% < 42.9% elapsed
+    })
+  })
+
   it('flags on-pace vs behind against the elapsed fraction of the week', () => {
     const plan = { planned_tss_total: 100, days: [] }
     // Wednesday → elapsed fraction = (2+1)/7 ≈ 42.9%.

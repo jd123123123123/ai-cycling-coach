@@ -128,7 +128,8 @@ export default function LoadFormView() {
   // ---- TSB → form state (neutral tone; no banned words) --------------------
   const TSB_MIN = -30, TSB_MAX = 25
   const posTsb = (v: number) => Math.max(0, Math.min(1, (v - TSB_MIN) / (TSB_MAX - TSB_MIN)))
-  const tsbState = classifyForm(tsb, de)
+  // dCtl7 lets the top band separate a taper from a layoff (classifyForm).
+  const tsbState = classifyForm(tsb, de, dCtl7)
   const TSB_SEGS = [
     { color: 'var(--color-move)', to: -15 },
     { color: 'var(--color-amber)', to: -5 },
