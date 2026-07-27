@@ -159,7 +159,6 @@ void main(){
 const FRAG_ROAD = `${COMMON}
 uniform vec3 u_aura; uniform vec3 u_bg;
 uniform sampler2D u_data;
-uniform float u_dataW;
 uniform float u_travel;
 uniform float u_mode;
 uniform float u_hasRoad;
@@ -169,8 +168,8 @@ const float RELIEF  = 0.30;
 float surfaceAt(float x, out float zone, out float bal){
   vec4 s = texture2D(u_data, vec2(clamp(x, 0.0, 1.0), 0.5));
   zone = s.g; bal = s.b;
-  float flat = step(1.5, u_mode);
-  float h = mix(s.r, 0.5, flat);
+  float isFlat = step(1.5, u_mode);
+  float h = mix(s.r, 0.5, isFlat);
   return HORIZON + (h - 0.5) * RELIEF * 2.0;
 }
 void main(){
@@ -204,7 +203,7 @@ void main(){
     land *= mix(1.0, 0.55, depth);
     land += 0.05 * fbm(vec2(uv.x * 34.0, uv.y * 12.0));
     land = mix(land, mix(u_bg, land, 0.30), step(3.5, u_mode) * step(u_mode, 4.5));
-    float ridge = smoothstep(0.010, 0.0, abs(uv.y - surf));
+    float ridge = smoothstep(0.010, 0.0, abs(uv.y - surf)) * step(u_mode, 1.5);
     land += light * ridge * 0.55;
     col = mix(col, land, ground);
     float wl = smoothstep(0.0018, 0.0, abs(uv.y - HORIZON));

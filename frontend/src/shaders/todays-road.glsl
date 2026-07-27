@@ -32,7 +32,6 @@ uniform vec3 u_bg;
 uniform vec3 u_aura;
 
 uniform sampler2D u_data;
-uniform float u_dataW;
 uniform float u_travel;     // scrub position, 0..1
 uniform float u_mode;       // roadModeIndex()
 uniform float u_hasRoad;    // 0 = draw no terrain at all
@@ -60,8 +59,8 @@ float surfaceAt(float x, out float zone, out float bal){
   zone = s.g;
   bal  = s.b;
   // Flat modes ignore the profile entirely — a calm valley at the waterline.
-  float flat = step(1.5, u_mode);
-  float h = mix(s.r, 0.5, flat);
+  float isFlat = step(1.5, u_mode);
+  float h = mix(s.r, 0.5, isFlat);
   return HORIZON + (h - 0.5) * RELIEF * 2.0;
 }
 
@@ -109,8 +108,12 @@ void main(){
     // Unlit rest day: the road is there, you are just not riding it.
     land = mix(land, mix(u_bg, land, 0.30), step(3.5, u_mode) * step(u_mode, 4.5));
 
-    // Ridge highlight where the surface meets the sky.
-    float ridge = smoothstep(0.010, 0.0, abs(uv.y - surf));
+    // Ridge highlight where the surface meets the sky. Flat modes have no
+    // silhouette to highlight — and every flat mode sits surf == HORIZON, so
+    // leaving this on would paint a false waterline where u_waterline says
+    // there must be none. Only lit for prescribed/ridden, where there is a
+    // real ridge.
+    float ridge = smoothstep(0.010, 0.0, abs(uv.y - surf)) * step(u_mode, 1.5);
     land += light * ridge * 0.55;
 
     col = mix(col, land, ground);
