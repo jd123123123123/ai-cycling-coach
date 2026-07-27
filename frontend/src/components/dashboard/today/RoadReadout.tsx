@@ -94,16 +94,16 @@ export default function RoadReadout({ profile, blocks, travel, de }: {
 
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', minWidth: 0 }}>
-      <span aria-label={elapsedLabel} style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>{mmss(d.elapsedS)}</span>
-      <strong aria-label={wattsLabel}>{d.watts} W</strong>
-      <span aria-label={zoneLabel}>{`Z${zone}`}</span>
-      {rpeLabel != null && <span aria-label={rpeLabel} style={{ opacity: 0.7 }}>{rpeLabel}</span>}
+      <span role="img" aria-label={elapsedLabel} style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>{mmss(d.elapsedS)}</span>
+      <strong role="img" aria-label={wattsLabel}>{d.watts} W</strong>
+      <span role="img" aria-label={zoneLabel}>{`Z${zone}`}</span>
+      {rpeLabel != null && <span role="img" aria-label={rpeLabel} style={{ opacity: 0.7 }}>{rpeLabel}</span>}
       {d.blockName && (
         <span style={{ opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere' }}>{d.blockName}</span>
       )}
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         <span style={{ opacity: 0.7 }}>{de ? 'Streichhölzer' : 'Matches'}</span>
-        <span aria-label={matchesLabel} style={{ letterSpacing: 1 }}>
+        <span role="img" aria-label={matchesLabel} style={{ letterSpacing: 1 }}>
           <span data-testid="road-matches" aria-hidden="true">
             {d.matches == null ? '—' : '▮'.repeat(filled) + '▯'.repeat(MATCH_PIPS - filled)}
           </span>
