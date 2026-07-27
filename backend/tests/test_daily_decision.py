@@ -19,7 +19,9 @@ from app.schemas.coach import DailyDecisionReadiness
 from app.services.adaptive_readiness import Directive
 from app.services.daily_decision import (
     TodayContext,
+    _split_load_line,
     decide,
+    personalize_decision,
     strain_from_tss,
 )
 
@@ -229,6 +231,91 @@ class TestDirectiveCap:
 
 
 # ---------------------------------------------------------------------------
+# Composite readiness caps intensity alongside the HRV-primary directive
+# ---------------------------------------------------------------------------
+
+class TestReadinessCap:
+    def test_moderate_readiness_caps_hard_vo2_to_quality(self):
+        # The reported bug: readiness 55 (moderate) next to a hard VO2 day.
+        # HRV in-band → directive push/hard, but the composite says moderate,
+        # so the session dials back one notch to quality.
+        ctx = TodayContext(planned=_bike_plan(category="vo2", target_tss=54.0))
+        d = _decide(
+            ctx=ctx,
+            directive=_directive("push", "hard", 1.0),
+            readiness=DailyDecisionReadiness(score=55, tier="moderate"),
+        )
+        assert d.state == "quality"
+        # Quality and hard share the full planned load — only the copy changes.
+        assert d.tss_target == pytest.approx(54.0, abs=0.1)
+        assert "Gang zurück" in d.reason
+        assert "55" in d.reason
+
+    def test_push_readiness_leaves_hard_vo2_hard(self):
+        ctx = TodayContext(planned=_bike_plan(category="vo2", target_tss=54.0))
+        d = _decide(
+            ctx=ctx,
+            directive=_directive("push", "hard", 1.0),
+            readiness=DailyDecisionReadiness(score=75, tier="push"),
+        )
+        assert d.state == "hard"
+        assert "zurückgeschaltet" not in d.reason
+
+    def test_moderate_readiness_leaves_quality_day_quality(self):
+        # A sweet-spot day is already quality — moderate readiness doesn't
+        # push it lower.
+        ctx = TodayContext(planned=_bike_plan(category="sweet_spot", target_tss=61.0))
+        d = _decide(
+            ctx=ctx,
+            directive=_directive("push", "hard", 1.0),
+            readiness=DailyDecisionReadiness(score=55, tier="moderate"),
+        )
+        assert d.state == "quality"
+
+    def test_easy_readiness_caps_hard_and_reduces_load(self):
+        ctx = TodayContext(planned=_bike_plan(category="vo2", target_tss=78.0))
+        d = _decide(
+            ctx=ctx,
+            directive=_directive("push", "hard", 1.0),
+            readiness=DailyDecisionReadiness(score=38, tier="easy"),
+        )
+        assert d.state == "easy"
+        # Readiness is the binding constraint, so the load comes down too.
+        assert d.tss_target == pytest.approx(78.0 * 0.8, abs=0.1)
+
+    def test_rest_readiness_forces_recover(self):
+        ctx = TodayContext(planned=_bike_plan(category="vo2", target_tss=78.0))
+        d = _decide(
+            ctx=ctx,
+            directive=_directive("push", "hard", 1.0),
+            readiness=DailyDecisionReadiness(score=22, tier="rest"),
+        )
+        assert d.state == "recover"
+        assert d.tss_target == pytest.approx(78.0 * 0.55, abs=0.1)
+
+    def test_readiness_never_overrides_more_conservative_directive(self):
+        # Directive deload already says recover; a moderate composite must not
+        # bump it back UP to quality.
+        ctx = TodayContext(planned=_bike_plan(category="vo2", target_tss=78.0))
+        d = _decide(
+            ctx=ctx,
+            directive=_directive("deload", "easy", 0.55),
+            readiness=DailyDecisionReadiness(score=55, tier="moderate"),
+        )
+        assert d.state == "recover"
+        assert d.tss_target == pytest.approx(78.0 * 0.55, abs=0.1)
+
+    def test_missing_readiness_tier_does_not_cap(self):
+        ctx = TodayContext(planned=_bike_plan(category="vo2", target_tss=54.0))
+        d = _decide(
+            ctx=ctx,
+            directive=_directive("push", "hard", 1.0),
+            readiness=DailyDecisionReadiness(score=None, tier=None),
+        )
+        assert d.state == "hard"
+
+
+# ---------------------------------------------------------------------------
 # Planned rest copy (audit exact strings)
 # ---------------------------------------------------------------------------
 
@@ -238,8 +325,8 @@ class TestPlannedRestCopy:
         d = _decide(ctx=ctx, readiness=DailyDecisionReadiness(score=82, tier="push"))
         assert d.state == "planned_rest"
         assert (
-            "Gut erholt — und heute ist Ruhetag geplant. "
-            "Nimm die Frische mit in die morgige Einheit." in d.reason
+            "Frischer als sonst — und heute steht Ruhetag. "
+            "Nimm den Rückenwind mit in morgen." in d.reason
         )
 
     def test_well_recovered_rest_day_banks_freshness_en(self):
@@ -250,8 +337,8 @@ class TestPlannedRestCopy:
             locale="en",
         )
         assert (
-            "Well recovered — and today is a planned rest day. "
-            "Bank it for tomorrow's quality session." in d.reason
+            "Fresher than usual — and today's a rest day. "
+            "Carry that tailwind into tomorrow." in d.reason
         )
 
     def test_rest_day_never_says_belaste_hart(self):
@@ -264,6 +351,80 @@ class TestPlannedRestCopy:
     def test_date_is_athlete_local_iso(self):
         d = _decide()
         assert d.date == "2026-07-20"
+
+
+# ---------------------------------------------------------------------------
+# Personalization — the small-model voice layer on top of decide()
+# ---------------------------------------------------------------------------
+
+class TestPersonalization:
+    def test_split_load_line_de(self):
+        flavor, suffix = _split_load_line(
+            "Alles steht auf grün — jetzt reinhauen. "
+            "Belastungsziel heute: ~54 TSS (harter Tag).",
+            de=True,
+        )
+        assert flavor == "Alles steht auf grün — jetzt reinhauen."
+        assert suffix == "Belastungsziel heute: ~54 TSS (harter Tag)."
+
+    def test_split_load_line_absent(self):
+        flavor, suffix = _split_load_line("Ruhetag — Füße hoch.", de=True)
+        assert flavor == "Ruhetag — Füße hoch."
+        assert suffix == ""
+
+    async def test_personalize_falls_back_without_api_key(self, monkeypatch):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", None)
+        d = _decide(ctx=TodayContext(planned=_bike_plan(category="vo2")))
+        # No key → returns the deterministic decision unchanged, never touches db.
+        out = await personalize_decision(db=None, user_id=1, decision=d, locale="de")
+        assert out is d
+
+    async def test_personalize_preserves_state_and_load_number(self, monkeypatch):
+        # Stub the model + name lookup so the test is offline and deterministic.
+        from app.config import settings
+        import app.services.daily_decision as dd
+
+        monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "test-key")
+        monkeypatch.setattr(dd, "_lookup_first_name", _async_return("Jannis"))
+
+        async def _fake_complete(**kwargs):
+            from types import SimpleNamespace
+
+            # The model must never see (or emit) the TSS number.
+            assert "TSS" not in kwargs["user"]
+            return SimpleNamespace(
+                text='{"verdict": "Ab aufs Rad, Jannis!", "reason": "Beine sind bereit — gib Gas."}',
+                provider="anthropic",
+                model="claude-haiku-4-5",
+            )
+
+        monkeypatch.setattr(dd, "complete_text", _fake_complete, raising=False)
+        import app.services.llm_client as llm_client
+        monkeypatch.setattr(llm_client, "complete_text", _fake_complete)
+
+        d = _decide(
+            ctx=TodayContext(planned=_bike_plan(category="vo2", target_tss=54.0)),
+            directive=_directive("push", "hard", 1.0),
+        )
+        assert d.state == "hard" and d.tss_target == pytest.approx(54.0, abs=0.1)
+
+        out = await personalize_decision(db=None, user_id=1, decision=d, locale="de")
+        # Voice is rewritten…
+        assert out.verdict == "Ab aufs Rad, Jannis!"
+        assert "Beine sind bereit" in out.reason
+        # …but state, load, and the factual TSS line are untouched.
+        assert out.state == "hard"
+        assert out.tss_target == pytest.approx(54.0, abs=0.1)
+        assert "Belastungsziel heute: ~54 TSS" in out.reason
+
+
+def _async_return(value):
+    async def _inner(*args, **kwargs):
+        return value
+
+    return _inner
 
 
 # ---------------------------------------------------------------------------

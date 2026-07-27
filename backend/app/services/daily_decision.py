@@ -57,6 +57,27 @@ logger = logging.getLogger(__name__)
 _STRAIN_PER_TSS = 1.0 / 8.0
 _STRAIN_MAX = 21.0
 
+# Intensity states ordered easy→hard. Used to take the MORE conservative of the
+# HRV-primary directive and the composite-readiness ceiling — never to bump a
+# day back up.
+_STATE_RANK = {"recover": 0, "easy": 1, "quality": 2, "hard": 3}
+
+# Composite-readiness tier → the hardest state it permits. The adaptive
+# directive's primary gate is HRV-band (RCT); the multi-signal readiness score
+# is a SECOND cap so a middling recovery day (short sleep, hot ACWR, deep TSB)
+# can't be handed a hard VO2 just because HRV happens to sit in-band.
+_READINESS_TIER_CEILING = {
+    "push": "hard",
+    "moderate": "quality",
+    "easy": "easy",
+    "rest": "recover",
+}
+
+# When readiness is the BINDING constraint (it, not the directive, forced the
+# downgrade), the load comes down to match — mirroring the directive's own
+# hold (0.8) / deload (0.55) reductions so state and TSS never contradict.
+_READINESS_LOAD_CAP = {"recover": 0.55, "easy": 0.8}
+
 
 def strain_from_tss(tss_target: float | None) -> float | None:
     """tss_target/8 on the 0-21 scale. Null in → null out."""
@@ -449,27 +470,27 @@ def decide(
     if status_state == "sick":
         return _decision(
             "sick",
-            "Krank gemeldet — heute zählt nur Erholung." if de
-            else "Marked sick — recovery is today's only session.",
-            "Dein eigener Status schlägt jedes Trainingssignal. Kein Training, bis du dich besser fühlst." if de
-            else "Your self-report outranks every training signal. No training until you feel better.",
+            "Krankgemeldet — heute gewinnt die Erholung." if de
+            else "Sick day — recovery takes the win.",
+            "Kein Watt der Welt schlägt Gesundwerden. Ruh dich aus, komm stärker zurück." if de
+            else "No watts on Earth beat getting healthy. Rest up, come back swinging.",
             keep_planned=False,
         )
     if status_state == "injured":
         return _decision(
             "injured",
-            "Verletzt gemeldet — Heilung ist das Training." if de
-            else "Marked injured — healing is the training.",
-            "Erst heilen, dann trainieren. Der Plan wartet auf dich." if de
-            else "Heal first, train later. The plan will wait for you.",
+            "Verletzt gemeldet — Heilen ist jetzt dein Training." if de
+            else "Injured — healing is the workout now.",
+            "Erst wieder ganz werden, dann Gas geben. Der Plan läuft dir nicht weg." if de
+            else "Get whole first, then send it. The plan isn't going anywhere.",
             keep_planned=False,
         )
     if status_state == "break":
         return _decision(
             "break",
-            "Pause eingelegt — locker bleiben." if de else "On a break — keep it light.",
-            "Selbst gemeldete Pause. Sanft zurückkommen, wenn du bereit bist." if de
-            else "Self-reported break. Ease back in when you're ready.",
+            "Pause-Modus — einfach mal durchrollen." if de else "On a break — just cruise.",
+            "Kopf frei, Beine locker. Wenn's wieder kribbelt, steigst du ein." if de
+            else "Clear head, easy legs. Hop back in when the itch comes back.",
             keep_planned=False,
         )
 
@@ -499,10 +520,10 @@ def decide(
         )
         return _decision(
             "trained_already",
-            f"Training erledigt — {mins} min {label}." if de
-            else f"Done — {mins} min {label} logged.",
-            "Das war die Arbeit für heute. Jetzt zählt Erholung: tanken, trinken, schlafen." if de
-            else "That's today's work. Recovery is the win now: fuel, hydrate, sleep.",
+            f"Im Kasten — {mins} min {label}." if de
+            else f"In the bag — {mins} min {label}.",
+            "Das war deine Arbeit für heute. Jetzt regiert die Couch: essen, trinken, schlafen." if de
+            else "That was today's work. Now go rule the couch: eat, drink, sleep.",
             cta=cta,
         )
 
@@ -513,8 +534,8 @@ def decide(
         o_mins = int(round(other_minutes))
         o_label = _sport_label(other_fam, de)
         cross_prefix = (
-            f"Heute schon {o_mins} min {o_label} — zählt. " if de
-            else f"{o_mins} min of {o_label} already banked — it counts. "
+            f"Schon {o_mins} min {o_label} in den Beinen — zählt. " if de
+            else f"{o_mins} min of {o_label} already in the legs — it counts. "
         )
 
     # ── 3. Planned rest day ──────────────────────────────────────────────
@@ -524,15 +545,15 @@ def decide(
             readiness.tier in ("moderate", "push")
         )
         reason = (
-            ("Gut erholt — und heute ist Ruhetag geplant. Nimm die Frische mit in die morgige Einheit." if de
-             else "Well recovered — and today is a planned rest day. Bank it for tomorrow's quality session.")
+            ("Frischer als sonst — und heute steht Ruhetag. Nimm den Rückenwind mit in morgen." if de
+             else "Fresher than usual — and today's a rest day. Carry that tailwind into tomorrow.")
             if well_recovered else
-            ("Ruhetag wie geplant — genau das, was dein Körper gerade braucht." if de
-             else "Rest day as planned — exactly what your body needs right now.")
+            ("Ruhetag wie geplant — genau das, wonach die Beine gerade rufen." if de
+             else "Rest day as planned — exactly what your legs are asking for.")
         )
         return _decision(
             "planned_rest",
-            "Ruhetag — so geplant." if de else "Rest day — as planned.",
+            "Ruhetag — Füße hoch." if de else "Rest day — feet up.",
             cross_prefix + reason,
             keep_planned=False,
         )
@@ -554,13 +575,28 @@ def decide(
     vol = float(directive.volume_modifier) if directive is not None else 1.0
 
     if d_directive in ("deload", "rest"):
-        state = "recover"
+        directive_state = "recover"
     elif d_ceiling == "easy" or d_directive == "hold" and d_ceiling not in ("moderate", "hard", "push"):
-        state = "easy"
+        directive_state = "easy"
     elif d_ceiling == "moderate" and base_state == "hard":
-        state = "quality"  # capped one notch
+        directive_state = "quality"  # capped one notch
     else:
-        state = base_state
+        directive_state = base_state
+
+    # Composite readiness is a SECOND cap alongside the HRV-primary directive.
+    # Take whichever is more conservative — a moderate/easy/rest readiness tier
+    # can only pull a day DOWN, never bump a directive-driven recover/easy back
+    # up. Missing tier (no signals) never caps. This is what stops "readiness 55"
+    # sitting next to a hard VO2: HRV in-band → directive hard, but moderate
+    # readiness dials it to quality.
+    state = directive_state
+    readiness_ceiling = _READINESS_TIER_CEILING.get(readiness.tier or "")
+    readiness_capped = (
+        readiness_ceiling is not None
+        and _STATE_RANK[readiness_ceiling] < _STATE_RANK[directive_state]
+    )
+    if readiness_capped:
+        state = readiness_ceiling
 
     planned_tss = ctx.planned.get("target_tss")
     # ONE load number (5-reviewer gate, Jul 2026): the directive's volume
@@ -568,7 +604,12 @@ def decide(
     # scales the served workout up, so an upside modifier (escalate ×1.25) must
     # never inflate the "Belastungsziel heute" past the session the athlete
     # actually sees on Today.
-    tss_target = (float(planned_tss) * min(vol, 1.0)) if planned_tss else None
+    load_mod = min(vol, 1.0)
+    # When readiness (not the directive) forced the downgrade, bring the load
+    # down to match the softer state so the TSS never contradicts the verdict.
+    if readiness_capped:
+        load_mod = min(load_mod, _READINESS_LOAD_CAP.get(state, 1.0))
+    tss_target = (float(planned_tss) * load_mod) if planned_tss else None
 
     # Prefer the template's German title in the DE UI so the verdict never
     # embeds a raw English session name.
@@ -578,29 +619,38 @@ def decide(
         or ("Einheit" if de else "Session")
     )
     if state == "recover":
-        verdict = "Locker erholen — Plan bleibt, Umfang runter." if de \
-            else "Recover easy — the plan stays, the load comes down."
+        verdict = "Locker ausrollen — Plan bleibt, Umfang runter." if de \
+            else "Spin it out — plan stays, volume drops."
         reason = (
-            "Deine Erholungssignale wollen Entlastung. Die geplante Einheit bleibt, aber kürzer und leichter." if de
-            else "Your recovery signals ask for less. Today's session stays, just shorter and lighter."
+            "Deine Signale wollen weniger, also geben wir weniger. Gleiche Einheit, nur kürzer und sanfter." if de
+            else "Your signals want less, so less it is. Same session, just shorter and softer."
         )
     elif state == "easy":
         verdict = f"Lockerer Tag — {title}." if de else f"Easy day — {title}."
         reason = (
-            "Ruhig fahren, Grundlage sammeln — die Woche fängt den Rest auf." if de
-            else "Keep it easy, bank the base — the week absorbs the rest."
+            "Ruhig rollen, Grundlage tanken — deine harten Tage danken es dir." if de
+            else "Roll easy, stack the base — your hard days will thank you."
         )
     elif state == "quality":
         verdict = f"Qualitätstag — {title}." if de else f"Quality day — {title}."
         reason = (
-            "Signale sind gut — die geplante Einheit zählt heute." if de
-            else "Signals look good — today's planned session is the one that counts."
+            "Grünes Licht — das ist heute die Einheit, die zählt. Zeig den Beinen, wer der Chef ist." if de
+            else "Green light — this is the session that counts today. Show the legs who's boss."
         )
     else:  # hard
         verdict = f"Harter Tag — {title}." if de else f"Hard day — {title}."
         reason = (
-            "Du bist bereit für die volle Einheit — genau nach Plan." if de
-            else "You're ready for the full session — exactly as planned."
+            "Alles steht auf grün — volle Einheit, genau nach Plan. Jetzt reinhauen." if de
+            else "Everything's green — full session, exactly to plan. Go send it."
+        )
+
+    # Name the readiness downgrade honestly — the athlete sees a moderate score
+    # and a softer session; say WHY they connect.
+    if readiness_capped and readiness.score is not None:
+        n = int(readiness.score)
+        reason = f"{reason} " + (
+            f"Erholung liegt bei {n}/100 — wir schalten clever einen Gang zurück." if de
+            else f"Recovery's sitting at {n}/100 — we're smartly shifting down a gear."
         )
 
     if tss_target is not None:
@@ -611,6 +661,166 @@ def decide(
         target="today#workout",
     )
     return _decision(state, verdict, cross_prefix + reason, cta=cta, tss_target=tss_target)
+
+
+# ======================================================================
+#  Personalization — a small model gives the ONE decision a human voice
+# ======================================================================
+#
+# `decide()` stays deterministic: it owns the state, the TSS number, and the
+# copy that ships when the LLM is unavailable. This layer only rewrites the
+# VOICE of the verdict + reason so the same decision reads like a text from a
+# sharp training buddy instead of a template — grounded in the athlete's name,
+# session, and readiness. It NEVER touches state/tss_target/strain, never
+# invents numbers, and falls back to the deterministic copy on any failure.
+
+_PERSONALIZE_SYSTEM_DE = (
+    "Du bist der/die persönliche Rad-Coach der App — locker, warm, motivierend, "
+    "wie ein guter Trainingskumpel per WhatsApp. Du bekommst die heutige "
+    "Entscheidung (Zustand, Session, Erholung) und schreibst sie frisch und "
+    "menschlich um.\n"
+    "Regeln:\n"
+    "- Antworte NUR als JSON: {\"verdict\": \"...\", \"reason\": \"...\"}\n"
+    "- Deutsch, per Du. verdict: max ~6 Wörter, knackig. reason: 1–2 kurze Sätze.\n"
+    "- Halte die BEDEUTUNG des Entwurfs: Ruhetag bleibt ruhig, harter Tag macht Lust, "
+    "krank/verletzt bleibt fürsorglich — nie widersprechen.\n"
+    "- Erfinde NIEMALS Zahlen, Watt, TSS, Tempo oder Distanzen (die hängen wir separat an).\n"
+    "- Nutze den Vornamen ab und zu, nicht in jedem Satz. Keine Hashtags, höchstens sparsam ein Emoji.\n"
+    "- Klingt jedes Mal anders — kein Baustein-Deutsch."
+)
+_PERSONALIZE_SYSTEM_EN = (
+    "You are the app's personal cycling coach — relaxed, warm, motivating, like a "
+    "sharp training buddy texting you. You get today's decision (state, session, "
+    "recovery) and rewrite it fresh and human.\n"
+    "Rules:\n"
+    "- Reply ONLY as JSON: {\"verdict\": \"...\", \"reason\": \"...\"}\n"
+    "- verdict: max ~6 words, punchy. reason: 1–2 short sentences.\n"
+    "- Keep the MEANING of the draft: a rest day stays restful, a hard day gets you "
+    "fired up, sick/injured stays caring — never contradict it.\n"
+    "- NEVER invent numbers, watts, TSS, pace or distances (we append those separately).\n"
+    "- Use the first name occasionally, not every sentence. No hashtags, at most a sparing emoji.\n"
+    "- Sound different every time — no template voice."
+)
+
+# Small in-process cache so an unchanged decision doesn't re-hit the model on
+# every Today/coach render within a session (keyed by the deterministic copy).
+_PERSONALIZE_CACHE: dict[str, tuple[str, str]] = {}
+_PERSONALIZE_CACHE_MAX = 256
+
+
+def _split_load_line(reason: str, de: bool) -> tuple[str, str]:
+    """Separate the factual load-target sentence from the flavor so the model
+    never sees (or mangles) the TSS number. Returns (flavor, load_line_suffix)
+    where the suffix is re-appended verbatim after personalization."""
+    marker = "Belastungsziel heute:" if de else "Load target today:"
+    idx = reason.rfind(marker)
+    if idx == -1:
+        return reason, ""
+    return reason[:idx].rstrip(), reason[idx:]
+
+
+def _first_name(display_name: str | None) -> str | None:
+    if not display_name:
+        return None
+    first = display_name.strip().split()
+    return first[0] if first else None
+
+
+async def _lookup_first_name(db: AsyncSession, user_id: int) -> str | None:
+    try:
+        from app.models.user import User
+
+        row = await db.execute(select(User.display_name).where(User.id == user_id))
+        return _first_name(row.scalar_one_or_none())
+    except Exception:  # pragma: no cover — name is a nicety, never a blocker
+        return None
+
+
+def _parse_personalized(text: str) -> tuple[str, str] | None:
+    import json
+
+    t = (text or "").strip()
+    if t.startswith("```"):
+        t = t.strip("`")
+        if t[:4].lower() == "json":
+            t = t[4:]
+    try:
+        data = json.loads(t)
+    except Exception:
+        return None
+    verdict = str(data.get("verdict") or "").strip()
+    reason = str(data.get("reason") or "").strip()
+    if not verdict or not reason:
+        return None
+    return verdict, reason
+
+
+async def personalize_decision(
+    db: AsyncSession,
+    user_id: int,
+    decision: DailyDecision,
+    *,
+    locale: str = "de",
+) -> DailyDecision:
+    """Rewrite the decision's verdict + reason in a warm, personalized voice via
+    the light model. Best-effort: returns `decision` unchanged on any failure,
+    when the model is unavailable, or when there's nothing worth rewriting."""
+    from app.config import settings
+
+    if not settings.ANTHROPIC_API_KEY or not decision.verdict or not decision.reason:
+        return decision
+
+    de = str(locale).lower().startswith("de")
+    flavor, load_suffix = _split_load_line(decision.reason, de)
+    first_name = await _lookup_first_name(db, user_id)
+
+    cache_key = f"{user_id}|{locale}|{decision.state}|{decision.verdict}|{decision.reason}|{first_name}"
+    cached = _PERSONALIZE_CACHE.get(cache_key)
+    if cached is not None:
+        verdict, reason = cached
+    else:
+        r = decision.readiness
+        facts = {
+            "state": decision.state,
+            "verdict_draft": decision.verdict,
+            "reason_draft": flavor,
+            "session": decision.planned.title if decision.planned else None,
+            "duration_minutes": decision.planned.duration_minutes if decision.planned else None,
+            "readiness_score": r.score if r else None,
+            "readiness_tier": r.tier if r else None,
+            "first_name": first_name,
+        }
+        import json
+
+        try:
+            from app.services.llm_client import complete_text
+
+            llm = await complete_text(
+                system=_PERSONALIZE_SYSTEM_DE if de else _PERSONALIZE_SYSTEM_EN,
+                user=json.dumps(facts, ensure_ascii=False),
+                max_tokens=220,
+                model=settings.COACH_LIGHT_MODEL,
+                temperature=0.9,  # Haiku accepts sampling params — variety per day
+                response_json=True,
+            )
+        except Exception:  # noqa: BLE001 — deterministic copy is the floor
+            logger.debug("daily_decision personalization failed (user_id=%s)", user_id, exc_info=True)
+            return decision
+
+        parsed = _parse_personalized(llm.text)
+        if parsed is None:
+            return decision
+        verdict, reason = parsed
+        if len(_PERSONALIZE_CACHE) >= _PERSONALIZE_CACHE_MAX:
+            _PERSONALIZE_CACHE.clear()
+        _PERSONALIZE_CACHE[cache_key] = (verdict, reason)
+
+    # Re-append the factual load-target sentence verbatim — the model never
+    # touched the TSS number.
+    if load_suffix:
+        reason = f"{reason} {load_suffix}"
+
+    return decision.model_copy(update={"verdict": verdict, "reason": reason})
 
 
 # ======================================================================
@@ -663,7 +873,7 @@ async def compute_daily_decision(
             logger.exception("adaptive directive failed inside daily_decision (user_id=%s)", user_id)
             directive = None
 
-    return decide(
+    decision = decide(
         today=today,
         status_state=status_state,
         ctx=ctx,
@@ -672,3 +882,7 @@ async def compute_daily_decision(
         language=language,
         locale=locale,
     )
+
+    # Give the deterministic decision a warm, personalized voice (best-effort —
+    # falls straight back to the rule-based copy above if the model is off).
+    return await personalize_decision(db, user_id, decision, locale=locale)
