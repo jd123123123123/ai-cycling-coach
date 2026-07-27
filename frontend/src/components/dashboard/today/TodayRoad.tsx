@@ -198,7 +198,7 @@ const TodayRoad = forwardRef<TodayRoadHandle, TodayRoadProps>(function TodayRoad
       onPointerMove={(e) => { if (e.buttons > 0) onPointer(e) }}
       onPointerUp={releaseCapture}
       onPointerCancel={releaseCapture}
-      style={{ position: 'absolute', inset: 0, touchAction: 'pan-y' }}
+      style={{ position: 'absolute', inset: 0, touchAction: 'pan-y pinch-zoom' }}
     >
       {gl ? (
         // Remount on a profile CONTENT change so the data texture is
