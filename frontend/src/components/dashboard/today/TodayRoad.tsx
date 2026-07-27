@@ -10,7 +10,7 @@
  * terrain and the CP waterline, and is still scrubbable. The information
  * survives; only the atmosphere is lost.
  */
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ShaderCanvas, { packRoadTexture } from '../../wrapped/ShaderCanvas'
 import type { RoadProfile } from '../../../utils/roadProfile'
 import { roadModeIndex, type RoadMode } from '../../../utils/roadMode'
@@ -54,12 +54,60 @@ export function roadSvgPath(profile: RoadProfile, w: number, h: number): string 
     .join(' ')
 }
 
+/**
+ * Compact structural signature of the packed terrain: one `zone.blockIndex`
+ * token per RUN of samples that share both values, so a plan edit that
+ * reclassifies a block's zone or splits/reorders blocks changes the string
+ * even when it doesn't change the sample count, the total duration, CP, or
+ * the deepest W′ point. Cheap — one pass over at most MAX_SAMPLES samples,
+ * no hashing.
+ */
+function terrainSignature(profile: RoadProfile): string {
+  let sig = ''
+  let prevZone = -1
+  let prevBlock = -1
+  for (const s of profile.samples) {
+    if (s.zone !== prevZone || s.blockIndex !== prevBlock) {
+      sig += `${s.zone}.${s.blockIndex}|`
+      prevZone = s.zone
+      prevBlock = s.blockIndex
+    }
+  }
+  return sig
+}
+
+/**
+ * The React `key` ShaderCanvas must be remounted under whenever the profile's
+ * CONTENT changes, not just its sample count.
+ *
+ * ShaderCanvas's own data-texture re-upload guard keys on texture WIDTH only
+ * (see the CONTRACT comment there): two different profiles that resample to
+ * the same width — e.g. both hit MAX_SAMPLES, or an edited plan keeps the
+ * same total duration/CP/minWbal but reclassifies a block's zone or
+ * reorders blocks — would silently keep rendering the previous profile's
+ * texture on the GPU. `totalDurationS` + `cp` + `minWbal` catch most content
+ * changes cheaply; `terrainSignature` additionally catches changes to the
+ * zone (G channel, terrain tint) and blockIndex (A channel, scrub→block
+ * mapping) that packRoadTexture packs but the other four fields can miss.
+ * Exported so the "changes when content changes at constant sample count"
+ * property is directly testable without rendering GL.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function roadRemountKey(profile: RoadProfile, textureWidth: number): string {
+  return `road-${textureWidth}-${profile.totalDurationS}-${profile.cp ?? 'x'}-${profile.minWbal ?? 'x'}-${terrainSignature(profile)}`
+}
+
 const BOX = { width: '100%', height: '100%' } as const
 
 export default function TodayRoad({ profile, mode, auraColor, onTravel }: TodayRoadProps) {
   const hostRef = useRef<HTMLDivElement>(null)
-  const travelRef = useRef(0)
   const rafRef = useRef(0)
+  // Coalesces multiple pointermove events that land in the same animation
+  // frame into a single published value; read only inside the rAF callback
+  // below (never during render), so it never triggers the react-hooks/refs
+  // "no ref reads during render" rule.
+  const pendingTravelRef = useRef(0)
+  const [travel, setTravel] = useState(0)
   const gl = useMemo(() => supportsWebGL(), [])
   const texture = useMemo(() => packRoadTexture(profile), [profile])
 
@@ -67,11 +115,16 @@ export default function TodayRoad({ profile, mode, auraColor, onTravel }: TodayR
   // The waterline is meaningful only when CP is genuinely known.
   const waterline = profile.cp != null && (mode === 'prescribed' || mode === 'ridden')
 
-  // Scrub position is a ref + one rAF-coalesced callback per frame, so a
-  // pointer drag never causes a React render per pointermove event.
+  // Scrub position is coalesced through rAF to at most one React render per
+  // animation frame during an active drag (never one render per pointermove
+  // event), and that render is what actually reaches the GPU: it produces a
+  // new `uniforms` object, ShaderCanvas re-renders with it and reassigns its
+  // own `uniformsRef.current` (see ShaderCanvas.tsx), and its already-running
+  // render loop picks up the new u_travel on the very next frame.
   const publish = useCallback(() => {
     rafRef.current = 0
-    onTravel?.(travelRef.current)
+    setTravel(pendingTravelRef.current)
+    onTravel?.(pendingTravelRef.current)
   }, [onTravel])
 
   const onPointer = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -79,48 +132,51 @@ export default function TodayRoad({ profile, mode, auraColor, onTravel }: TodayR
     if (!host || !hasRoad) return
     const rect = host.getBoundingClientRect()
     if (rect.width <= 0) return
-    travelRef.current = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
-    host.style.setProperty('--road-travel', String(travelRef.current))
+    pendingTravelRef.current = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
     if (!rafRef.current) rafRef.current = requestAnimationFrame(publish)
   }, [hasRoad, publish])
 
+  // Capture the pointer on down so a fast drag that leaves the div bounds
+  // keeps delivering pointermove (clamped at 0/1 by onPointer above) instead
+  // of the scrub going stale. Guarded — not every test/DOM environment
+  // implements the Pointer Capture API.
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    onPointer(e)
+  }, [onPointer])
+
+  const releaseCapture = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }, [])
+
   useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }, [])
 
-  // NOTE: u_travel intentionally reads travelRef.current — the shader's rider
-  // marker follows the scrub on the next uniform refresh only; the
-  // authoritative, immediate feedback is the DOM readout built in Task 7.
-  // Reading a ref during render is normally unsafe (the eslint react-hooks
-  // "refs" rule flags it), but is safe here: travelRef is never used to
-  // derive rendered JSX or drive reconciliation, only to seed a value that
-  // ShaderCanvas re-reads imperatively every animation frame via its own
-  // ref, so a stale read here cannot desync React's output from the DOM.
   const uniforms = useMemo(() => ({
     u_aura: auraColor,
     u_bg: '#0A0C0F',
-    // eslint-disable-next-line react-hooks/refs
-    u_travel: travelRef.current,
+    u_travel: travel,
     u_mode: roadModeIndex(mode),
     u_hasRoad: hasRoad ? 1 : 0,
     u_waterline: waterline ? 1 : 0,
-  }), [auraColor, mode, hasRoad, waterline])
+  }), [auraColor, mode, hasRoad, waterline, travel])
 
-  // The data-texture re-upload guard inside ShaderCanvas keys on texture
-  // WIDTH only (see the CONTRACT comment there): a new profile that
-  // resamples to the same sample COUNT (e.g. both hit MAX_SAMPLES) would
-  // silently keep rendering the old terrain. Force a remount whenever the
-  // profile's CONTENT changes, not just its width, by folding in a few
-  // cheap characteristic values instead of hashing the whole sample array.
-  const roadKey = `road-${texture.width}-${profile.totalDurationS}-${profile.cp ?? 'x'}-${profile.minWbal ?? 'x'}`
+  const roadKey = useMemo(() => roadRemountKey(profile, texture.width), [profile, texture.width])
 
   return (
     <div
       ref={hostRef}
-      onPointerDown={onPointer}
+      onPointerDown={onPointerDown}
       onPointerMove={(e) => { if (e.buttons > 0) onPointer(e) }}
+      onPointerUp={releaseCapture}
+      onPointerCancel={releaseCapture}
       style={{ position: 'absolute', inset: 0, touchAction: 'pan-y' }}
     >
       {gl ? (
-        // Remount on a profile change so the data texture is re-uploaded.
+        // Remount on a profile CONTENT change so the data texture is
+        // re-uploaded; travel changes do NOT change roadKey, so scrubbing
+        // never remounts (and never re-initializes) the WebGL canvas.
         <ShaderCanvas
           key={roadKey}
           variant="road"
