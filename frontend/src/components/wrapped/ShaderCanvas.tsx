@@ -140,8 +140,87 @@ void main(){
 }
 `
 
-// Replaced with the real terrain shader in the next task.
-const FRAG_ROAD = FRAG_AURA
+// Road: the Today tab's landscape. Ground level IS Critical Power — above
+// the waterline the athlete spends W′ (a climb), below it the reserve
+// reconstitutes (a descent). The Skiba differential model rendered as
+// gravity. The shader performs NO physiology; it draws exactly what the
+// data texture says (packed by packRoadTexture() above) and roadProfile.ts
+// owns every physiological decision. u_mode indices come from
+// roadModeIndex() in roadMode.ts and must stay in sync: 0 prescribed ·
+// 1 ridden · 2 flat-calm · 3 flat-done · 4 flat-unlit · 5 bare. u_waterline
+// is 0 whenever CP is unknown, and the shader then draws no waterline at
+// all — the project's honest-data rule.
+//
+// NOTE: this is a port of src/shaders/todays-road.glsl (the design-
+// provenance source, kept in sync by hand). It is IDENTICAL except it
+// drops the `/** @... */` annotations, drops the u_resolution/u_time
+// uniform declarations and the local hash/noise/fbm helpers (all supplied
+// by the shared COMMON prelude above), and renames u_resolution → u_res.
+const FRAG_ROAD = `${COMMON}
+uniform vec3 u_aura; uniform vec3 u_bg;
+uniform sampler2D u_data;
+uniform float u_dataW;
+uniform float u_travel;
+uniform float u_mode;
+uniform float u_hasRoad;
+uniform float u_waterline;
+const float HORIZON = 0.42;
+const float RELIEF  = 0.30;
+float surfaceAt(float x, out float zone, out float bal){
+  vec4 s = texture2D(u_data, vec2(clamp(x, 0.0, 1.0), 0.5));
+  zone = s.g; bal = s.b;
+  float flat = step(1.5, u_mode);
+  float h = mix(s.r, 0.5, flat);
+  return HORIZON + (h - 0.5) * RELIEF * 2.0;
+}
+void main(){
+  vec2 uv = gl_FragCoord.xy / u_res;
+  float zone = 0.0, bal = 1.0;
+  float surf = surfaceAt(uv.x, zone, bal);
+  vec3 light = mix(u_aura, vec3(1.0, 0.98, 0.94), 0.60);
+  vec3 deep  = mix(u_aura, u_bg, 0.30);
+  vec2 c = vec2(0.5, 0.72);
+  vec2 p = (uv - c) * vec2(u_res.x / u_res.y, 1.0);
+  float r = length(p);
+  float t = u_time * 0.05;
+  vec2 q = vec2(fbm(p * 1.7 + t), fbm(p * 1.7 + vec2(2.7, 1.9) - t));
+  float flow = fbm(p * 1.7 + 1.3 * q);
+  float breath = 0.5 + 0.5 * sin(u_time * 0.6);
+  float field = pow(smoothstep(1.02, 0.0, r), 1.3);
+  float crown = smoothstep(0.60, 0.0, r);
+  vec3 sky = u_bg;
+  vec3 aura = mix(deep, u_aura, clamp(flow * 1.2 + 0.18, 0.0, 1.0));
+  aura = mix(aura, light, clamp(crown * 0.9 + flow * 0.22, 0.0, 1.0));
+  sky = mix(sky, aura, (0.60 + 0.20 * breath) * field);
+  sky += light * crown * (0.16 + 0.10 * breath);
+  vec3 col = sky;
+  if (u_hasRoad > 0.5) {
+    float ground = smoothstep(surf + 0.004, surf - 0.004, uv.y);
+    float depth = clamp((surf - uv.y) * 3.0, 0.0, 1.0);
+    vec3 cool = mix(u_bg, u_aura, 0.35);
+    vec3 hot  = mix(u_aura, vec3(1.0, 0.42, 0.24), 0.55);
+    vec3 land = mix(cool, hot, smoothstep(0.35, 0.75, zone));
+    land *= mix(0.42, 1.0, bal);
+    land *= mix(1.0, 0.55, depth);
+    land += 0.05 * fbm(vec2(uv.x * 34.0, uv.y * 12.0));
+    land = mix(land, mix(u_bg, land, 0.30), step(3.5, u_mode) * step(u_mode, 4.5));
+    float ridge = smoothstep(0.010, 0.0, abs(uv.y - surf));
+    land += light * ridge * 0.55;
+    col = mix(col, land, ground);
+    float wl = smoothstep(0.0018, 0.0, abs(uv.y - HORIZON));
+    col += vec3(1.0) * wl * 0.30 * u_waterline;
+    float zTravel, bTravel;
+    float sTravel = surfaceAt(u_travel, zTravel, bTravel);
+    vec2 rider = vec2(u_travel, sTravel + 0.012);
+    float dr = length((uv - rider) * vec2(u_res.x / u_res.y, 1.0));
+    col += light * pow(smoothstep(0.10, 0.0, dr), 2.0) * (0.55 + 0.25 * breath);
+    col += vec3(1.0) * smoothstep(0.011, 0.0, dr);
+  }
+  col *= smoothstep(-0.15, 0.30, uv.y) * 0.34 + 0.66;
+  col += (hash(gl_FragCoord.xy + u_time) - 0.5) * 0.016;
+  gl_FragColor = vec4(col, 1.0);
+}
+`
 
 const FRAG: Record<ShaderVariant, string> = {
   // Iridescent: two-level domain warp, then blend three brand colours by the
