@@ -45,6 +45,8 @@ import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useGoalTrajectory } from '../../../hooks/useGoalTrajectory'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { canonicalReadiness, computeReadiness } from '../../../utils/metrics'
+import { readinessFreshness, withholdReadiness } from '../../../utils/readinessGate'
+import ReadinessFreshnessNote from '../today/ReadinessFreshnessNote'
 import { latestLoad, daysToEvent, localDayKey } from '../../../utils/loadMetrics'
 import ScoreRing from '../../ui/ScoreRing'
 import { useLocale } from '../../../contexts/LocaleContext'
@@ -82,10 +84,18 @@ export function flagshipState(opts: {
   tier: string | null
   score: number | null
 }): FlagshipState {
-  if (opts.readinessPending) return 'pending'
+  // Precedence note (Jul 2026). `readinessPending` used to outrank everything,
+  // which painted the whole screen dead grey on days the app knew exactly what
+  // it wanted the athlete to do — a planned rest day with a late wearable sync
+  // lost its reassuring teal face and its answer. Readiness is only ONE input
+  // to the day's face: the three states that are known WITHOUT it (you already
+  // rode, the plan says rest, you told us you're sidelined) now come first.
+  // 'pending' remains for the genuinely unresolved case — a training day whose
+  // recommendation really does hinge on a score we don't have.
   if (opts.trainedToday) return 'post'
   if (opts.isPlannedRest) return 'planned-rest'
   if (opts.sidelined) return 'rest'
+  if (opts.readinessPending) return 'pending'
   if (opts.decisionState === 'recover' || opts.tier === 'rest') return 'rest'
   if (
     opts.decisionState === 'hard' || opts.decisionState === 'quality' ||
@@ -150,9 +160,26 @@ export function buildRoadPayload(
 // ── P1-11 / P1-8 weekly rhythm — pure, testable helpers ─────────────────────
 
 /** Audit P1-11 copy: the weekly-rhythm stat that replaced the daily streak.
- *  Null (→ hide entirely) while the backend hasn't sent consistency yet. */
-export function consistencyLabel(c: WeekConsistency | null | undefined, de: boolean): string | null {
+ *  Null (→ hide entirely) while the backend hasn't sent consistency yet.
+ *
+ *  `met`/`planned` count the WHOLE week, so early in the week the ratio is
+ *  necessarily 0-of-n and reads as a score the athlete is losing — on Monday
+ *  it is unwinnable by construction. For the first two days the same two
+ *  numbers are stated forward instead ("5 Trainingstage diese Woche geplant"),
+ *  which carries strictly more information than being told you have completed
+ *  none of them yet. From midweek on the ratio is a real progress report and
+ *  is shown as one. `todayIdx` is 0=Mon … 6=Sun; omitted → always the ratio. */
+export function consistencyLabel(
+  c: WeekConsistency | null | undefined,
+  de: boolean,
+  todayIdx?: number,
+): string | null {
   if (!c || c.planned <= 0) return null
+  if (c.met === 0 && todayIdx != null && todayIdx <= 1) {
+    return de
+      ? `${c.planned} Trainingstage diese Woche geplant`
+      : `${c.planned} training days planned this week`
+  }
   return de
     ? `Konstanz: ${c.met} von ${c.planned} geplanten Tagen`
     : `Consistency: ${c.met} of ${c.planned} planned days`
@@ -192,44 +219,13 @@ export function shouldShowFitnessTrendChip(
   return true
 }
 
-// ── Honest readiness gating — "today's overnight data exists?" ───────────────
-// (readiness-timing fix, Jul 2026) At local midnight the training day rolls
-// over (the daily decision buckets by athlete-local date), but the athlete
-// hasn't slept yet — so there is NO overnight recovery signal for the new day.
-// A recovery metric only counts as "today's overnight data" when it is DATED to
-// the athlete's current local day AND carries an overnight signal (sleep score,
-// overnight HRV, or resting HR). A metric from a PREVIOUS local day (yesterday's
-// morning sync) must NEVER be presented as today's readiness.
-
-/** True when a recovery metric dated to the current local day carries an
- *  overnight signal. `todayKey` is the athlete-local yyyy-MM-dd (localDayKey). */
-export function hasTodayOvernightRecovery(
-  metrics:
-    | { date?: string | null; sleep_score?: number | null; hrv_status?: number | null; resting_hr?: number | null }[]
-    | null
-    | undefined,
-  todayKey: string,
-): boolean {
-  if (!metrics) return false
-  return metrics.some(
-    (m) => m.date === todayKey && (m.sleep_score != null || m.hrv_status != null || m.resting_hr != null),
-  )
-}
-
-/** Whether the readiness card must show the calm PENDING state instead of a
- *  score. True ONLY in the "new local day, overnight sync hasn't landed yet"
- *  window: no today-overnight data, the athlete HAS a wearable history (an
- *  athlete with no wearable at all keeps the honest empty '—' state instead),
- *  they haven't trained today (a late/early session shows its post-ride review),
- *  and they're not self-reported sidelined (that card carries its own reason). */
-export function isReadinessPending(opts: {
-  hasTodayOvernight: boolean
-  hasRecoveryHistory: boolean
-  trainedToday: boolean
-  sidelined: boolean
-}): boolean {
-  return !opts.hasTodayOvernight && opts.hasRecoveryHistory && !opts.trainedToday && !opts.sidelined
-}
+// ── Honest readiness gating ──────────────────────────────────────────────────
+// Lives in `utils/readinessGate` now, so RecoveryTab resolves the SAME gate
+// from the SAME data and the two tabs can never again disagree about whether
+// today's readiness is knowable. See that module for the full rationale; the
+// short version is that it also distinguishes the pre-sync morning ('pending',
+// self-resolving) from a wearable that stopped syncing days ago ('stale',
+// actionable) — one message reassures, the other needs a Sync button.
 
 // ── Brief-failure fallback (review finding #1, Jul 2026) ─────────────────────
 // The logic now lives in the SHARED useTodaySession hook (one source of truth
@@ -297,13 +293,28 @@ export default function TodayTab() {
   }
   const athleteName = ((athlete?.name as string | undefined)?.split(' ')[0]) || nameFromEmail(user?.email)
 
+  // Athlete-local day key. Declared here because the overnight-freshness gate
+  // just below needs it, and every wearable-derived value on this tab flows
+  // through that gate.
+  const todayKey = localDayKey(today)
+  // Is the newest wearable night actually last night? `latest` is simply the
+  // newest row carrying ANY signal, which on a watch that stopped syncing is a
+  // week old — and every tile below is captioned as if it were this morning's
+  // ("Erholung über Nacht", "AUSKLANG · 33 % ERHOLUNG"). Nulling the four raw
+  // readings at the source is what makes the rest of the tab honest for free:
+  // the tiles, drivers, morning-read paragraph and methods drawer all already
+  // render "—" for a missing signal, so none of them needs its own gate.
+  const overnightIsToday = useMemo(
+    () => readinessFreshness(metrics, todayKey).gate === 'fresh',
+    [metrics, todayKey],
+  )
   const pmcBio = evidence.biometrics as Record<string, unknown> | undefined
   const hrv = pmcBio?.hrv as Record<string, unknown> | undefined
-  const hrvDelta = hrv?.delta_pct as number | null | undefined
-  const sleepScore = latest?.sleep_score ?? null
-  const bodyBattery = latest?.body_battery ?? null
-  const restingHr = latest?.resting_hr ?? null
-  const hrvNow = snapshot?.hrv_overnight_avg ?? latest?.hrv_status ?? null
+  const hrvDelta = overnightIsToday ? (hrv?.delta_pct as number | null | undefined) : null
+  const sleepScore = overnightIsToday ? (latest?.sleep_score ?? null) : null
+  const bodyBattery = overnightIsToday ? (latest?.body_battery ?? null) : null
+  const restingHr = overnightIsToday ? (latest?.resting_hr ?? null) : null
+  const hrvNow = overnightIsToday ? (snapshot?.hrv_overnight_avg ?? latest?.hrv_status ?? null) : null
 
   // P0-5: ONE producer for CTL/ATL/TSB — the shared latestLoad selector over
   // live PMC. Never the brief's evidence.pmc snapshot (60-day window, cacheable
@@ -330,7 +341,6 @@ export default function TodayTab() {
   // Today's training snapshot — real activity channels only (no steps).
   // P0-2: activities are bucketed onto BROWSER-LOCAL days via the shared
   // localDayKey selector — never a UTC `.slice(0, 10)` prefix.
-  const todayKey = localDayKey(today)
   const todayActs = (acts?.activities ?? []).filter((a) => localDayKey(a.started_at ?? a.date ?? '') === todayKey)
   const moveLoad = Math.round(todayActs.reduce((s, a) => s + (a.tss ?? 0), 0))
   const exMin = Math.round(todayActs.reduce((s, a) => s + (a.duration_seconds ?? 0) / 60, 0))
@@ -379,19 +389,20 @@ export default function TodayTab() {
   const trainedToday = decisionState != null
     ? decisionState === 'trained_already'
     : (!!review || hasSessionToday)
-  // Honest readiness gating (readiness-timing fix): does TODAY (athlete-local)
-  // have overnight recovery data yet? Pre-dawn on a new day the answer is no —
-  // yesterday's morning sync does NOT count — so the readiness card shows a
-  // calm "updates after you sleep" PENDING state instead of fabricating a fresh
-  // score from stale/partial inputs. Once the morning sync lands today's sleep /
-  // overnight-HRV / RHR (the normal case), the real score returns.
-  const hasTodayOvernight = useMemo(() => hasTodayOvernightRecovery(metrics, todayKey), [metrics, todayKey])
-  const readinessPending = isReadinessPending({
-    hasTodayOvernight,
-    hasRecoveryHistory: latest != null, // wearable history exists (else keep empty '—')
-    trainedToday,
-    sidelined,
-  })
+  // Honest readiness gating — the shared gate, so Recovery reads the same
+  // verdict from the same rows. `gate` says WHY the score is or isn't today's:
+  // 'fresh' (show it), 'pending' (this morning's sync is still in flight),
+  // 'stale' (the wearable hasn't produced a night in days — needs a sync), or
+  // 'none' (no wearable at all; the honest empty '—' state, not a promise).
+  const freshness = useMemo(() => readinessFreshness(metrics, todayKey), [metrics, todayKey])
+  const readinessPending = withholdReadiness({ gate: freshness.gate, trainedToday, sidelined })
+  // Human date of the last night we DO have, for the stale copy ("Letzte
+  // Messung 20. Juli"). Parsed at UTC midnight to match the day-key convention.
+  const lastOvernightLabel = useMemo(() => {
+    if (!freshness.lastOvernightKey) return null
+    const d = new Date(`${freshness.lastOvernightKey}T00:00:00`)
+    return Number.isNaN(d.getTime()) ? null : formatDate(d, de ? 'd. MMMM' : 'MMMM d', locale)
+  }, [freshness.lastOvernightKey, de, locale])
   const hrvDown = typeof hrvDelta === 'number' && hrvDelta <= -3
   const hrvUp = typeof hrvDelta === 'number' && hrvDelta >= 3
   const sleptWell = typeof sleepScore === 'number' && sleepScore >= 80
@@ -695,7 +706,13 @@ export default function TodayTab() {
   const hour = today.getHours()
   const moment: 'post' | 'evening' | 'morning' = trainedToday ? 'post' : hour >= 18 ? 'evening' : 'morning'
 
-  const sleepHours = latest?.sleep_detail?.total_s != null ? latest.sleep_detail.total_s / 3600 : null
+  // Through the same gate as its four neighbours (hrvNow / sleepScore /
+  // restingHr / bodyBattery). Missing it left the overnight tile row reading
+  // "HRV —, Ruhepuls —, Schlaf 7,2 h": three honest dashes next to one
+  // confident week-old number, which is a worse lie than all four being wrong.
+  const sleepHours = overnightIsToday && latest?.sleep_detail?.total_s != null
+    ? latest.sleep_detail.total_s / 3600
+    : null
   // Session IF — prefer the review's measured intensity factor, else derive it
   // from today's real TSS + moving time (same IF math as the prescribed card).
   const sessionIF = review?.intensity_factor?.actual
@@ -909,7 +926,9 @@ export default function TodayTab() {
   // 7-day fitness (CTL) trend. Both honest, real-data cues; never hype. The
   // fitness chip hides when a decline is plan-intended (planned rest/recover
   // day or a deliberately quiet week) so a working plan never reads as failure.
-  const consistencyText = consistencyLabel(consistency, de)
+  // 0=Mon … 6=Sun — lets the label state the week forward on Mon/Tue rather
+  // than as a 0-of-n score nobody can win that early.
+  const consistencyText = consistencyLabel(consistency, de, (today.getDay() + 6) % 7)
   const showFitnessTrend = shouldShowFitnessTrendChip(
     dCtl,
     decisionState,
@@ -1121,39 +1140,67 @@ export default function TodayTab() {
       {/* 3 · Recovery/readiness card — "here's exactly where you stand" hero:
           score ring + verdict, morning read, momentum cues and moment tiles.
           Gradient + glow are keyed to the readiness color. */}
-      {readinessPending ? (
-        /* PENDING — new local day, overnight sync hasn't landed yet. No score
-           ring, no fabricated number; a calm "nach dem Schlaf" line over the
-           muted aura. The real score returns the moment today's overnight
-           sleep / HRV / RHR lands (normal morning case). */
-        <div className="flex flex-col items-center text-center gap-4 pt-4 pb-2">
-          <div
-            className="grid place-items-center rounded-full"
-            style={{ width: 140, height: 140, border: '1px solid #FFFFFF1F', background: 'color-mix(in srgb, var(--color-muted) 12%, transparent)' }}
-          >
-            <Moon size={44} strokeWidth={1.6} style={{ color: '#9BA4AF' }} />
-          </div>
-          <div className="flex flex-col items-center gap-1.5 px-3">
-            <span className="eyebrow" style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.16em', color: '#9BA4AF' }}>{tFor(locale, 'ring_readiness')}</span>
-            <span className="num-display" style={{ fontSize: 24, fontWeight: 800, color: '#FFFFFF', lineHeight: 1.15 }}>{de ? 'Noch keine Nacht-Werte' : 'No overnight data yet'}</span>
-            <p style={{ fontSize: 14, fontWeight: 500, color: '#FFFFFFB3', lineHeight: 1.45 }}>
-              {de
-                ? 'Deine Bereitschaft aktualisiert sich nach deinem Schlaf — für heute liegen noch keine Über-Nacht-Werte vor.'
-                : 'Your readiness updates after you sleep — no overnight data has landed for today yet.'}
-            </p>
-          </div>
-        </div>
-      ) : (
+      {(
         <>
-          {/* GateKicker — the question the screen answers, glowing in the state
-              colour (pen GateKicker). */}
+          {/* GateKicker — the question the screen answers (pen GateKicker).
+              Now a dark glass chip rather than bare state-coloured text.
+              `readiness-aura.glsl` paints a deliberately luminous crown at
+              r < 0.6 around (0.5, 0.34) — exactly where this line sits — and
+              state-coloured text on that bloom fails contrast outright on the
+              light faces (planned-rest #3E9BFF and ready #16E08A both wash out
+              to near-invisible). The chip gives the type its own dark ground so
+              the bloom can stay as bright as it was designed to be. */}
           <div className="flex justify-center -mb-1">
-            <span className="eyebrow" style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.18em', color: auraColor, textAlign: 'center', textShadow: `0 0 14px ${auraColor}66` }}>{gateKicker}</span>
+            <span
+              className="eyebrow inline-flex rounded-full"
+              style={{
+                fontSize: 12, fontWeight: 800, letterSpacing: '0.18em', textAlign: 'center',
+                padding: '5px 13px',
+                color: `color-mix(in srgb, ${auraColor} 40%, #FFFFFF)`,
+                background: '#0A0C0F99',
+                border: `1px solid color-mix(in srgb, ${auraColor} 40%, transparent)`,
+                backdropFilter: 'blur(8px)',
+                textShadow: `0 0 14px ${auraColor}66`,
+              }}
+            >{gateKicker}</span>
           </div>
 
           {/* Readiness ring (pen Ring) — big gauge, state-coloured, score in the
-              centre with the state label; two status pills beneath. */}
+              centre with the state label; two status pills beneath.
+
+              When readiness is withheld (`readinessPending`) the gauge is
+              replaced by a MEDALLION, not drawn empty. Two earlier attempts
+              both failed for the same reason: a 224 px circle with nothing in
+              it is the loudest element on the screen saying the least. (The
+              version before that went further and replaced the entire hero —
+              verdict, pills, plan and all — with a grey moon disc.) The
+              medallion is deliberately small and deliberately dark: it cedes
+              the visual weight to the verdict below, which IS the answer on a
+              day the app can still call, and its dark ground survives the
+              aura's luminous crown where a translucent one dissolves. */}
           <div className="flex flex-col items-center gap-4">
+            {readinessPending ? (
+              <Link
+                to="/dashboard?tab=recovery"
+                className="grid place-items-center rounded-full"
+                aria-label={de ? 'Erholung öffnen' : 'Open recovery'}
+                style={{
+                  width: 128, height: 128,
+                  background: '#0A0C0FB8',
+                  border: `2px dashed color-mix(in srgb, ${auraColor} 55%, transparent)`,
+                  backdropFilter: 'blur(10px)',
+                  boxShadow: `0 0 30px ${auraColor}33`,
+                }}
+              >
+                {/* Glyph only. A caption here ("kein Wert · nicht
+                    synchronisiert") wrapped to three cramped lines and merely
+                    pre-announced the amber note directly beneath it — the
+                    dashed edge already reads as "not measured". */}
+                {fState === 'planned-rest' || fState === 'rest'
+                  ? <Moon size={40} strokeWidth={1.5} style={{ color: `color-mix(in srgb, ${auraColor} 25%, #FFFFFF)` }} />
+                  : <Bike size={40} strokeWidth={1.5} style={{ color: `color-mix(in srgb, ${auraColor} 25%, #FFFFFF)` }} />}
+              </Link>
+            ) : (
             <Link to="/dashboard?tab=recovery" className="grid place-items-center" aria-label={de ? 'Erholung öffnen' : 'Open recovery'}>
               <ScoreRing score={score ?? 0} color={ringColor} gradient={ringGradient} glow={ringGlow} size={224} stroke={14} trackColor="#FFFFFF14">
                 <div className="flex flex-col items-center gap-1">
@@ -1162,14 +1209,23 @@ export default function TodayTab() {
                 </div>
               </ScoreRing>
             </Link>
-            {/* Status pills — state word + real form (TSB). */}
+            )}
+            {/* Status pills — state word + real form (TSB). The state word is a
+                readiness claim, so it is suppressed in the 'pending' face where
+                no readiness exists to claim; TSB stays, because form comes from
+                training load and is just as true with the watch offline. */}
+            {/* Both pills carry a dark glass ground (`#0A0C0F99`) rather than a
+                14 %-of-accent wash. The wash was invisible against the aura's
+                crown, leaving thin coloured text floating on coloured light. */}
             <div className="flex items-center justify-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: `color-mix(in srgb, ${statePill.color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${statePill.color} 45%, transparent)` }}>
+              {fState !== 'pending' && (
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: '#0A0C0F99', border: `1px solid color-mix(in srgb, ${statePill.color} 50%, transparent)`, backdropFilter: 'blur(8px)' }}>
                 <span style={{ width: 7, height: 7, borderRadius: 999, background: statePill.color, boxShadow: `0 0 8px ${statePill.color}` }} />
-                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: statePill.color }}>{statePill.word}</span>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: `color-mix(in srgb, ${statePill.color} 78%, #FFFFFF)` }}>{statePill.word}</span>
               </span>
+              )}
               {tsb != null && (
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: `color-mix(in srgb, ${tsb >= 0 ? '#38B6FF' : '#FF9E3D'} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${tsb >= 0 ? '#38B6FF' : '#FF9E3D'} 45%, transparent)` }}>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: '#0A0C0F99', border: `1px solid color-mix(in srgb, ${tsb >= 0 ? '#38B6FF' : '#FF9E3D'} 50%, transparent)`, backdropFilter: 'blur(8px)' }}>
                   {tsb >= 0 ? <TrendingUp size={12} style={{ color: '#8ED0FF' }} /> : <TrendingDown size={12} style={{ color: '#FFC080' }} />}
                   <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: tsb >= 0 ? '#8ED0FF' : '#FFC080' }}>{tFor(locale, 'form_label')} {tsb >= 0 ? '+' : ''}{Math.round(tsb)}</span>
                 </span>
@@ -1183,6 +1239,16 @@ export default function TodayTab() {
             {verdictHead && <h2 className="num-display" style={{ fontSize: 26, fontWeight: 800, color: '#FFFFFF', lineHeight: 1.1 }}>{verdictHead}</h2>}
             <p style={{ fontSize: 14, fontWeight: 500, color: '#FFFFFFB3', lineHeight: 1.4 }}>{wrapLine}</p>
           </div>
+
+          {/* Why the ring is empty — and, when a sync would fix it, the button
+              that does. Renders only while readiness is withheld. */}
+          {readinessPending && (
+            <ReadinessFreshnessNote
+              gate={freshness.gate}
+              ageDays={freshness.ageDays}
+              lastLabel={lastOvernightLabel}
+            />
+          )}
 
           {/* Morning read — deterministic synthesis of last night + today (real
               signals only; morning moment only). */}

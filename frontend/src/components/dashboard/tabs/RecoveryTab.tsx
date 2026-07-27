@@ -19,6 +19,8 @@ import { useDailyDecision } from '../../../hooks/useAdaptive'
 import { isTrainState } from '../../../api/adaptive'
 import { canonicalReadiness, computeReadiness, readinessTier } from '../../../utils/metrics'
 import { localDayKey } from '../../../utils/loadMetrics'
+import { readinessFreshness } from '../../../utils/readinessGate'
+import ReadinessFreshnessNote from '../today/ReadinessFreshnessNote'
 import { formatDate } from '../../../utils/format'
 import ScoreRing from '../../ui/ScoreRing'
 import MetricCard from '../../ui/MetricCard'
@@ -112,9 +114,27 @@ export default function RecoveryTab() {
     return m
   }, [metrics])
   const latest = [...metrics].reverse().find((m) => m.hrv_status != null || m.resting_hr != null || m.sleep_score != null) ?? null
+  // Athlete-local day key — needed early, by the readiness freshness gate below
+  // as well as by the strain/calendar buckets further down.
+  const todayKey = localDayKey(today)
 
-  // Latest night with a real Garmin sleep-stage payload (SpO₂ / respiration / stages).
-  const sd = ([...metrics].reverse().find((m) => m.sleep_detail != null)?.sleep_detail) ?? null
+  // Latest night with a real Garmin sleep-stage payload (SpO₂ / respiration /
+  // stages). The row is kept, not just its detail, so the card can say WHICH
+  // night it is describing. This card is captioned "Schlaf" over a 34 px
+  // "7:47 geschlafen" — every reader takes that as last night, and on a watch
+  // that stopped syncing it is whatever night happened to be the last one
+  // recorded. Unlike the readiness score, the figure itself is still true and
+  // still worth seeing; only the implied date is wrong. So the card is dated
+  // rather than blanked.
+  const sdRow = [...metrics].reverse().find((m) => m.sleep_detail != null) ?? null
+  const sd = sdRow?.sleep_detail ?? null
+  const sleepNightKey = (sdRow?.date ?? sdRow?.recorded_at ?? '').slice(0, 10) || null
+  const sleepIsTonight = sleepNightKey === todayKey
+  const sleepNightLabel = useMemo(() => {
+    if (!sleepNightKey || sleepIsTonight) return null
+    const d = new Date(`${sleepNightKey}T00:00:00`)
+    return Number.isNaN(d.getTime()) ? null : formatDate(d, de ? 'd. MMMM' : 'MMMM d', locale)
+  }, [sleepNightKey, sleepIsTonight, de, locale])
   const sleepStages = sd ? [
     { n: 'Deep', de: 'Tief', c: 'var(--color-strain)', s: sd.deep_s },
     { n: 'Light', de: 'Leicht', c: 'var(--color-stand)', s: sd.light_s },
@@ -135,8 +155,24 @@ export default function RecoveryTab() {
     snapshot?.training_readiness
       ?? computeReadiness(latest?.hrv_status ?? null, latest?.body_battery ?? null, latest?.sleep_score ?? null),
   )
-  const rColor = tierColor(score ?? null)
-  const scoreTxt = score != null ? Math.round(score) : null
+  // …and the same FRESHNESS gate Today applies. Sharing the score selector was
+  // only half of "one readiness story": until now Recovery showed a confident
+  // green 70 on a morning where Today, one tab away, said no overnight data had
+  // landed — because only Today asked whether the inputs were actually from
+  // today. Both surfaces now read the same gate over the same rows.
+  const freshness = useMemo(() => readinessFreshness(metrics, todayKey), [metrics, todayKey])
+  // `trainedToday`/`sidelined` are Today-hero escapes (its post-ride and
+  // illness cards own those days). Recovery has no such substitute hero — this
+  // IS the recovery surface — so it gates purely on whether the number is
+  // today's.
+  const scoreWithheld = freshness.gate === 'pending' || freshness.gate === 'stale'
+  const lastOvernightLabel = useMemo(() => {
+    if (!freshness.lastOvernightKey) return null
+    const d = new Date(`${freshness.lastOvernightKey}T00:00:00`)
+    return Number.isNaN(d.getTime()) ? null : formatDate(d, de ? 'd. MMMM' : 'MMMM d', locale)
+  }, [freshness.lastOvernightKey, de, locale])
+  const rColor = scoreWithheld ? 'var(--color-muted)' : tierColor(score ?? null)
+  const scoreTxt = score != null && !scoreWithheld ? Math.round(score) : null
 
   // baselines
   const last7 = metrics.slice(-7)
@@ -149,11 +185,18 @@ export default function RecoveryTab() {
   const sleepNow = latest?.sleep_score ?? null
   const stressNow = snapshot?.stress?.now ?? latest?.stress_level ?? null
 
-  const readinessGreen = tier === 'peak' || tier === 'ready'
+  // "Green" is a claim about how the athlete recovered LAST NIGHT. With the
+  // score withheld there is no last night on record, so every branch that
+  // reads this must fall through to its non-committal wording rather than
+  // congratulate the athlete on sleep the app never saw.
+  const readinessGreen = !scoreWithheld && (tier === 'peak' || tier === 'ready')
 
   // Recovery-specific NUANCE (allowed): an observation, never a directive —
   // it may accompany a push verdict but can never contradict it.
-  const sleepNuance = sleepNow != null && sleepAvg != null && sleepNow <= sleepAvg - 10
+  // Only from a night we actually have: `sleepNow` is the newest sleep score in
+  // the window, which on a stale-wearable day is a week old — "sleep ran
+  // shorter than usual" about last Monday is noise appended to today's verdict.
+  const sleepNuance = !scoreWithheld && sleepNow != null && sleepAvg != null && sleepNow <= sleepAvg - 10
     ? (de ? ' Schlaf war kürzer als sonst — beobachten.' : ' Sleep ran shorter than usual — keep an eye on it.')
     : ''
 
@@ -183,6 +226,26 @@ export default function RecoveryTab() {
     if (trainDay && decision) {
       return { t: decision.verdict, s: decision.reason + sleepNuance }
     }
+    // Withheld branch: the tier below is computed from nights that are not
+    // today's, so falling through would hand the athlete a fabricated verdict —
+    // and, because `readinessGreen` is false while withheld, specifically a
+    // fabricated NEGATIVE one ("your signals point to fatigue") off data the
+    // app itself has just admitted it doesn't have.
+    if (scoreWithheld) {
+      return freshness.gate === 'stale'
+        ? {
+            t: de ? 'Keine aktuellen Nacht-Werte' : 'No current overnight data',
+            s: de
+              ? `Letzte Messung ${lastOvernightLabel ?? '—'}. Synchronisiere deine Uhr — bis dahin bewerten wir deine Erholung nicht.`
+              : `Last reading ${lastOvernightLabel ?? '—'}. Sync your watch — until then we won't grade your recovery.`,
+          }
+        : {
+            t: de ? 'Nacht-Werte kommen noch' : 'Overnight data still landing',
+            s: de
+              ? 'Sobald die letzte Nacht hochgeladen ist, steht dein Bereitschafts-Wert hier.'
+              : 'Your readiness score lands here as soon as last night uploads.',
+          }
+    }
     // No-data branch (finding #3): with zero signals there is NO verdict —
     // a fatigue call requires actual data, never the fallthrough default.
     if (score == null) {
@@ -208,7 +271,6 @@ export default function RecoveryTab() {
     for (const a of acts?.activities ?? []) { if (!a.started_at) continue; const k = localDayKey(a.started_at); m.set(k, (m.get(k) ?? 0) + (a.tss ?? 0)) }
     return m
   }, [acts])
-  const todayKey = localDayKey(today)
   const todayTSS = tssByDate.get(todayKey) ?? 0
   const todayStrain = todayTSS > 0 ? Math.min(21, todayTSS / 8) : null
   // Load target comes from the ONE Daily Decision (plan × directive), in the
@@ -236,7 +298,16 @@ export default function RecoveryTab() {
   // Rolling sleep debt: signed shortfall vs baseline summed over last 7 nights, floored at 0.
   const debtWindow = recentSleep.slice(-7)
   const sleepDebtS = debtWindow.length ? Math.max(0, debtWindow.reduce((a, r) => a + (sleepNeedS - r.total_s), 0)) : null
-  const lastNightS = recentSleep.length ? recentSleep[recentSleep.length - 1].total_s : null
+  // "Last night" must actually BE last night. `recentSleep` is date-ordered but
+  // not gap-filled, so its final element is the last night that got recorded —
+  // a week ago on an unsynced watch. The catch-up component below is the whole
+  // reason the card can say "SCHLAFBEDARF HEUTE" and print a bed-by time, and
+  // deriving it from a week-old shortfall makes both fiction. With no genuine
+  // last night the card falls back to the plain baseline need: still useful,
+  // and true.
+  const lastNightS = sleepIsTonight && recentSleep.length
+    ? recentSleep[recentSleep.length - 1].total_s
+    : null
   const debtTonightS = lastNightS != null ? Math.max(0, sleepNeedS - lastNightS) : 0
   // Tonight's need = baseline + last night's shortfall (catch-up), capped at 10 h.
   const needTonightS = Math.min(10 * 3600, sleepNeedS + debtTonightS)
@@ -325,8 +396,15 @@ export default function RecoveryTab() {
   }, [calSheet, byDate, tssByDate, de, locale])
 
   // recommendation zone — no score ⇒ no zone (never a fabricated red).
-  const zoneColor = score == null ? 'var(--color-muted)' : tier === 'peak' || tier === 'ready' ? 'var(--color-recovery)' : tier === 'caution' ? 'var(--color-amber)' : 'var(--color-move)'
-  const zoneLabel = score == null ? (de ? 'keine Daten' : 'no data') : tier === 'peak' || tier === 'ready' ? (de ? 'grüne Zone' : 'green zone') : tier === 'caution' ? (de ? 'gelbe Zone' : 'yellow zone') : (de ? 'rote Zone' : 'red zone')
+  // The zone chip is the readiness verdict in one word, so it withholds on the
+  // same terms as the number. `tier` survives from a stale night even when the
+  // hero has already dashed the score, and "grüne Zone" under a ring reading
+  // "—" is the same contradiction in miniature.
+  const zoneUnknown = score == null || scoreWithheld
+  const zoneColor = zoneUnknown ? 'var(--color-muted)' : tier === 'peak' || tier === 'ready' ? 'var(--color-recovery)' : tier === 'caution' ? 'var(--color-amber)' : 'var(--color-move)'
+  const zoneLabel = zoneUnknown
+    ? (scoreWithheld ? (de ? 'keine aktuellen Werte' : 'no current data') : (de ? 'keine Daten' : 'no data'))
+    : tier === 'peak' || tier === 'ready' ? (de ? 'grüne Zone' : 'green zone') : tier === 'caution' ? (de ? 'gelbe Zone' : 'yellow zone') : (de ? 'rote Zone' : 'red zone')
   // Decision first: on rest / trained / sick days the recommendation never
   // pushes training, however green the readiness ring looks.
   const recTitle = dState === 'planned_rest'
@@ -339,7 +417,15 @@ export default function RecoveryTab() {
           // Train states: the decision's verdict, verbatim — the same words
           // Today shows. Recovery never issues its own training directive.
           ? decision.verdict
-          : score == null
+            // `scoreWithheld` as well as `score == null`: the score object stays
+            // populated from a stale night even when the hero has just declared
+            // it not today's, so testing null alone let this recommendation
+            // assert "HRV is above baseline" two blocks under "no overnight
+            // data". The withheld branch shares the no-data copy — in both
+            // cases there is nothing current to recommend from.
+          : scoreWithheld
+            ? (de ? 'Keine aktuellen Nacht-Werte' : 'No current overnight data')
+            : score == null
             ? (de ? 'Noch keine Erholungsdaten' : 'No recovery data yet')
             : tier === 'peak' || tier === 'ready'
               ? (de ? 'Erholt — trainiere mit Absicht' : 'Recovered — train with intent')
@@ -355,7 +441,17 @@ export default function RecoveryTab() {
         ? decision.reason
         : trainDay && decision
           ? decision.reason + sleepNuance
-          : score == null
+          : scoreWithheld
+            // A device IS connected here — it just hasn't delivered. Telling
+            // this athlete to "connect a device" would be nonsense advice.
+            ? (freshness.gate === 'stale'
+              ? (de
+                ? `Ohne aktuelle Nacht-Werte (zuletzt ${lastOvernightLabel ?? '—'}) geben wir keine Empfehlung ab. Synchronisiere deine Uhr.`
+                : `Without a current night (last ${lastOvernightLabel ?? '—'}) we won't make a recommendation. Sync your watch.`)
+              : (de
+                ? 'Sobald die letzte Nacht hochgeladen ist, steht hier deine Empfehlung.'
+                : 'Your recommendation lands here as soon as last night uploads.'))
+            : score == null
             ? (de
               ? 'Verbinde ein Gerät oder trag deinen Schlaf ein — ohne Signale gibt es keine ehrliche Empfehlung.'
               : 'Connect a device or log your sleep — without signals there is no honest recommendation.')
@@ -405,6 +501,14 @@ export default function RecoveryTab() {
           <h3 className="num-display" style={{ fontSize: 17, color: 'var(--color-ink)' }}>{status.t}</h3>
           <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{status.s}</p>
         </div>
+        {/* Same note, same words, same Sync action as Today's hero — the two
+            tabs explain a missing score identically because they now derive it
+            identically. */}
+        {scoreWithheld && (
+          <div className="w-full">
+            <ReadinessFreshnessNote gate={freshness.gate} ageDays={freshness.ageDays} lastLabel={lastOvernightLabel} />
+          </div>
+        )}
       </div>
 
       {/* 3 · Recovery Drivers */}
@@ -412,9 +516,17 @@ export default function RecoveryTab() {
         <div className="flex flex-col" style={{ gap: 2 }}>
           <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Erholungs-Treiber' : 'Recovery Drivers'}</span>
           <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>
-            {scoreTxt != null
-              ? (de ? `Was den Score von ${scoreTxt} heute prägt` : `What shaped today's ${scoreTxt} score`)
-              : (de ? 'Noch kein Score — es fehlen Signale' : 'No score yet — signals missing')}
+            {/* Dateline, not "heute". The tiles below render the newest values
+                on record; on a stale-wearable day those are days old, and the
+                old wording ("Was den Score von 70 heute prägt") presented a
+                week-old HRV as this morning's. */}
+            {scoreWithheld
+              ? (de
+                  ? `Letzte gemessene Werte — ${lastOvernightLabel ?? '—'}`
+                  : `Last measured values — ${lastOvernightLabel ?? '—'}`)
+              : scoreTxt != null
+                ? (de ? `Was den Score von ${scoreTxt} heute prägt` : `What shaped today's ${scoreTxt} score`)
+                : (de ? 'Noch kein Score — es fehlen Signale' : 'No score yet — signals missing')}
           </span>
         </div>
         <Driver icon={Activity} label="HRV"
@@ -447,7 +559,16 @@ export default function RecoveryTab() {
           segColor={sleepNow != null && sleepAvg != null && sleepNow < sleepAvg ? 'var(--color-amber)' : 'var(--color-recovery)'} />
       </div>
 
-      {/* 4 · Metric row */}
+      {/* 4 · Metric row. Two big uncaptioned numbers with "vs Ø" trend chips —
+          nothing on them says when they were measured, so on a stale-wearable
+          day they read as this morning's. The Recovery-Drivers block above
+          carries its dateline in the card subtitle; this row has no subtitle,
+          so it gets an explicit one. */}
+      {scoreWithheld && lastOvernightLabel && (
+        <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-muted)', marginBottom: -8 }}>
+          {de ? `Zuletzt gemessen — ${lastOvernightLabel}` : `Last measured — ${lastOvernightLabel}`}
+        </span>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <MetricCard icon={Activity} iconColor="var(--color-recovery)" label="HRV" value={hrvNow != null ? `${Math.round(hrvNow)}` : DASH} unit="ms"
           trend={hrvNow != null && hrv7 != null ? { text: `${hrvNow - hrv7 >= 0 ? '+' : ''}${Math.round(hrvNow - hrv7)} ${de ? 'vs Ø' : 'vs avg'}`, color: hrvNow >= hrv7 ? 'var(--color-recovery)' : 'var(--color-amber)', dir: hrvNow >= hrv7 ? 'up' : 'down' } : undefined} />
@@ -458,8 +579,18 @@ export default function RecoveryTab() {
       {/* 6 · Sleep (stages — no backend duration/stage feed → graceful) */}
       <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Moon size={18} style={{ color: 'var(--color-strain)' }} /><span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Schlaf' : 'Sleep'}</span></div>
-          {sleepNow != null && <span className="rounded-full" style={{ padding: '5px 10px', background: 'color-mix(in srgb, var(--color-strain) 15%, transparent)', fontSize: 12, fontWeight: 600, color: 'var(--color-strain)' }}>{Math.round(sleepNow)}% {de ? 'Leistung' : 'performance'}</span>}
+          <div className="flex items-center gap-2 min-w-0">
+            <Moon size={18} style={{ color: 'var(--color-strain)' }} />
+            <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Schlaf' : 'Sleep'}</span>
+            {/* Names the night when it isn't last night, so the 34 px figure
+                below stops implying a night the watch never recorded. */}
+            {sleepNightLabel && (
+              <span className="rounded-full shrink-0" style={{ padding: '3px 8px', background: 'var(--color-surface-2)', fontSize: 11, fontWeight: 700, color: 'var(--color-muted)' }}>
+                {de ? `Nacht vom ${sleepNightLabel}` : `Night of ${sleepNightLabel}`}
+              </span>
+            )}
+          </div>
+          {sleepNow != null && <span className="rounded-full shrink-0" style={{ padding: '5px 10px', background: 'color-mix(in srgb, var(--color-strain) 15%, transparent)', fontSize: 12, fontWeight: 600, color: 'var(--color-strain)' }}>{Math.round(sleepNow)}% {de ? 'Leistung' : 'performance'}</span>}
         </div>
         <div className="flex items-end gap-1.5">
           <span className="num-display" style={{ fontSize: 34, color: 'var(--color-ink)' }}>{fmtHm(sd?.total_s)}</span>

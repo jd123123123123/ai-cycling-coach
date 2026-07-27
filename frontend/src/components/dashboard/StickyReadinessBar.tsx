@@ -18,6 +18,8 @@ import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useLocale } from '../../contexts/LocaleContext'
 import { computeReadiness, latestWithData, readinessTier, TIER_META } from '../../utils/metrics'
+import { readinessFreshness } from '../../utils/readinessGate'
+import { localDayKey } from '../../utils/loadMetrics'
 import { springs, prefersReducedMotion } from '../../utils/motion'
 
 /**
@@ -46,7 +48,13 @@ export default function StickyReadinessBar() {
     latestWithData(metrics, 'sleep_score') ??
     latestWithData(metrics, 'hrv_status') ??
     latestWithData(metrics, 'body_battery')
-  const readiness = latest
+  // `latestWithData` is a positional reverse scan — it returns the newest row
+  // that HAS the field, whatever its date. On a watch that stopped syncing that
+  // is a week-old night, and this bar would print a confident readiness number
+  // and tier while the Today hero directly above it withholds the score as not
+  // today's. Same gate as the hero: no fresh overnight record, no number.
+  const freshness = readinessFreshness(metrics, localDayKey(today))
+  const readiness = latest && freshness.gate === 'fresh'
     ? computeReadiness(latest.hrv_status, latest.body_battery, latest.sleep_score)
     : null
   const tier = readinessTier(readiness)
@@ -84,8 +92,12 @@ export default function StickyReadinessBar() {
     }
   }, []) // run once on mount; the attribute lands in Task 2
 
-  // Only show when readiness data is available and hero has scrolled out
-  const show = !heroVisible && readiness != null
+  // Show once the hero has scrolled out, as long as the bar has SOMETHING true
+  // to carry. It used to require a readiness score, which meant gating the
+  // score above would have silently deleted the bar on stale-wearable days —
+  // taking the day's session with it, even though the session is still known.
+  // The score block below already renders conditionally.
+  const show = !heroVisible && (readiness != null || workoutTitle != null)
 
   const barContent = (
     <div

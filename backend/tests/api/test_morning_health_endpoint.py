@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.dependencies import get_current_active_user, get_db_for_user, get_current_user
+from app.services.athlete_time import today_local
 
 
 def _row(day: date, *, rhr, hrv, resp, spo2, sleep):
@@ -65,11 +66,19 @@ class TestUnauthenticated:
         assert client.get("/health/morning-check").status_code == 401
 
 
+def _baseline_rows(*, anchor, n=20, offset=0):
+    """`n` steady baseline days ending `offset` days before `anchor`."""
+    return [
+        _row(anchor - timedelta(days=i + offset), rhr=48, hrv=65, resp=13.0, spo2=96.0, sleep=82)
+        for i in range(n, 0, -1)
+    ]
+
+
 class TestNormal:
     def test_normal_vitals_return_level_none_no_card(self, client):
-        rows = [
-            _row(date.today() - timedelta(days=i), rhr=48, hrv=65, resp=13.0, spo2=96.0, sleep=82)
-            for i in range(20, -1, -1)
+        today = today_local()
+        rows = _baseline_rows(anchor=today) + [
+            _row(today, rhr=48, hrv=65, resp=13.0, spo2=96.0, sleep=82)
         ]
         _install(rows)
         try:
@@ -85,11 +94,9 @@ class TestNormal:
 
 class TestClusterEndToEnd:
     def test_illness_cluster_returns_high_with_localized_recommendation(self, client):
-        rows = [
-            _row(date.today() - timedelta(days=i), rhr=48, hrv=65, resp=13.0, spo2=96.0, sleep=82)
-            for i in range(20, 0, -1)
-        ]
-        rows.append(_row(date.today(), rhr=55, hrv=45, resp=16.0, spo2=95.0, sleep=70))
+        today = today_local()
+        rows = _baseline_rows(anchor=today)
+        rows.append(_row(today, rhr=55, hrv=45, resp=16.0, spo2=95.0, sleep=70))
         _install(rows)
         try:
             resp = client.get("/health/morning-check?locale=de")
@@ -102,3 +109,52 @@ class TestClusterEndToEnd:
         assert "Ruhepuls" in body["recommendation"]
         metrics = {s["metric"] for s in body["signals"]}
         assert {"resting_hr", "hrv", "respiration"} <= metrics
+
+
+class TestStaleVitals:
+    """The early-warning card must never fire off a reading that isn't today's.
+
+    Regression cover for the live 2026-07-27 defect: with the newest
+    daily_metrics row dated 2026-07-20 the endpoint still rendered a
+    role="alert" health warning ("Rest today and listen to your body") off a
+    week-old vitals cluster, because the detector takes its last row as "today".
+    """
+
+    def test_illness_cluster_dated_yesterday_returns_none(self, client):
+        today = today_local()
+        yesterday = today - timedelta(days=1)
+        rows = _baseline_rows(anchor=today, offset=1)
+        rows.append(_row(yesterday, rhr=55, hrv=45, resp=16.0, spo2=95.0, sleep=70))
+        _install(rows)
+        try:
+            resp = client.get("/health/morning-check?locale=de")
+        finally:
+            app.dependency_overrides.clear()
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["level"] == "none"
+        assert body["signals"] == []
+        assert body["headline"] is None
+        assert body["recommendation"] is None
+
+    def test_week_old_illness_cluster_returns_none(self, client):
+        today = today_local()
+        stale = today - timedelta(days=7)
+        rows = _baseline_rows(anchor=today, offset=7)
+        rows.append(_row(stale, rhr=55, hrv=45, resp=16.0, spo2=95.0, sleep=70))
+        _install(rows)
+        try:
+            resp = client.get("/health/morning-check?locale=de")
+        finally:
+            app.dependency_overrides.clear()
+        assert resp.status_code == 200
+        assert resp.json()["level"] == "none"
+
+    def test_no_rows_at_all_returns_none(self, client):
+        _install([])
+        try:
+            resp = client.get("/health/morning-check?locale=de")
+        finally:
+            app.dependency_overrides.clear()
+        assert resp.status_code == 200
+        assert resp.json()["level"] == "none"

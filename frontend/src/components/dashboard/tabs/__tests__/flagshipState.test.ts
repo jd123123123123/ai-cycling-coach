@@ -12,8 +12,18 @@ const base = {
 }
 
 describe('flagshipState — the five faces of the Today flagship', () => {
-  it('pending outranks everything (new day, no overnight data yet)', () => {
-    expect(flagshipState({ ...base, readinessPending: true, trainedToday: true })).toBe('pending')
+  // Precedence (revised Jul 2026): readiness is one input among several, so the
+  // faces that are knowable WITHOUT it come first. 'pending' used to outrank
+  // everything, which greyed out days the app had a confident answer for.
+  it('pending yields to a face the app knows without a readiness score', () => {
+    expect(flagshipState({ ...base, readinessPending: true, trainedToday: true })).toBe('post')
+    expect(flagshipState({ ...base, readinessPending: true, isPlannedRest: true })).toBe('planned-rest')
+    expect(flagshipState({ ...base, readinessPending: true, sidelined: true })).toBe('rest')
+  })
+
+  it('pending on a plain training day, where the call really does need the score', () => {
+    expect(flagshipState({ ...base, readinessPending: true, decisionState: 'hard' })).toBe('pending')
+    expect(flagshipState({ ...base, readinessPending: true, tier: 'ready', score: 88 })).toBe('pending')
   })
 
   it('trained today → post-ride face', () => {

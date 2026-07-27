@@ -1022,7 +1022,17 @@ async def get_current_week(
             for d in sorted(by_day)
         ]
         if daily_readiness:
-            readiness_dict = detect_readiness(daily_readiness)
+            # Pass the athlete-local today so the detector can refuse to judge
+            # off a stale row. The 30-day window above has no recency filter —
+            # before this, a watch that stopped syncing on the 20th still had
+            # its last row treated as "today" on the 27th, and the Plan tab
+            # rendered a green "du bist erholt und bereit, wie geplant zu
+            # trainieren" off week-old vitals. On the stale path the detector
+            # returns status="unknown", which the guard below turns into
+            # readiness=None — the response carries no readiness at all and
+            # PlanTab (`week?.readiness ?? null`) simply renders no note,
+            # which is the honest outcome: we don't know.
+            readiness_dict = detect_readiness(daily_readiness, today=today)
             if readiness_dict.get("status") != "unknown":
                 readiness_out = Readiness(
                     status=readiness_dict["status"],

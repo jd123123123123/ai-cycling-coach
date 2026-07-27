@@ -6,6 +6,11 @@ single readiness signal + a clear, localized reason string. The endpoint feeds
 it the last ~14 days of ``daily_metrics`` and folds the verdict into the
 plan-change note and a top-level ``readiness`` field on /weeks/current.
 
+Every verdict below is a present-tense claim about TODAY, so the newest row
+must actually be dated today: if the watch hasn't synced, we return "unknown"
+rather than let a week-old reading impersonate this morning (see the staleness
+gate in ``detect_readiness``).
+
 Method — INDIVIDUAL rolling baselines only (never population norms):
     - Work on ln(RMSSD). We use ``hrv_status`` as the RMSSD proxy and take its
       natural log so the day-to-day distribution is roughly symmetric (Plews /
@@ -35,6 +40,8 @@ import math
 import statistics
 from datetime import date
 from typing import Literal
+
+from app.services.athlete_time import today_local
 
 Status = Literal["green", "amber", "illness", "overreaching", "unknown"]
 
@@ -68,27 +75,56 @@ def _iso(d) -> str:
     return str(d)
 
 
-def detect_readiness(daily: list[dict]) -> dict:
+def detect_readiness(daily: list[dict], *, today: date | str | None = None) -> dict:
     """Assess today's readiness from a trailing HRV/RHR history.
 
     Args:
         daily: chronologically-ascending list of
             ``{"date": date|iso, "hrv": float|None, "rhr": float|None}``.
-            The LAST entry is "today". ``hrv`` is Garmin ``hrv_status`` (RMSSD
-            proxy); ``rhr`` is ``resting_hr``.
+            The LAST entry is only treated as "today" when its ``date``
+            actually IS ``today`` (see the staleness gate below). ``hrv`` is
+            Garmin ``hrv_status`` (RMSSD proxy); ``rhr`` is ``resting_hr``.
+        today: the athlete-local current date. Defaults to
+            ``athlete_time.today_local()`` so a caller that forgets to pass it
+            still gets the gate — the safe default, never "assume the newest
+            row is today".
 
     Returns:
         ``{"status", "reason_en", "reason_de", "suggest_easy": bool,
            "signals": {...}}`` — a dict so the endpoint can localize and expose
         it. ``status`` is one of green/amber/illness/overreaching/unknown.
-        Pure — no side effects.
+        Pure apart from resolving the default ``today``.
     """
     if not daily:
         return _unknown("no biometric history")
 
-    today = daily[-1]
-    ln_today = _ln(today.get("hrv"))
-    rhr_today = _num(today.get("rhr"))
+    # ── Staleness gate ───────────────────────────────────────────────────────
+    # This detector speaks in the present tense: "your HRV is a touch below
+    # your baseline THIS MORNING", "you're recovered and ready to train as
+    # planned". Every one of those claims is a statement about today.
+    #
+    # Until July 2026 the function simply took ``daily[-1]`` as "today" with no
+    # date check, and its callers built the list from a 30-day window with no
+    # recency filter. So when a watch stopped syncing, the newest surviving row
+    # silently kept playing the part of today: observed live on 2026-07-27 with
+    # the freshest ``daily_metrics`` row dated 2026-07-20, where the Training
+    # tab rendered a confident green "Deine HRV und dein Ruhepuls liegen in
+    # deinem Normalbereich — du bist erholt und bereit, wie geplant zu
+    # trainieren." off a week-old reading. The athlete could have been ill for
+    # six days and the app would still have told them they were fresh.
+    #
+    # If the newest reading is not from today, we genuinely do not know today's
+    # readiness — so we say so, reusing the existing "unknown" shape (callers
+    # already suppress the note on unknown) and naming the date of the last
+    # reading so the reason is actionable ("your watch hasn't synced").
+    today_date = _iso(today_local() if today is None else today)
+    last_date = _iso(daily[-1].get("date"))
+    if last_date != today_date:
+        return _unknown(f"last reading is from {last_date}, not today")
+
+    today_row = daily[-1]
+    ln_today = _ln(today_row.get("hrv"))
+    rhr_today = _num(today_row.get("rhr"))
 
     # Baseline = the readings BEFORE today (up to _BASELINE_WINDOW days back).
     prior = daily[:-1]
