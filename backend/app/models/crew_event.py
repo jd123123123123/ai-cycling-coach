@@ -66,6 +66,14 @@ class CrewEvent(Base):
     tour_polyline: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     tour_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     tour_elevation_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # [[cumulative_distance_m, elevation_m], …] (≤120 points) for the event
+    # detail page's elevation-profile chart. NULL when the GPX had no <ele>
+    # data — the chart then hides rather than drawing a fake flat line.
+    tour_profile: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    tour_descent_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Steepest gradient sustained over ≥100 m (see services/crew_tour.py for why
+    # a per-point delta would be meaningless here).
+    tour_max_grade_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

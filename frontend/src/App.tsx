@@ -40,6 +40,7 @@ const DebriefView = lazyWithRetry(() => import('./pages/DebriefView'))
 const SessionReportView = lazyWithRetry(() => import('./pages/SessionReportView'))
 const RideRecapView = lazyWithRetry(() => import('./pages/RideRecapView'))
 const CrewRideDetailView = lazyWithRetry(() => import('./pages/CrewRideDetailView'))
+const CrewEventDetailView = lazyWithRetry(() => import('./pages/CrewEventDetailView'))
 // Bike-only: the standalone Load & Form (/load-form) analysis page is archived
 // (file kept on disk, route removed) — its data lives inline on Today/Recovery.
 const WorkoutDetailView = lazyWithRetry(() => import('./pages/WorkoutDetailView'))
@@ -204,6 +205,19 @@ function AppRoutes() {
           <Route
             path="/activities/:id/ride"
             element={<RideRideRedirect />}
+          />
+
+          {/* The planned crew ride (pen "V3 · Ride Detail (Sunrise)"). A crew
+              event previously existed only as a card inside the Social tab —
+              creatable and RSVP-able, but with nowhere to actually look at the
+              ride you had been invited to. */}
+          <Route
+            path="/crew-event/:id"
+            element={
+              <ProtectedRoute checkOnboarding>
+                <CrewEventDetailView />
+              </ProtectedRoute>
+            }
           />
 
           <Route

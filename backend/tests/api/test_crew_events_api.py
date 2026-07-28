@@ -411,6 +411,14 @@ def test_tour_upload_parses_and_download_returns_file(client_for, tmp_path, monk
     assert len(body["tour_polyline"]) == 4
     assert body["tour_polyline"][0] == [46.0, 7.0]
     assert (tmp_path / "40.gpx").exists()
+    # Elevation-profile fields for the detail page's chart.
+    assert len(body["tour_profile"]) == 4
+    assert body["tour_profile"][0][0] == 0.0  # cumulative distance starts at 0
+    assert body["tour_profile"][0][1] == 1000.0
+    xs = [p[0] for p in body["tour_profile"]]
+    assert xs == sorted(xs)
+    assert body["tour_descent_m"] >= 0
+    assert body["tour_max_grade_pct"] is not None
 
     # download the raw file back
     dl = client.get("/crews/me/events/40/tour")
@@ -463,3 +471,168 @@ def test_tour_upload_rejects_garbage_gpx(client_for, tmp_path, monkeypatch):
         files={"file": ("junk.gpx", b"not a gpx at all", "application/gpx+xml")},
     )
     assert res.status_code == 422
+
+
+# ── ride weather ──────────────────────────────────────────────────────────
+
+
+def _event_with_tour(event_id: int, *, crew_id: int = 1, starts_at=None) -> CrewEvent:
+    ev = CrewEvent(
+        crew_id=crew_id,
+        creator_user_id=5,
+        name="Dolomites Recon",
+        kind="group_ride",
+        starts_at=starts_at or (NOW + timedelta(days=2)),
+    )
+    ev.id = event_id
+    ev.created_at = NOW
+    ev.tour_filename = "recon.gpx"
+    ev.tour_polyline = [[46.5, 11.9], [46.51, 11.91]]
+    return ev
+
+
+def _om_body(window_start):
+    """An Open-Meteo-shaped body covering 8 hours from the ride's start hour."""
+    times = [
+        (window_start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M") for i in range(8)
+    ]
+    return {
+        "hourly": {
+            "time": times,
+            "temperature_2m": [12.0 + i for i in range(8)],
+            "precipitation_probability": [10 * i for i in range(8)],
+            "wind_speed_10m": [8.0 + i for i in range(8)],
+            "wind_direction_10m": [200 + i for i in range(8)],
+            "weather_code": [3] * 8,
+        },
+        "daily": {
+            "time": [window_start.date().isoformat()],
+            "sunrise": [f"{window_start.date().isoformat()}T05:12"],
+        },
+    }
+
+
+def test_event_weather_returns_five_hour_strip(client_for, monkeypatch):
+    starts = (NOW + timedelta(days=2)).replace(minute=37, second=0, microsecond=0)
+    window_start = starts.replace(minute=0)
+    ev = _event_with_tour(80, starts_at=starts)
+    db = _base_db(events={80: ev})
+
+    async def fake_fetch(lat, lng, start, end, **kw):
+        # Coordinates must come from the route's first point, not a guess.
+        assert (round(lat, 2), round(lng, 2)) == (46.5, 11.9)
+        return _om_body(window_start)
+
+    monkeypatch.setattr(ce, "fetch_window_forecast", fake_fetch)
+
+    res = client_for(db).get("/crews/me/events/80/weather")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["available"] is True
+    assert len(body["hourly"]) == 5  # the design's five-cell strip
+    first = body["hourly"][0]
+    assert first["temp_c"] == 12.0
+    assert first["wind_kmh"] == 8.0
+    assert first["wind_dir_deg"] == 200
+    assert first["precip_prob_pct"] == 0
+    assert first["weather_code"] == 3
+    assert body["sunrise"] is not None
+    assert body["window_start"].startswith(window_start.strftime("%Y-%m-%dT%H:00"))
+
+
+def test_event_weather_unavailable_without_tour(client_for, monkeypatch):
+    ev = CrewEvent(crew_id=1, creator_user_id=5, name="No Route", kind="race",
+                   starts_at=NOW + timedelta(days=1))
+    ev.id = 81
+    ev.created_at = NOW
+    db = _base_db(events={81: ev})
+
+    called = []
+
+    async def fake_fetch(*a, **kw):  # must never run: we have no location
+        called.append(a)
+        return {}
+
+    monkeypatch.setattr(ce, "fetch_window_forecast", fake_fetch)
+
+    res = client_for(db).get("/crews/me/events/81/weather")
+    assert res.status_code == 200, res.text
+    assert res.json() == {
+        "available": False,
+        "window_start": None,
+        "window_end": None,
+        "hourly": [],
+        "sunrise": None,
+    }
+    assert called == []
+
+
+def test_event_weather_requires_crew_membership(client_for, monkeypatch):
+    db = FakeDB(users={5: _user(5, "jannis@evori.ai")})  # caller in no crew
+    res = client_for(db).get("/crews/me/events/80/weather")
+    assert res.status_code == 403
+
+
+def test_event_weather_other_crew_event_404(client_for, monkeypatch):
+    ev = _event_with_tour(82, crew_id=2)  # caller is in crew 1
+    db = _base_db(events={82: ev})
+    res = client_for(db).get("/crews/me/events/82/weather")
+    assert res.status_code == 404
+
+
+def test_event_weather_degrades_when_client_returns_none(client_for, monkeypatch):
+    db = _base_db(events={83: _event_with_tour(83)})
+
+    async def fake_fetch(*a, **kw):
+        return None  # the client's own defensive contract on any failure
+
+    monkeypatch.setattr(ce, "fetch_window_forecast", fake_fetch)
+
+    res = client_for(db).get("/crews/me/events/83/weather")
+    assert res.status_code == 200
+    assert res.json()["available"] is False
+
+
+def test_event_weather_never_500s_when_client_raises(client_for, monkeypatch):
+    db = _base_db(events={84: _event_with_tour(84)})
+
+    async def boom(*a, **kw):
+        raise RuntimeError("upstream exploded")
+
+    monkeypatch.setattr(ce, "fetch_window_forecast", boom)
+
+    res = client_for(db).get("/crews/me/events/84/weather")
+    assert res.status_code == 200
+    assert res.json()["available"] is False
+    assert res.json()["hourly"] == []
+
+
+def test_event_weather_unavailable_beyond_forecast_horizon(client_for, monkeypatch):
+    # A club ride next season: no forecast exists, so don't fabricate one.
+    db = _base_db(events={85: _event_with_tour(85, starts_at=NOW + timedelta(days=200))})
+
+    called = []
+
+    async def fake_fetch(*a, **kw):
+        called.append(a)
+        return {}
+
+    monkeypatch.setattr(ce, "fetch_window_forecast", fake_fetch)
+
+    res = client_for(db).get("/crews/me/events/85/weather")
+    assert res.status_code == 200
+    assert res.json()["available"] is False
+    assert called == []  # gated locally, no wasted upstream call
+
+
+def test_event_weather_unavailable_for_long_past_event(client_for, monkeypatch):
+    db = _base_db(events={86: _event_with_tour(86, starts_at=NOW - timedelta(days=90))})
+
+    async def fake_fetch(*a, **kw):  # pragma: no cover — must not be reached
+        raise AssertionError("should not fetch for a long-past event")
+
+    monkeypatch.setattr(ce, "fetch_window_forecast", fake_fetch)
+
+    res = client_for(db).get("/crews/me/events/86/weather")
+    assert res.status_code == 200
+    assert res.json()["available"] is False

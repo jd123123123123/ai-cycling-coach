@@ -15,6 +15,9 @@ Endpoints (all under /crews/me/events):
   POST /crews/me/events/{id}/tour  upload a GPX (creator/owner only) → parse +
                                    cache polyline/distance/elevation, return event
   GET  /crews/me/events/{id}/tour  download the raw GPX (FileResponse); 404 if none
+  GET  /crews/me/events/{id}/weather  five-hour ride-weather strip at the route
+                                   start; honest available:false when there is no
+                                   tour, no forecast horizon, or upstream fails
 
 Tours are stored on disk at {settings.CREW_TOURS_ROOT}/{event_id}.gpx (the
 Railway /data volume in prod; a local .dev_data path in dev). The parsed summary
@@ -24,7 +27,7 @@ is cached on the crew_events row so the card renders without re-parsing.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -40,12 +43,22 @@ from app.models.crew_event import CrewEvent, CrewEventAttendee
 from app.models.user import User
 from app.services.crew_score import display_handle
 from app.services.crew_tour import parse_gpx
+from app.services.weather_client import fetch_window_forecast
 
 router = APIRouter(prefix="/crews/me/events", tags=["crew-events"])
 
 MAX_TOUR_BYTES = 10 * 1024 * 1024  # ~10 MB — GPX is text, this is generous.
 RSVP_STATUSES = ("going", "maybe", "out")
 EVENT_KINDS = ("sunrise_ride", "chaingang", "group_ride", "race")
+
+# Weather strip: five hourly cells from the event's start hour — long enough to
+# cover a proper group ride, and exactly what the detail page renders.
+WEATHER_WINDOW_HOURS = 5
+# Open-Meteo's /forecast endpoint only serves a band around today (a couple of
+# months back, ~16 days ahead). Gate locally so an event next winter is an
+# honest "unavailable" instead of a wasted request that 400s upstream.
+_FORECAST_MAX_DAYS_AHEAD = 14
+_FORECAST_MAX_DAYS_BEHIND = 5
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -109,6 +122,33 @@ class EventRead(BaseModel):
     tour_distance_m: float | None
     tour_elevation_m: float | None
     tour_polyline: list[list[float]] | None
+    # Elevation-profile series for the event detail page:
+    # [[cumulative_distance_m, elevation_m], …] (≤120 points). null when the GPX
+    # had no elevation data — the chart hides rather than faking a flat line.
+    tour_profile: list[list[float]] | None
+    tour_descent_m: float | None
+    tour_max_grade_pct: float | None  # steepest gradient sustained over ≥100 m
+
+
+class EventHour(BaseModel):
+    """One cell of the event's hourly weather strip. Every measure is nullable:
+    Open-Meteo can serve a window with gaps, and a missing number must render as
+    '—' rather than a zero that looks like real data."""
+
+    time: datetime
+    temp_c: float | None
+    wind_kmh: float | None
+    wind_dir_deg: float | None
+    precip_prob_pct: float | None
+    weather_code: int | None
+
+
+class EventWeatherRead(BaseModel):
+    available: bool
+    window_start: datetime | None
+    window_end: datetime | None
+    hourly: list[EventHour]
+    sunrise: datetime | None
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -193,6 +233,9 @@ def _serialize_event(
         tour_distance_m=event.tour_distance_m,
         tour_elevation_m=event.tour_elevation_m,
         tour_polyline=event.tour_polyline,
+        tour_profile=event.tour_profile,
+        tour_descent_m=event.tour_descent_m,
+        tour_max_grade_pct=event.tour_max_grade_pct,
     )
 
 
@@ -411,6 +454,9 @@ async def upload_tour(
     event.tour_polyline = parsed.polyline
     event.tour_distance_m = parsed.distance_m
     event.tour_elevation_m = parsed.elevation_m
+    event.tour_profile = parsed.profile or None  # honest NULL when no <ele> data
+    event.tour_descent_m = parsed.descent_m
+    event.tour_max_grade_pct = parsed.max_grade_pct
     await db.commit()
     await db.refresh(event)
     return await _serialize_with_attendees(db, event, current_user.id)
@@ -436,4 +482,127 @@ async def download_tour(
         path,
         media_type="application/gpx+xml",
         filename=event.tour_filename,
+    )
+
+
+def _parse_om_time(value) -> datetime | None:
+    """Open-Meteo returns naive ISO strings in the requested timezone; we always
+    request UTC, so stamp UTC on them rather than letting a naive datetime leak
+    into the response (the frontend renders these in the rider's locale)."""
+    if not isinstance(value, str):
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+_WEATHER_UNAVAILABLE = EventWeatherRead(
+    available=False, window_start=None, window_end=None, hourly=[], sunrise=None
+)
+
+
+@router.get("/{event_id}/weather", response_model=EventWeatherRead)
+async def get_event_weather(
+    event_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> EventWeatherRead:
+    """Ride-weather forecast for an event: five hourly cells from the start hour
+    at the route's own starting coordinates, plus that day's sunrise.
+
+    Decoration on a page that must render regardless, so every failure mode is
+    an honest ``available: false`` rather than an error: no uploaded tour (we
+    have no location and refuse to guess one), a date outside the forecast
+    horizon, or any upstream problem. Auth is the same crew-membership scoping as
+    the sibling endpoints: 403 when not in a crew, 404 for another crew's event.
+    """
+    mem = await _require_membership(db, current_user.id)
+    event = await _get_crew_event(db, event_id, mem.crew_id)
+
+    # Location comes only from the route's first point. No tour → no honest
+    # location (the meeting_point is free text, not coordinates) → unavailable.
+    polyline = event.tour_polyline or []
+    if not polyline or not isinstance(polyline[0], (list, tuple)) or len(polyline[0]) < 2:
+        return _WEATHER_UNAVAILABLE
+    try:
+        lat, lng = float(polyline[0][0]), float(polyline[0][1])
+    except (TypeError, ValueError):
+        return _WEATHER_UNAVAILABLE
+
+    starts_at = event.starts_at
+    if starts_at.tzinfo is None:  # SQLite/test rows can come back naive
+        starts_at = starts_at.replace(tzinfo=timezone.utc)
+    window_start = starts_at.astimezone(timezone.utc).replace(
+        minute=0, second=0, microsecond=0
+    )
+    window_end = window_start + timedelta(hours=WEATHER_WINDOW_HOURS)
+
+    now = datetime.now(timezone.utc)
+    if not (
+        now - timedelta(days=_FORECAST_MAX_DAYS_BEHIND)
+        <= window_start
+        <= now + timedelta(days=_FORECAST_MAX_DAYS_AHEAD)
+    ):
+        return _WEATHER_UNAVAILABLE
+
+    try:
+        body = await fetch_window_forecast(lat, lng, window_start, window_end)
+    except Exception:  # the client already swallows its own failures; belt+braces
+        body = None
+    if not body:
+        return _WEATHER_UNAVAILABLE
+
+    hourly = body.get("hourly") or {}
+    times = hourly.get("time") or []
+    temps = hourly.get("temperature_2m") or []
+    precs = hourly.get("precipitation_probability") or []
+    winds = hourly.get("wind_speed_10m") or []
+    wdirs = hourly.get("wind_direction_10m") or []
+    codes = hourly.get("weather_code") or []
+
+    def _at(seq, i):
+        val = seq[i] if i < len(seq) else None
+        return None if val is None else val
+
+    cells: list[EventHour] = []
+    for i, raw_t in enumerate(times):
+        t = _parse_om_time(raw_t)
+        # Half-open window: exactly WEATHER_WINDOW_HOURS cells, so the strip has
+        # a fixed width whatever minute the ride happens to start on.
+        if t is None or not (window_start <= t < window_end):
+            continue
+        code = _at(codes, i)
+        cells.append(
+            EventHour(
+                time=t,
+                temp_c=_at(temps, i),
+                wind_kmh=_at(winds, i),
+                wind_dir_deg=_at(wdirs, i),
+                precip_prob_pct=_at(precs, i),
+                weather_code=int(code) if code is not None else None,
+            )
+        )
+    if not cells:
+        # Upstream answered but not for our window (e.g. clipped horizon).
+        return _WEATHER_UNAVAILABLE
+
+    # Sunrise for the ride's own date — the daily arrays are parallel to
+    # daily.time, so match on date instead of assuming index 0.
+    sunrise: datetime | None = None
+    daily = body.get("daily") or {}
+    d_times = daily.get("time") or []
+    d_sunrise = daily.get("sunrise") or []
+    for i, day in enumerate(d_times):
+        if isinstance(day, str) and day.startswith(window_start.date().isoformat()):
+            sunrise = _parse_om_time(_at(d_sunrise, i))
+            break
+
+    return EventWeatherRead(
+        available=True,
+        window_start=window_start,
+        window_end=window_end,
+        hourly=cells,
+        sunrise=sunrise,
     )

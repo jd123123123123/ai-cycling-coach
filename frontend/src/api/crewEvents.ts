@@ -40,6 +40,39 @@ export interface CrewEvent {
   tour_distance_m: number | null
   tour_elevation_m: number | null
   tour_polyline: [number, number][] | null // [[lat, lng], …]
+  // Route profile for the elevation chart: [[cumulative_distance_m, ele_m], …],
+  // downsampled server-side. Empty/null when the GPX carried no elevation —
+  // many route-only exports don't, and the chart says so rather than drawing a
+  // flat line that looks like a measurement.
+  tour_profile: [number, number][] | null
+  tour_descent_m: number | null
+  tour_max_grade_pct: number | null
+}
+
+// ── Ride weather (GET /crews/me/events/{id}/weather) ──────────────────
+// Decoration on a page that must render without it: `available` is false for an
+// event with no route (no coordinates to ask about) or one outside the forecast
+// horizon, and the card hides rather than inventing a forecast.
+export interface EventWeatherHour {
+  time: string
+  temp_c: number | null
+  wind_kmh: number | null
+  wind_dir_deg: number | null
+  precip_prob_pct: number | null
+  weather_code: number | null
+}
+
+export interface EventWeather {
+  available: boolean
+  window_start: string | null
+  window_end: string | null
+  hourly: EventWeatherHour[]
+  sunrise: string | null
+}
+
+export async function fetchEventWeather(eventId: number): Promise<EventWeather> {
+  const res = await apiClient.get<EventWeather>(`/crews/me/events/${eventId}/weather`)
+  return res.data
 }
 
 export interface CreateEventInput {

@@ -10,7 +10,7 @@
  * structure with honest "—"/empty notes — never fabricated.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Swords, Trophy, Flame, Check, Users, UserPlus, Bell, Clock,
@@ -1953,10 +1953,16 @@ function EventCard({ ev, de, canUploadTour, onRsvp, rsvpPending, onUploadTour, u
           <span className="num-display" style={{ fontSize: 13, color: kind.color, lineHeight: 1 }}>{weekday}</span>
           <span className="num-mono" style={{ fontSize: 10, fontWeight: 600, color: kind.color, marginTop: 2 }}>{time}</span>
         </div>
-        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+        {/* Name/meta open the full ride page. The RSVP button beside them keeps
+            its own tap target, so the quick "Join" from the feed still works
+            without a detour. */}
+        <Link to={`/crew-event/${ev.id}`} className="flex flex-col gap-0.5 flex-1 min-w-0 text-left">
           <span className="truncate" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{ev.name}</span>
-          <span className="truncate" style={{ fontSize: 12, color: 'var(--color-muted)' }}>{meta}</span>
-        </div>
+          <span className="truncate inline-flex items-center gap-1" style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+            {meta}
+            <ChevronRight size={12} strokeWidth={2.4} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+          </span>
+        </Link>
         <div className="flex flex-col gap-1 shrink-0">
           <button type="button" onClick={() => onRsvp(going ? 'out' : 'going')} disabled={rsvpPending} aria-pressed={going}
             className="inline-flex items-center justify-center gap-1 rounded-full"

@@ -73,6 +73,55 @@ async def fetch_today_forecast(
     return body
 
 
+async def fetch_window_forecast(
+    lat: float,
+    lng: float,
+    start: datetime,
+    end: datetime,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> dict | None:
+    """Hourly forecast (UTC) plus that day's sunrise for an arbitrary
+    lat/lng + date window, or None.
+
+    Sibling of fetch_today_forecast, which is hard-wired to "the athlete's
+    current local day at their last ride's location" and therefore cannot serve
+    a planned crew event days out at the route's own start coordinates. Same
+    upstream (Open-Meteo /v1/forecast), same defensive contract: any failure —
+    including a 400 because the requested dates fall outside Open-Meteo's
+    forecast horizon — returns None and the caller degrades to "unavailable".
+
+    Not cached: unlike the Today nudge this is not hit on every pageview, and a
+    stale cache entry on a ride-day morning is worse than an extra request.
+    """
+    params = {
+        "latitude": round(lat, 3),
+        "longitude": round(lng, 3),
+        "start_date": start.date().isoformat(),
+        "end_date": end.date().isoformat(),
+        "hourly": "temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,weather_code",
+        "daily": "sunrise",
+        "wind_speed_unit": "kmh",
+        "timezone": "UTC",
+    }
+    owns_client = client is None
+    try:
+        client = client or httpx.AsyncClient(timeout=_TIMEOUT)
+        try:
+            resp = await client.get(_FORECAST_URL, params=params)
+            resp.raise_for_status()
+            body = resp.json()
+        finally:
+            if owns_client:
+                await client.aclose()
+    except Exception as exc:  # network, HTTP, JSON — all non-fatal
+        logger.info("window forecast fetch failed (non-fatal): %s", exc)
+        return None
+    if not isinstance(body, dict) or "hourly" not in body:
+        return None
+    return body
+
+
 async def fetch_ride_weather(
     lat: float,
     lng: float,
