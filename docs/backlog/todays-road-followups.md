@@ -43,9 +43,18 @@ check by eye on a phone once, and nothing else can settle them:
   means "Critical Power" when CP *is* known. One pixel line, two meanings. It also squashes the
   road into the lower half of the relief band, making a VO₂ session and a recovery ride the same
   shape.
-- **Duplicated aura sky, already drifted.** `FRAG_ROAD` re-implements `FRAG_AURA`'s sky by hand
-  with a different uv flip, bloom centre and bottom falloff. On a blockless flat-mode day the
-  backdrop silently swaps from `readiness-aura.glsl` to this drifted copy. Nothing pins them.
+- **Duplicated aura sky, now drifted much further (updated 2026-07-28).** `FRAG_ROAD`
+  re-implements `FRAG_AURA`'s sky by hand with a different uv flip, bloom centre and bottom
+  falloff. On a blockless flat-mode day the backdrop silently swaps from `readiness-aura.glsl`
+  to this drifted copy. Nothing pins them.
+  The aura has since been rebuilt as contained emission on a true-dark base (tight core at
+  `vec2(0.5,0.42)`, vignette, film grain, falloff to `u_bg`). The road's copy still carries the
+  OLD pastel wash — `smoothstep(1.02, 0.0, r)`, a highlight lifted 60 % toward white, and a
+  bottom falloff floored at `0.58` so it never reaches `u_bg`. Confirmed present in the shipped
+  bundle. Latent only because the road is kill-switched; **re-enabling the road without porting
+  the new sky would visibly regress the Today background** to the washed-out version on every
+  road day. Port `FRAG_AURA`'s sky into `FRAG_ROAD` (or better: extract one shared `sky()`
+  function so they cannot drift a third time) as part of any road revival.
 - **Flat-mode terrain presence hangs off an irrelevance.** `hasRoad` gates on
   `samples.length > 0`, but `surfaceAt` discards the profile entirely in flat modes — so a
   planned-rest day shows bare sky or a flat valley depending on whether the plan happens to
