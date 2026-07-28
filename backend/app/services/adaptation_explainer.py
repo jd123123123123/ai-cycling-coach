@@ -41,7 +41,7 @@ def explain_adaptations(evidence: dict | None, *, de: bool = False) -> dict:
     ev = evidence or {}
     changes: list[dict] = []
 
-    def add(signal_en, signal_de, direction, detail_en, detail_de, action_en, action_de, principle_en, principle_de, severity):
+    def add(signal_en, signal_de, direction, detail_en, detail_de, action_en, action_de, principle_en, principle_de, severity, kind="load"):
         changes.append({
             "signal": signal_de if de else signal_en,
             "direction": direction,  # 'up' | 'down' | 'flat'
@@ -49,6 +49,11 @@ def explain_adaptations(evidence: dict | None, *, de: bool = False) -> dict:
             "action": action_de if de else action_en,
             "principle": principle_de if de else principle_en,
             "severity": severity,
+            # 'recovery' = measured off the body overnight (HRV, sleep).
+            # 'load'     = derived from training history (TSB, CTL ramp, ACWR).
+            # The summary below may only call signals "recovery signals" when a
+            # recovery one is actually among them — see the note there.
+            "kind": kind,
         })
 
     # ── HRV drift (autonomic readiness) ────────────────────────────────────
@@ -62,7 +67,7 @@ def explain_adaptations(evidence: dict | None, *, de: bool = False) -> dict:
                 "Intensität gedeckelt — heute eher aerob (Z2)",
                 "A suppressed overnight HRV signals incomplete parasympathetic recovery; training hard through it blunts adaptation.",
                 "Eine gedämpfte HRV zeigt unvollständige parasympathische Erholung; hartes Training bremst dann die Anpassung.",
-                "ease")
+                "ease", kind="recovery")
         elif hrv_delta >= 7:
             add("HRV", "HRV", "up",
                 f"HRV is {hrv_delta:.0f}% above baseline — well recovered",
@@ -71,7 +76,7 @@ def explain_adaptations(evidence: dict | None, *, de: bool = False) -> dict:
                 "grünes Licht für eine Qualitäts-/Intensitätseinheit",
                 "An elevated HRV reflects strong autonomic recovery — the window where hard work yields the most adaptation.",
                 "Eine erhöhte HRV zeigt starke autonome Erholung — das Fenster, in dem harte Arbeit am meisten bringt.",
-                "boost")
+                "boost", kind="recovery")
 
     # ── Form / TSB ─────────────────────────────────────────────────────────
     tsb = _num(_g(ev, "pmc", "tsb"))
@@ -139,7 +144,7 @@ def explain_adaptations(evidence: dict | None, *, de: bool = False) -> dict:
             "Intensität reduziert; heute Nacht den Schlaf schützen",
             "One night of short sleep lowers time-to-exhaustion and readiness for high-intensity work.",
             "Eine Nacht kurzer Schlaf senkt die Ausbelastungszeit und die Bereitschaft für harte Einheiten.",
-            "ease")
+            "ease", kind="recovery")
 
     # ── Yesterday's session (recovery sequencing) ──────────────────────────
     y_intensity = _g(ev, "recent", "yesterday_intensity") or _g(ev, "recent", "last_session_zone")
@@ -176,9 +181,22 @@ def explain_adaptations(evidence: dict | None, *, de: bool = False) -> dict:
                    if de else
                    f"{len(eases)} signal(s) point to holding back — today is deliberately easier.")
     elif boosts and not eases:
-        summary = ("Deine Erholungssignale sind grün — heute darfst du drücken."
-                   if de else
-                   "Your recovery signals are green — today you can push.")
+        # Name the signals that are ACTUALLY green. Of the three boost sources
+        # only HRV is measured off the body; TSB and the CTL ramp are computed
+        # from training history. The old copy called all of them "recovery
+        # signals", so an athlete whose watch had not reported an overnight
+        # reading in eight days was told their recovery signals were green —
+        # off a +19 TSB and nothing else. Form is a real, useful green light;
+        # it is just not a recovery measurement, and saying so keeps this card
+        # consistent with the readiness gate on every other surface.
+        if any(c.get("kind") == "recovery" for c in boosts):
+            summary = ("Deine Erholungssignale sind grün — heute darfst du drücken."
+                       if de else
+                       "Your recovery signals are green — today you can push.")
+        else:
+            summary = ("Deine Form spricht für Qualität — heute darfst du drücken."
+                       if de else
+                       "Your form says go — today you can push.")
     else:
         summary = ("Gemischte Signale — der Plan balanciert Reiz und Erholung."
                    if de else

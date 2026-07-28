@@ -660,8 +660,20 @@ class TestNoPowerWattsInDrafts:
                     assert isinstance(pct, float), (
                         f"power_target_pct_ftp should be float, got {type(pct)}: {pct}"
                     )
-                    assert 0.0 < pct <= 1.5, (
-                        f"power_target_pct_ftp {pct} out of sane range (0, 1.5]"
+                    # Ceiling is ZONE-AWARE. A flat 1.5 cap was wrong: it
+                    # asserted something false about sprint training. Zone 6/7
+                    # work is 10-30s neuromuscular efforts at RPE 10, and 200%
+                    # FTP there is unremarkable (trained sprinters reach
+                    # 300-400%). The old cap only passed because it depended on
+                    # the day of week — it went red the moment a week shape
+                    # containing `aktivitus_pe_5` (20x(10/20s) sprints) was
+                    # generated, which is a scheduling coincidence, not a bug.
+                    # Sustained zones keep the tight cap, which is where an
+                    # out-of-range target would actually be dangerous.
+                    ceiling = 3.0 if interval.get("zone", 0) >= 6 else 1.5
+                    assert 0.0 < pct <= ceiling, (
+                        f"power_target_pct_ftp {pct} out of sane range "
+                        f"(0, {ceiling}] for zone {interval.get('zone')}"
                     )
 
 

@@ -1037,11 +1037,21 @@ export default function TodayTab() {
     : tFor(locale, 'ring_readiness')
   // Big verdict headline (short) — the wittier, data-driven wrapLine is the
   // supporting sentence beneath it.
+  // 'pending' gets a headline too. It used to fall through to null, which was
+  // harmless while the pending branch replaced the whole hero — but now that
+  // the hero survives a withheld score, a null headline left the face with a
+  // medallion, one pill and a small grey line, and no answer at the size the
+  // answer belongs. Readiness is unknown here; the PLAN is not, so the
+  // headline is plan-anchored and stays true either way.
   const verdictHead = fState === 'ready' ? tFor(locale, 'verdict_go_ride')
     : fState === 'controlled' ? tFor(locale, 'verdict_controlled')
     : fState === 'rest' ? tFor(locale, 'verdict_rest')
     : fState === 'post' ? tFor(locale, 'verdict_banked')
     : fState === 'planned-rest' ? tFor(locale, 'verdict_rest_session')
+    : fState === 'pending'
+      ? (isActiveTrainingDay && wIntensity
+          ? (de ? `${wIntensity.t} steht an` : `${wIntensity.t} on deck`)
+          : (de ? 'Dein Plan steht' : 'Your plan stands'))
     : null
   // Section kicker above the session/rest block.
   const sessionKicker = fState === 'rest' ? tFor(locale, 'kicker_instead')
