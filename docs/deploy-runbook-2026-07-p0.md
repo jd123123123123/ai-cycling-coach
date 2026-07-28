@@ -37,6 +37,18 @@ Context: docs/usability-audit-2026-07.md; implementation commits `9fc8827..HEAD`
   the profile on first load; athletes outside Europe/Berlin get correct
   local-day attribution from their first session.
 
+## BLOCKER — map attribution (added 2026-07-28)
+
+The crew-ride map uses Maptoolkit tiles (no API key). Their licence requires
+BOTH the "© Maptoolkit © OpenStreetMap" text notice **and** the Maptoolkit logo,
+clickable and unobstructed, bottom-right on every map. The text notice ships
+(MapLibre renders it from the TileJSON); **the logo does not** — the asset is not
+bundled. Do not ship the map to real users until it is added, or until written
+confirmation from Maptoolkit that the text alone suffices.
+
+Also worth registering the production domain with them: free, and it raises the
+rate ceiling 5× (120 → 600 tiles/s sustained).
+
 ## Watchlist (first week)
 
 - `GET /coach/brief` latency: now also computes the fresh DailyDecision
