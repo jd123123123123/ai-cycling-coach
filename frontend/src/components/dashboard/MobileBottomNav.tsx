@@ -1,29 +1,42 @@
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Zap, Footprints, Heart, BarChart3, Users, TrendingUp } from 'lucide-react'
+import { Zap, CalendarDays, Heart, TrendingUp } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
+import { CHAPTERS, type ChapterId } from '../../utils/seasonArc'
 
 // Bottom navigation — rebuilt 1:1 from pencil-new.pen component/TabBar. A
-// floating translucent pill with five surfaces: Today · Train · Recovery ·
-// History · Social. Coral marks the active tab. Shown on every viewport (the
-// app is phone-first, like the .pen).
+// floating translucent pill, now with the four chapters of one season arc:
+// Today · Plan · Body · History. Coral marks the active tab. Shown on every
+// viewport (the app is phone-first, like the .pen).
 
-type TabId = 'today' | 'plan' | 'progress' | 'recovery' | 'analyze' | 'social'
-
-// `route` items navigate to a standalone page; the rest flip the ?tab= param.
-const TABS: Array<{ id: TabId; en: string; de: string; icon: React.ReactNode; route?: string }> = [
-  { id: 'today',    en: 'Today',    de: 'Heute',    icon: <Zap size={20} strokeWidth={2} /> },
-  { id: 'plan',     en: 'Train',    de: 'Training', icon: <Footprints size={20} strokeWidth={2} /> },
-  { id: 'progress', en: 'Progress', de: 'Fortschritt', icon: <TrendingUp size={20} strokeWidth={2} />, route: '/progress/bike' },
-  { id: 'recovery', en: 'Recovery', de: 'Erholung', icon: <Heart size={20} strokeWidth={2} /> },
-  { id: 'analyze',  en: 'History',  de: 'Verlauf',  icon: <BarChart3 size={20} strokeWidth={2} /> },
-  { id: 'social',   en: 'Social',   de: 'Social',   icon: <Users size={20} strokeWidth={2} /> },
+// Four chapters of one season arc, not six topic buckets. Progress folded into
+// History (both answer "did it work?"), and Social left the bar entirely —
+// crew rides belong on the Plan calendar and kudos belong in History's
+// evidence, so a peer tab was making the crew compete with the storyline for a
+// nav slot. `?tab=social` still RESOLVES (see resolveActive) so no existing
+// link 404s; it simply has no button of its own.
+const TABS: Array<{ id: ChapterId; en: string; de: string; icon: React.ReactNode }> = [
+  { id: 'today',   en: 'Today',   de: 'Heute',   icon: <Zap size={20} strokeWidth={2} /> },
+  { id: 'plan',    en: 'Plan',    de: 'Plan',    icon: <CalendarDays size={20} strokeWidth={2} /> },
+  { id: 'body',    en: 'Body',    de: 'Körper',  icon: <Heart size={20} strokeWidth={2} /> },
+  { id: 'history', en: 'History', de: 'Verlauf', icon: <TrendingUp size={20} strokeWidth={2} /> },
 ]
 
-function resolveActive(raw: string | null): TabId {
+// The bar and the chapter dots must agree, or the dots count one story and the
+// buttons offer another.
+if (TABS.length !== CHAPTERS.length) {
+  throw new Error(`ChapterBar has ${CHAPTERS.length} chapters, nav has ${TABS.length} tabs`)
+}
+
+/** Old ?tab= values keep working. Retired ids map onto their new chapter
+ *  rather than silently falling through to 'today', which would have sent
+ *  every bookmarked /dashboard?tab=recovery link to the wrong page. */
+export function resolveActive(raw: string | null): ChapterId {
   if (raw === 'plan' || raw === 'train' || raw === 'week' || raw === 'workouts') return 'plan'
-  if (raw === 'recovery') return 'recovery'
-  if (raw === 'analyze' || raw === 'history' || raw === 'trends' || raw === 'report') return 'analyze'
-  if (raw === 'social' || raw === 'crew') return 'social'
+  if (raw === 'body' || raw === 'recovery') return 'body'
+  if (raw === 'history' || raw === 'analyze' || raw === 'trends' || raw === 'report' || raw === 'progress') return 'history'
+  // Crew content now lives inside Plan and History; History is where kudos and
+  // crew standing land, so that is the honest destination for a crew link.
+  if (raw === 'social' || raw === 'crew') return 'history'
   return 'today'
 }
 
@@ -36,18 +49,16 @@ export default function MobileBottomNav() {
   // Honest active state (audit P1-12): a tab only lights up on its own
   // surface. /coach, /season, /load-form etc. previously kept 'Heute' lit —
   // a false you-are-here on 7+ routes. Non-dashboard routes (except
-  // /progress) highlight nothing.
-  const active: TabId | null = location.pathname.startsWith('/progress')
-    ? 'progress'
+  // /progress) highlight nothing. /progress is no longer a tab of its own —
+  // it is a detail page inside the History chapter, so it lights History
+  // rather than a fifth slot.
+  const active: ChapterId | null = location.pathname.startsWith('/progress')
+    ? 'history'
     : location.pathname.startsWith('/dashboard')
       ? resolveActive(searchParams.get('tab'))
       : null
 
-  function handleTab(tab: { id: TabId; route?: string }) {
-    if (tab.route) {
-      navigate(tab.route)
-      return
-    }
+  function handleTab(tab: { id: ChapterId }) {
     // Coming from a standalone route (e.g. /progress), go back to the dashboard.
     if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/dashboard')) {
       navigate(`/dashboard?tab=${tab.id}`)

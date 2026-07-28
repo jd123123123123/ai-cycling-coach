@@ -1,14 +1,21 @@
 /**
- * DashboardPage — tab orchestrator.
+ * DashboardPage — chapter orchestrator.
  *
- * Three surfaces, each with one job:
- *   - today  → the verdict (readiness + prescription, one glance)
- *   - train  → the plan (this week + day structure + plan-vs-actual)
- *   - trends → the evidence (PMC, distribution, biometrics, estimates, history)
+ * Four chapters of one season arc, each with one job:
+ *   - today   → the verdict (readiness + prescription, one glance)
+ *   - plan    → the plan (this week + day structure + plan-vs-actual)
+ *   - body    → biometrics / readiness (the old Recovery surface)
+ *   - history → the evidence (PMC, distribution, biometrics, estimates,
+ *               history, and — now — Progress, which folded in here)
  *
- * Legacy `?tab=bike|run` redirect to `today`; `?tab=week` aliases `train`;
- * `?tab=crew` renders the Crew Week Highlights surface (deep-link only —
- * not in the bottom nav yet; Social remains the fifth nav surface).
+ * Legacy `?tab=bike|run` redirect to `today`; `?tab=week` aliases `plan`;
+ * `?tab=progress|analyze|trends|report` all alias `history`.
+ *
+ * Crew keeps its two deep-linkable homes until their content is woven into
+ * Plan and History (phases 2 and 3): `?tab=social` still renders `SocialTab`
+ * and `?tab=crew` still renders `CrewHighlights`, a distinct component. Both
+ * are checked before the chapter switch so `resolveActive` collapsing them
+ * onto `history` for nav-highlighting purposes never drops either surface.
  *
  * Tab state lives in the `?tab` URL search param (default 'today'), written
  * back with `replace: true` so back-nav doesn't accumulate tab changes.
@@ -25,40 +32,14 @@ import RecoveryTab from '../components/dashboard/tabs/RecoveryTab'
 import HistoryTab from '../components/dashboard/tabs/HistoryTab'
 import SocialTab from '../components/social/tabs/SocialTab'
 import CrewHighlights from '../components/social/tabs/CrewHighlights'
-
-type TabId = 'today' | 'plan' | 'recovery' | 'analyze' | 'social' | 'crew'
-
-function resolveTab(raw: string | null): TabId {
-  switch (raw) {
-    case 'today': return 'today'
-    // Train folds the old Plan/Week + Workouts surfaces
-    case 'plan':
-    case 'train':
-    case 'week':
-    case 'workouts': return 'plan'
-    // Recovery — biometrics / readiness
-    case 'recovery': return 'recovery'
-    // History = analytics (Load & Form + records)
-    case 'analyze':
-    case 'history':
-    case 'trends':
-    case 'report': return 'analyze'
-    // Social is the fifth surface
-    case 'social': return 'social'
-    // Crew Week Highlights — its own surface (deep-linked via ?tab=crew)
-    case 'crew': return 'crew'
-    // legacy sport tabs collapsed into Today
-    case 'bike':
-    case 'run':
-    default: return 'today'
-  }
-}
+import { resolveActive } from '../components/dashboard/MobileBottomNav'
+import type { ChapterId } from '../utils/seasonArc'
 
 export default function DashboardPage() {
   const [searchParams] = useSearchParams()
   const reducedMotion = useReducedMotion()
 
-  const activeTab: TabId = resolveTab(searchParams.get('tab'))
+  const activeTab: ChapterId = resolveActive(searchParams.get('tab'))
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -72,13 +53,21 @@ export default function DashboardPage() {
   }
 
   const tabContent = (() => {
+    // Crew keeps its two deep-linkable homes until their content is woven into
+    // Plan and History (phases 2 and 3). Until then a bookmarked
+    // /dashboard?tab=social or /dashboard?tab=crew must keep showing what it
+    // showed before — collapsing both into the History chapter here would
+    // silently drop the CrewHighlights surface, which is a distinct component
+    // from SocialTab, not an alias for it.
+    const rawTab = searchParams.get('tab')
+    if (rawTab === 'social') return <SocialTab />
+    if (rawTab === 'crew') return <CrewHighlights />
+
     switch (activeTab) {
-      case 'today':    return <TodayTab />
-      case 'plan':     return <PlanTab />
-      case 'recovery': return <RecoveryTab />
-      case 'analyze':  return <HistoryTab />
-      case 'social':   return <SocialTab />
-      case 'crew':     return <CrewHighlights />
+      case 'today':   return <TodayTab />
+      case 'plan':    return <PlanTab />
+      case 'body':    return <RecoveryTab />
+      case 'history': return <HistoryTab />
     }
   })()
 
