@@ -269,10 +269,18 @@ export default function DashboardShell({
             <TodayRoad ref={roadRef} profile={road.profile} mode={road.mode} auraColor={road.color} onTravel={setTravel} />
           </div>
         ) : aura && (
+          // `fixed`, not `absolute`. Absolute inside <main> stretched the canvas
+          // over main's FULL scroll height — ~2500px on Today — so the shader's
+          // bloom, positioned at 30% of the canvas, landed roughly 750px down
+          // the document instead of behind the readiness ring, and every card
+          // on the page sat inside the tinted field. Fixing it to the viewport
+          // puts the light where the ring is and lets content scroll THROUGH
+          // it, which is also what the road layer above already does — the two
+          // backdrops no longer parallax differently when the state flips.
           <ShaderCanvas
             variant="aura"
             uniforms={{ u_aura: aura, u_bg: '#0A0C0F' }}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: -1, pointerEvents: 'none' }}
+            style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', zIndex: -1, pointerEvents: 'none' }}
           />
         )}
 
