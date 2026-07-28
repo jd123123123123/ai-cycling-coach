@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
 import { CelebrationProvider } from './contexts/CelebrationContext'
@@ -38,7 +38,6 @@ const ExploreRoutesView = lazyWithRetry(() => import('./pages/ExploreRoutesView'
 const PlanImportView = lazyWithRetry(() => import('./pages/PlanImportView'))
 const DebriefView = lazyWithRetry(() => import('./pages/DebriefView'))
 const SessionReportView = lazyWithRetry(() => import('./pages/SessionReportView'))
-const RideAnalysisView = lazyWithRetry(() => import('./pages/RideAnalysisView'))
 const RideRecapView = lazyWithRetry(() => import('./pages/RideRecapView'))
 const CrewRideDetailView = lazyWithRetry(() => import('./pages/CrewRideDetailView'))
 // Bike-only: the standalone Load & Form (/load-form) analysis page is archived
@@ -195,13 +194,16 @@ function AppRoutes() {
             }
           />
 
+          {/* The deep ride analysis is no longer its own screen: it is the tail
+              of the recap, which was the entry point from History anyway. The
+              two duplicated roughly half their content (ride header, summary
+              strip, coach narrative, NP/IF hero, power curve, route, PRs), so a
+              rider had to visit both and reconcile them to understand one ride.
+              This path is kept as a redirect — old links, notification deep
+              links and the celebration cards all point at it. */}
           <Route
             path="/activities/:id/ride"
-            element={
-              <ProtectedRoute checkOnboarding>
-                <RideAnalysisView />
-              </ProtectedRoute>
-            }
+            element={<RideRideRedirect />}
           />
 
           <Route
@@ -266,6 +268,12 @@ function AppRoutes() {
       </Suspense>
     </PageTransition>
   )
+}
+
+/** Preserves `/activities/:id/ride` links by sending them to the merged page. */
+function RideRideRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/activities/${id}/recap`} replace />
 }
 
 export default App

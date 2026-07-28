@@ -15,15 +15,20 @@
  * rule. Every missing stream renders an honest "—" or the card self-hides.
  */
 import { useEffect, useMemo } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { parseISO, format } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
 import {
-  ChevronLeft, Share2, Sparkles, Activity, TrendingUp, Gauge, Zap, Award, Star,
-  ChevronRight, Flag, LineChart, Trophy, CheckCircle2,
+  ChevronLeft, Share2, Sparkles, Activity, TrendingUp, Gauge, Zap, Award, Star, LineChart, Trophy, CheckCircle2,
 } from 'lucide-react'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import { useStreamAnalysis } from '../hooks/useStreamAnalysis'
+import { usePMC } from '../hooks/usePMC'
+import { useActivitiesRange } from '../hooks/useActivitiesRange'
+import { useCurrentWeek } from '../hooks/useCurrentWeek'
+import RideEffectCard from '../components/debrief/RideEffectCard'
+import RideAnalysisView from './RideAnalysisView'
+import { localDayKey } from '../utils/loadMetrics'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useRideRpe, useSetRideRpe } from '../hooks/useRideRpe'
 import type { RpeValue } from '../api/rideFeedback'
@@ -113,6 +118,14 @@ export default function RideRecapView() {
   const { data: rpeData } = useRideRpe(idOk ? activityId : undefined)
   const setRpe = useSetRideRpe(idOk ? activityId : undefined)
   const { celebrateOnce } = useCelebrate()
+  // Context for "what this ride did": the load model either side of the ride,
+  // every ride of the season for the rank, and the week plan for the target it
+  // was measured against. All three are shared react-query caches the rest of
+  // the app already warms, so this adds no new round trip in the common case.
+  const { data: pmc } = usePMC(180)
+  const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
+  const { data: seasonActs } = useActivitiesRange(seasonStart, useMemo(() => new Date(), []))
+  const { data: weekPlan } = useCurrentWeek()
 
   const header = data?.header ?? null
   const verdict = data?.verdict ?? null
@@ -121,6 +134,27 @@ export default function RideRecapView() {
   const efforts = data?.efforts ?? []
   const ftp = athlete?.ftp_watts ?? data?.wko?.mftp_watts ?? null
   const weight = athlete?.weight_kg ?? null
+
+  // The plan target this ride is measured against: the planned row DATED to
+  // the ride's own day. Only the current week's plan is fetched, so an older
+  // ride simply has no target and the card drops that row rather than
+  // comparing against a week it was never part of.
+  const plannedTssForRide = useMemo(() => {
+    if (!header?.date) return null
+    const key = localDayKey(header.date)
+    const day = (weekPlan?.days ?? []).find((d) => d.date === key)
+    return day?.target_tss ?? null
+  }, [header?.date, weekPlan])
+
+  // Decoupling only means something once the ride is long enough for aerobic
+  // drift to develop. Under ~75 minutes the figure is noise, and presenting it
+  // as a durability verdict would read as a judgement on an interval session
+  // that was never trying to be durable.
+  const decouplingForCard = useMemo(() => {
+    const secs = header?.moving_time_s ?? 0
+    if (secs < 75 * 60) return null
+    return data?.efficiency?.decoupling_pct ?? null
+  }, [header?.moving_time_s, data?.efficiency])
 
   const route = useMemo(
     () => (sa?.gps?.polyline ? routePath(sa.gps.polyline, 358, 300) : null),
@@ -424,6 +458,25 @@ export default function RideRecapView() {
               </div>
             </div>
 
+            {/* 2.5 · What this ride DID — the effect + progression block.
+                Placed directly under the hero, above the coach narrative,
+                because "what did it train and what did it change" is the
+                question a rider opens a past ride to answer; the prose then
+                elaborates on an answer they already have. Self-hides when none
+                of its four rows has real data. */}
+            {header && (
+              <RideEffectCard
+                activityId={activityId}
+                rideDayKey={localDayKey(header.date)}
+                actualTss={header.tss}
+                plannedTss={plannedTssForRide}
+                zoneTimePct={pacing?.zone_time_pct ?? null}
+                decouplingPct={decouplingForCard}
+                pmcEntries={pmc?.entries ?? null}
+                seasonRides={seasonActs?.activities ?? null}
+              />
+            )}
+
             {/* 3 · AI narrative + tags */}
             {verdict?.ai_verdict && (
               <div className={cardCls} style={cardStyle}>
@@ -716,21 +769,22 @@ export default function RideRecapView() {
               </div>
             )}
 
-            {/* 9 · Go deeper → Ride Analysis */}
-            <Link
-              to={`/activities/${activityId}/ride`}
-              className="rounded-[24px] flex items-center gap-3"
-              style={{ ...cardStyle, padding: '16px 18px' }}
-            >
-              <span className="grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, background: 'var(--color-accent-soft)' }}>
-                <Flag size={19} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
+            {/* 9 · The deep dive, INLINE.
+                Was a "Tiefer eintauchen →" link to /activities/:id/ride. That
+                second screen re-rendered the ride header, the summary strip,
+                the coach narrative, the NP/IF hero and the power curve that
+                this page had already shown — so understanding one ride meant
+                visiting two screens and reconciling two versions of the same
+                numbers. It is now the tail of this page: `embedded` strips its
+                chrome and every duplicated block, leaving only what it uniquely
+                had (elevation, power zones, heart rate, pedal dynamics,
+                climbing/speed, fuel, full segment table). /ride redirects here. */}
+            <div className="flex flex-col gap-1">
+              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: 'var(--color-muted)' }}>
+                {de ? 'JEDE ZAHL DIESER FAHRT' : 'EVERY NUMBER FROM THIS RIDE'}
               </span>
-              <div className="flex flex-col min-w-0 flex-1">
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Tiefer eintauchen' : 'Go deeper on this ride'}</span>
-                <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Zonen, Spitzen & Entkopplung in der Fahrtanalyse' : 'Zones, peak efforts & decoupling in Ride Analysis'}</span>
-              </div>
-              <ChevronRight size={22} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
-            </Link>
+            </div>
+            <RideAnalysisView embedded />
           </div>
         )}
       </div>

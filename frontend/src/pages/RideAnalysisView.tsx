@@ -234,7 +234,17 @@ function MetricCell({ icon, iconColor, value, unit, label }: {
   )
 }
 
-export default function RideAnalysisView() {
+/**
+ * `embedded` folds this page into RideRecapView as its deep-dive tail (see the
+ * merge note in that file). It drops the page chrome (own scroll container,
+ * back link, loading/error states) and every block the recap already renders
+ * above it — the ride header, the summary strip, the coach insights, the power
+ * hero and the power curve were all duplicated verbatim across the two
+ * screens. What survives is what only this page ever had: elevation, power
+ * zones, heart rate, pedal dynamics, climbing/speed, fuel and the full segment
+ * table.
+ */
+export default function RideAnalysisView({ embedded = false }: { embedded?: boolean }) {
   const { id } = useParams()
   const activityId = Number(id)
   const { locale } = useLocale()
@@ -514,9 +524,15 @@ export default function RideAnalysisView() {
     return takes.slice(0, 4)
   }, [verdict, de])
 
-  return (
-    <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
-      <div className="max-w-md mx-auto px-4 pt-6 pb-28 flex flex-col gap-6">
+  // When embedded the recap owns the page, so this component must not bring its
+  // own scroll container, padding or back link — that nested a second page
+  // inside the first (a stray "← Zurück" mid-scroll and doubled horizontal
+  // padding). Built as an element, not a component defined during render: a
+  // render-created wrapper changes identity every pass and remounts the whole
+  // subtree, throwing away the charts' internal state on each parent update.
+  const body = (
+    <>
+        {!embedded && (
         <Link
           to="/dashboard?tab=history"
           className="inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1.5"
@@ -524,8 +540,11 @@ export default function RideAnalysisView() {
         >
           {de ? '← Zurück' : '← Back'}
         </Link>
+        )}
 
-        {isLoading && (
+        {/* The recap above already renders its own skeleton and error state for
+            the same query, so an embedded copy would double them. */}
+        {!embedded && isLoading && (
           <div className="flex flex-col gap-6">
             <div className="rounded-[24px] h-24 shimmer-bg" style={{ border: '1px solid var(--color-rule)' }} />
             <div className="rounded-[24px] h-28 shimmer-bg" style={{ border: '1px solid var(--color-rule)' }} />
@@ -533,7 +552,7 @@ export default function RideAnalysisView() {
           </div>
         )}
 
-        {isError && (
+        {!embedded && isError && (
           <p style={{ color: 'var(--color-bad)', fontSize: 14 }}>
             {de ? 'Fahrtanalyse konnte nicht geladen werden.' : "Couldn't load this ride analysis."}
           </p>
@@ -541,7 +560,8 @@ export default function RideAnalysisView() {
 
         {data && header && (
           <>
-            {/* 1 · Ride header */}
+            {!embedded && (<>
+{/* 1 · Ride header */}
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 rounded-full" style={{ padding: '5px 10px', background: 'var(--color-accent-soft)' }}>
@@ -596,6 +616,8 @@ export default function RideAnalysisView() {
                 ))}
               </div>
             )}
+
+                        </>)}
 
             {/* 3 · Route & elevation */}
             {((story?.route && story.route.length > 0) || elevBars || route || routeKind === 'zwift' || routeKind === 'rouvy') && (
@@ -670,7 +692,8 @@ export default function RideAnalysisView() {
               </div>
             )}
 
-            {/* 4 · Power hero (coral) */}
+            {!embedded && (<>
+{/* 4 · Power hero (coral) */}
             {powerStats.np != null && (
               <div className="rounded-[24px] p-5 flex flex-col gap-4" style={{ background: 'var(--color-paper-2)', border: '1.5px solid var(--color-accent)' }}>
                 <SectionHead icon={<Zap size={17} strokeWidth={2.2} />} label="POWER" color="var(--color-accent)" />
@@ -721,6 +744,8 @@ export default function RideAnalysisView() {
               </div>
             )}
 
+                        </>)}
+
             {/* 5 · Power zones */}
             {powerZones && (
               <div className={cardCls} style={cardStyle}>
@@ -758,7 +783,8 @@ export default function RideAnalysisView() {
               </div>
             )}
 
-            {/* 6 · Power curve — ride mean-maximal (best rolling avg per duration) */}
+            {!embedded && (<>
+{/* 6 · Power curve — ride mean-maximal (best rolling avg per duration) */}
             <div className={cardCls} style={cardStyle}>
               <SectionHead
                 icon={<Activity size={16} strokeWidth={2} />}
@@ -786,6 +812,8 @@ export default function RideAnalysisView() {
                 </div>
               )}
             </div>
+
+                        </>)}
 
             {/* 7 · Heart rate */}
             {(hrStats.avg != null || hrStats.max != null || hrStats.decoupling != null || hrZoneBreakdown) && (
@@ -1065,7 +1093,13 @@ export default function RideAnalysisView() {
 
           </>
         )}
-      </div>
+    </>
+  )
+
+  if (embedded) return <div className="flex flex-col gap-6">{body}</div>
+  return (
+    <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
+      <div className="max-w-md mx-auto px-4 pt-6 pb-28 flex flex-col gap-6">{body}</div>
     </div>
   )
 }
