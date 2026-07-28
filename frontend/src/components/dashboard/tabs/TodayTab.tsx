@@ -1229,27 +1229,20 @@ export default function TodayTab() {
               </ScoreRing>
             </Link>
             )}
-            {/* Status pills — state word + real form (TSB). The state word is a
-                readiness claim, so it is suppressed in the 'pending' face where
-                no readiness exists to claim; TSB stays, because form comes from
-                training load and is just as true with the watch offline. */}
-            {/* Both pills carry a dark glass ground (`#0A0C0F99`) rather than a
-                14 %-of-accent wash. The wash was invisible against the aura's
-                crown, leaving thin coloured text floating on coloured light. */}
-            <div className="flex items-center justify-center gap-2">
-              {fState !== 'pending' && (
+            {/* Status pill — state word only now. It used to carry a second
+                pill for raw TSB ("FORM +19"), which put a training-load number
+                above the verdict it was supposed to support — on a screen
+                whose whole promise (per review, Jul 2026) is "tell me what to
+                do in one sentence, not a number I have to interpret." TSB
+                itself isn't gone: Fitness & Frische below already shows it
+                with the words that explain what it means, so showing it twice
+                — once bare, once explained — only bought confusion. */}
+            {fState !== 'pending' && (
               <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: '#0A0C0F99', border: `1px solid color-mix(in srgb, ${statePill.color} 50%, transparent)`, backdropFilter: 'blur(8px)' }}>
                 <span style={{ width: 7, height: 7, borderRadius: 999, background: statePill.color, boxShadow: `0 0 8px ${statePill.color}` }} />
                 <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: `color-mix(in srgb, ${statePill.color} 78%, #FFFFFF)` }}>{statePill.word}</span>
               </span>
-              )}
-              {tsb != null && (
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5" style={{ background: '#0A0C0F99', border: `1px solid color-mix(in srgb, ${tsb >= 0 ? '#38B6FF' : '#FF9E3D'} 50%, transparent)`, backdropFilter: 'blur(8px)' }}>
-                  {tsb >= 0 ? <TrendingUp size={12} style={{ color: '#8ED0FF' }} /> : <TrendingDown size={12} style={{ color: '#FFC080' }} />}
-                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: tsb >= 0 ? '#8ED0FF' : '#FFC080' }}>{tFor(locale, 'form_label')} {tsb >= 0 ? '+' : ''}{Math.round(tsb)}</span>
-                </span>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Verdict (pen Verdict) — big state headline + the real, data-driven
@@ -1295,6 +1288,125 @@ export default function TodayTab() {
               at the BOTTOM as "WHERE THIS LEADS" — no duplicate mid-flow race
               chip here.) */}
 
+          {/* Section kicker — introduces the session / rest block directly
+              below (reordered Jul 2026: this used to sit at the END of the
+              hero, after Drivers/Coach/Momentum, so the actual session — the
+              answer to "should I ride today?" — rendered 1.7 screens below
+              the question on a 390px viewport. Session, weather, coach and
+              drivers now follow immediately; Drivers/Coach/Momentum moved
+              below the weather card, see there). */}
+          <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{sessionKicker}</span>
+        </>
+      )}
+
+      {/* 4 · Session Review — recommendation vs. what the athlete actually did */}
+      {review && <SessionReviewCard review={review} de={de} />}
+
+      {/* 4 · V3 Rest Card (pen JhT2g / iBIGi) — green, never punitive: the
+          decision's own reason, tomorrow preview, "Warum Pause?" → AI coach and
+          a manual-override link to the workout view, no-guilt footer. */}
+      {decisionState === 'planned_rest' && (
+        <div
+          className="rounded-[24px] p-5 flex flex-col gap-4"
+          style={{
+            background: 'linear-gradient(125deg, color-mix(in srgb, var(--color-recovery) 14%, var(--color-paper-2)) 0%, var(--color-paper-2) 75%)',
+            border: '1px solid var(--color-recovery)',
+          }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <Moon size={16} strokeWidth={2.2} style={{ color: 'var(--color-recovery)' }} />
+              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-recovery)' }}>{de ? 'Heutiger Plan' : "Today's plan"}</span>
+            </div>
+            <span className="rounded-full px-2.5 py-1" style={{ background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)', fontSize: 11, fontWeight: 700, color: 'var(--color-recovery)' }}>
+              {de ? 'Geplante Pause' : 'Planned rest'}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <h2 className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{de ? 'Erholungstag' : 'Recovery Day'}</h2>
+            <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+              {(decision?.reason?.trim() || (de ? 'Erholung ist heute die Einheit — der Plan verwandelt die Arbeit der Woche in Fitness.' : 'Recovery is the session today — the plan is turning this week’s work into fitness.'))}
+              {(() => {
+                const tp = tomorrow?.description?.trim()
+                  ? tomorrow.description.trim()
+                  : tomorrow?.predicted_tss != null
+                    ? `~${Math.round(tomorrow.predicted_tss)} TSS${chipLabel(tomorrow.intensity_chip) ? ` · ${chipLabel(tomorrow.intensity_chip)}` : ''}`
+                    : null
+                return tp ? ` ${de ? 'Morgen' : 'Tomorrow'}: ${tp}` : null
+              })()}
+            </p>
+          </div>
+          <RideAnywayZ1 de={de} />
+          <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>
+            {de ? 'Kein schlechtes Gewissen, nichts ausgegraut — der Plan hat diesen Tag mitgezählt.' : 'No guilt, no grey-outs — the plan already counted this day.'}
+          </p>
+        </div>
+      )}
+
+      {/* Brief-failure fallbacks (finding #1) — the honest reduced states.
+          (a) week plan says rest → slim factual rest row (no celebratory prose)
+          (b) week plan has a session → render THAT session from real week data
+          (c) nothing loads → degraded state + retry. Never the green rest card. */}
+      {fallback === 'planned_rest' && (
+        <div className="rounded-[24px] p-5 flex items-center gap-3.5" style={cardStyle} {...GLASS_CARD_MARKER}>
+          <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
+            <Moon size={22} strokeWidth={2} style={{ color: 'var(--color-recovery)' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Ruhetag' : 'Rest day'}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
+              {de ? 'Laut Wochenplan — Erholung & Regeneration.' : 'Per the week plan — recovery & regeneration.'}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* planned_session fallback now renders inside <SessionOfTheDay /> below. */}
+      {fallback === 'degraded' && (
+        <div className="rounded-[24px] p-5 flex flex-col items-center text-center gap-3" style={cardStyle} {...GLASS_CARD_MARKER}>
+          <div className="grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
+            <RefreshCw size={20} strokeWidth={2.2} style={{ color: 'var(--color-muted)' }} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>
+              {de ? 'Wir können deinen Plan gerade nicht laden' : "We can't load your plan right now"}
+            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+              {de ? 'Kurz durchatmen und neu versuchen — deine Daten sind sicher.' : 'Take a breath and retry — your data is safe.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => refetchBrief()}
+            className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-6"
+            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}
+          >
+            <RefreshCw size={14} /> {de ? 'Neu versuchen' : 'Try again'}
+          </button>
+        </div>
+      )}
+
+      {/* Einheit des Tages — the ONE shared session card (identical mount on
+          the Train tab). Owns the active-session card, the honest
+          planned_session fallback, the "Anpassen" sheet and "Rückgängig".
+          Reordered ahead of WeatherWindow (Jul 2026): the section kicker above
+          reads "DEINE HEUTIGE EINHEIT" and weather used to render before this,
+          so the heading's own promise was answered by something else first. */}
+      <SessionOfTheDay />
+
+      {/* Hourly WeatherWindow (pen "V3 · Explore Routes" IgqyH) — the SINGLE
+          weather element on Today, mounted near the session card, now AFTER
+          it: weather is a when-to-go modifier on the session, not the session
+          itself, and belongs after the thing it modifies. Shown on EVERY day
+          incl. rest days (explicit user decision, Jul 2026 — a rest day still
+          wants to know the dry window if you ride anyway). Hides itself only
+          when there's no real forecast data (honest absence). */}
+      <WeatherWindowCard />
+
+      {/* Drivers / Coach card / Momentum — moved here from the top of the hero
+          (Jul 2026 review): they were rendering the coach's read and the
+          overnight signal breakdown for a session the reader hadn't seen yet,
+          1.7 screens before the session card itself. Reading the coach's
+          "why" now follows having already seen the "what". */}
           {/* Drivers (pen Drivers) — the overnight signals moving the score, as
               honest chips; morning moment. Post/evening keep the adaptive tile
               row (session wrap-up / wind-down). */}
@@ -1396,108 +1508,6 @@ export default function TodayTab() {
           {/* (The standalone "Fokus heute:" line was removed — its content now
               lives once, humanised, inside the coach card above.) */}
 
-          {/* Section kicker — introduces the session / rest block below. */}
-          <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{sessionKicker}</span>
-        </>
-      )}
-
-      {/* 4 · Session Review — recommendation vs. what the athlete actually did */}
-      {review && <SessionReviewCard review={review} de={de} />}
-
-      {/* 4 · V3 Rest Card (pen JhT2g / iBIGi) — green, never punitive: the
-          decision's own reason, tomorrow preview, "Warum Pause?" → AI coach and
-          a manual-override link to the workout view, no-guilt footer. */}
-      {decisionState === 'planned_rest' && (
-        <div
-          className="rounded-[24px] p-5 flex flex-col gap-4"
-          style={{
-            background: 'linear-gradient(125deg, color-mix(in srgb, var(--color-recovery) 14%, var(--color-paper-2)) 0%, var(--color-paper-2) 75%)',
-            border: '1px solid var(--color-recovery)',
-          }}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <Moon size={16} strokeWidth={2.2} style={{ color: 'var(--color-recovery)' }} />
-              <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-recovery)' }}>{de ? 'Heutiger Plan' : "Today's plan"}</span>
-            </div>
-            <span className="rounded-full px-2.5 py-1" style={{ background: 'color-mix(in srgb, var(--color-recovery) 15%, transparent)', fontSize: 11, fontWeight: 700, color: 'var(--color-recovery)' }}>
-              {de ? 'Geplante Pause' : 'Planned rest'}
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <h2 className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{de ? 'Erholungstag' : 'Recovery Day'}</h2>
-            <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
-              {(decision?.reason?.trim() || (de ? 'Erholung ist heute die Einheit — der Plan verwandelt die Arbeit der Woche in Fitness.' : 'Recovery is the session today — the plan is turning this week’s work into fitness.'))}
-              {(() => {
-                const tp = tomorrow?.description?.trim()
-                  ? tomorrow.description.trim()
-                  : tomorrow?.predicted_tss != null
-                    ? `~${Math.round(tomorrow.predicted_tss)} TSS${chipLabel(tomorrow.intensity_chip) ? ` · ${chipLabel(tomorrow.intensity_chip)}` : ''}`
-                    : null
-                return tp ? ` ${de ? 'Morgen' : 'Tomorrow'}: ${tp}` : null
-              })()}
-            </p>
-          </div>
-          <RideAnywayZ1 de={de} />
-          <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-muted)', lineHeight: 1.4 }}>
-            {de ? 'Kein schlechtes Gewissen, nichts ausgegraut — der Plan hat diesen Tag mitgezählt.' : 'No guilt, no grey-outs — the plan already counted this day.'}
-          </p>
-        </div>
-      )}
-
-      {/* Brief-failure fallbacks (finding #1) — the honest reduced states.
-          (a) week plan says rest → slim factual rest row (no celebratory prose)
-          (b) week plan has a session → render THAT session from real week data
-          (c) nothing loads → degraded state + retry. Never the green rest card. */}
-      {fallback === 'planned_rest' && (
-        <div className="rounded-[24px] p-5 flex items-center gap-3.5" style={cardStyle} {...GLASS_CARD_MARKER}>
-          <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
-            <Moon size={22} strokeWidth={2} style={{ color: 'var(--color-recovery)' }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="num-display" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{de ? 'Ruhetag' : 'Rest day'}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
-              {de ? 'Laut Wochenplan — Erholung & Regeneration.' : 'Per the week plan — recovery & regeneration.'}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* planned_session fallback now renders inside <SessionOfTheDay /> below. */}
-      {fallback === 'degraded' && (
-        <div className="rounded-[24px] p-5 flex flex-col items-center text-center gap-3" style={cardStyle} {...GLASS_CARD_MARKER}>
-          <div className="grid place-items-center rounded-full" style={{ width: 44, height: 44, background: 'var(--color-surface-2)' }}>
-            <RefreshCw size={20} strokeWidth={2.2} style={{ color: 'var(--color-muted)' }} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <div className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>
-              {de ? 'Wir können deinen Plan gerade nicht laden' : "We can't load your plan right now"}
-            </div>
-            <p style={{ fontSize: 12.5, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
-              {de ? 'Kurz durchatmen und neu versuchen — deine Daten sind sicher.' : 'Take a breath and retry — your data is safe.'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => refetchBrief()}
-            className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] px-6"
-            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)', fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}
-          >
-            <RefreshCw size={14} /> {de ? 'Neu versuchen' : 'Try again'}
-          </button>
-        </div>
-      )}
-
-      {/* Hourly WeatherWindow (pen "V3 · Explore Routes" IgqyH) — the SINGLE
-          weather element on Today, mounted near the session card. Shown on
-          EVERY day incl. rest days (explicit user decision, Jul 2026 — a rest
-          day still wants to know the dry window if you ride anyway). Hides
-          itself only when there's no real forecast data (honest absence). */}
-      <WeatherWindowCard />
-
-      {/* Einheit des Tages — the ONE shared session card (identical mount on
-          the Train tab). Owns the active-session card, the honest
-          planned_session fallback, the "Anpassen" sheet and "Rückgängig". */}
-      <SessionOfTheDay />
 
       {/* Diese Woche (pen WeekProgress) — mounted directly after the WorkoutCard
           to match the pen's FlowColumn order (WorkoutCard → WeekProgress → Load
