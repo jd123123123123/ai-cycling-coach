@@ -22,9 +22,7 @@ import { useParams, Link } from 'react-router-dom'
 import { parseISO, format } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
 import {
-  Bike, Map as MapIcon, Mountain, TrendingUp, Zap, BarChart3, LineChart, Star,
-  HeartPulse, Utensils, Flag, Award, Lightbulb, Heart, Clock, Gauge, Activity,
-  CheckCircle2, Scale, BatteryMedium, Route as RouteIcon, Thermometer, Wind, Droplets,
+  Bike, Mountain, TrendingUp, Zap, BarChart3, Star, HeartPulse, Lightbulb, Heart, Clock, Activity, CheckCircle2, Scale, BatteryMedium, Thermometer, Wind,
 } from 'lucide-react'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import { usePowerProfile } from '../hooks/usePowerProfile'
@@ -32,29 +30,8 @@ import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useStreamAnalysis } from '../hooks/useStreamAnalysis'
 import { useLocale } from '../contexts/LocaleContext'
 import HoverBars from '../components/ui/HoverBars'
-
-/** Project a lat/lng polyline into an SVG path fitted to a WxH box (north up,
- *  aspect-preserved, padded). Returns the `d` string + fitted point list. */
-function routePath(poly: [number, number][], w: number, h: number, pad = 10): { d: string; pts: [number, number][] } | null {
-  if (!poly || poly.length < 2) return null
-  const lats = poly.map((p) => p[0]), lngs = poly.map((p) => p[1])
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats)
-  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
-  // Mercator-ish: scale lng by cos(lat) so shapes aren't stretched.
-  const midLat = (minLat + maxLat) / 2
-  const kx = Math.cos((midLat * Math.PI) / 180)
-  const gw = (maxLng - minLng) * kx || 1e-6
-  const gh = (maxLat - minLat) || 1e-6
-  const scale = Math.min((w - 2 * pad) / gw, (h - 2 * pad) / gh)
-  const offX = pad + ((w - 2 * pad) - gw * scale) / 2
-  const offY = pad + ((h - 2 * pad) - gh * scale) / 2
-  const pts = poly.map(([lat, lng]): [number, number] => [
-    offX + (lng - minLng) * kx * scale,
-    offY + (maxLat - lat) * scale, // flip y → north up
-  ])
-  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ')
-  return { d, pts }
-}
+import ZoneStack from '../components/debrief/ZoneStack'
+import { zoneNumber } from '../utils/rideEffect'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 const cardCls = 'rounded-[24px] p-5 flex flex-col gap-[14px]'
@@ -72,15 +49,6 @@ function fmtMin(s: number): string {
   return `${m}m`
 }
 
-/** mm:ss (or h:mm:ss past an hour) — used by the HR time-in-zone breakdown. */
-function fmtClock(s: number): string {
-  const t = Math.round(s)
-  const h = Math.floor(t / 3600)
-  const m = Math.floor((t % 3600) / 60)
-  const sec = t % 60
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-  return `${m}:${String(sec).padStart(2, '0')}`
-}
 
 /** Duration set for the ride mean-maximal power curve (seconds → short label). */
 const MMP_DURATIONS: { s: number; label: string }[] = [
@@ -196,14 +164,6 @@ interface RideWeather {
   }
 }
 
-function downsample<T>(arr: T[], target: number): T[] {
-  if (arr.length <= target) return arr
-  const step = arr.length / target
-  const out: T[] = []
-  for (let i = 0; i < target; i++) out.push(arr[Math.floor(i * step)])
-  return out
-}
-
 function SectionHead({ icon, label, color = 'var(--color-ink-2)', right }: {
   icon: React.ReactNode; label: string; color?: string; right?: React.ReactNode
 }) {
@@ -258,19 +218,8 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
   // Real per-second stream analysis: GPS route, elevation, HR zones, cycling dynamics.
   const { data: sa } = useStreamAnalysis(Number.isFinite(activityId) ? activityId : undefined)
   const bd = sa?.bike_dynamics
-  const route = useMemo(() => (sa?.gps?.polyline ? routePath(sa.gps.polyline, 320, 150) : null), [sa])
-  const routeKind = sa?.route_kind
 
   const header = data?.header
-  // Route line tinted by ride intensity (IF).
-  const routeColor = (() => {
-    const iff = header?.if_ ?? null
-    if (iff == null) return 'var(--color-strain)'
-    if (iff < 0.75) return 'var(--color-recovery)'
-    if (iff < 0.85) return 'var(--color-stand)'
-    if (iff < 0.95) return 'var(--color-amber)'
-    return 'var(--color-accent)'
-  })()
   const story = data?.story ?? null
   const efficiency = data?.efficiency ?? null
   const pacing = data?.pacing ?? null
@@ -279,7 +228,6 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
     () => [...(data?.climbs ?? [])].sort((a, b) => (b.elev_gain_m ?? 0) - (a.elev_gain_m ?? 0)).slice(0, 8),
     [data],
   )
-  const fueling = data?.fueling ?? null
   const verdict = data?.verdict ?? null
   const wko = data?.wko ?? null
 
@@ -295,18 +243,6 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
     return { avg, max, np, vi, kj, eftp }
   }, [story, header, pacing, wko, power])
 
-  // Elevation profile bars from the altitude stream. `frac` drives bar height
-  // (normalized min→max to show the profile shape); `m` is the real altitude.
-  const elevBars = useMemo(() => {
-    const alt = (story?.altitude ?? []).filter((x): x is number => typeof x === 'number')
-    if (alt.length < 4) return null
-    const ds = downsample(alt, 42)
-    const min = Math.min(...ds)
-    const max = Math.max(...ds)
-    const span = max - min || 1
-    return ds.map((a, i) => ({ m: a, frac: (a - min) / span, pct: Math.round((i / (ds.length - 1)) * 100) }))
-  }, [story])
-
   // Max grade across climbs + route points
   const maxGrade = useMemo(() => {
     const g: number[] = []
@@ -316,6 +252,14 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
   }, [data, story])
 
   // Power zones from pacing.zone_time_pct
+  // Power zones. The key reader goes through the shared tolerant `zoneNumber`
+  // (utils/rideEffect) rather than probing `z1` / `Z1` / `1` by hand.
+  //
+  // That hand-rolled probe is why this card had been INVISIBLE: the wire sends
+  // `{"zone1": 12.9, "zone2": 31.0, ...}` and none of the three spellings it
+  // tried matched, so `rows` came back empty, the memo returned null and the
+  // whole LEISTUNGSZONEN card silently self-hid on every ride. It never threw
+  // and never logged, so nothing pointed at it.
   const powerZones = useMemo(() => {
     const zt = pacing?.zone_time_pct
     if (!zt) return null
@@ -323,12 +267,20 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
     const namesEn = ['Active Recovery', 'Endurance', 'Tempo', 'Threshold', 'VO₂ Max', 'Anaerobic', 'Neuromuscular']
     const namesDe = ['Aktive Erholung', 'Grundlage', 'Tempo', 'Schwelle', 'VO₂max', 'Anaerob', 'Neuromuskulär']
     const move = header?.moving_time_s ?? 0
-    const rows: { key: string; label: string; name: string; pct: number; color: string; time: string }[] = []
+    const byZone = new Map<number, number>()
+    for (const [key, pct] of Object.entries(zt)) {
+      const z = zoneNumber(key)
+      if (z == null || typeof pct !== 'number' || pct <= 0) continue
+      byZone.set(z, (byZone.get(z) ?? 0) + pct)
+    }
+    const rows: { key: string; label: string; name: string; pct: number; color: string; time: string; seconds: number }[] = []
     for (let z = 1; z <= 7; z++) {
-      const pct = zt[`z${z}`] ?? zt[`Z${z}`] ?? zt[String(z)]
-      if (typeof pct === 'number') rows.push({
+      const pct = byZone.get(z)
+      if (pct == null) continue
+      const seconds = move ? (pct / 100) * move : 0
+      rows.push({
         key: `z${z}`, label: `Z${z}`, name: (de ? namesDe : namesEn)[z - 1], pct,
-        color: colors[z - 1], time: move ? fmtMin((pct / 100) * move) : '—',
+        color: colors[z - 1], time: move ? fmtMin(seconds) : '—', seconds,
       })
     }
     return rows.length ? rows : null
@@ -452,8 +404,23 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
     const speeds = (story?.speed ?? []).filter((x): x is number => typeof x === 'number' && x > 0)
     const avgSpeed = header?.avg_speed_kmh ?? (speeds.length ? (speeds.reduce((a, b) => a + b, 0) / speeds.length) * 3.6 : null)
     const maxSpeed = speeds.length ? Math.max(...speeds) * 3.6 : null
-    const vam = climbs.length ? Math.max(...climbs.map((c) => c.vam_m_per_h ?? 0)) : null
-    return { avgSpeed, maxSpeed, vam: vam || null, maxGrade }
+    // VAM is only a climbing rate if there was a climb to measure it on. This
+    // ride's "859 m/h" came from a 57-second, 13-metre bump — a real number
+    // about nothing, presented as one of four headline metrics. A climb has to
+    // last 3 minutes or gain 30 m before its VAM says anything about climbing.
+    const realClimbs = climbs.filter((c) => (c.duration_s ?? 0) >= 180 || (c.elev_gain_m ?? 0) >= 30)
+    const best = realClimbs.length
+      ? realClimbs.reduce((a, b) => ((b.vam_m_per_h ?? 0) > (a.vam_m_per_h ?? 0) ? b : a))
+      : null
+    return {
+      avgSpeed,
+      maxSpeed,
+      vam: best?.vam_m_per_h ?? null,
+      vamClimb: best,
+      hasRealClimb: realClimbs.length > 0,
+      climbCount: realClimbs.length,
+      maxGrade,
+    }
   }, [story, header, climbs, maxGrade])
 
   // Environment — real conditions from the stored Open-Meteo hourly blob
@@ -497,22 +464,6 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
     if (tempC == null && windMs == null) return null
     return { tempC, windMs, windDir }
   }, [sa, header])
-
-  // Segments & peak efforts — real power-duration peaks with PR flags.
-  const efforts = useMemo(() => {
-    const durLabel = (s: number) =>
-      s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)}min` : `${Math.round(s / 3600)}h`
-    return [...(data?.efforts ?? [])]
-      .filter((e) => typeof e.ride_watts === 'number' && e.ride_watts > 0)
-      .sort((a, b) => a.duration_s - b.duration_s)
-      .slice(0, 8)
-      .map((e) => ({
-        name: de ? `Bestleistung ${durLabel(e.duration_s)}` : `${durLabel(e.duration_s)} peak effort`,
-        sub: e.pct_of_best != null ? `${Math.round(e.pct_of_best)}% ${de ? 'der Saisonbestleistung' : 'of season best'}` : durLabel(e.duration_s),
-        watts: Math.round(e.ride_watts),
-        pr: e.is_pr,
-      }))
-  }, [data, de])
 
   // Coach insight takes from the AI verdict.
   const insightTakes = useMemo(() => {
@@ -619,79 +570,6 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
 
                         </>)}
 
-            {/* 3 · Route & elevation */}
-            {((story?.route && story.route.length > 0) || elevBars || route || routeKind === 'zwift' || routeKind === 'rouvy') && (
-              <div className={cardCls} style={cardStyle}>
-                <SectionHead icon={<MapIcon size={16} strokeWidth={2} />} label={de ? 'STRECKE & HÖHE' : 'ROUTE & ELEVATION'} />
-                {/* Route card: real GPS route (outdoor) · virtual-world art (Zwift/ROUVY) · fallback */}
-                {route && (routeKind === 'outdoor' || routeKind == null) ? (
-                  <div className="relative rounded-[16px] overflow-hidden" style={{ height: 150, background: 'radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--color-recovery) 10%, var(--color-paper)) 0%, var(--color-paper) 70%)', border: '1px solid var(--color-rule)' }}>
-                    <svg viewBox="0 0 320 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
-                      <path d={route.d} fill="none" stroke={routeColor} strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.28} style={{ filter: 'blur(3px)' }} />
-                      <path d={route.d} fill="none" stroke={routeColor} strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
-                      <circle cx={route.pts[0][0]} cy={route.pts[0][1]} r={4} fill="var(--color-recovery)" stroke="var(--color-paper)" strokeWidth={1.5} />
-                      <circle cx={route.pts[route.pts.length - 1][0]} cy={route.pts[route.pts.length - 1][1]} r={4} fill="var(--color-move)" stroke="var(--color-paper)" strokeWidth={1.5} />
-                    </svg>
-                    <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full" style={{ padding: '4px 9px', background: 'color-mix(in srgb, var(--color-paper) 78%, transparent)' }}>
-                      <RouteIcon size={13} strokeWidth={2} style={{ color: routeColor }} />
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'GPS-Route' : 'GPS route'}</span>
-                    </span>
-                    {climbs.length > 0 && (
-                      <span className="absolute left-2.5 bottom-2.5 inline-flex items-center gap-1.5 rounded-full" style={{ padding: '5px 10px', background: 'color-mix(in srgb, var(--color-paper) 80%, transparent)' }}>
-                        <Mountain size={14} strokeWidth={2} style={{ color: 'var(--color-amber)' }} />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink)' }}>{climbs.length} {de ? 'Anstiege' : climbs.length === 1 ? 'climb' : 'climbs'}</span>
-                      </span>
-                    )}
-                  </div>
-                ) : (routeKind === 'zwift' || routeKind === 'rouvy') ? (
-                  <div className="relative rounded-[16px] overflow-hidden" style={{ height: 150, border: '1px solid var(--color-rule)', background: routeKind === 'zwift' ? 'linear-gradient(160deg, #1B2A4A 0%, #2A1B4A 55%, #0A0C0F 100%)' : 'linear-gradient(160deg, #12324A 0%, #1B3A2A 55%, #0A0C0F 100%)' }}>
-                    {/* stylized virtual-world horizon + road, in the pen's flat-graphic style */}
-                    <svg viewBox="0 0 320 150" width="100%" height="100%" preserveAspectRatio="none" style={{ display: 'block', position: 'absolute', inset: 0 }}>
-                      <path d="M0 96 L120 70 L180 84 L240 60 L320 78 L320 150 L0 150 Z" fill={routeKind === 'zwift' ? '#F26C2A22' : '#16E08A22'} />
-                      <path d="M0 110 L90 96 L160 104 L230 90 L320 100" fill="none" stroke={routeKind === 'zwift' ? '#F26C2A' : '#16E08A'} strokeWidth={2} opacity={0.5} />
-                      <path d="M150 150 L172 110 L188 110 L210 150 Z" fill="color-mix(in srgb, var(--color-ink) 12%, transparent)" />
-                      <line x1="180" y1="150" x2="180" y2="112" stroke="color-mix(in srgb, var(--color-ink) 30%, transparent)" strokeDasharray="4 5" strokeWidth={2} />
-                    </svg>
-                    <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full" style={{ padding: '5px 11px', background: 'rgba(0,0,0,0.35)' }}>
-                      <Bike size={14} strokeWidth={2.2} style={{ color: routeKind === 'zwift' ? '#F26C2A' : '#16E08A' }} />
-                      <span className="eyebrow" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#FFFFFF' }}>{routeKind === 'zwift' ? 'ZWIFT' : 'ROUVY'}</span>
-                    </span>
-                    <span className="absolute left-3 bottom-3" style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>{de ? 'Virtuelle Fahrt' : 'Virtual ride'}{header?.title ? ` · ${header.title.replace(/^(Zwift|ROUVY)\s*[-–]\s*/i, '')}` : ''}</span>
-                  </div>
-                ) : (
-                  <div className="relative grid place-items-center rounded-[16px] overflow-hidden" style={{ height: 150, background: 'var(--color-surface-2)', border: '1px dashed var(--color-rule)' }}>
-                    <span className="inline-flex items-center gap-1.5" style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-                      <MapIcon size={14} strokeWidth={2} /> {de ? 'Keine GPS-Strecke' : 'No GPS route'}
-                    </span>
-                  </div>
-                )}
-                {elevBars && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'Höhenprofil' : 'Elevation profile'}</span>
-                      {maxGrade != null && (
-                        <span className="inline-flex items-center gap-1 rounded-full" style={{ padding: '4px 9px', background: 'var(--color-accent-soft)' }}>
-                          <TrendingUp size={13} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
-                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-accent)' }}>{de ? 'Max. Steigung' : 'Max grade'} {Math.round(maxGrade)}%</span>
-                        </span>
-                      )}
-                    </div>
-                    <HoverBars
-                      height={58}
-                      gap={2}
-                      radius={1}
-                      defaultColor="var(--color-amber)"
-                      bars={elevBars.map((b) => ({
-                        value: Math.max(0.06, b.frac),
-                        valueLabel: `${Math.round(b.m)} m`,
-                        label: `${b.pct}% ${de ? 'der Strecke' : 'through'}`,
-                      }))}
-                    />
-                  </>
-                )}
-              </div>
-            )}
-
             {!embedded && (<>
 {/* 4 · Power hero (coral) */}
             {powerStats.np != null && (
@@ -745,43 +623,6 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
             )}
 
                         </>)}
-
-            {/* 5 · Power zones */}
-            {powerZones && (
-              <div className={cardCls} style={cardStyle}>
-                <SectionHead icon={<BarChart3 size={16} strokeWidth={2} />} label={de ? 'LEISTUNGSZONEN' : 'POWER ZONES'} />
-                <div className="flex flex-col gap-[11px]">
-                  {powerZones.map((z) => (
-                    <div key={z.key} className="flex flex-col gap-[5px]">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-[7px]">
-                          <span style={{ width: 8, height: 8, borderRadius: 999, background: z.color }} />
-                          <span style={{ fontSize: 11, fontWeight: 700, color: z.color }}>{z.label}</span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{z.name}</span>
-                        </span>
-                        <span className="flex items-end gap-1.5">
-                          <span className="num-mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink)' }}>{z.time}</span>
-                          <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{Math.round(z.pct)}%</span>
-                        </span>
-                      </div>
-                      <div className="rounded-full overflow-hidden" style={{ height: 8, background: 'var(--color-surface-3)' }}>
-                        <div style={{ width: `${Math.min(100, z.pct)}%`, height: '100%', borderRadius: 999, background: z.color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {zoneHardPct != null && (
-                  <div className="flex items-start gap-2 rounded-[12px]" style={{ background: 'var(--color-surface-2)', padding: '10px 12px' }}>
-                    <LineChart size={16} strokeWidth={2} style={{ color: 'var(--color-amber)', flexShrink: 0, marginTop: 1 }} />
-                    <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.35 }}>
-                      {de
-                        ? `${zoneHardPct}% der Zeit an der Schwelle oder darüber (Z4–Z7).`
-                        : `${zoneHardPct}% of time spent at threshold or above (Z4–Z7).`}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
 
             {!embedded && (<>
 {/* 6 · Power curve — ride mean-maximal (best rolling avg per duration) */}
@@ -838,38 +679,17 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
                   const zNames = de
                     ? ['Erholung', 'Grundlage', 'Tempo', 'Schwelle', 'VO₂max']
                     : ['Recovery', 'Endurance', 'Tempo', 'Threshold', 'VO₂ Max']
-                  const { secs, total, basis, ref } = hrZoneBreakdown
+                  const { secs, basis, ref } = hrZoneBreakdown
                   const caption = basis === 'lthr'
                     ? (de ? `Zonen aus LTHR ${Math.round(ref)} bpm` : `Zones from LTHR ${Math.round(ref)} bpm`)
                     : basis === 'hrmax'
                       ? (de ? `Zonen aus % max. HF ${Math.round(ref)} bpm` : `Zones from % HRmax ${Math.round(ref)} bpm`)
                       : (de ? `Zonen aus beob. max. HF ${Math.round(ref)} bpm` : `Zones from observed max HR ${Math.round(ref)} bpm`)
                   return (
-                    <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center justify-between">
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'Zeit in HF-Zonen' : 'Time in HR zones'}</span>
-                        <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-muted)' }}>{caption}</span>
-                      </div>
-                      <div className="flex flex-col gap-[9px]">
-                        {secs.map((sec, i) => {
-                          const pct = (sec / total) * 100
-                          return (
-                            <div key={i} className="flex items-center gap-2.5" title={`Z${i + 1} ${zNames[i]} · ${fmtClock(sec)} · ${Math.round(pct)}%`}>
-                              <span className="flex items-center gap-1.5" style={{ width: 96, flexShrink: 0 }}>
-                                <span style={{ width: 8, height: 8, borderRadius: 999, background: zColors[i] }} />
-                                <span style={{ fontSize: 11, fontWeight: 700, color: zColors[i] }}>Z{i + 1}</span>
-                                <span className="truncate" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)' }}>{zNames[i]}</span>
-                              </span>
-                              <div className="flex-1 rounded-full overflow-hidden" style={{ height: 8, background: 'var(--color-surface-3)', cursor: 'default' }}>
-                                <div style={{ width: `${Math.max(pct > 0 ? 2 : 0, pct)}%`, height: '100%', borderRadius: 999, background: zColors[i] }} />
-                              </div>
-                              <span className="num-mono text-right" style={{ width: 46, fontSize: 11, fontWeight: 600, color: 'var(--color-ink)' }}>{fmtClock(sec)}</span>
-                              <span className="num-mono text-right" style={{ width: 30, fontSize: 11, color: 'var(--color-muted)' }}>{Math.round(pct)}%</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
+                    <ZoneStack
+                      zones={secs.map((sec, i) => ({ label: `Z${i + 1}`, name: zNames[i], color: zColors[i], seconds: sec }))}
+                      caption={caption}
+                    />
                   )
                 })() : (
                   <div className="grid place-items-center rounded-[14px]" style={{ minHeight: 56, background: 'var(--color-surface-2)', border: '1px dashed var(--color-rule)', padding: '12px' }}>
@@ -893,6 +713,128 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* 8 · Climbing & speed — was a 2x2 grid of equal-weight tiles where two
+                of the four (VAM, max gradient) are near-meaningless on a flat
+                ride, and one of those two was computed off a 57-second bump.
+                Now: speed gets the visual, because it is real on every ride —
+                a range bar with Ø marked inside 0..max, which shows at a glance
+                whether the ride was steady or full of surges. Climbing gets a
+                line only when there was climbing. */}
+            {(climbSpeed.avgSpeed != null || climbSpeed.maxSpeed != null) && (
+              <div className={cardCls} style={cardStyle}>
+                <SectionHead icon={<Mountain size={16} strokeWidth={2} />} label={de ? 'ANSTIEG & TEMPO' : 'CLIMBING & SPEED'} />
+
+                {climbSpeed.avgSpeed != null && climbSpeed.maxSpeed != null && climbSpeed.maxSpeed > 0 && (() => {
+                  const avgPct = Math.max(2, Math.min(100, (climbSpeed.avgSpeed / climbSpeed.maxSpeed) * 100))
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-end justify-between">
+                        <span className="flex items-end gap-1.5">
+                          <span className="num-display" style={{ fontSize: 30, color: 'var(--color-ink)', lineHeight: 1 }}>{climbSpeed.avgSpeed.toFixed(1)}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-strain)', paddingBottom: 3 }}>km/h {de ? 'Ø' : 'avg'}</span>
+                        </span>
+                        <span className="flex items-end gap-1.5">
+                          <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink-2)', lineHeight: 1 }}>{climbSpeed.maxSpeed.toFixed(1)}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)', paddingBottom: 2 }}>km/h max</span>
+                        </span>
+                      </div>
+                      {/* Ø marked inside the 0..max span: the gap between the
+                          marker and the right edge IS the ride's surge range. */}
+                      <div className="relative w-full" style={{ height: 10 }}>
+                        <div className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(90deg, var(--color-strain) 0%, var(--color-amber) 100%)', opacity: 0.28 }} />
+                        <div className="absolute left-0 top-0 bottom-0 rounded-full" style={{ width: `${avgPct}%`, background: 'linear-gradient(90deg, var(--color-strain) 0%, var(--color-amber) 100%)' }} />
+                        <span className="absolute" style={{ left: `calc(${avgPct}% - 1px)`, top: -3, bottom: -3, width: 2, borderRadius: 2, background: 'var(--color-ink)' }} />
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {climbSpeed.hasRealClimb && climbSpeed.vam != null ? (
+                  <div className="flex gap-2.5">
+                    <MetricCell icon={<TrendingUp size={17} strokeWidth={2} />} iconColor="var(--color-exercise)" value={nf(Math.round(climbSpeed.vam))} unit="m/h" label="VAM" />
+                    <MetricCell icon={<Mountain size={17} strokeWidth={2} />} iconColor="var(--color-accent)" value={climbSpeed.maxGrade != null ? `${Math.round(climbSpeed.maxGrade)}` : '—'} unit="%" label={de ? 'Max Steigung' : 'Max Gradient'} />
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 rounded-[12px]" style={{ background: 'var(--color-surface-2)', padding: '10px 12px' }}>
+                    <Mountain size={15} strokeWidth={2} style={{ color: 'var(--color-muted)', flexShrink: 0, marginTop: 1 }} />
+                    <span style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>
+                      {de
+                        ? `Flaches Profil — keine Anstiege über 3 Min oder 30 Hm${climbSpeed.maxGrade != null ? `, maximal ${Math.round(climbSpeed.maxGrade)}% Steigung` : ''}. VAM sagt hier nichts über deine Kletterform.`
+                        : `Flat profile — no climbs over 3 min or 30 m${climbSpeed.maxGrade != null ? `, ${Math.round(climbSpeed.maxGrade)}% steepest` : ''}. VAM says nothing about your climbing here.`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 8b · Environment — real temperature + wind from the stored
+                Open-Meteo blob. Hides entirely for virtual/indoor rides.
+                The humidity cell is gone: no humidity is ever fetched, so it
+                was a permanent em dash taking a third of the card and implying
+                a metric the app might one day fill. Wind now POINTS — the arrow
+                is rotated to the real bearing, which is the one thing a rider
+                wants from a wind reading. */}
+            {environment && (
+              <div className={cardCls} style={cardStyle}>
+                <SectionHead icon={<Thermometer size={16} strokeWidth={2} />} label={de ? 'BEDINGUNGEN' : 'ENVIRONMENT'} />
+                <div className="flex gap-2.5">
+                  <div className="flex-1 flex items-center gap-3 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: '13px 14px' }}>
+                    <Thermometer size={20} strokeWidth={2} style={{ color: 'var(--color-amber)', flexShrink: 0 }} />
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="flex items-end gap-1">
+                        <span className="num-display" style={{ fontSize: 26, color: 'var(--color-ink)', lineHeight: 1 }}>
+                          {environment.tempC != null ? Math.round(environment.tempC) : '—'}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-amber)', paddingBottom: 2 }}>°C</span>
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'Temperatur' : 'Temperature'}</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 flex items-center gap-3 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: '13px 14px' }}>
+                    {/* Rotated to where the wind is GOING (bearing + 180°) —
+                        how a wind arrow reads on a map. */}
+                    <span
+                      className="grid place-items-center shrink-0"
+                      style={{ transform: environment.windDir != null ? `rotate(${(environment.windDir + 180) % 360}deg)` : undefined }}
+                      aria-hidden
+                    >
+                      <Wind size={20} strokeWidth={2} style={{ color: 'var(--color-strain)' }} />
+                    </span>
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="flex items-end gap-1">
+                        <span className="num-display" style={{ fontSize: 26, color: 'var(--color-ink)', lineHeight: 1 }}>
+                          {environment.windMs != null ? Math.round(environment.windMs * 3.6) : '—'}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-strain)', paddingBottom: 2 }}>km/h</span>
+                      </span>
+                      <span className="truncate" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>
+                        {environment.windDir != null ? `${de ? 'Wind aus' : 'Wind from'} ${compass(environment.windDir, de)}` : (de ? 'Wind' : 'Wind')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 5 · Power zones — one segmented bar (ZoneStack) instead of five
+                stacked tracks. Five separately-scaled bars answer "how long in
+                Z2?" but make the question a rider actually asks — what SHAPE
+                was this ride — a reading task rather than a glance, and cost
+                ~100px doing it. */}
+            {powerZones && (
+              <div className={cardCls} style={cardStyle}>
+                <SectionHead icon={<BarChart3 size={16} strokeWidth={2} />} label={de ? 'LEISTUNGSZONEN' : 'POWER ZONES'} />
+                <ZoneStack
+                  zones={powerZones.map((z) => ({ label: z.label, name: z.name, color: z.color, seconds: z.seconds }))}
+                  hardLabel={zoneHardPct != null
+                    ? (de
+                        ? `${zoneHardPct}% der Zeit an der Schwelle oder darüber (Z4–Z7).`
+                        : `${zoneHardPct}% of time spent at threshold or above (Z4–Z7).`)
+                    : undefined}
+                />
               </div>
             )}
 
@@ -958,136 +900,6 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
                 <p style={{ fontSize: 11, color: 'var(--color-muted)', lineHeight: 1.4 }}>
                   {de ? 'Aus Cycling-Dynamics-Pedalen (Rennrad). Zwift/Indoor liefert keine Pedal-Dynamik.' : 'From Cycling Dynamics pedals (outdoor). Zwift/indoor provides no pedal dynamics.'}
                 </p>
-              </div>
-            )}
-
-            {/* 8 · Climbing & speed */}
-            {(climbSpeed.avgSpeed != null || climbSpeed.maxSpeed != null || climbSpeed.vam != null || climbSpeed.maxGrade != null) && (
-              <div className={cardCls} style={cardStyle}>
-                <SectionHead icon={<Mountain size={16} strokeWidth={2} />} label={de ? 'ANSTIEG & TEMPO' : 'CLIMBING & SPEED'} />
-                <div className="flex flex-col gap-2.5">
-                  <div className="flex gap-2.5">
-                    <MetricCell icon={<Gauge size={17} strokeWidth={2} />} iconColor="var(--color-strain)" value={climbSpeed.avgSpeed != null ? climbSpeed.avgSpeed.toFixed(1) : '—'} unit="km/h" label={de ? 'Ø Tempo' : 'Avg Speed'} />
-                    <MetricCell icon={<Gauge size={17} strokeWidth={2} />} iconColor="var(--color-amber)" value={climbSpeed.maxSpeed != null ? climbSpeed.maxSpeed.toFixed(1) : '—'} unit="km/h" label={de ? 'Max Tempo' : 'Max Speed'} />
-                  </div>
-                  <div className="flex gap-2.5">
-                    <MetricCell icon={<TrendingUp size={17} strokeWidth={2} />} iconColor="var(--color-exercise)" value={climbSpeed.vam != null ? nf(Math.round(climbSpeed.vam)) : '—'} unit="m/h" label="VAM" />
-                    <MetricCell icon={<Mountain size={17} strokeWidth={2} />} iconColor="var(--color-accent)" value={climbSpeed.maxGrade != null ? `${Math.round(climbSpeed.maxGrade)}` : '—'} unit="%" label={de ? 'Max Steigung' : 'Max Gradient'} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 8b · Environment — pen's last content card (node hD7AU): real
-                 temperature + wind (with compass direction) from the stored
-                 Open-Meteo blob. Humidity has no backend source → honest "—".
-                 Hides entirely for virtual/indoor rides with no weather. */}
-            {environment && (
-              <div className={cardCls} style={cardStyle}>
-                <SectionHead icon={<Thermometer size={16} strokeWidth={2} />} label={de ? 'BEDINGUNGEN' : 'ENVIRONMENT'} />
-                <div className="flex gap-2.5">
-                  <MetricCell
-                    icon={<Thermometer size={17} strokeWidth={2} />}
-                    iconColor="var(--color-amber)"
-                    value={environment.tempC != null ? `${Math.round(environment.tempC)}` : '—'}
-                    unit="°C"
-                    label={de ? 'Temperatur' : 'Temperature'}
-                  />
-                  <MetricCell
-                    icon={<Wind size={17} strokeWidth={2} />}
-                    iconColor="var(--color-strain)"
-                    value={environment.windMs != null ? `${Math.round(environment.windMs * 3.6)}` : '—'}
-                    unit="km/h"
-                    label={environment.windDir != null
-                      ? `${de ? 'Wind' : 'Wind'} ${compass(environment.windDir, de)}`
-                      : (de ? 'Wind' : 'Wind')}
-                  />
-                  <MetricCell
-                    icon={<Droplets size={17} strokeWidth={2} />}
-                    iconColor="var(--color-exercise)"
-                    value="—"
-                    unit=""
-                    label={de ? 'Luftfeuchte' : 'Humidity'}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* 9 · Fuel */}
-            {fueling && (fueling.total_kcal != null || fueling.total_kj != null || fueling.cho_g_estimate != null) && (() => {
-              const dur = fueling.duration_h || (header.moving_time_s ? header.moving_time_s / 3600 : null)
-              const kcalPerH = fueling.total_kcal != null && dur ? Math.round(fueling.total_kcal / dur) : null
-              const gPerH = fueling.cho_g_estimate != null && dur ? Math.round(fueling.cho_g_estimate / dur) : null
-              const targetMid = fueling.carb_target_g_per_h ? (fueling.carb_target_g_per_h[0] + fueling.carb_target_g_per_h[1]) / 2 : null
-              const targetTotal = targetMid != null && dur ? Math.round(targetMid * dur) : null
-              const fuelPct = targetTotal && fueling.cho_g_estimate != null ? Math.round((fueling.cho_g_estimate / targetTotal) * 100) : null
-              return (
-                <div className={cardCls} style={cardStyle}>
-                  <SectionHead icon={<Utensils size={16} strokeWidth={2} />} label={de ? 'ENERGIE & KOHLENHYDRATE' : 'FUEL & CARBS'} />
-                  <div className="flex gap-2.5">
-                    <div className="flex-1 flex flex-col gap-[3px] rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: '12px 13px' }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'Energie' : 'Energy'}</span>
-                      <span className="flex items-end gap-1">
-                        <span className="num-display" style={{ fontSize: 28, color: 'var(--color-ink)', lineHeight: 1 }}>{fueling.total_kcal != null ? nf(Math.round(fueling.total_kcal)) : '—'}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-amber)', paddingBottom: 3 }}>kcal</span>
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
-                        {fueling.total_kj != null ? `${nf(Math.round(fueling.total_kj))} kJ` : '—'}{kcalPerH != null ? ` · ${kcalPerH}/h` : ''}
-                      </span>
-                    </div>
-                    <div className="flex-1 flex flex-col gap-[3px] rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: '12px 13px' }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{de ? 'Kohlenhydrate' : 'Carbs'}</span>
-                      <span className="flex items-end gap-1">
-                        <span className="num-display" style={{ fontSize: 28, color: 'var(--color-ink)', lineHeight: 1 }}>{fueling.cho_g_estimate != null ? Math.round(fueling.cho_g_estimate) : '—'}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-exercise)', paddingBottom: 3 }}>g</span>
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{gPerH != null ? `${gPerH} g/h ${de ? 'aufgenommen' : 'intake'}` : '—'}</span>
-                    </div>
-                  </div>
-                  {fuelPct != null && targetTotal != null && (
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between">
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Verpflegung vs. Ziel' : 'Fueling vs target'}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-exercise)' }}>{Math.round(fueling.cho_g_estimate!)} / {targetTotal} g · {fuelPct}%</span>
-                      </div>
-                      <div className="rounded-full overflow-hidden" style={{ height: 8, background: 'var(--color-surface-3)' }}>
-                        <div style={{ width: `${Math.min(100, fuelPct)}%`, height: '100%', borderRadius: 999, background: 'var(--color-exercise)' }} />
-                      </div>
-                    </div>
-                  )}
-                  {fueling.note && <p style={{ fontSize: 12, color: 'var(--color-ink-2)', lineHeight: 1.4 }}>{fueling.note}</p>}
-                </div>
-              )
-            })()}
-
-            {/* 10 · Segments & peak efforts */}
-            {efforts.length > 0 && (
-              <div className={cardCls} style={cardStyle}>
-                <SectionHead icon={<Flag size={16} strokeWidth={2} />} label={de ? 'SEGMENTE & SPITZENLEISTUNGEN' : 'SEGMENTS & PEAK EFFORTS'} />
-                <div className="flex flex-col gap-2">
-                  {efforts.map((e, i) => (
-                    <div key={i} className="flex items-center justify-between rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: '11px 12px' }}>
-                      <div className="flex items-center gap-[11px] min-w-0">
-                        <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 34, height: 34, background: e.pr ? 'var(--color-accent-soft)' : 'var(--color-surface-3)' }}>
-                          {e.pr ? <Award size={17} strokeWidth={2} style={{ color: 'var(--color-accent)' }} /> : <Zap size={17} strokeWidth={2} style={{ color: 'var(--color-ink-2)' }} />}
-                        </span>
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <span className="truncate" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>{e.name}</span>
-                          <span className="truncate" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{e.sub}</span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-0.5 shrink-0">
-                        <span className="flex items-end gap-0.5">
-                          <span className="num-display" style={{ fontSize: 19, color: 'var(--color-ink)', lineHeight: 1 }}>{e.watts}</span>
-                          <span style={{ fontSize: 11, color: 'var(--color-muted)', paddingBottom: 1 }}>W</span>
-                        </span>
-                        <span style={{ fontSize: 10, fontWeight: 600, color: e.pr ? 'var(--color-accent)' : 'var(--color-muted)' }}>
-                          {e.pr ? (de ? 'Persönlicher Rekord' : 'Personal record') : (de ? 'Spitze' : 'Peak')}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
 

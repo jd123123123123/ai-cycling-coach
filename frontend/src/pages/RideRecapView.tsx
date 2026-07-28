@@ -779,11 +779,9 @@ export default function RideRecapView() {
                 chrome and every duplicated block, leaving only what it uniquely
                 had (elevation, power zones, heart rate, pedal dynamics,
                 climbing/speed, fuel, full segment table). /ride redirects here. */}
-            <div className="flex flex-col gap-1">
-              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: 'var(--color-muted)' }}>
-                {de ? 'JEDE ZAHL DIESER FAHRT' : 'EVERY NUMBER FROM THIS RIDE'}
-              </span>
-            </div>
+            {/* No divider heading: with route/elevation, fuel and the segment
+                table gone, the tail is four focused cards that read as part of
+                one page rather than a second document needing its own title. */}
             <RideAnalysisView embedded />
           </div>
         )}
