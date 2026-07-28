@@ -28,6 +28,10 @@ import StatValue from '../../ui/StatValue'
 import RecoveryEtaCard from '../RecoveryEtaCard'
 import { BottomSheet } from '../../strength/BottomSheet'
 import { useLocale } from '../../../contexts/LocaleContext'
+import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
+import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
+import { seasonArc } from '../../../utils/seasonArc'
+import ChapterBar from '../../narrative/ChapterBar'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 const DASH = '—'
@@ -106,6 +110,17 @@ export default function RecoveryTab() {
   const { decision } = useDailyDecision()
   const dState = decision?.state ?? null
   const trainDay = isTrainState(dState)
+
+  // ChapterBar's arc — shares the cached current-week and profile queries
+  // TodayTab/PlanTab/HistoryTab already fetch; no evidence record exists on
+  // this tab, so there is no goal-date backup beyond the profile's own.
+  const { data: week } = useCurrentWeek()
+  const { data: profile } = useAthleteProfile()
+  const arc = useMemo(() => seasonArc({
+    targetEventDate: profile?.target_event_date ?? null,
+    goalEventDate: null,
+    meso: week?.meso_block ?? null,
+  }), [profile?.target_event_date, week?.meso_block])
 
   const metrics = metricsResp?.metrics ?? []
   const byDate = useMemo(() => {
@@ -474,6 +489,7 @@ export default function RecoveryTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
+      <ChapterBar chapter="body" arc={arc} de={de} />
       {/* 1 · Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col" style={{ gap: 2 }}>

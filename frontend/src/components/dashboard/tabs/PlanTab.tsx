@@ -23,8 +23,8 @@ import PlanChangeInterview from '../../plan/PlanChangeInterview'
 import { detectWorkoutSport, loggedReviewFromEvidence } from '../../../api/coach'
 import type { WorkoutSport } from '../../../api/coach'
 import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
-import { daysToEvent } from '../../../utils/loadMetrics'
-import { phaseLabel } from '../../../utils/seasonArc'
+import { phaseLabel, seasonArc } from '../../../utils/seasonArc'
+import ChapterBar from '../../narrative/ChapterBar'
 import { intensityStep, intensityLabel } from '../../../utils/intensityScale'
 import { formatDate } from '../../../utils/format'
 
@@ -312,17 +312,20 @@ export default function PlanTab() {
   const hasSportSessions = sportSessions.length > 0
   const sportWord = sport === 'bike' ? (de ? 'Rad' : 'Bike') : sport === 'run' ? (de ? 'Lauf' : 'Run') : (de ? 'Alle' : 'All')
 
-  // Days-to-event — ONE producer (utils/loadMetrics.daysToEvent) over the
-  // athlete's goal date (profile first, brief evidence as backup); the server's
-  // meso figure is only a fallback when no goal date is available client-side.
+  // Season arc — ONE producer (utils/seasonArc) over the athlete's goal date
+  // (profile first, brief evidence as backup) and the meso block; the shared
+  // module also backs the ChapterBar, so the bar and this card can never
+  // disagree about what week it is.
   // Audit P0-5: the old three-way fallback (meso ?? stale brief evidence ??
   // Math.round over a non-midnight `now`) flipped 138↔139 depending on the hour.
   const goalEventDate = typeof athleteEv.goal_event_date === 'string' ? athleteEv.goal_event_date as string : null
-  const goalDaysOut = daysToEvent(profile?.target_event_date ?? goalEventDate)
-  const daysToEventResolved = goalDaysOut != null ? Math.max(0, goalDaysOut) : meso?.days_to_event ?? null
+  const arc = useMemo(() => seasonArc({
+    targetEventDate: profile?.target_event_date ?? null,
+    goalEventDate,
+    meso: meso ?? null,
+  }), [profile?.target_event_date, goalEventDate, meso])
 
   // Plan card — real aggregates, scoped to the selected discipline.
-  const weeksLeft = daysToEventResolved != null ? Math.max(0, Math.ceil(daysToEventResolved / 7)) : null
   const weekHours = sportDays.reduce((s, d) => s + dayDurSec(d), 0) / 3600
   const sessionCount = sportSessions.length
   // Sport-specific TSS target = this sport's planned days; 'all' prefers the
@@ -352,7 +355,6 @@ export default function PlanTab() {
   const readiness = week?.readiness ?? null
   const planChanges = week?.plan_changes ?? null
 
-  const weekOfMeso = meso?.block_index_in_meso != null ? meso.block_index_in_meso + 1 : null
   // planned_tss_total is THE weekly display target (sum of all planned rows
   // incl. shadowed secondaries); the meso figure is advisory-only fallback.
   const planTarget = week?.planned_tss_total ?? meso?.weekly_tss_target ?? 0
@@ -365,18 +367,17 @@ export default function PlanTab() {
   // detail (.pen pTlXd / SeasonView). Week-of-block badge + block progress bar
   // + Weeks-left / Week-hours / Sessions / Week-load stats. Real meso data;
   // honest "—" where a figure is absent.
-  const blockHorizon = meso?.progression?.horizon_weeks ?? null
-  const blockBadge = weekOfMeso != null && blockHorizon != null && blockHorizon > 0
-    ? (de ? `Woche ${weekOfMeso} / ${blockHorizon}` : `Week ${weekOfMeso} / ${blockHorizon}`)
+  const blockBadge = arc.weekInBlock != null && arc.blockWeeks != null && arc.blockWeeks > 0
+    ? (de ? `Woche ${arc.weekInBlock} / ${arc.blockWeeks}` : `Week ${arc.weekInBlock} / ${arc.blockWeeks}`)
     : phaseLabel(meso?.phase ?? null, de)
-  const blockPct = weekOfMeso != null && blockHorizon != null && blockHorizon > 0
-    ? Math.min(100, (weekOfMeso / blockHorizon) * 100)
+  const blockPct = arc.weekInBlock != null && arc.blockWeeks != null && arc.blockWeeks > 0
+    ? Math.min(100, (arc.weekInBlock / arc.blockWeeks) * 100)
     : planPct
   const planStats: [string, string][] = [
-    weeksLeft != null
-      ? [`${weeksLeft}`, de ? 'Wochen übrig' : 'Weeks left']
-      : blockHorizon != null
-        ? [`${blockHorizon}`, de ? 'Wochen Aufbau' : 'Week block']
+    arc.weeksToEvent != null
+      ? [`${arc.weeksToEvent}`, de ? 'Wochen übrig' : 'Weeks left']
+      : arc.blockWeeks != null
+        ? [`${arc.blockWeeks}`, de ? 'Wochen Aufbau' : 'Week block']
         : ['—', de ? 'Wochen übrig' : 'Weeks left'],
     [weekHours > 0 ? `${weekHours.toFixed(1)}h` : '—', de ? 'Std./Woche' : 'Week hours'],
     [`${sessionCount}`, de ? 'Einheiten' : 'Sessions'],
@@ -510,6 +511,7 @@ export default function PlanTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
+      <ChapterBar chapter="plan" arc={arc} de={de} />
       {/* Top PlanCard (.pen TqTJw) — the season-summary card the V3 · Train
           frame leads with. Tapping it opens the Season & Race Day detail
           (.pen pTlXd → /season). Real meso data; honest "—" where absent. */}
