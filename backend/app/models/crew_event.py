@@ -74,6 +74,12 @@ class CrewEvent(Base):
     # Steepest gradient sustained over ≥100 m (see services/crew_tour.py for why
     # a per-point delta would be meaningless here).
     tour_max_grade_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Named pins from the GPX's <wpt> elements (≤12), spread along the route:
+    # [{"name", "lat", "lng", "sym", "desc"}, …] — what the detail-page map
+    # labels. NULL when the upload carried no *named* waypoints (unnamed pins
+    # are dropped at parse time — see services/crew_tour.py), so the map draws
+    # no pin layer at all rather than an empty one.
+    tour_waypoints: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

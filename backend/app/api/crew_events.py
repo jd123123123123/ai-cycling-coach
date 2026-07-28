@@ -98,6 +98,22 @@ class AttendeeRead(BaseModel):
     status: str
 
 
+class TourWaypoint(BaseModel):
+    """One labelled pin on the event's route map, parsed from a GPX <wpt>.
+
+    `name` is always present — a waypoint that had no usable label is dropped
+    during parsing rather than surfaced as an anonymous dot. `sym` is the raw
+    GPX symbol/type string, passed through untouched so the frontend's icon
+    lookup sees exactly what the export wrote.
+    """
+
+    name: str
+    lat: float
+    lng: float
+    sym: str | None
+    desc: str | None
+
+
 class EventRead(BaseModel):
     id: int
     crew_id: int
@@ -128,6 +144,9 @@ class EventRead(BaseModel):
     tour_profile: list[list[float]] | None
     tour_descent_m: float | None
     tour_max_grade_pct: float | None  # steepest gradient sustained over ≥100 m
+    # Named pins for the route map (≤12, spread along the route). null when the
+    # GPX carried no named waypoints, so the map draws no pin layer at all.
+    tour_waypoints: list[TourWaypoint] | None
 
 
 class EventHour(BaseModel):
@@ -236,6 +255,7 @@ def _serialize_event(
         tour_profile=event.tour_profile,
         tour_descent_m=event.tour_descent_m,
         tour_max_grade_pct=event.tour_max_grade_pct,
+        tour_waypoints=event.tour_waypoints,
     )
 
 
@@ -457,6 +477,9 @@ async def upload_tour(
     event.tour_profile = parsed.profile or None  # honest NULL when no <ele> data
     event.tour_descent_m = parsed.descent_m
     event.tour_max_grade_pct = parsed.max_grade_pct
+    # Honest NULL rather than [] when the GPX had no named waypoints, so
+    # "no pins in this file" reads differently from "not parsed yet".
+    event.tour_waypoints = parsed.waypoints or None
     await db.commit()
     await db.refresh(event)
     return await _serialize_with_attendees(db, event, current_user.id)

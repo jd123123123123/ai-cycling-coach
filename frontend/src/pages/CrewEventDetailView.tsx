@@ -12,13 +12,9 @@
  * ── Deliberate deviations from the pen, and why ───────────────────────────
  * Every one of these is "no honest source", not "not done yet".
  *
- *  • No satellite/map tiles. The app has no map-tile provider (the ride-analysis
- *    route card drew SVG over a flat field for the same reason), so the hero
- *    renders the real GPX track over a gradient field. The pen's "Satellite"
- *    map-type pill goes with it — there is nothing to switch between.
- *  • No waypoint pins/labels ("Starnberger See", "Kloster Andechs"). GPX
- *    waypoints are not parsed or stored, and inventing points of interest along
- *    someone's route would be fabrication.
+ *  • The pen's "Satellite" map type is a Dark ↔ Terrain toggle instead: those
+ *    are two real Maptoolkit styles (the second carries contours + hillshading),
+ *    whereas we have no satellite imagery to switch to.
  *  • No surface breakdown (asphalt/gravel/path km). GPX carries no surface tags.
  *  • No amenities row (café/parking/WC/water), no separate meet-vs-roll-out
  *    time, no distance-to-start. None of these exist on the event model; they
@@ -33,14 +29,14 @@
  * all DERIVED (utils/crewRide) rather than stored — they are functions of the
  * route and the forecast, so deriving them keeps one producer per number.
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { parseISO, format } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
 import {
   ArrowLeft, Share2, Flag, MapPin, Navigation, Users, UserPlus, Check, Download,
   ArrowUp, ArrowDown, Wind, Droplets, Sunrise, Shirt, ThumbsUp, CloudRain, Crown, MessageCircle,
-  Sun, CloudSun, CloudFog, CloudLightning, Snowflake,
+  Sun, CloudSun, CloudFog, CloudLightning, Snowflake, Layers, Maximize2, X,
 } from 'lucide-react'
 import { useCrewEvent, useRsvpCrewEvent } from '../hooks/useCrewEvents'
 import { useCrewEventWeather } from '../hooks/useCrewEventWeather'
@@ -48,6 +44,7 @@ import { downloadCrewEventTour } from '../api/crewEvents'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocale } from '../contexts/LocaleContext'
 import RouteProfile from '../components/crew/RouteProfile'
+import RouteMap, { type MapStyleKey } from '../components/crew/RouteMap'
 import {
   rideDifficulty, estimatedRideSeconds, fmtEstimate, summariseWeather,
   clothingAdvice, projectRoute, skyIcon,
@@ -92,6 +89,10 @@ export default function CrewEventDetailView() {
   const { user } = useAuth()
   const de = locale === 'de'
   const dfl = de ? { locale: deLocale } : undefined
+
+  const [mapStyle, setMapStyle] = useState<MapStyleKey>('dark')
+  const [mapOpen, setMapOpen] = useState(false)
+  const [mapReady, setMapReady] = useState(false)
 
   const { data: ev, isLoading, isError } = useCrewEvent(Number.isFinite(eventId) ? eventId : null)
   const { data: weather } = useCrewEventWeather(Number.isFinite(eventId) ? eventId : undefined)
@@ -162,7 +163,21 @@ export default function CrewEventDetailView() {
               <circle cx={route.pts[0][0]} cy={route.pts[0][1]} r={8} fill="#16E08A" stroke="#FFFFFF" strokeWidth={2} />
             </svg>
           )}
+          {/* Real basemap on top of the SVG fallback. The SVG stays mounted
+              underneath until the map paints (and forever, if tiles are
+              unreachable), so the route is never missing. */}
           {route && (
+            <div className="absolute inset-0" style={{ opacity: mapReady ? 1 : 0, transition: 'opacity 220ms ease' }}>
+              <RouteMap
+                polyline={ev.tour_polyline ?? []}
+                waypoints={ev.tour_waypoints ?? []}
+                styleKey={mapStyle}
+                onReady={() => setMapReady(true)}
+              />
+            </div>
+          )}
+
+          {route && !mapReady && (
             <span className="absolute grid place-items-center rounded-full" style={{
               left: route.pts[route.pts.length - 1][0] - 11, top: route.pts[route.pts.length - 1][1] - 11,
               width: 22, height: 22, background: '#FF5A3C', border: '2px solid #FFFFFF',
@@ -172,7 +187,10 @@ export default function CrewEventDetailView() {
           )}
 
           {/* Scrim so the title reads over the track. */}
-          <div className="absolute inset-x-0 bottom-0" style={{ height: 200, background: 'linear-gradient(180deg, #0A0C0F00 0%, #0A0C0F 100%)' }} />
+          {/* Scrim. Stronger with a live basemap than it needed to be over a
+              flat gradient: street labels and waypoint pills are busy, and the
+              title has to stay the most legible thing in the hero. */}
+          <div className="absolute inset-x-0 bottom-0" style={{ height: 210, background: 'linear-gradient(180deg, #0A0C0F00 0%, #0A0C0FD9 46%, #0A0C0F 100%)' }} />
 
           <button type="button" onClick={() => navigate(-1)} aria-label={de ? 'Zurück' : 'Back'}
             className="absolute grid place-items-center rounded-full"
@@ -186,6 +204,32 @@ export default function CrewEventDetailView() {
             style={{ right: 16, top: 14, width: 40, height: 40, background: '#0A0C0FA6', border: '1px solid #FFFFFF26', backdropFilter: 'blur(12px)' }}>
             <Share2 size={18} strokeWidth={2.2} style={{ color: '#fff' }} />
           </button>
+
+          {/* MapType (pen pEMGx) — a real Dark ↔ Terrain switch, plus expand.
+              Only shown once the basemap is actually up; toggling styles with
+              no map behind them would be a button that does nothing.
+              Top-RIGHT, under the share button: at left/62 these sat straight
+              over the difficulty pill and the ride title once a real basemap
+              was behind them. */}
+          {route && mapReady && (
+            <div className="absolute flex items-center" style={{ right: 16, top: 62, gap: 8 }}>
+              <button type="button"
+                onClick={() => setMapStyle((k) => (k === 'dark' ? 'cycling' : 'dark'))}
+                className="inline-flex items-center rounded-full"
+                style={{ gap: 5, padding: '7px 11px', background: '#0A0C0FA6', border: '1px solid #FFFFFF26', backdropFilter: 'blur(12px)' }}>
+                <Layers size={14} strokeWidth={2.2} style={{ color: '#fff' }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>
+                  {mapStyle === 'dark' ? (de ? 'Dunkel' : 'Dark') : (de ? 'Terrain' : 'Terrain')}
+                </span>
+              </button>
+              <button type="button" onClick={() => setMapOpen(true)}
+                aria-label={de ? 'Karte vergrößern' : 'Expand map'}
+                className="grid place-items-center rounded-full"
+                style={{ width: 34, height: 34, background: '#0A0C0FA6', border: '1px solid #FFFFFF26', backdropFilter: 'blur(12px)' }}>
+                <Maximize2 size={15} strokeWidth={2.2} style={{ color: '#fff' }} />
+              </button>
+            </div>
+          )}
 
           {/* TitleOv (pen MXs3O) */}
           <div className="absolute flex flex-col" style={{ left: 20, right: 20, bottom: 18, gap: 8 }}>
@@ -490,6 +534,44 @@ export default function CrewEventDetailView() {
           </div>
         </div>
       </div>
+
+      {/* Full-screen map. This is the ONLY interactive map on the page, and it
+          runs with cooperativeGestures: one finger scrolls, two fingers move the
+          map. The hero preview is deliberately inert so that scrolling past a
+          route can never be hijacked into panning it — the trap that leaves
+          mobile users stranded mid-page. */}
+      {mapOpen && ev.tour_polyline && (
+        <div className="fixed inset-0" style={{ zIndex: 60, background: '#0A0C0F' }} role="dialog" aria-modal="true"
+          aria-label={de ? 'Karte' : 'Map'}>
+          <RouteMap
+            polyline={ev.tour_polyline}
+            waypoints={ev.tour_waypoints ?? []}
+            styleKey={mapStyle}
+            interactive
+          />
+          <button type="button" onClick={() => setMapOpen(false)}
+            aria-label={de ? 'Karte schließen' : 'Close map'}
+            className="absolute grid place-items-center rounded-full"
+            style={{
+              left: 16, top: 'max(14px, env(safe-area-inset-top))', width: 40, height: 40,
+              background: '#0A0C0FCC', border: '1px solid #FFFFFF26', backdropFilter: 'blur(12px)',
+            }}>
+            <X size={20} strokeWidth={2.3} style={{ color: '#fff' }} />
+          </button>
+          <button type="button"
+            onClick={() => setMapStyle((k) => (k === 'dark' ? 'cycling' : 'dark'))}
+            className="absolute inline-flex items-center rounded-full"
+            style={{
+              left: 16, bottom: 'max(18px, env(safe-area-inset-bottom))', gap: 5, padding: '9px 13px',
+              background: '#0A0C0FCC', border: '1px solid #FFFFFF26', backdropFilter: 'blur(12px)',
+            }}>
+            <Layers size={15} strokeWidth={2.2} style={{ color: '#fff' }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
+              {mapStyle === 'dark' ? (de ? 'Dunkel' : 'Dark') : 'Terrain'}
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

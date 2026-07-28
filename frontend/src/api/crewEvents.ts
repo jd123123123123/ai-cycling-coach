@@ -47,6 +47,10 @@ export interface CrewEvent {
   tour_profile: [number, number][] | null
   tour_descent_m: number | null
   tour_max_grade_pct: number | null
+  // Named GPX waypoints, for map pins. Null when the file carried none —
+  // unnamed cue points are dropped server-side, since an unlabelled pin is
+  // noise and the label is the whole value.
+  tour_waypoints: { name: string; lat: number; lng: number; sym?: string | null; desc?: string | null }[] | null
 }
 
 // ── Ride weather (GET /crews/me/events/{id}/weather) ──────────────────

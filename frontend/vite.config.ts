@@ -6,6 +6,15 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // MapLibre GL must not go through esbuild dep pre-bundling. It spawns a web
+  // worker for tile parsing, and the pre-bundled copy resolves that worker's
+  // URL incorrectly: the map constructs, fetches its style and every TileJSON,
+  // reports all sources "loaded" — and then requests zero tiles, never fires
+  // `load`, and never sets isStyleLoaded(). No error is emitted anywhere, which
+  // is what makes it a nasty half-hour. Proven by A/B: the identical style and
+  // version render fine when imported straight from dist, bypassing the
+  // optimizer. Excluding it here keeps the app's own dynamic import working.
+  optimizeDeps: { exclude: ['maplibre-gl'] },
   test: {
     // Component tests arrived (Today's Road), so the runner now needs a DOM.
     // Pure-utility tests are unaffected by running under jsdom.

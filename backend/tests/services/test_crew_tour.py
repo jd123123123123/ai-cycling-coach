@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 
-from app.services.crew_tour import MAX_PROFILE_POINTS, parse_gpx
+from app.services.crew_tour import MAX_PROFILE_POINTS, MAX_WAYPOINTS, parse_gpx
 
 
 def _gpx(points: list[tuple[float, float, float | None]]) -> str:
@@ -160,3 +160,110 @@ def test_partial_elevation_data_still_yields_a_profile():
     xs = [p[0] for p in out.profile]
     assert xs == sorted(xs)
     assert out.max_grade_pct is not None
+
+
+# ── named waypoints (labelled map pins) ───────────────────────────────────
+
+
+def _wpt(lat: float, lon: float, inner: str) -> str:
+    return f'<wpt lat="{lat:.6f}" lon="{lon:.6f}">{inner}</wpt>'
+
+
+def _gpx_with_waypoints(
+    points: list[tuple[float, float, float | None]], wpts: list[str]
+) -> str:
+    """Same one-track GPX as _gpx, plus raw <wpt> elements (GPX 1.1 requires
+    waypoints before tracks)."""
+    track = _gpx(points)
+    return track.replace("<trk>", "".join(wpts) + "<trk>", 1)
+
+
+def test_named_waypoints_parsed_with_coords_and_symbol():
+    pts = _straight_climb(6, 100.0, [100.0] * 6)
+    wpts = [
+        _wpt(
+            _lat_for(0.0),
+            7.0,
+            "<name>Starnberger See</name><sym>Water</sym><desc>Lake stop</desc>",
+        ),
+        _wpt(_lat_for(500.0), 7.0, "<name>Kloster Andechs</name><sym>Church</sym>"),
+    ]
+    out = parse_gpx(_gpx_with_waypoints(pts, wpts))
+
+    assert [w["name"] for w in out.waypoints] == [
+        "Starnberger See",
+        "Kloster Andechs",
+    ]
+    first = out.waypoints[0]
+    assert first["sym"] == "Water"
+    assert first["desc"] == "Lake stop"
+    assert first["lat"] == round(_lat_for(0.0), 5)
+    assert first["lng"] == 7.0
+    # desc is optional and stays honestly null rather than "".
+    assert out.waypoints[1]["desc"] is None
+    # The track is untouched by the waypoints.
+    assert len(out.polyline) == 6
+
+
+def test_waypoint_without_a_usable_name_is_dropped():
+    """An unlabelled pin is noise on a map, so it never reaches the frontend —
+    but a <desc>-only or <type>-only pin still has something to render."""
+    pts = _straight_climb(4, 100.0, [100.0] * 4)
+    wpts = [
+        _wpt(_lat_for(0.0), 7.0, "<sym>Flag</sym>"),  # no name at all → dropped
+        _wpt(_lat_for(50.0), 7.0, "<name>   </name>"),  # whitespace → dropped
+        _wpt(_lat_for(100.0), 7.0, "<desc>Coffee stop</desc>"),  # desc fallback
+        _wpt(_lat_for(200.0), 7.0, "<type>Summit</type>"),  # type fallback
+    ]
+    out = parse_gpx(_gpx_with_waypoints(pts, wpts))
+
+    assert [w["name"] for w in out.waypoints] == ["Coffee stop", "Summit"]
+
+
+def test_waypoints_capped_and_de_clustered_along_the_route():
+    """A Garmin-style export with a cluster of cue points at one junction plus a
+    handful of real landmarks: the cap must keep the spread-out pins, not the
+    first 12 in file order (which are all the same roundabout)."""
+    pts = _straight_climb(101, 100.0, [100.0] * 101)  # 10 km of track
+    cluster = [
+        _wpt(_lat_for(50.0 + i), 7.0, f"<name>Cue {i}</name>") for i in range(30)
+    ]
+    landmarks = [
+        _wpt(_lat_for(d), 7.0, f"<name>Landmark {d}</name>")
+        for d in (2000.0, 4000.0, 6000.0, 8000.0, 10000.0)
+    ]
+    out = parse_gpx(_gpx_with_waypoints(pts, cluster + landmarks))
+
+    assert len(out.waypoints) == MAX_WAYPOINTS
+    names = [w["name"] for w in out.waypoints]
+    # Every spread-out landmark survives; the 30-strong cluster contributes only
+    # a couple of representatives instead of swallowing the whole budget.
+    for d in (2000.0, 4000.0, 6000.0, 8000.0, 10000.0):
+        assert f"Landmark {d}" in names
+    assert sum(1 for n in names if n.startswith("Cue ")) <= 7
+
+
+def test_waypoint_only_file_yields_both_a_polyline_and_waypoints():
+    """No <trk> and no <rte>: the waypoints are the only coordinates, so they
+    must still drive the polyline AND now also surface as named pins."""
+    wpts = [
+        _wpt(_lat_for(0.0), 7.0, "<name>Start</name>"),
+        _wpt(_lat_for(1000.0), 7.0, "<name>Middle</name>"),
+        _wpt(_lat_for(2000.0), 7.0, "<name>Finish</name>"),
+    ]
+    gpx = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<gpx version="1.1" creator="test" '
+        'xmlns="http://www.topografix.com/GPX/1/1">'
+        f"{''.join(wpts)}</gpx>"
+    )
+    out = parse_gpx(gpx)
+
+    assert len(out.polyline) == 3
+    assert [w["name"] for w in out.waypoints] == ["Start", "Middle", "Finish"]
+
+
+def test_file_without_waypoints_yields_empty_list():
+    out = parse_gpx(_gpx(_straight_climb(5, 100.0, [100.0] * 5)))
+
+    assert out.waypoints == []  # never invented
