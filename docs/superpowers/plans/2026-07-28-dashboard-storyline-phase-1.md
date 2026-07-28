@@ -47,9 +47,15 @@
 
 The numbers already exist in `PlanTab.tsx`. This task moves them, unchanged in behaviour, into a tested pure module so four chapters can share one source.
 
+**It is a move, not a copy.** `PlanTab`'s private `PHASE_WORDS` and its
+`phaseLabel` memo are deleted in this same task and commit, so the duplicate
+never exists in the tree. Leaving a duplication window for a later task to
+close would be a real defect that happened to be scheduled.
+
 **Files:**
 - Create: `frontend/src/utils/seasonArc.ts`
 - Test: `frontend/src/utils/__tests__/seasonArc.test.ts`
+- Modify: `frontend/src/components/dashboard/tabs/PlanTab.tsx` — delete `PHASE_WORDS` (lines ~59–65) and the `phaseLabel` memo (~lines 341–353); import and call `phaseLabel(meso?.phase ?? null, de)` from `../../../utils/seasonArc` instead. Leave every other PlanTab figure alone — the rest of the arc wiring is Task 5.
 
 **Interfaces:**
 - Consumes: `daysToEvent(eventDate, now?)` from `frontend/src/utils/loadMetrics.ts` (returns `number | null`, uses `differenceInCalendarDays`).
@@ -310,13 +316,28 @@ export function seasonArc(input: SeasonArcInput): SeasonArc {
 Run: `cd frontend && npx vitest run src/utils/__tests__/seasonArc.test.ts`
 Expected: PASS, 18 tests.
 
-- [ ] **Step 5: Typecheck and commit**
+- [ ] **Step 5: Delete PlanTab's now-duplicate copy**
 
-Run: `cd frontend && npx tsc -b --noEmit`
-Expected: only the pre-existing `src/auraprobe.tsx` finding, if it has not yet been resolved on your branch.
+In `PlanTab.tsx`: delete the `PHASE_WORDS` constant and the `phaseLabel`
+`useMemo`. Add `import { phaseLabel } from '../../../utils/seasonArc'` and
+replace the memo's single consumer with `phaseLabel(meso?.phase ?? null, de)`.
+`useMemo` may become an unused import — check before removing it, it is used
+elsewhere in the file.
+
+Touch nothing else in PlanTab. `daysToEventResolved`, `weeksLeft`,
+`weekOfMeso` and `blockHorizon` stay as they are; Task 5 rewires them.
+
+- [ ] **Step 6: Typecheck, run the full suite, and commit**
+
+Run: `cd frontend && npx tsc -b --noEmit && npx vitest run`
+Expected: `tsc` reports only the pre-existing `src/auraprobe.tsx` finding, if it
+has not yet been resolved on your branch. The full suite passes — baseline is
+573 tests, so expect 573 + 18 new. A PlanTab test that asserts a phase string
+must still pass; `phaseLabel` was moved verbatim, so a failure means the move
+changed behaviour and the CODE is wrong, not the test.
 
 ```bash
-git add frontend/src/utils/seasonArc.ts frontend/src/utils/__tests__/seasonArc.test.ts
+git add frontend/src/utils/seasonArc.ts frontend/src/utils/__tests__/seasonArc.test.ts frontend/src/components/dashboard/tabs/PlanTab.tsx
 git commit -m "feat(narrative): extract the season arc into one tested module
 
 The phase, week-in-block and countdown figures lived privately inside
@@ -1064,14 +1085,29 @@ No card moves in this task. The bar goes in, identically positioned, and the fou
 
 - [ ] **Step 1: Mount it on `TodayTab`**
 
-`ChapterBar` is the first child of the tab's root fragment, above the greeting. Build the arc from data the tab already has:
+None of TodayTab, RecoveryTab or HistoryTab currently holds the week payload.
+Add the same hook `PlanTab` and `SeasonView` already use:
+
+```tsx
+import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
+// …
+const { data: week } = useCurrentWeek()
+```
+
+This is **not** a second network fetch — `useCurrentWeek` is a React Query hook
+and the four chapters share one cached result. Call it with no arguments, as
+`SeasonView.tsx:105` does. (`PlanTab` passes a `weekOffset` because it has a
+week pager; the chapter bar always describes the current week.)
+
+`ChapterBar` is the first child of the tab's root fragment, above the greeting.
+Build the arc from data the tab now has:
 
 ```tsx
 const arc = useMemo(() => seasonArc({
   targetEventDate: profile?.target_event_date ?? null,
-  goalEventDate: typeof athleteEv.goal_event_date === 'string' ? athleteEv.goal_event_date : null,
+  goalEventDate: typeof athlete?.goal_event_date === 'string' ? athlete.goal_event_date : null,
   meso: week?.meso_block ?? null,
-}), [profile?.target_event_date, athleteEv.goal_event_date, week?.meso_block])
+}), [profile?.target_event_date, athlete?.goal_event_date, week?.meso_block])
 ```
 
 then, as the first rendered element:
@@ -1080,7 +1116,11 @@ then, as the first rendered element:
 <ChapterBar chapter="today" arc={arc} de={de} />
 ```
 
-If `TodayTab` does not already hold `week`, read it from the same hook `PlanTab` uses — do NOT add a second fetch. Locate it with `grep -n "meso_block\|useWeek\|week?" src/components/dashboard/tabs/PlanTab.tsx`.
+`athlete` is TodayTab's existing `evidence.athlete` record (declared around line
+281) — **not** `athleteEv`, which is PlanTab's name for the same thing. In
+PlanTab use `athleteEv.goal_event_date`; in the other three tabs derive the
+record the way that file already does, and pass `goalEventDate: null` if the
+file has no evidence record at all. Never invent a new fetch for it.
 
 - [ ] **Step 2: Verify it renders before touching the other three**
 
@@ -1098,19 +1138,26 @@ Same position — first child, above each page's existing header:
 <ChapterBar chapter="history" arc={arc} de={de} />  // HistoryTab
 ```
 
-- [ ] **Step 4: Delete PlanTab's private arc math**
+- [ ] **Step 4: Rewire PlanTab's remaining arc math onto the shared module**
 
-In `PlanTab.tsx`, `goalDaysOut` / `daysToEventResolved` / `weeksLeft` / `phaseLabel` / `weekOfMeso` / `blockHorizon` (lines ~326–395) are now duplicates. Replace each use with the `arc` fields:
+Task 1 already moved `PHASE_WORDS` and `phaseLabel`. What is left in
+`PlanTab.tsx` (lines ~326–395) is the rest of the private arc, now duplicated by
+`seasonArc()`. Replace each use with the `arc` fields and delete the local
+computations:
 
 | old | new |
 |---|---|
 | `daysToEventResolved` | `arc.daysToEvent` |
 | `weeksLeft` | `arc.weeksToEvent` |
-| `phaseLabel` (the memo) | `phaseLabel(arc.phaseKey, de)` from `utils/seasonArc` |
 | `weekOfMeso` | `arc.weekInBlock` |
 | `blockHorizon` | `arc.blockWeeks` |
 
-Delete PlanTab's local `PHASE_WORDS` constant (lines 59–65) — it now lives in `seasonArc.ts`. Keep `blockBadge` and `blockPct`; they are presentation, not arc math, but they must now read the `arc` fields.
+`goalDaysOut` and the local `daysToEvent(...)` call go with them — `seasonArc`
+makes that call internally, with the same precedence.
+
+Keep `blockBadge` and `blockPct`. They are presentation, not arc math, but they
+must now read the `arc` fields. Note that `blockPct` falls back to `planPct`
+when the block figures are absent; preserve that fallback exactly.
 
 - [ ] **Step 5: Run the full suite and typecheck**
 
