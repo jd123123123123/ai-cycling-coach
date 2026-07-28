@@ -26,7 +26,7 @@ import { useActivitiesRange } from '../hooks/useActivitiesRange'
 import { localDayKey } from '../utils/loadMetrics'
 import { useLocale } from '../contexts/LocaleContext'
 import { workoutDisplayTitle, workoutDisplayPurpose, workoutDisplayRationale } from '../api/coach'
-import BlockBars, { zoneColor, zoneForPct } from '../components/workout/BlockBars'
+import BlockBars, { zoneColor, zoneForPct, blockBarFrac, BLOCK_BARS_MAX_PCT } from '../components/workout/BlockBars'
 import WorkoutExportCard, { type ExportBlockReason } from '../components/workout/WorkoutExportCard'
 import type { ResolvedBlock, PrescribedWorkout } from '../api/coach'
 import type { CustomBlock } from '../api/customWorkouts'
@@ -205,6 +205,12 @@ const ZONE_BANDS: Array<{ z: number; lo: number; hi: number }> = [
   { z: 4, lo: 90, hi: 105 }, { z: 5, lo: 105, hi: 120 }, { z: 6, lo: 120, hi: 150 },
 ]
 const SCALE_MAX = 150
+
+/** Axis ticks for the interval profile, in %FTP. Kept inside the bars' own
+ *  domain (BLOCK_BARS_MAX_PCT) so a tick can never sit off the top of the
+ *  column, and low enough at the bottom to actually bracket recovery blocks —
+ *  the old 60 floor was above every warm-up and recovery valley in the plan. */
+const PROFILE_TICKS = [120, 90, 60, 30].filter((v) => v / 100 <= BLOCK_BARS_MAX_PCT)
 
 export default function WorkoutDetailView() {
   const navigate = useNavigate()
@@ -456,13 +462,37 @@ export default function WorkoutDetailView() {
               <span style={eyebrow}>{t.profile}</span>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>% FTP</span>
             </div>
+            {/* Axis ticks are POSITIONED from the bars' own scale, not spaced
+                evenly. Evenly spacing 120/90/60 over this column implied a
+                60-120 domain while BlockBars draws 0-135 from a zero baseline,
+                so a 55% FTP warm-up landed where the axis read ~84% — the
+                athlete's warm-up looked 29 points harder than prescribed, and
+                the recovery valleys 32. `blockBarFrac` is now the single source
+                of the mapping, so the two cannot drift again. Faint gridlines
+                make the scale legible instead of implied. */}
             <div className="flex gap-2">
-              <div className="flex flex-col justify-between items-end" style={{ width: 26, height: 150 }}>
-                {[120, 90, 60].map((y) => (
-                  <span key={y} style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-muted)' }}>{y}</span>
+              <div className="relative" style={{ width: 26, height: 150 }}>
+                {PROFILE_TICKS.map((y) => (
+                  <span
+                    key={y}
+                    className="absolute right-0"
+                    style={{
+                      bottom: blockBarFrac(y / 100) * 150,
+                      transform: 'translateY(50%)',
+                      fontSize: 9, fontWeight: 600, color: 'var(--color-muted)',
+                    }}
+                  >{y}</span>
                 ))}
               </div>
-              <div className="flex-1" style={{ height: 150 }}>
+              <div className="flex-1 relative" style={{ height: 150 }}>
+                {PROFILE_TICKS.map((y) => (
+                  <span
+                    key={y}
+                    aria-hidden
+                    className="absolute left-0 right-0"
+                    style={{ bottom: blockBarFrac(y / 100) * 150, height: 1, background: 'var(--color-rule)', opacity: 0.55 }}
+                  />
+                ))}
                 <BlockBars blocks={w.blocks} height={150} />
               </div>
             </div>

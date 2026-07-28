@@ -78,6 +78,26 @@ export function expandBlocks(blocks: ResolvedBlock[]): BarSegment[] {
   return out
 }
 
+/**
+ * Top of the bar column, as a fraction of FTP. Bars are drawn from a ZERO
+ * baseline up to this ceiling.
+ *
+ * Exported because any axis drawn next to these bars must derive its label
+ * positions from the same number. WorkoutDetailView used to label its 150px
+ * column 120 / 90 / 60 spaced evenly, which silently assumed a 60-120 domain
+ * while the bars used 0-135: a 55% FTP warm-up drew at 61px, where that axis
+ * read ~84% FTP. The athlete's warm-up looked like tempo work, 29 points
+ * harder than prescribed, and the recovery valleys were off by 32. Only the
+ * high blocks happened to land near-correct, which is why it survived review.
+ */
+export const BLOCK_BARS_MAX_PCT = 1.35
+
+/** Fraction of the column height a given %FTP occupies (0-1, clamped). The one
+ *  place the bar geometry is defined — axes and gridlines call this too. */
+export function blockBarFrac(pctOfFtp: number): number {
+  return Math.max(0, Math.min(1, pctOfFtp / BLOCK_BARS_MAX_PCT))
+}
+
 export default function BlockBars({ blocks, height = 96 }: {
   blocks: ResolvedBlock[]
   height?: number
@@ -88,9 +108,9 @@ export default function BlockBars({ blocks, height = 96 }: {
   return (
     <div className="flex items-end w-full" style={{ height, gap: 1 }}>
       {segments.map((s, i) => {
-        // Height: %FTP scaled so 135% FTP tops out; zone fallback for no-watt
-        // blocks. Same effort math as the detail page's terrain header.
-        const frac = Math.min(1, s.pct / 1.35)
+        // Height: %FTP scaled so BLOCK_BARS_MAX_PCT tops out; zone fallback for
+        // no-watt blocks. Same effort math as the detail page's terrain header.
+        const frac = blockBarFrac(s.pct)
         return (
           <div
             key={i}

@@ -4,7 +4,7 @@
  * legacy fallback for old persisted rows.
  */
 import { describe, expect, it } from 'vitest'
-import { expandBlocks, zoneForPct } from '../BlockBars'
+import { expandBlocks, zoneForPct, blockBarFrac, BLOCK_BARS_MAX_PCT } from '../BlockBars'
 import type { ResolvedBlock } from '../../../api/coach'
 
 const block = (over: Partial<ResolvedBlock>): ResolvedBlock => ({
@@ -96,5 +96,40 @@ describe('zoneForPct', () => {
     expect(zoneForPct(1.15)).toBe(5)
     expect(zoneForPct(1.5)).toBe(6)
     expect(zoneForPct(1.8)).toBe(7)
+  })
+})
+
+// The bug this pins: WorkoutDetailView labelled its 150px profile column
+// 120 / 90 / 60 spaced EVENLY, implying a 60-120 domain, while these bars are
+// drawn 0-BLOCK_BARS_MAX_PCT from a zero baseline. A 55% FTP warm-up drew at
+// 61px, where that axis read ~84% FTP — 29 points harder than prescribed, and
+// recovery valleys were off by 32. Only the hard intervals happened to land
+// near-correct, which is why it survived review. Axis ticks are now POSITIONED
+// with blockBarFrac, so an axis and its bars agree by construction.
+describe('blockBarFrac — the one bar/axis mapping', () => {
+  const H = 150
+  const px = (pct: number) => blockBarFrac(pct) * H
+
+  it('is a zero-baseline scale topping out at the domain ceiling', () => {
+    expect(blockBarFrac(0)).toBe(0)
+    expect(blockBarFrac(BLOCK_BARS_MAX_PCT)).toBe(1)
+  })
+
+  it('clamps instead of overflowing the column', () => {
+    expect(blockBarFrac(2.0)).toBe(1)
+    expect(blockBarFrac(-0.5)).toBe(0)
+  })
+
+  it('would have exposed the old evenly-spaced 60-120 axis', () => {
+    const oldAxisReadsAt = (heightPx: number) => 60 + (heightPx / H) * 60
+    expect(oldAxisReadsAt(px(0.55))).toBeGreaterThan(80) // true value: 55
+    expect(oldAxisReadsAt(px(0.5))).toBeGreaterThan(80)  // true value: 50
+    // The hard interval that hid the fault:
+    expect(Math.abs(oldAxisReadsAt(px(1.1)) - 110)).toBeLessThan(2)
+  })
+
+  it('brackets recovery blocks — a 30% tick sits below a 50% recovery bar', () => {
+    expect(px(0.3)).toBeLessThan(px(0.5))
+    expect(px(0.3)).toBeGreaterThan(0)
   })
 })
