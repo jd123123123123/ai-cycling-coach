@@ -24,6 +24,7 @@ import { detectWorkoutSport, loggedReviewFromEvidence } from '../../../api/coach
 import type { WorkoutSport } from '../../../api/coach'
 import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
 import { daysToEvent } from '../../../utils/loadMetrics'
+import { phaseLabel } from '../../../utils/seasonArc'
 import { intensityStep, intensityLabel } from '../../../utils/intensityScale'
 import { formatDate } from '../../../utils/format'
 
@@ -54,15 +55,6 @@ const RUN_PACE = [
   { z: 'Z5', en: 'VO₂ Max', de: 'VO₂max', lo: 1.00, hi: 1.06, color: 'var(--color-amber)' },
 ]
 const fmtPace = (sPerKm: number) => `${Math.floor(sPerKm / 60)}:${String(Math.round(sPerKm % 60)).padStart(2, '0')}`
-
-// Localized phase words for the raw meso phase key ("base1" → "Grundlage 1").
-const PHASE_WORDS: Record<string, { en: string; de: string }> = {
-  base: { en: 'Base', de: 'Grundlage' },
-  build: { en: 'Build', de: 'Aufbau' },
-  peak: { en: 'Peak', de: 'Peak' },
-  taper: { en: 'Taper', de: 'Taper' },
-  race: { en: 'Race', de: 'Rennen' },
-}
 
 // Localized session-category labels (plan-day category → chip/meta word) so a
 // German user never reads "Sweet spot" chrome under a Lauf row.
@@ -338,19 +330,6 @@ export default function PlanTab() {
   // shadowed secondary sessions), reconciling header and list (audit P0-5).
   const sportTargetTss = sportDays.reduce((s, d) => s + (d.target_tss ?? 0), 0)
   const weeklyTarget = sport === 'all' ? (week?.planned_tss_total ?? sportTargetTss) : sportTargetTss
-  // Phase chip — localized stem + number ("base1" → DE "Grundlage 1"), raw
-  // server value only as last-resort fallback.
-  const phaseLabel = useMemo(() => {
-    const raw = meso?.phase
-    if (!raw) return de ? 'Grundlage' : 'Base'
-    const m = raw.match(/^([a-z]+)\s*(\d+)?$/i)
-    const stem = (m?.[1] ?? raw).toLowerCase()
-    const word = Object.entries(PHASE_WORDS).find(([k]) => stem.startsWith(k))?.[1]
-    const label = word
-      ? (de ? word.de : word.en)
-      : raw.replace(/([a-z])(\d)/i, '$1 $2').replace(/^\w/, (c) => c.toUpperCase())
-    return m?.[2] ? `${label} ${m[2]}` : label
-  }, [meso?.phase, de])
   const planName = goalName ?? (de ? 'Trainingsplan' : 'Training Plan')
 
   // Workout-of-day — sport detection only gates the shared SessionOfTheDay
@@ -389,7 +368,7 @@ export default function PlanTab() {
   const blockHorizon = meso?.progression?.horizon_weeks ?? null
   const blockBadge = weekOfMeso != null && blockHorizon != null && blockHorizon > 0
     ? (de ? `Woche ${weekOfMeso} / ${blockHorizon}` : `Week ${weekOfMeso} / ${blockHorizon}`)
-    : phaseLabel
+    : phaseLabel(meso?.phase ?? null, de)
   const blockPct = weekOfMeso != null && blockHorizon != null && blockHorizon > 0
     ? Math.min(100, (weekOfMeso / blockHorizon) * 100)
     : planPct
@@ -581,7 +560,7 @@ export default function PlanTab() {
         <div className="flex-1 min-w-0 flex flex-col items-center" style={{ gap: 2 }}>
           <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{weekLabel}</span>
           <span className="truncate" style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--color-muted)' }}>
-            {[weekRangeLabel, phaseLabel, weekTssTarget > 0 ? `${weekTssTarget} TSS` : null].filter(Boolean).join(' · ')}
+            {[weekRangeLabel, phaseLabel(meso?.phase ?? null, de), weekTssTarget > 0 ? `${weekTssTarget} TSS` : null].filter(Boolean).join(' · ')}
           </span>
         </div>
         <button type="button" aria-label={de ? 'Nächste Woche' : 'Next week'}
