@@ -31,6 +31,7 @@ import { useStreamAnalysis } from '../hooks/useStreamAnalysis'
 import { useLocale } from '../contexts/LocaleContext'
 import HoverBars from '../components/ui/HoverBars'
 import ZoneStack from '../components/debrief/ZoneStack'
+import ClimbList from '../components/debrief/ClimbList'
 import { zoneNumber } from '../utils/rideEffect'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
@@ -174,22 +175,6 @@ function SectionHead({ icon, label, color = 'var(--color-ink-2)', right }: {
         <span className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', color }}>{label}</span>
       </span>
       {right}
-    </div>
-  )
-}
-
-/** Metric cell used by the Climbing & Speed grid (pen ref component p73BZ). */
-function MetricCell({ icon, iconColor, value, unit, label }: {
-  icon: React.ReactNode; iconColor: string; value: string; unit: string; label: string
-}) {
-  return (
-    <div className="flex-1 flex flex-col gap-1 rounded-[14px]" style={{ background: 'var(--color-surface-2)', padding: '12px 11px' }}>
-      <span style={{ color: iconColor, display: 'inline-flex' }}>{icon}</span>
-      <span className="flex items-baseline gap-0.5">
-        <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)', lineHeight: 1 }}>{value}</span>
-        {unit && <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{unit}</span>}
-      </span>
-      <span className="eyebrow" style={{ fontSize: 10, letterSpacing: '0.06em', color: 'var(--color-muted)' }}>{label}</span>
     </div>
   )
 }
@@ -416,9 +401,10 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
       avgSpeed,
       maxSpeed,
       vam: best?.vam_m_per_h ?? null,
-      vamClimb: best,
+      // Longest first: on a mountain day the athlete reads the passes in the
+      // order they hurt, not in the order they happened.
+      realClimbs: [...realClimbs].sort((a, b) => (b.elev_gain_m ?? 0) - (a.elev_gain_m ?? 0)),
       hasRealClimb: realClimbs.length > 0,
-      climbCount: realClimbs.length,
       maxGrade,
     }
   }, [story, header, climbs, maxGrade])
@@ -752,11 +738,12 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
                   )
                 })()}
 
-                {climbSpeed.hasRealClimb && climbSpeed.vam != null ? (
-                  <div className="flex gap-2.5">
-                    <MetricCell icon={<TrendingUp size={17} strokeWidth={2} />} iconColor="var(--color-exercise)" value={nf(Math.round(climbSpeed.vam))} unit="m/h" label="VAM" />
-                    <MetricCell icon={<Mountain size={17} strokeWidth={2} />} iconColor="var(--color-accent)" value={climbSpeed.maxGrade != null ? `${Math.round(climbSpeed.maxGrade)}` : '—'} unit="%" label={de ? 'Max Steigung' : 'Max Gradient'} />
-                  </div>
+                {climbSpeed.hasRealClimb ? (
+                  /* The ride's climbing story, one row per pass. A single VAM
+                     tile collapsed four Dolomites passes into one number; the
+                     list is the part a rider training for a mountain gran fondo
+                     actually comes back to. */
+                  <ClimbList climbs={climbSpeed.realClimbs} />
                 ) : (
                   <div className="flex items-start gap-2 rounded-[12px]" style={{ background: 'var(--color-surface-2)', padding: '10px 12px' }}>
                     <Mountain size={15} strokeWidth={2} style={{ color: 'var(--color-muted)', flexShrink: 0, marginTop: 1 }} />
@@ -857,10 +844,15 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
                   </div>
                 )}
 
-                <div className="flex">
+                {/* Stat rows, not thirds-of-a-row. Three equal columns forced
+                    "Power-Phase R" to wrap across three lines and broke
+                    "144–216" over two, because a 20px display number plus a
+                    two-word label does not fit in 110px. Label left, value
+                    right, one row each — reads instantly and cannot wrap. */}
+                <div className="flex flex-col">
                   {([
                     bd.pco_left_mm != null || bd.pco_right_mm != null
-                      ? { l: de ? 'PCO L/R' : 'PCO L/R', v: `${bd.pco_left_mm != null ? Math.round(bd.pco_left_mm) : '—'} / ${bd.pco_right_mm != null ? Math.round(bd.pco_right_mm) : '—'}`, u: 'mm', c: 'var(--color-stand)' }
+                      ? { l: 'PCO L/R', v: `${bd.pco_left_mm != null ? Math.round(bd.pco_left_mm) : '—'} / ${bd.pco_right_mm != null ? Math.round(bd.pco_right_mm) : '—'}`, u: 'mm', c: 'var(--color-stand)' }
                       : null,
                     bd.power_phase_right
                       ? { l: de ? 'Power-Phase R' : 'Power phase R', v: `${Math.round(bd.power_phase_right[0] ?? 0)}–${Math.round(bd.power_phase_right[1] ?? 0)}`, u: '°', c: 'var(--color-amber)' }
@@ -869,9 +861,16 @@ export default function RideAnalysisView({ embedded = false }: { embedded?: bool
                       ? { l: de ? 'Leistungszustand' : 'Perf. condition', v: `${bd.performance_condition > 0 ? '+' : ''}${bd.performance_condition}`, u: '', c: bd.performance_condition >= 0 ? 'var(--color-recovery)' : 'var(--color-move)' }
                       : null,
                   ].filter(Boolean) as Array<{ l: string; v: string; u: string; c: string }>).map((x, i) => (
-                    <div key={i} className="flex-1 flex flex-col gap-0.5" style={i > 0 ? { borderLeft: '1px solid var(--color-rule)', paddingLeft: 12 } : undefined}>
-                      <span className="flex items-end gap-0.5"><span className="num-display" style={{ fontSize: 20, color: x.c }}>{x.v}</span>{x.u && <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)', paddingBottom: 3 }}>{x.u}</span>}</span>
-                      <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-muted)' }}>{x.l}</span>
+                    <div
+                      key={i}
+                      className="flex items-baseline justify-between gap-3"
+                      style={{ paddingTop: i > 0 ? 9 : 0, paddingBottom: 9, borderTop: i > 0 ? '1px solid var(--color-rule)' : undefined }}
+                    >
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)', whiteSpace: 'nowrap' }}>{x.l}</span>
+                      <span className="flex items-baseline gap-1 shrink-0">
+                        <span className="num-display" style={{ fontSize: 19, color: x.c, whiteSpace: 'nowrap' }}>{x.v}</span>
+                        {x.u && <span className="num-mono" style={{ fontSize: 11, color: 'var(--color-muted)' }}>{x.u}</span>}
+                      </span>
                     </div>
                   ))}
                 </div>
