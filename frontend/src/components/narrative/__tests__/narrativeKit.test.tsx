@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { BrainCircuit } from 'lucide-react'
 import ChapterHero from '../ChapterHero'
 import MomentCard from '../MomentCard'
 import CoachRead from '../CoachRead'
@@ -47,6 +48,31 @@ describe('CoachRead', () => {
     wrap(<CoachRead eyebrow="DEIN COACH" body="Du bist frisch — nutze es." />)
     expect(screen.getByText('DEIN COACH')).toBeTruthy()
     expect(screen.getByText('Du bist frisch — nutze es.')).toBeTruthy()
+  })
+
+  it('grounds itself darkly instead of as a translucent purple wash', () => {
+    // Heute renders this over a live WebGL readiness aura. A transparent
+    // #8B5CF612 wash let that aura through and left the body text and eyebrow
+    // near-invisible on the light faces (planned-rest #3E9BFF, ready #16E08A)
+    // — a bug already found and fixed once in TodayTab's own coach card. The
+    // dark ground is what survives every aura state, so it is asserted here
+    // rather than left to whoever next edits this file.
+    const { container } = wrap(<CoachRead eyebrow="E" body="B" />)
+    const card = container.querySelector('[data-coach-read]') as HTMLElement
+    expect(card).toBeTruthy()
+    expect(card.style.background).toContain('10, 12, 15')
+  })
+
+  it('renders the coach orb only when given a glyph', () => {
+    const { container: withOrb } = wrap(<CoachRead eyebrow="E" body="B" icon={BrainCircuit} />)
+    expect(withOrb.querySelector('[data-coach-orb]')).toBeTruthy()
+    const { container: without } = wrap(<CoachRead eyebrow="E" body="B" />)
+    expect(without.querySelector('[data-coach-orb]')).toBeNull()
+  })
+
+  it('still becomes a link when given a destination', () => {
+    const { container } = wrap(<CoachRead eyebrow="E" body="B" to="/coach" />)
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/coach')
   })
 })
 
