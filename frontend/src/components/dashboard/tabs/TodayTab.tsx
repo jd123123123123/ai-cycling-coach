@@ -33,6 +33,7 @@ import BreakthroughCelebration from '../BreakthroughCelebration'
 import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
 import AbsorptionCard from '../AbsorptionCard'
 import MorningHealthCard from '../MorningHealthCard'
+import CoachRead from '../../narrative/CoachRead'
 import { useStreak, type WeekConsistency } from '../../../hooks/useStreak'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { usePlanAdaptations } from '../../../hooks/usePlanAdaptations'
@@ -1473,25 +1474,16 @@ export default function TodayTab() {
             </div>
           )}
 
-          {/* Coach card (pen CoachCard) — the coach's read for today, purple
-              tint + gradient avatar orb. → /coach. */}
+          {/* Coach card (pen CoachCard) — the coach's read for today. The
+              purple identity, the dark aura-proof ground and the orb all live
+              in <CoachRead> now, shared with every other chapter. */}
           {coachMessage && (
-            /* A 10 %-purple wash (#8B5CF61A) let the aura through, which on the
-               light faces — planned-rest blue, ready green — turned the card
-               into pale lavender with near-white body text and a #C4B5FD
-               eyebrow that vanished completely. This card carries the coach's
-               actual voice, the thing the whole product is for, so it gets a
-               dark glass ground that holds on every aura. The purple identity
-               moves to the border, the orb and the eyebrow, where it reads. */
-            <Link to="/coach" className="hover-card flex gap-3 rounded-[20px] p-3.5" style={{ background: 'color-mix(in srgb, #8B5CF6 12%, #0A0C0FCC)', border: '1px solid #8B5CF659', backdropFilter: 'blur(10px)' }}>
-              <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 38, height: 38, background: 'linear-gradient(45deg, #8B5CF6, #59C3FF)', boxShadow: '0 0 12px #8B5CF666' }}>
-                <BrainCircuit size={20} strokeWidth={2} style={{ color: '#FFFFFF' }} />
-              </div>
-              <div className="flex-1 min-w-0 flex flex-col gap-1">
-                <span className="eyebrow" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: '#C4B5FD' }}>{tFor(locale, 'coach_label')}</span>
-                <p style={{ fontSize: 13.5, fontWeight: 500, color: '#FFFFFFF2', lineHeight: 1.4 }}>{coachMessage}</p>
-              </div>
-            </Link>
+            <CoachRead
+              eyebrow={tFor(locale, 'coach_label')}
+              body={coachMessage}
+              to="/coach"
+              icon={BrainCircuit}
+            />
           )}
 
           {/* Momentum cues — weekly rhythm (consistency vs plan) + 7-day fitness
