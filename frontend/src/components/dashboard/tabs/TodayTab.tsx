@@ -32,8 +32,8 @@ import { usePowerProfile } from '../../../hooks/usePowerProfile'
 import BreakthroughCelebration from '../BreakthroughCelebration'
 import WeeklyWrappedBanner from '../WeeklyWrappedBanner'
 import AbsorptionCard from '../AbsorptionCard'
-import MorningHealthCard from '../MorningHealthCard'
 import CoachRead from '../../narrative/CoachRead'
+import NextChapter from '../../narrative/NextChapter'
 import { useStreak, type WeekConsistency } from '../../../hooks/useStreak'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { usePlanAdaptations } from '../../../hooks/usePlanAdaptations'
@@ -63,7 +63,7 @@ import ChapterBar from '../../narrative/ChapterBar'
 // so the terrain reads through. `glassCardStyle` is the ONE shared token
 // (frontend/src/components/dashboard/glassCard.ts) also used by every other
 // Today card component (SessionOfTheDay, FitnessFreshnessCard,
-// WeatherWindowCard, ExtraSessionsCard, MorningHealthCard, AbsorptionCard,
+// WeatherWindowCard, ExtraSessionsCard, AbsorptionCard,
 // ThisWeekCard, SessionReviewCard) so the whole page reads as one glass
 // system, not a patchwork of a few translucent cards among solid ones. Falls
 // back to a solid surface when backdrop-filter isn't supported.
@@ -1152,12 +1152,11 @@ export default function TodayTab() {
         </div>
       </div>
 
-      {/* Morning-health early-warning — illness / significant-downturn cluster
-          from the morning wearable vitals (GET /health/morning-check). Renders
-          ONLY when the detector flags a real cluster vs the athlete's baseline;
-          a normal morning shows nothing. Placed high so a health warning is the
-          first thing seen. Self-contained — owns its own data + null-render. */}
-      <MorningHealthCard />
+      {/* MorningHealthCard moved to Körper (phase 2b) — an illness / downturn
+          cluster from overnight vitals is a body signal, and Körper is where
+          every body signal now lives. It is mounted nowhere between 2a and 2b
+          shipping; that gap is one deploy cycle and is deliberate, rather than
+          inventing a third temporary home for a card that has a real one. */}
 
       {/* Weekly Wrapped — the once-a-week high-dopamine banner (localStorage-
           gated per ISO week; self-hides when there's no ridden week to show). */}
@@ -1579,6 +1578,11 @@ export default function TodayTab() {
           <ChevronRight size={16} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />
         </Link>
       )}
+
+      {/* Chapter handoff — every chapter names the next one, which is what
+          makes four pages read as one document rather than four menus. Last
+          element before the methods drawer, which is an overlay, not content. */}
+      <NextChapter from="today" de={de} />
 
       {/* Methods drawer — "Wie wird das berechnet?" for the readiness score. */}
       {methods.sheet}
