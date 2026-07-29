@@ -30,6 +30,8 @@ import { BottomSheet } from '../../strength/BottomSheet'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useSeasonArc } from '../../../hooks/useSeasonArc'
 import ChapterBar from '../../narrative/ChapterBar'
+import MomentCard from '../../narrative/MomentCard'
+import { limitingDriver } from '../../../utils/limitingDriver'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
 const DASH = '—'
@@ -480,6 +482,69 @@ export default function RecoveryTab() {
     { l: de ? 'Atemrate' : 'Resp. rate', value: sd?.respiration_avg != null ? Math.round(sd.respiration_avg) : null },
   ]
 
+  // ── Driver data, one source ────────────────────────────────────────────
+  // These seven were written out longhand in the JSX below. They are an array
+  // now because two things need them: the tile list (unchanged) and
+  // limitingDriver(), which picks the one to feature as this chapter's Moment.
+  // Every value/delta/dev expression here is copied verbatim from the tiles it
+  // replaces — this step must not change a single rendered number.
+  const driverRows = useMemo(() => ([
+    {
+      key: 'hrv', icon: Activity, label: 'HRV',
+      value: hrvNow != null ? `${Math.round(hrvNow)} ms` : DASH,
+      delta: hrvNow != null && hrv7 != null ? `${hrvNow - hrv7 >= 0 ? '+' : '−'}${Math.abs(Math.round(hrvNow - hrv7))}` : null,
+      deltaColor: hrvNow != null && hrv7 != null && hrvNow >= hrv7 ? 'var(--color-recovery)' : 'var(--color-amber)',
+      dev: hrvNow != null && hrv7 != null ? clamp((hrvNow - hrv7) / 20, -1, 1) : null,
+      segColor: hrvNow != null && hrv7 != null && hrvNow < hrv7 ? 'var(--color-amber)' : 'var(--color-recovery)',
+    },
+    {
+      key: 'rhr', icon: Heart, label: de ? 'Ruhepuls' : 'Resting HR',
+      value: rhrNow != null ? `${Math.round(rhrNow)} bpm` : DASH,
+      delta: rhrNow != null && rhr7 != null ? `${rhrNow <= rhr7 ? '−' : '+'}${Math.abs(Math.round(rhrNow - rhr7))}` : null,
+      deltaColor: rhrNow != null && rhr7 != null && rhrNow <= rhr7 ? 'var(--color-recovery)' : 'var(--color-amber)',
+      dev: rhrNow != null && rhr7 != null ? clamp((rhr7 - rhrNow) / 8, -1, 1) : null,
+      segColor: rhrNow != null && rhr7 != null && rhrNow > rhr7 ? 'var(--color-amber)' : 'var(--color-recovery)',
+    },
+    {
+      key: 'resp', icon: Wind, label: de ? 'Atmung' : 'Respiratory',
+      value: sd?.respiration_avg != null ? `${sd.respiration_avg.toFixed(0)} br/min` : DASH,
+      delta: null, deltaColor: 'var(--color-muted)', dev: null,
+      segColor: sd?.respiration_avg != null ? 'var(--color-recovery)' : 'var(--color-muted)',
+    },
+    {
+      key: 'spo2', icon: Droplet, label: de ? 'Ruhe-SpO₂' : 'Resting SpO₂',
+      value: sd?.spo2_avg != null ? `${Math.round(sd.spo2_avg)}%` : DASH,
+      delta: null, deltaColor: 'var(--color-muted)', dev: null,
+      segColor: sd?.spo2_avg != null ? 'var(--color-recovery)' : 'var(--color-muted)',
+    },
+    {
+      // Skin temp is not in Garmin's daily feed (skinTempDataExists:false) —
+      // honest "Not tracked", never a fabricated °.
+      key: 'skin', icon: Thermometer, label: de ? 'Hauttemp.' : 'Skin temp',
+      value: de ? 'Nicht erfasst' : 'Not tracked',
+      delta: null, deltaColor: 'var(--color-muted)', dev: null, segColor: 'var(--color-muted)',
+    },
+    {
+      key: 'sleep', icon: Moon, label: de ? 'Schlaf' : 'Sleep perf.',
+      value: sleepNow != null ? `${Math.round(sleepNow)}%` : DASH,
+      delta: sleepNow != null && sleepAvg != null ? `${sleepNow - sleepAvg >= 0 ? '+' : '−'}${Math.abs(Math.round(sleepNow - sleepAvg))}` : null,
+      deltaColor: sleepNow != null && sleepAvg != null && sleepNow >= sleepAvg ? 'var(--color-recovery)' : 'var(--color-amber)',
+      dev: sleepNow != null && sleepAvg != null ? clamp((sleepNow - sleepAvg) / 20, -1, 1) : null,
+      segColor: sleepNow != null && sleepAvg != null && sleepNow < sleepAvg ? 'var(--color-amber)' : 'var(--color-recovery)',
+    },
+  ]), [hrvNow, hrv7, rhrNow, rhr7, sd?.respiration_avg, sd?.spo2_avg, sleepNow, sleepAvg, de])
+
+  // The chapter's Moment: the one signal actually below this athlete's own
+  // baseline. Suppressed entirely when readiness is withheld — on a stale
+  // wearable these deviations are computed against days-old values, and
+  // naming a "limiter" from them is precisely the verdict readinessGate
+  // exists to withhold. The hero's amber note and its Sync action already
+  // own that story, so the slot stays empty rather than hedged.
+  const limiter = useMemo(
+    () => (scoreWithheld ? null : limitingDriver(driverRows)),
+    [scoreWithheld, driverRows],
+  )
+
   return (
     <div className="flex flex-col gap-6 pb-4">
       <ChapterBar chapter="body" arc={arc} de={de} />
@@ -520,6 +585,19 @@ export default function RecoveryTab() {
         )}
       </div>
 
+      {/* Moment — the one signal holding readiness back, lifted out of the
+          driver list below so the reader has something to act on instead of
+          seven equal tiles. */}
+      {limiter && (
+        <MomentCard
+          eyebrow={de ? 'WAS DICH HEUTE BREMST' : 'WHAT IS HOLDING YOU BACK'}
+          headline={`${limiter.label} ${limiter.value}`}
+          support={limiter.delta != null
+            ? (de ? `${limiter.delta} gegenüber deinem 7-Tage-Schnitt` : `${limiter.delta} vs your 7-day average`)
+            : (de ? 'Unter deinem 7-Tage-Schnitt' : 'Below your 7-day average')}
+        />
+      )}
+
       {/* 3 · Recovery Drivers */}
       <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
         <div className="flex flex-col" style={{ gap: 2 }}>
@@ -538,34 +616,10 @@ export default function RecoveryTab() {
                 : (de ? 'Noch kein Score — es fehlen Signale' : 'No score yet — signals missing')}
           </span>
         </div>
-        <Driver icon={Activity} label="HRV"
-          value={hrvNow != null ? `${Math.round(hrvNow)} ms` : DASH}
-          delta={hrvNow != null && hrv7 != null ? `${hrvNow - hrv7 >= 0 ? '+' : '−'}${Math.abs(Math.round(hrvNow - hrv7))}` : null}
-          deltaColor={hrvNow != null && hrv7 != null && hrvNow >= hrv7 ? 'var(--color-recovery)' : 'var(--color-amber)'}
-          dev={hrvNow != null && hrv7 != null ? clamp((hrvNow - hrv7) / 20, -1, 1) : null}
-          segColor={hrvNow != null && hrv7 != null && hrvNow < hrv7 ? 'var(--color-amber)' : 'var(--color-recovery)'} />
-        <Driver icon={Heart} label={de ? 'Ruhepuls' : 'Resting HR'}
-          value={rhrNow != null ? `${Math.round(rhrNow)} bpm` : DASH}
-          delta={rhrNow != null && rhr7 != null ? `${rhrNow <= rhr7 ? '−' : '+'}${Math.abs(Math.round(rhrNow - rhr7))}` : null}
-          deltaColor={rhrNow != null && rhr7 != null && rhrNow <= rhr7 ? 'var(--color-recovery)' : 'var(--color-amber)'}
-          dev={rhrNow != null && rhr7 != null ? clamp((rhr7 - rhrNow) / 8, -1, 1) : null}
-          segColor={rhrNow != null && rhr7 != null && rhrNow > rhr7 ? 'var(--color-amber)' : 'var(--color-recovery)'} />
-        <Driver icon={Wind} label={de ? 'Atmung' : 'Respiratory'}
-          value={sd?.respiration_avg != null ? `${sd.respiration_avg.toFixed(0)} br/min` : DASH}
-          delta={null} deltaColor="var(--color-muted)" dev={null}
-          segColor={sd?.respiration_avg != null ? 'var(--color-recovery)' : 'var(--color-muted)'} />
-        <Driver icon={Droplet} label={de ? 'Ruhe-SpO₂' : 'Resting SpO₂'}
-          value={sd?.spo2_avg != null ? `${Math.round(sd.spo2_avg)}%` : DASH}
-          delta={null} deltaColor="var(--color-muted)" dev={null}
-          segColor={sd?.spo2_avg != null ? 'var(--color-recovery)' : 'var(--color-muted)'} />
-        {/* Skin temp is not in Garmin's daily feed (skinTempDataExists:false) — honest "Not tracked", never a fabricated °. */}
-        <Driver icon={Thermometer} label={de ? 'Hauttemp.' : 'Skin temp'} value={de ? 'Nicht erfasst' : 'Not tracked'} delta={null} deltaColor="var(--color-muted)" dev={null} segColor="var(--color-muted)" />
-        <Driver icon={Moon} label={de ? 'Schlaf' : 'Sleep perf.'}
-          value={sleepNow != null ? `${Math.round(sleepNow)}%` : DASH}
-          delta={sleepNow != null && sleepAvg != null ? `${sleepNow - sleepAvg >= 0 ? '+' : '−'}${Math.abs(Math.round(sleepNow - sleepAvg))}` : null}
-          deltaColor={sleepNow != null && sleepAvg != null && sleepNow >= sleepAvg ? 'var(--color-recovery)' : 'var(--color-amber)'}
-          dev={sleepNow != null && sleepAvg != null ? clamp((sleepNow - sleepAvg) / 20, -1, 1) : null}
-          segColor={sleepNow != null && sleepAvg != null && sleepNow < sleepAvg ? 'var(--color-amber)' : 'var(--color-recovery)'} />
+        {driverRows.map((r) => (
+          <Driver key={r.key} icon={r.icon} label={r.label} value={r.value}
+            delta={r.delta} deltaColor={r.deltaColor} dev={r.dev} segColor={r.segColor} />
+        ))}
       </div>
 
       {/* 4 · Metric row. Two big uncaptioned numbers with "vs Ø" trend chips —
