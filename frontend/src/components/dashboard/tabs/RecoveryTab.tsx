@@ -31,6 +31,8 @@ import { useLocale } from '../../../contexts/LocaleContext'
 import { useSeasonArc } from '../../../hooks/useSeasonArc'
 import ChapterBar from '../../narrative/ChapterBar'
 import MomentCard from '../../narrative/MomentCard'
+import MorningHealthCard from '../MorningHealthCard'
+import NextChapter from '../../narrative/NextChapter'
 import { limitingDriver } from '../../../utils/limitingDriver'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
@@ -585,6 +587,16 @@ export default function RecoveryTab() {
         )}
       </div>
 
+      {/* Morning-health early-warning — illness / significant-downturn cluster
+          from the morning wearable vitals (GET /health/morning-check). Renders
+          ONLY when the detector flags a real cluster vs the athlete's baseline;
+          a normal morning shows nothing. Received from Heute (phase 2b): an
+          overnight-vitals warning is a body signal, and this is where body
+          signals live. Placed above the Moment deliberately — when the
+          detector fires, a possible illness outranks whichever driver is
+          furthest below baseline. Self-contained: owns its data + null-render. */}
+      <MorningHealthCard />
+
       {/* Moment — the one signal holding readiness back, lifted out of the
           driver list below so the reader has something to act on instead of
           seven equal tiles. */}
@@ -880,6 +892,10 @@ export default function RecoveryTab() {
           <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Noch keine Verhaltensdaten erfasst' : 'No behaviors logged yet'}</span>
         </div>
       </div>
+
+      {/* Chapter handoff — every chapter names the next one, which is what
+          makes four pages read as one document rather than four menus. */}
+      <NextChapter from="body" de={de} />
 
       {/* Calendar-day detail — tap a past day in the calendar to browse it. */}
       <BottomSheet
