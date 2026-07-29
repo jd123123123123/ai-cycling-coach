@@ -17,6 +17,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { AlertTriangle, Activity, Thermometer, TrendingUp, Sparkles } from 'lucide-react'
 import { GLASS_CARD_MARKER, GLASS_PAPER_2, GLASS_BLUR } from '../dashboard/glassCard'
+import Sparkline from '../ui/Sparkline'
 
 export type InsightPolarity = 'warning' | 'opportunity'
 export type InsightLevel = 'watch' | 'elevated' | 'high'
@@ -29,6 +30,8 @@ export interface InsightNudgeSignal {
   delta: number | null
   unit: string
   severity: 'mild' | 'strong'
+  /** Trailing values for the sparkline. Empty when too few to imply a trend. */
+  series?: number[]
 }
 
 export interface InsightNudgeProps {
@@ -112,6 +115,9 @@ export default function InsightNudge({
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-ink-2)' }}>
                 {metricLabel(sig.metric)}
               </span>
+              {sig.series && sig.series.length >= 2 && (
+                <Sparkline values={sig.series} color={color} label={`${metricLabel(sig.metric)} — ${sig.series.length} d`} />
+              )}
               <span className="num-display" style={{ fontSize: 13, color }}>
                 {deltaText(sig)}
               </span>

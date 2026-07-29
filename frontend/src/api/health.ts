@@ -8,6 +8,7 @@ export interface MorningHealthSignal {
   delta: number | null
   unit: string
   severity: 'mild' | 'strong'
+  series: number[]
 }
 
 export interface MorningHealthCheck {

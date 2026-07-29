@@ -66,4 +66,26 @@ describe('InsightNudge', () => {
     expect(screen.getByText('HRV')).toBeTruthy()
     expect(screen.getByText(/−14/)).toBeTruthy()
   })
+
+  it('draws a sparkline in the chip when the signal carries a series', () => {
+    const { container } = render(
+      <InsightNudge
+        polarity="opportunity" level="high" eyebrow="E" headline="H" recommendation="R"
+        signals={[sig({ series: [50, 49, 48, 47, 45, 42, 40] })]}
+        metricLabel={metricLabel}
+      />,
+    )
+    expect(container.querySelector('svg polyline')).toBeTruthy()
+  })
+
+  it('omits the sparkline when the series is empty, keeping the chip text-only', () => {
+    const { container } = render(
+      <InsightNudge
+        polarity="opportunity" level="high" eyebrow="E" headline="H" recommendation="R"
+        signals={[sig({ series: [] })]}
+        metricLabel={metricLabel}
+      />,
+    )
+    expect(container.querySelector('svg polyline')).toBeNull()
+  })
 })
