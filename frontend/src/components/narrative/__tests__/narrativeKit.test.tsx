@@ -41,6 +41,16 @@ describe('MomentCard', () => {
     const { container: without } = wrap(<MomentCard eyebrow="E" headline="H" />)
     expect(without.querySelector('a')).toBeNull()
   })
+
+  it('colours its support line with supportColor when given one, and falls back to muted otherwise', () => {
+    wrap(<MomentCard eyebrow="E" headline="H" support="+4 gegenüber deinem 7-Tage-Schnitt" supportColor="var(--color-amber)" />)
+    expect(screen.getByText('+4 gegenüber deinem 7-Tage-Schnitt').style.color).toBe('var(--color-amber)')
+
+    cleanup()
+
+    wrap(<MomentCard eyebrow="E" headline="H" support="−15 vs your 7-day average" />)
+    expect(screen.getByText('−15 vs your 7-day average').style.color).toBe('var(--color-muted)')
+  })
 })
 
 describe('CoachRead', () => {

@@ -485,7 +485,7 @@ export default function RecoveryTab() {
   ]
 
   // ── Driver data, one source ────────────────────────────────────────────
-  // These seven were written out longhand in the JSX below. They are an array
+  // These six were written out longhand in the JSX below. They are an array
   // now because two things need them: the tile list (unchanged) and
   // limitingDriver(), which picks the one to feature as this chapter's Moment.
   // Every value/delta/dev expression here is copied verbatim from the tiles it
@@ -599,7 +599,7 @@ export default function RecoveryTab() {
 
       {/* Moment — the one signal holding readiness back, lifted out of the
           driver list below so the reader has something to act on instead of
-          seven equal tiles. */}
+          six equal tiles. */}
       {limiter && (
         <MomentCard
           eyebrow={de ? 'WAS DICH HEUTE BREMST' : 'WHAT IS HOLDING YOU BACK'}
@@ -607,6 +607,7 @@ export default function RecoveryTab() {
           support={limiter.delta != null
             ? (de ? `${limiter.delta} gegenüber deinem 7-Tage-Schnitt` : `${limiter.delta} vs your 7-day average`)
             : (de ? 'Unter deinem 7-Tage-Schnitt' : 'Below your 7-day average')}
+          supportColor={limiter.deltaColor}
         />
       )}
 

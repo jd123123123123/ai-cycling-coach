@@ -13,11 +13,12 @@ export interface MomentCardProps {
   eyebrow: string
   headline: string
   support?: string | null
+  supportColor?: string
   to?: string
   children?: React.ReactNode
 }
 
-export default function MomentCard({ eyebrow, headline, support, to, children }: MomentCardProps) {
+export default function MomentCard({ eyebrow, headline, support, supportColor, to, children }: MomentCardProps) {
   const body = (
     <div
       data-moment
@@ -34,7 +35,7 @@ export default function MomentCard({ eyebrow, headline, support, to, children }:
       </div>
       <div className="flex flex-col gap-1">
         <span className="num-display" style={{ fontSize: 22, color: 'var(--color-ink)' }}>{headline}</span>
-        {support ? <span style={{ fontSize: 13, color: 'var(--color-muted)' }}>{support}</span> : null}
+        {support ? <span style={{ fontSize: 13, color: supportColor ?? 'var(--color-muted)' }}>{support}</span> : null}
       </div>
       {children}
     </div>
