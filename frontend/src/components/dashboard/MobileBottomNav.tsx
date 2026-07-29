@@ -22,9 +22,12 @@ const TABS: Array<{ id: ChapterId; en: string; de: string; icon: React.ReactNode
 ]
 
 // The bar and the chapter dots must agree, or the dots count one story and the
-// buttons offer another.
+// buttons offer another. This can only fire from an actual source edit that
+// somehow slipped past tsc and this file's own tests — a module-scope throw
+// would crash the entire app bundle at import time, below any error boundary,
+// for every user. console.error degrades loudly instead.
 if (TABS.length !== CHAPTERS.length) {
-  throw new Error(`ChapterBar has ${CHAPTERS.length} chapters, nav has ${TABS.length} tabs`)
+  console.error(`ChapterBar has ${CHAPTERS.length} chapters, nav has ${TABS.length} tabs`)
 }
 
 /** Old ?tab= values keep working. Retired ids map onto their new chapter
@@ -52,10 +55,15 @@ export default function MobileBottomNav() {
   // /progress) highlight nothing. /progress is no longer a tab of its own —
   // it is a detail page inside the History chapter, so it lights History
   // rather than a fifth slot.
+  // `?tab=social`/`?tab=crew` render their OWN distinct component
+  // (DashboardPage), not a chapter — resolveActive still aliases them onto
+  // History for OLD-link purposes, but that must not light History's button
+  // while a completely different surface is on screen.
+  const rawTab = searchParams.get('tab')
   const active: ChapterId | null = location.pathname.startsWith('/progress')
     ? 'history'
     : location.pathname.startsWith('/dashboard')
-      ? resolveActive(searchParams.get('tab'))
+      ? (rawTab === 'social' || rawTab === 'crew' ? null : resolveActive(rawTab))
       : null
 
   function handleTab(tab: { id: ChapterId }) {

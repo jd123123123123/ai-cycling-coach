@@ -28,9 +28,7 @@ import StatValue from '../../ui/StatValue'
 import RecoveryEtaCard from '../RecoveryEtaCard'
 import { BottomSheet } from '../../strength/BottomSheet'
 import { useLocale } from '../../../contexts/LocaleContext'
-import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
-import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
-import { seasonArc } from '../../../utils/seasonArc'
+import { useSeasonArc } from '../../../hooks/useSeasonArc'
 import ChapterBar from '../../narrative/ChapterBar'
 
 const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' } as const
@@ -111,16 +109,11 @@ export default function RecoveryTab() {
   const dState = decision?.state ?? null
   const trainDay = isTrainState(dState)
 
-  // ChapterBar's arc — shares the cached current-week and profile queries
-  // TodayTab/PlanTab/HistoryTab already fetch; no evidence record exists on
-  // this tab, so there is no goal-date backup beyond the profile's own.
-  const { data: week } = useCurrentWeek()
-  const { data: profile } = useAthleteProfile()
-  const arc = useMemo(() => seasonArc({
-    targetEventDate: profile?.target_event_date ?? null,
-    goalEventDate: null,
-    meso: week?.meso_block ?? null,
-  }), [profile?.target_event_date, week?.meso_block])
+  // ChapterBar's arc — the ONE shared hook every chapter calls (this tab used
+  // to build its own arc with `goalEventDate: null` hard-coded, which could
+  // disagree with Today/Plan for an athlete whose event lives in the legacy
+  // `goals` JSONB rather than the profile's `target_event_date` column).
+  const arc = useSeasonArc()
 
   const metrics = metricsResp?.metrics ?? []
   const byDate = useMemo(() => {

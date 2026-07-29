@@ -33,12 +33,10 @@ import {
 } from 'lucide-react'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useStreak } from '../../../hooks/useStreak'
-import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
-import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
+import { useSeasonArc } from '../../../hooks/useSeasonArc'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { formatDate, formatTime24 } from '../../../utils/format'
 import type { ActivityRead } from '../../../api/dashboard'
-import { seasonArc } from '../../../utils/seasonArc'
 import ChapterBar from '../../narrative/ChapterBar'
 
 // ── Bike-only sub-discipline split ──────────────────────────────────────────
@@ -170,16 +168,11 @@ export default function HistoryTab() {
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 365), [today]), today)
   const { data: streakData } = useStreak()
 
-  // ChapterBar's arc — shares the cached current-week and profile queries the
-  // other three chapters already fetch; no evidence record exists on this
-  // tab, so there is no goal-date backup beyond the profile's own.
-  const { data: week } = useCurrentWeek()
-  const { data: profile } = useAthleteProfile()
-  const arc = useMemo(() => seasonArc({
-    targetEventDate: profile?.target_event_date ?? null,
-    goalEventDate: null,
-    meso: week?.meso_block ?? null,
-  }), [profile?.target_event_date, week?.meso_block])
+  // ChapterBar's arc — the ONE shared hook every chapter calls (this tab used
+  // to build its own arc with `goalEventDate: null` hard-coded, which could
+  // disagree with Today/Plan for an athlete whose event lives in the legacy
+  // `goals` JSONB rather than the profile's `target_event_date` column).
+  const arc = useSeasonArc()
 
   // Sub-discipline filter (bike-only): all / outdoor / indoor.
   const [filter, setFilter] = useState<Filter>('all')

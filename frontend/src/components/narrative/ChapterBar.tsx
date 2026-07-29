@@ -32,7 +32,7 @@ export default function ChapterBar({ chapter, arc, de }: ChapterBarProps) {
   const weekFrac = arc.weekInBlock != null && arc.blockWeeks != null
     ? `W${arc.weekInBlock}/${arc.blockWeeks}`
     : null
-  const countdown = arc.daysToEvent != null ? `${arc.daysToEvent} ${de ? 'T' : 'D'}` : null
+  const countdown = !arc.synthesized ? `${arc.daysToEvent} ${de ? 'T' : 'D'}` : null
   const anchor = countdown ?? (de ? 'Trainingsblock' : 'Training block')
 
   const ariaLabel = [

@@ -24,6 +24,7 @@ import { detectWorkoutSport, loggedReviewFromEvidence } from '../../../api/coach
 import type { WorkoutSport } from '../../../api/coach'
 import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
 import { phaseLabel, seasonArc } from '../../../utils/seasonArc'
+import { useSeasonArc } from '../../../hooks/useSeasonArc'
 import ChapterBar from '../../narrative/ChapterBar'
 import { intensityStep, intensityLabel } from '../../../utils/intensityScale'
 import { formatDate } from '../../../utils/format'
@@ -312,18 +313,23 @@ export default function PlanTab() {
   const hasSportSessions = sportSessions.length > 0
   const sportWord = sport === 'bike' ? (de ? 'Rad' : 'Bike') : sport === 'run' ? (de ? 'Lauf' : 'Run') : (de ? 'Alle' : 'All')
 
-  // Season arc — ONE producer (utils/seasonArc) over the athlete's goal date
-  // (profile first, brief evidence as backup) and the meso block; the shared
-  // module also backs the ChapterBar, so the bar and this card can never
-  // disagree about what week it is.
+  // Season arc for THIS card — ONE producer (utils/seasonArc) over the
+  // athlete's goal date (profile first, brief evidence as backup) and the
+  // PAGED meso block (respects weekOffset), so the season-summary card below
+  // always describes the week currently selected in the pager.
   // Audit P0-5: the old three-way fallback (meso ?? stale brief evidence ??
   // Math.round over a non-midnight `now`) flipped 138↔139 depending on the hour.
   const goalEventDate = typeof athleteEv.goal_event_date === 'string' ? athleteEv.goal_event_date as string : null
-  const arc = useMemo(() => seasonArc({
+  const cardArc = useMemo(() => seasonArc({
     targetEventDate: profile?.target_event_date ?? null,
     goalEventDate,
     meso: meso ?? null,
   }), [profile?.target_event_date, goalEventDate, meso])
+  // ChapterBar's arc — the ONE shared hook every chapter calls, ALWAYS
+  // describing the current week regardless of this tab's own week pager, so
+  // the bar can never disagree with Today/Body/History when the user pages
+  // through past/future weeks here.
+  const arc = useSeasonArc()
 
   // Plan card — real aggregates, scoped to the selected discipline.
   const weekHours = sportDays.reduce((s, d) => s + dayDurSec(d), 0) / 3600
@@ -367,17 +373,17 @@ export default function PlanTab() {
   // detail (.pen pTlXd / SeasonView). Week-of-block badge + block progress bar
   // + Weeks-left / Week-hours / Sessions / Week-load stats. Real meso data;
   // honest "—" where a figure is absent.
-  const blockBadge = arc.weekInBlock != null && arc.blockWeeks != null && arc.blockWeeks > 0
-    ? (de ? `Woche ${arc.weekInBlock} / ${arc.blockWeeks}` : `Week ${arc.weekInBlock} / ${arc.blockWeeks}`)
+  const blockBadge = cardArc.weekInBlock != null && cardArc.blockWeeks != null && cardArc.blockWeeks > 0
+    ? (de ? `Woche ${cardArc.weekInBlock} / ${cardArc.blockWeeks}` : `Week ${cardArc.weekInBlock} / ${cardArc.blockWeeks}`)
     : phaseLabel(meso?.phase ?? null, de)
-  const blockPct = arc.weekInBlock != null && arc.blockWeeks != null && arc.blockWeeks > 0
-    ? Math.min(100, (arc.weekInBlock / arc.blockWeeks) * 100)
+  const blockPct = cardArc.weekInBlock != null && cardArc.blockWeeks != null && cardArc.blockWeeks > 0
+    ? Math.min(100, (cardArc.weekInBlock / cardArc.blockWeeks) * 100)
     : planPct
   const planStats: [string, string][] = [
-    arc.weeksToEvent != null
-      ? [`${arc.weeksToEvent}`, de ? 'Wochen übrig' : 'Weeks left']
-      : arc.blockWeeks != null
-        ? [`${arc.blockWeeks}`, de ? 'Wochen Aufbau' : 'Week block']
+    cardArc.weeksToEvent != null
+      ? [`${cardArc.weeksToEvent}`, de ? 'Wochen übrig' : 'Weeks left']
+      : cardArc.blockWeeks != null
+        ? [`${cardArc.blockWeeks}`, de ? 'Wochen Aufbau' : 'Week block']
         : ['—', de ? 'Wochen übrig' : 'Weeks left'],
     [weekHours > 0 ? `${weekHours.toFixed(1)}h` : '—', de ? 'Std./Woche' : 'Week hours'],
     [`${sessionCount}`, de ? 'Einheiten' : 'Sessions'],
@@ -476,6 +482,7 @@ export default function PlanTab() {
   if (weekBlocked && !week) {
     return (
       <div className="flex flex-col gap-6 pb-4">
+        <ChapterBar chapter="plan" arc={arc} de={de} />
         <div className="rounded-[24px] flex flex-col items-center text-center" style={{ ...cardStyle, gap: 14, padding: '32px 24px' }}>
           <div className="grid place-items-center rounded-full" style={{ width: 52, height: 52, background: 'var(--color-accent-soft)' }}>
             <Zap size={26} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
