@@ -93,4 +93,24 @@ describe('NextChapter', () => {
     wrap(<NextChapter from="today" de={false} />)
     expect(screen.getByRole('link').textContent).toMatch(/WHERE THIS IS GOING/i)
   })
+
+  it('grounds itself darkly instead of as a translucent coral wash', () => {
+    // Heute renders this over a live WebGL readiness aura, same as CoachRead
+    // above. A transparent 12% coral wash (var(--color-accent) 12%,
+    // transparent) let the aura through and dropped the coral label text
+    // to as low as 1.0:1 contrast on some aura faces — invisible. The dark
+    // ground is what survives every aura state, so it is asserted here
+    // rather than left to whoever next edits this file.
+    //
+    // Unlike CoachRead's ground (two literal hex operands), this one mixes
+    // in `var(--color-accent)`. jsdom only normalizes color-mix() to rgb()
+    // when every operand is a resolvable color literal — with a var() in
+    // the mix it leaves the whole value as the unparsed source string, so
+    // the assertion below matches the literal dark-ground hex instead of an
+    // rgb() substring.
+    const { container } = wrap(<NextChapter from="today" de />)
+    const link = container.querySelector('a') as HTMLAnchorElement
+    expect(link).toBeTruthy()
+    expect(link.style.background).toContain('#0A0C0FCC')
+  })
 })

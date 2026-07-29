@@ -21,8 +21,8 @@ export default function NextChapter({ from, de }: NextChapterProps) {
   return (
     <Link
       to={`/dashboard?tab=${to}`}
-      className="flex items-center justify-between gap-2 rounded-full px-4 py-3"
-      style={{ background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 35%, transparent)' }}
+      className="flex items-center justify-between gap-2 rounded-full px-4 py-3 min-h-[44px]"
+      style={{ background: 'color-mix(in srgb, var(--color-accent) 12%, #0A0C0FCC)', border: '1px solid color-mix(in srgb, var(--color-accent) 35%, transparent)' }}
     >
       <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: 'var(--color-accent)' }}>
         {de ? 'WEITER' : 'NEXT'} — {title}

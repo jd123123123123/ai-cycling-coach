@@ -32,7 +32,7 @@ export default function CoachRead({ eyebrow, body, to, icon: Icon, children }: C
   const inner = (
     <div
       data-coach-read
-      className="flex gap-3 rounded-[24px] p-4"
+      className="flex gap-3 rounded-[20px] p-3.5"
       style={{
         background: 'color-mix(in srgb, #8B5CF6 12%, #0A0C0FCC)',
         border: '1px solid #8B5CF659',
@@ -55,7 +55,7 @@ export default function CoachRead({ eyebrow, body, to, icon: Icon, children }: C
       <div className="flex-1 min-w-0 flex flex-col gap-1">
         <div className="flex items-center justify-between gap-2">
           <span className="eyebrow" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: '#C4B5FD' }}>{eyebrow}</span>
-          {to ? <ChevronRight size={16} className="shrink-0" style={{ color: '#C4B5FD' }} /> : null}
+          {to ? <ChevronRight size={16} className="hover-arrow shrink-0" style={{ color: '#C4B5FD' }} /> : null}
         </div>
         <p style={{ fontSize: 13.5, fontWeight: 500, color: '#FFFFFFF2', lineHeight: 1.4 }}>{body}</p>
         {children}

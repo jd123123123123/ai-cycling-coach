@@ -8,7 +8,7 @@
  * `var(--color-paper-2)` slabs. This module is the single source of that
  * treatment so every consumer (TodayTab's own cards + the shared
  * SessionOfTheDay / FitnessFreshnessCard / WeatherWindowCard /
- * ExtraSessionsCard / MorningHealthCard / AbsorptionCard / ThisWeekCard /
+ * ExtraSessionsCard / AbsorptionCard / ThisWeekCard /
  * SessionReviewCard components) stays in sync — one token, not eight
  * copies drifting independently.
  *
