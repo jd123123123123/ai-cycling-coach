@@ -5,7 +5,7 @@
  * header as the tabbed dashboard instead of missing it.
  */
 import { Link } from 'react-router-dom'
-import { SlidersHorizontal } from 'lucide-react'
+import { SlidersHorizontal, Users } from 'lucide-react'
 import SyncButton from './SyncButton'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -34,6 +34,18 @@ export default function DashboardHeaderBar() {
         style={{ width: 36, height: 36, border: '1px solid var(--color-rule)', color: 'var(--color-ink-2)', backgroundColor: 'var(--color-paper-2)' }}
       >
         <SlidersHorizontal size={16} strokeWidth={2} />
+      </Link>
+      {/* Crew entry — Social left the bottom bar when the nav became four
+          chapters. The crew stack is not going anywhere, so it keeps a
+          one-tap home here until its content is woven into Plan's calendar
+          and History's evidence (phases 2 and 3). */}
+      <Link
+        to="/dashboard?tab=social"
+        aria-label={de ? 'Crew' : 'Crew'}
+        className="grid place-items-center rounded-full"
+        style={{ width: 36, height: 36, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}
+      >
+        <Users size={17} strokeWidth={2} style={{ color: 'var(--color-muted)' }} />
       </Link>
       {/* Rider profile — the primary, thumb-reachable way to "yourself" */}
       <Link
