@@ -1034,15 +1034,15 @@ and change the render switch (lines 75–80) to:
 
 with `const activeTab: ChapterId = resolveActive(searchParams.get('tab'))`.
 
-**`SocialTab` now has no mount.** Keep the crew surface reachable: leave the `SocialTab` import in place and render it when the raw param is literally `social` or `crew`, before the chapter switch:
+**`SocialTab` and `CrewHighlights` now have no mount.** `DashboardPage.tsx` has two separate deep-linked surfaces that `resolveActive` collapses into one chapter: `?tab=social` → `SocialTab`, and `?tab=crew` → `CrewHighlights` (a distinct component). Keep both reachable by their raw param, checked before the chapter switch, so neither is silently dropped:
 
 ```tsx
-  // Crew keeps a deep-linkable home until its content is woven into Plan and
-  // History (phases 2 and 3). Until then a bookmarked /dashboard?tab=social
-  // must still show the crew, not silently redirect to History.
   const rawTab = searchParams.get('tab')
-  if (rawTab === 'social' || rawTab === 'crew') return <SocialTab />
+  if (rawTab === 'social') return <SocialTab />
+  if (rawTab === 'crew') return <CrewHighlights />
 ```
+
+Keep the `CrewHighlights` import. Also update the file's stale header comment (it says "Social remains the fifth nav surface" and describes three surfaces).
 
 - [ ] **Step 5: Run the tests**
 
@@ -1130,7 +1130,11 @@ Render `/dashboard?tab=today` at 390×844 and confirm the bar shows phase, week 
 
 - [ ] **Step 3: Mount it on the other three**
 
-Same position — first child, above each page's existing header:
+`PlanTab` and `TodayTab` already hold `profile`/`athlete`. `RecoveryTab` and
+`HistoryTab` hold neither — add `useAthleteProfile()` to both (shared cache,
+not a new fetch) and pass `goalEventDate: null` for both, since neither has a
+brief-evidence record to derive one from. Then mount, first child, above each
+page's existing header:
 
 ```tsx
 <ChapterBar chapter="plan" arc={arc} de={de} />     // PlanTab
