@@ -12,6 +12,7 @@ export interface MorningHealthSignal {
 
 export interface MorningHealthCheck {
   level: 'none' | 'watch' | 'elevated' | 'high'
+  polarity: 'warning' | 'opportunity' | null
   signals: MorningHealthSignal[]
   headline: string | null
   recommendation: string | null
