@@ -90,6 +90,7 @@ class TestNormal:
         assert body["level"] == "none"
         assert body["signals"] == []
         assert body["recommendation"] is None
+        assert body["polarity"] is None
 
 
 class TestClusterEndToEnd:

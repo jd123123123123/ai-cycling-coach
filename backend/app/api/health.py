@@ -112,15 +112,16 @@ async def get_morning_health_check(
                 "morning-health: stale vitals for user_id=%s (last reading %s, today %s)",
                 current_user.id, last, today.isoformat(),
             )
-            return MorningHealthCheck(level="none", signals=[], headline=None, recommendation=None)
+            return MorningHealthCheck(level="none", polarity=None, signals=[], headline=None, recommendation=None)
 
         verdict = detect_morning_health(daily)
     except Exception:  # pragma: no cover — never break the Today load
         logger.exception("morning-health check failed for user_id=%s", current_user.id)
-        return MorningHealthCheck(level="none", signals=[], headline=None, recommendation=None)
+        return MorningHealthCheck(level="none", polarity=None, signals=[], headline=None, recommendation=None)
 
     return MorningHealthCheck(
         level=verdict["level"],
+        polarity=verdict.get("polarity"),
         signals=[MorningHealthSignal(**s) for s in verdict["signals"]],
         headline=verdict["headline_de" if de else "headline_en"],
         recommendation=verdict["recommendation_de" if de else "recommendation_en"],

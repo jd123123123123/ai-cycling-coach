@@ -1,6 +1,8 @@
 """Schemas for GET /health/morning-check — the morning-health early-warning."""
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -16,15 +18,15 @@ class MorningHealthSignal(BaseModel):
 
 
 class MorningHealthCheck(BaseModel):
-    """Illness / significant-downturn early-warning from morning wearable vitals.
+    """Illness/downturn early-warning OR a genuine, earned recovery upswing.
 
-    `level` is 'none' when vitals are normal, absent, or the baseline is too thin
-    to judge — the frontend renders NOTHING in that case (honest empty). When
-    non-'none', `signals` lists the specific deviating markers and
-    `recommendation` (already localized to the request) is the honest, data-cited
-    guidance. This is an early-warning nudge, never a diagnosis.
+    `level` is 'none' when vitals are normal, absent, or the baseline is too
+    thin to judge — the frontend renders NOTHING in that case (honest empty).
+    `polarity` is `None` exactly when `level == 'none'`; otherwise it says
+    which direction fired. This is an early-signal nudge, never a diagnosis.
     """
-    level: str           # 'none' | 'watch' | 'elevated' | 'high'
+    level: str                              # 'none' | 'watch' | 'elevated' | 'high'
+    polarity: Literal["warning", "opportunity"] | None = None
     signals: list[MorningHealthSignal]
     headline: str | None      # short localized headline, None when level == 'none'
     recommendation: str | None  # localized recommendation, None when level == 'none'
