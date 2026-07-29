@@ -4,7 +4,43 @@ import Sparkline from '../Sparkline'
 
 vi.mock('motion/react', async () => {
   const actual = await vi.importActual<typeof import('motion/react')>('motion/react')
-  return { ...actual, useReducedMotion: vi.fn(() => false) }
+  return {
+    ...actual,
+    useReducedMotion: vi.fn(() => false),
+    motion: {
+      ...actual.motion,
+      // Sparkline's own job is choosing the RIGHT initial/animate/transition
+      // values given `reduce` — whether Motion correctly animates those values
+      // afterward is Motion's own tested responsibility, not this component's.
+      // So these stubs render as real SVG elements (children/attrs still work)
+      // but ALSO stamp their initial/transition props onto inspectable
+      // data-* attributes, so a test can assert on the exact object Sparkline
+      // computed without depending on Motion's real animation engine or
+      // jsdom's ability to compute animated styles synchronously.
+      polyline: (props: Record<string, unknown>) => {
+        const { initial, animate, transition, ...rest } = props
+        return (
+          <polyline
+            {...(rest as React.SVGProps<SVGPolylineElement>)}
+            data-initial={JSON.stringify(initial)}
+            data-animate={JSON.stringify(animate)}
+            data-transition={JSON.stringify(transition)}
+          />
+        )
+      },
+      path: (props: Record<string, unknown>) => {
+        const { initial, animate, transition, ...rest } = props
+        return (
+          <path
+            {...(rest as React.SVGProps<SVGPathElement>)}
+            data-initial={JSON.stringify(initial)}
+            data-animate={JSON.stringify(animate)}
+            data-transition={JSON.stringify(transition)}
+          />
+        )
+      },
+    },
+  }
 })
 
 afterEach(cleanup)
@@ -83,42 +119,35 @@ describe('Sparkline', () => {
 })
 
 describe('Sparkline — draw-in animation', () => {
-  it('calls useReducedMotion and configures animation when motion is not reduced', async () => {
+  it('gives the polyline and fill a real starting keyframe when motion is not reduced', async () => {
     const { useReducedMotion } = await import('motion/react')
     vi.mocked(useReducedMotion).mockReturnValue(false)
     const { container } = render(<Sparkline values={[1, 5, 3, 8]} color="red" />)
-    // Verify the hook was called to check the user's motion preference.
-    // This is the condition that gates the animation code path.
-    expect(vi.mocked(useReducedMotion)).toHaveBeenCalled()
     const polyline = container.querySelector('polyline')!
     const path = container.querySelector('path')!
-    // Both motion.path and motion.polyline render as real SVG elements.
-    // In reduce=false mode, the component passes initial={{ pathLength: 0 }}
-    // and initial={{ opacity: 0 }} to them, which Motion handles.
-    expect(polyline).toBeTruthy()
-    expect(path).toBeTruthy()
-    // Verify the elements have the expected SVG structure.
-    expect(polyline.getAttribute('points')).toBeTruthy()
-    expect(path.getAttribute('d')).toBeTruthy()
+    // With reduce=false, `initial` must be a REAL starting keyframe distinct
+    // from the animate target — pathLength 0, not `false` (which would mean
+    // "skip the enter animation entirely").
+    expect(JSON.parse(polyline.getAttribute('data-initial')!)).toMatchObject({ pathLength: 0 })
+    expect(JSON.parse(polyline.getAttribute('data-animate')!)).toMatchObject({ pathLength: 1 })
+    expect(JSON.parse(path.getAttribute('data-initial')!)).toMatchObject({ opacity: 0 })
+    // And the transition must be a real, non-zero duration.
+    const t = JSON.parse(polyline.getAttribute('data-transition')!)
+    expect(t.duration).toBeGreaterThan(0)
   })
 
-  it('calls useReducedMotion and skips animation when motion is reduced — the finished chart renders on first paint', async () => {
+  it('skips the animation entirely when the user prefers reduced motion', async () => {
     const { useReducedMotion } = await import('motion/react')
     vi.mocked(useReducedMotion).mockReturnValue(true)
-    vi.clearAllMocks() // Clear any prior calls from setup
     const { container } = render(<Sparkline values={[1, 5, 3, 8]} color="red" />)
-    // Verify the hook was called to check the user's motion preference.
-    expect(vi.mocked(useReducedMotion)).toHaveBeenCalled()
     const polyline = container.querySelector('polyline')!
     const path = container.querySelector('path')!
-    // With reduce=true, `initial={false}` means Motion renders the `animate`
-    // target immediately, with no animation keyframe — just the final state on first paint.
-    expect(polyline).toBeTruthy()
-    expect(path).toBeTruthy()
-    // The chart must be fully rendered and visible, not in an initial animated state.
-    // Points attribute must be the complete, final path (4 coordinate pairs).
-    const points = polyline.getAttribute('points')!
-    expect(points.trim().length).toBeGreaterThan(0)
-    expect(points.split(' ').length).toBe(4) // one coordinate pair per input value
+    // With reduce=true, `initial` must be the boolean `false` — Motion's own
+    // documented signal to skip the enter animation and render the `animate`
+    // target immediately, never a numeric 0 that would still animate from.
+    expect(JSON.parse(polyline.getAttribute('data-initial')!)).toBe(false)
+    expect(JSON.parse(path.getAttribute('data-initial')!)).toBe(false)
+    const t = JSON.parse(polyline.getAttribute('data-transition')!)
+    expect(t.duration).toBe(0)
   })
 })
