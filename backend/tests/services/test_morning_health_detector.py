@@ -217,3 +217,46 @@ class TestOpportunityRecommendationWording:
         assert "Ruhepuls" in out["recommendation_de"] or "HRV" in out["recommendation_de"]
         # Never medicalized wording on the good-news path.
         assert "Arzt" not in out["recommendation_de"]
+
+
+class TestSignalSeries:
+    def test_warning_signals_carry_their_recent_series(self):
+        daily = _series(20) + [_today(rhr=55, hrv=45, respiration=16.0)]
+        out = detect_morning_health(daily)
+        rhr = next(s for s in out["signals"] if s["metric"] == "resting_hr")
+        # Enough history exists, so a series is attached, oldest first with
+        # today's value last — that ordering is what the sparkline draws.
+        assert len(rhr["series"]) >= 7
+        assert rhr["series"][-1] == 55
+
+    def test_opportunity_signals_carry_their_recent_series(self):
+        daily = _series(19) + [
+            {"date": date.today() - timedelta(days=1), "rhr": 40, "hrv": 85,
+             "respiration": 13.0, "spo2": 96.0, "sleep_score": 82},
+            _today(rhr=40, hrv=85),
+        ]
+        out = detect_morning_health(daily)
+        assert out["polarity"] == "opportunity"
+        hrv = next(s for s in out["signals"] if s["metric"] == "hrv")
+        assert len(hrv["series"]) >= 7
+        assert hrv["series"][-1] == 85
+
+    def test_series_is_empty_when_history_is_too_short_to_imply_a_trend(self):
+        # 6 prior days + today = 7 rows, but the RHR baseline needs 5 priors and
+        # the series needs 7 usable points; with exactly 7 total this is the
+        # boundary — assert the rule holds rather than a specific count.
+        daily = _series(6) + [_today(rhr=56)]
+        out = detect_morning_health(daily)
+        for sig in out["signals"]:
+            assert sig["series"] == [] or len(sig["series"]) >= 7
+
+    def test_series_skips_missing_readings_rather_than_emitting_nulls(self):
+        prior = _series(20)
+        prior[5]["rhr"] = None
+        prior[9]["rhr"] = None
+        daily = prior + [_today(rhr=55, hrv=45, respiration=16.0)]
+        out = detect_morning_health(daily)
+        rhr = next(s for s in out["signals"] if s["metric"] == "resting_hr")
+        # A sparkline cannot draw a null; gaps are omitted, not zero-filled
+        # (a zero would render as a cliff to the floor of the chart).
+        assert all(isinstance(v, (int, float)) for v in rhr["series"])

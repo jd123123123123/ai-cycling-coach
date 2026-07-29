@@ -93,6 +93,35 @@ _SLEEP_POOR_DROP = 15
 _SUSTAIN_DAYS = 2
 _SLEEP_GOOD_RISE = 15.0  # mirrors _SLEEP_POOR_DROP
 
+# ── Sparkline series ─────────────────────────────────────────────────────────
+# How many trailing days the UI may draw behind a cited signal, and the floor
+# below which it may draw nothing at all. A curve through 3 points implies a
+# trend that is not established — the same "no baseline, no claim" rule the
+# verdict logic above already follows, applied to the picture instead of the
+# number.
+_SPARK_WINDOW = 14
+_SPARK_MIN_POINTS = 7
+
+_SERIES_KEY = {
+    "resting_hr": "rhr",
+    "hrv": "hrv",
+    "respiration": "respiration",
+    "spo2": "spo2",
+    "sleep_score": "sleep_score",
+}
+
+
+def _series_for(key: str, daily: list[dict]) -> list[float]:
+    """Trailing values for one metric, oldest first, today's value last.
+
+    Missing readings are OMITTED, never zero-filled: a zero would draw as a
+    cliff to the floor of the chart and read as a catastrophic reading rather
+    than as absent data. Returns [] when too few usable points exist to imply
+    a trend at all.
+    """
+    vals = [x for d in daily[-_SPARK_WINDOW:] if (x := _num(d.get(key))) is not None]
+    return vals if len(vals) >= _SPARK_MIN_POINTS else []
+
 
 def detect_morning_health(daily: list[dict]) -> dict:
     """Assess today's morning vitals for an illness / significant-downturn cluster.
@@ -140,7 +169,7 @@ def detect_morning_health(daily: list[dict]) -> dict:
 
     for s in (rhr, hrv, resp, spo2, sleep):
         if s and s.get("triggered"):
-            signals.append(_public(s))
+            signals.append(_public(s, _series_for(_SERIES_KEY[s["metric"]], daily)))
 
     core = [s for s in (rhr, hrv, resp) if s and s.get("triggered")]
     n_core = len(core)
@@ -366,7 +395,10 @@ def _opportunity_verdict(daily: list[dict], today: dict, prior: list[dict]) -> d
     if level == "none":
         return _none(None, None, signals=[])
 
-    signals = [_public(s) for s in (rhr_opp, hrv_opp, sleep_opp) if s and s["triggered"]]
+    signals = [
+        _public(s, _series_for(_SERIES_KEY[s["metric"]], daily))
+        for s in (rhr_opp, hrv_opp, sleep_opp) if s and s["triggered"]
+    ]
     reco_de, reco_en, head_de, head_en = _opportunity_copy(level, signals)
     return {
         "level": level,
@@ -515,7 +547,7 @@ def _ln(x) -> float | None:
     return math.log(f)
 
 
-def _public(sig: dict) -> dict:
+def _public(sig: dict, series: list[float] | None = None) -> dict:
     """Strip internal keys before the signal leaves the service."""
     return {
         "metric": sig["metric"],
@@ -525,6 +557,7 @@ def _public(sig: dict) -> dict:
         "delta": sig.get("delta"),
         "unit": sig.get("unit") or "",
         "severity": sig["severity"],
+        "series": series or [],
     }
 
 

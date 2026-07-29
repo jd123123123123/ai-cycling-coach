@@ -15,6 +15,7 @@ class MorningHealthSignal(BaseModel):
     delta: float | None  # signed deviation (bpm / % / brpm), None when no baseline
     unit: str            # 'bpm' | '%' | 'brpm' | ''
     severity: str        # 'mild' | 'strong'
+    series: list[float] = []   # trailing values for the sparkline; [] when too few to draw
 
 
 class MorningHealthCheck(BaseModel):
