@@ -14,8 +14,16 @@
  *    one and it was invisible at this size — too thin, too short. The caller's
  *    own "vs <baseline>" text carries that reference instead. An element nobody
  *    can see is not free; it is dishonest chrome.
+ *
+ * ── The draw-in uses `motion`, already a dependency ──
+ * This is the same `pathLength` draw-in `StreakBreakOverlay.tsx` already uses
+ * for its own SVG path — followed here rather than invented fresh, so the app
+ * has one animated-path convention, not two. `useReducedMotion()` gates it the
+ * same way that file does: `initial={reduce ? false : {...}}` so a
+ * reduced-motion user sees the finished chart immediately, never a moving one.
  */
 import { useId } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
 
 export interface SparklineProps {
   /** Chronological values, oldest first. Fewer than 2 renders nothing. */
@@ -39,6 +47,8 @@ export default function Sparkline({
   // One point is a dot, not a trend. Render nothing rather than something
   // meaningless — the caller's chip still shows the number and the baseline.
   if (clean.length < 2) return null
+
+  const reduce = useReducedMotion()
 
   const min = Math.min(...clean)
   const max = Math.max(...clean)
@@ -70,14 +80,23 @@ export default function Sparkline({
           <stop offset="1" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={`M ${pts} L ${width},${height} L 0,${height} Z`} fill={`url(#${gradientId})`} />
-      <polyline
+      <motion.path
+        d={`M ${pts} L ${width},${height} L 0,${height} Z`}
+        fill={`url(#${gradientId})`}
+        initial={reduce ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={reduce ? { duration: 0 } : { duration: 0.5, delay: 0.2 }}
+      />
+      <motion.polyline
         points={pts}
         fill="none"
         stroke={color}
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
+        initial={reduce ? false : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={reduce ? { duration: 0 } : { duration: 0.7, ease: 'easeOut' }}
       />
       {/* The eye should land on today, which is the only point that is a fact
           about right now rather than history. */}

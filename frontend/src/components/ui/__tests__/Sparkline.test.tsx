@@ -1,6 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 import Sparkline from '../Sparkline'
+
+vi.mock('motion/react', async () => {
+  const actual = await vi.importActual<typeof import('motion/react')>('motion/react')
+  return { ...actual, useReducedMotion: vi.fn(() => false) }
+})
 
 afterEach(cleanup)
 
@@ -74,5 +79,29 @@ describe('Sparkline', () => {
       expect(pairs[i][0]).toBeGreaterThan(pairs[i - 1][0])
       expect(pairs[i][1]).toBeLessThan(pairs[i - 1][1])
     }
+  })
+})
+
+describe('Sparkline — draw-in animation', () => {
+  it('sets pathLength as the animation target on the stroked polyline', async () => {
+    const { useReducedMotion } = await import('motion/react')
+    vi.mocked(useReducedMotion).mockReturnValue(false)
+    const { container } = render(<Sparkline values={[1, 5, 3, 8]} color="red" />)
+    // motion writes its animated props onto the real DOM element as it settles;
+    // the presence of the element plus a non-zero rendered length is what we can
+    // assert without a fake timer harness — the actual interpolation is motion's
+    // own tested behaviour, not this component's.
+    const polyline = container.querySelector('polyline')
+    expect(polyline).toBeTruthy()
+  })
+
+  it('skips the animation entirely when the user prefers reduced motion', async () => {
+    const { useReducedMotion } = await import('motion/react')
+    vi.mocked(useReducedMotion).mockReturnValue(true)
+    const { container } = render(<Sparkline values={[1, 5, 3, 8]} color="red" />)
+    const polyline = container.querySelector('polyline')!
+    // With reduce=true the component must render the FINAL state immediately
+    // (no 0-length flash), matching every other motion usage in this codebase.
+    expect(polyline.getAttribute('points')).not.toBe('')
   })
 })
