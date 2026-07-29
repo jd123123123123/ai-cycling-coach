@@ -83,6 +83,49 @@ The only phase designed here. Two things happen, in order:
 - **LLM-phrased nudges.** The rule decides *whether* and *what*; a future phase could hand a confirmed trigger to the coach model to *phrase* it more richly, with the trigger itself staying deterministic so a phrasing model can't invent a false positive. Not needed now — the existing detector's hand-written bilingual copy is already good.
 - **Any change to `readinessGate.ts`, the readiness score, or the daily decision.** This is a new, separate early-signal surface; it does not touch the stale-wearable withholding rule or the training-readiness dial.
 
+## Amendment (2026-07-29, after Körper shipped): the signals get a shape
+
+The shipped card cites each signal as text — `Ruhepuls −8,5 bpm vs 48`. That is
+honest and precise, and it is also flat: it states a delta without showing the
+*trend* the delta came from. Seeing a resting-HR curve actually bend downward
+over a week is both more informative and more motivating than reading one
+number, and it is the "more visualisation" half of what this surface is for.
+
+**The data is already in hand and currently discarded.** `GET
+/health/morning-check` loads ~30 days of `daily_metrics` rows
+(`backend/app/api/health.py`, the `daily = [...]` comprehension) and hands the
+whole series to the detector, which reduces each metric to one value plus a
+baseline and throws the rest away. A sparkline therefore costs **zero**
+additional queries, zero additional round-trips, and no new fetch — only a
+field on the wire that is already computed.
+
+### Decisions, taken from a rendered prototype rather than on paper
+
+Three variants were built and rendered at 390px before any production code
+(honoring the house rule that a new visual concept gets a real frame first —
+Today's Road passed every static gate and still shipped as a bar chart):
+
+1. **Area-filled curve wins.** A 1.8px stroke alone is legible only if the eye
+   traces it; a gradient fill under the same curve reads as a shape instantly
+   at chip size. This is the variant to build.
+2. **The dashed baseline reference line is dropped.** All three prototypes drew
+   one, and it was invisible in all three at 52×18px — too thin and too short
+   to survive. The existing `vs <baseline>` text already carries the baseline
+   reference, and the curve's own position carries the trend. Rendering an
+   element that cannot be seen is not a neutral cost: it is dishonest chrome.
+3. **A dot-per-day variant is rejected.** At this size the dots read as a
+   loading indicator, not as data.
+4. **Polarity inverts the colour, and it reads correctly.** The warning variant
+   (red curve, rising resting HR) still reads as concern at a glance; the
+   opportunity variant reads as good news. Confirmed in the render, not assumed.
+
+### The honesty rule that comes with it
+
+A sparkline drawn from too few points implies a trend that isn't established.
+Below a minimum of **7 usable points** for that metric, the chip renders exactly
+as it does today — text only, no sparkline. Same discipline as the detector
+itself: no baseline, no claim.
+
 ## Verification
 
 Matching this project's established discipline:
