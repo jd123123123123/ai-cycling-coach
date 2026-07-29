@@ -11,8 +11,7 @@
  * Not a full chart — full PMC + recovery live in the dashboard. This is
  * an at-a-glance summary inside chat context.
  */
-import type { ResponsiveContainerProps } from 'recharts'
-import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts'
+import Sparkline from '../ui/Sparkline'
 import { TrendingUp, TrendingDown, Activity } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -65,47 +64,23 @@ function PmcCard({
   const direction = trend.direction ?? 'steady'
   const ctlDelta = trend.ctl_delta ?? 0
 
-  // Build sparkline series — recharts wants objects. Nulls become gaps.
-  const series = days.map((d, i) => ({
-    i,
-    ctl: d.ctl ?? null,
-  }))
-
   const directionLabel = directionDisplay(direction, language)
   const DirectionIcon =
     ctlDelta > 0.5 ? TrendingUp : ctlDelta < -0.5 ? TrendingDown : Activity
 
   return (
     <div className="grid grid-cols-[auto_1fr] gap-3 items-center">
-      {/* Sparkline */}
-      <div
-        className="flex-shrink-0"
-        style={{ width: 96, height: 44 }}
-        aria-hidden
-      >
-        {series.length >= 2 ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={series} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
-              <YAxis hide domain={['dataMin - 2', 'dataMax + 2']} />
-              <Line
-                type="monotone"
-                dataKey="ctl"
-                stroke="var(--color-amber)"
-                strokeWidth={1.6}
-                dot={false}
-                isAnimationActive={false}
-                connectNulls
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div
-            className="w-full h-full opacity-30"
-            style={{
-              borderBottom: '1px dashed var(--color-rule)',
-            }}
-          />
-        )}
+      <div className="flex-shrink-0" style={{ width: 96, height: 44 }} aria-hidden>
+        <Sparkline
+          values={days.map((d) => d.ctl).filter((v): v is number => v != null)}
+          color={
+            ctlDelta > 0.5 ? 'var(--color-recovery)'
+              : ctlDelta < -0.5 ? 'var(--color-amber)'
+              : 'var(--color-muted)'
+          }
+          width={96}
+          height={44}
+        />
       </div>
       {/* Stats */}
       <div className="flex flex-col gap-1 min-w-0">
@@ -206,8 +181,6 @@ function RecoveryCard({
   const simpleMode = language === 'simple'
   const hrvPct = aggregate.hrv_trend_pct ?? 0
 
-  const series = days.map((d, i) => ({ i, hrv: d.hrv ?? null }))
-
   const DirectionIcon =
     hrvPct > 2 ? TrendingUp : hrvPct < -2 ? TrendingDown : Activity
   const headline =
@@ -219,32 +192,17 @@ function RecoveryCard({
 
   return (
     <div className="grid grid-cols-[auto_1fr] gap-3 items-center">
-      <div
-        className="flex-shrink-0"
-        style={{ width: 96, height: 44 }}
-        aria-hidden
-      >
-        {series.length >= 2 ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={series} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
-              <YAxis hide domain={['dataMin - 2', 'dataMax + 2']} />
-              <Line
-                type="monotone"
-                dataKey="hrv"
-                stroke="var(--color-forest-2)"
-                strokeWidth={1.6}
-                dot={false}
-                isAnimationActive={false}
-                connectNulls
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div
-            className="w-full h-full opacity-30"
-            style={{ borderBottom: '1px dashed var(--color-rule)' }}
-          />
-        )}
+      <div className="flex-shrink-0" style={{ width: 96, height: 44 }} aria-hidden>
+        <Sparkline
+          values={days.map((d) => d.hrv).filter((v): v is number => v != null)}
+          color={
+            hrvPct > 2 ? 'var(--color-recovery)'
+              : hrvPct < -2 ? 'var(--color-amber)'
+              : 'var(--color-muted)'
+          }
+          width={96}
+          height={44}
+        />
       </div>
       <div className="flex flex-col gap-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">
@@ -319,10 +277,6 @@ function RecoveryCard({
 
 export default function AnalyticalAnswerCard({ toolName, result }: Props) {
   const { language } = useLanguage()
-
-  // Suppress the recharts ResponsiveContainerProps unused import by referencing
-  // its shape — needed only for type inference in strict TS builds.
-  void ({} as Partial<ResponsiveContainerProps>)
 
   if (toolName === 'fetch_pmc_window') {
     const days = (result.days as PmcDay[] | undefined) ?? []
