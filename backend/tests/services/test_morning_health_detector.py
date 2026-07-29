@@ -143,3 +143,77 @@ class TestRecommendationWording:
         assert rhr["direction"] == "up"
         assert rhr["severity"] == "strong"
         assert rhr["delta"] == 7.0
+
+
+class TestOpportunityInsufficientData:
+    def test_single_good_day_is_not_a_story(self):
+        # Today's RHR is well below baseline, but YESTERDAY was ordinary —
+        # the improvement has not been sustained, so this must not fire.
+        daily = _series(20) + [_today(rhr=40)]
+        out = detect_morning_health(daily)
+        assert out["level"] == "none"
+        assert out["polarity"] is None
+
+    def test_too_few_days_for_the_sustain_window_is_none(self):
+        daily = _series(1) + [_today(rhr=40)]
+        out = detect_morning_health(daily)
+        assert out["level"] == "none"
+        assert out["polarity"] is None
+
+
+class TestOpportunityCluster:
+    def test_sustained_rhr_and_hrv_improvement_is_high(self):
+        # Two days running: RHR clearly below baseline (48 -> 40) AND HRV
+        # clearly above baseline (65 -> 85) — both core markers, both strong.
+        daily = _series(19) + [
+            {"date": date.today() - timedelta(days=1), "rhr": 40, "hrv": 85, "respiration": 13.0, "spo2": 96.0, "sleep_score": 82},
+            _today(rhr=40, hrv=85),
+        ]
+        out = detect_morning_health(daily)
+        assert out["level"] == "high"
+        assert out["polarity"] == "opportunity"
+        metrics = {s["metric"] for s in out["signals"]}
+        assert {"resting_hr", "hrv"} <= metrics
+
+    def test_sustained_mild_two_marker_improvement_is_elevated(self):
+        # RHR 48->43 (mild improvement, ~5 below) and HRV 65->72 (mild, ~11%
+        # above) held for two days.
+        daily = _series(19) + [
+            {"date": date.today() - timedelta(days=1), "rhr": 43, "hrv": 72, "respiration": 13.0, "spo2": 96.0, "sleep_score": 82},
+            _today(rhr=43, hrv=72),
+        ]
+        out = detect_morning_health(daily)
+        assert out["level"] == "elevated"
+        assert out["polarity"] == "opportunity"
+
+    def test_single_marker_alone_is_watch_not_elevated(self):
+        # Only RHR improves (sustained, strong); HRV stays at baseline.
+        daily = _series(19) + [
+            {"date": date.today() - timedelta(days=1), "rhr": 39, "hrv": 65, "respiration": 13.0, "spo2": 96.0, "sleep_score": 82},
+            _today(rhr=39, hrv=65),
+        ]
+        out = detect_morning_health(daily)
+        assert out["level"] == "watch"
+        assert out["polarity"] == "opportunity"
+
+    def test_a_recent_illness_signal_still_takes_priority_over_any_improvement(self):
+        # RHR is up (illness direction) — even if some other metric looked
+        # good, the warning path must win; the two are checked in order and
+        # the warning is never silently downgraded to good news.
+        daily = _series(20) + [_today(rhr=56)]
+        out = detect_morning_health(daily)
+        assert out["level"] == "watch"
+        assert out["polarity"] == "warning"
+
+
+class TestOpportunityRecommendationWording:
+    def test_high_opportunity_recommendation_is_encouraging_not_alarmed(self):
+        daily = _series(19) + [
+            {"date": date.today() - timedelta(days=1), "rhr": 40, "hrv": 85, "respiration": 13.0, "spo2": 96.0, "sleep_score": 82},
+            _today(rhr=40, hrv=85),
+        ]
+        out = detect_morning_health(daily)
+        assert out["headline_de"] is not None
+        assert "Ruhepuls" in out["recommendation_de"] or "HRV" in out["recommendation_de"]
+        # Never medicalized wording on the good-news path.
+        assert "Arzt" not in out["recommendation_de"]

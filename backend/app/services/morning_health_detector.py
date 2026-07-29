@@ -81,6 +81,18 @@ _SPO2_LOW_DROP = 2.0     # ≥ 2% below personal baseline
 _SLEEP_POOR_ABS = 60
 _SLEEP_POOR_DROP = 15
 
+# ── Opportunity (good-news) side ─────────────────────────────────────────────
+# Same evidence base as the illness thresholds above (Hedelin 2000; Buchheit
+# 2014 for RHR; Plews 2013 for HRV) — a meaningful RHR drop or HRV rise below/
+# above the athlete's own baseline is understood as the same underlying
+# parasympathetic-recovery signal in reverse, so the magnitudes are mirrored
+# rather than invented fresh. What differs from the illness side is TIMING:
+# a single good night proves nothing (same reason a single bad night isn't
+# illness), so this requires the improvement to hold for `_SUSTAIN_DAYS`
+# consecutive mornings, not just today.
+_SUSTAIN_DAYS = 2
+_SLEEP_GOOD_RISE = 15.0  # mirrors _SLEEP_POOR_DROP
+
 
 def detect_morning_health(daily: list[dict]) -> dict:
     """Assess today's morning vitals for an illness / significant-downturn cluster.
@@ -152,11 +164,12 @@ def detect_morning_health(daily: list[dict]) -> dict:
         level = "none"
 
     if level == "none":
-        return _none(None, None, signals=[])
+        return _opportunity_verdict(daily, today, prior)
 
     reco_de, reco_en, head_de, head_en = _copy(level, signals)
     return {
         "level": level,
+        "polarity": "warning",
         "signals": signals,
         "headline_de": head_de,
         "headline_en": head_en,
@@ -254,6 +267,156 @@ def _sleep_signal(today: dict, prior: list[dict]) -> dict | None:
         "direction": "down", "delta": round(v - base) if base is not None else None,
         "unit": "", "triggered": bool(triggered), "severity": "mild",
     }
+
+
+def _opportunity_rhr(daily: list[dict]) -> dict | None:
+    """RHR held meaningfully BELOW baseline for the last `_SUSTAIN_DAYS` days."""
+    if len(daily) < _SUSTAIN_DAYS:
+        return None
+    recent = daily[-_SUSTAIN_DAYS:]
+    prior = daily[:-_SUSTAIN_DAYS][-_BASELINE_WINDOW:]
+    hist = [x for d in prior if (x := _num(d.get("rhr"))) is not None]
+    vals = [x for d in recent if (x := _num(d.get("rhr"))) is not None]
+    if len(vals) < _SUSTAIN_DAYS or len(hist) < _MIN_BASELINE_N:
+        return None
+    base = statistics.median(hist)
+    sd = statistics.stdev(hist) if len(hist) >= 2 else 0.0
+    deltas = [v - base for v in vals]  # negative = improved (lower RHR)
+    least_good = max(deltas)  # the least-impressive day in the window decides
+    mild_ok = least_good <= -_RHR_MILD_BPM or (sd > 0 and least_good <= -_RHR_MILD_SD * sd)
+    if not mild_ok:
+        return None
+    strong = least_good <= -_RHR_STRONG_BPM or (sd > 0 and least_good <= -_RHR_STRONG_SD * sd)
+    today_delta = vals[-1] - base
+    return {
+        "metric": "resting_hr", "value": round(vals[-1], 1), "baseline": round(base, 1),
+        "direction": "down", "delta": round(today_delta, 1), "unit": "bpm",
+        "triggered": True, "severity": "strong" if strong else "mild",
+    }
+
+
+def _opportunity_hrv(daily: list[dict]) -> dict | None:
+    """HRV held meaningfully ABOVE baseline for the last `_SUSTAIN_DAYS` days."""
+    if len(daily) < _SUSTAIN_DAYS:
+        return None
+    recent = daily[-_SUSTAIN_DAYS:]
+    prior = daily[:-_SUSTAIN_DAYS][-_BASELINE_WINDOW:]
+    hist_ln = [x for d in prior if (x := _ln(d.get("hrv"))) is not None]
+    hist_raw = [x for d in prior if (x := _num(d.get("hrv"))) is not None]
+    recent_ln = [x for d in recent if (x := _ln(d.get("hrv"))) is not None]
+    recent_raw = [x for d in recent if (x := _num(d.get("hrv"))) is not None]
+    if len(recent_ln) < _SUSTAIN_DAYS or len(hist_ln) < _MIN_BASELINE_N or not hist_raw:
+        return None
+    mu = statistics.mean(hist_ln)
+    sd = statistics.stdev(hist_ln) if len(hist_ln) >= 2 else 0.0
+    base_raw = statistics.median(hist_raw)
+    least_good_ln = min(recent_ln)
+    least_good_pct = min(((v - base_raw) / base_raw * 100.0) for v in recent_raw) if base_raw else 0.0
+    mild_ok = (sd > 0 and least_good_ln > mu + _HRV_MILD_SD * sd) or least_good_pct >= -_HRV_MILD_PCT
+    if not mild_ok:
+        return None
+    strong = (sd > 0 and least_good_ln > mu + _HRV_STRONG_SD * sd) or least_good_pct >= -_HRV_STRONG_PCT
+    today_v = recent_raw[-1]
+    today_pct = (today_v - base_raw) / base_raw * 100.0 if base_raw else 0.0
+    return {
+        "metric": "hrv", "value": round(today_v, 1), "baseline": round(base_raw, 1),
+        "direction": "up", "delta": round(today_pct, 1), "unit": "%",
+        "triggered": True, "severity": "strong" if strong else "mild",
+    }
+
+
+def _sleep_opportunity_signal(today: dict, prior: list[dict]) -> dict | None:
+    """Well-rested corroborator — single-day, same role sleep plays as a
+    corroborator (never a lone trigger) on the illness side."""
+    v = _num(today.get("sleep_score"))
+    hist = [x for d in prior if (x := _num(d.get("sleep_score"))) is not None]
+    if v is None:
+        return None
+    base = statistics.median(hist) if len(hist) >= _MIN_BASELINE_N else None
+    triggered = base is not None and (v - base) >= _SLEEP_GOOD_RISE
+    return {
+        "metric": "sleep_score", "value": round(v),
+        "baseline": round(base) if base is not None else None,
+        "direction": "up", "delta": round(v - base) if base is not None else None,
+        "unit": "", "triggered": bool(triggered), "severity": "mild",
+    }
+
+
+def _opportunity_verdict(daily: list[dict], today: dict, prior: list[dict]) -> dict:
+    rhr_opp = _opportunity_rhr(daily)
+    hrv_opp = _opportunity_hrv(daily)
+    sleep_opp = _sleep_opportunity_signal(today, prior)
+
+    core = [s for s in (rhr_opp, hrv_opp) if s and s["triggered"]]
+    n_core = len(core)
+    strong_core = sum(1 for s in core if s["severity"] == "strong")
+    corroborated = bool(sleep_opp and sleep_opp["triggered"])
+
+    if n_core >= 2 and strong_core >= 1:
+        level: Level = "high"
+    elif n_core >= 2:
+        level = "elevated"
+    elif n_core >= 1 and strong_core >= 1 and corroborated:
+        level = "elevated"
+    elif n_core >= 1 and (strong_core >= 1 or corroborated):
+        level = "watch"
+    else:
+        level = "none"
+
+    if level == "none":
+        return _none(None, None, signals=[])
+
+    signals = [_public(s) for s in (rhr_opp, hrv_opp, sleep_opp) if s and s["triggered"]]
+    reco_de, reco_en, head_de, head_en = _opportunity_copy(level, signals)
+    return {
+        "level": level,
+        "polarity": "opportunity",
+        "signals": signals,
+        "headline_de": head_de,
+        "headline_en": head_en,
+        "recommendation_de": reco_de,
+        "recommendation_en": reco_en,
+    }
+
+
+def _opportunity_copy(level: Level, signals: list[dict]) -> tuple[str, str, str, str]:
+    order = {"resting_hr": 0, "hrv": 1, "sleep_score": 2}
+    cited = sorted(signals, key=lambda s: order.get(s["metric"], 9))[:3]
+    de_markers = ", ".join(_fmt(s, True) for s in cited)
+    en_markers = ", ".join(_fmt(s, False) for s in cited)
+
+    if level == "watch":
+        head_de, head_en = "Gute Erholung", "Solid recovery"
+        reco_de = (
+            f"Deine Morgenwerte sehen gut aus ({de_markers}). Ein guter Tag, "
+            "um Qualität abzurufen, wenn dein Plan es hergibt."
+        )
+        reco_en = (
+            f"Your morning vitals look good ({en_markers}). A solid day to "
+            "bring quality, if your plan calls for it."
+        )
+    elif level == "elevated":
+        head_de, head_en = "Starke Erholung", "Strong recovery"
+        reco_de = (
+            f"Mehrere Tage in Folge deutlich über deiner Baseline ({de_markers}) "
+            "— dein Körper erholt sich gut von der letzten Belastung."
+        )
+        reco_en = (
+            f"Several days running clearly above your baseline ({en_markers}) "
+            "— your body is recovering well from recent load."
+        )
+    else:  # high
+        head_de, head_en = "Ausgezeichnete Form", "Excellent form"
+        reco_de = (
+            f"Deine Werte zeigen anhaltend starke Erholung ({de_markers}). "
+            "Wenn dein Plan es zulässt, ist das ein guter Moment für eine "
+            "harte Einheit."
+        )
+        reco_en = (
+            f"Your data shows sustained, strong recovery ({en_markers}). "
+            "If your plan allows it, this is a good moment for a hard session."
+        )
+    return reco_de, reco_en, head_de, head_en
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -368,6 +531,7 @@ def _public(sig: dict) -> dict:
 def _none(reason_de: str | None, reason_en: str | None, *, signals: list | None = None) -> dict:
     return {
         "level": "none",
+        "polarity": None,
         "signals": signals if signals is not None else [],
         "headline_de": None,
         "headline_en": None,
