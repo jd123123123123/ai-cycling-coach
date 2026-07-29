@@ -587,14 +587,15 @@ export default function RecoveryTab() {
         )}
       </div>
 
-      {/* Morning-health early-warning — illness / significant-downturn cluster
-          from the morning wearable vitals (GET /health/morning-check). Renders
-          ONLY when the detector flags a real cluster vs the athlete's baseline;
-          a normal morning shows nothing. Received from Heute (phase 2b): an
-          overnight-vitals warning is a body signal, and this is where body
-          signals live. Placed above the Moment deliberately — when the
-          detector fires, a possible illness outranks whichever driver is
-          furthest below baseline. Self-contained: owns its data + null-render. */}
+      {/* Morning-health signal — surfaces both illness/downturn warnings and
+          sustained recovery opportunities (multi-day resting-HR-down / HRV-up
+          upswing) from morning wearable vitals (GET /health/morning-check).
+          Renders ONLY when the detector flags a signal vs the athlete's
+          baseline; a normal morning shows nothing. Received from Heute
+          (phase 2b): overnight-vitals signals are body signals, placed where
+          they belong. Above Moment deliberately — when the detector fires,
+          it outranks whichever driver is furthest below baseline.
+          Self-contained: owns its data + null-render. */}
       <MorningHealthCard />
 
       {/* Moment — the one signal holding readiness back, lifted out of the
