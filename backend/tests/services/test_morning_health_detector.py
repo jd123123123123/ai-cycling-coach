@@ -250,6 +250,33 @@ class TestSignalSeries:
         for sig in out["signals"]:
             assert sig["series"] == [] or len(sig["series"]) >= 7
 
+    def test_series_preserves_chronological_order_not_just_todays_value_last(self):
+        # The other tests in this class fill every prior day with the SAME
+        # constant, which means a reversed or shuffled series would satisfy all
+        # of them — only today's distinct value sits at a checked index. So this
+        # one gives every day a DISTINGUISHABLE resting-HR value and pins the
+        # whole list. A reversed series draws a curve that rises while the cited
+        # number says the value fell, which no other assertion here can see.
+        n = 14
+        start = date.today() - timedelta(days=n)
+        # 40, 41, 42 … one unique value per day, oldest first.
+        prior = [
+            {"date": start + timedelta(days=i), "rhr": 40 + i, "hrv": 65,
+             "respiration": 13.0, "spo2": 96.0, "sleep_score": 82}
+            for i in range(n)
+        ]
+        # Today jumps well above the trailing baseline, firing the warning path
+        # so a resting-HR signal is actually emitted to carry the series.
+        daily = prior + [_today(rhr=70, hrv=45, respiration=16.0)]
+        out = detect_morning_health(daily)
+        rhr = next(s for s in out["signals"] if s["metric"] == "resting_hr")
+        # Window is the last 14 rows: the last 13 priors (41..53) then today.
+        expected = [40 + i for i in range(1, n)] + [70]
+        assert rhr["series"] == expected
+        # Stated separately so a failure reads unambiguously as an ORDER problem
+        # rather than a windowing one.
+        assert rhr["series"] == sorted(rhr["series"]), "series must be oldest-first"
+
     def test_series_skips_missing_readings_rather_than_emitting_nulls(self):
         prior = _series(20)
         prior[5]["rhr"] = None
