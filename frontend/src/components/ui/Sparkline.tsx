@@ -42,13 +42,12 @@ export default function Sparkline({
   // useId, not a module counter: two chips on one page each need their own
   // gradient id, and a counter would collide across a hot reload or an SSR pass.
   const gradientId = useId()
+  const reduce = useReducedMotion()
 
   const clean = values.filter((v) => Number.isFinite(v))
   // One point is a dot, not a trend. Render nothing rather than something
   // meaningless — the caller's chip still shows the number and the baseline.
   if (clean.length < 2) return null
-
-  const reduce = useReducedMotion()
 
   const min = Math.min(...clean)
   const max = Math.max(...clean)

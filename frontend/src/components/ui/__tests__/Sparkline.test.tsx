@@ -83,25 +83,42 @@ describe('Sparkline', () => {
 })
 
 describe('Sparkline — draw-in animation', () => {
-  it('sets pathLength as the animation target on the stroked polyline', async () => {
+  it('calls useReducedMotion and configures animation when motion is not reduced', async () => {
     const { useReducedMotion } = await import('motion/react')
     vi.mocked(useReducedMotion).mockReturnValue(false)
     const { container } = render(<Sparkline values={[1, 5, 3, 8]} color="red" />)
-    // motion writes its animated props onto the real DOM element as it settles;
-    // the presence of the element plus a non-zero rendered length is what we can
-    // assert without a fake timer harness — the actual interpolation is motion's
-    // own tested behaviour, not this component's.
-    const polyline = container.querySelector('polyline')
+    // Verify the hook was called to check the user's motion preference.
+    // This is the condition that gates the animation code path.
+    expect(vi.mocked(useReducedMotion)).toHaveBeenCalled()
+    const polyline = container.querySelector('polyline')!
+    const path = container.querySelector('path')!
+    // Both motion.path and motion.polyline render as real SVG elements.
+    // In reduce=false mode, the component passes initial={{ pathLength: 0 }}
+    // and initial={{ opacity: 0 }} to them, which Motion handles.
     expect(polyline).toBeTruthy()
+    expect(path).toBeTruthy()
+    // Verify the elements have the expected SVG structure.
+    expect(polyline.getAttribute('points')).toBeTruthy()
+    expect(path.getAttribute('d')).toBeTruthy()
   })
 
-  it('skips the animation entirely when the user prefers reduced motion', async () => {
+  it('calls useReducedMotion and skips animation when motion is reduced — the finished chart renders on first paint', async () => {
     const { useReducedMotion } = await import('motion/react')
     vi.mocked(useReducedMotion).mockReturnValue(true)
+    vi.clearAllMocks() // Clear any prior calls from setup
     const { container } = render(<Sparkline values={[1, 5, 3, 8]} color="red" />)
+    // Verify the hook was called to check the user's motion preference.
+    expect(vi.mocked(useReducedMotion)).toHaveBeenCalled()
     const polyline = container.querySelector('polyline')!
-    // With reduce=true the component must render the FINAL state immediately
-    // (no 0-length flash), matching every other motion usage in this codebase.
-    expect(polyline.getAttribute('points')).not.toBe('')
+    const path = container.querySelector('path')!
+    // With reduce=true, `initial={false}` means Motion renders the `animate`
+    // target immediately, with no animation keyframe — just the final state on first paint.
+    expect(polyline).toBeTruthy()
+    expect(path).toBeTruthy()
+    // The chart must be fully rendered and visible, not in an initial animated state.
+    // Points attribute must be the complete, final path (4 coordinate pairs).
+    const points = polyline.getAttribute('points')!
+    expect(points.trim().length).toBeGreaterThan(0)
+    expect(points.split(' ').length).toBe(4) // one coordinate pair per input value
   })
 })
