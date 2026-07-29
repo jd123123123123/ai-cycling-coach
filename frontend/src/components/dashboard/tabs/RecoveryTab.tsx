@@ -598,6 +598,34 @@ export default function RecoveryTab() {
         />
       )}
 
+      {/* Read — the coach's interpretation, directly under the Moment it
+          explains (moved up from the bottom of the chapter, Jul 2026: it used
+          to sit after the load target and daytime stress, six cards below the
+          signals it interprets). Keeps its own recovery-green identity rather
+          than the kit's purple CoachRead shell: purple is the coach's prose
+          voice, green is recovery, and collapsing the two would cost both
+          signals. Still links to today's plan — acting on it happens there. */}
+      <Link to="/dashboard?tab=today" className="hover-card rounded-[24px] p-5 flex flex-col" style={{ gap: 14, background: 'color-mix(in srgb, var(--color-recovery) 15%, var(--color-paper-2))', border: '1px solid var(--color-recovery)' }}>
+        <div className="flex items-center" style={{ gap: 12 }}>
+          <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 40, height: 40, background: zoneColor }}><Zap size={22} strokeWidth={2.2} style={{ color: 'var(--color-paper)' }} /></span>
+          <div className="flex flex-col min-w-0" style={{ gap: 1 }}>
+            <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{recTitle}</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: zoneColor }}>{scoreTxt != null ? `${de ? 'Bereitschaft' : 'Readiness'} ${scoreTxt} · ${zoneLabel}` : zoneLabel}</span>
+          </div>
+          <ChevronRight size={20} className="hover-arrow shrink-0" style={{ marginLeft: 'auto', color: zoneColor }} />
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>{recBody}</p>
+        <div className="flex gap-2.5">
+          {[{ icon: Sunset, l: de ? 'Runterfahren' : 'Wind-down' }, { icon: Moon, l: de ? 'Licht aus' : 'Lights out' }].map((a) => (
+            <div key={a.l} className="flex-1 flex items-center rounded-[14px]" style={{ gap: 9, padding: 12, background: 'color-mix(in srgb, var(--color-paper) 50%, transparent)' }}>
+              <a.icon size={18} style={{ color: 'var(--color-recovery)' }} />
+              <div className="flex flex-col" style={{ gap: 1 }}><span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{a.l}</span><span className="num-display" style={{ fontSize: 14, color: 'var(--color-ink-2)' }}>{DASH}</span></div>
+            </div>
+          ))}
+        </div>
+        <div className="hover-reveal" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Zum heutigen Plan →' : "Go to today's plan →"}</div>
+      </Link>
+
       {/* 3 · Recovery Drivers */}
       <div className="rounded-[24px] p-5 flex flex-col" style={{ ...cardStyle, gap: 16 }}>
         <div className="flex flex-col" style={{ gap: 2 }}>
@@ -807,28 +835,6 @@ export default function RecoveryTab() {
           <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Keine Stressdaten in den letzten 7 Tagen' : 'No stress data in the last 7 days'}</span>
         )}
       </div>
-
-      {/* 12 · Recommendation → act on it in today's plan */}
-      <Link to="/dashboard?tab=today" className="hover-card rounded-[24px] p-5 flex flex-col" style={{ gap: 14, background: 'color-mix(in srgb, var(--color-recovery) 15%, var(--color-paper-2))', border: '1px solid var(--color-recovery)' }}>
-        <div className="flex items-center" style={{ gap: 12 }}>
-          <span className="shrink-0 grid place-items-center rounded-full" style={{ width: 40, height: 40, background: zoneColor }}><Zap size={22} strokeWidth={2.2} style={{ color: 'var(--color-paper)' }} /></span>
-          <div className="flex flex-col min-w-0" style={{ gap: 1 }}>
-            <span className="num-display" style={{ fontSize: 18, color: 'var(--color-ink)' }}>{recTitle}</span>
-            <span style={{ fontSize: 12, fontWeight: 500, color: zoneColor }}>{scoreTxt != null ? `${de ? 'Bereitschaft' : 'Readiness'} ${scoreTxt} · ${zoneLabel}` : zoneLabel}</span>
-          </div>
-          <ChevronRight size={20} className="hover-arrow shrink-0" style={{ marginLeft: 'auto', color: zoneColor }} />
-        </div>
-        <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.45 }}>{recBody}</p>
-        <div className="flex gap-2.5">
-          {[{ icon: Sunset, l: de ? 'Runterfahren' : 'Wind-down' }, { icon: Moon, l: de ? 'Licht aus' : 'Lights out' }].map((a) => (
-            <div key={a.l} className="flex-1 flex items-center rounded-[14px]" style={{ gap: 9, padding: 12, background: 'color-mix(in srgb, var(--color-paper) 50%, transparent)' }}>
-              <a.icon size={18} style={{ color: 'var(--color-recovery)' }} />
-              <div className="flex flex-col" style={{ gap: 1 }}><span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-muted)' }}>{a.l}</span><span className="num-display" style={{ fontSize: 14, color: 'var(--color-ink-2)' }}>{DASH}</span></div>
-            </div>
-          ))}
-        </div>
-        <div className="hover-reveal" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-accent)' }}>{de ? 'Zum heutigen Plan →' : "Go to today's plan →"}</div>
-      </Link>
 
       {/* 12b · Recovery outlook — forward TSB projection ("fresh by Thursday") */}
       <RecoveryEtaCard />
