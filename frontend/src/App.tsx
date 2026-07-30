@@ -49,6 +49,7 @@ const WorkoutDetailView = lazyWithRetry(() => import('./pages/WorkoutDetailView'
 const BikeProgressView = lazyWithRetry(() => import('./pages/BikeProgressView'))
 const RecoveryTrendsView = lazyWithRetry(() => import('./pages/RecoveryTrendsView'))
 const WorkoutBuilderView = lazyWithRetry(() => import('./pages/WorkoutBuilderView'))
+const RouteRehearsalView = lazyWithRetry(() => import('./pages/RouteRehearsalView'))
 
 function App() {
   return (
@@ -272,6 +273,9 @@ function AppRoutes() {
           <Route path="/workouts/builder/:id" element={<ProtectedRoute checkOnboarding><WorkoutBuilderView /></ProtectedRoute>} />
 
           <Route path="/progress/bike" element={<ProtectedRoute checkOnboarding><BikeProgressView /></ProtectedRoute>} />
+
+          {/* Route rehearsal: what a specific route will do to you, as a range. */}
+          <Route path="/rehearse/:id" element={<ProtectedRoute checkOnboarding><RouteRehearsalView /></ProtectedRoute>} />
 
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
