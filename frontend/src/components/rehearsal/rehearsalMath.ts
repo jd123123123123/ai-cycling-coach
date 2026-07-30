@@ -33,6 +33,19 @@ export function elevationsFromSegments(segments: RehearsalSegment[]): number[] {
   return out
 }
 
+/**
+ * Locale-aware fixed-point number, e.g. `120.5` (en) vs `120,5` (de). This app
+ * is German-first: every decimal shown on screen (km, %, km/h — not just the
+ * `kJ` figure that already used `toLocaleString`) must use the comma, not the
+ * `Number.prototype.toFixed` dot.
+ */
+export function formatDecimal(value: number, de: boolean, digits = 1): string {
+  return value.toLocaleString(de ? 'de-DE' : 'en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })
+}
+
 /** Seconds → `h:mm`. Used for the range only — never for a lone p50. */
 export function formatHm(seconds: number): string {
   const total = Math.max(0, Math.round(seconds))
@@ -95,14 +108,34 @@ export function climbStats(
 }
 
 /**
+ * A W′ balance above this is "recovered" for the purpose of this sentence —
+ * NOT the simulator's own `_BLOWN_J` (1 J), which only tells the physics
+ * engine when it's safe to stop capping power. That razor-thin threshold
+ * would flip back to "recovered" a few seconds into a descent, long before
+ * the rider is meaningfully fresh. This is a display concern: how far the
+ * balance has to climb before a *later* climb's attempted watts stop being
+ * "the same blow-up" and start being a fresh, potentially uncapped, effort.
+ */
+const RECOVERED_J = 500
+
+/**
  * The wattage ceiling implied by a blow-up.
  *
  * Once W′ is empty the simulator caps the rider at CP, so the power it hands
- * back for the segments AFTER the blow-up IS (approximately) that athlete's
- * CP on this terrain. That is exactly the number the athlete needs: hold the
- * preceding climb at or under it and W′ never empties. Reading it off the
- * projection rather than inventing a percentage keeps the advice and the
- * simulation the same model. Null when the blow-up is the last segment.
+ * back for the segments immediately AFTER the blow-up IS (approximately)
+ * that athlete's CP on this terrain. That is exactly the number the athlete
+ * needs: hold the preceding climb at or under it and W′ never empties.
+ * Reading it off the projection rather than inventing a percentage keeps the
+ * advice and the simulation the same model.
+ *
+ * The pool is restricted to the CONTIGUOUS blown run — from the blow-up
+ * point until W′ first climbs back to something meaningful — because the
+ * simulator un-caps power the moment `bal` recovers (`simulator.py`'s
+ * `blown` flag), and effort `race` will happily attempt well above CP again
+ * on a later climb once the rider has recovered on a descent. Pooling across
+ * that later attempt would return a ceiling ABOVE CP — advice that
+ * guarantees the very blow-up it claims to prevent. Null when the blow-up is
+ * the last segment.
  */
 export function blowUpCeilingW(
   segments: RehearsalSegment[],
@@ -110,8 +143,13 @@ export function blowUpCeilingW(
 ): number | null {
   const idx = segments.findIndex((s) => s.start_m >= distanceM)
   if (idx < 0) return null
-  const after = segments.slice(idx).filter((s) => s.gradient_pct >= 3)
-  const pool = after.length > 0 ? after : segments.slice(idx)
+
+  let end = idx
+  while (end < segments.length && segments[end].w_bal_j < RECOVERED_J) end++
+  const run = end > idx ? segments.slice(idx, end) : segments.slice(idx, idx + 1)
+
+  const after = run.filter((s) => s.gradient_pct >= 3)
+  const pool = after.length > 0 ? after : run
   if (pool.length === 0) return null
   return Math.max(...pool.map((s) => s.power_w))
 }

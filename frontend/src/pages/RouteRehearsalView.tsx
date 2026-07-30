@@ -33,6 +33,7 @@ import {
   blowUpCeilingW,
   climbLabel,
   elevationsFromSegments,
+  formatDecimal,
   formatHms,
   wPrimeCapacity,
 } from '../components/rehearsal/rehearsalMath'
@@ -158,7 +159,7 @@ export default function RouteRehearsalView() {
           {title}
         </h1>
         <span style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>
-          {`${(data.distance_m / 1000).toFixed(1)} km · ${Math.round(data.ascent_m)} ${de ? 'Hm' : 'm up'}`}
+          {`${formatDecimal(data.distance_m / 1000, de)} km · ${Math.round(data.ascent_m)} ${de ? 'Hm' : 'm up'}`}
         </span>
       </div>
 
@@ -194,10 +195,10 @@ export default function RouteRehearsalView() {
           <div style={{ minHeight: 44, display: 'flex', flexWrap: 'wrap', gap: '6px 16px', alignItems: 'baseline' }}>
             {scrubbed ? (
               <>
-                <Readout label="km" value={(scrubbed.start_m / 1000).toFixed(1)} />
-                <Readout label={de ? 'Steigung' : 'Gradient'} value={`${scrubbed.gradient_pct.toFixed(1)} %`} />
+                <Readout label="km" value={formatDecimal(scrubbed.start_m / 1000, de)} />
+                <Readout label={de ? 'Steigung' : 'Gradient'} value={`${formatDecimal(scrubbed.gradient_pct, de)} %`} />
                 <Readout label={de ? 'Ziel' : 'Target'} value={`${Math.round(scrubbed.power_w)} W`} />
-                <Readout label={de ? 'Tempo' : 'Speed'} value={`${(scrubbed.speed_ms * 3.6).toFixed(1)} km/h`} />
+                <Readout label={de ? 'Tempo' : 'Speed'} value={`${formatDecimal(scrubbed.speed_ms * 3.6, de)} km/h`} />
                 <Readout label={de ? 'Zeit' : 'Elapsed'} value={formatHms(scrubbed.elapsed_s)} />
                 <Readout
                   label="W′"

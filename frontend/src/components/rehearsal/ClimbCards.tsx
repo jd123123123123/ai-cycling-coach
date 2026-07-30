@@ -1,6 +1,6 @@
 import type { RehearsalClimb, RehearsalSegment } from '../../api/rehearsal'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
-import { climbLabel, climbStats, formatHms } from './rehearsalMath'
+import { climbLabel, climbStats, formatDecimal, formatHms } from './rehearsalMath'
 import { zoneColorForGradient } from './profileMath'
 
 /**
@@ -55,18 +55,20 @@ export default function ClimbCards({
                 {climbLabel(climb, de)}
               </span>
               <span style={{ fontSize: 12.5, color: 'var(--color-muted)', marginLeft: 'auto' }}>
-                {de ? `ab km ${(climb.start_m / 1000).toFixed(1)}` : `from km ${(climb.start_m / 1000).toFixed(1)}`}
+                {de
+                  ? `ab km ${formatDecimal(climb.start_m / 1000, de)}`
+                  : `from km ${formatDecimal(climb.start_m / 1000, de)}`}
               </span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               <Figure
                 label={de ? 'Länge' : 'Length'}
-                value={`${(climb.length_m / 1000).toFixed(1)} km`}
+                value={`${formatDecimal(climb.length_m / 1000, de)} km`}
               />
               <Figure
                 label={de ? 'Ø Steigung' : 'Avg gradient'}
-                value={`${climb.avg_grade_pct.toFixed(1)} %`}
+                value={`${formatDecimal(climb.avg_grade_pct, de)} %`}
               />
               <Figure
                 label={de ? 'Zielleistung' : 'Target power'}
@@ -78,7 +80,7 @@ export default function ClimbCards({
               />
               <Figure
                 label={de ? 'W′-Kosten' : "W′ cost"}
-                value={stats.wCostJ != null ? `${(stats.wCostJ / 1000).toFixed(1)} kJ` : '—'}
+                value={stats.wCostJ != null ? `${formatDecimal(stats.wCostJ / 1000, de)} kJ` : '—'}
               />
               <Figure
                 label={de ? 'Höhenmeter' : 'Elevation'}

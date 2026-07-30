@@ -59,9 +59,10 @@ export default function AssumptionsRow({
           <SegmentedTabs<Effort>
             tabs={effortTabs}
             value={assumptions.effort}
-            onChange={(id) => !disabled && onChange({ effort: id })}
+            onChange={(id) => onChange({ effort: id })}
             ariaLabel={de ? 'Fahrweise' : 'Effort'}
             indicatorId="rehearsal-effort"
+            disabled={disabled}
           />
         </div>
         <p style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--color-muted)', margin: 0 }}>
@@ -79,9 +80,10 @@ export default function AssumptionsRow({
           <SegmentedTabs<Draft>
             tabs={draftTabs}
             value={assumptions.draft}
-            onChange={(id) => !disabled && onChange({ draft: id })}
+            onChange={(id) => onChange({ draft: id })}
             ariaLabel={de ? 'Windschatten' : 'Drafting'}
             indicatorId="rehearsal-draft"
+            disabled={disabled}
           />
         </div>
       </div>

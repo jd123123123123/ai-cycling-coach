@@ -96,6 +96,24 @@ describe('blowUpCeilingW', () => {
   it('is null past the end of the route', () => {
     expect(blowUpCeilingW([seg({ start_m: 0 })], 9999)).toBeNull()
   })
+
+  it('stops at the recovery and ignores a later, uncapped surge above CP', () => {
+    // Blow-up at km 1: two capped-at-CP segments (w_bal_j near empty), then a
+    // descent that refills W′, then a later climb where `race` attempts well
+    // above CP again now that the rider has recovered. The ceiling must stay
+    // at the capped value from the FIRST blown run, not follow the surge.
+    const w = blowUpCeilingW(
+      [
+        seg({ start_m: 0, gradient_pct: 8, power_w: 320, w_bal_j: 20000 }),
+        seg({ start_m: 1000, gradient_pct: 8, power_w: 250, w_bal_j: 400 }),
+        seg({ start_m: 2000, gradient_pct: 8, power_w: 250, w_bal_j: 300 }),
+        seg({ start_m: 3000, gradient_pct: -5, power_w: 90, w_bal_j: 15000 }),
+        seg({ start_m: 4000, gradient_pct: 9, power_w: 300, w_bal_j: 12000 }),
+      ],
+      1000,
+    )
+    expect(w).toBe(250)
+  })
 })
 
 describe('wPrimeCapacity', () => {

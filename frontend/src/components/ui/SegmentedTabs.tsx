@@ -18,6 +18,13 @@ interface SegmentedTabsProps<T extends string> {
    * Analyze sub-control) — a shared id makes the indicator jump between them.
    */
   indicatorId?: string
+  /**
+   * Disables every tab: real `disabled` attribute (not just an `onChange`
+   * guard), so the buttons drop out of the tab order and are announced as
+   * unavailable — matching any other disabled control on the same screen
+   * during an in-flight request.
+   */
+  disabled?: boolean
 }
 
 /**
@@ -34,6 +41,7 @@ export function SegmentedTabs<T extends string>({
   onChange,
   ariaLabel,
   indicatorId = 'segmented-indicator',
+  disabled = false,
 }: SegmentedTabsProps<T>) {
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -83,6 +91,7 @@ export function SegmentedTabs<T extends string>({
       ref={listRef}
       role="tablist"
       aria-label={ariaLabel}
+      aria-disabled={disabled || undefined}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -103,6 +112,7 @@ export function SegmentedTabs<T extends string>({
             type="button"
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
+            disabled={disabled}
             onClick={() => onChange(tab.id)}
             onKeyDown={(e) => handleKeyDown(e, index)}
             style={{
@@ -114,7 +124,7 @@ export function SegmentedTabs<T extends string>({
               borderRadius: 'var(--radius-pill)',
               border: 'none',
               background: 'transparent',
-              cursor: 'pointer',
+              cursor: disabled ? 'default' : 'pointer',
               fontSize: 14,
               fontWeight: isActive ? 590 : 500,
               letterSpacing: '-0.01em',

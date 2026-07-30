@@ -36,6 +36,18 @@ describe('AssumptionsRow', () => {
     expect(onChange).toHaveBeenCalledWith({ draft: 'bunch' })
   })
 
+  it('disables the effort and drafting tabs, not just their onChange, while a request is in flight', () => {
+    const onChange = vi.fn()
+    render(<AssumptionsRow assumptions={assumptions} onChange={onChange} disabled de />)
+    const race = screen.getByRole('tab', { name: 'Rennen' })
+    const bunch = screen.getByRole('tab', { name: 'Großes Feld' })
+    expect(race.hasAttribute('disabled')).toBe(true)
+    expect(bunch.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(race)
+    fireEvent.click(bunch)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('toggles the weather assumption', () => {
     const onChange = vi.fn()
     render(<AssumptionsRow assumptions={assumptions} onChange={onChange} de={false} />)
