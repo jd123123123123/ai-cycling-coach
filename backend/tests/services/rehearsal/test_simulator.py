@@ -62,21 +62,39 @@ class TestSimulate:
             flat_model.segments[0].speed_ms, rel=1e-6
         )
 
-    def test_blow_up_is_reported_when_w_prime_is_exhausted(self):
-        # A tiny W' against a long, steep (>=12%, pace_factor's top bucket)
-        # climb: attempted power for a climb this steep genuinely outruns what
-        # duration_scale says is sustainable for a climb this long, so the
-        # rider cannot hold the target and the simulator must say where it
-        # broke.
-        res = simulate(_segments(80, 13.0), _rider(w_prime_j=3000.0))
-        assert res.blow_ups
-        assert res.blow_ups[0].distance_m > 0
+    def test_blow_up_fires_on_a_REAL_climb_when_racing_it(self):
+        # The Passo Giau: ~10 km at ~9%. A rider racing it attempts ~1.13 x CP,
+        # so a 20 kJ W' empties partway up and the simulator must say where.
+        # This is the test whose absence let an inert blow-up ship green: the
+        # earlier version only fired above 12% on 40-minute climbs, which no
+        # European road climb satisfies.
+        res = simulate(_segments(66, 9.0), _rider(), Assumptions(effort="race"))
+        assert res.blow_ups, "racing a 9% alpine climb must be able to break the rider"
+        assert 0 < res.blow_ups[0].distance_m < 66 * 150.0
+
+    def test_the_same_climb_ridden_steadily_does_not_break_the_rider(self):
+        # Ambition is the variable: the blow-up is a consequence of how hard you
+        # try, not a property of the mountain.
+        res = simulate(_segments(66, 9.0), _rider(), Assumptions(effort="steady"))
+        assert res.blow_ups == []
+
+    def test_racing_is_faster_than_riding_steadily(self):
+        race = simulate(_segments(40, 6.0), _rider(), Assumptions(effort="race"))
+        steady = simulate(_segments(40, 6.0), _rider(), Assumptions(effort="steady"))
+        assert race.total_time_s < steady.total_time_s
+
+    def test_a_long_climb_is_paced_more_conservatively_than_a_short_one(self):
+        # duration_scale must still bite -- dropping it made long-climb
+        # predictions ~6% optimistic, and that number is what the UI shows.
+        short = simulate(_segments(20, 8.0), _rider())
+        long_ = simulate(_segments(200, 8.0), _rider())
+        assert long_.segments[-1].power_w < short.segments[-1].power_w
 
     def test_no_blow_up_on_an_easy_route(self):
         assert simulate(_segments(20, 0.0), _rider()).blow_ups == []
 
     def test_w_bal_never_goes_negative(self):
-        res = simulate(_segments(80, 13.0), _rider(w_prime_j=3000.0))
+        res = simulate(_segments(80, 11.0), _rider(w_prime_j=3000.0))
         assert all(s.w_bal_j >= -1e-6 for s in res.segments)
 
     def test_drafting_in_a_bunch_is_faster_on_the_flat(self):
