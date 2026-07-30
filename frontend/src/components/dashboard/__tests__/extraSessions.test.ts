@@ -105,4 +105,25 @@ describe('deriveExtraSessions', () => {
     expect(m.sessions[0].kind).toBe('other')
     expect(m.byKind.other).toBe(1)
   })
+
+  // Today's card asks a one-day question; Verlauf keeps the rolling week.
+  // Same derivation, different window — the load math must not change with it.
+  it('counts only sessions dated today when the window is a single day', () => {
+    const m = deriveExtraSessions([
+      act(21, 6, 'gym', { tss: 18 }),   // today → additional
+      act(18, 6, 'gym', { tss: 30 }),   // three days back → outside a 1-day window
+    ], TODAY, 1)
+    expect(m.count).toBe(1)
+    expect(m.extraTss).toBe(18)
+    expect(m.byKind.gym).toBe(1)
+  })
+
+  it('the same fixtures over seven days keep both sessions', () => {
+    const m = deriveExtraSessions([
+      act(21, 6, 'gym', { tss: 18 }),
+      act(18, 6, 'gym', { tss: 30 }),
+    ], TODAY, 7)
+    expect(m.count).toBe(2)
+    expect(m.extraTss).toBe(48)
+  })
 })

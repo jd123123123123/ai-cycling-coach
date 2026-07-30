@@ -3,15 +3,18 @@
  *
  * The app plans ONE bike session a day, but athletes also do OTHER sessions —
  * a second ride the same day, a gym session, a run, padel/tennis, etc. This
- * card surfaces those non-primary sessions over a rolling 7-day window and
+ * card surfaces those non-primary sessions over its `window` — today alone on
+ * the Today tab, a rolling 7 days on Verlauf — and
  * ACCOUNTS FOR THEIR LOAD: how much TSS they add and what share of the window's
  * total training load that is, so the full training picture — not just the
  * planned bike ride — is visible. HR-bearing sessions now carry an honest
  * hrTSS; genuinely uncomputable load renders duration-only, never a fake number.
  *
- * Mounts on the Today tab right below <ThisWeekCard /> (which sums ALL sports'
- * TSS into the weekly total) — this card breaks out the non-bike contribution
- * of that same load. Pure math lives in ./extraSessions (unit-tested in node).
+ * Two mounts. On Today (below <ThisWeekCard />, which sums ALL sports' TSS into
+ * the weekly total) it shows TODAY's extra sessions only, and renders nothing at
+ * all when there are none — a screen that answers one day should not carry a
+ * card whose only message is "nothing happened". On Verlauf it keeps the full
+ * rolling-7-day breakdown of the non-bike contribution to that same load. Pure math lives in ./extraSessions (unit-tested in node).
  * German-first, tuned for 390px. V3 tokens, honest "—" everywhere.
  */
 import { useMemo } from 'react'
@@ -58,22 +61,27 @@ function fmtDuration(sec: number | null): string {
   return `${h}:${String(m).padStart(2, '0')} h`
 }
 
-export default function ExtraSessionsCard() {
+export default function ExtraSessionsCard({ window }: { window: 'today' | 'week' }) {
   const { locale } = useLocale()
   const de = locale === 'de'
+  const dayOnly = window === 'today'
   const today = useMemo(() => new Date(), [])
-  // 7-day rolling window, matching Recovery's cross-training lens.
+  // Always fetch the 7-day range, even for the one-day window: it is one shared
+  // React-Query key rather than two, and the derivation does the windowing.
   const { data: actData } = useActivitiesRange(useMemo(() => subDays(today, 7), [today]), today)
 
-  const m = useMemo(() => deriveExtraSessions(actData?.activities ?? [], today, 7), [actData, today])
+  const m = useMemo(
+    () => deriveExtraSessions(actData?.activities ?? [], today, dayOnly ? 1 : 7),
+    [actData, today, dayOnly],
+  )
 
   // Cross-training is opt-in behaviour, not a metric every athlete has. A
   // bike-only rider has zero extra sessions every single week, so the empty
   // state ("Keine zusätzlichen Einheiten in den letzten 7 Tagen") was a
   // permanent full-size card on Today saying nothing had happened — one of
   // several dead cards competing with the day's actual answer for the scroll.
-  // It self-hides now (Today is its only mount, so there is no grid to leave a
-  // hole in); the moment a real cross-training session lands, the card appears
+  // It self-hides on both mounts (neither sits in a grid, so there is no hole
+  // to leave); the moment a real cross-training session lands, the card appears
   // with something to say.
   if (m.count === 0) return null
 
@@ -81,10 +89,14 @@ export default function ExtraSessionsCard() {
   // for the training picture (total load + recovery cost). Never bare numbers.
   const analysis = (() => {
     if (m.count === 0) return null
+    // A one-day share is a far noisier number than it looks (a single rest day
+    // makes any extra session 100% of the day's load), so the today window
+    // states the added load and omits the share rather than reframe it.
+    const share = !dayOnly && m.sharePct != null
     const loadClause = m.withLoad > 0
       ? (de
-          ? `${m.count} Zusatz${m.count === 1 ? 'einheit' : 'einheiten'} bringen +${m.extraTss} TSS${m.sharePct != null ? ` — ${m.sharePct}% deiner Gesamtlast der letzten 7 Tage` : ''}.`
-          : `${m.count} extra session${m.count === 1 ? '' : 's'} add +${m.extraTss} TSS${m.sharePct != null ? ` — ${m.sharePct}% of your total load over the last 7 days` : ''}.`)
+          ? `${m.count} Zusatz${m.count === 1 ? 'einheit' : 'einheiten'} bringen +${m.extraTss} TSS${share ? ` — ${m.sharePct}% deiner Gesamtlast der letzten 7 Tage` : ''}.`
+          : `${m.count} extra session${m.count === 1 ? '' : 's'} add +${m.extraTss} TSS${share ? ` — ${m.sharePct}% of your total load over the last 7 days` : ''}.`)
       : (de
           ? `${m.count} Zusatz${m.count === 1 ? 'einheit' : 'einheiten'} ohne berechenbare Last (nur Dauer).`
           : `${m.count} extra session${m.count === 1 ? '' : 's'} with no computable load (duration only).`)
@@ -107,7 +119,9 @@ export default function ExtraSessionsCard() {
           </span>
           <div className="flex flex-col gap-0.5 min-w-0">
             <span className="num-display" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)' }}>{de ? 'Zusätzliche Einheiten' : 'Extra sessions'}</span>
-            <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{de ? 'Letzte 7 Tage · neben dem Radplan' : 'Last 7 days · beyond the bike plan'}</span>
+            <span style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>{dayOnly
+              ? (de ? 'Heute · neben dem Radplan' : 'Today · beyond the bike plan')
+              : (de ? 'Letzte 7 Tage · neben dem Radplan' : 'Last 7 days · beyond the bike plan')}</span>
           </div>
         </div>
         <div className="flex items-end gap-0.5 shrink-0">
@@ -121,7 +135,9 @@ export default function ExtraSessionsCard() {
           <div className="flex justify-between">
             {[
               { v: m.withLoad > 0 ? `+${m.extraTss}` : DASH, l: de ? 'TSS zusätzlich' : 'Added TSS', c: 'var(--color-strain)' },
-              { v: m.sharePct != null && m.withLoad > 0 ? `${m.sharePct}%` : DASH, l: de ? 'der Wochenlast' : 'of week load', c: 'var(--color-ink)' },
+              // Share of the WEEK's load — meaningless against a single day, so
+              // the today window drops the tile instead of relabelling it.
+              ...(dayOnly ? [] : [{ v: m.sharePct != null && m.withLoad > 0 ? `${m.sharePct}%` : DASH, l: de ? 'der Wochenlast' : 'of week load', c: 'var(--color-ink)' }]),
               { v: `${m.count}`, l: de ? 'Einheiten' : 'Sessions', c: 'var(--color-ink)' },
             ].map((s) => (
               <div key={s.l} className="flex flex-col gap-0.5">

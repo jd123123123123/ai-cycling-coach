@@ -1546,7 +1546,7 @@ export default function TodayTab() {
           and its share of the window total. ThisWeekCard sums ALL sports into the
           weekly TSS; this card breaks out the non-bike contribution so the full
           training picture (load + recovery cost) is visible, not just the plan. */}
-      <ExtraSessionsCard />
+      <ExtraSessionsCard window="today" />
 
       {/* Breakthrough celebration — only when the detector found a real one (P1.2) */}
       <BreakthroughCelebration />

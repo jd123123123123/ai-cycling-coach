@@ -32,6 +32,7 @@ import {
   Mountain, Clock, Gauge, Trophy, Zap,
 } from 'lucide-react'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
+import ExtraSessionsCard from '../ExtraSessionsCard'
 import { useStreak } from '../../../hooks/useStreak'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { formatDate, formatTime24 } from '../../../utils/format'
@@ -744,6 +745,13 @@ export default function HistoryTab() {
           </div>
         )}
       </div>
+
+      {/* ── 6b. Extra sessions (rolling 7 days) ──
+          The non-bike contribution to the week's load. It lives here rather
+          than on Today, whose copy asks the same question about today alone:
+          a 7-day breakdown is a history question. Self-hides when the week
+          held no extra sessions. */}
+      <ExtraSessionsCard window="week" />
 
       {/* ── 7. Deep Dives Card ── */}
       <div className="rounded-[24px] flex flex-col" style={{ ...cardStyle, padding: '6px 20px' }}>
