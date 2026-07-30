@@ -21,6 +21,9 @@
 - **Frontend gates, run from `frontend/`:** `npx tsc -b --noEmit`, `npx vitest run`, `npx eslint <changed files>`, `npm run build`.
 - **Backend gates, run from `backend/`:** `.venv/bin/python -m pytest`.
 - **Do not deploy.** Deployment is a separate, explicit decision after review.
+- **Never `git add -A` or `git add .`.** The working tree carries two untracked
+  scratch files (`frontend/aura.html`, `frontend/src/auraprobe.tsx`) that must
+  stay untracked. Stage the exact paths your task touched, and nothing else.
 
 **Physics constants — use these exact values everywhere (they match `cda_estimate.py`'s own defaults so the forward and inverse solves never disagree):**
 
@@ -135,8 +138,13 @@ class TrackPoint:
     elevation_m: float | None
 
 
-def _collect_geo_points(raw: str | bytes) -> list:
-    """Every usable gpxpy point, tracks → routes → waypoints. Raises ValueError."""
+def _parse_and_collect(raw: str | bytes):
+    """(gpx, points) — parse ONCE and collect usable points. Raises ValueError.
+
+    Returns the gpx object too, because parse_gpx still needs it for
+    length_2d() and get_uphill_downhill(); parsing twice would be wasteful and
+    could drift if the two calls ever disagreed.
+    """
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8", errors="replace")
     try:
@@ -157,7 +165,7 @@ def _collect_geo_points(raw: str | bytes) -> list:
     geo = [p for p in raw_points if p.latitude is not None and p.longitude is not None]
     if not geo:
         raise ValueError("GPX file contains no track points")
-    return geo
+    return gpx, geo
 
 
 def parse_gpx_track(raw: str | bytes) -> list[TrackPoint]:
@@ -174,19 +182,24 @@ def parse_gpx_track(raw: str | bytes) -> list[TrackPoint]:
             lng=float(p.longitude),
             elevation_m=float(p.elevation) if p.elevation is not None else None,
         )
-        for p in _collect_geo_points(raw)
+        for p in _parse_and_collect(raw)[1]
     ]
 ```
 
 - [ ] **Step 4: Point `parse_gpx` at the shared collector**
 
-Inside `parse_gpx`, replace the inline decode/parse/collect block (from `if isinstance(raw, bytes):` through the `raise ValueError("GPX file contains no track points")` line) with:
+Inside `parse_gpx`, replace the inline decode/parse/collect block — from
+`if isinstance(raw, bytes):` down to and including the
+`raise ValueError("GPX file contains no track points")` line — with exactly:
 
 ```python
-    geo_points = _collect_geo_points(raw)
+    gpx, geo_points = _parse_and_collect(raw)
 ```
 
-Then delete the now-unused `raw_points` local. Keep everything below (`coords`, distance, elevation, profile, waypoints) exactly as it was — `gpx.length_2d()` and `gpx.get_uphill_downhill()` need the `gpx` object, so keep a second local for them by having `_collect_geo_points` stay as written and re-parsing inside `parse_gpx` **only if** those helpers are still needed. Simplest correct form: leave `parse_gpx`'s own `gpxpy.parse` call in place for the `gpx` object it needs, and use `_collect_geo_points` solely for the point list.
+Delete the now-unused `raw_points` local. Everything below (`coords`, distance,
+elevation, profile, waypoints) is unchanged and still uses `gpx` and
+`geo_points` under those same names, so nothing else in the function moves. The
+file must end up with exactly one `gpxpy.parse` call.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -2796,7 +2809,7 @@ navigates. Show it only for activities with a `route_polyline`.
 ```bash
 cd backend && .venv/bin/python -m pytest -q
 cd ../frontend && npx tsc -b --noEmit && npx vitest run && npx eslint src/components/dashboard/tabs/HistoryTab.tsx && npm run build
-git add -A backend/app backend/migrations backend/tests frontend/src
+git add backend/app backend/migrations backend/tests frontend/src
 git commit -m "feat(rehearsal): crew tours, past rides and the target event
 
 Three more adapters onto the same RehearsalRoute, so the simulator still
