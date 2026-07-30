@@ -42,6 +42,9 @@ export function expandBlocks(blocks: ResolvedBlock[]): PowerStep[] {
   const steps: PowerStep[] = []
   blocks.forEach((b, blockIndex) => {
     if (!(b.duration_s > 0)) return
+    // No watt band (no threshold known, none resolved) → no power step to
+    // draw. Skipping is the honest read; mid(null) would plot a phantom 0 W.
+    if (b.target_watts_low == null || b.target_watts_high == null) return
     const onWatts = mid(b.target_watts_low, b.target_watts_high)
     const reps = b.reps ?? 0
     const onS = b.on_s ?? 0

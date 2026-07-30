@@ -24,6 +24,9 @@ interface IntervalRibbonProps {
  * Kept as a small static map instead of pulling in `translateCoach` so the
  * component stays standalone and testable.
  */
+/** No watt band at all — honest absence, same dash the rest of the app uses. */
+const DASH_W = '—'
+
 const ZONE_FEEL_SIMPLE: Record<number, string> = {
   1: 'very easy',
   2: 'easy',
@@ -163,16 +166,22 @@ export default function IntervalRibbon({
             b.target_hr_low != null && b.target_hr_high != null
               ? ` · ${b.target_hr_low}-${b.target_hr_high} bpm`
               : ''
+          // The watt band is nullable: no threshold known and none resolved
+          // server-side. Interpolating it raw printed "null–nullW", so the
+          // absent band reads as a dash like every other missing figure.
+          const wattStr = b.target_watts_low != null && b.target_watts_high != null
+            ? `${b.target_watts_low}–${b.target_watts_high}W`
+            : DASH_W
           const ariaLabel = simpleMode
             ? (locale === 'de'
                 ? `${simpleName}: ${formatMinutes(b.duration_s)}, Tempo ${feel}`
                 : `${simpleName}: ${formatMinutes(b.duration_s)}, ${feel} pace`)
             : (locale === 'de'
-                ? `${b.name}: ${formatMinutes(b.duration_s)} bei ${b.target_watts_low}-${b.target_watts_high}W${hrStr}, Zone ${b.zone}, RPE ${b.rpe}${cadenceStr ? ', ' + cadenceStr.slice(3) : ''}`
-                : `${b.name}: ${formatMinutes(b.duration_s)} at ${b.target_watts_low}-${b.target_watts_high}W${hrStr}, zone ${b.zone}, RPE ${b.rpe}${cadenceStr ? ', ' + cadenceStr.slice(3) : ''}`)
+                ? `${b.name}: ${formatMinutes(b.duration_s)} bei ${wattStr}${hrStr}, Zone ${b.zone}, RPE ${b.rpe}${cadenceStr ? ', ' + cadenceStr.slice(3) : ''}`
+                : `${b.name}: ${formatMinutes(b.duration_s)} at ${wattStr}${hrStr}, zone ${b.zone}, RPE ${b.rpe}${cadenceStr ? ', ' + cadenceStr.slice(3) : ''}`)
           const titleAttr = simpleMode
             ? `${simpleName} · ${formatMinutes(b.duration_s)} · ${feel}`
-            : `${b.name} · ${formatMinutes(b.duration_s)} · ${b.target_watts_low}–${b.target_watts_high}W${hrStr} · Z${b.zone} · RPE ${b.rpe}${cadenceStr}`
+            : `${b.name} · ${formatMinutes(b.duration_s)} · ${wattStr}${hrStr} · Z${b.zone} · RPE ${b.rpe}${cadenceStr}`
           return (
             <button
               key={`${b.name}-${idx}`}
@@ -227,7 +236,9 @@ export default function IntervalRibbon({
             ) : (
               <>
                 {formatMinutes(blocks[hoverIdx].duration_s)} ·{' '}
-                {blocks[hoverIdx].target_watts_low}–{blocks[hoverIdx].target_watts_high}W
+                {blocks[hoverIdx].target_watts_low != null && blocks[hoverIdx].target_watts_high != null
+                  ? `${blocks[hoverIdx].target_watts_low}–${blocks[hoverIdx].target_watts_high}W`
+                  : DASH_W}
                 {blocks[hoverIdx].target_hr_low != null &&
                   blocks[hoverIdx].target_hr_high != null && (
                     <>

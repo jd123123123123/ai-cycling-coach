@@ -42,7 +42,10 @@ function fmtMMSS(s: number) {
   const sec = Math.round(s % 60)
   return `${m}:${String(sec).padStart(2, '0')}`
 }
-const wattsStr = (lo: number, hi: number) => (lo <= 0 ? '—' : lo === hi ? `${lo}` : `${lo}–${hi}`)
+// A null band means no threshold was known and the server resolved none —
+// an honest dash, never watts derived from a guessed FTP.
+const wattsStr = (lo: number | null, hi: number | null) =>
+  (lo == null || hi == null || lo <= 0 ? '—' : lo === hi ? `${lo}` : `${lo}–${hi}`)
 
 // German zone names (bike) — used when a block's own name is generic.
 const ZONE_NAME_DE: Record<number, string> = {
@@ -126,7 +129,9 @@ function summarize(w: PrescribedWorkout) {
   const peakPct = blocks.reduce((m, b) => Math.max(m, b.target_pct_ftp || 0), 0)
   const kj = Math.round(
     blocks.reduce((a, b) => {
-      const avg = b.target_watts_high > 0 ? (b.target_watts_low + b.target_watts_high) / 2 : 0
+      const avg = b.target_watts_low != null && b.target_watts_high != null && b.target_watts_high > 0
+        ? (b.target_watts_low + b.target_watts_high) / 2
+        : 0
       return a + avg * b.duration_s
     }, 0) / 1000,
   )
@@ -346,7 +351,7 @@ export default function WorkoutDetailView() {
   const gels = Math.max(0, Math.round((totalCarbs - bottles * 15) / 25))
 
   // Targets — main block, honest "—" where sensor data is absent.
-  const powerVal = main && main.target_watts_high > 0 ? `${wattsStr(main.target_watts_low, main.target_watts_high)} W` : '—'
+  const powerVal = main && (main.target_watts_high ?? 0) > 0 ? `${wattsStr(main.target_watts_low, main.target_watts_high)} W` : '—'
   const hrVal = main && main.target_hr_low != null && main.target_hr_high != null ? `${main.target_hr_low}–${main.target_hr_high}` : '—'
   const cadVal = main && main.cadence_low != null && main.cadence_high != null ? `${main.cadence_low}–${main.cadence_high}` : '—'
 
@@ -362,7 +367,7 @@ export default function WorkoutDetailView() {
   // Only structured power workouts export. The endpoint serves TODAY's brief,
   // so a future planned day is honestly disabled; today without an FTP anchor
   // (endpoint would 400) is disabled too.
-  const structured = w.blocks.length > 0 && w.blocks.some((b) => (b.target_pct_ftp ?? 0) > 0 || b.target_watts_high > 0)
+  const structured = w.blocks.length > 0 && w.blocks.some((b) => (b.target_pct_ftp ?? 0) > 0 || (b.target_watts_high ?? 0) > 0)
   const exportAvailable = isToday && structured && ftp != null && ftp > 0
   const exportReason: ExportBlockReason = !structured
     ? 'no_structure'
@@ -528,7 +533,7 @@ export default function WorkoutDetailView() {
                     </div>
                     <div className="flex flex-col items-end gap-[2px]">
                       <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{fmtMMSS(b.duration_s)}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{b.target_watts_high > 0 ? `${wattsStr(b.target_watts_low, b.target_watts_high)} W` : '—'}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{(b.target_watts_high ?? 0) > 0 ? `${wattsStr(b.target_watts_low, b.target_watts_high)} W` : '—'}</span>
                     </div>
                   </div>
                 )
@@ -557,7 +562,7 @@ export default function WorkoutDetailView() {
                         </div>
                         <div className="flex flex-col items-end gap-[2px]">
                           <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{fmtMMSS(r.b.duration_s)}</span>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{r.b.target_watts_high > 0 ? `${wattsStr(r.b.target_watts_low, r.b.target_watts_high)} W` : '—'}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)' }}>{(r.b.target_watts_high ?? 0) > 0 ? `${wattsStr(r.b.target_watts_low, r.b.target_watts_high)} W` : '—'}</span>
                         </div>
                       </div>
                     </div>

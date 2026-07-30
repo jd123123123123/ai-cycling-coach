@@ -23,8 +23,10 @@ export interface OutlookEntry {
 export interface ResolvedBlock {
   name: string
   duration_s: number
-  target_watts_low: number
-  target_watts_high: number
+  /** Null when no threshold is known and the server resolved none — the plan
+   *  renders an honest dash rather than watts derived from a guessed FTP. */
+  target_watts_low: number | null
+  target_watts_high: number | null
   target_pct_ftp: number
   zone: number // 1..7
   rpe: number  // 1..10
@@ -208,7 +210,7 @@ export function detectWorkoutSport(w: PrescribedWorkout): WorkoutSport {
   const hay = `${w.category ?? ''} ${w.framework_cited ?? ''} ${w.title ?? ''}`.toLowerCase()
   if (/\b(gym|strength|kraft|lift|hypertroph|squat|deadlift|bench|press|mobility|core)\b/.test(hay)) return 'gym'
   if (/\b(run|running|lauf|jog|5k|10k|marathon|track|tempo run|interval run)\b/.test(hay)) return 'running'
-  const hasWatts = (w.blocks ?? []).some((b) => b.target_watts_high > 0)
+  const hasWatts = (w.blocks ?? []).some((b) => (b.target_watts_high ?? 0) > 0)
   return hasWatts ? 'cycling' : 'cycling'
 }
 

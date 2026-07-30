@@ -1,16 +1,17 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { format, parseISO, isToday, isFuture } from 'date-fns'
 import { enUS, de } from 'date-fns/locale'
 import { SideSheet } from '../ui/SideSheet'
 import IntervalRibbon from './IntervalRibbon'
-import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
-import type { ResolvedBlock } from '../../api/coach'
+import type { DayPlan } from '../../api/weeks'
 import type { CoachLanguage } from '../../contexts/LanguageContext'
 import type { ActivityRead } from '../../api/dashboard'
 import { formatDate, formatHours } from '../../utils/format'
 import { useT, useLocale } from '../../contexts/LocaleContext'
+import { usePowerProfile } from '../../hooks/usePowerProfile'
+import { adaptIntervals } from './adaptIntervals'
 
 interface DayPlanCardProps {
   day: DayPlan
@@ -37,25 +38,6 @@ const CATEGORY_DOT_COLOR: Record<string, string> = {
   endurance: 'var(--color-zone-2)', tempo: 'var(--color-zone-3)',
   sweet_spot: 'var(--color-zone-3)', threshold: 'var(--color-zone-4)',
   vo2: 'var(--color-zone-5)',
-}
-
-function adaptIntervals(intervals: IntervalBlockOut[]): ResolvedBlock[] {
-  return intervals.map((b, i) => {
-    const pct = b.power_target_pct_ftp ?? 0.65
-    return {
-      name: `Segment ${i + 1}`,
-      duration_s: b.duration_seconds,
-      target_pct_ftp: pct,
-      target_watts_low: Math.round(pct * 200 * 0.95),
-      target_watts_high: Math.round(pct * 200 * 1.05),
-      zone: b.zone,
-      rpe: Math.round(b.zone * 1.2),
-      cadence_low: null,
-      cadence_high: null,
-      target_hr_low: null,
-      target_hr_high: null,
-    }
-  })
 }
 
 function parsedDate(dateStr: string) { try { return parseISO(dateStr) } catch { return null } }
@@ -91,7 +73,14 @@ export default function DayPlanCard({ day, language, activity = null, hideDurati
   const duration = day.duration_seconds_target ? formatHours(day.duration_seconds_target) : isRest ? (locale === 'de' ? 'Ruhe' : 'Rest') : '—'
   // Suppress a repeated placeholder duration on workout days; rest keeps "Ruhe".
   const showDuration = isRest || !hideDuration
-  const adaptedBlocks = adaptIntervals(day.intervals)
+  // The athlete's REAL threshold, not the 200 W this adapter used to assume.
+  // Same cached query TodayTab reads for its header chip, so this is a cache
+  // read rather than an extra fetch.
+  const { data: powerProfile } = usePowerProfile()
+  const adaptedBlocks = useMemo(
+    () => adaptIntervals(day.intervals, powerProfile?.threshold_watts ?? null),
+    [day.intervals, powerProfile],
+  )
 
   // ─── Agenda row variant — the primary Plan surface ──────────────────────────
   if (variant === 'row') {

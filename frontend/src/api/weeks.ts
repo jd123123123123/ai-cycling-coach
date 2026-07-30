@@ -12,6 +12,16 @@ export interface IntervalBlockOut {
   on_s?: number | null
   off_s?: number | null
   off_pct_ftp?: number | null
+  /** Prescription detail resolved server-side (Jul 2026). Optional: older
+   *  stored rows omit them, HR is null whenever LTHR is unknown, and on the
+   *  ordinary mesocycle-planned week only cadence arrives (from the template)
+   *  — watts stay null there and are derived from the athlete's real FTP. */
+  cadence_low?: number | null
+  cadence_high?: number | null
+  target_hr_low?: number | null
+  target_hr_high?: number | null
+  target_watts_low?: number | null
+  target_watts_high?: number | null
 }
 
 export interface DayPlan {
