@@ -24,12 +24,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+
 
 @dataclass(frozen=True)
 class WBalanceResult:
     min_w_prime_bal_j: float    # lowest reserve reached (negative = exhaustion)
     end_w_prime_bal_j: float    # reserve at the end of the ride
     depleted: bool              # True if the reserve ever went below 0
+
+
+def w_prime_balance_step(balance_j, power_w, cp: float, w_prime: float):
+    """One second of W′ balance from an arbitrary starting balance.
+
+    Extracted so the rehearsal simulator can carry the balance forward and react
+    to depletion mid-route; w_prime_balance always starts from a full tank,
+    which is right for a ridden file and wrong for a march. ONE recurrence,
+    two callers. Accepts scalars or NumPy arrays.
+    """
+    over = power_w > cp
+    depleted = balance_j - (power_w - cp)
+    recharged = balance_j + (w_prime - balance_j) * (cp - power_w) / w_prime
+    out = np.where(over, depleted, recharged)
+    return np.minimum(out, w_prime)
 
 
 def w_prime_balance(
@@ -39,12 +56,7 @@ def w_prime_balance(
     bal = w_prime
     out: list[float] = []
     for p in power_series:
-        if p > cp:
-            bal -= (p - cp)
-        else:
-            bal += (w_prime - bal) * (cp - p) / w_prime
-            if bal > w_prime:
-                bal = w_prime
+        bal = float(w_prime_balance_step(bal, p, cp, w_prime))
         out.append(bal)
     return out
 
