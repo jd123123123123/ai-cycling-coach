@@ -63,7 +63,10 @@ describe('useSeasonArc — cross-call-site invariant', () => {
       <QueryClientProvider client={qc}>
         <LanguageProvider>
           <LocaleProvider>
-            {/* Stand-ins for four different tabs' ChapterBar call sites. */}
+            {/* Stand-ins for four different surfaces calling the hook. These
+                were the four tabs' ChapterBar mounts until that block was
+                retired; the invariant is about the hook, not that component,
+                so the probes outlive it. */}
             <Probe testId="today" />
             <Probe testId="plan" />
             <Probe testId="body" />

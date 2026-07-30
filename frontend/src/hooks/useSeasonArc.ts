@@ -5,7 +5,15 @@ import { useCurrentWeek } from './useCurrentWeek'
 import { seasonArc, type SeasonArc } from '../utils/seasonArc'
 
 /**
- * The one derivation of the season arc, shared by every chapter's ChapterBar.
+ * The one derivation of the season arc for any chapter that needs it.
+ *
+ * NOTE (Jul 2026): no production call sites at the moment. Its four callers
+ * were the four tabs' ChapterBar mounts, and that header block was retired;
+ * PlanTab's season card builds its own arc with `seasonArc()` over the PAGED
+ * meso, which this hook deliberately does not describe. Kept — not deleted —
+ * because the invariant below is the reason it exists, and any future surface
+ * that wants the CURRENT week's arc must come through here rather than
+ * reintroduce the per-tab derivations this replaced.
  *
  * Before this hook existed, each of the four tabs built its own SeasonArc
  * inline, and two of them never read the brief's goal_event_date at all —
