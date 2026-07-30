@@ -11,14 +11,14 @@
  *
  * Session-reset delay (06-03 invariant): when `open` flips false, we wait
  * exactly 240ms before resetting section state and unsubscribing from the
- * tool log. This prevents a flash of empty state during SideSheet's exit
+ * tool log. This prevents a flash of empty state during the sheet's exit
  * animation — same timing the original TransparencyDrawer used pre-migration.
  *
  * The setTimeout(..., 240) is explicitly grep-visible at the useEffect below
  * to satisfy the verification assertion.
  */
 import { useEffect, useRef, useState } from 'react'
-import { SideSheet } from '../ui/SideSheet'
+import { BottomSheet } from '../strength/BottomSheet'
 import { SegmentedTabs } from '../ui/SegmentedTabs'
 import BiometricsDetail from './BiometricsDetail'
 import { useWhyTired } from '../../hooks/useWhyTired'
@@ -404,7 +404,7 @@ export default function ContributorsSheet({
   // Session-reset delay (06-03 invariant):
   // Session-reset delay (06-03 invariant): wait exactly 240ms after close
   // before resetting section + unsubscribing. Prevents a flash of empty state
-  // during SideSheet's exit animation. setTimeout(..., 240) grep-target below:
+  // during the sheet's exit animation. setTimeout(..., 240) grep-target below:
   useEffect(() => {
     if (open) return
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
@@ -447,12 +447,14 @@ export default function ContributorsSheet({
       : (language === 'simple' ? "What's driving it" : 'Readiness contributors & rationale')
 
   return (
-    <SideSheet
+    // Container only: a 640px side sheet is not a side sheet at 390px, which is
+    // the width this app is built for. The tabs, the contributor list, the
+    // rationale and the tools section are reused exactly as they were.
+    <BottomSheet
       open={open}
       onClose={onClose}
       eyebrow={locale === 'de' ? 'Warum das?' : 'Why this?'}
       title={sheetTitle}
-      width={640}
     >
       <div className="flex flex-col gap-5">
         {/* Section tabs */}
@@ -478,6 +480,6 @@ export default function ContributorsSheet({
           )}
         </div>
       </div>
-    </SideSheet>
+    </BottomSheet>
   )
 }

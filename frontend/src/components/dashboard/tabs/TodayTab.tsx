@@ -24,6 +24,7 @@ import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
 import ThisWeekCard from '../ThisWeekCard'
 import ExtraSessionsCard from '../ExtraSessionsCard'
+import ContributorsTrigger from '../ContributorsTrigger'
 import { useAura, type RoadPayload } from '../AuraContext'
 import { buildRoadProfile, steadyBlock, type RoadProfile } from '../../../utils/roadProfile'
 import { roadMode, type RoadMode } from '../../../utils/roadMode'
@@ -1294,6 +1295,30 @@ export default function TodayTab() {
               the question on a 390px viewport. Session, weather, coach and
               drivers now follow immediately; Drivers/Coach/Momentum moved
               below the weather card, see there). */}
+          {/* What drove the number, and the coach's read on it — both directly
+              under the ring. They used to render ~1.7 screens below it: the
+              athlete scrolled past the entire session to reach the explanation
+              of the number they had just looked at. The trigger renders nothing
+              while readiness is withheld; a withheld score gets no explanation. */}
+          <ContributorsTrigger
+            hrv={hrvNow}
+            rhr={restingHr}
+            sleep={sleepScore}
+            tsb={tsb}
+            score={score ?? null}
+            pending={readinessPending}
+            de={de}
+          />
+
+          {coachMessage && (
+            <CoachRead
+              eyebrow={tFor(locale, 'coach_label')}
+              body={coachMessage}
+              to="/coach"
+              icon={BrainCircuit}
+            />
+          )}
+
           <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{sessionKicker}</span>
         </>
       )}
@@ -1462,18 +1487,6 @@ export default function TodayTab() {
                 ))}
               </div>
             </div>
-          )}
-
-          {/* Coach card (pen CoachCard) — the coach's read for today. The
-              purple identity, the dark aura-proof ground and the orb all live
-              in <CoachRead> now, shared with every other chapter. */}
-          {coachMessage && (
-            <CoachRead
-              eyebrow={tFor(locale, 'coach_label')}
-              body={coachMessage}
-              to="/coach"
-              icon={BrainCircuit}
-            />
           )}
 
           {/* Momentum cues — weekly rhythm (consistency vs plan) + 7-day fitness
