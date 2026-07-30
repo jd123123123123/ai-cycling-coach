@@ -8,7 +8,7 @@
 import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { nextChapter, type ChapterId } from '../../utils/seasonArc'
-import { CHAPTER_TITLES } from './ChapterBar'
+import { CHAPTER_TITLES } from '../../utils/seasonArc'
 
 export interface NextChapterProps {
   from: ChapterId

@@ -28,8 +28,6 @@ import StatValue from '../../ui/StatValue'
 import RecoveryEtaCard from '../RecoveryEtaCard'
 import { BottomSheet } from '../../strength/BottomSheet'
 import { useLocale } from '../../../contexts/LocaleContext'
-import { useSeasonArc } from '../../../hooks/useSeasonArc'
-import ChapterBar from '../../narrative/ChapterBar'
 import MomentCard from '../../narrative/MomentCard'
 import MorningHealthCard from '../MorningHealthCard'
 import NextChapter from '../../narrative/NextChapter'
@@ -112,12 +110,6 @@ export default function RecoveryTab() {
   const { decision } = useDailyDecision()
   const dState = decision?.state ?? null
   const trainDay = isTrainState(dState)
-
-  // ChapterBar's arc — the ONE shared hook every chapter calls (this tab used
-  // to build its own arc with `goalEventDate: null` hard-coded, which could
-  // disagree with Today/Plan for an athlete whose event lives in the legacy
-  // `goals` JSONB rather than the profile's `target_event_date` column).
-  const arc = useSeasonArc()
 
   const metrics = metricsResp?.metrics ?? []
   const byDate = useMemo(() => {
@@ -549,7 +541,6 @@ export default function RecoveryTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
-      <ChapterBar chapter="body" arc={arc} de={de} />
       {/* 1 · Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col" style={{ gap: 2 }}>

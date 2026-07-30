@@ -31,6 +31,16 @@ export function nextChapter(id: ChapterId): ChapterId {
   return CHAPTERS[(chapterIndex(id) + 1) % CHAPTERS.length]
 }
 
+/** Each chapter's question, in the athlete's language. Lived in ChapterBar
+ *  until that component was removed; NextChapter still names the next
+ *  chapter's question, so the titles outlive the bar that introduced them. */
+export const CHAPTER_TITLES: Record<ChapterId, { en: string; de: string }> = {
+  today:   { en: 'WHAT DO I DO TODAY', de: 'WAS MACHE ICH HEUTE' },
+  plan:    { en: 'WHERE THIS IS GOING', de: 'WO DAS HINGEHT' },
+  body:    { en: 'CAN I TAKE IT',       de: 'KANN ICH DAS TRAGEN' },
+  history: { en: 'DID IT WORK',         de: 'HAT ES FUNKTIONIERT' },
+}
+
 /** The subset of the server's MesoBlockContext this module reads. */
 export interface SeasonArcMeso {
   phase?: string | null

@@ -27,7 +27,7 @@ const TABS: Array<{ id: ChapterId; en: string; de: string; icon: React.ReactNode
 // would crash the entire app bundle at import time, below any error boundary,
 // for every user. console.error degrades loudly instead.
 if (TABS.length !== CHAPTERS.length) {
-  console.error(`ChapterBar has ${CHAPTERS.length} chapters, nav has ${TABS.length} tabs`)
+  console.error(`seasonArc has ${CHAPTERS.length} chapters, nav has ${TABS.length} tabs`)
 }
 
 /** Old ?tab= values keep working. Retired ids map onto their new chapter

@@ -33,11 +33,9 @@ import {
 } from 'lucide-react'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useStreak } from '../../../hooks/useStreak'
-import { useSeasonArc } from '../../../hooks/useSeasonArc'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { formatDate, formatTime24 } from '../../../utils/format'
 import type { ActivityRead } from '../../../api/dashboard'
-import ChapterBar from '../../narrative/ChapterBar'
 
 // ── Bike-only sub-discipline split ──────────────────────────────────────────
 // The only ride split we can HONESTLY derive: a trainer/indoor ride carries no
@@ -167,12 +165,6 @@ export default function HistoryTab() {
   // A full year of history (API caps a single range at 366 days).
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 365), [today]), today)
   const { data: streakData } = useStreak()
-
-  // ChapterBar's arc — the ONE shared hook every chapter calls (this tab used
-  // to build its own arc with `goalEventDate: null` hard-coded, which could
-  // disagree with Today/Plan for an athlete whose event lives in the legacy
-  // `goals` JSONB rather than the profile's `target_event_date` column).
-  const arc = useSeasonArc()
 
   // Sub-discipline filter (bike-only): all / outdoor / indoor.
   const [filter, setFilter] = useState<Filter>('all')
@@ -415,7 +407,6 @@ export default function HistoryTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-5">
-      <ChapterBar chapter="history" arc={arc} de={de} />
       {/* ── 1. Header ── */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">

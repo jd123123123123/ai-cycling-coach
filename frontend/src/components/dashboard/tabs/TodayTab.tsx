@@ -56,8 +56,6 @@ import { tFor } from '../../../i18n/strings'
 import { useMethods } from '../../ui/MethodsDrawer'
 import { buildReadinessMethod } from '../../../utils/methodsContent'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../glassCard'
-import { useSeasonArc } from '../../../hooks/useSeasonArc'
-import ChapterBar from '../../narrative/ChapterBar'
 
 // Glass, not solid: Today's Road sits behind these cards (DashboardShell),
 // so the terrain reads through. `glassCardStyle` is the ONE shared token
@@ -295,11 +293,6 @@ export default function TodayTab() {
     return local ? local.charAt(0).toUpperCase() + local.slice(1) : undefined
   }
   const athleteName = ((athlete?.name as string | undefined)?.split(' ')[0]) || nameFromEmail(user?.email)
-
-  // ChapterBar's arc — the ONE shared hook every chapter calls, so the
-  // phase/week/countdown line can never disagree between chapters (it reads
-  // the same three cached queries PlanTab/RecoveryTab/HistoryTab read).
-  const arc = useSeasonArc()
 
   // Athlete-local day key. Declared here because the overnight-freshness gate
   // just below needs it, and every wearable-derived value on this tab flows
@@ -1101,7 +1094,6 @@ export default function TodayTab() {
 
   return (
     <div className="relative flex flex-col gap-6 pb-4">
-      <ChapterBar chapter="today" arc={arc} de={de} />
       {/* FLAGSHIP AURA — the "Morning Readiness Moment" backdrop (pen frames'
           readiness-aura.glsl fill). A full-bleed, state-keyed WebGL aura fixed
           to the viewport behind ALL Today content; the page bg (#0A0C0F) equals

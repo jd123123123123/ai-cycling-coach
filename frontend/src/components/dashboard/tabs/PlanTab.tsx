@@ -24,8 +24,6 @@ import { detectWorkoutSport, loggedReviewFromEvidence } from '../../../api/coach
 import type { WorkoutSport } from '../../../api/coach'
 import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
 import { phaseLabel, seasonArc } from '../../../utils/seasonArc'
-import { useSeasonArc } from '../../../hooks/useSeasonArc'
-import ChapterBar from '../../narrative/ChapterBar'
 import { intensityStep, intensityLabel } from '../../../utils/intensityScale'
 import { formatDate } from '../../../utils/format'
 
@@ -325,12 +323,6 @@ export default function PlanTab() {
     goalEventDate,
     meso: meso ?? null,
   }), [profile?.target_event_date, goalEventDate, meso])
-  // ChapterBar's arc — the ONE shared hook every chapter calls, ALWAYS
-  // describing the current week regardless of this tab's own week pager, so
-  // the bar can never disagree with Today/Body/History when the user pages
-  // through past/future weeks here.
-  const arc = useSeasonArc()
-
   // Plan card — real aggregates, scoped to the selected discipline.
   const weekHours = sportDays.reduce((s, d) => s + dayDurSec(d), 0) / 3600
   const sessionCount = sportSessions.length
@@ -482,7 +474,6 @@ export default function PlanTab() {
   if (weekBlocked && !week) {
     return (
       <div className="flex flex-col gap-6 pb-4">
-        <ChapterBar chapter="plan" arc={arc} de={de} />
         <div className="rounded-[24px] flex flex-col items-center text-center" style={{ ...cardStyle, gap: 14, padding: '32px 24px' }}>
           <div className="grid place-items-center rounded-full" style={{ width: 52, height: 52, background: 'var(--color-accent-soft)' }}>
             <Zap size={26} strokeWidth={2.2} style={{ color: 'var(--color-accent)' }} />
@@ -518,7 +509,6 @@ export default function PlanTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
-      <ChapterBar chapter="plan" arc={arc} de={de} />
       {/* Top PlanCard (.pen TqTJw) — the season-summary card the V3 · Train
           frame leads with. Tapping it opens the Season & Race Day detail
           (.pen pTlXd → /season). Real meso data; honest "—" where absent. */}
