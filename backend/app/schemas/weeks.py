@@ -24,6 +24,20 @@ class IntervalBlockOut(BaseModel):
     on_s: int | None = None
     off_s: int | None = None
     off_pct_ftp: float | None = None
+    # ── Prescription detail the service layer already resolves ────────────
+    # ResolvedBlock carries cadence, an LTHR-derived HR band and FTP-resolved
+    # watts; this schema used to forward none of them, so the client had to
+    # re-derive watts from %FTP against a guessed FTP and could never show
+    # cadence or HR at all. All optional: older stored rows simply omit them,
+    # and the mesocycle writer stores none of the three (cadence comes from the
+    # template there; HR and watts are genuinely unresolved and stay null
+    # rather than being invented).
+    cadence_low: int | None = None
+    cadence_high: int | None = None
+    target_hr_low: int | None = None
+    target_hr_high: int | None = None
+    target_watts_low: int | None = None
+    target_watts_high: int | None = None
 
 
 class DayPlan(BaseModel):

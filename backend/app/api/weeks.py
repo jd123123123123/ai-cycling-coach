@@ -206,6 +206,12 @@ def _apply_personalization(days: list[DayPlan], preface: str, personalized: dict
                     on_s=blk.get("on_s"),
                     off_s=blk.get("off_s"),
                     off_pct_ftp=blk.get("off_pct_ftp"),
+                    cadence_low=blk.get("cadence_low"),
+                    cadence_high=blk.get("cadence_high"),
+                    target_hr_low=blk.get("target_hr_low"),
+                    target_hr_high=blk.get("target_hr_high"),
+                    target_watts_low=blk.get("target_watts_low"),
+                    target_watts_high=blk.get("target_watts_high"),
                 )
                 for blk in intervals
             ]
@@ -487,6 +493,20 @@ def _build_day_plan(
                     on_s=blk.get("on_s", tb.on_s if tb else None),
                     off_s=blk.get("off_s", tb.off_s if tb else None),
                     off_pct_ftp=blk.get("off_pct_ftp", tb.off_pct_ftp if tb else None),
+                    # Cadence: stored value first, then the library block. The
+                    # mesocycle writer persists no cadence at all, so for the
+                    # ordinary planned week the TEMPLATE is the only source --
+                    # which is why the plan could never show a cadence.
+                    cadence_low=blk.get("cadence_low", tb.cadence_low if tb else None),
+                    cadence_high=blk.get("cadence_high", tb.cadence_high if tb else None),
+                    # HR and watts are resolved per athlete (LTHR, FTP), not
+                    # authored in the library, so there is no template fallback
+                    # to reach for. Null here means the client derives watts
+                    # from the athlete's real threshold, or shows nothing.
+                    target_hr_low=blk.get("target_hr_low"),
+                    target_hr_high=blk.get("target_hr_high"),
+                    target_watts_low=blk.get("target_watts_low"),
+                    target_watts_high=blk.get("target_watts_high"),
                 )
             )
         return DayPlan(

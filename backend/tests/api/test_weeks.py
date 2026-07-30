@@ -561,3 +561,78 @@ class TestDetectMissedYesterday:
         from app.api.weeks import _detect_missed_yesterday
         db = _routed_missed_db(plans=[], acts=[])
         assert await _detect_missed_yesterday(db, 1, self.TODAY, "de") is None
+
+
+# ---------------------------------------------------------------------------
+# Test 8: the plan endpoint forwards the prescription detail it already has
+# ---------------------------------------------------------------------------
+#
+# IntervalBlockOut used to carry duration, %FTP, zone and the structured-set
+# fields ONLY. Everything else the service layer resolves — cadence, the
+# LTHR-derived HR band, FTP-scaled watts — was dropped at the schema boundary,
+# so the client could not render a cadence or HR prescription at all and had to
+# guess an FTP to print watts.
+#
+# Two writers populate interval_structure with different key spellings for
+# duration/%FTP, but ALL of them agree on these six field names, so one
+# blk.get() per field covers every path.
+
+class TestIntervalPrescriptionDetail:
+    def _pw(self, intervals: list[dict]) -> MagicMock:
+        pw = MagicMock()
+        pw.template_id = None
+        pw.sport = "cycling"
+        pw.title = "Sweet spot"
+        pw.duration_seconds_target = 3600
+        pw.interval_structure = {"intervals": intervals}
+        return pw
+
+    def test_forwards_cadence_hr_and_watts_when_stored(self):
+        from app.api.weeks import _build_day_plan
+
+        today = date.today()
+        day = _build_day_plan(
+            today,
+            self._pw([
+                {
+                    "duration_seconds": 600,
+                    "power_target_pct_ftp": 0.75,
+                    "zone": 3,
+                    "cadence_low": 85,
+                    "cadence_high": 95,
+                    "target_hr_low": 140,
+                    "target_hr_high": 155,
+                    "target_watts_low": 180,
+                    "target_watts_high": 200,
+                }
+            ]),
+            today,
+            "cycling",
+            "simple",
+        )
+        blk = day.intervals[0]
+        assert blk.cadence_low == 85
+        assert blk.cadence_high == 95
+        assert blk.target_hr_low == 140
+        assert blk.target_hr_high == 155
+        assert blk.target_watts_low == 180
+        assert blk.target_watts_high == 200
+
+    def test_absent_detail_stays_none_rather_than_invented(self):
+        """The mesocycle writer stores name/duration/pct/zone/rpe only. Those
+        rows must deserialize with the new fields empty — never a default that
+        reads as a real prescription."""
+        from app.api.weeks import _build_day_plan
+
+        today = date.today()
+        day = _build_day_plan(
+            today,
+            self._pw([{"duration_seconds": 600, "power_target_pct_ftp": 0.75, "zone": 3}]),
+            today,
+            "cycling",
+            "simple",
+        )
+        blk = day.intervals[0]
+        assert blk.cadence_low is None
+        assert blk.target_hr_low is None
+        assert blk.target_watts_low is None
