@@ -6,6 +6,7 @@
  * elevation, best/avg time, live Open-Meteo weather for outdoor routes.
  */
 import { useEffect, useMemo, useState } from 'react'
+import RouteSketch from '../components/ui/RouteSketch'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
@@ -39,28 +40,20 @@ const fmtTime = (s: number | null) => {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')} h` : `${m} min`
 }
 
-/** SVG sketch of the GPS track — normalized to the card, no tiles. */
-function RouteSketch({ polyline, virtual }: { polyline: [number, number][]; virtual: boolean }) {
-  const d = useMemo(() => {
-    if (!polyline || polyline.length < 2) return null
-    const lats = polyline.map((p) => p[0]), lngs = polyline.map((p) => p[1])
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats)
-    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
-    const spanLat = Math.max(1e-6, maxLat - minLat), spanLng = Math.max(1e-6, maxLng - minLng)
-    const W = 120, H = 76, pad = 6
-    // Keep aspect: scale by the larger span, center the smaller.
-    const s = Math.min((W - 2 * pad) / spanLng, (H - 2 * pad) / spanLat)
-    const ox = (W - spanLng * s) / 2, oy = (H - spanLat * s) / 2
-    return polyline
-      .map((p, i) => `${i === 0 ? 'M' : 'L'}${(ox + (p[1] - minLng) * s).toFixed(1)},${(oy + (maxLat - p[0]) * s).toFixed(1)}`)
-      .join(' ')
-  }, [polyline])
-  if (!d) return null
+/** SVG sketch of the GPS track — normalized to the card, no tiles. One shared
+ *  projection (ui/RouteSketch) since Jul 2026; this file, the crew card and the
+ *  history thumbnails each carried their own copy of the same maths. */
+function RouteSketchCard({ polyline, virtual }: { polyline: [number, number][]; virtual: boolean }) {
   return (
-    <svg viewBox="0 0 120 76" style={{ width: 120, height: 76, flexShrink: 0 }}>
-      <rect x="0" y="0" width="120" height="76" rx="14" fill="var(--color-surface-2)" />
-      <path d={d} fill="none" stroke={virtual ? 'var(--color-strain)' : 'var(--color-accent)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <RouteSketch
+      polyline={polyline}
+      width={120}
+      height={76}
+      pad={6}
+      radius={14}
+      background="var(--color-surface-2)"
+      color={virtual ? 'var(--color-strain)' : 'var(--color-accent)'}
+    />
   )
 }
 
@@ -199,7 +192,7 @@ export default function ExploreRoutesView() {
             : null
           return (
           <div key={i} className="flex gap-4 p-4" style={CARD}>
-            <RouteSketch polyline={r.polyline} virtual={r.is_virtual} />
+            <RouteSketchCard polyline={r.polyline} virtual={r.is_virtual} />
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="num-display truncate" style={{ fontSize: 15, color: 'var(--color-ink)' }}>{r.name}</span>

@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import ExtraSessionsCard from '../ExtraSessionsCard'
+import RouteSketch from '../../ui/RouteSketch'
 import { useStreak } from '../../../hooks/useStreak'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { formatDate, formatTime24 } from '../../../utils/format'
@@ -47,61 +48,32 @@ const cardStyle = { background: 'var(--color-paper-2)', border: '1px solid var(-
 const isIndoor = (a: ActivityRead) => (a.distance_meters ?? 0) <= 0 && (a.duration_seconds ?? 0) > 0
 const rideColor = (a: ActivityRead) => (isIndoor(a) ? 'var(--color-amber)' : 'var(--color-strain)')
 
-// ── Generative activity thumbnail ──────────────────────────────────────────
-// Deterministic (SSR-stable, offline, CSP-safe) SVG rendered from the activity's
-// own numbers — an "intensity terrain" ridge that stands in for the ride's
-// route line (the pen's Thumb), unique-but-stable per activity.
-function fnv1a(str: string): number {
-  let h = 0x811c9dc5
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return h >>> 0
-}
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0
-  return () => {
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
+// ── Activity thumbnail ─────────────────────────────────────────────────────
+// The ride's OWN GPS track, drawn by the shared RouteSketch. This used to be a
+// procedurally generated "intensity terrain" ridge — fnv1a over the activity id
+// seeding mulberry32 — which looked like data and encoded nothing about the
+// ride, which is why its shape read as arbitrary. Rides with no GPS, or whose
+// stream was never stored, get a neutral mark rather than a convincing fake.
 function ActivityThumb({ activity, color }: { activity: ActivityRead; color: string }) {
-  const W = 64
-  const H = 64
-  const seed = fnv1a(
-    `${activity.id}:${Math.round(activity.tss ?? 0)}:${Math.round(activity.distance_meters ?? 0)}:` +
-      `${Math.round(activity.duration_seconds ?? 0)}:${Math.round(activity.average_hr ?? 0)}`,
-  )
-  const rnd = mulberry32(seed)
-  const gid = `thumb-fill-${activity.id}`
-  const n = 9
-  const step = W / (n - 1)
-  const ys = Array.from({ length: n }, () => 0.28 + rnd() * 0.55)
-  const top = ys.map((f, i) => `${i === 0 ? 'M' : 'L'} ${(i * step).toFixed(1)} ${(H - f * H).toFixed(1)}`).join(' ')
-  const area = `M 0 ${H} ${ys.map((f, i) => `L ${(i * step).toFixed(1)} ${(H - f * H).toFixed(1)}`).join(' ')} L ${W} ${H} Z`
-  const endX = (n - 1) * step
-  const endY = H - ys[n - 1] * H
+  const polyline = activity.route_polyline ?? null
+  const hasRoute = (polyline?.length ?? 0) >= 2
 
   return (
     <span
-      className="relative shrink-0 overflow-hidden"
-      style={{ width: 64, height: 64, borderRadius: 14, background: `linear-gradient(135deg, color-mix(in srgb, ${color} 43%, transparent), color-mix(in srgb, ${color} 8%, transparent))` }}
+      className="relative shrink-0 grid place-items-center overflow-hidden"
+      style={{
+        width: 64,
+        height: 64,
+        borderRadius: 14,
+        background: hasRoute
+          ? `linear-gradient(135deg, color-mix(in srgb, ${color} 43%, transparent), color-mix(in srgb, ${color} 8%, transparent))`
+          : 'var(--color-surface-2)',
+        border: hasRoute ? undefined : '1px solid var(--color-rule)',
+      }}
     >
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden className="absolute inset-0">
-        <defs>
-          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.5" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.05" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill={`url(#${gid})`} />
-        <path d={top} fill="none" stroke={color} strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={endX} cy={endY} r={3.4} fill={color} stroke="var(--color-paper-2)" strokeWidth={1.5} />
-      </svg>
+      {hasRoute
+        ? <RouteSketch polyline={polyline} width={64} height={64} color={color} strokeWidth={2.25} pad={8} />
+        : <Bike size={20} style={{ color: 'var(--color-muted)' }} />}
     </span>
   )
 }

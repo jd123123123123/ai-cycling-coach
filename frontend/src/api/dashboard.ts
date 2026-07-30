@@ -60,6 +60,10 @@ export interface ActivityRead {
   title: string | null
   source: string | null
   date?: string | null
+  /** Downsampled GPS track, <= 48 points, sent by the list endpoint. Null for
+   *  indoor rides and for rides whose stream was never stored — render the
+   *  neutral placeholder, never a fake line. */
+  route_polyline?: [number, number][] | null
 }
 
 export interface ActivityListResponse {
