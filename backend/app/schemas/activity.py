@@ -56,6 +56,13 @@ class ActivityRead(BaseModel):
     external_id: str | None
     raw_data: dict | None
     created_at: datetime
+    # ── Route sketch (Jul 2026) ──────────────────────────────────────────
+    # [[lat, lng], …], at most 48 evenly-strided points from the ride's
+    # ALREADY-STORED stream. None for indoor rides and for rides whose stream
+    # was never stored — the client draws a neutral mark, never a fake line.
+    # Populated only by the list endpoint, which never fetches a stream to
+    # fill it: a list must not fan out one stream request per row.
+    route_polyline: list[list[float]] | None = None
 
 
 class ActivityListResponse(BaseModel):

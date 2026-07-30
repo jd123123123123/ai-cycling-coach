@@ -4,6 +4,7 @@ All endpoints are RLS-protected via get_db_for_user which sets the PostgreSQL
 session variable app.current_user_id, enabling RLS policies on the activities
 hypertable to filter rows by the authenticated user.
 """
+import json
 from datetime import datetime
 from typing import Annotated
 
@@ -20,7 +21,7 @@ from app.models.user import User
 from app.schemas.activity import ActivityCreate, ActivityListResponse, ActivityRead
 from app.schemas.ride_feedback import RideFeedbackIn, RideFeedbackRead
 from app.services import activity_service
-from app.services.activity_stream_analysis import analyze_stream_blob
+from app.services.activity_stream_analysis import analyze_stream_blob, route_sketch_polyline
 from app.services.athlete_service import get_or_create_profile
 
 router = APIRouter(prefix="/activities", tags=["activities"])
@@ -77,6 +78,19 @@ async def recompute_load(
     return {"updated": updated}
 
 
+def _as_points(value: object) -> list | None:
+    """A JSON channel read straight out of the blob, normalised to a list."""
+    if value is None or isinstance(value, list):
+        return value
+    if isinstance(value, (str, bytes)):
+        try:
+            parsed = json.loads(value)
+        except (ValueError, TypeError):
+            return None
+        return parsed if isinstance(parsed, list) else None
+    return None
+
+
 @router.get(
     "",
     response_model=ActivityListResponse,
@@ -103,10 +117,40 @@ async def list_activities(
         end_date=end_date,
         limit=limit,
     )
-    return ActivityListResponse(
-        activities=[ActivityRead.model_validate(a) for a in activities],
-        count=len(activities),
-    )
+    # Route sketches for the history list's thumbnails. ONE extra query for the
+    # whole page — never one per row, and never a stream FETCH: rides whose
+    # stream was never stored simply come back without a polyline and the client
+    # draws its neutral mark. Only the two GPS channels are read out of the
+    # blob, so the big power/HR/cadence arrays stay in the database.
+    routes: dict[int, list[list[float]]] = {}
+    ids = [a.id for a in activities]
+    if ids:
+        rows = (
+            await db.execute(
+                select(
+                    ActivityStream.activity_id,
+                    ActivityStream.streams["latitude"],
+                    ActivityStream.streams["longitude"],
+                ).where(ActivityStream.activity_id.in_(ids))
+            )
+        ).all()
+        for activity_id, lat, lng in rows:
+            # `streams -> 'latitude'` comes back parsed on some driver/type
+            # combinations and as raw JSON text on others. Normalising here
+            # beats a silently empty polyline, which would read as "this ride
+            # has no GPS" — the exact kind of confident wrong answer this
+            # endpoint exists to stop.
+            poly = route_sketch_polyline({"latitude": _as_points(lat), "longitude": _as_points(lng)})
+            if poly is not None:
+                routes[activity_id] = poly
+
+    out: list[ActivityRead] = []
+    for a in activities:
+        item = ActivityRead.model_validate(a)
+        item.route_polyline = routes.get(a.id)
+        out.append(item)
+
+    return ActivityListResponse(activities=out, count=len(out))
 
 
 @router.get(

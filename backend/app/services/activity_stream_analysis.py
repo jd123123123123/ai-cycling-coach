@@ -144,6 +144,31 @@ def _gps(latitude: list, longitude: list) -> dict | None:
     }
 
 
+# The history list draws one tiny route sketch per ride. 48 points is enough
+# for a 64 px thumbnail to read as the right shape, and small enough that a
+# 50-row page stays a modest payload.
+ROUTE_SKETCH_POINTS = 48
+
+
+def route_sketch_polyline(streams: dict | None, max_points: int = ROUTE_SKETCH_POINTS) -> list[list[float]] | None:
+    """[[lat, lng], …] for a list-sized route sketch, or None without GPS.
+
+    Strided, never averaged: averaging smooths real corners into a track the
+    athlete never rode. Reuses the same even-stride downsampler the per-ride
+    stream analysis uses, so the sketch is a subset of that polyline rather
+    than a second interpretation of the track.
+    """
+    s = streams or {}
+    pts = [
+        [float(lat), float(lng)]
+        for lat, lng in zip(s.get("latitude") or [], s.get("longitude") or [])
+        if lat is not None and lng is not None
+    ]
+    if len(pts) < 2:
+        return None
+    return _downsample(pts, max_points)
+
+
 def analyze_stream_blob(streams: dict, *, sport: str, device_max_hr: float | None = None) -> dict[str, Any]:
     """Return the display bundle for one activity's stored stream blob."""
     s = streams or {}
