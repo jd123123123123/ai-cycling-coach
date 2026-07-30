@@ -158,13 +158,21 @@ def _w_prime_step_vec(
 
     k = (cp - power) / w_prime
     gap = w_prime - bal
-    bal_whole = np.where(
-        (k > 1.0) & (whole >= 1.0),
-        w_prime,
-        w_prime - gap * np.power(1.0 - k, whole),
-    )
-    stepped = np.minimum(bal_whole + (w_prime - bal_whole) * k * frac, w_prime)
-    recharged = np.where(frac > 1e-9, stepped, bal_whole)
+    # In the depleting branch (power > cp) k is negative, so (1 - k) > 1 and
+    # raising it to a long segment's whole-second count can overflow to inf
+    # for a small W′; that inf can then turn an `inf * 0` or `inf - inf` into
+    # nan a couple of lines below. `np.where(power > cp, ...)` at the bottom
+    # always picks `depleted` in that case, so this whole branch's value is
+    # discarded — only the warning is noise. Silence it rather than the
+    # result.
+    with np.errstate(over="ignore", invalid="ignore"):
+        bal_whole = np.where(
+            (k > 1.0) & (whole >= 1.0),
+            w_prime,
+            w_prime - gap * np.power(1.0 - k, whole),
+        )
+        stepped = np.minimum(bal_whole + (w_prime - bal_whole) * k * frac, w_prime)
+        recharged = np.where(frac > 1e-9, stepped, bal_whole)
 
     return np.where(power > cp, depleted, recharged)
 

@@ -120,6 +120,83 @@ class TestTheMarchIsTheSamePhysicsAsSimulate:
             )
             assert got == pytest.approx(expected, rel=1e-4)
 
+    def test_matches_simulate_while_w_prime_genuinely_oscillates(self):
+        """The other guard's fixture drives W′ to `_BLOWN_J` for 65% of its
+        segments, so once it is empty only the binary "is it empty" matters
+        and the *trajectory* through `_w_prime_step_vec`'s closed form (the
+        geometric recharge, the `k > 1` branch, the fractional final step) is
+        never actually exercised. A recharge-rate bug there (found by
+        mutation: recharge x1.5, drain x2, fractional recharge x3) passed
+        every existing test in this file.
+
+        This fixture (verified below, not assumed) drains on 9.5% ramps and
+        recovers on gentle -2% dips without ever pinning at zero, so the exact
+        W′ trajectory is what determines total_time_s.
+        """
+        model = _rider()
+        segs = _sharp(200, up=9.5, down=-2.0, period=3)
+        honest = simulate(segs, model, Assumptions(effort="fondo"))
+        bals = [s.w_bal_j for s in honest.segments]
+
+        # The fixture must actually oscillate well above zero, not pin low —
+        # verify the premise rather than assume it.
+        assert min(bals) > 0.20 * (model.w_prime_j or 0.0), "fixture pins near zero"
+        assert sum(bals) / len(bals) > 0.35 * (model.w_prime_j or 0.0), (
+            "fixture spends most of its time depleted, not oscillating"
+        )
+
+        for draft in ("solo", "small_group", "bunch"):
+            assumptions = Assumptions(draft=draft, effort="fondo")
+            expected = simulate(segs, model, assumptions).total_time_s
+            got = float(
+                _march_total_times(
+                    segs, model, assumptions,
+                    np.array([model.cp_watts]), np.array([model.cda_m2]),
+                    np.array([model.crr]), None, None,
+                )[0]
+            )
+            assert got == pytest.approx(expected, rel=1e-6), draft
+
+    def test_matches_simulate_at_a_climb_duration_bucket_boundary(self):
+        """`_climb_duration_scales` estimates each climb's duration on fresh
+        legs with the SOLO CdA and no wind (mirroring `_climb_durations`), so
+        the draft assumption can never tip a climb across a `duration_scale`
+        bucket. That estimate is otherwise untested here: every other fixture
+        sits far from the 1200 s / 2400 s boundaries, so a bug that estimated
+        duration a different way (e.g. with the draft-adjusted CdA) would
+        still land in the same bucket and go unnoticed.
+
+        These two climbs (grade 6%, at `effort="fondo"`) were sized by
+        binary-search on `_climb_durations` itself so their SOLO-CdA estimate
+        sits a few percent past each boundary (1220 s and 2420 s -- just past
+        1200 s and 2400 s). Swapping in the `bunch` draft's CdA for the
+        estimate (a 2.1% faster climb, measured separately) would pull both
+        below their boundary and flip their `duration_scale`, changing
+        `total_time_s` far past this test's tolerance.
+        """
+        model = _rider()
+        segs = [
+            Segment(start_m=0.0, length_m=5385.099908591346, gradient_pct=6.0,
+                     bearing_deg=0.0, elevation_m=1000.0, climb_id=1),
+            Segment(start_m=5385.099908591346, length_m=800.0, gradient_pct=0.0,
+                     bearing_deg=0.0, elevation_m=1000.0, climb_id=None),
+            Segment(start_m=6185.099908591346, length_m=10681.919490812343,
+                     gradient_pct=6.0, bearing_deg=0.0, elevation_m=1000.0,
+                     climb_id=2),
+        ]
+
+        for draft in ("solo", "small_group", "bunch"):
+            assumptions = Assumptions(draft=draft, effort="fondo")
+            expected = simulate(segs, model, assumptions).total_time_s
+            got = float(
+                _march_total_times(
+                    segs, model, assumptions,
+                    np.array([model.cp_watts]), np.array([model.cda_m2]),
+                    np.array([model.crr]), None, None,
+                )[0]
+            )
+            assert got == pytest.approx(expected, rel=1e-6), draft
+
 
 class TestSharpTerrainIsNotSmoothedAway:
     """An earlier band coarsened long routes ~8x before drawing. On sharp
