@@ -22,7 +22,6 @@ import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type Ch
 import SessionReviewCard from '../SessionReviewCard'
 import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
-import FitnessFreshnessCard from '../FitnessFreshnessCard'
 import ThisWeekCard from '../ThisWeekCard'
 import ExtraSessionsCard from '../ExtraSessionsCard'
 import { useAura, type RoadPayload } from '../AuraContext'
@@ -322,8 +321,8 @@ export default function TodayTab() {
   // for far longer than a day) — the Form chip must always equal the displayed
   // CTL − the displayed ATL.
   const load = latestLoad(pmc?.entries)
-  const ctl = load?.ctl ?? null
-  const atl = load?.atl ?? null
+  // ctl/atl are no longer read here — Fitness & Frische, their only consumer
+  // on this tab, moved to Koerper. tsb and dCtl7 still feed Today's own chips.
   const tsb = load?.tsb ?? null
   const dCtl = load?.dCtl7 ?? null
 
@@ -1506,11 +1505,6 @@ export default function TodayTab() {
           TSS/sessions/left + Mon→Sun day-dots). Same real hooks + numbers as
           /load-form (one shared derivation). */}
       <ThisWeekCard />
-
-      {/* 5 · Fitness & Frische (pen Load Card) — the pen's TSB form gauge (from
-          V3 · Load & Form), bound to real CTL/ATL/TSB. Replaces the raw
-          training-load card on Today; the deeper load story lives on /load-form. */}
-      <FitnessFreshnessCard ctl={ctl} atl={atl} tsb={tsb} dCtl7={dCtl} />
 
       {/* WHERE THIS LEADS (pen RaceLeads) — amber gradient card tying today's
           work to the target event. All real trajectory data: event name, days

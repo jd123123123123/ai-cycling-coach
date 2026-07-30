@@ -15,10 +15,11 @@ import {
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
+import { usePMC } from '../../../hooks/usePMC'
 import { useDailyDecision } from '../../../hooks/useAdaptive'
 import { isTrainState } from '../../../api/adaptive'
 import { canonicalReadiness, computeReadiness, readinessTier } from '../../../utils/metrics'
-import { localDayKey } from '../../../utils/loadMetrics'
+import { latestLoad, localDayKey } from '../../../utils/loadMetrics'
 import { readinessFreshness } from '../../../utils/readinessGate'
 import ReadinessFreshnessNote from '../today/ReadinessFreshnessNote'
 import { formatDate } from '../../../utils/format'
@@ -26,6 +27,7 @@ import ScoreRing from '../../ui/ScoreRing'
 import MetricCard from '../../ui/MetricCard'
 import StatValue from '../../ui/StatValue'
 import RecoveryEtaCard from '../RecoveryEtaCard'
+import FitnessFreshnessCard from '../FitnessFreshnessCard'
 import { BottomSheet } from '../../strength/BottomSheet'
 import { useLocale } from '../../../contexts/LocaleContext'
 import MomentCard from '../../narrative/MomentCard'
@@ -110,6 +112,12 @@ export default function RecoveryTab() {
   const { decision } = useDailyDecision()
   const dState = decision?.state ?? null
   const trainDay = isTrainState(dState)
+
+  // CTL/ATL/TSB for Fitness & Frische, which moved here from Today. Same ONE
+  // producer Today uses for its Form chip — the shared latestLoad selector over
+  // live PMC, never the brief's cacheable evidence.pmc snapshot (audit P0-5).
+  const { data: pmc } = usePMC(90)
+  const load = latestLoad(pmc?.entries)
 
   const metrics = metricsResp?.metrics ?? []
   const byDate = useMemo(() => {
@@ -885,6 +893,18 @@ export default function RecoveryTab() {
           <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Noch keine Verhaltensdaten erfasst' : 'No behaviors logged yet'}</span>
         </div>
       </div>
+
+      {/* Fitness & Frische (pen Load Card) — the TSB form gauge on real
+          CTL/ATL/TSB. It answers "can I take it", which is this chapter's
+          question, and it reads AFTER the overnight body signals because it is
+          the load context for them, not a competing headline. Moved off Today,
+          where it was the fifth card on a screen that answers one day. */}
+      <FitnessFreshnessCard
+        ctl={load?.ctl ?? null}
+        atl={load?.atl ?? null}
+        tsb={load?.tsb ?? null}
+        dCtl7={load?.dCtl7 ?? null}
+      />
 
       {/* Chapter handoff — every chapter names the next one, which is what
           makes four pages read as one document rather than four menus. */}
