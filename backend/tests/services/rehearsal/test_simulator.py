@@ -112,3 +112,91 @@ class TestSimulate:
         still = simulate(segs, _rider()).total_time_s
         windy = simulate(segs, _rider(), headwind_ms=[6.0] * 30).total_time_s
         assert windy > still
+
+    def test_blow_up_actually_caps_power_and_slows_the_rider(self):
+        # The blow-up isn't just a marker in a list -- it must change the
+        # physics. Racing a real ~9% climb (Passo Giau shape), power before
+        # the break is ~279 W (above the 250 W CP); the instant W' is spent,
+        # the simulator must hold the rider AT available CP (250 W here,
+        # since durability_drop_pct=0.0 keeps available_cp == cp_watts), and
+        # speed must drop with it. Deleting `target = cp_now` at the cap
+        # site leaves power (and therefore speed) at the pre-blow-up,
+        # above-CP value with every existing test still green.
+        res = simulate(_segments(66, 9.0), _rider(), Assumptions(effort="race"))
+        assert res.blow_ups, "racing a 9% alpine climb must be able to break the rider"
+        blow_at = res.blow_ups[0].distance_m
+
+        before = [s for s in res.segments if s.start_m < blow_at]
+        after = [s for s in res.segments if s.start_m >= blow_at]
+        assert before and after
+
+        pre_power = before[-1].power_w
+        post_power = after[0].power_w
+        assert pre_power > 250.0 * 1.05, "pre-blow-up power should sit above CP"
+        assert post_power == pytest.approx(250.0, abs=1e-6), (
+            "once blown, power must be capped at available CP, not left at "
+            "the attempted (above-CP) value"
+        )
+        assert post_power < pre_power * 0.95
+
+        pre_speed_kmh = before[-1].speed_ms * 3.6
+        post_speed_kmh = after[0].speed_ms * 3.6
+        assert post_speed_kmh < pre_speed_kmh * 0.95, (
+            "capping power must also cap speed -- a blow-up that doesn't "
+            "slow the rider down isn't a blow-up"
+        )
+
+    def test_w_prime_drains_even_with_sub_second_segments(self):
+        # Segments short enough (2 m at climbing speed) that int(seg_time)
+        # is 0 for every single one. If the fractional W' step were
+        # skipped -- as an earlier version did by truncating to whole
+        # seconds -- W' would never move at this granularity and the
+        # blow-up would be unreachable no matter how hard the effort.
+        tiny_segments = [
+            Segment(
+                start_m=i * 2.0, length_m=2.0, gradient_pct=9.0,
+                bearing_deg=0.0, elevation_m=1000.0, climb_id=1,
+            )
+            for i in range(2000)
+        ]
+        res = simulate(tiny_segments, _rider(), Assumptions(effort="race"))
+
+        elapsed = [s.elapsed_s for s in res.segments]
+        seg_times = [elapsed[0]] + [
+            elapsed[i] - elapsed[i - 1] for i in range(1, len(elapsed))
+        ]
+        assert all(t < 1.0 for t in seg_times), (
+            "test setup invariant: every segment must take under a second"
+        )
+
+        assert res.segments[-1].w_bal_j < res.segments[0].w_bal_j, (
+            "W' must drain even when every segment is sub-second"
+        )
+        assert res.blow_ups, (
+            "a sub-second-segment climb must still be able to blow the "
+            "rider up -- the fractional W' step is what makes that possible"
+        )
+
+    def test_attempted_power_on_a_climb_does_not_depend_on_draft(self):
+        # _climb_durations deliberately estimates using the rider's SOLO
+        # CdA regardless of the chosen draft assumption, so that the
+        # duration_scale bucket -- and therefore attempted power -- doesn't
+        # discontinuously shift just because the rider picked "bunch".
+        # Elapsed time legitimately differs (drafting is faster); attempted
+        # power on each segment must not.
+        #
+        # n=53 segments of 160 m at 8% is chosen deliberately: the solo-CdA
+        # duration estimate for this climb (~2424 s) sits just above the
+        # 2400 s duration_scale bucket boundary; if the draft-adjusted
+        # (bunch) CdA leaked into the estimate instead, the shorter bunch
+        # estimate (~2397 s) would fall into the bucket below and change
+        # attempted power. A smaller/arbitrary climb wouldn't straddle that
+        # boundary and could pass even with the leak reintroduced.
+        segs = _segments(53, 8.0, length_m=160.0)
+        solo = simulate(segs, _rider(), Assumptions(draft="solo"))
+        bunch = simulate(segs, _rider(), Assumptions(draft="bunch"))
+
+        assert [s.power_w for s in solo.segments] == [
+            s.power_w for s in bunch.segments
+        ]
+        assert bunch.total_time_s != pytest.approx(solo.total_time_s, rel=1e-9)
