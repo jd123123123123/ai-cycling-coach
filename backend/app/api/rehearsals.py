@@ -231,7 +231,10 @@ async def create_rehearsal(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
-    except Exception as exc:  # a file that is not GPX at all
+    except ValueError as exc:  # crew_tour._parse_and_collect normalises gpxpy's
+        # own exceptions (GPXException, GPXXMLSyntaxException, ...) to
+        # ValueError; a bug elsewhere in the call stack should surface as a
+        # real 500, not be reported to the athlete as a bad file.
         logger.info("rehearsal GPX parse failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

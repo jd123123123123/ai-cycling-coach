@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.services.rehearsal.simulator import Draft, Effort
 
@@ -102,7 +102,19 @@ class RehearsalOut(BaseModel):
     blow_ups: list[BlowUpOut] = []
     #: True when CdA is the labelled fallback rather than a measurement.
     cda_is_default: bool = True
+    #: True when the durability fade is the unmeasured default (currently
+    #: always, until a stored durability_drop_pct exists) -- never a
+    #: fabricated "you slow down at km 180" without a real measurement
+    #: behind it.
+    durability_is_default: bool = True
     weather_used: bool = False
+
+    @model_validator(mode="after")
+    def _time_and_band_together(self) -> RehearsalOut:
+        """Never a bare time without the band, or a band without a time."""
+        if (self.total_time_s is None) != (self.band is None):
+            raise ValueError("total_time_s and band must both be set or both be None")
+        return self
 
 
 class RehearsalListItem(BaseModel):
@@ -117,6 +129,13 @@ class RehearsalListItem(BaseModel):
     can_predict: bool
     total_time_s: float | None = None
     band: BandOut | None = None
+
+    @model_validator(mode="after")
+    def _time_and_band_together(self) -> RehearsalListItem:
+        """Never a bare time without the band, or a band without a time."""
+        if (self.total_time_s is None) != (self.band is None):
+            raise ValueError("total_time_s and band must both be set or both be None")
+        return self
 
 
 class RehearsalListOut(BaseModel):

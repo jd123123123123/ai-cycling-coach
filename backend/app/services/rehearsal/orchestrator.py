@@ -115,6 +115,7 @@ def run_rehearsal(
             "carbs_g_per_hour": None,
             "blow_ups": [],
             "cda_is_default": model.cda_is_default,
+            "durability_is_default": model.durability_drop_pct <= 0,
             "weather_used": False,
         }
 
@@ -136,6 +137,7 @@ def run_rehearsal(
         "carbs_g_per_hour": (sim.total_kj / hours) * _CARB_G_PER_HOUR_PER_KJ_H,
         "blow_ups": [asdict(b) for b in sim.blow_ups],
         "cda_is_default": model.cda_is_default,
+        "durability_is_default": model.durability_drop_pct <= 0,
         "weather_used": weather_used,
     }
 
