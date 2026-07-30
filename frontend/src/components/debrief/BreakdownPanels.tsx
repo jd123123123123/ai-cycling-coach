@@ -1,5 +1,6 @@
 import { useLocale } from '../../contexts/LocaleContext'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { mergeClimbs } from './mergeClimbs'
 import type {
   RaceDebrief, Pacing, Climb, EffortMatch, Efficiency, Matchbook, Quadrant, Fueling, WkoModel, Cda,
 } from '../../api/debrief'
@@ -20,47 +21,6 @@ function durationLabel(seconds: number, de: boolean): string {
   if (seconds < 60) return `${Math.round(seconds)}s`
   const m = Math.round(seconds / 60)
   return de ? `${m}min` : `${m}m`
-}
-
-/** The segmenter splits a climb every time the grade dips below its threshold,
- * so one long climb with varying steepness comes back as many fragments. Bridge
- * consecutive climb segments separated by only a short non-climb gap back into
- * a single climb — a real descent/valley (long gap) still keeps them apart. */
-function mergeClimbs(climbs: Climb[]): Climb[] {
-  if (climbs.length <= 1) return climbs.slice()
-  const sorted = [...climbs].sort((a, b) => a.start_s - b.start_s)
-  const out: Climb[] = []
-  let cur: Climb = { ...sorted[0] }
-  for (let k = 1; k < sorted.length; k++) {
-    const nx = sorted[k]
-    const gap = nx.start_s - (cur.start_s + cur.duration_s)
-    // Bridge only across a SHORT non-climb gap — a false-flat inside one climb
-    // is seconds long; a real descent/valley between two passes runs minutes,
-    // so an absolute cap keeps distinct climbs apart instead of snowballing the
-    // whole ride into one giant "climb".
-    const bridge = gap <= 90
-    if (bridge) {
-      const gain = cur.elev_gain_m + nx.elev_gain_m
-      const dist = cur.distance_m + nx.distance_m
-      const dur = nx.start_s + nx.duration_s - cur.start_s
-      const wDur = (cur.w_per_kg != null ? cur.duration_s : 0) + (nx.w_per_kg != null ? nx.duration_s : 0)
-      const wSum = (cur.w_per_kg != null ? cur.w_per_kg * cur.duration_s : 0) + (nx.w_per_kg != null ? nx.w_per_kg * nx.duration_s : 0)
-      cur = {
-        ...cur,
-        duration_s: dur,
-        distance_m: dist,
-        elev_gain_m: gain,
-        avg_grade_pct: dist > 0 ? (gain / dist) * 100 : cur.avg_grade_pct,
-        vam_m_per_h: dur > 0 ? gain / (dur / 3600) : cur.vam_m_per_h,
-        w_per_kg: wDur > 0 ? wSum / wDur : null,
-      }
-    } else {
-      out.push(cur)
-      cur = { ...nx }
-    }
-  }
-  out.push(cur)
-  return out
 }
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
@@ -292,7 +252,9 @@ function ClimbsSlide({ climbs, ftp, weightKg }: { climbs: Climb[]; ftp: number |
   const notable = merged
     .filter((c) => c.distance_m >= 300 || c.elev_gain_m >= 30)
     .sort((a, b) => b.elev_gain_m - a.elev_gain_m)
-  const totalAscent = climbs.reduce((s, c) => s + c.elev_gain_m, 0)
+  // Sum the climbs the headline COUNTS. Summing the raw fragments reported
+  // elevation from climbs the filter had just excluded from the list.
+  const totalAscent = notable.reduce((s, c) => s + c.elev_gain_m, 0)
   const shown = notable.slice(0, 6)
   if (shown.length === 0) return null
   const extra = notable.length - shown.length
