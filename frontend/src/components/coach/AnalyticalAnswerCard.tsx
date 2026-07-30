@@ -67,17 +67,20 @@ function PmcCard({
   const directionLabel = directionDisplay(direction, language)
   const DirectionIcon =
     ctlDelta > 0.5 ? TrendingUp : ctlDelta < -0.5 ? TrendingDown : Activity
+  // One expression, one colour: the icon and the line it sits beside are two
+  // renderings of the same fact. They were computed separately before, so a
+  // climbing-fitness card drew a green line under an amber arrow.
+  const directionColor =
+    ctlDelta > 0.5 ? 'var(--color-recovery)'
+      : ctlDelta < -0.5 ? 'var(--color-amber)'
+      : 'var(--color-muted)'
 
   return (
     <div className="grid grid-cols-[auto_1fr] gap-3 items-center">
       <div className="flex-shrink-0" style={{ width: 96, height: 44 }} aria-hidden>
         <Sparkline
           values={days.map((d) => d.ctl).filter((v): v is number => v != null)}
-          color={
-            ctlDelta > 0.5 ? 'var(--color-recovery)'
-              : ctlDelta < -0.5 ? 'var(--color-amber)'
-              : 'var(--color-muted)'
-          }
+          color={directionColor}
           width={96}
           height={44}
         />
@@ -88,7 +91,7 @@ function PmcCard({
           <DirectionIcon
             size={13}
             strokeWidth={1.8}
-            style={{ color: 'var(--color-amber)', flexShrink: 0 }}
+            style={{ color: directionColor, flexShrink: 0 }}
             aria-hidden
           />
           <span
@@ -183,6 +186,11 @@ function RecoveryCard({
 
   const DirectionIcon =
     hrvPct > 2 ? TrendingUp : hrvPct < -2 ? TrendingDown : Activity
+  // Same rule as the PMC card: the arrow and the line never disagree.
+  const directionColor =
+    hrvPct > 2 ? 'var(--color-recovery)'
+      : hrvPct < -2 ? 'var(--color-amber)'
+      : 'var(--color-muted)'
   const headline =
     hrvPct < -5
       ? simpleMode ? 'Recovery looks stressed' : 'HRV suppressed'
@@ -195,11 +203,7 @@ function RecoveryCard({
       <div className="flex-shrink-0" style={{ width: 96, height: 44 }} aria-hidden>
         <Sparkline
           values={days.map((d) => d.hrv).filter((v): v is number => v != null)}
-          color={
-            hrvPct > 2 ? 'var(--color-recovery)'
-              : hrvPct < -2 ? 'var(--color-amber)'
-              : 'var(--color-muted)'
-          }
+          color={directionColor}
           width={96}
           height={44}
         />
@@ -209,7 +213,7 @@ function RecoveryCard({
           <DirectionIcon
             size={13}
             strokeWidth={1.8}
-            style={{ color: 'var(--color-forest-2)', flexShrink: 0 }}
+            style={{ color: directionColor, flexShrink: 0 }}
             aria-hidden
           />
           <span
