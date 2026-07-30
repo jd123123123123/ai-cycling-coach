@@ -160,15 +160,21 @@ function mapDayToWorkout(d: DayPlan, ftp: number | null, de: boolean): Prescribe
     return {
       name: de ? ZONE_NAME_DE[z] : `Zone ${z}`,
       duration_s: durS,
-      target_watts_low: watts,
-      target_watts_high: watts,
+      // Prefer what the server resolved; fall back to %FTP against the
+      // athlete's real threshold, and report nothing rather than guess.
+      target_watts_low: iv.target_watts_low ?? (watts > 0 ? watts : null),
+      target_watts_high: iv.target_watts_high ?? (watts > 0 ? watts : null),
       target_pct_ftp: pct,
       zone: z,
       rpe: RPE_BY_ZONE[z] ?? 4,
-      cadence_low: null,
-      cadence_high: null,
-      target_hr_low: null,
-      target_hr_high: null,
+      // These were hardcoded to null, so the ZIELWERTE panel showed "— rpm"
+      // and "— bpm" on every planned day no matter what the plan prescribed --
+      // the reported "sometimes not displayed". The /weeks payload carries
+      // cadence now (from the template) and HR when LTHR resolution ran.
+      cadence_low: iv.cadence_low ?? null,
+      cadence_high: iv.cadence_high ?? null,
+      target_hr_low: iv.target_hr_low ?? null,
+      target_hr_high: iv.target_hr_high ?? null,
       reps: structured ? iv.reps : null,
       on_s: structured ? iv.on_s : null,
       off_s: structured ? iv.off_s : null,
