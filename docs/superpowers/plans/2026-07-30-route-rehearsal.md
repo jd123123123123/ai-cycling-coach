@@ -1228,11 +1228,14 @@ faster approximation of it."
 
   # in app/services/rehearsal/simulator.py
   Draft = Literal["solo", "small_group", "bunch"]
+  Effort = Literal["steady", "fondo", "race"]
   DRAFT_FACTORS: dict[str, float] = {"solo": 1.0, "small_group": 0.75, "bunch": 0.65}
+  EFFORT_INTENSITY: dict[str, float] = {"steady": 0.85, "fondo": 0.95, "race": 1.08}
 
   @dataclass(frozen=True)
   class Assumptions:
       draft: Draft = "solo"
+      effort: Effort = "fondo"
       use_weather: bool = True
 
   @dataclass(frozen=True)
@@ -1418,12 +1421,33 @@ class TestSimulate:
             flat_model.segments[0].speed_ms, rel=1e-6
         )
 
-    def test_blow_up_is_reported_when_w_prime_is_exhausted(self):
-        # A tiny W' against a long, steep climb: the rider cannot hold the
-        # target and the simulator must say where it broke.
-        res = simulate(_segments(80, 11.0), _rider(w_prime_j=3000.0))
-        assert res.blow_ups
-        assert res.blow_ups[0].distance_m > 0
+    def test_blow_up_fires_on_a_REAL_climb_when_racing_it(self):
+        # The Passo Giau: ~10 km at ~9%. A rider racing it attempts ~1.13 x CP,
+        # so a 20 kJ W' empties partway up and the simulator must say where.
+        # This is the test whose absence let an inert blow-up ship green: the
+        # earlier version only fired above 12% on 40-minute climbs, which no
+        # European road climb satisfies.
+        res = simulate(_segments(66, 9.0), _rider(), Assumptions(effort="race"))
+        assert res.blow_ups, "racing a 9% alpine climb must be able to break the rider"
+        assert 0 < res.blow_ups[0].distance_m < 66 * 150.0
+
+    def test_the_same_climb_ridden_steadily_does_not_break_the_rider(self):
+        # Ambition is the variable: the blow-up is a consequence of how hard you
+        # try, not a property of the mountain.
+        res = simulate(_segments(66, 9.0), _rider(), Assumptions(effort="steady"))
+        assert res.blow_ups == []
+
+    def test_racing_is_faster_than_riding_steadily(self):
+        race = simulate(_segments(40, 6.0), _rider(), Assumptions(effort="race"))
+        steady = simulate(_segments(40, 6.0), _rider(), Assumptions(effort="steady"))
+        assert race.total_time_s < steady.total_time_s
+
+    def test_a_long_climb_is_paced_more_conservatively_than_a_short_one(self):
+        # duration_scale must still bite -- dropping it made long-climb
+        # predictions ~6% optimistic, and that number is what the UI shows.
+        short = simulate(_segments(20, 8.0), _rider())
+        long_ = simulate(_segments(200, 8.0), _rider())
+        assert long_.segments[-1].power_w < short.segments[-1].power_w
 
     def test_no_blow_up_on_an_easy_route(self):
         assert simulate(_segments(20, 0.0), _rider()).blow_ups == []
@@ -1524,9 +1548,51 @@ class SimulationResult:
     blow_ups: list[BlowUp]
 
 
-def _target_power(gradient_pct: float, cp_now: float, route_time_s: float) -> float:
-    """Sustainable target for this gradient, using the app's own pacing curve."""
-    return cp_now * pace_factor(gradient_pct) * duration_scale(int(route_time_s))
+#: How hard the athlete intends to ride. This is what makes a blow-up POSSIBLE:
+#: climb_companion's pace_factor tops out at 0.97 of CP because it is a pacing
+#: ADVISOR — every output is a fraction of CP by construction, so attempted
+#: power could never exceed CP and W' could never drain. Ambition is the missing
+#: input: whether you blow up depends on how hard you try, which is also the
+#: honest answer to give an athlete.
+EFFORT_INTENSITY: dict[str, float] = {"steady": 0.85, "fondo": 0.95, "race": 1.08}
+
+#: Riders push harder as the road tips up, and above CP on the steep pitches.
+#: These multiply the effort intensity, so only an ambitious effort on a real
+#: gradient goes over threshold.
+def _climb_push(gradient_pct: float) -> float:
+    if gradient_pct < 0.0:
+        return 0.60
+    if gradient_pct < 3.0:
+        return 0.88
+    if gradient_pct < 6.0:
+        return 1.00
+    if gradient_pct < 9.0:
+        return 1.05
+    if gradient_pct < 12.0:
+        return 1.10
+    return 1.15
+
+
+def _target_power(
+    gradient_pct: float, cp_now: float, effort: Effort, climb_time_s: float
+) -> float:
+    """Attempted power for this gradient at this ambition.
+
+    CAN exceed cp_now -- that is the whole point, and the reason W' drains at a
+    rate that matters (a racing rider on a 9% ramp attempts ~1.13 x CP, draining
+    a 20 kJ W' in about ten minutes) rather than the 7.5 W that made the
+    blow-up arithmetically unreachable.
+
+    duration_scale still applies: a 100-minute climb is ridden more
+    conservatively than a 10-minute one, and dropping it made long-climb
+    predictions systematically optimistic.
+    """
+    return (
+        cp_now
+        * EFFORT_INTENSITY[effort]
+        * _climb_push(gradient_pct)
+        * duration_scale(int(climb_time_s))
+    )
 
 
 def simulate(
