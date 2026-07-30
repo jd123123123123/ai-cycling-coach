@@ -9,9 +9,9 @@
  * The pure math lives in ./thisWeek (deriveThisWeek) so both surfaces show
  * identical numbers and the logic is unit-tested in the node vitest env.
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { subDays } from 'date-fns'
-import { Check, Zap, Bed } from 'lucide-react'
+import { Check, Zap, Bed, ChevronDown } from 'lucide-react'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useCurrentWeek } from '../../hooks/useCurrentWeek'
@@ -19,6 +19,10 @@ import { deriveThisWeek } from './thisWeek'
 import { glassCardStyle, GLASS_CARD_MARKER } from './glassCard'
 
 const DASH = '—'
+/** Collapsed by default: Today answers one day, and the per-metric stats and
+ *  the Mon-Sun dots are a week's worth of detail behind one tap. The choice
+ *  persists so an athlete who wants the detail keeps it. */
+const STORAGE_KEY = 'thisWeekCard.expanded'
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
@@ -53,6 +57,14 @@ export default function ThisWeekCard() {
   const { data: actData } = useActivitiesRange(useMemo(() => subDays(today, 14), [today]), today)
   const { data: weekPlan } = useCurrentWeek()
 
+  const [expanded, setExpanded] = useState<boolean>(() => {
+    try { return localStorage.getItem(STORAGE_KEY) === '1' } catch { return false }
+  })
+  const toggle = () => setExpanded((v) => {
+    try { localStorage.setItem(STORAGE_KEY, v ? '0' : '1') } catch { /* private mode */ }
+    return !v
+  })
+
   const w = useMemo(() => deriveThisWeek(actData?.activities ?? [], weekPlan, today), [actData, weekPlan, today])
 
   const complianceColor = w.complianceOnPace ? 'var(--color-recovery)' : 'var(--color-muted)'
@@ -83,6 +95,13 @@ export default function ThisWeekCard() {
 
   return (
     <Card>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={expanded}
+        aria-controls="this-week-details"
+        className="flex w-full flex-col text-left"
+      >
       <CardHead
         title={de ? 'Diese Woche' : 'This Week'}
         sub={paceLine
@@ -94,13 +113,27 @@ export default function ThisWeekCard() {
            "Genau im Plan" reads as a contradiction, and green-for-zero reads as
            sarcasm. Nothing due and nothing done is a state the subtitle already
            states in words, so the number sits this one out. */
-        right={w.compliancePct != null && !(w.plannedToDateTss === 0 && w.tss === 0) ? (
-          <div className="flex items-end gap-0.5">
-            <span className="num-display" style={{ fontSize: 34, fontWeight: 700, lineHeight: 1, color: complianceColor }}>{w.compliancePct}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: complianceColor, paddingBottom: 4 }}>%</span>
+        right={(
+          <div className="flex items-center gap-2">
+            {w.compliancePct != null && !(w.plannedToDateTss === 0 && w.tss === 0) && (
+              <div className="flex items-end gap-0.5">
+                <span className="num-display" style={{ fontSize: 34, fontWeight: 700, lineHeight: 1, color: complianceColor }}>{w.compliancePct}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: complianceColor, paddingBottom: 4 }}>%</span>
+              </div>
+            )}
+            <ChevronDown
+              size={18}
+              style={{
+                color: 'var(--color-muted)',
+                transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 180ms ease',
+                flexShrink: 0,
+              }}
+            />
           </div>
-        ) : undefined}
+        )}
       />
+      </button>
       {w.compliancePct != null ? (
         <div style={{ height: 10, borderRadius: 5, background: 'var(--color-surface-3)', overflow: 'hidden' }}>
           <div style={{ width: `${Math.min(100, Math.max(0, w.compliancePct))}%`, height: '100%', borderRadius: 5, background: w.complianceOnPace ? 'var(--color-recovery)' : 'color-mix(in srgb, var(--color-muted) 55%, transparent)' }} />
@@ -108,6 +141,8 @@ export default function ThisWeekCard() {
       ) : (
         <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>{de ? 'Noch keine Plandaten diese Woche' : 'No plan data yet this week'}</span>
       )}
+      {expanded && (
+      <div id="this-week-details" className="flex flex-col" style={{ gap: 16 }}>
       <div className="flex justify-between">
         {[
           { v: w.plannedWeekTss != null ? `${w.tss} / ${Math.round(w.plannedWeekTss)}` : `${w.tss}`, l: de ? 'TSS erledigt' : 'TSS done' },
@@ -138,6 +173,8 @@ export default function ThisWeekCard() {
           </div>
         ))}
       </div>
+      </div>
+      )}
     </Card>
   )
 }
