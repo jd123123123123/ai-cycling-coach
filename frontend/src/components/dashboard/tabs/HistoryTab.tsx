@@ -709,15 +709,27 @@ export default function HistoryTab() {
                   <Bike size={15} style={{ color: col }} />
                   <span className="truncate" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{a.title ?? (de ? 'Fahrt' : 'Ride')}</span>
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{relDate(a)}</span>
+                {/* position: relative + the pill absolutely placed on it keeps
+                    this line's own box height fixed at the bare date text's
+                    line-height -- the pill's padding/border never enter the
+                    flex-col's flow, so a row with the pill and a row without
+                    it are the same height, and a mixed indoor/outdoor list
+                    stays uniform rather than going ragged. */}
+                <div className="flex items-center" style={{ position: 'relative' }}>
+                  <span
+                    className="truncate"
+                    style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', paddingRight: canRehearse ? 112 : 0 }}
+                  >
+                    {relDate(a)}
+                  </span>
                   {canRehearse && (
                     <button
                       type="button"
                       disabled={pendingRef !== null}
                       onClick={() => { void rehearse('activity', a.id, a.title ?? undefined) }}
-                      className="relative z-10 inline-flex items-center gap-1 rounded-full shrink-0"
+                      className="absolute right-0 top-1/2 z-10 inline-flex items-center gap-1 rounded-full shrink-0"
                       style={{
+                        transform: 'translateY(-50%)',
                         padding: '4px 9px', background: 'var(--color-surface-2)',
                         border: '1px solid var(--color-rule)',
                         opacity: pendingRef !== null && !busy ? 0.5 : 1,

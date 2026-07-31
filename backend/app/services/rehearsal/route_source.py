@@ -120,6 +120,14 @@ def route_from_activity(
     channel separately) matters: a dropout at second 500 in the latitude
     channel must never be paired with second 501's longitude, which would
     stitch a phantom leg across the map and invent both distance and ascent.
+
+    A single interior barometer dropout must not refuse the whole ride: real
+    streams drop the odd altitude sample while GPS keeps fixing. So a sample
+    missing ANY of the three components (lat, lng, OR altitude) is skipped
+    individually, and the ride is refused for missing elevation only when NO
+    sample carries an altitude at all -- that is the genuinely altitude-free
+    case (indoor trainer, GPS-only head unit), which still needs its own
+    honest "no elevation" refusal rather than a misleading "too short".
     """
     fixes = [
         (la, ln, al)
@@ -130,16 +138,15 @@ def route_from_activity(
         raise RouteUnusable(
             "this ride has no GPS track -- an indoor ride has no route to rehearse"
         )
+    full_fixes = [(la, ln, al) for la, ln, al in fixes if al is not None]
+    if not full_fixes:
+        raise RouteUnusable(
+            "route has no elevation data -- a rehearsal needs the terrain"
+        )
     return route_from_track(
         [
-            TrackPoint(
-                lat=float(la),
-                lng=float(ln),
-                # Left None deliberately: route_from_track refuses the whole
-                # route by name rather than filling in a flat guess.
-                elevation_m=float(al) if al is not None else None,
-            )
-            for la, ln, al in fixes
+            TrackPoint(lat=float(la), lng=float(ln), elevation_m=float(al))
+            for la, ln, al in full_fixes
         ],
         name=name,
     )

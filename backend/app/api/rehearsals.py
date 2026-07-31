@@ -339,7 +339,16 @@ async def _resolve_route(
             return await _crew_event_route(payload, db, user_id)
         if payload.source_kind == "activity":
             return await _activity_route(payload, db, user_id)
-        return await _target_event_route(payload, db, user_id)
+        if payload.source_kind == "target_event":
+            return await _target_event_route(payload, db, user_id)
+        # SourceKind is a four-way Literal, so this is unreachable today --
+        # but an unmatched value must raise, not silently fall through to
+        # target_event, if a fifth kind is ever added without updating this
+        # dispatch.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"unsupported source_kind: {payload.source_kind!r}",
+        )
     except RouteUnusable as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)

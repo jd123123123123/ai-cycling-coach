@@ -104,6 +104,21 @@ class TestRouteFromActivity:
         with pytest.raises(RouteUnusable, match="no GPS"):
             route_from_activity([None] * 20, [None] * 20, [None] * 20)
 
+    def test_an_interior_altitude_dropout_still_produces_a_usable_route(self):
+        """One missing barometer sample must not refuse a ride with terrain
+        everywhere else -- only the dropped sample is skipped, not the ride.
+        """
+        from app.services.rehearsal.route_source import route_from_activity
+
+        lat = [46.0 + i * 0.0005 for i in range(40)]
+        lng = [11.0] * 40
+        alt = [1000.0 + i * 4 for i in range(40)]
+        alt[20] = None  # a single interior dropout
+        r = route_from_activity(lat, lng, alt, name="Dropout ride")
+        assert r.name == "Dropout ride"
+        assert len(r.points) == 39  # the one dropout sample is skipped
+        assert r.total_distance_m > 0
+
     def test_refuses_a_ride_whose_altitude_channel_is_missing(self):
         """A GPS ride with no barometric/altitude channel is refused by name.
 
