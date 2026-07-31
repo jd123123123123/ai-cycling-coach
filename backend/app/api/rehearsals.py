@@ -10,8 +10,18 @@ Maratona would take back in March" needs the March answer to still exist, and
 re-simulating with today's CP would quietly answer a different question. A
 PATCH is the one place a re-run happens, and it re-runs deliberately.
 
-Only source_kind='gpx' is wired here; crew_event / activity / target_event
-routes land with Task 12.
+All four source kinds land here and all four collapse to the same
+RehearsalRoute before anything is simulated, so the engine never learns where
+a route came from:
+
+  * gpx           the uploaded file
+  * crew_event    the event's ORIGINAL tour, re-read off disk at full
+                  resolution -- never the <=120-point profile cached on the
+                  row for its card, which is a chart, not a route
+  * activity      a ride already ridden, from its own stream. This is the
+                  feature's accuracy check: the prediction lands next to what
+                  actually happened
+  * target_event  the athlete's stored official course
 
 Honesty rules this router enforces (spec section 6):
   * an athlete with no CP or no body weight still gets 201 with the terrain,
@@ -31,7 +41,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# The crew-scoping helpers are imported rather than re-implemented: "an event
+# is visible only to its own crew" is a security property, and a second copy of
+# that query here would be free to drift away from the one the crew router
+# enforces.
+from app.api.crew_events import _get_crew_event, _require_membership, _tour_path
 from app.dependencies import get_current_active_user, get_db_for_user
+from app.models.activity import Activity
+from app.models.activity_stream import ActivityStream
 from app.models.athlete_profile import AthleteProfile
 from app.models.route_rehearsal import RouteRehearsal
 from app.models.user import User
@@ -52,6 +69,8 @@ from app.services.rehearsal.rider_model import build_rider_model
 from app.services.rehearsal.route_source import (
     RehearsalRoute,
     RouteUnusable,
+    route_from_activity,
+    route_from_crew_event,
     route_from_gpx,
 )
 from app.services.rehearsal.simulator import Assumptions
@@ -202,31 +221,125 @@ async def _simulate_and_store(
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Endpoints
+# Route sources
 # ──────────────────────────────────────────────────────────────────────
 
-@router.post("", response_model=RehearsalOut, status_code=status.HTTP_201_CREATED)
-async def create_rehearsal(
-    payload: RehearsalCreate,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db_for_user),
-) -> RehearsalOut:
-    """Simulate a route and store the answer."""
-    if payload.source_kind != "gpx":
+def _needs_ref(payload: RehearsalCreate) -> int:
+    if payload.source_ref is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"'{payload.source_kind}' routes are not supported yet",
+            detail=f"a '{payload.source_kind}' rehearsal needs a source_ref",
         )
-    if not payload.gpx:
+    return payload.source_ref
+
+
+async def _crew_event_route(
+    payload: RehearsalCreate, db: AsyncSession, user_id: int
+) -> RehearsalRoute:
+    """The crew event's ORIGINAL tour, off disk, at full resolution.
+
+    Scoped to the caller's own crew by the same helpers the crew router uses,
+    so an event from someone else's crew is indistinguishable from one that
+    does not exist.
+    """
+    event_id = _needs_ref(payload)
+    mem = await _require_membership(db, user_id)
+    event = await _get_crew_event(db, event_id, mem.crew_id)
+    if event.tour_filename is None:
+        raise HTTPException(status_code=404, detail="this event has no tour")
+    return route_from_crew_event(
+        _tour_path(event.id),
+        name=payload.name or event.name,
+        # The ride is on a real day, so it can carry a real forecast -- which
+        # is precisely the point of rehearsing a crew ride before Saturday.
+        ride_date=payload.ride_date or event.starts_at.date(),
+    )
+
+
+async def _activity_route(
+    payload: RehearsalCreate, db: AsyncSession, user_id: int
+) -> RehearsalRoute:
+    """A ride already ridden, rebuilt from its own stream at full resolution.
+
+    No ride_date is passed: the day is in the past, so no forecast applies and
+    a rehearsal of it is deliberately weather-free. That keeps the comparison
+    honest -- the prediction sits next to the recorded ride under stated,
+    neutral conditions rather than under a forecast that no longer exists.
+    """
+    activity_id = _needs_ref(payload)
+    activity = (
+        await db.execute(
+            select(Activity).where(
+                Activity.id == activity_id, Activity.user_id == user_id
+            )
+        )
+    ).scalars().first()
+    if activity is None:
+        raise HTTPException(status_code=404, detail="activity not found")
+
+    stream = (
+        await db.execute(
+            select(ActivityStream).where(
+                ActivityStream.activity_id == activity_id,
+                ActivityStream.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if stream is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="a GPX file is required to rehearse an uploaded route",
+            status_code=404, detail="no stored ride data for this activity"
         )
 
-    try:
-        route = route_from_gpx(
-            payload.gpx, name=payload.name, ride_date=payload.ride_date
+    channels = stream.streams or {}
+    return route_from_activity(
+        channels.get("latitude") or [],
+        channels.get("longitude") or [],
+        channels.get("altitude") or [],
+        name=payload.name or activity.title,
+    )
+
+
+async def _target_event_route(
+    payload: RehearsalCreate, db: AsyncSession, user_id: int
+) -> RehearsalRoute:
+    """The athlete's stored official course, dated to the event itself."""
+    profile = (
+        await db.execute(
+            select(AthleteProfile).where(AthleteProfile.user_id == user_id)
         )
+    ).scalar_one_or_none()
+    raw = getattr(profile, "target_event_gpx", None) if profile is not None else None
+    if not raw:
+        raise HTTPException(
+            status_code=404, detail="no target-event route has been uploaded yet"
+        )
+    goal_event = (getattr(profile, "goals", None) or {}).get("target_event") or {}
+    return route_from_gpx(
+        raw,
+        name=payload.name or goal_event.get("name"),
+        ride_date=payload.ride_date or profile.target_event_date,
+    )
+
+
+async def _resolve_route(
+    payload: RehearsalCreate, db: AsyncSession, user_id: int
+) -> RehearsalRoute:
+    """One of four sources → the single shape everything downstream sees."""
+    try:
+        if payload.source_kind == "gpx":
+            if not payload.gpx:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="a GPX file is required to rehearse an uploaded route",
+                )
+            return route_from_gpx(
+                payload.gpx, name=payload.name, ride_date=payload.ride_date
+            )
+        if payload.source_kind == "crew_event":
+            return await _crew_event_route(payload, db, user_id)
+        if payload.source_kind == "activity":
+            return await _activity_route(payload, db, user_id)
+        return await _target_event_route(payload, db, user_id)
     except RouteUnusable as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
@@ -240,6 +353,20 @@ async def create_rehearsal(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="that file could not be read as a GPX route",
         ) from exc
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Endpoints
+# ──────────────────────────────────────────────────────────────────────
+
+@router.post("", response_model=RehearsalOut, status_code=status.HTTP_201_CREATED)
+async def create_rehearsal(
+    payload: RehearsalCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_for_user),
+) -> RehearsalOut:
+    """Simulate a route and store the answer."""
+    route = await _resolve_route(payload, db, current_user.id)
 
     row = RouteRehearsal(
         user_id=current_user.id,

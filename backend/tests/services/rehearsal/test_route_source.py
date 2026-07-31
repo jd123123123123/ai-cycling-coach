@@ -73,3 +73,82 @@ class TestRouteFromGpx:
         assert len(r.points) == 3
         assert r.name == "From file"
         assert r.total_ascent_m == pytest.approx(10.0, abs=0.01)
+
+
+class TestRouteFromActivity:
+    def test_builds_a_route_from_stream_channels(self):
+        from app.services.rehearsal.route_source import route_from_activity
+
+        lat = [46.0 + i * 0.0005 for i in range(40)]
+        lng = [11.0] * 40
+        alt = [1000.0 + i * 4 for i in range(40)]
+        r = route_from_activity(lat, lng, alt, name="Last Sunday")
+        assert r.name == "Last Sunday"
+        assert r.total_distance_m > 0
+        assert r.total_ascent_m == pytest.approx(156.0, rel=0.05)
+
+    def test_skips_samples_with_no_fix(self):
+        from app.services.rehearsal.route_source import route_from_activity
+
+        lat = [46.0, None, 46.001, 46.002]
+        lng = [11.0, 11.0, None, 11.0]
+        alt = [1000.0, 1001.0, 1002.0, 1003.0]
+        r = route_from_activity(lat, lng, alt)
+        # The two samples missing a coordinate are dropped whole, never paired
+        # with the next sample's other half.
+        assert len(r.points) == 2
+
+    def test_refuses_an_indoor_ride(self):
+        from app.services.rehearsal.route_source import route_from_activity
+
+        with pytest.raises(RouteUnusable, match="no GPS"):
+            route_from_activity([None] * 20, [None] * 20, [None] * 20)
+
+    def test_refuses_a_ride_whose_altitude_channel_is_missing(self):
+        """A GPS ride with no barometric/altitude channel is refused by name.
+
+        Falling back to "too short" would send the athlete looking for a
+        longer route when the real problem is that the head unit recorded no
+        elevation -- and inventing flat terrain would be worse still.
+        """
+        from app.services.rehearsal.route_source import route_from_activity
+
+        lat = [46.0 + i * 0.0005 for i in range(40)]
+        lng = [11.0] * 40
+        with pytest.raises(RouteUnusable, match="elevation"):
+            route_from_activity(lat, lng, [])
+
+
+class TestRouteFromCrewEvent:
+    _GPX = """<?xml version="1.0"?>
+<gpx version="1.1" creator="t" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><trkseg>
+""" + "\n".join(
+        f'    <trkpt lat="{46.0 + i * 0.0005:.4f}" lon="11.0"><ele>{1000 + i * 4}</ele></trkpt>'
+        for i in range(40)
+    ) + """
+  </trkseg></trk>
+</gpx>"""
+
+    def test_reads_the_original_file_at_full_resolution(self, tmp_path):
+        """All 40 points, not the ≤120-point card profile the event row caches.
+
+        The event's stored `tour_profile` is a chart; simulating needs every
+        point, so this must come off disk.
+        """
+        from app.services.rehearsal.route_source import route_from_crew_event
+
+        path = tmp_path / "7.gpx"
+        path.write_text(self._GPX)
+        r = route_from_crew_event(
+            str(path), name="Sunrise loop", ride_date=date(2026, 8, 2)
+        )
+        assert len(r.points) == 40
+        assert r.name == "Sunrise loop"
+        assert r.ride_date == date(2026, 8, 2)
+
+    def test_a_missing_file_is_refused_with_a_reason(self, tmp_path):
+        from app.services.rehearsal.route_source import route_from_crew_event
+
+        with pytest.raises(RouteUnusable, match="no longer"):
+            route_from_crew_event(str(tmp_path / "nope.gpx"))

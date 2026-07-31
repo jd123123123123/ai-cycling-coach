@@ -272,11 +272,15 @@ class TestCreateRehearsal:
         assert body["total_time_s"] is None
         assert body["band"] is None
 
-    def test_a_source_kind_that_is_not_wired_yet_is_refused(self, client_with_athlete):
-        resp = client_with_athlete.post(
-            "/rehearsals", json={"source_kind": "crew_event", "source_ref": 3}
-        )
-        assert resp.status_code == 422
+    def test_a_referenced_source_without_a_source_ref_is_refused(
+        self, client_with_athlete
+    ):
+        """crew_event / activity name a row; without an id there is nothing to
+        look up, and that is the athlete's request being wrong, not the file."""
+        for kind in ("crew_event", "activity"):
+            resp = client_with_athlete.post("/rehearsals", json={"source_kind": kind})
+            assert resp.status_code == 422, kind
+            assert "source_ref" in resp.json()["detail"]
 
     def test_a_file_that_is_not_gpx_at_all_is_422(self, client_with_athlete):
         """gpxpy raises its own exception types; crew_tour normalises them to
@@ -490,3 +494,263 @@ class TestWeatherEndToEnd:
         assert resp.status_code == 201
         assert resp.json()["weather_used"] is False
         mock_fetch.assert_not_called()
+
+
+# ──────────────────────────────────────────────────────────────────────
+# The other three route sources (Task 12)
+# ──────────────────────────────────────────────────────────────────────
+
+def _make_source_db(profile: MagicMock | None, rows: dict):
+    """A session that answers each table with the row the test put there.
+
+    `rows` keys: 'crew_memberships', 'crew_events', 'activities',
+    'activity_streams'. A key that is absent answers None, which is exactly
+    what "that row does not exist" looks like to the router.
+    """
+    db = AsyncMock()
+    added: list = []
+
+    def _table_for(query) -> str:
+        text = str(query)
+        for name in (
+            "activity_streams",
+            "activities",
+            "crew_memberships",
+            "crew_events",
+            "route_rehearsals",
+        ):
+            if name in text:
+                return name
+        return "athlete_profiles"
+
+    async def _execute(query, *args, **kwargs):  # noqa: ANN001
+        result = MagicMock()
+        table = _table_for(query)
+        row = profile if table == "athlete_profiles" else rows.get(table)
+        result.scalar_one_or_none.return_value = row
+        result.scalars.return_value.all.return_value = [row] if row else []
+        result.scalars.return_value.first.return_value = row
+        return result
+
+    def _add(obj):
+        added.append(obj)
+
+    async def _commit():
+        for obj in added:
+            if getattr(obj, "id", None) is None:
+                obj.id = 1
+            if getattr(obj, "created_at", None) is None:
+                obj.created_at = datetime.now(timezone.utc)
+
+    db.execute = _execute
+    db.add = _add
+    db.commit = _commit
+    db.refresh = AsyncMock()
+    db.close = AsyncMock()
+    return db
+
+
+def _client_with_sources(profile: MagicMock | None, rows: dict) -> TestClient:
+    user = _make_user(1)
+    mock_db = _make_source_db(profile, rows)
+
+    async def _override_user():
+        return user
+
+    async def _override_db():
+        yield mock_db
+
+    app.dependency_overrides[get_current_active_user] = _override_user
+    app.dependency_overrides[get_current_user] = _override_user
+    app.dependency_overrides[get_db_for_user] = _override_db
+    return TestClient(app, raise_server_exceptions=True)
+
+
+@pytest.fixture
+def sources():
+    """Factory + teardown: `sources(rows, profile=...)` → an authed client."""
+    def _make(rows: dict, profile: MagicMock | None = None):
+        return _client_with_sources(
+            profile if profile is not None else _make_profile(), rows
+        )
+
+    with patch(
+        "app.api.rehearsals.latest_critical_power", new=AsyncMock(return_value=None)
+    ):
+        try:
+            yield _make
+        finally:
+            app.dependency_overrides.clear()
+
+
+def _membership(crew_id: int = 5) -> MagicMock:
+    mem = MagicMock()
+    mem.crew_id = crew_id
+    return mem
+
+
+def _event(event_id: int = 3, *, tour_filename: str | None = "loop.gpx") -> MagicMock:
+    ev = MagicMock()
+    ev.id = event_id
+    ev.name = "Sunrise loop"
+    ev.tour_filename = tour_filename
+    ev.starts_at = datetime(2026, 8, 2, 7, 0, tzinfo=timezone.utc)
+    return ev
+
+
+class TestCrewEventSource:
+    def test_reads_the_original_tour_not_the_card_profile(
+        self, sources, tmp_path, monkeypatch
+    ):
+        """The 60-point original off disk, not the ≤120-point card profile.
+
+        The mocked event row carries no usable `tour_profile` at all; if the
+        router were reading the row rather than the file, there would be
+        nothing to simulate.
+        """
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "CREW_TOURS_ROOT", str(tmp_path))
+        (tmp_path / "3.gpx").write_text(_GPX)
+
+        client = sources({"crew_memberships": _membership(), "crew_events": _event()})
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "crew_event", "source_ref": 3}
+        )
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["name"] == "Sunrise loop"
+        assert body["source_kind"] == "crew_event"
+        assert body["source_ref"] == 3
+        # 60 trackpoints × 8 m of gain — the full file, not a 120-point chart.
+        assert body["ascent_m"] == pytest.approx(59 * 8, rel=0.01)
+
+    def test_an_event_with_no_tour_is_404(self, sources):
+        client = sources(
+            {
+                "crew_memberships": _membership(),
+                "crew_events": _event(tour_filename=None),
+            }
+        )
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "crew_event", "source_ref": 3}
+        )
+        assert resp.status_code == 404
+
+    def test_an_event_in_another_crew_is_404(self, sources):
+        """`_get_crew_event` scopes by crew, so a foreign event simply is not
+        there — indistinguishable from one that never existed."""
+        client = sources({"crew_memberships": _membership()})
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "crew_event", "source_ref": 3}
+        )
+        assert resp.status_code == 404
+
+    def test_a_missing_file_on_disk_is_422_with_a_reason(
+        self, sources, tmp_path, monkeypatch
+    ):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "CREW_TOURS_ROOT", str(tmp_path))
+        client = sources({"crew_memberships": _membership(), "crew_events": _event()})
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "crew_event", "source_ref": 3}
+        )
+        assert resp.status_code == 422
+        assert "no longer" in resp.json()["detail"]
+
+
+def _activity(activity_id: int = 11, title: str | None = "Last Sunday") -> MagicMock:
+    act = MagicMock()
+    act.id = activity_id
+    act.title = title
+    return act
+
+
+def _stream(channels: dict) -> MagicMock:
+    st = MagicMock()
+    st.streams = channels
+    return st
+
+
+_OUTDOOR_STREAM = {
+    "latitude": [46.0 + i * 0.0005 for i in range(60)],
+    "longitude": [11.0] * 60,
+    "altitude": [1000.0 + i * 4 for i in range(60)],
+}
+
+
+class TestActivitySource:
+    def test_a_past_ride_becomes_a_rehearsable_route(self, sources):
+        """The accuracy check: the same course, predicted, next to what
+        actually happened."""
+        client = sources(
+            {"activities": _activity(), "activity_streams": _stream(_OUTDOOR_STREAM)}
+        )
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "activity", "source_ref": 11}
+        )
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["name"] == "Last Sunday"
+        assert body["source_kind"] == "activity"
+        assert body["ascent_m"] == pytest.approx(59 * 4, rel=0.01)
+        assert body["can_predict"] is True
+        # A past ride carries no forecast — there is none left to fetch.
+        assert body["weather_used"] is False
+
+    def test_an_indoor_ride_is_refused_with_a_reason(self, sources):
+        client = sources(
+            {
+                "activities": _activity(title="Zwift"),
+                "activity_streams": _stream({"power": [200] * 60}),
+            }
+        )
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "activity", "source_ref": 11}
+        )
+        assert resp.status_code == 422
+        assert "no GPS" in resp.json()["detail"]
+
+    def test_an_activity_that_is_not_the_callers_is_404(self, sources):
+        client = sources({})
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "activity", "source_ref": 11}
+        )
+        assert resp.status_code == 404
+
+    def test_an_activity_with_no_stored_stream_is_404(self, sources):
+        client = sources({"activities": _activity()})
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "activity", "source_ref": 11}
+        )
+        assert resp.status_code == 404
+
+
+class TestTargetEventSource:
+    def _profile(self, gpx: str | None, event_date=None) -> MagicMock:
+        profile = _make_profile()
+        profile.target_event_gpx = gpx
+        profile.target_event_date = event_date
+        profile.goals = {"target_event": {"name": "Maratona"}}
+        return profile
+
+    def test_the_stored_course_is_simulated_and_dated(self, sources):
+        ride_date = date.today() + timedelta(days=FORECAST_HORIZON_DAYS + 30)
+        client = sources({}, profile=self._profile(_GPX, ride_date))
+        with patch(
+            "app.api.rehearsals.fetch_window_forecast",
+            new=AsyncMock(return_value=None),
+        ):
+            resp = client.post("/rehearsals", json={"source_kind": "target_event"})
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["name"] == "Maratona"
+        assert body["source_kind"] == "target_event"
+        assert body["can_predict"] is True
+
+    def test_no_stored_course_is_404(self, sources):
+        client = sources({}, profile=self._profile(None))
+        resp = client.post("/rehearsals", json={"source_kind": "target_event"})
+        assert resp.status_code == 404
+        assert "target-event" in resp.json()["detail"]

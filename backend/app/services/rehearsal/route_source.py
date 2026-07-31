@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from itertools import zip_longest
 
 from app.services.climb_companion import haversine_m
 from app.services.crew_tour import TrackPoint, parse_gpx_track
@@ -98,3 +99,69 @@ def route_from_gpx(
 ) -> RehearsalRoute:
     """Uploaded GPX -> RehearsalRoute. Reuses crew_tour's parser, never a second one."""
     return route_from_track(parse_gpx_track(raw), name=name, ride_date=ride_date)
+
+
+def route_from_activity(
+    latitudes: list[float | None],
+    longitudes: list[float | None],
+    altitudes: list[float | None],
+    *,
+    name: str | None = None,
+) -> RehearsalRoute:
+    """A ridden activity's own track -> a route to rehearse again.
+
+    Rehearsing a route you have already ridden is the accuracy check: the
+    prediction lands next to what actually happened, which earns trust when
+    they agree and exposes the model when they do not. That only works if the
+    route comes off the stream at FULL resolution, so nothing is downsampled
+    here either.
+
+    Samples are dropped whole. Zipping by index (rather than compacting each
+    channel separately) matters: a dropout at second 500 in the latitude
+    channel must never be paired with second 501's longitude, which would
+    stitch a phantom leg across the map and invent both distance and ascent.
+    """
+    fixes = [
+        (la, ln, al)
+        for la, ln, al in zip_longest(latitudes, longitudes, altitudes)
+        if la is not None and ln is not None
+    ]
+    if not fixes:
+        raise RouteUnusable(
+            "this ride has no GPS track -- an indoor ride has no route to rehearse"
+        )
+    return route_from_track(
+        [
+            TrackPoint(
+                lat=float(la),
+                lng=float(ln),
+                # Left None deliberately: route_from_track refuses the whole
+                # route by name rather than filling in a flat guess.
+                elevation_m=float(al) if al is not None else None,
+            )
+            for la, ln, al in fixes
+        ],
+        name=name,
+    )
+
+
+def route_from_crew_event(
+    gpx_path: str, *, name: str | None = None, ride_date: date | None = None
+) -> RehearsalRoute:
+    """A crew event's uploaded tour, re-read at FULL resolution.
+
+    The event row stores a <=120-point profile for its card; simulating needs
+    every point, so this re-reads the original file from disk rather than
+    upsampling a chart. Interpolating a 120-point profile back up would smooth
+    away exactly the ramps a rehearsal exists to warn about.
+    """
+    try:
+        with open(gpx_path, "rb") as fh:
+            raw = fh.read()
+    except OSError as exc:
+        # The row says there is a tour; the volume disagrees. Say so, rather
+        # than reporting a corrupt-file error the host cannot act on.
+        raise RouteUnusable(
+            "the original GPX for this ride is no longer on file"
+        ) from exc
+    return route_from_gpx(raw, name=name, ride_date=ride_date)

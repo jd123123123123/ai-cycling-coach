@@ -97,6 +97,12 @@ class AthleteProfile(Base):
     target_event_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     target_priority: Mapped[str | None] = mapped_column(String(1), nullable=True)
 
+    # Official GPX of the target event, so the countdown can show a projected
+    # time on the ACTUAL course rather than on a route that merely resembles
+    # it. Stored as text; parsed on demand by the rehearsal engine (a parsed
+    # cache would go stale the moment the organiser publishes a new track).
+    target_event_gpx: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # FTP history — list of {"ftp_watts": int, "measured_at": str} dicts
     ftp_history: Mapped[list | None] = mapped_column(JSON, default=list, nullable=True)
 
