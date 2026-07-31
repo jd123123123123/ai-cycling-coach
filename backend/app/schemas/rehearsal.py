@@ -87,6 +87,12 @@ class SegmentOut(BaseModel):
     #: Measured altitude, so the silhouette never has to be integrated back
     #: out of the gradients by the client.
     elevation_m: float | None = None
+    #: Where the segment starts, so the map and the profile can be driven by one
+    #: shared index instead of the client resampling the route a second time.
+    #: Nullable because rehearsals stored before the map shipped have no
+    #: coordinates on their persisted segments and must still load.
+    lat: float | None = None
+    lng: float | None = None
     power_w: float | None = None
     speed_ms: float | None = None
     elapsed_s: float | None = None

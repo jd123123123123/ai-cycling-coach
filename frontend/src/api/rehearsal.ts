@@ -33,6 +33,10 @@ export interface RehearsalSegment {
   start_m: number
   gradient_pct: number
   elevation_m: number | null
+  /** Where the segment starts. Null on rehearsals stored before the map
+   *  shipped — those still scrub the profile, they just have no map. */
+  lat?: number | null
+  lng?: number | null
   power_w: number | null
   speed_ms: number | null
   elapsed_s: number | null

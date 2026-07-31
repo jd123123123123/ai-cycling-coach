@@ -26,9 +26,19 @@ import {
   type Rehearsal,
 } from '../api/rehearsal'
 import RehearsalProfile from '../components/rehearsal/RehearsalProfile'
+import WPrimeTrace from '../components/rehearsal/WPrimeTrace'
 import VerdictBlock from '../components/rehearsal/VerdictBlock'
 import ClimbCards from '../components/rehearsal/ClimbCards'
 import AssumptionsRow from '../components/rehearsal/AssumptionsRow'
+import RouteMap from '../components/crew/RouteMap'
+import RouteSketch from '../components/ui/RouteSketch'
+import {
+  blowUpIndices,
+  polylineFromSegments,
+  polylineIndices,
+  powerColors,
+} from '../components/rehearsal/rehearsalMap'
+import { useRehearsalPlayback } from '../hooks/useRehearsalPlayback'
 import {
   blowUpCeilingW,
   climbLabel,
@@ -50,7 +60,6 @@ export default function RouteRehearsalView() {
   const queryClient = useQueryClient()
 
   const [scrubIdx, setScrubIdx] = useState<number | null>(null)
-  const onScrub = useCallback((i: number | null) => setScrubIdx(i), [])
 
   const { data, isLoading, isError } = useQuery<Rehearsal>({
     queryKey: ['rehearsal', rehearsalId],
@@ -93,6 +102,44 @@ export default function RouteRehearsalView() {
   const segments = useMemo(() => data?.segments ?? [], [data])
   const elevations = useMemo(() => elevationsFromSegments(segments), [segments])
   const wPrime = useMemo(() => wPrimeCapacity(segments), [segments])
+
+  // ── The map, and the one index that drives everything ──────────────────
+  const routeLine = useMemo(() => polylineFromSegments(segments), [segments])
+  const routeIdxs = useMemo(() => polylineIndices(segments), [segments])
+  const routeColors = useMemo(() => powerColors(segments), [segments])
+  const blowUpIdxs = useMemo(
+    () => blowUpIndices(segments, data?.blow_ups ?? []),
+    [segments, data],
+  )
+  const [mapReady, setMapReady] = useState(false)
+
+  const { playIdx, playing, skip, replay } = useRehearsalPlayback({
+    rehearsalId,
+    count: segments.length,
+    enabled: !isLoading && segments.length > 1,
+  })
+
+  // A finger always wins over the film — touching the profile IS the skip.
+  const activeIdx = scrubIdx ?? playIdx
+  const onScrubShared = useCallback(
+    (i: number | null) => {
+      if (i != null && playing) skip()
+      setScrubIdx(i)
+    },
+    [playing, skip],
+  )
+
+  // Where to put the dot on the map. `routeIdxs` maps map-vertex → segment, so
+  // this walks it backwards: the nearest drawn vertex at or before the cursor.
+  const markerLatLng = useMemo<[number, number] | null>(() => {
+    if (activeIdx == null || routeLine.length === 0) return null
+    let best = 0
+    for (let k = 0; k < routeIdxs.length; k++) {
+      if (routeIdxs[k] <= activeIdx) best = k
+      else break
+    }
+    return routeLine[best] ?? null
+  }, [activeIdx, routeIdxs, routeLine])
 
   const blowUp = data?.blow_ups?.[0] ?? null
   const blowUpClimb = useMemo(() => {
@@ -149,7 +196,9 @@ export default function RouteRehearsalView() {
     )
   }
 
-  const scrubbed = scrubIdx != null ? segments[scrubIdx] ?? null : null
+  // The readout follows the shared cursor, so it narrates the film as it plays
+  // instead of sitting on its placeholder until someone touches the screen.
+  const scrubbed = activeIdx != null ? segments[activeIdx] ?? null : null
   const title = data.name ?? (de ? 'Unbenannte Strecke' : 'Unnamed route')
 
   return shell(
@@ -162,6 +211,82 @@ export default function RouteRehearsalView() {
           {`${formatDecimal(data.distance_m / 1000, de)} km · ${Math.round(data.ascent_m)} ${de ? 'Hm' : 'm up'}`}
         </span>
       </div>
+
+      {/* ── MapHero: where the road actually runs, coloured by target watts ──
+          The SVG sketch is drawn first and stays until MapLibre reports a
+          painted frame, so a blocked tile host or a phone without WebGL still
+          shows the route rather than an empty black box. */}
+      {routeLine.length > 1 && (
+        <section
+          style={{
+            position: 'relative',
+            borderRadius: 20,
+            overflow: 'hidden',
+            height: 232,
+            background: 'var(--color-surface-2)',
+            border: '1px solid var(--color-rule)',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'grid',
+              placeItems: 'center',
+              opacity: mapReady ? 0 : 1,
+              transition: 'opacity 320ms ease',
+            }}
+          >
+            <RouteSketch
+              polyline={routeLine}
+              width={358}
+              height={232}
+              color="var(--color-accent)"
+              strokeWidth={2.5}
+              halo
+              endpoints
+              ariaLabel={de ? 'Streckenverlauf' : 'Route outline'}
+            />
+          </div>
+          <RouteMap
+            polyline={routeLine}
+            lineColors={routeColors.length === routeLine.length ? routeColors : undefined}
+            markerLatLng={markerLatLng}
+            styleKey="dark"
+            onReady={() => setMapReady(true)}
+          />
+          {/* One control, two jobs: it interrupts the film while it runs, and
+              afterwards it is the only way back to it — the film plays by
+              itself exactly once per rehearsal, and a rider who skipped it or
+              came back later should not have to clear storage to see it. */}
+          <button
+            type="button"
+            onClick={playing ? skip : replay}
+            aria-label={
+              playing
+                ? (de ? 'Durchfahrt überspringen' : 'Skip the fly-through')
+                : (de ? 'Durchfahrt abspielen' : 'Play the fly-through')
+            }
+            style={{
+                position: 'absolute',
+                top: 10,
+                right: 10,
+                padding: '5px 11px',
+                borderRadius: 999,
+                background: 'rgba(10,12,15,0.72)',
+                border: '1px solid rgba(255,255,255,0.22)',
+                backdropFilter: 'blur(8px)',
+                fontSize: 11,
+                fontWeight: 700,
+              color: '#fff',
+            }}
+          >
+            {playing
+              ? (de ? 'Überspringen' : 'Skip')
+              : (de ? 'Durchfahrt' : 'Fly through')}
+          </button>
+        </section>
+      )}
 
       <VerdictBlock
         band={data.band}
@@ -181,13 +306,23 @@ export default function RouteRehearsalView() {
           {...GLASS_CARD_MARKER}
           style={{ ...glassCardStyle, borderRadius: 20, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}
         >
-          <div ref={profileBoxRef} style={{ width: '100%' }}>
+          <div ref={profileBoxRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <RehearsalProfile
               segments={segments}
               elevations={elevations}
               width={profileWidth}
               height={PROFILE_HEIGHT}
-              onScrub={onScrub}
+              onScrub={onScrubShared}
+              activeIdx={activeIdx}
+              blowUpIdxs={blowUpIdxs}
+            />
+            <WPrimeTrace
+              segments={segments}
+              wPrimeJ={wPrime}
+              width={profileWidth}
+              height={54}
+              activeIdx={activeIdx}
+              de={de}
             />
           </div>
 

@@ -90,6 +90,30 @@ class TestBuildSegments:
         segs = build_segments(_straight_route(80.0))
         assert segs[0].bearing_deg == pytest.approx(0.0, abs=5.0)
 
+    def test_segments_carry_the_coordinate_they_start_at(self):
+        """The map is drawn off these, so they must be the segment's OWN start.
+
+        A northbound route makes the failure mode visible: latitude has to rise
+        monotonically with distance. Copying one coordinate to every segment, or
+        taking the segment's end instead of its start, both survive a "is it
+        near the route" check and both misplace the scrub dot on the map.
+        """
+        route = _straight_route(80.0)
+        segs = build_segments(route)
+
+        assert segs[0].lat == pytest.approx(route.points[0].lat, abs=1e-9)
+        assert segs[0].lng == pytest.approx(route.points[0].lng, abs=1e-9)
+
+        lats = [s.lat for s in segs]
+        assert lats == sorted(lats)
+        assert lats[-1] > lats[0]
+
+        # ~111.32 km per degree: 150 m of northbound road is ~0.00135°, so the
+        # spacing pins that these are per-segment positions, not a repeated one.
+        assert segs[1].lat - segs[0].lat == pytest.approx(
+            segs[0].length_m / 111_320.0, rel=0.05
+        )
+
 
 class TestClimbs:
     def test_finds_a_sustained_climb(self):

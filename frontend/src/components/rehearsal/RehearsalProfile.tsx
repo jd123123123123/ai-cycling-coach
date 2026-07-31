@@ -39,6 +39,19 @@ const MAX_DRAWN_POINTS = 200
  * `zoneColorForGradient`. This also means the earlier bug (flats/descents
  * painted invisible because `--color-zone-1` == the card background) can't
  * recur: non-climbing segments never touch a zone colour at all any more.
+ *
+ * On top of the terrain it draws the two things the engine already computes
+ * and the surface used to hide in a text row:
+ *  • the TARGET WATTS as a line on its own scale, so the shape of the effort
+ *    is visible against the shape of the road. They are not the same curve —
+ *    power is capped on the steepest pitches and the gap between them is
+ *    exactly what pacing means.
+ *  • the BLOW-UP as a marker on the road where it happens, rather than only a
+ *    sentence in the verdict. A rider should be able to point at it.
+ *
+ * `activeIdx` is controlled by the parent so one index drives the profile, the
+ * map and the readout together — including during playback, when nothing is
+ * touching the screen at all.
  */
 export default function RehearsalProfile({
   segments,
@@ -46,12 +59,20 @@ export default function RehearsalProfile({
   width,
   height,
   onScrub,
+  activeIdx = null,
+  blowUpIdxs = [],
+  showPower = true,
 }: {
   segments: RehearsalSegment[]
   elevations: number[]
   width: number
   height: number
   onScrub: (index: number | null) => void
+  /** Cursor position, shared with the map. Null draws no cursor. */
+  activeIdx?: number | null
+  /** Segment indices where the simulator recorded a blow-up. */
+  blowUpIdxs?: number[]
+  showPower?: boolean
 }) {
   const pad = 6
 
@@ -92,7 +113,31 @@ export default function RehearsalProfile({
       return [{ key: i, poly, color }]
     })
 
-    return { outline, terrain, climbFills }
+    // Target watts on their own scale. Anchored at zero so the line's height
+    // reads as "how hard", not "how hard relative to the easiest bit" — a
+    // min-anchored axis would make a flat 180 W ride look like an alpine one.
+    // Confined to the lower two-thirds of the box so it never tangles with the
+    // ridgeline, which is the shape that has to stay readable.
+    const powers = idxs.map((i) => segments[i]?.power_w ?? null)
+    const maxPower = powers.reduce<number>((m, p) => (p != null && p > m ? p : m), 0)
+    const powerLine =
+      maxPower > 0
+        ? powers
+            .map((p, k) => {
+              if (p == null) return null
+              const y = height - pad - (p / maxPower) * (height - pad * 2) * 0.66
+              return `${points[k][0].toFixed(1)},${y.toFixed(1)}`
+            })
+            // A null power mid-route would otherwise join two distant points
+            // with a straight line that claims watts nobody predicted.
+            .filter((s): s is string => s != null)
+            .join(' ')
+        : null
+
+    const xForIndex = (i: number) => xAt(Math.min(Math.max(i, 0), n - 1))
+    const yForIndex = (i: number) => yAt(elevAt(Math.min(Math.max(i, 0), n - 1)))
+
+    return { outline, terrain, climbFills, powerLine, maxPower, xForIndex, yForIndex }
   }, [segments, elevations, width, height, pad])
 
   if (!bands) return null
@@ -131,6 +176,65 @@ export default function RehearsalProfile({
         strokeLinejoin="round"
         strokeLinecap="round"
       />
+
+      {showPower && bands.powerLine && (
+        <polyline
+          points={bands.powerLine}
+          fill="none"
+          stroke="var(--color-accent)"
+          strokeWidth={1.75}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          opacity={0.9}
+        />
+      )}
+
+      {/* Where the rider runs out of W′. Drawn under the cursor so scrubbing
+          onto it does not hide it. */}
+      {blowUpIdxs.map((i) => (
+        <g key={`blowup-${i}`}>
+          <line
+            x1={bands.xForIndex(i)}
+            y1={0}
+            x2={bands.xForIndex(i)}
+            y2={height}
+            stroke="var(--color-strain)"
+            strokeWidth={1.25}
+            strokeDasharray="3 3"
+            opacity={0.85}
+          />
+          <circle
+            cx={bands.xForIndex(i)}
+            cy={bands.yForIndex(i)}
+            r={4.5}
+            fill="var(--color-strain)"
+            stroke="var(--color-surface)"
+            strokeWidth={1.5}
+          />
+        </g>
+      ))}
+
+      {activeIdx != null && (
+        <g>
+          <line
+            x1={bands.xForIndex(activeIdx)}
+            y1={0}
+            x2={bands.xForIndex(activeIdx)}
+            y2={height}
+            stroke="var(--color-ink)"
+            strokeWidth={1}
+            opacity={0.5}
+          />
+          <circle
+            cx={bands.xForIndex(activeIdx)}
+            cy={bands.yForIndex(activeIdx)}
+            r={4}
+            fill="var(--color-ink)"
+            stroke="var(--color-surface)"
+            strokeWidth={1.5}
+          />
+        </g>
+      )}
     </svg>
   )
 }

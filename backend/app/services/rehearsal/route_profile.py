@@ -52,6 +52,13 @@ class Segment:
     gradient_pct: float
     bearing_deg: float
     elevation_m: float
+    #: Where this segment starts on the globe. Carried so the surface can draw
+    #: the route on a map against the same index the profile scrubs -- the
+    #: interpolation happens in build_segments either way (it is how bearing is
+    #: derived), so keeping the pair costs nothing and spares the client a
+    #: second, coarser resampling of the stored route.
+    lat: float = 0.0
+    lng: float = 0.0
     climb_id: int | None = None
 
 
@@ -106,6 +113,8 @@ def build_segments(
                 gradient_pct=(rise / length) * 100.0 if length > 0 else 0.0,
                 bearing_deg=bearing_deg(lat0, lng0, lat1, lng1),
                 elevation_m=e0,
+                lat=lat0,
+                lng=lng0,
             )
         )
         start += length

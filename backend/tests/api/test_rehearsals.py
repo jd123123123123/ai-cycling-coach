@@ -294,9 +294,27 @@ class TestCreateRehearsal:
         assert all(s["elevation_m"] is not None for s in segments)
         assert any(s["gradient_pct"] > 0 for s in segments)
         assert any(s["climb_id"] is not None for s in segments)
+        # The map is terrain too: a rider with no CP still gets to see where the
+        # road runs, so the coordinates ship on this branch as well.
+        assert all(s["lat"] is not None and s["lng"] is not None for s in segments)
         # ... and the ride is not, so none of it is faked as a zero.
         for key in ("power_w", "speed_ms", "elapsed_s", "w_bal_j"):
             assert all(s[key] is None for s in segments), key
+
+    def test_segments_carry_coordinates_for_the_map(self, client_with_athlete):
+        """Map and profile are driven by ONE index, so every segment needs its
+        own position — a client that had to resample the stored route separately
+        would put the scrub dot somewhere the readout does not describe."""
+        resp = client_with_athlete.post(
+            "/rehearsals", json={"source_kind": "gpx", "gpx": _GPX}
+        )
+        segments = resp.json()["segments"]
+
+        assert all(s["lat"] is not None and s["lng"] is not None for s in segments)
+        # Real coordinates, not a repeated placeholder.
+        assert len({(s["lat"], s["lng"]) for s in segments}) > 1
+        assert all(-90.0 <= s["lat"] <= 90.0 for s in segments)
+        assert all(-180.0 <= s["lng"] <= 180.0 for s in segments)
 
     def test_a_rider_on_profile_ftp_is_told_no_w_prime_is_known(
         self, client_with_athlete

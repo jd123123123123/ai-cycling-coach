@@ -76,6 +76,43 @@ export interface RouteMapProps {
    *  its SVG fallback out instead of flashing an empty canvas. */
   onReady?: () => void
   className?: string
+  /** Per-vertex colours, same length as `polyline`. Paints the route as a
+   *  gradient along its own length instead of one flat colour — the rehearsal
+   *  page uses it to colour the road by target watts, so the hard parts are
+   *  visible on the map before the profile is even read. Ignored unless it
+   *  matches `polyline` in length, because a mismatched ramp would silently
+   *  colour the wrong stretches of road. */
+  lineColors?: string[]
+  /** A dot that tracks the scrub. Moving it does NOT rebuild the map: the
+   *  marker is created once with the route and repositioned in place, so
+   *  dragging a finger across the profile stays cheap. `null` hides it. */
+  markerLatLng?: [number, number] | null
+}
+
+/** Up to this many `line-gradient` stops. A 138 km route bins to ~900 segments;
+ *  MapLibre would take every one, but the ramp is read at a glance and the
+ *  style expression is re-parsed on every style load, so it is sampled down. */
+const MAX_GRADIENT_STOPS = 48
+
+/** Colour ramp as a `line-gradient` expression, or null when unusable. */
+function gradientExpression(colors: string[]): unknown[] | null {
+  const n = colors.length
+  if (n < 2) return null
+  const count = Math.min(n, MAX_GRADIENT_STOPS)
+  const stops: unknown[] = []
+  let prev = -1
+  for (let k = 0; k < count; k++) {
+    const i = Math.round((k / (count - 1)) * (n - 1))
+    // `interpolate` requires STRICTLY increasing stops; rounding can repeat an
+    // index on short routes, and a duplicate stop makes MapLibre reject the
+    // whole layer (which would drop the route line, not just its colour).
+    const t = k / (count - 1)
+    if (t <= prev) continue
+    prev = t
+    stops.push(t, colors[i])
+  }
+  if (stops.length < 4) return null
+  return ['interpolate', ['linear'], ['line-progress'], ...stops]
 }
 
 /** Bounding box of the track, as MapLibre's [[w,s],[e,n]]. */
@@ -90,10 +127,19 @@ function boundsOf(poly: [number, number][]): [[number, number], [number, number]
 
 export default function RouteMap({
   polyline, waypoints = [], styleKey = 'dark', interactive = false, onReady, className,
+  lineColors, markerLatLng = null,
 }: RouteMapProps) {
   const holder = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MlMap | null>(null)
   const [failed, setFailed] = useState(false)
+  // The scrub dot, kept outside React so moving it never re-renders the map.
+  const scrubRef = useRef<{ setLngLat: (l: [number, number]) => void; remove: () => void } | null>(null)
+  const scrubEl = useRef<HTMLDivElement | null>(null)
+  // Latest scrub position, read by `decorate` — the map may finish loading
+  // after the user has already dragged, and without this the dot would sit at
+  // the start until the next move.
+  const latestMarker = useRef<[number, number] | null>(markerLatLng)
+  latestMarker.current = markerLatLng
 
   useEffect(() => {
     if (!holder.current || polyline.length < 2 || failed) return
@@ -164,9 +210,16 @@ export default function RouteMap({
           decorated = true
           const coords = polyline.map(([lat, lng]) => [lng, lat])
 
+          const ramp = lineColors && lineColors.length === polyline.length
+            ? gradientExpression(lineColors)
+            : null
+
           map.addSource('route', {
             type: 'geojson',
             data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } },
+            // Required by `line-gradient`: without it the expression is
+            // rejected and the line falls back to no paint at all.
+            lineMetrics: ramp != null,
           })
           // Casing then line, the way the pen layers them — a white casing is
           // what keeps a coloured route legible over both dark forest and pale
@@ -179,8 +232,10 @@ export default function RouteMap({
           map.addLayer({
             id: 'route-line', type: 'line', source: 'route',
             layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#FF5A3C', 'line-width': 4 },
-          })
+            paint: ramp
+              ? { 'line-gradient': ramp, 'line-width': 4 }
+              : { 'line-color': '#FF5A3C', 'line-width': 4 },
+          } as Parameters<MlMap['addLayer']>[0])
 
           const [startLat, startLng] = polyline[0]
           const [endLat, endLng] = polyline[polyline.length - 1]
@@ -191,6 +246,28 @@ export default function RouteMap({
           }
           new maplibre.Marker({ element: dot('#16E08A', 15) }).setLngLat([startLng, startLat]).addTo(map)
           new maplibre.Marker({ element: dot('#FF5A3C', 15) }).setLngLat([endLng, endLat]).addTo(map)
+
+          if (markerLatLng !== undefined) {
+            // Bigger than the endpoint dots and ringed, so it reads as "you are
+            // here" rather than a third fixed pin. Starts hidden unless the
+            // user has already scrubbed: an untouched route must look exactly
+            // as it did before this prop existed.
+            const el = document.createElement('div')
+            el.style.cssText =
+              'width:20px;height:20px;border-radius:999px;background:#FFFFFF;' +
+              'border:3px solid #FF5A3C;box-shadow:0 0 0 4px #FF5A3C33,0 2px 8px #000000AA;' +
+              'opacity:0;transition:opacity 120ms linear;pointer-events:none'
+            scrubEl.current = el
+            const start = latestMarker.current
+            const m = new maplibre.Marker({ element: el })
+              .setLngLat(start ? [start[1], start[0]] : [startLng, startLat])
+              .addTo(map)
+            if (start) el.style.opacity = '1'
+            scrubRef.current = {
+              setLngLat: (l) => { m.setLngLat(l) },
+              remove: () => { m.remove() },
+            }
+          }
 
           for (const w of waypoints) {
             if (!Number.isFinite(w.lat) || !Number.isFinite(w.lng)) continue
@@ -226,12 +303,53 @@ export default function RouteMap({
       cancelled = true
       mapRef.current?.remove()
       mapRef.current = null
+      // The map takes its markers with it; drop our handles so a later scrub
+      // cannot poke at a removed marker.
+      scrubRef.current = null
+      scrubEl.current = null
     }
     // `waypoints`/`onReady` are intentionally excluded: they arrive with the
     // same fetch as `polyline`, and including them would tear the map down and
     // rebuild it on every parent render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [polyline, styleKey, interactive, failed])
+
+  // Scrub position. Deliberately NOT part of the effect above: rebuilding a
+  // MapLibre instance per pointer-move would be unusable on a phone.
+  useEffect(() => {
+    const marker = scrubRef.current
+    const el = scrubEl.current
+    if (!marker || !el) return
+    if (markerLatLng) {
+      marker.setLngLat([markerLatLng[1], markerLatLng[0]])
+      el.style.opacity = '1'
+    } else {
+      el.style.opacity = '0'
+    }
+  }, [markerLatLng])
+
+  // Re-colour in place when a new simulation arrives (different watts → a
+  // different ramp) so changing an assumption does not tear the map down.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !lineColors || lineColors.length !== polyline.length) return
+    const ramp = gradientExpression(lineColors)
+    if (!ramp) return
+    try {
+      if (map.getLayer('route-line')) {
+        // MapLibre types `line-gradient` as a closed union of expression
+        // shapes; ours is built at runtime from a variable number of stops, so
+        // it cannot be proven to match without rebuilding the union by hand.
+        ;(map.setPaintProperty as (layer: string, prop: string, value: unknown) => void)(
+          'route-line',
+          'line-gradient',
+          ramp,
+        )
+      }
+    } catch {
+      // Style not ready yet — `decorate` will apply this ramp when it runs.
+    }
+  }, [lineColors, polyline])
 
   if (polyline.length < 2 || failed) return null
   return (

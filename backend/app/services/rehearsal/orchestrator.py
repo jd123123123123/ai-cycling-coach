@@ -84,6 +84,10 @@ def _segment_payload(seg: Segment, sim: SegmentResult | None) -> dict:
         # the silhouette is the one thing this branch still claims, so it comes
         # from the route itself.
         "elevation_m": seg.elevation_m,
+        # Terrain too, and for the same reason: where the road runs is measured,
+        # not predicted, so the map draws for a rider with no CP as well.
+        "lat": seg.lat,
+        "lng": seg.lng,
         "climb_id": seg.climb_id,
         "power_w": sim.power_w if sim is not None else None,
         "speed_ms": sim.speed_ms if sim is not None else None,
