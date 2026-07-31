@@ -37,15 +37,20 @@
  * screen. A ride page must render its route without a network map.
  *
  * ── Attribution ──────────────────────────────────────────────────────────
- * Maptoolkit's licence requires a clickable "© Maptoolkit © OpenStreetMap"
- * bottom-right on every map. Their TileJSON already supplies exactly that, and
- * MapLibre's AttributionControl renders it — so nothing is passed manually
- * (doing so duplicated the notice). Shown `compact`, i.e. an (i) badge that
- * expands on tap, because the full bar spans the hero and covers the title.
+ * Maptoolkit's licence requires a VISIBLE "© Maptoolkit © OpenStreetMap", each
+ * part linking to its own copyright page. Verified 31 Jul 2026 against
+ * maptoolkit.com/copyright: a text notice with clickable links is the whole
+ * requirement, and NO logo is required — their own TileJSON ships exactly that
+ * text and no image. (This corrects an earlier note here, and the matching
+ * entry in the deploy runbook, which claimed a logo was mandatory and treated
+ * its absence as a ship blocker.)
  *
- * Their terms ALSO require the Maptoolkit logo alongside the text. That asset is
- * not bundled here, so this is NOT yet fully compliant — flagged in the deploy
- * runbook as a blocker for shipping the map to production.
+ * It is rendered by <MapAttribution/> in this file rather than by MapLibre's
+ * AttributionControl. The control's full bar spans a 358 px hero and covers the
+ * ride title, and the compact variant had to be force-collapsed to an (i)
+ * badge on every frame — a notice that starts closed is a weak reading of
+ * "visible". Rendering it directly gives a permanently visible, permanently
+ * clickable line that fits the design instead of fighting it.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { Map as MlMap } from 'maplibre-gl'
@@ -173,16 +178,13 @@ export default function RouteMap({
         // `customAttribution` APPENDED to it and rendered the notice twice.
         // `compact` collapses it to an (i) badge — expanded, the white bar spans
         // the hero and sits straight over the ride title.
-        const attrib = new maplibre.AttributionControl({ compact: true })
-        map.addControl(attrib, 'bottom-right')
-        // MapLibre opens the compact notice whenever the container is wide
-        // enough. On the preview that is a full-width white bar over the title,
-        // so it starts closed; the (i) badge still expands it on tap.
-        requestAnimationFrame(() => {
-          const el = holder.current?.querySelector('details.maplibregl-ctrl-attrib')
-          el?.removeAttribute('open')
-          el?.classList.remove('maplibregl-compact-show')
-        })
+        // No AttributionControl: the notice is rendered by this component
+        // instead (see <MapAttribution/> below). MapLibre's compact control
+        // had to be force-collapsed to an (i) badge to stop a full-width white
+        // bar covering the ride title -- and a notice that starts closed is a
+        // weak reading of "visibly include". Rendering it ourselves gives a
+        // permanently visible, permanently clickable line that fits the design
+        // rather than fighting it.
         if (interactive) map.addControl(new maplibre.NavigationControl({ showCompass: false }), 'top-right')
 
         map.on('error', (e) => {
@@ -353,19 +355,66 @@ export default function RouteMap({
 
   if (polyline.length < 2 || failed) return null
   return (
-    <div ref={holder} className={className} style={{ position: 'absolute', inset: 0 }} aria-hidden={!interactive}>
-      {/* Attribution is licence-required and stays exactly as MapLibre renders
-          it — restyling it turned into a specificity fight with their stylesheet
-          and produced a white-on-white pill. Instead it is only LIFTED clear of
-          the ride title (MapLibre pins it bottom-right, which is where the
-          date/host line sits) and left collapsed to its (i) badge, which is the
-          standard compact pattern: the notice is one tap away and fully legible
-          when opened, rather than a wide white bar across the hero. */}
-      {!interactive && (
-        <style>{`
-          .maplibregl-ctrl-bottom-right { bottom: 58px }
-        `}</style>
-      )}
+    <>
+      <div ref={holder} className={className} style={{ position: 'absolute', inset: 0 }} aria-hidden={!interactive} />
+      <MapAttribution lifted={!interactive} />
+    </>
+  )
+}
+
+/**
+ * The licence notice. Maptoolkit's terms (verified against their copyright
+ * page, 31 Jul 2026) require a VISIBLE attribution naming both Maptoolkit and
+ * OpenStreetMap, each linking to its own copyright page. A logo is NOT
+ * required -- their own TileJSON ships exactly this text and no image.
+ *
+ * Rendered here rather than by MapLibre's AttributionControl so it can be
+ * small, legible over any basemap, and always open. It sits outside the map's
+ * container div, so nothing the map draws can cover it, and it is a sibling of
+ * the hero content rather than a child of the canvas -- which is what keeps
+ * "unobstructed" true rather than merely intended.
+ *
+ * `pointerEvents` is set on the links only: the notice must be clickable
+ * without turning the surrounding corner of a static hero into a dead zone
+ * that swallows the tap meant to open the full-screen map.
+ */
+function MapAttribution({ lifted }: { lifted: boolean }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 6,
+        // Clear of the ride title / date line on a static hero.
+        bottom: lifted ? 58 : 6,
+        display: 'flex',
+        gap: 4,
+        padding: '2px 6px',
+        borderRadius: 6,
+        background: 'rgba(10,12,15,0.58)',
+        backdropFilter: 'blur(4px)',
+        fontSize: 9.5,
+        lineHeight: 1.5,
+        color: 'rgba(255,255,255,0.82)',
+        pointerEvents: 'none',
+        zIndex: 2,
+      }}
+    >
+      <a
+        href="https://www.maptoolkit.com/copyright/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: 'inherit', textDecoration: 'underline', pointerEvents: 'auto' }}
+      >
+        © Maptoolkit
+      </a>
+      <a
+        href="https://www.openstreetmap.org/copyright"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: 'inherit', textDecoration: 'underline', pointerEvents: 'auto' }}
+      >
+        © OpenStreetMap
+      </a>
     </div>
   )
 }

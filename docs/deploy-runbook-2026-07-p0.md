@@ -37,17 +37,36 @@ Context: docs/usability-audit-2026-07.md; implementation commits `9fc8827..HEAD`
   the profile on first load; athletes outside Europe/Berlin get correct
   local-day attribution from their first session.
 
-## BLOCKER — map attribution (added 2026-07-28)
+## ~~BLOCKER~~ — map attribution (added 2026-07-28, CLEARED 2026-07-31)
 
-The crew-ride map uses Maptoolkit tiles (no API key). Their licence requires
-BOTH the "© Maptoolkit © OpenStreetMap" text notice **and** the Maptoolkit logo,
-clickable and unobstructed, bottom-right on every map. The text notice ships
-(MapLibre renders it from the TileJSON); **the logo does not** — the asset is not
-bundled. Do not ship the map to real users until it is added, or until written
-confirmation from Maptoolkit that the text alone suffices.
+**Cleared. No logo is required, and the map is free to ship.**
 
-Also worth registering the production domain with them: free, and it raises the
-rate ceiling 5× (120 → 600 tiles/s sustained).
+The original entry claimed Maptoolkit's licence required the Maptoolkit *logo*
+in addition to the text notice, and treated the missing asset as a ship
+blocker. Checked against the source on 2026-07-31:
+
+- maptoolkit.com/copyright — the canonical page, and the one their own
+  attribution links to — states the requirement as a visible
+  "© Maptoolkit © OSM" with each part linking to its copyright page. No logo
+  is mentioned anywhere.
+- Their TileJSON (tiles.maptoolkit.org/mtk.json) ships that exact text, with
+  both links, and no image — which is what a provider serves when text alone
+  satisfies them.
+
+What the requirement actually is: the notice must be **visible** and
+**clickable**. That is now guaranteed rather than assumed. `RouteMap` no longer
+uses MapLibre's `AttributionControl`; it renders `<MapAttribution/>` itself,
+permanently open, outside the map container so nothing the canvas draws can
+cover it. The previous setup force-collapsed the control to an `(i)` badge on
+every frame to stop a white bar covering the ride title — a notice that starts
+closed is a weak reading of "visible", and it is gone.
+
+Covered by `RouteMapAttribution.test.tsx`, which asserts both notices, both
+hrefs and `rel="noopener"` render even when the basemap cannot initialise.
+
+Still worth doing (not a blocker): register the production domain with
+Maptoolkit. Free, and it raises the rate ceiling 5× (120 → 600 tiles/s
+sustained).
 
 ## Watchlist (first week)
 
