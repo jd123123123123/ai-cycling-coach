@@ -36,7 +36,7 @@ import { de as deLocale } from 'date-fns/locale'
 import {
   ArrowLeft, Share2, Flag, MapPin, Navigation, Users, UserPlus, Check, Download,
   ArrowUp, ArrowDown, Wind, Droplets, Sunrise, Shirt, ThumbsUp, CloudRain, Crown, MessageCircle,
-  Sun, CloudSun, CloudFog, CloudLightning, Snowflake, Layers, Maximize2, X,
+  Sun, CloudSun, CloudFog, CloudLightning, Snowflake, Layers, Maximize2, X, Timer,
 } from 'lucide-react'
 import { useCrewEvent, useRsvpCrewEvent } from '../hooks/useCrewEvents'
 import { useCrewEventWeather } from '../hooks/useCrewEventWeather'
@@ -50,6 +50,7 @@ import {
   clothingAdvice, projectRoute, skyIcon,
 } from '../utils/crewRide'
 import { hapticTick } from '../lib/haptics'
+import { useRehearseRoute } from '../hooks/useRehearseRoute'
 
 const card = { background: 'var(--color-paper-2)', border: '1px solid #FFFFFF14' } as const
 const cardCls = 'rounded-[24px] flex flex-col'
@@ -97,6 +98,7 @@ export default function CrewEventDetailView() {
   const { data: ev, isLoading, isError } = useCrewEvent(Number.isFinite(eventId) ? eventId : null)
   const { data: weather } = useCrewEventWeather(Number.isFinite(eventId) ? eventId : undefined)
   const rsvp = useRsvpCrewEvent()
+  const { rehearse, pendingRef, failed: rehearseFailed, error: rehearseError } = useRehearseRoute()
 
   const route = useMemo(() => projectRoute(ev?.tour_polyline, HERO_W, HERO_H, 26), [ev?.tour_polyline])
   const diff = useMemo(() => rideDifficulty(ev?.tour_distance_m, ev?.tour_elevation_m), [ev])
@@ -519,6 +521,49 @@ export default function CrewEventDetailView() {
                 {isGoing ? (de ? 'Du bist dabei' : "You're in") : (de ? 'Mitfahren' : 'Join this ride')}
               </span>
             </button>
+
+            {/* Rehearse — the difference between "22 km, 640 m" and "here is
+                what THAT costs YOU". Only offered once a tour exists, because
+                without a route there is nothing to simulate. */}
+            {ev.has_tour && (
+              <button
+                type="button"
+                disabled={pendingRef !== null}
+                onClick={() => {
+                  hapticTick()
+                  // A crew event is a group ride by definition, so starting
+                  // the projection on "solo" would have been wrong for every
+                  // rehearsal from this button. A race means a bunch; anything
+                  // else, a small group. `effort` is NOT guessed — how hard
+                  // the athlete intends to ride is theirs to say, and the
+                  // API's `fondo` default is the neutral answer until they do.
+                  void rehearse('crew_event', ev.id, ev.name, {
+                    draft: ev.kind === 'race' ? 'bunch' : 'small_group',
+                  })
+                }}
+                className="flex items-center justify-center rounded-full"
+                style={{
+                  gap: 7, padding: '12px 0', background: 'var(--color-paper-2)',
+                  border: '1px solid var(--color-rule)', opacity: pendingRef !== null ? 0.6 : 1,
+                }}
+              >
+                <Timer size={16} strokeWidth={2.3} style={{ color: '#16E08A' }} />
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>
+                  {pendingRef !== null
+                    ? (de ? 'Wird geprobt …' : 'Rehearsing…')
+                    : (de ? 'Diese Runde proben' : 'Rehearse this ride')}
+                </span>
+              </button>
+            )}
+
+            {rehearseFailed && (
+              <span role="alert" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-amber)', textAlign: 'center', lineHeight: 1.4 }}>
+                {rehearseError
+                  ?? (de
+                    ? 'Diese Runde konnte gerade nicht geprobt werden.'
+                    : "Couldn't rehearse this ride just now.")}
+              </span>
+            )}
 
             {ev.has_tour && (
               <button

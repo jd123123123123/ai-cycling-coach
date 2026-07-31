@@ -29,13 +29,14 @@ import {
 } from 'date-fns'
 import {
   Bike, SlidersHorizontal, ChevronRight, Flame, TrendingUp,
-  Mountain, Clock, Gauge, Trophy, Zap,
+  Mountain, Clock, Gauge, Trophy, Zap, Repeat,
 } from 'lucide-react'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import ExtraSessionsCard from '../ExtraSessionsCard'
 import RouteSketch from '../../ui/RouteSketch'
 import { useStreak } from '../../../hooks/useStreak'
 import { useLocale } from '../../../contexts/LocaleContext'
+import { useRehearseRoute } from '../../../hooks/useRehearseRoute'
 import { formatDate, formatTime24 } from '../../../utils/format'
 import type { ActivityRead } from '../../../api/dashboard'
 
@@ -138,6 +139,7 @@ export default function HistoryTab() {
   // A full year of history (API caps a single range at 366 days).
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 365), [today]), today)
   const { data: streakData } = useStreak()
+  const { rehearse, pendingRef, failed: rehearseFailed, error: rehearseError } = useRehearseRoute()
 
   // Sub-discipline filter (bike-only): all / outdoor / indoor.
   const [filter, setFilter] = useState<Filter>('all')
@@ -689,15 +691,64 @@ export default function HistoryTab() {
         {recent.map((a) => {
           const col = rideColor(a)
           const route = `/activities/${a.id}/recap`
+          // Only a ride with a stored track can be rehearsed. An indoor ride
+          // has no route to ride again, so the offer is simply absent rather
+          // than present-and-refusing.
+          const canRehearse = (a.route_polyline?.length ?? 0) >= 2
+          const busy = pendingRef === a.id
           return (
-            <Link key={a.id} to={route} className="hover-card flex items-center gap-3 rounded-[24px] p-3" style={cardStyle}>
+            // The card is a plain container with a stretched link inside it,
+            // so the whole row still navigates while the rehearse control gets
+            // its own hit area — a <button> nested inside an <a> would not be
+            // valid HTML.
+            <div key={a.id} className="hover-card relative flex items-center gap-3 rounded-[24px] p-3" style={cardStyle}>
+              <Link to={route} className="absolute inset-0 rounded-[24px]" aria-label={a.title ?? (de ? 'Fahrt' : 'Ride')} />
               <ActivityThumb activity={a} color={col} />
               <div className="flex-1 min-w-0 flex flex-col gap-[7px]">
                 <div className="flex items-center gap-1.5">
                   <Bike size={15} style={{ color: col }} />
                   <span className="truncate" style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-ink)' }}>{a.title ?? (de ? 'Fahrt' : 'Ride')}</span>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)' }}>{relDate(a)}</span>
+                {/* position: relative + the pill absolutely placed on it keeps
+                    this line's own box height fixed at the bare date text's
+                    line-height -- the pill's padding/border never enter the
+                    flex-col's flow, so a row with the pill and a row without
+                    it are the same height, and a mixed indoor/outdoor list
+                    stays uniform rather than going ragged. */}
+                <div className="flex items-center" style={{ position: 'relative' }}>
+                  <span
+                    className="truncate"
+                    style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-muted)', paddingRight: canRehearse ? 112 : 0 }}
+                  >
+                    {relDate(a)}
+                  </span>
+                  {canRehearse && (
+                    <button
+                      type="button"
+                      disabled={pendingRef !== null}
+                      // No draft or effort is passed on purpose: nothing stored
+                      // about a past ride says whether it was ridden in a
+                      // wheel or how hard it was intended, so the API's
+                      // neutral solo/fondo default stands and AssumptionsRow
+                      // is where the athlete corrects it.
+                      onClick={() => { void rehearse('activity', a.id, a.title ?? undefined) }}
+                      className="absolute right-0 top-1/2 z-10 inline-flex items-center gap-1 rounded-full shrink-0"
+                      style={{
+                        transform: 'translateY(-50%)',
+                        padding: '4px 9px', background: 'var(--color-surface-2)',
+                        border: '1px solid var(--color-rule)',
+                        opacity: pendingRef !== null && !busy ? 0.5 : 1,
+                      }}
+                    >
+                      <Repeat size={11} strokeWidth={2.4} style={{ color: 'var(--color-accent)' }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-accent)' }}>
+                        {busy
+                          ? (de ? 'Läuft …' : 'Working…')
+                          : (de ? 'Nochmal fahren' : 'Ride it again')}
+                      </span>
+                    </button>
+                  )}
+                </div>
                 <div className="flex gap-4">
                   {recentStats(a).map((s, si) => (
                     <div key={si} className="flex flex-col gap-px">
@@ -708,9 +759,15 @@ export default function HistoryTab() {
                 </div>
               </div>
               <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-muted)' }} />
-            </Link>
+            </div>
           )
         })}
+        {rehearseFailed && (
+          <span role="alert" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-amber)', lineHeight: 1.4 }}>
+            {rehearseError
+              ?? (de ? 'Diese Fahrt konnte gerade nicht geprobt werden.' : "Couldn't rehearse that ride just now.")}
+          </span>
+        )}
         {recent.length === 0 && (
           <div className="grid place-items-center rounded-[24px]" style={{ ...cardStyle, height: 96, fontSize: 12, fontWeight: 500, color: 'var(--color-muted)' }}>
             {de ? 'Noch keine Fahrten' : 'No rides logged yet'}

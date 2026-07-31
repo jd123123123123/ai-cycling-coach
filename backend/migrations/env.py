@@ -13,6 +13,7 @@ from app.database import Base  # noqa: F401
 from app.models import (  # noqa: F401
     user, athlete_profile, consent, activity, garmin_credential,
     daily_metric, planned_workout, daily_metric_sample, coach_brief,
+    route_rehearsal,
 )
 
 # this is the Alembic Config object, which provides

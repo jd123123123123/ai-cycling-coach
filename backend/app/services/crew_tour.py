@@ -72,6 +72,62 @@ class ParsedTour:
     waypoints: list[dict]
 
 
+@dataclass(frozen=True)
+class TrackPoint:
+    """One GPX point at full resolution. Elevation is None when the file has none."""
+    lat: float
+    lng: float
+    elevation_m: float | None
+
+
+def _parse_and_collect(raw: str | bytes):
+    """(gpx, points) — parse ONCE and collect usable points. Raises ValueError.
+
+    Returns the gpx object too, because parse_gpx still needs it for
+    length_2d() and get_uphill_downhill(); parsing twice would be wasteful and
+    could drift if the two calls ever disagreed.
+    """
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    try:
+        gpx = gpxpy.parse(raw)
+    except Exception as exc:  # gpxpy raises several exception types
+        raise ValueError(f"could not parse GPX: {exc}") from exc
+
+    raw_points: list = []
+    for track in gpx.tracks:
+        for seg in track.segments:
+            raw_points.extend(seg.points)
+    if not raw_points:
+        for route in gpx.routes:
+            raw_points.extend(route.points)
+    if not raw_points:
+        raw_points = list(gpx.waypoints)
+
+    geo = [p for p in raw_points if p.latitude is not None and p.longitude is not None]
+    if not geo:
+        raise ValueError("GPX file contains no track points")
+    return gpx, geo
+
+
+def parse_gpx_track(raw: str | bytes) -> list[TrackPoint]:
+    """Full-resolution track points, for the rehearsal simulator.
+
+    parse_gpx's `profile` is downsampled to ≤120 points — right for a card-sized
+    elevation chart, far too coarse to simulate 150 m segments over a long route.
+    Both functions read the SAME point sequence via _collect_geo_points, so a
+    rehearsal can never describe a different road than the chart above it.
+    """
+    return [
+        TrackPoint(
+            lat=float(p.latitude),
+            lng=float(p.longitude),
+            elevation_m=float(p.elevation) if p.elevation is not None else None,
+        )
+        for p in _parse_and_collect(raw)[1]
+    ]
+
+
 def _downsample(points: list[list[float]], max_points: int) -> list[list[float]]:
     """Evenly pick ~max_points, always keeping the first and last point."""
     n = len(points)
@@ -276,31 +332,8 @@ def _parse_waypoints(gpx, geo_points: list, cumulative: list[float]) -> list[dic
 def parse_gpx(raw: str | bytes) -> ParsedTour:
     """Parse GPX text into a ParsedTour. Raises ValueError on unparseable input
     or a file with no usable track points."""
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8", errors="replace")
-    try:
-        gpx = gpxpy.parse(raw)
-    except Exception as exc:  # gpxpy raises several exception types
-        raise ValueError(f"could not parse GPX: {exc}") from exc
+    gpx, geo_points = _parse_and_collect(raw)
 
-    # Collect every track point (across tracks + segments), then fall back to
-    # routes and standalone waypoints so we still render odd exports.
-    raw_points: list = []
-    for track in gpx.tracks:
-        for seg in track.segments:
-            raw_points.extend(seg.points)
-    if not raw_points:
-        for route in gpx.routes:
-            raw_points.extend(route.points)
-    if not raw_points:
-        raw_points = list(gpx.waypoints)
-
-    # Drop unusable points ONCE and keep the surviving objects, so the polyline
-    # and the elevation profile are built from exactly the same point sequence
-    # (otherwise the profile's cumulative distances would not match the track).
-    geo_points = [
-        p for p in raw_points if p.latitude is not None and p.longitude is not None
-    ]
     coords = [
         [round(p.latitude, _COORD_DP), round(p.longitude, _COORD_DP)]
         for p in geo_points

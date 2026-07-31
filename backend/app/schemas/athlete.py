@@ -15,6 +15,13 @@ ExperienceLevel = Literal["new", "returning", "seasoned"]
 # UI depth register (onboarding depth selector ↔ Settings "Detailgrad").
 DetailLevel = Literal["guide", "numbers", "pro"]
 
+#: Ceiling on the stored target-event course, in bytes. Deliberately the same
+#: 10 MB the crew tour uploader (crew_events.MAX_TOUR_BYTES) and the rehearsal
+#: POST (schemas.rehearsal.MAX_GPX_BYTES) enforce — one GPX limit across the
+#: app, restated here rather than imported so a schema module stays free of
+#: service-layer imports.
+MAX_TARGET_EVENT_GPX_BYTES = 10 * 1024 * 1024
+
 
 class DaysAvailable(BaseModel):
     """Weekday availability flags + the athlete's long-ride day.
@@ -104,6 +111,11 @@ class AthleteProfileUpdate(BaseModel):
     target_event_date: date | None = None
     target_event_type: Literal['race', 'fondo', 'audax', 'maintenance'] | None = None
     target_priority: Literal['A', 'B', 'C'] | None = None
+    # The official course of the target event, as raw GPX text. This is the
+    # ONLY writer for the column the route-rehearsal 'target_event' source
+    # reads, so without it that source can only ever 404. Sending null clears
+    # it. Never echoed back on the read model — see has_target_event_route.
+    target_event_gpx: str | None = None
     # IANA timezone (e.g. "Europe/Berlin") — drives every "what day is it?"
     # computation (athlete_time). Frontend sends
     # Intl.DateTimeFormat().resolvedOptions().timeZone.
@@ -126,6 +138,21 @@ class AthleteProfileUpdate(BaseModel):
     @classmethod
     def _validate_hard_day_blackouts(cls, v: list[str] | None) -> list[str] | None:
         return _validate_blackouts(v)
+
+    @field_validator("target_event_gpx")
+    @classmethod
+    def _validate_target_event_gpx(cls, v: str | None) -> str | None:
+        """Bound the course in BYTES, and refuse anything that is plainly not GPX."""
+        if v is None:
+            return v
+        if len(v.encode("utf-8")) > MAX_TARGET_EVENT_GPX_BYTES:
+            raise ValueError(
+                "that GPX file is too large — the limit is "
+                f"{MAX_TARGET_EVENT_GPX_BYTES // (1024 * 1024)} MB"
+            )
+        if "<gpx" not in v[:4096].lower():
+            raise ValueError("that file could not be read as a GPX route")
+        return v
 
     @field_validator("timezone")
     @classmethod
@@ -170,6 +197,9 @@ class AthleteProfileRead(BaseModel):
     target_event_date: date | None = None
     target_event_type: Literal['race', 'fondo', 'audax', 'maintenance'] | None = None
     target_priority: Literal['A', 'B', 'C'] | None = None
+    # Whether an official course is stored for the target event — the GPX
+    # itself is never echoed back (it can be megabytes and nothing renders it).
+    has_target_event_route: bool = False
 
     # IANA timezone of the athlete (None → backend default Europe/Berlin)
     timezone: str | None = None
