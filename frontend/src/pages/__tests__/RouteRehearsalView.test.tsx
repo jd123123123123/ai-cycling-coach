@@ -29,15 +29,16 @@ const rehearsal: Rehearsal = {
   missing: [],
   climbs: [],
   segments: [
-    { start_m: 0, gradient_pct: 0, power_w: 200, speed_ms: 8, elapsed_s: 0, w_bal_j: 20000, climb_id: null },
-    { start_m: 1000, gradient_pct: 5, power_w: 250, speed_ms: 7, elapsed_s: 150, w_bal_j: 15000, climb_id: null },
-    { start_m: 2000, gradient_pct: 8, power_w: 300, speed_ms: 5, elapsed_s: 400, w_bal_j: 10000, climb_id: null },
-    { start_m: 3000, gradient_pct: -3, power_w: 100, speed_ms: 12, elapsed_s: 500, w_bal_j: 18000, climb_id: null },
+    { start_m: 0, gradient_pct: 0, elevation_m: null, power_w: 200, speed_ms: 8, elapsed_s: 0, w_bal_j: 20000, climb_id: null },
+    { start_m: 1000, gradient_pct: 5, elevation_m: null, power_w: 250, speed_ms: 7, elapsed_s: 150, w_bal_j: 15000, climb_id: null },
+    { start_m: 2000, gradient_pct: 8, elevation_m: null, power_w: 300, speed_ms: 5, elapsed_s: 400, w_bal_j: 10000, climb_id: null },
+    { start_m: 3000, gradient_pct: -3, elevation_m: null, power_w: 100, speed_ms: 12, elapsed_s: 500, w_bal_j: 18000, climb_id: null },
   ],
   band: { p10_s: 6000, p50_s: 6300, p90_s: 6600, draws: 200 },
   blow_ups: [],
   cda_is_default: false,
   durability_is_default: false,
+  w_prime_is_default: false,
   weather_used: false,
 }
 
@@ -82,5 +83,62 @@ describe('RouteRehearsalView — scrub readout', () => {
 
     expect(screen.getByText(/watts, speed and W′ at any point/i)).toBeTruthy()
     expect(screen.queryByText('50 %')).toBeNull()
+  })
+})
+
+/**
+ * The `can_predict: false` path had no coverage at all, which is how the
+ * surface came to promise a profile it did not render: the API returned
+ * `segments: []` and the profile card was gated on `segments.length > 0`, so
+ * the sentence "the route profile is below regardless" pointed at nothing.
+ * The terrain is measured data — it is the PREDICTION that is missing.
+ */
+const unpaced: Rehearsal = {
+  ...rehearsal,
+  can_predict: false,
+  missing: ['cp'],
+  band: undefined,
+  total_time_s: undefined,
+  total_kj: undefined,
+  carbs_g_per_hour: undefined,
+  segments: rehearsal.segments.map((s, i) => ({
+    start_m: s.start_m,
+    gradient_pct: s.gradient_pct,
+    elevation_m: 1000 + i * 40,
+    power_w: null,
+    speed_ms: null,
+    elapsed_s: null,
+    w_bal_j: null,
+    climb_id: null,
+  })),
+}
+
+describe('RouteRehearsalView — no prediction', () => {
+  it('renders the profile the verdict block promises', () => {
+    const qc = new QueryClient()
+    qc.setQueryData(['rehearsal', 42], unpaced)
+    const { container } = renderPage(qc)
+
+    expect(screen.getByText(/NO TIME PREDICTION|KEINE ZEITVORHERSAGE/i)).toBeTruthy()
+    expect(container.querySelector('svg[viewBox="0 0 358 150"]')).toBeTruthy()
+    // No time anywhere — the band is the answer, and there isn't one.
+    expect(container.textContent).not.toContain('1:40')
+  })
+
+  it('scrubs the real road and dashes every projected figure', () => {
+    const qc = new QueryClient()
+    qc.setQueryData(['rehearsal', 42], unpaced)
+    const { container } = renderPage(qc)
+
+    const svg = container.querySelector('svg[viewBox="0 0 358 150"]')!
+    svg.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 358, height: 150, right: 358, bottom: 150, x: 0, y: 0, toJSON: () => {} }) as DOMRect
+    fireEvent.pointerMove(svg, { clientX: 215 })
+
+    // km and gradient are measured off the route and still read out ...
+    expect(screen.getByText('2.0')).toBeTruthy()
+    expect(screen.getByText('8.0 %')).toBeTruthy()
+    // ... target, speed, elapsed and W′ are projections, so all four dash.
+    expect(screen.getAllByText('—').length).toBe(4)
   })
 })

@@ -18,6 +18,12 @@ export interface AthleteProfile {
   target_event_date: string | null   // ISO date YYYY-MM-DD
   target_event_type: 'race' | 'fondo' | 'audax' | 'maintenance' | null
   target_priority: 'A' | 'B' | 'C' | null
+  /**
+   * Whether an official course (GPX) is stored for the target event. The GPX
+   * itself is never sent to the client — it can be megabytes and nothing
+   * renders it; this only says whether "rehearse my target event" is open.
+   */
+  has_target_event_route?: boolean
   // P0-2 timezone handshake — IANA string (e.g. "Europe/Berlin") so the server
   // can bucket days on the ATHLETE's calendar, not UTC. Optional until the
   // backend field lands everywhere.
@@ -66,6 +72,12 @@ export interface AthleteProfileUpdate {
   target_event_date?: string | null
   target_event_type?: 'race' | 'fondo' | 'audax' | 'maintenance' | null
   target_priority?: 'A' | 'B' | 'C' | null
+  /**
+   * The official course of the target event, as raw GPX text. The only writer
+   * for the column the route-rehearsal `target_event` source reads. Send null
+   * to clear it.
+   */
+  target_event_gpx?: string | null
   // P0-2 timezone handshake — IANA string reported by the browser
   timezone?: string | null
   // V3 Settings — suppress coach push notices on rest days

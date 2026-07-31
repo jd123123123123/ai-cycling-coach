@@ -1,6 +1,19 @@
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createRehearsal, type SourceKind } from '../api/rehearsal'
+import { createRehearsal, type Draft, type Effort, type SourceKind } from '../api/rehearsal'
+
+/** What a caller may fix up front; anything omitted keeps the API default. */
+export interface RehearseOptions {
+  effort?: Effort
+  draft?: Draft
+  /**
+   * Only a dated route can carry a forecast. Left to the API for the sources
+   * that already know their own day (a crew event takes the event's date, a
+   * past ride is deliberately weather-free), so this is for an upload that
+   * the caller can date itself.
+   */
+  ride_date?: string
+}
 
 /**
  * "Rehearse this route" — POST a route source, land on `/rehearse/:id`.
@@ -23,13 +36,31 @@ export function useRehearseRoute() {
   const [error, setError] = useState<string | null>(null)
 
   const rehearse = useCallback(
-    async (source_kind: SourceKind, source_ref?: number, name?: string) => {
+    async (
+      source_kind: SourceKind,
+      source_ref?: number,
+      name?: string,
+      opts?: RehearseOptions & { gpx?: string },
+    ) => {
       if (pendingRef !== null) return
       setPendingRef(source_ref ?? -1)
       setFailed(false)
       setError(null)
       try {
-        const r = await createRehearsal({ source_kind, source_ref, name })
+        // `use_weather` is deliberately NOT sent: the API's default (on) is
+        // already gated on the route actually having a date inside the
+        // forecast horizon, so forcing it here would only ever be a worse
+        // guess. `effort`/`draft` are the athlete's intent and DO travel —
+        // AssumptionsRow can still change either afterwards.
+        const r = await createRehearsal({
+          source_kind,
+          source_ref,
+          name,
+          gpx: opts?.gpx,
+          effort: opts?.effort,
+          draft: opts?.draft,
+          ride_date: opts?.ride_date,
+        })
         navigate(`/rehearse/${r.id}`)
       } catch (err: unknown) {
         // The API writes its refusals for a human ("this ride has no GPS

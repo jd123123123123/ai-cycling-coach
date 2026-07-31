@@ -11,16 +11,21 @@
 import type { RehearsalClimb, RehearsalSegment } from '../../api/rehearsal'
 
 /**
- * Elevation profile integrated from the pacing segments' gradients.
+ * The elevation series the silhouette is drawn from.
  *
- * The wire format carries `gradient_pct` and `start_m` but no altitude — the
- * simulator never needs one, it only needs slope. The silhouette does, so we
- * rebuild it: each segment climbs `gradient % × its length`. The absolute
- * datum is arbitrary (starts at 0) because `RehearsalProfile` normalises
- * min→max into its box anyway; only the SHAPE is claimed here, never an
- * altitude figure, which is why no number from this function is ever printed.
+ * Prefers the MEASURED `elevation_m` the API now carries per segment. Older
+ * stored rehearsals (written before that field existed) have none, so the
+ * shape is integrated back out of the gradients as a fallback: each segment
+ * climbs `gradient % × its length`. In that fallback the absolute datum is
+ * arbitrary (it starts at 0), which is harmless because `RehearsalProfile`
+ * normalises min→max into its box anyway — only the SHAPE is ever claimed
+ * here, never an altitude figure, which is why no number from this function
+ * is printed on screen.
  */
 export function elevationsFromSegments(segments: RehearsalSegment[]): number[] {
+  if (segments.length > 0 && segments.every((s) => s.elevation_m != null)) {
+    return segments.map((s) => s.elevation_m as number)
+  }
   const out: number[] = []
   let elev = 0
   for (let i = 0; i < segments.length; i++) {
@@ -77,10 +82,16 @@ export interface ClimbStats {
 }
 
 /**
- * The three figures a climb card shows beyond the terrain. All three are
- * null when the climb has no segments (a `can_predict=false` rehearsal still
- * carries climbs — the terrain is real even when the athlete's profile can't
- * be paced) so the card can render an honest `—` instead of a zero.
+ * The three figures a climb card shows beyond the terrain. Each is null
+ * whenever the projection does not actually carry it, so the card renders an
+ * honest `—` instead of a fabricated zero. That happens in two ways:
+ *
+ *  - the climb has no paced segments at all (a `can_predict=false` rehearsal
+ *    still carries climbs — the terrain is real even when the athlete's
+ *    profile cannot be paced);
+ *  - the rider has no measured W′, in which case the whole balance series is
+ *    flat zero. `max(0, 0 − 0)` used to print "0,0 kJ" on every climb, which
+ *    is not a cheap climb — it is a number we do not have.
  */
 export function climbStats(
   segments: RehearsalSegment[],
@@ -96,13 +107,30 @@ export function climbStats(
   const last = idxs[idxs.length - 1]
   const on = idxs.map((i) => segments[i])
 
-  const meanPowerW = on.reduce((a, s) => a + s.power_w, 0) / on.length
+  const powers = on.map((s) => s.power_w)
+  const meanPowerW = powers.every((p) => p != null)
+    ? (powers as number[]).reduce((a, p) => a + p, 0) / powers.length
+    : null
+
   // The climb ends where the NEXT segment starts; without one (the route
   // finishes on the summit) the last segment's own elapsed is the best we have.
   const endElapsed = segments[last + 1]?.elapsed_s ?? segments[last].elapsed_s
-  const timeS = Math.max(0, endElapsed - segments[first].elapsed_s)
-  const minW = Math.min(...on.map((s) => s.w_bal_j))
-  const wCostJ = Math.max(0, segments[first].w_bal_j - minW)
+  const startElapsed = segments[first].elapsed_s
+  const timeS =
+    endElapsed != null && startElapsed != null
+      ? Math.max(0, endElapsed - startElapsed)
+      : null
+
+  // Gated on the WHOLE route's balance series, not just this climb's: a rider
+  // with no W′ on file has zeros everywhere, and that is the case where the
+  // drop is meaningless rather than merely small.
+  const capacity = wPrimeCapacity(segments)
+  const startBal = segments[first].w_bal_j
+  const balances = on.map((s) => s.w_bal_j)
+  const wCostJ =
+    capacity != null && startBal != null && balances.every((b) => b != null)
+      ? Math.max(0, startBal - Math.min(...(balances as number[])))
+      : null
 
   return { meanPowerW, timeS, wCostJ }
 }
@@ -145,13 +173,15 @@ export function blowUpCeilingW(
   if (idx < 0) return null
 
   let end = idx
-  while (end < segments.length && segments[end].w_bal_j < RECOVERED_J) end++
+  while (end < segments.length && (segments[end].w_bal_j ?? 0) < RECOVERED_J) end++
   const run = end > idx ? segments.slice(idx, end) : segments.slice(idx, idx + 1)
 
   const after = run.filter((s) => s.gradient_pct >= 3)
-  const pool = after.length > 0 ? after : run
+  const pool = (after.length > 0 ? after : run)
+    .map((s) => s.power_w)
+    .filter((p): p is number => p != null)
   if (pool.length === 0) return null
-  return Math.max(...pool.map((s) => s.power_w))
+  return Math.max(...pool)
 }
 
 /** Fallback display name for a climb: the API detects them, it can't name them. */
@@ -159,9 +189,16 @@ export function climbLabel(climb: RehearsalClimb, de: boolean): string {
   return de ? `Anstieg ${climb.climb_id}` : `Climb ${climb.climb_id}`
 }
 
-/** W′ at full — the largest balance seen, i.e. the value before any drain. */
+/**
+ * W′ at full — the largest balance seen, i.e. the value before any drain.
+ * Null when the projection carries no balance at all (no CP, or no measured
+ * W′), which is what makes every W′ figure downstream render as `—`.
+ */
 export function wPrimeCapacity(segments: RehearsalSegment[]): number | null {
-  if (segments.length === 0) return null
-  const max = Math.max(...segments.map((s) => s.w_bal_j))
+  const known = segments
+    .map((s) => s.w_bal_j)
+    .filter((b): b is number => b != null)
+  if (known.length === 0) return null
+  const max = Math.max(...known)
   return max > 0 ? max : null
 }

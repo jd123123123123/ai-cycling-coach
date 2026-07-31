@@ -53,10 +53,26 @@ describe('VerdictBlock', () => {
     expect(screen.getByText(/Ermüdungsverlust unbekannt/)).toBeTruthy()
   })
 
+  // A missing W′ silently disables the simulator's cap branch: no blow-up is
+  // ever recorded and the W′ series is flat zero. Without this line the
+  // athlete reads that absence as "I never break".
+  it('says it cannot locate the blow-up when no W′ is on file', () => {
+    render(<VerdictBlock {...base} wPrimeIsDefault />)
+    expect(screen.getByText(/Kein W′ hinterlegt/)).toBeTruthy()
+  })
+
+  it('stays silent about W′ when a measured one backs the projection', () => {
+    const { container } = render(<VerdictBlock {...base} wPrimeIsDefault={false} />)
+    expect(container.textContent).not.toContain('Kein W′')
+  })
+
   it('says so in English too', () => {
-    render(<VerdictBlock {...base} de={false} cdaIsDefault durabilityIsDefault weatherUsed />)
+    render(
+      <VerdictBlock {...base} de={false} cdaIsDefault durabilityIsDefault wPrimeIsDefault weatherUsed />,
+    )
     expect(screen.getByText(/default estimate/i)).toBeTruthy()
     expect(screen.getByText(/No durability data yet/i)).toBeTruthy()
+    expect(screen.getByText(/No W′ on file/i)).toBeTruthy()
     expect(screen.getByText(/from the forecast/i)).toBeTruthy()
   })
 

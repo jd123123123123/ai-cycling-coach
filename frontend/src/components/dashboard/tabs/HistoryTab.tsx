@@ -726,6 +726,11 @@ export default function HistoryTab() {
                     <button
                       type="button"
                       disabled={pendingRef !== null}
+                      // No draft or effort is passed on purpose: nothing stored
+                      // about a past ride says whether it was ridden in a
+                      // wheel or how hard it was intended, so the API's
+                      // neutral solo/fondo default stands and AssumptionsRow
+                      // is where the athlete corrects it.
                       onClick={() => { void rehearse('activity', a.id, a.title ?? undefined) }}
                       className="absolute right-0 top-1/2 z-10 inline-flex items-center gap-1 rounded-full shrink-0"
                       style={{

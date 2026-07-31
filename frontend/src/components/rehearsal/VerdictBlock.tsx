@@ -23,6 +23,7 @@ export default function VerdictBlock({
   blowUpWatts,
   cdaIsDefault,
   durabilityIsDefault,
+  wPrimeIsDefault,
   weatherUsed,
   de,
   missing,
@@ -34,6 +35,12 @@ export default function VerdictBlock({
   blowUpWatts?: number | null
   cdaIsDefault: boolean
   durabilityIsDefault?: boolean
+  /**
+   * True when no measured W′ backs this rider. There is then no ceiling in
+   * the model at all, so the absence of a blow-up is an absence of evidence —
+   * and the block says exactly that rather than letting silence imply safety.
+   */
+  wPrimeIsDefault?: boolean
   weatherUsed: boolean
   de: boolean
   /** Names of the profile inputs that make a prediction impossible. */
@@ -52,6 +59,13 @@ export default function VerdictBlock({
       de
         ? 'Ermüdungsverlust unbekannt — die Vorhersage nimmt an, dass du bei km 180 so stark bist wie bei km 5.'
         : "No durability data yet — this assumes you're as strong at km 180 as at km 5.",
+    )
+  }
+  if (wPrimeIsDefault) {
+    notes.push(
+      de
+        ? 'Kein W′ hinterlegt — wir können dir nicht sagen, wo du einbrichst.'
+        : 'No W′ on file — we cannot tell you where you blow up.',
     )
   }
   if (weatherUsed) {

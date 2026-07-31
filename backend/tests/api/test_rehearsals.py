@@ -12,11 +12,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.api.rehearsals import _DAYLIGHT_FROM_H, _DAYLIGHT_TO_H, _forecast_for_route
 from app.dependencies import get_current_active_user, get_current_user, get_db_for_user
 from app.main import app
+from app.models.athlete_profile import AthleteProfile
 from app.models.route_rehearsal import RouteRehearsal
+from app.schemas.athlete import (
+    MAX_TARGET_EVENT_GPX_BYTES,
+    AthleteProfileRead,
+    AthleteProfileUpdate,
+)
+from app.schemas.rehearsal import MAX_GPX_BYTES
 from app.services.rehearsal.orchestrator import route_from_json, route_to_json, run_rehearsal
 from app.services.rehearsal.rider_model import build_rider_model
 from app.services.rehearsal.route_source import route_from_gpx
@@ -271,6 +279,67 @@ class TestCreateRehearsal:
         assert body["climbs"]          # the terrain still renders
         assert body["total_time_s"] is None
         assert body["band"] is None
+
+    def test_an_unpaceable_rehearsal_still_carries_the_whole_profile(
+        self, client_no_ftp
+    ):
+        """The surface PROMISES the profile ("das Streckenprofil siehst du
+        trotzdem", spec §6). It used to return `segments: []`, so the promise
+        was false and the silhouette simply was not there."""
+        resp = client_no_ftp.post("/rehearsals", json={"source_kind": "gpx", "gpx": _GPX})
+        body = resp.json()
+        segments = body["segments"]
+        assert len(segments) > 1
+        # The road is measured, so it is all there ...
+        assert all(s["elevation_m"] is not None for s in segments)
+        assert any(s["gradient_pct"] > 0 for s in segments)
+        assert any(s["climb_id"] is not None for s in segments)
+        # ... and the ride is not, so none of it is faked as a zero.
+        for key in ("power_w", "speed_ms", "elapsed_s", "w_bal_j"):
+            assert all(s[key] is None for s in segments), key
+
+    def test_a_rider_on_profile_ftp_is_told_no_w_prime_is_known(
+        self, client_with_athlete
+    ):
+        """No CP fit means no W′, which disables the simulator's cap branch
+        entirely: no blow-up is reported and the W′ series is flat. That has
+        to be stated, or the silence reads as "you never break"."""
+        resp = client_with_athlete.post(
+            "/rehearsals", json={"source_kind": "gpx", "gpx": _GPX, "effort": "race"}
+        )
+        body = resp.json()
+        assert body["can_predict"] is True
+        assert body["w_prime_is_default"] is True
+        assert body["blow_ups"] == []
+
+    def test_a_rider_with_a_fitted_cp_curve_carries_a_real_w_prime(self):
+        """The other side of the same flag: a measured W′ is not a default."""
+        _install(_make_profile())
+        try:
+            with patch(
+                "app.api.rehearsals.latest_critical_power",
+                new=AsyncMock(return_value={"cp_watts": 250.0, "w_prime_j": 20000.0}),
+            ):
+                client = TestClient(app, raise_server_exceptions=True)
+                body = client.post(
+                    "/rehearsals", json={"source_kind": "gpx", "gpx": _GPX}
+                ).json()
+        finally:
+            app.dependency_overrides.clear()
+        assert body["w_prime_is_default"] is False
+        assert any(s["w_bal_j"] for s in body["segments"])
+
+    def test_an_oversized_gpx_is_refused_before_it_is_parsed(
+        self, client_with_athlete
+    ):
+        """Unbounded, one authenticated POST can pin a worker on a parse. The
+        cap matches the crew tour uploader's MAX_TOUR_BYTES."""
+        oversized = "x" * (MAX_GPX_BYTES + 1)
+        resp = client_with_athlete.post(
+            "/rehearsals", json={"source_kind": "gpx", "gpx": oversized}
+        )
+        assert resp.status_code == 422
+        assert "too large" in json.dumps(resp.json()).lower()
 
     def test_a_referenced_source_without_a_source_ref_is_refused(
         self, client_with_athlete
@@ -754,3 +823,37 @@ class TestTargetEventSource:
         resp = client.post("/rehearsals", json={"source_kind": "target_event"})
         assert resp.status_code == 404
         assert "target-event" in resp.json()["detail"]
+
+
+class TestTargetEventCourseWriter:
+    """`target_event_gpx` had a reader and no writer, so the source above
+    could only ever 404 and the column nothing could populate. The profile
+    update is that writer -- these guard its contract."""
+
+    def test_the_profile_update_accepts_a_course(self):
+        data = AthleteProfileUpdate(target_event_gpx=_GPX)
+        assert data.target_event_gpx == _GPX
+        # exclude_unset is what update_profile writes with; the field must
+        # actually be in it or the setattr loop never runs.
+        assert "target_event_gpx" in data.model_dump(exclude_unset=True)
+
+    def test_null_clears_the_course(self):
+        data = AthleteProfileUpdate(target_event_gpx=None)
+        assert data.model_dump(exclude_unset=True) == {"target_event_gpx": None}
+
+    def test_a_file_that_is_not_gpx_is_refused(self):
+        with pytest.raises(ValidationError, match="GPX"):
+            AthleteProfileUpdate(target_event_gpx="just some text")
+
+    def test_an_oversized_course_is_refused(self):
+        oversized = "<gpx>" + "x" * MAX_TARGET_EVENT_GPX_BYTES
+        with pytest.raises(ValidationError, match="too large"):
+            AthleteProfileUpdate(target_event_gpx=oversized)
+
+    def test_the_read_model_reports_the_course_without_shipping_it(self):
+        """Megabytes of GPX have no business on every profile fetch; the
+        client only needs to know whether the door is open."""
+        profile = AthleteProfile(user_id=1, target_event_gpx=_GPX)
+        assert profile.has_target_event_route is True
+        assert AthleteProfile(user_id=1).has_target_event_route is False
+        assert "target_event_gpx" not in AthleteProfileRead.model_fields

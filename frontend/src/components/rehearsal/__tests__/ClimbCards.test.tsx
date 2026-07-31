@@ -14,6 +14,7 @@ const climb: RehearsalClimb = {
 
 const seg = (o: Partial<RehearsalSegment> & { start_m: number }): RehearsalSegment => ({
   gradient_pct: 8,
+  elevation_m: null,
   power_w: 0,
   speed_ms: 5,
   elapsed_s: 0,
@@ -45,6 +46,41 @@ describe('ClimbCards', () => {
     expect(screen.queryByText('0 W')).toBeNull()
     // Target power, time and W′ cost all fall back to the dash.
     expect(screen.getAllByText('—').length).toBe(3)
+  })
+
+  // A rider on profile FTP carries no W′, so the simulator's balance series
+  // is flat zero. `max(0, 0 − 0)` printed "0,0 kJ" on every climb — a
+  // fabricated measurement, and precisely the number the athlete would use to
+  // decide the climb is cheap.
+  it('renders a dash, not "0,0 kJ", when no W′ backs the projection', () => {
+    render(
+      <ClimbCards
+        climbs={[climb]}
+        segments={[
+          seg({ start_m: 1000, power_w: 300, elapsed_s: 0, w_bal_j: 0 }),
+          seg({ start_m: 2000, power_w: 300, elapsed_s: 400, w_bal_j: 0 }),
+        ]}
+        de
+      />,
+    )
+    expect(screen.queryByText('0,0 kJ')).toBeNull()
+    // Target power and time are still real; only the W′ cost is unknown.
+    expect(screen.getByText('300 W')).toBeTruthy()
+    expect(screen.getAllByText('—').length).toBe(1)
+  })
+
+  it('still reports a real W′ cost when a measured W′ backs it', () => {
+    render(
+      <ClimbCards
+        climbs={[climb]}
+        segments={[
+          seg({ start_m: 1000, w_bal_j: 20000 }),
+          seg({ start_m: 2000, w_bal_j: 14000 }),
+        ]}
+        de
+      />,
+    )
+    expect(screen.getByText('6,0 kJ')).toBeTruthy()
   })
 
   it('renders nothing when there are no climbs', () => {

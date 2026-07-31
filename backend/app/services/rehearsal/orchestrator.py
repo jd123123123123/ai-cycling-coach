@@ -27,7 +27,7 @@ from app.services.rehearsal.route_profile import (
     find_climbs,
 )
 from app.services.rehearsal.route_source import RehearsalRoute, RoutePoint
-from app.services.rehearsal.simulator import Assumptions, simulate
+from app.services.rehearsal.simulator import Assumptions, SegmentResult, simulate
 from app.services.rehearsal.uncertainty import simulate_band
 from app.services.rehearsal.weather import build_weather_on_route, weather_applies
 
@@ -65,6 +65,31 @@ def _guard_inputs(model: RiderModel, segments: list[Segment]) -> None:
             raise RehearsalInputError(
                 "route elevation data is corrupt -- a rehearsal needs the terrain"
             )
+
+
+def _segment_payload(seg: Segment, sim: SegmentResult | None) -> dict:
+    """One segment on the wire: the terrain always, the pacing only if predicted.
+
+    The terrain half (`start_m`, `gradient_pct`, `elevation_m`, `climb_id`) is
+    measured off the route and is just as real for a rider with no CP as for
+    one with a fitted power-duration curve -- which is exactly what the surface
+    promises ("the route profile is below regardless", spec §6). The paced half
+    is None rather than 0.0 when there is no prediction, so a client cannot
+    render a fabricated zero watt / zero kJ figure.
+    """
+    return {
+        "start_m": seg.start_m,
+        "gradient_pct": seg.gradient_pct,
+        # The MEASURED altitude, not one integrated back out of the gradients:
+        # the silhouette is the one thing this branch still claims, so it comes
+        # from the route itself.
+        "elevation_m": seg.elevation_m,
+        "climb_id": seg.climb_id,
+        "power_w": sim.power_w if sim is not None else None,
+        "speed_ms": sim.speed_ms if sim is not None else None,
+        "elapsed_s": sim.elapsed_s if sim is not None else None,
+        "w_bal_j": sim.w_bal_j if sim is not None else None,
+    }
 
 
 def run_rehearsal(
@@ -108,7 +133,9 @@ def run_rehearsal(
                 if not v
             ],
             "climbs": [asdict(c) for c in climbs],
-            "segments": [],
+            # The terrain, in full. The prediction is what is missing, not the
+            # road -- so the profile and the climbs still render.
+            "segments": [_segment_payload(s, None) for s in segments],
             "total_time_s": None,
             "band": None,
             "total_kj": None,
@@ -116,6 +143,7 @@ def run_rehearsal(
             "blow_ups": [],
             "cda_is_default": model.cda_is_default,
             "durability_is_default": model.durability_drop_pct <= 0,
+            "w_prime_is_default": not model.w_prime_j,
             "weather_used": False,
         }
 
@@ -130,7 +158,10 @@ def run_rehearsal(
         "can_predict": True,
         "missing": [],
         "climbs": [asdict(c) for c in climbs],
-        "segments": [asdict(s) for s in sim.segments],
+        "segments": [
+            _segment_payload(seg, sim_seg)
+            for seg, sim_seg in zip(segments, sim.segments)
+        ],
         "total_time_s": sim.total_time_s,
         "band": asdict(band),
         "total_kj": sim.total_kj,
@@ -138,6 +169,12 @@ def run_rehearsal(
         "blow_ups": [asdict(b) for b in sim.blow_ups],
         "cda_is_default": model.cda_is_default,
         "durability_is_default": model.durability_drop_pct <= 0,
+        # No W′ on file means the simulator's cap branch never fires: this
+        # rider is never stopped from holding 1.24 × CP for six hours, so
+        # there is no blow-up to report and the W′ series is flat zero. The
+        # flag exists so the surface can SAY that rather than let a missing
+        # ceiling read as a rider who simply never breaks.
+        "w_prime_is_default": not model.w_prime_j,
         "weather_used": weather_used,
     }
 

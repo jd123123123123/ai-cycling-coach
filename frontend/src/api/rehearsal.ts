@@ -19,13 +19,24 @@ export interface Assumptions {
   use_weather: boolean
 }
 
+/**
+ * One ~150 m stretch of road.
+ *
+ * The terrain half (`start_m`, `gradient_pct`, `elevation_m`, `climb_id`) is
+ * measured off the route and is always present — including on a
+ * `can_predict: false` rehearsal, where the profile still renders because the
+ * road is real even when the rider's physiology is unknown. The paced half is
+ * `null` in exactly that case; it is never zero, because a zero would read as
+ * a measurement.
+ */
 export interface RehearsalSegment {
   start_m: number
   gradient_pct: number
-  power_w: number
-  speed_ms: number
-  elapsed_s: number
-  w_bal_j: number
+  elevation_m: number | null
+  power_w: number | null
+  speed_ms: number | null
+  elapsed_s: number | null
+  w_bal_j: number | null
   climb_id: number | null
 }
 
@@ -75,6 +86,12 @@ export interface Rehearsal {
   cda_is_default: boolean
   /** True when the durability fade is the unmeasured default. */
   durability_is_default: boolean
+  /**
+   * True when no measured W′ backs this rider. The simulator then has no
+   * ceiling to enforce: no blow-up is reported and the W′ series is flat
+   * zero. That absence must be stated, never rendered as "you never break".
+   */
+  w_prime_is_default: boolean
   weather_used: boolean
 }
 

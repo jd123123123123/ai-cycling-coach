@@ -170,6 +170,7 @@ export default function RouteRehearsalView() {
         blowUpWatts={blowUp ? blowUpCeilingW(segments, blowUp.distance_m) : null}
         cdaIsDefault={data.cda_is_default}
         durabilityIsDefault={data.durability_is_default}
+        wPrimeIsDefault={data.w_prime_is_default}
         weatherUsed={data.weather_used}
         missing={data.missing}
         de={de}
@@ -197,13 +198,26 @@ export default function RouteRehearsalView() {
               <>
                 <Readout label="km" value={formatDecimal(scrubbed.start_m / 1000, de)} />
                 <Readout label={de ? 'Steigung' : 'Gradient'} value={`${formatDecimal(scrubbed.gradient_pct, de)} %`} />
-                <Readout label={de ? 'Ziel' : 'Target'} value={`${Math.round(scrubbed.power_w)} W`} />
-                <Readout label={de ? 'Tempo' : 'Speed'} value={`${formatDecimal(scrubbed.speed_ms * 3.6, de)} km/h`} />
-                <Readout label={de ? 'Zeit' : 'Elapsed'} value={formatHms(scrubbed.elapsed_s)} />
+                {/* Everything below the gradient is a PROJECTION, so each one
+                    falls back to `—` on its own: an unpaced rehearsal still
+                    scrubs the real road, it just has nothing to say about
+                    watts. */}
+                <Readout
+                  label={de ? 'Ziel' : 'Target'}
+                  value={scrubbed.power_w != null ? `${Math.round(scrubbed.power_w)} W` : '—'}
+                />
+                <Readout
+                  label={de ? 'Tempo' : 'Speed'}
+                  value={scrubbed.speed_ms != null ? `${formatDecimal(scrubbed.speed_ms * 3.6, de)} km/h` : '—'}
+                />
+                <Readout
+                  label={de ? 'Zeit' : 'Elapsed'}
+                  value={scrubbed.elapsed_s != null ? formatHms(scrubbed.elapsed_s) : '—'}
+                />
                 <Readout
                   label="W′"
                   value={
-                    wPrime != null
+                    wPrime != null && scrubbed.w_bal_j != null
                       ? `${Math.round(Math.max(0, Math.min(1, scrubbed.w_bal_j / wPrime)) * 100)} %`
                       : '—'
                   }
@@ -211,9 +225,13 @@ export default function RouteRehearsalView() {
               </>
             ) : (
               <span style={{ fontSize: 12.5, color: 'var(--color-muted)' }}>
-                {de
-                  ? 'Über das Profil streichen — Watt, Tempo und W′ an jedem Punkt.'
-                  : 'Drag across the profile — watts, speed and W′ at any point.'}
+                {data.can_predict
+                  ? de
+                    ? 'Über das Profil streichen — Watt, Tempo und W′ an jedem Punkt.'
+                    : 'Drag across the profile — watts, speed and W′ at any point.'
+                  : de
+                    ? 'Über das Profil streichen — Kilometer und Steigung an jedem Punkt.'
+                    : 'Drag across the profile — distance and gradient at any point.'}
               </span>
             )}
           </div>

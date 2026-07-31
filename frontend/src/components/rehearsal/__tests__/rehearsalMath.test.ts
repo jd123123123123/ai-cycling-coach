@@ -11,6 +11,7 @@ import type { RehearsalClimb, RehearsalSegment } from '../../../api/rehearsal'
 
 const seg = (o: Partial<RehearsalSegment> & { start_m: number }): RehearsalSegment => ({
   gradient_pct: 0,
+  elevation_m: null,
   power_w: 200,
   speed_ms: 8,
   elapsed_s: 0,
@@ -52,6 +53,25 @@ describe('elevationsFromSegments', () => {
   it('is empty for an empty route', () => {
     expect(elevationsFromSegments([])).toEqual([])
   })
+
+  // The API now measures altitude per segment. Integrating gradients is only
+  // the fallback for rehearsals stored before that field existed.
+  it('prefers the measured altitude over the integrated one', () => {
+    const out = elevationsFromSegments([
+      seg({ start_m: 0, gradient_pct: 10, elevation_m: 1200 }),
+      seg({ start_m: 100, gradient_pct: -5, elevation_m: 1210 }),
+    ])
+    expect(out).toEqual([1200, 1210])
+  })
+
+  it('falls back to the gradients when even one altitude is missing', () => {
+    const out = elevationsFromSegments([
+      seg({ start_m: 0, gradient_pct: 10, elevation_m: 1200 }),
+      seg({ start_m: 100, gradient_pct: -5, elevation_m: null }),
+    ])
+    expect(out[0]).toBe(0)
+    expect(out[1]).toBeCloseTo(10)
+  })
 })
 
 describe('climbStats', () => {
@@ -76,6 +96,32 @@ describe('climbStats', () => {
 
   it('returns nulls (not zeros) when the climb has no pacing behind it', () => {
     expect(climbStats([], climb)).toEqual({ meanPowerW: null, timeS: null, wCostJ: null })
+  })
+
+  // No measured W′ → the whole balance series is zero → `max(0, 0 − 0)` is a
+  // fabricated "0,0 kJ", which reads as "this climb is free".
+  it('returns a null W′ cost when the whole balance series is zero', () => {
+    const stats = climbStats(
+      [
+        seg({ start_m: 100, elapsed_s: 60, w_bal_j: 0, power_w: 300, climb_id: 1 }),
+        seg({ start_m: 200, elapsed_s: 120, w_bal_j: 0, power_w: 260, climb_id: 1 }),
+      ],
+      climb,
+    )
+    expect(stats.wCostJ).toBeNull()
+    // The pacing figures are real and survive.
+    expect(stats.meanPowerW).toBe(280)
+  })
+
+  it('returns nulls for the paced figures on an unpaced rehearsal', () => {
+    const stats = climbStats(
+      [
+        seg({ start_m: 100, climb_id: 1, power_w: null, elapsed_s: null, w_bal_j: null }),
+        seg({ start_m: 200, climb_id: 1, power_w: null, elapsed_s: null, w_bal_j: null }),
+      ],
+      climb,
+    )
+    expect(stats).toEqual({ meanPowerW: null, timeS: null, wCostJ: null })
   })
 })
 

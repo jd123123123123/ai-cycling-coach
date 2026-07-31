@@ -74,11 +74,18 @@ describe('CrewEventDetailView — "Rehearse this ride"', () => {
     fireEvent.click(screen.getByText(/Diese Runde proben|Rehearse this ride/))
 
     await waitFor(() => expect(screen.getByTestId('landed')).toBeTruthy())
-    expect(createRehearsal).toHaveBeenCalledWith({
-      source_kind: 'crew_event',
-      source_ref: 3,
-      name: 'Sunrise loop',
-    })
+    // A crew event is a group ride, so the projection starts in a wheel
+    // rather than solo. `effort` stays unset — how hard the athlete intends
+    // to ride is theirs to say, not ours to guess.
+    expect(createRehearsal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source_kind: 'crew_event',
+        source_ref: 3,
+        name: 'Sunrise loop',
+        draft: 'small_group',
+        effort: undefined,
+      }),
+    )
   })
 
   it('is absent while the host has uploaded no tour', () => {

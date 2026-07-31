@@ -40,6 +40,8 @@ from datetime import date, datetime, time, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
+from starlette.concurrency import run_in_threadpool
 
 # The crew-scoping helpers are imported rather than re-implemented: "an event
 # is visible only to its own crew" is a security property, and a second copy of
@@ -96,6 +98,11 @@ _DAYLIGHT_TO_H = 18
 #: rather than a guessed one.
 _STORED_CDA_M2: float | None = None
 _STORED_DURABILITY_DROP_PCT = 0.0
+
+#: Ceiling on a list response. Nothing pages this list today and no athlete
+#: has anywhere near this many rehearsals -- the bound exists so the query
+#: cannot grow without limit with the account.
+_LIST_LIMIT = 100
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -204,8 +211,18 @@ async def _simulate_and_store(
     model = await _build_model(db, user_id)
     forecast = await _forecast_for_route(route, date.today()) if assumptions.use_weather else None
     try:
-        result = run_rehearsal(
-            route, model, assumptions, today=date.today(), forecast=forecast
+        # ~0.85 s of pure NumPy/Python for a 150 km alpine route, and
+        # AssumptionsRow PATCHes on every tab tap -- run directly inside
+        # `async def` it blocks the event loop and stalls every other request
+        # on the worker. The march releases the GIL for its array work, so a
+        # thread is nearly free here.
+        result = await run_in_threadpool(
+            run_rehearsal,
+            route,
+            model,
+            assumptions,
+            today=date.today(),
+            forecast=forecast,
         )
     except (RouteUnusable, RehearsalInputError) as exc:
         raise HTTPException(
@@ -404,11 +421,30 @@ async def list_rehearsals(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_for_user),
 ) -> RehearsalListOut:
-    """The athlete's rehearsals, newest first, headline figures only."""
+    """The athlete's rehearsals, newest first, headline figures only.
+
+    `load_only` matters more than it looks: a stored rehearsal carries ~800 KB
+    of route JSONB and ~195 KB of result JSONB, none of which a list row shows.
+    `result` is still needed for the two headline figures, so only `route` is
+    genuinely deferred -- and the LIMIT keeps a long-lived account from turning
+    one list call into tens of megabytes.
+    """
     res = await db.execute(
         select(RouteRehearsal)
+        .options(
+            load_only(
+                RouteRehearsal.id,
+                RouteRehearsal.name,
+                RouteRehearsal.source_kind,
+                RouteRehearsal.distance_m,
+                RouteRehearsal.ascent_m,
+                RouteRehearsal.created_at,
+                RouteRehearsal.result,
+            )
+        )
         .where(RouteRehearsal.user_id == current_user.id)
         .order_by(RouteRehearsal.created_at.desc())
+        .limit(_LIST_LIMIT)
     )
     rows = list(res.scalars().all())
     return RehearsalListOut(

@@ -8,7 +8,7 @@ import { TERRAIN_FILL } from '../profileMath'
 import type { RehearsalSegment } from '../../../api/rehearsal'
 
 const seg = (i: number, gradient: number): RehearsalSegment => ({
-  start_m: i * 150, gradient_pct: gradient, power_w: 240, speed_ms: 6,
+  start_m: i * 150, gradient_pct: gradient, elevation_m: null, power_w: 240, speed_ms: 6,
   elapsed_s: i * 25, w_bal_j: 20000 - i * 100, climb_id: gradient > 3 ? 1 : null,
 })
 

@@ -20,6 +20,7 @@ import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useLocale } from '../../../contexts/LocaleContext'
 import AdaptiveCard from '../../plan/AdaptiveCard'
 import PlanChangeInterview from '../../plan/PlanChangeInterview'
+import GpxRehearseCard from '../../rehearsal/GpxRehearseCard'
 import { detectWorkoutSport, loggedReviewFromEvidence } from '../../../api/coach'
 import type { WorkoutSport } from '../../../api/coach'
 import type { DayPlan, IntervalBlockOut } from '../../../api/weeks'
@@ -912,6 +913,11 @@ export default function PlanTab() {
         </span>
         <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />
       </button>
+
+      {/* Route Rehearsal's GPX entry point — next to the goal because that is
+          where a target event is set, and because saving the uploaded course
+          against the event is the same gesture. */}
+      <GpxRehearseCard profile={profile} de={de} />
 
       {/* Secondary plan tools: BYO plan import + custom-workout builder. */}
       <div className="flex flex-wrap gap-2">

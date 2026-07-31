@@ -529,7 +529,18 @@ export default function CrewEventDetailView() {
               <button
                 type="button"
                 disabled={pendingRef !== null}
-                onClick={() => { hapticTick(); void rehearse('crew_event', ev.id, ev.name) }}
+                onClick={() => {
+                  hapticTick()
+                  // A crew event is a group ride by definition, so starting
+                  // the projection on "solo" would have been wrong for every
+                  // rehearsal from this button. A race means a bunch; anything
+                  // else, a small group. `effort` is NOT guessed — how hard
+                  // the athlete intends to ride is theirs to say, and the
+                  // API's `fondo` default is the neutral answer until they do.
+                  void rehearse('crew_event', ev.id, ev.name, {
+                    draft: ev.kind === 'race' ? 'bunch' : 'small_group',
+                  })
+                }}
                 className="flex items-center justify-center rounded-full"
                 style={{
                   gap: 7, padding: '12px 0', background: 'var(--color-paper-2)',

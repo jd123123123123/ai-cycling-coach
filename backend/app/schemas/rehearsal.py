@@ -13,11 +13,17 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.services.rehearsal.simulator import Draft, Effort
 
 SourceKind = Literal["gpx", "crew_event", "activity", "target_event"]
+
+#: Same ceiling the crew tour uploader enforces (crew_events.MAX_TOUR_BYTES).
+#: GPX is text, so 10 MB is generous for any real route -- but the field is a
+#: JSON string on an authenticated POST, and without a bound one request can
+#: pin a worker parsing hundreds of megabytes.
+MAX_GPX_BYTES = 10 * 1024 * 1024
 
 
 class AssumptionsIn(BaseModel):
@@ -47,6 +53,17 @@ class RehearsalCreate(BaseModel):
     effort: Effort = "fondo"
     use_weather: bool = True
 
+    @field_validator("gpx")
+    @classmethod
+    def _gpx_within_limit(cls, v: str | None) -> str | None:
+        """Bound the upload, in BYTES -- a multibyte name inflates a char count."""
+        if v is not None and len(v.encode("utf-8")) > MAX_GPX_BYTES:
+            raise ValueError(
+                f"that GPX file is too large -- the limit is "
+                f"{MAX_GPX_BYTES // (1024 * 1024)} MB"
+            )
+        return v
+
 
 class ClimbOut(BaseModel):
     climb_id: int
@@ -58,12 +75,22 @@ class ClimbOut(BaseModel):
 
 
 class SegmentOut(BaseModel):
+    """Terrain always; pacing only when there was a prediction to make.
+
+    `power_w`/`speed_ms`/`elapsed_s`/`w_bal_j` are None for a
+    `can_predict=false` rehearsal -- the road is measured, the ride is not, and
+    a nullable field is the only way to say so without a fabricated zero.
+    """
+
     start_m: float
     gradient_pct: float
-    power_w: float
-    speed_ms: float
-    elapsed_s: float
-    w_bal_j: float
+    #: Measured altitude, so the silhouette never has to be integrated back
+    #: out of the gradients by the client.
+    elevation_m: float | None = None
+    power_w: float | None = None
+    speed_ms: float | None = None
+    elapsed_s: float | None = None
+    w_bal_j: float | None = None
     climb_id: int | None = None
 
 
@@ -107,6 +134,11 @@ class RehearsalOut(BaseModel):
     #: fabricated "you slow down at km 180" without a real measurement
     #: behind it.
     durability_is_default: bool = True
+    #: True when no measured W′ backs this rider (profile FTP rather than a
+    #: fitted CP curve). The simulator then has no ceiling to enforce, so it
+    #: reports no blow-up and a flat-zero W′ series -- which must read as "we
+    #: cannot tell you where you break", never as "you never break".
+    w_prime_is_default: bool = True
     weather_used: bool = False
 
     @model_validator(mode="after")
