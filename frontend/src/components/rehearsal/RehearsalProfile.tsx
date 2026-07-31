@@ -1,6 +1,12 @@
 import { useMemo } from 'react'
 import type { RehearsalSegment } from '../../api/rehearsal'
-import { downsampleIndices, zoneColorForGradient } from './profileMath'
+import {
+  CLIMB_FILL_OPACITY,
+  downsampleIndices,
+  TERRAIN_FILL,
+  TERRAIN_OPACITY,
+  zoneColorForGradient,
+} from './profileMath'
 
 /** Cap on the points actually drawn — see `downsampleIndices` for why. */
 const MAX_DRAWN_POINTS = 200
@@ -19,6 +25,20 @@ const MAX_DRAWN_POINTS = 200
  * segment index — same reasoning as `HoverBars` using pointer events for
  * touch — so the scrub readout (Task 11) always shows a real measurement,
  * never a value interpolated from a thinned-out point.
+ *
+ * The whole route is always drawn as one continuous terrain shape in a
+ * neutral fill (`TERRAIN_FILL`) first, then climbing spans are tinted on
+ * top by gradient band. "Climbing" is decided by `climb_id` (non-null
+ * inside a detected climb), not a raw gradient threshold: a segment's
+ * `climb_id` already reflects the backend's real climb detection (min gain
+ * + min distance, not just "gradient > x"), so gating on it means a brief
+ * flat or slight dip *inside* a climb still gets a zone tint instead of
+ * silently falling out to the neutral base, while short ordinary rollers
+ * that never form a real climb correctly stay part of the plain terrain.
+ * `gradient_pct` still drives WHICH band a climbing segment gets — see
+ * `zoneColorForGradient`. This also means the earlier bug (flats/descents
+ * painted invisible because `--color-zone-1` == the card background) can't
+ * recur: non-climbing segments never touch a zone colour at all any more.
  */
 export default function RehearsalProfile({
   segments,
@@ -54,15 +74,25 @@ export default function RehearsalProfile({
     const points = idxs.map((i) => [xAt(i), yAt(elevAt(i))] as [number, number])
     const outline = points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
 
-    const fills = idxs.slice(0, -1).map((i, k) => {
+    // The full silhouette closed down to the baseline — always drawn, so
+    // the terrain never has a gap regardless of gradient or climb status.
+    const firstX = points[0][0].toFixed(1)
+    const lastX = points[points.length - 1][0].toFixed(1)
+    const terrain = `${outline} ${lastX},${height} ${firstX},${height}`
+
+    // Climb tints layer on top of the terrain — only drawn where a segment
+    // is actually inside a detected climb (`climb_id != null`); everywhere
+    // else the neutral terrain fill alone carries the shape.
+    const climbFills = idxs.slice(0, -1).flatMap((i, k) => {
+      if (segments[i].climb_id == null) return []
       const [x0, y0] = points[k]
       const [x1, y1] = points[k + 1]
       const color = zoneColorForGradient(segments[i].gradient_pct)
       const poly = `${x0.toFixed(1)},${y0.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)} ${x1.toFixed(1)},${height} ${x0.toFixed(1)},${height}`
-      return { key: i, poly, color }
+      return [{ key: i, poly, color }]
     })
 
-    return { outline, fills }
+    return { outline, terrain, climbFills }
   }, [segments, elevations, width, height, pad])
 
   if (!bands) return null
@@ -89,8 +119,9 @@ export default function RehearsalProfile({
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
-      {bands.fills.map(({ key, poly, color }) => (
-        <polygon key={key} points={poly} fill={color} opacity={0.55} stroke="none" />
+      <polygon points={bands.terrain} fill={TERRAIN_FILL} opacity={TERRAIN_OPACITY} stroke="none" />
+      {bands.climbFills.map(({ key, poly, color }) => (
+        <polygon key={key} points={poly} fill={color} opacity={CLIMB_FILL_OPACITY} stroke="none" />
       ))}
       <polyline
         points={bands.outline}
