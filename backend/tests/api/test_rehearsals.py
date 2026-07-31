@@ -246,10 +246,19 @@ class TestCreateRehearsal:
         # No stored durability measurement yet -- the fade must say so rather
         # than silently applying (or implying) a number nobody measured.
         assert body["durability_is_default"] is True
+        # The three physics assumptions, plus every rider/day override sitting
+        # at "untouched" -- a rehearsal created without naming a knob must not
+        # come back claiming a weight or a target time nobody asked for.
         assert body["assumptions"] == {
             "draft": "solo",
             "effort": "fondo",
             "use_weather": True,
+            "weight_kg": None,
+            "bike_mass_kg": None,
+            "surface": "asphalt",
+            "start_hour": None,
+            "use_projected_cp": False,
+            "target_time_s": None,
         }
 
     def test_effort_is_an_assumption_the_athlete_sets(self, client_with_athlete):
@@ -875,3 +884,207 @@ class TestTargetEventCourseWriter:
         assert profile.has_target_event_route is True
         assert AthleteProfile(user_id=1).has_target_event_route is False
         assert "target_event_gpx" not in AthleteProfileRead.model_fields
+
+
+class TestRiderOverrides:
+    """Weight, bike and surface: cheap knobs, but they must actually reach the
+    physics — and a rehearsal that names none of them must be untouched."""
+
+    def _time(self, client, **knobs) -> float:
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "gpx", "gpx": _GPX, **knobs}
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()["total_time_s"]
+
+    def test_a_lighter_rider_climbs_the_same_route_faster(self, client_with_athlete):
+        heavy = self._time(client_with_athlete, weight_kg=90)
+        light = self._time(client_with_athlete, weight_kg=60)
+        assert light < heavy
+
+    def test_a_heavier_bike_is_slower(self, client_with_athlete):
+        light = self._time(client_with_athlete, weight_kg=72, bike_mass_kg=6)
+        heavy = self._time(client_with_athlete, weight_kg=72, bike_mass_kg=14)
+        assert heavy > light
+
+    def test_gravel_is_slower_than_asphalt_at_the_same_watts(self, client_with_athlete):
+        road = self._time(client_with_athlete, surface="asphalt")
+        gravel = self._time(client_with_athlete, surface="gravel")
+        assert gravel > road
+
+    def test_asphalt_is_exactly_the_old_default(self, client_with_athlete):
+        """The surface knob must not move an existing rehearsal's numbers."""
+        untouched = self._time(client_with_athlete)
+        asphalt = self._time(client_with_athlete, surface="asphalt")
+        assert asphalt == pytest.approx(untouched, rel=1e-9)
+
+    def test_a_nonsense_weight_is_refused_rather_than_simulated(self, client_with_athlete):
+        # Correct physics applied to a 4 kg rider produces confident nonsense.
+        resp = client_with_athlete.post(
+            "/rehearsals", json={"source_kind": "gpx", "gpx": _GPX, "weight_kg": 4}
+        )
+        assert resp.status_code == 422
+
+    def test_the_knobs_come_back_so_the_controls_can_render_themselves(
+        self, client_with_athlete
+    ):
+        resp = client_with_athlete.post(
+            "/rehearsals",
+            json={
+                "source_kind": "gpx",
+                "gpx": _GPX,
+                "weight_kg": 68,
+                "bike_mass_kg": 7.4,
+                "surface": "gravel",
+            },
+        )
+        a = resp.json()["assumptions"]
+        assert a["weight_kg"] == 68
+        assert a["bike_mass_kg"] == 7.4
+        assert a["surface"] == "gravel"
+
+
+class TestTargetTimeOverAPI:
+    def test_a_reachable_target_comes_back_with_the_intensity_it_demands(
+        self, client_with_athlete
+    ):
+        base = client_with_athlete.post(
+            "/rehearsals", json={"source_kind": "gpx", "gpx": _GPX}
+        ).json()["total_time_s"]
+
+        resp = client_with_athlete.post(
+            "/rehearsals",
+            json={"source_kind": "gpx", "gpx": _GPX, "target_time_s": base * 0.97},
+        )
+        body = resp.json()
+        assert body["target_reachable"] is True
+        assert body["target_intensity_pct"] > 0
+        assert body["fastest_possible_s"] is None
+        # The band is drawn around the ride actually being planned.
+        assert body["total_time_s"] == pytest.approx(base * 0.97, abs=30)
+
+    def test_an_impossible_target_is_refused_and_says_what_is_possible(
+        self, client_with_athlete
+    ):
+        resp = client_with_athlete.post(
+            "/rehearsals",
+            json={"source_kind": "gpx", "gpx": _GPX, "target_time_s": 300},
+        )
+        body = resp.json()
+        assert body["target_reachable"] is False
+        assert body["fastest_possible_s"] > 300
+
+    def test_no_target_means_no_target_fields(self, client_with_athlete):
+        body = client_with_athlete.post(
+            "/rehearsals", json={"source_kind": "gpx", "gpx": _GPX}
+        ).json()
+        assert body["target_time_s"] is None
+        assert body["target_reachable"] is None
+        assert body["target_intensity_pct"] is None
+
+
+def _stored_row_with_knobs():
+    """A stored rehearsal that already has rider/day knobs set on it."""
+    row = _stored_row()
+    row.assumptions = {
+        "draft": "solo",
+        "effort": "fondo",
+        "use_weather": True,
+        "weight_kg": 65,
+        "bike_mass_kg": None,
+        "surface": "gravel",
+        "start_hour": 7,
+        "use_projected_cp": False,
+        "target_time_s": None,
+    }
+    return row
+
+
+@pytest.fixture
+def client_with_knobs_stored():
+    _install(_make_profile(), stored=_stored_row_with_knobs())
+    try:
+        with patch(
+            "app.api.rehearsals.latest_critical_power", new=AsyncMock(return_value=None)
+        ):
+            yield TestClient(app, raise_server_exceptions=True)
+    finally:
+        app.dependency_overrides.clear()
+
+
+class TestPatchMergesKnobs:
+    def test_patching_one_knob_does_not_clear_the_others(self, client_with_knobs_stored):
+        """The failure this guards: tapping the draft tab silently wiping the
+        athlete's weight override or start hour, because PATCH rebuilt the
+        overrides from a body that only mentioned draft."""
+        patched = client_with_knobs_stored.patch(
+            "/rehearsals/7", json={"draft": "bunch"}
+        ).json()
+
+        assert patched["assumptions"]["draft"] == "bunch"
+        assert patched["assumptions"]["weight_kg"] == 65
+        assert patched["assumptions"]["surface"] == "gravel"
+        assert patched["assumptions"]["start_hour"] == 7
+
+
+class TestStartHour:
+    """A named start hour is a specific morning, not an average one.
+
+    The whole point of the knob is that 6 a.m. is a different ride from 11 —
+    so the failure worth guarding is the silent one: a start hour that is
+    accepted, stored, echoed back, and then quietly averaged away.
+    """
+
+    @staticmethod
+    def _route(ride_date):
+        return route_from_gpx(_GPX, name="W", ride_date=ride_date)
+
+    @staticmethod
+    def _varying_body() -> dict:
+        """Cold and still at dawn, hot and windy at midday."""
+        return {
+            "hourly": {
+                "wind_speed_10m": [3.6 if h < 9 else 36.0 for h in range(24)],
+                "wind_direction_10m": [90.0] * 24,
+                "temperature_2m": [4.0 if h < 9 else 28.0 for h in range(24)],
+            }
+        }
+
+    async def test_an_early_start_gets_the_early_weather(self):
+        route = self._route(date.today() + timedelta(days=1))
+        with patch(
+            "app.api.rehearsals.fetch_window_forecast",
+            new=AsyncMock(return_value=self._varying_body()),
+        ):
+            dawn = await _forecast_for_route(route, date.today(), 7)
+            noon = await _forecast_for_route(route, date.today(), 13)
+
+        assert dawn["temperature_c"] == pytest.approx(4.0)
+        assert noon["temperature_c"] == pytest.approx(28.0)
+        assert dawn["wind_speed_ms"] < noon["wind_speed_ms"]
+
+    async def test_no_start_hour_still_averages_the_daylight_window(self):
+        """The old behaviour, unchanged for anyone who never touches the knob."""
+        route = self._route(date.today() + timedelta(days=1))
+        with patch(
+            "app.api.rehearsals.fetch_window_forecast",
+            new=AsyncMock(return_value=self._varying_body()),
+        ):
+            averaged = await _forecast_for_route(route, date.today())
+
+        # Between the dawn value and the midday one, being a mean of both.
+        assert 4.0 < averaged["temperature_c"] < 28.0
+
+    async def test_a_hole_at_that_hour_falls_back_rather_than_returning_nothing(self):
+        """A forecast gap at exactly the chosen hour must not delete the
+        weather entirely -- the rider asked for wind, not for silence."""
+        body = self._varying_body()
+        body["hourly"]["temperature_2m"][7] = None
+        route = self._route(date.today() + timedelta(days=1))
+        with patch(
+            "app.api.rehearsals.fetch_window_forecast", new=AsyncMock(return_value=body)
+        ):
+            forecast = await _forecast_for_route(route, date.today(), 7)
+
+        assert forecast is not None
+        assert forecast["temperature_c"] is not None

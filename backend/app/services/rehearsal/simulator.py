@@ -54,6 +54,13 @@ class Assumptions:
     draft: Draft = "solo"
     effort: Effort = "fondo"
     use_weather: bool = True
+    #: Multiplier ON TOP of EFFORT_INTENSITY, searched by the target-time
+    #: solver. The athlete never sets this directly -- they set a finish time,
+    #: and the solver reports the intensity that would reach it. Kept here
+    #: rather than in the solver so every path that computes attempted power
+    #: (including the climb-duration pre-pass) scales identically; a scale that
+    #: reached only _target_power would pace the climbs off the wrong estimate.
+    intensity_scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -103,8 +110,17 @@ def _climb_push(gradient_pct: float) -> float:
     return 1.15
 
 
+def _intensity(effort: Effort, scale: float = 1.0) -> float:
+    """Attempted fraction of CP on the flat, after any target-time scaling."""
+    return EFFORT_INTENSITY[effort] * scale
+
+
 def _target_power(
-    gradient_pct: float, cp_now: float, effort: Effort, climb_time_s: float
+    gradient_pct: float,
+    cp_now: float,
+    effort: Effort,
+    climb_time_s: float,
+    intensity_scale: float = 1.0,
 ) -> float:
     """Attempted power for this gradient at this ambition.
 
@@ -123,14 +139,14 @@ def _target_power(
     """
     return (
         cp_now
-        * EFFORT_INTENSITY[effort]
+        * _intensity(effort, intensity_scale)
         * _climb_push(gradient_pct)
         * duration_scale(int(climb_time_s))
     )
 
 
 def _climb_durations(
-    segments: list[Segment], model: RiderModel, effort: Effort
+    segments: list[Segment], model: RiderModel, effort: Effort, intensity_scale: float = 1.0
 ) -> dict[int, float]:
     """One rough duration estimate per continuous climb run, not per segment.
 
@@ -161,7 +177,9 @@ def _climb_durations(
         while j < n and segments[j].climb_id == cid:
             seg = segments[j]
             est_power = (
-                (model.cp_watts or 0.0) * EFFORT_INTENSITY[effort] * _climb_push(seg.gradient_pct)
+                (model.cp_watts or 0.0)
+                * _intensity(effort, intensity_scale)
+                * _climb_push(seg.gradient_pct)
             )
             est_speed = float(
                 speed_for_power(est_power, seg.gradient_pct, model.mass_kg, solo_cda, model.crr)
@@ -204,7 +222,9 @@ def simulate(
     cda = (model.cda_m2 or 0.0) * DRAFT_FACTORS[assumptions.draft]
     w_prime = model.w_prime_j or 0.0
     bal = w_prime
-    climb_durations = _climb_durations(segments, model, assumptions.effort)
+    climb_durations = _climb_durations(
+        segments, model, assumptions.effort, assumptions.intensity_scale
+    )
 
     out: list[SegmentResult] = []
     blow_ups: list[BlowUp] = []
@@ -215,7 +235,10 @@ def simulate(
     for i, seg in enumerate(segments):
         cp_now = available_cp(model, kj)
         climb_time_s = climb_durations.get(seg.climb_id, 0.0) if seg.climb_id is not None else 0.0
-        target = _target_power(seg.gradient_pct, cp_now, assumptions.effort, climb_time_s)
+        target = _target_power(
+            seg.gradient_pct, cp_now, assumptions.effort, climb_time_s,
+            assumptions.intensity_scale,
+        )
 
         # W′ is the ceiling on going above available CP. Once it is gone the
         # rider is held at what their aerobic engine still supports — this is

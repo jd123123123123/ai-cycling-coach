@@ -15,6 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.services.rehearsal.knobs import Surface
 from app.services.rehearsal.simulator import Draft, Effort
 
 SourceKind = Literal["gpx", "crew_event", "activity", "target_event"]
@@ -26,7 +27,27 @@ SourceKind = Literal["gpx", "crew_event", "activity", "target_event"]
 MAX_GPX_BYTES = 10 * 1024 * 1024
 
 
-class AssumptionsIn(BaseModel):
+class OverridesMixin(BaseModel):
+    """The knobs that change WHO is riding, WHEN, and on WHAT.
+
+    All optional, all meaning "leave it as it is" when absent — a PATCH that
+    names only `draft` must not silently reset the athlete's target time.
+    """
+
+    #: Body weight only; bike mass is separate so "3 kg off me" and "a lighter
+    #: bike" are answerable independently.
+    weight_kg: float | None = Field(None, ge=30, le=200)
+    bike_mass_kg: float | None = Field(None, ge=4, le=30)
+    surface: Surface | None = None
+    #: Hour of day (UTC) the ride starts; None averages the daylight window.
+    start_hour: int | None = Field(None, ge=0, le=23)
+    #: Rehearse against projected fitness for the event date, not today's CP.
+    use_projected_cp: bool | None = None
+    #: "I want to finish inside this." Triggers the backward solve.
+    target_time_s: float | None = Field(None, ge=300)
+
+
+class AssumptionsIn(OverridesMixin):
     """PATCH body. Every field optional: omitted means "leave it as it was"."""
 
     draft: Draft | None = None
@@ -38,6 +59,14 @@ class AssumptionsOut(BaseModel):
     draft: Draft
     effort: Effort
     use_weather: bool
+    # Echoed back so the controls can render their own state after a reload
+    # rather than resetting to the defaults on every visit.
+    weight_kg: float | None = None
+    bike_mass_kg: float | None = None
+    surface: Surface = "asphalt"
+    start_hour: int | None = None
+    use_projected_cp: bool = False
+    target_time_s: float | None = None
 
 
 class RehearsalCreate(BaseModel):
@@ -52,6 +81,12 @@ class RehearsalCreate(BaseModel):
     draft: Draft = "solo"
     effort: Effort = "fondo"
     use_weather: bool = True
+    weight_kg: float | None = Field(None, ge=30, le=200)
+    bike_mass_kg: float | None = Field(None, ge=4, le=30)
+    surface: Surface = "asphalt"
+    start_hour: int | None = Field(None, ge=0, le=23)
+    use_projected_cp: bool = False
+    target_time_s: float | None = Field(None, ge=300)
 
     @field_validator("gpx")
     @classmethod
@@ -146,6 +181,19 @@ class RehearsalOut(BaseModel):
     #: cannot tell you where you break", never as "you never break".
     w_prime_is_default: bool = True
     weather_used: bool = False
+    #: The backward solve. All None unless a target time was asked for.
+    #: `target_reachable` and `target_costs_blow_up` are separate answers: a
+    #: time the clock allows but W' does not is a warning, not a plan.
+    target_time_s: float | None = None
+    target_reachable: bool | None = None
+    target_costs_blow_up: bool | None = None
+    #: Solved intensity as a percentage of the effort setting's normal pace.
+    target_intensity_pct: float | None = None
+    #: Best time available at full gas, when the target is out of reach.
+    fastest_possible_s: float | None = None
+    #: True when the CP used was PROJECTED to the event date rather than
+    #: measured today -- the surface has to say which fitness it simulated.
+    cp_is_projected: bool = False
 
     @model_validator(mode="after")
     def _time_and_band_together(self) -> RehearsalOut:

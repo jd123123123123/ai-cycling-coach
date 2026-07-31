@@ -55,14 +55,19 @@ def build_rider_model(
     weight_kg: float | None,
     cda_m2: float | None,
     durability_drop_pct: float,
+    bike_mass_kg: float | None = None,
+    crr: float | None = None,
 ) -> RiderModel:
+    """`bike_mass_kg` and `crr` are the athlete's overrides; both fall back to
+    the stated defaults, so callers that do not offer the knobs are unchanged."""
+    bike = bike_mass_kg if bike_mass_kg and bike_mass_kg > 0 else BIKE_MASS_KG
     return RiderModel(
         cp_watts=cp_watts,
         w_prime_j=w_prime_j,
-        mass_kg=(weight_kg + BIKE_MASS_KG) if weight_kg else None,
+        mass_kg=(weight_kg + bike) if weight_kg else None,
         cda_m2=cda_m2 if cda_m2 else CDA_FALLBACK_M2,
         cda_is_default=not cda_m2,
-        crr=DEFAULT_CRR,
+        crr=crr if crr and crr > 0 else DEFAULT_CRR,
         durability_drop_pct=max(0.0, durability_drop_pct),
     )
 

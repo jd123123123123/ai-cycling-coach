@@ -24,12 +24,15 @@ import {
   type Draft,
   type Effort,
   type Rehearsal,
+  type RiderOverrides,
 } from '../api/rehearsal'
 import RehearsalProfile from '../components/rehearsal/RehearsalProfile'
 import WPrimeTrace from '../components/rehearsal/WPrimeTrace'
 import VerdictBlock from '../components/rehearsal/VerdictBlock'
 import ClimbCards from '../components/rehearsal/ClimbCards'
 import AssumptionsRow from '../components/rehearsal/AssumptionsRow'
+import RiderKnobs from '../components/rehearsal/RiderKnobs'
+import TargetTimeCard from '../components/rehearsal/TargetTimeCard'
 import RouteMap from '../components/crew/RouteMap'
 import RouteSketch from '../components/ui/RouteSketch'
 import {
@@ -91,7 +94,7 @@ export default function RouteRehearsalView() {
   }, [segmentCount])
 
   const mutation = useMutation({
-    mutationFn: (patch: { draft?: Draft; effort?: Effort; use_weather?: boolean }) =>
+    mutationFn: (patch: { draft?: Draft; effort?: Effort; use_weather?: boolean } & RiderOverrides) =>
       updateAssumptions(rehearsalId, patch),
     onSuccess: (fresh) => {
       queryClient.setQueryData(['rehearsal', rehearsalId], fresh)
@@ -301,6 +304,8 @@ export default function RouteRehearsalView() {
         de={de}
       />
 
+      <TargetTimeCard data={data} de={de} />
+
       {segments.length > 0 && (
         <section
           {...GLASS_CARD_MARKER}
@@ -405,6 +410,14 @@ export default function RouteRehearsalView() {
         assumptions={data.assumptions}
         onChange={(patch) => mutation.mutate(patch)}
         disabled={mutation.isPending}
+        de={de}
+      />
+
+      <RiderKnobs
+        assumptions={data.assumptions}
+        onChange={(patch) => mutation.mutate(patch)}
+        disabled={mutation.isPending}
+        canProject={data.source_kind === 'target_event' || data.source_kind === 'crew_event'}
         de={de}
       />
       {mutation.isPending && (

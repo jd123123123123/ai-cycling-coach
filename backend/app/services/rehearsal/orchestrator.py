@@ -16,7 +16,7 @@ Two things it refuses to paper over:
 from __future__ import annotations
 
 import math
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import date
 
 from app.services.rehearsal.rider_model import RiderModel
@@ -28,6 +28,7 @@ from app.services.rehearsal.route_profile import (
 )
 from app.services.rehearsal.route_source import RehearsalRoute, RoutePoint
 from app.services.rehearsal.simulator import Assumptions, SegmentResult, simulate
+from app.services.rehearsal.target_time import TargetSolution, solve_for_target_time
 from app.services.rehearsal.uncertainty import simulate_band
 from app.services.rehearsal.weather import build_weather_on_route, weather_applies
 
@@ -103,6 +104,7 @@ def run_rehearsal(
     *,
     today: date,
     forecast: dict | None = None,
+    target_time_s: float | None = None,
 ) -> dict:
     """Full pipeline -> the payload the API returns. Weather is passed in, not fetched."""
     segments = build_segments(route)
@@ -151,9 +153,21 @@ def run_rehearsal(
             "weather_used": False,
         }
 
+    target: TargetSolution | None = None
     try:
-        sim = simulate(segments, model, assumptions, headwind, air_density)
-        band = simulate_band(segments, model, assumptions, headwind, air_density)
+        if target_time_s:
+            # Backward solve: the athlete named a finish time, so the pacing
+            # comes out of the solver and the band is drawn around THAT ride,
+            # not around the effort setting they are no longer riding to.
+            target = solve_for_target_time(
+                segments, model, assumptions, headwind, air_density, target_time_s
+            )
+            solved = replace(assumptions, intensity_scale=target.intensity_scale)
+            sim = target.result
+            band = simulate_band(segments, model, solved, headwind, air_density)
+        else:
+            sim = simulate(segments, model, assumptions, headwind, air_density)
+            band = simulate_band(segments, model, assumptions, headwind, air_density)
     except ValueError as exc:  # physics rejected an input the guard let through
         raise RehearsalInputError(f"this route cannot be simulated: {exc}") from exc
     hours = max(1e-6, sim.total_time_s / 3600.0)
@@ -180,6 +194,14 @@ def run_rehearsal(
         # ceiling read as a rider who simply never breaks.
         "w_prime_is_default": not model.w_prime_j,
         "weather_used": weather_used,
+        # The backward solve, or a row of Nones when no time was asked for.
+        # `reachable` and `costs_a_blow_up` are deliberately separate: a time
+        # the clock allows but W' does not is a warning, not a plan.
+        "target_time_s": target.target_time_s if target else None,
+        "target_reachable": target.reachable if target else None,
+        "target_costs_blow_up": target.costs_a_blow_up if target else None,
+        "target_intensity_pct": round(target.intensity_scale * 100.0, 1) if target else None,
+        "fastest_possible_s": target.fastest_possible_s if target else None,
     }
 
 

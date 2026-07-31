@@ -12,11 +12,28 @@ import { apiClient } from './client'
 export type Draft = 'solo' | 'small_group' | 'bunch'
 export type Effort = 'steady' | 'fondo' | 'race'
 export type SourceKind = 'gpx' | 'crew_event' | 'activity' | 'target_event'
+export type Surface = 'asphalt' | 'rough' | 'gravel'
 
-export interface Assumptions {
+/** Everything the athlete can change about the rider, the road and the day. */
+export interface RiderOverrides {
+  /** Body weight only — bike mass is separate, so "3 kg off me" and "a lighter
+   *  bike" are answerable independently. */
+  weight_kg?: number | null
+  bike_mass_kg?: number | null
+  surface?: Surface
+  /** Hour of day (UTC). Null averages the daylight window. */
+  start_hour?: number | null
+  /** Rehearse against projected fitness for the event date, not today's CP. */
+  use_projected_cp?: boolean
+  /** "I want to finish inside this." Triggers the backward solve. */
+  target_time_s?: number | null
+}
+
+export interface Assumptions extends RiderOverrides {
   draft: Draft
   effort: Effort
   use_weather: boolean
+  surface: Surface
 }
 
 /**
@@ -85,6 +102,19 @@ export interface Rehearsal {
   band?: RehearsalBand
   total_kj?: number
   carbs_g_per_hour?: number
+  /** The backward solve. All absent unless a target time was asked for.
+   *  `target_reachable` and `target_costs_blow_up` are separate answers: a
+   *  time the clock allows but W′ does not is a warning, not a plan. */
+  target_time_s?: number | null
+  target_reachable?: boolean | null
+  target_costs_blow_up?: boolean | null
+  /** Solved intensity as a percentage of the effort setting's normal pace. */
+  target_intensity_pct?: number | null
+  /** Best time available at full gas, when the target is out of reach. */
+  fastest_possible_s?: number | null
+  /** True when the CP simulated was PROJECTED to the event date, not measured
+   *  today — the surface must say which fitness it rode. */
+  cp_is_projected?: boolean
   blow_ups: RehearsalBlowUp[]
   /** True when CdA is the labelled fallback rather than a measurement. */
   cda_is_default: boolean
@@ -108,7 +138,7 @@ export async function createRehearsal(body: {
   draft?: Draft
   effort?: Effort
   use_weather?: boolean
-}): Promise<Rehearsal> {
+} & RiderOverrides): Promise<Rehearsal> {
   return (await apiClient.post<Rehearsal>('/rehearsals', body)).data
 }
 
@@ -118,7 +148,7 @@ export async function getRehearsal(id: number): Promise<Rehearsal> {
 
 export async function updateAssumptions(
   id: number,
-  body: { draft?: Draft; effort?: Effort; use_weather?: boolean },
+  body: { draft?: Draft; effort?: Effort; use_weather?: boolean } & RiderOverrides,
 ): Promise<Rehearsal> {
   return (await apiClient.patch<Rehearsal>(`/rehearsals/${id}`, body)).data
 }

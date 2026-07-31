@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import math
+from dataclasses import replace
 from datetime import date, datetime, time, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -75,6 +76,12 @@ from app.services.rehearsal.route_source import (
     route_from_crew_event,
     route_from_gpx,
 )
+from app.services.rehearsal.fitness_projection import project_cp_for_date
+from app.services.rehearsal.knobs import (
+    OverrideError,
+    RiderOverrides,
+    validate as validate_overrides,
+)
 from app.services.rehearsal.simulator import Assumptions
 from app.services.rehearsal.weather import weather_applies
 from app.services.stream_ingestion import latest_critical_power
@@ -109,7 +116,7 @@ _LIST_LIMIT = 100
 # Athlete inputs
 # ──────────────────────────────────────────────────────────────────────
 
-async def _build_model(db: AsyncSession, user_id: int):
+async def _build_model(db: AsyncSession, user_id: int, overrides: RiderOverrides | None = None):
     """The athlete's physical inputs, each with an honest absence.
 
     CP comes from the fitted power-duration curve when a ride has one, because
@@ -132,16 +139,44 @@ async def _build_model(db: AsyncSession, user_id: int):
         cp_watts = float(profile.ftp_watts)
 
     weight = getattr(profile, "weight_kg", None) if profile is not None else None
+    o = overrides or RiderOverrides()
+    # The override wins over the profile, but only when it is set: a rider who
+    # never touched the weight knob must still be simulated at their real mass.
+    if o.weight_kg:
+        weight = o.weight_kg
     return build_rider_model(
         cp_watts=cp_watts,
         w_prime_j=w_prime_j,
         weight_kg=float(weight) if weight else None,
         cda_m2=_STORED_CDA_M2,
         durability_drop_pct=_STORED_DURABILITY_DROP_PCT,
+        bike_mass_kg=o.bike_mass_kg,
+        crr=o.crr(),
     )
 
 
-async def _forecast_for_route(route: RehearsalRoute, today: date) -> dict | None:
+async def _project_model(
+    db: AsyncSession, user_id: int, model, route: RehearsalRoute
+):
+    """Swap in projected CP for the route's date, or leave the model alone.
+
+    Returns `(model, cp_is_projected)`. W' is deliberately NOT projected with
+    it: the projection produces a fitness-equivalent FTP, and there is no
+    evidence in it about how the athlete's anaerobic capacity moves. Scaling W'
+    by the same factor would be an invention, and W' is what decides where the
+    blow-up lands -- the one number this page must not make up.
+    """
+    projected = await project_cp_for_date(
+        db, user_id, route.ride_date, model.cp_watts
+    )
+    if projected is None:
+        return model, False
+    return replace(model, cp_watts=projected), True
+
+
+async def _forecast_for_route(
+    route: RehearsalRoute, today: date, start_hour: int | None = None
+) -> dict | None:
     """One representative wind + temperature for a dated route, or None.
 
     None means "no weather", which the orchestrator reports as
@@ -158,14 +193,22 @@ async def _forecast_for_route(route: RehearsalRoute, today: date) -> dict | None
     speeds = hourly.get("wind_speed_10m") or []
     dirs = hourly.get("wind_direction_10m") or []
     temps = hourly.get("temperature_2m") or []
-    idx = [
+    usable = [
         i
         for i in range(min(len(speeds), len(dirs), len(temps)))
-        if _DAYLIGHT_FROM_H <= i % 24 <= _DAYLIGHT_TO_H
-        and speeds[i] is not None
-        and dirs[i] is not None
-        and temps[i] is not None
+        if speeds[i] is not None and dirs[i] is not None and temps[i] is not None
     ]
+    if start_hour is None:
+        # No start time named: average the daylight window, as before.
+        idx = [i for i in usable if _DAYLIGHT_FROM_H <= i % 24 <= _DAYLIGHT_TO_H]
+    else:
+        # A named start hour is a specific morning, not an average one -- the
+        # whole point of the knob is that 6 a.m. is a different ride from 11.
+        # Falls back to the daylight average rather than to nothing when the
+        # forecast has a hole at exactly that hour.
+        idx = [i for i in usable if i % 24 == start_hour]
+        if not idx:
+            idx = [i for i in usable if _DAYLIGHT_FROM_H <= i % 24 <= _DAYLIGHT_TO_H]
     if not idx:
         return None
     # Vector-average the wind: averaging bearings numerically turns a 350°/10°
@@ -182,8 +225,18 @@ async def _forecast_for_route(route: RehearsalRoute, today: date) -> dict | None
     }
 
 
-def _assumptions_json(a: Assumptions) -> dict:
-    return {"draft": a.draft, "effort": a.effort, "use_weather": a.use_weather}
+def _assumptions_json(a: Assumptions, o: RiderOverrides) -> dict:
+    return {
+        "draft": a.draft,
+        "effort": a.effort,
+        "use_weather": a.use_weather,
+        "weight_kg": o.weight_kg,
+        "bike_mass_kg": o.bike_mass_kg,
+        "surface": o.surface,
+        "start_hour": o.start_hour,
+        "use_projected_cp": o.use_projected_cp,
+        "target_time_s": o.target_time_s,
+    }
 
 
 def _to_out(row: RouteRehearsal) -> RehearsalOut:
@@ -206,10 +259,26 @@ async def _simulate_and_store(
     route: RehearsalRoute,
     assumptions: Assumptions,
     user_id: int,
+    overrides: RiderOverrides | None = None,
 ) -> RouteRehearsal:
     """Run the pipeline for `route` and write the answer onto `row`."""
-    model = await _build_model(db, user_id)
-    forecast = await _forecast_for_route(route, date.today()) if assumptions.use_weather else None
+    o = overrides or RiderOverrides()
+    try:
+        validate_overrides(o)
+    except OverrideError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    model = await _build_model(db, user_id, o)
+    cp_is_projected = False
+    if o.use_projected_cp:
+        model, cp_is_projected = await _project_model(db, user_id, model, route)
+    forecast = (
+        await _forecast_for_route(route, date.today(), o.start_hour)
+        if assumptions.use_weather
+        else None
+    )
     try:
         # ~0.85 s of pure NumPy/Python for a 150 km alpine route, and
         # AssumptionsRow PATCHes on every tab tap -- run directly inside
@@ -223,14 +292,16 @@ async def _simulate_and_store(
             assumptions,
             today=date.today(),
             forecast=forecast,
+            target_time_s=o.target_time_s,
         )
     except (RouteUnusable, RehearsalInputError) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
 
+    result["cp_is_projected"] = cp_is_projected
     row.route = route_to_json(route)
-    row.assumptions = _assumptions_json(assumptions)
+    row.assumptions = _assumptions_json(assumptions, o)
     row.result = result
     row.distance_m = route.total_distance_m
     row.ascent_m = route.total_ascent_m
@@ -408,7 +479,15 @@ async def create_rehearsal(
     assumptions = Assumptions(
         draft=payload.draft, effort=payload.effort, use_weather=payload.use_weather
     )
-    await _simulate_and_store(db, row, route, assumptions, current_user.id)
+    overrides = RiderOverrides(
+        weight_kg=payload.weight_kg,
+        bike_mass_kg=payload.bike_mass_kg,
+        surface=payload.surface,
+        start_hour=payload.start_hour,
+        use_projected_cp=payload.use_projected_cp,
+        target_time_s=payload.target_time_s,
+    )
+    await _simulate_and_store(db, row, route, assumptions, current_user.id, overrides)
 
     db.add(row)
     await db.commit()
@@ -505,8 +584,22 @@ async def update_assumptions(
             else bool(stored.get("use_weather", True))
         ),
     )
+    # Every knob merges over the stored value, so a PATCH that names only
+    # `draft` cannot silently clear the athlete's target time or start hour.
+    def _merged(name: str, default):
+        sent = getattr(payload, name)
+        return sent if sent is not None else stored.get(name, default)
+
+    overrides = RiderOverrides(
+        weight_kg=_merged("weight_kg", None),
+        bike_mass_kg=_merged("bike_mass_kg", None),
+        surface=_merged("surface", "asphalt") or "asphalt",
+        start_hour=_merged("start_hour", None),
+        use_projected_cp=bool(_merged("use_projected_cp", False)),
+        target_time_s=_merged("target_time_s", None),
+    )
     route = route_from_json(row.route)
-    await _simulate_and_store(db, row, route, assumptions, current_user.id)
+    await _simulate_and_store(db, row, route, assumptions, current_user.id, overrides)
     await db.commit()
     await db.refresh(row)
     return _to_out(row)

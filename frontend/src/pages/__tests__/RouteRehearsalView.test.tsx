@@ -24,7 +24,7 @@ const rehearsal: Rehearsal = {
   distance_m: 40000,
   ascent_m: 800,
   created_at: '2026-07-01T00:00:00Z',
-  assumptions: { draft: 'solo', effort: 'fondo', use_weather: false },
+  assumptions: { draft: 'solo', effort: 'fondo', use_weather: false, surface: 'asphalt' },
   can_predict: true,
   missing: [],
   climbs: [],

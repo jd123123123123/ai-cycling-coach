@@ -3,7 +3,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import AssumptionsRow from '../AssumptionsRow'
 import type { Assumptions } from '../../../api/rehearsal'
 
-const assumptions: Assumptions = { draft: 'solo', effort: 'fondo', use_weather: true }
+const assumptions: Assumptions = { draft: 'solo', effort: 'fondo', use_weather: true, surface: 'asphalt' }
 
 describe('AssumptionsRow', () => {
   afterEach(cleanup)
