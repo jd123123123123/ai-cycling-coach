@@ -105,6 +105,8 @@ def run_rehearsal(
     today: date,
     forecast: dict | None = None,
     target_time_s: float | None = None,
+    spread_scale: float = 1.0,
+    band_samples: int = 0,
 ) -> dict:
     """Full pipeline -> the payload the API returns. Weather is passed in, not fetched."""
     segments = build_segments(route)
@@ -164,10 +166,16 @@ def run_rehearsal(
             )
             solved = replace(assumptions, intensity_scale=target.intensity_scale)
             sim = target.result
-            band = simulate_band(segments, model, solved, headwind, air_density)
+            band = simulate_band(
+                segments, model, solved, headwind, air_density,
+                spread_scale=spread_scale,
+            )
         else:
             sim = simulate(segments, model, assumptions, headwind, air_density)
-            band = simulate_band(segments, model, assumptions, headwind, air_density)
+            band = simulate_band(
+                segments, model, assumptions, headwind, air_density,
+                spread_scale=spread_scale,
+            )
     except ValueError as exc:  # physics rejected an input the guard let through
         raise RehearsalInputError(f"this route cannot be simulated: {exc}") from exc
     hours = max(1e-6, sim.total_time_s / 3600.0)
@@ -201,6 +209,10 @@ def run_rehearsal(
         "target_reachable": target.reachable if target else None,
         "target_costs_blow_up": target.costs_a_blow_up if target else None,
         "target_intensity_pct": round(target.intensity_scale * 100.0, 1) if target else None,
+        # How the band's width was arrived at. Zero samples means it is the
+        # reasoned default, and the surface says so rather than implying the
+        # range was measured.
+        "band_samples": band_samples,
         "fastest_possible_s": target.fastest_possible_s if target else None,
     }
 

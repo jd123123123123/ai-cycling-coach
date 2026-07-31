@@ -25,6 +25,7 @@ export default function VerdictBlock({
   durabilityIsDefault,
   wPrimeIsDefault,
   weatherUsed,
+  bandSamples = 0,
   de,
   missing,
 }: {
@@ -42,6 +43,9 @@ export default function VerdictBlock({
    */
   wPrimeIsDefault?: boolean
   weatherUsed: boolean
+  /** How many of the athlete's own completed rides the band width was
+   *  measured against. 0 means it is the reasoned default. */
+  bandSamples?: number
   de: boolean
   /** Names of the profile inputs that make a prediction impossible. */
   missing?: string[]
@@ -66,6 +70,15 @@ export default function VerdictBlock({
       de
         ? 'Kein W′ hinterlegt — wir können dir nicht sagen, wo du einbrichst.'
         : 'No W′ on file — we cannot tell you where you blow up.',
+    )
+  }
+  // Where the RANGE came from. Without this the width reads as a measurement
+  // in both cases, and one of them is a set of reasoned assumptions.
+  if (bandSamples > 0) {
+    notes.push(
+      de
+        ? `Spanne an ${bandSamples} deiner gefahrenen Strecken geeicht.`
+        : `Range calibrated against ${bandSamples} of your own completed rides.`,
     )
   }
   if (weatherUsed) {

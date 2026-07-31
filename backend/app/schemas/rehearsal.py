@@ -147,6 +147,25 @@ class BlowUpOut(BaseModel):
     climb_id: int | None = None
 
 
+class ActualOut(BaseModel):
+    """The recorded ride next to the prediction of it.
+
+    Present only on a rehearsal of an activity, and only when the two are
+    genuinely comparable -- a truncated stream produces no comparison rather
+    than a fake model error.
+    """
+
+    actual_time_s: float
+    predicted_time_s: float
+    #: Positive when the model predicted SLOWER than the rider actually rode.
+    error_s: float
+    error_pct: float
+    #: Whether the recorded time landed inside p10-p90. This is the test of
+    #: the BAND, not of the median: a band that never contains the outcome is
+    #: too narrow however good its centre.
+    inside_band: bool | None = None
+
+
 class RehearsalOut(BaseModel):
     id: int
     name: str | None = None
@@ -194,6 +213,11 @@ class RehearsalOut(BaseModel):
     #: True when the CP used was PROJECTED to the event date rather than
     #: measured today -- the surface has to say which fitness it simulated.
     cp_is_projected: bool = False
+    #: Populated only when this rehearsal is of a ride that was actually done.
+    actual: ActualOut | None = None
+    #: How many of the athlete's own completed rides the band width was
+    #: calibrated on. 0 means the reasoned default, not a measurement.
+    band_samples: int = 0
 
     @model_validator(mode="after")
     def _time_and_band_together(self) -> RehearsalOut:

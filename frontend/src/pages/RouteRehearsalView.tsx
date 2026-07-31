@@ -33,6 +33,8 @@ import ClimbCards from '../components/rehearsal/ClimbCards'
 import AssumptionsRow from '../components/rehearsal/AssumptionsRow'
 import RiderKnobs from '../components/rehearsal/RiderKnobs'
 import TargetTimeCard from '../components/rehearsal/TargetTimeCard'
+import ActualVsPredicted from '../components/rehearsal/ActualVsPredicted'
+import CompareRehearsals from '../components/rehearsal/CompareRehearsals'
 import RouteMap from '../components/crew/RouteMap'
 import RouteSketch from '../components/ui/RouteSketch'
 import {
@@ -300,9 +302,12 @@ export default function RouteRehearsalView() {
         durabilityIsDefault={data.durability_is_default}
         wPrimeIsDefault={data.w_prime_is_default}
         weatherUsed={data.weather_used}
+        bandSamples={data.band_samples ?? 0}
         missing={data.missing}
         de={de}
       />
+
+      {data.actual && <ActualVsPredicted actual={data.actual} de={de} />}
 
       <TargetTimeCard data={data} de={de} />
 
@@ -405,6 +410,8 @@ export default function RouteRehearsalView() {
           </p>
         </section>
       )}
+
+      <CompareRehearsals current={data} de={de} />
 
       <AssumptionsRow
         assumptions={data.assumptions}

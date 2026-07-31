@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import date, datetime, time, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -83,6 +83,8 @@ from app.services.rehearsal.knobs import (
     validate as validate_overrides,
 )
 from app.services.rehearsal.simulator import Assumptions
+from app.services.rehearsal.band_calibration import calibrate_spread
+from app.services.rehearsal.verdict_vs_actual import compare_to_actual
 from app.services.rehearsal.weather import weather_applies
 from app.services.stream_ingestion import latest_critical_power
 from app.services.weather_client import fetch_window_forecast
@@ -253,6 +255,28 @@ def _to_out(row: RouteRehearsal) -> RehearsalOut:
     )
 
 
+async def _recorded_ride(db: AsyncSession, user_id: int, activity_id: int) -> dict:
+    """Duration and distance of the ride this rehearsal is OF, for the check.
+
+    Read here rather than stashed away during route building: a module-level
+    cache would leak, would not survive a second worker, and would answer a
+    PATCH months later with a figure captured at create time.
+    """
+    activity = (
+        await db.execute(
+            select(Activity).where(
+                Activity.id == activity_id, Activity.user_id == user_id
+            )
+        )
+    ).scalars().first()
+    if activity is None:
+        return {}
+    return {
+        "actual_time_s": float(activity.duration_seconds) if activity.duration_seconds else None,
+        "actual_distance_m": float(activity.distance_meters) if activity.distance_meters else None,
+    }
+
+
 async def _simulate_and_store(
     db: AsyncSession,
     row: RouteRehearsal,
@@ -269,6 +293,10 @@ async def _simulate_and_store(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+
+    # The band's width, measured against this athlete's own past rides rather
+    # than assumed. None keeps the reasoned default.
+    calibration = await calibrate_spread(db, user_id)
 
     model = await _build_model(db, user_id, o)
     cp_is_projected = False
@@ -293,6 +321,8 @@ async def _simulate_and_store(
             today=date.today(),
             forecast=forecast,
             target_time_s=o.target_time_s,
+            spread_scale=calibration.spread_scale if calibration else 1.0,
+            band_samples=calibration.samples if calibration else 0,
         )
     except (RouteUnusable, RehearsalInputError) as exc:
         raise HTTPException(
@@ -300,6 +330,21 @@ async def _simulate_and_store(
         ) from exc
 
     result["cp_is_projected"] = cp_is_projected
+
+    # Predicted vs actual: only a rehearsal OF a recorded ride can be checked.
+    if row.source_kind == "activity" and row.source_ref:
+        recorded = await _recorded_ride(db, user_id, row.source_ref)
+        band = result.get("band") or {}
+        comparison = compare_to_actual(
+            predicted_time_s=result.get("total_time_s"),
+            actual_time_s=recorded.get("actual_time_s"),
+            rehearsed_distance_m=route.total_distance_m,
+            actual_distance_m=recorded.get("actual_distance_m"),
+            band_p10_s=band.get("p10_s"),
+            band_p90_s=band.get("p90_s"),
+        )
+        if comparison is not None:
+            result["actual"] = asdict(comparison)
     row.route = route_to_json(route)
     row.assumptions = _assumptions_json(assumptions, o)
     row.result = result

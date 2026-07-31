@@ -82,6 +82,18 @@ export interface RehearsalBlowUp {
   climb_id: number | null
 }
 
+/** What the model said, next to what actually happened. */
+export interface RehearsalActual {
+  actual_time_s: number
+  predicted_time_s: number
+  /** Positive when the model predicted SLOWER than the rider rode. */
+  error_s: number
+  error_pct: number
+  /** Whether the recorded time landed inside p10–p90 — the test of the BAND,
+   *  not of the median. */
+  inside_band?: boolean | null
+}
+
 export interface Rehearsal {
   id: number
   name: string | null
@@ -115,6 +127,12 @@ export interface Rehearsal {
   /** True when the CP simulated was PROJECTED to the event date, not measured
    *  today — the surface must say which fitness it rode. */
   cp_is_projected?: boolean
+  /** Present only on a rehearsal of a ride that was actually done, and only
+   *  when the two are genuinely comparable. */
+  actual?: RehearsalActual | null
+  /** How many of the athlete's own completed rides the band width was
+   *  calibrated on. 0 means the reasoned default, not a measurement. */
+  band_samples?: number
   blow_ups: RehearsalBlowUp[]
   /** True when CdA is the labelled fallback rather than a measurement. */
   cda_is_default: boolean
@@ -151,4 +169,22 @@ export async function updateAssumptions(
   body: { draft?: Draft; effort?: Effort; use_weather?: boolean } & RiderOverrides,
 ): Promise<Rehearsal> {
   return (await apiClient.patch<Rehearsal>(`/rehearsals/${id}`, body)).data
+}
+
+/** One row of the athlete's rehearsal list — headline figures only. */
+export interface RehearsalListItem {
+  id: number
+  name?: string | null
+  source_kind: SourceKind
+  distance_m: number
+  ascent_m: number
+  created_at: string
+  can_predict: boolean
+  total_time_s?: number | null
+  band?: RehearsalBand | null
+}
+
+export async function listRehearsals(): Promise<RehearsalListItem[]> {
+  const { data } = await apiClient.get<{ rehearsals: RehearsalListItem[] }>('/rehearsals')
+  return data.rehearsals ?? []
 }

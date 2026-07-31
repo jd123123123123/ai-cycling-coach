@@ -80,6 +80,12 @@ _CDA_SIGMA_DEFAULT = 0.18  # a position-based guess is far shakier
 _CRR_LOW, _CRR_HIGH = 0.004, 0.007   # surface unknown
 _WIND_SIGMA = 0.30         # the forecast field itself is a forecast
 
+#: Bounds on the backtest correction. A calibration that halves the band on
+#: three lucky rides, or triples it on three unlucky ones, is overfitting a
+#: handful of samples -- the clamp keeps the correction a correction.
+_MIN_SPREAD_SCALE = 0.6
+_MAX_SPREAD_SCALE = 2.5
+
 #: Floors so a rare wide Gaussian tail never draws a non-positive, physically
 #: meaningless CP or CdA (speed_for_power would either crash on it or, for a
 #: negative CdA, flip the aero force's sign).
@@ -313,8 +319,17 @@ def simulate_band(
     air_density: Sequence[float] | None = None,
     draws: int = DEFAULT_DRAWS,
     seed: int = 20260730,
+    spread_scale: float = 1.0,
 ) -> TimeBand:
-    """p10/p50/p90 finishing times over the uncertain inputs."""
+    """p10/p50/p90 finishing times over the uncertain inputs.
+
+    `spread_scale` widens (>1) or narrows (<1) the band around its own median
+    without moving that median. It carries the BACKTEST correction: the input
+    sigmas below are reasoned estimates, and the only way to know whether the
+    resulting band is the right width is to check it against rides the athlete
+    actually did. See `band_calibration.calibrate_spread`. Left at 1.0 the
+    band is exactly what it was before calibration existed.
+    """
     if not model.can_predict_time:
         raise ValueError("rider model cannot support a time prediction")
     if draws <= 0 or not segments:
@@ -345,9 +360,17 @@ def simulate_band(
     times = np.sort(
         _march_total_times(segments, model, assumptions, cp, cda, crr, wind, rho)
     )
-    return TimeBand(
-        p10_s=_percentile(times, 0.10),
-        p50_s=_percentile(times, 0.50),
-        p90_s=_percentile(times, 0.90),
-        draws=draws,
-    )
+    p10 = _percentile(times, 0.10)
+    p50 = _percentile(times, 0.50)
+    p90 = _percentile(times, 0.90)
+
+    if spread_scale != 1.0:
+        # Scale the DEVIATIONS, not the times: the central estimate is the
+        # simulator's answer and calibration has nothing to say about it. What
+        # the backtest measures is whether the uncertainty around it was
+        # honest, so only the width moves.
+        scale = max(_MIN_SPREAD_SCALE, min(_MAX_SPREAD_SCALE, spread_scale))
+        p10 = p50 - (p50 - p10) * scale
+        p90 = p50 + (p90 - p50) * scale
+
+    return TimeBand(p10_s=p10, p50_s=p50, p90_s=p90, draws=draws)
