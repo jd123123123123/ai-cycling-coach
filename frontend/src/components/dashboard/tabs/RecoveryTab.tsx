@@ -565,12 +565,16 @@ export default function RecoveryTab() {
       {/* 2 · Recovery hero */}
       <div className="rounded-[24px] flex flex-col items-center" style={{ ...cardStyle, gap: 18, padding: '28px 20px' }}>
         <ScoreRing score={score ?? 0} color={rColor} size={208} stroke={14}>
+          {(swept) => (
           <div className="flex flex-col items-center">
-            <span className="num-display" style={{ fontSize: 64, color: 'var(--color-ink)', lineHeight: 1 }}>{scoreTxt ?? DASH}</span>
+            {/* The dash stays a dash: an unknown score must not roll up from
+                zero as though it were a real measurement. */}
+            <span className="num-display" style={{ fontSize: 64, color: 'var(--color-ink)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{scoreTxt != null ? Math.round(swept) : DASH}</span>
             {/* One score, one label: this is the canonical READINESS the daily
                 decision uses — not a separate "% recovered" look-alike. */}
             <span className="eyebrow" style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.07em', color: rColor }}>{de ? 'BEREITSCHAFT' : 'READINESS'}</span>
           </div>
+          )}
         </ScoreRing>
         <div className="flex flex-col items-center gap-1 text-center">
           <h3 className="num-display" style={{ fontSize: 17, color: 'var(--color-ink)' }}>{status.t}</h3>

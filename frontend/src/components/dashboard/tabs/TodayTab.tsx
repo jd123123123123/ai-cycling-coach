@@ -1222,10 +1222,14 @@ export default function TodayTab() {
             ) : (
             <Link to="/dashboard?tab=recovery" className="grid place-items-center" aria-label={de ? 'Erholung öffnen' : 'Open recovery'}>
               <ScoreRing score={score ?? 0} color={ringColor} gradient={ringGradient} glow={ringGlow} size={224} stroke={14} trackColor="#FFFFFF14">
-                <div className="flex flex-col items-center gap-1">
-                  <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.22em', color: `color-mix(in srgb, ${ringColor} 55%, #FFFFFF)` }}>{ringLabel}</span>
-                  <span className="num-display" style={{ fontSize: 62, fontWeight: 800, color: '#FFFFFF', lineHeight: 0.95 }}>{score != null ? Math.round(score) : '—'}</span>
-                </div>
+                {(swept) => (
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.22em', color: `color-mix(in srgb, ${ringColor} 55%, #FFFFFF)` }}>{ringLabel}</span>
+                    {/* Counts up WITH the dial. Tabular figures so the number
+                        does not jitter sideways while it rolls. */}
+                    <span className="num-display" style={{ fontSize: 62, fontWeight: 800, color: '#FFFFFF', lineHeight: 0.95, fontVariantNumeric: 'tabular-nums' }}>{score != null ? Math.round(swept) : '—'}</span>
+                  </div>
+                )}
               </ScoreRing>
             </Link>
             )}
