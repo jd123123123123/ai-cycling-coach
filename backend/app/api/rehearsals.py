@@ -86,6 +86,7 @@ from app.services.rehearsal.simulator import Assumptions
 from app.services.athlete_power_profile import compute_athlete_power_profile
 from app.services.hr_zones import derive_lthr, derive_max_hr
 from app.services.rehearsal.band_calibration import calibrate_spread
+from app.services.rehearsal.route_history import past_attempts, summarize as summarize_history
 from app.services.rehearsal.verdict_vs_actual import compare_to_actual
 from app.services.rehearsal.weather import weather_applies
 from app.services.stream_ingestion import latest_critical_power
@@ -366,6 +367,16 @@ async def _simulate_and_store(
     )
     fc_inputs = await _forecast_inputs(db, user_id, res_profile.scalar_one_or_none())
 
+    # Past rides on this route. Doubles as the PR target, computed once so the
+    # history card and the PR probability cannot disagree.
+    attempts = await past_attempts(
+        db,
+        user_id,
+        route_distance_m=route.total_distance_m,
+        route_ascent_m=route.total_ascent_m,
+    )
+    pr_time_s = min((a.duration_s for a in attempts), default=None)
+
     model = await _build_model(db, user_id, o)
     cp_is_projected = False
     if o.use_projected_cp:
@@ -395,6 +406,7 @@ async def _simulate_and_store(
             athlete_mmp=fc_inputs["athlete_mmp"],
             hr_anchors=fc_inputs["hr_anchors"],
             start_readiness_pct=None,
+            pr_time_s=pr_time_s,
         )
     except (RouteUnusable, RehearsalInputError) as exc:
         raise HTTPException(
@@ -402,6 +414,9 @@ async def _simulate_and_store(
         ) from exc
 
     result["cp_is_projected"] = cp_is_projected
+    history = summarize_history(attempts, result.get("total_time_s"))
+    if history is not None:
+        result["history"] = history
 
     # Predicted vs actual: only a rehearsal OF a recorded ride can be checked.
     if row.source_kind == "activity" and row.source_ref:

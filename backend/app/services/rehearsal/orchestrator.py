@@ -40,6 +40,7 @@ from app.services.rehearsal.forecast import (
     zone_distribution,
 )
 from app.services.rehearsal.matchbook_bridge import forecast_matchbook
+from app.services.rehearsal.race_plan import fuel_plan, narrate_segments, pr_probability
 from app.services.rehearsal.simulator import Assumptions, SegmentResult, simulate
 from app.services.rehearsal.target_time import TargetSolution, solve_for_target_time
 from app.services.rehearsal.uncertainty import simulate_band
@@ -113,11 +114,15 @@ def _segment_payload(seg: Segment, sim: SegmentResult | None) -> dict:
 def _forecast_payload(
     *,
     sim,
+    band,
+    climbs,
     model: RiderModel,
     ftp_watts: float | None,
     athlete_mmp: dict | None,
     hr_anchors: dict | None,
     start_readiness_pct: float | None,
+    pr_time_s: float | None,
+    temperature_c: float | None,
 ) -> dict:
     """Everything the surface asks about the ride, from one 1 Hz expansion.
 
@@ -183,6 +188,35 @@ def _forecast_payload(
         "battery": battery_forecast(
             start_readiness_pct=start_readiness_pct, tss=tss
         ),
+        # The plan a rider carries: chapters, PR odds, fuel.
+        "chapters": [
+            {
+                "start_m": c.start_m,
+                "end_m": c.end_m,
+                "length_m": c.length_m,
+                "avg_gradient_pct": round(c.avg_gradient_pct, 2),
+                "avg_power_w": round(c.avg_power_w, 1),
+                "duration_s": round(c.duration_s),
+                "zone": c.zone,
+                "climb_id": c.climb_id,
+                "kind": c.kind,
+            }
+            for c in narrate_segments(sim.segments, climbs, ftp)
+        ],
+        # Read off the SAME band the page already shows, so the two cannot
+        # contradict each other.
+        "pr": pr_probability(
+            p10_s=getattr(band, "p10_s", None),
+            p50_s=getattr(band, "p50_s", None),
+            p90_s=getattr(band, "p90_s", None),
+            pr_s=pr_time_s,
+        ),
+        "fuel": fuel_plan(
+            total_kj=sim.total_kj,
+            duration_s=duration_s,
+            intensity_factor=intensity_factor(np_w, ftp),
+            temperature_c=temperature_c,
+        ),
     }
 
 
@@ -200,6 +234,7 @@ def run_rehearsal(
     athlete_mmp: dict | None = None,
     hr_anchors: dict | None = None,
     start_readiness_pct: float | None = None,
+    pr_time_s: float | None = None,
 ) -> dict:
     """Full pipeline -> the payload the API returns. Weather is passed in, not fetched."""
     segments = build_segments(route)
@@ -312,11 +347,15 @@ def run_rehearsal(
         # exactly the same instruments that measure a recorded ride.
         **_forecast_payload(
             sim=sim,
+            band=band,
+            climbs=climbs,
             model=model,
             ftp_watts=ftp_watts,
             athlete_mmp=athlete_mmp,
             hr_anchors=hr_anchors,
             start_readiness_pct=start_readiness_pct,
+            pr_time_s=pr_time_s,
+            temperature_c=(forecast or {}).get("temperature_c") if weather_used else None,
         ),
         "fastest_possible_s": target.fastest_possible_s if target else None,
     }

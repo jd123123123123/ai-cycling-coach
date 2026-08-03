@@ -39,6 +39,9 @@ import RideMetrics from '../components/rehearsal/RideMetrics'
 import TimeInZones from '../components/rehearsal/TimeInZones'
 import EngineVsRoute from '../components/rehearsal/EngineVsRoute'
 import CostCard from '../components/rehearsal/CostCard'
+import SegmentPlan from '../components/rehearsal/SegmentPlan'
+import RouteRecord from '../components/rehearsal/RouteRecord'
+import FuelPlanCard from '../components/rehearsal/FuelPlanCard'
 import RouteMap from '../components/crew/RouteMap'
 import RouteSketch from '../components/ui/RouteSketch'
 import {
@@ -410,6 +413,19 @@ export default function RouteRehearsalView() {
         trainingEffect={data.training_effect}
         de={de}
       />
+
+      {/* The plan a rider carries down the road, then the record it is
+          measured against, then what to eat while doing it. */}
+      <SegmentPlan chapters={data.chapters ?? []} de={de} />
+
+      <RouteRecord
+        history={data.history}
+        pr={data.pr}
+        forecastS={data.total_time_s}
+        de={de}
+      />
+
+      <FuelPlanCard fuel={data.fuel} de={de} />
 
       {(data.total_kj != null || data.carbs_g_per_hour != null) && (
         <section

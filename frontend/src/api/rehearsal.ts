@@ -149,6 +149,56 @@ export interface RehearsalBattery {
   is_estimate: boolean
 }
 
+/** One stretch of road a rider would name out loud. */
+export interface RehearsalChapter {
+  start_m: number
+  end_m: number
+  length_m: number
+  avg_gradient_pct: number
+  avg_power_w: number
+  duration_s: number
+  zone: number
+  climb_id?: number | null
+  kind: 'climb' | 'descent' | 'flat'
+}
+
+/** Read off the SAME band the page shows, so the two cannot contradict. */
+export interface RehearsalPr {
+  pr_s: number
+  probability: number
+  margin_s: number
+  is_estimate: boolean
+}
+
+/** Fuel ADEQUACY. Never weight, never a deficit, never a calorie budget. */
+export interface RehearsalFuel {
+  carbs_g_per_hour_low: number
+  carbs_g_per_hour_high: number
+  carbs_g_total: number
+  energy_kcal: number
+  fluid_l: number
+  bottles: number
+  sweat_l_per_hour: number
+  temperature_c?: number | null
+  is_estimate: boolean
+}
+
+export interface RehearsalAttempt {
+  activity_id: number
+  date: string
+  duration_s: number
+  avg_power_w?: number | null
+}
+
+export interface RehearsalHistory {
+  attempts: RehearsalAttempt[]
+  best_s: number
+  forecast_vs_best_s?: number | null
+  count: number
+  /** False when there are too few rides to talk about a direction of travel. */
+  trend_is_meaningful: boolean
+}
+
 export interface Rehearsal {
   id: number
   name: string | null
@@ -207,6 +257,10 @@ export interface Rehearsal {
   heart_rate?: RehearsalHeartRate | null
   training_effect?: RehearsalTrainingEffect | null
   battery?: RehearsalBattery | null
+  chapters?: RehearsalChapter[]
+  pr?: RehearsalPr | null
+  fuel?: RehearsalFuel | null
+  history?: RehearsalHistory | null
   blow_ups: RehearsalBlowUp[]
   /** True when CdA is the labelled fallback rather than a measurement. */
   cda_is_default: boolean

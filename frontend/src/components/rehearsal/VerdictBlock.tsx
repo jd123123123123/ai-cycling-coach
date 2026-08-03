@@ -1,5 +1,7 @@
 import type { RehearsalBand } from '../../api/rehearsal'
+import { useEffect, useState } from 'react'
 import { formatHm } from './rehearsalMath'
+import { prefersReducedMotion } from '../../utils/motion'
 
 /**
  * VerdictBlock — the headline of a route rehearsal.
@@ -151,11 +153,13 @@ export default function VerdictBlock({
       >
         {de ? 'VORAUSSICHTLICHE ZEIT' : 'PREDICTED TIME'}
       </span>
-      <span
-        className="num-display"
-        style={{ fontSize: 40, lineHeight: 1.05, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}
-      >
-        {`${formatHm(band.p10_s)} – ${formatHm(band.p90_s)}`}
+      {/* The median as an odometer, the RANGE immediately under it. The pen
+          leads with one big time, and a single number is exactly what this
+          page must not claim — so the reels show p50 and the line beneath
+          carries the ± that makes it honest. The two are never separated. */}
+      <TimeOdometer seconds={band.p50_s} />
+      <span style={{ fontSize: 14, color: 'var(--color-ink-2)', fontVariantNumeric: 'tabular-nums' }}>
+        {`± ${Math.round((band.p90_s - band.p10_s) / 120)} min · ${formatHm(band.p10_s)} – ${formatHm(band.p90_s)}`}
       </span>
       <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--color-ink-2)', margin: 0 }}>
         {de
@@ -193,4 +197,52 @@ function blowUpSentence(
   return w != null
     ? `${where} unless you hold the climb before it under ${w} W.`
     : `${where} unless you take the climb before it noticeably easier.`
+}
+
+
+/**
+ * TimeOdometer — the finish time, rolling up on arrival.
+ *
+ * The pen draws this as mechanical reels, and the reason it is worth the code
+ * is not decoration: a number that counts up is a number the eye watches
+ * arrive, which is what makes a rider read the range under it rather than
+ * skipping straight past. A static figure gets glanced at.
+ *
+ * Honours prefers-reduced-motion by arriving immediately.
+ */
+function TimeOdometer({ seconds }: { seconds: number }) {
+  const [shown, setShown] = useState(() => (prefersReducedMotion() ? seconds : 0))
+
+  useEffect(() => {
+    if (prefersReducedMotion()) {
+      return
+    }
+    let raf = 0
+    let t0: number | null = null
+    const DURATION = 900
+    const step = (t: number) => {
+      if (t0 == null) t0 = t
+      const p = Math.min(1, (t - t0) / DURATION)
+      setShown(seconds * (1 - Math.pow(1 - p, 3)))
+      if (p < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [seconds])
+
+  return (
+    <span
+      className="num-display"
+      style={{
+        fontSize: 56,
+        lineHeight: 1,
+        fontWeight: 800,
+        color: 'var(--color-ink)',
+        letterSpacing: '-0.02em',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {formatHm(shown)}
+    </span>
+  )
 }

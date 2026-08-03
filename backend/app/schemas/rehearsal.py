@@ -225,6 +225,59 @@ class BatteryOut(BaseModel):
     is_estimate: bool = True
 
 
+class ChapterOut(BaseModel):
+    """One stretch of road a rider would name out loud."""
+
+    start_m: float
+    end_m: float
+    length_m: float
+    avg_gradient_pct: float
+    avg_power_w: float
+    duration_s: float
+    zone: int
+    climb_id: int | None = None
+    kind: str
+
+
+class PrOut(BaseModel):
+    """Read off the SAME band the page shows, so the two cannot contradict."""
+
+    pr_s: float
+    probability: float
+    margin_s: float
+    is_estimate: bool = True
+
+
+class FuelOut(BaseModel):
+    """Fuel ADEQUACY. Never weight, never a deficit, never a calorie budget."""
+
+    carbs_g_per_hour_low: float
+    carbs_g_per_hour_high: float
+    carbs_g_total: float
+    energy_kcal: float
+    fluid_l: float
+    bottles: int
+    sweat_l_per_hour: float
+    temperature_c: float | None = None
+    is_estimate: bool = True
+
+
+class AttemptOut(BaseModel):
+    activity_id: int
+    date: str
+    duration_s: float
+    avg_power_w: float | None = None
+
+
+class HistoryOut(BaseModel):
+    attempts: list[AttemptOut] = []
+    best_s: float
+    forecast_vs_best_s: float | None = None
+    count: int
+    #: False when there are too few rides to talk about a direction of travel.
+    trend_is_meaningful: bool
+
+
 class RehearsalOut(BaseModel):
     id: int
     name: str | None = None
@@ -296,6 +349,10 @@ class RehearsalOut(BaseModel):
     heart_rate: HeartRateOut | None = None
     training_effect: TrainingEffectOut | None = None
     battery: BatteryOut | None = None
+    chapters: list[ChapterOut] = []
+    pr: PrOut | None = None
+    fuel: FuelOut | None = None
+    history: HistoryOut | None = None
 
     @model_validator(mode="after")
     def _time_and_band_together(self) -> RehearsalOut:
