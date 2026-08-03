@@ -37,6 +37,8 @@ import AbsorptionCard from '../AbsorptionCard'
 import CoachRead from '../../narrative/CoachRead'
 import NextChapter from '../../narrative/NextChapter'
 import { useStreak, type WeekConsistency } from '../../../hooks/useStreak'
+import { useMoments } from '../../../hooks/useMoments'
+import MomentCard from '../../celebration/MomentCard'
 import { useCurrentWeek } from '../../../hooks/useCurrentWeek'
 import { usePlanAdaptations } from '../../../hooks/usePlanAdaptations'
 import { useTodaySession, sessionIntensity } from '../../../hooks/useTodaySession'
@@ -259,6 +261,7 @@ export default function TodayTab() {
   const { data: profile } = useAthleteProfile()
   const { data: powerProfile } = usePowerProfile()
   const { data: streakData } = useStreak()
+  const { moments } = useMoments()
   // Current week's plan — only read for planned_tss_total (quiet-week detection
   // gating the fitness-trend chip, audit P1-8). Shares PlanTab's query cache.
   const { data: weekPlan } = useCurrentWeek()
@@ -1151,6 +1154,19 @@ export default function TodayTab() {
           every body signal now lives. It is mounted nowhere between 2a and 2b
           shipping; that gap is one deploy cycle and is deliberate, rather than
           inventing a third temporary home for a card that has a real one. */}
+
+      {/* What yesterday earned. Renders nothing on a day that earned nothing,
+          and nothing at all while the streak is paused — cheering through an
+          illness pause is the one thing this layer must never do. A prescribed
+          rest day that was honoured shows up here as a win, which is the whole
+          point of tying the reward to adherence rather than to activity. */}
+      {moments.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {moments.map((m) => (
+            <MomentCard key={m.id} moment={m} />
+          ))}
+        </div>
+      )}
 
       {/* Weekly Wrapped — the once-a-week high-dopamine banner (localStorage-
           gated per ISO week; self-hides when there's no ridden week to show). */}
