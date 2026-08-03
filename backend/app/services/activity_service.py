@@ -303,6 +303,22 @@ async def create_activity(
             exc,
         )
 
+    # Give a GPX-uploaded route rehearsal its actual-vs-predicted comparison
+    # now that the ride behind it exists. Only cycling rides carry a route
+    # rehearsal could plausibly be "of"; other sports skip the query entirely.
+    # Defensive: a matching bug must not break activity creation.
+    if activity.sport == "cycling":
+        try:
+            from app.services.rehearsal.retro_match import attach_actual_if_matching
+
+            await attach_actual_if_matching(db, user_id, activity)
+        except Exception as exc:
+            logger.warning(
+                "Retro rehearsal match failed for user_id=%s after activity create (non-fatal): %s",
+                user_id,
+                exc,
+            )
+
     return activity
 
 
