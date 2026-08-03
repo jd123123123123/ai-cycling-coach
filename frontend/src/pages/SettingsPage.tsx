@@ -12,7 +12,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft,
   Bell,
   Bike,
   ChevronRight,
@@ -32,6 +31,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import AppShell from '../components/shell/AppShell'
 import { useLocale } from '../contexts/LocaleContext'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useGarminStatus } from '../hooks/useGarminStatus'
@@ -283,28 +283,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: 'var(--color-paper)' }}>
-      <div className="mx-auto flex flex-col" style={{ maxWidth: 430 }}>
-        {/* NavRow (pen Fb0TE) */}
-        <div className="flex items-center gap-2.5 px-4 py-1.5 pt-[max(6px,env(safe-area-inset-top))]">
-          <button
-            type="button"
-            onClick={goBack}
-            aria-label={de ? 'Zurück' : 'Back'}
-            className="flex items-center justify-center -ml-1 p-1"
-          >
-            <ArrowLeft size={24} strokeWidth={2} style={{ color: 'var(--color-ink)' }} />
-          </button>
-          <h1
-            className="text-[20px] font-bold"
-            style={{ color: 'var(--color-ink)', fontFamily: DISPLAY_FONT }}
-          >
-            {de ? 'Profil & Einstellungen' : 'Profile & Settings'}
-          </h1>
-        </div>
-
-        {/* Content (pen HW5v2) */}
-        <div className="flex flex-col gap-5 px-5 pt-2 pb-8">
+    <AppShell
+      title={de ? 'Profil & Einstellungen' : 'Profile & Settings'}
+      onBack={goBack}
+    >
+      <div className="flex flex-col gap-5">
           {/* ProfileCard (pen bsy4b) */}
           <div
             className="flex items-center gap-3.5 w-full rounded-[24px] p-[18px]"
@@ -496,8 +479,7 @@ export default function SettingsPage() {
               {de ? 'Abmelden' : 'Sign out'}
             </button>
           </div>
-        </div>
       </div>
-    </div>
+    </AppShell>
   )
 }

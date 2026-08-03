@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
-  ArrowLeft, TrendingUp, TrendingDown, Zap, Check, ArrowRight, Moon, Bed,
+  TrendingUp, TrendingDown, Zap, Check, ArrowRight, Moon, Bed,
 } from 'lucide-react'
 import { subDays, subMonths, startOfMonth, format } from 'date-fns'
+import AppShell from '../components/shell/AppShell'
 import { useLocale } from '../contexts/LocaleContext'
 import { usePMC } from '../hooks/usePMC'
 import { useActivitiesRange } from '../hooks/useActivitiesRange'
@@ -100,7 +101,6 @@ function Pill({ children, color, soft }: { children: React.ReactNode; color: str
 export default function LoadFormView() {
   const { locale } = useLocale()
   const de = locale === 'de'
-  const navigate = useNavigate()
   const today = useMemo(() => new Date(), [])
 
   const [rangeId, setRangeId] = useState<RangeId>('6W')
@@ -258,44 +258,28 @@ export default function LoadFormView() {
     v == null ? DASH : `${v >= 0 ? '+' : ''}${v}${unit}`
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
-      <div className="mx-auto w-full max-w-md px-4 pt-3 pb-28 flex flex-col gap-5">
-        {/* Back */}
-        <button
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1.5"
-          style={{ fontSize: 12.5, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)', background: 'transparent' }}
-        >
-          <ArrowLeft size={15} /> {de ? 'Zurück' : 'Back'}
-        </button>
-
-        {/* Header + FUNCTIONAL range toggle */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="eyebrow" style={{ fontSize: 12, letterSpacing: 1, fontWeight: 600, color: 'var(--color-muted)' }}>
-              {de ? range.de : range.en}
-            </span>
-            <span className="num-display" style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-ink)' }}>
-              {de ? 'Belastung & Form' : 'Load & Form'}
-            </span>
-          </div>
-          <div className="flex rounded-full p-[3px]" style={{ background: 'var(--color-surface-2)', gap: 2 }}>
-            {RANGES.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => setRangeId(r.id)}
-                className="rounded-full"
-                style={{
-                  padding: '6px 12px', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
-                  color: r.id === rangeId ? 'var(--color-ink)' : 'var(--color-ink-2)',
-                  background: r.id === rangeId ? 'var(--color-accent)' : 'transparent',
-                }}
-              >
-                {r.id}
-              </button>
-            ))}
-          </div>
+    <AppShell
+      title={de ? 'Belastung & Form' : 'Load & Form'}
+      subtitle={de ? range.de : range.en}
+      action={
+        <div className="flex rounded-full p-[3px]" style={{ background: 'var(--color-surface-2)', gap: 2 }}>
+          {RANGES.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setRangeId(r.id)}
+              className="rounded-full"
+              style={{
+                padding: '6px 12px', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
+                color: r.id === rangeId ? 'var(--color-ink)' : 'var(--color-ink-2)',
+                background: r.id === rangeId ? 'var(--color-accent)' : 'transparent',
+              }}
+            >
+              {r.id}
+            </button>
+          ))}
         </div>
+      }
+    >
 
         {/* 1. Recommendation — mirrors the daily decision (single source) */}
         <Card accent>
@@ -585,7 +569,6 @@ export default function LoadFormView() {
             </div>
           ))}
         </Card>
-      </div>
-    </div>
+    </AppShell>
   )
 }
