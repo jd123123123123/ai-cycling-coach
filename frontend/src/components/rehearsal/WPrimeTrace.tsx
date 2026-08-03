@@ -91,11 +91,23 @@ export default function WPrimeTrace({
 
   if (!model) return null
 
-  // Empty enough to matter gets the strain colour; a ride that never dips deep
-  // stays calm. The threshold matches the point where the simulator starts
-  // capping power in practice.
-  const drained = model.minFrac <= 0.15
-  const stroke = drained ? 'var(--color-strain)' : 'var(--color-accent)'
+  // Colour states the VERDICT, not the metric. A full matchbook is the best
+  // possible outcome, so it is calm green; only a genuinely emptied reserve
+  // earns an alarm colour. The first version drew a healthy 100% trace in
+  // --color-accent (coral) and the card read as a warning about a ride that
+  // went perfectly — the exact inversion this app's colour rules exist to
+  // prevent. Three steps, because "nearly empty" and "empty" are different
+  // rides and the athlete acts differently on each.
+  const stroke =
+    model.minFrac <= 0.08
+      ? 'var(--color-bad)'
+      : model.minFrac <= 0.30
+        ? 'var(--color-caution)'
+        : 'var(--color-good)'
+  // A full reserve fills the whole box, so the area has to stay faint or the
+  // card becomes one solid slab of colour. It deepens as the reserve empties,
+  // which is the moment worth looking at.
+  const fillOpacity = model.minFrac <= 0.30 ? 0.2 : 0.1
   const activeY = activeIdx != null ? model.yForIndex(activeIdx) : null
 
   return (
@@ -123,7 +135,7 @@ export default function WPrimeTrace({
             : `W′ balance across the route, lowest point ${Math.round(model.minFrac * 100)} percent`
         }
       >
-        <polygon points={model.area} fill={stroke} opacity={0.16} stroke="none" />
+        <polygon points={model.area} fill={stroke} opacity={fillOpacity} stroke="none" />
         <polyline
           points={model.line}
           fill="none"

@@ -1,6 +1,7 @@
 import type { RehearsalChapter } from '../../api/rehearsal'
 import { formatDecimal, formatHms } from './rehearsalMath'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
+import { eyebrow } from '../dashboard/surfaces'
 
 const ZONE_COLORS = [
   'var(--color-zone-1)',
@@ -40,7 +41,7 @@ export default function SegmentPlan({
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
         <span
           className="eyebrow"
-          style={{ fontSize: 11, letterSpacing: '0.16em', fontWeight: 800, color: 'var(--color-ink-2)' }}
+          style={eyebrow('var(--color-ink-2)')}
         >
           {de ? 'DER PLAN, KM FÜR KM' : 'THE PLAN, KM BY KM'}
         </span>

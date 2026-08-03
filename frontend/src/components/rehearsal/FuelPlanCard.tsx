@@ -2,6 +2,7 @@ import { Droplet } from 'lucide-react'
 import type { RehearsalFuel } from '../../api/rehearsal'
 import { formatDecimal } from './rehearsalMath'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
+import { eyebrow, surface } from '../dashboard/surfaces'
 
 /**
  * FuelPlanCard — what to eat and drink to ride this well.
@@ -33,7 +34,7 @@ export default function FuelPlanCard({ fuel, de }: { fuel?: RehearsalFuel | null
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
         <span
           className="eyebrow"
-          style={{ fontSize: 11, letterSpacing: '0.16em', fontWeight: 800, color: 'var(--color-zone-3)' }}
+          style={eyebrow('var(--color-zone-3)')}
         >
           {de ? 'DEN MOTOR FÜTTERN' : 'FUEL THE ENGINE'}
         </span>
@@ -113,14 +114,13 @@ function Tile({ v, l, s }: { v: string; l: string; s: string }) {
         gap: 1,
         alignItems: 'center',
         padding: '8px 4px',
-        borderRadius: 12,
-        background: 'var(--color-surface-2)',
+        ...surface('recessed'),
       }}
     >
       <span className="num-display" style={{ fontSize: 19, fontWeight: 800, color: 'var(--color-ink)' }}>
         {v}
       </span>
-      <span style={{ fontSize: 9.5, letterSpacing: '0.1em', fontWeight: 800, color: 'var(--color-muted)' }}>
+      <span style={eyebrow('var(--color-muted)')}>
         {l}
       </span>
       <span style={{ fontSize: 10.5, color: 'var(--color-ink-2)' }}>{s}</span>

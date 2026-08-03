@@ -1,6 +1,7 @@
 import type { Rehearsal } from '../../api/rehearsal'
 import { formatDecimal } from './rehearsalMath'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
+import { eyebrow } from '../dashboard/surfaces'
 
 /**
  * RideMetrics — the six numbers a rider already knows how to read.
@@ -69,7 +70,7 @@ export default function RideMetrics({ data, de }: { data: Rehearsal; de: boolean
     >
       <span
         className="eyebrow"
-        style={{ fontSize: 11, letterSpacing: '0.16em', fontWeight: 800, color: 'var(--color-ink-2)' }}
+        style={eyebrow('var(--color-ink-2)')}
       >
         {de ? 'WAS DICH ERWARTET' : 'WHAT TO EXPECT'}
       </span>
@@ -81,7 +82,7 @@ export default function RideMetrics({ data, de }: { data: Rehearsal; de: boolean
           {cells.slice(offset, offset + 3).map((c) => (
             <div key={c.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span
-                style={{ fontSize: 9.5, letterSpacing: '0.1em', fontWeight: 800, color: 'var(--color-muted)' }}
+                style={eyebrow('var(--color-muted)')}
               >
                 {c.label}
               </span>

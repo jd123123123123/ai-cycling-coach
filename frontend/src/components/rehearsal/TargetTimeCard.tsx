@@ -1,6 +1,7 @@
 import type { Rehearsal } from '../../api/rehearsal'
 import { formatHm } from './rehearsalMath'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
+import { accentBloom, accentEdge, eyebrow } from '../dashboard/surfaces'
 
 /**
  * TargetTimeCard — the answer to "I want to finish inside X".
@@ -59,12 +60,18 @@ export default function TargetTimeCard({ data, de }: { data: Rehearsal; de: bool
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
-        borderLeft: `3px solid ${tone}`,
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
+      {/* State arrives as an EDGE, not a wash: the card stays near-black so
+          several accented cards can sit on one screen without fighting. */}
+      <span aria-hidden style={accentBloom(tone)} />
+      <span aria-hidden style={accentEdge(tone)} />
+
       <span
         className="eyebrow"
-        style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 700, color: 'var(--color-ink-2)' }}
+        style={eyebrow('var(--color-ink-2)')}
       >
         {de ? `ZIELZEIT ${formatHm(target)}` : `TARGET ${formatHm(target)}`}
       </span>

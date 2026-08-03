@@ -2,6 +2,7 @@ import { Trophy } from 'lucide-react'
 import type { RehearsalHistory, RehearsalPr } from '../../api/rehearsal'
 import { formatHm } from './rehearsalMath'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
+import { eyebrow, surface } from '../dashboard/surfaces'
 
 /**
  * RouteRecord — you, against this route, before.
@@ -50,7 +51,7 @@ export default function RouteRecord({
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
         <span
           className="eyebrow"
-          style={{ fontSize: 11, letterSpacing: '0.16em', fontWeight: 800, color: 'var(--color-ink-2)' }}
+          style={eyebrow('var(--color-ink-2)')}
         >
           {de ? 'DU GEGEN DIESE STRECKE' : 'YOU vs THIS ROUTE'}
         </span>
@@ -165,11 +166,12 @@ function Cell({
         alignItems: 'center',
         padding: '9px 4px',
         borderRadius: 12,
-        background: highlight ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'var(--color-surface-2)',
+        ...(highlight ? {} : surface('recessed')),
+        background: highlight ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : undefined,
         border: highlight ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)' : '1px solid transparent',
       }}
     >
-      <span style={{ fontSize: 9.5, letterSpacing: '0.1em', fontWeight: 800, color: 'var(--color-muted)' }}>
+      <span style={eyebrow('var(--color-muted)')}>
         {label}
       </span>
       <span

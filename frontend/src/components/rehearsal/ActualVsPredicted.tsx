@@ -1,6 +1,7 @@
 import type { RehearsalActual } from '../../api/rehearsal'
 import { formatHm } from './rehearsalMath'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
+import { accentBloom, accentEdge, eyebrow } from '../dashboard/surfaces'
 
 /** Inside this the prediction is "on the money" rather than fast or slow.
  *  Claiming a 40-second edge over a five-hour ride is precision the model
@@ -48,12 +49,18 @@ export default function ActualVsPredicted({
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
-        borderLeft: `3px solid ${tone}`,
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
+      {/* State arrives as an EDGE, not a wash: the card stays near-black so
+          several accented cards can sit on one screen without fighting. */}
+      <span aria-hidden style={accentBloom(tone)} />
+      <span aria-hidden style={accentEdge(tone)} />
+
       <span
         className="eyebrow"
-        style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 700, color: 'var(--color-ink-2)' }}
+        style={eyebrow('var(--color-ink-2)')}
       >
         {de ? 'VORHERSAGE GEGEN WIRKLICHKEIT' : 'PREDICTION VS REALITY'}
       </span>

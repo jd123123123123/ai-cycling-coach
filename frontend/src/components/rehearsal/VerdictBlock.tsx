@@ -2,6 +2,7 @@ import type { RehearsalBand } from '../../api/rehearsal'
 import { useEffect, useState } from 'react'
 import { formatHm } from './rehearsalMath'
 import { prefersReducedMotion } from '../../utils/motion'
+import { accentBloom, accentEdge, surface } from '../dashboard/surfaces'
 
 /**
  * VerdictBlock — the headline of a route rehearsal.
@@ -145,8 +146,23 @@ export default function VerdictBlock({
 
   const blowUp = blowUpKm != null ? blowUpSentence(de, blowUpKm, blowUpClimb, blowUpWatts) : null
 
+  // The one HERO on this screen. Everything else is a card; this is what the
+  // page is about, and giving it real elevation is what stops a stack of
+  // fourteen equal-weight boxes from reading as a wireframe.
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section
+      style={{
+        ...surface('hero'),
+        position: 'relative',
+        overflow: 'hidden',
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}
+    >
+      <span aria-hidden style={accentBloom('var(--color-good)', 'strong')} />
+      <span aria-hidden style={accentEdge('var(--color-good)')} />
       <span
         className="eyebrow"
         style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 700, color: 'var(--color-ink-2)' }}

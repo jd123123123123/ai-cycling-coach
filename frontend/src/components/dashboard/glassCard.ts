@@ -41,10 +41,23 @@ export const GLASS_BLUR = GLASS
   : ({} as const)
 
 /** Drop-in replacement for the old flat `{ background: var(--color-paper-2),
- *  border: 1px solid var(--color-rule) }` card style. */
+ *  border: 1px solid var(--color-rule) }` card style.
+ *
+ *  Carries the RIM LIGHT: a 1px highlight along the top edge and a matching
+ *  shadow along the bottom. That pair is what separates a machined panel from
+ *  a filled rectangle, and adding it here rather than at each call site lifts
+ *  every card in the app at once — Today, Recovery, the rehearsal surface and
+ *  the crew pages all consume this object. `--shadow-glass-rim` had existed as
+ *  a token since the 6.1 redesign and was used by nothing.
+ *
+ *  The accompanying --shadow-1 is deliberately the smallest step on the scale:
+ *  on a screen of a dozen cards a heavier drop shadow stops reading as depth
+ *  and starts reading as fog. Cards that need to lift further ask for the
+ *  `hero` tier in `surfaces.ts`. */
 export const glassCardStyle = {
   background: GLASS_PAPER_2,
   border: '1px solid var(--color-rule)',
+  boxShadow: 'var(--shadow-glass-rim), var(--shadow-1)',
   ...GLASS_BLUR,
 } as const
 

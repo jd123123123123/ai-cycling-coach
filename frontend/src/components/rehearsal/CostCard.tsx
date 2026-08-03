@@ -1,6 +1,7 @@
 import { Flame } from 'lucide-react'
 import type { RehearsalBattery, RehearsalMatches, RehearsalTrainingEffect } from '../../api/rehearsal'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
+import { eyebrow, surface } from '../dashboard/surfaces'
 
 const MATCH_SLOTS = 5
 
@@ -43,7 +44,7 @@ export default function CostCard({
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
         <span
           className="eyebrow"
-          style={{ fontSize: 11, letterSpacing: '0.16em', fontWeight: 800, color: 'var(--color-amber)' }}
+          style={eyebrow('var(--color-amber)')}
         >
           {de ? 'WAS ES DICH KOSTET' : 'WHAT IT COSTS YOU'}
         </span>
@@ -138,7 +139,7 @@ export default function CostCard({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span
                 className="eyebrow"
-                style={{ fontSize: 10.5, letterSpacing: '0.14em', fontWeight: 800, color: 'var(--color-accent)' }}
+                style={eyebrow('var(--color-accent)')}
               >
                 {de ? 'STREICHHÖLZER' : 'MATCHES TO BURN'}
               </span>
@@ -225,14 +226,13 @@ function Tile({ v, l, s }: { v: string; l: string; s: string }) {
         gap: 1,
         alignItems: 'center',
         padding: '8px 4px',
-        borderRadius: 12,
-        background: 'var(--color-surface-2)',
+        ...surface('recessed'),
       }}
     >
       <span className="num-display" style={{ fontSize: 19, fontWeight: 800, color: 'var(--color-ink)' }}>
         {v}
       </span>
-      <span style={{ fontSize: 9.5, letterSpacing: '0.1em', fontWeight: 800, color: 'var(--color-muted)' }}>
+      <span style={eyebrow('var(--color-muted)')}>
         {l}
       </span>
       <span style={{ fontSize: 10.5, color: 'var(--color-ink-2)', textAlign: 'center' }}>{s}</span>

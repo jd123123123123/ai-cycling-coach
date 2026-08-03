@@ -1,5 +1,6 @@
 import type { RehearsalDemand } from '../../api/rehearsal'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
+import { eyebrow } from '../dashboard/surfaces'
 
 /**
  * EngineVsRoute — "can my engine do what this road asks?"
@@ -51,7 +52,7 @@ export default function EngineVsRoute({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <span
           className="eyebrow"
-          style={{ fontSize: 11, letterSpacing: '0.16em', fontWeight: 800, color: 'var(--color-recovery)' }}
+          style={eyebrow('var(--color-recovery)')}
         >
           {de ? 'DEIN MOTOR vs DIESE STRECKE' : 'YOUR ENGINE vs THIS ROUTE'}
         </span>

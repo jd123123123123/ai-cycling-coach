@@ -1,6 +1,7 @@
 import type { RehearsalZone } from '../../api/rehearsal'
 import { formatHms } from './rehearsalMath'
 import { glassCardStyle, GLASS_CARD_MARKER } from '../dashboard/glassCard'
+import { eyebrow } from '../dashboard/surfaces'
 
 /**
  * TimeInZones — where the hours actually go.
@@ -56,7 +57,7 @@ export default function TimeInZones({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <span
           className="eyebrow"
-          style={{ fontSize: 11, letterSpacing: '0.16em', fontWeight: 800, color: 'var(--color-ink-2)' }}
+          style={eyebrow('var(--color-ink-2)')}
         >
           {de ? 'WO DIE ZEIT HINGEHT' : 'WHERE THE TIME GOES'}
         </span>
