@@ -94,6 +94,61 @@ export interface RehearsalActual {
   inside_band?: boolean | null
 }
 
+/** Seconds spent in one power zone. */
+export interface RehearsalZone {
+  zone: number
+  name_en: string
+  name_de: string
+  seconds: number
+  fraction: number
+}
+
+/**
+ * What the ROUTE demands at a duration, against what the RIDER has.
+ *
+ * `required_w` is the best sustained average the course forces over that
+ * window — a property of the road, always present. `athlete_best_w` is null
+ * when the rider has no comparable effort on file; the demand still ships.
+ */
+export interface RehearsalDemand {
+  duration_s: number
+  required_w: number
+  athlete_best_w?: number | null
+  spare_w?: number | null
+  /** required / best. Above 1.0 = the road asks for more than you have done. */
+  ratio?: number | null
+}
+
+export interface RehearsalMatches {
+  count: number
+  count_uncapped: number
+  time_above_cp_s: number
+  min_balance_j: number
+  fully_depleted: boolean
+  starts_s: number[]
+}
+
+export interface RehearsalHeartRate {
+  avg_bpm: number
+  max_bpm: number
+  is_estimate: boolean
+}
+
+export interface RehearsalTrainingEffect {
+  aerobic: number
+  anaerobic: number
+  recovery_hours_low: number
+  recovery_hours_high: number
+  is_estimate: boolean
+}
+
+export interface RehearsalBattery {
+  start_pct: number
+  finish_pct: number
+  cost_pct: number
+  is_estimate: boolean
+}
+
 export interface Rehearsal {
   id: number
   name: string | null
@@ -133,6 +188,25 @@ export interface Rehearsal {
   /** How many of the athlete's own completed rides the band width was
    *  calibrated on. 0 means the reasoned default, not a measurement. */
   band_samples?: number
+
+  // ── Forecast layer ─────────────────────────────────────────────────────
+  // All derived from one 1 Hz expansion of the simulated ride, so a predicted
+  // NP is directly comparable with a recorded one.
+  avg_power_w?: number | null
+  normalized_power_w?: number | null
+  intensity_factor?: number | null
+  tss?: number | null
+  variability_index?: number | null
+  /** The anchor zones and TSS were computed against. */
+  ftp_used_w?: number | null
+  /** True when a CP stood in for a missing FTP — the surface must say so. */
+  ftp_is_cp_fallback?: boolean
+  zones?: RehearsalZone[]
+  demand?: RehearsalDemand[]
+  matches?: RehearsalMatches | null
+  heart_rate?: RehearsalHeartRate | null
+  training_effect?: RehearsalTrainingEffect | null
+  battery?: RehearsalBattery | null
   blow_ups: RehearsalBlowUp[]
   /** True when CdA is the labelled fallback rather than a measurement. */
   cda_is_default: boolean

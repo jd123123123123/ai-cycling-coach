@@ -35,6 +35,10 @@ import RiderKnobs from '../components/rehearsal/RiderKnobs'
 import TargetTimeCard from '../components/rehearsal/TargetTimeCard'
 import ActualVsPredicted from '../components/rehearsal/ActualVsPredicted'
 import CompareRehearsals from '../components/rehearsal/CompareRehearsals'
+import RideMetrics from '../components/rehearsal/RideMetrics'
+import TimeInZones from '../components/rehearsal/TimeInZones'
+import EngineVsRoute from '../components/rehearsal/EngineVsRoute'
+import CostCard from '../components/rehearsal/CostCard'
 import RouteMap from '../components/crew/RouteMap'
 import RouteSketch from '../components/ui/RouteSketch'
 import {
@@ -384,6 +388,28 @@ export default function RouteRehearsalView() {
       )}
 
       <ClimbCards climbs={data.climbs} segments={segments} de={de} />
+
+      {/* ── The forecast stack ─────────────────────────────────────────────
+          Everything here is derived from one 1 Hz expansion of the simulated
+          ride, so a predicted NP is comparable with a recorded one rather than
+          a parallel estimate that would drift from it. */}
+      <RideMetrics data={data} de={de} />
+
+      <TimeInZones
+        zones={data.zones ?? []}
+        ftpUsedW={data.ftp_used_w}
+        ftpIsCpFallback={data.ftp_is_cp_fallback}
+        de={de}
+      />
+
+      <EngineVsRoute demand={data.demand ?? []} de={de} />
+
+      <CostCard
+        battery={data.battery}
+        matches={data.matches}
+        trainingEffect={data.training_effect}
+        de={de}
+      />
 
       {(data.total_kj != null || data.carbs_g_per_hour != null) && (
         <section
