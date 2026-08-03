@@ -22,6 +22,7 @@ import {
   Share2, Sparkles, Activity, TrendingUp, Gauge, Zap, Award, Star, LineChart, Trophy, CheckCircle2,
 } from 'lucide-react'
 import AppShell from '../components/shell/AppShell'
+import Scene from '../components/scene/Scene'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import { useStreamAnalysis } from '../hooks/useStreamAnalysis'
 import { usePMC } from '../hooks/usePMC'
@@ -131,6 +132,13 @@ export default function RideRecapView() {
   const header = data?.header ?? null
   const verdict = data?.verdict ?? null
   const story = data?.story ?? null
+  // Altitude only — the terrain must be the ROAD, not a power trace dressed up
+  // as one. Filtered to finite numbers because the stream carries nulls through
+  // tunnels and dropouts.
+  const rideTerrain = useMemo(
+    () => (story?.altitude ?? []).filter((x): x is number => typeof x === 'number' && Number.isFinite(x)),
+    [story],
+  )
   const pacing = data?.pacing ?? null
   const efforts = data?.efforts ?? []
   const ftp = athlete?.ftp_watts ?? data?.wko?.mftp_watts ?? null
@@ -347,6 +355,23 @@ export default function RideRecapView() {
       }
     >
       <>
+        {/* The ride as a landscape, from the altitude stream this page already
+            loads. Renders nothing when the ride has no altitude (indoor, or a
+            device that never recorded it) -- an invented ridge over a turbo
+            session would be a fabricated measurement. */}
+        {rideTerrain.length > 1 && (
+          <section
+            className="-mt-1 overflow-hidden rounded-[18px]"
+            style={{ marginLeft: -16, marginRight: -16 }}
+          >
+            <Scene
+              kind="terrain"
+              values={rideTerrain}
+              seed={`recap:${activityId ?? 'x'}`}
+              height={116}
+            />
+          </section>
+        )}
 
         {isLoading && (
           <div className="flex flex-col gap-[18px] px-4 pt-2">
