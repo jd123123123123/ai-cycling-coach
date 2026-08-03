@@ -48,6 +48,15 @@ export default function WPrimeTrace({
     if (n === 0 || !wPrimeJ || wPrimeJ <= 0) return null
     if (!segments.some((s) => s.w_bal_j != null)) return null
 
+    // A reserve that never moves is not a matchbook -- it is the simulator
+    // reporting that it had no fitted W' to spend, so its cap branch never
+    // fired. Drawing that flat line under the words "your matchbook" claims a
+    // measurement that does not exist, and it directly contradicts the
+    // verdict block's own "no W' on file" note two cards above. Withhold the
+    // verdict, keep the honest gap.
+    const known = segments.map((s) => s.w_bal_j).filter((b): b is number => b != null)
+    if (known.length > 1 && Math.max(...known) - Math.min(...known) < 1) return null
+
     const idxs = downsampleIndices(n, MAX_DRAWN_POINTS)
     const pad = 3
     // Fraction of W′ still available, clamped: the integrator can overshoot a

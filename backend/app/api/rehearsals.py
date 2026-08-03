@@ -367,6 +367,21 @@ async def _simulate_and_store(
     )
     fc_inputs = await _forecast_inputs(db, user_id, res_profile.scalar_one_or_none())
 
+    # Today's readiness, from the SAME producer the coach brief and the Today
+    # hero read (daily_decision._readiness_summary). Sharing the producer is
+    # what stops the battery card from disagreeing with the readiness ring on
+    # the same morning -- the exact class of bug the stale-wearable rule was
+    # written for. Returns None on stale or missing signals, and the surface
+    # then states the gap rather than drawing a battery from nothing.
+    start_readiness_pct: float | None = None
+    try:
+        from app.services.daily_decision import _readiness_summary
+
+        readiness = await _readiness_summary(db, user_id)
+        start_readiness_pct = float(readiness.score) if readiness.score is not None else None
+    except Exception:  # pragma: no cover -- a rehearsal must survive this
+        logger.exception("readiness unavailable for user_id=%s", user_id)
+
     # Past rides on this route. Doubles as the PR target, computed once so the
     # history card and the PR probability cannot disagree.
     attempts = await past_attempts(
@@ -405,7 +420,7 @@ async def _simulate_and_store(
             ftp_watts=fc_inputs["ftp_watts"],
             athlete_mmp=fc_inputs["athlete_mmp"],
             hr_anchors=fc_inputs["hr_anchors"],
-            start_readiness_pct=None,
+            start_readiness_pct=start_readiness_pct,
             pr_time_s=pr_time_s,
         )
     except (RouteUnusable, RehearsalInputError) as exc:
@@ -694,7 +709,58 @@ async def get_rehearsal(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_for_user),
 ) -> RehearsalOut:
-    return _to_out(await _load_owned(db, rehearsal_id, current_user.id))
+    """A stored rehearsal, re-simulated on read when it predates the forecast layer.
+
+    Results are persisted as JSONB, so a rehearsal created before the forecast
+    layer shipped carries no zones, no demand curve, no chapters and no fuel --
+    every one of those surfaces would render its empty state and the page would
+    look broken for work the athlete had already done. Recomputing on read
+    fixes them in place, once, rather than migrating every stored row for a
+    shape that is still moving.
+
+    The recompute uses the STORED route and assumptions, so the answer it
+    produces is the answer that rehearsal always meant -- only the derived
+    layer is new. A failure leaves the stored result untouched: an old
+    rehearsal that renders partially is better than one that 500s.
+    """
+    row = await _load_owned(db, rehearsal_id, current_user.id)
+
+    # `zones` is the cheapest marker of the forecast layer: present on every
+    # predicted rehearsal since it shipped, absent on every one before it.
+    result = row.result or {}
+    needs_backfill = bool(result.get("can_predict")) and "zones" not in result
+    if needs_backfill:
+        try:
+            stored = row.assumptions or {}
+            assumptions = Assumptions(
+                draft=stored.get("draft", "solo"),
+                effort=stored.get("effort", "fondo"),
+                use_weather=bool(stored.get("use_weather", True)),
+            )
+            overrides = RiderOverrides(
+                weight_kg=stored.get("weight_kg"),
+                bike_mass_kg=stored.get("bike_mass_kg"),
+                surface=stored.get("surface", "asphalt") or "asphalt",
+                start_hour=stored.get("start_hour"),
+                use_projected_cp=bool(stored.get("use_projected_cp", False)),
+                target_time_s=stored.get("target_time_s"),
+            )
+            await _simulate_and_store(
+                db,
+                row,
+                route_from_json(row.route),
+                assumptions,
+                current_user.id,
+                overrides,
+            )
+            await db.commit()
+            await db.refresh(row)
+        except Exception:  # pragma: no cover -- never fail a read
+            logger.exception(
+                "forecast backfill failed for rehearsal_id=%s", rehearsal_id
+            )
+
+    return _to_out(row)
 
 
 @router.patch("/{rehearsal_id}", response_model=RehearsalOut)
