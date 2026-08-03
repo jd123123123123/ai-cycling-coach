@@ -15,7 +15,7 @@ import { useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Navigate } from 'react-router-dom'
 import { format, parseISO, differenceInCalendarWeeks } from 'date-fns'
 import {
-  ChevronLeft, ChevronRight, Share2, Bike, Repeat, Zap, Heart, Gauge, Droplet,
+  ChevronRight, Share2, Bike, Repeat, Zap, Heart, Gauge, Droplet,
   Cookie, Brain, Flag, MessageCircle, Home, CalendarClock,
 } from 'lucide-react'
 import { formatDate } from '../utils/format'
@@ -24,6 +24,7 @@ import { useAthleteProfile } from '../hooks/useAthleteProfile'
 import { useCurrentWeek } from '../hooks/useCurrentWeek'
 import { useActivitiesRange } from '../hooks/useActivitiesRange'
 import { localDayKey } from '../utils/loadMetrics'
+import AppShell from '../components/shell/AppShell'
 import { useLocale } from '../contexts/LocaleContext'
 import { workoutDisplayTitle, workoutDisplayPurpose, workoutDisplayRationale } from '../api/coach'
 import BlockBars, { zoneColor, zoneForPct, blockBarFrac, BLOCK_BARS_MAX_PCT } from '../components/workout/BlockBars'
@@ -310,16 +311,12 @@ export default function WorkoutDetailView() {
   }
 
   // ── NavRow (shared across states) ──────────────────────────────────────────
-  const nav = (
-    <div className="flex items-center justify-between px-4" style={{ paddingTop: 6, paddingBottom: 6 }}>
-      <button type="button" onClick={() => navigate(-1)} aria-label={de ? 'Zurück' : 'Back'} className="grid place-items-center" style={{ width: 40, height: 40, borderRadius: 100, ...chip }}>
-        <ChevronLeft size={24} style={{ color: 'var(--color-ink)' }} />
-      </button>
-      <span style={{ fontFamily: '"Sora", sans-serif', fontSize: 17, fontWeight: 700, color: 'var(--color-ink)' }}>{t.title}</span>
-      <button type="button" aria-label={de ? 'Teilen' : 'Share'} className="grid place-items-center" style={{ width: 40, height: 40, borderRadius: 100, ...chip }}>
-        <Share2 size={20} style={{ color: 'var(--color-ink)' }} />
-      </button>
-    </div>
+  // Title and back now come from PageHeader; only the share affordance is
+  // page-specific, so it is all that stays here.
+  const shareAction = (
+    <button type="button" aria-label={de ? 'Teilen' : 'Share'} className="grid place-items-center" style={{ width: 40, height: 40, borderRadius: 100, ...chip }}>
+      <Share2 size={20} style={{ color: 'var(--color-ink)' }} />
+    </button>
   )
 
   if (!w || !s) {
@@ -333,15 +330,14 @@ export default function WorkoutDetailView() {
         ? (de ? 'Ruhetag — Erholung & Regeneration. Keine Einheit geplant.' : 'Rest day — recovery & regeneration. No session planned.')
         : (de ? 'Keine Einheit für diesen Tag.' : 'No session for this day.')
     return (
-      <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
-        <div className="mx-auto w-full max-w-md">{nav}</div>
-        <div className="grid place-items-center py-24 px-6 text-center">
+      <AppShell title={t.title} onBack={() => navigate(-1)}>
+        <div className="grid place-items-center py-24 px-2 text-center">
           <div className="flex flex-col items-center gap-2">
             {dLabel && <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--color-muted)' }}>{dLabel.toUpperCase()}</span>}
             <p style={{ color: 'var(--color-ink-2)' }}>{msg}</p>
           </div>
         </div>
-      </div>
+      </AppShell>
     )
   }
 
@@ -384,10 +380,8 @@ export default function WorkoutDetailView() {
         : null
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
-      <div className="mx-auto w-full max-w-md">
-        {nav}
-        <div className="px-4 flex flex-col" style={{ paddingTop: 8, paddingBottom: 28, gap: 20 }}>
+    <AppShell title={t.title} onBack={() => navigate(-1)} action={shareAction}>
+        <div className="flex flex-col" style={{ gap: 20 }}>
 
           {/* ── Hero ──────────────────────────────────────────────────────── */}
           <div className="flex flex-col gap-4">
@@ -698,7 +692,6 @@ export default function WorkoutDetailView() {
           <WorkoutExportCard available={exportAvailable} reason={exportReason} onEditWorkout={onEditWorkout} />
 
         </div>
-      </div>
-    </div>
+    </AppShell>
   )
 }
