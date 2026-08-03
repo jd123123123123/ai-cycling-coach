@@ -23,6 +23,7 @@ import SessionReviewCard from '../SessionReviewCard'
 import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
 import RouteSuggestionCard from '../today/RouteSuggestionCard'
+import WindWidget from '../today/WindWidget'
 import ThisWeekCard from '../ThisWeekCard'
 import ExtraSessionsCard from '../ExtraSessionsCard'
 import ContributorsTrigger from '../ContributorsTrigger'
@@ -1430,6 +1431,10 @@ export default function TodayTab() {
           wants to know the dry window if you ride anyway). Hides itself only
           when there's no real forecast data (honest absence). */}
       <WeatherWindowCard />
+
+      {/* Wind, next to the weather: temperature decides what you wear, wind
+          decides which way you ride. Renders nothing without a forecast. */}
+      <WindWidget />
 
       {/* A road of the athlete's own that fits today's stated duration and TSS
           target. Sits next to the weather because both answer the same
