@@ -126,6 +126,7 @@ def build_ride(
     date: str | None = None,
     distance_m: float | None = None,
     duration_s: int | None = None,
+    tss: float | None = None,
 ) -> dict | None:
     """One ride as a cluster candidate, or None when it has no usable GPS.
 
@@ -155,6 +156,7 @@ def build_ride(
         "elevation_m": elevation_gain_m(streams.get("altitude")),
         "polyline": simplify_polyline(track),
         "is_virtual": is_virtual_title(title),
+        "tss": float(tss) if tss is not None else None,
     }
 
 
@@ -206,6 +208,7 @@ def summarize_route(group: list[dict]) -> dict:
     """One route card: representative name, ride counts, times, sketch."""
     durations = [r["duration_s"] for r in group if r["duration_s"]]
     gains = [r["elevation_m"] for r in group if r["elevation_m"] is not None]
+    tss_values = [r["tss"] for r in group if r.get("tss") is not None]
     dates = [r["date"] for r in group if r["date"]]
     virtual_votes = sum(1 for r in group if r["is_virtual"])
     newest = group[0]  # most-recent-first ordering preserved from the query
@@ -216,6 +219,9 @@ def summarize_route(group: list[dict]) -> dict:
         "elevation_m": round(median(gains)) if gains else None,
         "best_time_s": min(durations) if durations else None,
         "avg_time_s": round(sum(durations) / len(durations)) if durations else None,
+        # Median rather than mean: one all-out race effort on an otherwise
+        # easy loop must not drag the "typical" TSS toward it.
+        "avg_tss": round(median(tss_values), 1) if tss_values else None,
         "last_ridden": max(dates) if dates else None,
         "start_lat": newest["start_lat"],
         "start_lng": newest["start_lng"],
@@ -250,6 +256,7 @@ async def load_route_library(db: AsyncSession, user_id: int) -> dict:
             Activity.started_at,
             Activity.distance_meters,
             Activity.duration_seconds,
+            Activity.tss,
         )
         .join(Activity, Activity.id == ActivityStream.activity_id)
         .where(
@@ -271,6 +278,7 @@ async def load_route_library(db: AsyncSession, user_id: int) -> dict:
             date=r.started_at.date().isoformat() if r.started_at else None,
             distance_m=r.distance_meters,
             duration_s=r.duration_seconds,
+            tss=r.tss,
         )
         if ride is not None:
             rides.append(ride)

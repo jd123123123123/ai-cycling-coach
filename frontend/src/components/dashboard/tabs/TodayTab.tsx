@@ -22,6 +22,7 @@ import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type Ch
 import SessionReviewCard from '../SessionReviewCard'
 import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
+import RouteSuggestionCard from '../today/RouteSuggestionCard'
 import ThisWeekCard from '../ThisWeekCard'
 import ExtraSessionsCard from '../ExtraSessionsCard'
 import ContributorsTrigger from '../ContributorsTrigger'
@@ -1429,6 +1430,12 @@ export default function TodayTab() {
           wants to know the dry window if you ride anyway). Hides itself only
           when there's no real forecast data (honest absence). */}
       <WeatherWindowCard />
+
+      {/* A road of the athlete's own that fits today's stated duration and TSS
+          target. Sits next to the weather because both answer the same
+          question — "what does riding today actually look like?" — and renders
+          nothing at all when no confident suggestion exists. */}
+      <RouteSuggestionCard />
 
       {/* Drivers / Coach card / Momentum — moved here from the top of the hero
           (Jul 2026 review): they were rendering the coach's read and the
