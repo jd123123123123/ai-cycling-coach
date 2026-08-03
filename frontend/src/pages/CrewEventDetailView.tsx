@@ -42,6 +42,7 @@ import { useCrewEvent, useRsvpCrewEvent } from '../hooks/useCrewEvents'
 import { useCrewEventWeather } from '../hooks/useCrewEventWeather'
 import { downloadCrewEventTour } from '../api/crewEvents'
 import { useAuth } from '../contexts/AuthContext'
+import AppShell from '../components/shell/AppShell'
 import { useLocale } from '../contexts/LocaleContext'
 import RouteProfile from '../components/crew/RouteProfile'
 import RouteMap, { type MapStyleKey } from '../components/crew/RouteMap'
@@ -141,11 +142,13 @@ export default function CrewEventDetailView() {
   const hostName = ev.creator_handle
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
-      <div className="mx-auto flex flex-col" style={{ maxWidth: 430 }}>
+    <AppShell title={ev.name} onBack={() => navigate(-1)}>
+      <>
 
         {/* ── MapHero (pen G3h5P) ───────────────────────────────────────── */}
-        <div className="relative overflow-hidden" style={{ height: route ? HERO_H : HERO_H_BARE, background: '#0A0C0F' }}>
+        {/* Bleeds past the shell gutter: a route hero that stops short of the
+            screen edge reads as a thumbnail rather than as the ride. */}
+        <div className="relative overflow-hidden" style={{ height: route ? HERO_H : HERO_H_BARE, background: '#0A0C0F', marginLeft: -16, marginRight: -16 }}>
           {/* Field the route sits on. Not a map — see the header note. */}
           <div className="absolute inset-0" style={{
             background: 'radial-gradient(120% 90% at 24% 18%, #1B2733 0%, #10151B 46%, #0A0C0F 100%)',
@@ -578,7 +581,7 @@ export default function CrewEventDetailView() {
             )}
           </div>
         </div>
-      </div>
+      </>
 
       {/* Full-screen map. This is the ONLY interactive map on the page, and it
           runs with cooperativeGestures: one finger scrolls, two fingers move the
@@ -617,6 +620,6 @@ export default function CrewEventDetailView() {
           </button>
         </div>
       )}
-    </div>
+    </AppShell>
   )
 }

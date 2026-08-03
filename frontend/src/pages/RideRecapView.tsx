@@ -19,8 +19,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { parseISO, format } from 'date-fns'
 import { de as deLocale } from 'date-fns/locale'
 import {
-  ChevronLeft, Share2, Sparkles, Activity, TrendingUp, Gauge, Zap, Award, Star, LineChart, Trophy, CheckCircle2,
+  Share2, Sparkles, Activity, TrendingUp, Gauge, Zap, Award, Star, LineChart, Trophy, CheckCircle2,
 } from 'lucide-react'
+import AppShell from '../components/shell/AppShell'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import { useStreamAnalysis } from '../hooks/useStreamAnalysis'
 import { usePMC } from '../hooks/usePMC'
@@ -326,35 +327,26 @@ export default function RideRecapView() {
   }, [idOk, activityId, bestPr, prCount, de])
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
-      <div className="max-w-md mx-auto pb-28">
-        {/* 1 · Header */}
-        <div className="flex items-center justify-between gap-3 px-4 pt-6 pb-2.5">
-          <button
-            onClick={() => navigate('/dashboard?tab=history')}
-            className="grid place-items-center rounded-full"
-            style={{ width: 40, height: 40, background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)' }}
-            aria-label={de ? 'Zurück' : 'Back'}
-          >
-            <ChevronLeft size={22} strokeWidth={2.2} style={{ color: 'var(--color-ink)' }} />
-          </button>
-          <div className="flex flex-col items-center min-w-0">
-            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)' }}>{de ? 'Fahrt abgeschlossen' : 'Ride complete'}</span>
-            {header?.date && (
-              <span className="num-mono" style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-                {format(parseISO(header.date), de ? 'EEE, d. MMM · HH:mm' : 'EEE, MMM d · HH:mm', dfLocale)}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={onShare}
-            className="grid place-items-center rounded-full"
-            style={{ width: 40, height: 40, background: 'var(--color-accent)' }}
-            aria-label={de ? 'Teilen' : 'Share'}
-          >
-            <Share2 size={18} strokeWidth={2.2} style={{ color: '#fff' }} />
-          </button>
-        </div>
+    <AppShell
+      title={de ? 'Fahrt abgeschlossen' : 'Ride complete'}
+      subtitle={
+        header?.date
+          ? format(parseISO(header.date), de ? 'EEE, d. MMM · HH:mm' : 'EEE, MMM d · HH:mm', dfLocale)
+          : undefined
+      }
+      onBack={() => navigate('/dashboard?tab=history')}
+      action={
+        <button
+          onClick={onShare}
+          className="grid place-items-center rounded-full"
+          style={{ width: 40, height: 40, background: 'var(--color-accent)' }}
+          aria-label={de ? 'Teilen' : 'Share'}
+        >
+          <Share2 size={18} strokeWidth={2.2} style={{ color: '#fff' }} />
+        </button>
+      }
+    >
+      <>
 
         {isLoading && (
           <div className="flex flex-col gap-[18px] px-4 pt-2">
@@ -785,7 +777,7 @@ export default function RideRecapView() {
             <RideAnalysisView embedded />
           </div>
         )}
-      </div>
-    </div>
+      </>
+    </AppShell>
   )
 }

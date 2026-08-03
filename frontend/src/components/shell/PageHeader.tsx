@@ -60,7 +60,22 @@ export default function PageHeader({
       )}
 
       <div className="flex min-w-0 flex-col">
-        <h1 className="num-display truncate" style={{ fontSize: 26, color: 'var(--color-ink)' }}>
+        {/*
+          Long titles step down instead of truncating. At 390 px a 26 px title
+          plus a back chevron plus an action button leaves room for roughly 16
+          characters, and German is routinely longer than English for the same
+          screen ("Fahrt abgeschlossen" vs "Ride complete") -- which is exactly
+          how the recap page rendered as "Fahrt abgeschloss…". Two deterministic
+          steps, no measurement, so it cannot reflow between renders.
+        */}
+        <h1
+          className="num-display truncate"
+          style={{
+            fontSize: title.length > 22 ? 19 : title.length > 15 ? 22 : 26,
+            color: 'var(--color-ink)',
+            lineHeight: 1.15,
+          }}
+        >
           {title}
         </h1>
         {subtitle && (

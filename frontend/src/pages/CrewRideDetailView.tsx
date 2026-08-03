@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Share2, Users, Flag, Circle, Mountain, Info } from 'lucide-react'
+import AppShell from '../components/shell/AppShell'
 import { useLocale } from '../contexts/LocaleContext'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
 import { useAthleteProfile } from '../hooks/useAthleteProfile'
@@ -263,11 +264,15 @@ export default function CrewRideDetailView() {
     }
   }, [header, de])
 
+  // No PageHeader title here: the map hero already carries the ride's name as an
+  // overlay, and a second copy in a header bar would state it twice on one
+  // screen. The shell is here for the navigation and the shared gutter.
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
-      <div className="mx-auto w-full" style={{ maxWidth: 430 }}>
-        {/* ── MAP HERO ── */}
-        <div className="relative" style={{ height: HERO_H, background: 'linear-gradient(160deg,#12161C,#0A0C0F)', overflow: 'hidden' }}>
+    <AppShell>
+      <>
+        {/* ── MAP HERO ── bleeds past the gutter; a route hero inset on both
+            sides reads as a thumbnail rather than as the ride. */}
+        <div className="relative" style={{ height: HERO_H, background: 'linear-gradient(160deg,#12161C,#0A0C0F)', overflow: 'hidden', marginLeft: -16, marginRight: -16 }}>
           {story?.route && story.route.length > 1 ? (
             <RouteHero route={story.route} />
           ) : (
@@ -418,7 +423,7 @@ export default function CrewRideDetailView() {
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-ink-2)' }}>{de ? 'Zurück zur Crew' : 'Back to crew'}</span>
           </Link>
         </div>
-      </div>
-    </div>
+      </>
+    </AppShell>
   )
 }
