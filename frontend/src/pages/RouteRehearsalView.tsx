@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
+import Scene from '../components/scene/Scene'
 import { useLocale } from '../contexts/LocaleContext'
 import {
   getRehearsal,
@@ -215,6 +216,22 @@ export default function RouteRehearsalView() {
 
   return shell(
     <>
+      {/* The route as a landscape, drawn from the same elevations the profile
+          chart plots. Not decoration: it is this rider's actual road, so the
+          page opens on the shape of the day rather than on a title. Renders
+          nothing when there are no elevations — the honest-gap rule. */}
+      <section
+        className="-mt-3 overflow-hidden rounded-b-[20px]"
+        style={{ marginLeft: -16, marginRight: -16 }}
+      >
+        <Scene
+          kind="terrain"
+          values={elevations}
+          seed={`rehearsal:${data.id}`}
+          height={132}
+        />
+      </section>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <h1 style={{ fontSize: 22, fontWeight: 620, color: 'var(--color-ink)', letterSpacing: '-0.02em', margin: 0 }}>
           {title}
