@@ -13,7 +13,8 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
-import { ChevronLeft, ChevronUp, ChevronDown, Trash2, Plus, Clock, Zap, Download } from 'lucide-react'
+import { ChevronUp, ChevronDown, Trash2, Plus, Clock, Zap, Download } from 'lucide-react'
+import AppShell from '../components/shell/AppShell'
 import { useLocale } from '../contexts/LocaleContext'
 import BlockBars from '../components/workout/BlockBars'
 import {
@@ -191,19 +192,11 @@ export default function WorkoutBuilderView() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: INK, paddingBottom: 96 }}>
-      {/* Header */}
-      <div className="flex items-center gap-2" style={{ padding: '14px 16px', borderBottom: RULE, position: 'sticky', top: 0, background: 'var(--color-bg)', zIndex: 5 }}>
-        <button type="button" onClick={() => navigate('/dashboard')} aria-label="back"
-          className="flex items-center justify-center rounded-full" style={{ width: 36, height: 36, background: CARD }}>
-          <ChevronLeft size={20} />
-        </button>
-        <div style={{ fontSize: 17, fontWeight: 800 }}>
-          {de ? 'Workout-Baukasten' : 'Workout builder'}
-        </div>
-      </div>
-
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <AppShell
+      title={de ? 'Workout-Baukasten' : 'Workout builder'}
+      onBack={() => navigate('/dashboard')}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Live preview */}
         <div className="rounded-2xl" style={{ background: CARD, padding: 16, border: RULE }}>
           <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
@@ -313,7 +306,7 @@ export default function WorkoutBuilderView() {
           </div>
         )}
       </div>
-    </div>
+    </AppShell>
   )
 }
 

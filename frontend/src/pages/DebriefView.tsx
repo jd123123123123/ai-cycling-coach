@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { useLocale } from '../contexts/LocaleContext'
 import { useRaceDebrief } from '../hooks/useRaceDebrief'
@@ -10,6 +10,7 @@ import RideStory from '../components/debrief/RideStory'
 import BreakdownPanels from '../components/debrief/BreakdownPanels'
 import DebriefPlan from '../components/debrief/DebriefPlan'
 import DashboardSection from '../components/dashboard/DashboardSection'
+import AppShell from '../components/shell/AppShell'
 
 // Each debrief act rises in on a staggered, spring-eased cadence — the report
 // reveals itself as a narrative rather than dumping all at once.
@@ -32,17 +33,15 @@ export default function DebriefView() {
   const { locale } = useLocale()
   const de = locale === 'de'
   const { data, isLoading, isError } = useRaceDebrief(activityId)
+  const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-paper)' }}>
-      <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-9 sm:gap-11">
-        <Link
-          to="/dashboard?tab=history"
-          className="inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1.5 transition-colors"
-          style={{ fontSize: 12.5, color: 'var(--color-ink-2)', border: '1px solid var(--color-rule)' }}
-        >
-          {locale === 'de' ? '← Zurück' : '← Back'}
-        </Link>
+    <AppShell
+      title={de ? 'Analyse' : 'Debrief'}
+      onBack={() =>
+        window.history.length > 1 ? navigate(-1) : navigate('/dashboard?tab=history')
+      }
+    >
         {isLoading && (
           <div className="flex flex-col gap-4">
             <div className="rounded-[20px] h-56 shimmer-bg" style={{ border: '1px solid var(--color-rule)' }} />
@@ -111,7 +110,6 @@ export default function DebriefView() {
             )}
           </>
         )}
-      </div>
-    </div>
+    </AppShell>
   )
 }
