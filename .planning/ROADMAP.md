@@ -28,6 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] ~~**Phase 7: Periodization + Workout Generation**~~ — split into 7.0/7.1/7.2 (research 2026-05-04)
 - [ ] **Phase 8: Nutrition Integration** - Manual nutrition logging, fueling advice, and nutrition-aware adaptation
 - [ ] **Phase 9: Social + Retention Rituals** - Packs (4-12 training partners), user-chosen rivals, morning/post-ride/Sunday rituals, consistency streaks, pack-kudos — all grounded in Self-Determination Theory (autonomy/competence/relatedness); explicit dark-pattern ban list (no global leaderboards, no streak ransom, no variable-ratio rewards, no guilt copy)
+- [ ] **Phase 10: Verification + deploy gate** - Nothing in the forecast/rehearsal stack has ever run against real data or been seen in a browser. Live-data validation (real GPX, real Garmin history, applied migrations), physiology sanity against published ranges, visual verification at 390×844, and a written deploy gate that must pass before V4 ships.
 
 ## Phase Details
 
@@ -298,6 +299,43 @@ Plans:
 
 **Audience discipline note**: serious athletes (WHOOP/Garmin/TrainerRoad alumni) have seen every gamification trick. The competitive moat for this audience is **honesty + insight + autonomy**, not hooks. If a proposed feature is indistinguishable from Strava/Duolingo mechanics, reject it.
 
+### Phase 10: Verification + deploy gate
+**Goal**: Every claim the forecast stack makes has been checked against something real — real routes, real athlete history, a real browser, a real database — and a written gate decides whether it ships.
+
+**Depends on**: Phase 7.06 (streams), and the V4 forecast work on `main` (commits 8ba8ba0, dfc4245, 6638429)
+
+**Why this phase exists**: the V4 Route Forecast stack ships 2,968 backend and 828 frontend tests, and every one of them is a unit test against synthetic input. No forecast has been produced from a real GPX file, compared against a real recorded ride, or rendered in a browser. Three science bugs (HR above threshold, anaerobic TE saturation, battery cost) passed the full ordering-test suite and were only found by checking magnitudes against physiology by hand. That is the failure mode this phase is built around: **the tests agree with the code, and both can be wrong together.**
+
+**Success Criteria** (what must be TRUE):
+  1. A real GPX from a real ride produces a forecast end to end against a LOCAL database with all migrations applied — no mocks anywhere in the path
+  2. Forecast-vs-actual is measured on at least 5 recorded rides: predicted time, NP and TSS are reported next to what actually happened, and the error is written down rather than described as "close"
+  3. Every modelled quantity (HR, training effect, battery, demand curve, PR probability, fuel) is checked against published physiological ranges, with each check either PASS or an explicit accepted deviation
+  4. Band calibration is exercised with ≥5 real comparisons and the resulting coverage is reported — the band either contains ~80% of outcomes or the sigmas are corrected
+  5. All ten V4 surfaces render at 390×844 in a real browser and are screenshotted; no clipped, collapsed, or overlapping layout survives
+  6. Every honest-gap path is verified by removing the input, not by trusting the test: no FTP, no readiness, no HR anchors, no past rides, no coordinates — each produces the stated sentence, never a fabricated number
+  7. A written deploy gate exists listing what must pass, and the V4 stack has either passed it or has a named list of what failed — the gate is EVALUATED, not executed (see constraint below)
+
+**Plans**: TBD (run /gsd:plan-phase 10 to break down)
+
+**Hard constraint — no new Railway instance (user decision, 2026-08-03):**
+This phase runs entirely on local infrastructure. It must NOT spin up a second Railway
+project, a staging environment, or a "test mode" instance to verify against. Every
+success criterion above is reachable with a local Postgres and a local dev server, and
+standing up a parallel hosted environment would add a second billable project to a
+workspace whose first one is already suspended. The deploy gate is a DOCUMENT that says
+whether V4 is fit to ship — producing it does not require deploying anything.
+
+**Known blockers going in** (all pre-existing, none introduced by V4):
+- Railway trial expired — production returns `404 Application not found`. Restoring it is
+  a billing decision outside this phase, and this phase does not depend on it
+- Docker daemon unresponsive since Phase 03-01; migrations `d5e6f7a8b9c0`, `e6f7a8b9c0d1`, `914be70dbda3`, `b9d106ca0f6e` are unapplied locally
+- `main` is 28 commits ahead of `origin/main` and the deployed copy is gone — the work exists on one machine only
+- Phases 5, 6.1 and 6.2 are marked "Complete (awaiting live UAT)" and never received it
+
+**Anti-goals**: this phase does not add features, and it does not deploy. If verification
+finds a gap, it is written down and scheduled — not fixed opportunistically inside the
+verification pass, which is how a test phase turns into an unreviewed feature phase.
+
 ## Progress
 
 **Execution Order:**
@@ -317,6 +355,7 @@ Note: Phases 8 and 9 depend on Phase 5 (not on each other) and can execute in pa
 | 7. Periodization + Workout Generation | 0/TBD | Not started | - |
 | 8. Nutrition Integration | 0/TBD | Not started | - |
 | 9. Social + Gamification | 0/TBD | Not started | - |
+| 10. Verification + deploy gate | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-04-16*

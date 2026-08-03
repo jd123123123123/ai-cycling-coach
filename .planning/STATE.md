@@ -316,6 +316,15 @@ Recent decisions affecting current work:
 
 ### Roadmap Evolution
 
+- Phase 10 added (2026-08-03): Verification + deploy gate. Added after the V4 Route
+  Forecast stack landed on `main` with 2,968 backend + 828 frontend tests that are ALL
+  unit tests against synthetic input — no forecast has ever been produced from a real
+  GPX, compared against a real recorded ride, or rendered in a browser. Trigger: three
+  science bugs (HR extrapolation above threshold, anaerobic-TE saturation constant,
+  battery cost per TSS) passed the entire ordering-test suite and were caught only by
+  checking magnitudes against physiology by hand. HARD CONSTRAINT from the user: no new
+  Railway instance, not even in test mode — verification is local-only and the deploy
+  gate is a document, not a deploy.
 - Phase 6.1 inserted after Phase 6 (2026-04-22): UI Overhaul — Apple-disciplined editorial redesign. Driven by REDESIGN-BRIEF.md synthesizing 4 research tracks (ui-reduce-scroll-patterns, competitor-pain-points, apple-2027-design-language, retention-psychology). Scope = P0+P1 from brief §5. Design-direction path = B (editorial voice, Apple structural discipline). Run /gsd:plan-phase 06.1 to break into plans.
 
 ### Pending Todos
@@ -346,5 +355,18 @@ Recent decisions affecting current work:
 Last session: 2026-05-03 — Phase 7.05 Plan 05 complete (bundle audit + 7-rail check + visual checkpoint)
 Stopped at: 07.05-05 complete. Commits: (239eb9c) bundle artifacts, docs(07.05-05) plan metadata. Phase 7.05 DONE.
 Resume file: None
-Next: Phase 7.0 Plan 05 (TrendsTab collapse) or Phase 8 (Nutrition). Apply migrations d5e6f7a8b9c0 + e6f7a8b9c0d1 before running against live DB (requires Docker restart).
+Next: Phase 10 (Verification + deploy gate) — `/gsd:plan-phase 10`.
+
+NOTE (2026-08-03): this file's Current Position block is stale — it describes Phase 7.05
+and has not been updated since 2026-05-03. Substantial work has landed on `main` since,
+outside the GSD plan loop: Route Rehearsal (25 commits), the V4 Route Forecast layer
+(forecast.py, race_plan.py, route_history.py, band_calibration.py, verdict_vs_actual.py,
+target_time.py, fitness_projection.py, knobs.py + ten frontend cards), the ScoreRing
+redesign, and an audited target-group research report. Reconciling the roadmap with what
+is actually built is itself a candidate plan inside Phase 10.
+
+Blockers carried in: Railway trial expired (production returns 404); Docker daemon
+unresponsive so migrations d5e6f7a8b9c0, e6f7a8b9c0d1, 914be70dbda3, b9d106ca0f6e are
+unapplied locally; `main` is 28 commits ahead of `origin/main` and the deployed copy is
+gone, so the work exists on one machine only.
 Pending: DailyInsight 14-day timeline (needs dailyTones[] data plumbing); RecentActivities NP sparkline (needs intraday power data); Polarized 14-day sparkline (needs daily zone-second aggregation utility or backend endpoint); Legacy literal sweep in TrainingCalendar/BiometricsDetail/WorkoutPreviewModal/CalendarHeatmap; SyncButton ring-reveal success animation; Per-provider sync endpoint; test infra install (vitest + @testing-library/react); Provision ANTHROPIC_API_KEY in production; migrate chat rate limiter to Redis; expose /coach/metrics-trend endpoint; restart Docker daemon + alembic upgrade head; Fresh npm ci in frontend. ReadinessHero EnterGroup → RevealCascade swap (deferred, future polish sweep).
