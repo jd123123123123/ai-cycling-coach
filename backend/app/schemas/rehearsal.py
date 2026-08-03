@@ -166,6 +166,65 @@ class ActualOut(BaseModel):
     inside_band: bool | None = None
 
 
+class ZoneOut(BaseModel):
+    zone: int
+    name_en: str
+    name_de: str
+    seconds: float
+    fraction: float
+
+
+class DemandOut(BaseModel):
+    """What the ROUTE demands at a duration, against what the RIDER has.
+
+    `athlete_best_w` is None when the athlete has no comparable effort on file.
+    The demand itself is always present: it is a property of the road, and worth
+    showing even to a rider with nothing to compare it against.
+    """
+
+    duration_s: int
+    required_w: float
+    athlete_best_w: float | None = None
+    spare_w: float | None = None
+    #: required / best. Above 1.0 means the road asks for more than the rider
+    #: has ever produced for that long.
+    ratio: float | None = None
+
+
+class MatchesOut(BaseModel):
+    count: int
+    count_uncapped: int
+    time_above_cp_s: float
+    min_balance_j: float
+    fully_depleted: bool
+    starts_s: list[float] = []
+
+
+class HeartRateOut(BaseModel):
+    avg_bpm: float
+    max_bpm: float
+    #: Always True. A predicted heart rate is a model on top of a model and the
+    #: surface must say so.
+    is_estimate: bool = True
+
+
+class TrainingEffectOut(BaseModel):
+    """A documented analogue of Firstbeat's Training Effect, not a reproduction."""
+
+    aerobic: float
+    anaerobic: float
+    recovery_hours_low: float
+    recovery_hours_high: float
+    is_estimate: bool = True
+
+
+class BatteryOut(BaseModel):
+    start_pct: float
+    finish_pct: float
+    cost_pct: float
+    is_estimate: bool = True
+
+
 class RehearsalOut(BaseModel):
     id: int
     name: str | None = None
@@ -218,6 +277,25 @@ class RehearsalOut(BaseModel):
     #: How many of the athlete's own completed rides the band width was
     #: calibrated on. 0 means the reasoned default, not a measurement.
     band_samples: int = 0
+
+    # ── Forecast layer ────────────────────────────────────────────────────
+    # All derived from one 1 Hz expansion of the simulated ride, so a predicted
+    # NP is comparable with a recorded one rather than a parallel estimate.
+    avg_power_w: float | None = None
+    normalized_power_w: float | None = None
+    intensity_factor: float | None = None
+    tss: float | None = None
+    variability_index: float | None = None
+    #: The anchor zones and TSS were computed against, and whether it was a CP
+    #: standing in for a missing FTP.
+    ftp_used_w: float | None = None
+    ftp_is_cp_fallback: bool = False
+    zones: list[ZoneOut] = []
+    demand: list[DemandOut] = []
+    matches: MatchesOut | None = None
+    heart_rate: HeartRateOut | None = None
+    training_effect: TrainingEffectOut | None = None
+    battery: BatteryOut | None = None
 
     @model_validator(mode="after")
     def _time_and_band_together(self) -> RehearsalOut:

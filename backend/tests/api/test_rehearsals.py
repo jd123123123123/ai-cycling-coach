@@ -1088,3 +1088,77 @@ class TestStartHour:
 
         assert forecast is not None
         assert forecast["temperature_c"] is not None
+
+
+class TestForecastLayerOverAPI:
+    """The forecast fields, end to end. The point of these is that the derived
+    numbers are computed from the SAME 1 Hz stream the simulator produced, so a
+    predicted NP is comparable with a recorded one."""
+
+    def _body(self, client, **extra):
+        resp = client.post(
+            "/rehearsals", json={"source_kind": "gpx", "gpx": _GPX, **extra}
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    def test_returns_the_numbers_a_rider_already_knows_how_to_read(
+        self, client_with_athlete
+    ):
+        body = self._body(client_with_athlete)
+        assert body["avg_power_w"] > 0
+        assert body["normalized_power_w"] > 0
+        assert body["tss"] > 0
+        assert 0 < body["intensity_factor"] < 3
+        # NP is never below the average on a real route.
+        assert body["normalized_power_w"] >= body["avg_power_w"] - 1
+
+    def test_zone_distribution_covers_the_whole_ride(self, client_with_athlete):
+        body = self._body(client_with_athlete)
+        assert len(body["zones"]) == 5
+        assert sum(z["fraction"] for z in body["zones"]) == pytest.approx(1.0, abs=0.01)
+        assert sum(z["seconds"] for z in body["zones"]) > 0
+
+    def test_the_route_demand_curve_is_returned_even_without_athlete_bests(
+        self, client_with_athlete
+    ):
+        """The road's demand is a property of the road. This fixture's athlete
+        has no fitted power-duration curve, and the demand must still ship."""
+        body = self._body(client_with_athlete)
+        assert body["demand"], "the route's own demand must always be present"
+        for d in body["demand"]:
+            assert d["required_w"] > 0
+
+    def test_says_which_anchor_the_zones_were_binned_against(self, client_with_athlete):
+        # Zones and TSS are defined against FTP; when a CP stands in for a
+        # missing FTP the surface has to be able to say so.
+        body = self._body(client_with_athlete)
+        assert body["ftp_used_w"] > 0
+        assert isinstance(body["ftp_is_cp_fallback"], bool)
+
+    def test_no_heart_rate_forecast_without_the_anchors(self, client_with_athlete):
+        """This fixture's profile carries no LTHR or resting HR. A predicted
+        heart rate built on a guessed maximum is a fabrication, so the field
+        must be absent rather than populated."""
+        body = self._body(client_with_athlete)
+        assert body["heart_rate"] is None
+
+    def test_no_battery_forecast_without_a_known_starting_readiness(
+        self, client_with_athlete
+    ):
+        # Forecasting a finish state from an unknown start is the exact failure
+        # the readiness gate exists to prevent.
+        body = self._body(client_with_athlete)
+        assert body["battery"] is None
+
+    def test_an_unpaceable_rehearsal_carries_no_forecast_numbers(self, client_no_ftp):
+        """No prediction means no derived prediction either — the terrain is
+        still real, the ride is not."""
+        body = client_no_ftp.post(
+            "/rehearsals", json={"source_kind": "gpx", "gpx": _GPX}
+        ).json()
+        assert body["can_predict"] is False
+        assert body["normalized_power_w"] is None
+        assert body["tss"] is None
+        assert body["zones"] == []
+        assert body["demand"] == []

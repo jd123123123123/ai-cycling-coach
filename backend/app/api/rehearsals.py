@@ -83,6 +83,8 @@ from app.services.rehearsal.knobs import (
     validate as validate_overrides,
 )
 from app.services.rehearsal.simulator import Assumptions
+from app.services.athlete_power_profile import compute_athlete_power_profile
+from app.services.hr_zones import derive_lthr, derive_max_hr
 from app.services.rehearsal.band_calibration import calibrate_spread
 from app.services.rehearsal.verdict_vs_actual import compare_to_actual
 from app.services.rehearsal.weather import weather_applies
@@ -255,6 +257,67 @@ def _to_out(row: RouteRehearsal) -> RehearsalOut:
     )
 
 
+def _num(value) -> float | None:
+    """A real number from a profile attribute, or None.
+
+    Profile objects reach this module from several paths and an attribute that
+    is absent, a string, or a test double must all degrade to "unknown" rather
+    than reaching the physiology as something that only looks numeric.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) and f > 0 else None
+
+
+async def _forecast_inputs(db: AsyncSession, user_id: int, profile) -> dict:
+    """The athlete-side inputs the forecast layer needs, each independently absent-able.
+
+    Nothing here is required: a rider with no power-duration curve still gets a
+    route demand curve (the road's demand is a property of the road), and a
+    rider with no HR anchors simply gets no HR forecast rather than one built on
+    a guessed maximum.
+    """
+    ftp = _num(getattr(profile, "ftp_watts", None)) if profile is not None else None
+    dob = getattr(profile, "date_of_birth", None) if profile is not None else None
+    if not isinstance(dob, str):
+        dob = None
+    stored_max = _num(getattr(profile, "max_heart_rate", None)) if profile is not None else None
+    stored_max_i = int(stored_max) if stored_max else None
+    max_hr = derive_max_hr(max_heart_rate=stored_max_i, date_of_birth=dob)
+    lthr_raw = _num(getattr(profile, "lthr_cycling", None)) if profile is not None else None
+    lthr = derive_lthr(
+        lthr=int(lthr_raw) if lthr_raw else None,
+        max_heart_rate=stored_max_i,
+        date_of_birth=dob,
+    )
+
+    mmp: dict | None = None
+    try:
+        pp = await compute_athlete_power_profile(db, user_id, profile)
+        if pp:
+            mmp = pp.get("mmp_curve")
+    except Exception:  # pragma: no cover -- a rehearsal must survive this
+        logger.exception("power profile unavailable for user_id=%s", user_id)
+
+    return {
+        "ftp_watts": float(ftp) if ftp else None,
+        "athlete_mmp": mmp,
+        "hr_anchors": {
+            "lthr_bpm": float(lthr) if lthr else None,
+            "max_hr": float(max_hr) if max_hr else None,
+            "resting_hr": (
+                _num(getattr(profile, "resting_heart_rate", None))
+                if profile is not None
+                else None
+            ),
+        },
+    }
+
+
 async def _recorded_ride(db: AsyncSession, user_id: int, activity_id: int) -> dict:
     """Duration and distance of the ride this rehearsal is OF, for the check.
 
@@ -298,6 +361,11 @@ async def _simulate_and_store(
     # than assumed. None keeps the reasoned default.
     calibration = await calibrate_spread(db, user_id)
 
+    res_profile = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+    )
+    fc_inputs = await _forecast_inputs(db, user_id, res_profile.scalar_one_or_none())
+
     model = await _build_model(db, user_id, o)
     cp_is_projected = False
     if o.use_projected_cp:
@@ -323,6 +391,10 @@ async def _simulate_and_store(
             target_time_s=o.target_time_s,
             spread_scale=calibration.spread_scale if calibration else 1.0,
             band_samples=calibration.samples if calibration else 0,
+            ftp_watts=fc_inputs["ftp_watts"],
+            athlete_mmp=fc_inputs["athlete_mmp"],
+            hr_anchors=fc_inputs["hr_anchors"],
+            start_readiness_pct=None,
         )
     except (RouteUnusable, RehearsalInputError) as exc:
         raise HTTPException(

@@ -27,6 +27,19 @@ from app.services.rehearsal.route_profile import (
     find_climbs,
 )
 from app.services.rehearsal.route_source import RehearsalRoute, RoutePoint
+from app.services.rehearsal.forecast import (
+    battery_forecast,
+    engine_vs_route,
+    expand_to_1hz,
+    intensity_factor,
+    normalized_power,
+    predict_heart_rate,
+    training_effect,
+    training_stress,
+    variability_index,
+    zone_distribution,
+)
+from app.services.rehearsal.matchbook_bridge import forecast_matchbook
 from app.services.rehearsal.simulator import Assumptions, SegmentResult, simulate
 from app.services.rehearsal.target_time import TargetSolution, solve_for_target_time
 from app.services.rehearsal.uncertainty import simulate_band
@@ -97,6 +110,82 @@ def _segment_payload(seg: Segment, sim: SegmentResult | None) -> dict:
     }
 
 
+def _forecast_payload(
+    *,
+    sim,
+    model: RiderModel,
+    ftp_watts: float | None,
+    athlete_mmp: dict | None,
+    hr_anchors: dict | None,
+    start_readiness_pct: float | None,
+) -> dict:
+    """Everything the surface asks about the ride, from one 1 Hz expansion.
+
+    FTP falls back to CP when the profile carries no FTP. They are not the same
+    quantity, but the zone boundaries and TSS are defined against FTP and a CP
+    is a far better stand-in than nothing -- flagged on the wire so the surface
+    can say which anchor it used.
+    """
+    series = expand_to_1hz(sim.segments)
+    if not series:
+        return {}
+
+    ftp = ftp_watts if (ftp_watts and ftp_watts > 0) else model.cp_watts
+    duration_s = float(len(series))
+    avg_w = sum(series) / duration_s
+    np_w = normalized_power(series)
+    tss = training_stress(duration_s, np_w, ftp)
+
+    mb = forecast_matchbook(series, model.cp_watts, model.w_prime_j)
+
+    return {
+        "avg_power_w": round(avg_w, 1),
+        "normalized_power_w": round(np_w, 1) if np_w else None,
+        "intensity_factor": round(intensity_factor(np_w, ftp) or 0, 3) or None,
+        "tss": round(tss, 1) if tss else None,
+        "variability_index": round(variability_index(np_w, avg_w) or 0, 3) or None,
+        "ftp_used_w": round(ftp, 1) if ftp else None,
+        "ftp_is_cp_fallback": bool(ftp and not (ftp_watts and ftp_watts > 0)),
+        "zones": [
+            {
+                "zone": z.zone,
+                "name_en": z.name_en,
+                "name_de": z.name_de,
+                "seconds": round(z.seconds),
+                "fraction": round(z.fraction, 4),
+            }
+            for z in zone_distribution(series, ftp)
+        ],
+        "demand": [
+            {
+                "duration_s": d.duration_s,
+                "required_w": round(d.required_w, 1),
+                "athlete_best_w": round(d.athlete_best_w, 1) if d.athlete_best_w else None,
+                "spare_w": round(d.spare_w, 1) if d.spare_w is not None else None,
+                "ratio": round(d.ratio, 3) if d.ratio is not None else None,
+            }
+            for d in engine_vs_route(series, athlete_mmp)
+        ],
+        "matches": mb,
+        "heart_rate": predict_heart_rate(
+            series,
+            ftp_w=ftp,
+            lthr_bpm=(hr_anchors or {}).get("lthr_bpm"),
+            resting_hr=(hr_anchors or {}).get("resting_hr"),
+            max_hr=(hr_anchors or {}).get("max_hr"),
+        ),
+        "training_effect": training_effect(
+            tss=tss,
+            time_above_cp_s=float((mb or {}).get("time_above_cp_s") or 0.0),
+            w_prime_j=model.w_prime_j,
+            duration_s=duration_s,
+        ),
+        "battery": battery_forecast(
+            start_readiness_pct=start_readiness_pct, tss=tss
+        ),
+    }
+
+
 def run_rehearsal(
     route: RehearsalRoute,
     model: RiderModel,
@@ -107,6 +196,10 @@ def run_rehearsal(
     target_time_s: float | None = None,
     spread_scale: float = 1.0,
     band_samples: int = 0,
+    ftp_watts: float | None = None,
+    athlete_mmp: dict | None = None,
+    hr_anchors: dict | None = None,
+    start_readiness_pct: float | None = None,
 ) -> dict:
     """Full pipeline -> the payload the API returns. Weather is passed in, not fetched."""
     segments = build_segments(route)
@@ -213,6 +306,18 @@ def run_rehearsal(
         # reasoned default, and the surface says so rather than implying the
         # range was measured.
         "band_samples": band_samples,
+        # ── The forecast layer ────────────────────────────────────────────
+        # Everything below is derived from ONE expansion of the simulated ride
+        # to 1 Hz, so the predicted NP, zones and demand curve are computed by
+        # exactly the same instruments that measure a recorded ride.
+        **_forecast_payload(
+            sim=sim,
+            model=model,
+            ftp_watts=ftp_watts,
+            athlete_mmp=athlete_mmp,
+            hr_anchors=hr_anchors,
+            start_readiness_pct=start_readiness_pct,
+        ),
         "fastest_possible_s": target.fastest_possible_s if target else None,
     }
 
