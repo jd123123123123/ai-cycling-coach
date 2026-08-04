@@ -15,6 +15,7 @@ import { useLocale } from '../../contexts/LocaleContext'
 import { useTodayWeather } from '../../hooks/useTodayWeather'
 import { computeWeatherWindow, type WeatherWindow } from './WeatherNudge'
 import { glassCardStyle, GLASS_CARD_MARKER } from './glassCard'
+import { WindPanel } from './today/WindWidget'
 
 const TEAL = 'var(--color-stand)'
 
@@ -25,10 +26,18 @@ export function compassLabel(deg: number | null): string | null {
   return dirs[Math.round(((deg % 360) + 360) % 360 / 45) % 8]
 }
 
-/** The note line — only real signals: mean wind (+ direction) and rain onset. */
-export function windowNote(win: WeatherWindow, de: boolean): string | null {
+/**
+ * The note line — rain only.
+ *
+ * Wind used to be the first fragment here ("12 km/h SW — rain risk rises after
+ * 15:00"). It has moved to WindPanel, which draws it: the card would otherwise
+ * state the same wind speed twice, once as a picture and once as text.
+ * `includeWind` is kept for callers that render the note WITHOUT the dial
+ * (WeatherNudge), where the text fragment is still the only wind they get.
+ */
+export function windowNote(win: WeatherWindow, de: boolean, includeWind = false): string | null {
   const parts: string[] = []
-  if (win.windMean != null) {
+  if (includeWind && win.windMean != null) {
     const dir = compassLabel(win.windDirDeg)
     parts.push(`${win.windMean} km/h${dir ? ` ${dir}` : ''}`)
   }
@@ -103,7 +112,12 @@ export default function WeatherWindowCard() {
         ))}
       </div>
 
-      {/* Wind/rain note row — real signals only (pen ezscV) */}
+      {/* Wind, drawn rather than described. Inside the weather card because it
+          IS weather — it was a separate card sitting directly beneath this one,
+          which split one answer ("what is it doing out there?") across two. */}
+      <WindPanel />
+
+      {/* Rain note row — real signals only (pen ezscV) */}
       {note && (
         <div className="flex items-center gap-2">
           <Wind size={15} strokeWidth={2.2} style={{ color: TEAL, flexShrink: 0 }} />

@@ -22,8 +22,7 @@ import { loggedReviewFromEvidence, streamCoachChat, workoutDisplayTitle, type Ch
 import SessionReviewCard from '../SessionReviewCard'
 import SessionOfTheDay from '../SessionOfTheDay'
 import WeatherWindowCard from '../WeatherWindowCard'
-import RouteSuggestionCard from '../today/RouteSuggestionCard'
-import WindWidget from '../today/WindWidget'
+import { WindPill } from '../today/WindWidget'
 import ThisWeekCard from '../ThisWeekCard'
 import ExtraSessionsCard from '../ExtraSessionsCard'
 import ContributorsTrigger from '../ContributorsTrigger'
@@ -1136,16 +1135,11 @@ export default function TodayTab() {
               one. It now shows what actually lives behind it: the threshold
               the whole plan is prescribed against. Honest "—" when the power
               model has nothing to report. */}
-          <Link
-            to="/power-profile"
-            className="inline-flex items-center justify-center rounded-full px-2.5"
-            style={{ height: 34, background: '#FFFFFF12', border: '1px solid #FFFFFF1F' }}
-            aria-label={de ? 'Power-Profil öffnen' : 'Open power profile'}
-          >
-            <span className="num-display" style={{ fontSize: 12.5, fontWeight: 700, color: '#FFFFFFE6', whiteSpace: 'nowrap' }}>
-              {powerProfile?.threshold_watts != null ? `${Math.round(powerProfile.threshold_watts)} W` : '— W'}
-            </span>
-          </Link>
+          {/* Wind, not FTP. This row sits beside the temperature and answers
+              "what is it doing out there" — FTP is a number that changes a few
+              times a year and had the slot next to one that changes hourly.
+              The threshold is still stated on the session card's own FTP line. */}
+          <WindPill />
         </div>
       </div>
 
@@ -1267,6 +1261,84 @@ export default function TodayTab() {
             )}
           </div>
 
+          {/* What drove the number — directly under the ring, which is the only
+              place it makes sense. Both this and the driver tiles used to sit
+              well below: the trigger after the verdict/morning-read/missed
+              blocks, the tiles all the way past the weather card. The athlete
+              read the score, then three other things, and only then what the
+              score was made of. A number and its breakdown are one thought.
+              (This deliberately reverses the Jul-2026 ordering, which pushed
+              them down to get the session card higher; the session still sits
+              immediately below the hero.) Renders nothing while readiness is
+              withheld — a withheld score gets no explanation. */}
+          <ContributorsTrigger
+            hrv={hrvNow}
+            rhr={restingHr}
+            sleep={sleepScore}
+            tsb={tsb}
+            score={score ?? null}
+            pending={readinessPending}
+            de={de}
+          />
+
+          {/* Drivers (pen Drivers) — the overnight signals moving the score, as
+              honest chips; morning moment. Post/evening keep the adaptive tile
+              row (session wrap-up / wind-down). */}
+          {moment === 'morning' ? (
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{tFor(locale, 'drivers_label')}</span>
+                <button
+                  type="button"
+                  onClick={() => methods.open(buildReadinessMethod(locale, { hrv: hrvNow, rhr: restingHr, sleep: sleepScore, tsb, score: score ?? null }))}
+                  aria-label={de ? 'Wie wird das berechnet?' : 'How is this calculated?'}
+                  className="inline-flex items-center gap-1 rounded-full"
+                  style={{ padding: '4px 10px', background: '#FFFFFF10', border: '1px solid #FFFFFF1F', color: '#FFFFFFB3' }}
+                >
+                  <Info size={12} />
+                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em' }}>{de ? 'Wie berechnet?' : 'How?'}</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2.5">
+                {driverChips.map((d, i) => {
+                  const Icon = d.icon
+                  return (
+                    <div key={i} className="flex flex-col gap-1.5 rounded-[16px] p-3" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14', backdropFilter: 'blur(10px)' }}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Icon size={12} style={{ color: '#9BA4AF' }} />
+                        <span className="eyebrow" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: '#9BA4AF' }}>{d.label}</span>
+                      </span>
+                      <span className="flex items-baseline gap-1">
+                        <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>{d.value}</span>
+                        {d.unit && <span style={{ fontSize: 10, color: '#5C6570' }}>{d.unit}</span>}
+                      </span>
+                      {d.delta && <span style={{ fontSize: 10.5, fontWeight: 700, color: d.deltaColor ?? '#9BA4AF' }}>{d.delta}</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{momentLabel}</span>
+              <div className="flex rounded-[16px] p-3" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14', backdropFilter: 'blur(10px)' }}>
+                {momentTiles.map((t, i) => (
+                  <div key={i} className="flex-1 flex items-stretch">
+                    {i > 0 && <div style={{ width: 1, background: '#FFFFFF14' }} />}
+                    <div className="flex-1 flex flex-col items-center gap-1 px-1">
+                      <span className="flex items-baseline gap-0.5">
+                        <span className="num-display" style={{ fontSize: 19, fontWeight: 700, color: t.color ?? '#FFFFFF', lineHeight: 1 }}>{t.value}</span>
+                        {t.unit && <span style={{ fontSize: 10, color: '#5C6570' }}>{t.unit}</span>}
+                      </span>
+                      <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', color: '#9BA4AF', textAlign: 'center' }}>{t.label}</span>
+                      {t.sub && <span style={{ fontSize: 10, fontWeight: 700, color: t.subColor ?? '#9BA4AF', lineHeight: 1 }}>{t.sub}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Verdict (pen Verdict) — big state headline + the real, data-driven
               supporting sentence (wrapLine). */}
           <div className="flex flex-col items-center text-center gap-1.5 px-2">
@@ -1317,21 +1389,6 @@ export default function TodayTab() {
               the question on a 390px viewport. Session, weather, coach and
               drivers now follow immediately; Drivers/Coach/Momentum moved
               below the weather card, see there). */}
-          {/* What drove the number, and the coach's read on it — both directly
-              under the ring. They used to render ~1.7 screens below it: the
-              athlete scrolled past the entire session to reach the explanation
-              of the number they had just looked at. The trigger renders nothing
-              while readiness is withheld; a withheld score gets no explanation. */}
-          <ContributorsTrigger
-            hrv={hrvNow}
-            rhr={restingHr}
-            sleep={sleepScore}
-            tsb={tsb}
-            score={score ?? null}
-            pending={readinessPending}
-            de={de}
-          />
-
           {coachMessage && (
             <CoachRead
               eyebrow={tFor(locale, 'coach_label')}
@@ -1448,79 +1505,16 @@ export default function TodayTab() {
           when there's no real forecast data (honest absence). */}
       <WeatherWindowCard />
 
-      {/* Wind, next to the weather: temperature decides what you wear, wind
-          decides which way you ride. Renders nothing without a forecast. */}
-      <WindWidget />
-
-      {/* A road of the athlete's own that fits today's stated duration and TSS
-          target. Sits next to the weather because both answer the same
-          question — "what does riding today actually look like?" — and renders
-          nothing at all when no confident suggestion exists. */}
-      <RouteSuggestionCard />
+      {/* Wind moved INTO the weather card (it IS weather, and two stacked cards
+          split one answer across two surfaces); the route suggestions moved
+          INTO the session card (which road is part of "what am I riding
+          today"). Neither is gone — both are where they belong. */}
 
       {/* Drivers / Coach card / Momentum — moved here from the top of the hero
           (Jul 2026 review): they were rendering the coach's read and the
           overnight signal breakdown for a session the reader hadn't seen yet,
           1.7 screens before the session card itself. Reading the coach's
           "why" now follows having already seen the "what". */}
-          {/* Drivers (pen Drivers) — the overnight signals moving the score, as
-              honest chips; morning moment. Post/evening keep the adaptive tile
-              row (session wrap-up / wind-down). */}
-          {moment === 'morning' ? (
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{tFor(locale, 'drivers_label')}</span>
-                <button
-                  type="button"
-                  onClick={() => methods.open(buildReadinessMethod(locale, { hrv: hrvNow, rhr: restingHr, sleep: sleepScore, tsb, score: score ?? null }))}
-                  aria-label={de ? 'Wie wird das berechnet?' : 'How is this calculated?'}
-                  className="inline-flex items-center gap-1 rounded-full"
-                  style={{ padding: '4px 10px', background: '#FFFFFF10', border: '1px solid #FFFFFF1F', color: '#FFFFFFB3' }}
-                >
-                  <Info size={12} />
-                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em' }}>{de ? 'Wie berechnet?' : 'How?'}</span>
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-2.5">
-                {driverChips.map((d, i) => {
-                  const Icon = d.icon
-                  return (
-                    <div key={i} className="flex flex-col gap-1.5 rounded-[16px] p-3" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14', backdropFilter: 'blur(10px)' }}>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Icon size={12} style={{ color: '#9BA4AF' }} />
-                        <span className="eyebrow" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: '#9BA4AF' }}>{d.label}</span>
-                      </span>
-                      <span className="flex items-baseline gap-1">
-                        <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>{d.value}</span>
-                        {d.unit && <span style={{ fontSize: 10, color: '#5C6570' }}>{d.unit}</span>}
-                      </span>
-                      {d.delta && <span style={{ fontSize: 10.5, fontWeight: 700, color: d.deltaColor ?? '#9BA4AF' }}>{d.delta}</span>}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2.5">
-              <span className="eyebrow" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: '#FFFFFF99' }}>{momentLabel}</span>
-              <div className="flex rounded-[16px] p-3" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14', backdropFilter: 'blur(10px)' }}>
-                {momentTiles.map((t, i) => (
-                  <div key={i} className="flex-1 flex items-stretch">
-                    {i > 0 && <div style={{ width: 1, background: '#FFFFFF14' }} />}
-                    <div className="flex-1 flex flex-col items-center gap-1 px-1">
-                      <span className="flex items-baseline gap-0.5">
-                        <span className="num-display" style={{ fontSize: 19, fontWeight: 700, color: t.color ?? '#FFFFFF', lineHeight: 1 }}>{t.value}</span>
-                        {t.unit && <span style={{ fontSize: 10, color: '#5C6570' }}>{t.unit}</span>}
-                      </span>
-                      <span className="eyebrow" style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', color: '#9BA4AF', textAlign: 'center' }}>{t.label}</span>
-                      {t.sub && <span style={{ fontSize: 10, fontWeight: 700, color: t.subColor ?? '#9BA4AF', lineHeight: 1 }}>{t.sub}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Momentum cues — weekly rhythm (consistency vs plan) + 7-day fitness
               trend, small neutral chips. No daily-streak framing (P1-11). */}
           {(consistencyText != null || showFitnessTrend) && (

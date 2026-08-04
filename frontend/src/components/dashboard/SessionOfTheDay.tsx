@@ -31,6 +31,7 @@ import { usePMC } from '../../hooks/usePMC'
 import { daysToEvent, latestLoad, localDayKey } from '../../utils/loadMetrics'
 import { useLocale } from '../../contexts/LocaleContext'
 import BlockBars from '../workout/BlockBars'
+import RouteMatches from './today/RouteMatches'
 import { glassCardStyle, GLASS_CARD_MARKER, GLASS_PAPER_2, GLASS_BLUR } from './glassCard'
 
 // Also mounted on the Train (Plan) tab, which has no road behind it — glass
@@ -270,6 +271,12 @@ export default function SessionOfTheDay() {
           </div>
         </div>
       )}
+
+      {/* Which of the athlete's own roads suit this session. Inside the card
+          because "where do I ride it" is part of the answer to "what am I
+          riding today", not a separate question further down the page. Renders
+          nothing on rest days or without GPS history. */}
+      <RouteMatches />
 
       {/* What changed & why — transparent, data-driven adaptation */}
       {adaptations && (adaptations.summary || adaptations.changes.length > 0) && (
