@@ -19,6 +19,17 @@ import { WindPanel } from './today/WindWidget'
 
 const TEAL = 'var(--color-stand)'
 
+/** Wind strength as a colour, on the same Beaufort-anchored thresholds the
+ *  wind dial uses (12 / 20 / 30 km/h). One rule, so a 25 km/h hour is never
+ *  amber in the strip and green in the dial on the same screen. */
+function windTone(kmh: number | null): string {
+  if (kmh == null) return 'var(--color-muted)'
+  if (kmh < 12) return 'var(--color-good)'
+  if (kmh < 20) return 'var(--color-good)'
+  if (kmh < 30) return 'var(--color-caution)'
+  return 'var(--color-bad)'
+}
+
 /** Compass label from degrees (wind FROM direction). */
 export function compassLabel(deg: number | null): string | null {
   if (deg == null || !Number.isFinite(deg)) return null
@@ -95,14 +106,56 @@ export default function WeatherWindowCard() {
         )}
       </div>
 
-      {/* Hour strip — 8 columns; teal blocks = inside the best window (pen lrDgJ) */}
+      {/* Hour strip — 8 columns; teal blocks = inside the best window (pen lrDgJ).
+          Each column now carries the two numbers a rider actually plans the
+          hour around: how warm it is, and which way the wind is pushing.
+
+          The strip already computed `temp`, `wind` and `windDir` per hour to
+          decide which hours were rideable at all; it just spent them on a
+          colour and threw them away. Showing them turns "these four hours are
+          good" into "these four hours are good, and here is what they feel
+          like" — which is the difference between a verdict and a forecast.
+
+          The arrow points where the wind is GOING, matching the masthead pill
+          and the dial below. Forecast bearings are "from"; a rider pictures the
+          arrow blowing them along, and the three surfaces must not disagree. */}
       <div className="flex gap-1.5">
         {win.strip.map((h) => (
-          <div key={h.hour} className="flex-1 flex flex-col items-center" style={{ gap: 5 }}>
+          <div key={h.hour} className="flex-1 flex flex-col items-center" style={{ gap: 4 }}>
+            <span
+              className="num-display"
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: h.good ? 'var(--color-ink)' : 'var(--color-muted)',
+                lineHeight: 1,
+              }}
+            >
+              {h.temp != null ? `${Math.round(h.temp)}°` : '—'}
+            </span>
+
+            <span className="flex flex-col items-center" style={{ gap: 1 }}>
+              {h.windDir != null ? (
+                <svg viewBox="0 0 12 12" width={11} height={11} aria-hidden>
+                  <g transform={`rotate(${(h.windDir + 180) % 360} 6 6)`}>
+                    <path d="M6 1.5 L9 9 L6 7.2 L3 9 Z" fill={windTone(h.wind)} />
+                  </g>
+                </svg>
+              ) : (
+                <span style={{ height: 11 }} />
+              )}
+              <span
+                className="num-mono"
+                style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-muted)', lineHeight: 1 }}
+              >
+                {h.wind != null ? Math.round(h.wind) : '—'}
+              </span>
+            </span>
+
             <div
               className="w-full"
               style={{
-                height: 26,
+                height: 22,
                 borderRadius: 6,
                 background: h.good ? TEAL : 'var(--color-surface-3)',
               }}
