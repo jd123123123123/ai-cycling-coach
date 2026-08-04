@@ -247,8 +247,27 @@
   --page-ink: #F5F5F7;
 }
 
+/* `overflow-x: hidden` on html/body silently makes them a SCROLL CONTAINER, and
+   a scroll container that never actually scrolls (the document scrolls instead)
+   breaks `position: sticky` for every descendant — the sticky element resolves
+   against a scrollport that never moves, so it just scrolls away. That is why
+   the workout builder's pinned header did nothing until this changed.
+
+   `overflow-x: clip` gives the same "no horizontal scrollbar" guarantee without
+   creating a scroll container, so sticky keeps working. The guarantee is
+   load-bearing here: several surfaces bleed past the shell gutter with negative
+   margins (route heroes, Scene backdrops) and would otherwise let the page slide
+   sideways. Supported in Safari 16+, Chrome 90+, Firefox 81+; the `hidden`
+   declaration above remains as the fallback for anything older, which loses
+   sticky headers but never gains a sideways scroll. */
+@supports (overflow-x: clip) {
+  html, body { overflow-x: clip; }
+}
+
 @layer base {
   html, body {
+    /* Fallback for browsers without `overflow-x: clip` — see the @supports
+       block below, which is what actually applies on every target browser. */
     overflow-x: hidden;
     background: var(--page-bg);
     color: var(--page-ink);

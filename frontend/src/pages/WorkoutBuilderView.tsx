@@ -195,6 +195,12 @@ export default function WorkoutBuilderView() {
     <AppShell
       title={de ? 'Workout-Baukasten' : 'Workout builder'}
       onBack={() => navigate('/dashboard')}
+      // The block list runs long and the athlete adds blocks from the bottom
+      // while checking the preview at the top; the title and the way out stay
+      // useful the whole way down. This restores the sticky header the page had
+      // before it moved onto the shell -- as a shell option, so any other long
+      // surface can have it without hand-rolling a second header.
+      stickyHeader
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Live preview */}

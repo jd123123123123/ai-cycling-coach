@@ -54,9 +54,18 @@ So `AppShell` is a new, thin primitive:
 - the existing `MobileBottomNav`, rendered from one place
 - scroll restoration
 
-`DashboardShell` is refactored to *compose* `AppShell` and keep its road/aura
-extras. Its invariant is preserved verbatim, including the comment that documents
-it.
+**Amended after implementation.** The plan said `DashboardShell` would be
+refactored to *compose* `AppShell`. It was not, deliberately: `DashboardShell`'s
+`<main>` is the element its delegated pointer-scrub listener is attached to, and
+moving that element inside another component would either relocate the listener
+or add a wrapper between the shell and the node it takes pointer capture on —
+both of which risk the documented, unenforced tap-swallowing invariant for no
+user-visible gain.
+
+Instead the two shells **share their layout constants by convention**:
+`max-w-md mx-auto px-4 pb-28`, `gap-6`, `paper-grain`. That agreement is what
+makes a page look identical on either shell, and it is asserted only by the
+comment in each file. If they drift, the app splits back into two designs.
 
 **Nav model:** the existing four chapters — Today · Plan · Body · History — from
 `utils/seasonArc`. This is deliberately NOT redesigned: it is `.pen`-derived, its
@@ -133,9 +142,18 @@ Each wave is rendered and screenshotted at 390×844 before it is called done.
 - **Sequencing against Phase 10.** Phase 10 exists to verify and screenshot the
   V4 surfaces; this redesign churns those same surfaces. Resolution: fold Phase
   10's visual criterion (SC5) into Wave 2's verification. The data and physiology
-  criteria (SC2–SC4) are independent of the redesign and still need doing —
-  including the open flag that VI = 1.007 on a route with a 10 km climb at 9%,
-  which suggests the simulator holds near-constant power through descents.
+  criteria (SC2–SC4) are independent of the redesign and still need doing.
+
+  **VI = 1.007 flag WITHDRAWN — not a defect.** It was raised on the assumption
+  that the simulator holds power through descents. Checked against the stored
+  result: the model *does* vary power with gradient (129 W mean below −6%,
+  202 W on 6–9% ramps). The route simply spends **89% of its time climbing at
+  ≥3% and 4% descending** — the descent is fast, so it occupies almost no time,
+  and a route that is essentially one long steady climb genuinely has VI ≈ 1.00,
+  the same as a hill-climb TT. Reported `avg`, `NP` and `VI` all reproduce
+  exactly from the segments. The original flag reasoned from distance share
+  (10 km of 26 km) rather than time share, which is the mistake to avoid
+  repeating on the remaining physiology checks.
 
 ## Non-goals
 

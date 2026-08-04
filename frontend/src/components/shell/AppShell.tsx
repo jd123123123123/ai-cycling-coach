@@ -48,6 +48,21 @@ export interface AppShellProps {
    * where a nav would offer an exit the flow does not want to advertise.
    */
   nav?: boolean
+  /**
+   * Pin the header to the top while the content scrolls under it.
+   *
+   * For long working surfaces where the title and the back affordance stay
+   * useful all the way down — the workout builder's block list is the case
+   * this exists for. It is opt-in rather than default because a pinned header
+   * costs vertical space on every screen, and most pages are read top to
+   * bottom once.
+   *
+   * NOTE: `position: sticky` needs an opaque background or the content shows
+   * through as it passes underneath, so this paints `--color-paper` and adds a
+   * hairline rule. That is also why it cannot simply be a class on PageHeader:
+   * the background belongs to the shell, not to the title block.
+   */
+  stickyHeader?: boolean
 }
 
 export default function AppShell({
@@ -59,6 +74,7 @@ export default function AppShell({
   action,
   scene,
   nav = true,
+  stickyHeader = false,
 }: AppShellProps) {
   return (
     <div className="relative min-h-dvh">
@@ -85,13 +101,38 @@ export default function AppShell({
 
       <main className="paper-grain relative isolate mx-auto flex min-w-0 max-w-md flex-col gap-6 px-4 pb-28 pt-3">
         {title && (
-          <PageHeader
-            title={title}
-            subtitle={subtitle}
-            back={back}
-            onBack={onBack}
-            action={action}
-          />
+          <div
+            style={
+              stickyHeader
+                ? {
+                    position: 'sticky',
+                    // Clears the notch on iOS; 0 everywhere else.
+                    top: 'env(safe-area-inset-top, 0px)',
+                    zIndex: 5,
+                    // Opaque, or the scrolling content shows through the title.
+                    background: 'var(--color-paper)',
+                    // The gutter is on <main>, so a sticky child has to reclaim
+                    // it to paint edge to edge instead of leaving 16 px strips
+                    // of scrolling content either side of the header.
+                    marginLeft: -16,
+                    marginRight: -16,
+                    paddingLeft: 16,
+                    paddingRight: 16,
+                    paddingTop: 8,
+                    paddingBottom: 10,
+                    borderBottom: '1px solid var(--color-rule)',
+                  }
+                : undefined
+            }
+          >
+            <PageHeader
+              title={title}
+              subtitle={subtitle}
+              back={back}
+              onBack={onBack}
+              action={action}
+            />
+          </div>
         )}
         {children}
       </main>
