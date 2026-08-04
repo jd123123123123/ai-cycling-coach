@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useLocale } from '../../contexts/LocaleContext'
 import type { RehearsalSegment } from '../../api/rehearsal'
+import { penCard, penEyebrow } from './penCard'
 
 /**
  * GradientCard — the road's profile, painted by how steep each stretch is.
@@ -105,12 +106,11 @@ export default function GradientCard({
   return (
     <section
       className="rounded-[20px] flex flex-col"
-      style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', padding: 16, gap: 12 }}
+      style={{ ...penCard, padding: 16, gap: 12 }}
     >
       <div className="flex items-baseline justify-between gap-3">
         <span
-          className="eyebrow"
-          style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-ink-2)' }}
+          style={penEyebrow('#FFFFFFB3')}
         >
           {de ? 'STEIGUNGSPROFIL' : 'GRADIENT PROFILE'}
         </span>

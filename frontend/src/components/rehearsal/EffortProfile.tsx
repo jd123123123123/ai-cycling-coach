@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useLocale } from '../../contexts/LocaleContext'
 import type { RehearsalSegment } from '../../api/rehearsal'
+import { penCard, penEyebrow } from './penCard'
 
 /**
  * EffortProfile — the road's shape, coloured by what it will cost.
@@ -89,12 +90,11 @@ export default function EffortProfile({
   return (
     <section
       className="rounded-[20px] flex flex-col"
-      style={{ background: '#14181DE6', border: '1px solid var(--color-rule)', padding: 16, gap: 12 }}
+      style={{ ...penCard, padding: 16, gap: 12 }}
     >
       <div className="flex items-baseline justify-between gap-3">
         <span
-          className="eyebrow"
-          style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-amber)' }}
+          style={penEyebrow('#FFB020')}
         >
           {de ? 'DER BERG VOR DIR' : 'THE MOUNTAIN AHEAD'}
         </span>

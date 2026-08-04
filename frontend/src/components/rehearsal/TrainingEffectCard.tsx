@@ -1,5 +1,6 @@
 import { useLocale } from '../../contexts/LocaleContext'
 import type { RehearsalTrainingEffect } from '../../api/rehearsal'
+import { penCard, penEyebrow } from './penCard'
 
 /**
  * TrainingEffectCard — the forecast in the units the athlete's watch will use.
@@ -64,12 +65,11 @@ export default function TrainingEffectCard({
   return (
     <section
       className="rounded-[20px] flex flex-col"
-      style={{ background: 'var(--color-paper-2)', border: '1px solid var(--color-rule)', padding: 16, gap: 12 }}
+      style={{ ...penCard, padding: 16, gap: 12 }}
     >
       <div className="flex items-baseline justify-between gap-3">
         <span
-          className="eyebrow"
-          style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--color-ink-blue)' }}
+          style={penEyebrow('#59C3FF')}
         >
           {de ? 'WAS DEINE UHR SAGEN WIRD' : 'WHAT YOUR GARMIN WILL SAY'}
         </span>
