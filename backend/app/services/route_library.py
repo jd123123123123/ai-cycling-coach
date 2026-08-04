@@ -116,6 +116,99 @@ def elevation_gain_m(altitude: list[float | None] | None) -> float | None:
     return round(gain, 1)
 
 
+# ── terrain shape (pure) ─────────────────────────────────────────────────────
+#
+# Total ascent alone cannot tell two very different roads apart: 600 m spread
+# evenly over 60 km of rollers and 600 m in one 8 km climb are the same number
+# and completely different sessions. Threshold intervals want the second; an
+# endurance ride is happier on the first. So the library also records HOW the
+# climbing is arranged, which is what makes gradient-aware matching possible
+# in route_recommendation.
+#
+# Everything here is measured from the athlete's own altitude/distance streams.
+# Nothing is inferred from a route name or a map database.
+
+#: Sampling step for gradient. Fine enough to keep a real ramp, coarse enough
+#: that GPS altitude noise (±2-3 m on consumer units) does not manufacture
+#: phantom 20% pitches out of a flat road.
+_GRADIENT_WINDOW_M = 200.0
+
+#: A climb "run" continues while the road keeps rising at or above this. Below
+#: it the terrain is a false flat, not a climb an athlete would pace.
+_CLIMB_MIN_GRADIENT_PCT = 2.5
+
+
+def gradient_samples(
+    altitude: list[float | None] | None,
+    distance: list[float | None] | None,
+) -> list[tuple[float, float]]:
+    """``[(segment_length_m, gradient_pct), ...]`` at a fixed distance step.
+
+    Returns [] when either channel is missing or too short — a route with no
+    altitude has no known terrain, and guessing one would be exactly the
+    fabrication this module refuses everywhere else.
+    """
+    if not altitude or not distance:
+        return []
+    pairs = [
+        (float(d), float(a))
+        for d, a in zip(distance, altitude)
+        if d is not None and a is not None
+    ]
+    if len(pairs) < 20:
+        return []
+    pairs.sort(key=lambda p: p[0])
+
+    out: list[tuple[float, float]] = []
+    anchor_d, anchor_a = pairs[0]
+    for d, a in pairs[1:]:
+        run = d - anchor_d
+        if run < _GRADIENT_WINDOW_M:
+            continue
+        out.append((run, ((a - anchor_a) / run) * 100.0))
+        anchor_d, anchor_a = d, a
+    return out
+
+
+def terrain_metrics(
+    altitude: list[float | None] | None,
+    distance: list[float | None] | None,
+) -> dict:
+    """How this road's climbing is ARRANGED, not just how much there is.
+
+    ``longest_climb_m``  — the longest continuous run above 2.5%. This is the
+      number that decides whether a 2x20 threshold block can actually be ridden
+      as one sustained effort or has to be broken over rollers.
+    ``max_gradient_pct`` — steepest 200 m stretch, the "can I even turn the
+      pedals" figure.
+    ``climb_share_pct``  — how much of the route is spent going up, which
+      separates a rolling road from a flat one with a single wall in it.
+
+    All None/absent when there is no altitude to measure.
+    """
+    samples = gradient_samples(altitude, distance)
+    if not samples:
+        return {"longest_climb_m": None, "max_gradient_pct": None, "climb_share_pct": None}
+
+    total_m = sum(length for length, _ in samples)
+    climbing_m = sum(length for length, g in samples if g >= _CLIMB_MIN_GRADIENT_PCT)
+
+    longest = 0.0
+    run = 0.0
+    for length, g in samples:
+        if g >= _CLIMB_MIN_GRADIENT_PCT:
+            run += length
+            longest = max(longest, run)
+        else:
+            run = 0.0
+
+    return {
+        "longest_climb_m": round(longest) if longest > 0 else 0,
+        "max_gradient_pct": round(max(g for _, g in samples), 1),
+        "climb_share_pct": round((climbing_m / total_m) * 100.0, 1) if total_m > 0 else None,
+    }
+
+
 # ── ride → cluster input (pure) ──────────────────────────────────────────────
 
 def build_ride(
@@ -157,6 +250,9 @@ def build_ride(
         "polyline": simplify_polyline(track),
         "is_virtual": is_virtual_title(title),
         "tss": float(tss) if tss is not None else None,
+        # How the climbing is ARRANGED — what makes gradient-aware matching
+        # possible downstream. All-None when the ride carried no altitude.
+        **terrain_metrics(streams.get("altitude"), streams.get("distance")),
     }
 
 
@@ -211,6 +307,11 @@ def summarize_route(group: list[dict]) -> dict:
     tss_values = [r["tss"] for r in group if r.get("tss") is not None]
     dates = [r["date"] for r in group if r["date"]]
     virtual_votes = sum(1 for r in group if r["is_virtual"])
+    # Terrain is a property of the ROAD, so it is the same on every ride of it;
+    # the median just shrugs off one ride whose altimeter drifted.
+    climbs = [r["longest_climb_m"] for r in group if r.get("longest_climb_m") is not None]
+    grades = [r["max_gradient_pct"] for r in group if r.get("max_gradient_pct") is not None]
+    shares = [r["climb_share_pct"] for r in group if r.get("climb_share_pct") is not None]
     newest = group[0]  # most-recent-first ordering preserved from the query
     return {
         "name": _representative_name(group),
@@ -227,6 +328,9 @@ def summarize_route(group: list[dict]) -> dict:
         "start_lng": newest["start_lng"],
         "is_virtual": virtual_votes * 2 >= len(group),
         "polyline": newest["polyline"],
+        "longest_climb_m": round(median(climbs)) if climbs else None,
+        "max_gradient_pct": round(median(grades), 1) if grades else None,
+        "climb_share_pct": round(median(shares), 1) if shares else None,
     }
 
 

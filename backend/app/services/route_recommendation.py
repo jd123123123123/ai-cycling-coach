@@ -57,6 +57,7 @@ the right shape, we are just not sure yet" from "this is the wrong shape".
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 #: Below this the plan gives no target to compare against, and recommending
 #: anything would be scoring against a number the athlete never set.
@@ -80,8 +81,67 @@ _LOW_CONFIDENCE_PENALTY = 0.85
 #: a confident answer to a question nobody asked. Demoted hard, never hidden.
 _VIRTUAL_PENALTY = 0.4
 
-#: Cap on alternatives returned alongside the top pick.
+#: A road ridden in the last few days is a worse SUGGESTION than an equally
+#: good one the athlete has not seen lately, even though it is an equally good
+#: match. Mild and multiplicative: variety is a preference, not a correction,
+#: and an athlete with exactly one suitable road must still be shown it.
+_RECENTLY_RIDDEN_DAYS = 3
+_RECENTLY_RIDDEN_PENALTY = 0.9
+
+#: Cap on alternatives returned alongside the top pick (legacy shape).
 MAX_ALTERNATIVES = 4
+
+#: How many ranked roads the surface may show. Several roads genuinely fit a
+#: given session, and the athlete picks between them on things this model
+#: cannot see -- traffic, who they are riding with, whether they can face that
+#: climb today. Showing one and calling it THE answer hides that choice.
+MAX_MATCHES = 5
+
+# ── what terrain each kind of session actually wants ─────────────────────────
+#
+# Two numbers per session category, both stated rather than learned:
+#
+#   climb_share_pct — how much of the road should be going up. This is what
+#     separates "flat" from "rolling" from "mountainous" in a way total ascent
+#     cannot: 600 m over 60 km of rollers and 600 m in one 8 km climb are the
+#     same ascent and completely different rides.
+#   longest_climb_m — how long ONE uninterrupted climb should be. This is the
+#     number that decides whether a 2x20 threshold block can be ridden as a
+#     single sustained effort or has to be chopped up over rollers, and it is
+#     why gradient matters here at all.
+#
+# The values are coaching convention, not a fitted model, and they are in one
+# table so they can be argued with in one place. `None` means the session is
+# genuinely indifferent -- endurance rides fine on anything -- and an
+# indifferent term is skipped rather than scored as a middling match.
+_CATEGORY_TERRAIN: dict[str, tuple[float | None, float | None]] = {
+    # Recovery wants flat: every ramp forces power up on the one day the plan
+    # asked for it to stay down.
+    "recovery": (0.0, 0.0),
+    "endurance": (15.0, None),
+    "tempo": (25.0, 1500.0),
+    "sweet_spot": (30.0, 2500.0),
+    "threshold": (35.0, 3500.0),
+    # VO2 wants climbs long enough for a 3-5 min effort but not so long the
+    # rider is still climbing through the recovery valley.
+    "vo2": (25.0, 1200.0),
+}
+
+#: Climb-share is scored over a wide band: terrain preference is a real signal
+#: but a soft one, and a road 10 points hillier than ideal is still a fine
+#: place to ride the session.
+_CLIMB_SHARE_TOLERANCE_PCT = 20.0
+
+#: Floor on the climb-length tolerance so the flat-preferring categories
+#: (recovery, ideal 0 m) have a sane scale to be wrong against.
+_CLIMB_LENGTH_TOLERANCE_FLOOR_M = 1200.0
+
+#: Weights over the four terms. Duration and intensity still carry the most --
+#: they are what the plan literally states -- while terrain and climb shape are
+#: how well the ROAD suits that session. Renormalised over whichever terms are
+#: actually available, so a route with no altitude is scored on what is known
+#: rather than penalised into oblivion for a stream it never recorded.
+_WEIGHTS = {"duration": 0.30, "tss": 0.30, "terrain": 0.25, "climb": 0.15}
 
 
 @dataclass(frozen=True)
@@ -94,8 +154,14 @@ class RouteFit:
     raw_fit: float
     duration_fit: float | None
     tss_fit: float | None
+    #: How well the road's climb share suits this session category.
+    terrain_fit: float | None
+    #: How well its longest single climb suits this session category.
+    climb_fit: float | None
     is_low_confidence: bool
     is_virtual: bool
+    #: Ridden within the last few days — a variety demotion, not a mismatch.
+    is_recently_ridden: bool
 
 
 def _clamped_fit(actual: float | None, target: float | None) -> float | None:
@@ -105,38 +171,102 @@ def _clamped_fit(actual: float | None, target: float | None) -> float | None:
     return max(0.0, 1.0 - abs(actual - target) / target)
 
 
+def _band_fit(actual: float | None, ideal: float | None, tolerance: float) -> float | None:
+    """1.0 at `ideal`, falling to 0 once `tolerance` away. None = not scorable.
+
+    Used for the terrain terms, where the honest claim is "about this much"
+    rather than the proportional "within x% of the target" that duration and
+    TSS get. A proportional error is meaningless against an ideal of zero,
+    which is exactly what recovery's flat-road preference is.
+    """
+    if actual is None or ideal is None or tolerance <= 0:
+        return None
+    return max(0.0, 1.0 - abs(actual - ideal) / tolerance)
+
+
+def _terrain_fits(route: dict, category: str | None) -> tuple[float | None, float | None]:
+    """(climb-share fit, longest-climb fit) for this road against this session.
+
+    Both None when the category is unknown or the road carried no altitude —
+    an unmeasured road has unknown terrain, and scoring it as "average" would
+    invent a fact about it.
+    """
+    if not category:
+        return None, None
+    targets = _CATEGORY_TERRAIN.get(category)
+    if targets is None:
+        return None, None
+    ideal_share, ideal_climb = targets
+
+    terrain_fit = _band_fit(
+        route.get("climb_share_pct"), ideal_share, _CLIMB_SHARE_TOLERANCE_PCT
+    )
+    climb_fit = _band_fit(
+        route.get("longest_climb_m"),
+        ideal_climb,
+        max(_CLIMB_LENGTH_TOLERANCE_FLOOR_M, ideal_climb or 0.0),
+    )
+    return terrain_fit, climb_fit
+
+
+def _days_since(iso_date: str | None, today: date | None) -> int | None:
+    if not iso_date or today is None:
+        return None
+    try:
+        return (today - date.fromisoformat(iso_date[:10])).days
+    except ValueError:
+        return None
+
+
 def score_route(
     route: dict,
     *,
     target_duration_minutes: float | None,
     target_tss: float | None,
+    category: str | None = None,
+    today: date | None = None,
 ) -> RouteFit:
     """Fit of one route summary (from `route_library.summarize_route`) against
-    one planned session's stated duration and TSS target."""
+    one planned session's stated duration, TSS target and session category."""
     avg_time_s = route.get("avg_time_s")
     avg_time_min = (avg_time_s / 60.0) if avg_time_s else None
     duration_fit = _clamped_fit(avg_time_min, target_duration_minutes)
     tss_fit = _clamped_fit(route.get("avg_tss"), target_tss)
+    terrain_fit, climb_fit = _terrain_fits(route, category)
 
-    parts = [f for f in (duration_fit, tss_fit) if f is not None]
-    raw_fit = sum(parts) / len(parts) if parts else 0.0
+    # Weighted mean over whichever terms are actually available, renormalised
+    # by the weights present. A road with no altitude is scored on what IS
+    # known rather than punished for a stream it never recorded.
+    weighted = [
+        (_WEIGHTS["duration"], duration_fit),
+        (_WEIGHTS["tss"], tss_fit),
+        (_WEIGHTS["terrain"], terrain_fit),
+        (_WEIGHTS["climb"], climb_fit),
+    ]
+    present = [(w, f) for w, f in weighted if f is not None]
+    total_w = sum(w for w, _ in present)
+    raw_fit = sum(w * f for w, f in present) / total_w if total_w > 0 else 0.0
 
-    # A fit computed from ONE of the two signals is a weaker claim than one
-    # computed from both, even when the number is identical: matching only
+    # A fit computed from ONE of the two STATED signals is a weaker claim than
+    # one computed from both, even when the number is identical: matching only
     # duration says nothing about whether the road will make the athlete work
-    # the way today asks. Scored at 85% so it still ranks above a genuine
-    # mismatch, but never above an equally-good two-signal match.
-    if len(parts) == 1:
+    # the way today asks. Terrain terms describe the road, not the plan's
+    # demand, so they do not lift this — the discount keys on duration/TSS only.
+    if len([f for f in (duration_fit, tss_fit) if f is not None]) == 1:
         raw_fit *= 0.85
 
     low_confidence = int(route.get("times_ridden") or 0) < LOW_CONFIDENCE_RIDE_COUNT
     is_virtual = bool(route.get("is_virtual"))
+    days_since = _days_since(route.get("last_ridden"), today)
+    recently_ridden = days_since is not None and days_since <= _RECENTLY_RIDDEN_DAYS
 
     score = raw_fit
     if low_confidence:
         score *= _LOW_CONFIDENCE_PENALTY
     if is_virtual:
         score *= _VIRTUAL_PENALTY
+    if recently_ridden:
+        score *= _RECENTLY_RIDDEN_PENALTY
 
     return RouteFit(
         route=route,
@@ -144,8 +274,11 @@ def score_route(
         raw_fit=raw_fit,
         duration_fit=duration_fit,
         tss_fit=tss_fit,
+        terrain_fit=terrain_fit,
+        climb_fit=climb_fit,
         is_low_confidence=low_confidence,
         is_virtual=is_virtual,
+        is_recently_ridden=recently_ridden,
     )
 
 
@@ -154,6 +287,8 @@ def recommend_routes(
     *,
     target_duration_minutes: float | None,
     target_tss: float | None,
+    category: str | None = None,
+    today: date | None = None,
 ) -> list[RouteFit] | None:
     """Ranked fits, best first, or None when there is nothing to score against.
 
@@ -173,6 +308,8 @@ def recommend_routes(
             r,
             target_duration_minutes=target_duration_minutes,
             target_tss=target_tss,
+            category=category,
+            today=today,
         )
         for r in routes
     ]

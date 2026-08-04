@@ -10,6 +10,7 @@ Two endpoints:
 
 RLS-protected via ``get_db_for_user``.
 """
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -19,7 +20,11 @@ from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.user import User
 from app.services.daily_decision import load_today_context
 from app.services.route_library import load_route_library
-from app.services.route_recommendation import MAX_ALTERNATIVES, recommend_routes
+from app.services.route_recommendation import (
+    MAX_ALTERNATIVES,
+    MAX_MATCHES,
+    recommend_routes,
+)
 
 router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -68,9 +73,14 @@ async def get_recommended_routes(
         library["routes"],
         target_duration_minutes=planned.get("duration_minutes"),
         target_tss=planned.get("target_tss"),
+        category=planned.get("category"),
+        today=date.today(),
     )
     if not ranked:
         return {"available": False, "reason": "no_target_to_match"}
+
+    def _r(v: float | None, places: int = 3) -> float | None:
+        return round(v, places) if v is not None else None
 
     def _out(fit):
         return {
@@ -79,11 +89,24 @@ async def get_recommended_routes(
             # The unpenalised shape match, so the surface can say "right shape,
             # thin evidence" rather than collapsing both into one number.
             "raw_fit": round(fit.raw_fit, 3),
-            "duration_fit": round(fit.duration_fit, 3) if fit.duration_fit is not None else None,
-            "tss_fit": round(fit.tss_fit, 3) if fit.tss_fit is not None else None,
+            # Per-term breakdown. The surface words these itself — the API
+            # states WHICH factors matched and how well, never the copy.
+            "duration_fit": _r(fit.duration_fit),
+            "tss_fit": _r(fit.tss_fit),
+            "terrain_fit": _r(fit.terrain_fit),
+            "climb_fit": _r(fit.climb_fit),
             "is_low_confidence": fit.is_low_confidence,
             "is_virtual": fit.is_virtual,
+            "is_recently_ridden": fit.is_recently_ridden,
         }
+
+    # Every scored road, best first. The old shape returned one "top" plus a
+    # few alternatives, which framed this as a single answer with also-rans;
+    # in practice several roads fit a given session and the athlete picks on
+    # things the model cannot see (traffic, who they are riding with, whether
+    # they can face that climb today). `top` is kept so existing clients do
+    # not break, but `matches` is the real payload.
+    matches = [_out(f) for f in ranked[:MAX_MATCHES]]
 
     return {
         "available": True,
@@ -91,7 +114,9 @@ async def get_recommended_routes(
             "title": planned.get("title"),
             "target_tss": planned.get("target_tss"),
             "duration_minutes": planned.get("duration_minutes"),
+            "category": planned.get("category"),
         },
-        "top": _out(ranked[0]),
-        "alternatives": [_out(f) for f in ranked[1 : 1 + MAX_ALTERNATIVES]],
+        "matches": matches,
+        "top": matches[0],
+        "alternatives": matches[1 : 1 + MAX_ALTERNATIVES],
     }

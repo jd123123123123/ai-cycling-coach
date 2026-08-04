@@ -176,3 +176,92 @@ class TestRecommendRoutes:
     def test_a_sub_minimum_duration_target_with_no_tss_target_yields_none(self):
         routes = [_route("Some loop", avg_time_min=60, avg_tss=70)]
         assert recommend_routes(routes, target_duration_minutes=2, target_tss=None) is None
+
+
+# ── terrain-aware matching ───────────────────────────────────────────────────
+# A road's SHAPE, not just its length and typical TSS. Two roads with identical
+# duration and TSS can be a good and a terrible venue for the same session.
+
+def _terrain_route(name, *, avg_time_min, avg_tss, climb_share_pct, longest_climb_m,
+                   times_ridden=5, last_ridden=None):
+    return {
+        "name": name,
+        "avg_time_s": avg_time_min * 60,
+        "avg_tss": avg_tss,
+        "times_ridden": times_ridden,
+        "climb_share_pct": climb_share_pct,
+        "longest_climb_m": longest_climb_m,
+        "last_ridden": last_ridden,
+    }
+
+
+class TestTerrainMatching:
+    def test_threshold_prefers_a_sustained_climb_over_rollers(self):
+        """The whole point of the climb term: 2x20 at threshold wants ONE long
+        climb. Rollers of identical length and TSS chop the effort up."""
+        common = dict(avg_time_min=75, avg_tss=95)
+        climb = score_route(
+            _terrain_route("Pass road", climb_share_pct=35, longest_climb_m=3500, **common),
+            target_duration_minutes=75, target_tss=95, category="threshold",
+        )
+        rollers = score_route(
+            _terrain_route("Rolling loop", climb_share_pct=35, longest_climb_m=400, **common),
+            target_duration_minutes=75, target_tss=95, category="threshold",
+        )
+        assert climb.climb_fit is not None and rollers.climb_fit is not None
+        assert climb.climb_fit > rollers.climb_fit
+        assert climb.score > rollers.score
+
+    def test_recovery_prefers_the_flat_road(self):
+        """Every ramp forces power up on the one day the plan asked for it to
+        stay down."""
+        common = dict(avg_time_min=45, avg_tss=30)
+        flat = score_route(
+            _terrain_route("River path", climb_share_pct=2, longest_climb_m=0, **common),
+            target_duration_minutes=45, target_tss=30, category="recovery",
+        )
+        hilly = score_route(
+            _terrain_route("Hill loop", climb_share_pct=40, longest_climb_m=2500, **common),
+            target_duration_minutes=45, target_tss=30, category="recovery",
+        )
+        assert flat.score > hilly.score
+
+    def test_terrain_is_not_scored_when_the_road_has_no_altitude(self):
+        """An unmeasured road has UNKNOWN terrain. Scoring it as average would
+        invent a fact about it; it is simply scored on what is known."""
+        fit = score_route(
+            _route("No altimeter", avg_time_min=60, avg_tss=80),
+            target_duration_minutes=60, target_tss=80, category="threshold",
+        )
+        assert fit.terrain_fit is None
+        assert fit.climb_fit is None
+        assert fit.score == pytest.approx(1.0)
+
+    def test_an_unknown_category_falls_back_to_length_and_intensity(self):
+        fit = score_route(
+            _terrain_route("Loop", avg_time_min=60, avg_tss=80,
+                           climb_share_pct=30, longest_climb_m=2000),
+            target_duration_minutes=60, target_tss=80, category="not_a_category",
+        )
+        assert fit.terrain_fit is None and fit.climb_fit is None
+        assert fit.score == pytest.approx(1.0)
+
+    def test_a_road_ridden_yesterday_is_demoted_but_never_hidden(self):
+        """Variety is a preference, not a correction — an athlete with exactly
+        one suitable road must still be shown it."""
+        from datetime import date, timedelta
+        today = date(2026, 8, 4)
+        fresh = score_route(
+            _terrain_route("Loop A", avg_time_min=60, avg_tss=80, climb_share_pct=20,
+                           longest_climb_m=1000, last_ridden="2026-06-01"),
+            target_duration_minutes=60, target_tss=80, today=today,
+        )
+        just_ridden = score_route(
+            _terrain_route("Loop B", avg_time_min=60, avg_tss=80, climb_share_pct=20,
+                           longest_climb_m=1000,
+                           last_ridden=(today - timedelta(days=1)).isoformat()),
+            target_duration_minutes=60, target_tss=80, today=today,
+        )
+        assert just_ridden.is_recently_ridden is True
+        assert just_ridden.score < fresh.score
+        assert just_ridden.score > 0
