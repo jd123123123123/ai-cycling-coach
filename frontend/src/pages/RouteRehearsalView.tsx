@@ -15,10 +15,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Route } from 'lucide-react'
+import { ArrowLeft, Clock, Route, Wind } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import Scene from '../components/scene/Scene'
 import { useLocale } from '../contexts/LocaleContext'
+import { useDailyDecision } from '../hooks/useDailyDecision'
 import {
   getRehearsal,
   updateAssumptions,
@@ -42,9 +43,10 @@ import EngineVsRoute from '../components/rehearsal/EngineVsRoute'
 import CostCard from '../components/rehearsal/CostCard'
 import SegmentPlan from '../components/rehearsal/SegmentPlan'
 import RouteRecord from '../components/rehearsal/RouteRecord'
+import ForecastRing from '../components/rehearsal/ForecastRing'
+import GradientCard from '../components/rehearsal/GradientCard'
 import TrainingEffectCard from '../components/rehearsal/TrainingEffectCard'
 import BaselineStrip from '../components/rehearsal/BaselineStrip'
-import InclineDistribution from '../components/rehearsal/InclineDistribution'
 import EffortProfile from '../components/rehearsal/EffortProfile'
 import CoachNote from '../components/rehearsal/CoachNote'
 import PlanActions from '../components/rehearsal/PlanActions'
@@ -75,6 +77,8 @@ export default function RouteRehearsalView() {
   const rehearsalId = Number(id)
   const navigate = useNavigate()
   const { locale } = useLocale()
+  const { decision } = useDailyDecision()
+  const readinessScore = decision?.readiness?.score ?? null
   const de = locale === 'de'
   const queryClient = useQueryClient()
 
@@ -259,6 +263,30 @@ export default function RouteRehearsalView() {
   // instead of sitting on its placeholder until someone touches the screen.
   const scrubbed = activeIdx != null ? segments[activeIdx] ?? null : null
 
+  // The map footer's three facts. Each is null unless the rehearsal genuinely
+  // carries it, so an undated or indoor route shows a name and nothing invented.
+  const startLabel =
+    data?.assumptions?.start_hour != null
+      ? `${String(data.assumptions.start_hour).padStart(2, '0')}:00`
+      : null
+
+
+  // "Fits today" is a readiness claim, so it is null when readiness is unknown
+  // rather than defaulting to a reassuring yes.
+  const fitsToday =
+    readinessScore == null
+      ? null
+      : readinessScore >= 65 || (data?.ascent_m ?? 0) < 600
+
+  // The design says "faster than your LAST ride here"; the history payload
+  // carries the athlete's BEST here (`forecast_vs_best_s`, negative when the
+  // forecast is quicker). Best is the honest comparison available, and the
+  // label says best rather than last.
+  const fasterThanBestS =
+    data?.history?.forecast_vs_best_s != null && data.history.forecast_vs_best_s < 0
+      ? Math.abs(data.history.forecast_vs_best_s)
+      : null
+
   return shell(
     <>
       {/* The route as a landscape, drawn from the same elevations the profile
@@ -354,6 +382,45 @@ export default function RouteRehearsalView() {
               ? (de ? 'Überspringen' : 'Skip')
               : (de ? 'Durchfahrt' : 'Fly through')}
           </button>
+
+          {/* The map's own footer: what this road IS, in one line, plus the
+              three facts that decide whether today is the day to ride it.
+              Previously the map was a picture with no caption — the athlete had
+              to look elsewhere to learn even the route's name. */}
+          <div
+            className="flex flex-col"
+            style={{ padding: '13px 15px 15px', gap: 3, background: 'var(--color-paper-2)' }}
+          >
+            <span className="num-display truncate" style={{ fontSize: 20, color: 'var(--color-ink)' }}>
+              {data.name || (de ? 'Unbenannte Strecke' : 'Unnamed route')}
+            </span>
+            <span style={{ fontSize: 12.5, color: 'var(--color-ink-2)' }}>
+              {`${formatDecimal(data.distance_m / 1000, de)} km · ${Math.round(data.ascent_m)} ${de ? 'Hm' : 'm up'}`}
+            </span>
+            <div className="flex items-center flex-wrap" style={{ gap: 14, marginTop: 5 }}>
+              {startLabel && (
+                <span className="inline-flex items-center" style={{ gap: 5 }}>
+                  <Clock size={13} style={{ color: 'var(--color-muted)' }} />
+                  <span className="num-mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)' }}>
+                    {startLabel}
+                  </span>
+                </span>
+              )}
+              {/* The design shows temperature and wind here. The rehearsal
+                  payload carries only WHETHER weather was used, not the values
+                  — and pulling today's local forecast would print Munich's
+                  temperature next to a road in the Dolomites. So this states
+                  that weather is in the model, and no number it does not have. */}
+              {data.weather_used && (
+                <span className="inline-flex items-center" style={{ gap: 5 }}>
+                  <Wind size={13} style={{ color: 'var(--color-ink-blue)' }} />
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-ink-2)' }}>
+                    {de ? 'Wetter eingerechnet' : 'Weather included'}
+                  </span>
+                </span>
+              )}
+            </div>
+          </div>
         </section>
       )}
 
@@ -362,7 +429,23 @@ export default function RouteRehearsalView() {
           inputs instead of taking it on trust. */}
       <BaselineStrip ftpUsedW={data.ftp_used_w ?? null} />
 
+      {/* The headline the design leads with: time inside a ring whose arcs are
+          the predicted time-in-zone, then the route's own facts as pills. */}
+      <ForecastRing
+        band={data.band}
+        zones={data.zones ?? []}
+        distanceM={data.distance_m}
+        ascentM={data.ascent_m}
+        fitsToday={fitsToday}
+        fasterThanBestS={fasterThanBestS}
+        de={de}
+      />
+
+      {/* VerdictBlock keeps the disclosures underneath — which inputs are
+          defaults, where the blow-up is, why a time may be impossible. The
+          ring is the answer; this is the fine print that keeps it honest. */}
       <VerdictBlock
+        headline={false}
         band={data.band}
         blowUpKm={blowUp ? blowUp.distance_m / 1000 : null}
         blowUpClimb={blowUpClimb}
@@ -375,6 +458,15 @@ export default function RouteRehearsalView() {
         missing={data.missing}
         de={de}
       />
+
+      {/* The profile painted by gradient, with the summit marked and the
+          kilometres-per-bucket underneath — one card, as the design has it. */}
+      <GradientCard
+        segments={segments}
+        distanceM={data.distance_m}
+        ascentM={data.ascent_m}
+      />
+
 
       {data.actual && <ActualVsPredicted actual={data.actual} de={de} />}
 
@@ -458,14 +550,6 @@ export default function RouteRehearsalView() {
           Everything here is derived from one 1 Hz expansion of the simulated
           ride, so a predicted NP is comparable with a recorded one rather than
           a parallel estimate that would drift from it. */}
-      {/* How many kilometres sit at each gradient. The profile above says WHERE
-          the climbs are; this says how much of the day is actually steep. */}
-      <InclineDistribution
-        segments={segments}
-        distanceM={data.distance_m}
-        ascentM={data.ascent_m}
-      />
-
       {/* No section heading here: RideMetrics below already titles itself
           "WAS DICH ERWARTET", and adding one printed the same words twice. */}
       <RideMetrics data={data} de={de} />

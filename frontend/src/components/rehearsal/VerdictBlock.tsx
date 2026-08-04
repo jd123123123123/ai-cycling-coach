@@ -31,6 +31,7 @@ export default function VerdictBlock({
   bandSamples = 0,
   de,
   missing,
+  headline = true,
 }: {
   band?: RehearsalBand
   blowUpKm: number | null
@@ -52,6 +53,14 @@ export default function VerdictBlock({
   de: boolean
   /** Names of the profile inputs that make a prediction impossible. */
   missing?: string[]
+  /**
+   * Render the time headline. False when ForecastRing above already owns it —
+   * the ring shows the band in its centre, and printing p50 again twenty
+   * pixels below states the same prediction twice in two different shapes.
+   * The disclosures underneath (defaults, blow-up, range provenance) always
+   * render: they are the reason this block exists.
+   */
+  headline?: boolean
 }) {
   const notes: string[] = []
   if (cdaIsDefault) {
@@ -163,20 +172,24 @@ export default function VerdictBlock({
     >
       <span aria-hidden style={accentBloom('var(--color-good)', 'strong')} />
       <span aria-hidden style={accentEdge('var(--color-good)')} />
-      <span
-        className="eyebrow"
-        style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 700, color: 'var(--color-ink-2)' }}
-      >
-        {de ? 'VORAUSSICHTLICHE ZEIT' : 'PREDICTED TIME'}
-      </span>
-      {/* The median as an odometer, the RANGE immediately under it. The pen
-          leads with one big time, and a single number is exactly what this
-          page must not claim — so the reels show p50 and the line beneath
-          carries the ± that makes it honest. The two are never separated. */}
-      <TimeOdometer seconds={band.p50_s} />
-      <span style={{ fontSize: 14, color: 'var(--color-ink-2)', fontVariantNumeric: 'tabular-nums' }}>
-        {`± ${Math.round((band.p90_s - band.p10_s) / 120)} min · ${formatHm(band.p10_s)} – ${formatHm(band.p90_s)}`}
-      </span>
+      {headline && (
+        <>
+          <span
+            className="eyebrow"
+            style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 700, color: 'var(--color-ink-2)' }}
+          >
+            {de ? 'VORAUSSICHTLICHE ZEIT' : 'PREDICTED TIME'}
+          </span>
+          {/* The median as an odometer, the RANGE immediately under it. A
+              single number is exactly what this page must not claim — so the
+              reels show p50 and the line beneath carries the ± that makes it
+              honest. The two are never separated. */}
+          <TimeOdometer seconds={band.p50_s} />
+          <span style={{ fontSize: 14, color: 'var(--color-ink-2)', fontVariantNumeric: 'tabular-nums' }}>
+            {`± ${Math.round((band.p90_s - band.p10_s) / 120)} min · ${formatHm(band.p10_s)} – ${formatHm(band.p90_s)}`}
+          </span>
+        </>
+      )}
       <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--color-ink-2)', margin: 0 }}>
         {de
           ? `Spanne aus ${band.draws} Simulationen — 8 von 10 Fahrten landen darin.`
