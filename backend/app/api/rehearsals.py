@@ -38,7 +38,7 @@ import math
 from dataclasses import asdict, replace
 from datetime import date, datetime, time, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
@@ -248,6 +248,7 @@ def _to_out(row: RouteRehearsal) -> RehearsalOut:
     return RehearsalOut(
         id=row.id,
         name=row.name,
+        saved=bool(row.saved),
         source_kind=row.source_kind,
         source_ref=row.source_ref,
         distance_m=row.distance_m,
@@ -798,6 +799,107 @@ async def update_assumptions(
     )
     route = route_from_json(row.route)
     await _simulate_and_store(db, row, route, assumptions, current_user.id, overrides)
+    await db.commit()
+    await db.refresh(row)
+    return _to_out(row)
+
+
+# ─── Pacing plan export ──────────────────────────────────────────────────────
+# The design's CTA reads "Send pacing plan to Garmin". There is no Garmin
+# workout-push in this codebase -- the Garmin integration is read-only sync --
+# so a button claiming to SEND would be asserting something the app cannot do,
+# which is the one thing every other surface here refuses to do. It exports a
+# real workout file instead, and the label says export.
+#
+# .zwo rather than .fit: the writer already exists and is already exercised by
+# the custom-workout builder, and its power targets are FRACTIONS of FTP, so
+# the file stays correct when the athlete's FTP moves. Writing a .fit encoder
+# from scratch for one button would be a lot of surface for the same outcome.
+
+
+@router.get("/{rehearsal_id}/pacing-plan.zwo")
+async def export_pacing_plan(
+    rehearsal_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_for_user),
+) -> Response:
+    """The rehearsal's chapters as a structured workout the athlete can ride.
+
+    One steady block per chapter, at that chapter's own target watts expressed
+    against the FTP the forecast was computed with. The chapter names carry
+    through, so "Kesselberg" is what shows on the head unit rather than
+    "Block 4".
+    """
+    from app.services.custom_workout_blocks import CustomBlock, workout_to_zwo
+
+    row = await _load_owned(db, rehearsal_id, current_user.id)
+    result = row.result or {}
+    chapters = result.get("chapters") or []
+    ftp = result.get("ftp_used_w")
+
+    # Honest refusal rather than a plausible-looking file. Without chapters
+    # there is no plan, and without the FTP the forecast used every percentage
+    # in the file would be measured against a number nobody chose.
+    if not chapters or not ftp:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="no_pacing_plan_available",
+        )
+
+    blocks: list[CustomBlock] = []
+    for ch in chapters:
+        duration = int(round(float(ch.get("duration_s") or 0)))
+        watts = float(ch.get("avg_power_w") or 0)
+        if duration < 1 or watts <= 0:
+            continue
+        blocks.append(
+            CustomBlock(
+                type="steady",
+                duration_s=min(duration, 6 * 3600),
+                # A FRACTION of FTP (0.2-2.5), not a 0-100 percentage --
+                # the field name reads like the latter and is not.
+                power_pct=round(watts / float(ftp), 3),
+                name=(ch.get("label") or ch.get("kind") or "Abschnitt")[:80],
+            )
+        )
+    if not blocks:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="no_pacing_plan_available",
+        )
+
+    name = row.name or "Route"
+    xml = workout_to_zwo(
+        f"{name} — Pacing",
+        f"Pacing plan from your route forecast. {round(row.distance_m / 1000)} km, "
+        f"{round(row.ascent_m)} m up.",
+        blocks,
+    )
+    safe = "".join(c if c.isalnum() else "_" for c in name)[:40] or "route"
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="{safe}_pacing.zwo"'},
+    )
+
+
+@router.post("/{rehearsal_id}/save", response_model=RehearsalOut)
+async def set_saved(
+    rehearsal_id: int,
+    saved: bool = True,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_for_user),
+) -> RehearsalOut:
+    """Keep (or un-keep) this rehearsal.
+
+    Deliberately NOT the assumptions PATCH: that re-runs the whole simulation,
+    which is several hundred milliseconds of physics to flip one boolean. A
+    rehearsal is stored the moment it is created, so this flag is the only
+    thing that distinguishes "I tried this route once" from "this is a route I
+    care about".
+    """
+    row = await _load_owned(db, rehearsal_id, current_user.id)
+    row.saved = bool(saved)
     await db.commit()
     await db.refresh(row)
     return _to_out(row)

@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Route } from 'lucide-react'
 import DashboardShell from '../components/dashboard/DashboardShell'
 import Scene from '../components/scene/Scene'
 import { useLocale } from '../contexts/LocaleContext'
@@ -42,6 +42,12 @@ import EngineVsRoute from '../components/rehearsal/EngineVsRoute'
 import CostCard from '../components/rehearsal/CostCard'
 import SegmentPlan from '../components/rehearsal/SegmentPlan'
 import RouteRecord from '../components/rehearsal/RouteRecord'
+import TrainingEffectCard from '../components/rehearsal/TrainingEffectCard'
+import BaselineStrip from '../components/rehearsal/BaselineStrip'
+import InclineDistribution from '../components/rehearsal/InclineDistribution'
+import EffortProfile from '../components/rehearsal/EffortProfile'
+import CoachNote from '../components/rehearsal/CoachNote'
+import PlanActions from '../components/rehearsal/PlanActions'
 import FuelPlanCard from '../components/rehearsal/FuelPlanCard'
 import RouteMap from '../components/crew/RouteMap'
 import RouteSketch from '../components/ui/RouteSketch'
@@ -154,6 +160,23 @@ export default function RouteRehearsalView() {
     return routeLine[best] ?? null
   }, [activeIdx, routeIdxs, routeLine])
 
+  // "<name> · vor 3 Std." — the subject and its age in one line. Age is
+  // relative because "2026-08-04T05:12Z" is not something a rider converts in
+  // their head before a ride.
+  const sourceLine = useMemo(() => {
+    if (!data) return null
+    const name = data.name || (de ? 'Unbenannte Strecke' : 'Unnamed route')
+    const created = data.created_at ? new Date(data.created_at) : null
+    if (!created || Number.isNaN(created.getTime())) return name
+    const mins = Math.max(0, Math.round((Date.now() - created.getTime()) / 60000))
+    const age =
+      mins < 2 ? (de ? 'gerade eben' : 'just now')
+        : mins < 60 ? (de ? `vor ${mins} Min.` : `${mins} min ago`)
+        : mins < 60 * 24 ? (de ? `vor ${Math.round(mins / 60)} Std.` : `${Math.round(mins / 60)} h ago`)
+        : (de ? `vor ${Math.round(mins / 1440)} T.` : `${Math.round(mins / 1440)} d ago`)
+    return `${name} · ${age}`
+  }, [data, de])
+
   const blowUp = data?.blow_ups?.[0] ?? null
   const blowUpClimb = useMemo(() => {
     if (!blowUp || blowUp.climb_id == null || !data) return null
@@ -161,24 +184,47 @@ export default function RouteRehearsalView() {
     return climb ? climbLabel(climb, de) : null
   }, [blowUp, data, de])
 
+  // The header names the ROUTE, not the feature. A centred "PROBEFAHRT"
+  // eyebrow told the athlete which screen they were on, which they already
+  // knew, and left the actual subject — which road, from which file, how
+  // fresh — to be discovered further down. Source and age matter here because
+  // a forecast is only as current as the assumptions behind it.
   const header = (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center" style={{ gap: 12 }}>
       <button
         type="button"
         onClick={() => navigate(-1)}
         aria-label={de ? 'Zurück' : 'Back'}
-        className="grid place-items-center rounded-full"
+        className="grid shrink-0 place-items-center rounded-full"
         style={{ width: 40, height: 40, background: 'var(--color-surface-2)', border: '1px solid var(--color-rule)' }}
       >
         <ArrowLeft size={18} style={{ color: 'var(--color-ink-2)' }} />
       </button>
-      <span
-        className="eyebrow"
-        style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 700, color: 'var(--color-ink-2)' }}
-      >
-        {de ? 'PROBEFAHRT' : 'ROUTE REHEARSAL'}
-      </span>
-      <div style={{ width: 40 }} />
+      <div className="flex min-w-0 flex-col" style={{ gap: 1 }}>
+        <span className="num-display truncate" style={{ fontSize: 20, color: 'var(--color-ink)' }}>
+          {de ? 'Streckenvorschau' : 'Route Forecast'}
+        </span>
+        {sourceLine && (
+          <span className="truncate" style={{ fontSize: 12, color: 'var(--color-ink-2)' }}>
+            {sourceLine}
+          </span>
+        )}
+      </div>
+      {data?.source_kind && (
+        <span
+          className="ml-auto shrink-0 inline-flex items-center rounded-full"
+          style={{
+            gap: 4,
+            padding: '4px 9px',
+            background: 'var(--color-violet-soft)',
+          }}
+        >
+          <Route size={12} style={{ color: 'var(--color-violet)' }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-violet)' }}>
+            {data.source_kind === 'gpx' ? 'GPX' : data.source_kind.toUpperCase()}
+          </span>
+        </span>
+      )}
     </div>
   )
 
@@ -212,7 +258,6 @@ export default function RouteRehearsalView() {
   // The readout follows the shared cursor, so it narrates the film as it plays
   // instead of sitting on its placeholder until someone touches the screen.
   const scrubbed = activeIdx != null ? segments[activeIdx] ?? null : null
-  const title = data.name ?? (de ? 'Unbenannte Strecke' : 'Unnamed route')
 
   return shell(
     <>
@@ -232,14 +277,9 @@ export default function RouteRehearsalView() {
         />
       </section>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 620, color: 'var(--color-ink)', letterSpacing: '-0.02em', margin: 0 }}>
-          {title}
-        </h1>
-        <span style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>
-          {`${formatDecimal(data.distance_m / 1000, de)} km · ${Math.round(data.ascent_m)} ${de ? 'Hm' : 'm up'}`}
-        </span>
-      </div>
+      {/* The route's name and age moved INTO the header, so this block was
+          stating the same name a second time twenty pixels below it. Distance
+          and ascent survive on the gradient card's own subtitle and axis. */}
 
       {/* ── MapHero: where the road actually runs, coloured by target watts ──
           The SVG sketch is drawn first and stays until MapLibre reports a
@@ -316,6 +356,11 @@ export default function RouteRehearsalView() {
           </button>
         </section>
       )}
+
+      {/* The four numbers the whole forecast is computed FROM. Stated before
+          the verdict, so the athlete can judge the prediction against its own
+          inputs instead of taking it on trust. */}
+      <BaselineStrip ftpUsedW={data.ftp_used_w ?? null} />
 
       <VerdictBlock
         band={data.band}
@@ -413,6 +458,16 @@ export default function RouteRehearsalView() {
           Everything here is derived from one 1 Hz expansion of the simulated
           ride, so a predicted NP is comparable with a recorded one rather than
           a parallel estimate that would drift from it. */}
+      {/* How many kilometres sit at each gradient. The profile above says WHERE
+          the climbs are; this says how much of the day is actually steep. */}
+      <InclineDistribution
+        segments={segments}
+        distanceM={data.distance_m}
+        ascentM={data.ascent_m}
+      />
+
+      {/* No section heading here: RideMetrics below already titles itself
+          "WAS DICH ERWARTET", and adding one printed the same words twice. */}
       <RideMetrics data={data} de={de} />
 
       <TimeInZones
@@ -424,11 +479,19 @@ export default function RouteRehearsalView() {
 
       <EngineVsRoute demand={data.demand ?? []} de={de} />
 
-      <CostCard
-        battery={data.battery}
-        matches={data.matches}
-        trainingEffect={data.training_effect}
-        de={de}
+      <CostCard battery={data.battery} matches={data.matches} de={de} />
+
+      {/* The same forecast in the watch's own vocabulary. Its own card, not a
+          footnote under W' and battery. */}
+      <TrainingEffectCard trainingEffect={data.training_effect} />
+
+      {/* The road's shape, coloured by what it costs — where the hard part
+          actually falls, which neither the profile nor the zone totals say. */}
+      <EffortProfile
+        segments={segments}
+        distanceM={data.distance_m}
+        ascentM={data.ascent_m}
+        ftpW={data.ftp_used_w ?? null}
       />
 
       {/* The plan a rider carries down the road, then the record it is
@@ -470,6 +533,13 @@ export default function RouteRehearsalView() {
         </section>
       )}
 
+      {/* The one block that ties this road to THIS morning. */}
+      <CoachNote
+        ascentM={data.ascent_m}
+        distanceM={data.distance_m}
+        blowUps={(data.blow_ups ?? []).length}
+      />
+
       <CompareRehearsals current={data} de={de} />
 
       <AssumptionsRow
@@ -498,6 +568,14 @@ export default function RouteRehearsalView() {
             : 'That assumption could not be saved — the numbers above still reflect the previous setting.'}
         </span>
       )}
+
+      {/* What the athlete can DO with the forecast, once they believe it.
+          Last, and deliberately after the knobs: a pacing plan is only worth
+          taking away once the assumptions behind it are the ones they meant. */}
+      <PlanActions
+        rehearsalId={rehearsalId}
+        canExport={(data.chapters ?? []).length > 0 && data.ftp_used_w != null}
+      />
     </>,
   )
 }

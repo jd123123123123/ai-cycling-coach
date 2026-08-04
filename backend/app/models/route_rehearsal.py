@@ -14,7 +14,7 @@ athlete_profiles / coach_recommendations rather than the crew-shared tables.
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -43,6 +43,15 @@ class RouteRehearsal(Base):
     assumptions: Mapped[dict] = mapped_column(JSONB, nullable=False)
     #: Full SimulationResult + band + fuelling, as returned to the client.
     result: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    # Kept-by-the-athlete flag. A rehearsal is persisted the moment it is
+    # created, so "saved" cannot mean "written down" -- it means the athlete
+    # chose to keep this one, which is what makes it findable later. Nullable
+    # with a server default so every pre-existing row reads as not-kept without
+    # a backfill.
+    saved: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

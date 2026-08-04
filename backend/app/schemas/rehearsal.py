@@ -281,6 +281,9 @@ class HistoryOut(BaseModel):
 class RehearsalOut(BaseModel):
     id: int
     name: str | None = None
+    #: Kept by the athlete. Every rehearsal is stored; this marks the ones
+    #: worth coming back to.
+    saved: bool = False
     source_kind: SourceKind
     source_ref: int | None = None
     distance_m: float
