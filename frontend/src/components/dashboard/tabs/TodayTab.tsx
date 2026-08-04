@@ -53,6 +53,7 @@ import { readinessFreshness, withholdReadiness } from '../../../utils/readinessG
 import ReadinessFreshnessNote from '../today/ReadinessFreshnessNote'
 import { latestLoad, daysToEvent, localDayKey } from '../../../utils/loadMetrics'
 import ScoreRing from '../../ui/ScoreRing'
+import { SLEEP_SAYINGS_DE, sayingFor } from '../../../i18n/sleepSayings'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import { tFor } from '../../../i18n/strings'
@@ -883,11 +884,18 @@ export default function TodayTab() {
       const base = hStr
         ? (de ? `${hStr} Schlaf (Score ${sN})` : `Slept ${hStr} (${sN})`)
         : (de ? `Schlaf-Score ${sN}` : `Sleep score ${sN}`)
-      const q = sleptGreat
-        ? pick(de ? ['eine richtige Nacht', 'Erholung sauber verbucht', 'so sieht Aufbau aus'] : ['a proper night', 'recovery banked in full', 'the kind training pays for'])
-        : sleptShort
-          ? pick(de ? ['etwas dünn', 'eher kurz', 'weniger, als der Plan mag'] : ['a bit thin', 'on the short side', 'less than the plan would like'])
-          : pick(de ? ['ordentlich, brauchbar', 'solide genug', 'kein Drama'] : ['decent and workable', 'solid enough', 'no drama there'])
+      // German draws from the deep bank (100+ per state, cycling by day of
+      // year); English still uses its three variants until its bank is
+      // written. `pick` cannot serve the bank — it indexes by day of MONTH, so
+      // it could only ever reach the first 31 of 100 lines.
+      const sleepState = sleptGreat ? 'great' : sleptShort ? 'short' : 'ok'
+      const q = de
+        ? sayingFor(SLEEP_SAYINGS_DE[sleepState], today, sleepState)
+        : sleptGreat
+          ? pick(['a proper night', 'recovery banked in full', 'the kind training pays for'])
+          : sleptShort
+            ? pick(['a bit thin', 'on the short side', 'less than the plan would like'])
+            : pick(['decent and workable', 'solid enough', 'no drama there'])
       return de ? `${base}${yCtx} — ${q}.` : `${base} — ${q}${yCtx}.`
     })()
 
