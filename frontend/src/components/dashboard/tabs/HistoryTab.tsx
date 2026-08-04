@@ -408,7 +408,7 @@ export default function HistoryTab() {
           something to draw; an empty history gets no invented range. */}
       {seasonTerrain.some((v) => v > 0) && (
         <section className="-mt-2 -mx-4 overflow-hidden">
-          <Scene kind="terrain" values={seasonTerrain} seed="history:year" height={104} />
+          <Scene kind="terrain" values={seasonTerrain} seed="history:year" height={132} />
         </section>
       )}
 

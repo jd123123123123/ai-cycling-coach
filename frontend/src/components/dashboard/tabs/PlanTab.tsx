@@ -521,7 +521,7 @@ export default function PlanTab() {
           week gets no invented landscape. */}
       {weekTerrain.some((v) => v > 0) && (
         <section className="-mt-2 -mx-4 overflow-hidden">
-          <Scene kind="terrain" values={weekTerrain} seed={`week:${days[0]?.date ?? 'x'}`} height={92} />
+          <Scene kind="terrain" values={weekTerrain} seed={`week:${days[0]?.date ?? 'x'}`} height={124} />
         </section>
       )}
 

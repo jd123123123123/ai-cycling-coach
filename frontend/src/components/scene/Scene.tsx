@@ -132,8 +132,13 @@ export default function Scene({
       return { kind: 'field' as const, hills: hills.reverse() }
     }
 
+    // A sky exists to show READINESS. Without it there is nothing to encode and
+    // the gradient is pure decoration — which is precisely what this engine's
+    // own rule forbids. Time of day alone is not information the athlete needs
+    // as a full-bleed band; they can see out of a window.
+    if (readiness == null) return null
     return { kind: 'sky' as const }
-  }, [kind, values, zones, seed])
+  }, [kind, values, zones, seed, readiness])
 
   if (!model) return null
 
@@ -168,13 +173,24 @@ export default function Scene({
           <stop offset="100%" stopColor="var(--color-gold)" stopOpacity={0} />
         </radialGradient>
         {/* Atmospheric perspective: distant ranges wash toward the sky colour. */}
+        {/* Atmospheric perspective. This used to reference the sky's END stop,
+            which became `transparent` when the sky was retuned — so the haze
+            silently painted nothing and the far ranges lost their separation.
+            It is the PAGE colour that distance washes toward, so name it. */}
         <linearGradient id={`${uid}-haze`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={skyTo} stopOpacity={0.55} />
-          <stop offset="100%" stopColor={skyTo} stopOpacity={0} />
+          <stop offset="0%" stopColor="var(--color-paper)" stopOpacity={0.7} />
+          <stop offset="100%" stopColor="var(--color-paper)" stopOpacity={0} />
         </linearGradient>
       </defs>
 
-      <rect x="0" y="0" width={VB_W} height={height} fill={`url(#${uid}-sky)`} />
+      {/* Only a `sky` scene paints the time-of-day gradient. A terrain banner
+          painted it too, and at 22% gold over a near-black page that came out
+          olive — a stain above the ridge rather than a sky behind it. Terrain
+          now sits on the page background and gets its depth from the ridges
+          and the haze instead. */}
+      {model.kind === 'sky' && (
+        <rect x="0" y="0" width={VB_W} height={height} fill={`url(#${uid}-sky)`} />
+      )}
 
       {(model.kind === 'sky' || model.kind === 'terrain') && ready != null && (
         <>
