@@ -9,54 +9,69 @@ from datetime import date, timedelta
 
 import pytest
 
-from app.services.execution_sayings import EXECUTION_SAYINGS_DE, saying_for
+from app.services.execution_sayings import (
+    EXECUTION_SAYINGS_DE,
+    EXECUTION_SAYINGS_EN,
+    saying_for,
+)
 from app.services.ride_compliance import Grade
 from typing import get_args
 
 
 GRADES = list(get_args(Grade))
 
+#: Every invariant is checked against BOTH language banks — a bank that is only
+#: verified in one language is a bank that will quietly rot in the other.
+BANKS = {"de": EXECUTION_SAYINGS_DE, "en": EXECUTION_SAYINGS_EN}
+LANGS = list(BANKS)
+
 
 class TestBankShape:
-    def test_every_grade_has_a_bank(self):
+    @pytest.mark.parametrize("lang", LANGS)
+    def test_every_grade_has_a_bank(self, lang):
         """A grade with no bank silently falls back to one repeated headline."""
-        assert set(EXECUTION_SAYINGS_DE) == set(GRADES)
+        assert set(BANKS[lang]) == set(GRADES)
 
+    @pytest.mark.parametrize("lang", LANGS)
     @pytest.mark.parametrize("grade", GRADES)
-    def test_each_bank_has_at_least_a_hundred_lines(self, grade):
-        assert len(EXECUTION_SAYINGS_DE[grade]) >= 100
+    def test_each_bank_has_at_least_a_hundred_lines(self, grade, lang):
+        assert len(BANKS[lang][grade]) >= 100
 
+    @pytest.mark.parametrize("lang", LANGS)
     @pytest.mark.parametrize("grade", GRADES)
-    def test_no_duplicates_within_a_bank(self, grade):
-        bank = EXECUTION_SAYINGS_DE[grade]
+    def test_no_duplicates_within_a_bank(self, grade, lang):
+        bank = BANKS[lang][grade]
         assert len(set(bank)) == len(bank)
 
-    def test_no_line_is_shared_between_grades(self):
+    @pytest.mark.parametrize("lang", LANGS)
+    def test_no_line_is_shared_between_grades(self, lang):
         """A line that fits both 'perfect' and 'overcooked' is telling the
         athlete nothing about how the ride actually went."""
         seen: dict[str, str] = {}
-        for grade, bank in EXECUTION_SAYINGS_DE.items():
+        for grade, bank in BANKS[lang].items():
             for line in bank:
                 assert line not in seen, f"{line!r} in both {seen.get(line)} and {grade}"
                 seen[line] = grade
 
+    @pytest.mark.parametrize("lang", LANGS)
     @pytest.mark.parametrize("grade", GRADES)
-    def test_lines_are_headlines_not_paragraphs(self, grade):
+    def test_lines_are_headlines_not_paragraphs(self, grade, lang):
         """These render as a card headline. A sentence that wraps to three
         lines breaks the layout it lives in."""
-        for line in EXECUTION_SAYINGS_DE[grade]:
+        for line in BANKS[lang][grade]:
             assert line.strip() == line
             assert 0 < len(line) <= 70, line
             assert not line.endswith("."), line
 
 
 class TestSelection:
+    @pytest.mark.parametrize("lang", LANGS)
     @pytest.mark.parametrize("grade", GRADES)
-    def test_every_line_is_reachable_within_a_year(self, grade):
+    def test_every_line_is_reachable_within_a_year(self, grade, lang):
         """The regression this exists for: the previous picker indexed by day
         of MONTH, so against a 100-line bank it could only ever reach the first
         31 and 69 lines would never once be shown."""
-        bank = EXECUTION_SAYINGS_DE[grade]
+        bank = BANKS[lang][grade]
         start = date(2026, 1, 1)
         seen = {saying_for(bank, start + timedelta(days=i), grade) for i in range(366)}
         assert len(seen) == len(bank)
@@ -65,9 +80,10 @@ class TestSelection:
         """Stability within a day: the headline must not reshuffle when the
         card re-renders or the athlete reopens the app."""
         day = date(2026, 5, 17)
-        for grade in GRADES:
-            bank = EXECUTION_SAYINGS_DE[grade]
-            assert saying_for(bank, day, grade) == saying_for(bank, day, grade)
+        for lang in LANGS:
+            for grade in GRADES:
+                bank = BANKS[lang][grade]
+                assert saying_for(bank, day, grade) == saying_for(bank, day, grade)
 
     def test_different_grades_do_not_collide_on_the_same_day(self):
         """Without the grade salt, every bank would hand back the same index,

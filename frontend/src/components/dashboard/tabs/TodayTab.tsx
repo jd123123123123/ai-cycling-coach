@@ -53,7 +53,7 @@ import { readinessFreshness, withholdReadiness } from '../../../utils/readinessG
 import ReadinessFreshnessNote from '../today/ReadinessFreshnessNote'
 import { latestLoad, daysToEvent, localDayKey } from '../../../utils/loadMetrics'
 import ScoreRing from '../../ui/ScoreRing'
-import { SLEEP_SAYINGS_DE, sayingFor } from '../../../i18n/sleepSayings'
+import { SLEEP_SAYINGS_DE, SLEEP_SAYINGS_EN, sayingFor } from '../../../i18n/sleepSayings'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import { tFor } from '../../../i18n/strings'
@@ -884,18 +884,15 @@ export default function TodayTab() {
       const base = hStr
         ? (de ? `${hStr} Schlaf (Score ${sN})` : `Slept ${hStr} (${sN})`)
         : (de ? `Schlaf-Score ${sN}` : `Sleep score ${sN}`)
-      // German draws from the deep bank (100+ per state, cycling by day of
-      // year); English still uses its three variants until its bank is
-      // written. `pick` cannot serve the bank — it indexes by day of MONTH, so
+      // Both languages now draw from the deep banks (100+ per state, cycling by
+      // day of year). `pick` cannot serve them — it indexes by day of MONTH, so
       // it could only ever reach the first 31 of 100 lines.
       const sleepState = sleptGreat ? 'great' : sleptShort ? 'short' : 'ok'
-      const q = de
-        ? sayingFor(SLEEP_SAYINGS_DE[sleepState], today, sleepState)
-        : sleptGreat
-          ? pick(['a proper night', 'recovery banked in full', 'the kind training pays for'])
-          : sleptShort
-            ? pick(['a bit thin', 'on the short side', 'less than the plan would like'])
-            : pick(['decent and workable', 'solid enough', 'no drama there'])
+      const q = sayingFor(
+        (de ? SLEEP_SAYINGS_DE : SLEEP_SAYINGS_EN)[sleepState],
+        today,
+        sleepState,
+      )
       return de ? `${base}${yCtx} — ${q}.` : `${base} — ${q}${yCtx}.`
     })()
 

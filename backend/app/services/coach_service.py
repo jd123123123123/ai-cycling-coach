@@ -41,7 +41,11 @@ from app.models.coach_brief import CoachBrief
 from app.models.coach_recommendation import CoachRecommendation
 from app.models.daily_metric import DailyMetric
 from app.services import advanced_metrics
-from app.services.execution_sayings import EXECUTION_SAYINGS_DE, saying_for
+from app.services.execution_sayings import (
+    EXECUTION_SAYINGS_DE,
+    EXECUTION_SAYINGS_EN,
+    saying_for,
+)
 from app.services.advanced_metrics import (
     ctl_atl_tsb_snapshot,
     hrv_trend,
@@ -2326,15 +2330,16 @@ def _build_post_ride_review(
         nudge = ""
     elif language == "simple":
         if de:
-            # German draws from the deep bank (100+ per grade, cycling by day of
-            # year); the single-headline dict is the fallback for a grade the
-            # bank does not cover. English keeps its one headline per grade
-            # until its own bank is written.
+            # Both languages draw from their deep bank (100+ per grade,
+            # cycling by day of year). The single-headline dict remains the
+            # fallback for a grade no bank covers.
             headline = saying_for(
                 EXECUTION_SAYINGS_DE.get(grade, []), date.today(), grade
             ) or _HEADLINE_BY_GRADE_SIMPLE_DE.get(grade, "Einheit erfasst")
         else:
-            headline = _HEADLINE_BY_GRADE_SIMPLE.get(grade, "Session logged")
+            headline = saying_for(
+                EXECUTION_SAYINGS_EN.get(grade, []), date.today(), grade
+            ) or _HEADLINE_BY_GRADE_SIMPLE.get(grade, "Session logged")
         physio = _simple_physio_read(compliance, trajectory, de=de)
         trajectory_narrative = _simple_trajectory_narrative(trajectory, de=de)
         nudge = _simple_nudge(grade, session_type, phase, de=de)
