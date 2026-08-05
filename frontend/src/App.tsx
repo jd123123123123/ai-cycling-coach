@@ -9,6 +9,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import AppSplash from './components/AppSplash'
 import PageTransition from './components/PageTransition'
 import { lazyWithRetry } from './lib/lazyWithRetry'
+import { resolveLandingPath } from './editorial/state/designSystem'
 
 // Auth entry points stay eager so first paint is instant.
 import LoginPage from './pages/LoginPage'
@@ -51,6 +52,10 @@ const BikeProgressView = lazyWithRetry(() => import('./pages/BikeProgressView'))
 const RecoveryTrendsView = lazyWithRetry(() => import('./pages/RecoveryTrendsView'))
 const WorkoutBuilderView = lazyWithRetry(() => import('./pages/WorkoutBuilderView'))
 const RouteRehearsalView = lazyWithRetry(() => import('./pages/RouteRehearsalView'))
+
+// EDITORIAL II — a second design system, mounted alongside the first.
+const EditorialTodayPage = lazyWithRetry(() => import('./editorial/pages/TodayPage'))
+const EditorialSessionDetailPage = lazyWithRetry(() => import('./editorial/pages/SessionDetailPage'))
 
 function App() {
   return (
@@ -281,8 +286,12 @@ function AppRoutes() {
           {/* Route rehearsal: what a specific route will do to you, as a range. */}
           <Route path="/rehearse/:id" element={<ProtectedRoute checkOnboarding><RouteRehearsalView /></ProtectedRoute>} />
 
+          {/* EDITORIAL II — a second design system, mounted alongside the first. */}
+          <Route path="/e/today" element={<ProtectedRoute checkOnboarding><EditorialTodayPage /></ProtectedRoute>} />
+          <Route path="/e/session/:id" element={<ProtectedRoute checkOnboarding><EditorialSessionDetailPage /></ProtectedRoute>} />
+
           {/* Default redirect */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<RootRedirect />} />
 
           {/* Catch-all: redirect unknown paths to dashboard (ProtectedRoute handles auth check) */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -296,6 +305,12 @@ function AppRoutes() {
 function RideRideRedirect() {
   const { id } = useParams()
   return <Navigate to={`/activities/${id}/recap`} replace />
+}
+
+/** Lands the athlete in whichever design system they last chose. */
+function RootRedirect() {
+  const location = useLocation()
+  return <Navigate to={resolveLandingPath(location.search)} replace />
 }
 
 export default App
