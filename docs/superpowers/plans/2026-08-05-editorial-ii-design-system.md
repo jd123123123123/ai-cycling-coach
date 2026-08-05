@@ -20,7 +20,7 @@
 - **Test conventions — this repo has no `@testing-library/jest-dom` and no vitest `globals`.** Do not add either; both would change files outside `editorial/`. That means:
   - jest-dom matchers are unavailable. Use `expect(el.getAttribute('href')).toBe('/e/train')`, not `toHaveAttribute`. Use `expect(el).not.toBeNull()` / `toBeTruthy()`, not `toBeInTheDocument`.
   - There is no auto-cleanup between tests. Every component test file must `import { cleanup } from '@testing-library/react'` and `import { afterEach } from 'vitest'`, then call `afterEach(cleanup)` at the top level — matching `src/hooks/__tests__/useRehearseRoute.test.tsx:11`. Without it, a second `render()` in the same file makes `screen.getByText` throw on duplicate matches.
-  - Import `describe`, `it`, `expect`, `vi`, `afterEach` explicitly from `vitest` in every test file.
+  - Import from `vitest` explicitly in every test file — and import only what you use: `frontend/tsconfig.app.json` sets `noUnusedLocals: true`, so an unused import fails `tsc -b` and therefore the build.
 - **Tokens are scoped.** All EDITORIAL II custom properties are declared under `.editorial-root`, never `:root`.
 - **No Playwright, no browser sessions.** Gates are `npx tsc -b`, `npm run build`, `npm run test`, `npm run lint`, `npm run lint:i18n` — all run from `frontend/`. Visual check is **one** rendered frame per screen (via the existing dev server) compared against `mcp__pencil__get_screenshot` of the same node.
 - **`npx tsc --noEmit` at the repo root is a no-op.** Always use `cd frontend && npx tsc -b`.
@@ -67,7 +67,7 @@ Components are presentational and data-free by rule. If a component imports from
 
 ```ts
 // frontend/src/editorial/__tests__/value.test.ts
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { fromNullable, isPresent, mapValue, missing, present } from '../data/value'
 
 describe('Value<T>', () => {
@@ -173,7 +173,7 @@ Run `mcp__pencil__get_app_state({ include_schema: true, include_canvas_design: t
 // frontend/src/editorial/__tests__/tokens.test.ts
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 const css = readFileSync(path.join(__dirname, '..', 'tokens.css'), 'utf8')
 
@@ -1060,7 +1060,7 @@ The view-model's assembly logic is pure. Extract it as `buildTodayModel(inputs)`
 
 ```ts
 // frontend/src/editorial/__tests__/useTodayModel.test.ts
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { buildTodayModel, type TodayModelInputs } from '../data/useTodayModel'
 import { isPresent } from '../data/value'
 
@@ -1841,7 +1841,7 @@ git commit -m "feat(editorial): the Evening day state, dashes and all"
 // frontend/src/editorial/__tests__/isolation.test.ts
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 const SRC = path.resolve(__dirname, '..', '..')
 
