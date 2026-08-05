@@ -30,22 +30,9 @@ describe('MetricTrack', () => {
     expect(screen.queryByText(/▲|▼/)).toBeNull()
   })
 
-  it('renders three distinct font sizes across md/lg/xl', () => {
-    const sizes: ('md' | 'lg' | 'xl')[] = ['md', 'lg', 'xl']
-    const rendered = sizes.map((size) => {
-      const { unmount, getByText } = render(
-        <MetricTrack label="L" state="" value={present(1)} unit="U" delta={null} band={null} hue="var(--m-hrv)" size={size} />,
-      )
-      const fontSize = getByText('1').style.fontSize
-      unmount()
-      return fontSize
-    })
-    expect(new Set(rendered).size).toBe(3)
-  })
-
-  it('defaults to lg (146px) when size is omitted', () => {
-    render(<MetricTrack label="L" state="" value={present(1)} unit="U" delta={null} band={null} hue="var(--m-hrv)" />)
-    expect(screen.getByText('1').style.fontSize).toBe('146px')
+  it('renders a short numeral at the full 146px size — the common case', () => {
+    render(<MetricTrack label="HRV" state="" value={present(68)} unit="ms" delta={null} band={null} hue="var(--m-hrv)" />)
+    expect(screen.getByText('68').style.fontSize).toBe('146px')
   })
 })
 

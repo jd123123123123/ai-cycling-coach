@@ -1,5 +1,6 @@
 import { isPresent, type Value } from '../data/value'
 import type { RangeBand } from '../data/useTodayModel'
+import { numeralFit } from './numeralFit'
 
 /**
  * The hero's headline metric. Primary geometry transcribed from the Trained
@@ -12,18 +13,18 @@ import type { RangeBand } from '../data/useTodayModel'
  * padding-bottom 20) carries a hue-coloured primary unit ("TSS") — Trained's
  * literal colour for that text.
  *
- * `size` (coordinator review, post-initial-transcription): sampled across
- * all five flagship Covers, the numeral comes in three sizes, tracking
- * scaling with it:
- *   lg (default) 146/800, letterSpacing -9  — Rest, Training, Trained
- *   xl           176/800, letterSpacing -11 — Resting
- *   md           118/800, letterSpacing -6  — Evening (numeral is a time,
- *                                              "22:30", not a metric)
- * Trained (this task's own frame) passes nothing and gets `lg`. The
- * statement line above the numeral (42/800, letterSpacing -2) and secondary
- * numerals like Trained's "288" / Evening's "2,847" (44/800, letterSpacing
- * -2) are constant across all five frames and are NOT part of this prop —
- * they don't go through MetricTrack.
+ * Sizing (owner's ruling, 2026-08-05, plan commit f2f35b3 — reversing an
+ * earlier `size` prop this task briefly carried; see task-8-report.md):
+ * ONE numeral size, 146/-9, on every screen, not a per-screen variant.
+ * 146 is a ceiling: Evening's numeral is a clock time ("22:30", five
+ * glyphs) that does not fit the 342px content column at 146px, so
+ * `numeralFit()` (numeralFit.ts) shrinks fontSize/letterSpacing together,
+ * only when the rendered text would not fit — Trained's "98" and every
+ * other short numeral stay at the full 146/-9. The statement line above
+ * the numeral (42/800, letterSpacing -2) and secondary numerals like
+ * Trained's "288" (44/800, letterSpacing -2) are constant across all five
+ * frames and are NOT part of this component at all — they don't go
+ * through MetricTrack.
  *
  * state/delta/band never co-occur with the big numeral in ANY of the five
  * flagship Cover instances checked (Trained's own TSS metric and Resting's
@@ -50,12 +51,6 @@ import type { RangeBand } from '../data/useTodayModel'
  * does not specify it, so it is not gospel, and a later reader with a
  * second real example should feel free to replace it.
  */
-const SIZE: Record<'md' | 'lg' | 'xl', { fontSize: number; letterSpacing: number }> = {
-  md: { fontSize: 118, letterSpacing: -6 },
-  lg: { fontSize: 146, letterSpacing: -9 },
-  xl: { fontSize: 176, letterSpacing: -11 },
-}
-
 export default function MetricTrack({
   label,
   state,
@@ -64,7 +59,6 @@ export default function MetricTrack({
   delta,
   band,
   hue,
-  size = 'lg',
 }: {
   label: string
   state: string
@@ -73,10 +67,10 @@ export default function MetricTrack({
   delta: number | null
   band: RangeBand | null
   hue: string
-  size?: 'md' | 'lg' | 'xl'
 }) {
   const present = isPresent(value)
-  const { fontSize, letterSpacing } = SIZE[size]
+  const numeralText = present ? String(value.value) : '—'
+  const { fontSize, letterSpacing } = numeralFit(numeralText)
   return (
     <div data-metric-track style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -117,7 +111,7 @@ export default function MetricTrack({
             filter: present ? 'drop-shadow(0 0 44px var(--a22))' : undefined,
           }}
         >
-          {present ? value.value : '—'}
+          {numeralText}
         </span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 20 }}>
           <div style={{ display: 'flex', gap: 7, alignItems: 'flex-end' }}>
