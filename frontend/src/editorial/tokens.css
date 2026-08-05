@@ -1,0 +1,52 @@
+/* frontend/src/editorial/tokens.css
+ * EDITORIAL II. Scoped under .editorial-root so nothing leaks into the
+ * existing app's :root palette. Values transcribed from the pen document's
+ * variables — do not "improve" them. */
+.editorial-root {
+  --e-bg: #08090C;
+  --e-ink: #FFFFFF;
+  --e-mid: #8A9099;
+  --e-lo: #4A5058;
+  --e-quiet: #767D87;
+  --e-acid: #C8FF00;
+  --e-rule: #FFFFFF1F;
+  --e-glass: #FFFFFF0F;
+  --e-cool: #6B8CFF;
+  --e-warn: #FF9F1C;
+  --e-bad: #FF4D4D;
+
+  /* Day-state accents — one per Today state, used as the state's single hue. */
+  --st-rest: #C8FF00;
+  --st-training: #2BE68F;
+  --st-trained: #FF5E00;
+  --st-resting: #00E5FF;
+  --st-evening: #7B5CFF;
+
+  /* Metric hues. Used only on their own metric, never decoratively. */
+  --m-hrv: #00E5FF;
+  --m-sleep: #ED29FF;
+  --m-cardiac: #FF47B2;
+  --m-load: #FF5E00;
+  --m-form: #A8D400;
+  --m-fatigue: #7099EB;
+
+  /* Depth ramp. Corrected against the pen's variables — d-2/d-3/d-4 differ
+   * from an earlier draft of this spec. */
+  --d-1: #FFFFFF14;
+  --d-2: #FFFFFF2B;
+  --d-3: #FFFFFF4D;
+  --d-4: #FFFFFF8C;
+
+  /* Status ramp. */
+  --s-good: #2BE68F;
+  --s-mid: #FFB020;
+  --s-low: #FF4356;
+
+  /* Type. Both families are already loaded by index.html. */
+  --e-display: "Sora", "Inter", ui-sans-serif, sans-serif;
+  --e-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* The active state accent. TodayPage rebinds this per day-state; components
+   * reference var(--st-active) so they need no per-state branching. */
+  --st-active: var(--st-rest);
+}
