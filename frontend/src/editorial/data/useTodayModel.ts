@@ -58,6 +58,14 @@ export interface TodayModel {
   sleep: Value<{ totalS: number; deepS: number | null; remS: number | null; lightS: number | null; awakeS: number | null }>
   pmc: Value<{ fitness: number; fatigue: number; form: number; series: PmcPoint[] }>
   recovery: Value<{ hoursRemaining: number; clearAtLabel: string }>
+  /** Resting's Hero Body "Climb" visualisation (`h54Rs`/`z46aUu`, "SINCE YOU
+   *  WOKE" — a rising wake→now arc, task 11's genuinely-new material).
+   *  Sourced from `useTodaySnapshot()`'s `body_battery: WakeNowPair` — a
+   *  real same-day wake vs. current reading, unlike `readiness` (a single
+   *  number, no wake/now shape anywhere in the API). Missing whenever
+   *  either half of the pair is null — a rising arc drawn from only one end
+   *  is not the shape the pen specifies. */
+  bodyBattery: Value<{ wake: number; now: number }>
   session: Value<SessionSummary>
   ride: Value<RideSummary>
   /** Time-in-HR-zone with bpm bounds, `01 The Session`'s "HR Zones" block.
@@ -263,6 +271,12 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     t('recoveryMissing'),
   )
 
+  const bbPair = snapshot?.body_battery ?? null
+  const bodyBattery = fromNullable(
+    bbPair && bbPair.wake != null && bbPair.now != null ? { wake: bbPair.wake, now: bbPair.now } : null,
+    wearableReason,
+  )
+
   const workout = session?.workout ?? null
   const sessionValue = fromNullable(
     workout == null ? null : (() => {
@@ -426,6 +440,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     sleep,
     pmc: pmcValue,
     recovery,
+    bodyBattery,
     session: sessionValue,
     ride,
     zones,

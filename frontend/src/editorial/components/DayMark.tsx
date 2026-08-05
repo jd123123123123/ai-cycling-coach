@@ -43,10 +43,31 @@ import type { DayState } from '../state/dayState'
  * is the transcribed shape; animating it is a separate concern this task
  * does not take on.
  *
- * Resting/Evening's silhouettes remain Tasks 11/14's — until they land,
- * those two states still fall back to this same disc.
+ * Resting — "Glyph Trough" (`RzWNl`/`nFyR6`, `h54Rs`): an `ellipse` ring
+ * segment, innerRadius 0.58, startAngle 30°, sweepAngle -240° — a 240°
+ * span ending at 30° - 240° = -210°, drawn here as `archRingPath(...,
+ * -210, 30)` (start/end swapped to keep the helper's own "end > start"
+ * assumption, same 240° arc either way), 34x34, fill the state accent, 18px
+ * outer glow at `#00E5FF40` (var(--st-a28), same alpha reasoning as Rest's
+ * and Training's own glyphs). The pen's own `context` field on this node
+ * describes an idle "rocking to rest" loop (rotate -7°→+7°→-7°, 5s
+ * ease-in-out) — not implemented here, matching Trained's disc and
+ * Training's arch (no motion; a static glyph is the transcribed shape).
+ *
+ * Evening's silhouette remains Task 14's — until it lands, that state still
+ * falls back to this same disc.
  */
 export default function DayMark({ state }: { state: DayState }) {
+  if (state === 'resting') {
+    return (
+      <div data-day-mark data-day-mark-state={state} style={{ width: 34, height: 34, filter: 'drop-shadow(0 0 18px var(--st-a28))' }}>
+        <svg width={34} height={34} viewBox="0 0 34 34">
+          <path d={archRingPath(17, 17, 17 * 0.58, 17, -210, 30)} fill="var(--st-active)" />
+        </svg>
+      </div>
+    )
+  }
+
   if (state === 'rest') {
     return (
       <div data-day-mark data-day-mark-state={state} style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

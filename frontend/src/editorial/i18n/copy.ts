@@ -263,6 +263,11 @@ export const COPY = {
     en: "You don't absorb a session by doing another one. The gain is made while you're still.",
   },
   quoteTrainedAttribution: { de: 'WAS JETZT PASSIERT', en: 'WHAT HAPPENS NEXT' },
+  quoteResting: {
+    de: 'Erholung ist nicht die Abwesenheit von Training. Sie ist die Hälfte davon, die du nicht spürst.',
+    en: "Recovery isn't the absence of training. It's the half of it you can't feel happening.",
+  },
+  quoteRestingAttribution: { de: 'WARUM HEUTE LEER IST', en: 'WHY TODAY IS EMPTY' },
 
   // ---- Tomorrow Plate / Route Plate --------------------------------------------
   tomorrowKickerLeft: { de: 'MORGEN · {label}', en: 'TOMORROW · {label}' },
@@ -281,6 +286,18 @@ export const COPY = {
   routePlateGap: { de: 'Weitere Streckendetails liegen noch nicht vor.', en: "Further route details aren't available yet." },
   routeCaptionRight: { de: '{n} × {m} @ {w} W', en: '{n} × {m} @ {w} W' },
   noPeakIdentified: { de: 'Noch kein Spitzenwert für diese Fahrt erkannt.', en: 'No headline peak identified for this ride yet.' },
+
+  // ---- Resting (h54Rs) ---------------------------------------------------------
+  heroUnitRecovery: { de: 'ERHOLUNG', en: 'RECOVERY' },
+  heroRecoverySinceWake: { de: '{sign} {n} seit dem Aufwachen', en: '{sign} {n} since you woke' },
+  heroRecoveryRangeMissing: { de: 'Noch kein 90-Tage-Bestwert erfasst.', en: 'No 90-day best recorded yet.' },
+  climbSinceWoke: { de: 'SEIT DEM AUFWACHEN', en: 'SINCE YOU WOKE' },
+  climbWakeLabel: { de: '{n} BEIM AUFWACHEN', en: '{n} AT WAKE' },
+  climbNow: { de: 'JETZT', en: 'NOW' },
+  sectionRightNow: { de: 'JETZT GERADE', en: 'RIGHT NOW' },
+  rightNowChipLive: { de: 'LIVE', en: 'LIVE' },
+  sleepDeltaMissing: { de: 'Kein Vergleichswert zum Schlaf verfügbar.', en: 'No sleep comparison available yet.' },
+  ringDeltaMissing: { de: 'Kein Vergleichswert verfügbar.', en: 'No comparison value available yet.' },
 
   // ---- data/useTodayModel.ts: reason strings ----------------------------------
   wearableLastSyncFallback: { de: 'deiner letzten Synchronisierung', en: 'your last sync' },

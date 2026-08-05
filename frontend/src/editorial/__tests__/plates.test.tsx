@@ -169,6 +169,7 @@ describe('Plate placement in TodayView', () => {
     sleep: missing('No wearable reading.'),
     pmc: present({ fitness: 68, fatigue: 58, form: -2, series: [] }),
     recovery: present({ hoursRemaining: 26, clearAtLabel: 'Fri 09:00' }),
+    bodyBattery: missing('No wearable reading since Tue.'),
     session: present({
       title: 'Threshold', targetWatts: 285, workKj: null, intensityFactor: 0.91, tss: 98,
       blocks: [{ label: 'Block 1', minutes: 12, watts: 285 }],

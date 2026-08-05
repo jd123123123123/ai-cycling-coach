@@ -6,6 +6,7 @@ import DayRail from '../components/DayRail'
 import DeltaRow from '../components/DeltaRow'
 import FatigueCurve from '../components/FatigueCurve'
 import InsightStrip from '../components/InsightStrip'
+import LiveRing from '../components/LiveRing'
 import MetricTrack from '../components/MetricTrack'
 import PeakRows, { type PeakTotal } from '../components/PeakRows'
 import PMCChart from '../components/PMCChart'
@@ -118,6 +119,11 @@ function TodayViewBody({ model }: { model: TodayModel }) {
   const { t, locale } = useCopy()
   const { state } = model
   const isRestOrTraining = state === 'rest' || state === 'training'
+  // Resting (`h54Rs`) shares Rest's Tomorrow Band ("MORGEN"/"TOMORROW") but
+  // has none of Rest/Training's "01 Recovery"/"02 Absorption"/"02 The
+  // Session" sections — its own numbered sections are entirely different
+  // ("01 Right Now", "02 Trajectory"), gated separately below.
+  const showTomorrowBand = isRestOrTraining || state === 'resting'
 
   const sessionLoad: Value<number> = isPresent(model.session)
     ? model.session.value.tss != null
@@ -134,12 +140,41 @@ function TodayViewBody({ model }: { model: TodayModel }) {
   // verdict headline (M4EaH/NSNJa, "Absorb, don't add." in the pen — a
   // coaching statement, not a title). Training and Trained both name the
   // session (A8Mcb / Foot's own "Session" text).
-  const heroHeadline: Value<string> = state === 'rest' ? mapValue(model.verdict, (v) => v.headline) : sessionName
+  const heroHeadline: Value<string> = state === 'rest' || state === 'resting'
+    ? mapValue(model.verdict, (v) => v.headline)
+    : sessionName
 
-  const heroNumeralValue: Value<number> = state === 'trained' ? sessionLoad : mapValue(model.readiness, (r) => r.score)
-  const heroNumeralUnit = state === 'trained' ? t('heroUnitTss') : t('heroUnitReadiness')
+  // Resting's own hero numeral (`h54Rs`/`Q3SvDo`, "91 RECOVERY OUT OF 100")
+  // is BODY BATTERY, not training_readiness — "RECOVERY" is a distinct label
+  // from Rest/Training's own "READINESS", and only body_battery has a real
+  // same-day wake→now shape (matching the Hero Body's "Climb" arc directly
+  // below it, `model.bodyBattery`) — training_readiness is a single number
+  // with no wake reading anywhere in the API. See task-11-report.md.
+  const heroNumeralValue: Value<number> = state === 'trained'
+    ? sessionLoad
+    : state === 'resting'
+      ? mapValue(model.bodyBattery, (bb) => bb.now)
+      : mapValue(model.readiness, (r) => r.score)
+  const heroNumeralUnit = state === 'trained' ? t('heroUnitTss') : state === 'resting' ? t('heroUnitRecovery') : t('heroUnitReadiness')
   const heroNumeralUnitSub = state === 'trained' ? t('heroUnitSessionLoad') : t('heroUnitOutOf100')
   const heroNumeralHue = state === 'trained' ? 'var(--m-load)' : 'var(--st-active)'
+
+  // Resting's own RC lines (`h54Rs`/`l1W5R`+`hwZsA`, "▲ 3 since this
+  // morning" / "top of your 90-day range") — the FIRST line is real,
+  // computed from `model.bodyBattery`'s own wake/now pair (unlike Rest's
+  // "vs yesterday", which is a different comparison window entirely, so it
+  // is not reused here even though a value exists in `readiness.
+  // deltaVsYesterday` — that would silently relabel a "vs yesterday" number
+  // as "since this morning," which is exactly the kind of mislabeling this
+  // build has already been corrected for once). The SECOND line ("top of
+  // your 90-day range") has no source anywhere — honestly missing.
+  const recoverySinceWakeLine: Value<string> = isPresent(model.bodyBattery)
+    ? present(t('heroRecoverySinceWake', {
+      sign: model.bodyBattery.value.now - model.bodyBattery.value.wake >= 0 ? '▲' : '▼',
+      n: Math.abs(model.bodyBattery.value.now - model.bodyBattery.value.wake),
+    }))
+    : missing(model.bodyBattery.missing)
+  const recoveryRangeLine: Value<string> = missing(t('heroRecoveryRangeMissing'))
 
   // "▲ N vs yesterday" (Rest's GoFzO / Training's B1DqG) — real, from
   // readiness.deltaVsYesterday. The season-best line (Rest's EqI8Z "3 off
@@ -152,6 +187,8 @@ function TodayViewBody({ model }: { model: TodayModel }) {
     }))
     : missing(isPresent(model.readiness) ? t('heroReadinessDeltaMissing') : model.readiness.missing)
   const readinessContextLine: Value<string> = missing(t('heroReadinessContextMissing'))
+  const rcPrimaryLine: Value<string> = state === 'resting' ? recoverySinceWakeLine : readinessDeltaLine
+  const rcSecondaryLine: Value<string> = state === 'resting' ? recoveryRangeLine : readinessContextLine
 
   const todayIndex = (new Date().getDay() + 6) % 7
 
@@ -285,6 +322,27 @@ function TodayViewBody({ model }: { model: TodayModel }) {
   // only explanation sits several lines below (coordinator review, finding
   // 2 — a `Statement` should never surface content that is ONLY a dash).
 
+  // ---- 01 Right Now (Resting) ------------------------------------------------
+  // Three `LiveRing`s (`h54Rs`/`W3PK3`+`HzsA8`+`L6fYBh`) — HRV / RESTING HR /
+  // SLEEP, the SAME three signals Rest/Training's own "01 Recovery" shows as
+  // `RangeRow`s, rendered here as rings instead (task 11's own visual
+  // vocabulary for this state). `wake` is each ring's own diff reference —
+  // HRV/RESTING HR reconstruct it from `TodayModel`'s already-real `delta`
+  // (so the ring's Delta line, "+10 ms"/"−4 bpm", is real data, not
+  // invented); SLEEP has no delta field anywhere in `TodayModel`, so its
+  // `wake` is honestly missing and its Delta line is silently absent — see
+  // `LiveRing.tsx`'s own doc comment for why `wake` here is NOT the same
+  // same-day body_battery/stress wake reading the brief's interface names
+  // (this screen's three rings are HRV/RHR/Sleep, none of which carry one).
+  // Same "no composite verdict" gap as "01 Recovery" above — no Statement.
+  const hrvWake: Value<number> = isPresent(model.hrv) && model.hrv.value.delta != null
+    ? present(model.hrv.value.value - model.hrv.value.delta)
+    : missing(isPresent(model.hrv) ? t('ringDeltaMissing') : model.hrv.missing)
+  const restingHrWake: Value<number> = isPresent(model.restingHr) && model.restingHr.value.delta != null
+    ? present(model.restingHr.value.value - model.restingHr.value.delta)
+    : missing(isPresent(model.restingHr) ? t('ringDeltaMissing') : model.restingHr.missing)
+  const sleepWake: Value<number> = missing(t('sleepDeltaMissing'))
+
   // ---- 02 The Session (Training) --------------------------------------------
   const { workBlocks, uniformWork } = workIntervalsOf(sessionBlocks)
   const trainingSessionClaim: Value<string> = isPresent(model.session)
@@ -329,6 +387,7 @@ function TodayViewBody({ model }: { model: TodayModel }) {
 
   // ---- 03 Trajectory (all states) --------------------------------------------
   const fitnessDelta7d = isPresent(model.pmc) ? pmcDelta(model.pmc.value.series, 7, (p) => p.ctl) : null
+  const trajectoryIndex = state === 'resting' ? '02' : '03'
   const trajectoryTiles: { label: string; value: Value<number | string>; unit: string }[] = [
     { label: t('insightFitness'), value: mapValue(model.pmc, (p) => Math.round(p.fitness)), unit: fitnessDelta7d != null ? `${signed(fitnessDelta7d)} / 7D` : '' },
     { label: t('pmcFatigue'), value: mapValue(model.pmc, (p) => Math.round(p.fatigue)), unit: fatigueDelta1d != null ? `${signed(fatigueDelta1d)} / 1D` : '' },
@@ -359,16 +418,19 @@ function TodayViewBody({ model }: { model: TodayModel }) {
 
   // ---- Quote Plate (all states) — pull-quote copy is editorial writing,
   // legitimately static per state (not athlete data), transcribed verbatim
-  // from CqmME (Rest) / X8wnJ (Training) / WVwiD (Trained) — German
-  // authored per the pen's own register, English kept as the source (see
-  // `i18n/copy.ts`'s `quoteRest`/`quoteTraining`/`quoteTrained`).
+  // from CqmME (Rest) / X8wnJ (Training) / WVwiD (Trained) / o8vinG
+  // (Resting) — German authored per the pen's own register, English kept as
+  // the source (see `i18n/copy.ts`'s `quoteRest`/`quoteTraining`/
+  // `quoteTrained`/`quoteResting`).
   const quoteCopy = state === 'rest'
     ? { quote: t('quoteRest'), attribution: t('quoteRestAttribution') }
     : state === 'training'
       ? { quote: t('quoteTraining'), attribution: t('quoteTrainingAttribution') }
       : state === 'trained'
         ? { quote: t('quoteTrained'), attribution: t('quoteTrainedAttribution') }
-        : null
+        : state === 'resting'
+          ? { quote: t('quoteResting'), attribution: t('quoteRestingAttribution') }
+          : null
 
   // ---- Tomorrow Plate (Rest, Trained) / Route Plate (Training) --------------
   // Every field routes through TodayModel where a real source exists; where
@@ -497,10 +559,10 @@ function TodayViewBody({ model }: { model: TodayModel }) {
             ) : (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'flex-end' }}>
                 <span style={{ fontFamily: 'var(--e-body)', fontSize: 13, fontWeight: 800, color: 'var(--e-ink)' }}>
-                  {isPresent(readinessDeltaLine) ? readinessDeltaLine.value : '—'}
+                  {isPresent(rcPrimaryLine) ? rcPrimaryLine.value : '—'}
                 </span>
                 <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)' }}>
-                  {isPresent(readinessContextLine) ? readinessContextLine.value : readinessContextLine.missing}
+                  {isPresent(rcSecondaryLine) ? rcSecondaryLine.value : rcSecondaryLine.missing}
                 </span>
               </div>
             )}
@@ -540,6 +602,44 @@ function TodayViewBody({ model }: { model: TodayModel }) {
               <Bars blocks={sessionBlocks} emphasizeMax />
             </div>
           )}
+          {state === 'resting' && (
+            // The Hero Body's own "Climb" visualisation (`h54Rs`/`z46aUu`,
+            // "SINCE YOU WOKE") — a rising wake→now arc for body_battery,
+            // this task's genuinely-new hero material. The pen's own ceiling
+            // row ("90-DAY BEST · 94") has no TodayModel source anywhere —
+            // not a transient gap but a permanently unresolvable one (no
+            // 90-day body-battery history field exists at all), so per the
+            // "never a permanently-unresolvable slot dressed as a transient
+            // gap" rule it renders nothing at all, not a dash. Kept as a
+            // static (non-animated) hero flourish — it is this screen's own
+            // bespoke embellishment, not one of the named chart components
+            // the motion rules enumerate (Bars/PMCChart/FatigueCurve/
+            // ZoneRows/WeekRail/LiveRing).
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 26 }}>
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 9.5, fontWeight: 800, letterSpacing: 1.1, color: 'var(--e-lo)' }}>
+                {t('climbSinceWoke')}
+              </span>
+              {isPresent(model.bodyBattery) ? (
+                <div style={{ width: '100%', height: 60, position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: 0, right: 0, top: 30, height: 1, background: 'var(--d-2)' }} />
+                  <div style={{ position: 'absolute', left: 4, top: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--d-3)' }} />
+                    <span style={{ fontFamily: 'var(--e-body)', fontSize: 9.5, fontWeight: 800, letterSpacing: 1.1, color: 'var(--e-lo)', whiteSpace: 'nowrap' }}>
+                      {t('climbWakeLabel', { n: model.bodyBattery.value.wake })}
+                    </span>
+                  </div>
+                  <div style={{ position: 'absolute', right: 4, top: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--st-active)', boxShadow: '0 0 16px var(--st-a40)' }} />
+                    <span style={{ fontFamily: 'var(--e-body)', fontSize: 9.5, fontWeight: 800, letterSpacing: 1.1, color: 'var(--st-active)' }}>
+                      {t('climbNow')}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p style={quietReason}>{model.bodyBattery.missing}</p>
+              )}
+            </div>
+          )}
 
           {state === 'trained' ? (
             <Verdict
@@ -570,7 +670,48 @@ function TodayViewBody({ model }: { model: TodayModel }) {
           )}
         </div>
 
-        <InsightStrip items={insightItems} />
+        {/* Resting's own frame (`h54Rs`) has NO Insight Strip between the
+            Hero Body and its first numbered section — confirmed by a fresh
+            read of the full child list, unlike every other Today state. */}
+        {state !== 'resting' && <InsightStrip items={insightItems} />}
+
+        {state === 'resting' && (
+          <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+            <SecHead
+              index="01"
+              title={t('sectionRightNow')}
+              kicker
+              chip={t('rightNowChipLive')}
+            />
+            {/* No composite "every system is back" verdict anywhere on
+                TodayModel — same permanent gap as "01 Recovery" above, so no
+                Statement (matching the same rule, not a floating dash). */}
+            <div style={{ width: '100%', display: 'flex', gap: 18, paddingTop: 26 }}>
+              <LiveRing
+                label={t('labelHrv')}
+                wake={hrvWake}
+                now={mapValue(model.hrv, (h) => h.value)}
+                hue="var(--st-active)"
+                unit={t('unitMs')}
+              />
+              <LiveRing
+                label={t('labelRestingHr')}
+                wake={restingHrWake}
+                now={mapValue(model.restingHr, (h) => h.value)}
+                hue="var(--st-active)"
+                unit={t('unitBpm')}
+              />
+              <LiveRing
+                label={t('labelSleep')}
+                wake={sleepWake}
+                now={mapValue(model.sleep, (s) => s.totalS)}
+                hue="var(--st-active)"
+                unit={t('unitH')}
+                format={formatHM}
+              />
+            </div>
+          </section>
+        )}
 
         {state === 'trained' && (
           <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
@@ -803,13 +944,21 @@ function TodayViewBody({ model }: { model: TodayModel }) {
           </section>
         )}
 
-        <section data-section="03" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+        {/* "03 Trajectory" is state-agnostic across Rest/Training/Trained
+            (see the top-of-file doc comment) — Resting shares the exact
+            same content but numbers it "02" (`h54Rs`'s own numbered
+            sections are only "01 Right Now" / "02 Trajectory", confirmed by
+            a fresh read; no "01 Recovery"/"02 Absorption" precede it), and
+            its own Sub node (`vs2tv/tGIwT`) is `enabled: false` in the tree
+            — unlike Rest/Training/Trained's, so it's the one field this
+            section doesn't share across every state. */}
+        <section data-section={trajectoryIndex} style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
           <SecHead
-            index="03"
+            index={trajectoryIndex}
             title={t('sectionTrajectory')}
             kicker
             chip={fitnessDelta7d == null ? undefined : fitnessDelta7d > 0 ? t('chipClimbing') : fitnessDelta7d < 0 ? t('chipDeclining') : t('chipSteady')}
-            sub={t('trajectorySub')}
+            sub={state === 'resting' ? undefined : t('trajectorySub')}
           />
           <Statement claim={trajectoryClaim} />
 
@@ -824,7 +973,7 @@ function TodayViewBody({ model }: { model: TodayModel }) {
           </div>
         </section>
 
-        {(state === 'rest' || state === 'trained') && (
+        {(state === 'rest' || state === 'trained' || state === 'resting') && (
           <TomorrowPlate
             state={state}
             kickerLeft={tomorrowKickerLeft}
@@ -847,11 +996,11 @@ function TodayViewBody({ model }: { model: TodayModel }) {
           />
         )}
 
-        {isRestOrTraining && (
+        {showTomorrowBand && (
           <div style={{ width: '100%', padding: '30px 24px 0 24px' }}>
             <TomorrowBand
-              session={state === 'rest' ? tomorrowSession : todaySession}
-              kicker={state === 'rest' ? t('tomorrowBandTomorrow') : t('tomorrowBandToday')}
+              session={state === 'rest' || state === 'resting' ? tomorrowSession : todaySession}
+              kicker={state === 'rest' || state === 'resting' ? t('tomorrowBandTomorrow') : t('tomorrowBandToday')}
             />
           </div>
         )}
@@ -884,11 +1033,12 @@ const tickStyle: CSSProperties = {
 }
 
 /** Day Mark's absolute `top` offset — pen-verified per state (`K8WxOh` Rest
- *  186, `LRIzl` Training 158, `F6851` Trained 150), previously hardcoded to
- *  150 for every state. Resting/Evening have no pen read yet; they fall
- *  back to Trained's value below rather than guessing. */
+ *  186, `LRIzl` Training 158, `F6851` Trained 150, `RzWNl` Resting 170,
+ *  task 11's own fresh read of `h54Rs`), previously hardcoded to 150 for
+ *  every state. Evening has no pen read yet; it falls back to Trained's
+ *  value below rather than guessing. */
 const DAY_MARK_TOP: Partial<Record<DayState, number>> & { trained: number } = {
-  rest: 186, training: 158, trained: 150,
+  rest: 186, training: 158, trained: 150, resting: 170,
 }
 
 function pmcDelta(series: PmcPoint[], daysBack: number, pick: (p: PmcPoint) => number): number | null {

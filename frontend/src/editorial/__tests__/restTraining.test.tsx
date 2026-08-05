@@ -49,6 +49,7 @@ const baseModel: TodayModel = {
   sleep: present({ totalS: 27720, deepS: 4920, remS: 6480, lightS: 15120, awakeS: 1200 }),
   pmc: present({ fitness: 68, fatigue: 52, form: 16, series: [] }),
   recovery: present({ hoursRemaining: 22, clearAtLabel: 'Thu 17:30' }),
+  bodyBattery: missing('No wearable reading since Tue.'),
   session: missing('Nothing planned for today.'),
   ride: missing('No ride recorded yet today.'),
   zones: missing('No ride recorded yet today.'),

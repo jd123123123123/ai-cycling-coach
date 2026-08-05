@@ -44,6 +44,7 @@ const model: TodayModel = {
   sleep: present({ totalS: 27000, deepS: 4800, remS: 5400, lightS: 15600, awakeS: 1200 }),
   pmc: present({ fitness: 68, fatigue: 58, form: -2, series: buildPmcSeries(42) }),
   recovery: present({ hoursRemaining: 26, clearAtLabel: 'Fr 09:00' }),
+  bodyBattery: missing('Keine Messung seit Dienstag.'),
   session: present({
     title: 'Threshold', targetWatts: 285, workKj: null, intensityFactor: 0.91, tss: 98,
     blocks: [
@@ -91,6 +92,7 @@ const restModel: TodayModel = {
   sleep: present({ totalS: 27720, deepS: 4920, remS: 6480, lightS: 15120, awakeS: 1200 }),
   pmc: present({ fitness: 68, fatigue: 52, form: 16, series: buildPmcSeries(42) }),
   recovery: present({ hoursRemaining: 22, clearAtLabel: 'Do 17:30' }),
+  bodyBattery: missing('Keine Messung seit Dienstag.'),
   session: missing('Nothing planned for today.'),
   ride: missing('No ride recorded yet today.'),
   zones: missing('No ride recorded yet today.'),
@@ -138,6 +140,37 @@ const trainingModel: TodayModel = {
   tomorrow: missing("Tomorrow's plan is not set yet."),
 } as TodayModel
 
+const restingModel: TodayModel = {
+  state: 'resting',
+  dateLabel: present('DO 23 JUL'),
+  streakDays: present(13),
+  readiness: present({ score: 91, deltaVsYesterday: 5 }),
+  bodyBattery: present({ wake: 88, now: 91 }),
+  hrv: present({ value: 74, unit: 'ms', delta: 10, band: { low: 52, high: 80, position: 'above' } }),
+  restingHr: present({ value: 46, unit: 'bpm', delta: -4, band: { low: 44, high: 55, position: 'below' } }),
+  sleep: present({ totalS: 29100, deepS: 5400, remS: 6600, lightS: 15900, awakeS: 1200 }),
+  pmc: present({ fitness: 68, fatigue: 42, form: 22, series: buildPmcSeries(42) }),
+  recovery: present({ hoursRemaining: 0, clearAtLabel: 'Jetzt frisch' }),
+  session: missing('Für heute nichts geplant.'),
+  ride: missing('Heute noch keine Fahrt erfasst.'),
+  zones: missing('Heute noch keine Fahrt erfasst.'),
+  peaks: missing('Noch keine Spitzenleistungs-Aufschlüsselung für diese Fahrt.'),
+  planVsRidden: missing('Diese Fahrt konnte nicht mit dem Plan abgeglichen werden.'),
+  verdict: present({
+    headline: 'Zurück auf Kurs.',
+    body: 'Du bist seit dem Aufwachen um drei Punkte gestiegen. Heute bleibt nur noch, es ausklingen zu lassen.',
+  }),
+  whatThisChanges: missing('Der Coach hat sich zu dieser Fahrt noch nicht geäußert.'),
+  conditions: missing('Kein Standort aus einer kürzlichen Fahrt.'),
+  tomorrow: present({ title: 'VO2 max · 5 × 4 @ 330 W', detail: 'Fünf mal vier, bei 330.', unlockLabel: present('05:00') }),
+  week: [
+    { letter: 'M', tss: present(64) }, { letter: 'D', tss: present(48) }, { letter: 'M', tss: present(12) },
+    { letter: 'D', tss: missing('Keine Fahrt erfasst.') }, { letter: 'F', tss: present(24) },
+    { letter: 'S', tss: present(68) }, { letter: 'S', tss: present(44) },
+  ],
+  isLoading: false,
+} as TodayModel
+
 describe('visual harness', () => {
   it.skipIf(!OUT)('writes the Trained screen to HTML', () => {
     writeHarness('trained', model)
@@ -148,11 +181,14 @@ describe('visual harness', () => {
   it.skipIf(!OUT)('writes the Training screen to HTML', () => {
     writeHarness('training', trainingModel)
   })
+  it.skipIf(!OUT)('writes the Resting screen to HTML', () => {
+    writeHarness('resting', restingModel)
+  })
 })
 
-/** `HARNESS_OUT=/tmp/t10.html` writes trained to that exact path and
- *  rest/training alongside it as `/tmp/t10.rest.html` / `/tmp/t10.training.html`. */
-function writeHarness(name: 'trained' | 'rest' | 'training', m: TodayModel) {
+/** `HARNESS_OUT=/tmp/t10.html` writes trained to that exact path and every
+ *  other state alongside it as `/tmp/t10.<state>.html`. */
+function writeHarness(name: 'trained' | 'rest' | 'training' | 'resting', m: TodayModel) {
   const { container } = render(<MemoryRouter><TodayView model={m} /></MemoryRouter>)
   const tokens = readFileSync(path.join(__dirname, '..', 'tokens.css'), 'utf8')
   const base = OUT!.endsWith('.html') ? OUT!.slice(0, -5) : OUT!
