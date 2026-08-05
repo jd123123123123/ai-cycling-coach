@@ -50,4 +50,45 @@ describe('buildTodayModel', () => {
   it('never invents a session when none is planned', () => {
     expect(isPresent(buildTodayModel(base()).session)).toBe(false)
   })
+
+  it('marks whatThisChanges missing when the brief has neither adaptations nor a post-ride review', () => {
+    const m = buildTodayModel(base({
+      brief: { adaptations: null, post_ride_review: null } as never,
+    }))
+    expect(isPresent(m.whatThisChanges)).toBe(false)
+    expect(m.whatThisChanges).toEqual({ missing: 'The coach has not weighed in on this ride yet.' })
+  })
+
+  it('splits whatThisChanges into the ON YOU and ON THE PLAN claims from real fields', () => {
+    const m = buildTodayModel(base({
+      brief: {
+        adaptations: { summary: 'Thursday VO2 targets rise 10 W', changes: [] },
+        post_ride_review: { physiological_read: 'Threshold moves to 288 W', goal_trajectory: 'trending up', next_session_nudge: 'Tomorrow stays easy.' },
+      } as never,
+    }))
+    expect(isPresent(m.whatThisChanges)).toBe(true)
+    if (isPresent(m.whatThisChanges)) {
+      expect(m.whatThisChanges.value.onYou.claim).toBe('Threshold moves to 288 W')
+      expect(m.whatThisChanges.value.onThePlan.claim).toBe('Thursday VO2 targets rise 10 W')
+    }
+  })
+
+  it('unlockLabel is missing even when tomorrow itself is present — no time-of-day source exists', () => {
+    const m = buildTodayModel(base({
+      tomorrowWorkout: { title: 'Recovery Spin', description: 'Forty-five minutes, easy.' } as never,
+    }))
+    expect(isPresent(m.tomorrow)).toBe(true)
+    if (isPresent(m.tomorrow)) {
+      expect(isPresent(m.tomorrow.value.unlockLabel)).toBe(false)
+      expect(m.tomorrow.value.unlockLabel).toEqual({ missing: "No unlock time on tomorrow's plan." })
+    }
+  })
+
+  it('ride.kj is missing (not estimated from calories) when average_power is null', () => {
+    const m = buildTodayModel(base({
+      activitiesToday: [{ id: 1, sport: 'cycling', average_power: null, duration_seconds: 3600 } as never],
+    }))
+    expect(isPresent(m.ride)).toBe(true)
+    if (isPresent(m.ride)) expect(m.ride.value.kj).toBeNull()
+  })
 })

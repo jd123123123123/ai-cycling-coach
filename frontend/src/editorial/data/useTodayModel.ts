@@ -14,7 +14,7 @@ import { useTodayWeather, type TodayWeather } from '../../hooks/useTodayWeather'
 import type { ActivityRead, DailyMetric, PMCResponse, PlannedWorkout, TodaySnapshotResponse } from '../../api/dashboard'
 import type { MorningHealthCheck, MorningHealthSignal } from '../../api/health'
 import type { CoachBriefResponse } from '../../api/coach'
-import { fromNullable, isPresent, present, type Value } from './value'
+import { fromNullable, missing, present, type Value } from './value'
 import { useDayState } from '../state/useDayState'
 import type { DayState } from '../state/dayState'
 
@@ -36,6 +36,11 @@ export interface RideSummary {
   np: number | null
   durationS: number | null
 }
+/** One labelled claim in the "what this changes" block — a headline plus the
+ *  sentence that grounds it. Both halves are plain strings because the block
+ *  as a whole is the Value: either the coach has spoken (both claims exist)
+ *  or it hasn't (the whole thing is missing). */
+export interface Claim { claim: string; detail: string }
 
 export interface TodayModel {
   state: DayState
@@ -49,9 +54,16 @@ export interface TodayModel {
   recovery: Value<{ hoursRemaining: number; clearAtLabel: string }>
   session: Value<SessionSummary>
   ride: Value<RideSummary>
-  verdict: Value<{ headline: string; body: string; whatThisChanges: string | null }>
+  verdict: Value<{ headline: string; body: string }>
+  /** Two labelled claims — ON YOU / ON THE PLAN — pulled from the brief's
+   *  adaptation transparency and post-ride review, never from outlook_7d
+   *  (that field is a different claim: tomorrow's suggested TSS). */
+  whatThisChanges: Value<{ onYou: Claim; onThePlan: Claim }>
   conditions: Value<{ tempC: number; windKmh: number }>
-  tomorrow: Value<{ title: string; unlockLabel: string }>
+  /** unlockLabel is its own Value: the session for tomorrow may be known
+   *  while its clock time is not — PlannedWorkout carries no time-of-day
+   *  field anywhere, so this is honestly missing until a source exists. */
+  tomorrow: Value<{ title: string; detail: string; unlockLabel: Value<string> }>
   isLoading: boolean
 }
 
@@ -232,6 +244,11 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     rideActivity == null ? null : {
       activityId: rideActivity.id,
       distanceM: rideActivity.distance_meters,
+      // kJ = W · s / 1000 is the DEFINITION of mechanical work, not an
+      // estimate — this is exactly how a head unit derives the number from
+      // average power and duration. Never fall back to calories (a
+      // different, physiologically-derived quantity); missing whenever
+      // average_power is null rather than padding with an approximation.
       kj: rideActivity.average_power != null && rideActivity.duration_seconds != null
         ? Math.round((rideActivity.average_power * rideActivity.duration_seconds) / 1000)
         : null,
@@ -246,9 +263,29 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     brief == null ? null : {
       headline: brief.verdict,
       body: brief.rationale,
-      whatThisChanges: brief.outlook_7d?.find((o) => o.day_offset === 1)?.note ?? null,
     },
     'The coach has not weighed in yet today.',
+  )
+
+  // ON YOU / ON THE PLAN — pulled from adaptations ("what changed & why" —
+  // the plan side) and the post-ride review (the physiological side), never
+  // from outlook_7d (a different claim entirely: tomorrow's suggested TSS).
+  const adaptations = brief?.adaptations ?? null
+  const postRideReview = brief?.post_ride_review ?? null
+  const whatThisChanges = fromNullable(
+    adaptations == null && postRideReview == null ? null : {
+      onYou: {
+        claim: postRideReview?.physiological_read ?? adaptations!.summary,
+        detail: postRideReview?.goal_trajectory ?? adaptations!.changes[0]?.detail ?? adaptations!.summary,
+      },
+      onThePlan: {
+        claim: adaptations?.summary ?? postRideReview!.next_session_nudge,
+        detail: postRideReview?.next_session_nudge
+          ?? adaptations!.changes[0]?.detail
+          ?? adaptations!.summary,
+      },
+    },
+    'The coach has not weighed in on this ride yet.',
   )
 
   const weatherReason = 'No location from a recent ride.'
@@ -265,7 +302,11 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   const tomorrow = fromNullable(
     tomorrowWorkout == null ? null : {
       title: tomorrowWorkout.title,
-      unlockLabel: isPresent(recovery) ? `Unlocks ${recovery.value.clearAtLabel}` : 'Unlocks tomorrow',
+      detail: brief?.tomorrow_plan?.description ?? tomorrowWorkout.description ?? '',
+      // No source anywhere: PlannedWorkout carries only `date`, no
+      // time-of-day field. Honestly missing until a real source exists —
+      // never assert a schedule the app does not have.
+      unlockLabel: missing<string>("No unlock time on tomorrow's plan."),
     },
     "Tomorrow's plan is not set yet.",
   )
@@ -283,6 +324,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     session: sessionValue,
     ride,
     verdict,
+    whatThisChanges,
     conditions,
     tomorrow,
     isLoading,
@@ -317,7 +359,7 @@ export function useTodayModel(): TodayModel {
   }) ?? null
 
   const isLoading = snapshotQuery.isLoading || recentMetricsQuery.isLoading || streakQuery.isLoading
-    || pmcQuery.isLoading || session.brief === undefined || weatherQuery.isLoading
+    || pmcQuery.isLoading || briefQuery.isLoading || weatherQuery.isLoading
     || activitiesQuery.isLoading || healthQuery.isLoading
 
   const inputs: TodayModelInputs = {
