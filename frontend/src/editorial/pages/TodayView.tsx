@@ -2,6 +2,7 @@ import { Flame, Thermometer, Wind } from 'lucide-react'
 import Bars from '../components/Bars'
 import Cover from '../components/Cover'
 import DayMark from '../components/DayMark'
+import BackToSessionDoneSheet from '../components/BackToSessionDoneSheet'
 import DayRail from '../components/DayRail'
 import DeltaRow from '../components/DeltaRow'
 import FatigueCurve from '../components/FatigueCurve'
@@ -16,6 +17,7 @@ import QuotePlate from '../components/QuotePlate'
 import RangeRow from '../components/RangeRow'
 import SecHead from '../components/SecHead'
 import Statement from '../components/Statement'
+import SwitchDayTypeSheet from '../components/SwitchDayTypeSheet'
 import StatTile from '../components/StatTile'
 import StatusBar from '../components/StatusBar'
 import TabBar from '../components/TabBar'
@@ -109,15 +111,49 @@ import { intlLocale } from '../i18n/copy'
  * below carries the entire original component; this wrapper only supplies
  * the state EditorialRoot needs.
  */
-export default function TodayView({ model }: { model: TodayModel }) {
+/**
+ * The day-state override, supplied by TodayPage. Optional on purpose:
+ * TodayView must stay a pure function of `model` so the fixture harness can
+ * render it with no QueryClient, no auth and no backend. When it is absent
+ * the DayRail shows no action pill and no sheet mounts — which is exactly
+ * what a static render should show.
+ */
+export interface DayStateControl {
+  /** The DayRail's accent pill. The pen makes that pill the only way in. */
+  onSwapDayType: () => void
+  openSheet: 'switch' | 'back' | null
+  onPickDayType: (next: 'rest' | 'training') => void
+  onConfirmSessionDone: () => void
+  onCloseSheet: () => void
+}
+
+/** Only these states have a sheet behind the pill (see the plan's Task 13). */
+const SWITCHABLE = new Set(['rest', 'training', 'resting'])
+
+export default function TodayView({ model, control }: { model: TodayModel; control?: DayStateControl }) {
   return (
     <EditorialRoot state={model.state}>
-      <TodayViewBody model={model} />
+      <TodayViewBody model={model} control={control} />
+      {control && (model.state === 'rest' || model.state === 'training') && (
+        <SwitchDayTypeSheet
+          open={control.openSheet === 'switch'}
+          current={model.state}
+          onPick={control.onPickDayType}
+          onClose={control.onCloseSheet}
+        />
+      )}
+      {control && model.state === 'resting' && (
+        <BackToSessionDoneSheet
+          open={control.openSheet === 'back'}
+          onConfirm={control.onConfirmSessionDone}
+          onClose={control.onCloseSheet}
+        />
+      )}
     </EditorialRoot>
   )
 }
 
-function TodayViewBody({ model }: { model: TodayModel }) {
+function TodayViewBody({ model, control }: { model: TodayModel; control?: DayStateControl }) {
   const { t, locale } = useCopy()
   const { state } = model
   const isRestOrTraining = state === 'rest' || state === 'training'
@@ -637,7 +673,11 @@ function TodayViewBody({ model }: { model: TodayModel }) {
               </div>
             </div>
 
-            <DayRail state={state} />
+            <DayRail
+              state={state}
+              showSwitchAction={control != null && SWITCHABLE.has(state)}
+              onSwapDayType={control?.onSwapDayType}
+            />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
