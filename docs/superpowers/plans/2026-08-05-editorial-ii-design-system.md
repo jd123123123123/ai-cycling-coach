@@ -1358,18 +1358,43 @@ git commit -m "feat(editorial): the Today view-model, every value a Value"
 **Interfaces:**
 - Consumes: `Value<T>` (Task 1), `RangeBand`/`TodayModel` (Task 7), `SecHead` (Task 6).
 - Produces:
-  - `MetricTrack({ label, state, value, unit, delta, band, hue, size })` where `value: Value<number>`, `band: RangeBand | null`, `hue: string` (a `var(--m-…)` reference), `size?: 'md' | 'lg' | 'xl'` defaulting to `'lg'`
+  - `MetricTrack({ label, state, value, unit, delta, band, hue })` where `value: Value<number>`, `band: RangeBand | null`, `hue: string` (a `var(--m-…)` reference). No `size` prop — see below.
   - `StatTile({ label, value, unit })` with `value: Value<number | string>`
 
-**The hero numeral is not one size** (pen-verified 2026-08-05 across all five
-frames). It changes per screen, and its letter-spacing scales with it — a
-hardcoded size would break three of the five screens:
+**The hero numeral is ONE size — a deliberate departure from the pen.**
 
-| Size | Font | Tracking | Screens |
-|---|---|---|---|
-| `lg` | 146 / 800 | −9 | Rest, Training, Trained |
-| `xl` | 176 / 800 | −11 | Resting |
-| `md` | 118 / 800 | −6 | Evening (`22:30` — the numeral is a *time* there) |
+The pen uses three (146/−9 on Rest, Training, Trained; 176/−11 on Resting;
+118/−6 on Evening). Ruled 2026-08-05: **use 146/−9 everywhere.** One nominal
+size, tuned once, applied to all five screens. This is an owner's decision to
+simplify the shared component, not a transcription miss — do not "restore" the
+per-screen sizes.
+
+`MetricTrack` therefore takes **no `size` prop**.
+
+**The one rule the single size forces: shrink to fit.** Evening's numeral is a
+time, `22:30` — five glyphs, which overflow the 342px content width at 146px.
+So the size is a *maximum*, reduced only when the content would not fit:
+
+```ts
+// frontend/src/editorial/components/numeralFit.ts
+export const NUMERAL_MAX = 146        // the one size, ruled 2026-08-05
+export const TRACKING_RATIO = -9 / NUMERAL_MAX
+export const CONTENT_W = 342          // 390 frame − 24 padding × 2
+export const GLYPH_RATIO = 0.62       // Sora 800 digit advance, in em
+
+/** One size, shrunk only when the glyphs would not fit the frame. */
+export function numeralFit(text: string): { fontSize: number; letterSpacing: number } {
+  const glyphs = [...text].length
+  const fits = CONTENT_W / (glyphs * GLYPH_RATIO)
+  const fontSize = Math.min(NUMERAL_MAX, Math.floor(fits))
+  return { fontSize, letterSpacing: Math.round(fontSize * TRACKING_RATIO * 10) / 10 }
+}
+```
+
+Tracking scales with the result, so a shrunk numeral keeps the same optical
+tightness. Expected: `98` and `91` → 146/−9 (unchanged); `22:30` → 110/−6.8.
+The colon is narrower than a digit, so the estimate is conservative and the
+string always fits.
 
 The statement line above it is 42/800 tracking −2 on every screen; secondary
 numerals (Trained's `288`, Evening's `2,847`) are 44/800 tracking −2.
