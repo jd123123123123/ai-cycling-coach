@@ -20,6 +20,20 @@ import { present, missing } from '../data/value'
 import type { TodayModel } from '../data/useTodayModel'
 import TodayView from '../pages/TodayView'
 
+function buildPmcSeries(days: number) {
+  const out = []
+  for (let i = 0; i < days; i++) {
+    const t = i / (days - 1)
+    out.push({
+      date: `2026-06-${String((i % 28) + 1).padStart(2, '0')}`,
+      ctl: 44 + t * 24 + Math.sin(i / 3) * 1.5,
+      atl: 40 + t * 30 + Math.sin(i / 2) * 3,
+      tsb: (44 + t * 24) - (40 + t * 30),
+    })
+  }
+  return out
+}
+
 const model: TodayModel = {
   state: 'trained',
   dateLabel: present('WED 22 JUL'),
@@ -28,13 +42,32 @@ const model: TodayModel = {
   hrv: present({ value: 68, unit: 'ms', delta: 4, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 46, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'in' } }),
   sleep: present({ totalS: 27000, deepS: 4800, remS: 5400, lightS: 15600, awakeS: 1200 }),
-  pmc: present({ fitness: 68, fatigue: 58, form: -2, series: [] }),
+  pmc: present({ fitness: 68, fatigue: 58, form: -2, series: buildPmcSeries(42) }),
   recovery: present({ hoursRemaining: 26, clearAtLabel: 'Fri 09:00' }),
   session: present({
     title: 'Threshold', targetWatts: 285, workKj: null, intensityFactor: 0.91, tss: 98,
-    blocks: [{ label: '1', minutes: 12, watts: 285 }],
+    blocks: [
+      { label: 'Warm-up', minutes: 12, watts: 180 },
+      { label: 'Block 1', minutes: 12, watts: 285 },
+      { label: 'Recover', minutes: 5, watts: 150 },
+      { label: 'Block 2', minutes: 12, watts: 283 },
+      { label: 'Recover', minutes: 5, watts: 150 },
+      { label: 'Block 3', minutes: 12, watts: 283 },
+      { label: 'Recover', minutes: 5, watts: 150 },
+      { label: 'Block 4', minutes: 12, watts: 285 },
+      { label: 'Cool-down', minutes: 10, watts: 120 },
+    ],
   }),
   ride: present({ activityId: 1, distanceM: 52400, kj: 1148, avgHr: 151, np: 296, durationS: 6420 }),
+  zones: present([
+    { name: 'Z1', lowBpm: 0, highBpm: 124, seconds: 1320 },
+    { name: 'Z2', lowBpm: 124, highBpm: 141, seconds: 1440 },
+    { name: 'Z3', lowBpm: 142, highBpm: 152, seconds: 1080 },
+    { name: 'Z4', lowBpm: 153, highBpm: 163, seconds: 2340 },
+    { name: 'Z5', lowBpm: 164, highBpm: Infinity, seconds: 240 },
+  ]),
+  peaks: missing('No peak-power breakdown for this ride yet.'),
+  planVsRidden: missing('This ride was not matched to its plan.'),
   verdict: present({
     headline: "That's the work banked.",
     body: 'You banked it clean. Everything from here is absorption.',

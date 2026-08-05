@@ -96,4 +96,25 @@
    * they need no per-state branching. */
   --st-active: var(--st-rest);
   --e-ground: var(--g-rest);
+
+  /* Task 9 (Trained's numbered sections). Colours read from the tree that
+   * have no existing token — each is a distinct alpha stop from a real node,
+   * verified against neighbours (--e-glass #FFFFFF0F, --d-1 #FFFFFF14,
+   * --d-2 #FFFFFF2B, --e-rule #FFFFFF1F) and NOT close enough to reuse. */
+  /* SecHead's "kicker" chip (bRBYv/sn3I7 etc.) and the flat rule dividers in
+   * "What It Changes" (TDfiL, Xe1qo, rxawd) and Ride Micro (tU6lF): all
+   * literally #FFFFFF12. */
+  --e-hairline: #FFFFFF12;
+  /* Bars: the non-interval segments (warm-up/recover/cool-down) of the one
+   * real (planned-target) bar row — pen's "Ridden" row fill (VRZFt etc). */
+  --e-bar-dim: #FFFFFF52;
+  /* Bars: baseline rule under the bar row (K6Hhvu). */
+  --e-baseline: #FFFFFF66;
+  /* HR Zones bar/legend tone for Z2 and Z3 (i408qx/AGSnx, g7PRKF/xOFQ9's
+   * "Tone" rects) — Z1 reuses --d-1, Z4 is the state accent, Z5 is --d-4. */
+  --e-zone-z2: #FFFFFF26;
+  --e-zone-z3: #FFFFFF3D;
+  /* Peak Power rows: the filled meter segment behind each duration's value
+   * (gPtjF's s0..s14, #FFFFFF5E) — the trailing "empty" segments reuse --d-1. */
+  --e-peak-track: #FFFFFF5E;
 }

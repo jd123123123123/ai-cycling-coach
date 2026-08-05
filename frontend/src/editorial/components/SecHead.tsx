@@ -35,12 +35,27 @@
  * chip's cornerRadius 999 and --radius-pill (100px) both render as a full
  * pill on a chip this size, so --radius-pill is used rather than a second,
  * near-duplicate pill token.
+ *
+ * ADDED (Task 9): `kicker`. The Trained flagship's own numbered-section
+ * heads ("01 The Session" etc. — bRBYv/fLBkn/Y5DjnE, all `ref: N42va`) are
+ * NOT the canonical instance above — every one overrides the Title
+ * descendant to Inter 12/800, letterSpacing 1.6, lineHeight 1.2, $e-mid
+ * (small caps kicker, not the 19px Sora display heading) and overrides the
+ * Chip to a flat #FFFFFF12 (var(--e-hairline), added in this task) with an
+ * $e-mid label instead of the accent-tinted default. Confirmed by reading
+ * the descendant overrides directly (`Get('bRBYv', {depth:0})`), not by
+ * guessing from the rendered dump. The index stays var(--st-active) either
+ * way — the override's literal #FF5E00 equals --st-trained exactly, and
+ * following the accent variable is what makes every other state's numbered
+ * section re-tint correctly too. Every Sub in these three instances is
+ * `enabled: false` in the tree, so Trained's call site simply omits `sub`.
  */
-export default function SecHead({ index, title, chip, sub }: {
+export default function SecHead({ index, title, chip, sub, kicker }: {
   index: string
   title: string
   chip?: string
   sub?: string
+  kicker?: boolean
 }) {
   return (
     <header style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%' }}>
@@ -58,7 +73,16 @@ export default function SecHead({ index, title, chip, sub }: {
           {index}
         </span>
         <h2
-          style={{
+          style={kicker ? {
+            fontFamily: 'var(--e-body)',
+            fontSize: 12,
+            fontWeight: 800,
+            letterSpacing: 1.6,
+            lineHeight: 1.2,
+            color: 'var(--e-mid)',
+            margin: 0,
+            flex: 1,
+          } : {
             fontFamily: 'var(--e-display)',
             fontSize: 19,
             fontWeight: 800,
@@ -75,7 +99,7 @@ export default function SecHead({ index, title, chip, sub }: {
           <div
             data-sechead-chip=""
             style={{
-              background: 'var(--st-a12)',
+              background: kicker ? 'var(--e-hairline)' : 'var(--st-a12)',
               borderRadius: 'var(--radius-pill)',
               padding: '4px 10px',
             }}
@@ -86,7 +110,7 @@ export default function SecHead({ index, title, chip, sub }: {
                 fontSize: 10,
                 fontWeight: 800,
                 letterSpacing: 1.4,
-                color: 'var(--st-active)',
+                color: kicker ? 'var(--e-mid)' : 'var(--st-active)',
               }}
             >
               {chip}

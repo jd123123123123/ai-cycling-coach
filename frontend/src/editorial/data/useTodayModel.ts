@@ -8,12 +8,16 @@ import { usePlannedWorkouts } from '../../hooks/usePlannedWorkouts'
 import { usePMC } from '../../hooks/usePMC'
 import { useRecoveryEta, type RecoveryEta } from '../../hooks/useRecoveryEta'
 import { useStreak, type StreakWithConsistency } from '../../hooks/useStreak'
+import { useStreamAnalysis } from '../../hooks/useStreamAnalysis'
 import { useTodaySession, type TodaySession } from '../../hooks/useTodaySession'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
 import { useTodayWeather, type TodayWeather } from '../../hooks/useTodayWeather'
 import type { ActivityRead, DailyMetric, PMCResponse, PlannedWorkout, TodaySnapshotResponse } from '../../api/dashboard'
 import type { MorningHealthCheck, MorningHealthSignal } from '../../api/health'
 import type { CoachBriefResponse } from '../../api/coach'
+import type { StreamAnalysis } from '../../api/streamAnalysis'
+import type { HrZone } from '../components/ZoneRows'
+import type { PeakRow } from '../components/PeakRows'
 import { fromNullable, missing, present, type Value } from './value'
 import { useDayState } from '../state/useDayState'
 import type { DayState } from '../state/dayState'
@@ -54,6 +58,25 @@ export interface TodayModel {
   recovery: Value<{ hoursRemaining: number; clearAtLabel: string }>
   session: Value<SessionSummary>
   ride: Value<RideSummary>
+  /** Time-in-HR-zone with bpm bounds, `01 The Session`'s "HR Zones" block.
+   *  Sourced from `useStreamAnalysis(activityId).hr_zones` — the backend
+   *  derives bpm bounds from FIXED %-of-max-HR bands, never from
+   *  `useTrainingZones` (which carries no heart-rate zones at all). Missing
+   *  whenever there is no ride today or the ride has no HR stream — see
+   *  task-9-report.md, verify-check 2. */
+  zones: Value<HrZone[]>
+  /** "Peak Power Today", `01 The Session`. Always missing: no hook anywhere
+   *  returns a per-ride power-duration curve — `usePowerProfile()`'s
+   *  `peaks`/`mmp_curve` are a sanitized envelope across every stored ride
+   *  ever, unscoped to today or to a season. See task-9-report.md,
+   *  verify-check 3 (a bigger gap than the brief's own question, which only
+   *  asked about the season-best percentage). */
+  peaks: Value<PeakRow[]>
+  /** Per-block plan-vs-ridden deltas backing `Bars`' delta column. Always
+   *  missing: `useStreamAnalysis`'s `splits` are per-kilometre, never
+   *  aligned to a named workout block. See task-9-report.md, verify-check 1.
+   *  The element type is reserved for a future block-matching source. */
+  planVsRidden: Value<{ blockLabel: string; deltaWatts: number }[]>
   verdict: Value<{ headline: string; body: string }>
   /** Two labelled claims — ON YOU / ON THE PLAN — pulled from the brief's
    *  adaptation transparency and post-ride review, never from outlook_7d
@@ -91,6 +114,10 @@ export interface TodayModelInputs {
    *  map is useAdaptive().hrv_state, never derived from the health signal's
    *  own baseline comparison. Optional: omitted callers get 'unknown'. */
   hrvState?: 'below' | 'in' | 'above' | 'unknown'
+  /** Today's ride's stream analysis (splits, HR-zone seconds, GPS, …), used
+   *  only for `zones` (`hr_zones.secs` + `hr_zones.max_hr`). Optional:
+   *  omitted callers get `zones: missing(...)`, same as no ride/no stream. */
+  streamAnalysis?: StreamAnalysis | null
 }
 
 const NO_WEARABLE_FALLBACK = 'your last sync'
@@ -133,7 +160,8 @@ function buildRangeBand(
 /** Pure assembly — no hooks, fully unit-testable. Every field is a Value<T>. */
 export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   const { now, state, snapshot, yesterdayMetric, todayMetric, streak, pmc, recoveryEta,
-    session, brief, weather, activitiesToday, health, tomorrowWorkout, isLoading, recentMetrics, hrvState } = inputs
+    session, brief, weather, activitiesToday, health, tomorrowWorkout, isLoading, recentMetrics, hrvState,
+    streamAnalysis } = inputs
 
   const dateLabel = present(
     now.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase().replace(/,/g, ''),
@@ -239,6 +267,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     'Nothing planned for today.',
   )
 
+  const NO_RIDE_REASON = 'No ride recorded yet today.'
   const rideActivity = activitiesToday.find((a) => a.sport === 'cycling') ?? null
   const ride = fromNullable(
     rideActivity == null ? null : {
@@ -256,7 +285,41 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       np: rideActivity.normalized_power,
       durationS: rideActivity.duration_seconds,
     },
-    'No ride recorded yet today.',
+    NO_RIDE_REASON,
+  )
+
+  // Time-in-HR-zone with real bpm bounds (task-9-report.md, verify-check 2):
+  // the backend computes `hr_zones.secs` from fixed %-of-max-HR bands over
+  // `hr_zones.max_hr` (`_hr_zones`, activity_stream_analysis.py — bounds
+  // 60/70/80/90%), so bpm bounds are derivable whenever a ride's stream
+  // carries HR data. `useTrainingZones` plays no part: it has no
+  // heart-rate zones at all, only power/pace.
+  const HR_ZONE_FRACTIONS = [0, 0.6, 0.7, 0.8, 0.9, Infinity]
+  const zones: Value<HrZone[]> = rideActivity == null
+    ? missing(NO_RIDE_REASON)
+    : streamAnalysis?.hr_zones == null
+      ? missing('No heart-rate data for this ride.')
+      : present(['Z1', 'Z2', 'Z3', 'Z4', 'Z5'].map((name, i) => ({
+        name,
+        lowBpm: Math.round(HR_ZONE_FRACTIONS[i] * streamAnalysis.hr_zones!.max_hr),
+        highBpm: Number.isFinite(HR_ZONE_FRACTIONS[i + 1])
+          ? Math.round(HR_ZONE_FRACTIONS[i + 1] * streamAnalysis.hr_zones!.max_hr)
+          : Infinity,
+        seconds: streamAnalysis.hr_zones!.secs[i] ?? 0,
+      })))
+
+  // "Peak Power Today" (task-9-report.md, verify-check 3): no hook returns
+  // a per-ride power-duration curve. usePowerProfile()'s peaks/mmp_curve
+  // are an all-time envelope across every stored ride, never scoped to
+  // today or to a season — always missing, matching the Insight Strip's
+  // own "PEAK POWER" gap (TodayView.tsx, task 8).
+  const peaks: Value<PeakRow[]> = missing('No peak-power breakdown for this ride yet.')
+
+  // Plan-vs-ridden per-block deltas (task-9-report.md, verify-check 1):
+  // useStreamAnalysis's splits are per-kilometre, never aligned to a named
+  // workout block — always missing.
+  const planVsRidden: Value<{ blockLabel: string; deltaWatts: number }[]> = missing(
+    'This ride was not matched to its plan.',
   )
 
   const verdict = fromNullable(
@@ -323,6 +386,9 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     recovery,
     session: sessionValue,
     ride,
+    zones,
+    peaks,
+    planVsRidden,
     verdict,
     whatThisChanges,
     conditions,
@@ -353,6 +419,9 @@ export function useTodayModel(): TodayModel {
   const tomorrowWorkoutsQuery = usePlannedWorkouts(tomorrow, tomorrow)
   const adaptiveQuery = useAdaptive()
 
+  const todayRideActivityId = activitiesQuery.data?.activities.find((a) => a.sport === 'cycling')?.id
+  const streamAnalysisQuery = useStreamAnalysis(todayRideActivityId)
+
   const todayMetric = recentMetricsQuery.data?.metrics.find((m) => {
     if (m.date == null) return false
     return m.date === toIsoDate(now)
@@ -380,6 +449,7 @@ export function useTodayModel(): TodayModel {
     isLoading,
     recentMetrics: recentMetricsQuery.data?.metrics,
     hrvState: adaptiveQuery.data?.hrv_state,
+    streamAnalysis: streamAnalysisQuery.data,
   }
 
   return buildTodayModel(inputs)
