@@ -1,9 +1,12 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import Cover from '../components/Cover'
 import QuotePlate from '../components/QuotePlate'
 import TomorrowPlate from '../components/TomorrowPlate'
 import { missing, present } from '../data/value'
+import type { TodayModel } from '../data/useTodayModel'
+import TodayView from '../pages/TodayView'
 
 afterEach(cleanup)
 
@@ -88,5 +91,45 @@ describe('TomorrowPlate', () => {
     expect(screen.getByText('No route data for today\'s ride.')).toBeTruthy()
     // deduped: the reason shared by two fields prints once, not twice.
     expect(screen.getAllByText('No route data for today\'s ride.')).toHaveLength(1)
+  })
+})
+
+describe('Plate placement in TodayView', () => {
+  // Pen-verified (2026-08-05): Quote Plate sits between section 01 and
+  // section 02 on every day state, and Tomorrow Plate / Route Plate closes
+  // section 03, before the Tomorrow Band / tab bar. Pinned here so a future
+  // reorder fails a test instead of shipping invisibly — the exact defect
+  // class the last three tasks each shipped once.
+  const trainedModel: TodayModel = {
+    state: 'trained',
+    dateLabel: present('WED 22 JUL'),
+    streakDays: present(13),
+    readiness: present({ score: 74, deltaVsYesterday: 8 }),
+    hrv: missing('No wearable reading.'),
+    restingHr: missing('No wearable reading.'),
+    sleep: missing('No wearable reading.'),
+    pmc: present({ fitness: 68, fatigue: 58, form: -2, series: [] }),
+    recovery: present({ hoursRemaining: 26, clearAtLabel: 'Fri 09:00' }),
+    session: present({
+      title: 'Threshold', targetWatts: 285, workKj: null, intensityFactor: 0.91, tss: 98,
+      blocks: [{ label: 'Block 1', minutes: 12, watts: 285 }],
+    }),
+    ride: missing('No ride recorded yet today.'),
+    zones: missing('No ride recorded yet today.'),
+    peaks: missing('No peak-power breakdown for this ride yet.'),
+    planVsRidden: missing('This ride was not matched to its plan.'),
+    verdict: missing('The coach has not weighed in yet today.'),
+    whatThisChanges: missing('The coach has not weighed in on this ride yet.'),
+    conditions: missing('No location from a recent ride.'),
+    tomorrow: present({ title: 'Recovery spin', detail: 'Easy.', unlockLabel: missing('No unlock time.') }),
+    isLoading: false,
+  } as TodayModel
+
+  it('orders 01, Quote Plate, 02, 03, Tomorrow Plate for Trained', () => {
+    const { container } = render(<MemoryRouter><TodayView model={trainedModel} /></MemoryRouter>)
+    const marks = Array.from(
+      container.querySelectorAll('[data-section], [data-quote-plate], [data-tomorrow-plate]'),
+    ).map((el) => el.getAttribute('data-section') ?? (el.hasAttribute('data-quote-plate') ? 'quote' : 'tomorrow'))
+    expect(marks).toEqual(['01', 'quote', '02', '03', 'tomorrow'])
   })
 })
