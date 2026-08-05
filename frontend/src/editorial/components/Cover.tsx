@@ -3,10 +3,16 @@ import type { DayState } from '../state/dayState'
 import { scrimGradient, type ScrimStop } from './plateScrim'
 
 /** Pen-verified per-state Cover heights (`bUuzT` Rest 480, `maOQH` Training
- *  455, `RLLDR` Trained 436) — NOT one shared height; the brief's "height
- *  480" describes Rest's own Cover only. A state with no plate work yet
- *  (Resting, Evening) falls back to Rest's geometry. */
-const COVER_HEIGHT: Partial<Record<DayState, number>> = { rest: 480, training: 455, trained: 436 }
+ *  455, `RLLDR` Trained 436, `k7YRY` Resting 462, task 11's own fresh read
+ *  of `h54Rs`) — NOT one shared height; the brief's "height 480" describes
+ *  Rest's own Cover only. CORRECTED (coordinator visual review, task 11):
+ *  Resting previously fell back to Rest's 480 here, flagged but not fixed
+ *  in the original task-11 report — fixed now, per-state rather than a
+ *  shared constant, so Evening (still unbuilt) does not inherit the same
+ *  gap when its own task reads `k7YRY`'s sibling and reaches for a
+ *  fallback. A state with no plate work yet (Evening) still falls back to
+ *  Rest's geometry. */
+const COVER_HEIGHT: Partial<Record<DayState, number>> = { rest: 480, training: 455, trained: 436, resting: 462 }
 
 /** Cover's own Scrim gradient shape differs per state — Training's is a
  *  genuinely different 6-stop shape (`W7LKiJ`) from Rest's and Trained's

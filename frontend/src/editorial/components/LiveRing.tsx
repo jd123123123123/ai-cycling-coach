@@ -78,7 +78,24 @@ export default function LiveRing({ label, wake, now, hue, unit, format = String 
       ref={ref}
       data-live-ring
       onClick={present ? () => tap.toggle('ring') : undefined}
-      style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', width: '100%', cursor: present ? 'pointer' : undefined }}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
+        // CORRECTED (coordinator visual review, task 11): `width: '100%'`
+        // inside the three-up flex row (`bXly1`/`Rings` in the pen, "gap:
+        // 18", each ring "width: fill_container") made every ring's
+        // flex-basis the FULL row width, so the browser flex-shrunk all
+        // three to fit — but the ring's own SVG (a fixed 102x102 child) does
+        // not shrink with its container, so it overflowed into neighbouring
+        // columns. A stray cyan fragment under the first ring's delta line
+        // was ring 2's own Track/Arc bleeding left, not a real extra
+        // element. `flex: 1 1 0%` (the CSS reading of "fill_container" as
+        // an equal-width flex column) plus `minWidth: 0` (so a flex item can
+        // shrink below its content's intrinsic width instead of forcing
+        // the row to overflow) fixes it.
+        flex: '1 1 0%',
+        minWidth: 0,
+        cursor: present ? 'pointer' : undefined,
+      }}
     >
       <div style={{ position: 'relative', width: SIZE, height: SIZE }}>
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} style={{ transform: 'rotate(-90deg)' }}>

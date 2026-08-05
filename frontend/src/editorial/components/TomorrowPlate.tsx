@@ -89,7 +89,18 @@ export default function TomorrowPlate({
         height: photoUrl ? 246 : undefined,
         overflow: 'hidden',
         position: 'relative',
-        padding: '0 24px 18px 24px',
+        // CORRECTED (coordinator visual review, task 11): with a photo, the
+        // 246px box's own empty top space (content bottom-anchored via
+        // `justifyContent: flex-end`) is what separates this plate from
+        // whatever precedes it — Resting's own "02 Trajectory" ends in
+        // `PMCChart`'s legend row with zero gap of its own (confirmed: no
+        // spacer node sits between `r9ejSt` and `swkhP` in `h54Rs`). Without
+        // a photo this plate collapses to its content's height (Cover's own
+        // doc comment explains why), which silently threw away that
+        // breathing room too — the legend and this plate's "MORGEN · 05:00"
+        // kicker rendered as one collided line. 32px restores it without
+        // reintroducing a fixed box.
+        padding: photoUrl ? '0 24px 18px 24px' : '32px 24px 18px 24px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-end',
