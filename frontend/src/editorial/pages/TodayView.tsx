@@ -131,17 +131,20 @@ export default function TodayView({ model }: { model: TodayModel }) {
     const clearWeekday = isPresent(model.recovery) ? model.recovery.value.clearAtLabel.split(' ')[0].toUpperCase() : null
     const untilLabel = clearWeekday ? `UNTIL ${clearWeekday} IS CLEARED` : 'UNTIL CLEARED'
     const formItem = { label: 'FORM', value: mapValue(model.pmc, (p) => signed(Math.round(p.form))) }
-    const recoveryMarkersItem = { label: 'RECOVERY MARKERS', value: missing<string>('No composite recovery read yet.') }
+    // The pen's own first column ("3 OF 3" / "RECOVERY MARKERS ___") has no
+    // TodayModel source at all — not a data gap that might resolve, a slot
+    // nothing was ever wired to (coordinator review, finding 1). A
+    // three-column strip with one column that can NEVER populate reads as a
+    // design lie, so the column is dropped rather than kept as a permanent
+    // dash — Rest and Training render a two-item strip, not three.
     if (state === 'rest') {
       return [
-        recoveryMarkersItem,
         { label: untilLabel, value: mapValue(model.recovery, (r) => `${Math.round(r.hoursRemaining)} h`) },
         formItem,
       ]
     }
     // training
     return [
-      recoveryMarkersItem,
       { label: 'AT THRESHOLD', value: workBlockSummary(sessionBlocksOf(model)) },
       formItem,
     ]
@@ -239,8 +242,13 @@ export default function TodayView({ model }: { model: TodayModel }) {
   // No TodayModel field synthesises a composite "all systems say go" style
   // verdict from the three signals below (and the direction of "good" isn't
   // uniform across them — a lower resting HR is good, a lower HRV is not —
-  // so this is not safely derivable from the band positions either).
-  const recoveryClaim: Value<string> = missing('No composite recovery read from the coach yet.')
+  // so this is not safely derivable from the band positions either). This
+  // is a permanent, never-resolves gap, not a transient one — so, matching
+  // the same rule Trained's own "01 The Session" Statement already follows
+  // (`isPresent(sessionClaim) && <Statement .../>`, TodayView.tsx), the
+  // Statement is not rendered at all rather than emitting a lone "—" whose
+  // only explanation sits several lines below (coordinator review, finding
+  // 2 — a `Statement` should never surface content that is ONLY a dash).
 
   // ---- 02 The Session (Training) --------------------------------------------
   const { workBlocks, uniformWork } = workIntervalsOf(sessionBlocks)
@@ -531,8 +539,12 @@ export default function TodayView({ model }: { model: TodayModel }) {
 
         {isRestOrTraining && (
           <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
-            <SecHead index="01" title="RECOVERY" kicker />
-            <Statement claim={recoveryClaim} />
+            <SecHead
+              index="01"
+              title="RECOVERY"
+              kicker
+              sub="HRV, resting heart rate and sleep — each against your own 30-day range."
+            />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 20 }}>
               <RangeRow
@@ -616,14 +628,23 @@ export default function TodayView({ model }: { model: TodayModel }) {
 
         {state === 'rest' && (
           <section data-section="02" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
-            <SecHead index="02" title="ABSORPTION" kicker />
+            <SecHead
+              index="02"
+              title="ABSORPTION"
+              kicker
+              sub="The session your body is still paying for right now."
+            />
             <Statement claim={missing('No absorption summary from the coach yet.')} />
 
             <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
               {costTilesRest.map((t) => (
-                <StatTile key={t.label} label={t.label} value={t.value} unit={t.unit} />
+                <StatTile key={t.label} label={t.label} value={t.value} unit={t.unit} hideReason />
               ))}
             </div>
+            {/* Every tile above shares the exact same reason (no "last
+                completed session" field exists at all) — printed once here,
+                not once per tile (coordinator review, finding 4). */}
+            <p style={quietReason}>{NO_LAST_SESSION}</p>
 
             <div style={{ paddingTop: 24, display: 'flex', flexDirection: 'column', gap: 9 }}>
               <span style={kickerLabelDim}>ABSORPTION · {ABSORPTION_WINDOW_H} HOURS</span>
@@ -655,6 +676,7 @@ export default function TodayView({ model }: { model: TodayModel }) {
               title="THE SESSION"
               kicker
               chip={isPresent(model.session) ? `${model.session.value.blocks.length} BLOCKS` : undefined}
+              sub="The session your body is still paying for right now."
             />
             <Statement claim={trainingSessionClaim} />
 
@@ -679,6 +701,7 @@ export default function TodayView({ model }: { model: TodayModel }) {
             title="TRAJECTORY"
             kicker
             chip={fitnessDelta7d == null ? undefined : fitnessDelta7d > 0 ? 'CLIMBING' : fitnessDelta7d < 0 ? 'DECLINING' : 'STEADY'}
+            sub="Fitness, fatigue and form from the rolling 42-day model."
           />
           <Statement claim={trajectoryClaim} />
 

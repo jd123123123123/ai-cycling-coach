@@ -57,6 +57,14 @@ export interface BarsBlock {
  * whose watts equal the row's own max are painted `var(--st-active)`
  * instead of the ghost tone; every other block, and the default
  * (`emphasizeMax` unset), is unchanged.
+ *
+ * KNOWN LIMITATION (flagged in task-10-report.md, not fixed — no session
+ * shape currently planned by this app triggers it): "peak wattage = work
+ * interval" silently breaks for a session with no distinct interval
+ * structure at all — e.g. a flat endurance ride where every block shares
+ * the same target wattage would have EVERY block tinted as "work," not
+ * none. Fine for the threshold/VO2-style interval sessions this app plans
+ * today; worth a second look if/when a flatter session shape is added.
  */
 export default function Bars({ blocks, emphasizeMax = false }: { blocks: BarsBlock[]; emphasizeMax?: boolean }) {
   const presentWatts = blocks

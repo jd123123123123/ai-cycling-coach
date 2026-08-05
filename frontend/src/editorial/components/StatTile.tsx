@@ -17,15 +17,29 @@ import { isPresent, type Value } from '../data/value'
  * metric hues (--m-*) belong to MetricTrack, the component that actually
  * applies them in the tree; a `hue` prop here had nothing to transcribe and
  * was removed after review rather than kept as an unused guess.
+ *
+ * `hideReason` (new prop, Task 10 fix): when a caller renders several
+ * tiles that are ALL missing for the exact same reason (Rest's "02
+ * ABSORPTION" cost tiles — LOAD/TIME/INTENSITY/POWER, all missing because
+ * there is no "last completed session" field at all), printing that one
+ * sentence under all four tiles is the same defect `InsightStrip` already
+ * fixes for its own row: the reason should print ONCE, not once per tile.
+ * `hideReason` lets the tile still show its honest "—" while suppressing
+ * its own copy of the reason text, so the caller can print it once below
+ * the whole row instead (see `TodayView.tsx`'s "02 ABSORPTION" section).
+ * Default `false` — every other caller (Trained's costTiles/trajectoryTiles)
+ * is unaffected.
  */
 export default function StatTile({
   label,
   value,
   unit,
+  hideReason = false,
 }: {
   label: string
   value: Value<number | string>
   unit: string
+  hideReason?: boolean
 }) {
   const present = isPresent(value)
   return (
@@ -66,7 +80,7 @@ export default function StatTile({
           {unit}
         </span>
       )}
-      {!present && (
+      {!present && !hideReason && (
         <span
           style={{
             fontFamily: 'var(--e-body)',
