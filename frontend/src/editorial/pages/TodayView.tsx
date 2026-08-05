@@ -6,8 +6,10 @@ import DayRail from '../components/DayRail'
 import DeltaRow from '../components/DeltaRow'
 import FatigueCurve from '../components/FatigueCurve'
 import InsightStrip from '../components/InsightStrip'
+import Ledger from '../components/Ledger'
 import LiveRing from '../components/LiveRing'
 import MetricTrack from '../components/MetricTrack'
+import { numeralFit } from '../components/numeralFit'
 import PeakRows, { type PeakTotal } from '../components/PeakRows'
 import PMCChart from '../components/PMCChart'
 import QuotePlate from '../components/QuotePlate'
@@ -122,8 +124,10 @@ function TodayViewBody({ model }: { model: TodayModel }) {
   // Resting (`h54Rs`) shares Rest's Tomorrow Band ("MORGEN"/"TOMORROW") but
   // has none of Rest/Training's "01 Recovery"/"02 Absorption"/"02 The
   // Session" sections — its own numbered sections are entirely different
-  // ("01 Right Now", "02 Trajectory"), gated separately below.
-  const showTomorrowBand = isRestOrTraining || state === 'resting'
+  // ("01 Right Now", "02 Trajectory"), gated separately below. Evening
+  // (`KYS6e`/`cx4zJ`) also carries a Tomorrow Band Wrap at the very bottom
+  // of its own frame, below its own "03 Tomorrow" section.
+  const showTomorrowBand = isRestOrTraining || state === 'resting' || state === 'evening'
 
   const sessionLoad: Value<number> = isPresent(model.session)
     ? model.session.value.tss != null
@@ -139,8 +143,12 @@ function TodayViewBody({ model }: { model: TodayModel }) {
   // Rest has no session to name today, so its headline is the coach's own
   // verdict headline (M4EaH/NSNJa, "Absorb, don't add." in the pen — a
   // coaching statement, not a title). Training and Trained both name the
-  // session (A8Mcb / Foot's own "Session" text).
-  const heroHeadline: Value<string> = state === 'rest' || state === 'resting'
+  // session (A8Mcb / Foot's own "Session" text). Evening's own headline
+  // (`ifGet`, "Protect tomorrow." — cx4zJ's Cover Foot) is the same shape as
+  // Rest's: a coaching statement about the evening ahead, not a session
+  // title (the ride, if any, already happened) — so it reads the coach's
+  // own verdict headline too.
+  const heroHeadline: Value<string> = state === 'rest' || state === 'resting' || state === 'evening'
     ? mapValue(model.verdict, (v) => v.headline)
     : sessionName
 
@@ -190,9 +198,36 @@ function TodayViewBody({ model }: { model: TodayModel }) {
   const rcPrimaryLine: Value<string> = state === 'resting' ? recoverySinceWakeLine : readinessDeltaLine
   const rcSecondaryLine: Value<string> = state === 'resting' ? recoveryRangeLine : readinessContextLine
 
+  // ---- Evening's own hero numeral: a lights-out TIME, not a number --------
+  // `xCSBq`/`UxmjR` ("22:30", cx4zJ's Cover Foot "Value") is a recommended
+  // bedtime, computed from a sleep-duration target and a wake-alarm time.
+  // TodayModel carries neither — no field anywhere derives "when should you
+  // be asleep" (`session`/`tomorrow` carry no time-of-day, `sleep` is last
+  // NIGHT's already-recorded total, not tonight's target). Permanently
+  // missing, not a transient gap — one reason, reused for the numeral, the
+  // BarLabels/hypnogram this task deliberately omits (same root cause), and
+  // Tonight's own tiles below. `numeralFit()` is still exercised here (not
+  // bypassed for the missing arm) so the day this field gets a real source,
+  // the shrink-to-fit behaviour is already wired, not bolted on later.
+  const eveningLightsOutMissing = t('eveningLightsOutMissing')
+  const eveningNumeralText = '—'
+  const eveningNumeralFit = numeralFit(eveningNumeralText)
+
   const todayIndex = (new Date().getDay() + 6) % 7
 
   const insightItems = (() => {
+    if (state === 'evening') {
+      // "TONIGHT'S TARGET" / "UNTIL LIGHTS OUT" / "VS YOUR AVERAGE" (`n2uml`/
+      // `uYXfH`/`yvy2C`, cx4zJ's own Insight Strip) all derive from the same
+      // bedtime-target/wake-alarm data TodayModel does not have — one shared
+      // reason, same as the hero numeral above (InsightStrip dedupes its own
+      // list, so it prints once here regardless of how many items share it).
+      return [
+        { label: t('insightTonightTarget'), value: missing<string>(eveningLightsOutMissing) },
+        { label: t('insightUntilLightsOut'), value: missing<string>(eveningLightsOutMissing) },
+        { label: t('insightVsAverage'), value: missing<string>(eveningLightsOutMissing) },
+      ]
+    }
     if (state === 'trained') {
       return [
         { label: t('insightPeakPower'), value: missing<string>(t('insightPeakPowerMissing')) },
@@ -430,7 +465,9 @@ function TodayViewBody({ model }: { model: TodayModel }) {
         ? { quote: t('quoteTrained'), attribution: t('quoteTrainedAttribution') }
         : state === 'resting'
           ? { quote: t('quoteResting'), attribution: t('quoteRestingAttribution') }
-          : null
+          : state === 'evening'
+            ? { quote: t('quoteEvening'), attribution: t('quoteEveningAttribution') }
+            : null
 
   // ---- Tomorrow Plate (Rest, Trained) / Route Plate (Training) --------------
   // Every field routes through TodayModel where a real source exists; where
@@ -483,6 +520,84 @@ function TodayViewBody({ model }: { model: TodayModel }) {
       ? present(t('routeCaptionRight', { n: workBlocks.length, m: Math.round(workBlocks[0].minutes), w: watts.value }))
       : missing(t('blockNoTarget'))
   })()
+
+  // ---- Evening: 01 Today (subsumes Trained's "the ride") --------------------
+  // Statement reuses `costClaim` (below) — the exact same fatigue-delta claim
+  // Trained's own "02 The Cost" already computes, since Evening's own
+  // Statement ("Three hours, barely a dent.") is the same kind of claim: how
+  // much today's ride cost, read from the same PMC ATL delta.
+  const eveningRideChip: Value<string> = isPresent(model.ride) ? present(t('chipRideDone')) : missing(model.ride.missing)
+
+  const eveningRideCalories: Value<string> = isPresent(model.ride)
+    ? model.ride.value.calories != null
+      ? present(`${model.ride.value.calories.toLocaleString(intlLocale(locale))} ${t('unitKcal')}`)
+      : missing(t('noCaloriesForRide'))
+    : missing(model.ride.missing)
+  const NO_DAILY_ENERGY = t('noDailyEnergyBreakdown')
+  const eveningLedgerRows = [
+    { label: t('ledgerRide'), value: eveningRideCalories },
+    { label: t('ledgerMovement'), value: missing<string>(NO_DAILY_ENERGY) },
+    { label: t('ledgerRest'), value: missing<string>(NO_DAILY_ENERGY) },
+  ]
+
+  const eveningAvgPower: Value<number> = isPresent(model.ride)
+    ? model.ride.value.kj != null && model.ride.value.durationS
+      ? present(Math.round((model.ride.value.kj * 1000) / model.ride.value.durationS))
+      : missing(t('noUniformTarget'))
+    : missing(model.ride.missing)
+  const eveningRideTiles: { label: string; value: Value<number | string>; unit: string }[] = [
+    {
+      label: t('tileDuration'),
+      value: isPresent(model.ride)
+        ? model.ride.value.durationS != null ? present(formatHoursMinutes(model.ride.value.durationS / 60)) : missing(t('rideMissing'))
+        : missing(model.ride.missing),
+      unit: t('unitMoving'),
+    },
+    {
+      label: t('tileDistance'),
+      value: isPresent(model.ride)
+        ? model.ride.value.distanceM != null
+          ? present((model.ride.value.distanceM / 1000).toLocaleString(intlLocale(locale), { maximumFractionDigits: 1, minimumFractionDigits: 1 }))
+          : missing(t('rideMissing'))
+        : missing(model.ride.missing),
+      unit: t('unitKm'),
+    },
+    { label: t('tileAvgPower'), value: eveningAvgPower, unit: t('unitWatts') },
+    {
+      label: t('tileAvgHr'),
+      value: isPresent(model.ride)
+        ? model.ride.value.avgHr != null ? present(model.ride.value.avgHr) : missing(t('rideMissing'))
+        : missing(model.ride.missing),
+      unit: t('unitBpm'),
+    },
+  ]
+
+  // ---- Evening: 02 Tonight ---------------------------------------------------
+  // BEDTIME/WAKE/SLEEP/DEBT (`UtYXL`/`IgmOU`/`agHrh`/`N1xe2`, cx4zJ's own
+  // Tiles) all need the same bedtime-target/wake-alarm source the hero
+  // numeral above has none of — permanently missing, all four, one shared
+  // reason (same pattern as Rest's own "02 Absorption" cost tiles).
+  const eveningTonightTiles: { label: string; value: Value<number | string>; unit: string }[] = [
+    { label: t('tileBedtime'), value: missing(eveningLightsOutMissing), unit: t('unitTarget') },
+    { label: t('tileWake'), value: missing(eveningLightsOutMissing), unit: t('unitAlarm') },
+    { label: t('tileSleepTargetEvening'), value: missing(eveningLightsOutMissing), unit: t('unitHrs') },
+    { label: t('tileDebt'), value: missing(eveningLightsOutMissing), unit: t('unitNone') },
+  ]
+
+  // ---- Evening: 03 Tomorrow ---------------------------------------------------
+  // FORM is real (model.pmc.form, the same field Trajectory's own tiles
+  // already show elsewhere) — TARGET/WORK need tomorrow's own session
+  // blocks, which `TodayModel.tomorrow` does not carry (title/detail/
+  // unlockLabel only, no blocks) — permanently missing, one shared reason.
+  const NO_TOMORROW_BLOCKS = t('noTomorrowSessionDetail')
+  const eveningTomorrowChip: Value<string> = isPresent(model.tomorrow)
+    ? present(model.tomorrow.value.title.split(' · ')[0].toUpperCase())
+    : missing(model.tomorrow.missing)
+  const eveningTomorrowTiles: { label: string; value: Value<number | string>; unit: string }[] = [
+    { label: t('insightForm'), value: mapValue(model.pmc, (p) => signed(Math.round(p.form))), unit: '' },
+    { label: t('tileTarget'), value: missing(NO_TOMORROW_BLOCKS), unit: t('unitWatts') },
+    { label: t('tileWork'), value: missing(NO_TOMORROW_BLOCKS), unit: t('unitMin') },
+  ]
 
   return (
       <main data-day-state={state} style={{ display: 'flex', flexDirection: 'column' }}>
@@ -539,16 +654,34 @@ function TodayViewBody({ model }: { model: TodayModel }) {
               {isPresent(heroHeadline) ? heroHeadline.value : '—'}
             </span>
 
-            <MetricTrack
-              label=""
-              state=""
-              value={heroNumeralValue}
-              unit={heroNumeralUnit}
-              unitSub={heroNumeralUnitSub}
-              delta={null}
-              band={null}
-              hue={heroNumeralHue}
-            />
+            {state === 'evening' ? (
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--e-display)',
+                    fontSize: eveningNumeralFit.fontSize,
+                    fontWeight: 800,
+                    letterSpacing: eveningNumeralFit.letterSpacing,
+                    lineHeight: 0.86,
+                    color: 'var(--e-lo)',
+                  }}
+                >
+                  {eveningNumeralText}
+                </span>
+                <p style={quietReason}>{eveningLightsOutMissing}</p>
+              </div>
+            ) : (
+              <MetricTrack
+                label=""
+                state=""
+                value={heroNumeralValue}
+                unit={heroNumeralUnit}
+                unitSub={heroNumeralUnitSub}
+                delta={null}
+                band={null}
+                hue={heroNumeralHue}
+              />
+            )}
 
             {state === 'trained' ? (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'flex-end' }}>
@@ -556,7 +689,12 @@ function TodayViewBody({ model }: { model: TodayModel }) {
                   {isPresent(sessionContext) ? sessionContext.value : sessionContext.missing}
                 </span>
               </div>
-            ) : (
+            ) : state === 'evening' ? null : (
+              // Evening's own Cover Foot (`cx4zJ`/`nvFz3`) has no RC line at
+              // all after its Value — the earlier bare-Hero read (`KYS6e`)
+              // did, but the newer IMAGERY variant dropped it (see
+              // task-14-report.md). This screen's honest missing-bedtime
+              // reason already prints once, directly under the numeral above.
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'flex-end' }}>
                 <span style={{ fontFamily: 'var(--e-body)', fontSize: 13, fontWeight: 800, color: 'var(--e-ink)' }}>
                   {isPresent(rcPrimaryLine) ? rcPrimaryLine.value : '—'}
@@ -674,6 +812,45 @@ function TodayViewBody({ model }: { model: TodayModel }) {
             Hero Body and its first numbered section — confirmed by a fresh
             read of the full child list, unlike every other Today state. */}
         {state !== 'resting' && <InsightStrip items={insightItems} />}
+
+        {state === 'evening' && (
+          <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+            <SecHead
+              index="01"
+              title={t('sectionToday')}
+              kicker
+              chip={isPresent(eveningRideChip) ? eveningRideChip.value : undefined}
+            />
+            {/* Evening subsumes Trained — this section carries the ride,
+                using the same fatigue-delta claim Trained's own "02 The
+                Cost" already computes (`costClaim`, below). */}
+            <Statement claim={costClaim} />
+
+            {/* Energy section: the hourly energy-out curve
+                (`model.energyOut`) is verified permanently missing (see
+                useTodayModel.ts's own doc comment) — per this task's own
+                brief, the section renders the Ledger alone rather than a
+                chart with nothing to draw. */}
+            {isPresent(model.energyOut) ? null : (
+              <div style={{ paddingTop: 22 }}>
+                <Ledger caption={t('ledgerCaption')} rows={eveningLedgerRows} />
+              </div>
+            )}
+
+            <div style={{ width: '100%', display: 'flex', paddingTop: 18 }}>
+              {eveningRideTiles.map((tile) => (
+                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} />
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '18px 0 0 0' }}>
+              <div style={{ width: '100%', height: 1, background: 'var(--e-hairline)' }} />
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 700, letterSpacing: 0.4, color: 'var(--e-mid)' }}>
+                {isPresent(rideMicro) ? rideMicro.value : rideMicro.missing}
+              </span>
+            </div>
+          </section>
+        )}
 
         {state === 'resting' && (
           <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
@@ -848,6 +1025,23 @@ function TodayViewBody({ model }: { model: TodayModel }) {
           <QuotePlate state={state} quote={quoteCopy.quote} attribution={quoteCopy.attribution} />
         )}
 
+        {state === 'evening' && (
+          <section data-section="02" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+            <SecHead index="02" title={t('sectionTonight')} kicker />
+            {/* No composite "eight hours is the job" claim anywhere on
+                TodayModel — same permanent gap as the tiles below, so no
+                Statement (matching the rule Rest's own "01 Recovery" and
+                "01 Right Now" already follow: a slot that can never resolve
+                renders nothing, not a floating dash). */}
+            <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
+              {eveningTonightTiles.map((tile) => (
+                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} hideReason />
+              ))}
+            </div>
+            <p style={quietReason}>{eveningLightsOutMissing}</p>
+          </section>
+        )}
+
         {state === 'trained' && (
           <section data-section="02" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
             <SecHead
@@ -951,29 +1145,58 @@ function TodayViewBody({ model }: { model: TodayModel }) {
             a fresh read; no "01 Recovery"/"02 Absorption" precede it), and
             its own Sub node (`vs2tv/tGIwT`) is `enabled: false` in the tree
             — unlike Rest/Training/Trained's, so it's the one field this
-            section doesn't share across every state. */}
-        <section data-section={trajectoryIndex} style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
-          <SecHead
-            index={trajectoryIndex}
-            title={t('sectionTrajectory')}
-            kicker
-            chip={fitnessDelta7d == null ? undefined : fitnessDelta7d > 0 ? t('chipClimbing') : fitnessDelta7d < 0 ? t('chipDeclining') : t('chipSteady')}
-            sub={state === 'resting' ? undefined : t('trajectorySub')}
-          />
-          <Statement claim={trajectoryClaim} />
+            section doesn't share across every state. Evening does NOT share
+            this section at all — its own "03" is "TOMORROW" (`gvQQs`/
+            `Mfsjz`), an entirely different section, rendered separately
+            below. */}
+        {state !== 'evening' && (
+          <section data-section={trajectoryIndex} style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+            <SecHead
+              index={trajectoryIndex}
+              title={t('sectionTrajectory')}
+              kicker
+              chip={fitnessDelta7d == null ? undefined : fitnessDelta7d > 0 ? t('chipClimbing') : fitnessDelta7d < 0 ? t('chipDeclining') : t('chipSteady')}
+              sub={state === 'resting' ? undefined : t('trajectorySub')}
+            />
+            <Statement claim={trajectoryClaim} />
 
-          <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
-            {trajectoryTiles.map((tile) => (
-              <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} />
-            ))}
-          </div>
+            <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
+              {trajectoryTiles.map((tile) => (
+                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} />
+              ))}
+            </div>
 
-          <div style={{ paddingTop: 14 }}>
-            <PMCChart series={pmcSeries} days={42} />
-          </div>
-        </section>
+            <div style={{ paddingTop: 14 }}>
+              <PMCChart series={pmcSeries} days={42} />
+            </div>
+          </section>
+        )}
 
-        {(state === 'rest' || state === 'trained' || state === 'resting') && (
+        {state === 'evening' && (
+          <section data-section="03" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+            <SecHead
+              index="03"
+              title={t('sectionTomorrow')}
+              kicker
+              chip={isPresent(eveningTomorrowChip) ? eveningTomorrowChip.value : undefined}
+            />
+            {/* No Statement here: the pen's own claim ("5 × 4 at 330 W.")
+                duplicates the structured session title `TomorrowBand`
+                already shows below, and `TomorrowPlate` (also below) already
+                carries the real prose description — a third repetition of
+                the same session would be the exact "same content twice"
+                defect this build has already been corrected for (see
+                TomorrowPlate.tsx's own doc comment). */}
+            <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
+              {eveningTomorrowTiles.map((tile) => (
+                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} hideReason />
+              ))}
+            </div>
+            <p style={quietReason}>{NO_TOMORROW_BLOCKS}</p>
+          </section>
+        )}
+
+        {(state === 'rest' || state === 'trained' || state === 'resting' || state === 'evening') && (
           <TomorrowPlate
             state={state}
             kickerLeft={tomorrowKickerLeft}
@@ -999,8 +1222,8 @@ function TodayViewBody({ model }: { model: TodayModel }) {
         {showTomorrowBand && (
           <div style={{ width: '100%', padding: '30px 24px 0 24px' }}>
             <TomorrowBand
-              session={state === 'rest' || state === 'resting' ? tomorrowSession : todaySession}
-              kicker={state === 'rest' || state === 'resting' ? t('tomorrowBandTomorrow') : t('tomorrowBandToday')}
+              session={state === 'rest' || state === 'resting' || state === 'evening' ? tomorrowSession : todaySession}
+              kicker={state === 'rest' || state === 'resting' || state === 'evening' ? t('tomorrowBandTomorrow') : t('tomorrowBandToday')}
             />
           </div>
         )}
@@ -1035,10 +1258,14 @@ const tickStyle: CSSProperties = {
 /** Day Mark's absolute `top` offset — pen-verified per state (`K8WxOh` Rest
  *  186, `LRIzl` Training 158, `F6851` Trained 150, `RzWNl` Resting 170,
  *  task 11's own fresh read of `h54Rs`), previously hardcoded to 150 for
- *  every state. Evening has no pen read yet; it falls back to Trained's
- *  value below rather than guessing. */
+ *  every state. Evening: 137, read from `KYS6e`/`BQWNf`'s own `y` (its Day
+ *  Mark sits inside the bare Hero's `padding: [8,24,0,24]`) — the newer
+ *  `cx4zJ` (IMAGERY) variant's Cover carries no Day Mark node at all (see
+ *  DayMark.tsx's own doc comment), so this offset is transcribed from the
+ *  older frame and kept for cross-state visual parity, not a fresh read of
+ *  the currently-canonical tree. */
 const DAY_MARK_TOP: Partial<Record<DayState, number>> & { trained: number } = {
-  rest: 186, training: 158, trained: 150, resting: 170,
+  rest: 186, training: 158, trained: 150, resting: 170, evening: 137,
 }
 
 function pmcDelta(series: PmcPoint[], daysBack: number, pick: (p: PmcPoint) => number): number | null {

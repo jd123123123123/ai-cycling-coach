@@ -41,6 +41,12 @@ export interface RideSummary {
   avgHr: number | null
   np: number | null
   durationS: number | null
+  /** `ActivityRead.calories` — a real, Garmin-reported per-ride total (Task
+   *  14, Evening's Ledger "THE RIDE" row). Distinct from `kj` (mechanical
+   *  work, W·s/1000): calories are gross energy expenditure, never derived
+   *  from kj — the two measure different things and one must not stand in
+   *  for the other. */
+  calories: number | null
 }
 /** One labelled claim in the "what this changes" block — a headline plus the
  *  sentence that grounds it. Both halves are plain strings because the block
@@ -105,6 +111,21 @@ export interface TodayModel {
    *  data), but each day's `tss` is its own Value — a day with no matching
    *  PMC entry (no ride that day) is honestly missing, never a zero bar. */
   week: { letter: string; tss: Value<number> }[]
+  /** Evening's "01 Today" hourly energy-out curve (`ey8Tp`/`OjJbK`, pen
+   *  `KYS6e`/`cx4zJ` — 16 hourly bars, 06:00-21:00, highlighted across the
+   *  ride's own span). Verified during Task 14: no hook anywhere returns a
+   *  per-hour calorie series. `useIntradayDay(iso)` — the one candidate
+   *  named in the brief — resolves to `IntradayDayResponse` (`api/
+   *  dashboard.ts`, backed by `GET /daily-metrics/{iso}/intraday`), which
+   *  carries only `body_battery` / `stress` / `hrv` / `hr` point series —
+   *  none of them an energy-out quantity, and no other endpoint in
+   *  `backend/app/schemas/*.py` exposes hourly kcal either (only
+   *  `ActivityRead.calories`, a single per-ride total, wired to `ride`
+   *  above). This is why: always missing, permanently — not a transient
+   *  gap that might resolve tomorrow. `TodayView.tsx` renders Evening's
+   *  "01 Today" energy section as the Ledger alone when this is missing,
+   *  per the brief's own instruction. */
+  energyOut: Value<{ hours: { hour: number; kcal: number }[] }>
   isLoading: boolean
 }
 
@@ -319,6 +340,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       avgHr: rideActivity.average_hr,
       np: rideActivity.normalized_power,
       durationS: rideActivity.duration_seconds,
+      calories: rideActivity.calories,
     },
     NO_RIDE_REASON,
   )
@@ -430,6 +452,10 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     }
   })
 
+  // Evening's hourly energy-out curve — verified missing, see the field's
+  // own doc comment on TodayModel above.
+  const energyOut: Value<{ hours: { hour: number; kcal: number }[] }> = missing(t('energyOutMissing'))
+
   return {
     state,
     dateLabel,
@@ -451,6 +477,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     conditions,
     tomorrow,
     week,
+    energyOut,
     isLoading,
   }
 }

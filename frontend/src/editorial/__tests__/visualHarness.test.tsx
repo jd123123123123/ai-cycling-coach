@@ -173,6 +173,38 @@ const restingModel: TodayModel = {
   isLoading: false,
 } as TodayModel
 
+const eveningModel: TodayModel = {
+  state: 'evening',
+  dateLabel: present('DO 23 JUL'),
+  streakDays: present(13),
+  readiness: present({ score: 74, deltaVsYesterday: 8 }),
+  hrv: present({ value: 68, unit: 'ms', delta: 4, band: { low: 52, high: 74, position: 'above' } }),
+  restingHr: present({ value: 46, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'in' } }),
+  sleep: present({ totalS: 27000, deepS: 4800, remS: 5400, lightS: 15600, awakeS: 1200 }),
+  pmc: present({ fitness: 68, fatigue: 58, form: -2, series: buildPmcSeries(42) }),
+  recovery: present({ hoursRemaining: 26, clearAtLabel: 'Fr 09:00' }),
+  bodyBattery: missing('Keine Messung seit Dienstag.'),
+  session: missing('Für heute nichts geplant.'),
+  ride: present({ activityId: 1, distanceM: 84200, kj: 2130, avgHr: 138, np: 212, durationS: 10680, calories: 1842 }),
+  zones: missing('Heute noch keine Fahrt erfasst.'),
+  peaks: missing('Noch keine Spitzenleistungs-Aufschlüsselung für diese Fahrt.'),
+  planVsRidden: missing('Diese Fahrt konnte nicht mit dem Plan abgeglichen werden.'),
+  verdict: present({
+    headline: 'Schütz morgen.',
+    body: 'Die morgige VO2-Einheit braucht eine volle Nacht. Um 22:30 ins Bett gibt dir acht Stunden vor dem Wecker.',
+  }),
+  whatThisChanges: missing('Der Coach hat sich zu dieser Fahrt noch nicht geäußert.'),
+  conditions: missing('Kein Standort aus einer kürzlichen Fahrt.'),
+  tomorrow: present({ title: 'VO2 max · 5 × 4 @ 330 W', detail: 'Fünf mal vier, bei 330.', unlockLabel: present('05:00') }),
+  week: [
+    { letter: 'MO', tss: present(64) }, { letter: 'DI', tss: present(48) }, { letter: 'MI', tss: present(12) },
+    { letter: 'DO', tss: missing('Keine Fahrt erfasst.') }, { letter: 'FR', tss: present(24) },
+    { letter: 'SA', tss: present(68) }, { letter: 'SO', tss: present(44) },
+  ],
+  energyOut: missing('Kein stündlicher Energieverbrauch für heute verfügbar.'),
+  isLoading: false,
+} as TodayModel
+
 describe('visual harness', () => {
   it.skipIf(!OUT)('writes the Trained screen to HTML', () => {
     writeHarness('trained', model)
@@ -185,6 +217,9 @@ describe('visual harness', () => {
   })
   it.skipIf(!OUT)('writes the Resting screen to HTML', () => {
     writeHarness('resting', restingModel)
+  })
+  it.skipIf(!OUT)('writes the Evening screen to HTML', () => {
+    writeHarness('evening', eveningModel)
   })
   it.skipIf(!OUT)('writes the Session Detail screen to HTML', () => {
     writeSessionDetailHarness()
@@ -247,7 +282,7 @@ function writeSessionDetailHarness() {
 
 /** `HARNESS_OUT=/tmp/t10.html` writes trained to that exact path and every
  *  other state alongside it as `/tmp/t10.<state>.html`. */
-function writeHarness(name: 'trained' | 'rest' | 'training' | 'resting', m: TodayModel) {
+function writeHarness(name: 'trained' | 'rest' | 'training' | 'resting' | 'evening', m: TodayModel) {
   const { container } = render(<MemoryRouter><TodayView model={m} /></MemoryRouter>)
   const tokens = readFileSync(path.join(__dirname, '..', 'tokens.css'), 'utf8')
   const base = OUT!.endsWith('.html') ? OUT!.slice(0, -5) : OUT!

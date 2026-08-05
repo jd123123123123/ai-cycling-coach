@@ -54,10 +54,37 @@ import type { DayState } from '../state/dayState'
  * ease-in-out) — not implemented here, matching Trained's disc and
  * Training's arch (no motion; a static glyph is the transcribed shape).
  *
- * Evening's silhouette remains Task 14's — until it lands, that state still
- * falls back to this same disc.
+ * Evening — "Glyph Setting Disc" (`BQWNf`/`LMcU8`/`PHs8H`+`N7Hx9`, pen
+ * `KYS6e`): a 24x24 disc clipped by a 24x12 window (`Sky`, positioned
+ * 5/10 inside the 34x34 mark) so only its top half shows above a 34x2
+ * `Horizon` bar beneath it — a sun/moon setting behind a line, both in the
+ * state accent. The pen's own `context` on the disc describes a one-shot
+ * mount animation (translateY -9px -> 0 over 1200ms) that sinks it behind
+ * the horizon; not implemented here, matching every other state's static
+ * glyph (see the file-level note above on this project's build-gate
+ * posture). Read once, 2026-08-05 — the newer `cx4zJ` (IMAGERY) variant of
+ * the Evening frame does not carry a Day Mark node at all inside its own
+ * Cover, so this may since have been dropped from the design; kept here
+ * for parity with every other day state until a fresh pen read says
+ * otherwise (see task-14-report.md).
  */
 export default function DayMark({ state }: { state: DayState }) {
+  if (state === 'evening') {
+    return (
+      <div data-day-mark data-day-mark-state={state} style={{ width: 34, height: 34, position: 'relative' }}>
+        <div style={{ position: 'absolute', left: 5, top: 10, width: 24, height: 12, overflow: 'hidden' }}>
+          <div
+            style={{
+              width: 24, height: 24, borderRadius: '50%', background: 'var(--st-active)',
+              boxShadow: '0 0 18px var(--st-a28)',
+            }}
+          />
+        </div>
+        <div style={{ position: 'absolute', left: 0, top: 22, width: 34, height: 2, borderRadius: 1, background: 'var(--st-active)' }} />
+      </div>
+    )
+  }
+
   if (state === 'resting') {
     return (
       <div data-day-mark data-day-mark-state={state} style={{ width: 34, height: 34, filter: 'drop-shadow(0 0 18px var(--st-a28))' }}>
