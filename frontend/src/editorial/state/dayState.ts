@@ -64,7 +64,7 @@ export function writeOverride(state: DayState, now: Date): void {
   }
 }
 
-export function clearOverride(_now: Date): void {
+export function clearOverride(): void {
   try {
     localStorage.removeItem(KEY)
   } catch {

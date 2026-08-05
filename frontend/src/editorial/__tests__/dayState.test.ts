@@ -60,7 +60,7 @@ describe('override storage', () => {
 
   it('clears', () => {
     writeOverride('trained', at(9))
-    clearOverride(at(9))
+    clearOverride()
     expect(readOverride(at(9))).toBeNull()
   })
 
