@@ -3,6 +3,7 @@ import { downloadWorkoutExport } from '../../api/coach'
 import Bars, { type BarsBlock } from '../components/Bars'
 import NavHeader from '../components/NavHeader'
 import QuotePlate from '../components/QuotePlate'
+import RouteOptions from '../components/RouteOptions'
 import SecHead from '../components/SecHead'
 import SessionBlocks from '../components/SessionBlocks'
 import SessionCta from '../components/SessionCta'
@@ -26,9 +27,9 @@ import { intlLocale } from '../i18n/copy'
  * → `03 THE PAYOFF` → `04 WHERE TO RIDE IT` → CTA. The brief's own copy of
  * this tree names a `02 HOW TO RIDE IT` section between `01` and the Quote
  * Plate — the live tree has no such section; the pen wins. `04 WHERE TO
- * RIDE IT` is not rendered at all — see `useSessionModel.ts`'s own doc
- * comment for why (no route-suggestion data source exists anywhere in this
- * app; a permanent gap, not a transient one).
+ * RIDE IT` DOES render now (`components/RouteOptions.tsx`) — see
+ * `useSessionModel.ts`'s own doc comment for the real source (`GET
+ * /routes/mine`) and exactly what it does/doesn't supply.
  *
  * There is no TabBar on this screen (absent from `J5FV6`'s own tree) — Nav's
  * back arrow is this screen's only way out, matching a drill-down detail
@@ -94,6 +95,8 @@ function SessionDetailBody({ model, onBack }: { model: SessionModel; onBack: () 
       <QuotePlate state="training" quote={t('quoteTraining')} attribution={t('quoteTrainingAttribution')} />
 
       <Payoff model={model} payoffBlocks={payoffBlocks} />
+
+      <RouteOptions routes={model.routes} />
 
       <SessionCta onExport={handleExport} />
     </main>

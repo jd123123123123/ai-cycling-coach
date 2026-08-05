@@ -263,6 +263,29 @@ function writeSessionDetailHarness() {
       onYou: { claim: 'Deine 12-Minuten-Decke steigt auf 288 W', detail: 'Schwellenreferenz aktualisiert.' },
       onThePlan: { claim: 'Donnerstags VO2-Ziele steigen um 10 W', detail: 'Morgen bleibt locker.' },
     }),
+    routes: present([
+      {
+        key: 'oelberg-0', optionLetter: 'A', name: 'Ölberg Loop', distanceKm: 40, rideCount: 6,
+        ascentM: present(640),
+        trackPolyline: present([
+          [50.678, 7.228], [50.686, 7.241], [50.694, 7.239], [50.701, 7.258],
+          [50.706, 7.271], [50.699, 7.283], [50.688, 7.276], [50.680, 7.259],
+        ]),
+      },
+      {
+        key: 'rheinaue-1', optionLetter: 'B', name: 'Rheinaue Flat', distanceKm: 28, rideCount: 11,
+        ascentM: present(120),
+        trackPolyline: present([
+          [50.702, 7.098], [50.709, 7.112], [50.712, 7.129], [50.706, 7.144],
+          [50.696, 7.139], [50.690, 7.121], [50.695, 7.104],
+        ]),
+      },
+      {
+        key: 'siebengebirge-2', optionLetter: 'C', name: 'Siebengebirge Short', distanceKm: 22, rideCount: 3,
+        ascentM: missing('Keine Höhenmeter für diese Strecke erfasst.'),
+        trackPolyline: missing('Keine GPS-Strecke für diese Route erfasst.'),
+      },
+    ]),
     isLoading: false,
   }
   const { container } = render(
@@ -278,6 +301,19 @@ function writeSessionDetailHarness() {
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>*{box-sizing:border-box}html,body{margin:0;padding:0;background:#000}${tokens}</style>
 </head><body>${container.innerHTML}</body></html>`)
+
+  const emptySessionModel: SessionModel = { ...sessionModel, routes: missing('Noch keine eigenen GPS-Strecken erfasst.') }
+  const { container: emptyContainer } = render(
+    <MemoryRouter>
+      <SessionDetailView model={emptySessionModel} />
+    </MemoryRouter>,
+  )
+  writeFileSync(`${base}.session-detail-no-routes.html`, `<!doctype html><html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box}html,body{margin:0;padding:0;background:#000}${tokens}</style>
+</head><body>${emptyContainer.innerHTML}</body></html>`)
 }
 
 /** `HARNESS_OUT=/tmp/t10.html` writes trained to that exact path and every

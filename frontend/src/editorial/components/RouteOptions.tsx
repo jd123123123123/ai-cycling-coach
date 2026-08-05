@@ -1,0 +1,161 @@
+import { isPresent, type Value } from '../data/value'
+import type { RouteOption } from '../data/useSessionModel'
+import RouteSketch from '../../components/ui/RouteSketch'
+import SecHead from './SecHead'
+import { useCopy } from '../i18n/useCopy'
+import { intlLocale } from '../i18n/copy'
+
+/**
+ * "04 WHERE TO RIDE IT" (pen `DMMlw`, `J5FV6`). See `useSessionModel.ts`'s
+ * own doc comment for the full map of what `GET /routes/mine` supplies and
+ * what it doesn't — short version: name, distance, ascent, a ride count and
+ * the rider's own recorded GPS track are real; the pen's 44-segment
+ * elevation profile, its per-route weather ("Conditions") and its
+ * photographs are not, and are never modelled as fabricatable content.
+ *
+ * TRANSCRIPTION NOTES against `DMMlw`:
+ *  - `MzheX` (Section Head): Index "04" Sora 22/800 (colour follows
+ *    `var(--st-active)`, not the pen's literal `$st-training`, matching
+ *    every other numbered head in this codebase — see `SecHead.tsx`'s own
+ *    doc comment). Title `WHERE TO RIDE IT` is 12px Inter/800/ls1.6 in the
+ *    live tree — `SecHead`'s `kicker` prop is the closest existing match
+ *    (same 12px title, same `#FFFFFF12` chip background); its one known
+ *    deviation is the chip LABEL colour (kicker forces `--e-mid`, the pen's
+ *    own instance uses the accent) — a shared-component constraint, not
+ *    re-litigated here since `SecHead.tsx` belongs to another task's scope.
+ *  - `D9Mkk` (Option Row): pen's right-hand text ("1:45 · HOME 19:15") is a
+ *    duration/arrival estimate with no source anywhere — this component's
+ *    Option Row carries no right-hand text at all rather than a fabricated
+ *    time.
+ *  - `o3AyPi`/`cCKI1` (Title/Why): the pen's "Why" paragraph is bespoke
+ *    editorial copy naming this SESSION's own block count and distances
+ *    inside a specific route's kilometre markers — there is no field on
+ *    `RouteItem` that could ever produce it, so it is never rendered (the
+ *    same "permanently unresolvable slot renders nothing" rule the section
+ *    root itself follows for weather).
+ *  - `tEq8r` (Plate, the pen's photograph): OWNER'S RULING (2026-08-05) —
+ *    these are routes the rider actually rode, so the honest image is
+ *    their own recorded track, not a stock photo standing in for it. Drawn
+ *    via `components/ui/RouteSketch` (the app's existing GPS-track
+ *    renderer — three other call sites already share its projection;
+ *    reused here rather than forked) in `var(--st-active)`. A route whose
+ *    `polyline` has fewer than two points renders no sketch and shows
+ *    `noRouteTrack` instead — never a fallback photo, never a fabricated
+ *    shape.
+ *  - `gFBpP`/`ilKLz` (Elevation / Ramp Spans, 44 segments each): no source
+ *    — `RouteItem` carries no per-point elevation series, only a single
+ *    total ascent. Never rendered — not even a flattened/estimated bar set
+ *    built from `ascentM` alone (that would be exactly the "plausible
+ *    substitute" the missing-data rule forbids). One reason line
+ *    (`routeProfileMissing`) prints ONCE for the whole section instead of
+ *    once per card, since the reason is identical and permanent for every
+ *    route, not a per-row transient gap.
+ *  - `bHXcp` (Conditions): no per-route forecast anywhere in this app,
+ *    ever — omitted entirely, the same treatment `TodayModel.peaks`/
+ *    `planVsRidden` already give a permanent gap.
+ */
+
+const SKETCH_WIDTH = 390
+const SKETCH_HEIGHT = 148
+
+export default function RouteOptions({ routes }: { routes: Value<RouteOption[]> }) {
+  const { t } = useCopy()
+
+  return (
+    <div data-route-options style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '40px 0 0 0' }}>
+      <div style={{ width: '100%', padding: '0 24px 24px 24px' }}>
+        <SecHead
+          index="04"
+          title={t('sectionWhereToRideIt')}
+          chip={isPresent(routes) ? t('chipRoutesCount', { n: routes.value.length }) : undefined}
+          kicker
+        />
+      </div>
+
+      {isPresent(routes) ? (
+        <>
+          {routes.value.map((route, i) => (
+            <RouteCard key={route.key} route={route} isLast={i === routes.value.length - 1} />
+          ))}
+          <p
+            style={{
+              margin: 0, padding: '20px 24px 8px 24px', fontFamily: 'var(--e-body)', fontSize: 11,
+              fontWeight: 600, color: 'var(--e-quiet)',
+            }}
+          >
+            {t('routeProfileMissing')}
+          </p>
+        </>
+      ) : (
+        <p style={{ margin: 0, padding: '0 24px', fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)' }}>
+          {routes.missing}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function RouteCard({ route, isLast }: { route: RouteOption; isLast: boolean }) {
+  const { t, locale } = useCopy()
+  const km = route.distanceKm.toLocaleString(intlLocale(locale), { maximumFractionDigits: 1 })
+  const statsLine = isPresent(route.ascentM)
+    ? t('routeStatsWithAscent', { km, ascent: Math.round(route.ascentM.value), n: route.rideCount })
+    : t('routeStatsNoAscent', { km, n: route.rideCount })
+
+  return (
+    <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', padding: '0 24px' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--st-active)' }}>
+          {t('routeOptionLabel', { letter: route.optionLetter })}
+        </span>
+
+        <p style={{
+          margin: '10px 0 20px 0', fontFamily: 'var(--e-display)', fontSize: 24, fontWeight: 800,
+          letterSpacing: -1, lineHeight: 1.1, color: 'var(--e-ink)',
+        }}
+        >
+          {route.name}
+        </p>
+      </div>
+
+      <div
+        data-route-track
+        style={{
+          width: '100%', height: SKETCH_HEIGHT, background: 'var(--e-ground)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+        }}
+      >
+        {isPresent(route.trackPolyline) ? (
+          <RouteSketch
+            polyline={route.trackPolyline.value}
+            width={SKETCH_WIDTH}
+            height={SKETCH_HEIGHT}
+            pad={28}
+            strokeWidth={2.5}
+            color="var(--st-active)"
+            endpoints
+            fluid
+            renderHeight={SKETCH_HEIGHT}
+            ariaLabel={route.name}
+          />
+        ) : (
+          <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 600, color: 'var(--e-quiet)' }}>
+            {route.trackPolyline.missing}
+          </span>
+        )}
+      </div>
+
+      <div style={{ width: '100%', padding: '10px 24px 0 24px' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)' }}>
+          {statsLine}
+        </span>
+      </div>
+
+      {!isLast && (
+        <div style={{ width: '100%', padding: '30px 24px' }}>
+          <div style={{ width: '100%', height: 1, background: 'var(--e-rule)' }} />
+        </div>
+      )}
+    </div>
+  )
+}

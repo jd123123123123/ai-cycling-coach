@@ -435,6 +435,24 @@ export const COPY = {
     de: 'Noch keine Blockdaten für die morgige Einheit.',
     en: "No block data for tomorrow's session yet.",
   },
+
+  // ---- Task 12 follow-up: Session Detail 04 WHERE TO RIDE IT
+  // (components/RouteOptions.tsx, pen J5FV6 → DMMlw), wired to GET /routes/mine.
+  sectionWhereToRideIt: { de: 'WO DU FAHREN SOLLTEST', en: 'WHERE TO RIDE IT' },
+  chipRoutesCount: { de: '{n} STRECKEN', en: '{n} ROUTES' },
+  routeOptionLabel: { de: 'OPTION {letter}', en: 'OPTION {letter}' },
+  routeStatsWithAscent: { de: '{km} KM · {ascent} HM · {n}× GEFAHREN', en: '{km} KM · {ascent} M · RIDDEN {n}×' },
+  routeStatsNoAscent: { de: '{km} KM · {n}× GEFAHREN', en: '{km} KM · RIDDEN {n}×' },
+  routeProfileMissing: {
+    de: 'Kein Höhenprofil je Strecke verfügbar.',
+    en: 'No elevation profile per route available.',
+  },
+  noRouteAscent: { de: 'Keine Höhenmeter für diese Strecke erfasst.', en: 'No elevation gain recorded for this route.' },
+  noRouteTrack: { de: 'Keine GPS-Strecke für diese Route erfasst.', en: 'No GPS track recorded for this route.' },
+  noRoutesAvailable: {
+    de: 'Noch keine eigenen GPS-Strecken erfasst.',
+    en: 'No GPS routes of your own recorded yet.',
+  },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY

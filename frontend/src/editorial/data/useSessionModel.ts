@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTodaySession, sessionIntensity } from '../../hooks/useTodaySession'
 import type { ResolvedBlock } from '../../api/coach'
+import { apiClient } from '../../api/client'
 import type { Claim } from './useTodayModel'
 import { fromNullable, isPresent, missing, present, type Value } from './value'
 import { translate, useCopy } from '../i18n/useCopy'
@@ -21,17 +23,41 @@ import { EDITORIAL_DEFAULT_LOCALE, type Locale } from '../i18n/copy'
  * real children, in order, are: StatusBar · Nav · Hero · `01 The Blocks` ·
  * Quote Plate · `03 THE PAYOFF` · `04 WHERE TO RIDE IT` · CTA.
  *
- * SCOPE CUT, recorded rather than silently dropped: `04 WHERE TO RIDE IT`
- * (pen: three photographed route options, each with a 44-segment elevation
- * profile and its own hyperlocal weather) has NO real data source anywhere
- * in this app — there is no route-suggestion endpoint, no route ↔ session
- * matching, and no per-route forecast. Per the missing-data rule ("if a
- * slot can never resolve from the model, render nothing rather than a
- * permanent dash dressed as a transient gap"), this model carries no
- * `routes` field at all and the page renders no `04` section — the same
- * treatment `TodayModel` already gives `peaks` and `planVsRidden` for an
- * equally permanent gap, except here the omission is the whole section,
- * not just one tile, because nothing in the section would ever resolve.
+ * CORRECTION (2026-08-05, owner's ruling): `04 WHERE TO RIDE IT` DOES have a
+ * real source after all — `GET /routes/mine` (`RoutesResponse`, defined
+ * locally below; the working reference for its shape is
+ * `pages/ExploreRoutesView.tsx`, which this file does not import from —
+ * `editorial/` stays a one-way dependency on `api/`, never on sibling
+ * page trees). What that endpoint supplies and what it doesn't:
+ *
+ *  - Route name, distance (`distance_km`), ascent (`elevation_m`) and a
+ *    ride count (`times_ridden`) are real fields on `RouteItem` — these
+ *    feed `RouteOption` below and the "OPTION A/B/C" rows in
+ *    `components/RouteOptions.tsx`.
+ *  - The pen's 44-segment elevation PROFILE (a per-metre climb curve) has
+ *    no source — `RouteItem` carries a start coordinate and a polyline, not
+ *    an elevation series — so the profile is never modelled as a `Value`
+ *    at all (there is nothing that could ever resolve it); the row's real
+ *    fields still render, and the section prints one quiet reason once
+ *    (`routeProfileMissing`) rather than three identical dashed charts.
+ *  - The pen's per-route hyperlocal weather (temperature/wind/sunset) has
+ *    no source either — no forecast is ever fetched per historic route —
+ *    so it is simply never rendered, the same "permanent gap renders
+ *    nothing" treatment `TodayModel.peaks`/`planVsRidden` already use.
+ *  - The pen's three photographs have no source, but a BETTER honest image
+ *    does: `RouteItem.polyline`, the rider's own recorded GPS track for a
+ *    route they actually rode. `RouteOptions.tsx` draws it with the app's
+ *    existing `components/ui/RouteSketch` (three other call sites already
+ *    share it — reused here rather than forked, per the owner's ruling) in
+ *    the state accent, instead of a stock photo. This is a deliberate
+ *    departure from `Cover`/`QuotePlate`'s own "scrim over ground, never a
+ *    photo" resolution — those two are atmospheric mood plates with no
+ *    factual content to draw instead; a route the rider actually rode does
+ *    have one. `trackPolyline` is `missing` when a route's polyline has
+ *    fewer than two points — never a fabricated shape.
+ *
+ * `routes: Value<RouteOption[]>` is `missing` when `available` is false or
+ * the list is empty (an honest, single reason — not three dashed rows).
  */
 
 export interface ProgrammeBlock {
@@ -57,6 +83,60 @@ export interface PayoffPoint {
   isToday: boolean
 }
 
+/** Local mirror of `RouteItem`/`RoutesResponse` (`GET /routes/mine`,
+ *  `pages/ExploreRoutesView.tsx`) — kept as this file's own copy rather than
+ *  imported, per `editorial/`'s one-way dependency rule (nothing outside
+ *  `editorial/` imports from it; this tree may only READ from `api/`). Only
+ *  the fields `04 WHERE TO RIDE IT` actually uses are declared. */
+interface RouteItem {
+  name: string
+  times_ridden: number
+  distance_km: number
+  elevation_m: number | null
+  polyline: [number, number][]
+}
+interface RoutesResponse {
+  available: boolean
+  n_gps_rides: number
+  routes: RouteItem[]
+}
+
+export interface RouteOption {
+  key: string
+  /** "A" / "B" / "C" — the pen's own row index, not data. */
+  optionLetter: string
+  name: string
+  distanceKm: number
+  /** `elevation_m` is nullable on the real route — a transient per-route gap. */
+  ascentM: Value<number>
+  rideCount: number
+  /** The real GPS track (`RouteItem.polyline`) — drawn via the app's own
+   *  `RouteSketch`, per the owner's ruling that a rider's real recorded
+   *  track is the honest image for a route THEY rode, not a stock photo.
+   *  Missing when the route carries fewer than two points (`RouteSketch`
+   *  itself already treats that as "not a route"; this Value is what lets
+   *  the row show a reason instead of a component that silently renders
+   *  nothing). */
+  trackPolyline: Value<[number, number][]>
+}
+
+const OPTION_LETTERS = ['A', 'B', 'C']
+
+function buildRoutes(resp: RoutesResponse | undefined, locale: Locale): Value<RouteOption[]> {
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key)
+  if (!resp || !resp.available || resp.routes.length === 0) return missing(t('noRoutesAvailable'))
+  const options: RouteOption[] = resp.routes.slice(0, 3).map((r, i) => ({
+    key: `${r.name}-${i}`,
+    optionLetter: OPTION_LETTERS[i] ?? String(i + 1),
+    name: r.name,
+    distanceKm: r.distance_km,
+    ascentM: r.elevation_m != null ? present(r.elevation_m) : missing(t('noRouteAscent')),
+    rideCount: r.times_ridden,
+    trackPolyline: r.polyline && r.polyline.length >= 2 ? present(r.polyline) : missing(t('noRouteTrack')),
+  }))
+  return present(options)
+}
+
 export interface SessionModel {
   dateLabel: Value<string>
   title: Value<string>
@@ -76,6 +156,9 @@ export interface SessionModel {
   payoff: Value<PayoffPoint[]>
   payoffClaim: Value<string>
   whatThisChanges: Value<{ onYou: Claim; onThePlan: Claim }>
+  /** "04 WHERE TO RIDE IT" — see this file's own doc comment for what maps
+   *  from `GET /routes/mine` and what doesn't. */
+  routes: Value<RouteOption[]>
   isLoading: boolean
 }
 
@@ -134,11 +217,18 @@ export interface SessionModelInputs {
   brief: import('../../api/coach').CoachBriefResponse | undefined
   isLoading: boolean
   locale?: Locale
+  /** `GET /routes/mine` — see this file's own doc comment. `undefined`
+   *  while the query has not resolved (not yet fetched, or still loading):
+   *  treated the same as "no routes" (`buildRoutes` renders one honest
+   *  reason either way; there is no separate loading skeleton for this
+   *  section, matching how every other Session Detail section behaves
+   *  before its own query resolves). */
+  routesResponse?: RoutesResponse
 }
 
 /** Pure assembly — no hooks, fully unit-testable (mirrors `buildTodayModel`). */
 export function buildSessionModel(inputs: SessionModelInputs): SessionModel {
-  const { now, workout, brief, isLoading, locale = EDITORIAL_DEFAULT_LOCALE } = inputs
+  const { now, workout, brief, isLoading, locale = EDITORIAL_DEFAULT_LOCALE, routesResponse } = inputs
   const t = (key: Parameters<typeof translate>[1], vars?: Parameters<typeof translate>[2]) => translate(locale, key, vars)
   const de = locale === 'de'
 
@@ -242,6 +332,8 @@ export function buildSessionModel(inputs: SessionModelInputs): SessionModel {
     t('whatThisChangesMissing'),
   )
 
+  const routes = buildRoutes(routesResponse, locale)
+
   return {
     dateLabel,
     title,
@@ -257,6 +349,7 @@ export function buildSessionModel(inputs: SessionModelInputs): SessionModel {
     payoff,
     payoffClaim,
     whatThisChanges,
+    routes,
     isLoading,
   }
 }
@@ -268,12 +361,23 @@ export function useSessionModel(): SessionModel {
   const session = useTodaySession()
   const isLoading = session.brief === undefined && !session.workout
 
+  // Same query the working reference (`ExploreRoutesView.tsx`) uses for
+  // "04 WHERE TO RIDE IT"'s real fields — same key, so both screens share
+  // one cache entry, and same 30-minute staleTime (a rider's ridden-route
+  // history changes at most once a session).
+  const { data: routesResponse } = useQuery<RoutesResponse>({
+    queryKey: ['routes', 'mine'],
+    queryFn: async () => (await apiClient.get<RoutesResponse>('/routes/mine')).data,
+    staleTime: 30 * 60 * 1000,
+  })
+
   return buildSessionModel({
     now,
     workout: session.workout,
     brief: session.brief,
     isLoading,
     locale,
+    routesResponse,
   })
 }
 

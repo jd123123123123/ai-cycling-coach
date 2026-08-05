@@ -53,6 +53,20 @@ const fullModel: SessionModel = {
     onYou: { claim: 'Deine Schwelle steigt', detail: 'Referenzwert aktualisiert.' },
     onThePlan: { claim: 'Donnerstag bleibt locker', detail: 'Nichts ändert sich morgen.' },
   }),
+  routes: present([
+    {
+      key: 'oelberg-0', optionLetter: 'A', name: 'Ölberg Loop', distanceKm: 40, rideCount: 6,
+      ascentM: present(640), trackPolyline: present([[50.68, 7.23], [50.70, 7.26], [50.71, 7.29]]),
+    },
+    {
+      key: 'rheinaue-1', optionLetter: 'B', name: 'Rheinaue Flat', distanceKm: 28, rideCount: 11,
+      ascentM: present(120), trackPolyline: present([[50.70, 7.10], [50.71, 7.13], [50.69, 7.15]]),
+    },
+    {
+      key: 'siebengebirge-2', optionLetter: 'C', name: 'Siebengebirge Short', distanceKm: 22, rideCount: 3,
+      ascentM: missing('Keine Höhenmeter für diese Strecke erfasst.'), trackPolyline: missing('Keine GPS-Strecke für diese Route erfasst.'),
+    },
+  ]),
   isLoading: false,
 }
 
@@ -71,11 +85,12 @@ const emptyModel: SessionModel = {
   payoff: missing('Noch keine Sieben-Tage-Prognose.'),
   payoffClaim: missing('Der Coach hat die nächsten sieben Tage noch nicht eingeordnet.'),
   whatThisChanges: missing('Der Coach hat sich zu dieser Fahrt noch nicht geäußert.'),
+  routes: missing('Noch keine eigenen GPS-Strecken erfasst.'),
   isLoading: false,
 }
 
 describe('SessionDetailPage — section composition', () => {
-  it('renders every section in pen-verified order: Nav, Hero, 01 Blocks, Quote, 03 Payoff, CTA', () => {
+  it('renders every section in pen-verified order: Nav, Hero, 01 Blocks, Quote, 03 Payoff, 04 Where To Ride It, CTA', () => {
     const { container } = render(
       <MemoryRouter>
         <SessionDetailView model={fullModel} />
@@ -84,7 +99,7 @@ describe('SessionDetailPage — section composition', () => {
     const main = container.querySelector('[data-session-detail]')
     expect(main).not.toBeNull()
 
-    const order = ['[data-hero-numeral]', '[data-programme]', '[data-quote-plate]', '[data-stat-tile]']
+    const order = ['[data-hero-numeral]', '[data-programme]', '[data-quote-plate]', '[data-stat-tile]', '[data-route-options]']
     const all = Array.from(main!.querySelectorAll('*'))
     const positions = order.map((sel) => {
       const el = main!.querySelector(sel)
@@ -94,6 +109,10 @@ describe('SessionDetailPage — section composition', () => {
     for (let i = 1; i < positions.length; i++) {
       expect(positions[i]).toBeGreaterThan(positions[0])
     }
+    // "04 WHERE TO RIDE IT" sits after "03 THE PAYOFF" and before the CTA.
+    const ctaButton = screen.getByRole('button', { name: /workout exportieren/i })
+    const routeSection = main!.querySelector('[data-route-options]')!
+    expect(all.indexOf(routeSection)).toBeLessThan(all.indexOf(ctaButton))
     expect(main!.textContent).toContain('WORKOUT EXPORTIEREN')
   })
 
@@ -106,13 +125,31 @@ describe('SessionDetailPage — section composition', () => {
     expect(container.textContent).not.toMatch(/how to ride it/i)
   })
 
-  it('renders no 04 WHERE TO RIDE IT section — no route data source exists', () => {
+  it('renders 04 WHERE TO RIDE IT with real route rows, no per-route weather, one shared profile reason', () => {
     const { container } = render(
       <MemoryRouter>
         <SessionDetailView model={fullModel} />
       </MemoryRouter>,
     )
-    expect(container.textContent).not.toMatch(/where to ride it|wo du fahren solltest/i)
+    expect(container.textContent).toMatch(/wo du fahren solltest/i)
+    expect(container.textContent).toContain('Ölberg Loop')
+    expect(container.textContent).toContain('Rheinaue Flat')
+    // The elevation-profile reason prints once for the section, not once per route.
+    const profileReasonCount = (container.textContent!.match(/Kein Höhenprofil je Strecke verfügbar\./g) ?? []).length
+    expect(profileReasonCount).toBe(1)
+    // The route with no polyline shows its own honest reason instead of a sketch.
+    expect(container.textContent).toContain('Keine GPS-Strecke für diese Route erfasst.')
+  })
+
+  it('renders 04 WHERE TO RIDE IT as one honest reason, not three dashed rows, when routes are unavailable', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <SessionDetailView model={emptyModel} />
+      </MemoryRouter>,
+    )
+    expect(container.textContent).toMatch(/wo du fahren solltest/i)
+    expect(container.textContent).toContain('Noch keine eigenen GPS-Strecken erfasst.')
+    expect(container.querySelector('[data-route-track]')).toBeNull()
   })
 
   it('renders honest dashes and reasons when nothing resolves, frame intact', () => {
