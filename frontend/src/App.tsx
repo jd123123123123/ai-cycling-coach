@@ -56,6 +56,7 @@ const RouteRehearsalView = lazyWithRetry(() => import('./pages/RouteRehearsalVie
 // EDITORIAL II — a second design system, mounted alongside the first.
 const EditorialTodayPage = lazyWithRetry(() => import('./editorial/pages/TodayPage'))
 const EditorialSessionDetailPage = lazyWithRetry(() => import('./editorial/pages/SessionDetailPage'))
+const EditorialTabPlate = lazyWithRetry(() => import('./editorial/pages/TabPlate'))
 
 function App() {
   return (
@@ -289,6 +290,7 @@ function AppRoutes() {
           {/* EDITORIAL II — a second design system, mounted alongside the first. */}
           <Route path="/e/today" element={<ProtectedRoute checkOnboarding><EditorialTodayPage /></ProtectedRoute>} />
           <Route path="/e/session/:id" element={<ProtectedRoute checkOnboarding><EditorialSessionDetailPage /></ProtectedRoute>} />
+          <Route path="/e/:tab" element={<ProtectedRoute checkOnboarding><EditorialTabPlate /></ProtectedRoute>} />
 
           {/* Default redirect */}
           <Route path="/" element={<RootRedirect />} />
