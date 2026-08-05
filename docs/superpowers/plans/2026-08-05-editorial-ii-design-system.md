@@ -797,9 +797,10 @@ import { useDayState } from '../state/useDayState'
 
 /**
  * The spine every Today state shares:
- *   StatusBar → Hero → Day Rail → Insight Strip → numbered sections
- *   → Tomorrow Band → TabBar
- * Sections are filled in per state by Tasks 8–13.
+ *   StatusBar → Hero → Insight Strip → numbered sections
+ *   → Tomorrow Band Wrap → TabWrap
+ * The Day Rail is nested inside the Hero, not a sibling of it, and Resting
+ * carries no Insight Strip. Sections are filled in per state by Tasks 8–14.
  */
 export default function TodayPage() {
   const { state } = useDayState()
