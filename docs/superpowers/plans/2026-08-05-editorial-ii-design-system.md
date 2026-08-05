@@ -279,6 +279,10 @@ Expected: FAIL — `ENOENT` on `tokens.css`.
   --e-display: "Sora", "Inter", ui-sans-serif, sans-serif;
   --e-body: "Inter", ui-sans-serif, system-ui, sans-serif;
 
+  /* The pen's $radius-pill, verbatim. A literal 9999 is an approximation, and
+   * this is a transcription. */
+  --radius-pill: 100px;
+
   /* The pen's "off" foreground for an unreached phase step. Darker than
    * --e-lo; it is a distinct value in the tree, not a near-miss. */
   --e-off: #3E444C;
