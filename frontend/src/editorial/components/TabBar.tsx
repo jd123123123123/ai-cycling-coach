@@ -4,7 +4,12 @@ import { Link } from 'react-router-dom'
 
 type Tab = 'today' | 'train' | 'recovery' | 'history' | 'social'
 
-const TABS: { id: Tab; label: string; icon: ComponentType<{ size?: number; color?: string }>; padX: number }[] = [
+const TABS: {
+  id: Tab
+  label: string
+  icon: ComponentType<{ size?: number; color?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>
+  padX: number
+}[] = [
   { id: 'today', label: 'TODAY', icon: Zap, padX: 14 },
   { id: 'train', label: 'TRAIN', icon: Bike, padX: 14 },
   { id: 'recovery', label: 'RECOVERY', icon: Heart, padX: 14 },
@@ -50,7 +55,7 @@ export default function TabBar({ active }: { active: Tab }) {
           width: '100%',
           height: 60,
           background: 'var(--e-ground)',
-          borderRadius: 9999,
+          borderRadius: 'var(--radius-pill)',
           border: '1px solid var(--e-rule)',
           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
           padding: '6px 8px',
@@ -68,7 +73,7 @@ export default function TabBar({ active }: { active: Tab }) {
               to={`/e/${id}`}
               aria-current={isActive ? 'page' : undefined}
               style={{
-                borderRadius: 9999,
+                borderRadius: 'var(--radius-pill)',
                 background: isActive ? 'color-mix(in srgb, var(--st-active) 15%, transparent)' : 'transparent',
                 display: 'flex',
                 flexDirection: 'column',
@@ -79,7 +84,7 @@ export default function TabBar({ active }: { active: Tab }) {
                 textDecoration: 'none',
               }}
             >
-              <Icon size={24} color={color} />
+              <Icon size={24} color={color} aria-hidden="true" />
               <span
                 style={{
                   fontFamily: 'var(--e-body)',

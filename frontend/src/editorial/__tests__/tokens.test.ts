@@ -48,4 +48,12 @@ describe('EDITORIAL II tokens', () => {
       expect(css).toMatch(new RegExp(`${name}\\s*:\\s*${hex}\\b`, 'i'))
     }
   })
+
+  it('declares the pill radius, the off-foreground, and the accent alphas', () => {
+    expect(css).toMatch(/--radius-pill\s*:\s*100px\b/i)
+    expect(css).toMatch(/--e-off\s*:\s*#3E444C\b/i)
+    for (const name of ['--st-a07', '--st-a12', '--st-a28', '--st-a40']) {
+      expect(css).toMatch(new RegExp(`${name}\\s*:\\s*color-mix\\(`, 'i'))
+    }
+  })
 })

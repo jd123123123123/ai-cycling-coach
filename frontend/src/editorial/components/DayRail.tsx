@@ -33,10 +33,9 @@ import type { DayState } from '../state/dayState'
  *   - active: tick height 6, fill var(--st-active), with a 16px glow at the
  *     pen's own alpha (#XXXXXX66 ≈ 40%); label var(--st-active).
  *   - upcoming (after the active step): tick height 2, fill var(--d-1)
- *     (#FFFFFF14 exact); label colour #3E444C has NO exact EDITORIAL II
- *     token — var(--e-lo) (#4A5058) is used as the closest existing "very
- *     dim" register. Flagging this as an approximated colour per the task's
- *     colour-discipline note.
+ *     (#FFFFFF14 exact); label colour #3E444C is now var(--e-off), a token
+ *     added specifically for this value — it is a distinct hex in the tree,
+ *     darker than --e-lo, not a near-miss that --e-lo should stand in for.
  *
  * The root frame's own fill (#0A0B05 / #05100A / #120B05 / #051012 /
  * #0A0816 across the five instances) is an EXACT match for --g-rest /
@@ -59,8 +58,8 @@ import type { DayState } from '../state/dayState'
  * Symbols font loaded and already depends on lucide-react, so
  * ArrowLeftRight/Undo2 stand in — a technical substitution, not a colour
  * approximation.) The pill fill/stroke (#XXXXXX12 / #XXXXXX47, the state
- * accent at the pen's own ~7%/~28% alpha) is expressed with color-mix
- * against var(--st-active) rather than inlining a hex.
+ * accent at the pen's own ~7%/~28% alpha) is var(--st-a07) / var(--st-a28);
+ * the active tick's glow (#XXXXXX66, ~40% alpha) is var(--st-a40).
  */
 
 const STEP_KEYS = ['daytype', 'session', 'recovery', 'lights-out'] as const
@@ -118,9 +117,9 @@ export default function DayRail({
               gap: 6,
               alignItems: 'center',
               padding: '6px 11px',
-              borderRadius: 9999,
-              background: 'color-mix(in srgb, var(--st-active) 7%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--st-active) 28%, transparent)',
+              borderRadius: 'var(--radius-pill)',
+              background: 'var(--st-a07)',
+              border: '1px solid var(--st-a28)',
               cursor: 'pointer',
             }}
           >
@@ -148,7 +147,7 @@ export default function DayRail({
           const isCompleted = i < activeIndex
           const tickColor = isActive ? 'var(--st-active)' : isCompleted ? 'var(--d-3)' : 'var(--d-1)'
           const tickHeight = isActive ? 6 : 2
-          const labelColor = isActive ? 'var(--st-active)' : isCompleted ? 'var(--e-mid)' : 'var(--e-lo)'
+          const labelColor = isActive ? 'var(--st-active)' : isCompleted ? 'var(--e-mid)' : 'var(--e-off)'
           return (
             <div
               key={key}
@@ -163,7 +162,7 @@ export default function DayRail({
                     height: tickHeight,
                     borderRadius: 3,
                     background: tickColor,
-                    boxShadow: isActive ? '0 0 16px color-mix(in srgb, var(--st-active) 40%, transparent)' : undefined,
+                    boxShadow: isActive ? '0 0 16px var(--st-a40)' : undefined,
                   }}
                 />
               </div>

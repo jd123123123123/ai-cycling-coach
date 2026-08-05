@@ -52,10 +52,17 @@ describe('chrome', () => {
     expect(screen.getByText('TRAINING DAY')).toBeTruthy()
   })
 
-  it('SecHead renders the number, the title, and an optional aside', () => {
-    render(<SecHead index="01" title="RECOVERY" aside="OVERNIGHT" />)
+  it('SecHead renders the number, the title, and the optional chip and sub', () => {
+    render(<SecHead index="01" title="YOUR BODY" chip="AHEAD" sub="What this section covers." />)
     expect(screen.getByText('01')).toBeTruthy()
-    expect(screen.getByText('RECOVERY')).toBeTruthy()
-    expect(screen.getByText('OVERNIGHT')).toBeTruthy()
+    expect(screen.getByText('YOUR BODY')).toBeTruthy()
+    expect(screen.getByText('AHEAD')).toBeTruthy()
+    expect(screen.getByText('What this section covers.')).toBeTruthy()
+  })
+
+  it('SecHead without a chip or sub renders neither', () => {
+    const { container } = render(<SecHead index="02" title="THE COST" />)
+    expect(container.querySelector('[data-sechead-chip]')).toBeNull()
+    expect(container.querySelector('[data-sechead-sub]')).toBeNull()
   })
 })

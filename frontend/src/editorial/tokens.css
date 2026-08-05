@@ -46,6 +46,23 @@
   --e-display: "Sora", "Inter", ui-sans-serif, sans-serif;
   --e-body: "Inter", ui-sans-serif, system-ui, sans-serif;
 
+  /* The pen's $radius-pill, verbatim. A literal 9999 is an approximation, and
+   * this is a transcription. */
+  --radius-pill: 100px;
+
+  /* The pen's "off" foreground for an unreached phase step. Darker than
+   * --e-lo; it is a distinct value in the tree, not a near-miss. */
+  --e-off: #3E444C;
+
+  /* Accent alphas. The pen writes these as literal #C8FF00xx, but the accent
+   * changes per day-state, so they are mixed from --st-active instead — a
+   * literal would strand every non-Rest screen on the acid hue.
+   *   a07 = 0x12   a12 = 0x1F   a28 = 0x47   a40 = 0x66  */
+  --st-a07: color-mix(in srgb, var(--st-active) 7%, transparent);
+  --st-a12: color-mix(in srgb, var(--st-active) 12%, transparent);
+  --st-a28: color-mix(in srgb, var(--st-active) 28%, transparent);
+  --st-a40: color-mix(in srgb, var(--st-active) 40%, transparent);
+
   /* Per-state grounds. Pen-verified 2026-08-05: every flagship frame paints
    * its OWN background, tinted toward that state's accent — none of them uses
    * the neutral --e-bg. The tint is the mood system, not decoration. */
