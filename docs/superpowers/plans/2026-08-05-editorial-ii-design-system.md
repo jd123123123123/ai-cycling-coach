@@ -418,7 +418,11 @@ export function deriveDayState(f: DayFacts): DayState {
   if (f.now.getHours() >= EVENING_HOUR) return 'evening'
   if (f.hasCyclingActivityToday) return 'trained'
   if (f.hasPlannedSessionToday && !f.plannedSessionCompleted) return 'training'
-  if (!f.hasPlannedSessionToday && f.now.getHours() >= RESTING_HOUR) return 'resting'
+  // Reaching this line already means nothing is pending: rule 3 returned for a
+  // planned-and-unfinished session, rule 2 for a ridden one. So a completed
+  // session with no recorded ride lands here too, and reads Resting — ruled
+  // 2026-08-05, correcting the spec table's redundant "no session" guard.
+  if (f.now.getHours() >= RESTING_HOUR) return 'resting'
   return 'rest'
 }
 

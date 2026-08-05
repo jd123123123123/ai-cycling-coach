@@ -141,8 +141,14 @@ Derivation, evaluated in order:
 | 1 | local time ≥ 21:00 | `evening` |
 | 2 | a cycling activity was recorded today | `trained` |
 | 3 | a session is planned for today and not completed | `training` |
-| 4 | no session planned and local time ≥ 11:00 | `resting` |
+| 4 | local time ≥ 11:00 | `resting` |
 | 5 | otherwise | `rest` |
+
+Rule 4 carried a "no session planned" guard in the first draft. It is redundant
+and, read literally, wrong: rules 2 and 3 have already returned for a ridden
+session and for a pending one, so anything reaching rule 4 has nothing left on
+today's menu — including a session marked complete without a recorded ride.
+That day reads Resting, not Rest. Ruled 2026-08-05.
 
 The 21:00 threshold is taken from the pen's own clocks: the Trained frame reads 19:24
 and the Evening frame reads 21:40, so a completed ride still shows Trained through the
