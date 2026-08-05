@@ -54,37 +54,20 @@ import type { DayState } from '../state/dayState'
  * ease-in-out) — not implemented here, matching Trained's disc and
  * Training's arch (no motion; a static glyph is the transcribed shape).
  *
- * Evening — "Glyph Setting Disc" (`BQWNf`/`LMcU8`/`PHs8H`+`N7Hx9`, pen
- * `KYS6e`): a 24x24 disc clipped by a 24x12 window (`Sky`, positioned
- * 5/10 inside the 34x34 mark) so only its top half shows above a 34x2
- * `Horizon` bar beneath it — a sun/moon setting behind a line, both in the
- * state accent. The pen's own `context` on the disc describes a one-shot
- * mount animation (translateY -9px -> 0 over 1200ms) that sinks it behind
- * the horizon; not implemented here, matching every other state's static
- * glyph (see the file-level note above on this project's build-gate
- * posture). Read once, 2026-08-05 — the newer `cx4zJ` (IMAGERY) variant of
- * the Evening frame does not carry a Day Mark node at all inside its own
- * Cover, so this may since have been dropped from the design; kept here
- * for parity with every other day state until a fresh pen read says
- * otherwise (see task-14-report.md).
+ * Evening — no glyph. The earlier `KYS6e` frame had one ("Glyph Setting
+ * Disc", `BQWNf`/`LMcU8`/`PHs8H`+`N7Hx9`: a 24x24 disc clipped by a 24x12
+ * `Sky` window so only its top half shows above a `Horizon` bar). A
+ * previous pass kept that shape here "for parity with every other day
+ * state" pending a fresh pen read. That fresh read is in: `cx4zJ` (the
+ * current canonical Evening frame, `Flagship · Evening · EDITORIAL II ·
+ * IMAGERY`) has no Day Mark node anywhere inside its own Cover (`TEpsw`) —
+ * confirmed by a full-subtree read, task 14 rebuild. The owner has ruled on
+ * the parity reasoning explicitly: it invents a mark the design doesn't
+ * ask for. `TodayView.tsx` no longer renders `<DayMark>` at all for
+ * `state === 'evening'`, so this branch is dead code and removed rather
+ * than kept unreachable.
  */
 export default function DayMark({ state }: { state: DayState }) {
-  if (state === 'evening') {
-    return (
-      <div data-day-mark data-day-mark-state={state} style={{ width: 34, height: 34, position: 'relative' }}>
-        <div style={{ position: 'absolute', left: 5, top: 10, width: 24, height: 12, overflow: 'hidden' }}>
-          <div
-            style={{
-              width: 24, height: 24, borderRadius: '50%', background: 'var(--st-active)',
-              boxShadow: '0 0 18px var(--st-a28)',
-            }}
-          />
-        </div>
-        <div style={{ position: 'absolute', left: 0, top: 22, width: 34, height: 2, borderRadius: 1, background: 'var(--st-active)' }} />
-      </div>
-    )
-  }
-
   if (state === 'resting') {
     return (
       <div data-day-mark data-day-mark-state={state} style={{ width: 34, height: 34, filter: 'drop-shadow(0 0 18px var(--st-a28))' }}>

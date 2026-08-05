@@ -764,9 +764,19 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
             )}
           </div>
 
-          <div style={{ position: 'absolute', top: DAY_MARK_TOP[state] ?? DAY_MARK_TOP.trained, right: 24 }}>
-            <DayMark state={state} />
-          </div>
+          {/* cx4zJ's Cover carries no Day Mark node at all — verified by a
+              fresh full-subtree read of `TEpsw` (task 14 rebuild, owner
+              ruling): Evening's Cover ends at `Foot` (Statement + Value,
+              no RC line either — see the headline slot below) followed by
+              `Bars`/`BarLabels` (the hypnogram, itself permanently missing —
+              same "no bedtime-target source" reason as the numeral, so not
+              rendered). No Day Mark renders for Evening; every other state
+              still gets one at its own pen-verified offset. */}
+          {state !== 'evening' && (
+            <div style={{ position: 'absolute', top: DAY_MARK_TOP[state] ?? DAY_MARK_TOP.trained, right: 24 }}>
+              <DayMark state={state} />
+            </div>
+          )}
         </Cover>
 
         <div data-hero-body style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '20px 24px 0 24px' }}>
@@ -1298,14 +1308,14 @@ const tickStyle: CSSProperties = {
 /** Day Mark's absolute `top` offset — pen-verified per state (`K8WxOh` Rest
  *  186, `LRIzl` Training 158, `F6851` Trained 150, `RzWNl` Resting 170,
  *  task 11's own fresh read of `h54Rs`), previously hardcoded to 150 for
- *  every state. Evening: 137, read from `KYS6e`/`BQWNf`'s own `y` (its Day
- *  Mark sits inside the bare Hero's `padding: [8,24,0,24]`) — the newer
- *  `cx4zJ` (IMAGERY) variant's Cover carries no Day Mark node at all (see
- *  DayMark.tsx's own doc comment), so this offset is transcribed from the
- *  older frame and kept for cross-state visual parity, not a fresh read of
- *  the currently-canonical tree. */
+ *  every state. No `evening` entry: `cx4zJ`'s Cover has no Day Mark node at
+ *  all (task 14 rebuild, owner ruling — see `DayMark.tsx`'s own doc comment
+ *  and the render site above, which skips this component entirely for
+ *  `state === 'evening'`). An earlier pass kept a transcribed-from-`KYS6e`
+ *  offset (137) "for cross-state parity" — that was exactly the kind of
+ *  invented-not-specified reasoning the owner has now overruled; removed. */
 const DAY_MARK_TOP: Partial<Record<DayState, number>> & { trained: number } = {
-  rest: 186, training: 158, trained: 150, resting: 170, evening: 137,
+  rest: 186, training: 158, trained: 150, resting: 170,
 }
 
 function pmcDelta(series: PmcPoint[], daysBack: number, pick: (p: PmcPoint) => number): number | null {
