@@ -200,8 +200,16 @@ describe('EDITORIAL II tokens', () => {
     }
   })
 
-  it('declares the depth ramp d-1 through d-4', () => {
-    for (const n of [1, 2, 3, 4]) expect(css).toMatch(new RegExp(`--d-${n}\\s*:`))
+  it('carries the depth ramp verbatim', () => {
+    // Pen-verified (2026-08-05): the pen's ramp is NOT evenly stepped, and
+    // d-2..d-4 differ from this plan's first draft. These are the pen's.
+    const ramp: Record<string, string> = {
+      '--d-1': '#FFFFFF14', '--d-2': '#FFFFFF2B',
+      '--d-3': '#FFFFFF4D', '--d-4': '#FFFFFF8C',
+    }
+    for (const [name, hex] of Object.entries(ramp)) {
+      expect(css).toMatch(new RegExp(`${name}\\s*:\\s*${hex}\\b`, 'i'))
+    }
   })
 })
 ```
@@ -248,9 +256,9 @@ Expected: FAIL — `ENOENT` on `tokens.css`.
 
   /* Depth ramp. */
   --d-1: #FFFFFF14;
-  --d-2: #FFFFFF1F;
-  --d-3: #FFFFFF29;
-  --d-4: #FFFFFF33;
+  --d-2: #FFFFFF2B;
+  --d-3: #FFFFFF4D;
+  --d-4: #FFFFFF8C;
 
   /* Status ramp. */
   --s-good: #2BE68F;
