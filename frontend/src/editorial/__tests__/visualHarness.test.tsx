@@ -18,7 +18,9 @@ import { describe, it } from 'vitest'
 const OUT = process.env.HARNESS_OUT
 import { present, missing } from '../data/value'
 import type { TodayModel } from '../data/useTodayModel'
+import type { SessionModel } from '../data/useSessionModel'
 import TodayView from '../pages/TodayView'
+import { SessionDetailView } from '../pages/SessionDetailPage'
 
 function buildPmcSeries(days: number) {
   const out = []
@@ -184,7 +186,64 @@ describe('visual harness', () => {
   it.skipIf(!OUT)('writes the Resting screen to HTML', () => {
     writeHarness('resting', restingModel)
   })
+  it.skipIf(!OUT)('writes the Session Detail screen to HTML', () => {
+    writeSessionDetailHarness()
+  })
 })
+
+/** Session Detail (Task 12, pen J5FV6) — its own fixture, German, run
+ *  through the real `SessionDetailPage` (model prop bypasses useSessionModel
+ *  so no React Query/auth/backend is needed), same "look at pixels, not just
+ *  the node tree" reasoning as the Today fixtures above. */
+function writeSessionDetailHarness() {
+  const sessionModel: SessionModel = {
+    dateLabel: present('MI 22 JUL'),
+    title: present('Schwelle 4×8'),
+    claim: present('Zweiunddreißig Minuten am Limit dessen, was du halten kannst.'),
+    numeral: present({ text: '4×8', qualifier: 'Z4', sub: '8 MIN BLÖCKE' }),
+    statWatts: present(285),
+    statDurationMin: present(105),
+    statTss: present(98),
+    statInZoneMin: present(32),
+    blocks: present([
+      { key: 'warmup', name: 'AUFWÄRMEN', note: present('Z2'), minutes: 20, watts: present(180), reps: 1, isMain: false },
+      { key: 'primer', name: 'ÖFFNER 3×2\'', note: present('Z3'), minutes: 6, watts: present(230), reps: 1, isMain: false },
+      { key: 'block', name: 'BLOCK', note: present('Z4'), minutes: 32, watts: present(285), reps: 4, isMain: true },
+      { key: 'cooldown', name: 'AUSFAHREN', note: present('Z1'), minutes: 15, watts: present(120), reps: 1, isMain: false },
+    ]),
+    totalDurationMin: present(105),
+    totalAtThresholdMin: present(32),
+    payoff: present([
+      { label: 'MI', tss: present(98), isToday: true },
+      { label: 'DO', tss: present(30), isToday: false },
+      { label: 'FR', tss: present(45), isToday: false },
+      { label: 'SA', tss: present(60), isToday: false },
+      { label: 'SO', tss: present(50), isToday: false },
+      { label: 'MO', tss: present(65), isToday: false },
+      { label: 'DI', tss: present(70), isToday: false },
+      { label: 'MI', tss: present(101), isToday: false },
+    ]),
+    payoffClaim: missing('Der Coach hat die nächsten sieben Tage noch nicht eingeordnet.'),
+    whatThisChanges: present({
+      onYou: { claim: 'Deine 12-Minuten-Decke steigt auf 288 W', detail: 'Schwellenreferenz aktualisiert.' },
+      onThePlan: { claim: 'Donnerstags VO2-Ziele steigen um 10 W', detail: 'Morgen bleibt locker.' },
+    }),
+    isLoading: false,
+  }
+  const { container } = render(
+    <MemoryRouter>
+      <SessionDetailView model={sessionModel} />
+    </MemoryRouter>,
+  )
+  const tokens = readFileSync(path.join(__dirname, '..', 'tokens.css'), 'utf8')
+  const base = OUT!.endsWith('.html') ? OUT!.slice(0, -5) : OUT!
+  writeFileSync(`${base}.session-detail.html`, `<!doctype html><html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box}html,body{margin:0;padding:0;background:#000}${tokens}</style>
+</head><body>${container.innerHTML}</body></html>`)
+}
 
 /** `HARNESS_OUT=/tmp/t10.html` writes trained to that exact path and every
  *  other state alongside it as `/tmp/t10.<state>.html`. */
