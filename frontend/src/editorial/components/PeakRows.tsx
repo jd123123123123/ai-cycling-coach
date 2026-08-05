@@ -1,4 +1,5 @@
 import { isPresent, type Value } from '../data/value'
+import { useCopy } from '../i18n/useCopy'
 
 export interface PeakRow {
   duration: string
@@ -52,6 +53,7 @@ export interface PeakTotal {
  * rendering a dash for a number nobody claims to know.
  */
 export default function PeakRows({ total, peaks }: { total: Value<PeakTotal>; peaks: Value<PeakRow[]> }) {
+  const { t } = useCopy()
   const present = isPresent(peaks)
   const list = present ? peaks.value : []
   const showPct = list.some((p) => p.percentOfSeasonBest != null)
@@ -67,11 +69,11 @@ export default function PeakRows({ total, peaks }: { total: Value<PeakTotal>; pe
     <section data-peak-rows style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-mid)' }}>
-          PEAK POWER TODAY
+          {t('peakRowsCaption')}
         </span>
         {showPct && (
           <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-quiet)' }}>
-            % OF SEASON BEST
+            {t('peakRowsSeasonBest')}
           </span>
         )}
       </div>

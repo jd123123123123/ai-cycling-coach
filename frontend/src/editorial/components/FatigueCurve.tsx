@@ -1,6 +1,7 @@
 import { isPresent } from '../data/value'
 import type { TodayModel } from '../data/useTodayModel'
 import { MOTION_DURATION_MS, MOTION_EASE, useReveal } from '../motion/useReveal'
+import { useCopy } from '../i18n/useCopy'
 
 /**
  * The Cost's "Curve" (fpPGi): the pen draws a precise bezier fatigue-decay
@@ -20,6 +21,7 @@ import { MOTION_DURATION_MS, MOTION_EASE, useReveal } from '../motion/useReveal'
  */
 export default function FatigueCurve({ pmc, recovery }: { pmc: TodayModel['pmc']; recovery: TodayModel['recovery'] }) {
   const { ref, on, reduced } = useReveal<HTMLDivElement>()
+  const { t } = useCopy()
 
   if (!isPresent(pmc)) {
     return (
@@ -52,7 +54,7 @@ export default function FatigueCurve({ pmc, recovery }: { pmc: TodayModel['pmc']
           }}
         />
         <span style={{ position: 'absolute', left: 0, top: 0, fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.9, color: 'var(--e-ink)' }}>
-          NOW · {Math.round(now)}
+          {t('fatigueCurveNow', { n: Math.round(now) })}
         </span>
         <span
           style={{
@@ -60,11 +62,11 @@ export default function FatigueCurve({ pmc, recovery }: { pmc: TodayModel['pmc']
             fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.9, color: 'var(--e-lo)',
           }}
         >
-          NEUTRAL {Math.round(neutral)}
+          {t('fatigueCurveNeutral', { n: Math.round(neutral) })}
         </span>
       </div>
       <span style={{ fontFamily: 'var(--e-body)', fontSize: 10, fontWeight: 700, color: 'var(--e-mid)' }}>
-        {isPresent(recovery) ? `Peaks now, then decays — back to neutral around ${recovery.value.clearAtLabel}.` : recovery.missing}
+        {isPresent(recovery) ? t('fatigueCurveCaption', { label: recovery.value.clearAtLabel }) : recovery.missing}
       </span>
     </div>
   )

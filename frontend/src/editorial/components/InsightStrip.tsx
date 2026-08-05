@@ -1,4 +1,5 @@
 import { isPresent, type Value } from '../data/value'
+import { useCopy } from '../i18n/useCopy'
 
 /**
  * Transcribed from the Trained frame's Insight Strip (fGuE1, LdBJ4):
@@ -34,6 +35,7 @@ export default function InsightStrip({
 }: {
   items: { label: string; value: Value<string> }[]
 }) {
+  const { t } = useCopy()
   const reasons = [...new Set(
     items
       .map((i) => i.value)
@@ -56,7 +58,7 @@ export default function InsightStrip({
             color: 'var(--e-quiet)',
           }}
         >
-          TODAY IN THREE NUMBERS
+          {t('insightStripCaption')}
         </span>
       </div>
       <div style={{ height: 11 }} />

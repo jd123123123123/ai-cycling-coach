@@ -15,8 +15,16 @@ const base = (over: Partial<TodayModelInputs> = {}): TodayModelInputs => ({
 })
 
 describe('buildTodayModel', () => {
-  it('formats the date meta the way the pen does', () => {
+  it('formats the date meta in German by default — EDITORIAL II ships in German', () => {
     const m = buildTodayModel(base())
+    // de-DE's own short weekday/month via Intl, not a hand-written array —
+    // "MI 22 JULI" (Node's ICU has no 3-letter German month abbreviation
+    // for July; "Juli" already IS the short form).
+    expect(m.dateLabel).toEqual({ value: 'MI 22 JULI' })
+  })
+
+  it('formats the date meta in English when locale is explicitly en', () => {
+    const m = buildTodayModel(base({ locale: 'en' }))
     expect(m.dateLabel).toEqual({ value: 'WED 22 JUL' })
   })
 
@@ -56,7 +64,7 @@ describe('buildTodayModel', () => {
       brief: { adaptations: null, post_ride_review: null } as never,
     }))
     expect(isPresent(m.whatThisChanges)).toBe(false)
-    expect(m.whatThisChanges).toEqual({ missing: 'The coach has not weighed in on this ride yet.' })
+    expect(m.whatThisChanges).toEqual({ missing: 'Der Coach hat sich zu dieser Fahrt noch nicht geäußert.' })
   })
 
   it('splits whatThisChanges into the ON YOU and ON THE PLAN claims from real fields', () => {
@@ -80,7 +88,7 @@ describe('buildTodayModel', () => {
     expect(isPresent(m.tomorrow)).toBe(true)
     if (isPresent(m.tomorrow)) {
       expect(isPresent(m.tomorrow.value.unlockLabel)).toBe(false)
-      expect(m.tomorrow.value.unlockLabel).toEqual({ missing: "No unlock time on tomorrow's plan." })
+      expect(m.tomorrow.value.unlockLabel).toEqual({ missing: 'Keine Startzeit für morgen geplant.' })
     }
   })
 

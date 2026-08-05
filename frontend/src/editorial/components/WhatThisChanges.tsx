@@ -1,5 +1,6 @@
 import { isPresent, type Value } from '../data/value'
 import type { Claim } from '../data/useTodayModel'
+import { useCopy } from '../i18n/useCopy'
 
 /**
  * "What It Changes" (wZE1f, `01 The Session`): a Rule, then ON YOU / ON
@@ -10,10 +11,11 @@ import type { Claim } from '../data/useTodayModel'
  * destination route wired into this task and is intentionally not built.
  */
 export default function WhatThisChanges({ value }: { value: Value<{ onYou: Claim; onThePlan: Claim }> }) {
+  const { t } = useCopy()
   const present = isPresent(value)
   const rows: { label: string; claim: Claim | null }[] = [
-    { label: 'ON YOU', claim: present ? value.value.onYou : null },
-    { label: 'ON THE PLAN', claim: present ? value.value.onThePlan : null },
+    { label: t('onYou'), claim: present ? value.value.onYou : null },
+    { label: t('onThePlan'), claim: present ? value.value.onThePlan : null },
   ]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>

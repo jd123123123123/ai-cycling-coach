@@ -75,9 +75,9 @@ describe('Rest screen composition', () => {
     expect(section01).not.toBeNull()
     expect(section02).not.toBeNull()
     expect(section03).not.toBeNull()
-    expect(section01!.querySelector('h2')?.textContent).toBe('RECOVERY')
+    expect(section01!.querySelector('h2')?.textContent).toBe('ERHOLUNG')
     expect(section02!.querySelector('h2')?.textContent).toBe('ABSORPTION')
-    expect(section03!.querySelector('h2')?.textContent).toBe('TRAJECTORY')
+    expect(section03!.querySelector('h2')?.textContent).toBe('VERLAUF')
     expect(container.querySelectorAll('[data-range-row]')).toHaveLength(3)
     expect(container.querySelector('[data-week-rail]')).not.toBeNull()
     expect(container.querySelector('[data-tomorrow-band]')).not.toBeNull()
@@ -85,7 +85,7 @@ describe('Rest screen composition', () => {
 
   it('never renders section 02 THE SESSION on a rest day', () => {
     render(<MemoryRouter><TodayView model={baseModel} /></MemoryRouter>)
-    expect(screen.queryByText('THE SESSION')).toBeNull()
+    expect(screen.queryByText('DIE EINHEIT')).toBeNull()
   })
 })
 
@@ -110,9 +110,9 @@ describe('Training screen composition', () => {
     const sectionEls = Array.from(container.querySelectorAll('[data-section]'))
     const sections = sectionEls.map((s) => s.getAttribute('data-section'))
     expect(sections).toEqual(['01', '02', '03'])
-    expect(sectionEls[0].querySelector('h2')?.textContent).toBe('RECOVERY')
-    expect(sectionEls[1].querySelector('h2')?.textContent).toBe('THE SESSION')
-    expect(sectionEls[2].querySelector('h2')?.textContent).toBe('TRAJECTORY')
+    expect(sectionEls[0].querySelector('h2')?.textContent).toBe('ERHOLUNG')
+    expect(sectionEls[1].querySelector('h2')?.textContent).toBe('DIE EINHEIT')
+    expect(sectionEls[2].querySelector('h2')?.textContent).toBe('VERLAUF')
     expect(container.querySelectorAll('[data-bars]').length).toBeGreaterThan(0)
   })
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { DayState } from './state/dayState'
+import { CopyLocaleProvider } from './i18n/useCopy'
 import './tokens.css'
 
 /** States with a pen-verified --e-photo-tint-* token (Task 10.5). A state
@@ -51,8 +52,10 @@ export default function EditorialRoot({
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {children}
-      <div id="editorial-sheet-root" />
+      <CopyLocaleProvider>
+        {children}
+        <div id="editorial-sheet-root" />
+      </CopyLocaleProvider>
     </div>
   )
 }

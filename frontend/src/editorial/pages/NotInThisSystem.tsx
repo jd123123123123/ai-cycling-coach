@@ -1,9 +1,12 @@
+import { useCopy } from '../i18n/useCopy'
+
 /**
  * Train / Recovery / History / Social are not designed in the pen. The TabBar
  * is built 1:1 and complete, but these destinations say so rather than
  * inventing screens the design never specified.
  */
 export default function NotInThisSystem({ tab }: { tab: string }) {
+  const { t } = useCopy()
   return (
     <div style={{ padding: '120px 24px', textAlign: 'center' }}>
       <div style={{
@@ -16,7 +19,7 @@ export default function NotInThisSystem({ tab }: { tab: string }) {
         fontFamily: 'var(--e-display)', fontSize: 20, lineHeight: 1.35,
         color: 'var(--e-mid)',
       }}>
-        This tab is not in this design system yet.
+        {t('notInThisSystem')}
       </div>
     </div>
   )

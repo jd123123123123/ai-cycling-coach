@@ -21,6 +21,8 @@ import type { PeakRow } from '../components/PeakRows'
 import { fromNullable, missing, present, type Value } from './value'
 import { useDayState } from '../state/useDayState'
 import type { DayState } from '../state/dayState'
+import { translate, useCopy } from '../i18n/useCopy'
+import { EDITORIAL_DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/copy'
 
 export interface RangeBand { low: number; high: number; position: 'below' | 'in' | 'above' }
 export interface PmcPoint { date: string; ctl: number; atl: number; tsb: number; tss?: number | null }
@@ -126,11 +128,19 @@ export interface TodayModelInputs {
    *  only for `zones` (`hr_zones.secs` + `hr_zones.max_hr`). Optional:
    *  omitted callers get `zones: missing(...)`, same as no ride/no stream. */
   streamAnalysis?: StreamAnalysis | null
+  /** EDITORIAL II's own locale (task 10.6). Resolved by the wrapper hook
+   *  below via `useCopy()` and passed in here so `buildTodayModel` itself
+   *  stays a pure function — no hook call inside it. Optional: omitted
+   *  callers (every existing unit test) get `EDITORIAL_DEFAULT_LOCALE`
+   *  ('de'), matching `useCopy`'s own no-provider default. `copy.ts`'s
+   *  `translate()` is a plain function, not a hook, so calling it from this
+   *  pure builder with an explicit locale is safe and fully deterministic —
+   *  the same inputs always produce the same reason strings, which is what
+   *  keeps this function unit-testable without React at all. */
+  locale?: Locale
 }
 
-const NO_WEARABLE_FALLBACK = 'your last sync'
-
-function lastReadingLabel(now: Date, recentMetrics: DailyMetric[] | undefined): string {
+function lastReadingLabel(now: Date, recentMetrics: DailyMetric[] | undefined, locale: Locale): string {
   const sevenDaysAgo = new Date(now)
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const candidates = (recentMetrics ?? [])
@@ -139,12 +149,12 @@ function lastReadingLabel(now: Date, recentMetrics: DailyMetric[] | undefined): 
     .filter((d) => d >= sevenDaysAgo && d <= now)
     .sort((a, b) => b.getTime() - a.getTime())
   const mostRecent = candidates[0]
-  if (!mostRecent) return NO_WEARABLE_FALLBACK
-  return mostRecent.toLocaleDateString('en-GB', { weekday: 'long' })
+  if (!mostRecent) return translate(locale, 'wearableLastSyncFallback')
+  return mostRecent.toLocaleDateString(intlLocale(locale), { weekday: 'long' })
 }
 
-function wearableMissingReason(now: Date, recentMetrics: DailyMetric[] | undefined): string {
-  return `No wearable reading since ${lastReadingLabel(now, recentMetrics)}.`
+function wearableMissingReason(now: Date, recentMetrics: DailyMetric[] | undefined, locale: Locale): string {
+  return translate(locale, 'wearableMissingSince', { day: lastReadingLabel(now, recentMetrics, locale) })
 }
 
 function buildRangeBand(
@@ -169,13 +179,16 @@ function buildRangeBand(
 export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   const { now, state, snapshot, yesterdayMetric, todayMetric, streak, pmc, recoveryEta,
     session, brief, weather, activitiesToday, health, tomorrowWorkout, isLoading, recentMetrics, hrvState,
-    streamAnalysis } = inputs
+    streamAnalysis, locale = EDITORIAL_DEFAULT_LOCALE } = inputs
+  const t = (key: Parameters<typeof translate>[1], vars?: Parameters<typeof translate>[2]) => translate(locale, key, vars)
 
   const dateLabel = present(
-    now.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase().replace(/,/g, ''),
+    now.toLocaleDateString(intlLocale(locale), { weekday: 'short', day: '2-digit', month: 'short' })
+      .toUpperCase()
+      .replace(/[.,]/g, ''),
   )
 
-  const streakDays = fromNullable(streak?.streak ?? null, 'No streak recorded yet.')
+  const streakDays = fromNullable(streak?.streak ?? null, t('streakMissing'))
 
   const todayReadiness = snapshot?.training_readiness ?? null
   const readiness = fromNullable(
@@ -185,10 +198,10 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
         ? todayReadiness - yesterdayMetric.training_readiness
         : null,
     },
-    'No readiness reading yet.',
+    t('readinessMissing'),
   )
 
-  const wearableReason = wearableMissingReason(now, recentMetrics)
+  const wearableReason = wearableMissingReason(now, recentMetrics, locale)
 
   const hrvSignal = health?.signals.find((s) => s.metric === 'hrv')
   const hrv = fromNullable(
@@ -233,21 +246,21 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       form: latestPmc.tsb,
       series: pmcEntries.map((e) => ({ date: e.date, ctl: e.ctl, atl: e.atl, tsb: e.tsb, tss: e.tss ?? null })),
     },
-    'Not enough training history yet.',
+    t('pmcMissing'),
   )
 
   const recoveryHours = snapshot?.recovery_time_hours ?? null
   const recovery = fromNullable(
     recoveryHours == null ? null : (() => {
       if (recoveryEta?.already_fresh) {
-        return { hoursRemaining: 0, clearAtLabel: 'Fresh now' }
+        return { hoursRemaining: 0, clearAtLabel: t('recoveryFreshNow') }
       }
       const clearAt = new Date(snapshot!.generated_at)
       clearAt.setHours(clearAt.getHours() + recoveryHours)
-      const clearAtLabel = `${clearAt.toLocaleDateString('en-GB', { weekday: 'short' })} ${clearAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+      const clearAtLabel = `${clearAt.toLocaleDateString(intlLocale(locale), { weekday: 'short' })} ${clearAt.toLocaleTimeString(intlLocale(locale), { hour: '2-digit', minute: '2-digit' })}`
       return { hoursRemaining: recoveryHours, clearAtLabel }
     })(),
-    'No recovery estimate yet.',
+    t('recoveryMissing'),
   )
 
   const workout = session?.workout ?? null
@@ -272,10 +285,10 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
         blocks,
       }
     })(),
-    'Nothing planned for today.',
+    t('sessionMissing'),
   )
 
-  const NO_RIDE_REASON = 'No ride recorded yet today.'
+  const NO_RIDE_REASON = t('rideMissing')
   const rideActivity = activitiesToday.find((a) => a.sport === 'cycling') ?? null
   const ride = fromNullable(
     rideActivity == null ? null : {
@@ -306,7 +319,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   const zones: Value<HrZone[]> = rideActivity == null
     ? missing(NO_RIDE_REASON)
     : streamAnalysis?.hr_zones == null
-      ? missing('No heart-rate data for this ride.')
+      ? missing(t('zonesNoHrData'))
       : present(['Z1', 'Z2', 'Z3', 'Z4', 'Z5'].map((name, i) => ({
         name,
         lowBpm: Math.round(HR_ZONE_FRACTIONS[i] * streamAnalysis.hr_zones!.max_hr),
@@ -321,13 +334,13 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   // are an all-time envelope across every stored ride, never scoped to
   // today or to a season — always missing, matching the Insight Strip's
   // own "PEAK POWER" gap (TodayView.tsx, task 8).
-  const peaks: Value<PeakRow[]> = missing('No peak-power breakdown for this ride yet.')
+  const peaks: Value<PeakRow[]> = missing(t('peaksMissing'))
 
   // Plan-vs-ridden per-block deltas (task-9-report.md, verify-check 1):
   // useStreamAnalysis's splits are per-kilometre, never aligned to a named
   // workout block — always missing.
   const planVsRidden: Value<{ blockLabel: string; deltaWatts: number }[]> = missing(
-    'This ride was not matched to its plan.',
+    t('planVsRiddenMissing'),
   )
 
   const verdict = fromNullable(
@@ -335,7 +348,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       headline: brief.verdict,
       body: brief.rationale,
     },
-    'The coach has not weighed in yet today.',
+    t('verdictMissing'),
   )
 
   // ON YOU / ON THE PLAN — pulled from adaptations ("what changed & why" —
@@ -356,10 +369,10 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
           ?? adaptations!.summary,
       },
     },
-    'The coach has not weighed in on this ride yet.',
+    t('whatThisChangesMissing'),
   )
 
-  const weatherReason = 'No location from a recent ride.'
+  const weatherReason = t('weatherMissing')
   const currentHour = weather?.available
     ? (weather.hours.find((h) => new Date(h.time).getTime() >= now.getTime()) ?? weather.hours[0] ?? null)
     : null
@@ -377,9 +390,9 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       // No source anywhere: PlannedWorkout carries only `date`, no
       // time-of-day field. Honestly missing until a real source exists —
       // never assert a schedule the app does not have.
-      unlockLabel: missing<string>("No unlock time on tomorrow's plan."),
+      unlockLabel: missing<string>(t('tomorrowUnlockMissing')),
     },
-    "Tomorrow's plan is not set yet.",
+    t('tomorrowMissing'),
   )
 
   // Rest's Mon-Sun training-load strip (WeekRail, `RYP0r`'s "Bars"/
@@ -387,19 +400,19 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   // matching the frame's own M/T/W/T/F/S/S label row) against the raw PMC
   // entries' own `tss` field — real per-day load, keyed by date. A day
   // with no matching entry is honestly missing, never a synthesised zero.
-  const DOW_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+  const DOW_LETTER_KEYS = ['weekMon', 'weekTue', 'weekWed', 'weekThu', 'weekFri', 'weekSat', 'weekSun'] as const
   const mondayOffset = (now.getDay() + 6) % 7
   const monday = new Date(now)
   monday.setHours(0, 0, 0, 0)
   monday.setDate(monday.getDate() - mondayOffset)
-  const week = DOW_LETTERS.map((letter, i) => {
+  const week = DOW_LETTER_KEYS.map((letterKey, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
     const iso = toIsoDate(d)
     const entry = pmcEntries.find((e) => e.date === iso)
     return {
-      letter,
-      tss: entry?.tss != null ? present(entry.tss) : missing<number>('No ride logged.'),
+      letter: t(letterKey),
+      tss: entry?.tss != null ? present(entry.tss) : missing<number>(t('weekDayNoRide')),
     }
   })
 
@@ -430,6 +443,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
 /** Assembles inputs from the live hooks and returns the pure model. */
 export function useTodayModel(): TodayModel {
   const { state } = useDayState()
+  const { locale } = useCopy()
   const now = useMemo(() => new Date(), [])
   const yesterday = useMemo(() => { const d = new Date(now); d.setDate(d.getDate() - 1); return d }, [now])
   const sevenDaysAgo = useMemo(() => { const d = new Date(now); d.setDate(d.getDate() - 7); return d }, [now])
@@ -480,6 +494,7 @@ export function useTodayModel(): TodayModel {
     recentMetrics: recentMetricsQuery.data?.metrics,
     hrvState: adaptiveQuery.data?.hrv_state,
     streamAnalysis: streamAnalysisQuery.data,
+    locale,
   }
 
   return buildTodayModel(inputs)

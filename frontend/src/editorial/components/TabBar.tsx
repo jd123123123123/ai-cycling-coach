@@ -1,21 +1,27 @@
 import { Bike, Heart, History, Users, Zap } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { Link } from 'react-router-dom'
+import { useCopy, type Copy } from '../i18n/useCopy'
+import type { CopyKey } from '../i18n/copy'
 
 type Tab = 'today' | 'train' | 'recovery' | 'history' | 'social'
 
-const TABS: {
+const TAB_DEFS: {
   id: Tab
-  label: string
+  labelKey: CopyKey
   icon: ComponentType<{ size?: number; color?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>
   padX: number
 }[] = [
-  { id: 'today', label: 'TODAY', icon: Zap, padX: 14 },
-  { id: 'train', label: 'TRAIN', icon: Bike, padX: 14 },
-  { id: 'recovery', label: 'RECOVERY', icon: Heart, padX: 14 },
-  { id: 'history', label: 'HISTORY', icon: History, padX: 14 },
-  { id: 'social', label: 'SOCIAL', icon: Users, padX: 12 },
+  { id: 'today', labelKey: 'tabToday', icon: Zap, padX: 14 },
+  { id: 'train', labelKey: 'tabTrain', icon: Bike, padX: 14 },
+  { id: 'recovery', labelKey: 'tabRecovery', icon: Heart, padX: 14 },
+  { id: 'history', labelKey: 'tabHistory', icon: History, padX: 14 },
+  { id: 'social', labelKey: 'tabSocial', icon: Users, padX: 12 },
 ]
+
+function tabsOf(t: Copy['t']) {
+  return TAB_DEFS.map((tab) => ({ ...tab, label: t(tab.labelKey) }))
+}
 
 /**
  * The bottom tab bar, transcribed from pen component G6TmH
@@ -48,6 +54,8 @@ const TABS: {
  * every other day-state-coloured element — rather than a fixed hue.
  */
 export default function TabBar({ active }: { active: Tab }) {
+  const { t } = useCopy()
+  const TABS = tabsOf(t)
   return (
     <div style={{ height: 88, padding: '0 16px', display: 'flex', justifyContent: 'center' }}>
       <div

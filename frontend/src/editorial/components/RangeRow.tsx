@@ -1,5 +1,6 @@
 import { isPresent, type Value } from '../data/value'
 import type { RangeBand } from '../data/useTodayModel'
+import { useCopy } from '../i18n/useCopy'
 
 /**
  * Transcribed from component/RangeRow (KT5iR), instanced three times per
@@ -60,9 +61,10 @@ export default function RangeRow({
   delta?: number | null
   format?: (n: number) => string
 }) {
+  const { t } = useCopy()
   const present = isPresent(value)
   const displayValue = present ? (format ? format(value.value) : String(value.value)) : '—'
-  const caption = band ? (band.position === 'below' ? 'BELOW RANGE' : band.position === 'above' ? 'ABOVE RANGE' : 'IN RANGE') : null
+  const caption = band ? (band.position === 'below' ? t('rangeBelow') : band.position === 'above' ? t('rangeAbove') : t('rangeIn')) : null
 
   return (
     <div data-range-row style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9 }}>

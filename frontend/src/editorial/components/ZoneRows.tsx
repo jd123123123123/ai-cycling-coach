@@ -1,6 +1,7 @@
 import { isPresent, type Value } from '../data/value'
 import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
 import { useTapHighlight } from '../motion/useTapHighlight'
+import { useCopy } from '../i18n/useCopy'
 
 export interface HrZone {
   name: string
@@ -59,6 +60,7 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
   const thresholdPct = z4 && totalSeconds > 0 ? Math.round((z4.seconds / totalSeconds) * 100) : null
   const { ref, on, reduced } = useReveal<HTMLElement>()
   const tap = useTapHighlight<string>()
+  const { t } = useCopy()
 
   return (
     <section ref={ref} data-zone-rows style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 11 }}>
@@ -69,7 +71,7 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
               fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-mid)',
             }}
           >
-            TIME IN HEART RATE ZONES
+            {t('zoneRowsCaption')}
           </span>
           {thresholdPct != null && (
             <span
@@ -77,7 +79,7 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
                 fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: 'var(--e-quiet)',
               }}
             >
-              {thresholdPct}% AT THRESHOLD
+              {t('zoneRowsThresholdPct', { pct: thresholdPct })}
             </span>
           )}
         </div>
@@ -86,7 +88,7 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
             fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-quiet)',
           }}
         >
-          {present ? `${formatHoursMin(totalSeconds)} TOTAL` : '—'}
+          {present ? t('zoneRowsTotal', { time: formatHoursMin(totalSeconds) }) : '—'}
         </span>
       </div>
 

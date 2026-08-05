@@ -1,5 +1,7 @@
 import { ArrowLeftRight, Undo2 } from 'lucide-react'
 import type { DayState } from '../state/dayState'
+import { useCopy } from '../i18n/useCopy'
+import type { CopyKey } from '../i18n/copy'
 
 /**
  * IMPORTANT DEVIATION FROM THE BRIEF — read before touching this file.
@@ -72,12 +74,12 @@ const ACTIVE_INDEX: Record<DayState, number> = {
   evening: 3,
 }
 
-const SWITCH_ACTION: Record<DayState, { label: string; icon: 'swap' | 'undo' }> = {
-  rest: { label: 'MAKE IT A TRAINING DAY', icon: 'swap' },
-  training: { label: 'MAKE IT A REST DAY', icon: 'swap' },
-  trained: { label: 'BACK TO PLANNED', icon: 'undo' },
-  resting: { label: 'BACK TO SESSION DONE', icon: 'undo' },
-  evening: { label: 'BACK TO SESSION DONE', icon: 'undo' },
+const SWITCH_ACTION_KEY: Record<DayState, { labelKey: CopyKey; icon: 'swap' | 'undo' }> = {
+  rest: { labelKey: 'dayRailMakeTraining', icon: 'swap' },
+  training: { labelKey: 'dayRailMakeRest', icon: 'swap' },
+  trained: { labelKey: 'dayRailBackToPlanned', icon: 'undo' },
+  resting: { labelKey: 'dayRailBackToDone', icon: 'undo' },
+  evening: { labelKey: 'dayRailBackToDone', icon: 'undo' },
 }
 
 export default function DayRail({
@@ -89,9 +91,15 @@ export default function DayRail({
   showSwitchAction?: boolean
   onSwapDayType?: () => void
 }) {
+  const { t } = useCopy()
   const activeIndex = ACTIVE_INDEX[state]
-  const labels = [state === 'rest' ? 'REST DAY' : 'TRAINING DAY', 'SESSION', 'RECOVERY', 'LIGHTS OUT']
-  const action = SWITCH_ACTION[state]
+  const labels = [
+    state === 'rest' ? t('dayRailRestDay') : t('dayRailTrainingDay'),
+    t('dayRailSession'),
+    t('dayRailRecovery'),
+    t('dayRailLightsOut'),
+  ]
+  const action = SWITCH_ACTION_KEY[state]
   const ActionIcon = action.icon === 'swap' ? ArrowLeftRight : Undo2
 
   return (
@@ -107,7 +115,7 @@ export default function DayRail({
               color: 'var(--e-quiet)',
             }}
           >
-            DAY STATE
+            {t('dayRailDayState')}
           </span>
           <button
             type="button"
@@ -133,7 +141,7 @@ export default function DayRail({
                 color: 'var(--st-active)',
               }}
             >
-              {action.label}
+              {t(action.labelKey)}
             </span>
           </button>
         </div>

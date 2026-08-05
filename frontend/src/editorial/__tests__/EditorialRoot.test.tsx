@@ -35,6 +35,6 @@ describe('NotInThisSystem', () => {
   it('says plainly that the tab is not designed here', () => {
     render(<NotInThisSystem tab="RECOVERY" />)
     expect(screen.getByText(/RECOVERY/)).toBeTruthy()
-    expect(screen.getByText(/not in this design system yet/i)).toBeTruthy()
+    expect(screen.getByText(/design-system noch nicht angelegt/i)).toBeTruthy()
   })
 })

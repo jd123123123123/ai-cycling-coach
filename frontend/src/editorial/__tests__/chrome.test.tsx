@@ -18,15 +18,15 @@ describe('chrome', () => {
 
   it('TabBar renders all five destinations and marks the active one', () => {
     wrap(<TabBar active="today" />)
-    for (const label of ['TODAY', 'TRAIN', 'RECOVERY', 'HISTORY', 'SOCIAL']) {
+    for (const label of ['HEUTE', 'TRAINING', 'ERHOLUNG', 'VERLAUF', 'CREW']) {
       expect(screen.getByText(label)).toBeTruthy()
     }
-    expect(screen.getByText('TODAY').closest('a')?.getAttribute('aria-current')).toBe('page')
+    expect(screen.getByText('HEUTE').closest('a')?.getAttribute('aria-current')).toBe('page')
   })
 
   it('TabBar points the four undesigned tabs inside the editorial tree', () => {
     wrap(<TabBar active="today" />)
-    expect(screen.getByText('TRAIN').closest('a')?.getAttribute('href')).toBe('/e/train')
+    expect(screen.getByText('TRAINING').closest('a')?.getAttribute('href')).toBe('/e/train')
   })
 
   // DayRail deviates from the brief here — see the block comment atop
@@ -44,12 +44,12 @@ describe('chrome', () => {
   it('DayRail advances the active step and the day-type label with the Today state', () => {
     const { container: restContainer } = render(<DayRail state="rest" />)
     expect(restContainer.querySelector('[data-step="daytype"]')?.getAttribute('data-active')).toBe('true')
-    expect(screen.getByText('REST DAY')).toBeTruthy()
+    expect(screen.getByText('RUHETAG')).toBeTruthy()
     cleanup()
 
     const { container: eveningContainer } = render(<DayRail state="evening" />)
     expect(eveningContainer.querySelector('[data-step="lights-out"]')?.getAttribute('data-active')).toBe('true')
-    expect(screen.getByText('TRAINING DAY')).toBeTruthy()
+    expect(screen.getByText('TRAININGSTAG')).toBeTruthy()
   })
 
   it('SecHead renders the number, the title, and the optional chip and sub', () => {

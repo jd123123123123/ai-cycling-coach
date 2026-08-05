@@ -1,5 +1,6 @@
 import { ArrowUpRight } from 'lucide-react'
 import { isPresent, type Value } from '../data/value'
+import { useCopy } from '../i18n/useCopy'
 
 /**
  * Transcribed from Rest's "Tomorrow Band Wrap" (FKp6r → K5LLS "Band",
@@ -26,11 +27,13 @@ import { isPresent, type Value } from '../data/value'
  */
 export default function TomorrowBand({
   session,
-  kicker = 'TOMORROW',
+  kicker: kickerProp,
 }: {
   session: Value<{ title: string; unlockLabel: string }>
   kicker?: string
 }) {
+  const { t } = useCopy()
+  const kicker = kickerProp ?? t('tomorrowBandTomorrow')
   const present = isPresent(session)
   return (
     <div data-tomorrow-band style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--e-glass)', borderRadius: 22, padding: 20, gap: 14 }}>

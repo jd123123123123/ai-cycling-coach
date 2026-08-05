@@ -61,9 +61,9 @@ describe('Trained sections', () => {
     ])} />)
     // 1320s in one zone reads as mm:ss ("22:00"), never h:mm.
     expect(screen.getByText('22:00')).toBeTruthy()
-    // The 6420s (107 min) TOTAL reads as h:mm ("1:47 TOTAL"), never "107:00".
-    expect(screen.getByText('1:47 TOTAL')).toBeTruthy()
-    expect(screen.queryByText('107:00 TOTAL')).toBeNull()
+    // The 6420s (107 min) TOTAL reads as h:mm ("1:47 GESAMT"), never "107:00".
+    expect(screen.getByText('1:47 GESAMT')).toBeTruthy()
+    expect(screen.queryByText('107:00 GESAMT')).toBeNull()
   })
 
   it('PeakRows renders the Total hero and omits the season-best column rather than inventing it', () => {

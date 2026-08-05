@@ -2,14 +2,16 @@ import { isPresent, type Value } from '../data/value'
 import type { PmcPoint } from '../data/useTodayModel'
 import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
 import { useTapHighlight } from '../motion/useTapHighlight'
+import { useCopy } from '../i18n/useCopy'
+import type { CopyKey } from '../i18n/copy'
 
 const WIDTH = 342
 const HEIGHT = 113
 
-const LEGEND: { key: 'ctl' | 'atl' | 'tsb'; label: string; color: string }[] = [
-  { key: 'ctl', label: 'FITNESS', color: 'var(--m-load)' },
-  { key: 'atl', label: 'FATIGUE', color: 'var(--m-fatigue)' },
-  { key: 'tsb', label: 'FORM', color: 'var(--m-form)' },
+const LEGEND_DEFS: { key: 'ctl' | 'atl' | 'tsb'; labelKey: CopyKey; color: string }[] = [
+  { key: 'ctl', labelKey: 'pmcFitness', color: 'var(--m-load)' },
+  { key: 'atl', labelKey: 'pmcFatigue', color: 'var(--m-fatigue)' },
+  { key: 'tsb', labelKey: 'pmcForm', color: 'var(--m-form)' },
 ]
 
 /**
@@ -41,6 +43,8 @@ export default function PMCChart({ series, days }: { series: Value<PmcPoint[]>; 
   const hasChart = present && points.length > 1
   const { ref, on, reduced } = useReveal<HTMLDivElement>()
   const tap = useTapHighlight<'ctl' | 'atl' | 'tsb'>()
+  const { t } = useCopy()
+  const LEGEND = LEGEND_DEFS.map((l) => ({ ...l, label: t(l.labelKey) }))
 
   return (
     <div ref={ref} data-pmc-chart style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -51,7 +55,7 @@ export default function PMCChart({ series, days }: { series: Value<PmcPoint[]>; 
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           preserveAspectRatio="none"
           role="img"
-          aria-label={`Fitness, fatigue and form over the last ${days} days`}
+          aria-label={t('pmcAriaLabel', { days })}
         >
           {buildLines(points).map((l, i) => {
             const selected = tap.isSelected(l.key)
@@ -80,16 +84,16 @@ export default function PMCChart({ series, days }: { series: Value<PmcPoint[]>; 
         </svg>
       ) : (
         <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: 0 }}>
-          {present ? 'Not enough training history to chart yet.' : series.missing}
+          {present ? t('pmcNotEnoughHistory') : series.missing}
         </p>
       )}
 
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', paddingTop: 8 }}>
         <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-lo)' }}>
-          {days} DAYS AGO
+          {t('pmcDaysAgo', { days })}
         </span>
         <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.2, color: 'var(--st-active)' }}>
-          NOW
+          {t('pmcNow')}
         </span>
       </div>
 
