@@ -3,7 +3,9 @@ import { isPresent, type Value } from '../data/value'
 
 /**
  * Transcribed from Rest's "Tomorrow Band Wrap" (FKp6r → K5LLS "Band",
- * `RYP0r`): fill #FFFFFF0A, cornerRadius 22, width fill_container. Col
+ * `RYP0r`): fill #FFFFFF0A, cornerRadius 22, width fill_container — no
+ * existing token is an exact match (closest is `--e-glass` #FFFFFF0F, a
+ * hair stronger); reused rather than adding a near-duplicate 0A stop.  Col
  * (vertical, gap 6): Kicker "TOMORROW · UNLOCKS 05:00" (10/800 ls1.6, the
  * state accent) then Title "Threshold · 4 × 8 @ 285 W" (22/800 ls-0.9
  * lh1.1, $e-ink). Arrow icon (24x24, state accent) sits to the right —
