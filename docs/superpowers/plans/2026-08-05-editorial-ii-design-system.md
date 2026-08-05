@@ -58,6 +58,48 @@ a defect, because the design is photographic. Where a real ride photo exists,
 use it; where none does, the plate keeps its geometry and renders the scrim over
 the ground — never a stock photo standing in for the athlete's own ride.
 
+### German is the language
+
+Owner's ruling, 2026-08-05. EDITORIAL II ships in **German**. The pen's copy is
+English because the designer wrote it in English; that is the mock, not the
+product.
+
+The app already has locale machinery: `i18n/strings.ts` (a `{ en, de }`
+dictionary), `contexts/LocaleContext.tsx` (`useLocale`, `useT`), and
+`npm run lint:i18n`, which fails on hardcoded English. `editorial/` must not add
+keys to the global dictionary — that file is outside the tree and the one-way
+dependency is what makes this system deletable. So:
+
+- `editorial/i18n/copy.ts` — EDITORIAL II's own deck, `{ de, en }` per key,
+  **German authored first**.
+- `editorial/i18n/useCopy.ts` — reads the locale from `contexts/LocaleContext`
+  (read-only, like every other import from outside the tree) and **defaults to
+  `de`** when no provider is mounted, so a fixture render is German too.
+
+Every literal under `editorial/` routes through it. That includes section
+headings, kickers, units, tab labels, and every `missing()` reason string.
+
+**Translate the register, not the words.** This is editorial writing with a
+voice — terse, calm, second person, never chirpy. The pull-quotes are the
+clearest test:
+
+> *"Nothing you do today will make you faster. Everything you don't do will."*
+> → **„Nichts, was du heute tust, macht dich schneller. Alles, was du lässt,
+> schon."**
+
+Not a literal gloss. Same rhythm, same turn, same length on a 390px screen.
+
+Rules that follow from German being longer than English:
+- Uppercase eyebrows and kickers get longer — check nothing overflows or
+  re-wraps into a slot sized for English. `WHAT THIS CHANGES` → `WAS DAS ÄNDERT`
+  is fine; some will need a shorter German phrase rather than a literal one.
+- Use `du`, not `Sie` — this is a training app, not a bank.
+- Keep the units the athlete already reads: `W`, `TSS`, `KM`, `BPM`, `H`.
+  Do not germanise `TSS` or `IF`.
+- German quotation marks („…") in prose copy.
+- Decimal comma in German numeric formatting (`52,4 KM`), via
+  `toLocaleString('de-DE')` — not a hand-rolled replace.
+
 ### Motion — every chart animates, nothing is flat and dead
 
 Owner's ruling, 2026-08-05. Charts must feel alive on open and respond to touch.
