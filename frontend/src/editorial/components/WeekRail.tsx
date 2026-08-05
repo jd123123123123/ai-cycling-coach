@@ -1,4 +1,6 @@
 import { isPresent, type Value } from '../data/value'
+import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
+import { useTapHighlight } from '../motion/useTapHighlight'
 
 /**
  * Transcribed from Rest's hero-body "Bars"/"BarLabels" (XD8oR/dfQOB,
@@ -22,6 +24,14 @@ import { isPresent, type Value } from '../data/value'
  * (the mock's "today" is baked into which literal bar is tinted) — it is
  * how a real week, which can land on any weekday, tells this component
  * which column to accent.
+ *
+ * Motion (Task 10.5): present-value bars grow from zero the first time the
+ * strip enters the viewport, staggered Monday to Sunday (`useReveal`) — a
+ * day with no matching entry keeps its dash, never a growing zero-bar
+ * (the "never animate a missing state" rule). Tapping a day's bar lifts it
+ * to `var(--st-active)` and drops the rest to `var(--d-2)`
+ * (`useTapHighlight`), surfacing its exact TSS; tapping it again restores
+ * the current-day accent.
  */
 export default function WeekRail({
   days,
@@ -39,26 +49,38 @@ export default function WeekRail({
     days.map((d) => d.tss).filter((v): v is { missing: string } => !isPresent(v)).map((v) => v.missing),
   )]
 
+  const { ref, on, reduced } = useReveal<HTMLDivElement>()
+  const tap = useTapHighlight<number>()
+
   return (
     <div data-week-rail style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ width: '100%', height: 70, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+      <div ref={ref} style={{ width: '100%', height: 70, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
         {days.map((d, i) => {
           const isToday = i === todayIndex
           const tss = d.tss
+          const selected = isPresent(tss) && tap.isSelected(i)
+          const dimmed = isPresent(tss) && tap.isDimmed(i)
           return (
             <div
               key={i}
               data-week-day
               title={isPresent(tss) ? `${tss.value} TSS` : tss.missing}
-              style={{ flex: 1, height: 70, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}
+              onClick={isPresent(tss) ? () => tap.toggle(i) : undefined}
+              style={{
+                flex: 1, height: 70, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                alignItems: 'center', cursor: isPresent(tss) ? 'pointer' : undefined,
+              }}
             >
               {isPresent(tss) ? (
                 <div
                   style={{
                     width: '100%',
-                    height: Math.max(8, Math.round((tss.value / (maxTss || 1)) * 70)),
+                    height: on ? Math.max(8, Math.round((tss.value / (maxTss || 1)) * 70)) : 0,
                     borderRadius: 5,
-                    background: isToday ? 'var(--st-active)' : 'var(--d-2)',
+                    background: selected ? 'var(--st-active)' : dimmed ? 'var(--d-2)' : isToday ? 'var(--st-active)' : 'var(--d-2)',
+                    transition: reduced
+                      ? undefined
+                      : `height ${MOTION_DURATION_MS}ms ${MOTION_EASE} ${staggerDelay(i)}ms, background 200ms ${MOTION_EASE}`,
                   }}
                 />
               ) : (

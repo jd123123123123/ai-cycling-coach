@@ -1,13 +1,15 @@
 import { isPresent, type Value } from '../data/value'
 import type { PmcPoint } from '../data/useTodayModel'
+import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
+import { useTapHighlight } from '../motion/useTapHighlight'
 
 const WIDTH = 342
 const HEIGHT = 113
 
-const LEGEND: { label: string; color: string }[] = [
-  { label: 'FITNESS', color: 'var(--m-load)' },
-  { label: 'FATIGUE', color: 'var(--m-fatigue)' },
-  { label: 'FORM', color: 'var(--m-form)' },
+const LEGEND: { key: 'ctl' | 'atl' | 'tsb'; label: string; color: string }[] = [
+  { key: 'ctl', label: 'FITNESS', color: 'var(--m-load)' },
+  { key: 'atl', label: 'FATIGUE', color: 'var(--m-fatigue)' },
+  { key: 'tsb', label: 'FORM', color: 'var(--m-form)' },
 ]
 
 /**
@@ -23,14 +25,25 @@ const LEGEND: { label: string; color: string }[] = [
  * brief, not the bar-chart node — the pen's dimensions (chart ~342×113,
  * an axis row below, a legend row below that) are kept as the layout
  * envelope, since those aren't in dispute.
+ *
+ * Motion (Task 10.5): each of the three lines draws in on first viewport
+ * entry via `pathLength`/`strokeDasharray`/`strokeDashoffset` (a
+ * browser-normalized 0-1 length so the trick works regardless of the line's
+ * real geometry), staggered so FITNESS draws first, then FATIGUE, then
+ * FORM. The legend doubles as the tap target — mobile has no hover — and
+ * selecting a metric lifts its line's stroke weight while the other two
+ * drop to a dim tone; tapping the same legend swatch again restores all
+ * three.
  */
 export default function PMCChart({ series, days }: { series: Value<PmcPoint[]>; days: 42 }) {
   const present = isPresent(series)
   const points = present ? series.value.slice(-days) : []
   const hasChart = present && points.length > 1
+  const { ref, on, reduced } = useReveal<HTMLDivElement>()
+  const tap = useTapHighlight<'ctl' | 'atl' | 'tsb'>()
 
   return (
-    <div data-pmc-chart style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5 }}>
+    <div ref={ref} data-pmc-chart style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5 }}>
       {hasChart ? (
         <svg
           width="100%"
@@ -40,17 +53,30 @@ export default function PMCChart({ series, days }: { series: Value<PmcPoint[]>; 
           role="img"
           aria-label={`Fitness, fatigue and form over the last ${days} days`}
         >
-          {buildLines(points).map((l) => (
-            <polyline
-              key={l.key}
-              points={l.pointsAttr}
-              fill="none"
-              stroke={l.color}
-              strokeWidth={2}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          ))}
+          {buildLines(points).map((l, i) => {
+            const selected = tap.isSelected(l.key)
+            const dimmed = tap.isDimmed(l.key)
+            return (
+              <polyline
+                key={l.key}
+                data-pmc-line={l.key}
+                points={l.pointsAttr}
+                fill="none"
+                stroke={dimmed ? 'var(--d-2)' : l.color}
+                strokeWidth={selected ? 3 : 2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                pathLength={1}
+                style={{
+                  strokeDasharray: 1,
+                  strokeDashoffset: on ? 0 : 1,
+                  transition: reduced
+                    ? undefined
+                    : `stroke-dashoffset ${MOTION_DURATION_MS}ms ${MOTION_EASE} ${staggerDelay(i)}ms, stroke-width 200ms ${MOTION_EASE}, stroke 200ms ${MOTION_EASE}`,
+                }}
+              />
+            )
+          })}
         </svg>
       ) : (
         <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: 0 }}>
@@ -69,9 +95,19 @@ export default function PMCChart({ series, days }: { series: Value<PmcPoint[]>; 
 
       <div style={{ width: '100%', display: 'flex', gap: 16, alignItems: 'center', paddingTop: 14 }}>
         {LEGEND.map((l) => (
-          <div key={l.label} style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: l.color }} />
-            <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-mid)' }}>
+          <div
+            key={l.label}
+            data-pmc-legend={l.key}
+            onClick={hasChart ? () => tap.toggle(l.key) : undefined}
+            style={{ display: 'flex', gap: 5, alignItems: 'center', cursor: hasChart ? 'pointer' : undefined }}
+          >
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: tap.isDimmed(l.key) ? 'var(--d-2)' : l.color }} />
+            <span
+              style={{
+                fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
+                color: tap.isSelected(l.key) ? 'var(--e-ink)' : 'var(--e-mid)',
+              }}
+            >
               {l.label}
             </span>
           </div>
@@ -96,7 +132,7 @@ export default function PMCChart({ series, days }: { series: Value<PmcPoint[]>; 
  */
 function buildLines(points: PmcPoint[]) {
   const x = (i: number) => (i / (points.length - 1)) * WIDTH
-  const line = (key: string, color: string, pick: (p: PmcPoint) => number) => {
+  const line = (key: 'ctl' | 'atl' | 'tsb', color: string, pick: (p: PmcPoint) => number) => {
     const values = points.map(pick)
     const min = Math.min(...values)
     const max = Math.max(...values)

@@ -1,4 +1,6 @@
 import { isPresent, type Value } from '../data/value'
+import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
+import { useTapHighlight } from '../motion/useTapHighlight'
 
 export interface HrZone {
   name: string
@@ -38,6 +40,14 @@ export interface HrZone {
  * never because zones are "unset" (there is nothing to configure), so
  * TodayModel's reason text says so rather than reusing the brief's literal
  * suggested string.
+ *
+ * Motion (Task 10.5): each zone's bar segment grows from zero width the
+ * first time the section enters the viewport, staggered left to right
+ * (`useReveal`) — skipped entirely when `zones` is missing, since there is
+ * nothing to grow. Tapping a zone's legend column lifts it to
+ * `var(--st-active)` and drops the other four to `var(--d-2)`
+ * (`useTapHighlight`), surfacing that zone's own bpm range; tapping it
+ * again restores the pen's own five-tone ramp.
  */
 const ZONE_TONE = ['var(--d-1)', 'var(--e-zone-z2)', 'var(--e-zone-z3)', 'var(--st-active)', 'var(--d-4)']
 
@@ -47,9 +57,11 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
   const totalSeconds = list.reduce((sum, z) => sum + z.seconds, 0)
   const z4 = list.find((z) => z.name === 'Z4')
   const thresholdPct = z4 && totalSeconds > 0 ? Math.round((z4.seconds / totalSeconds) * 100) : null
+  const { ref, on, reduced } = useReveal<HTMLElement>()
+  const tap = useTapHighlight<string>()
 
   return (
-    <section data-zone-rows style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 11 }}>
+    <section ref={ref} data-zone-rows style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 11 }}>
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span
@@ -81,28 +93,52 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
       {present ? (
         <>
           <div style={{ width: '100%', height: 12, display: 'flex', gap: 3 }}>
-            {list.map((z, i) => (
-              <div
-                key={z.name}
-                style={{ flex: z.seconds > 0 ? z.seconds : 0, height: 12, background: ZONE_TONE[i] ?? 'var(--d-1)' }}
-              />
-            ))}
+            {list.map((z, i) => {
+              const selected = tap.isSelected(z.name)
+              const dimmed = tap.isDimmed(z.name)
+              const tone = selected ? 'var(--st-active)' : dimmed ? 'var(--d-2)' : ZONE_TONE[i] ?? 'var(--d-1)'
+              return (
+                <div
+                  key={z.name}
+                  data-zone-bar={z.name}
+                  onClick={() => tap.toggle(z.name)}
+                  style={{
+                    flex: on ? (z.seconds > 0 ? z.seconds : 0) : 0.0001,
+                    height: 12,
+                    background: tone,
+                    cursor: 'pointer',
+                    transition: reduced
+                      ? undefined
+                      : `flex-grow ${MOTION_DURATION_MS}ms ${MOTION_EASE} ${staggerDelay(i)}ms, background 200ms ${MOTION_EASE}`,
+                  }}
+                />
+              )
+            })}
           </div>
           <div style={{ width: '100%', display: 'flex', gap: 3 }}>
-            {list.map((z, i) => (
-              <div key={z.name} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ width: '100%', height: 2, background: ZONE_TONE[i] ?? 'var(--d-1)' }} />
-                <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1, color: 'var(--e-mid)' }}>
-                  {z.name}
-                </span>
-                <span style={{ fontFamily: 'var(--e-body)', fontSize: 13, fontWeight: 800, color: 'var(--e-ink)' }}>
-                  {formatMinSec(z.seconds)}
-                </span>
-                <span style={{ fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 700, color: 'var(--e-quiet)' }}>
-                  {formatRange(z)}
-                </span>
-              </div>
-            ))}
+            {list.map((z, i) => {
+              const selected = tap.isSelected(z.name)
+              const dimmed = tap.isDimmed(z.name)
+              const tone = selected ? 'var(--st-active)' : dimmed ? 'var(--d-2)' : ZONE_TONE[i] ?? 'var(--d-1)'
+              return (
+                <div
+                  key={z.name}
+                  onClick={() => tap.toggle(z.name)}
+                  style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer' }}
+                >
+                  <div style={{ width: '100%', height: 2, background: tone }} />
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1, color: selected ? 'var(--e-ink)' : 'var(--e-mid)' }}>
+                    {z.name}
+                  </span>
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 13, fontWeight: 800, color: 'var(--e-ink)' }}>
+                    {formatMinSec(z.seconds)}
+                  </span>
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 700, color: 'var(--e-quiet)' }}>
+                    {formatRange(z)}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </>
       ) : (

@@ -2,6 +2,11 @@ import type { ReactNode } from 'react'
 import type { DayState } from './state/dayState'
 import './tokens.css'
 
+/** States with a pen-verified --e-photo-tint-* token (Task 10.5). A state
+ *  without its own plate work yet (Resting, Evening) falls back to Rest's
+ *  tint rather than referencing an undefined custom property. */
+const PHOTO_TINT_STATES: readonly DayState[] = ['rest', 'training', 'trained']
+
 /**
  * The EDITORIAL II shell. Owns the page ground, the 390-wide column, the safe
  * areas, and the portal target every bottom sheet mounts into. It also binds
@@ -32,6 +37,7 @@ export default function EditorialRoot({
         // @ts-expect-error — custom property on an inline style is valid CSS
         '--st-active': `var(--st-${state})`,
         '--e-ground': `var(--g-${state})`,
+        '--e-photo-tint': `var(--e-photo-tint-${PHOTO_TINT_STATES.includes(state) ? state : 'rest'})`,
         background: 'var(--e-ground)',
         color: 'var(--e-ink)',
         fontFamily: 'var(--e-body)',

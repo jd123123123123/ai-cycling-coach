@@ -1,5 +1,6 @@
 import { Flame, Thermometer, Wind } from 'lucide-react'
 import Bars from '../components/Bars'
+import Cover from '../components/Cover'
 import DayMark from '../components/DayMark'
 import DayRail from '../components/DayRail'
 import DeltaRow from '../components/DeltaRow'
@@ -8,6 +9,7 @@ import InsightStrip from '../components/InsightStrip'
 import MetricTrack from '../components/MetricTrack'
 import PeakRows, { type PeakTotal } from '../components/PeakRows'
 import PMCChart from '../components/PMCChart'
+import QuotePlate from '../components/QuotePlate'
 import RangeRow from '../components/RangeRow'
 import SecHead from '../components/SecHead'
 import Statement from '../components/Statement'
@@ -15,6 +17,7 @@ import StatTile from '../components/StatTile'
 import StatusBar from '../components/StatusBar'
 import TabBar from '../components/TabBar'
 import TomorrowBand from '../components/TomorrowBand'
+import TomorrowPlate from '../components/TomorrowPlate'
 import Verdict from '../components/Verdict'
 import WeekRail from '../components/WeekRail'
 import WhatThisChanges from '../components/WhatThisChanges'
@@ -309,24 +312,50 @@ export default function TodayView({ model }: { model: TodayModel }) {
     unlockLabel: '',
   }))
 
+  // ---- Quote Plate (all states) — pull-quote copy is editorial writing,
+  // legitimately static per state (not athlete data), transcribed verbatim
+  // from CqmME (Rest) / X8wnJ (Training) / WVwiD (Trained).
+  const quoteCopy = state === 'rest' || state === 'training' || state === 'trained' ? QUOTE_COPY[state] : null
+
+  // ---- Tomorrow Plate (Rest, Trained) / Route Plate (Training) --------------
+  // Every field routes through TodayModel where a real source exists; where
+  // none does (route distance/elevation, a session's own clock time, sunset)
+  // the field is honestly missing, same rule as everywhere else in this
+  // model. See task-10.5-report.md for the per-field source record.
+  const tomorrowKickerRight: Value<string> = isPresent(model.tomorrow)
+    ? present(model.tomorrow.value.title.split(' · ')[0].toUpperCase())
+    : missing(model.tomorrow.missing)
+  const tomorrowKickerLeft: Value<string> = (() => {
+    if (!isPresent(model.tomorrow)) return missing<string>(model.tomorrow.missing)
+    const unlock = model.tomorrow.value.unlockLabel
+    return isPresent(unlock) ? present(`TOMORROW · ${unlock.value}`) : missing<string>(unlock.missing)
+  })()
+  const tomorrowPlateTitle: Value<string> = mapValue(model.tomorrow, (t) => t.detail || t.title)
+  const tomorrowCaptionLeft: Value<string> = missing("No route distance for tomorrow's plan.")
+  const tomorrowCaptionRight: Value<string> = mapValue(
+    model.tomorrow,
+    () => (state === 'trained' ? 'THE WORK IS DONE' : 'TODAY MAKES IT POSSIBLE'),
+  )
+
+  const routeKickerLeft: Value<string> = missing("No start time recorded for today's session.")
+  const routeKickerRight: Value<string> = missing('No sunset time available.')
+  const routeTitle: Value<string> = mapValue(model.session, (s) => s.title)
+  const routeCaptionLeft: Value<string> = missing("No route data for today's ride.")
+  const routeCaptionRight: Value<string> = (() => {
+    const { workBlocks, uniformWork } = workIntervalsOf(sessionBlocks)
+    if (!uniformWork || workBlocks.length === 0) return missing('No clean interval pattern to summarize.')
+    const watts = workBlocks[0].watts
+    return isPresent(watts)
+      ? present(`${workBlocks.length} × ${Math.round(workBlocks[0].minutes)} @ ${watts.value} W`)
+      : missing('No target for this block.')
+  })()
+
   return (
     <EditorialRoot state={state}>
       <main data-day-state={state} style={{ display: 'flex', flexDirection: 'column' }}>
         <StatusBar time={new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} />
 
-        <div
-          data-hero
-          style={{
-            width: '100%',
-            background: 'var(--e-ground)',
-            padding: '14px 24px 26px 24px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: 22,
-            position: 'relative',
-          }}
-        >
+        <Cover state={state}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 22, width: '100%' }}>
             <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
@@ -427,7 +456,7 @@ export default function TodayView({ model }: { model: TodayModel }) {
           <div style={{ position: 'absolute', top: 150, right: 24 }}>
             <DayMark state={state} />
           </div>
-        </div>
+        </Cover>
 
         <div data-hero-body style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '20px 24px 0 24px' }}>
           {state === 'rest' && (
@@ -603,6 +632,10 @@ export default function TodayView({ model }: { model: TodayModel }) {
           </section>
         )}
 
+        {quoteCopy && (
+          <QuotePlate state={state} quote={quoteCopy.quote} attribution={quoteCopy.attribution} />
+        )}
+
         {state === 'trained' && (
           <section data-section="02" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
             <SecHead
@@ -720,6 +753,27 @@ export default function TodayView({ model }: { model: TodayModel }) {
           </div>
         </section>
 
+        {(state === 'rest' || state === 'trained') && (
+          <TomorrowPlate
+            state={state}
+            kickerLeft={tomorrowKickerLeft}
+            kickerRight={tomorrowKickerRight}
+            title={tomorrowPlateTitle}
+            captionLeft={tomorrowCaptionLeft}
+            captionRight={tomorrowCaptionRight}
+          />
+        )}
+        {state === 'training' && (
+          <TomorrowPlate
+            state={state}
+            kickerLeft={routeKickerLeft}
+            kickerRight={routeKickerRight}
+            title={routeTitle}
+            captionLeft={routeCaptionLeft}
+            captionRight={routeCaptionRight}
+          />
+        )}
+
         {isRestOrTraining && (
           <div style={{ width: '100%', padding: '30px 24px 0 24px' }}>
             <TomorrowBand
@@ -755,6 +809,22 @@ const condUnit: CSSProperties = {
 }
 const tickStyle: CSSProperties = {
   fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.8, color: 'var(--e-lo)',
+}
+
+/** Pull-quote copy, transcribed verbatim per state (CqmME/X8wnJ/WVwiD). */
+const QUOTE_COPY: Record<'rest' | 'training' | 'trained', { quote: string; attribution: string }> = {
+  rest: {
+    quote: "Nothing you do today will make you faster. Everything you don't do will.",
+    attribution: 'WHAT REST IS FOR',
+  },
+  training: {
+    quote: 'Everything you did in the last three weeks was to make the fourth block possible.',
+    attribution: 'WHAT TODAY IS FOR',
+  },
+  trained: {
+    quote: "You don't absorb a session by doing another one. The gain is made while you're still.",
+    attribution: 'WHAT HAPPENS NEXT',
+  },
 }
 
 function pmcDelta(series: PmcPoint[], daysBack: number, pick: (p: PmcPoint) => number): number | null {

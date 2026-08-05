@@ -1,4 +1,6 @@
 import { isPresent, type Value } from '../data/value'
+import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
+import { useTapHighlight } from '../motion/useTapHighlight'
 
 export interface BarsBlock {
   label: string
@@ -65,6 +67,14 @@ export interface BarsBlock {
  * the same target wattage would have EVERY block tinted as "work," not
  * none. Fine for the threshold/VO2-style interval sessions this app plans
  * today; worth a second look if/when a flatter session shape is added.
+ *
+ * Motion (Task 10.5): bars grow from a zero baseline the first time the row
+ * enters the viewport (`useReveal`), staggered per block so the row reads as
+ * a wave. A block with no real `watts` never animates — it renders its
+ * fixed ghost placeholder immediately, on every render (the "never animate a
+ * missing state" rule). Tapping a present block lifts it to `--st-active`
+ * and drops every other present block to `--d-2` (`useTapHighlight`),
+ * surfacing its exact wattage above the bar; tapping it again restores.
  */
 export default function Bars({ blocks, emphasizeMax = false }: { blocks: BarsBlock[]; emphasizeMax?: boolean }) {
   const presentWatts = blocks
@@ -72,27 +82,57 @@ export default function Bars({ blocks, emphasizeMax = false }: { blocks: BarsBlo
     .filter((w): w is number => w != null)
   const maxWatts = presentWatts.length > 0 ? Math.max(...presentWatts) : 0
 
+  const { ref, on, reduced } = useReveal<HTMLDivElement>()
+  const tap = useTapHighlight<number>()
+
   return (
-    <div data-bars style={{ width: '100%', height: 104, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+    <div ref={ref} data-bars style={{ width: '100%', height: 104, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
       {blocks.map((b, i) => {
         const watts = b.watts
         const wattsPresent = isPresent(watts)
-        const height = wattsPresent
+        const targetHeight = wattsPresent
           ? Math.max(6, Math.round((watts.value / (maxWatts || 1)) * 104))
           : 8
+        const height = wattsPresent && !on ? 0 : targetHeight
         const isWork = wattsPresent && emphasizeMax && watts.value === maxWatts
+        const selected = wattsPresent && tap.isSelected(i)
+        const dimmed = wattsPresent && tap.isDimmed(i)
+        const color = !wattsPresent
+          ? 'var(--e-bar-ghost-dim)'
+          : selected || isWork
+            ? 'var(--st-active)'
+            : dimmed
+              ? 'var(--d-2)'
+              : 'var(--e-bar-ghost)'
+
         return (
-          <div
-            key={i}
-            data-block=""
-            title={b.label}
-            style={{
-              flex: b.minutes || 1,
-              height,
-              borderRadius: '3px 3px 0 0',
-              background: isWork ? 'var(--st-active)' : wattsPresent ? 'var(--e-bar-ghost)' : 'var(--e-bar-ghost-dim)',
-            }}
-          />
+          <div key={i} style={{ position: 'relative', flex: b.minutes || 1, height: 104, display: 'flex', alignItems: 'flex-end' }}>
+            {selected && (
+              <span
+                style={{
+                  position: 'absolute', bottom: height + 4, left: '50%', transform: 'translateX(-50%)',
+                  whiteSpace: 'nowrap', fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, color: 'var(--e-ink)',
+                }}
+              >
+                {watts.value} W
+              </span>
+            )}
+            <div
+              data-block=""
+              title={b.label}
+              onClick={wattsPresent ? () => tap.toggle(i) : undefined}
+              style={{
+                width: '100%',
+                height,
+                borderRadius: '3px 3px 0 0',
+                background: color,
+                cursor: wattsPresent ? 'pointer' : undefined,
+                transition: wattsPresent && !reduced
+                  ? `height ${MOTION_DURATION_MS}ms ${MOTION_EASE} ${staggerDelay(i)}ms, background ${MOTION_DURATION_MS}ms ${MOTION_EASE}`
+                  : undefined,
+              }}
+            />
+          </div>
         )
       })}
     </div>

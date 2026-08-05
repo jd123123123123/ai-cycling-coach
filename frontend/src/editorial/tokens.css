@@ -128,4 +128,33 @@
   /* Peak Power rows: the filled meter segment behind each duration's value
    * (gPtjF's s0..s14, #FFFFFF5E) — the trailing "empty" segments reuse --d-1. */
   --e-peak-track: #FFFFFF5E;
+
+  /* Task 10.5 — the photographic plates (Cover, Quote Plate, Tomorrow Plate,
+   * Training's Route Plate). Each stacks a photo, a fixed grey "desaturate"
+   * wash, a state-tinted colour wash, and a scrim gradient built from the
+   * SAME hex as that state's own --g-* ground (verified against all three
+   * frames: Rest's scrims are #0A0B05.., Training's #05100A.., Trained's
+   * #120B05.. — exactly --g-rest/--g-training/--g-trained at partial alpha).
+   * Alpha suffixes transcribed verbatim per plate type: saturation
+   * A6/C4/D9 (Cover/Quote/Tomorrow-Route) = 65%/77%/85%; the colour wash
+   * 42/4A/5C = 26%/29%/36%. The wash's hue is per-state (see
+   * --e-photo-tint-*) and rebound to --e-photo-tint by EditorialRoot,
+   * exactly like --e-ground. */
+  --e-photo-sat: #6E7280;
+  --e-photo-sat-cover: color-mix(in srgb, var(--e-photo-sat) 65%, transparent);
+  --e-photo-sat-quote: color-mix(in srgb, var(--e-photo-sat) 77%, transparent);
+  --e-photo-sat-plate: color-mix(in srgb, var(--e-photo-sat) 85%, transparent);
+
+  --e-photo-tint-rest: #6B7A2F;
+  --e-photo-tint-training: #2F7A55;
+  --e-photo-tint-trained: #7A4A2F;
+  --e-photo-tint: var(--e-photo-tint-rest);
+  --e-photo-tint-cover: color-mix(in srgb, var(--e-photo-tint) 26%, transparent);
+  --e-photo-tint-quote: color-mix(in srgb, var(--e-photo-tint) 29%, transparent);
+  --e-photo-tint-plate: color-mix(in srgb, var(--e-photo-tint) 36%, transparent);
+
+  /* Tomorrow Plate / Route Plate's own Rule divider (S2v7S/zx1M3/vIlhZ,
+   * #FFFFFF3D on all three frames) — a distinct alpha stop from --e-rule
+   * (#FFFFFF1F) and --e-hairline (#FFFFFF12), not close enough to reuse. */
+  --e-rule-strong: #FFFFFF3D;
 }
