@@ -15,7 +15,7 @@ import type { TodayModel } from '../data/useTodayModel'
 export default function FatigueCurve({ pmc, recovery }: { pmc: TodayModel['pmc']; recovery: TodayModel['recovery'] }) {
   if (!isPresent(pmc)) {
     return (
-      <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: 0 }}>
+      <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: '8px 0 0 0' }}>
         {pmc.missing}
       </p>
     )

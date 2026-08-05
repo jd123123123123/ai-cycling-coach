@@ -36,7 +36,7 @@ export default function WhatThisChanges({ value }: { value: Value<{ onYou: Claim
         </div>
       ))}
       {!present && (
-        <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: 0 }}>
+        <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: '8px 0 0 0' }}>
           {value.missing}
         </p>
       )}
