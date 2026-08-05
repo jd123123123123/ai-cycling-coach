@@ -32,6 +32,15 @@ export interface TomorrowPlateProps {
   captionRight: Value<string>
   /** No TodayModel photo field — see Cover's own doc comment. */
   photoUrl?: string | null
+  /** ONE already-translated sentence covering the gap, shown only when the
+   *  plate has SOME real content but not all of it (see the block comment
+   *  below). The caller supplies the exact wording (`i18n/copy.ts`'s
+   *  `tomorrowPlateGap`/`routePlateGap`) rather than this component
+   *  concatenating each missing field's own reason — a plate with three or
+   *  four permanently-empty fields (the norm here; several are gaps
+   *  TodayModel will never fill, not transient ones) reading as three or
+   *  four stacked apologies is worse than one calm sentence. */
+  gapReason?: string
 }
 
 /**
@@ -41,18 +50,35 @@ export interface TomorrowPlateProps {
  * different copy register (tomorrow's plan vs. today's own ride). 246 tall
  * in the pen, but — same correction as `Cover`/`QuotePlate` — that height
  * is the photo's own envelope; without one the plate collapses to its
- * content's height (coordinator visual review, defect 1). Every field is
- * independently a `Value`; missing fields dash in place, and every DISTINCT
- * reason across them collapses to ONE combined line below the plate
- * (coordinator visual review, defect 3 — two separate reason paragraphs
- * read as a stacked list inside this compact a plate; `InsightStrip` and
- * the absorption tiles fold multiple reasons into one line the same way).
+ * content's height (coordinator visual review, defect 1).
+ *
+ * CORRECTED (coordinator visual review, round 2 — task 10.6): most of this
+ * plate's five fields are PERMANENT gaps (no start time, no sunset, no
+ * route data — TodayModel carries none of these anywhere, ever, not just
+ * today), so on a typical render only one or two of five fields are real.
+ * The previous version dashed every missing slot AND joined every distinct
+ * reason into one paragraph — on Rest, that read as a lone floating "—"
+ * for the (almost always empty) headline, followed by a wall of three
+ * concatenated apologies, directly ABOVE `TomorrowBand`, which shows the
+ * same tomorrow session cleanly. Two rules now:
+ *  - No content at all (every field missing) → render nothing. The
+ *    frame isn't lost — `TomorrowBand`, one section down, still carries
+ *    tomorrow (Rest/Training) or the whole plate simply has nothing to add
+ *    (Trained, which has no Band fallback but also nothing left unsaid).
+ *  - Some content → render exactly what's real, quietly (no dash) for
+ *    whatever's missing, and print `gapReason` — ONE sentence — instead of
+ *    a per-field reason list. Matches the register `InsightStrip`'s label
+ *    row and the absorption tiles already use: the frame stays, and a gap
+ *    gets ONE quiet explanation, not several.
  */
 export default function TomorrowPlate({
-  state, kickerLeft, kickerRight, title, captionLeft, captionRight, photoUrl,
+  state, kickerLeft, kickerRight, title, captionLeft, captionRight, photoUrl, gapReason,
 }: TomorrowPlateProps) {
   const fields = [kickerLeft, kickerRight, title, captionLeft, captionRight]
-  const reasons = [...new Set(fields.filter((f): f is { missing: string } => !isPresent(f)).map((f) => f.missing))]
+  const hasAnyContent = fields.some(isPresent)
+  const hasGap = fields.some((f) => !isPresent(f))
+
+  if (!hasAnyContent) return null
 
   return (
     <div
@@ -80,27 +106,29 @@ export default function TomorrowPlate({
 
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 11 }}>
         <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ ...kickerStyle, color: 'var(--st-active)' }}>{isPresent(kickerLeft) ? kickerLeft.value : '—'}</span>
-          <span style={{ ...kickerStyle, color: 'var(--e-mid)' }}>{isPresent(kickerRight) ? kickerRight.value : '—'}</span>
+          <span style={{ ...kickerStyle, color: 'var(--st-active)' }}>{isPresent(kickerLeft) ? kickerLeft.value : ''}</span>
+          <span style={{ ...kickerStyle, color: 'var(--e-mid)' }}>{isPresent(kickerRight) ? kickerRight.value : ''}</span>
         </div>
 
-        <p
-          style={{
-            margin: 0, fontFamily: 'var(--e-display)', fontSize: 26, fontWeight: 800,
-            letterSpacing: -1.1, lineHeight: 1.05, color: 'var(--e-ink)',
-          }}
-        >
-          {isPresent(title) ? title.value : '—'}
-        </p>
+        {isPresent(title) && (
+          <p
+            style={{
+              margin: 0, fontFamily: 'var(--e-display)', fontSize: 26, fontWeight: 800,
+              letterSpacing: -1.1, lineHeight: 1.05, color: 'var(--e-ink)',
+            }}
+          >
+            {title.value}
+          </p>
+        )}
 
         <div style={{ width: '100%', height: 1, background: 'var(--e-rule-strong)' }} />
 
         <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <span style={{ ...captionStyle, color: 'var(--e-ink)' }}>{isPresent(captionLeft) ? captionLeft.value : '—'}</span>
-          <span style={{ ...captionStyle, color: 'var(--st-active)' }}>{isPresent(captionRight) ? captionRight.value : '—'}</span>
+          <span style={{ ...captionStyle, color: 'var(--e-ink)' }}>{isPresent(captionLeft) ? captionLeft.value : ''}</span>
+          <span style={{ ...captionStyle, color: 'var(--st-active)' }}>{isPresent(captionRight) ? captionRight.value : ''}</span>
         </div>
 
-        {reasons.length > 0 && <p data-plate-reason style={reasonStyle}>{reasons.join(' ')}</p>}
+        {hasGap && gapReason && <p data-plate-reason style={reasonStyle}>{gapReason}</p>}
       </div>
     </div>
   )

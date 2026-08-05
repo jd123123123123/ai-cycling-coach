@@ -89,7 +89,7 @@ describe('TomorrowPlate', () => {
     expect(screen.getByText('TODAY MAKES IT POSSIBLE')).toBeTruthy()
   })
 
-  it('keeps the frame and dashes each missing field, printing every distinct reason as ONE combined line', () => {
+  it('renders present fields quietly (no dash) and prints ONE gap sentence when some fields are missing', () => {
     const { container } = render(
       <TomorrowPlate
         state="training"
@@ -98,19 +98,34 @@ describe('TomorrowPlate', () => {
         title={present('Threshold')}
         captionLeft={missing('No route data for today\'s ride.')}
         captionRight={missing('No route data for today\'s ride.')}
+        gapReason="Further route details aren't available yet."
       />,
     )
     expect(container.querySelector('[data-tomorrow-plate]')).not.toBeNull()
-    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
-    // Three distinct reasons across the four missing fields (the caption
-    // pair shares one) must render as a SINGLE paragraph, not one per
-    // reason stacked — coordinator visual review, defect 3.
+    expect(screen.getByText('Threshold')).toBeTruthy()
+    // No per-field dash — coordinator visual review round 2: a plate with
+    // several permanently-empty fields dashing every one of them, then
+    // stacking every distinct reason into one paragraph, read as a wall of
+    // apologies. Missing fields render quietly; ONE sentence covers the gap.
+    expect(screen.queryByText('—')).toBeNull()
     const reasonParagraphs = container.querySelectorAll('[data-plate-reason]')
     expect(reasonParagraphs.length).toBe(1)
-    const combined = reasonParagraphs[0]
-    expect(combined.textContent).toContain('No start time')
-    expect(combined.textContent).toContain('No sunset time available.')
-    expect(combined.textContent).toContain("No route data for today's ride.")
+    expect(reasonParagraphs[0].textContent).toBe("Further route details aren't available yet.")
+  })
+
+  it('renders nothing at all when every field is missing — the frame is not lost, a sibling section carries it', () => {
+    const { container } = render(
+      <TomorrowPlate
+        state="rest"
+        kickerLeft={missing('a')}
+        kickerRight={missing('b')}
+        title={missing('c')}
+        captionLeft={missing('d')}
+        captionRight={missing('e')}
+        gapReason="Further details for tomorrow aren't available yet."
+      />,
+    )
+    expect(container.querySelector('[data-tomorrow-plate]')).toBeNull()
   })
 
   it('is 246 tall only when a photo fills it', () => {

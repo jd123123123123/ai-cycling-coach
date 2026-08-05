@@ -832,6 +832,7 @@ function TodayViewBody({ model }: { model: TodayModel }) {
             title={tomorrowPlateTitle}
             captionLeft={tomorrowCaptionLeft}
             captionRight={tomorrowCaptionRight}
+            gapReason={t('tomorrowPlateGap')}
           />
         )}
         {state === 'training' && (
@@ -842,6 +843,7 @@ function TodayViewBody({ model }: { model: TodayModel }) {
             title={routeTitle}
             captionLeft={routeCaptionLeft}
             captionRight={routeCaptionRight}
+            gapReason={t('routePlateGap')}
           />
         )}
 

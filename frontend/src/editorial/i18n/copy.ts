@@ -274,6 +274,11 @@ export const COPY = {
   noStartTimeToday: { de: 'Keine Startzeit für die heutige Einheit erfasst.', en: "No start time recorded for today's session." },
   noSunsetTime: { de: 'Keine Sonnenuntergangszeit verfügbar.', en: 'No sunset time available.' },
   noRouteDataToday: { de: 'Keine Streckendaten für die heutige Fahrt.', en: "No route data for today's ride." },
+  // ONE combined sentence for a plate that has SOME real content but not
+  // all of it — replaces joining each missing field's own reason (see
+  // TomorrowPlate.tsx's own doc comment, coordinator visual review round 2).
+  tomorrowPlateGap: { de: 'Weitere Details zu morgen liegen noch nicht vor.', en: "Further details for tomorrow aren't available yet." },
+  routePlateGap: { de: 'Weitere Streckendetails liegen noch nicht vor.', en: "Further route details aren't available yet." },
   routeCaptionRight: { de: '{n} × {m} @ {w} W', en: '{n} × {m} @ {w} W' },
   noPeakIdentified: { de: 'Noch kein Spitzenwert für diese Fahrt erkannt.', en: 'No headline peak identified for this ride yet.' },
 
