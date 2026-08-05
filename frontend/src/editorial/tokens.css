@@ -63,6 +63,15 @@
   --st-a28: color-mix(in srgb, var(--st-active) 28%, transparent);
   --st-a40: color-mix(in srgb, var(--st-active) 40%, transparent);
 
+  /* component/RangeRow's (KT5iR) track rail. Neutral whites, not accent-tied
+   * — unlike --st-a*, these don't move with the day state, so they are their
+   * own literal tokens: --e-track-base (#FFFFFF12, the Track's 2px "Base"
+   * line) and --e-track-band (#FFFFFF26, the "Band" pill marking the normal
+   * range). Neither matches --e-glass (#FFFFFF0F) or --d-1 (#FFFFFF14)
+   * closely enough to reuse — both are distinct alpha stops in the tree. */
+  --e-track-base: #FFFFFF12;
+  --e-track-band: #FFFFFF26;
+
   /* Per-state grounds. Pen-verified 2026-08-05: every flagship frame paints
    * its OWN background, tinted toward that state's accent — none of them uses
    * the neutral --e-bg. The tint is the mood system, not decoration. */
