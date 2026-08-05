@@ -1629,7 +1629,12 @@ git commit -m "feat(editorial): Trained's session, cost and trajectory sections"
   - `WeekRail({ days }: { days: { letter: string; tss: Value<number> }[] })`
   - `TomorrowBand({ session }: { session: Value<{ title: string; unlockLabel: string }> })`
 
-Sections, pen-verified 2026-08-05 from the frames' own child names: **Rest** = `01 Why` / `02 Absorbing` / `03 Trajectory` — NOT "Recovery / Absorption", which is what the spec's first draft said. **Training** = `01 Recovery` / `02 The Session` / `03 Trajectory`. Most of both is reuse; the new material is sleep composition (deep / REM / light / awake), the absorption band with `clear Thu 17:30`, the session-preview bars, and conditions.
+Sections for **Rest**: the frame's child *nodes* are named `01 Why` / `02 Absorbing`,
+but the headings those sections actually **render** are `01 RECOVERY` and
+`02 ABSORPTION` — verified 2026-08-05 by reading the SecHead text inside each.
+The node name is the designer's label for the layer, not the copy. Use the
+rendered text. (An earlier amendment to this plan got that backwards; the
+spec's first draft was right.) **Training** = `01 Recovery` / `02 The Session` / `03 Trajectory`. Most of both is reuse; the new material is sleep composition (deep / REM / light / awake), the absorption band with `clear Thu 17:30`, the session-preview bars, and conditions.
 
 - [ ] **Step 1: Read both frames**
 

@@ -183,7 +183,7 @@ Sections per state:
 
 | State | 01 | 02 | 03 |
 |---|---|---|---|
-| Rest | Why | Absorbing | Trajectory |
+| Rest | Recovery | Absorption | Trajectory |
 | Training | Recovery | The Session | Trajectory |
 | Trained | The Session | The Cost | Trajectory |
 | Resting | Right Now | Trajectory | — |
