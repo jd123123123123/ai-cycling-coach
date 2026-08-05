@@ -1358,11 +1358,33 @@ git commit -m "feat(editorial): the Today view-model, every value a Value"
 **Interfaces:**
 - Consumes: `Value<T>` (Task 1), `RangeBand`/`TodayModel` (Task 7), `SecHead` (Task 6).
 - Produces:
-  - `MetricTrack({ label, state, value, unit, delta, band, hue })` where `value: Value<number>`, `band: RangeBand | null`, `hue: string` (a `var(--m-…)` reference)
-  - `StatTile({ label, value, unit, hue })` with `value: Value<number | string>`
+  - `MetricTrack({ label, state, value, unit, delta, band, hue, size })` where `value: Value<number>`, `band: RangeBand | null`, `hue: string` (a `var(--m-…)` reference), `size?: 'md' | 'lg' | 'xl'` defaulting to `'lg'`
+  - `StatTile({ label, value, unit })` with `value: Value<number | string>`
+
+**The hero numeral is not one size** (pen-verified 2026-08-05 across all five
+frames). It changes per screen, and its letter-spacing scales with it — a
+hardcoded size would break three of the five screens:
+
+| Size | Font | Tracking | Screens |
+|---|---|---|---|
+| `lg` | 146 / 800 | −9 | Rest, Training, Trained |
+| `xl` | 176 / 800 | −11 | Resting |
+| `md` | 118 / 800 | −6 | Evening (`22:30` — the numeral is a *time* there) |
+
+The statement line above it is 42/800 tracking −2 on every screen; secondary
+numerals (Trained's `288`, Evening's `2,847`) are 44/800 tracking −2.
+
+**`StatTile` takes no `hue`.** No sampled instance colours a tile, so the prop
+has nothing to transcribe. Drop it rather than inventing a use — the metric
+hues `--m-*` belong to `MetricTrack`, where the pen actually applies them.
   - `Verdict({ headline, body })` with `Value<string>` on both
   - `DayMark({ state })`
   - `InsightStrip({ items }: { items: { label: string; value: Value<string> }[] })`
+
+**The hero's context row is prose, not tiles** (pen-verified). This plan's first
+draft said "for Trained the context is the ride's Big Four tiles"; the tree says
+the Hero's context is plain text (`285 W AVG · 4 BLOCKS HELD`), and the tiles
+live in a later section. The tree wins.
 
 Trained is built first on purpose: it is the widest component test (2977px, Big Four tiles, plan-vs-ridden, peak power, HR zones, the Cost band, the Trajectory chart). Everything it proves, the other four screens reuse.
 
