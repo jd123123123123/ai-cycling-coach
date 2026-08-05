@@ -23,7 +23,7 @@ import { useDayState } from '../state/useDayState'
 import type { DayState } from '../state/dayState'
 
 export interface RangeBand { low: number; high: number; position: 'below' | 'in' | 'above' }
-export interface PmcPoint { date: string; ctl: number; atl: number; tsb: number }
+export interface PmcPoint { date: string; ctl: number; atl: number; tsb: number; tss?: number | null }
 export interface SessionSummary {
   title: string
   targetWatts: number | null
@@ -87,6 +87,14 @@ export interface TodayModel {
    *  while its clock time is not — PlannedWorkout carries no time-of-day
    *  field anywhere, so this is honestly missing until a source exists. */
   tomorrow: Value<{ title: string; detail: string; unlockLabel: Value<string> }>
+  /** Rest's hero-body "Bars"/"BarLabels" (XD8oR/dfQOB, `RYP0r`) — a 7-bar
+   *  Mon-Sun training-load strip, one bar per calendar day of the CURRENT
+   *  week. Sourced from `PMCEntry.tss` (`usePMC()`'s raw entries, keyed by
+   *  `date`) — a real per-day load number, not derived or estimated. Always
+   *  7 entries (never itself a Value: the frame is 7 slots regardless of
+   *  data), but each day's `tss` is its own Value — a day with no matching
+   *  PMC entry (no ride that day) is honestly missing, never a zero bar. */
+  week: { letter: string; tss: Value<number> }[]
   isLoading: boolean
 }
 
@@ -223,7 +231,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       fitness: latestPmc.ctl,
       fatigue: latestPmc.atl,
       form: latestPmc.tsb,
-      series: pmcEntries.map((e) => ({ date: e.date, ctl: e.ctl, atl: e.atl, tsb: e.tsb })),
+      series: pmcEntries.map((e) => ({ date: e.date, ctl: e.ctl, atl: e.atl, tsb: e.tsb, tss: e.tss ?? null })),
     },
     'Not enough training history yet.',
   )
@@ -374,6 +382,27 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     "Tomorrow's plan is not set yet.",
   )
 
+  // Rest's Mon-Sun training-load strip (WeekRail, `RYP0r`'s "Bars"/
+  // "BarLabels"). Built from the current calendar week (Monday-start,
+  // matching the frame's own M/T/W/T/F/S/S label row) against the raw PMC
+  // entries' own `tss` field — real per-day load, keyed by date. A day
+  // with no matching entry is honestly missing, never a synthesised zero.
+  const DOW_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+  const mondayOffset = (now.getDay() + 6) % 7
+  const monday = new Date(now)
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(monday.getDate() - mondayOffset)
+  const week = DOW_LETTERS.map((letter, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    const iso = toIsoDate(d)
+    const entry = pmcEntries.find((e) => e.date === iso)
+    return {
+      letter,
+      tss: entry?.tss != null ? present(entry.tss) : missing<number>('No ride logged.'),
+    }
+  })
+
   return {
     state,
     dateLabel,
@@ -393,6 +422,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     whatThisChanges,
     conditions,
     tomorrow,
+    week,
     isLoading,
   }
 }

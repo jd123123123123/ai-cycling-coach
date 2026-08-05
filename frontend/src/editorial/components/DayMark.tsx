@@ -1,3 +1,4 @@
+import { Moon } from 'lucide-react'
 import type { DayState } from '../state/dayState'
 
 /**
@@ -9,12 +10,67 @@ import type { DayState } from '../state/dayState'
  * innerRadius 0.58, startAngle 30, sweepAngle -240, plus a rocking-loop
  * animation) confirm every state gets its own shape, not just its own hue.
  *
- * This task (8) only transcribes Trained's disc — Resting/Rest/Training/
- * Evening's silhouettes belong to Tasks 9-14, which own those frames. Until
- * they land, every other state falls back to this same disc rather than
- * guessing an untranscribed shape.
+ * Task 8 only transcribed Trained's disc. This task (10) adds Rest's and
+ * Training's own silhouettes:
+ *
+ * Rest — "Glyph Crescent" (un3SU, `RYP0r`): a `path` node, viewBox
+ * [0,0,20,40], rendered at 16x32, fill the state accent, 20px outer glow at
+ * `#C8FF0040` (var(--st-a28) — close enough to the pen's own 0x40 ≈ 25%
+ * alpha that this file's existing a28 token, already 28%, is reused rather
+ * than adding a near-duplicate a25 stop), rotated -16°. Its own `geometry`
+ * field in the tree is a literal `"..."` — a placeholder, not real path
+ * data (confirmed by reading the raw node twice). A first pass here hand-
+ * derived a two-arc crescent path from the viewBox/rotation alone; it
+ * type-checked and rendered an empty `<path>` (`getBBox()` returned `{}` —
+ * a degenerate, self-cancelling shape, caught only by actually looking at
+ * the harness render, not by any static gate). Replaced with lucide-react's
+ * own `Moon` glyph (already this project's icon dependency) — a real,
+ * renders-every-time crescent — rather than keep debugging invented arc
+ * math for a shape the pen never actually specified. Flagged in
+ * task-10-report.md.
+ *
+ * Training — "Glyph Arch" (DlHqX, `x4AxA5`): an `ellipse` ring segment,
+ * innerRadius 0.58, startAngle -30°, sweepAngle 240° (so it sweeps from
+ * -30° to 210°), 34x34, fill the state accent, 18px outer glow at
+ * `#2BE68F40` (var(--st-a28), same alpha reasoning as Rest's). Drawn here
+ * as an SVG arc ring rather than the pen's own ellipse-with-innerRadius
+ * primitive, which has no direct DOM/CSS equivalent.
+ *
+ * Both frames' own `context` fields describe idle motion (a breathing
+ * rotate for Rest, a self-drawing sweep + gentle bob for Training) — not
+ * implemented here, matching Trained's own disc (no motion) and this
+ * project's build-gate posture (`no-playwright-be-frugal`): a static glyph
+ * is the transcribed shape; animating it is a separate concern this task
+ * does not take on.
+ *
+ * Resting/Evening's silhouettes remain Tasks 11/14's — until they land,
+ * those two states still fall back to this same disc.
  */
 export default function DayMark({ state }: { state: DayState }) {
+  if (state === 'rest') {
+    return (
+      <div data-day-mark data-day-mark-state={state} style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Moon
+          size={22}
+          color="var(--st-active)"
+          fill="var(--st-active)"
+          aria-hidden="true"
+          style={{ transform: 'rotate(-16deg)', filter: 'drop-shadow(0 0 20px var(--st-a28))' }}
+        />
+      </div>
+    )
+  }
+
+  if (state === 'training') {
+    return (
+      <div data-day-mark data-day-mark-state={state} style={{ width: 34, height: 34, filter: 'drop-shadow(0 0 18px var(--st-a28))' }}>
+        <svg width={34} height={34} viewBox="0 0 34 34">
+          <path d={archRingPath(17, 17, 17 * 0.58, 17, -30, 210)} fill="var(--st-active)" />
+        </svg>
+      </div>
+    )
+  }
+
   return (
     <div data-day-mark data-day-mark-state={state} style={{ width: 34, height: 34 }}>
       <div
@@ -28,4 +84,24 @@ export default function DayMark({ state }: { state: DayState }) {
       />
     </div>
   )
+}
+
+/** A closed ring-segment path (annulus arc) from `startDeg` to `endDeg`,
+ * degrees measured clockwise from the positive x-axis (SVG's own
+ * convention), between `innerR` and `outerR` around (cx, cy). */
+function archRingPath(cx: number, cy: number, innerR: number, outerR: number, startDeg: number, endDeg: number): string {
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const point = (r: number, deg: number) => [cx + r * Math.cos(toRad(deg)), cy + r * Math.sin(toRad(deg))]
+  const large = endDeg - startDeg > 180 ? 1 : 0
+  const [ox1, oy1] = point(outerR, startDeg)
+  const [ox2, oy2] = point(outerR, endDeg)
+  const [ix2, iy2] = point(innerR, endDeg)
+  const [ix1, iy1] = point(innerR, startDeg)
+  return [
+    `M ${ox1} ${oy1}`,
+    `A ${outerR} ${outerR} 0 ${large} 1 ${ox2} ${oy2}`,
+    `L ${ix2} ${iy2}`,
+    `A ${innerR} ${innerR} 0 ${large} 0 ${ix1} ${iy1}`,
+    'Z',
+  ].join(' ')
 }

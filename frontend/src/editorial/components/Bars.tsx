@@ -44,8 +44,21 @@ export interface BarsBlock {
  * 37/69 — warm-up, four intervals with three recoveries, cool-down). A
  * missing `watts` value renders a minimal placeholder at the dimmer ghost
  * tone instead of inventing a height.
+ *
+ * `emphasizeMax` (new prop, Task 10): Training's own hero-body session
+ * preview (FUAIT, `x4AxA5`) tints its WORK blocks the state accent
+ * (`#2BE68F`) and its warm-up/recovery/cool-down blocks a dim ghost tone —
+ * unlike `01 The Session`'s Planned row (`BBZZe`, what this component was
+ * originally transcribed from), which is uniformly ghost-toned because it
+ * is a plan no one has ridden yet. `SessionSummary.blocks` carries no
+ * `isWork` flag, but "the block(s) at the session's peak wattage are the
+ * work intervals" is a real, definitional read of the same data already on
+ * the model (not an estimate) — so when `emphasizeMax` is true, blocks
+ * whose watts equal the row's own max are painted `var(--st-active)`
+ * instead of the ghost tone; every other block, and the default
+ * (`emphasizeMax` unset), is unchanged.
  */
-export default function Bars({ blocks }: { blocks: BarsBlock[] }) {
+export default function Bars({ blocks, emphasizeMax = false }: { blocks: BarsBlock[]; emphasizeMax?: boolean }) {
   const presentWatts = blocks
     .map((b) => (isPresent(b.watts) ? b.watts.value : null))
     .filter((w): w is number => w != null)
@@ -59,6 +72,7 @@ export default function Bars({ blocks }: { blocks: BarsBlock[] }) {
         const height = wattsPresent
           ? Math.max(6, Math.round((watts.value / (maxWatts || 1)) * 104))
           : 8
+        const isWork = wattsPresent && emphasizeMax && watts.value === maxWatts
         return (
           <div
             key={i}
@@ -68,7 +82,7 @@ export default function Bars({ blocks }: { blocks: BarsBlock[] }) {
               flex: b.minutes || 1,
               height,
               borderRadius: '3px 3px 0 0',
-              background: wattsPresent ? 'var(--e-bar-ghost)' : 'var(--e-bar-ghost-dim)',
+              background: isWork ? 'var(--st-active)' : wattsPresent ? 'var(--e-bar-ghost)' : 'var(--e-bar-ghost-dim)',
             }}
           />
         )

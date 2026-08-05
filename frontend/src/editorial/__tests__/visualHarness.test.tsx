@@ -81,15 +81,86 @@ const model: TodayModel = {
   isLoading: false,
 } as TodayModel
 
+const restModel: TodayModel = {
+  state: 'rest',
+  dateLabel: present('WED 22 JUL'),
+  streakDays: present(12),
+  readiness: present({ score: 88, deltaVsYesterday: 6 }),
+  hrv: present({ value: 68, unit: 'ms', delta: 6, band: { low: 52, high: 74, position: 'above' } }),
+  restingHr: present({ value: 48, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'below' } }),
+  sleep: present({ totalS: 27720, deepS: 4920, remS: 6480, lightS: 15120, awakeS: 1200 }),
+  pmc: present({ fitness: 68, fatigue: 52, form: 16, series: buildPmcSeries(42) }),
+  recovery: present({ hoursRemaining: 22, clearAtLabel: 'Thu 17:30' }),
+  session: missing('Nothing planned for today.'),
+  ride: missing('No ride recorded yet today.'),
+  zones: missing('No ride recorded yet today.'),
+  peaks: missing('No peak-power breakdown for this ride yet.'),
+  planVsRidden: missing('This ride was not matched to its plan.'),
+  verdict: present({
+    headline: "Absorb, don't add.",
+    body: "You're fresh — that's the point. Today your job is to stay out of the way.",
+  }),
+  whatThisChanges: missing('The coach has not weighed in on this ride yet.'),
+  conditions: missing('No location from a recent ride.'),
+  tomorrow: present({ title: 'Threshold · 4 × 8 @ 285 W', detail: '', unlockLabel: missing('No unlock time.') }),
+  week: [
+    { letter: 'M', tss: present(64) }, { letter: 'T', tss: present(48) }, { letter: 'W', tss: present(12) },
+    { letter: 'T', tss: missing('No ride logged.') }, { letter: 'F', tss: present(24) },
+    { letter: 'S', tss: present(68) }, { letter: 'S', tss: present(44) },
+  ],
+  isLoading: false,
+} as TodayModel
+
+const trainingModel: TodayModel = {
+  ...restModel,
+  state: 'training',
+  dateLabel: present('WED 22 JUL'),
+  readiness: present({ score: 82, deltaVsYesterday: 4 }),
+  session: present({
+    title: 'Threshold', targetWatts: 285, workKj: null, intensityFactor: 0.91, tss: 98,
+    blocks: [
+      { label: 'Warm-up', minutes: 20, watts: 180 },
+      { label: 'Interval 1', minutes: 8, watts: 285 },
+      { label: 'Recover', minutes: 3, watts: 150 },
+      { label: 'Interval 2', minutes: 8, watts: 285 },
+      { label: 'Recover', minutes: 3, watts: 150 },
+      { label: 'Interval 3', minutes: 8, watts: 285 },
+      { label: 'Recover', minutes: 3, watts: 150 },
+      { label: 'Interval 4', minutes: 8, watts: 285 },
+      { label: 'Cool-down', minutes: 15, watts: 120 },
+    ],
+  }),
+  conditions: present({ tempC: 13, windKmh: 14 }),
+  verdict: present({
+    headline: 'Green light. Go get it.',
+    body: "Everything's in range. You're cleared for full intensity.",
+  }),
+  tomorrow: missing("Tomorrow's plan is not set yet."),
+} as TodayModel
+
 describe('visual harness', () => {
   it.skipIf(!OUT)('writes the Trained screen to HTML', () => {
-    const { container } = render(<MemoryRouter><TodayView model={model} /></MemoryRouter>)
-    const tokens = readFileSync(path.join(__dirname, '..', 'tokens.css'), 'utf8')
-    writeFileSync(OUT!, `<!doctype html><html><head><meta charset="utf-8">
+    writeHarness('trained', model)
+  })
+  it.skipIf(!OUT)('writes the Rest screen to HTML', () => {
+    writeHarness('rest', restModel)
+  })
+  it.skipIf(!OUT)('writes the Training screen to HTML', () => {
+    writeHarness('training', trainingModel)
+  })
+})
+
+/** `HARNESS_OUT=/tmp/t10.html` writes trained to that exact path and
+ *  rest/training alongside it as `/tmp/t10.rest.html` / `/tmp/t10.training.html`. */
+function writeHarness(name: 'trained' | 'rest' | 'training', m: TodayModel) {
+  const { container } = render(<MemoryRouter><TodayView model={m} /></MemoryRouter>)
+  const tokens = readFileSync(path.join(__dirname, '..', 'tokens.css'), 'utf8')
+  const base = OUT!.endsWith('.html') ? OUT!.slice(0, -5) : OUT!
+  const finalPath = name === 'trained' ? OUT! : `${base}.${name}.html`
+  writeFileSync(finalPath, `<!doctype html><html><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>*{box-sizing:border-box}html,body{margin:0;padding:0;background:#000}${tokens}</style>
 </head><body>${container.innerHTML}</body></html>`)
-  })
-})
+}
