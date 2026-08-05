@@ -12,28 +12,24 @@ import { isPresent, type Value } from '../data/value'
  * at $e-lo. This task's interface carries `unit`, not `delta`, so that
  * third line follows T-LOAD's colour (e-lo), not the canonical's e-acid.
  *
- * `hue` is required by the task interface but is not applied to any text in
- * either sampled instance — it drives a restrained one-pixel accent rule
- * above the label instead, echoing how the pen tints its OTHER hue-bearing
- * numbers (e.g. the Insight Strip's "288 W" session-power figure) rather
- * than inventing an unverified visual. Flagged in task-8-report.md as a
- * genuine gap: no sampled StatTile instance uses `hue` directly.
+ * No `hue` prop: neither sampled instance colours anything by metric hue —
+ * both Label and the third line are $e-lo, both Value are $e-ink. The
+ * metric hues (--m-*) belong to MetricTrack, the component that actually
+ * applies them in the tree; a `hue` prop here had nothing to transcribe and
+ * was removed after review rather than kept as an unused guess.
  */
 export default function StatTile({
   label,
   value,
   unit,
-  hue,
 }: {
   label: string
   value: Value<number | string>
   unit: string
-  hue: string
 }) {
   const present = isPresent(value)
   return (
     <div data-stat-tile style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 100 }}>
-      <div style={{ width: 18, height: 2, borderRadius: 1, background: hue }} />
       <span
         style={{
           fontFamily: 'var(--e-body)',

@@ -6,10 +6,24 @@ import type { RangeBand } from '../data/useTodayModel'
  * frame's own "Metric Track" node (cjLpM -> M1 Load, LdBJ4): value 146px
  * Sora 800, letterSpacing -9, lineHeight 0.86, coloured by the metric's own
  * hue with a glow at the pen's literal alpha (#FF5E0038, ~22% of the hue —
- * no --st-a* stop matches 22% exactly, so the glow is mixed from `hue`
- * inline rather than forcing a mismatched token). The unit stack (gap 3,
+ * no --st-a* stop matches 22% exactly, so the glow uses the generic
+ * currentColor-based --a22 token, since it must follow whichever hue the
+ * `hue` prop carries, not one fixed source colour). The unit stack (gap 3,
  * padding-bottom 20) carries a hue-coloured primary unit ("TSS") — Trained's
  * literal colour for that text.
+ *
+ * `size` (coordinator review, post-initial-transcription): sampled across
+ * all five flagship Covers, the numeral comes in three sizes, tracking
+ * scaling with it:
+ *   lg (default) 146/800, letterSpacing -9  — Rest, Training, Trained
+ *   xl           176/800, letterSpacing -11 — Resting
+ *   md           118/800, letterSpacing -6  — Evening (numeral is a time,
+ *                                              "22:30", not a metric)
+ * Trained (this task's own frame) passes nothing and gets `lg`. The
+ * statement line above the numeral (42/800, letterSpacing -2) and secondary
+ * numerals like Trained's "288" / Evening's "2,847" (44/800, letterSpacing
+ * -2) are constant across all five frames and are NOT part of this prop —
+ * they don't go through MetricTrack.
  *
  * state/delta/band never co-occur with the big numeral in ANY of the five
  * flagship Cover instances checked (Trained's own TSS metric and Resting's
@@ -31,9 +45,17 @@ import type { RangeBand } from '../data/useTodayModel'
  * width. RangeRow gives exactly one concrete example of the Mark's position
  * (HRV, position "above", Mark at 236/322 = 73.8% of track width, Band
  * spanning 104-217/322 = 32.3%-67.4%); the pen does not encode a general
- * value-to-position formula, so `markPct` below is this task's own
- * placement rule (below/in/above -> fixed thirds), not a transcribed value.
+ * value-to-position formula. `markPct` below is this task's own
+ * interpolation of that one example into a below/in/above rule — the pen
+ * does not specify it, so it is not gospel, and a later reader with a
+ * second real example should feel free to replace it.
  */
+const SIZE: Record<'md' | 'lg' | 'xl', { fontSize: number; letterSpacing: number }> = {
+  md: { fontSize: 118, letterSpacing: -6 },
+  lg: { fontSize: 146, letterSpacing: -9 },
+  xl: { fontSize: 176, letterSpacing: -11 },
+}
+
 export default function MetricTrack({
   label,
   state,
@@ -42,6 +64,7 @@ export default function MetricTrack({
   delta,
   band,
   hue,
+  size = 'lg',
 }: {
   label: string
   state: string
@@ -50,8 +73,10 @@ export default function MetricTrack({
   delta: number | null
   band: RangeBand | null
   hue: string
+  size?: 'md' | 'lg' | 'xl'
 }) {
   const present = isPresent(value)
+  const { fontSize, letterSpacing } = SIZE[size]
   return (
     <div data-metric-track style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -84,14 +109,12 @@ export default function MetricTrack({
         <span
           style={{
             fontFamily: 'var(--e-display)',
-            fontSize: 146,
+            fontSize,
             fontWeight: 800,
-            letterSpacing: -9,
+            letterSpacing,
             lineHeight: 0.86,
             color: present ? hue : 'var(--e-lo)',
-            filter: present
-              ? `drop-shadow(0 0 44px color-mix(in srgb, ${hue} 22%, transparent))`
-              : undefined,
+            filter: present ? 'drop-shadow(0 0 44px var(--a22))' : undefined,
           }}
         >
           {present ? value.value : '—'}
