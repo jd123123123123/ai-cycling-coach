@@ -279,6 +279,19 @@ Expected: FAIL — `ENOENT` on `tokens.css`.
   --e-display: "Sora", "Inter", ui-sans-serif, sans-serif;
   --e-body: "Inter", ui-sans-serif, system-ui, sans-serif;
 
+  /* The pen's "off" foreground for an unreached phase step. Darker than
+   * --e-lo; it is a distinct value in the tree, not a near-miss. */
+  --e-off: #3E444C;
+
+  /* Accent alphas. The pen writes these as literal #C8FF00xx, but the accent
+   * changes per day-state, so they are mixed from --st-active instead — a
+   * literal would strand every non-Rest screen on the acid hue.
+   *   a07 = 0x12   a12 = 0x1F   a28 = 0x47   a40 = 0x66  */
+  --st-a07: color-mix(in srgb, var(--st-active) 7%, transparent);
+  --st-a12: color-mix(in srgb, var(--st-active) 12%, transparent);
+  --st-a28: color-mix(in srgb, var(--st-active) 28%, transparent);
+  --st-a40: color-mix(in srgb, var(--st-active) 40%, transparent);
+
   /* Per-state grounds. Pen-verified 2026-08-05: every flagship frame paints
    * its OWN background, tinted toward that state's accent — none of them uses
    * the neutral --e-bg. The tint is the mood system, not decoration. */
@@ -906,8 +919,34 @@ git commit -m "feat(editorial): the shell, the /e routes, and the landing switch
 - Produces:
   - `StatusBar({ time }: { time: string })`
   - `TabBar({ active }: { active: 'today' | 'train' | 'recovery' | 'history' | 'social' })` — `today` links to `/e/today`; the other four link to `/e/:tab`, which renders `NotInThisSystem`.
-  - `DayRail({ days }: { days: DayRailDay[] })` where `interface DayRailDay { letter: string; iso: string; load: number | null; isToday: boolean }`
-  - `SecHead({ index, title, aside }: { index: string; title: string; aside?: string })` — the `01 RECOVERY` numbered section header.
+  - `DayRail({ state, showSwitchAction, onSwapDayType }: { state: DayState; showSwitchAction?: boolean; onSwapDayType?: () => void })`
+  - `SecHead({ index, title, chip, sub }: { index: string; title: string; chip?: string; sub?: string })` — the numbered section header.
+
+**Two pen corrections, verified 2026-08-05. Both contradict this plan's first draft; the pen wins.**
+
+**DayRail is not a weekly load strip.** Pen `uKzuZ` is a same-day *phase* rail:
+a `DAY STATE` key, an optional accent pill action, a hairline rule, then four
+steps — `REST DAY`/`TRAINING DAY` -> `SESSION` -> `RECOVERY` -> `LIGHTS OUT`. The
+active step's tick is 6px tall in `var(--st-active)` with an outer glow
+(`blur 16`, accent at 40%); every inactive tick is 2px `var(--d-1)` and its
+label is `var(--e-off)`. Labels are Inter 9/800, letterSpacing 1. Rail gap 8,
+step gap 9. The pill carries a `swap_horiz` icon and reads
+`MAKE IT A TRAINING DAY` — **this pill is the entry point to Task 13's Switch
+Day Type sheet**, so `onSwapDayType` is the wiring, not decoration.
+
+**SecHead comes from `N42va`, not `rYYq3`.** `rYYq3` (`component/SecHead V5`)
+is a different design system's component — its fills reference `$accent`
+(#FF5A3C), `$text-primary`, `$text-tertiary`, none of which are EDITORIAL II
+variables. The flagship frames' sections reference `N42va`
+(`component/SectionHead`), confirmed on both `QvlIq` "01 Why" and `JzYYR`
+"02 Absorbing". Transcribe `N42va`:
+
+- Root: vertical, gap 9, width fill.
+- Row: gap 12, alignItems center.
+  - `Index` — Sora 22/800, letterSpacing -0.5, lineHeight 1, `var(--st-active)` (`$e-acid` in the component; per-state in the instances).
+  - `Title` — Sora 19/800, letterSpacing -0.5, lineHeight 1, `var(--e-ink)`, fills the row.
+  - `Chip` (optional) — fill `var(--st-a12)`, cornerRadius 999, padding 4/10; label Inter 10/800, letterSpacing 1.4, `var(--st-active)`.
+- `Sub` (optional) — Inter 12/600, lineHeight 1.35, `var(--e-lo)`.
 
 - [ ] **Step 1: Read the four pen components**
 
@@ -924,9 +963,9 @@ Write down, per component: height, padding, gap, every text node's fontSize / fo
 
 ```tsx
 // frontend/src/editorial/__tests__/chrome.test.tsx
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import DayRail from '../components/DayRail'
 import SecHead from '../components/SecHead'
 import StatusBar from '../components/StatusBar'
@@ -955,20 +994,41 @@ describe('chrome', () => {
     expect(screen.getByText('TRAIN').closest('a')?.getAttribute('href')).toBe('/e/train')
   })
 
-  it('DayRail marks today and renders a mark per day', () => {
-    const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((letter, i) => ({
-      letter, iso: `2026-07-${20 + i}`, load: i === 2 ? 68 : null, isToday: i === 2,
-    }))
-    const { container } = wrap(<DayRail days={days} />)
-    expect(container.querySelectorAll('[data-day]')).toHaveLength(7)
-    expect(container.querySelectorAll('[data-today="true"]')).toHaveLength(1)
+  it('DayRail renders the four phases and lights exactly one', () => {
+    const { container } = wrap(<DayRail state="rest" />)
+    expect(container.querySelectorAll('[data-step]')).toHaveLength(4)
+    expect(container.querySelectorAll('[data-active="true"]')).toHaveLength(1)
+    expect(screen.getByText('REST DAY')).toBeTruthy()
+    expect(screen.getByText('LIGHTS OUT')).toBeTruthy()
   })
 
-  it('SecHead renders the number, the title, and an optional aside', () => {
-    render(<SecHead index="01" title="RECOVERY" aside="OVERNIGHT" />)
+  it('DayRail names the first phase for the day state', () => {
+    wrap(<DayRail state="training" />)
+    expect(screen.getByText('TRAINING DAY')).toBeTruthy()
+  })
+
+  it('DayRail hides the action pill unless asked, and reports the tap', () => {
+    const onSwap = vi.fn()
+    const { container } = wrap(<DayRail state="rest" />)
+    expect(container.querySelector('[data-day-action]')).toBeNull()
+    cleanup()
+    wrap(<DayRail state="rest" showSwitchAction onSwapDayType={onSwap} />)
+    fireEvent.click(screen.getByText('MAKE IT A TRAINING DAY'))
+    expect(onSwap).toHaveBeenCalled()
+  })
+
+  it('SecHead renders the number, the title, and the optional chip and sub', () => {
+    render(<SecHead index="01" title="YOUR BODY" chip="AHEAD" sub="What this section covers." />)
     expect(screen.getByText('01')).toBeTruthy()
-    expect(screen.getByText('RECOVERY')).toBeTruthy()
-    expect(screen.getByText('OVERNIGHT')).toBeTruthy()
+    expect(screen.getByText('YOUR BODY')).toBeTruthy()
+    expect(screen.getByText('AHEAD')).toBeTruthy()
+    expect(screen.getByText('What this section covers.')).toBeTruthy()
+  })
+
+  it('SecHead without a chip or sub renders neither', () => {
+    const { container } = render(<SecHead index="02" title="THE COST" />)
+    expect(container.querySelector('[data-sechead-chip]')).toBeNull()
+    expect(container.querySelector('[data-sechead-sub]')).toBeNull()
   })
 })
 ```
@@ -1719,6 +1779,10 @@ git commit -m "feat(editorial): Session Detail, with an honest export CTA"
 **Interfaces:**
 - Consumes: `useDayState().setOverride` (Task 7), `#editorial-sheet-root` (Task 5).
 - Produces: `Sheet({ open, onClose, children })` portalling into `#editorial-sheet-root`; `SwitchDayTypeSheet({ open, current, onPick, onClose })` swapping `rest ⇄ training`; `BackToSessionDoneSheet({ open, onConfirm, onClose })` returning `resting → trained`.
+
+**The DayRail's action pill is how the sheet opens.** `DayRail` already accepts
+`showSwitchAction` and `onSwapDayType` (Task 6); wire that callback here rather
+than inventing a second trigger.
 
 The sheets are the real override mechanism, exactly as designed. The dev picker (behind the same conditions as `/design-lab` — an unauthenticated route, no flag) previews all five states without writing storage.
 
