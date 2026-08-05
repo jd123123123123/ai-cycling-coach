@@ -2,18 +2,22 @@ import { Flame } from 'lucide-react'
 import Bars from '../components/Bars'
 import DayMark from '../components/DayMark'
 import DayRail from '../components/DayRail'
+import DeltaRow from '../components/DeltaRow'
+import FatigueCurve from '../components/FatigueCurve'
 import InsightStrip from '../components/InsightStrip'
 import MetricTrack from '../components/MetricTrack'
-import PeakRows from '../components/PeakRows'
+import PeakRows, { type PeakTotal } from '../components/PeakRows'
 import PMCChart from '../components/PMCChart'
 import SecHead from '../components/SecHead'
+import Statement from '../components/Statement'
 import StatTile from '../components/StatTile'
 import StatusBar from '../components/StatusBar'
 import TabBar from '../components/TabBar'
 import Verdict from '../components/Verdict'
+import WhatThisChanges from '../components/WhatThisChanges'
 import ZoneRows from '../components/ZoneRows'
 import { isPresent, mapValue, missing, present, type Value } from '../data/value'
-import type { Claim, PmcPoint, TodayModel } from '../data/useTodayModel'
+import type { PmcPoint, TodayModel } from '../data/useTodayModel'
 import EditorialRoot from '../EditorialRoot'
 import type { CSSProperties } from 'react'
 
@@ -27,10 +31,10 @@ import type { CSSProperties } from 'react'
  *   StatusBar → Hero → Day Rail → Insight Strip → numbered sections
  *   → Tomorrow Band → TabBar
  *
- * This task (8) builds the Hero + Insight Strip for the Trained state only,
- * transcribed from the Trained frame (LdBJ4). The numbered sections
- * ("01 The Session", "02 The Cost", "03 Trajectory"), the Quote Plate and
- * the Tomorrow Plate belong to later tasks and are not built here.
+ * Built for the Trained state, transcribed from the Trained frame (LdBJ4):
+ * task 8 built the Hero + Insight Strip; task 9 added the numbered sections
+ * ("01 The Session", "02 The Cost", "03 Trajectory"). The Quote Plate and
+ * the Tomorrow Plate remain for a later task.
  *
  * Two things this hero deliberately leaves out, both recorded in
  * task-8-report.md as TodayModel gaps rather than invented:
@@ -77,10 +81,12 @@ export default function TodayView({ model }: { model: TodayModel }) {
   ]
 
   // ---- 01 The Session ----------------------------------------------------
-  // Bars renders the one row TodayModel can ground — planned per-block
+  // `Bars` renders the one row TodayModel can ground — planned per-block
   // targets (model.session.value.blocks) — never a fabricated "ridden" row.
-  // See planVsRidden's own doc comment on TodayModel for why the delta
-  // column is always null today.
+  // `DeltaRow` reads `delta` off the same list (always null today — see
+  // planVsRidden's own doc comment on TodayModel) but is positioned above
+  // the honestly-missing "WHAT YOU RODE" row, not above `Bars`, per the
+  // tree (Fpt7K: DeltaRow → Ridden → Baseline → Bars/Planned).
   const sessionBlocks = isPresent(model.session)
     ? model.session.value.blocks.map((b) => ({
       label: b.label,
@@ -90,6 +96,20 @@ export default function TodayView({ model }: { model: TodayModel }) {
     }))
     : []
   const sessionClaim: Value<string> = mapValue(model.planVsRidden, () => '')
+
+  // "Peak Power Today"'s Total hero (qYRaJ) is speculative even when peaks
+  // exist: no field marks any one row as "the headline" one. The longest
+  // duration in the list is the closest defensible stand-in (matches the
+  // pen's own example, whose Total mirrors its 12-minute row) — but since
+  // `model.peaks` is always missing today (verify-check 3), this is inert
+  // until a real source exists.
+  const peaksTotal: Value<PeakTotal> = isPresent(model.peaks) && model.peaks.value.length > 0
+    ? present({
+      watts: model.peaks.value[model.peaks.value.length - 1].watts,
+      unit: `WATTS · ${model.peaks.value[model.peaks.value.length - 1].duration}`,
+      delta: null,
+    })
+    : missing(isPresent(model.peaks) ? 'No headline peak identified for this ride yet.' : model.peaks.missing)
 
   const rideMicro: Value<string> = mapValue(model.ride, (r) => [
     r.distanceM != null ? `${(r.distanceM / 1000).toFixed(1)} KM` : null,
@@ -263,22 +283,21 @@ export default function TodayView({ model }: { model: TodayModel }) {
               plan-vs-ridden matching (see sessionClaim above), which is
               always missing today. A bare "—" here, with its only
               explanation sitting well below the bars, read like a broken
-              render (coordinator review, defect 3) — the fuller reason is
-              printed once, immediately under the honest-missing "WHAT YOU
-              RODE" row below, so this Statement contributes nothing when it
-              would just be a second, redundant dash. It still renders
-              normally the day a real claim is available. */}
+              render (coordinator review round 2, defect 3) — the fuller
+              reason is printed once, immediately under the honest-missing
+              "WHAT YOU RODE" row below, so this Statement contributes
+              nothing when it would just be a second, redundant dash. It
+              still renders normally the day a real claim is available. */}
           {isPresent(sessionClaim) && <Statement claim={sessionClaim} />}
 
           <div style={{ paddingTop: 24 }}>
-            {/* CORRECTED (coordinator review, defect 1): this used to feed
-                the PLANNED blocks to a "WHAT YOU RODE" heading, then admit
-                right below it that the ride wasn't matched to its plan —
-                planned numbers under a ridden label, the exact substitution
-                the missing-data rule forbids. Now this heading owns its own
-                honestly-missing row (dashed placeholder bars, frame intact,
-                the real reason printed once), and the actual data we have
-                — the plan — renders below under its own true label. */}
+            {/* CORRECTED (coordinator review round 2, defect 1): this used
+                to feed the PLANNED blocks to a "WHAT YOU RODE" heading, then
+                admit right below it that the ride wasn't matched to its plan
+                — planned numbers under a ridden label, the exact
+                substitution the missing-data rule forbids. Now this heading
+                owns its own honestly-missing row, and the actual data we
+                have — the plan — renders below under its own true label. */}
             <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '10px 0 9px 0' }}>
               <span style={kickerLabel}>WHAT YOU RODE</span>
               <span style={kickerLabelQuiet}>
@@ -287,7 +306,23 @@ export default function TodayView({ model }: { model: TodayModel }) {
                   : ''}
               </span>
             </div>
-            <div style={{ width: '100%', height: 104, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+
+            {/* CORRECTED (coordinator review round 3, defect 1): the Deltas
+                row (Z7tZK in the tree) sits above the Ridden bars, not above
+                Planned — moved here, above this honest-missing row, from
+                inside `Bars` (which now renders only Planned). See
+                `DeltaRow.tsx` and `Bars.tsx` for the full record. */}
+            <DeltaRow blocks={sessionBlocks} />
+
+            {/* CORRECTED (coordinator review round 3, defect 3): this
+                placeholder used to reserve the full 104px chart height even
+                though the ghost bars inside it are only 8px tall, leaving
+                ~96px of dead space under the label before the reason text.
+                "Frame intact" means the label, rails and Baseline survive —
+                not a bar chart's pixel envelope when there is no chart, so
+                this container is no longer height-constrained; it collapses
+                to its (short, flat) content. */}
+            <div data-ridden-row style={{ width: '100%', display: 'flex', gap: 2, alignItems: 'flex-end' }}>
               {sessionBlocks.map((b, i) => (
                 <div
                   key={i}
@@ -299,7 +334,7 @@ export default function TodayView({ model }: { model: TodayModel }) {
               <p style={quietReason}>{model.planVsRidden.missing}</p>
             )}
 
-            <div style={{ width: '100%', height: 1, background: 'var(--e-baseline)', margin: '10px 0' }} />
+            <div data-baseline style={{ width: '100%', height: 1, background: 'var(--e-baseline)', margin: '10px 0' }} />
 
             <Bars blocks={sessionBlocks} />
             <div style={{ width: '100%', paddingTop: 8 }}>
@@ -315,7 +350,7 @@ export default function TodayView({ model }: { model: TodayModel }) {
           </div>
 
           <div style={{ paddingTop: 28 }}>
-            <PeakRows peaks={model.peaks} />
+            <PeakRows total={peaksTotal} peaks={model.peaks} />
           </div>
 
           <div style={{ paddingTop: 28 }}>
@@ -387,116 +422,6 @@ const kickerLabelDim: CSSProperties = {
 }
 const quietReason: CSSProperties = {
   fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: '8px 0 0 0',
-}
-
-/**
- * The Statement claim (shabf/I9sDcQ, lEHMb/nXCwA, Sk59s/G3tt5t — one per
- * numbered section): Sora 28/800, letterSpacing -1.2, lineHeight 1.05,
- * $e-ink, padding [16,0,4,0]. The pen's own example strings ("Four blocks.
- * Zero fade.", "Fatigue jumped 14.", "Fitness up 2. Form spent.") are
- * ride-specific mock content, not a fixed source string — TodayView
- * computes these from real numbers (pmcDelta over the real series) and
- * passes them in as a Value<string>; this component only renders the
- * frame + honest-dash arm, matching every other component in this file.
- */
-function Statement({ claim, showReason = true }: { claim: Value<string>; showReason?: boolean }) {
-  const present_ = isPresent(claim)
-  return (
-    <div style={{ padding: '16px 0 4px 0' }}>
-      <p
-        style={{
-          fontFamily: 'var(--e-display)', fontSize: 28, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1.05, color: 'var(--e-ink)', margin: 0, width: '100%',
-        }}
-      >
-        {present_ ? claim.value : '—'}
-      </p>
-      {!present_ && showReason && <p style={quietReason}>{claim.missing}</p>}
-    </div>
-  )
-}
-
-/**
- * "What It Changes" (wZE1f, `01 The Session`): a Rule, then ON YOU / ON
- * THE PLAN rows (Q8hlBw/Oc0V0), each a Rule + 8px/800/ls1.4 accent label +
- * 16px Sora headline + 12px $e-mid detail. Sourced straight from
- * TodayModel's existing `whatThisChanges` (never re-derived here, per the
- * brief). The CTA arrow button (SdW8T) is decorative navigation with no
- * destination route wired into this task and is intentionally not built.
- */
-function WhatThisChanges({ value }: { value: Value<{ onYou: Claim; onThePlan: Claim }> }) {
-  const present_ = isPresent(value)
-  const rows: { label: string; claim: Claim | null }[] = [
-    { label: 'ON YOU', claim: present_ ? value.value.onYou : null },
-    { label: 'ON THE PLAN', claim: present_ ? value.value.onThePlan : null },
-  ]
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {rows.map((row) => (
-        <div key={row.label} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ width: '100%', height: 1, background: 'var(--e-hairline)' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 800, letterSpacing: 1.4, color: 'var(--st-active)' }}>
-              {row.label}
-            </span>
-            <span style={{ fontFamily: 'var(--e-display)', fontSize: 16, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.25, color: 'var(--e-ink)' }}>
-              {row.claim ? row.claim.claim : '—'}
-            </span>
-            {row.claim && (
-              <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 500, lineHeight: 1.45, color: 'var(--e-mid)' }}>
-                {row.claim.detail}
-              </span>
-            )}
-          </div>
-        </div>
-      ))}
-      {!present_ && <p style={quietReason}>{value.missing}</p>}
-    </div>
-  )
-}
-
-/**
- * The Cost's "Curve" (fpPGi): the pen draws a precise bezier fatigue-decay
- * path with a "NOW · 58" marker and a "NEUTRAL 42" marker. There is no
- * source for that exact curve shape, but its two endpoints ARE real:
- * "now" is `pmc.fatigue` (today's ATL) and "neutral" is `pmc.fitness`
- * (form returns to zero — TSB back to neutral — when ATL decays down to
- * CTL). This renders those two real numbers as a simple two-mark bar
- * rather than inventing the bezier's exact decay shape. The caption uses
- * `recovery.clearAtLabel` (the same already-computed ETA the hero itself
- * uses) when present, and that Value's own reason otherwise.
- */
-function FatigueCurve({ pmc, recovery }: { pmc: TodayModel['pmc']; recovery: TodayModel['recovery'] }) {
-  if (!isPresent(pmc)) {
-    return <p style={quietReason}>{pmc.missing}</p>
-  }
-  const now = pmc.value.fatigue
-  const neutral = pmc.value.fitness
-  const max = Math.max(now, neutral, 1) * 1.15
-  const nowPct = Math.min(100, Math.round((now / max) * 100))
-  const neutralPct = Math.min(100, Math.round((neutral / max) * 100))
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-      <div style={{ position: 'relative', width: '100%', height: 70 }}>
-        <div style={{ position: 'absolute', left: 0, bottom: 0, width: '100%', height: 1, background: 'var(--e-rule)' }} />
-        <div style={{ position: 'absolute', left: 0, bottom: 1, width: `${nowPct}%`, height: 6, borderRadius: 3, background: 'var(--st-active)' }} />
-        <div style={{ position: 'absolute', left: `${neutralPct}%`, bottom: 1, width: 1, height: 26, background: 'var(--d-2)' }} />
-        <span style={{ position: 'absolute', left: 0, top: 0, fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.9, color: 'var(--e-ink)' }}>
-          NOW · {Math.round(now)}
-        </span>
-        <span
-          style={{
-            position: 'absolute', left: `${neutralPct}%`, top: 32, transform: 'translateX(-100%)', whiteSpace: 'nowrap',
-            fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.9, color: 'var(--e-lo)',
-          }}
-        >
-          NEUTRAL {Math.round(neutral)}
-        </span>
-      </div>
-      <span style={{ fontFamily: 'var(--e-body)', fontSize: 10, fontWeight: 700, color: 'var(--e-mid)' }}>
-        {isPresent(recovery) ? `Peaks now, then decays — back to neutral around ${recovery.value.clearAtLabel}.` : recovery.missing}
-      </span>
-    </div>
-  )
 }
 
 function pmcDelta(series: PmcPoint[], daysBack: number, pick: (p: PmcPoint) => number): number | null {
