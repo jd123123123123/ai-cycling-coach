@@ -20,6 +20,7 @@
 - **Test conventions — this repo has no `@testing-library/jest-dom` and no vitest `globals`.** Do not add either; both would change files outside `editorial/`. That means:
   - jest-dom matchers are unavailable. Use `expect(el.getAttribute('href')).toBe('/e/train')`, not `toHaveAttribute`. Use `expect(el).not.toBeNull()` / `toBeTruthy()`, not `toBeInTheDocument`.
   - There is no auto-cleanup between tests. Every component test file must `import { cleanup } from '@testing-library/react'` and `import { afterEach } from 'vitest'`, then call `afterEach(cleanup)` at the top level — matching `src/hooks/__tests__/useRehearseRoute.test.tsx:11`. Without it, a second `render()` in the same file makes `screen.getByText` throw on duplicate matches.
+  - `npm run lint` runs eslint with `@typescript-eslint/no-unused-vars` and **no `argsIgnorePattern`** — a leading underscore does NOT exempt an unused parameter. Do not write `_foo` for signature symmetry; drop the parameter.
   - Import from `vitest` explicitly in every test file — and import only what you use: `frontend/tsconfig.app.json` sets `noUnusedLocals: true`, so an unused import fails `tsc -b` and therefore the build.
 - **Tokens are scoped.** All EDITORIAL II custom properties are declared under `.editorial-root`, never `:root`.
 - **No Playwright, no browser sessions.** Gates are `npx tsc -b`, `npm run build`, `npm run test`, `npm run lint`, `npm run lint:i18n` — all run from `frontend/`. Visual check is **one** rendered frame per screen (via the existing dev server) compared against `mcp__pencil__get_screenshot` of the same node.
@@ -344,7 +345,7 @@ git commit -m "feat(editorial): the EDITORIAL II token set, scoped so it cannot 
   - `isoDateKey(d: Date): string`
   - `readOverride(now: Date): DayState | null`
   - `writeOverride(state: DayState, now: Date): void`
-  - `clearOverride(now: Date): void`
+  - `clearOverride(): void` — takes no argument: the key is a single slot, and eslint's `no-unused-vars` has no `argsIgnorePattern` in this repo, so a `_now` written for signature symmetry is a lint error, not an exemption.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -412,7 +413,7 @@ describe('override storage', () => {
 
   it('clears', () => {
     writeOverride('trained', at(9))
-    clearOverride(at(9))
+    clearOverride()
     expect(readOverride(at(9))).toBeNull()
   })
 
@@ -502,7 +503,7 @@ export function writeOverride(state: DayState, now: Date): void {
   }
 }
 
-export function clearOverride(_now: Date): void {
+export function clearOverride(): void {
   try {
     localStorage.removeItem(KEY)
   } catch {
@@ -1289,7 +1290,7 @@ export function useDayState(): {
   const setOverride = useCallback((s: DayState) => {
     writeOverride(s, new Date()); setTick((t) => t + 1)
   }, [])
-  const clear = useCallback(() => { clearOverride(new Date()); setTick((t) => t + 1) }, [])
+  const clear = useCallback(() => { clearOverride(); setTick((t) => t + 1) }, [])
 
   return { state: previewState ?? stored ?? derived, derived, setOverride, clear, preview: setPreviewState }
 }
