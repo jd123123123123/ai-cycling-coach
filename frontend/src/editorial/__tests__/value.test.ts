@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { fromNullable, isPresent, mapValue, missing, present } from '../data/value'
 
 describe('Value<T>', () => {
