@@ -25,6 +25,7 @@ import ZoneRows from '../components/ZoneRows'
 import { isPresent, mapValue, missing, present, type Value } from '../data/value'
 import type { PmcPoint, TodayModel } from '../data/useTodayModel'
 import EditorialRoot from '../EditorialRoot'
+import type { DayState } from '../state/dayState'
 import type { CSSProperties } from 'react'
 
 /**
@@ -330,7 +331,18 @@ export default function TodayView({ model }: { model: TodayModel }) {
     const unlock = model.tomorrow.value.unlockLabel
     return isPresent(unlock) ? present(`TOMORROW · ${unlock.value}`) : missing<string>(unlock.missing)
   })()
-  const tomorrowPlateTitle: Value<string> = mapValue(model.tomorrow, (t) => t.detail || t.title)
+  // CORRECTED (coordinator visual review, defect 2): this used to fall back
+  // to `t.title` when `detail` was empty — but `TomorrowBand` (rendered
+  // directly below this plate for Rest/Training) shows that SAME title
+  // verbatim, so on any day the plan has no separate description the two
+  // sections read as the identical session announced twice, back to back.
+  // The pen's own Plate title (Rest: "Four by eight, at 285.") is prose
+  // DIFFERENT from the Band's structured "Threshold · 4 × 8 @ 285 W" — real
+  // prose has no TodayModel source beyond `detail`, so when `detail` is
+  // empty this honestly dashes instead of duplicating the Band's own text.
+  const tomorrowPlateTitle: Value<string> = isPresent(model.tomorrow) && model.tomorrow.value.detail
+    ? present(model.tomorrow.value.detail)
+    : missing<string>("No description for tomorrow's plan.")
   const tomorrowCaptionLeft: Value<string> = missing("No route distance for tomorrow's plan.")
   const tomorrowCaptionRight: Value<string> = mapValue(
     model.tomorrow,
@@ -339,7 +351,15 @@ export default function TodayView({ model }: { model: TodayModel }) {
 
   const routeKickerLeft: Value<string> = missing("No start time recorded for today's session.")
   const routeKickerRight: Value<string> = missing('No sunset time available.')
-  const routeTitle: Value<string> = mapValue(model.session, (s) => s.title)
+  // CORRECTED (coordinator visual review, defect 2): this used to read
+  // `model.session.value.title`, the exact same string `TomorrowBand`
+  // renders directly below (`todaySession.title`) — the two sections
+  // duplicated the session name back to back. The pen's Route Plate title
+  // is real route prose ("Ölberg Loop, four ramps."), and TodayModel has no
+  // route-naming field at all (documented since Task 10's own Route/GPX
+  // note) — honestly missing, which now also keeps it visibly distinct from
+  // the Band rather than accidentally repeating it.
+  const routeTitle: Value<string> = missing<string>("No route name for today's ride.")
   const routeCaptionLeft: Value<string> = missing("No route data for today's ride.")
   const routeCaptionRight: Value<string> = (() => {
     const { workBlocks, uniformWork } = workIntervalsOf(sessionBlocks)
@@ -453,7 +473,7 @@ export default function TodayView({ model }: { model: TodayModel }) {
             )}
           </div>
 
-          <div style={{ position: 'absolute', top: 150, right: 24 }}>
+          <div style={{ position: 'absolute', top: DAY_MARK_TOP[state] ?? DAY_MARK_TOP.trained, right: 24 }}>
             <DayMark state={state} />
           </div>
         </Cover>
@@ -809,6 +829,14 @@ const condUnit: CSSProperties = {
 }
 const tickStyle: CSSProperties = {
   fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.8, color: 'var(--e-lo)',
+}
+
+/** Day Mark's absolute `top` offset — pen-verified per state (`K8WxOh` Rest
+ *  186, `LRIzl` Training 158, `F6851` Trained 150), previously hardcoded to
+ *  150 for every state. Resting/Evening have no pen read yet; they fall
+ *  back to Trained's value below rather than guessing. */
+const DAY_MARK_TOP: Partial<Record<DayState, number>> & { trained: number } = {
+  rest: 186, training: 158, trained: 150,
 }
 
 /** Pull-quote copy, transcribed verbatim per state (CqmME/X8wnJ/WVwiD). */

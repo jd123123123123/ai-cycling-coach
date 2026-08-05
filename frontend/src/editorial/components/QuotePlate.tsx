@@ -20,9 +20,17 @@ export interface QuotePlateProps {
 }
 
 /**
- * The 322-tall photographic plate between section 01 and section 02 on
- * every day state (pen "Quote Plate": `CqmME` Rest, `X8wnJ` Training,
- * `WVwiD` Trained). Holds a 34×2 accent Tick, the quote, and a label.
+ * The photographic plate between section 01 and section 02 on every day
+ * state (pen "Quote Plate": `CqmME` Rest, `X8wnJ` Training, `WVwiD`
+ * Trained). 322 tall in the pen — but that height is the photo's own
+ * envelope. Holds a 34×2 accent Tick, the quote, and a label.
+ *
+ * CORRECTED (coordinator visual review, defect 1): without a photo (see
+ * `TodayModel`'s own gap, `task-10.5-report.md`), a fixed 322px box reads as
+ * empty void above the bottom-pinned quote. Collapses to its content's
+ * height when `photoUrl` is absent; the scrim still renders full-bleed
+ * behind that content. See `Cover.tsx`'s own doc comment for why the
+ * absolute scrim sizing to auto-height content has no circular dependency.
  */
 export default function QuotePlate({ state, quote, attribution, photoUrl }: QuotePlateProps) {
   return (
@@ -31,7 +39,7 @@ export default function QuotePlate({ state, quote, attribution, photoUrl }: Quot
       data-day-state={state}
       style={{
         width: '100%',
-        height: 322,
+        height: photoUrl ? 322 : undefined,
         overflow: 'hidden',
         position: 'relative',
         padding: '0 24px 28px 24px',

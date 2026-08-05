@@ -23,14 +23,22 @@ describe('Cover', () => {
     expect(screen.getByText('hello')).toBeTruthy()
   })
 
-  it('uses the pen-verified height per state', () => {
+  it('uses the pen-verified height per state ONLY when a photo fills it', () => {
     const heights: Record<string, number> = { rest: 480, training: 455, trained: 436 }
     for (const [state, height] of Object.entries(heights)) {
-      const { container } = render(<Cover state={state as 'rest' | 'training' | 'trained'}><span /></Cover>)
+      const { container } = render(
+        <Cover state={state as 'rest' | 'training' | 'trained'} photoUrl="./ride.jpg"><span /></Cover>,
+      )
       const el = container.querySelector('[data-cover]') as HTMLElement
       expect(el.style.height).toBe(`${height}px`)
       cleanup()
     }
+  })
+
+  it('collapses to its content height when there is no photo — never a fixed empty void', () => {
+    const { container } = render(<Cover state="rest"><span /></Cover>)
+    const el = container.querySelector('[data-cover]') as HTMLElement
+    expect(el.style.height).toBe('')
   })
 
   it('layers the photo/tint stack only when a photo URL is given', () => {
@@ -49,10 +57,16 @@ describe('QuotePlate', () => {
     expect(screen.getByText('WHAT REST IS FOR')).toBeTruthy()
   })
 
-  it('is 322 tall regardless of state', () => {
-    const { container } = render(<QuotePlate state="trained" quote="q" attribution="a" />)
+  it('is 322 tall only when a photo fills it', () => {
+    const { container } = render(<QuotePlate state="trained" quote="q" attribution="a" photoUrl="./ride.jpg" />)
     const el = container.querySelector('[data-quote-plate]') as HTMLElement
     expect(el.style.height).toBe('322px')
+  })
+
+  it('collapses to its content height with no photo — no void above the quote', () => {
+    const { container } = render(<QuotePlate state="trained" quote="q" attribution="a" />)
+    const el = container.querySelector('[data-quote-plate]') as HTMLElement
+    expect(el.style.height).toBe('')
   })
 })
 
@@ -75,7 +89,7 @@ describe('TomorrowPlate', () => {
     expect(screen.getByText('TODAY MAKES IT POSSIBLE')).toBeTruthy()
   })
 
-  it('keeps the frame and dashes each missing field, printing each distinct reason once', () => {
+  it('keeps the frame and dashes each missing field, printing every distinct reason as ONE combined line', () => {
     const { container } = render(
       <TomorrowPlate
         state="training"
@@ -88,9 +102,39 @@ describe('TomorrowPlate', () => {
     )
     expect(container.querySelector('[data-tomorrow-plate]')).not.toBeNull()
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
-    expect(screen.getByText('No route data for today\'s ride.')).toBeTruthy()
-    // deduped: the reason shared by two fields prints once, not twice.
-    expect(screen.getAllByText('No route data for today\'s ride.')).toHaveLength(1)
+    // Three distinct reasons across the four missing fields (the caption
+    // pair shares one) must render as a SINGLE paragraph, not one per
+    // reason stacked — coordinator visual review, defect 3.
+    const reasonParagraphs = container.querySelectorAll('[data-plate-reason]')
+    expect(reasonParagraphs.length).toBe(1)
+    const combined = reasonParagraphs[0]
+    expect(combined.textContent).toContain('No start time')
+    expect(combined.textContent).toContain('No sunset time available.')
+    expect(combined.textContent).toContain("No route data for today's ride.")
+  })
+
+  it('is 246 tall only when a photo fills it', () => {
+    const { container } = render(
+      <TomorrowPlate
+        state="rest"
+        kickerLeft={present('a')} kickerRight={present('b')} title={present('c')}
+        captionLeft={present('d')} captionRight={present('e')} photoUrl="./ride.jpg"
+      />,
+    )
+    const el = container.querySelector('[data-tomorrow-plate]') as HTMLElement
+    expect(el.style.height).toBe('246px')
+  })
+
+  it('collapses to its content height with no photo', () => {
+    const { container } = render(
+      <TomorrowPlate
+        state="rest"
+        kickerLeft={present('a')} kickerRight={present('b')} title={present('c')}
+        captionLeft={present('d')} captionRight={present('e')}
+      />,
+    )
+    const el = container.querySelector('[data-tomorrow-plate]') as HTMLElement
+    expect(el.style.height).toBe('')
   })
 })
 

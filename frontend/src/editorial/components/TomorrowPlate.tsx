@@ -35,12 +35,18 @@ export interface TomorrowPlateProps {
 }
 
 /**
- * The 246-tall photographic plate that closes Rest's and Trained's sections
+ * The photographic plate that closes Rest's and Trained's sections
  * ("Tomorrow Plate": `WUjdn` Rest, `hODVO` Trained) and Training's own
  * session-of-today variant ("Route Plate": `hQVuk`) — identical geometry,
- * different copy register (tomorrow's plan vs. today's own ride). Every
- * field is independently a `Value`; missing fields dash in place and their
- * DISTINCT reasons print once each below the plate, never once per field.
+ * different copy register (tomorrow's plan vs. today's own ride). 246 tall
+ * in the pen, but — same correction as `Cover`/`QuotePlate` — that height
+ * is the photo's own envelope; without one the plate collapses to its
+ * content's height (coordinator visual review, defect 1). Every field is
+ * independently a `Value`; missing fields dash in place, and every DISTINCT
+ * reason across them collapses to ONE combined line below the plate
+ * (coordinator visual review, defect 3 — two separate reason paragraphs
+ * read as a stacked list inside this compact a plate; `InsightStrip` and
+ * the absorption tiles fold multiple reasons into one line the same way).
  */
 export default function TomorrowPlate({
   state, kickerLeft, kickerRight, title, captionLeft, captionRight, photoUrl,
@@ -54,7 +60,7 @@ export default function TomorrowPlate({
       data-day-state={state}
       style={{
         width: '100%',
-        height: 246,
+        height: photoUrl ? 246 : undefined,
         overflow: 'hidden',
         position: 'relative',
         padding: '0 24px 18px 24px',
@@ -94,9 +100,7 @@ export default function TomorrowPlate({
           <span style={{ ...captionStyle, color: 'var(--st-active)' }}>{isPresent(captionRight) ? captionRight.value : '—'}</span>
         </div>
 
-        {reasons.map((reason) => (
-          <p key={reason} style={reasonStyle}>{reason}</p>
-        ))}
+        {reasons.length > 0 && <p data-plate-reason style={reasonStyle}>{reasons.join(' ')}</p>}
       </div>
     </div>
   )

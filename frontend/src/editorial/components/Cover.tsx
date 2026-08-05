@@ -41,6 +41,20 @@ export interface CoverProps {
  * is passed as children (the existing Meta/DayRail/Statement/MetricTrack/
  * DayMark hero, unchanged). `clip: true` in the pen → `overflow: hidden`
  * here so the photo never bleeds past the plate's own height.
+ *
+ * CORRECTED (coordinator visual review, defect 1): the per-state pixel
+ * height above is the PHOTO's own envelope — the pen never shows this frame
+ * without an image filling it. `TodayModel` carries no photo field (see
+ * task-10.5-report.md), so every render today has none, and a fixed 480/
+ * 455/436px box with no photo in it read as a layout bug — a large empty
+ * void above the content, not a designed plate. Without a photo the frame
+ * now collapses to the height its content needs (`height: undefined`, flex
+ * column auto-sizing); the scrim still renders full-bleed behind that
+ * content via `position: absolute; inset: 0`, which sizes to whatever
+ * height the in-flow content resolves to (an out-of-flow absolute child
+ * never contributes to its parent's own auto-height calculation, so there
+ * is no circular dependency). The fixed height returns the moment a real
+ * photo exists.
  */
 export default function Cover({ state, photoUrl, children }: CoverProps) {
   const height = COVER_HEIGHT[state] ?? COVER_HEIGHT.rest!
@@ -52,7 +66,7 @@ export default function Cover({ state, photoUrl, children }: CoverProps) {
       data-hero
       style={{
         width: '100%',
-        height,
+        height: photoUrl ? height : undefined,
         overflow: 'hidden',
         position: 'relative',
         padding: '14px 24px 26px 24px',
