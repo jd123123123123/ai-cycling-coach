@@ -12,6 +12,80 @@
 
 ## Global Constraints
 
+### The pen is live — re-read it, never trust a recorded tree
+
+**Verified 2026-08-05, mid-build: the `.pen` file is being edited while this plan
+runs.** Frames gained sections after Tasks 8–10 had already transcribed them.
+Every frame ID below is still correct, but **the structure recorded earlier in
+this plan is stale**. Before building or reviewing any screen, re-read its tree
+and diff it against what is implemented. A frame you read an hour ago is not
+evidence.
+
+Current top-level structure, read 2026-08-05:
+
+| Frame | Children |
+|---|---|
+| `RYP0r` Rest | StatusBar · **Cover** · **Hero Body** · Insight Strip · 01 Why · **Quote Plate** · 02 Absorbing · 03 Trajectory · **Tomorrow Plate** · Tomorrow Band Wrap · TabWrap |
+| `x4AxA5` Training | StatusBar · **Cover** · **Hero Body** · Insight Strip · 01 Recovery · **Quote Plate** · 02 The Session · 03 Trajectory · **Route Plate** · Tomorrow Band Wrap · TabWrap |
+| `LdBJ4` Trained | StatusBar · **Cover** · **Hero Body** · Insight Strip · 01 The Session · **Quote Plate** · 02 The Cost · 03 Trajectory · **Tomorrow Plate** · Tomorrow Band Wrap · TabWrap |
+| `h54Rs` Resting | StatusBar · **Cover** · **Hero Body** · 01 Right Now · **Quote Plate** · 02 Trajectory · **Tomorrow Plate** · Tomorrow Band Wrap · TabWrap |
+| `KYS6e` Evening | StatusBar · Hero · Insight Strip · 01 Today · 02 Tonight · 03 Tomorrow · Tomorrow Band Wrap · TabWrap |
+| `J5FV6` Session Detail | StatusBar · Nav · Hero · 01 The Blocks · **Quote Plate** · 03 THE PAYOFF · 04 WHERE TO RIDE IT · CTA |
+
+Bold = **not yet implemented on any screen**. `x4AxA5` has a duplicate at
+`NoBgz` (identical children, different canvas x) — use `x4AxA5`.
+
+### The photographic plates
+
+`Cover` and `Quote Plate` are not flat frames. Each carries a stacked fill:
+
+1. a photographic image (`Cover`: a generated asset; `Quote Plate`: an Unsplash
+   URL, credited in node metadata),
+2. `#6E7280A6`–`#6E7280C4` at `blendMode: saturation`,
+3. `#6B7A2F42`–`#6B7A2F4A` at `blendMode: color`,
+
+plus an absolutely-positioned `Scrim` rectangle: a 180° linear gradient from
+`#0A0B0529` → `#0A0B057A` at 48% → `#0A0B05FF` at 100%, so type stays legible
+against the photo's bottom edge.
+
+`Quote Plate` is 322 tall, `padding [0,24,28,24]`, `justifyContent: end`, and
+holds a 34×2 accent `Tick` in `--st-active`, the pull-quote in `--e-ink`, and a
+label. `Cover` is 480 tall, `padding [14,24,26,24]`.
+
+**This is the single biggest visual gap in the build.** Task 8 shipped the Cover
+as flat `--e-ground` and recorded it as an honest omission; that omission is now
+a defect, because the design is photographic. Where a real ride photo exists,
+use it; where none does, the plate keeps its geometry and renders the scrim over
+the ground — never a stock photo standing in for the athlete's own ride.
+
+### Motion — every chart animates, nothing is flat and dead
+
+Owner's ruling, 2026-08-05. Charts must feel alive on open and respond to touch.
+This is mobile: **interaction means tap/press, not hover.**
+
+- **On mount:** bars grow from their baseline; lines draw in via
+  `stroke-dasharray`/`stroke-dashoffset`; rings sweep from 0 to their value;
+  numerals may count up. Stagger siblings by ~30–40ms so a row resolves as a
+  wave, not a jump.
+- **Duration:** 400–700ms, `cubic-bezier(0.22, 1, 0.36, 1)` (a soft
+  decelerating ease). Long enough to read as deliberate, short enough that it
+  never delays comprehension.
+- **On tap:** the touched element highlights — a bar lifts to `--st-active`,
+  its siblings drop to `--d-2`, and its exact value surfaces. Tapping away
+  restores. No tooltips that need a mouse.
+- **Animate only on first entry into the viewport**, via `IntersectionObserver`,
+  so a chart far down the page animates when it is reached rather than
+  invisibly at mount.
+- **`prefers-reduced-motion: reduce` disables all of it** — the chart renders in
+  its final state immediately. This is not optional.
+- **Never animate a missing state.** A dash does not count up, and ghost bars do
+  not grow. Motion is a property of real data.
+
+Applies to `Bars`, `PMCChart`, `FatigueCurve`, `ZoneRows`, `WeekRail`,
+`LiveRing`, and every chart in the tasks still to come.
+
+
+
 - **Mobile only.** Every screen is designed and verified at **390×844**. Desktop is a sanity check, never a deliverable.
 - **Pen file:** `~/Downloads/pencil-new.pen`. Frames prefixed `Flagship · … · EDITORIAL II`. Access **only** via `mcp__pencil__*` tools — never `Read`/`Grep` on `.pen`.
 - **Transcription rule:** for every screen, call `mcp__pencil__execute` with `Get(<nodeId>, {depth: 12, resolveInstances: true, resolveVariables: false})` and transcribe padding / gap / fontSize / fontWeight / letterSpacing / fill / cornerRadius / stroke / effect **verbatim**. Never eyeball a spec from a screenshot.
