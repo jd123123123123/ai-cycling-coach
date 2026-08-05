@@ -157,4 +157,21 @@
    * #FFFFFF3D on all three frames) — a distinct alpha stop from --e-rule
    * (#FFFFFF1F) and --e-hairline (#FFFFFF12), not close enough to reuse. */
   --e-rule-strong: #FFFFFF3D;
+
+  /* Task 13 — the two bottom sheets (Switch Day Type mBvke, Back To Session
+   * Done tEnIQ). Both frames share one literal scrim (li7WR / zhHoN,
+   * #04060ACC — 80% alpha of #04060A, plus a 14px background_blur applied
+   * in the component) and one literal "text/icon on a bright accent fill"
+   * colour used on both Primary CTAs (dwqd9/C2EbZ and s4i717/uaB05,
+   * #04060A exact, identical to the scrim's own opaque colour but recorded
+   * separately since it plays a different role and had no existing token).
+   * The two Sheet panels themselves (NfM70 #0E1006, pLofn #060F11) are
+   * distinct literals per frame, not a shared formula against --g-rest/
+   * --g-resting — no lighten ratio derived from the two data points held
+   * up under checking, so each is its own token rather than a guessed
+   * function of --e-ground. */
+  --e-scrim: #04060ACC;
+  --e-on-accent: #04060A;
+  --e-sheet-switch-bg: #0E1006;
+  --e-sheet-back-bg: #060F11;
 }

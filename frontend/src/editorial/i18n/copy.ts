@@ -318,6 +318,123 @@ export const COPY = {
   tomorrowUnlockMissing: { de: 'Keine Startzeit für morgen geplant.', en: "No unlock time on tomorrow's plan." },
   tomorrowMissing: { de: 'Der Plan für morgen steht noch nicht.', en: "Tomorrow's plan is not set yet." },
   weekDayNoRide: { de: 'Keine Fahrt erfasst.', en: 'No ride logged.' },
+
+  // ---- Task 13: bottom sheets (Switch Day Type / Back To Session Done) --------
+  sheetChangeDayStateHeader: { de: 'TAG ÄNDERN', en: 'CHANGE DAY STATE' },
+  sheetClose: { de: 'Schließen', en: 'Close' },
+  sheetFromLabel: { de: 'VON', en: 'FROM' },
+  sheetToLabel: { de: 'ZU', en: 'TO' },
+  sheetStateRestTitle: { de: 'Ruhetag', en: 'Rest Day' },
+  sheetStateTrainingTitle: { de: 'Trainingstag', en: 'Training Day' },
+  sheetStateRecoveringTitle: { de: 'Erholung', en: 'Recovering' },
+  sheetStateSessionDoneTitle: { de: 'Einheit erledigt', en: 'Session Done' },
+  sheetSwitchBodyToTraining: {
+    de: 'Der Trainingstag gilt nur für heute. Morgen entscheidest du wieder neu.',
+    en: 'This applies only to today. Tomorrow resets to the plan.',
+  },
+  sheetSwitchBodyToRest: {
+    de: 'Der Ruhetag gilt nur für heute. Dein Trainingsplan bleibt unverändert.',
+    en: 'This rest day applies only to today. Your training plan stays untouched.',
+  },
+  sheetSwitchToTrainingCta: { de: 'ZUM TRAININGSTAG WECHSELN', en: 'SWITCH TO A TRAINING DAY' },
+  sheetSwitchToRestCta: { de: 'ZUM RUHETAG WECHSELN', en: 'SWITCH TO A REST DAY' },
+  sheetKeepRestCta: { de: 'RUHETAG BEIBEHALTEN', en: 'KEEP THE REST DAY' },
+  sheetKeepTrainingCta: { de: 'TRAININGSTAG BEIBEHALTEN', en: 'KEEP THE TRAINING DAY' },
+  sheetBackBody: {
+    de: 'Du kehrst zur Ansicht nach der Einheit zurück. Deine Erholung läuft im Hintergrund weiter — nichts, was du bereits erfasst hast, geht verloren.',
+    en: "You'll return to the post-session view. Recovery keeps running in the background — nothing you've logged is lost.",
+  },
+  sheetStayInRecoveryCta: { de: 'IN ERHOLUNG BLEIBEN', en: 'STAY IN RECOVERY' },
+
+  // ---- Task 12: Session Detail (pages/SessionDetailPage.tsx, pen J5FV6) ------
+  navSessionTitle: { de: 'EINHEIT', en: 'SESSION' },
+  sessionKicker: { de: 'HEUTE · EINHEIT', en: 'TODAY · SESSION' },
+  sessionMissingTitle: { de: 'Für heute nichts geplant.', en: 'Nothing planned for today.' },
+  sessionClaimMissing: { de: 'Der Coach hat diese Einheit noch nicht begründet.', en: 'The coach has not motivated this session yet.' },
+  numeralMissing: { de: 'Kein klares Intervallmuster für diese Einheit.', en: 'No clean interval pattern for this session.' },
+  numeralQualifierZone: { de: 'IN Z{zone}', en: 'IN Z{zone}' },
+  numeralSubMinBlocks: { de: '{n} MIN BLÖCKE', en: '{n} MIN BLOCKS' },
+  heroStatWatts: { de: 'WATT', en: 'WATTS' },
+  heroStatDuration: { de: 'DAUER', en: 'DURATION' },
+  heroStatTss: { de: 'TSS', en: 'TSS' },
+  heroStatInZone: { de: 'IN ZONE', en: 'IN ZONE' },
+  noWattTarget: { de: 'Kein einheitlicher Zielwert.', en: 'No uniform target.' },
+  noDuration: { de: 'Keine Dauer erfasst.', en: 'No duration recorded.' },
+  noTss: { de: 'Keine TSS-Schätzung.', en: 'No TSS estimate.' },
+  noZoneTime: { de: 'Keine Hauptblöcke erkannt.', en: 'No main blocks identified.' },
+  blockNoZone: { de: 'Keine Zone für diesen Block.', en: 'No zone for this block.' },
+  sectionTheBlocks: { de: 'DIE BLÖCKE', en: 'THE BLOCKS' },
+  chipParts: { de: '{n} TEILE', en: '{n} PARTS' },
+  blocksStatementA: { de: 'Alles vor Block eins ist Vorbereitung.', en: 'Everything before block one is preparation.' },
+  blocksStatementB: { de: 'Alles danach ist Schadensbegrenzung.', en: 'Everything after is damage control.' },
+  colophonTotalSession: { de: 'GESAMTE EINHEIT', en: 'TOTAL SESSION' },
+  colophonAtThreshold: { de: 'AN DER SCHWELLE', en: 'AT THRESHOLD' },
+  mainSetLabel: { de: 'DER HAUPTBLOCK', en: 'THE MAIN SET' },
+  mainSetTotal: { de: '{time} GESAMT', en: '{time} TOTAL' },
+  sectionThePayoff: { de: 'DIE AUSZAHLUNG', en: 'THE PAYOFF' },
+  chipNext7Days: { de: 'NÄCHSTE 7 TAGE', en: 'NEXT 7 DAYS' },
+  payoffClaimMissing: { de: 'Der Coach hat die nächsten sieben Tage noch nicht eingeordnet.', en: 'The coach has not projected the next seven days yet.' },
+  payoffChartMissing: { de: 'Noch keine Sieben-Tage-Prognose.', en: 'No seven-day outlook yet.' },
+  payoffToday: { de: 'HEUTE', en: 'TODAY' },
+  sessionCtaTitle: { de: 'WORKOUT EXPORTIEREN', en: 'EXPORT WORKOUT' },
+  sessionCtaSubtitle: { de: 'Intervalle und Strecke als Datei für dein Edge', en: 'Structured intervals and route, as a file for your Edge' },
+  sessionCtaFailed: { de: 'Export fehlgeschlagen. Versuch es noch einmal.', en: 'Export failed. Try again.' },
+
+  // ---- Task 14: Evening (pen KYS6e / cx4zJ) — 01 TODAY ------------------------
+  sectionToday: { de: 'HEUTE', en: 'TODAY' },
+  chipRideDone: { de: 'FAHRT ERLEDIGT', en: 'RIDE DONE' },
+  eveningLightsOutMissing: {
+    de: 'Kein Zubettgeh-Ziel für heute Nacht erfasst.',
+    en: 'No bedtime target set for tonight.',
+  },
+  insightTonightTarget: { de: 'SCHLAFZIEL HEUTE NACHT', en: "TONIGHT'S TARGET" },
+  insightUntilLightsOut: { de: 'BIS LICHT AUS', en: 'UNTIL LIGHTS OUT' },
+  insightVsAverage: { de: 'GGÜ. DEINEM SCHNITT', en: 'VS YOUR AVERAGE' },
+  ledgerCaption: { de: 'WOHIN ES GING', en: 'WHERE IT WENT' },
+  ledgerRide: { de: 'FAHRT', en: 'THE RIDE' },
+  ledgerMovement: { de: 'TAGESBEWEGUNG', en: 'DAILY MOVEMENT' },
+  ledgerRest: { de: 'RUHEUMSATZ', en: 'AT REST' },
+  unitKcal: { de: 'KCAL', en: 'KCAL' },
+  noCaloriesForRide: { de: 'Kein Kalorienwert für diese Fahrt.', en: 'No calorie total for this ride.' },
+  noDailyEnergyBreakdown: {
+    de: 'Keine Aufschlüsselung des Tagesumsatzes verfügbar.',
+    en: 'No daily energy breakdown available.',
+  },
+  energyOutMissing: {
+    de: 'Kein stündlicher Energieverbrauch für heute verfügbar.',
+    en: 'No hourly energy-out data available for today.',
+  },
+  tileDuration: { de: 'DAUER', en: 'DURATION' },
+  unitMoving: { de: 'BEWEGT', en: 'MOVING' },
+  tileDistance: { de: 'DISTANZ', en: 'DISTANCE' },
+  unitKm: { de: 'KM', en: 'KM' },
+  tileAvgPower: { de: 'Ø LEISTUNG', en: 'AVG POWER' },
+  tileAvgHr: { de: 'Ø HERZFREQUENZ', en: 'AVG HR' },
+
+  // ---- Task 14: Evening — Quote Plate ------------------------------------------
+  quoteEvening: {
+    de: 'Auf dem Rad wirst du nicht schneller. Du wirst schneller in den acht Stunden danach.',
+    en: "You don't get faster on the bike. You get faster in the eight hours after it.",
+  },
+  quoteEveningAttribution: { de: 'WARUM HEUTE NACHT DIE EINHEIT IST', en: 'WHY TONIGHT IS THE SESSION' },
+
+  // ---- Task 14: Evening — 02 TONIGHT -------------------------------------------
+  sectionTonight: { de: 'HEUTE NACHT', en: 'TONIGHT' },
+  tileBedtime: { de: 'ZUBETTGEHEN', en: 'BEDTIME' },
+  tileWake: { de: 'WECKEN', en: 'WAKE' },
+  tileSleepTargetEvening: { de: 'SCHLAF', en: 'SLEEP' },
+  tileDebt: { de: 'SCHLAFSCHULD', en: 'DEBT' },
+  unitTarget: { de: 'ZIEL', en: 'TARGET' },
+  unitAlarm: { de: 'WECKER', en: 'ALARM' },
+  unitHrs: { de: 'STD', en: 'HRS' },
+  unitNone: { de: 'KEINE', en: 'NONE' },
+
+  // ---- Task 14: Evening — 03 TOMORROW -------------------------------------------
+  sectionTomorrow: { de: 'MORGEN', en: 'TOMORROW' },
+  noTomorrowSessionDetail: {
+    de: 'Noch keine Blockdaten für die morgige Einheit.',
+    en: "No block data for tomorrow's session yet.",
+  },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY
