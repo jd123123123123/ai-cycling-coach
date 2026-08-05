@@ -35,6 +35,26 @@ describe('MetricTrack', () => {
     render(<MetricTrack label="HRV" state="" value={present(68)} unit="ms" delta={null} band={null} hue="var(--m-hrv)" />)
     expect(screen.getByText('68').style.fontSize).toBe('146px')
   })
+
+  it('renders unitSub as the unit stack\'s second line, and no top caption when label is empty', () => {
+    const { container } = render(
+      <MetricTrack label="" state="" value={present(98)} unit="TSS" unitSub="SESSION LOAD"
+        delta={null} band={null} hue="var(--m-load)" />,
+    )
+    expect(screen.getByText('SESSION LOAD')).toBeTruthy()
+    expect(screen.getByText('TSS')).toBeTruthy()
+    // with label/state empty, band null, and the value present, the only
+    // child of the root is the value/unit row — no top caption block
+    const root = container.querySelector('[data-metric-track]')
+    expect(root?.children.length).toBe(1)
+  })
+
+  it('spaces the value and unit stack 9px apart, per the Trained frame\'s own ilUFr node', () => {
+    render(<MetricTrack label="" state="" value={present(98)} unit="TSS" unitSub="SESSION LOAD"
+      delta={null} band={null} hue="var(--m-load)" />)
+    const valueSpan = screen.getByText('98')
+    expect(valueSpan.parentElement?.style.gap).toBe('9px')
+  })
 })
 
 describe('StatTile', () => {
@@ -48,6 +68,16 @@ describe('Verdict', () => {
   it('withholds the body but keeps the block when the coach has not spoken', () => {
     render(<Verdict headline={missing('The coach has not weighed in yet today.')} body={missing('The coach has not weighed in yet today.')} />)
     expect(screen.getByText('The coach has not weighed in yet today.')).toBeTruthy()
+  })
+
+  it('renders the missing reason at the quiet register, not the body\'s normal colour', () => {
+    render(<Verdict headline={missing('r')} body={missing('r')} />)
+    expect(screen.getByText('r').style.color).toBe('var(--e-quiet)')
+  })
+
+  it('renders a present body at its normal colour', () => {
+    render(<Verdict headline={present('Headline')} body={present('Body copy.')} />)
+    expect(screen.getByText('Body copy.').style.color).toBe('var(--e-mid)')
   })
 })
 

@@ -35,6 +35,17 @@ import EditorialRoot from '../EditorialRoot'
  *    labels ("0:00" / "285 W AVG · 4 BLOCKS HELD" / "1:47") — both are
  *    session-history comparisons TodayModel has no field for, and the power
  *    trace additionally needs a per-second series no hook here provides.
+ *    `sessionContext` routes this permanently-missing value through
+ *    `missing()` rather than a hardcoded string, so a later task adding a
+ *    real source only has to change this variable, not the markup below it.
+ *
+ * CORRECTED (coordinator's formal review, finding 1): the MetricTrack call
+ * for session load previously passed "SESSION LOAD" as `label`, which
+ * rendered it as a caption ABOVE the numeral. Trained's own Metric Track
+ * has no such caption — "SESSION LOAD" is the unit stack's second line,
+ * next to "TSS". Now passed as `unitSub`; `label`/`state` are both empty,
+ * so MetricTrack renders no top caption at all for this call, matching the
+ * pen exactly. See MetricTrack.tsx's own doc comment for the full record.
  */
 export default function TodayView({ model }: { model: TodayModel }) {
   const { state } = model
@@ -46,6 +57,8 @@ export default function TodayView({ model }: { model: TodayModel }) {
     : missing(model.session.missing)
 
   const sessionName: Value<string> = mapValue(model.session, (s) => s.title)
+
+  const sessionContext: Value<string> = missing('No session-load comparison available yet.')
 
   const insightItems = [
     { label: 'PEAK POWER', value: missing<string>('No peak-power analysis yet.') },
@@ -125,10 +138,11 @@ export default function TodayView({ model }: { model: TodayModel }) {
             </span>
 
             <MetricTrack
-              label="SESSION LOAD"
+              label=""
               state=""
               value={sessionLoad}
               unit="TSS"
+              unitSub="SESSION LOAD"
               delta={null}
               band={null}
               hue="var(--m-load)"
@@ -143,7 +157,7 @@ export default function TodayView({ model }: { model: TodayModel }) {
                   color: 'var(--e-quiet)',
                 }}
               >
-                No session-load comparison available yet.
+                {isPresent(sessionContext) ? sessionContext.value : sessionContext.missing}
               </span>
             </div>
           </div>

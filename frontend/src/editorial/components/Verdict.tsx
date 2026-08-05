@@ -16,6 +16,12 @@ import { isPresent, type Value } from '../data/value'
  * reason once, in the body slot — printing it in both slots would make the
  * brief's own test (which asserts the reason text via a single getByText)
  * fail on a duplicate match.
+ *
+ * CORRECTED (coordinator's formal review, finding 3): the missing-arm
+ * reason must render at `var(--e-quiet)`, the register every other
+ * reason line in this file (MetricTrack, StatTile, InsightStrip) already
+ * uses — not `var(--e-mid)`, the body's own normal-state colour. The body
+ * `<p>`'s colour is therefore conditional on `bodyPresent`, not fixed.
  */
 export default function Verdict({
   headline,
@@ -53,7 +59,7 @@ export default function Verdict({
           fontWeight: 500,
           lineHeight: 1.45,
           textAlign: 'center',
-          color: 'var(--e-mid)',
+          color: bodyPresent ? 'var(--e-mid)' : 'var(--e-quiet)',
           margin: 0,
           width: 320,
           maxWidth: '100%',

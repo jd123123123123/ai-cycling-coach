@@ -4,14 +4,37 @@ import { numeralFit } from './numeralFit'
 
 /**
  * The hero's headline metric. Primary geometry transcribed from the Trained
- * frame's own "Metric Track" node (cjLpM -> M1 Load, LdBJ4): value 146px
+ * frame's own "Metric Track" node (LdBJ4/EK9Nk/cjLpM/ilUFr): value 146px
  * Sora 800, letterSpacing -9, lineHeight 0.86, coloured by the metric's own
  * hue with a glow at the pen's literal alpha (#FF5E0038, ~22% of the hue —
  * no --st-a* stop matches 22% exactly, so the glow uses the generic
  * currentColor-based --a22 token, since it must follow whichever hue the
- * `hue` prop carries, not one fixed source colour). The unit stack (gap 3,
- * padding-bottom 20) carries a hue-coloured primary unit ("TSS") — Trained's
- * literal colour for that text.
+ * `hue` prop carries, not one fixed source colour).
+ *
+ * CORRECTED (coordinator's formal review, finding 1): Trained's Metric Track
+ * has NO top caption at all — verified at `.../ilUFr/o1NGut/UUEG3`. "SESSION
+ * LOAD" is the SECOND LINE OF THE UNIT STACK, sitting to the right of the
+ * numeral beneath "TSS" (`t2lXjj`, 14px/800/ls1.5, hue-coloured — the "U"
+ * node), at 10px/800/letterSpacing 1.3, `var(--e-mid)` (the "U2" node,
+ * `UUEG3`). My first pass misread this as a top caption and passed it as
+ * `label`, which rendered ABOVE the numeral — real content relocated to the
+ * wrong slot, not just a disagreement about where an empty slot should sit.
+ * Confirmed the same shape on Rest's own Metric Track (`88` / `READINESS` /
+ * `OUT OF 100`, nothing above the numeral). Fixed by adding `unitSub`, a
+ * second line inside the unit stack (gap 3, padding-bottom 20 on the whole
+ * stack — matches the pen's `Unit` frame exactly), and making the top
+ * caption row (`label`/`state`) render only when `label` is non-empty, so
+ * Trained's real call (which has no top caption) can opt out of it instead
+ * of rendering an empty line that still ate vertical space.
+ *
+ * CORRECTED (finding 2): the Value+Unit row's gap is 9, not 20 — read from
+ * `ilUFr` itself (the actual Value+Unit container: `gap: 9`), not from
+ * `cjLpM` (`gap: 20`, but irrelevant — it wraps only one child, `ilUFr`, so
+ * its gap never applies) and not from RangeRow's unrelated root gap. My
+ * first pass had the source backwards: the *root* gap (9) came from
+ * RangeRow's own top-level gap, which happens to also be 9 and masked the
+ * error, while the *Value/Unit row* wrongly took RangeRow's Track-adjacent
+ * spacing.
  *
  * Sizing (owner's ruling, 2026-08-05, plan commit f2f35b3 — reversing an
  * earlier `size` prop this task briefly carried; see task-8-report.md):
@@ -56,6 +79,7 @@ export default function MetricTrack({
   state,
   value,
   unit,
+  unitSub,
   delta,
   band,
   hue,
@@ -64,6 +88,7 @@ export default function MetricTrack({
   state: string
   value: Value<number>
   unit: string
+  unitSub?: string
   delta: number | null
   band: RangeBand | null
   hue: string
@@ -73,33 +98,35 @@ export default function MetricTrack({
   const { fontSize, letterSpacing } = numeralFit(numeralText)
   return (
     <div data-metric-track style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        <span
-          style={{
-            fontFamily: 'var(--e-body)',
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 1.4,
-            color: 'var(--e-mid)',
-          }}
-        >
-          {label}
-        </span>
-        {state && (
+      {label && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span
             style={{
               fontFamily: 'var(--e-body)',
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: 1.2,
-              color: 'var(--e-lo)',
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: 1.4,
+              color: 'var(--e-mid)',
             }}
           >
-            {state}
+            {label}
           </span>
-        )}
-      </div>
-      <div style={{ display: 'flex', width: '100%', gap: 20, alignItems: 'flex-end' }}>
+          {state && (
+            <span
+              style={{
+                fontFamily: 'var(--e-body)',
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 1.2,
+                color: 'var(--e-lo)',
+              }}
+            >
+              {state}
+            </span>
+          )}
+        </div>
+      )}
+      <div style={{ display: 'flex', width: '100%', gap: 9, alignItems: 'flex-end' }}>
         <span
           style={{
             fontFamily: 'var(--e-display)',
@@ -139,6 +166,19 @@ export default function MetricTrack({
               </span>
             )}
           </div>
+          {unitSub && (
+            <span
+              style={{
+                fontFamily: 'var(--e-body)',
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: 1.3,
+                color: 'var(--e-mid)',
+              }}
+            >
+              {unitSub}
+            </span>
+          )}
         </div>
       </div>
       {band && (
