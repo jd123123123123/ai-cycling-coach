@@ -634,7 +634,11 @@ export default function TodayView({ model }: { model: TodayModel }) {
               kicker
               sub="The session your body is still paying for right now."
             />
-            <Statement claim={missing('No absorption summary from the coach yet.')} />
+            {/* No Statement here, for the same reason 01 has none: the pen's
+                claim ("Still absorbing Tuesday.") needs the last session's own
+                weekday, which TodayModel cannot supply. A slot that can never
+                resolve renders nothing, not a dash implying a transient gap.
+                The tiles below carry the one honest reason. */}
 
             <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
               {costTilesRest.map((t) => (
