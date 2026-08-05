@@ -1141,9 +1141,10 @@ export interface TodayModel {
   recovery: Value<{ hoursRemaining: number; clearAtLabel: string }>
   session: Value<SessionSummary>
   ride: Value<RideSummary>
-  verdict: Value<{ headline: string; body: string; whatThisChanges: string | null }>
+  verdict: Value<{ headline: string; body: string }>
+  whatThisChanges: Value<{ onYou: Claim; onThePlan: Claim }>   // Claim = { claim: string; detail: string }
   conditions: Value<{ tempC: number; windKmh: number }>
-  tomorrow: Value<{ title: string; unlockLabel: string }>
+  tomorrow: Value<{ title: string; detail: string; unlockLabel: Value<string> }>
   isLoading: boolean
 }
 
@@ -1152,6 +1153,37 @@ export interface PmcPoint { date: string; ctl: number; atl: number; tsb: number 
 export interface SessionSummary { title: string; targetWatts: number | null; workKj: number | null; intensityFactor: number | null; tss: number | null; blocks: { label: string; minutes: number; watts: number | null }[] }
 export interface RideSummary { activityId: number; distanceM: number | null; kj: number | null; avgHr: number | null; np: number | null; durationS: number | null }
 ```
+
+**Three more corrections, pen- and type-verified 2026-08-05 (Task 7 review).**
+
+**`whatThisChanges` is a structure, not a string.** Pen frame `LdBJ4` renders it as
+two labelled claims: `ON YOU` — "Your 12-minute ceiling moves to 288 W" +
+"Threshold reference updated — the number every future target is built from";
+`ON THE PLAN` — "Thursday's VO2 targets rise 10 W" + "Tomorrow stays easy…".
+Source it from `brief.adaptations` (`{ summary, changes: AdaptationChange[] }` —
+literally "What changed & why") and `brief.post_ride_review`
+(`physiological_read` for the body claim, `next_session_nudge` for the plan
+claim). It is NOT `outlook_7d[day_offset === 1].note`, which is tomorrow's
+suggested-TSS note and means something else entirely. When the brief carries
+no adaptations and no post-ride review, the whole block is
+`missing('The coach has not weighed in on this ride yet.')`.
+
+**`unlockLabel` has no backend source, so it is a `Value` and usually a dash.**
+The pen reads `TOMORROW · UNLOCKS 05:00` — a real clock time. `PlannedWorkout`
+(`frontend/src/api/dashboard.ts:188`) carries only `date`; there is no
+time-of-day field anywhere in the planned-workout payload. Never hardcode
+`'Unlocks tomorrow'` or any other fixed phrase: that asserts a schedule the
+app does not know. Render `missing('No unlock time on tomorrow\'s plan.')`
+until a source exists.
+
+**`ride.kj` may be computed, and must say so in a comment.** `kJ = W · s / 1000`
+is the *definition* of mechanical work, not an approximation — it is exactly how
+a head unit derives the figure. Computing it from `average_power ×
+duration_seconds` is therefore a presentational transform of two real fields,
+not a substituted metric, and it stays. Two conditions: it is `missing` whenever
+`average_power` is null (never fall back to `calories`, which measures something
+else), and the code carries a comment saying why the arithmetic is exact, so a
+later reader does not "fix" it into a dash.
 
 **Grounding correction to the spec's data map.** The spec lists `daily_metrics.hrv_overnight_avg` and `daily_metrics.sleep_total_s`. Neither is on `DailyMetric` (`frontend/src/api/dashboard.ts:20`). The real sources are:
 
