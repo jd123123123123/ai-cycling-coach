@@ -36,14 +36,14 @@ function buildPmcSeries(days: number) {
 
 const model: TodayModel = {
   state: 'trained',
-  dateLabel: present('WED 22 JUL'),
+  dateLabel: present('MI 22 JUL'),
   streakDays: present(13),
   readiness: present({ score: 74, deltaVsYesterday: 8 }),
   hrv: present({ value: 68, unit: 'ms', delta: 4, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 46, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'in' } }),
   sleep: present({ totalS: 27000, deepS: 4800, remS: 5400, lightS: 15600, awakeS: 1200 }),
   pmc: present({ fitness: 68, fatigue: 58, form: -2, series: buildPmcSeries(42) }),
-  recovery: present({ hoursRemaining: 26, clearAtLabel: 'Fri 09:00' }),
+  recovery: present({ hoursRemaining: 26, clearAtLabel: 'Fr 09:00' }),
   session: present({
     title: 'Threshold', targetWatts: 285, workKj: null, intensityFactor: 0.91, tss: 98,
     blocks: [
@@ -69,43 +69,43 @@ const model: TodayModel = {
   peaks: missing('No peak-power breakdown for this ride yet.'),
   planVsRidden: missing('This ride was not matched to its plan.'),
   verdict: present({
-    headline: "That's the work banked.",
-    body: 'You banked it clean. Everything from here is absorption.',
+    headline: 'Die Arbeit ist auf dem Konto.',
+    body: 'Sauber eingefahren. Alles ab hier ist Absorption.',
   }),
   whatThisChanges: present({
-    onYou: { claim: 'Your 12-minute ceiling moves to 288 W', detail: 'Threshold reference updated.' },
-    onThePlan: { claim: "Thursday's VO2 targets rise 10 W", detail: 'Tomorrow stays easy.' },
+    onYou: { claim: 'Deine 12-Minuten-Decke steigt auf 288 W', detail: 'Schwellenreferenz aktualisiert.' },
+    onThePlan: { claim: 'Donnerstags VO2-Ziele steigen um 10 W', detail: 'Morgen bleibt locker.' },
   }),
   conditions: present({ tempC: 19, windKmh: 12 }),
-  tomorrow: present({ title: 'Recovery spin', detail: 'Forty-five minutes, easy.', unlockLabel: missing('No unlock time.') }),
+  tomorrow: present({ title: 'Lockere Runde', detail: 'Fünfundvierzig Minuten, locker.', unlockLabel: missing('Keine Startzeit im morgigen Plan.') }),
   isLoading: false,
 } as TodayModel
 
 const restModel: TodayModel = {
   state: 'rest',
-  dateLabel: present('WED 22 JUL'),
+  dateLabel: present('MI 22 JUL'),
   streakDays: present(12),
   readiness: present({ score: 88, deltaVsYesterday: 6 }),
   hrv: present({ value: 68, unit: 'ms', delta: 6, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 48, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'below' } }),
   sleep: present({ totalS: 27720, deepS: 4920, remS: 6480, lightS: 15120, awakeS: 1200 }),
   pmc: present({ fitness: 68, fatigue: 52, form: 16, series: buildPmcSeries(42) }),
-  recovery: present({ hoursRemaining: 22, clearAtLabel: 'Thu 17:30' }),
+  recovery: present({ hoursRemaining: 22, clearAtLabel: 'Do 17:30' }),
   session: missing('Nothing planned for today.'),
   ride: missing('No ride recorded yet today.'),
   zones: missing('No ride recorded yet today.'),
   peaks: missing('No peak-power breakdown for this ride yet.'),
   planVsRidden: missing('This ride was not matched to its plan.'),
   verdict: present({
-    headline: "Absorb, don't add.",
-    body: "You're fresh — that's the point. Today your job is to stay out of the way.",
+    headline: "Absorbieren, nicht draufpacken.",
+    body: "Du bist frisch — genau darum geht es. Heute ist dein Job, dir nicht im Weg zu stehen.",
   }),
   whatThisChanges: missing('The coach has not weighed in on this ride yet.'),
   conditions: missing('No location from a recent ride.'),
-  tomorrow: present({ title: 'Threshold · 4 × 8 @ 285 W', detail: '', unlockLabel: missing('No unlock time.') }),
+  tomorrow: present({ title: 'Threshold · 4 × 8 @ 285 W', detail: '', unlockLabel: missing('Keine Startzeit im morgigen Plan.') }),
   week: [
     { letter: 'M', tss: present(64) }, { letter: 'T', tss: present(48) }, { letter: 'W', tss: present(12) },
-    { letter: 'T', tss: missing('No ride logged.') }, { letter: 'F', tss: present(24) },
+    { letter: 'T', tss: missing('Keine Fahrt erfasst.') }, { letter: 'F', tss: present(24) },
     { letter: 'S', tss: present(68) }, { letter: 'S', tss: present(44) },
   ],
   isLoading: false,
@@ -114,7 +114,7 @@ const restModel: TodayModel = {
 const trainingModel: TodayModel = {
   ...restModel,
   state: 'training',
-  dateLabel: present('WED 22 JUL'),
+  dateLabel: present('MI 22 JUL'),
   readiness: present({ score: 82, deltaVsYesterday: 4 }),
   session: present({
     title: 'Threshold', targetWatts: 285, workKj: null, intensityFactor: 0.91, tss: 98,
