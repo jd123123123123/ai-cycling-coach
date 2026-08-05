@@ -144,7 +144,9 @@ export default function TodayPage() {
             </div>
           </div>
 
-          <DayMark state={state} />
+          <div style={{ position: 'absolute', top: 150, right: 24 }}>
+            <DayMark state={state} />
+          </div>
         </div>
 
         <div data-hero-body style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '20px 24px 0 24px' }}>
