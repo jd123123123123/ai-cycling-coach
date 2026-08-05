@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import InsightStrip from '../components/InsightStrip'
 import MetricTrack from '../components/MetricTrack'
 import StatTile from '../components/StatTile'
 import Verdict from '../components/Verdict'
@@ -47,5 +48,52 @@ describe('Verdict', () => {
   it('withholds the body but keeps the block when the coach has not spoken', () => {
     render(<Verdict headline={missing('The coach has not weighed in yet today.')} body={missing('The coach has not weighed in yet today.')} />)
     expect(screen.getByText('The coach has not weighed in yet today.')).toBeTruthy()
+  })
+})
+
+describe('InsightStrip', () => {
+  it('keeps a missing item\'s label in its slot, and keeps all three columns', () => {
+    render(
+      <InsightStrip
+        items={[
+          { label: 'PEAK POWER', value: missing('No peak-power analysis yet.') },
+          { label: 'UNTIL BACK TO NEUTRAL', value: present('26 h') },
+          { label: 'FITNESS', value: present('68') },
+        ]}
+      />,
+    )
+    // three signal columns survive regardless of missing state — the label
+    // is never replaced by the reason text
+    expect(screen.getByText('PEAK POWER')).toBeTruthy()
+    expect(screen.getByText('UNTIL BACK TO NEUTRAL')).toBeTruthy()
+    expect(screen.getByText('FITNESS')).toBeTruthy()
+    expect(screen.queryByText('No peak-power analysis yet.')).toBeTruthy()
+  })
+
+  it('prints one reason line when two items share the same missing reason', () => {
+    render(
+      <InsightStrip
+        items={[
+          { label: 'PEAK POWER', value: missing('No location from a recent ride.') },
+          { label: 'UNTIL BACK TO NEUTRAL', value: missing('No location from a recent ride.') },
+          { label: 'FITNESS', value: present('68') },
+        ]}
+      />,
+    )
+    expect(screen.getAllByText('No location from a recent ride.').length).toBe(1)
+  })
+
+  it('prints both reasons when two items are missing for different reasons', () => {
+    render(
+      <InsightStrip
+        items={[
+          { label: 'PEAK POWER', value: missing('No peak-power analysis yet.') },
+          { label: 'UNTIL BACK TO NEUTRAL', value: missing('No recovery estimate yet.') },
+          { label: 'FITNESS', value: present('68') },
+        ]}
+      />,
+    )
+    expect(screen.getByText('No peak-power analysis yet.')).toBeTruthy()
+    expect(screen.getByText('No recovery estimate yet.')).toBeTruthy()
   })
 })

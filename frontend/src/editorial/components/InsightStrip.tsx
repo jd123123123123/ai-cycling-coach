@@ -15,12 +15,32 @@ import { isPresent, type Value } from '../data/value'
  * historical series per metric and a per-item hue, and this task's own
  * interface — `{ items: { label; value: Value<string> }[] }` — carries
  * neither. Flagged in task-8-report.md; every item's Value renders $e-ink.
+ *
+ * Missing-arm fix (coordinator review): the label slot must NEVER be
+ * substituted with the missing reason — that was the one place in this
+ * task that broke the system's own rule ("the frame always stays: labels
+ * and rails intact, the reason is an ADDITIONAL quiet line"), which
+ * `MetricTrack` and `StatTile` both already follow correctly. The pen's
+ * Label slot is fixed-height 23px for an 8.5px/lineHeight1.32 two-line
+ * caption ("A NEW 12-MINUTE RECORD" etc.) — a full sentence dropped into
+ * that slot overflows it and collides with whatever sits below (the
+ * TabBar, in this hero). So: `item.label` always renders, at that fixed
+ * height; distinct missing reasons print once each, below the whole row,
+ * in the same 12px/600 `var(--e-quiet)` register `MetricTrack` uses for
+ * its own reason line (`MetricTrack.tsx`'s `!present` paragraph).
  */
 export default function InsightStrip({
   items,
 }: {
   items: { label: string; value: Value<string> }[]
 }) {
+  const reasons = [...new Set(
+    items
+      .map((i) => i.value)
+      .filter((v): v is { missing: string } => !isPresent(v))
+      .map((v) => v.missing),
+  )]
+
   return (
     <section
       data-insight-strip
@@ -68,14 +88,32 @@ export default function InsightStrip({
                   letterSpacing: 0.9,
                   lineHeight: 1.32,
                   color: 'var(--e-quiet)',
+                  height: 23,
                 }}
               >
-                {present ? item.label : itemValue.missing}
+                {item.label}
               </span>
             </div>
           )
         })}
       </div>
+      {reasons.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 10 }}>
+          {reasons.map((reason) => (
+            <span
+              key={reason}
+              style={{
+                fontFamily: 'var(--e-body)',
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--e-quiet)',
+              }}
+            >
+              {reason}
+            </span>
+          ))}
+        </div>
+      )}
     </section>
   )
 }
