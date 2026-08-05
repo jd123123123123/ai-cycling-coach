@@ -200,6 +200,16 @@ describe('EDITORIAL II tokens', () => {
     }
   })
 
+  it('carries the pen-verified per-state grounds', () => {
+    const grounds: Record<string, string> = {
+      '--g-rest': '#0A0B05', '--g-training': '#05100A', '--g-trained': '#120B05',
+      '--g-resting': '#051012', '--g-evening': '#0A0816', '--g-session': '#05100A',
+    }
+    for (const [name, hex] of Object.entries(grounds)) {
+      expect(css).toMatch(new RegExp(`${name}\\s*:\\s*${hex}\\b`, 'i'))
+    }
+  })
+
   it('carries the depth ramp verbatim', () => {
     // Pen-verified (2026-08-05): the pen's ramp is NOT evenly stepped, and
     // d-2..d-4 differ from this plan's first draft. These are the pen's.
@@ -269,9 +279,22 @@ Expected: FAIL — `ENOENT` on `tokens.css`.
   --e-display: "Sora", "Inter", ui-sans-serif, sans-serif;
   --e-body: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  /* The active state accent. TodayPage rebinds this per day-state; components
-   * reference var(--st-active) so they need no per-state branching. */
+  /* Per-state grounds. Pen-verified 2026-08-05: every flagship frame paints
+   * its OWN background, tinted toward that state's accent — none of them uses
+   * the neutral --e-bg. The tint is the mood system, not decoration. */
+  --g-rest: #0A0B05;
+  --g-training: #05100A;
+  --g-trained: #120B05;
+  --g-resting: #051012;
+  --g-evening: #0A0816;
+  /* Session Detail shares the Training ground (pen frame J5FV6). */
+  --g-session: #05100A;
+
+  /* The active state accent and ground. EditorialRoot rebinds both per
+   * day-state; components reference var(--st-active) / var(--e-ground) so
+   * they need no per-state branching. */
   --st-active: var(--st-rest);
+  --e-ground: var(--g-rest);
 }
 ```
 
@@ -657,10 +680,20 @@ describe('EditorialRoot', () => {
     expect(screen.getByText('hello')).toBeTruthy()
   })
 
-  it('binds the active accent to the day state', () => {
+  it('binds the active accent and the ground to the day state', () => {
     const { container } = render(<EditorialRoot state="trained"><span /></EditorialRoot>)
     const root = container.querySelector('.editorial-root') as HTMLElement
     expect(root.style.getPropertyValue('--st-active')).toBe('var(--st-trained)')
+    expect(root.style.getPropertyValue('--e-ground')).toBe('var(--g-trained)')
+  })
+
+  it('gives each state its own ground — the tint is the mood system', () => {
+    const grounds = (['rest', 'training', 'trained', 'resting', 'evening'] as const).map((s) => {
+      const { container } = render(<EditorialRoot state={s}><span /></EditorialRoot>)
+      const el = container.querySelector('.editorial-root') as HTMLElement
+      return el.style.getPropertyValue('--e-ground')
+    })
+    expect(new Set(grounds).size).toBe(5)
   })
 })
 
@@ -705,7 +738,8 @@ export default function EditorialRoot({
       style={{
         // @ts-expect-error — custom property on an inline style is valid CSS
         '--st-active': `var(--st-${state})`,
-        background: 'var(--e-bg)',
+        '--e-ground': `var(--g-${state})`,
+        background: 'var(--e-ground)',
         color: 'var(--e-ink)',
         fontFamily: 'var(--e-body)',
         minHeight: '100dvh',
@@ -1450,7 +1484,7 @@ git commit -m "feat(editorial): Trained's session, cost and trajectory sections"
   - `WeekRail({ days }: { days: { letter: string; tss: Value<number> }[] })`
   - `TomorrowBand({ session }: { session: Value<{ title: string; unlockLabel: string }> })`
 
-Sections: **Rest** = 01 Recovery / 02 Absorption / 03 Trajectory. **Training** = 01 Recovery / 02 The Session / 03 Trajectory. Most of both is reuse; the new material is sleep composition (deep / REM / light / awake), the absorption band with `clear Thu 17:30`, the session-preview bars, and conditions.
+Sections, pen-verified 2026-08-05 from the frames' own child names: **Rest** = `01 Why` / `02 Absorbing` / `03 Trajectory` — NOT "Recovery / Absorption", which is what the spec's first draft said. **Training** = `01 Recovery` / `02 The Session` / `03 Trajectory`. Most of both is reuse; the new material is sleep composition (deep / REM / light / awake), the absorption band with `clear Thu 17:30`, the session-preview bars, and conditions.
 
 - [ ] **Step 1: Read both frames**
 
@@ -1539,7 +1573,9 @@ git commit -m "feat(editorial): the Rest and Training day states"
 - Consumes: `useTodaySnapshot()` → `body_battery: { wake, now, now_at }`, `stress: { wake, now, now_at }`.
 - Produces: `LiveRing({ label, wake, now, hue }: { label: string; wake: Value<number>; now: Value<number>; hue: string })`.
 
-Sections: 01 Right Now / 02 Trajectory. Smallest screen (1604px). New material: the live rings and the wake-to-now track.
+Sections: `01 Right Now` / `02 Trajectory`. Smallest screen (1604px). New material: the live rings and the wake-to-now track.
+
+**Resting breaks the shared spine:** its frame `h54Rs` has no Insight Strip — children are StatusBar | Hero | 01 Right Now | 02 Trajectory | Tomorrow Band Wrap | TabWrap. Do not add one.
 
 - [ ] **Step 1: Read the frame**
 
@@ -1610,7 +1646,7 @@ git commit -m "feat(editorial): the Resting day state and its live rings"
 - Consumes: `usePlannedWorkouts`, `useCoachBrief`, `usePowerProfile`, `useTodayWeather`, `/routes` + `rehearsal/route_history`.
 - Produces: `useSessionModel(id: string): SessionModel` with `{ title: Value<string>; targetWatts: Value<number>; claim: Value<string>; stats: Value<SessionSummary>; blocks: Value<Block[]>; howToRideIt: Value<string[]>; payoff: Value<PmcPoint[]>; route: Value<RouteSummary>; }`. `NavHeader({ title, onBack }: { title: string; onBack: () => void })` transcribed from pen component `kdOT0`.
 
-Screen order: Nav → Hero (numeral, claim, stats, profile) → 01 The Blocks → 02 How To Ride It → 03 The Payoff → 04 Where To Ride It → CTA rules.
+Screen order, pen-verified 2026-08-05 from frame `J5FV6`'s children: StatusBar → Nav → Hero (numeral, claim, stats, profile) → `01 The Blocks` → `02 HOW TO RIDE IT` → **Quote Plate** → `03 THE PAYOFF` → `04 WHERE TO RIDE IT` → CTA. The Quote Plate sits between 02 and 03 and was missing from the spec's first draft — transcribe it.
 
 **The one deliberate departure from the pen.** The primary CTA keeps the pen's exact geometry, type, and rule structure, but its label reads `EXPORT WORKOUT` with the sub-line `Structured intervals and route, as a file for your Edge` — there is no Garmin push path in this backend, the app exports. This matches the resolution already reached for the V4 route rehearsal page. Everything else is transcribed as designed. Pin this in a test so nobody "fixes" it back.
 

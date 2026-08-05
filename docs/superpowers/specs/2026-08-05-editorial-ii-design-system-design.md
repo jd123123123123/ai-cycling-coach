@@ -166,8 +166,14 @@ previews all five without changing stored state.
 Every Today state shares this spine, in order:
 
 ```
-StatusBar → Hero → Day Rail → Insight Strip → numbered sections → Tomorrow Band → TabBar
+StatusBar → Hero → Insight Strip → numbered sections → Tomorrow Band → TabBar
 ```
+
+Pen-verified 2026-08-05: the Day Rail is nested inside the Hero rather than being
+its sibling, and Resting carries no Insight Strip. Each frame also paints its own
+ground, tinted toward its state accent — the neutral `--e-bg` is used by none of
+them (`--g-rest #0A0B05`, `--g-training #05100A`, `--g-trained #120B05`,
+`--g-resting #051012`, `--g-evening #0A0816`).
 
 The Hero varies by state but always runs: Meta row (date · streak) → statement or
 session name → the big numeral → metric track with delta → context (bars, conditions,
@@ -177,14 +183,14 @@ Sections per state:
 
 | State | 01 | 02 | 03 |
 |---|---|---|---|
-| Rest | Recovery | Absorption | Trajectory |
+| Rest | Why | Absorbing | Trajectory |
 | Training | Recovery | The Session | Trajectory |
 | Trained | The Session | The Cost | Trajectory |
 | Resting | Right Now | Trajectory | — |
 | Evening | Today | Tonight | Tomorrow |
 
 Session Detail runs: Nav → Hero (numeral, claim, stats, profile) → 01 The Blocks →
-02 How To Ride It → 03 The Payoff → 04 Where To Ride It → CTA rules.
+02 How To Ride It → Quote Plate → 03 The Payoff → 04 Where To Ride It → CTA rules.
 
 ## Data map
 
