@@ -38,4 +38,14 @@ describe('EDITORIAL II tokens', () => {
       expect(css).toMatch(new RegExp(`${name}\\s*:\\s*${hex}\\b`, 'i'))
     }
   })
+
+  it('carries the pen-verified per-state grounds', () => {
+    const grounds: Record<string, string> = {
+      '--g-rest': '#0A0B05', '--g-training': '#05100A', '--g-trained': '#120B05',
+      '--g-resting': '#051012', '--g-evening': '#0A0816', '--g-session': '#05100A',
+    }
+    for (const [name, hex] of Object.entries(grounds)) {
+      expect(css).toMatch(new RegExp(`${name}\\s*:\\s*${hex}\\b`, 'i'))
+    }
+  })
 })

@@ -46,7 +46,20 @@
   --e-display: "Sora", "Inter", ui-sans-serif, sans-serif;
   --e-body: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  /* The active state accent. TodayPage rebinds this per day-state; components
-   * reference var(--st-active) so they need no per-state branching. */
+  /* Per-state grounds. Pen-verified 2026-08-05: every flagship frame paints
+   * its OWN background, tinted toward that state's accent — none of them uses
+   * the neutral --e-bg. The tint is the mood system, not decoration. */
+  --g-rest: #0A0B05;
+  --g-training: #05100A;
+  --g-trained: #120B05;
+  --g-resting: #051012;
+  --g-evening: #0A0816;
+  /* Session Detail shares the Training ground (pen frame J5FV6). */
+  --g-session: #05100A;
+
+  /* The active state accent and ground. EditorialRoot rebinds both per
+   * day-state; components reference var(--st-active) / var(--e-ground) so
+   * they need no per-state branching. */
   --st-active: var(--st-rest);
+  --e-ground: var(--g-rest);
 }

@@ -14,10 +14,20 @@ describe('EditorialRoot', () => {
     expect(screen.getByText('hello')).toBeTruthy()
   })
 
-  it('binds the active accent to the day state', () => {
+  it('binds the active accent and the ground to the day state', () => {
     const { container } = render(<EditorialRoot state="trained"><span /></EditorialRoot>)
     const root = container.querySelector('.editorial-root') as HTMLElement
     expect(root.style.getPropertyValue('--st-active')).toBe('var(--st-trained)')
+    expect(root.style.getPropertyValue('--e-ground')).toBe('var(--g-trained)')
+  })
+
+  it('gives each state its own ground — the tint is the mood system', () => {
+    const grounds = (['rest', 'training', 'trained', 'resting', 'evening'] as const).map((s) => {
+      const { container } = render(<EditorialRoot state={s}><span /></EditorialRoot>)
+      const el = container.querySelector('.editorial-root') as HTMLElement
+      return el.style.getPropertyValue('--e-ground')
+    })
+    expect(new Set(grounds).size).toBe(5)
   })
 })
 
