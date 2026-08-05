@@ -40,6 +40,21 @@ describe('Trained sections', () => {
     expect(screen.getByText('164 +')).toBeTruthy()
   })
 
+  it('ZoneRows formats each zone as mm:ss but the TOTAL as h:mm', () => {
+    render(<ZoneRows zones={present([
+      { name: 'Z1', lowBpm: 0, highBpm: 124, seconds: 1320 },
+      { name: 'Z2', lowBpm: 124, highBpm: 141, seconds: 1440 },
+      { name: 'Z3', lowBpm: 142, highBpm: 152, seconds: 1080 },
+      { name: 'Z4', lowBpm: 153, highBpm: 163, seconds: 2340 },
+      { name: 'Z5', lowBpm: 164, highBpm: Infinity, seconds: 240 },
+    ])} />)
+    // 1320s in one zone reads as mm:ss ("22:00"), never h:mm.
+    expect(screen.getByText('22:00')).toBeTruthy()
+    // The 6420s (107 min) TOTAL reads as h:mm ("1:47 TOTAL"), never "107:00".
+    expect(screen.getByText('1:47 TOTAL')).toBeTruthy()
+    expect(screen.queryByText('107:00 TOTAL')).toBeNull()
+  })
+
   it('PeakRows omits the season-best column rather than inventing it', () => {
     render(<PeakRows peaks={present([{ duration: '5:00', watts: 342, percentOfSeasonBest: null }])} />)
     expect(screen.getByText('342')).toBeTruthy()

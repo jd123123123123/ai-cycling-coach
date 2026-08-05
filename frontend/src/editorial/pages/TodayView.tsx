@@ -259,13 +259,26 @@ export default function TodayView({ model }: { model: TodayModel }) {
             kicker
             chip={isPresent(model.session) ? `${model.session.value.blocks.length} BLOCKS` : undefined}
           />
-          {/* showReason=false: the identical "not matched to its plan" reason
-              reappears right below, under the WHAT YOU RODE bars — printing
-              it twice back-to-back would violate the "print a shared reason
-              once" rule. */}
-          <Statement claim={sessionClaim} showReason={false} />
+          {/* Section 01's own Statement claim depends entirely on
+              plan-vs-ridden matching (see sessionClaim above), which is
+              always missing today. A bare "—" here, with its only
+              explanation sitting well below the bars, read like a broken
+              render (coordinator review, defect 3) — the fuller reason is
+              printed once, immediately under the honest-missing "WHAT YOU
+              RODE" row below, so this Statement contributes nothing when it
+              would just be a second, redundant dash. It still renders
+              normally the day a real claim is available. */}
+          {isPresent(sessionClaim) && <Statement claim={sessionClaim} />}
 
           <div style={{ paddingTop: 24 }}>
+            {/* CORRECTED (coordinator review, defect 1): this used to feed
+                the PLANNED blocks to a "WHAT YOU RODE" heading, then admit
+                right below it that the ride wasn't matched to its plan —
+                planned numbers under a ridden label, the exact substitution
+                the missing-data rule forbids. Now this heading owns its own
+                honestly-missing row (dashed placeholder bars, frame intact,
+                the real reason printed once), and the actual data we have
+                — the plan — renders below under its own true label. */}
             <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '10px 0 9px 0' }}>
               <span style={kickerLabel}>WHAT YOU RODE</span>
               <span style={kickerLabelQuiet}>
@@ -274,10 +287,24 @@ export default function TodayView({ model }: { model: TodayModel }) {
                   : ''}
               </span>
             </div>
-            <Bars blocks={sessionBlocks} />
+            <div style={{ width: '100%', height: 104, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+              {sessionBlocks.map((b, i) => (
+                <div
+                  key={i}
+                  style={{ flex: b.minutes || 1, height: 8, borderRadius: '3px 3px 0 0', background: 'var(--e-bar-dim)' }}
+                />
+              ))}
+            </div>
             {!isPresent(model.planVsRidden) && (
               <p style={quietReason}>{model.planVsRidden.missing}</p>
             )}
+
+            <div style={{ width: '100%', height: 1, background: 'var(--e-baseline)', margin: '10px 0' }} />
+
+            <Bars blocks={sessionBlocks} />
+            <div style={{ width: '100%', paddingTop: 8 }}>
+              <span style={kickerLabelQuiet}>WHAT WAS PLANNED</span>
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '18px 0 0 0' }}>

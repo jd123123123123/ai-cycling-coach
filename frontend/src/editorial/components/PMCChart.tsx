@@ -81,18 +81,33 @@ export default function PMCChart({ series, days }: { series: Value<PmcPoint[]>; 
   )
 }
 
+/**
+ * CTL/ATL live on roughly the same scale (both TSS-per-day rolling
+ * averages, typically 0-150); TSB is their *difference*, routinely an
+ * order of magnitude smaller (single digits to low tens). A shared axis
+ * across all three (the first pass here) pins TSB flat along the bottom —
+ * technically correct, but reads as if form never moves at all
+ * (coordinator review, observation). Each line is normalised to its OWN
+ * min/max instead: still no shared-axis "10 fitness points = 10 fatigue
+ * points" comparison (this was never a literal-value chart the pen
+ * specifies precisely — see this file's own top comment on why it departs
+ * from the tree's bar chart), but every one of the three lines now
+ * actually shows its own shape, which is what a trend chart is for.
+ */
 function buildLines(points: PmcPoint[]) {
-  const all = points.flatMap((p) => [p.ctl, p.atl, p.tsb])
-  const min = Math.min(...all)
-  const max = Math.max(...all)
-  const span = max - min || 1
   const x = (i: number) => (i / (points.length - 1)) * WIDTH
-  const y = (v: number) => HEIGHT - ((v - min) / span) * HEIGHT
-  const line = (key: string, color: string, pick: (p: PmcPoint) => number) => ({
-    key,
-    color,
-    pointsAttr: points.map((p, i) => `${x(i)},${y(pick(p))}`).join(' '),
-  })
+  const line = (key: string, color: string, pick: (p: PmcPoint) => number) => {
+    const values = points.map(pick)
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const span = max - min || 1
+    const y = (v: number) => HEIGHT - ((v - min) / span) * HEIGHT
+    return {
+      key,
+      color,
+      pointsAttr: points.map((p, i) => `${x(i)},${y(pick(p))}`).join(' '),
+    }
+  }
   return [
     line('ctl', 'var(--m-load)', (p) => p.ctl),
     line('atl', 'var(--m-fatigue)', (p) => p.atl),

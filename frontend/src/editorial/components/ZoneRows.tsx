@@ -10,7 +10,12 @@ export interface HrZone {
 /**
  * Transcribed from "HR Zones" (vvR2D, `01 The Session`): Kicker Row (K
  * "TIME IN HEART RATE ZONES" 9/800/ls1.6 $e-mid, Caption "36% AT THRESHOLD"
- * 9/700/ls1.2 $e-quiet, right-aligned "1:47 TOTAL" 9/800/ls1.6 $e-quiet) —
+ * 9/700/ls1.2 $e-quiet, right-aligned "1:47 TOTAL" 9/800/ls1.6 $e-quiet —
+ * note the TOTAL is `h:mm` (the pen's own literal "1:47"), a DIFFERENT
+ * format from each zone's own `mm:ss` ("22:00" etc. below) — the two use
+ * separate formatters, `formatHoursMin`/`formatMinSec`; a coordinator
+ * review caught an earlier pass reusing `mm:ss` for the total, which
+ * printed 107 minutes as "107:00" instead of "1:47") —
  * a 12px-tall segmented Bar (asN1m, 5 rects, gap 3) — a 5-column Legend
  * (KjKQ7, gap 3: 2px Tone rect, "Z1" 9/800/ls1 $e-mid, "22:00" 13/800
  * $e-ink, "< 124" 8/700 $e-quiet).
@@ -69,7 +74,7 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
             fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-quiet)',
           }}
         >
-          {present ? `${formatMinSec(totalSeconds)} TOTAL` : '—'}
+          {present ? `${formatHoursMin(totalSeconds)} TOTAL` : '—'}
         </span>
       </div>
 
@@ -113,6 +118,16 @@ function formatMinSec(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60)
   const s = Math.round(totalSeconds % 60)
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+/** `h:mm`, for the TOTAL only — a ride's total zone time is naturally over
+ *  an hour, where `formatMinSec`'s `mm:ss` would misread 107 minutes as
+ *  "107:00" (implying 107 hours). Matches the pen's own "1:47 TOTAL". */
+function formatHoursMin(totalSeconds: number): string {
+  const totalMinutes = Math.round(totalSeconds / 60)
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  return `${h}:${String(m).padStart(2, '0')}`
 }
 
 function formatRange(z: HrZone): string {

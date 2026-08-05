@@ -105,10 +105,21 @@
    * "What It Changes" (TDfiL, Xe1qo, rxawd) and Ride Micro (tU6lF): all
    * literally #FFFFFF12. */
   --e-hairline: #FFFFFF12;
-  /* Bars: the non-interval segments (warm-up/recover/cool-down) of the one
-   * real (planned-target) bar row — pen's "Ridden" row fill (VRZFt etc). */
+  /* Bars/TodayView: the pen's "Ridden" row fill (VRZFt etc, #FFFFFF52) —
+   * reused for the honest-missing "WHAT YOU RODE" placeholder bars in
+   * TodayView (task 9, coordinator review), since we have zero real ridden
+   * data and this is literally the tone that row uses in the tree. */
   --e-bar-dim: #FFFFFF52;
-  /* Bars: baseline rule under the bar row (K6Hhvu). */
+  /* Bars: the pen's "Planned" ghost row fill (BBZZe's work-block npOZv
+   * #FFFFFF42 / non-work-block USnAP #FFFFFF21) — Bars renders ONLY the
+   * planned row (see Bars.tsx doc comment), so its bars use these ghost
+   * tones, never the accent (that would visually claim an achieved result
+   * we don't have). */
+  --e-bar-ghost: #FFFFFF42;
+  --e-bar-ghost-dim: #FFFFFF21;
+  /* TodayView: rule between the "WHAT YOU RODE" placeholder and the
+   * Planned bars (K6Hhvu) — the pen's own Baseline sits between its Ridden
+   * and Planned rows, so it's placed by the caller now, not owned by Bars. */
   --e-baseline: #FFFFFF66;
   /* HR Zones bar/legend tone for Z2 and Z3 (i408qx/AGSnx, g7PRKF/xOFQ9's
    * "Tone" rects) — Z1 reuses --d-1, Z4 is the state accent, Z5 is --d-4. */

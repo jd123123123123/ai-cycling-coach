@@ -10,36 +10,47 @@ export interface BarsBlock {
 /**
  * Transcribed from "Plan vs Ridden" (Fpt7K, `01 The Session`): a Deltas row
  * (Z7tZK, 8 columns alternating value/spacer, widths matching each
- * segment's own bar width) sitting above a single bar row (Ridden, sFosG:
- * height 104, gap 2, alignItems end, cornerRadius [3,3,0,0] on each bar),
- * with a 1px Baseline rule (K6Hhvu, `var(--e-baseline)`, #FFFFFF66) beneath.
+ * segment's own bar width) sitting above the pen's "Planned" ghost bar row
+ * (BBZZe: height 96, gap 2, work-block fill #FFFFFF42 →
+ * var(--e-bar-ghost), non-work-block fill #FFFFFF21 →
+ * var(--e-bar-ghost-dim)). The pen draws Planned as a downward mirror below
+ * a shared baseline (cornerRadius [0,0,3,3]); this component doesn't mirror
+ * — it renders its own upward chart on its own local baseline, matching
+ * every other bar chart in this file, so corners round at the top
+ * ([3,3,0,0]) instead.
  *
- * The pen shows TWO bar rows — an orange "Ridden" row (sFosG) and a dim
- * ghost "Planned" row beneath it (BBZZe) — because its mock data carries
- * both a plan and a separately-measured result per block. TodayModel cannot
- * supply that: `useStreamAnalysis`'s `splits` are per-kilometre only, never
- * aligned to a named workout block (task-9-report.md, verify-check 1), so
- * there is no real per-block "ridden" wattage anywhere in the app — only
- * the plan's own per-block target (`SessionSummary.blocks[].watts`).
- * Rendering two rows from one real dataset would fabricate the second one,
- * so this component renders the single row it can ground. `delta` is kept
- * on the prop shape and rendered when non-null so a future block-matching
- * source only has to start passing real deltas, not touch this file.
+ * CORRECTED (coordinator review, defect 1, task-9-report.md): this
+ * component renders ONLY the pen's "Planned" row — never the accent-coloured
+ * "Ridden" row (sFosG, #FF5E00) — because `useStreamAnalysis`'s `splits` are
+ * per-kilometre only, never aligned to a named workout block
+ * (task-9-report.md, verify-check 1), so there is no real per-block
+ * "ridden" wattage anywhere in the app, only the plan's own per-block
+ * target (`SessionSummary.blocks[].watts`). An earlier pass coloured these
+ * bars `var(--m-load)` (the pen's accent, the Ridden row's own colour) and
+ * labelled the whole thing "WHAT YOU RODE" — that rendered planned numbers
+ * under a ridden heading and let a "ride not matched to its plan" reason
+ * sit directly beneath a chart that implied otherwise. TodayView now owns
+ * BOTH labels and renders an honestly-missing "WHAT YOU RODE" placeholder
+ * ABOVE this component, and this component only ever renders "WHAT WAS
+ * PLANNED" — ghost-toned bars, matching what the pen itself calls them.
+ * The 1px Baseline rule (K6Hhvu, `var(--e-baseline)`) that sits between the
+ * two pen rows is TodayView's to place, not this component's, since it now
+ * sits between two separately-rendered blocks, not below one.
  *
- * Delta colour: the tree's four examples (+1 → $e-ink, −1/−2 → $e-quiet,
- * +3 → literal #FF5E00) don't reduce to a plain sign rule — the tree's own
- * "BEST" tag two rows down in Peak Power marks the standout result the same
- * way. Read as: the single best positive delta gets the accent
- * (var(--st-active)), other positive deltas are plain ink, non-positive
- * deltas are dim. This is this component's own interpolation of one
- * concrete example, not a value the pen states as a formula.
+ * `delta` is kept on the prop shape and rendered when non-null (Deltas row
+ * colour: the tree's four examples — +1 → $e-ink, −1/−2 → $e-quiet, +3 →
+ * literal #FF5E00 — read as "the single best positive delta gets the
+ * accent, other positive deltas are plain ink, non-positive deltas are
+ * dim," this component's own interpolation of one concrete example) so a
+ * future block-matching source only has to start passing real deltas, not
+ * touch this file or its label.
  *
  * Bar height is proportional to `watts` among the present blocks (capped at
  * the row's 104px); width is proportional to `minutes` via flex-grow,
  * matching the pen's duration-scaled column widths (55/37/18/37/18/37/18/
  * 37/69 — warm-up, four intervals with three recoveries, cool-down). A
- * missing `watts` value renders a minimal dim placeholder instead of
- * inventing a height.
+ * missing `watts` value renders a minimal placeholder at the dimmer ghost
+ * tone instead of inventing a height.
  */
 export default function Bars({ blocks }: { blocks: BarsBlock[] }) {
   const presentWatts = blocks
@@ -93,14 +104,12 @@ export default function Bars({ blocks }: { blocks: BarsBlock[] }) {
                 flex: b.minutes || 1,
                 height,
                 borderRadius: '3px 3px 0 0',
-                background: wattsPresent ? 'var(--m-load)' : 'var(--e-bar-dim)',
+                background: wattsPresent ? 'var(--e-bar-ghost)' : 'var(--e-bar-ghost-dim)',
               }}
             />
           )
         })}
       </div>
-
-      <div style={{ width: '100%', height: 1, background: 'var(--e-baseline)' }} />
     </div>
   )
 }
