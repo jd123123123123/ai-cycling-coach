@@ -1,12 +1,11 @@
-import { Flame, Thermometer, Wind } from 'lucide-react'
+import { Thermometer, Wind } from 'lucide-react'
 import Bars from '../components/Bars'
 import Cover from '../components/Cover'
 import { COVER_PHOTO, QUOTE_PHOTO, TOMORROW_PHOTO } from '../components/plateImagery'
-import DayMark from '../components/DayMark'
 import BackToSessionDoneSheet from '../components/BackToSessionDoneSheet'
-import DayRail from '../components/DayRail'
 import DeltaRow from '../components/DeltaRow'
 import FatigueCurve from '../components/FatigueCurve'
+import HeaderSpine from '../components/HeaderSpine'
 import InsightStrip from '../components/InsightStrip'
 import Ledger from '../components/Ledger'
 import LiveRing from '../components/LiveRing'
@@ -14,7 +13,6 @@ import MetricTrack, { type MetricTrackAction } from '../components/MetricTrack'
 import { headlineFit } from '../components/numeralFit'
 import PeakRows, { type PeakTotal } from '../components/PeakRows'
 import PMCChart from '../components/PMCChart'
-import ProfileAvatar from '../components/ProfileAvatar'
 import QuotePlate from '../components/QuotePlate'
 import RangeRow from '../components/RangeRow'
 import SecHead from '../components/SecHead'
@@ -415,14 +413,6 @@ function TodayViewBody({ model, control, profile }: {
   // other missing hero numeral — see the render site below.
   const eveningLightsOutMissing = t('eveningLightsOutMissing')
   const eveningLightsOutHeadline = t('eveningLightsOutHeadline')
-
-  // Find the win (design pass, 2026-08-06): real, never invented — a streak
-  // of 3+ days is a true, ordinary-but-genuine accomplishment that shows up
-  // on most real accounts most of the time (unlike a 90-day best, which is
-  // rare), so it's the header's own always-available candidate for real
-  // visual weight. Below 3 the header stays neutral rather than treating a
-  // one- or two-day streak as an event.
-  const isWinStreak = isPresent(model.streakDays) && model.streakDays.value >= 3
 
   // Distinct missing-reasons across section 01's three rows, in first-seen
   // order — the sleep-composition strip below shares them, so it suppresses
@@ -904,66 +894,14 @@ function TodayViewBody({ model, control, profile }: {
         {...swipe}
       >
         <Cover state={state} photoUrl={COVER_PHOTO[state]}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 22, width: '100%' }}>
-            <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--e-body)',
-                    fontSize: 'var(--t-label)',
-                    fontWeight: 800,
-                    letterSpacing: 1.4,
-                    color: state === 'training' ? 'var(--e-lo)' : 'var(--e-mid)',
-                    textShadow: 'var(--e-label-shadow)',
-                  }}
-                >
-                  {isPresent(model.dateLabel) ? model.dateLabel.value : '—'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                {/* Find the win (design pass, 2026-08-06): a streak is the
-                    one true, almost-always-present "good thing" this screen
-                    can point to without inventing anything — it's already
-                    real data (`model.streakDays`), just rendered as small
-                    grey chrome. A streak worth noticing (≥3 days) gets the
-                    day's own accent colour and a bolder weight instead of
-                    the neutral header tone; a short or absent streak stays
-                    quiet rather than being dressed up into something it
-                    isn't. */}
-                <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                  <Flame
-                    size={14}
-                    color={isWinStreak ? 'var(--st-active)' : 'var(--e-mid)'}
-                    aria-hidden="true"
-                    fill={isWinStreak ? 'var(--st-active)' : 'none'}
-                  />
-                  <span
-                    style={{
-                      fontFamily: 'var(--e-body)',
-                      fontSize: 'var(--t-label)',
-                      fontWeight: 800,
-                      letterSpacing: 1.2,
-                      color: isWinStreak ? 'var(--st-active)' : 'var(--e-mid)',
-                      textShadow: 'var(--e-label-shadow)',
-                    }}
-                  >
-                    {isPresent(model.streakDays) ? t('heroStreakDays', { n: model.streakDays.value }) : '—'}
-                  </span>
-                </div>
-                {profile && <ProfileAvatar avatarUrl={profile.avatarUrl} initial={profile.initial} />}
-              </div>
-            </div>
-
-            <DayRail
-              state={state}
-              derived={control?.derived ?? state}
-              showSwitchAction={control != null && SWITCHABLE.has(state)}
-              onSwapDayType={control?.onSwapDayType}
-              onStepSelect={control ? control.onPreview : undefined}
-              isPreviewing={control?.isPreviewing ?? false}
-              onExitPreview={control ? () => control.onPreview(null) : undefined}
-            />
-          </div>
+          <HeaderSpine
+            state={state}
+            dateLabel={model.dateLabel}
+            streakDays={model.streakDays}
+            profile={profile}
+            control={control}
+            switchable={SWITCHABLE.has(state)}
+          />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
             <span
@@ -1087,20 +1025,6 @@ function TodayViewBody({ model, control, profile }: {
               </div>
             )}
           </div>
-
-          {/* cx4zJ's Cover carries no Day Mark node at all — verified by a
-              fresh full-subtree read of `TEpsw` (task 14 rebuild, owner
-              ruling): Evening's Cover ends at `Foot` (Statement + Value,
-              no RC line either — see the headline slot below) followed by
-              `Bars`/`BarLabels` (the hypnogram, itself permanently missing —
-              same "no bedtime-target source" reason as the numeral, so not
-              rendered). No Day Mark renders for Evening; every other state
-              still gets one at its own pen-verified offset. */}
-          {state !== 'evening' && (
-            <div style={{ position: 'absolute', top: DAY_MARK_TOP[state] ?? DAY_MARK_TOP.trained, right: 32 }}>
-              <DayMark state={state} />
-            </div>
-          )}
         </Cover>
 
         <div data-hero-body style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '34px 24px 0 24px' }}>
@@ -1815,19 +1739,6 @@ function MovedRow({ label, caption, value, unit, delta, track, trackMissingReaso
       {!last && <div style={{ width: '100%', height: 1, background: 'var(--e-hairline)' }} />}
     </div>
   )
-}
-
-/** Day Mark's absolute `top` offset — pen-verified per state (`K8WxOh` Rest
- *  186, `LRIzl` Training 158, `F6851` Trained 150, `RzWNl` Resting 170,
- *  task 11's own fresh read of `h54Rs`), previously hardcoded to 150 for
- *  every state. No `evening` entry: `cx4zJ`'s Cover has no Day Mark node at
- *  all (task 14 rebuild, owner ruling — see `DayMark.tsx`'s own doc comment
- *  and the render site above, which skips this component entirely for
- *  `state === 'evening'`). An earlier pass kept a transcribed-from-`KYS6e`
- *  offset (137) "for cross-state parity" — that was exactly the kind of
- *  invented-not-specified reasoning the owner has now overruled; removed. */
-const DAY_MARK_TOP: Partial<Record<DayState, number>> & { trained: number } = {
-  rest: 186, training: 158, trained: 150, resting: 170,
 }
 
 function pmcDelta(series: PmcPoint[], daysBack: number, pick: (p: PmcPoint) => number): number | null {
