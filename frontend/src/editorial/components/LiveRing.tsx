@@ -1,6 +1,8 @@
 import { isPresent, type Value } from '../data/value'
 import { MOTION_DURATION_MS, MOTION_EASE, useReveal } from '../motion/useReveal'
 import { useTapHighlight } from '../motion/useTapHighlight'
+import { useListNav } from '../motion/useListNav'
+import { useCopy } from '../i18n/useCopy'
 
 const SIZE = 102
 const CENTER = SIZE / 2
@@ -55,6 +57,16 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
  * stroke on tap; a single ring has no siblings to dim (unlike `Bars`/
  * `WeekRail`, which coordinate several bars at once), so this is the
  * one-element reading of the same rule.
+ *
+ * Interaction (chart-interaction task): the ring itself is focusable
+ * (`tabIndex`/`role="img"`/`aria-label`) — with only one selectable target,
+ * `useListNav(['ring'], tap)` reduces to "Enter/arrow keys select it,
+ * Escape clears" rather than moving between siblings, but it's the same
+ * primitive every other chart uses, not a bespoke keydown handler. The ring
+ * is a 102×102 SVG, already well past the 44px touch minimum, so it needs
+ * no separate hit-target overlay. `aria-live="polite"` sits on the root
+ * (already always mounted); the delta line beneath the label is what
+ * changes/gets announced on select — see `liveRingReadout` usage below.
  */
 export default function LiveRing({ label, wake, now, hue, unit, format = String }: {
   label: string
@@ -67,6 +79,9 @@ export default function LiveRing({ label, wake, now, hue, unit, format = String 
   const present = isPresent(now)
   const { ref, on, reduced } = useReveal<HTMLDivElement>()
   const tap = useTapHighlight<'ring'>()
+  const { t } = useCopy()
+  const ringKeys = present ? (['ring'] as const) : []
+  const onKeyDown = useListNav(ringKeys, tap)
 
   const RING_FILL_FRACTION = 0.88
   const fraction = present && on ? RING_FILL_FRACTION : 0
@@ -77,7 +92,11 @@ export default function LiveRing({ label, wake, now, hue, unit, format = String 
     <div
       ref={ref}
       data-live-ring
+      role="img"
+      aria-label={label}
+      tabIndex={present ? 0 : undefined}
       onClick={present ? () => tap.toggle('ring') : undefined}
+      onKeyDown={present ? onKeyDown : undefined}
       style={{
         display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
         // CORRECTED (coordinator visual review, task 11): `width: '100%'`
@@ -147,6 +166,9 @@ export default function LiveRing({ label, wake, now, hue, unit, format = String 
           {now.missing}
         </span>
       )}
+      <span data-live-ring-readout aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+        {present && tap.isSelected('ring') ? t('liveRingReadout', { label, value: format(now.value), unit: unit ?? '' }) : ''}
+      </span>
     </div>
   )
 }

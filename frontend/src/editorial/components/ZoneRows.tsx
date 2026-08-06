@@ -1,6 +1,8 @@
 import { isPresent, type Value } from '../data/value'
 import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
 import { useTapHighlight } from '../motion/useTapHighlight'
+import { useListNav } from '../motion/useListNav'
+import { touchTargetOverlayStyleVertical } from '../motion/touchTarget'
 import { useCopy } from '../i18n/useCopy'
 
 export interface HrZone {
@@ -49,6 +51,20 @@ export interface HrZone {
  * `var(--st-active)` and drops the other four to `var(--d-2)`
  * (`useTapHighlight`), surfacing that zone's own bpm range; tapping it
  * again restores the pen's own five-tone ramp.
+ *
+ * Interaction (chart-interaction task): the section itself is the one
+ * focusable chart (`tabIndex`/`role="group"`/`aria-label`, `useListNav`
+ * keyed by the real zone names) — Left/Right move the highlight zone by
+ * zone, Home/End jump to Z1/Z5, Escape clears. The 12px-tall segment bar
+ * gets an invisible `touchTargetOverlayStyleVertical()` hit area (its own
+ * 12px is well under the 44px minimum) — height-only growth, deliberately:
+ * a live-browser check found the height+width variant overflows a zone
+ * segment's own flex box sideways when that zone's real time-in-zone is
+ * small, invading a neighbouring zone (see `Bars.tsx`'s own doc comment for
+ * the identical failure mode found there first). The legend column below is
+ * already tall enough from its own stacked text that it needs no overlay at
+ * all. `aria-live="polite"` sits on the section root (already always
+ * mounted), announcing the readout line's mount/unmount below.
  */
 const ZONE_TONE = ['var(--d-1)', 'var(--e-zone-z2)', 'var(--e-zone-z3)', 'var(--st-active)', 'var(--d-4)']
 
@@ -61,9 +77,20 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
   const { ref, on, reduced } = useReveal<HTMLElement>()
   const tap = useTapHighlight<string>()
   const { t } = useCopy()
+  const zoneKeys = list.map((z) => z.name)
+  const onKeyDown = useListNav(zoneKeys, tap)
+  const selectedZone = tap.selected != null ? list.find((z) => z.name === tap.selected) : null
 
   return (
-    <section ref={ref} data-zone-rows style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 11 }}>
+    <section
+      ref={ref}
+      data-zone-rows
+      role="group"
+      aria-label={t('zoneRowsAriaLabel')}
+      tabIndex={zoneKeys.length > 0 ? 0 : undefined}
+      onKeyDown={zoneKeys.length > 0 ? onKeyDown : undefined}
+      style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 11 }}
+    >
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span
@@ -105,6 +132,7 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
                   data-zone-bar={z.name}
                   onClick={() => tap.toggle(z.name)}
                   style={{
+                    position: 'relative',
                     flex: on ? (z.seconds > 0 ? z.seconds : 0) : 0.0001,
                     height: 12,
                     background: tone,
@@ -113,7 +141,9 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
                       ? undefined
                       : `flex-grow ${MOTION_DURATION_MS}ms ${MOTION_EASE} ${staggerDelay(i)}ms, background 200ms ${MOTION_EASE}`,
                   }}
-                />
+                >
+                  <div style={touchTargetOverlayStyleVertical()} />
+                </div>
               )
             })}
           </div>
@@ -142,6 +172,9 @@ export default function ZoneRows({ zones }: { zones: Value<HrZone[]> }) {
               )
             })}
           </div>
+          <span data-zone-rows-readout aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+            {selectedZone ? t('zoneRowsReadout', { zone: selectedZone.name, range: formatRange(selectedZone), time: formatMinSec(selectedZone.seconds) }) : ''}
+          </span>
         </>
       ) : (
         <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: 0 }}>

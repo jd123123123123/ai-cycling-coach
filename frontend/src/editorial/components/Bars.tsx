@@ -1,6 +1,8 @@
 import { isPresent, type Value } from '../data/value'
 import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
 import { useTapHighlight } from '../motion/useTapHighlight'
+import { useListNav } from '../motion/useListNav'
+import { useCopy } from '../i18n/useCopy'
 
 export interface BarsBlock {
   label: string
@@ -87,6 +89,31 @@ export interface BarsBlock {
  * call site. The hardcoded `height: 104, gap: 2` this component previously
  * shipped with matched neither source (104 is ~8% taller than 96, plain
  * wrong for FUAIT's 81) and is now gone.
+ *
+ * Interaction (chart-interaction task): the row itself is the one focusable
+ * chart (`tabIndex`/`role="group"`/`aria-label`, `useListNav` keyed by the
+ * PRESENT blocks' own indices, so keyboard focus can never land on a
+ * `missing()` block) — Left/Right move the highlight one block at a time,
+ * Home/End jump to the first/last present block, Escape clears. `aria-live=
+ * "polite"` sits on the row itself (already always mounted) so the floating
+ * watts readout's own mount/unmount is announced without a second, separate
+ * live region.
+ *
+ * Touch target (live-browser finding, not just a static rule): the click
+ * handler lives on the OUTER per-block wrapper (`flex: b.minutes || 1,
+ * height: rowHeight` — already the column's own full, non-overlapping flex
+ * box, ~81-96px tall) rather than on the visual `data-block` bar or an
+ * absolutely-positioned overlay grown past it. A first pass grew an
+ * invisible overlay to the 44×44 minimum on the bar itself; verified live at
+ * `/e/today`, that overlay overflowed PAST its own ~18px-wide interval
+ * columns into neighbouring blocks (2px gaps, up to 11 columns in 342px) —
+ * DOM order made the LATER sibling's overlay win any overlap, so a tap
+ * clearly aimed at one interval block could silently select its neighbour
+ * instead. The outer wrapper is already the full, exclusive flex-item box
+ * (no absolute overflow, so no cross-column collision is possible); its
+ * height already clears 44px, and its width is the column's own
+ * duration-proportional share — genuinely thin for the shortest intervals,
+ * but never ambiguous, which matters more than nominally hitting 44px.
  */
 export default function Bars({
   blocks,
@@ -106,9 +133,22 @@ export default function Bars({
 
   const { ref, on, reduced } = useReveal<HTMLDivElement>()
   const tap = useTapHighlight<number>()
+  const { t } = useCopy()
+  const presentKeys = blocks.map((b, i) => (isPresent(b.watts) ? i : null)).filter((i): i is number => i != null)
+  const onKeyDown = useListNav(presentKeys, tap)
+  const selectedBlock = tap.selected != null ? blocks[tap.selected] : null
+  const selectedWatts = selectedBlock && isPresent(selectedBlock.watts) ? selectedBlock.watts.value : null
 
   return (
-    <div ref={ref} data-bars style={{ width: '100%', height: rowHeight, display: 'flex', gap, alignItems: 'flex-end' }}>
+    <div
+      ref={ref}
+      data-bars
+      role="group"
+      aria-label={t('barsAriaLabel')}
+      tabIndex={presentKeys.length > 0 ? 0 : undefined}
+      onKeyDown={presentKeys.length > 0 ? onKeyDown : undefined}
+      style={{ width: '100%', height: rowHeight, display: 'flex', gap, alignItems: 'flex-end' }}
+    >
       {blocks.map((b, i) => {
         const watts = b.watts
         const wattsPresent = isPresent(watts)
@@ -128,7 +168,14 @@ export default function Bars({
               : 'var(--e-bar-ghost)'
 
         return (
-          <div key={i} style={{ position: 'relative', flex: b.minutes || 1, height: rowHeight, display: 'flex', alignItems: 'flex-end' }}>
+          <div
+            key={i}
+            onClick={wattsPresent ? () => tap.toggle(i) : undefined}
+            style={{
+              position: 'relative', flex: b.minutes || 1, height: rowHeight, display: 'flex', alignItems: 'flex-end',
+              cursor: wattsPresent ? 'pointer' : undefined,
+            }}
+          >
             {selected && (
               <span
                 style={{
@@ -142,13 +189,11 @@ export default function Bars({
             <div
               data-block=""
               title={b.label}
-              onClick={wattsPresent ? () => tap.toggle(i) : undefined}
               style={{
                 width: '100%',
                 height,
                 borderRadius: '3px 3px 0 0',
                 background: color,
-                cursor: wattsPresent ? 'pointer' : undefined,
                 transition: wattsPresent && !reduced
                   ? `height ${MOTION_DURATION_MS}ms ${MOTION_EASE} ${staggerDelay(i)}ms, background ${MOTION_DURATION_MS}ms ${MOTION_EASE}`
                   : undefined,
@@ -157,6 +202,9 @@ export default function Bars({
           </div>
         )
       })}
+      <span data-bars-readout aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+        {selectedBlock && selectedWatts != null ? t('barsReadout', { label: selectedBlock.label, watts: selectedWatts }) : ''}
+      </span>
     </div>
   )
 }

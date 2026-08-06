@@ -1,6 +1,8 @@
 import { isPresent, type Value } from '../data/value'
 import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
 import { useTapHighlight } from '../motion/useTapHighlight'
+import { useListNav } from '../motion/useListNav'
+import { useCopy } from '../i18n/useCopy'
 
 /**
  * Transcribed from Rest's hero-body "Bars"/"BarLabels" (XD8oR/dfQOB,
@@ -36,6 +38,15 @@ import { useTapHighlight } from '../motion/useTapHighlight'
  * to `var(--st-active)` and drops the rest to `var(--d-2)`
  * (`useTapHighlight`), surfacing its exact TSS; tapping it again restores
  * the current-day accent.
+ *
+ * Interaction (chart-interaction task): the bar row is the one focusable
+ * chart (`tabIndex`/`role="group"`/`aria-label`, `useListNav` keyed by the
+ * PRESENT days' own indices — a dashed day is never a keyboard stop). Each
+ * day's own wrapper already spans the full 70px row height and a column
+ * width close to the 44px minimum (7 columns, 6px gaps, in a 342px strip),
+ * so it needs no separate touch-target overlay unlike `Bars`' duration-
+ * scaled columns. `aria-live="polite"` sits on the outer wrapper (already
+ * always mounted).
  */
 export default function WeekRail({
   days,
@@ -55,9 +66,21 @@ export default function WeekRail({
 
   const { ref, on, reduced } = useReveal<HTMLDivElement>()
   const tap = useTapHighlight<number>()
+  const { t } = useCopy()
+  const presentKeys = days.map((d, i) => (isPresent(d.tss) ? i : null)).filter((i): i is number => i != null)
+  const onKeyDown = useListNav(presentKeys, tap)
+  const selectedDay = tap.selected != null ? days[tap.selected] : null
+  const selectedTss = selectedDay && isPresent(selectedDay.tss) ? selectedDay.tss.value : null
 
   return (
-    <div data-week-rail style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div
+      data-week-rail
+      role="group"
+      aria-label={t('weekRailAriaLabel')}
+      tabIndex={presentKeys.length > 0 ? 0 : undefined}
+      onKeyDown={presentKeys.length > 0 ? onKeyDown : undefined}
+      style={{ width: '100%', display: 'flex', flexDirection: 'column' }}
+    >
       <div ref={ref} style={{ width: '100%', height: 70, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
         {days.map((d, i) => {
           const isToday = i === todayIndex
@@ -120,6 +143,9 @@ export default function WeekRail({
           ))}
         </div>
       )}
+      <span data-week-rail-readout aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+        {selectedDay && selectedTss != null ? t('weekRailReadout', { letter: selectedDay.letter, tss: selectedTss }) : ''}
+      </span>
     </div>
   )
 }

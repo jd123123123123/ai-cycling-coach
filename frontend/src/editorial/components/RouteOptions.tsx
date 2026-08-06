@@ -4,6 +4,7 @@ import RouteSketch from '../../components/ui/RouteSketch'
 import SecHead from './SecHead'
 import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
 import { useTapHighlight, type TapHighlight } from '../motion/useTapHighlight'
+import { useListNav } from '../motion/useListNav'
 import { useCopy } from '../i18n/useCopy'
 import { intlLocale } from '../i18n/copy'
 
@@ -73,6 +74,15 @@ import { intlLocale } from '../i18n/copy'
  * (`useTapHighlight`, keyed by `route.key`, shared across all cards so
  * selecting one actually dims its siblings); tapping the same card again
  * restores all three.
+ *
+ * Interaction (chart-interaction task): the whole section is the one
+ * focusable chart (`tabIndex`/`role="group"`/`aria-label`, `useListNav`
+ * keyed by each route's own `key`) — Up/Down (or Left/Right) move the
+ * highlight card by card, Home/End jump to the first/last route, Escape
+ * clears. Every card is already a full-width, well over 44px tall touch
+ * target, so no separate hit-target overlay is needed here. `aria-live=
+ * "polite"` sits on the section root (already always mounted); the existing
+ * "ROUTE SELECTED" label's own conditional render is what gets announced.
  */
 
 const SKETCH_WIDTH = 390
@@ -83,9 +93,19 @@ const SKETCH_HEIGHT = 236
 export default function RouteOptions({ routes }: { routes: Value<RouteOption[]> }) {
   const { t } = useCopy()
   const tap = useTapHighlight<string>()
+  const routeKeys = isPresent(routes) ? routes.value.map((r) => r.key) : []
+  const onKeyDown = useListNav(routeKeys, tap)
 
   return (
-    <div data-route-options style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '40px 0 0 0' }}>
+    <div
+      data-route-options
+      role="group"
+      aria-label={t('routeOptionsAriaLabel')}
+      tabIndex={routeKeys.length > 0 ? 0 : undefined}
+      onKeyDown={routeKeys.length > 0 ? onKeyDown : undefined}
+      aria-live="polite"
+      style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '40px 0 0 0' }}
+    >
       <div style={{ width: '100%', padding: '0 24px 24px 24px' }}>
         <SecHead
           index="04"

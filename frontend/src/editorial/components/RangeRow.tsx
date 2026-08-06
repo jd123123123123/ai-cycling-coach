@@ -2,6 +2,8 @@ import { isPresent, type Value } from '../data/value'
 import type { RangeBand } from '../data/useTodayModel'
 import { MOTION_DURATION_MS, MOTION_EASE, useReveal } from '../motion/useReveal'
 import { useTapHighlight } from '../motion/useTapHighlight'
+import { useListNav } from '../motion/useListNav'
+import { touchTargetOverlayStyle } from '../motion/touchTarget'
 import { useCopy } from '../i18n/useCopy'
 
 /**
@@ -58,6 +60,15 @@ import { useCopy } from '../i18n/useCopy'
  * `var(--st-active)` while selected and returns to its resting `--e-ink`
  * (the real-instance override documented above, not the pen's `$e-acid`)
  * when deselected.
+ *
+ * Interaction (chart-interaction task): the row is focusable
+ * (`tabIndex`/`role="img"`/`aria-label={label}`) only when `band` is real —
+ * `useListNav(['mark'], tap)` gives it Enter/arrow-key/Escape parity with
+ * the tap gesture above (a single-item list, same shared primitive every
+ * other chart uses). The Mark is 3px wide/12px tall — well under the touch
+ * minimum — so it gets an invisible `touchTargetOverlayStyle()` overlay;
+ * `aria-live="polite"` sits on the row root (already always mounted), and
+ * `data-range-readout`'s own mount/unmount (unchanged) is what's announced.
  */
 export default function RangeRow({
   label,
@@ -82,9 +93,20 @@ export default function RangeRow({
   const caption = band ? (band.position === 'below' ? t('rangeBelow') : band.position === 'above' ? t('rangeAbove') : t('rangeIn')) : null
   const selected = band != null && tap.isSelected('mark')
   const markLeft = band ? (on ? markPct(band) : 50) : 0
+  const markKeys = band != null ? (['mark'] as const) : []
+  const onKeyDown = useListNav(markKeys, tap)
 
   return (
-    <div ref={ref} data-range-row style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9 }}>
+    <div
+      ref={ref}
+      data-range-row
+      role="img"
+      aria-label={label}
+      tabIndex={band != null ? 0 : undefined}
+      onKeyDown={band != null ? onKeyDown : undefined}
+      aria-live="polite"
+      style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9 }}
+    >
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingBottom: 4 }}>
           <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-mid)' }}>
@@ -126,7 +148,9 @@ export default function RangeRow({
                 background: selected ? 'var(--st-active)' : 'var(--e-ink)', backgroundClip: 'content-box', cursor: 'pointer',
                 transition: reduced ? undefined : `left ${MOTION_DURATION_MS}ms ${MOTION_EASE}, background 200ms ${MOTION_EASE}`,
               }}
-            />
+            >
+              <div style={touchTargetOverlayStyle()} />
+            </div>
           </div>
           {selected && (
             <span data-range-readout style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 700, letterSpacing: 1, color: 'var(--st-active)' }}>

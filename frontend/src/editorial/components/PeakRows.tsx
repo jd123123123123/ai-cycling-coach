@@ -1,6 +1,8 @@
 import { isPresent, type Value } from '../data/value'
 import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
 import { useTapHighlight } from '../motion/useTapHighlight'
+import { useListNav } from '../motion/useListNav'
+import { TOUCH_TARGET_MIN } from '../motion/touchTarget'
 import { useCopy } from '../i18n/useCopy'
 
 export interface PeakRow {
@@ -64,6 +66,27 @@ export interface PeakTotal {
  * and surfaces an explicit watts-at-duration readout; tapping the same row
  * again restores the ramp. None of this runs when `peaks` itself is
  * missing — there is no list to grow or select.
+ *
+ * Interaction (chart-interaction task): the section is the one focusable
+ * chart (`tabIndex`/`role="group"`/`aria-label`, `useListNav` keyed by each
+ * row's own `duration`) — Left/Right (or Up/Down) move the highlight row by
+ * row, Home/End jump to the shortest/longest duration, Escape clears.
+ * `aria-live="polite"` sits on the section root (already always mounted);
+ * the existing `data-peak-readout` span's own mount/unmount (unchanged from
+ * Task C) is what gets announced.
+ *
+ * Touch target (live-browser finding, not just a static rule): each row's
+ * own content is only ~20px tall — well under the 44px minimum — but a
+ * first pass reached for that minimum with an absolutely-positioned overlay
+ * grown past the row's own box. Verified live at `/e/today`: with only a 9px
+ * gap between rows, that overlay reached past its own row into its
+ * neighbours, and DOM order made the LOWER row win any overlap — a tap near
+ * a row's edge could silently select the wrong duration. `minHeight:
+ * TOUCH_TARGET_MIN` on `data-peak-row` reaches the same 44px, but through
+ * REAL layout (the row's own flex box actually grows, centred via the
+ * existing `alignItems: 'center'`) rather than an absolute overlay — the
+ * list's own `gap: 9` between rows still applies on top of that real height,
+ * so two rows can never touch, let alone overlap.
  */
 export default function PeakRows({ total, peaks }: { total: Value<PeakTotal>; peaks: Value<PeakRow[]> }) {
   const { t } = useCopy()
@@ -71,6 +94,8 @@ export default function PeakRows({ total, peaks }: { total: Value<PeakTotal>; pe
   const tap = useTapHighlight<string>()
   const present = isPresent(peaks)
   const list = present ? peaks.value : []
+  const durationKeys = list.map((p) => p.duration)
+  const onKeyDown = useListNav(durationKeys, tap)
   const maxWatts = list.length > 0 ? Math.max(...list.map((p) => p.watts)) : 0
   const showPct = list.some((p) => p.percentOfSeasonBest != null)
   const totalPresent = isPresent(total)
@@ -82,7 +107,15 @@ export default function PeakRows({ total, peaks }: { total: Value<PeakTotal>; pe
   const showTotalReason = !totalPresent && present
 
   return (
-    <section ref={ref} data-peak-rows style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <section
+      ref={ref}
+      data-peak-rows
+      role="group"
+      aria-label={t('peakRowsAriaLabel')}
+      tabIndex={durationKeys.length > 0 ? 0 : undefined}
+      onKeyDown={durationKeys.length > 0 ? onKeyDown : undefined}
+      style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}
+    >
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-mid)' }}>
           {t('peakRowsCaption')}
@@ -134,7 +167,7 @@ export default function PeakRows({ total, peaks }: { total: Value<PeakTotal>; pe
                 <div
                   data-peak-row={p.duration}
                   onClick={() => tap.toggle(p.duration)}
-                  style={{ width: '100%', display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}
+                  style={{ width: '100%', minHeight: TOUCH_TARGET_MIN, display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}
                 >
                   <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1, color: selected ? 'var(--e-ink)' : 'var(--e-mid)', width: 44 }}>
                     {p.duration}
