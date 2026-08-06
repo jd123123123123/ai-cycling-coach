@@ -163,4 +163,70 @@ describe('SessionDetailPage — section composition', () => {
     // The CTA and its honest label still render even with no session data.
     expect(screen.getByRole('button', { name: /workout exportieren/i })).toBeTruthy()
   })
+
+  // ---- Bug fix (2026-08-06): the withheld hero numeral -----------------
+  // Same defect, same fix as Today's own MetricTrack (commit 5f98a62): a
+  // "—" scaled to the 104px hero slot read as a solid grey rectangle, not
+  // as "no session." The missing arm now composes a small dot + headline
+  // instead, and never prints the literal em dash character at hero size.
+  it('never renders a bare "—" in the hero numeral slot — the missing state is a composed dot + headline', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <SessionDetailView model={emptyModel} />
+      </MemoryRouter>,
+    )
+    const heroNumeral = container.querySelector('[data-hero-numeral]')
+    expect(heroNumeral).not.toBeNull()
+    expect(heroNumeral!.textContent).not.toBe('—')
+    expect(heroNumeral!.textContent).toContain('Für heute nichts geplant.')
+  })
+
+  it('renders the real numeral text (no dash, no reason) in the hero slot when a session exists', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <SessionDetailView model={fullModel} />
+      </MemoryRouter>,
+    )
+    const heroNumeral = container.querySelector('[data-hero-numeral]')
+    expect(heroNumeral!.textContent).toBe('4×8')
+  })
+
+  // ---- Design pass (2026-08-06): dedupe reasons screen-wide, not per ---
+  // section. With no session at all, the numeral/claim/every hero stat/the
+  // "01 The Blocks" fallback all share the identical "nothing planned"
+  // reason — it must print exactly once (on the hero numeral, this screen's
+  // most prominent slot), never once per slot.
+  it('prints the shared "nothing planned" reason exactly once across the whole screen', () => {
+    render(
+      <MemoryRouter>
+        <SessionDetailView model={emptyModel} />
+      </MemoryRouter>,
+    )
+    expect(screen.getAllByText(/für heute nichts geplant/i).length).toBe(1)
+  })
+})
+
+describe('SessionDetailPage — header spine', () => {
+  const identity = { streakDays: 12, avatarUrl: null, avatarInitial: 'J' }
+
+  it('shows no avatar or streak when identity is absent — matches a fixture render with no auth', () => {
+    render(
+      <MemoryRouter>
+        <SessionDetailView model={fullModel} />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByLabelText(/mein profil/i)).toBeNull()
+  })
+
+  it('shows the same date · streak · avatar identity strip Today carries, reconciling the two headers', () => {
+    render(
+      <MemoryRouter>
+        <SessionDetailView model={fullModel} identity={identity} />
+      </MemoryRouter>,
+    )
+    expect(screen.getByLabelText(/mein profil/i)).toBeTruthy()
+    expect(screen.getByText('12 TAGE')).toBeTruthy()
+    // The back affordance a detail view needs is still there alongside it.
+    expect(screen.getByRole('button', { name: /back/i })).toBeTruthy()
+  })
 })

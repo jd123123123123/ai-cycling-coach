@@ -311,24 +311,37 @@ export function buildSessionModel(inputs: SessionModelInputs): SessionModel {
   // transient one this task can safely fabricate.
   const payoffClaim: Value<string> = missing(t('payoffClaimMissing'))
 
-  // ON YOU / ON THE PLAN — identical derivation to `TodayModel.whatThisChanges`
-  // (adaptations + post-ride review, never `outlook_7d`, which is a
-  // different claim entirely).
+  // ON YOU / ON THE PLAN — same bug, same fix as `TodayModel.whatThisChanges`
+  // (useTodayModel.ts, commit 5f98a62: "the withheld hero is designed, not a
+  // grey bar"). The old derivation let `onThePlan` fall back to
+  // `adaptations.summary` whenever there was no post-ride review — but
+  // `onYou`'s OWN fallback, when there was no post-ride review either, was
+  // ALSO `adaptations!.summary` (via the non-null assertion). Session Detail
+  // has no post-ride review on a day the session hasn't happened yet (the
+  // ordinary case for a session someone is looking at before riding it), so
+  // both rows silently printed the identical `adaptations.summary` sentence
+  // under two different labels — "ON YOU" and "ON THE PLAN" read as two
+  // independent findings that were actually one. Same fix as Today: `onYou`
+  // has exactly two real sources (the post-ride physiological read, or a
+  // genuine per-signal `AdaptationChange`) and is NEVER backfilled from the
+  // plan's own summary, which is a different claim (what the PLAN does, not
+  // what the athlete's body does). The whole block renders only once BOTH
+  // sides have a real, distinct claim — otherwise it is honestly missing
+  // rather than showing a duplicate.
   const adaptations = brief?.adaptations ?? null
   const postRideReview = brief?.post_ride_review ?? null
+  const firstChange = adaptations?.changes[0] ?? null
+  const onYouClaim = postRideReview?.physiological_read ?? firstChange?.detail ?? null
+  const onYouDetail = postRideReview?.goal_trajectory ?? firstChange?.action ?? firstChange?.principle ?? null
+  const onThePlanClaim = adaptations?.summary ?? postRideReview?.next_session_nudge ?? null
+  const onThePlanDetail = postRideReview?.next_session_nudge ?? firstChange?.detail ?? adaptations?.summary ?? null
   const whatThisChanges = fromNullable(
-    adaptations == null && postRideReview == null ? null : {
-      onYou: {
-        claim: postRideReview?.physiological_read ?? adaptations!.summary,
-        detail: postRideReview?.goal_trajectory ?? adaptations!.changes[0]?.detail ?? adaptations!.summary,
-      },
-      onThePlan: {
-        claim: adaptations?.summary ?? postRideReview!.next_session_nudge,
-        detail: postRideReview?.next_session_nudge
-          ?? adaptations!.changes[0]?.detail
-          ?? adaptations!.summary,
-      },
-    },
+    onYouClaim != null && onYouDetail != null && onThePlanClaim != null && onThePlanDetail != null
+      ? {
+        onYou: { claim: onYouClaim, detail: onYouDetail },
+        onThePlan: { claim: onThePlanClaim, detail: onThePlanDetail },
+      }
+      : null,
     t('whatThisChangesMissing'),
   )
 
