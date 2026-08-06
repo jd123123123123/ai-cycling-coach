@@ -100,6 +100,65 @@ Rules that follow from German being longer than English:
 - Decimal comma in German numeric formatting (`52,4 KM`), via
   `toLocaleString('de-DE')` — not a hand-rolled replace.
 
+### The design pass — measured 2026-08-06 in the running app
+
+The screens were **transcribed, not designed**. They reproduce a static mock
+faithfully — including the mock's caption density — and then add a reason line
+under every empty slot. Measured on one real screen at 390×844:
+
+| Symptom | Measured |
+|---|---|
+| Distinct type steps | **22** (a scale is 6–8) |
+| Elements at ≤9px | **42** |
+| `Heute noch keine Fahrt erfasst.` | printed **3×** on one screen |
+| `Signale stabil seit gestern…` | printed **2×** |
+| Photographic plate inset | 24px, with 0 above the text |
+
+A mock is read at 2× on a designer's monitor. This is read at 390px, one-handed,
+possibly in sunlight. 9px/800 uppercase at 1.7 tracking does not survive that
+translation, and forty-two of them is not an editorial device — it is noise.
+
+**1. One type scale, seven steps, floor 11px.** Tokens in `tokens.css`; nothing
+outside them.
+
+```
+--t-display 146/800/-9    the hero numeral — the signature, untouched
+--t-title    34/800/-1    section statements ("Fitness gesunken um 2.")
+--t-lead     22/800/-0.5  secondary numerals, stat tiles
+--t-body     15/500       prose. Currently 12–14 — too small to read comfortably
+--t-label    12/800/1.4   uppercase eyebrows. Was 9. This is the big one
+--t-micro    11/700/0.8   FLOOR. Units and deltas only, never a sentence
+```
+
+The small uppercase eyebrow is the pen's real editorial signature — keep the
+device, raise the floor, and **cut the count**. Fewer, larger labels read as
+confident; forty-two tiny ones read as a spreadsheet.
+
+**2. Air around photography.** Full-bleed plates get `32px` horizontal inset and
+at least `40px` above the first line. Text pressed to a photo edge looks like a
+crop accident. The pen's 24 is a mock value measured on a monitor.
+
+**3. Cut the scaffolding.** Delete any line that explains *what a chart is*
+rather than *what it says*. `Fitness, Ermüdung und Form aus dem rollierenden
+42-Tage-Modell.` is a data-source footnote; the statement above it already says
+`Fitness gesunken um 2. Form gespart.` — which is the actual finding. One
+sentence per section, and it must carry information.
+
+**4. Dedupe reasons across the whole screen, not per section.** Three identical
+apologies is the screen apologising for itself. One reason, once, at its first
+occurrence.
+
+**5. Find the win.** The pen's mock is full of payoffs — `A NEW 12-MINUTE
+RECORD`, `hardest session in 18 days`. Real data renders those as dashes, so
+the live screen is all scaffolding and no reward. With 89 activities there is
+always something true and good to say: a streak, a week's load, a fitness
+trend, a personal best. **Never invent one** — but do go looking, and give the
+best true thing on the screen real visual weight. That is where the dopamine
+lives, and it is honest.
+
+**6. One header spine.** Every screen opens identically: date · streak · avatar,
+then the Day Rail. Same heights, same insets, same type, no per-screen variants.
+
 ### Motion — every chart animates, nothing is flat and dead
 
 Owner's ruling, 2026-08-05. Charts must feel alive on open and respond to touch.
