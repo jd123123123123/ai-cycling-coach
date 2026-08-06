@@ -234,15 +234,35 @@ describe('weekLoad and phaseContext', () => {
   } as unknown as WeekResponse
 
   it('sums the present days against the plan total', () => {
-    const model = buildTodayModel(base({ weekPlan }))
+    // base()'s `now` is Wed 22 Jul 2026, so the current Mon-Sun week is
+    // 2026-07-20..26. Real PMC entries for three of those seven days; the
+    // other four days get no entry at all (genuinely missing, not a zero).
+    // A fourth entry sits on 2026-07-27 — one day PAST the current week —
+    // to prove the sum is scoped to the seven matched days, not every
+    // entry the fixture happens to carry.
+    const model = buildTodayModel(base({
+      weekPlan,
+      pmc: {
+        entries: [
+          { date: '2026-07-20', ctl: 50, atl: 45, tsb: 5, tss: 64 }, // Mon, in week
+          { date: '2026-07-21', ctl: 50, atl: 45, tsb: 5, tss: 48 }, // Tue, in week
+          { date: '2026-07-24', ctl: 50, atl: 45, tsb: 5, tss: 24 }, // Fri, in week
+          { date: '2026-07-27', ctl: 50, atl: 45, tsb: 5, tss: 999 }, // next Mon, OUTSIDE the week
+        ],
+      } as never,
+    }))
     expect(isPresent(model.weekLoad)).toBe(true)
     if (!isPresent(model.weekLoad)) return
-    // base()'s PMC entries carry the only real per-day loads; a day with no
-    // entry contributes nothing rather than a zero that flatters the week.
     expect(model.weekLoad.value.planned).toBe(420)
-    expect(model.weekLoad.value.spent).toBe(
-      model.week.reduce((sum, d) => sum + (isPresent(d.tss) ? d.tss.value : 0), 0),
-    )
+    // Hand-computed literal — only the three in-week days' real tss, typed
+    // out — NOT re-derived from model.week.reduce(...), which would just
+    // check the implementation against itself.
+    expect(model.weekLoad.value.spent).toBe(136)
+    // The fourth entry (999 TSS, dated one day past the week) is
+    // deliberately large: if the implementation ever summed every PMC
+    // entry instead of only the seven matched, dated days, spent would
+    // land near 1135, not 136 — this assertion would catch that.
+    expect(model.weekLoad.value.spent).toBeLessThan(999)
   })
 
   it('withholds the meter rather than inventing a denominator', () => {
