@@ -470,6 +470,30 @@ export const COPY = {
   heroReadinessContext90Best: { de: 'Dein 90-Tage-Bestwert', en: 'Your 90-day best' },
   heroRecoveryRange90Off: { de: '{n} unter deiner 90-Tage-Bestmarke', en: '{n} off your 90-day peak' },
   heroRecoveryRange90Best: { de: 'Spitze deiner 90-Tage-Spanne', en: 'Top of your 90-day range' },
+
+  // ---- Editorial II audit (a2, 2026-08-06): Evening's "01 Today" trio -----
+  // (`cx4zJ`/`I7AqeN`+`ppDu5`+`j7KHFv`, "WHAT IT MOVED · LAST 7 DAYS") — real
+  // section confirmed present in the pen, previously unbuilt. See
+  // audit-a2-resting-evening.md for the full record.
+  movedKeyHeading: { de: 'WAS SICH BEWEGT HAT · LETZTE 7 TAGE', en: 'WHAT IT MOVED · LAST 7 DAYS' },
+  trioTrainingLoad: { de: 'TRAININGSBELASTUNG', en: 'TRAINING LOAD' },
+  trioTrainingLoadCaption: { de: '{rank} GRÖSSTER TAG DIESE WOCHE', en: '{rank} BIGGEST DAY THIS WEEK' },
+  trioFatigueCaptionRising: { de: 'STEIGEND', en: 'CLIMBING' },
+  trioFatigueCaptionEasing: { de: 'SINKEND', en: 'EASING' },
+  trioFatigueCaptionSteady: { de: 'STABIL', en: 'STEADY' },
+  trioRestingHrCaption: { de: 'HEUTE MORGEN GEMESSEN', en: 'MEASURED THIS MORNING' },
+  trioRestingHrHistoryMissing: {
+    de: 'Kein 7-Tage-Verlauf für den Ruhepuls verfügbar.',
+    en: 'No 7-day resting-HR history available.',
+  },
+
+  // ---- Editorial II audit (a3, 2026-08-06): Session Detail `01 The Blocks`
+  // Programme column header row (`MnBvu`/`j3uhOg`, `H-STEP`/`H-TIME`/
+  // `H-WATTS`) — present in the pen, previously unbuilt in
+  // `SessionBlocks.tsx`. See audit-a3-session-sheets.md.
+  colStep: { de: 'SCHRITT', en: 'STEP' },
+  colTime: { de: 'ZEIT', en: 'TIME' },
+  colWatts: { de: 'WATT', en: 'WATTS' },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY

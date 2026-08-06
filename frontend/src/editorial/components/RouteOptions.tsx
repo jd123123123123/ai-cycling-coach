@@ -76,7 +76,9 @@ import { intlLocale } from '../i18n/copy'
  */
 
 const SKETCH_WIDTH = 390
-const SKETCH_HEIGHT = 148
+// AUDIT (a3, 2026-08-06): the pen's own Plate (`tEq8r`) is 236px tall, not
+// 148 — was rendering the track area at nearly two-thirds the pen's height.
+const SKETCH_HEIGHT = 236
 
 export default function RouteOptions({ routes }: { routes: Value<RouteOption[]> }) {
   const { t } = useCopy()
@@ -207,7 +209,9 @@ function RouteCard({
       </div>
 
       {!isLast && (
-        <div style={{ width: '100%', padding: '30px 24px' }}>
+        // AUDIT (a3, 2026-08-06): pen's Divider (`CvKfF`) padding is [36,24]
+        // (top/bottom 36), not 30.
+        <div style={{ width: '100%', padding: '36px 24px' }}>
           <div style={{ width: '100%', height: 1, background: 'var(--e-rule)' }} />
         </div>
       )}

@@ -104,6 +104,27 @@ function SessionDetailBody({ model, onBack }: { model: SessionModel; onBack: () 
   )
 }
 
+/**
+ * AUDIT (a3, 2026-08-06) against `J5FV6`'s own `Hero`/`eShIQ`:
+ *
+ *  - `Kicker` (`tPNdr`) is TWO texts, space-between: `K-Left` ("TONIGHT ·
+ *    INTERVAL SESSION", rendered below as `sessionKicker`) AND `K-Right`
+ *    ("STARTS IN 3 H 12", a countdown to the workout's scheduled start).
+ *    `K-Right` has no source: `PrescribedWorkout` (`api/coach.ts`) carries
+ *    no scheduled time-of-day at all — the coach prescribes a session, not
+ *    a start time — so there is nothing to count down to. Permanently
+ *    unresolvable, never rendered (the same "no plausible substitute" rule
+ *    `RouteOptions.tsx` follows for its own missing fields).
+ *  - `Cover` (`bGbru`) is a full-bleed stock photo of a workout with a
+ *    ground-tinted scrim over it. This app has no session-specific image
+ *    field, and `QuotePlate`/`Cover`'s own resolution elsewhere in this
+ *    design system (see `RouteOptions.tsx`'s doc comment) is "scrim over
+ *    ground, never a stock photo standing in for real content" — Session
+ *    Detail's own Hero already follows that resolution by omitting the
+ *    photo entirely and letting `EditorialRoot`'s state ground
+ *    (`--g-training`) show through, consistent rather than a fresh
+ *    departure.
+ */
 function Hero({ model }: { model: SessionModel }) {
   const { t } = useCopy()
   const { numeral, claim } = model
@@ -130,9 +151,9 @@ function Hero({ model }: { model: SessionModel }) {
             data-hero-numeral=""
             style={{
               fontFamily: 'var(--e-display)',
-              fontSize: 88,
+              fontSize: 104,
               fontWeight: 800,
-              letterSpacing: -5,
+              letterSpacing: -6,
               lineHeight: 0.86,
               color: isPresent(numeral) ? 'var(--st-active)' : 'var(--e-lo)',
               filter: isPresent(numeral) ? 'drop-shadow(0 0 44px var(--a22))' : undefined,
@@ -141,7 +162,7 @@ function Hero({ model }: { model: SessionModel }) {
             {isPresent(numeral) ? numeral.value.text : '—'}
           </span>
           {isPresent(numeral) && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 16 }}>
               {numeral.value.qualifier && (
                 <span style={{ fontFamily: 'var(--e-body)', fontSize: 13, fontWeight: 800, letterSpacing: 1.5, color: 'var(--st-active)' }}>
                   {numeral.value.qualifier}
@@ -202,7 +223,13 @@ function Payoff({ model, payoffBlocks }: { model: SessionModel; payoffBlocks: Ba
 
   return (
     <div style={{ width: '100%', padding: '40px 24px 0 24px', display: 'flex', flexDirection: 'column' }}>
-      <SecHead index="03" title={t('sectionThePayoff')} chip={t('chipNext7Days')} />
+      {/* AUDIT (a3, 2026-08-06): `S4Hzi/KAfbw` reads 12px Inter/800/ls1.6
+          $e-mid ("THE PAYOFF"), not N42va's canonical 19px Sora display
+          title — the same small-caps kicker style `04 WHERE TO RIDE IT`
+          already uses (`RouteOptions.tsx`'s own `kicker` prop). Its Chip
+          (`S4Hzi/sn3I7`) is also flat `#FFFFFF12`/`$e-mid` label, not the
+          accent-tinted default — matching `kicker`'s own chip styling. */}
+      <SecHead index="03" title={t('sectionThePayoff')} chip={t('chipNext7Days')} kicker />
 
       <div style={{ width: '100%', padding: '14px 0 24px 0' }}>
         <p style={{

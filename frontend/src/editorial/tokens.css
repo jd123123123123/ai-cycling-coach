@@ -60,6 +60,7 @@
    *   a07 = 0x12   a12 = 0x1F   a28 = 0x47   a40 = 0x66  */
   --st-a07: color-mix(in srgb, var(--st-active) 7%, transparent);
   --st-a12: color-mix(in srgb, var(--st-active) 12%, transparent);
+  --st-a16: color-mix(in srgb, var(--st-active) 16%, transparent);
   --st-a28: color-mix(in srgb, var(--st-active) 28%, transparent);
   --st-a40: color-mix(in srgb, var(--st-active) 40%, transparent);
 
