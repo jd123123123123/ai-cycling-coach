@@ -9,13 +9,11 @@ import SecHead from '../components/SecHead'
 import SessionBlocks from '../components/SessionBlocks'
 import SessionCta from '../components/SessionCta'
 import StatTile from '../components/StatTile'
-import StatusBar from '../components/StatusBar'
 import WhatThisChanges from '../components/WhatThisChanges'
 import EditorialRoot from '../EditorialRoot'
 import { isPresent, type Value } from '../data/value'
 import { useSessionModel, type SessionModel } from '../data/useSessionModel'
 import { useCopy } from '../i18n/useCopy'
-import { intlLocale } from '../i18n/copy'
 
 /**
  * Session Detail (pen `J5FV6`), transcribed as a pure function of an
@@ -25,7 +23,13 @@ import { intlLocale } from '../i18n/copy'
  *
  * PEN-VERIFIED ORDER (2026-08-05 re-read, `J5FV6`'s direct children):
  * StatusBar → Nav → Hero (Cover + Hero Body) → `01 The Blocks` → Quote Plate
- * → `03 THE PAYOFF` → `04 WHERE TO RIDE IT` → CTA. The brief's own copy of
+ * → `03 THE PAYOFF` → `04 WHERE TO RIDE IT` → CTA. StatusBar is the pen's own
+ * mock iOS chrome (topbar task: deleted, a real phone already draws its own —
+ * see `components/DayRail.tsx`'s topbar-task doc comment for the sibling
+ * change on Today). `J5FV6`'s own Nav (`tT4p8`) carries no avatar slot at
+ * all (fresh re-read, topbar task) — unlike Today's Cover Meta row
+ * (`bUuzT`/`ToC54`), so Session Detail does not grow a profile avatar; its
+ * own Nav (back + title + date) is unchanged. The brief's own copy of
  * this tree names a `02 HOW TO RIDE IT` section between `01` and the Quote
  * Plate — the live tree has no such section; the pen wins. `04 WHERE TO
  * RIDE IT` DOES render now (`components/RouteOptions.tsx`) — see
@@ -59,9 +63,8 @@ export function SessionDetailView({ model, onBack }: { model: SessionModel; onBa
 }
 
 function SessionDetailBody({ model, onBack }: { model: SessionModel; onBack: () => void }) {
-  const { t, locale } = useCopy()
+  const { t } = useCopy()
 
-  const timeLabel = new Date().toLocaleTimeString(intlLocale(locale), { hour: '2-digit', minute: '2-digit' })
   const dateLabel = isPresent(model.dateLabel) ? model.dateLabel.value : '—'
 
   const payoffBlocks: BarsBlock[] = isPresent(model.payoff)
@@ -74,8 +77,6 @@ function SessionDetailBody({ model, onBack }: { model: SessionModel; onBack: () 
 
   return (
     <main data-session-detail="">
-      <StatusBar time={timeLabel} />
-
       <div style={{ width: '100%', padding: '4px 24px 0 24px' }}>
         <NavHeader title={t('navSessionTitle')} date={dateLabel} onBack={onBack} />
       </div>

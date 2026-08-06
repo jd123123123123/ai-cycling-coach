@@ -580,9 +580,21 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   }
 }
 
-/** Assembles inputs from the live hooks and returns the pure model. */
-export function useTodayModel(): TodayModel {
-  const { state } = useDayState()
+/**
+ * Assembles inputs from the live hooks and returns the pure model.
+ *
+ * `stateOverride` lets a caller that already owns its own `useDayState()`
+ * instance (`TodayPage`, so it can also read `derived`/`isPreviewing`/
+ * `preview` for the Day Rail's browsing feature) drive this hook's `state`
+ * from that SAME instance, rather than this hook calling `useDayState()`
+ * again internally — two independent hook instances would each hold their
+ * own `previewState`, so a preview set on one would never be visible on the
+ * other. When omitted (every existing call site), this hook still derives
+ * its own state exactly as before.
+ */
+export function useTodayModel(stateOverride?: DayState): TodayModel {
+  const { state: ownState } = useDayState()
+  const state = stateOverride ?? ownState
   const { locale } = useCopy()
   const now = useMemo(() => new Date(), [])
   const yesterday = useMemo(() => { const d = new Date(now); d.setDate(d.getDate() - 1); return d }, [now])

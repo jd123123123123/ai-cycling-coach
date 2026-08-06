@@ -494,6 +494,18 @@ export const COPY = {
   colStep: { de: 'SCHRITT', en: 'STEP' },
   colTime: { de: 'ZEIT', en: 'TIME' },
   colWatts: { de: 'WATT', en: 'WATTS' },
+
+  // ---- Topbar task: the Day Rail becomes browsable (components/DayRail.tsx,
+  // pages/TodayView.tsx) — tapping/swiping to a step PREVIEWS that state
+  // without writing the athlete's real day override. This chip is the one
+  // "you're just looking" affordance, shown only while a preview is active.
+  dayRailPreviewChip: { de: 'VORSCHAU · ZURÜCK ZU HEUTE', en: 'PREVIEW · BACK TO TODAY' },
+  dayRailPreviewAria: { de: 'Vorschau verlassen und zu heute zurückkehren', en: 'Exit preview and return to today' },
+
+  // ---- Topbar task: the real profile header (components/ProfileAvatar.tsx),
+  // the Cover Meta row's Avatar (bUuzT/ToC54) — links to /profile, matching
+  // DashboardHeaderBar's own rider-profile avatar.
+  profileAvatarAria: { de: 'Mein Profil', en: 'My profile' },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY

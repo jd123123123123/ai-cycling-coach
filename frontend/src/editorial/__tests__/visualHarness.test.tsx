@@ -356,7 +356,12 @@ function writeSessionDetailHarness() {
 /** `HARNESS_OUT=/tmp/t10.html` writes trained to that exact path and every
  *  other state alongside it as `/tmp/t10.<state>.html`. */
 function writeHarness(name: 'trained' | 'rest' | 'training' | 'resting' | 'evening', m: TodayModel) {
-  const { container } = render(<MemoryRouter><TodayView model={m} /></MemoryRouter>)
+  // Topbar task: `profile` is optional (no auth/backend in the harness), but
+  // wiring a placeholder here is what lets the harness actually show the
+  // Meta row's avatar for a visual check — a real page always supplies it.
+  const { container } = render(
+    <MemoryRouter><TodayView model={m} profile={{ avatarUrl: null, initial: 'J' }} /></MemoryRouter>,
+  )
   const tokens = readFileSync(path.join(__dirname, '..', 'tokens.css'), 'utf8')
   const base = OUT!.endsWith('.html') ? OUT!.slice(0, -5) : OUT!
   const finalPath = name === 'trained' ? OUT! : `${base}.${name}.html`

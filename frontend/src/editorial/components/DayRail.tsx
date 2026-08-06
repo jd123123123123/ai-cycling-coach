@@ -1,7 +1,9 @@
-import { ArrowLeftRight, Undo2 } from 'lucide-react'
-import type { DayState } from '../state/dayState'
+import { ArrowLeftRight, Undo2, X } from 'lucide-react'
+import { useEffect, useState, type CSSProperties } from 'react'
+import { dayRailStepTargets, type DayState } from '../state/dayState'
 import { useCopy } from '../i18n/useCopy'
 import type { CopyKey } from '../i18n/copy'
+import { MOTION_DURATION_MS, MOTION_EASE, prefersReducedMotion } from '../motion/useReveal'
 
 /**
  * IMPORTANT DEVIATION FROM THE BRIEF — read before touching this file.
@@ -39,13 +41,36 @@ import type { CopyKey } from '../i18n/copy'
  *     added specifically for this value — it is a distinct hex in the tree,
  *     darker than --e-lo, not a near-miss that --e-lo should stand in for.
  *
- * The root frame's own fill (#0A0B05 / #05100A / #120B05 / #051012 /
- * #0A0816 across the five instances) is an EXACT match for --g-rest /
- * --g-training / --g-trained / --g-resting / --g-evening respectively —
- * i.e. the rail is painted with var(--e-ground), the same ground
- * EditorialRoot already binds. It carries no padding of its own (matches
- * EditorialRoot's "every section pads itself" convention) and no width —
- * it is meant to fill a 24px-padded parent.
+ * CORRECTED (topbar task, owner ruling "make sure the bar has a transparent
+ * and not black background"): an earlier pass read the root frame's own
+ * fill (#0A0B05 / #05100A / #120B05 / #051012 / #0A0816 — an EXACT match for
+ * --g-rest / --g-training / --g-trained / --g-resting / --g-evening) and
+ * painted THIS component with `background: var(--e-ground)`. That match is
+ * real, but it describes `bUuzT` the FRAME's own background — the same
+ * frame whose Meta row and DayRail sit ON TOP of a full-bleed photo (see
+ * `Cover.tsx`'s own doc comment on the photographic stack). Painting DayRail
+ * itself opaque put a solid ground-coloured bar between the athlete and the
+ * cover photo, at exactly the strip where the pen shows the photo showing
+ * through. `Cover` already renders that same ground colour as its own base
+ * layer (`background: var(--e-ground)` on the Cover root, task 10.5) for the
+ * no-photo case — DayRail doesn't need to repaint it, and must not, so the
+ * photo is never blocked when one exists. This component is now transparent;
+ * it carries no padding of its own (matches EditorialRoot's "every section
+ * pads itself" convention) and no width — it is meant to fill a 24px-padded
+ * parent (`Cover`, its only real caller).
+ *
+ * Topbar task — browsing: the four steps are now real buttons. Tapping one
+ * (or swiping the screen body left/right, see `pages/TodayView.tsx`'s own
+ * `useSwipeStep`) calls `onStepSelect` with that step's target `DayState` —
+ * wired by the page to `useDayState().preview`, which OVERLAYS `state`
+ * without writing the stored override (`setOverride`). That is the whole
+ * reason browsing can never change the athlete's real day: `preview` is a
+ * plain React state value, gone on reload, never touching `localStorage`.
+ * Step 0 (day type) is shared by two real states — `dayRailStepTargets`
+ * below resolves it from `derived` (the REAL, non-overridden day, per
+ * `useDayState()`), not from whatever is currently being previewed, so
+ * tapping "back" to step 0 from LIGHTS OUT always lands on the day's own
+ * actual type rather than a guess.
  *
  * The "DAY STATE" header + swap action (r3xsHB) is `enabled: false` in
  * every one of the five real flagship instances — every real Today screen
@@ -82,14 +107,43 @@ const SWITCH_ACTION_KEY: Record<DayState, { labelKey: CopyKey; icon: 'swap' | 'u
   evening: { labelKey: 'dayRailBackToDone', icon: 'undo' },
 }
 
+const resetButton: CSSProperties = {
+  appearance: 'none',
+  background: 'transparent',
+  border: 'none',
+  padding: 0,
+  margin: 0,
+  font: 'inherit',
+  color: 'inherit',
+  textAlign: 'left',
+  cursor: 'pointer',
+}
+
 export default function DayRail({
   state,
+  derived = state,
   showSwitchAction = false,
   onSwapDayType,
+  onStepSelect,
+  isPreviewing = false,
+  onExitPreview,
 }: {
   state: DayState
+  /** The day's real, non-overridden state (`useDayState().derived`). Only
+   *  affects which of 'rest'/'training' step 0 targets — defaults to `state`
+   *  so a caller that has no browsing feature (e.g. the standalone chrome
+   *  test) doesn't need to supply it separately. */
+  derived?: DayState
   showSwitchAction?: boolean
   onSwapDayType?: () => void
+  /** Called with a step's target state when the athlete taps it. Omit to
+   *  render the steps as inert (no browsing control wired). */
+  onStepSelect?: (next: DayState) => void
+  /** True while a browsed (non-real) state is being shown — see
+   *  `useDayState().isPreviewing`. Shows the dismissible preview chip. */
+  isPreviewing?: boolean
+  /** Clears the preview, returning to the athlete's real day. */
+  onExitPreview?: () => void
 }) {
   const { t } = useCopy()
   const activeIndex = ACTIVE_INDEX[state]
@@ -99,11 +153,12 @@ export default function DayRail({
     t('dayRailRecovery'),
     t('dayRailLightsOut'),
   ]
+  const targets = dayRailStepTargets(derived)
   const action = SWITCH_ACTION_KEY[state]
   const ActionIcon = action.icon === 'swap' ? ArrowLeftRight : Undo2
 
   return (
-    <div style={{ width: '100%', background: 'var(--e-ground)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
       {showSwitchAction && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
           <span
@@ -156,13 +211,17 @@ export default function DayRail({
           const tickHeight = isActive ? 6 : 2
           const labelColor = isActive ? 'var(--st-active)' : isCompleted ? 'var(--e-mid)' : 'var(--e-off)'
           return (
-            <div
+            <button
               key={key}
+              type="button"
               data-step={key}
               data-active={String(isActive)}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}
+              aria-current={isActive ? 'step' : undefined}
+              aria-label={labels[i]}
+              onClick={() => onStepSelect?.(targets[i])}
+              style={{ ...resetButton, flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}
             >
-              <div style={{ height: 6, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+              <div style={{ height: 6, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                 <div
                   style={{
                     width: '100%',
@@ -184,10 +243,69 @@ export default function DayRail({
               >
                 {labels[i]}
               </span>
-            </div>
+            </button>
           )
         })}
       </div>
+      {isPreviewing && (
+        <div style={{ paddingTop: 12 }}>
+          <PreviewChip onExit={onExitPreview} />
+        </div>
+      )}
     </div>
+  )
+}
+
+/** The "you're just looking" affordance (topbar task) — shown only while
+ *  `preview()` is overlaying a state other than the athlete's real one. A
+ *  quiet, dismissible chip, never a modal or a banner: tapping it clears the
+ *  preview via `onExitPreview` (`useDayState().preview(null)`), so the
+ *  athlete can never mistake browsing for a real day-state change. Reuses
+ *  `motion/useReveal.ts`'s `prefersReducedMotion`/duration/ease primitives
+ *  for its own entrance rather than a bespoke transition. */
+function PreviewChip({ onExit }: { onExit?: () => void }) {
+  const { t } = useCopy()
+  const [reduced] = useState(prefersReducedMotion)
+  const [shown, setShown] = useState(reduced)
+
+  useEffect(() => {
+    if (reduced) return
+    const id = requestAnimationFrame(() => setShown(true))
+    return () => cancelAnimationFrame(id)
+  }, [reduced])
+
+  return (
+    <button
+      type="button"
+      data-preview-chip
+      onClick={onExit}
+      aria-label={t('dayRailPreviewAria')}
+      style={{
+        ...resetButton,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '6px 11px',
+        borderRadius: 'var(--radius-pill)',
+        background: 'var(--st-a07)',
+        border: '1px solid var(--st-a28)',
+        opacity: shown ? 1 : 0,
+        transform: shown ? 'translateY(0)' : 'translateY(-4px)',
+        transition: reduced ? undefined : `opacity ${MOTION_DURATION_MS}ms ${MOTION_EASE}, transform ${MOTION_DURATION_MS}ms ${MOTION_EASE}`,
+      }}
+    >
+      <X size={11} color="var(--st-active)" aria-hidden="true" />
+      <span
+        style={{
+          fontFamily: 'var(--e-body)',
+          fontSize: 9,
+          fontWeight: 800,
+          letterSpacing: 1.2,
+          color: 'var(--st-active)',
+        }}
+      >
+        {t('dayRailPreviewChip')}
+      </span>
+    </button>
   )
 }

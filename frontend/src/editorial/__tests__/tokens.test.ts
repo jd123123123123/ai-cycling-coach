@@ -56,4 +56,8 @@ describe('EDITORIAL II tokens', () => {
       expect(css).toMatch(new RegExp(`${name}\\s*:\\s*color-mix\\(`, 'i'))
     }
   })
+
+  it('carries the Cover Meta row Avatar ring verbatim (topbar task)', () => {
+    expect(css).toMatch(/--e-avatar-ring\s*:\s*#FFFFFF29\b/i)
+  })
 })

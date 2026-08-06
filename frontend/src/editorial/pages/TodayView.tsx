@@ -14,13 +14,13 @@ import MetricTrack from '../components/MetricTrack'
 import { numeralFit } from '../components/numeralFit'
 import PeakRows, { type PeakTotal } from '../components/PeakRows'
 import PMCChart from '../components/PMCChart'
+import ProfileAvatar from '../components/ProfileAvatar'
 import QuotePlate from '../components/QuotePlate'
 import RangeRow from '../components/RangeRow'
 import SecHead from '../components/SecHead'
 import Statement from '../components/Statement'
 import SwitchDayTypeSheet from '../components/SwitchDayTypeSheet'
 import StatTile from '../components/StatTile'
-import StatusBar from '../components/StatusBar'
 import TabBar from '../components/TabBar'
 import TomorrowBand from '../components/TomorrowBand'
 import TomorrowPlate from '../components/TomorrowPlate'
@@ -31,10 +31,11 @@ import ZoneRows from '../components/ZoneRows'
 import { isPresent, mapValue, missing, present, type Value } from '../data/value'
 import type { PmcPoint, TodayModel } from '../data/useTodayModel'
 import EditorialRoot from '../EditorialRoot'
-import type { DayState } from '../state/dayState'
+import { dayRailStepTargets, type DayState } from '../state/dayState'
 import type { CSSProperties } from 'react'
 import { useCopy, type Copy } from '../i18n/useCopy'
 import { intlLocale } from '../i18n/copy'
+import { useSwipeStep } from '../motion/useSwipeStep'
 
 /**
  * The Today screen's layout, as a pure function of an already-assembled
@@ -43,8 +44,18 @@ import { intlLocale } from '../i18n/copy'
  * screens get looked at rather than merely type-checked.
  *
  * The spine every Today state shares:
- *   StatusBar → Hero (Meta → Day Rail → headline → numeral → context) →
- *   Hero Body → Insight Strip → numbered sections → Tomorrow → TabBar
+ *   Hero (Meta [date · streak · avatar] → Day Rail → headline → numeral →
+ *   context) → Hero Body → Insight Strip → numbered sections → Tomorrow →
+ *   TabBar
+ *
+ * Topbar task: the pen's own mock iOS StatusBar (`components/StatusBar.tsx`)
+ * is deleted — a real phone already draws its own — and the Cover's Meta
+ * row grows the avatar it was always missing (`components/ProfileAvatar.tsx`,
+ * real data via `TodayPage`'s `profile` prop). The Day Rail is also now
+ * browsable: tap a step or swipe the screen body left/right to READ any
+ * other state without changing the athlete's real day — see
+ * `components/DayRail.tsx`'s own doc comment and `state/useDayState.ts`'s
+ * `preview`.
  *
  * TRAINED (task 8/9, LdBJ4): the numeral is the day's TSS; the numbered
  * sections are "01 THE SESSION" / "02 THE COST" / "03 TRAJECTORY".
@@ -126,15 +137,41 @@ export interface DayStateControl {
   onPickDayType: (next: 'rest' | 'training') => void
   onConfirmSessionDone: () => void
   onCloseSheet: () => void
+  /** The day's real, non-overridden state (`useDayState().derived`) — lets
+   *  the Day Rail resolve step 0's day type while browsing away from it. */
+  derived: DayState
+  /** True while `onPreview` is overlaying a state other than the real one
+   *  (`useDayState().isPreviewing`). */
+  isPreviewing: boolean
+  /** Reads any other Today state WITHOUT changing the athlete's real day —
+   *  `useDayState().preview`. Pass `null` to return to the real state. This
+   *  is a strictly different action from `onPickDayType`/
+   *  `onConfirmSessionDone` above, which DO change the real day via
+   *  `setOverride`. */
+  onPreview: (next: DayState | null) => void
 }
 
 /** Only these states have a sheet behind the pill (see the plan's Task 13). */
 const SWITCHABLE = new Set(['rest', 'training', 'resting'])
 
-export default function TodayView({ model, control }: { model: TodayModel; control?: DayStateControl }) {
+/** The Cover Meta row's avatar (see `components/ProfileAvatar.tsx`) — data
+ *  enters as a prop from the page (`TodayPage`), never a hook read inside
+ *  this tree's presentational layer. Optional so the visual harness and any
+ *  fixture render (no auth, no backend) can omit it and simply show no
+ *  avatar, exactly like `control` being absent hides the DayRail's pill. */
+export interface ProfileHeaderData {
+  avatarUrl: string | null
+  initial: string
+}
+
+export default function TodayView({ model, control, profile }: {
+  model: TodayModel
+  control?: DayStateControl
+  profile?: ProfileHeaderData
+}) {
   return (
     <EditorialRoot state={model.state}>
-      <TodayViewBody model={model} control={control} />
+      <TodayViewBody model={model} control={control} profile={profile} />
       {control && (model.state === 'rest' || model.state === 'training') && (
         <SwitchDayTypeSheet
           open={control.openSheet === 'switch'}
@@ -154,9 +191,22 @@ export default function TodayView({ model, control }: { model: TodayModel; contr
   )
 }
 
-function TodayViewBody({ model, control }: { model: TodayModel; control?: DayStateControl }) {
+function TodayViewBody({ model, control, profile }: {
+  model: TodayModel
+  control?: DayStateControl
+  profile?: ProfileHeaderData
+}) {
   const { t, locale } = useCopy()
   const { state } = model
+  // Browsing (topbar task): swiping the screen body left/right moves one
+  // Day Rail step, exactly like tapping a step — both call `onPreview`,
+  // never `setOverride`. `dayRailStepTargets` is the SAME list DayRail
+  // itself uses for its own tap targets, so swipe and tap always agree on
+  // what "the next step" means. When there is no `control` (a fixture/
+  // harness render), `onSelect` below is a no-op — swiping does nothing,
+  // matching DayRail's own steps rendering inert without `onStepSelect`.
+  const stepTargets = dayRailStepTargets(control?.derived ?? state)
+  const swipe = useSwipeStep(stepTargets, state, (next) => control?.onPreview(next))
   const isRestOrTraining = state === 'rest' || state === 'training'
   // Resting (`h54Rs`) shares Rest's Tomorrow Band ("MORGEN"/"TOMORROW") but
   // has none of Rest/Training's "01 Recovery"/"02 Absorption"/"02 The
@@ -702,9 +752,11 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
   ]
 
   return (
-      <main data-day-state={state} style={{ display: 'flex', flexDirection: 'column' }}>
-        <StatusBar time={new Date().toLocaleTimeString(intlLocale(locale), { hour: '2-digit', minute: '2-digit' })} />
-
+      <main
+        data-day-state={state}
+        style={{ display: 'flex', flexDirection: 'column' }}
+        {...swipe}
+      >
         <Cover state={state} photoUrl={COVER_PHOTO[state]}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 22, width: '100%' }}>
             <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -736,13 +788,18 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
                     {isPresent(model.streakDays) ? t('heroStreakDays', { n: model.streakDays.value }) : '—'}
                   </span>
                 </div>
+                {profile && <ProfileAvatar avatarUrl={profile.avatarUrl} initial={profile.initial} />}
               </div>
             </div>
 
             <DayRail
               state={state}
+              derived={control?.derived ?? state}
               showSwitchAction={control != null && SWITCHABLE.has(state)}
               onSwapDayType={control?.onSwapDayType}
+              onStepSelect={control ? control.onPreview : undefined}
+              isPreviewing={control?.isPreviewing ?? false}
+              onExitPreview={control ? () => control.onPreview(null) : undefined}
             />
           </div>
 

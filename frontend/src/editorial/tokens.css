@@ -175,4 +175,10 @@
   --e-on-accent: #04060A;
   --e-sheet-switch-bg: #0E1006;
   --e-sheet-back-bg: #060F11;
+
+  /* Topbar task — the Cover Meta row's Avatar (bUuzT/ToC54, "date · streak ·
+   * avatar"): a 1px inner stroke, #FFFFFF29 verbatim — a distinct alpha stop
+   * from --e-rule (#FFFFFF1F) and --d-2 (#FFFFFF2B), not close enough to
+   * reuse either. */
+  --e-avatar-ring: #FFFFFF29;
 }

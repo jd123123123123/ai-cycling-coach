@@ -28,6 +28,23 @@ export function deriveDayState(f: DayFacts): DayState {
   return 'rest'
 }
 
+/**
+ * The Day Rail's own four browsable steps, in rail order, as the `DayState`
+ * each one targets (topbar task: `components/DayRail.tsx`,
+ * `pages/TodayView.tsx`). Step 0 (day type) is shared by 'rest'/'training' —
+ * resolved from `derived` (the day's REAL, non-overridden state), never from
+ * whatever is currently being previewed, so browsing back to step 0 always
+ * lands on the day's actual type rather than a guess. Lives here (not in
+ * `components/DayRail.tsx`) because it's a pure function of `DayState`, and
+ * `TodayView.tsx`'s own swipe gesture needs the exact same list DayRail's
+ * taps use — a component file can only export components (react-refresh
+ * fast-refresh rule), so a shared helper belongs in the state module both
+ * already depend on.
+ */
+export function dayRailStepTargets(derived: DayState): readonly [DayState, DayState, DayState, DayState] {
+  return [derived === 'rest' ? 'rest' : 'training', 'trained', 'resting', 'evening']
+}
+
 const KEY = 'editorial.dayState'
 
 /** Local ISO date (not UTC) — the override must expire at the athlete's midnight. */
