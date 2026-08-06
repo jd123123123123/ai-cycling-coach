@@ -37,31 +37,37 @@ export default function Verdict({
   headline,
   body,
 }: {
-  headline: Value<string>
+  /** Omitted where the hero above already carries the statement's headline —
+   *  Rest's and Training's hero bodies. An omitted headline renders nothing;
+   *  a MISSING one still renders its dash, because that is a reading we
+   *  expected and do not have. The two cases are not the same. */
+  headline?: Value<string>
   body: Value<string>
 }) {
-  const headlinePresent = isPresent(headline)
+  const headlinePresent = headline != null && isPresent(headline)
   const bodyPresent = isPresent(body)
   return (
     <div
       data-verdict
       style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', width: '100%' }}
     >
-      <p
-        style={{
-          fontFamily: 'var(--e-display)',
-          fontSize: 'var(--t-title)',
-          fontWeight: 800,
-          letterSpacing: -1,
-          lineHeight: 1.05,
-          textAlign: 'center',
-          color: 'var(--e-ink)',
-          margin: 0,
-          width: '100%',
-        }}
-      >
-        {headlinePresent ? headline.value : '—'}
-      </p>
+      {headline != null && (
+        <p
+          style={{
+            fontFamily: 'var(--e-display)',
+            fontSize: 'var(--t-title)',
+            fontWeight: 800,
+            letterSpacing: -1,
+            lineHeight: 1.05,
+            textAlign: 'center',
+            color: 'var(--e-ink)',
+            margin: 0,
+            width: '100%',
+          }}
+        >
+          {headlinePresent ? headline.value : '—'}
+        </p>
+      )}
       <p
         style={{
           fontFamily: 'var(--e-body)',

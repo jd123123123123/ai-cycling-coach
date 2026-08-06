@@ -140,13 +140,23 @@ describe('Session title resilience (pages/TodayView.tsx headlineFit)', () => {
   })
 
   it('the rendered hero headline uses a smaller font for the real long title than the short pen example', () => {
-    const { container } = render(<MemoryRouter><TodayView model={baseModel} /></MemoryRouter>)
-    // the same title also appears (at its own, unrelated size) in the
-    // Tomorrow/Today band lower on the page — scope to the hero itself
+    // Trained is the state whose headline IS the session name — Training's
+    // hero now carries the coach's statement instead (owner ruling: repeating
+    // the session there duplicated section 02 and the Day Rail).
+    const trainedModel: TodayModel = { ...baseModel, state: 'trained' }
+    const { container } = render(<MemoryRouter><TodayView model={trainedModel} /></MemoryRouter>)
     const cover = container.querySelector('[data-cover]')
     const headline = Array.from(cover!.querySelectorAll('span')).find((el) => el.textContent === 'MAP — 5×3min @ 110% FTP')
     expect(headline).toBeTruthy()
     expect(parseFloat(headline!.style.fontSize)).toBeLessThan(42)
+  })
+
+  it('Training\'s hero carries the coach statement, not a second copy of the session name', () => {
+    const { container } = render(<MemoryRouter><TodayView model={baseModel} /></MemoryRouter>)
+    const cover = container.querySelector('[data-cover]')!
+    const spans = Array.from(cover.querySelectorAll('span')).map((el) => el.textContent)
+    expect(spans).toContain('VO2 heute — du bist frisch')
+    expect(spans).not.toContain('MAP — 5×3min @ 110% FTP')
   })
 })
 

@@ -77,6 +77,7 @@ export default function RangeRow({
   band,
   delta,
   format,
+  showReason = true,
 }: {
   label: string
   value: Value<number>
@@ -84,6 +85,10 @@ export default function RangeRow({
   band: RangeBand | null
   delta?: number | null
   format?: (n: number) => string
+  /** False when the caller prints one shared reason for a group of rows.
+   *  Three rows fed by the same wearable print the same sentence three
+   *  times otherwise, which reads as the screen apologising to itself. */
+  showReason?: boolean
 }) {
   const { t } = useCopy()
   const { ref, on, reduced } = useReveal<HTMLDivElement>()
@@ -160,7 +165,7 @@ export default function RangeRow({
         </>
       )}
 
-      {!present && (
+      {!present && showReason && (
         <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: 0 }}>
           {value.missing}
         </p>

@@ -245,9 +245,14 @@ function TodayViewBody({ model, control, profile }: {
   // Rest's: a coaching statement about the evening ahead, not a session
   // title (the ride, if any, already happened) — so it reads the coach's
   // own verdict headline too.
-  const heroHeadline: Value<string> = state === 'rest' || state === 'resting' || state === 'evening'
-    ? mapValue(model.verdict, (v) => v.headline)
-    : sessionName
+  // OWNER RULING 2026-08-06: on a Trainingstag the hero used to repeat the
+  // session name, which section 02 ("DIE EINHEIT") already carries in full and
+  // the Day Rail already names — three sayings of one thing. The hero now
+  // carries the coach's own statement instead, like every other state except
+  // Trained (where the ride IS the day's headline).
+  const heroHeadline: Value<string> = state === 'trained'
+    ? sessionName
+    : mapValue(model.verdict, (v) => v.headline)
 
   // Resting's own hero numeral (`h54Rs`/`Q3SvDo`, "91 RECOVERY OUT OF 100")
   // is BODY BATTERY, not training_readiness — "RECOVERY" is a distinct label
@@ -255,12 +260,31 @@ function TodayViewBody({ model, control, profile }: {
   // same-day wake→now shape (matching the Hero Body's "Climb" arc directly
   // below it, `model.bodyBattery`) — training_readiness is a single number
   // with no wake reading anywhere in the API. See task-11-report.md.
+  // Same ruling: Training's numeral is the athlete's ENERGY RESERVE, not a
+  // second reading of the session. Body battery answers the question a
+  // training day actually poses — "have I got it in me today?" — where
+  // readiness only restates what the plan already decided.
+  // Body battery and readiness come off the SAME watch. When the gate
+  // withholds readiness because the watch has not synced, a body-battery
+  // numeral is exactly as stale — printing "100" above "Letzte Messung
+  // 3. August" would be the screen contradicting itself. So the gate
+  // withholds both, and the reason it prints is the dated one.
+  const wearableWithheld = model.readinessGate === 'stale' || model.readinessGate === 'pending'
+  const bodyBatteryNow: Value<number> = wearableWithheld && !isPresent(model.readiness)
+    ? missing<number>(isPresent(model.bodyBattery) ? model.readiness.missing : model.bodyBattery.missing)
+    : mapValue(model.bodyBattery, (bb) => bb.now)
   const heroNumeralValue: Value<number> = state === 'trained'
     ? sessionLoad
-    : state === 'resting'
-      ? mapValue(model.bodyBattery, (bb) => bb.now)
+    : state === 'resting' || state === 'training'
+      ? bodyBatteryNow
       : mapValue(model.readiness, (r) => r.score)
-  const heroNumeralUnit = state === 'trained' ? t('heroUnitTss') : state === 'resting' ? t('heroUnitRecovery') : t('heroUnitReadiness')
+  const heroNumeralUnit = state === 'trained'
+    ? t('heroUnitTss')
+    : state === 'resting'
+      ? t('heroUnitRecovery')
+      : state === 'training'
+        ? t('heroUnitEnergy')
+        : t('heroUnitReadiness')
   const heroNumeralUnitSub = state === 'trained' ? t('heroUnitSessionLoad') : t('heroUnitOutOf100')
   const heroNumeralHue = state === 'trained' ? 'var(--m-load)' : 'var(--st-active)'
 
@@ -399,6 +423,14 @@ function TodayViewBody({ model, control, profile }: {
   // visual weight. Below 3 the header stays neutral rather than treating a
   // one- or two-day streak as an event.
   const isWinStreak = isPresent(model.streakDays) && model.streakDays.value >= 3
+
+  // Distinct missing-reasons across section 01's three rows, in first-seen
+  // order — the sleep-composition strip below shares them, so it suppresses
+  // any it would otherwise repeat.
+  const recoveryReasons = [...new Set(
+    ([model.hrv, model.restingHr, model.sleep] as Value<unknown>[])
+      .flatMap((v) => (isPresent(v) ? [] : [v.missing])),
+  )]
 
   const todayIndex = (new Date().getDay() + 6) % 7
 
@@ -936,6 +968,10 @@ function TodayViewBody({ model, control, profile }: {
                 fontWeight: 800,
                 lineHeight: 1.05,
                 color: 'var(--e-ink)',
+                // The Day Mark is absolutely positioned at the Cover's top
+                // right; a headline running the full column width slides
+                // straight under it. Reserve its lane.
+                paddingRight: 46,
                 ...headlineFit(isPresent(heroHeadline) ? heroHeadline.value : '—'),
               }}
             >
@@ -1122,10 +1158,11 @@ function TodayViewBody({ model, control, profile }: {
               body={mapValue(model.verdict, (v) => v.body)}
             />
           ) : state === 'training' ? (
-            <Verdict
-              headline={mapValue(model.verdict, (v) => v.headline)}
-              body={mapValue(model.verdict, (v) => v.body)}
-            />
+            // Body only. The hero above now carries this statement's headline
+            // (owner ruling), so repeating it here printed the same sentence
+            // twice, 200px apart — the same shape as Rest's own hero body,
+            // which has never had a headline slot.
+            <Verdict body={mapValue(model.verdict, (v) => v.body)} />
           ) : (
             // Rest's own hero-body Verdict (oYHto) has no headline slot at
             // all — only the body paragraph (WHDco). Using the `Verdict`
@@ -1368,6 +1405,7 @@ function TodayViewBody({ model, control, profile }: {
                 unit={t('unitMs')}
                 band={isPresent(model.hrv) ? model.hrv.value.band : null}
                 delta={isPresent(model.hrv) ? model.hrv.value.delta : null}
+                showReason={false}
               />
               <RangeRow
                 label={t('labelRestingHr')}
@@ -1375,6 +1413,7 @@ function TodayViewBody({ model, control, profile }: {
                 unit={t('unitBpm')}
                 band={isPresent(model.restingHr) ? model.restingHr.value.band : null}
                 delta={isPresent(model.restingHr) ? model.restingHr.value.delta : null}
+                showReason={false}
               />
               <RangeRow
                 label={t('labelSleep')}
@@ -1382,7 +1421,15 @@ function TodayViewBody({ model, control, profile }: {
                 unit={t('unitH')}
                 band={null}
                 format={formatHM}
+                showReason={false}
               />
+              {/* One reason for the whole group. All three rows come off the
+                  same wearable, so when it has not synced they fail together
+                  and printing the sentence per row reads as the screen
+                  apologising to itself — four times, measured live. */}
+              {recoveryReasons.map((reason) => (
+                <p key={reason} style={quietReason}>{reason}</p>
+              ))}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 20 }}>

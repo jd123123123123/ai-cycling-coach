@@ -615,6 +615,10 @@ export const COPY = {
   // between this and the original by `items.length`, rather than one
   // caption baked in regardless of what it's captioning.
   insightStripCaptionTwo: { de: 'HEUTE IN ZWEI ZAHLEN', en: 'TODAY IN TWO NUMBERS' },
+  // Trainingstag's hero numeral (owner ruling 2026-08-06). The app already
+  // calls body battery an "Energiereserve" in BiometricsDetail/IntradayModal,
+  // so ENERGIE is the term the athlete has already met, not a new coinage.
+  heroUnitEnergy: { de: 'ENERGIE', en: 'ENERGY' },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY
