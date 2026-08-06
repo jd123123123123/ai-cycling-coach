@@ -432,6 +432,10 @@ function TodayViewBody({ model, control, profile }: {
       .flatMap((v) => (isPresent(v) ? [] : [v.missing])),
   )]
 
+  // Rest / Resting / Evening look ahead to tomorrow's session; Training and
+  // Trained are still inside today's.
+  const showsTomorrow = state === 'rest' || state === 'resting' || state === 'evening'
+
   const todayIndex = (new Date().getDay() + 6) % 7
 
   const insightItems = (() => {
@@ -1695,9 +1699,14 @@ function TodayViewBody({ model, control, profile }: {
 
         {showTomorrowBand && (
           <div style={{ width: '100%', padding: '46px 16px 0 16px' }}>
+            {/* The band leads to Session Detail ONLY where it is showing
+                TODAY's session — that page renders today's workout and takes
+                no id, so pointing a "MORGEN" band at it would open the wrong
+                day. Those states get no arrow rather than a wrong one. */}
             <TomorrowBand
-              session={state === 'rest' || state === 'resting' || state === 'evening' ? tomorrowSession : todaySession}
-              kicker={state === 'rest' || state === 'resting' || state === 'evening' ? t('tomorrowBandTomorrow') : t('tomorrowBandToday')}
+              session={showsTomorrow ? tomorrowSession : todaySession}
+              kicker={showsTomorrow ? t('tomorrowBandTomorrow') : t('tomorrowBandToday')}
+              to={showsTomorrow ? undefined : '/e/session'}
             />
           </div>
         )}

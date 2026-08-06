@@ -180,3 +180,26 @@ describe('Block-count agreement (Insight Strip vs the numbered section chip)', (
     expect(screen.queryByText('11 BLÖCKE')).toBeNull()
   })
 })
+
+describe('Session Detail is reachable (dead-affordance audit 2026-08-06)', () => {
+  it('Training: the band that shows TODAY\'s session is a real link to Session Detail', () => {
+    const { container } = render(<MemoryRouter><TodayView model={baseModel} /></MemoryRouter>)
+    const band = container.querySelector('[data-tomorrow-band]')!
+    expect(band.tagName).toBe('A')
+    expect(band.getAttribute('href')).toBe('/e/session')
+  })
+
+  it('Rest: the band shows TOMORROW\'s session, so it neither links nor shows an arrow', () => {
+    const restModel: TodayModel = {
+      ...baseModel,
+      state: 'rest',
+      tomorrow: present({ title: 'VO2 max · 5 × 4 @ 330 W', detail: '', unlockLabel: present('05:00') }),
+    } as TodayModel
+    const { container } = render(<MemoryRouter><TodayView model={restModel} /></MemoryRouter>)
+    const band = container.querySelector('[data-tomorrow-band]')!
+    // Session Detail renders TODAY's workout and takes no id — pointing a
+    // "MORGEN" band at it would open the wrong day.
+    expect(band.tagName).not.toBe('A')
+    expect(band.querySelector('svg')).toBeNull()
+  })
+})

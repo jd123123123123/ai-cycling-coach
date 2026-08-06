@@ -1,4 +1,5 @@
 import { ArrowUpRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { isPresent, type Value } from '../data/value'
 import { useCopy } from '../i18n/useCopy'
 
@@ -33,15 +34,23 @@ import { useCopy } from '../i18n/useCopy'
 export default function TomorrowBand({
   session,
   kicker: kickerProp,
+  to,
 }: {
   session: Value<{ title: string; unlockLabel: string }>
   kicker?: string
+  /** Where the band leads. The ↗ only renders when this is set AND there is
+   *  a session to open — an arrow that goes nowhere is worse than no arrow,
+   *  and the band spent this whole build showing one. */
+  to?: string
 }) {
   const { t } = useCopy()
   const kicker = kickerProp ?? t('tomorrowBandTomorrow')
   const present = isPresent(session)
+  const linked = present && to != null
+  const Root = (linked ? Link : 'div') as React.ElementType
   return (
-    <div
+    <Root
+      {...(linked ? { to, 'aria-label': `${kicker}: ${session.value.title}` } : {})}
       data-tomorrow-band
       style={{
         width: '100%',
@@ -53,6 +62,7 @@ export default function TomorrowBand({
         border: '1px solid var(--st-active)',
         padding: 22,
         gap: 14,
+        textDecoration: 'none',
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
@@ -68,7 +78,7 @@ export default function TomorrowBand({
           </p>
         )}
       </div>
-      <ArrowUpRight size={24} color="var(--st-active)" aria-hidden="true" />
-    </div>
+      {linked && <ArrowUpRight size={24} color="var(--st-active)" aria-hidden="true" />}
+    </Root>
   )
 }

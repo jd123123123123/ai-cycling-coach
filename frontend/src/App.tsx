@@ -289,6 +289,11 @@ function AppRoutes() {
 
           {/* EDITORIAL II — a second design system, mounted alongside the first. */}
           <Route path="/e/today" element={<ProtectedRoute checkOnboarding><EditorialTodayPage /></ProtectedRoute>} />
+          {/* Session Detail renders TODAY's session — `useSessionModel` takes no
+              id and this backend has no id-scoped session endpoint. The bare
+              path is therefore the honest one; `/:id` stays registered so an
+              older link still resolves rather than 404ing. */}
+          <Route path="/e/session" element={<ProtectedRoute checkOnboarding><EditorialSessionDetailPage /></ProtectedRoute>} />
           <Route path="/e/session/:id" element={<ProtectedRoute checkOnboarding><EditorialSessionDetailPage /></ProtectedRoute>} />
           <Route path="/e/:tab" element={<ProtectedRoute checkOnboarding><EditorialTabPlate /></ProtectedRoute>} />
 
