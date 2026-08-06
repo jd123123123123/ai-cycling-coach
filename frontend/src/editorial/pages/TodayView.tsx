@@ -1,6 +1,7 @@
 import { Flame, Thermometer, Wind } from 'lucide-react'
 import Bars from '../components/Bars'
 import Cover from '../components/Cover'
+import { COVER_PHOTO, QUOTE_PHOTO, TOMORROW_PHOTO } from '../components/plateImagery'
 import DayMark from '../components/DayMark'
 import BackToSessionDoneSheet from '../components/BackToSessionDoneSheet'
 import DayRail from '../components/DayRail'
@@ -639,7 +640,7 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
       <main data-day-state={state} style={{ display: 'flex', flexDirection: 'column' }}>
         <StatusBar time={new Date().toLocaleTimeString(intlLocale(locale), { hour: '2-digit', minute: '2-digit' })} />
 
-        <Cover state={state}>
+        <Cover state={state} photoUrl={COVER_PHOTO[state]}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 22, width: '100%' }}>
             <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
@@ -1072,7 +1073,7 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
         )}
 
         {quoteCopy && (
-          <QuotePlate state={state} quote={quoteCopy.quote} attribution={quoteCopy.attribution} />
+          <QuotePlate state={state} quote={quoteCopy.quote} attribution={quoteCopy.attribution} photoUrl={QUOTE_PHOTO[state]} />
         )}
 
         {state === 'evening' && (
@@ -1248,6 +1249,7 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
 
         {(state === 'rest' || state === 'trained' || state === 'resting' || state === 'evening') && (
           <TomorrowPlate
+            photoUrl={TOMORROW_PHOTO[state]}
             state={state}
             kickerLeft={tomorrowKickerLeft}
             kickerRight={tomorrowKickerRight}
@@ -1259,6 +1261,7 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
         )}
         {state === 'training' && (
           <TomorrowPlate
+            photoUrl={TOMORROW_PHOTO[state]}
             state={state}
             kickerLeft={routeKickerLeft}
             kickerRight={routeKickerRight}

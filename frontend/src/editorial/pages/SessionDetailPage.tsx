@@ -3,6 +3,7 @@ import { downloadWorkoutExport } from '../../api/coach'
 import Bars, { type BarsBlock } from '../components/Bars'
 import NavHeader from '../components/NavHeader'
 import QuotePlate from '../components/QuotePlate'
+import { SESSION_QUOTE_PHOTO } from '../components/plateImagery'
 import RouteOptions from '../components/RouteOptions'
 import SecHead from '../components/SecHead'
 import SessionBlocks from '../components/SessionBlocks'
@@ -92,7 +93,7 @@ function SessionDetailBody({ model, onBack }: { model: SessionModel; onBack: () 
         </div>
       )}
 
-      <QuotePlate state="training" quote={t('quoteTraining')} attribution={t('quoteTrainingAttribution')} />
+      <QuotePlate state="training" quote={t('quoteTraining')} attribution={t('quoteTrainingAttribution')} photoUrl={SESSION_QUOTE_PHOTO} />
 
       <Payoff model={model} payoffBlocks={payoffBlocks} />
 
