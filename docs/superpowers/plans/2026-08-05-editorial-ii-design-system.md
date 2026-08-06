@@ -131,7 +131,16 @@ Applies to `Bars`, `PMCChart`, `FatigueCurve`, `ZoneRows`, `WeekRail`,
 - **Mobile only.** Every screen is designed and verified at **390×844**. Desktop is a sanity check, never a deliverable.
 - **Pen file:** `~/Downloads/pencil-new.pen`. Frames prefixed `Flagship · … · EDITORIAL II`. Access **only** via `mcp__pencil__*` tools — never `Read`/`Grep` on `.pen`.
 - **Transcription rule:** for every screen, call `mcp__pencil__execute` with `Get(<nodeId>, {depth: 12, resolveInstances: true, resolveVariables: false})` and transcribe padding / gap / fontSize / fontWeight / letterSpacing / fill / cornerRadius / stroke / effect **verbatim**. Never eyeball a spec from a screenshot.
-- **No new endpoints, no backend changes, no modifications to existing hooks.** `editorial/` consumes them read-only.
+- **Backend: additive exposure only, ruled 2026-08-06.** The original rule was "no
+  backend changes"; the owner's goal — *all data there, or better data* —
+  overrides it where a value is **already computed and stored** and merely not
+  exposed. Attaching an existing field to an existing endpoint is allowed. What
+  is still forbidden: new endpoints, new computation at request time, schema
+  migrations, and any change to an existing field's meaning. The isolation rule
+  is untouched by this — it governs the *frontend* tree (nothing outside
+  `editorial/` imports from it), and adding a field to a response never
+  threatens it.
+- **No modifications to existing frontend hooks.** `editorial/` consumes them read-only.
 - **Only two files under `frontend/src/` outside `editorial/` may change:** `frontend/src/App.tsx` (route registration + root redirect) and, if and only if `npm run lint:i18n` demands it, `frontend/scripts/i18n-allowlist.json`. If any other file under `frontend/src/` needs to change, stop and ask. (This bounds application code only. The plan and spec documents under `docs/` are living records — the controller amends them when a review or a human ruling changes a requirement, and those commits will appear in review diffs.)
 - **Test conventions — this repo has no `@testing-library/jest-dom` and no vitest `globals`.** Do not add either; both would change files outside `editorial/`. That means:
   - jest-dom matchers are unavailable. Use `expect(el.getAttribute('href')).toBe('/e/train')`, not `toHaveAttribute`. Use `expect(el).not.toBeNull()` / `toBeTruthy()`, not `toBeInTheDocument`.
