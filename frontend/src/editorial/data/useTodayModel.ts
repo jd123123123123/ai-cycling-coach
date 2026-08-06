@@ -118,7 +118,7 @@ export interface TodayModel {
    *  adaptation transparency and post-ride review, never from outlook_7d
    *  (that field is a different claim: tomorrow's suggested TSS). */
   whatThisChanges: Value<{ onYou: Claim; onThePlan: Claim }>
-  conditions: Value<{ tempC: number; windKmh: number }>
+  conditions: Value<{ tempC: number; windKmh: number; windFrom: string | null }>
   /** unlockLabel is its own Value: the session for tomorrow may be known
    *  while its clock time is not — PlannedWorkout carries no time-of-day
    *  field anywhere, so this is honestly missing until a source exists. */
@@ -226,6 +226,13 @@ function buildRangeBand(
     position = signal.value < signal.baseline ? 'below' : 'above'
   }
   return { low, high, position }
+}
+
+/** Meteorological convention: the direction the wind blows FROM. */
+export function compassPoint(deg: number | null | undefined): string | null {
+  if (deg == null || !Number.isFinite(deg)) return null
+  const points = ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW']
+  return points[Math.round(((deg % 360) + 360) % 360 / 45) % 8]!
 }
 
 /** Pure assembly — no hooks, fully unit-testable. Every field is a Value<T>. */
@@ -477,7 +484,14 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     : null
   const conditions = fromNullable(
     weather?.available && currentHour && currentHour.temp_c != null && currentHour.wind_kmh != null
-      ? { tempC: currentHour.temp_c, windKmh: currentHour.wind_kmh }
+      ? {
+        tempC: currentHour.temp_c,
+        windKmh: currentHour.wind_kmh,
+        // The pen's conditions row reads "14 KM/H NW". wind_dir_deg is a real
+        // stored field on WeatherHour, so the compass point is a rounding of
+        // real data, not a guess — null when the reading is absent.
+        windFrom: compassPoint(currentHour.wind_dir_deg),
+      }
       : null,
     weatherReason,
   )

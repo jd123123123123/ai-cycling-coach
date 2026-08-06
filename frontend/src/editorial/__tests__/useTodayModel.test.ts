@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTodayModel, type TodayModelInputs } from '../data/useTodayModel'
+import { buildTodayModel, compassPoint, type TodayModelInputs } from '../data/useTodayModel'
 import { isPresent } from '../data/value'
 
 const base = (over: Partial<TodayModelInputs> = {}): TodayModelInputs => ({
@@ -98,5 +98,31 @@ describe('buildTodayModel', () => {
     }))
     expect(isPresent(m.ride)).toBe(true)
     if (isPresent(m.ride)) expect(m.ride.value.kj).toBeNull()
+  })
+})
+
+describe('compassPoint', () => {
+  it('rounds a bearing to the German compass point the wind blows FROM', () => {
+    expect(compassPoint(0)).toBe('N')
+    expect(compassPoint(45)).toBe('NO')
+    expect(compassPoint(180)).toBe('S')
+    expect(compassPoint(315)).toBe('NW')
+  })
+
+  it('rounds to the nearest point rather than truncating', () => {
+    expect(compassPoint(23)).toBe('NO')
+    expect(compassPoint(22)).toBe('N')
+  })
+
+  it('wraps past 360 and normalises a negative bearing', () => {
+    expect(compassPoint(360)).toBe('N')
+    expect(compassPoint(350)).toBe('N')
+    expect(compassPoint(-45)).toBe('NW')
+  })
+
+  it('has no reading rather than a default heading', () => {
+    expect(compassPoint(null)).toBeNull()
+    expect(compassPoint(undefined)).toBeNull()
+    expect(compassPoint(Number.NaN)).toBeNull()
   })
 })
