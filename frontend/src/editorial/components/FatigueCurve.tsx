@@ -1,6 +1,7 @@
 import { isPresent } from '../data/value'
 import type { TodayModel } from '../data/useTodayModel'
 import { MOTION_DURATION_MS, MOTION_EASE, useReveal } from '../motion/useReveal'
+import { useTapHighlight } from '../motion/useTapHighlight'
 import { useCopy } from '../i18n/useCopy'
 
 /**
@@ -18,9 +19,17 @@ import { useCopy } from '../i18n/useCopy'
  * the section enters the viewport, and the "neutral" marker's position is
  * revealed alongside it — both via `useReveal`, both skipped entirely when
  * `pmc` itself is missing (never animate a value that isn't there).
+ *
+ * Motion (Task C, tap): the two points on this curve — "now" and "neutral"
+ * — are each tappable, matching how `PMCChart`'s legend swatches behave.
+ * Tapping one surfaces its own label at full ink and drops the other to
+ * `var(--d-2)`; tapping the same point again restores both. `useTapHighlight`
+ * is the shared primitive, keyed by `'now' | 'neutral'` instead of PMCChart's
+ * metric keys.
  */
 export default function FatigueCurve({ pmc, recovery }: { pmc: TodayModel['pmc']; recovery: TodayModel['recovery'] }) {
   const { ref, on, reduced } = useReveal<HTMLDivElement>()
+  const tap = useTapHighlight<'now' | 'neutral'>()
   const { t } = useCopy()
 
   if (!isPresent(pmc)) {
@@ -42,24 +51,44 @@ export default function FatigueCurve({ pmc, recovery }: { pmc: TodayModel['pmc']
       <div style={{ position: 'relative', width: '100%', height: 70 }}>
         <div style={{ position: 'absolute', left: 0, bottom: 0, width: '100%', height: 1, background: 'var(--e-rule)' }} />
         <div
+          data-fatigue-point="now"
+          onClick={() => tap.toggle('now')}
           style={{
             position: 'absolute', left: 0, bottom: 1, width: `${on ? nowPct : 0}%`, height: 6, borderRadius: 3,
-            background: 'var(--st-active)', transition: barTransition,
+            background: tap.isDimmed('now') ? 'var(--d-2)' : 'var(--st-active)', cursor: 'pointer',
+            transition: reduced ? undefined : `${barTransition}, background 200ms ${MOTION_EASE}`,
           }}
         />
         <div
+          data-fatigue-point="neutral"
+          onClick={() => tap.toggle('neutral')}
           style={{
-            position: 'absolute', left: `${neutralPct}%`, bottom: 1, width: 1, height: 26, background: 'var(--d-2)',
-            opacity: on ? 1 : 0, transition: reduced ? undefined : `opacity ${MOTION_DURATION_MS}ms ${MOTION_EASE}`,
+            position: 'absolute', left: `${neutralPct}%`, bottom: 1, width: 8, height: 26, marginLeft: -4,
+            cursor: 'pointer', display: 'flex', justifyContent: 'center',
           }}
-        />
-        <span style={{ position: 'absolute', left: 0, top: 0, fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.9, color: 'var(--e-ink)' }}>
+        >
+          <div
+            style={{
+              width: tap.isSelected('neutral') ? 2 : 1, height: 26,
+              background: tap.isSelected('neutral') ? 'var(--st-active)' : 'var(--d-2)',
+              opacity: on ? 1 : 0,
+              transition: reduced ? undefined : `opacity ${MOTION_DURATION_MS}ms ${MOTION_EASE}, width 200ms ${MOTION_EASE}, background 200ms ${MOTION_EASE}`,
+            }}
+          />
+        </div>
+        <span
+          style={{
+            position: 'absolute', left: 0, top: 0, fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.9,
+            color: tap.isDimmed('now') ? 'var(--d-2)' : 'var(--e-ink)',
+          }}
+        >
           {t('fatigueCurveNow', { n: Math.round(now) })}
         </span>
         <span
           style={{
             position: 'absolute', left: `${neutralPct}%`, top: 32, transform: 'translateX(-100%)', whiteSpace: 'nowrap',
-            fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.9, color: 'var(--e-lo)',
+            fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.9,
+            color: tap.isSelected('neutral') ? 'var(--e-ink)' : tap.isDimmed('neutral') ? 'var(--d-2)' : 'var(--e-lo)',
           }}
         >
           {t('fatigueCurveNeutral', { n: Math.round(neutral) })}

@@ -2,6 +2,8 @@ import { isPresent, type Value } from '../data/value'
 import type { RouteOption } from '../data/useSessionModel'
 import RouteSketch from '../../components/ui/RouteSketch'
 import SecHead from './SecHead'
+import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
+import { useTapHighlight, type TapHighlight } from '../motion/useTapHighlight'
 import { useCopy } from '../i18n/useCopy'
 import { intlLocale } from '../i18n/copy'
 
@@ -53,6 +55,24 @@ import { intlLocale } from '../i18n/copy'
  *  - `bHXcp` (Conditions): no per-route forecast anywhere in this app,
  *    ever — omitted entirely, the same treatment `TodayModel.peaks`/
  *    `planVsRidden` already give a permanent gap.
+ *
+ * Motion (Task C): `RouteSketch` (`components/ui/RouteSketch.tsx`) is
+ * outside this tree and shared by three other call sites, so it is never
+ * edited here — it draws its own `<polyline>` with no `pathLength`/
+ * `strokeDasharray` hook exposed, and adding one would mean changing a
+ * shared component for a single caller's animation. Instead, each card's
+ * track wraps `RouteSketch` in a plain container that animates its OWN
+ * `clip-path` (`inset(0 100% 0 0)` → `inset(0 0 0 0)`) on first viewport
+ * entry — a left-to-right wipe that reads as "the track draws itself in"
+ * without touching the sketch's internal geometry, staggered per row via
+ * `staggerDelay(index)`. A route with no track (`trackPolyline` missing)
+ * never wraps or animates — its reason text renders immediately, like every
+ * other missing-state text in this file. Tapping a card selects it: it
+ * lifts to `var(--st-active)` (name, option label, stats all move to full
+ * accent) while every other card's text drops to `var(--d-2)`
+ * (`useTapHighlight`, keyed by `route.key`, shared across all cards so
+ * selecting one actually dims its siblings); tapping the same card again
+ * restores all three.
  */
 
 const SKETCH_WIDTH = 390
@@ -60,6 +80,7 @@ const SKETCH_HEIGHT = 148
 
 export default function RouteOptions({ routes }: { routes: Value<RouteOption[]> }) {
   const { t } = useCopy()
+  const tap = useTapHighlight<string>()
 
   return (
     <div data-route-options style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '40px 0 0 0' }}>
@@ -75,7 +96,7 @@ export default function RouteOptions({ routes }: { routes: Value<RouteOption[]> 
       {isPresent(routes) ? (
         <>
           {routes.value.map((route, i) => (
-            <RouteCard key={route.key} route={route} isLast={i === routes.value.length - 1} />
+            <RouteCard key={route.key} route={route} index={i} isLast={i === routes.value.length - 1} tap={tap} />
           ))}
           <p
             style={{
@@ -95,23 +116,43 @@ export default function RouteOptions({ routes }: { routes: Value<RouteOption[]> 
   )
 }
 
-function RouteCard({ route, isLast }: { route: RouteOption; isLast: boolean }) {
+function RouteCard({
+  route,
+  index,
+  isLast,
+  tap,
+}: {
+  route: RouteOption
+  index: number
+  isLast: boolean
+  tap: TapHighlight<string>
+}) {
   const { t, locale } = useCopy()
+  const { ref, on, reduced } = useReveal<HTMLDivElement>()
   const km = route.distanceKm.toLocaleString(intlLocale(locale), { maximumFractionDigits: 1 })
   const statsLine = isPresent(route.ascentM)
     ? t('routeStatsWithAscent', { km, ascent: Math.round(route.ascentM.value), n: route.rideCount })
     : t('routeStatsNoAscent', { km, n: route.rideCount })
+  const selected = tap.isSelected(route.key)
+  const dimmed = tap.isDimmed(route.key)
+  const textColor = selected ? 'var(--st-active)' : dimmed ? 'var(--d-2)' : 'var(--e-ink)'
+  const labelColor = selected ? 'var(--st-active)' : dimmed ? 'var(--d-2)' : 'var(--st-active)'
 
   return (
-    <div style={{ width: '100%' }}>
+    <div
+      ref={ref}
+      data-route-card={route.key}
+      onClick={() => tap.toggle(route.key)}
+      style={{ width: '100%', cursor: 'pointer' }}
+    >
       <div style={{ width: '100%', padding: '0 24px' }}>
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--st-active)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: labelColor }}>
           {t('routeOptionLabel', { letter: route.optionLetter })}
         </span>
 
         <p style={{
           margin: '10px 0 20px 0', fontFamily: 'var(--e-display)', fontSize: 24, fontWeight: 800,
-          letterSpacing: -1, lineHeight: 1.1, color: 'var(--e-ink)',
+          letterSpacing: -1, lineHeight: 1.1, color: textColor,
         }}
         >
           {route.name}
@@ -126,18 +167,27 @@ function RouteCard({ route, isLast }: { route: RouteOption; isLast: boolean }) {
         }}
       >
         {isPresent(route.trackPolyline) ? (
-          <RouteSketch
-            polyline={route.trackPolyline.value}
-            width={SKETCH_WIDTH}
-            height={SKETCH_HEIGHT}
-            pad={28}
-            strokeWidth={2.5}
-            color="var(--st-active)"
-            endpoints
-            fluid
-            renderHeight={SKETCH_HEIGHT}
-            ariaLabel={route.name}
-          />
+          <div
+            data-route-sketch-wrap
+            style={{
+              width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              clipPath: `inset(0 ${on ? 0 : 100}% 0 0)`,
+              transition: reduced ? undefined : `clip-path ${MOTION_DURATION_MS}ms ${MOTION_EASE} ${staggerDelay(index)}ms`,
+            }}
+          >
+            <RouteSketch
+              polyline={route.trackPolyline.value}
+              width={SKETCH_WIDTH}
+              height={SKETCH_HEIGHT}
+              pad={28}
+              strokeWidth={2.5}
+              color="var(--st-active)"
+              endpoints
+              fluid
+              renderHeight={SKETCH_HEIGHT}
+              ariaLabel={route.name}
+            />
+          </div>
         ) : (
           <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 600, color: 'var(--e-quiet)' }}>
             {route.trackPolyline.missing}
@@ -146,9 +196,14 @@ function RouteCard({ route, isLast }: { route: RouteOption; isLast: boolean }) {
       </div>
 
       <div style={{ width: '100%', padding: '10px 24px 0 24px' }}>
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, color: dimmed ? 'var(--d-2)' : 'var(--e-quiet)' }}>
           {statsLine}
         </span>
+        {selected && (
+          <span style={{ display: 'block', marginTop: 6, fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--st-active)' }}>
+            {t('routeSelected')}
+          </span>
+        )}
       </div>
 
       {!isLast && (

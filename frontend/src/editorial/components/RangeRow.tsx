@@ -1,5 +1,7 @@
 import { isPresent, type Value } from '../data/value'
 import type { RangeBand } from '../data/useTodayModel'
+import { MOTION_DURATION_MS, MOTION_EASE, useReveal } from '../motion/useReveal'
+import { useTapHighlight } from '../motion/useTapHighlight'
 import { useCopy } from '../i18n/useCopy'
 
 /**
@@ -45,6 +47,17 @@ import { useCopy } from '../i18n/useCopy'
  * one real thing both frames' Track shapes agree on: today's value inside
  * its band. Flagged in task-10-report.md as a deliberate, documented
  * departure from Training's own Track node.
+ *
+ * Motion (Task C): the Mark doesn't appear at its resting position — it
+ * travels there. It starts centred (50%, the "no read yet" position) and
+ * transitions its `left` to `markPct(band)` the first time the row enters
+ * the viewport (`useReveal`), matching every other chart's mount reveal.
+ * Skipped entirely when `band` is null — there is nothing to travel to.
+ * Tapping the Mark (or its track) surfaces an exact readout — the value and
+ * the band's own low/high bounds — via `useTapHighlight`; the Mark lifts to
+ * `var(--st-active)` while selected and returns to its resting `--e-ink`
+ * (the real-instance override documented above, not the pen's `$e-acid`)
+ * when deselected.
  */
 export default function RangeRow({
   label,
@@ -62,12 +75,16 @@ export default function RangeRow({
   format?: (n: number) => string
 }) {
   const { t } = useCopy()
+  const { ref, on, reduced } = useReveal<HTMLDivElement>()
+  const tap = useTapHighlight<'mark'>()
   const present = isPresent(value)
   const displayValue = present ? (format ? format(value.value) : String(value.value)) : '—'
   const caption = band ? (band.position === 'below' ? t('rangeBelow') : band.position === 'above' ? t('rangeAbove') : t('rangeIn')) : null
+  const selected = band != null && tap.isSelected('mark')
+  const markLeft = band ? (on ? markPct(band) : 50) : 0
 
   return (
-    <div data-range-row style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9 }}>
+    <div ref={ref} data-range-row style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9 }}>
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingBottom: 4 }}>
           <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-mid)' }}>
@@ -97,14 +114,26 @@ export default function RangeRow({
       </div>
 
       {band && (
-        <div style={{ position: 'relative', width: '100%', height: 12 }}>
-          <div style={{ position: 'absolute', left: 0, top: 5, width: '100%', height: 2, background: 'var(--e-track-base)' }} />
-          <div style={{ position: 'absolute', left: '32%', top: 4, width: '35%', height: 4, borderRadius: 2, background: 'var(--e-track-band)' }} />
-          <div
-            data-range-marker
-            style={{ position: 'absolute', left: `${markPct(band)}%`, top: 0, width: 3, height: 12, background: 'var(--e-ink)' }}
-          />
-        </div>
+        <>
+          <div style={{ position: 'relative', width: '100%', height: 12 }}>
+            <div style={{ position: 'absolute', left: 0, top: 5, width: '100%', height: 2, background: 'var(--e-track-base)' }} />
+            <div style={{ position: 'absolute', left: '32%', top: 4, width: '35%', height: 4, borderRadius: 2, background: 'var(--e-track-band)' }} />
+            <div
+              data-range-marker
+              onClick={() => tap.toggle('mark')}
+              style={{
+                position: 'absolute', left: `${markLeft}%`, top: 0, width: 3, height: 12, marginLeft: -6, padding: '0 6px',
+                background: selected ? 'var(--st-active)' : 'var(--e-ink)', backgroundClip: 'content-box', cursor: 'pointer',
+                transition: reduced ? undefined : `left ${MOTION_DURATION_MS}ms ${MOTION_EASE}, background 200ms ${MOTION_EASE}`,
+              }}
+            />
+          </div>
+          {selected && (
+            <span data-range-readout style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 700, letterSpacing: 1, color: 'var(--st-active)' }}>
+              {t('rangeReadout', { value: displayValue, low: band.low, high: band.high })}
+            </span>
+          )}
+        </>
       )}
 
       {!present && (

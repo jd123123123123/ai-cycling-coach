@@ -1,4 +1,6 @@
 import { isPresent, type Value } from '../data/value'
+import { MOTION_DURATION_MS, MOTION_EASE, staggerDelay, useReveal } from '../motion/useReveal'
+import { useTapHighlight } from '../motion/useTapHighlight'
 import { useCopy } from '../i18n/useCopy'
 
 export interface PeakRow {
@@ -51,11 +53,25 @@ export interface PeakTotal {
  * every row's `percentOfSeasonBest` is null (as it always will be, given
  * the above), the whole column — header included — is omitted rather than
  * rendering a dash for a number nobody claims to know.
+ *
+ * Motion (Task C): the meter track (`t8t8i7`-style, previously a static
+ * full-width fill) now actually meters — each row's filled segment grows
+ * from zero the first time the section enters the viewport (`useReveal`),
+ * scaled to that row's own watts against the list's max, staggered per row
+ * so the list resolves as a wave. Tapping a row lifts its fill to
+ * `var(--st-active)` and its duration/watts text to full ink, drops every
+ * other row's fill to `var(--d-2)` (`useTapHighlight`, keyed by duration),
+ * and surfaces an explicit watts-at-duration readout; tapping the same row
+ * again restores the ramp. None of this runs when `peaks` itself is
+ * missing — there is no list to grow or select.
  */
 export default function PeakRows({ total, peaks }: { total: Value<PeakTotal>; peaks: Value<PeakRow[]> }) {
   const { t } = useCopy()
+  const { ref, on, reduced } = useReveal<HTMLElement>()
+  const tap = useTapHighlight<string>()
   const present = isPresent(peaks)
   const list = present ? peaks.value : []
+  const maxWatts = list.length > 0 ? Math.max(...list.map((p) => p.watts)) : 0
   const showPct = list.some((p) => p.percentOfSeasonBest != null)
   const totalPresent = isPresent(total)
   // Total and the per-duration list share the exact same root cause today
@@ -66,7 +82,7 @@ export default function PeakRows({ total, peaks }: { total: Value<PeakTotal>; pe
   const showTotalReason = !totalPresent && present
 
   return (
-    <section data-peak-rows style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <section ref={ref} data-peak-rows style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-mid)' }}>
           {t('peakRowsCaption')}
@@ -108,35 +124,61 @@ export default function PeakRows({ total, peaks }: { total: Value<PeakTotal>; pe
 
       {present ? (
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9 }}>
-          {list.map((p) => (
-            <div key={p.duration} style={{ width: '100%', display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1, color: 'var(--e-mid)', width: 44 }}>
-                {p.duration}
-              </span>
-              <div style={{ flex: 1, height: 10, display: 'flex', alignItems: 'center' }}>
-                <div style={{ width: '100%', height: 8, borderRadius: 1, background: 'var(--e-peak-track)' }} />
-              </div>
-              <div style={{ width: 56, display: 'flex', gap: 3, justifyContent: 'flex-end', alignItems: 'flex-end' }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--e-display)', fontSize: 16, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1, color: 'var(--e-ink)',
-                  }}
+          {list.map((p, i) => {
+            const selected = tap.isSelected(p.duration)
+            const dimmed = tap.isDimmed(p.duration)
+            const fillPct = Math.max(4, Math.round((p.watts / (maxWatts || 1)) * 100))
+            const fillColor = selected ? 'var(--st-active)' : dimmed ? 'var(--d-2)' : 'var(--e-peak-track)'
+            return (
+              <div key={p.duration} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div
+                  data-peak-row={p.duration}
+                  onClick={() => tap.toggle(p.duration)}
+                  style={{ width: '100%', display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}
                 >
-                  {p.watts}
-                </span>
-                <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 700, color: 'var(--e-lo)' }}>W</span>
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1, color: selected ? 'var(--e-ink)' : 'var(--e-mid)', width: 44 }}>
+                    {p.duration}
+                  </span>
+                  <div style={{ flex: 1, height: 10, display: 'flex', alignItems: 'center' }}>
+                    <div
+                      data-peak-bar
+                      style={{
+                        width: `${on ? fillPct : 0}%`, height: 8, borderRadius: 1, background: fillColor,
+                        transition: reduced
+                          ? undefined
+                          : `width ${MOTION_DURATION_MS}ms ${MOTION_EASE} ${staggerDelay(i)}ms, background 200ms ${MOTION_EASE}`,
+                      }}
+                    />
+                  </div>
+                  <div style={{ width: 56, display: 'flex', gap: 3, justifyContent: 'flex-end', alignItems: 'flex-end' }}>
+                    <span
+                      style={{
+                        fontFamily: 'var(--e-display)', fontSize: 16, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1,
+                        color: selected ? 'var(--st-active)' : 'var(--e-ink)',
+                      }}
+                    >
+                      {p.watts}
+                    </span>
+                    <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 700, color: 'var(--e-lo)' }}>W</span>
+                  </div>
+                  {showPct && (
+                    <span
+                      style={{
+                        fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: 'var(--e-quiet)', width: 38, textAlign: 'right',
+                      }}
+                    >
+                      {p.percentOfSeasonBest != null ? `${Math.round(p.percentOfSeasonBest)}%` : '—'}
+                    </span>
+                  )}
+                </div>
+                {selected && (
+                  <span data-peak-readout style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 700, letterSpacing: 1, color: 'var(--st-active)', paddingLeft: 52 }}>
+                    {t('peakRowsReadout', { watts: p.watts, duration: p.duration })}
+                  </span>
+                )}
               </div>
-              {showPct && (
-                <span
-                  style={{
-                    fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: 'var(--e-quiet)', width: 38, textAlign: 'right',
-                  }}
-                >
-                  {p.percentOfSeasonBest != null ? `${Math.round(p.percentOfSeasonBest)}%` : '—'}
-                </span>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: 0 }}>

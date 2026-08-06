@@ -453,6 +453,11 @@ export const COPY = {
     de: 'Noch keine eigenen GPS-Strecken erfasst.',
     en: 'No GPS routes of your own recorded yet.',
   },
+
+  // ---- Task C: Motion layer — tap readouts ---------------------------------------
+  rangeReadout: { de: '{value} · BEREICH {low}–{high}', en: '{value} · RANGE {low}–{high}' },
+  peakRowsReadout: { de: '{watts} W BEI {duration}', en: '{watts} W AT {duration}' },
+  routeSelected: { de: 'STRECKE AUSGEWÄHLT', en: 'ROUTE SELECTED' },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY
