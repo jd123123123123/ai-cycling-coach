@@ -16,9 +16,11 @@ import type { ActivityRead, DailyMetric, PMCResponse, PlannedWorkout, TodaySnaps
 import type { MorningHealthCheck, MorningHealthSignal } from '../../api/health'
 import type { CoachBriefResponse } from '../../api/coach'
 import type { StreamAnalysis } from '../../api/streamAnalysis'
+import type { WeekResponse } from '../../api/weeks'
+import { useCurrentWeek } from '../../hooks/useCurrentWeek'
 import type { HrZone } from '../components/ZoneRows'
 import type { PeakRow } from '../components/PeakRows'
-import { fromNullable, missing, present, type Value } from './value'
+import { fromNullable, isPresent, missing, present, type Value } from './value'
 import { useDayState } from '../state/useDayState'
 import type { DayState } from '../state/dayState'
 import { translate, useCopy } from '../i18n/useCopy'
@@ -153,6 +155,21 @@ export interface TodayModel {
    *  data), but each day's `tss` is its own Value — a day with no matching
    *  PMC entry (no ride that day) is honestly missing, never a zero bar. */
   week: { letter: string; tss: Value<number> }[]
+  /** The week's load budget: TSS actually logged Mon–Sun so far over the
+   *  week plan's own planned total. `spent` sums the present days of `week`
+   *  above (real PMCEntry.tss); `planned` is WeekResponse.planned_tss_total —
+   *  the field api/weeks.ts marks as THE display target, never
+   *  meso_block.weekly_tss_target (advisory-only, the generator's budget).
+   *  Missing whenever there is no week plan or it carries no planned total —
+   *  a meter with an invented denominator is exactly the fabricated number
+   *  the missing-data rule exists to prevent. */
+  weekLoad: Value<{ spent: number; planned: number }>
+  /** The block context under the coach's paragraph — phase name, and the
+   *  countdown to the target event when there is one. Sourced from
+   *  WeekResponse.meso_block. `daysToEvent`/`eventType` are independently
+   *  null (a fitness-builder athlete has a phase but no event), so the copy
+   *  key that renders this has two arms. */
+  phaseContext: Value<{ phase: string; daysToEvent: number | null; eventType: string | null }>
   /** Evening's "01 Today" hourly energy-out curve (`ey8Tp`/`OjJbK`, pen
    *  `KYS6e`/`cx4zJ` — 16 hourly bars, 06:00-21:00, highlighted across the
    *  ride's own span). Verified during Task 14: no hook anywhere returns a
@@ -213,6 +230,11 @@ export interface TodayModelInputs {
    *  the same inputs always produce the same reason strings, which is what
    *  keeps this function unit-testable without React at all. */
   locale?: Locale
+  /** The current week plan, for `weekLoad`/`phaseContext`. Optional: omitted
+   *  callers (every existing unit test) get both fields missing, same as an
+   *  athlete with no plan. Read-only — `useCurrentWeek` is consumed, never
+   *  edited (the tree's one-way dependency rule). */
+  weekPlan?: WeekResponse | null
 }
 
 function lastReadingLabel(now: Date, recentMetrics: DailyMetric[] | undefined, locale: Locale): string {
@@ -276,7 +298,7 @@ export function compassPoint(deg: number | null | undefined): string | null {
 export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   const { now, state, snapshot, yesterdayMetric, todayMetric, streak, pmc, recoveryEta,
     session, brief, weather, activitiesToday, health, tomorrowWorkout, isLoading, recentMetrics, hrvState,
-    streamAnalysis, ninetyDayMetrics, locale = EDITORIAL_DEFAULT_LOCALE } = inputs
+    streamAnalysis, ninetyDayMetrics, locale = EDITORIAL_DEFAULT_LOCALE, weekPlan } = inputs
   const t = (key: Parameters<typeof translate>[1], vars?: Parameters<typeof translate>[2]) => translate(locale, key, vars)
 
   const dateLabel = present(
@@ -634,6 +656,31 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   // own doc comment on TodayModel above.
   const energyOut: Value<{ hours: { hour: number; kcal: number }[] }> = missing(t('energyOutMissing'))
 
+  // The week's load budget (Task 2): spent sums the present days of `week`
+  // above (real PMCEntry.tss, never a synthesised zero for a missing day);
+  // planned is WeekResponse.planned_tss_total, the field api/weeks.ts marks
+  // as THE display target — never meso_block.weekly_tss_target, which the
+  // same file marks advisory-only (the generator's own budget). No plan, or
+  // a plan whose planned_tss_total is null, withholds the whole meter rather
+  // than drawing it against an invented denominator.
+  const spentThisWeek = week.reduce((sum, d) => sum + (isPresent(d.tss) ? d.tss.value : 0), 0)
+  const plannedThisWeek = weekPlan?.planned_tss_total ?? null
+  const weekLoad: Value<{ spent: number; planned: number }> = plannedThisWeek == null
+    ? missing(t('weekLoadMissing'))
+    : present({ spent: spentThisWeek, planned: plannedThisWeek })
+
+  // The block context line under the coach's paragraph — phase name plus an
+  // independently-nullable event countdown (a fitness-builder athlete has a
+  // phase but no target event).
+  const phaseContext: Value<{ phase: string; daysToEvent: number | null; eventType: string | null }> =
+    weekPlan?.meso_block == null
+      ? missing(t('phaseContextMissing'))
+      : present({
+        phase: weekPlan.meso_block.phase,
+        daysToEvent: weekPlan.meso_block.days_to_event,
+        eventType: weekPlan.meso_block.target_event_type,
+      })
+
   return {
     state,
     dateLabel,
@@ -660,6 +707,8 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     conditions,
     tomorrow,
     week,
+    weekLoad,
+    phaseContext,
     energyOut,
     isLoading,
   }
@@ -705,6 +754,7 @@ export function useTodayModel(stateOverride?: DayState): TodayModel {
   const healthQuery = useMorningHealthCheck()
   const tomorrowWorkoutsQuery = usePlannedWorkouts(tomorrow, tomorrow)
   const adaptiveQuery = useAdaptive()
+  const weekPlanQuery = useCurrentWeek()
 
   const todayRideActivityId = activitiesQuery.data?.activities.find((a) => a.sport === 'cycling')?.id
   const streamAnalysisQuery = useStreamAnalysis(todayRideActivityId)
@@ -739,6 +789,7 @@ export function useTodayModel(stateOverride?: DayState): TodayModel {
     hrvState: adaptiveQuery.data?.hrv_state,
     streamAnalysis: streamAnalysisQuery.data,
     locale,
+    weekPlan: weekPlanQuery.data ?? null,
   }
 
   return buildTodayModel(inputs)

@@ -330,6 +330,8 @@ export const COPY = {
   tomorrowUnlockMissing: { de: 'Keine Startzeit für morgen geplant.', en: "No unlock time on tomorrow's plan." },
   tomorrowMissing: { de: 'Der Plan für morgen steht noch nicht.', en: "Tomorrow's plan is not set yet." },
   weekDayNoRide: { de: 'Keine Fahrt erfasst.', en: 'No ride logged.' },
+  weekLoadMissing: { de: 'Für diese Woche ist noch keine Belastung geplant.', en: 'No planned load for this week yet.' },
+  phaseContextMissing: { de: 'Kein Wochenplan hinterlegt.', en: 'No week plan on file.' },
 
   // ---- Task 13: bottom sheets (Switch Day Type / Back To Session Done) --------
   sheetChangeDayStateHeader: { de: 'TAG ÄNDERN', en: 'CHANGE DAY STATE' },

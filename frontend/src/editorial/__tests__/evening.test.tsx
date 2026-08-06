@@ -81,6 +81,8 @@ const eveningModel: TodayModel = {
     { letter: 'SA', tss: present(68) }, { letter: 'SO', tss: present(44) },
   ],
   energyOut: missing('Kein stündlicher Energieverbrauch für heute verfügbar.'),
+  weekLoad: present({ spent: 260, planned: 420 }),
+  phaseContext: present({ phase: 'Grundlage 1', daysToEvent: 121, eventType: 'Marathon' }),
   isLoading: false,
 }
 

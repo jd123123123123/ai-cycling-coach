@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildTodayModel, compassPoint, type TodayModelInputs } from '../data/useTodayModel'
 import { isPresent } from '../data/value'
+import type { WeekResponse } from '../../api/weeks'
 
 const base = (over: Partial<TodayModelInputs> = {}): TodayModelInputs => ({
   now: new Date(2026, 6, 22, 9, 0),
@@ -223,6 +224,51 @@ describe('buildTodayModel', () => {
     }))
     expect(isPresent(m.ride)).toBe(true)
     if (isPresent(m.ride)) expect(m.ride.value.kj).toBeNull()
+  })
+})
+
+describe('weekLoad and phaseContext', () => {
+  const weekPlan = {
+    planned_tss_total: 420,
+    meso_block: { phase: 'Grundlage 1', days_to_event: 121, target_event_type: 'Marathon' },
+  } as unknown as WeekResponse
+
+  it('sums the present days against the plan total', () => {
+    const model = buildTodayModel(base({ weekPlan }))
+    expect(isPresent(model.weekLoad)).toBe(true)
+    if (!isPresent(model.weekLoad)) return
+    // base()'s PMC entries carry the only real per-day loads; a day with no
+    // entry contributes nothing rather than a zero that flatters the week.
+    expect(model.weekLoad.value.planned).toBe(420)
+    expect(model.weekLoad.value.spent).toBe(
+      model.week.reduce((sum, d) => sum + (isPresent(d.tss) ? d.tss.value : 0), 0),
+    )
+  })
+
+  it('withholds the meter rather than inventing a denominator', () => {
+    const model = buildTodayModel(base({
+      weekPlan: { ...weekPlan, planned_tss_total: null } as unknown as WeekResponse,
+    }))
+    expect(isPresent(model.weekLoad)).toBe(false)
+  })
+
+  it('is missing entirely when there is no week plan', () => {
+    const model = buildTodayModel(base({ weekPlan: null }))
+    expect(isPresent(model.weekLoad)).toBe(false)
+    expect(isPresent(model.phaseContext)).toBe(false)
+  })
+
+  it('carries the phase even when the athlete has no target event', () => {
+    const model = buildTodayModel(base({
+      weekPlan: {
+        ...weekPlan,
+        meso_block: { phase: 'Grundlage 1', days_to_event: null, target_event_type: null },
+      } as unknown as WeekResponse,
+    }))
+    expect(isPresent(model.phaseContext)).toBe(true)
+    if (!isPresent(model.phaseContext)) return
+    expect(model.phaseContext.value.phase).toBe('Grundlage 1')
+    expect(model.phaseContext.value.daysToEvent).toBeNull()
   })
 })
 
