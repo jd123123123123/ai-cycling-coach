@@ -4,11 +4,15 @@ import { useTapHighlight } from '../motion/useTapHighlight'
 
 /**
  * Transcribed from Rest's hero-body "Bars"/"BarLabels" (XD8oR/dfQOB,
- * `RYP0r`, depth 1): a 7-column Mon-Sun strip, columns fill_container with
- * a 2px gap (matching every other bar row in this file), each bar
- * cornerRadius 5, height literal per day (22/64/12/40/24/68/44 in the
- * pen's own mock), fill `$d-2` (var(--d-2)) except the CURRENT day's bar,
- * which is the state accent (`$C8FF00` in Rest → var(--st-active)).
+ * `RYP0r`, depth 1): a 7-column Mon-Sun strip, columns fill_container.
+ * CORRECTED (Audit A1, finding 3): the bar row's own gap is 6, and the
+ * label row's own gap is 5 — verified directly against `XD8oR`/`dfQOB`.
+ * An earlier pass hardcoded both to 2, on a doc-comment claim ("matching
+ * every other bar row in this file") that was never backed by the pen —
+ * `XD8oR`'s own gap is 6, not 2. Each bar has cornerRadius 5, height
+ * literal per day (22/64/12/40/24/68/44 in the pen's own mock), fill
+ * `$d-2` (var(--d-2)) except the CURRENT day's bar, which is the state
+ * accent (`$C8FF00` in Rest → var(--st-active)).
  * BarLabels: 10px/800 Inter, `$e-quiet` (#767D87) except the current day's
  * letter, which is `$e-ink` (#FFFFFF, plain white — NOT accent-tinted,
  * confirmed at `GX9bc`, the "W" label sitting under the accent bar).
@@ -54,7 +58,7 @@ export default function WeekRail({
 
   return (
     <div data-week-rail style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div ref={ref} style={{ width: '100%', height: 70, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+      <div ref={ref} style={{ width: '100%', height: 70, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
         {days.map((d, i) => {
           const isToday = i === todayIndex
           const tss = d.tss
@@ -90,7 +94,7 @@ export default function WeekRail({
           )
         })}
       </div>
-      <div style={{ width: '100%', display: 'flex', gap: 2, paddingTop: 8 }}>
+      <div style={{ width: '100%', display: 'flex', gap: 5, paddingTop: 8 }}>
         {days.map((d, i) => (
           <span
             key={i}

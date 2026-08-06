@@ -148,7 +148,6 @@ export default function DayRail({
       )}
       <div style={{ height: 14 }} />
       <div style={{ width: '100%', height: 1, background: 'var(--e-rule)' }} />
-      <div style={{ height: 16 }} />
       <div style={{ display: 'flex', gap: 8, width: '100%' }}>
         {STEP_KEYS.map((key, i) => {
           const isActive = i === activeIndex

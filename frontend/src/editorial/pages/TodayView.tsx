@@ -212,26 +212,44 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
   // deltaVsYesterday` — that would silently relabel a "vs yesterday" number
   // as "since this morning," which is exactly the kind of mislabeling this
   // build has already been corrected for once). The SECOND line ("top of
-  // your 90-day range") has no source anywhere — honestly missing.
+  // your 90-day range") is RE-WIRED (audit-b-data gap 2): `bodyBattery90DayHigh`
+  // is a real trailing-90-day MAX over `DailyMetric.body_battery`, folding in
+  // today's own wake/now reading — see useTodayModel.ts's own doc comment.
   const recoverySinceWakeLine: Value<string> = isPresent(model.bodyBattery)
     ? present(t('heroRecoverySinceWake', {
       sign: model.bodyBattery.value.now - model.bodyBattery.value.wake >= 0 ? '▲' : '▼',
       n: Math.abs(model.bodyBattery.value.now - model.bodyBattery.value.wake),
     }))
     : missing(model.bodyBattery.missing)
-  const recoveryRangeLine: Value<string> = missing(t('heroRecoveryRangeMissing'))
+  const recoveryRangeLine: Value<string> = isPresent(model.bodyBattery) && isPresent(model.bodyBattery90DayHigh)
+    ? (() => {
+      const off = Math.round(model.bodyBattery90DayHigh.value - model.bodyBattery.value.now)
+      return present(off <= 0 ? t('heroRecoveryRange90Best') : t('heroRecoveryRange90Off', { n: off }))
+    })()
+    : missing(t('heroRecoveryRangeMissing'))
 
   // "▲ N vs yesterday" (Rest's GoFzO / Training's B1DqG) — real, from
   // readiness.deltaVsYesterday. The season-best line (Rest's EqI8Z "3 off
-  // your 90-day best" / Training's c7Y2u3 "cleared for full intensity") has
-  // no TodayModel source at all — always missing, printed once.
+  // your 90-day best" / Training's c7Y2u3 "cleared for full intensity") is
+  // RE-WIRED (audit-b-data gap 2): `readiness90DayBest` is a real trailing-
+  // 90-day MAX over `DailyMetric.training_readiness`, same pattern
+  // `breakthrough_detector.py` already uses for power PBs. "cleared for
+  // full intensity" (Training's own wording, a coaching verdict rather than
+  // a number) still has no source and is not synthesised here — Training
+  // gets the same off-best framing as Rest, which is honestly what the data
+  // supports.
   const readinessDeltaLine: Value<string> = isPresent(model.readiness) && model.readiness.value.deltaVsYesterday != null
     ? present(t('heroReadinessDeltaVsYesterday', {
       sign: model.readiness.value.deltaVsYesterday >= 0 ? '▲' : '▼',
       n: Math.abs(model.readiness.value.deltaVsYesterday),
     }))
     : missing(isPresent(model.readiness) ? t('heroReadinessDeltaMissing') : model.readiness.missing)
-  const readinessContextLine: Value<string> = missing(t('heroReadinessContextMissing'))
+  const readinessContextLine: Value<string> = isPresent(model.readiness) && isPresent(model.readiness90DayBest)
+    ? (() => {
+      const off = Math.round(model.readiness90DayBest.value - model.readiness.value.score)
+      return present(off <= 0 ? t('heroReadinessContext90Best') : t('heroReadinessContext90Off', { n: off }))
+    })()
+    : missing(t('heroReadinessContextMissing'))
   const rcPrimaryLine: Value<string> = state === 'resting' ? recoverySinceWakeLine : readinessDeltaLine
   const rcSecondaryLine: Value<string> = state === 'resting' ? recoveryRangeLine : readinessContextLine
 
@@ -650,7 +668,7 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
                     fontSize: 10,
                     fontWeight: 800,
                     letterSpacing: 1.8,
-                    color: 'var(--e-mid)',
+                    color: state === 'training' ? 'var(--e-lo)' : 'var(--e-mid)',
                   }}
                 >
                   {isPresent(model.dateLabel) ? model.dateLabel.value : '—'}
@@ -780,7 +798,7 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
           )}
         </Cover>
 
-        <div data-hero-body style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '20px 24px 0 24px' }}>
+        <div data-hero-body style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '34px 24px 0 24px' }}>
           {state === 'rest' && (
             <div style={{ paddingBottom: 26 }}>
               <WeekRail days={model.week} todayIndex={todayIndex} />
@@ -788,7 +806,10 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
           )}
           {state === 'training' && (
             <div style={{ paddingBottom: 26 }}>
-              <Bars blocks={sessionBlocks} emphasizeMax />
+              {/* `x4AxA5/cTYba/FUAIT` — Training's hero-body session preview
+                  is its own pen node, `height: 81, gap: 3`, distinct from
+                  `Bars`'s own default (see Bars.tsx's doc comment). */}
+              <Bars blocks={sessionBlocks} emphasizeMax height={81} gap={3} />
             </div>
           )}
           {state === 'resting' && (
@@ -1273,7 +1294,7 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
         )}
 
         {showTomorrowBand && (
-          <div style={{ width: '100%', padding: '30px 24px 0 24px' }}>
+          <div style={{ width: '100%', padding: '46px 16px 0 16px' }}>
             <TomorrowBand
               session={state === 'rest' || state === 'resting' || state === 'evening' ? tomorrowSession : todaySession}
               kicker={state === 'rest' || state === 'resting' || state === 'evening' ? t('tomorrowBandTomorrow') : t('tomorrowBandToday')}

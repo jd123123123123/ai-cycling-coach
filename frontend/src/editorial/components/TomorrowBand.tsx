@@ -4,9 +4,14 @@ import { useCopy } from '../i18n/useCopy'
 
 /**
  * Transcribed from Rest's "Tomorrow Band Wrap" (FKp6r → K5LLS "Band",
- * `RYP0r`): fill #FFFFFF0A, cornerRadius 22, width fill_container — no
- * existing token is an exact match (closest is `--e-glass` #FFFFFF0F, a
- * hair stronger); reused rather than adding a near-duplicate 0A stop.  Col
+ * `RYP0r`): fill #FFFFFF0A, cornerRadius 22, width fill_container, padding
+ * 22 (uniform — CORRECTED, Audit A1 finding 6: was 20) — no existing token
+ * is an exact match (closest is `--e-glass` #FFFFFF0F, a hair stronger);
+ * reused rather than adding a near-duplicate 0A stop. The card also carries
+ * a full-perimeter 1px accent-coloured stroke (`#C8FF00` in Rest's `K5LLS`,
+ * `#2BE68F` in Training's own equivalent `tnfx3` — the state accent both
+ * times, i.e. `var(--st-active)`), MISSING entirely from an earlier pass;
+ * added back here. Col
  * (vertical, gap 6): Kicker "TOMORROW · UNLOCKS 05:00" (10/800 ls1.6, the
  * state accent) then Title "Threshold · 4 × 8 @ 285 W" (22/800 ls-0.9
  * lh1.1, $e-ink). Arrow icon (24x24, state accent) sits to the right —
@@ -36,7 +41,20 @@ export default function TomorrowBand({
   const kicker = kickerProp ?? t('tomorrowBandTomorrow')
   const present = isPresent(session)
   return (
-    <div data-tomorrow-band style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--e-glass)', borderRadius: 22, padding: 20, gap: 14 }}>
+    <div
+      data-tomorrow-band
+      style={{
+        width: '100%',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        background: 'var(--e-glass)',
+        borderRadius: 22,
+        border: '1px solid var(--st-active)',
+        padding: 22,
+        gap: 14,
+      }}
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
         <span style={{ fontFamily: 'var(--e-body)', fontSize: 10, fontWeight: 800, letterSpacing: 1.6, color: 'var(--st-active)' }}>
           {kicker}{present && session.value.unlockLabel ? ` · ${session.value.unlockLabel}` : ''}

@@ -75,8 +75,30 @@ export interface BarsBlock {
  * missing state" rule). Tapping a present block lifts it to `--st-active`
  * and drops every other present block to `--d-2` (`useTapHighlight`),
  * surfacing its exact wattage above the bar; tapping it again restores.
+ *
+ * `height`/`gap` (Audit A1, finding 4): the pen does NOT give this shared
+ * component one row geometry. Its own primary transcription source, "01 The
+ * Session"'s Planned row (`BBZZe`, `LdBJ4`'s Trained flagship), is
+ * `height: 96, gap: 2` — that stays the default for every call site with no
+ * more specific pen source. Training's hero-body session preview (`FUAIT`,
+ * `x4AxA5`, `emphasizeMax`) is a DIFFERENT pen node with its own geometry —
+ * `height: 81, gap: 3` — verified directly against the tree, not a
+ * derivative of `BBZZe`; TodayView passes that override only at that one
+ * call site. The hardcoded `height: 104, gap: 2` this component previously
+ * shipped with matched neither source (104 is ~8% taller than 96, plain
+ * wrong for FUAIT's 81) and is now gone.
  */
-export default function Bars({ blocks, emphasizeMax = false }: { blocks: BarsBlock[]; emphasizeMax?: boolean }) {
+export default function Bars({
+  blocks,
+  emphasizeMax = false,
+  height: rowHeight = 96,
+  gap = 2,
+}: {
+  blocks: BarsBlock[]
+  emphasizeMax?: boolean
+  height?: number
+  gap?: number
+}) {
   const presentWatts = blocks
     .map((b) => (isPresent(b.watts) ? b.watts.value : null))
     .filter((w): w is number => w != null)
@@ -86,12 +108,12 @@ export default function Bars({ blocks, emphasizeMax = false }: { blocks: BarsBlo
   const tap = useTapHighlight<number>()
 
   return (
-    <div ref={ref} data-bars style={{ width: '100%', height: 104, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+    <div ref={ref} data-bars style={{ width: '100%', height: rowHeight, display: 'flex', gap, alignItems: 'flex-end' }}>
       {blocks.map((b, i) => {
         const watts = b.watts
         const wattsPresent = isPresent(watts)
         const targetHeight = wattsPresent
-          ? Math.max(6, Math.round((watts.value / (maxWatts || 1)) * 104))
+          ? Math.max(6, Math.round((watts.value / (maxWatts || 1)) * rowHeight))
           : 8
         const height = wattsPresent && !on ? 0 : targetHeight
         const isWork = wattsPresent && emphasizeMax && watts.value === maxWatts
@@ -106,7 +128,7 @@ export default function Bars({ blocks, emphasizeMax = false }: { blocks: BarsBlo
               : 'var(--e-bar-ghost)'
 
         return (
-          <div key={i} style={{ position: 'relative', flex: b.minutes || 1, height: 104, display: 'flex', alignItems: 'flex-end' }}>
+          <div key={i} style={{ position: 'relative', flex: b.minutes || 1, height: rowHeight, display: 'flex', alignItems: 'flex-end' }}>
             {selected && (
               <span
                 style={{

@@ -61,6 +61,11 @@ export interface CoverProps {
  * never contributes to its parent's own auto-height calculation, so there
  * is no circular dependency). The fixed height returns the moment a real
  * photo exists.
+ *
+ * CORRECTED (Audit A1, finding 7): the pen's own root Cover frames
+ * (`bUuzT`/`maOQH`/`RLLDR`) carry no `gap` — spacing between Top and Foot
+ * comes entirely from `justifyContent: "space_between"`. An earlier pass
+ * set `gap: 22` here; removed to match the pen exactly.
  */
 export default function Cover({ state, photoUrl, children }: CoverProps) {
   const height = COVER_HEIGHT[state] ?? COVER_HEIGHT.rest!
@@ -79,7 +84,6 @@ export default function Cover({ state, photoUrl, children }: CoverProps) {
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        gap: 22,
         background: photoUrl ? `center / cover no-repeat url(${photoUrl}), var(--e-ground)` : 'var(--e-ground)',
       }}
     >
