@@ -10,8 +10,8 @@ import FatigueCurve from '../components/FatigueCurve'
 import InsightStrip from '../components/InsightStrip'
 import Ledger from '../components/Ledger'
 import LiveRing from '../components/LiveRing'
-import MetricTrack from '../components/MetricTrack'
-import { numeralFit } from '../components/numeralFit'
+import MetricTrack, { type MetricTrackAction } from '../components/MetricTrack'
+import { headlineFit } from '../components/numeralFit'
 import PeakRows, { type PeakTotal } from '../components/PeakRows'
 import PMCChart from '../components/PMCChart'
 import ProfileAvatar from '../components/ProfileAvatar'
@@ -149,6 +149,16 @@ export interface DayStateControl {
    *  `onConfirmSessionDone` above, which DO change the real day via
    *  `setOverride`. */
   onPreview: (next: DayState | null) => void
+  /** Real-data audit (2026-08-06): the withheld-readiness hero's sync
+   *  action (`utils/readinessGate.ts`'s 'stale' case only — "your watch
+   *  hasn't synced" is the one gap a sync can actually fix). Optional, like
+   *  every other affordance here: a fixture render without a `control`
+   *  simply shows no action, same as the Day Rail's own pill. */
+  readinessSync?: {
+    onSync: () => void
+    pending: boolean
+    done: boolean
+  }
 }
 
 /** Only these states have a sheet behind the pill (see the plan's Task 13). */
@@ -254,6 +264,35 @@ function TodayViewBody({ model, control, profile }: {
   const heroNumeralUnitSub = state === 'trained' ? t('heroUnitSessionLoad') : t('heroUnitOutOf100')
   const heroNumeralHue = state === 'trained' ? 'var(--m-load)' : 'var(--st-active)'
 
+  // Real-data audit (2026-08-06): the readiness gate's dated headline/tone/
+  // action for the missing arm above — meaningful only on Rest/Training's
+  // hero (the two states whose numeral IS `model.readiness`; Trained uses
+  // session load and Resting uses body battery, neither gated by this
+  // rule). `control?.readinessSync` is the page's own sync mutation (a
+  // hook `TodayPage.tsx` owns via `useForceSync`), handed down the same way
+  // `onSwapDayType`/`onPreview` already are — absent in a fixture render,
+  // which then shows no action, matching every other control-gated
+  // affordance in this file.
+  const heroNumeralUsesReadinessGate = state === 'rest' || state === 'training'
+  const heroNumeralMissingHeadline = heroNumeralUsesReadinessGate && model.readinessGateHeadline
+    ? model.readinessGateHeadline
+    : undefined
+  const heroNumeralMissingTone: 'quiet' | 'warn' =
+    heroNumeralUsesReadinessGate && model.readinessGate === 'stale' ? 'warn' : 'quiet'
+  const heroNumeralMissingAction: MetricTrackAction | undefined =
+    heroNumeralUsesReadinessGate && model.readinessGate === 'stale' && control?.readinessSync
+      ? {
+        label: control.readinessSync.done
+          ? t('heroReadinessSyncDone')
+          : control.readinessSync.pending
+            ? t('heroReadinessSyncPending')
+            : t('heroReadinessSyncAction'),
+        onPress: control.readinessSync.onSync,
+        pending: control.readinessSync.pending,
+        done: control.readinessSync.done,
+      }
+      : undefined
+
   // Resting's own RC lines (`h54Rs`/`l1W5R`+`hwZsA`, "▲ 3 since this
   // morning" / "top of your 90-day range") — the FIRST line is real,
   // computed from `model.bodyBattery`'s own wake/now pair (unlike Rest's
@@ -311,12 +350,18 @@ function TodayViewBody({ model, control, profile }: {
   // NIGHT's already-recorded total, not tonight's target). Permanently
   // missing, not a transient gap — one reason, reused for the numeral, the
   // BarLabels/hypnogram this task deliberately omits (same root cause), and
-  // Tonight's own tiles below. `numeralFit()` is still exercised here (not
-  // bypassed for the missing arm) so the day this field gets a real source,
-  // the shrink-to-fit behaviour is already wired, not bolted on later.
+  // Tonight's own tiles below.
+  //
+  // CORRECTED (real-data audit, 2026-08-06): this numeral is ALWAYS the
+  // missing arm (there is no source, ever), which made it the worst
+  // instance of the giant-grey-dash defect — `numeralFit('—')` never
+  // shrinks a single glyph, so it rendered a full 146px "—", a solid grey
+  // rectangle occupying the top of the screen (found running the real app;
+  // static fixtures never rendered this state's honest reality). It now
+  // gets the same composed, designed treatment `MetricTrack` gives every
+  // other missing hero numeral — see the render site below.
   const eveningLightsOutMissing = t('eveningLightsOutMissing')
-  const eveningNumeralText = '—'
-  const eveningNumeralFit = numeralFit(eveningNumeralText)
+  const eveningLightsOutHeadline = t('eveningLightsOutHeadline')
 
   const todayIndex = (new Date().getDay() + 6) % 7
 
@@ -490,6 +535,34 @@ function TodayViewBody({ model, control, profile }: {
       ? present(t('trainingSessionClaim', { n: workBlocks.length, m: Math.round(workBlocks[0].minutes) }))
       : missing(t('noCleanIntervalPattern'))
     : missing(model.session.missing)
+
+  // Real-data audit (2026-08-06): the block-count disagreement. Training's
+  // Insight Strip already reports the real WORK-interval count via
+  // `workBlockSummary` ("5 BLÖCKE" for today's real session — 5 actual
+  // 3-minute MAP intervals). This section's own chip separately reported
+  // `model.session.value.blocks.length` (11 — every block, including
+  // warm-up, the 4 recoveries between intervals, and the cool-down) under
+  // the IDENTICAL word "BLÖCKE", reading as a contradiction on one screen.
+  // Re-reading the pen live (not trusting the recorded tree, per this
+  // build's own global rule) found neither number is what the pen actually
+  // specifies in either chip slot:
+  //  - Training's own "02 The Session" chip (`HwC47`/`r8stp3`) reads
+  //    "STARTS 17:30" — a start-time, not a block count at all, and
+  //    `PrescribedWorkout` carries no scheduled time-of-day anywhere (the
+  //    same permanently-missing gap `noStartTimeToday` already names
+  //    elsewhere in this file) — so it renders no chip below, rather than
+  //    inventing a count the pen never asked for.
+  //  - Trained's own "01 The Session" chip (`d3DbRa`) reads "4 × 12 MIN" —
+  //    a work-shape summary (interval count × duration), not a raw block
+  //    count either. `workShapeChip` is that shape, built from the SAME
+  //    `workBlocks`/`uniformWork` this section's own claim already
+  //    computes above — so Trained's chip and Training's Insight Strip now
+  //    agree on what "5" refers to, instead of a second screen inventing an
+  //    11 nobody asked for. See i18n/copy.ts's `chipWorkShape` for the full
+  //    record of what the real numbers were.
+  const workShapeChip: string | undefined = uniformWork && workBlocks.length > 0
+    ? t('chipWorkShape', { n: workBlocks.length, m: Math.round(workBlocks[0].minutes) })
+    : undefined
 
   const trainingTiles: { label: string; value: Value<number | string>; unit: string }[] = [
     {
@@ -807,30 +880,38 @@ function TodayViewBody({ model, control, profile }: {
             <span
               style={{
                 fontFamily: 'var(--e-display)',
-                fontSize: 42,
                 fontWeight: 800,
-                letterSpacing: -2,
-                lineHeight: 1,
+                lineHeight: 1.05,
                 color: 'var(--e-ink)',
+                ...headlineFit(isPresent(heroHeadline) ? heroHeadline.value : '—'),
               }}
             >
               {isPresent(heroHeadline) ? heroHeadline.value : '—'}
             </span>
 
             {state === 'evening' ? (
-              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9 }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--e-display)',
-                    fontSize: eveningNumeralFit.fontSize,
-                    fontWeight: 800,
-                    letterSpacing: eveningNumeralFit.letterSpacing,
-                    lineHeight: 0.86,
-                    color: 'var(--e-lo)',
-                  }}
-                >
-                  {eveningNumeralText}
-                </span>
+              // Same composed, designed treatment `MetricTrack` gives every
+              // other missing hero numeral (this screen bypasses that
+              // component entirely — its numeral is a clock time, not a
+              // number — but the visual language must match, not diverge,
+              // per the audit's own instruction). See MetricTrack.tsx's own
+              // doc comment for why a scaled "—" is the defect, not the fix.
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: 'var(--e-lo)' }} />
+                  <span
+                    style={{
+                      fontFamily: 'var(--e-body)',
+                      fontSize: 19,
+                      fontWeight: 800,
+                      letterSpacing: -0.2,
+                      lineHeight: 1.2,
+                      color: 'var(--e-ink)',
+                    }}
+                  >
+                    {eveningLightsOutHeadline}
+                  </span>
+                </div>
                 <p style={quietReason}>{eveningLightsOutMissing}</p>
               </div>
             ) : (
@@ -843,6 +924,9 @@ function TodayViewBody({ model, control, profile }: {
                 delta={null}
                 band={null}
                 hue={heroNumeralHue}
+                missingHeadline={heroNumeralMissingHeadline}
+                missingTone={heroNumeralMissingTone}
+                missingAction={heroNumeralMissingAction}
               />
             )}
 
@@ -1104,7 +1188,7 @@ function TodayViewBody({ model, control, profile }: {
               index="01"
               title={t('sectionTheSession')}
               kicker
-              chip={isPresent(model.session) ? t('chipBlocks', { n: model.session.value.blocks.length }) : undefined}
+              chip={workShapeChip}
             />
             {isPresent(sessionClaim) && <Statement claim={sessionClaim} />}
 
@@ -1322,11 +1406,15 @@ function TodayViewBody({ model, control, profile }: {
 
         {state === 'training' && (
           <section data-section="02" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+            {/* No chip: the pen's own chip here (`HwC47`/`r8stp3`) is
+                "STARTS 17:30", a start-time with no TodayModel source — see
+                `workShapeChip`'s own doc comment above for the full record
+                of why this used to show a block count that disagreed with
+                the Insight Strip's real "5 BLÖCKE" a few lines up. */}
             <SecHead
               index="02"
               title={t('sectionTheSession')}
               kicker
-              chip={isPresent(model.session) ? t('chipBlocks', { n: model.session.value.blocks.length }) : undefined}
               sub={t('absorptionSub')}
             />
             <Statement claim={trainingSessionClaim} />

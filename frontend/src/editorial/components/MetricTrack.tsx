@@ -73,7 +73,32 @@ import { numeralFit } from './numeralFit'
  * interpolation of that one example into a below/in/above rule — the pen
  * does not specify it, so it is not gospel, and a later reader with a
  * second real example should feel free to replace it.
+ *
+ * CORRECTED (real-data audit, 2026-08-06): the missing-value arm used to be
+ * a plain "—" at a manually shrunk 64px — smaller than the 146px present
+ * arm, but still ~57×55px on screen: a fat grey rectangle sitting where the
+ * day's number belongs, found by running the real app against an account
+ * whose wearable hadn't synced in 3 days (the ordinary case a stale-
+ * wearable athlete sees, not a rare edge case — see `utils/
+ * readinessGate.ts`, which the caller now consults before ever reaching
+ * this component). The missing arm is now a composed block — a status dot,
+ * a short headline, the fuller reason underneath it, and (only when the
+ * gap is actually actionable) a button — never a numeral-shaped glyph. See
+ * `missingHeadline`/`missingTone`/`missingAction` below.
  */
+/** An action offered alongside a missing numeral — currently only the
+ *  readiness gate's 'stale' case ("your watch hasn't synced"), where there
+ *  is something the athlete can actually do. Presentational only: the
+ *  mutation itself (`useForceSync`, a hook) is owned by the page
+ *  (`pages/TodayPage.tsx`) and handed down as this plain callback, the same
+ *  pattern `DayRail`'s `onStepSelect`/`onSwapDayType` already follow. */
+export interface MetricTrackAction {
+  label: string
+  onPress: () => void
+  pending?: boolean
+  done?: boolean
+}
+
 export default function MetricTrack({
   label,
   state,
@@ -83,6 +108,9 @@ export default function MetricTrack({
   delta,
   band,
   hue,
+  missingHeadline,
+  missingTone = 'quiet',
+  missingAction,
 }: {
   label: string
   state: string
@@ -92,17 +120,22 @@ export default function MetricTrack({
   delta: number | null
   band: RangeBand | null
   hue: string
+  /** A short, composed headline for the missing state — replaces the plain
+   *  reason text in that slot, so the missing block reads as a title plus a
+   *  calmer detail line (`value.missing`) instead of one run-on sentence.
+   *  Falls back to `value.missing` itself when omitted, so every caller
+   *  gets the composed treatment (see below) without having to supply one. */
+  missingHeadline?: string
+  /** 'warn' tints the missing headline/dot amber — pairs with
+   *  `missingAction` for an actionable gap (e.g. "your watch hasn't
+   *  synced"). 'quiet' (default) is the calm, self-resolving gap with
+   *  nothing to do. */
+  missingTone?: 'quiet' | 'warn'
+  missingAction?: MetricTrackAction
 }) {
   const present = isPresent(value)
   const numeralText = present ? String(value.value) : '—'
-  // An em dash scaled to the numeral's 146px stops reading as punctuation and
-  // renders as a filled bar — it looked like a loading skeleton on screen. The
-  // missing numeral keeps its slot and its baseline, at a size where a dash is
-  // still legibly a dash. Found by rendering Evening, whose bedtime target has
-  // no source at all, so its hero numeral is always this arm.
-  const { fontSize, letterSpacing } = present
-    ? numeralFit(numeralText)
-    : { fontSize: 64, letterSpacing: -2 }
+  const { fontSize, letterSpacing } = present ? numeralFit(numeralText) : { fontSize: 0, letterSpacing: 0 }
   return (
     <div data-metric-track style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%' }}>
       {label && (
@@ -133,62 +166,155 @@ export default function MetricTrack({
           )}
         </div>
       )}
-      <div style={{ display: 'flex', width: '100%', gap: 9, alignItems: 'flex-end' }}>
-        <span
-          style={{
-            fontFamily: 'var(--e-display)',
-            fontSize,
-            fontWeight: 800,
-            letterSpacing,
-            lineHeight: 0.86,
-            color: present ? hue : 'var(--e-lo)',
-            filter: present ? 'drop-shadow(0 0 44px var(--a22))' : undefined,
-          }}
-        >
-          {numeralText}
-        </span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 20 }}>
-          <div style={{ display: 'flex', gap: 7, alignItems: 'flex-end' }}>
+      {present ? (
+        <div style={{ display: 'flex', width: '100%', gap: 9, alignItems: 'flex-end' }}>
+          <span
+            style={{
+              fontFamily: 'var(--e-display)',
+              fontSize,
+              fontWeight: 800,
+              letterSpacing,
+              lineHeight: 0.86,
+              color: hue,
+              filter: 'drop-shadow(0 0 44px var(--a22))',
+            }}
+          >
+            {numeralText}
+          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 7, alignItems: 'flex-end' }}>
+              <span
+                style={{
+                  fontFamily: 'var(--e-body)',
+                  fontSize: 14,
+                  fontWeight: 800,
+                  letterSpacing: 1.5,
+                  color: hue,
+                }}
+              >
+                {unit}
+              </span>
+              {delta != null && (
+                <span
+                  style={{
+                    fontFamily: 'var(--e-body)',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: 'var(--e-acid)',
+                  }}
+                >
+                  {delta > 0 ? `+${delta}` : delta}
+                </span>
+              )}
+            </div>
+            {unitSub && (
+              <span
+                style={{
+                  fontFamily: 'var(--e-body)',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: 1.3,
+                  color: 'var(--e-mid)',
+                }}
+              >
+                {unitSub}
+              </span>
+            )}
+          </div>
+        </div>
+      ) : (
+        // A "—" scaled to the numeral's 146px stopped reading as punctuation
+        // and rendered as a filled bar — a fat grey rectangle sitting where
+        // the day's headline number belongs, indistinguishable from a
+        // broken image (real-data audit, 2026-08-06: found on an account
+        // whose wearable hadn't synced in 3 days — the ordinary case, not
+        // an edge case). Even shrunk to 64px it still measured ~57×55px.
+        // This composed block replaces the numeral's slot with an honest,
+        // designed answer instead of an oversized glyph: a small status
+        // dot, a short headline (dated when the reason is a stale
+        // reading — see `missingHeadline`), the fuller reason underneath,
+        // and — only when there's something to actually do about it — an
+        // action.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+          {unit && (
             <span
               style={{
                 fontFamily: 'var(--e-body)',
-                fontSize: 14,
+                fontSize: 11,
                 fontWeight: 800,
-                letterSpacing: 1.5,
-                color: hue,
+                letterSpacing: 1.4,
+                color: 'var(--e-mid)',
               }}
             >
               {unit}
             </span>
-            {present && delta != null && (
-              <span
-                style={{
-                  fontFamily: 'var(--e-body)',
-                  fontSize: 12,
-                  fontWeight: 800,
-                  color: 'var(--e-acid)',
-                }}
-              >
-                {delta > 0 ? `+${delta}` : delta}
-              </span>
-            )}
-          </div>
-          {unitSub && (
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                flexShrink: 0,
+                background: missingTone === 'warn' ? 'var(--e-warn)' : 'var(--e-lo)',
+              }}
+            />
             <span
               style={{
                 fontFamily: 'var(--e-body)',
-                fontSize: 10,
+                fontSize: 19,
                 fontWeight: 800,
-                letterSpacing: 1.3,
-                color: 'var(--e-mid)',
+                letterSpacing: -0.2,
+                lineHeight: 1.2,
+                color: missingTone === 'warn' ? 'var(--e-warn)' : 'var(--e-ink)',
               }}
             >
-              {unitSub}
+              {missingHeadline ?? value.missing}
             </span>
+          </div>
+          <p
+            style={{
+              fontFamily: 'var(--e-body)',
+              fontSize: 12.5,
+              fontWeight: 600,
+              lineHeight: 1.45,
+              color: 'var(--e-quiet)',
+              margin: 0,
+            }}
+          >
+            {missingHeadline ? value.missing : ''}
+          </p>
+          {missingAction && (
+            <button
+              type="button"
+              onClick={missingAction.onPress}
+              disabled={missingAction.pending || missingAction.done}
+              style={{
+                alignSelf: 'flex-start',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 2,
+                padding: '7px 14px',
+                borderRadius: 'var(--radius-pill)',
+                border: `1px solid ${missingAction.done ? 'var(--s-good)' : 'color-mix(in srgb, var(--e-warn) 45%, transparent)'}`,
+                background: missingAction.done
+                  ? 'color-mix(in srgb, var(--s-good) 16%, transparent)'
+                  : 'color-mix(in srgb, var(--e-warn) 16%, transparent)',
+                color: missingAction.done ? 'var(--s-good)' : 'var(--e-warn)',
+                opacity: missingAction.pending ? 0.6 : 1,
+                fontFamily: 'var(--e-body)',
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: 0.6,
+              }}
+            >
+              {missingAction.label}
+            </button>
           )}
         </div>
-      </div>
-      {band && (
+      )}
+      {present && band && (
         <div style={{ position: 'relative', width: '100%', height: 12 }}>
           <div
             style={{
@@ -223,19 +349,6 @@ export default function MetricTrack({
             }}
           />
         </div>
-      )}
-      {!present && (
-        <p
-          style={{
-            fontFamily: 'var(--e-body)',
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--e-quiet)',
-            margin: 0,
-          }}
-        >
-          {value.missing}
-        </p>
       )}
     </div>
   )

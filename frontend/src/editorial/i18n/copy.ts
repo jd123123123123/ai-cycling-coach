@@ -203,7 +203,19 @@ export const COPY = {
   // ---- 02 THE SESSION (Training) ---------------------------------------------
   noCleanIntervalPattern: { de: 'Kein klares Intervallmuster erkennbar.', en: 'No clean interval pattern to summarize.' },
   trainingSessionClaim: { de: '{n} × {m} an der Schwelle.', en: '{n} × {m} at threshold.' },
-  sessionPreviewCaption: { de: '{n} BLÖCKE · {hm}', en: '{n} BLOCKS · {hm}' },
+  // CORRECTED (real-data audit, 2026-08-06): was "{n} BLÖCKE · {hm}" — the
+  // SAME word `workBlockSummary` above already uses for the WORK-interval
+  // count only ("5 BLÖCKE" in the Insight Strip a few lines up). This
+  // caption sits under the full preview Bars (all 11 blocks: warm-up + 5
+  // work + 4 recovery + cool-down), so its own number was real and
+  // correctly captioned its own chart, but the identical word for a
+  // different count read as the exact contradiction the SecHead chip
+  // defect already was. "TEILE" is the neutral word Session Detail's own
+  // "01 The Blocks" already uses for this same "every structural segment"
+  // meaning (`chipParts`, `SessionBlocks.tsx`) — reusing it here gives the
+  // whole build one consistent vocabulary: BLÖCKE = work intervals, TEILE =
+  // every segment.
+  sessionPreviewCaption: { de: '{n} TEILE · {hm}', en: '{n} PARTS · {hm}' },
 
   // ---- 01 RECOVERY (Rest + Training) -----------------------------------------
   sectionRecovery: { de: 'ERHOLUNG', en: 'RECOVERY' },
@@ -506,6 +518,92 @@ export const COPY = {
   // the Cover Meta row's Avatar (bUuzT/ToC54) — links to /profile, matching
   // DashboardHeaderBar's own rider-profile avatar.
   profileAvatarAria: { de: 'Mein Profil', en: 'My profile' },
+
+  // ---- Task: chart interaction — scrub-to-read + keyboard parity ----------
+  // (motion/useScrub.ts, motion/useListNav.ts, motion/touchTarget.ts). Every
+  // chart's one focusable container and its aria-live readout route through
+  // these — see the owning components for how each is used.
+  pmcPlotAriaHint: {
+    de: 'Zum Lesen eines Tages berühren, ziehen oder Pfeiltasten verwenden',
+    en: 'Touch, drag, or use arrow keys to read a day',
+  },
+  pmcScrubReadout: {
+    de: '{date} · FITNESS {ctl} · ERMÜDUNG {atl} · FORM {tsb}',
+    en: '{date} · FITNESS {ctl} · FATIGUE {atl} · FORM {tsb}',
+  },
+  fatigueCurveAriaLabel: {
+    de: 'Ermüdungskurve: Jetzt-Wert und neutrale Rückkehr',
+    en: 'Fatigue curve: now value and neutral return',
+  },
+  barsAriaLabel: { de: 'Geplante Wattzahl je Blockabschnitt', en: 'Planned watts per block' },
+  barsReadout: { de: '{label} · {watts} W', en: '{label} · {watts} W' },
+  zoneRowsAriaLabel: { de: 'Zeit in den Herzfrequenzzonen', en: 'Time in heart-rate zones' },
+  zoneRowsReadout: { de: '{zone} · {range} · {time}', en: '{zone} · {range} · {time}' },
+  weekRailAriaLabel: {
+    de: 'Trainingsbelastung der letzten sieben Tage',
+    en: 'Training load over the last seven days',
+  },
+  weekRailReadout: { de: '{letter} · {tss} TSS', en: '{letter} · {tss} TSS' },
+  peakRowsAriaLabel: { de: 'Spitzenleistung nach Dauer', en: 'Peak power by duration' },
+  liveRingReadout: { de: '{label}: {value} {unit}', en: '{label}: {value} {unit}' },
+  routeOptionsAriaLabel: { de: 'Streckenoptionen', en: 'Route options' },
+
+  // ---- Real-data audit (2026-08-06): the withheld-readiness hero ----------
+  // (MetricTrack.tsx, pages/TodayView.tsx). The account's wearable hadn't
+  // synced since Monday when this was found — `readiness` rendered a 64px
+  // em dash (~57×55px, a "fat grey rectangle") instead of the designed,
+  // dated withheld state `utils/readinessGate.ts` already specifies for the
+  // rest of the app. These two headline/detail pairs are that gate's
+  // 'pending'/'stale' copy, transcribed into EDITORIAL II's own terse
+  // register — see `data/useTodayModel.ts`'s `readiness`/`readinessGate`/
+  // `readinessGateHeadline` for how the gate selects between them.
+  heroReadinessPendingHeadline: { de: 'Nacht-Werte stehen noch aus', en: 'Overnight data still landing' },
+  heroReadinessPendingDetail: {
+    de: 'Deine Bereitschaft erscheint, sobald die Uhr die Nacht hochgeladen hat. Der Plan unten steht schon.',
+    en: 'Your readiness appears once your watch uploads last night. The plan below already stands.',
+  },
+  heroReadinessStaleHeadline: { de: 'Seit {n} Tagen keine Nacht-Werte', en: 'No overnight data for {n} days' },
+  heroReadinessStaleDetail: {
+    de: 'Letzte Messung {day}. Der Trainingsplan gilt trotzdem.',
+    en: 'Last reading {day}. Your plan still stands.',
+  },
+  heroReadinessSyncAction: { de: 'Jetzt synchronisieren', en: 'Sync now' },
+  heroReadinessSyncPending: { de: 'Synchronisiere…', en: 'Syncing…' },
+  heroReadinessSyncDone: { de: 'Synchronisiert', en: 'Synced' },
+  heroReadinessSyncError: { de: 'Synchronisierung fehlgeschlagen.', en: 'Sync failed.' },
+
+  // ---- Real-data audit (2026-08-06): Evening's bedtime numeral ------------
+  // is ALWAYS this arm (no source anywhere, see `eveningLightsOutMissing`'s
+  // own doc comment) — it was rendering the SAME oversized dash bug, at
+  // 146px (numeralFit('—') never shrinks a 1-glyph string), the worst case
+  // of the defect above. Short composed headline, paired with the existing
+  // `eveningLightsOutMissing` detail sentence.
+  eveningLightsOutHeadline: { de: 'Kein Zubettgeh-Ziel', en: 'No bedtime target' },
+
+  // ---- Real-data audit (2026-08-06): the session title overflow -----------
+  // (pages/TodayView.tsx's `headlineFit`). No new copy — this note documents
+  // why `chipWorkShape` below exists in the same audit pass.
+
+  // ---- Real-data audit (2026-08-06): the block-count disagreement ---------
+  // (pages/TodayView.tsx). The real session (`MAP — 5×3min @ 110% FTP`) has
+  // 11 total blocks (warm-up + 5 work + 4 recovery + cool-down) but only 5
+  // WORK intervals — Training's Insight Strip already reports the 5 (real,
+  // `workBlockSummary`), while the numbered section's own chip separately
+  // reported 11 under the identical "BLÖCKE" word, reading as a
+  // contradiction on one screen. Re-reading the pen live (`HwC47`/`r8stp3`,
+  // Training's "02 The Session") found that chip is not a block count at
+  // all — it is "STARTS 17:30", a start-time chip with no TodayModel source
+  // (same permanently-missing gap `noStartTimeToday` already names
+  // elsewhere in this file) — so Training's chip is now dropped rather than
+  // inventing a count the pen never asked for. Trained's own "01 The
+  // Session" chip (`d3DbRa`) reads "4 × 12 MIN" in the pen — a work-shape
+  // summary (work-interval count × duration), not a raw block count either.
+  // `chipWorkShape` is that shape, built from the same `workIntervalsOf()`
+  // read `workBlockSummary`/`trainingSessionClaim` already use — so Trained
+  // and Training now agree with each other (and with Training's own Insight
+  // Strip) on what "5" refers to, instead of a second screen inventing an
+  // 11 no one asked for.
+  chipWorkShape: { de: '{n} × {m} MIN', en: '{n} × {m} MIN' },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY

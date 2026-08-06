@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useForceSync } from '../../hooks/useForceSync'
 import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
 import TodayView, { type DayStateControl, type ProfileHeaderData } from './TodayView'
@@ -30,6 +31,12 @@ export default function TodayPage() {
   const model = useTodayModel(state)
   const { user } = useAuth()
   const [openSheet, setOpenSheet] = useState<'switch' | 'back' | null>(null)
+  // Real-data audit (2026-08-06): the withheld-readiness hero's sync
+  // action — the same `useForceSync` mutation the existing app's own
+  // `ReadinessFreshnessNote` uses, wired here rather than in a component
+  // (components/ never import hooks/) and handed down as a plain callback,
+  // the same pattern `onSwapDayType`/`onPreview` already follow.
+  const forceSync = useForceSync()
 
   const closeSheet = useCallback(() => setOpenSheet(null), [])
 
@@ -43,7 +50,12 @@ export default function TodayPage() {
     derived,
     isPreviewing,
     onPreview: preview,
-  }), [state, derived, isPreviewing, openSheet, setOverride, preview, closeSheet])
+    readinessSync: {
+      onSync: () => forceSync.mutate(),
+      pending: forceSync.isPending,
+      done: forceSync.isSuccess,
+    },
+  }), [state, derived, isPreviewing, openSheet, setOverride, preview, closeSheet, forceSync])
 
   const profile: ProfileHeaderData = useMemo(() => ({
     avatarUrl: user?.avatar_url ?? null,

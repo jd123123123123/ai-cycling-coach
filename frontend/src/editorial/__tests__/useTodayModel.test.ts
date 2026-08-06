@@ -81,6 +81,131 @@ describe('buildTodayModel', () => {
     }
   })
 
+  // ---- Real-data audit (2026-08-06): the readiness gate -------------------
+  // `utils/readinessGate.ts` imported, not reimplemented — see that
+  // module's own doc comment for why 'pending' and 'stale' need different
+  // copy and why `trainedToday`/`sidelined` must suppress the gate.
+  describe('readiness gate', () => {
+    it('withholds a stale reading (3+ days) with a dated headline and detail, even when the snapshot still carries a number', () => {
+      const m = buildTodayModel(base({
+        now: new Date(2026, 6, 22, 9, 0), // Wed 22 Jul
+        snapshot: { ...base().snapshot!, training_readiness: 74 },
+        recentMetrics: [{ date: '2026-07-19', hrv_status: 65 } as never], // 3 days ago
+      }))
+      expect(m.readinessGate).toBe('stale')
+      expect(m.readinessGateHeadline).toBe('Seit 3 Tagen keine Nacht-Werte')
+      expect(isPresent(m.readiness)).toBe(false)
+      expect(m.readiness).toEqual({ missing: 'Letzte Messung 19. Juli. Der Trainingsplan gilt trotzdem.' })
+    })
+
+    it('withholds a pending reading (within 2 days) with calm copy, no day named', () => {
+      const m = buildTodayModel(base({
+        now: new Date(2026, 6, 22, 9, 0),
+        snapshot: { ...base().snapshot!, training_readiness: 74 },
+        recentMetrics: [{ date: '2026-07-21', hrv_status: 65 } as never], // yesterday
+      }))
+      expect(m.readinessGate).toBe('pending')
+      expect(m.readinessGateHeadline).toBe('Nacht-Werte stehen noch aus')
+      expect(isPresent(m.readiness)).toBe(false)
+      expect(m.readiness).toEqual({
+        missing: 'Deine Bereitschaft erscheint, sobald die Uhr die Nacht hochgeladen hat. Der Plan unten steht schon.',
+      })
+    })
+
+    it('pending and stale produce genuinely different copy', () => {
+      const stale = buildTodayModel(base({
+        now: new Date(2026, 6, 22, 9, 0),
+        recentMetrics: [{ date: '2026-07-19', hrv_status: 65 } as never],
+      }))
+      const pending = buildTodayModel(base({
+        now: new Date(2026, 6, 22, 9, 0),
+        recentMetrics: [{ date: '2026-07-21', hrv_status: 65 } as never],
+      }))
+      expect(stale.readinessGateHeadline).not.toBe(pending.readinessGateHeadline)
+      expect((stale.readiness as { missing: string }).missing).not.toBe((pending.readiness as { missing: string }).missing)
+    })
+
+    it('trainedToday (a ride logged today) suppresses the gate — the ride is fresher evidence', () => {
+      const m = buildTodayModel(base({
+        now: new Date(2026, 6, 22, 9, 0),
+        snapshot: { ...base().snapshot!, training_readiness: 74 },
+        recentMetrics: [{ date: '2026-07-19', hrv_status: 65 } as never], // would otherwise be stale
+        activitiesToday: [{ id: 1, sport: 'cycling' } as never],
+      }))
+      expect(m.readinessGate).toBe('stale') // the freshness verdict itself is unchanged...
+      expect(isPresent(m.readiness)).toBe(true) // ...but the withhold is suppressed
+      if (isPresent(m.readiness)) expect(m.readiness.value.score).toBe(74)
+    })
+
+    it('sidelined (self-reported illness/injury) suppresses the gate', () => {
+      const m = buildTodayModel(base({
+        now: new Date(2026, 6, 22, 9, 0),
+        snapshot: { ...base().snapshot!, training_readiness: 74 },
+        recentMetrics: [{ date: '2026-07-19', hrv_status: 65 } as never],
+        session: { sidelined: true } as never,
+      }))
+      expect(isPresent(m.readiness)).toBe(true)
+    })
+
+    it('gate is "fresh" and readiness is present when today has its own overnight record', () => {
+      const m = buildTodayModel(base({
+        now: new Date(2026, 6, 22, 9, 0),
+        snapshot: { ...base().snapshot!, training_readiness: 74 },
+        recentMetrics: [{ date: '2026-07-22', hrv_status: 65 } as never], // today
+      }))
+      expect(m.readinessGate).toBe('fresh')
+      expect(m.readinessGateHeadline).toBeNull()
+      expect(isPresent(m.readiness)).toBe(true)
+    })
+
+    it('gate is "none" (no wearable, ever) rather than withholding with sync-style copy', () => {
+      const m = buildTodayModel(base({
+        now: new Date(2026, 6, 22, 9, 0),
+        snapshot: { ...base().snapshot!, training_readiness: null },
+        recentMetrics: [],
+      }))
+      expect(m.readinessGate).toBe('none')
+      expect(m.readinessGateHeadline).toBeNull()
+      expect(isPresent(m.readiness)).toBe(false)
+      expect(m.readiness).toEqual({ missing: 'Noch keine Bereitschaftsmessung.' })
+    })
+  })
+
+  // ---- Real-data audit (2026-08-06): whatThisChanges never duplicates -----
+  // the same sentence under both ON YOU and ON THE PLAN. Reproduces the real
+  // account's exact state: a brief with `adaptations` but an empty
+  // `changes` array and no post-ride review yet (today's plan hasn't been
+  // ridden) — the old fallback let `onYou` silently borrow `onThePlan`'s own
+  // `adaptations.summary`, printing the identical sentence under both
+  // labels.
+  it('whatThisChanges never duplicates the plan summary under ON YOU when there is nothing distinct to say about the athlete yet', () => {
+    const m = buildTodayModel(base({
+      brief: {
+        adaptations: { summary: 'Signals steady since yesterday — the plan follows the periodized build.', changes: [] },
+        post_ride_review: null,
+      } as never,
+    }))
+    expect(isPresent(m.whatThisChanges)).toBe(false)
+  })
+
+  it('whatThisChanges DOES populate ON YOU from a real per-signal change, distinct from the plan summary', () => {
+    const m = buildTodayModel(base({
+      brief: {
+        adaptations: {
+          summary: 'Signals steady since yesterday — the plan follows the periodized build.',
+          changes: [{ signal: 'hrv', direction: 'down', detail: 'HRV dipped 6% this week.', action: 'Ease tomorrow.', principle: 'Absorb before adding.', severity: 'ease' }],
+        },
+        post_ride_review: null,
+      } as never,
+    }))
+    expect(isPresent(m.whatThisChanges)).toBe(true)
+    if (isPresent(m.whatThisChanges)) {
+      expect(m.whatThisChanges.value.onYou.claim).toBe('HRV dipped 6% this week.')
+      expect(m.whatThisChanges.value.onThePlan.claim).toBe('Signals steady since yesterday — the plan follows the periodized build.')
+      expect(m.whatThisChanges.value.onYou.claim).not.toBe(m.whatThisChanges.value.onThePlan.claim)
+    }
+  })
+
   it('unlockLabel is missing even when tomorrow itself is present — no time-of-day source exists', () => {
     const m = buildTodayModel(base({
       tomorrowWorkout: { title: 'Recovery Spin', description: 'Forty-five minutes, easy.' } as never,

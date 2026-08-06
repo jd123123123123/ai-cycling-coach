@@ -17,13 +17,40 @@ describe('MetricTrack', () => {
     expect(screen.getByText('ABOVE RANGE')).toBeTruthy()
   })
 
-  it('renders an em dash and the reason when the reading is missing — and keeps the frame', () => {
+  it('renders a composed block (no oversized dash) and the reason when the reading is missing — and keeps the frame', () => {
     const { container } = render(<MetricTrack label="HRV" state="ABOVE RANGE"
       value={missing('No wearable reading since Tue.')} unit="ms" delta={null} band={null} hue="var(--m-hrv)" />)
-    expect(screen.getByText('—')).toBeTruthy()
+    // the reason renders as the composed block's own headline (no separate
+    // `missingHeadline` was supplied) — never a giant "—" standing in for it
+    expect(screen.queryByText('—')).toBeNull()
     expect(screen.getByText('No wearable reading since Tue.')).toBeTruthy()
     expect(screen.getByText('HRV')).toBeTruthy()
     expect(container.querySelector('[data-metric-track]')).not.toBeNull()
+  })
+
+  it('never renders a numeral-sized glyph for a missing value, even at the hero scale', () => {
+    render(<MetricTrack label="" state="" value={missing('No overnight data.')} unit="READINESS"
+      unitSub="OUT OF 100" delta={null} band={null} hue="var(--st-active)" />)
+    const dash = screen.queryByText('—')
+    expect(dash).toBeNull()
+  })
+
+  it('splits a dated headline from the fuller reason when missingHeadline is supplied', () => {
+    render(<MetricTrack label="" state="" value={missing('Der Trainingsplan gilt trotzdem.')}
+      unit="READINESS" delta={null} band={null} hue="var(--st-active)"
+      missingHeadline="Seit 3 Tagen keine Nacht-Werte" />)
+    expect(screen.getByText('Seit 3 Tagen keine Nacht-Werte')).toBeTruthy()
+    expect(screen.getByText('Der Trainingsplan gilt trotzdem.')).toBeTruthy()
+  })
+
+  it('only shows the sync action when one is supplied — the pending/calm gap gets none', () => {
+    const { rerender } = render(<MetricTrack label="" state="" value={missing('r')} unit="READINESS"
+      delta={null} band={null} hue="var(--st-active)" missingHeadline="Nacht-Werte stehen noch aus" />)
+    expect(screen.queryByRole('button')).toBeNull()
+    rerender(<MetricTrack label="" state="" value={missing('r')} unit="READINESS" delta={null} band={null}
+      hue="var(--st-active)" missingHeadline="Seit 3 Tagen keine Nacht-Werte"
+      missingTone="warn" missingAction={{ label: 'Jetzt synchronisieren', onPress: () => {} }} />)
+    expect(screen.getByRole('button', { name: 'Jetzt synchronisieren' })).toBeTruthy()
   })
 
   it('never prints a delta when the value is missing', () => {

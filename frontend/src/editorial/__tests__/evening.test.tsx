@@ -52,6 +52,8 @@ const eveningModel: TodayModel = {
   dateLabel: present('DO 23 JUL'),
   streakDays: present(13),
   readiness: present({ score: 74, deltaVsYesterday: 8 }),
+  readinessGate: 'fresh',
+  readinessGateHeadline: null,
   readiness90DayBest: present(77),
   bodyBattery90DayHigh: missing('Noch keine 90-Tage-Historie erfasst.'),
   hrv: present({ value: 68, unit: 'ms', delta: 4, band: { low: 52, high: 74, position: 'above' } }),

@@ -23,6 +23,7 @@ import { useDayState } from '../state/useDayState'
 import type { DayState } from '../state/dayState'
 import { translate, useCopy } from '../i18n/useCopy'
 import { EDITORIAL_DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/copy'
+import { readinessFreshness, withholdReadiness, type ReadinessGate } from '../../utils/readinessGate'
 
 export interface RangeBand { low: number; high: number; position: 'below' | 'in' | 'above' }
 export interface PmcPoint { date: string; ctl: number; atl: number; tsb: number; tss?: number | null }
@@ -59,6 +60,23 @@ export interface TodayModel {
   dateLabel: Value<string>
   streakDays: Value<number>
   readiness: Value<{ score: number; deltaVsYesterday: number | null }>
+  /** Readiness freshness verdict (`utils/readinessGate.ts` — the SAME rule
+   *  the rest of the app uses, imported not reimplemented). 'pending'/
+   *  'stale' both withhold `readiness` above (unless `trainedToday`/
+   *  `sidelined` — see the gate's own doc comment for why those two
+   *  escapes exist), but only 'stale' deserves a sync action: "wait for
+   *  your sleep" and "your watch hasn't synced" are different messages.
+   *  'fresh' when `readiness` is present; 'none' when the athlete has never
+   *  had a wearable reading at all (the honest empty state, no gate copy). */
+  readinessGate: ReadinessGate
+  /** Short, dated headline for the withheld-readiness hero — "Seit 3 Tagen
+   *  keine Nacht-Werte" (stale) or "Nacht-Werte stehen noch aus" (pending).
+   *  Distinct from `readiness.missing` (the longer reassurance sentence
+   *  underneath it, e.g. "der Trainingsplan gilt trotzdem") so the hero can
+   *  compose a short title plus a calmer detail line instead of one
+   *  run-on sentence. `null` whenever `readiness` is present or the gate is
+   *  'none' (nothing gate-specific to headline). */
+  readinessGateHeadline: string | null
   /** Trailing 90-day best `training_readiness`, including today (audit-b-data
    *  gap 2 — the pen's "3 off your 90-day best" line). `DailyMetric.
    *  training_readiness` is stored daily and historically (the same table
@@ -214,6 +232,21 @@ function wearableMissingReason(now: Date, recentMetrics: DailyMetric[] | undefin
   return translate(locale, 'wearableMissingSince', { day: lastReadingLabel(now, recentMetrics, locale) })
 }
 
+/** Dates the stale-readiness measurement — "3. August" style, a real
+ *  calendar date rather than just a weekday name, matching the existing
+ *  app's own withheld-readiness copy ("Letzte Messung 3. August."). `iso` is
+ *  `readinessFreshness()`'s own `lastOvernightKey` (yyyy-MM-dd); falls back
+ *  to the same generic phrase `wearableMissingReason` uses when there is no
+ *  overnight record to date at all (should not happen when the gate is
+ *  'stale', since that gate requires a `lastOvernightKey` — kept as a
+ *  belt-and-braces fallback, never a thrown error over a display string). */
+function formatOvernightDate(iso: string | null, locale: Locale): string {
+  if (!iso) return translate(locale, 'wearableLastSyncFallback')
+  const parsed = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return translate(locale, 'wearableLastSyncFallback')
+  return parsed.toLocaleDateString(intlLocale(locale), { day: 'numeric', month: 'long' })
+}
+
 function buildRangeBand(
   signal: MorningHealthSignal | undefined,
   positionOverride?: 'below' | 'in' | 'above' | 'unknown',
@@ -254,16 +287,52 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
 
   const streakDays = fromNullable(streak?.streak ?? null, t('streakMissing'))
 
+  // Hoisted from its old spot further down (still used unchanged by `ride`/
+  // `zones`/`peaks` below) so the readiness gate — which needs to know
+  // whether the athlete already rode today — can read it too.
+  const rideActivity = activitiesToday.find((a) => a.sport === 'cycling') ?? null
+
+  // Readiness freshness gate (real-data audit, 2026-08-06): the account's
+  // wearable hadn't synced since Monday when this was found, and
+  // `readiness` rendered a giant, near-invisible em dash instead of the
+  // dated, honest withheld state the rest of the app already has via
+  // `utils/readinessGate.ts`. Imported, not reimplemented — see that
+  // module's own doc comment for why 'pending' and 'stale' need different
+  // copy, and why `trainedToday`/`sidelined` must suppress the gate rather
+  // than withhold a score that's actually backed by fresher evidence (the
+  // ride itself, or a self-reported reason training isn't the question
+  // today).
+  const readinessFreshnessInfo = readinessFreshness(recentMetrics, toIsoDate(now))
+  const trainedToday = rideActivity != null
+  const sidelinedToday = session?.sidelined ?? false
+  const readinessWithheld = withholdReadiness({
+    gate: readinessFreshnessInfo.gate,
+    trainedToday,
+    sidelined: sidelinedToday,
+  })
+  const readinessGate: ReadinessGate = readinessFreshnessInfo.gate
+  const readinessGateHeadline: string | null = readinessWithheld
+    ? readinessGate === 'stale'
+      ? t('heroReadinessStaleHeadline', { n: readinessFreshnessInfo.ageDays ?? 0 })
+      : t('heroReadinessPendingHeadline')
+    : null
+
   const todayReadiness = snapshot?.training_readiness ?? null
-  const readiness = fromNullable(
-    todayReadiness === null ? null : {
-      score: todayReadiness,
-      deltaVsYesterday: yesterdayMetric?.training_readiness != null
-        ? todayReadiness - yesterdayMetric.training_readiness
-        : null,
-    },
-    t('readinessMissing'),
-  )
+  const readiness = readinessWithheld
+    ? missing<{ score: number; deltaVsYesterday: number | null }>(
+      readinessGate === 'stale'
+        ? t('heroReadinessStaleDetail', { day: formatOvernightDate(readinessFreshnessInfo.lastOvernightKey, locale) })
+        : t('heroReadinessPendingDetail'),
+    )
+    : fromNullable(
+      todayReadiness === null ? null : {
+        score: todayReadiness,
+        deltaVsYesterday: yesterdayMetric?.training_readiness != null
+          ? todayReadiness - yesterdayMetric.training_readiness
+          : null,
+      },
+      t('readinessMissing'),
+    )
 
   const wearableReason = wearableMissingReason(now, recentMetrics, locale)
 
@@ -397,7 +466,9 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   )
 
   const NO_RIDE_REASON = t('rideMissing')
-  const rideActivity = activitiesToday.find((a) => a.sport === 'cycling') ?? null
+  // `rideActivity` itself is hoisted above (the readiness gate needs it for
+  // its own `trainedToday` escape) — this is still where it's turned into
+  // the `ride` Value.
   const ride = fromNullable(
     rideActivity == null ? null : {
       activityId: rideActivity.id,
@@ -478,21 +549,33 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   // ON YOU / ON THE PLAN — pulled from adaptations ("what changed & why" —
   // the plan side) and the post-ride review (the physiological side), never
   // from outlook_7d (a different claim entirely: tomorrow's suggested TSS).
+  //
+  // CORRECTED (real-data audit, 2026-08-06): the previous fallback let
+  // `onYou` borrow `onThePlan`'s own `adaptations.summary` whenever there
+  // was no post-ride review AND no per-signal `AdaptationChange` yet —
+  // exactly today's real state (no ride started, `adaptations.changes: []`)
+  // — so both rows printed the IDENTICAL sentence under two different
+  // labels, reading as two independent findings that were actually one.
+  // `onYou` now has exactly two real sources — the post-ride physiological
+  // read, or a genuine per-signal change — and is never backfilled from the
+  // plan's own summary, which is a different claim (what the PLAN is
+  // doing, not what the athlete's body is doing). The whole block renders
+  // only once BOTH sides have a real, distinct claim; otherwise it's
+  // honestly missing rather than showing a duplicate.
   const adaptations = brief?.adaptations ?? null
   const postRideReview = brief?.post_ride_review ?? null
+  const firstChange = adaptations?.changes[0] ?? null
+  const onYouClaim = postRideReview?.physiological_read ?? firstChange?.detail ?? null
+  const onYouDetail = postRideReview?.goal_trajectory ?? firstChange?.action ?? firstChange?.principle ?? null
+  const onThePlanClaim = adaptations?.summary ?? postRideReview?.next_session_nudge ?? null
+  const onThePlanDetail = postRideReview?.next_session_nudge ?? firstChange?.detail ?? adaptations?.summary ?? null
   const whatThisChanges = fromNullable(
-    adaptations == null && postRideReview == null ? null : {
-      onYou: {
-        claim: postRideReview?.physiological_read ?? adaptations!.summary,
-        detail: postRideReview?.goal_trajectory ?? adaptations!.changes[0]?.detail ?? adaptations!.summary,
-      },
-      onThePlan: {
-        claim: adaptations?.summary ?? postRideReview!.next_session_nudge,
-        detail: postRideReview?.next_session_nudge
-          ?? adaptations!.changes[0]?.detail
-          ?? adaptations!.summary,
-      },
-    },
+    onYouClaim != null && onYouDetail != null && onThePlanClaim != null && onThePlanDetail != null
+      ? {
+        onYou: { claim: onYouClaim, detail: onYouDetail },
+        onThePlan: { claim: onThePlanClaim, detail: onThePlanDetail },
+      }
+      : null,
     t('whatThisChangesMissing'),
   )
 
@@ -556,6 +639,8 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     dateLabel,
     streakDays,
     readiness,
+    readinessGate,
+    readinessGateHeadline,
     readiness90DayBest,
     bodyBattery90DayHigh,
     hrv,
