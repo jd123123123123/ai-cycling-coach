@@ -52,6 +52,8 @@ const eveningModel: TodayModel = {
   dateLabel: present('DO 23 JUL'),
   streakDays: present(13),
   readiness: present({ score: 74, deltaVsYesterday: 8 }),
+  readiness90DayBest: present(77),
+  bodyBattery90DayHigh: missing('Noch keine 90-Tage-Historie erfasst.'),
   hrv: present({ value: 68, unit: 'ms', delta: 4, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 46, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'in' } }),
   sleep: present({ totalS: 27000, deepS: 4800, remS: 5400, lightS: 15600, awakeS: 1200 }),

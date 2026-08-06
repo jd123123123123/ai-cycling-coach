@@ -164,6 +164,8 @@ describe('Plate placement in TodayView', () => {
     dateLabel: present('WED 22 JUL'),
     streakDays: present(13),
     readiness: present({ score: 74, deltaVsYesterday: 8 }),
+    readiness90DayBest: present(77),
+    bodyBattery90DayHigh: missing('No 90-day history recorded yet.'),
     hrv: missing('No wearable reading.'),
     restingHr: missing('No wearable reading.'),
     sleep: missing('No wearable reading.'),

@@ -54,6 +54,13 @@ export interface StreamAnalysis {
   weather?: unknown
   has_gps_flag?: boolean
   route_kind?: 'zwift' | 'rouvy' | 'outdoor' | 'indoor'
+  /** Per-ride mean-max power curve (`ActivityStream.mmp_curve`), keyed by
+   *  duration in seconds as a string (e.g. `"5"`, `"300"`), value in watts.
+   *  Computed at ingest from the ride's own 1 Hz power stream — never a
+   *  synthetic test effort. `null`/absent for runs, gym sessions, or rides
+   *  whose power data the ingest guard flagged as implausible (see
+   *  `stream_ingestion.py`'s `store_model` gate). */
+  mmp_curve?: Record<string, number> | null
 }
 
 export async function fetchStreamAnalysis(activityId: number | string): Promise<StreamAnalysis> {

@@ -243,6 +243,13 @@ async def get_stream_analysis(
         device_max_hr=float(activity.max_hr) if activity.max_hr else None,
     )
     result["weather"] = row.weather
+    # Per-ride mean-max power curve (`ActivityStream.mmp_curve`, computed at
+    # ingest by `activity_analysis.analyze_streams`, already read per-ride by
+    # `breakthrough_detector.py`/`race_debrief.py`). Attached the same
+    # one-line way as `weather` above — no new computation, just exposing an
+    # already-stored column. `None` for runs/gym or ingest-guard-flagged
+    # implausible power data (see `stream_ingestion.py`'s `store_model` gate).
+    result["mmp_curve"] = row.mmp_curve
     result["has_gps_flag"] = bool(row.has_gps)
     # Route-card image hint: Zwift/ROUVY indoor vs GPS outdoor.
     title = (activity.title or "").lower()

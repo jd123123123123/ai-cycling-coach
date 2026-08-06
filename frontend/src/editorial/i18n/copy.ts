@@ -458,6 +458,18 @@ export const COPY = {
   rangeReadout: { de: '{value} · BEREICH {low}–{high}', en: '{value} · RANGE {low}–{high}' },
   peakRowsReadout: { de: '{watts} W BEI {duration}', en: '{watts} W AT {duration}' },
   routeSelected: { de: 'STRECKE AUSGEWÄHLT', en: 'ROUTE SELECTED' },
+
+  // ---- audit-b-data gap 2: trailing 90-day readiness/recovery context ----
+  // (`useTodayModel.ts`'s `readiness90DayBest`/`bodyBattery90DayHigh`,
+  // TodayView.tsx's own `readinessContextLine`/`recoveryRangeLine`).
+  ninetyDayHistoryMissing: {
+    de: 'Noch keine 90-Tage-Historie erfasst.',
+    en: 'No 90-day history recorded yet.',
+  },
+  heroReadinessContext90Off: { de: '{n} unter dem 90-Tage-Bestwert', en: '{n} off your 90-day best' },
+  heroReadinessContext90Best: { de: 'Dein 90-Tage-Bestwert', en: 'Your 90-day best' },
+  heroRecoveryRange90Off: { de: '{n} unter deiner 90-Tage-Bestmarke', en: '{n} off your 90-day peak' },
+  heroRecoveryRange90Best: { de: 'Spitze deiner 90-Tage-Spanne', en: 'Top of your 90-day range' },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY

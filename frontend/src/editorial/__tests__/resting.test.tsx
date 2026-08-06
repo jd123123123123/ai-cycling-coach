@@ -40,6 +40,8 @@ const restingModel: TodayModel = {
   dateLabel: present('THU 23 JUL'),
   streakDays: present(13),
   readiness: present({ score: 88, deltaVsYesterday: 6 }),
+  readiness90DayBest: present(91),
+  bodyBattery90DayHigh: present(94),
   bodyBattery: present({ wake: 88, now: 91 }),
   hrv: present({ value: 74, unit: 'ms', delta: 10, band: { low: 52, high: 80, position: 'above' } }),
   restingHr: present({ value: 46, unit: 'bpm', delta: -4, band: { low: 44, high: 55, position: 'below' } }),

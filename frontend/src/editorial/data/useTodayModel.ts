@@ -59,6 +59,20 @@ export interface TodayModel {
   dateLabel: Value<string>
   streakDays: Value<number>
   readiness: Value<{ score: number; deltaVsYesterday: number | null }>
+  /** Trailing 90-day best `training_readiness`, including today (audit-b-data
+   *  gap 2 — the pen's "3 off your 90-day best" line). `DailyMetric.
+   *  training_readiness` is stored daily and historically (the same table
+   *  `breakthrough_detector.py` reads a trailing MAX from for power PBs); a
+   *  plain `Math.max` over an already-fetched 90-day window is not a new
+   *  backend query — `useDailyMetrics(start, end)` already exists and is
+   *  called here with a wider range, same as `recentMetrics` above with a
+   *  7-day one. `TodayView.tsx` turns this + `readiness` into the actual
+   *  sentence; this field is only the raw best score. */
+  readiness90DayBest: Value<number>
+  /** Trailing 90-day HIGH `body_battery`, including today's wake/now pair
+   *  (audit-b-data gap 2 — Resting's "top of your 90-day range" line). Same
+   *  source table, same client-side max, no new query. */
+  bodyBattery90DayHigh: Value<number>
   hrv: Value<{ value: number; unit: 'ms'; delta: number | null; band: RangeBand | null }>
   restingHr: Value<{ value: number; unit: 'bpm'; delta: number | null; band: RangeBand | null }>
   sleep: Value<{ totalS: number; deepS: number | null; remS: number | null; lightS: number | null; awakeS: number | null }>
@@ -81,12 +95,18 @@ export interface TodayModel {
    *  whenever there is no ride today or the ride has no HR stream — see
    *  task-9-report.md, verify-check 2. */
   zones: Value<HrZone[]>
-  /** "Peak Power Today", `01 The Session`. Always missing: no hook anywhere
-   *  returns a per-ride power-duration curve — `usePowerProfile()`'s
-   *  `peaks`/`mmp_curve` are a sanitized envelope across every stored ride
-   *  ever, unscoped to today or to a season. See task-9-report.md,
-   *  verify-check 3 (a bigger gap than the brief's own question, which only
-   *  asked about the season-best percentage). */
+  /** "Peak Power Today", `01 The Session`. RE-WIRED (2026-08-06, audit-b-data
+   *  gap 1): `useStreamAnalysis(activityId).mmp_curve` is today's ride's own
+   *  real mean-max power curve (`ActivityStream.mmp_curve`, computed at
+   *  ingest from the actual 1 Hz power stream — attached to
+   *  `/activities/{id}/stream-analysis` the same one-line way `weather`
+   *  already was). Missing whenever there is no ride today or the ride
+   *  carries no power model (run/gym/no power meter/ingest-guard-flagged).
+   *  `percentOfSeasonBest` stays permanently `null` on every row: comparing
+   *  against a season envelope needs a NEW cross-ride aggregate query (the
+   *  `athlete_power_profile.py` pattern), which is request-time computation
+   *  this task's scope explicitly does not cover — never a fabricated
+   *  denominator. */
   peaks: Value<PeakRow[]>
   /** Per-block plan-vs-ridden deltas backing `Bars`' delta column. Always
    *  missing: `useStreamAnalysis`'s `splits` are per-kilometre, never
@@ -149,6 +169,10 @@ export interface TodayModelInputs {
    *  to date the "no wearable reading since ___" reason honestly. Optional:
    *  omitted callers (e.g. unit tests) fall back to 'your last sync'. */
   recentMetrics?: DailyMetric[]
+  /** Trailing ~90 days of daily metrics — used only for `readiness90DayBest`/
+   *  `bodyBattery90DayHigh` (audit-b-data gap 2). Optional: omitted callers
+   *  (existing unit tests) get both fields `missing`, same as no history. */
+  ninetyDayMetrics?: DailyMetric[]
   /** The HRV above/in/below label — the ONE source per the corrected data
    *  map is useAdaptive().hrv_state, never derived from the health signal's
    *  own baseline comparison. Optional: omitted callers get 'unknown'. */
@@ -208,7 +232,7 @@ function buildRangeBand(
 export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   const { now, state, snapshot, yesterdayMetric, todayMetric, streak, pmc, recoveryEta,
     session, brief, weather, activitiesToday, health, tomorrowWorkout, isLoading, recentMetrics, hrvState,
-    streamAnalysis, locale = EDITORIAL_DEFAULT_LOCALE } = inputs
+    streamAnalysis, ninetyDayMetrics, locale = EDITORIAL_DEFAULT_LOCALE } = inputs
   const t = (key: Parameters<typeof translate>[1], vars?: Parameters<typeof translate>[2]) => translate(locale, key, vars)
 
   const dateLabel = present(
@@ -298,6 +322,30 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     wearableReason,
   )
 
+  // Trailing 90-day bests (audit-b-data gap 2) — a client-side Math.max over
+  // an already-fetched window of `DailyMetric` rows, the same table
+  // `breakthrough_detector.py` reads a trailing MAX from for power PBs.
+  // Today's own reading is folded in (a window ending "now" whose own last
+  // point isn't yet the historical row `useDailyMetrics` returns) so a new
+  // personal best today is never reported as "off" a best that excludes it.
+  const ninetyDayReadinessValues = [
+    ...(ninetyDayMetrics ?? []).map((m) => m.training_readiness).filter((v): v is number => v != null),
+    ...(todayReadiness != null ? [todayReadiness] : []),
+  ]
+  const readiness90DayBest = fromNullable(
+    ninetyDayReadinessValues.length > 0 ? Math.max(...ninetyDayReadinessValues) : null,
+    t('ninetyDayHistoryMissing'),
+  )
+
+  const ninetyDayBodyBatteryValues = [
+    ...(ninetyDayMetrics ?? []).map((m) => m.body_battery).filter((v): v is number => v != null),
+    ...(bbPair?.now != null ? [bbPair.now] : []),
+  ]
+  const bodyBattery90DayHigh = fromNullable(
+    ninetyDayBodyBatteryValues.length > 0 ? Math.max(...ninetyDayBodyBatteryValues) : null,
+    t('ninetyDayHistoryMissing'),
+  )
+
   const workout = session?.workout ?? null
   const sessionValue = fromNullable(
     workout == null ? null : (() => {
@@ -365,12 +413,27 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
         seconds: streamAnalysis.hr_zones!.secs[i] ?? 0,
       })))
 
-  // "Peak Power Today" (task-9-report.md, verify-check 3): no hook returns
-  // a per-ride power-duration curve. usePowerProfile()'s peaks/mmp_curve
-  // are an all-time envelope across every stored ride, never scoped to
-  // today or to a season — always missing, matching the Insight Strip's
-  // own "PEAK POWER" gap (TodayView.tsx, task 8).
-  const peaks: Value<PeakRow[]> = missing(t('peaksMissing'))
+  // "Peak Power Today" (audit-b-data gap 1): today's ride's own real
+  // mean-max power curve, keyed by duration in seconds. A small, meaningful
+  // subset of checkpoints (5s / 1min / 5min / 12min — the pen's own Total
+  // hero mirrors the longest, 12-minute row) rather than every stored
+  // duration, since PeakRows is a short list, not a full power-duration
+  // chart. Rows for durations the ride never reached are simply omitted
+  // (mmp_curve itself has no entry for them — a short ride never held a
+  // 12-minute effort, so there is no 12-minute row, not a fabricated one).
+  const PEAK_DURATIONS_S = [5, 60, 300, 720]
+  const formatPeakDuration = (s: number) => (s < 60 ? `${s}s` : `${Math.round(s / 60)}min`)
+  const mmpCurve = streamAnalysis?.mmp_curve ?? null
+  const peaks: Value<PeakRow[]> = rideActivity == null
+    ? missing(NO_RIDE_REASON)
+    : (() => {
+      if (!mmpCurve) return missing(t('peaksMissing'))
+      const rows: PeakRow[] = PEAK_DURATIONS_S
+        .map((s) => ({ s, watts: mmpCurve[String(s)] }))
+        .filter((r): r is { s: number; watts: number } => typeof r.watts === 'number')
+        .map((r) => ({ duration: formatPeakDuration(r.s), watts: Math.round(r.watts), percentOfSeasonBest: null }))
+      return rows.length > 0 ? present(rows) : missing(t('peaksMissing'))
+    })()
 
   // Plan-vs-ridden per-block deltas (task-9-report.md, verify-check 1):
   // useStreamAnalysis's splits are per-kilometre, never aligned to a named
@@ -461,6 +524,8 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     dateLabel,
     streakDays,
     readiness,
+    readiness90DayBest,
+    bodyBattery90DayHigh,
     hrv,
     restingHr,
     sleep,
@@ -489,11 +554,17 @@ export function useTodayModel(): TodayModel {
   const now = useMemo(() => new Date(), [])
   const yesterday = useMemo(() => { const d = new Date(now); d.setDate(d.getDate() - 1); return d }, [now])
   const sevenDaysAgo = useMemo(() => { const d = new Date(now); d.setDate(d.getDate() - 7); return d }, [now])
+  const ninetyDaysAgo = useMemo(() => { const d = new Date(now); d.setDate(d.getDate() - 90); return d }, [now])
   const tomorrow = useMemo(() => { const d = new Date(now); d.setDate(d.getDate() + 1); return d }, [now])
 
   const snapshotQuery = useTodaySnapshot()
   const yesterdayMetricsQuery = useDailyMetrics(yesterday, yesterday)
   const recentMetricsQuery = useDailyMetrics(sevenDaysAgo, now)
+  // audit-b-data gap 2 ("3 off your 90-day best") — the same existing
+  // `/daily-metrics` range endpoint `recentMetrics` already uses above, just
+  // a wider window; `buildTodayModel` reduces it to a client-side MAX. Not a
+  // new backend query.
+  const ninetyDayMetricsQuery = useDailyMetrics(ninetyDaysAgo, now)
   const streakQuery = useStreak()
   const pmcQuery = usePMC()
   const recoveryEtaQuery = useRecoveryEta()
@@ -534,6 +605,7 @@ export function useTodayModel(): TodayModel {
     tomorrowWorkout: tomorrowWorkoutsQuery.data?.planned_workouts[0] ?? null,
     isLoading,
     recentMetrics: recentMetricsQuery.data?.metrics,
+    ninetyDayMetrics: ninetyDayMetricsQuery.data?.metrics,
     hrvState: adaptiveQuery.data?.hrv_state,
     streamAnalysis: streamAnalysisQuery.data,
     locale,
