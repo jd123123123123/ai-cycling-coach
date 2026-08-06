@@ -23,14 +23,14 @@ export default function WhatThisChanges({ value }: { value: Value<{ onYou: Claim
         <div key={row.label} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ width: '100%', height: 1, background: 'var(--e-hairline)' }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 800, letterSpacing: 1.4, color: 'var(--st-active)' }}>
+            <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--st-active)' }}>
               {row.label}
             </span>
-            <span style={{ fontFamily: 'var(--e-display)', fontSize: 16, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.25, color: 'var(--e-ink)' }}>
+            <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-body)', fontWeight: 700, letterSpacing: -0.2, lineHeight: 1.3, color: 'var(--e-ink)' }}>
               {row.claim ? row.claim.claim : '—'}
             </span>
             {row.claim && (
-              <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 500, lineHeight: 1.45, color: 'var(--e-mid)' }}>
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, lineHeight: 1.45, color: 'var(--e-mid)' }}>
                 {row.claim.detail}
               </span>
             )}
@@ -38,7 +38,7 @@ export default function WhatThisChanges({ value }: { value: Value<{ onYou: Claim
         </div>
       ))}
       {!present && (
-        <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: '8px 0 0 0' }}>
+        <p style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-quiet)', margin: '8px 0 0 0' }}>
           {value.missing}
         </p>
       )}

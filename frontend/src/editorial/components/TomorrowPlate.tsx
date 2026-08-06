@@ -31,9 +31,9 @@ const photoLayer: CSSProperties = { position: 'absolute', inset: 0, zIndex: -4 }
 const satLayer: CSSProperties = { position: 'absolute', inset: 0, zIndex: -3 }
 const tintLayer: CSSProperties = { position: 'absolute', inset: 0, zIndex: -2 }
 const scrimLayer: CSSProperties = { position: 'absolute', inset: 0, zIndex: -1 }
-const kickerStyle: CSSProperties = { fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6 }
-const captionStyle: CSSProperties = { fontFamily: 'var(--e-body)', fontSize: 10, fontWeight: 800, letterSpacing: 1.5 }
-const reasonStyle: CSSProperties = { fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: '8px 0 0 0' }
+const kickerStyle: CSSProperties = { fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4 }
+const captionStyle: CSSProperties = { fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.2 }
+const reasonStyle: CSSProperties = { fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-quiet)', margin: '8px 0 0 0' }
 
 export interface TomorrowPlateProps {
   state: DayState
@@ -90,6 +90,16 @@ export interface TomorrowPlateProps {
  *    a per-field reason list. Matches the register `InsightStrip`'s label
  *    row and the absorption tiles already use: the frame stays, and a gap
  *    gets ONE quiet explanation, not several.
+ *
+ * Design pass (2026-08-06): inset widened to 32px horizontal / 40px above
+ * the first line, matching `Cover`/`QuotePlate` — one rule for every
+ * photographic surface. `title` now reads at `--t-title` (34px, was 26),
+ * the same "one bold sentence" step `Statement`/`QuotePlate` use, since this
+ * plate's title plays the identical editorial role (a short, real sentence
+ * about tomorrow's ride) just on a different surface. `height` → `minHeight`
+ * for the same reason as `Cover.tsx`'s own fix — 246 is the photo's
+ * envelope, not a hard content budget a longer real title should be clipped
+ * into.
  */
 export default function TomorrowPlate({
   state, kickerLeft, kickerRight, title, captionLeft, captionRight, photoUrl, gapReason,
@@ -106,7 +116,7 @@ export default function TomorrowPlate({
       data-day-state={state}
       style={{
         width: '100%',
-        height: photoUrl ? 246 : undefined,
+        minHeight: photoUrl ? 246 : undefined,
         overflow: 'hidden',
         position: 'relative',
         // CORRECTED (coordinator visual review, task 11): with a photo, the
@@ -118,9 +128,11 @@ export default function TomorrowPlate({
         // a photo this plate collapses to its content's height (Cover's own
         // doc comment explains why), which silently threw away that
         // breathing room too — the legend and this plate's "MORGEN · 05:00"
-        // kicker rendered as one collided line. 32px restores it without
-        // reintroducing a fixed box.
-        padding: photoUrl ? '0 24px 18px 24px' : '32px 24px 18px 24px',
+        // kicker rendered as one collided line. 40px restores it (and then
+        // some, per the design pass above) without reintroducing a fixed box
+        // — now the same top inset with or without a photo, so this is no
+        // longer a two-branch ternary.
+        padding: '40px 32px 18px 32px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-end',
@@ -146,8 +158,8 @@ export default function TomorrowPlate({
         {isPresent(title) && (
           <p
             style={{
-              margin: 0, fontFamily: 'var(--e-display)', fontSize: 26, fontWeight: 800,
-              letterSpacing: -1.1, lineHeight: 1.05, color: 'var(--e-ink)',
+              margin: 0, fontFamily: 'var(--e-display)', fontSize: 'var(--t-title)', fontWeight: 800,
+              letterSpacing: -1, lineHeight: 1.05, color: 'var(--e-ink)',
             }}
           >
             {title.value}

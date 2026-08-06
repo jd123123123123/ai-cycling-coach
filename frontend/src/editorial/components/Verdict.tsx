@@ -22,6 +22,16 @@ import { isPresent, type Value } from '../data/value'
  * reason line in this file (MetricTrack, StatTile, InsightStrip) already
  * uses — not `var(--e-mid)`, the body's own normal-state colour. The body
  * `<p>`'s colour is therefore conditional on `bodyPresent`, not fixed.
+ *
+ * Design pass (2026-08-06): the body paragraph is real coach prose — on
+ * Training/Trained it runs to several lines (seen live at 390×844: ~7 lines
+ * on a real account). Centred text is fine for a one-line headline but hard
+ * to read at paragraph length — the ragged left edge a centred block
+ * produces makes every line start at a different point, which is exactly
+ * what centring is bad at past a sentence or two. Left-aligned within the
+ * same 320px column; the column itself stays centred by its parent
+ * (`justifyContent: center` at the call site), so the paragraph still reads
+ * as a centred block on the page, just a legible one.
  */
 export default function Verdict({
   headline,
@@ -40,9 +50,9 @@ export default function Verdict({
       <p
         style={{
           fontFamily: 'var(--e-display)',
-          fontSize: 28,
+          fontSize: 'var(--t-title)',
           fontWeight: 800,
-          letterSpacing: -1.2,
+          letterSpacing: -1,
           lineHeight: 1.05,
           textAlign: 'center',
           color: 'var(--e-ink)',
@@ -55,10 +65,10 @@ export default function Verdict({
       <p
         style={{
           fontFamily: 'var(--e-body)',
-          fontSize: 14,
+          fontSize: 'var(--t-body)',
           fontWeight: 500,
-          lineHeight: 1.45,
-          textAlign: 'center',
+          lineHeight: 1.5,
+          textAlign: 'left',
           color: bodyPresent ? 'var(--e-mid)' : 'var(--e-quiet)',
           margin: 0,
           width: 320,

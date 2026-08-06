@@ -22,13 +22,13 @@ export default function Statement({ claim, showReason = true }: { claim: Value<s
     <div style={{ padding: '16px 0 4px 0' }}>
       <p
         style={{
-          fontFamily: 'var(--e-display)', fontSize: 28, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1.05, color: 'var(--e-ink)', margin: 0, width: '100%',
+          fontFamily: 'var(--e-display)', fontSize: 'var(--t-title)', fontWeight: 800, letterSpacing: -1, lineHeight: 1.05, color: 'var(--e-ink)', margin: 0, width: '100%',
         }}
       >
         {present ? claim.value : '—'}
       </p>
       {!present && showReason && (
-        <p style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: '8px 0 0 0' }}>
+        <p style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-quiet)', margin: '8px 0 0 0' }}>
           {claim.missing}
         </p>
       )}

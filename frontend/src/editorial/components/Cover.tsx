@@ -87,6 +87,26 @@ export interface CoverProps {
  * (`bUuzT`/`maOQH`/`RLLDR`) carry no `gap` — spacing between Top and Foot
  * comes entirely from `justifyContent: "space_between"`. An earlier pass
  * set `gap: 22` here; removed to match the pen exactly.
+ *
+ * Design pass (2026-08-06): the pen's own 14px top / 24px side padding is a
+ * mock value measured on a monitor — at 390×844 it read as the date/streak
+ * row pressed straight against the top of the photo, no air above it at
+ * all. Widened to 32px horizontal and 40px above the first line, matching
+ * `QuotePlate`/`TomorrowPlate`'s own plates so all three photographic
+ * surfaces share one inset rule rather than three slightly different ones.
+ *
+ * CORRECTED (design pass, live verification): the extra top padding pushed
+ * REAL content (Training's own temperature/wind row, seen live against the
+ * real account) past the fixed per-state height — `overflow: hidden` was
+ * silently clipping the bottom of the hero instead of showing it. The pen's
+ * per-state numbers are a photo ENVELOPE, not a content budget the design
+ * pass gets to shrink into; `height` is now `minHeight` so the box grows to
+ * fit whatever the real content needs and never eats it. The photo layer
+ * still fills the box exactly (`inset: 0` on an absolutely-positioned
+ * layer tracks the parent's actual, possibly-taller size automatically),
+ * so a state with more content simply shows a little more photo, never
+ * less — `overflow: hidden` stays only to keep the photo from bleeding past
+ * whichever height that turns out to be.
  */
 export default function Cover({ state, photoUrl, children }: CoverProps) {
   const height = COVER_HEIGHT[state] ?? COVER_HEIGHT.rest!
@@ -98,10 +118,10 @@ export default function Cover({ state, photoUrl, children }: CoverProps) {
       data-hero
       style={{
         width: '100%',
-        height: photoUrl ? height : undefined,
+        minHeight: photoUrl ? height : undefined,
         overflow: 'hidden',
         position: 'relative',
-        padding: '14px 24px 26px 24px',
+        padding: '40px 32px 26px 32px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',

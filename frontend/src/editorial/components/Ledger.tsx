@@ -39,7 +39,7 @@ export default function Ledger({ caption, rows }: { caption?: string; rows: Ledg
       {caption && (
         <span
           style={{
-            fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-lo)',
+            fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-lo)',
           }}
         >
           {caption}
@@ -55,12 +55,12 @@ export default function Ledger({ caption, rows }: { caption?: string; rows: Ledg
               data-ledger-row
               style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
             >
-              <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1, color: 'var(--e-lo)' }}>
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1, color: 'var(--e-lo)' }}>
                 {row.label}
               </span>
               <span
                 style={{
-                  fontFamily: 'var(--e-display)', fontSize: 17, fontWeight: 800, letterSpacing: -0.6, lineHeight: 1,
+                  fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 800, letterSpacing: -0.5, lineHeight: 1,
                   color: present ? 'var(--e-ink)' : 'var(--e-quiet)',
                 }}
               >
@@ -73,7 +73,7 @@ export default function Ledger({ caption, rows }: { caption?: string; rows: Ledg
       {reasons.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {reasons.map((reason) => (
-            <span key={reason} style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)' }}>
+            <span key={reason} style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-quiet)' }}>
               {reason}
             </span>
           ))}

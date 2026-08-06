@@ -604,6 +604,17 @@ export const COPY = {
   // Strip) on what "5" refers to, instead of a second screen inventing an
   // 11 no one asked for.
   chipWorkShape: { de: '{n} × {m} MIN', en: '{n} × {m} MIN' },
+
+  // ---- Design pass (2026-08-06): honest counts -------------------------------
+  // `insightStripCaption` ("TODAY IN THREE NUMBERS") is only true on Trained
+  // and Evening, which really do show three signals — Rest and Training's
+  // own strip has always rendered two (its own third column has no
+  // TodayModel source at all, see InsightStrip.tsx's own doc comment), so
+  // the caption was quietly claiming a count the row never delivered. Found
+  // live at 390×844 against the real account. `InsightStrip` now picks
+  // between this and the original by `items.length`, rather than one
+  // caption baked in regardless of what it's captioning.
+  insightStripCaptionTwo: { de: 'HEUTE IN ZWEI ZAHLEN', en: 'TODAY IN TWO NUMBERS' },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY

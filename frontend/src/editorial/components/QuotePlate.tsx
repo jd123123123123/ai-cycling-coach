@@ -51,6 +51,18 @@ export interface QuotePlateProps {
  * height when `photoUrl` is absent; the scrim still renders full-bleed
  * behind that content. See `Cover.tsx`'s own doc comment for why the
  * absolute scrim sizing to auto-height content has no circular dependency.
+ *
+ * Design pass (2026-08-06): horizontal inset widened 24→32px and a 40px
+ * `paddingTop` added (was 0) — measured live at 390×844, the pull-quote sat
+ * flush against the plate's own edges with no air above it at all, a "crop
+ * accident" look the brief calls out by name. The quote itself now reads at
+ * `--t-title` (34px), the same step Statement's claim uses elsewhere — both
+ * are "the one bold sentence" of their block, so they share a size rather
+ * than each inventing their own (was 24px, between two scale steps).
+ *
+ * `height` → `minHeight` for the same reason as `Cover.tsx`'s own fix: 322
+ * is the photo's envelope, not a hard content budget — a longer real quote
+ * must never be clipped by `overflow: hidden` to hold a fixed number.
  */
 export default function QuotePlate({ state, quote, attribution, photoUrl }: QuotePlateProps) {
   return (
@@ -59,10 +71,10 @@ export default function QuotePlate({ state, quote, attribution, photoUrl }: Quot
       data-day-state={state}
       style={{
         width: '100%',
-        height: photoUrl ? 322 : undefined,
+        minHeight: photoUrl ? 322 : undefined,
         overflow: 'hidden',
         position: 'relative',
-        padding: '0 24px 28px 24px',
+        padding: '40px 32px 28px 32px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-end',
@@ -82,7 +94,7 @@ export default function QuotePlate({ state, quote, attribution, photoUrl }: Quot
       <div style={{ width: 34, height: 2, background: 'var(--st-active)', marginBottom: 14 }} />
       <p
         style={{
-          margin: 0, fontFamily: 'var(--e-display)', fontSize: 24, fontWeight: 800,
+          margin: 0, fontFamily: 'var(--e-display)', fontSize: 'var(--t-title)', fontWeight: 800,
           letterSpacing: -1, lineHeight: 1.1, color: 'var(--e-ink)',
         }}
       >
@@ -90,8 +102,8 @@ export default function QuotePlate({ state, quote, attribution, photoUrl }: Quot
       </p>
       <span
         style={{
-          marginTop: 14, fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800,
-          letterSpacing: 1.6, color: 'var(--e-quiet)',
+          marginTop: 14, fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800,
+          letterSpacing: 1.4, color: 'var(--e-quiet)',
         }}
       >
         {attribution}

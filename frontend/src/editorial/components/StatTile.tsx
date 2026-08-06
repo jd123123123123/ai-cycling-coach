@@ -27,8 +27,12 @@ import { isPresent, type Value } from '../data/value'
  * `hideReason` lets the tile still show its honest "—" while suppressing
  * its own copy of the reason text, so the caller can print it once below
  * the whole row instead (see `TodayView.tsx`'s "02 ABSORPTION" section).
- * Default `false` — every other caller (Trained's costTiles/trajectoryTiles)
- * is unaffected.
+ *
+ * Design pass (2026-08-06): sizes now route through the shared type scale
+ * (`tokens.css`) instead of the transcribed literals above. The spec names
+ * this component's own value explicitly as the --t-lead (22px) example of
+ * "secondary numerals, stat tiles" — the pen's literal 34/21px are folded
+ * into that one step rather than kept as a third, tile-specific size.
  */
 export default function StatTile({
   label,
@@ -47,9 +51,9 @@ export default function StatTile({
       <span
         style={{
           fontFamily: 'var(--e-body)',
-          fontSize: 9,
+          fontSize: 'var(--t-label)',
           fontWeight: 800,
-          letterSpacing: 1.6,
+          letterSpacing: 1.4,
           color: 'var(--e-lo)',
         }}
       >
@@ -58,9 +62,9 @@ export default function StatTile({
       <span
         style={{
           fontFamily: 'var(--e-display)',
-          fontSize: 34,
+          fontSize: 'var(--t-lead)',
           fontWeight: 800,
-          letterSpacing: -1.4,
+          letterSpacing: -0.5,
           lineHeight: 1,
           color: 'var(--e-ink)',
         }}
@@ -71,8 +75,8 @@ export default function StatTile({
         <span
           style={{
             fontFamily: 'var(--e-body)',
-            fontSize: 9,
-            fontWeight: 800,
+            fontSize: 'var(--t-micro)',
+            fontWeight: 700,
             letterSpacing: 0.8,
             color: 'var(--e-lo)',
           }}
@@ -84,8 +88,8 @@ export default function StatTile({
         <span
           style={{
             fontFamily: 'var(--e-body)',
-            fontSize: 9,
-            fontWeight: 600,
+            fontSize: 'var(--t-body)',
+            fontWeight: 500,
             color: 'var(--e-quiet)',
           }}
         >

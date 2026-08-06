@@ -143,7 +143,7 @@ export default function MetricTrack({
           <span
             style={{
               fontFamily: 'var(--e-body)',
-              fontSize: 11,
+              fontSize: 'var(--t-label)',
               fontWeight: 800,
               letterSpacing: 1.4,
               color: 'var(--e-mid)',
@@ -155,9 +155,9 @@ export default function MetricTrack({
             <span
               style={{
                 fontFamily: 'var(--e-body)',
-                fontSize: 9,
+                fontSize: 'var(--t-micro)',
                 fontWeight: 700,
-                letterSpacing: 1.2,
+                letterSpacing: 0.8,
                 color: 'var(--e-lo)',
               }}
             >
@@ -186,9 +186,9 @@ export default function MetricTrack({
               <span
                 style={{
                   fontFamily: 'var(--e-body)',
-                  fontSize: 14,
+                  fontSize: 'var(--t-body)',
                   fontWeight: 800,
-                  letterSpacing: 1.5,
+                  letterSpacing: 1.2,
                   color: hue,
                 }}
               >
@@ -198,7 +198,7 @@ export default function MetricTrack({
                 <span
                   style={{
                     fontFamily: 'var(--e-body)',
-                    fontSize: 12,
+                    fontSize: 'var(--t-micro)',
                     fontWeight: 800,
                     color: 'var(--e-acid)',
                   }}
@@ -211,9 +211,9 @@ export default function MetricTrack({
               <span
                 style={{
                   fontFamily: 'var(--e-body)',
-                  fontSize: 10,
+                  fontSize: 'var(--t-label)',
                   fontWeight: 800,
-                  letterSpacing: 1.3,
+                  letterSpacing: 1.2,
                   color: 'var(--e-mid)',
                 }}
               >
@@ -240,7 +240,7 @@ export default function MetricTrack({
             <span
               style={{
                 fontFamily: 'var(--e-body)',
-                fontSize: 11,
+                fontSize: 'var(--t-label)',
                 fontWeight: 800,
                 letterSpacing: 1.4,
                 color: 'var(--e-mid)',
@@ -262,10 +262,10 @@ export default function MetricTrack({
             <span
               style={{
                 fontFamily: 'var(--e-body)',
-                fontSize: 19,
+                fontSize: 'var(--t-lead)',
                 fontWeight: 800,
-                letterSpacing: -0.2,
-                lineHeight: 1.2,
+                letterSpacing: -0.3,
+                lineHeight: 1.15,
                 color: missingTone === 'warn' ? 'var(--e-warn)' : 'var(--e-ink)',
               }}
             >
@@ -275,8 +275,8 @@ export default function MetricTrack({
           <p
             style={{
               fontFamily: 'var(--e-body)',
-              fontSize: 12.5,
-              fontWeight: 600,
+              fontSize: 'var(--t-body)',
+              fontWeight: 500,
               lineHeight: 1.45,
               color: 'var(--e-quiet)',
               margin: 0,
@@ -304,7 +304,7 @@ export default function MetricTrack({
                 color: missingAction.done ? 'var(--s-good)' : 'var(--e-warn)',
                 opacity: missingAction.pending ? 0.6 : 1,
                 fontFamily: 'var(--e-body)',
-                fontSize: 11,
+                fontSize: 'var(--t-label)',
                 fontWeight: 800,
                 letterSpacing: 0.6,
               }}

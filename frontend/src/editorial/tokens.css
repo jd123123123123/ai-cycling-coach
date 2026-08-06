@@ -181,4 +181,45 @@
    * from --e-rule (#FFFFFF1F) and --d-2 (#FFFFFF2B), not close enough to
    * reuse either. */
   --e-avatar-ring: #FFFFFF29;
+
+  /* Design pass (2026-08-06): ONE type scale, seven steps, floor 11px.
+   * Measured before this pass: 22 distinct fontSize literals scattered
+   * across the Today screen, 42 of them at 9px or smaller. Every fontSize in
+   * a component this system owns now resolves to one of the seven names
+   * below — nothing else. --t-display and --t-hero are CEILINGS, not fixed
+   * values: numeralFit.ts/headlineFit() shrink toward them only when the
+   * rendered text would not fit the 342px content column; they are not
+   * separately hand-set per call site.
+   *   display 146/800/-9   the hero numeral — the signature, untouched
+   *   hero     42/800/-2   the hero headline ceiling (session/verdict title)
+   *   title    34/800/-1   the one bold sentence of a section or plate
+   *            (Statement's claim, Verdict's headline, QuotePlate's pull
+   *            quote, TomorrowPlate's title) — was 24-30, several different
+   *            sizes for the same editorial role.
+   *   lead     22/800/-0.5 secondary numerals: StatTile/Ledger/MovedRow
+   *            values, SecHead's index, InsightStrip's value, a short
+   *            composed missing-headline. Was 16-34 depending on caller.
+   *   body     15/500      prose — reason lines, the coach paragraph, RC
+   *            context lines. Was 12-14, too small to read comfortably.
+   *   label    12/800/1.4  uppercase eyebrows/kickers/chip text. Was 8-11.
+   *            The biggest single fix: fewer, larger labels read as
+   *            confident; dozens of 9px ones read as a spreadsheet.
+   *   micro    11/700/0.8  FLOOR. Units and bare deltas only, never a
+   *            sentence — nothing in this system goes smaller.
+   */
+  --t-display: 146px;
+  --t-hero: 42px;
+  --t-title: 34px;
+  --t-lead: 22px;
+  --t-body: 15px;
+  --t-label: 12px;
+  --t-micro: 11px;
+
+  /* DayRail's inactive step labels sit directly on the Cover photo now (the
+   * "date · streak · avatar" spine + rail moved inside the photographic
+   * plate) — --e-off (#3E444C) reads near-illegible grey-on-photo without
+   * help. A text-shadow reads as a scrim without repainting a bar behind the
+   * rail (which would block the photo DayRail.tsx already goes out of its
+   * way not to block — see that file's own doc comment). */
+  --e-label-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
 }

@@ -342,6 +342,35 @@ function TodayViewBody({ model, control, profile }: {
   const rcPrimaryLine: Value<string> = state === 'resting' ? recoverySinceWakeLine : readinessDeltaLine
   const rcSecondaryLine: Value<string> = state === 'resting' ? recoveryRangeLine : readinessContextLine
 
+  // Dedupe reasons (design pass, 2026-08-06): fixing the orphan "—" below
+  // (rendering the primary line's own reason instead of a bare dash)
+  // surfaced a real duplicate — when the hero numeral itself is entirely
+  // missing (`heroNumeralValue`, rendered by `MetricTrack`'s own composed
+  // missing block a few lines up), the primary RC line's fallback reason is
+  // the SAME underlying Value's `.missing` text (both derive from
+  // `model.readiness` on Rest/Training, `model.bodyBattery` on Resting) —
+  // printing it twice repeats MetricTrack's own reason a few pixels below
+  // it. Suppressed only in that exact case; a present numeral with its own,
+  // narrower gap (e.g. a delta with no prior day to compare) still shows
+  // its own distinct reason here.
+  const rcPrimaryReasonAlreadyShown = !isPresent(heroNumeralValue) && !isPresent(rcPrimaryLine)
+    && heroNumeralValue.missing === rcPrimaryLine.missing
+
+  // Find the win, continued: when the secondary RC line IS the true "best
+  // in 90 days" claim, it's a real, honest win — give it the day's accent
+  // colour and real weight instead of the same quiet grey every other
+  // context line uses, so it reads as a highlight rather than trivia.
+  const rcSecondaryIsWin = isPresent(rcSecondaryLine)
+    && (rcSecondaryLine.value === t('heroReadinessContext90Best') || rcSecondaryLine.value === t('heroRecoveryRange90Best'))
+  // Cut the scaffolding (design pass, 2026-08-06): `heroReadinessContextMissing`
+  // ("No further readiness context available yet") names nothing — it is
+  // the vague, generic filler the design pass calls out by its exact German
+  // text. Rest/Training's own secondary line renders nothing rather than
+  // that sentence when there's no 90-day comparison to make; Resting's own
+  // secondary reason (`heroRecoveryRangeMissing`, "no 90-day best recorded
+  // yet") is specific enough to keep.
+  const rcSecondaryIsGenericFiller = !isPresent(rcSecondaryLine) && rcSecondaryLine.missing === t('heroReadinessContextMissing')
+
   // ---- Evening's own hero numeral: a lights-out TIME, not a number --------
   // `xCSBq`/`UxmjR` ("22:30", cx4zJ's Cover Foot "Value") is a recommended
   // bedtime, computed from a sleep-duration target and a wake-alarm time.
@@ -362,6 +391,14 @@ function TodayViewBody({ model, control, profile }: {
   // other missing hero numeral — see the render site below.
   const eveningLightsOutMissing = t('eveningLightsOutMissing')
   const eveningLightsOutHeadline = t('eveningLightsOutHeadline')
+
+  // Find the win (design pass, 2026-08-06): real, never invented — a streak
+  // of 3+ days is a true, ordinary-but-genuine accomplishment that shows up
+  // on most real accounts most of the time (unlike a 90-day best, which is
+  // rare), so it's the header's own always-available candidate for real
+  // visual weight. Below 3 the header stays neutral rather than treating a
+  // one- or two-day streak as an event.
+  const isWinStreak = isPresent(model.streakDays) && model.streakDays.value >= 3
 
   const todayIndex = (new Date().getDay() + 6) % 7
 
@@ -837,25 +874,41 @@ function TodayViewBody({ model, control, profile }: {
                 <span
                   style={{
                     fontFamily: 'var(--e-body)',
-                    fontSize: 10,
+                    fontSize: 'var(--t-label)',
                     fontWeight: 800,
-                    letterSpacing: 1.8,
+                    letterSpacing: 1.4,
                     color: state === 'training' ? 'var(--e-lo)' : 'var(--e-mid)',
+                    textShadow: 'var(--e-label-shadow)',
                   }}
                 >
                   {isPresent(model.dateLabel) ? model.dateLabel.value : '—'}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                {/* Find the win (design pass, 2026-08-06): a streak is the
+                    one true, almost-always-present "good thing" this screen
+                    can point to without inventing anything — it's already
+                    real data (`model.streakDays`), just rendered as small
+                    grey chrome. A streak worth noticing (≥3 days) gets the
+                    day's own accent colour and a bolder weight instead of
+                    the neutral header tone; a short or absent streak stays
+                    quiet rather than being dressed up into something it
+                    isn't. */}
                 <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                  <Flame size={14} color="var(--e-mid)" aria-hidden="true" />
+                  <Flame
+                    size={14}
+                    color={isWinStreak ? 'var(--st-active)' : 'var(--e-mid)'}
+                    aria-hidden="true"
+                    fill={isWinStreak ? 'var(--st-active)' : 'none'}
+                  />
                   <span
                     style={{
                       fontFamily: 'var(--e-body)',
-                      fontSize: 10,
+                      fontSize: 'var(--t-label)',
                       fontWeight: 800,
-                      letterSpacing: 1.4,
-                      color: 'var(--e-mid)',
+                      letterSpacing: 1.2,
+                      color: isWinStreak ? 'var(--st-active)' : 'var(--e-mid)',
+                      textShadow: 'var(--e-label-shadow)',
                     }}
                   >
                     {isPresent(model.streakDays) ? t('heroStreakDays', { n: model.streakDays.value }) : '—'}
@@ -902,10 +955,10 @@ function TodayViewBody({ model, control, profile }: {
                   <span
                     style={{
                       fontFamily: 'var(--e-body)',
-                      fontSize: 19,
+                      fontSize: 'var(--t-lead)',
                       fontWeight: 800,
-                      letterSpacing: -0.2,
-                      lineHeight: 1.2,
+                      letterSpacing: -0.3,
+                      lineHeight: 1.15,
                       color: 'var(--e-ink)',
                     }}
                   >
@@ -932,7 +985,7 @@ function TodayViewBody({ model, control, profile }: {
 
             {state === 'trained' ? (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'flex-end' }}>
-                <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)' }}>
+                <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-quiet)' }}>
                   {isPresent(sessionContext) ? sessionContext.value : sessionContext.missing}
                 </span>
               </div>
@@ -942,13 +995,37 @@ function TodayViewBody({ model, control, profile }: {
               // did, but the newer IMAGERY variant dropped it (see
               // task-14-report.md). This screen's honest missing-bedtime
               // reason already prints once, directly under the numeral above.
+              //
+              // CORRECTED (design pass, 2026-08-06): the primary line used to
+              // fall back to a bare "—" with its own explanation nowhere
+              // nearby — the orphan dash found live at 390×844. It now shows
+              // its own reason, like every other missing arm in this file —
+              // unless that reason is the exact one `MetricTrack` already
+              // printed a few lines up (`rcPrimaryReasonAlreadyShown`), in
+              // which case it renders nothing rather than repeat it. The
+              // secondary line is dropped entirely when it would only repeat
+              // the generic "no further context" filler (see
+              // `rcSecondaryIsGenericFiller`'s own doc comment); when it IS a
+              // real 90-day-best claim it gets the accent colour and body
+              // weight instead of quiet grey — the win, given real weight.
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'flex-end' }}>
-                <span style={{ fontFamily: 'var(--e-body)', fontSize: 13, fontWeight: 800, color: 'var(--e-ink)' }}>
-                  {isPresent(rcPrimaryLine) ? rcPrimaryLine.value : '—'}
-                </span>
-                <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)' }}>
-                  {isPresent(rcSecondaryLine) ? rcSecondaryLine.value : rcSecondaryLine.missing}
-                </span>
+                {!rcPrimaryReasonAlreadyShown && (
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 700, color: 'var(--e-ink)' }}>
+                    {isPresent(rcPrimaryLine) ? rcPrimaryLine.value : rcPrimaryLine.missing}
+                  </span>
+                )}
+                {!rcSecondaryIsGenericFiller && (
+                  <span
+                    style={{
+                      fontFamily: 'var(--e-body)',
+                      fontSize: 'var(--t-body)',
+                      fontWeight: rcSecondaryIsWin ? 800 : 500,
+                      color: rcSecondaryIsWin ? 'var(--st-active)' : 'var(--e-quiet)',
+                    }}
+                  >
+                    {isPresent(rcSecondaryLine) ? rcSecondaryLine.value : rcSecondaryLine.missing}
+                  </span>
+                )}
               </div>
             )}
 
@@ -980,7 +1057,7 @@ function TodayViewBody({ model, control, profile }: {
               rendered). No Day Mark renders for Evening; every other state
               still gets one at its own pen-verified offset. */}
           {state !== 'evening' && (
-            <div style={{ position: 'absolute', top: DAY_MARK_TOP[state] ?? DAY_MARK_TOP.trained, right: 24 }}>
+            <div style={{ position: 'absolute', top: DAY_MARK_TOP[state] ?? DAY_MARK_TOP.trained, right: 32 }}>
               <DayMark state={state} />
             </div>
           )}
@@ -1014,7 +1091,7 @@ function TodayViewBody({ model, control, profile }: {
             // the motion rules enumerate (Bars/PMCChart/FatigueCurve/
             // ZoneRows/WeekRail/LiveRing).
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 26 }}>
-              <span style={{ fontFamily: 'var(--e-body)', fontSize: 9.5, fontWeight: 800, letterSpacing: 1.1, color: 'var(--e-lo)' }}>
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-lo)' }}>
                 {t('climbSinceWoke')}
               </span>
               {isPresent(model.bodyBattery) ? (
@@ -1022,13 +1099,13 @@ function TodayViewBody({ model, control, profile }: {
                   <div style={{ position: 'absolute', left: 0, right: 0, top: 30, height: 1, background: 'var(--d-2)' }} />
                   <div style={{ position: 'absolute', left: 4, top: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--d-3)' }} />
-                    <span style={{ fontFamily: 'var(--e-body)', fontSize: 9.5, fontWeight: 800, letterSpacing: 1.1, color: 'var(--e-lo)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-lo)', whiteSpace: 'nowrap' }}>
                       {t('climbWakeLabel', { n: model.bodyBattery.value.wake })}
                     </span>
                   </div>
                   <div style={{ position: 'absolute', right: 4, top: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     <div style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--st-active)', boxShadow: '0 0 16px var(--st-a40)' }} />
-                    <span style={{ fontFamily: 'var(--e-body)', fontSize: 9.5, fontWeight: 800, letterSpacing: 1.1, color: 'var(--st-active)' }}>
+                    <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--st-active)' }}>
                       {t('climbNow')}
                     </span>
                   </div>
@@ -1055,10 +1132,15 @@ function TodayViewBody({ model, control, profile }: {
             // component here would render a stray "—" headline row for a
             // slot the frame doesn't have, so Rest renders that one
             // paragraph directly instead.
+            //
+            // Design pass (2026-08-06): left-aligned, matching `Verdict`'s
+            // own body paragraph fix — real coach prose runs long enough
+            // that centring it hurts readability more than it helps the
+            // block look tidy. The 320px column stays centred by its parent.
             <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
               <p
                 style={{
-                  fontFamily: 'var(--e-body)', fontSize: 14, fontWeight: 500, lineHeight: 1.45, textAlign: 'center',
+                  fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, lineHeight: 1.5, textAlign: 'left',
                   color: isPresent(model.verdict) ? 'var(--e-mid)' : 'var(--e-quiet)', margin: 0, width: 320, maxWidth: '100%',
                 }}
               >
@@ -1097,18 +1179,37 @@ function TodayViewBody({ model, control, profile }: {
               </div>
             )}
 
-            <div style={{ width: '100%', display: 'flex', paddingTop: 18 }}>
+            {/* Dedupe reasons (design pass, 2026-08-06): `energyOut` is
+                permanently missing (see the doc comment above), so the
+                Ledger a few lines up always renders and — when the ride
+                itself is missing too — always prints `model.ride.missing`
+                first. These four tiles used to each print their own copy of
+                the SAME text (measured baseline: this exact sentence
+                appeared 3× on one real screen); they now hide it, and the
+                caption row below stays silent for the same reason rather
+                than printing a fourth/fifth copy. */}
+            {/* gap: 8 (design pass, 2026-08-06) — StatTile's label now reads
+                at --t-label (12px, was 9px) and, unlike the old 9px size,
+                often fills its own 100px-wide column edge to edge. With
+                zero gap between tiles, two adjacent single-word labels (e.g.
+                "ZUBETTGEHEN" next to "WECKEN") rendered with no visible
+                space between them at all — found live at 390×844, reading
+                as one run-on word. Every StatTile row in this file gets the
+                same gap, for one consistent rule. */}
+            <div style={{ width: '100%', display: 'flex', gap: 8, paddingTop: 18 }}>
               {eveningRideTiles.map((tile) => (
-                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} />
+                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} hideReason />
               ))}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '18px 0 0 0' }}>
-              <div style={{ width: '100%', height: 1, background: 'var(--e-hairline)' }} />
-              <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 700, letterSpacing: 0.4, color: 'var(--e-mid)' }}>
-                {isPresent(rideMicro) ? rideMicro.value : rideMicro.missing}
-              </span>
-            </div>
+            {isPresent(rideMicro) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '18px 0 0 0' }}>
+                <div style={{ width: '100%', height: 1, background: 'var(--e-hairline)' }} />
+                <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 700, letterSpacing: 0.4, color: 'var(--e-mid)' }}>
+                  {rideMicro.value}
+                </span>
+              </div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '26px 0 0 0' }}>
               <span style={kickerLabel}>{t('movedKeyHeading')}</span>
@@ -1226,7 +1327,7 @@ function TodayViewBody({ model, control, profile }: {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '18px 0 0 0' }}>
               <div style={{ width: '100%', height: 1, background: 'var(--e-hairline)' }} />
-              <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 700, letterSpacing: 0.4, color: 'var(--e-mid)' }}>
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 700, letterSpacing: 0.4, color: 'var(--e-mid)' }}>
                 {isPresent(rideMicro) ? rideMicro.value : rideMicro.missing}
               </span>
             </div>
@@ -1249,11 +1350,15 @@ function TodayViewBody({ model, control, profile }: {
 
         {isRestOrTraining && (
           <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+            {/* Cut the scaffolding (design pass, 2026-08-06): `recoverySub`
+                ("HRV, resting heart rate and sleep — each against your own
+                30-day range") describes how the RangeRows below are built,
+                not what they say — the section's three real readings, and
+                their own bands, already carry the finding. No `sub`. */}
             <SecHead
               index="01"
               title={t('sectionRecovery')}
               kicker
-              sub={t('recoverySub')}
             />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 20 }}>
@@ -1296,10 +1401,10 @@ function TodayViewBody({ model, control, profile }: {
                   <div style={{ width: '100%', display: 'flex' }}>
                     {sleepParts(model.sleep.value, t).map((p) => (
                       <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1, color: 'var(--e-lo)' }}>
+                        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1, color: 'var(--e-lo)' }}>
                           {p.label}
                         </span>
-                        <span style={{ fontFamily: 'var(--e-body)', fontSize: 13, fontWeight: 800, color: 'var(--e-ink)' }}>
+                        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 700, color: 'var(--e-ink)' }}>
                           {p.seconds != null ? formatHM(p.seconds) : '—'}
                         </span>
                       </div>
@@ -1325,7 +1430,7 @@ function TodayViewBody({ model, control, profile }: {
                 Statement (matching the rule Rest's own "01 Recovery" and
                 "01 Right Now" already follow: a slot that can never resolve
                 renders nothing, not a floating dash). */}
-            <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
+            <div style={{ width: '100%', display: 'flex', gap: 8, paddingTop: 20 }}>
               {eveningTonightTiles.map((tile) => (
                 <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} hideReason />
               ))}
@@ -1344,11 +1449,20 @@ function TodayViewBody({ model, control, profile }: {
             />
             <Statement claim={costClaim} />
 
-            <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
+            {/* Dedupe reasons (design pass, 2026-08-06): `costClaim`'s own
+                fallback (above) is fatigue-history text — a DIFFERENT root
+                cause from these tiles', which are missing only when
+                `model.session` itself is absent. So the four tiles hide
+                their own per-tile copy (`hideReason`) and, when that's the
+                actual cause, print the real explanation once below — not
+                once per tile, and not silently dropped just because
+                Statement already said something else. */}
+            <div style={{ width: '100%', display: 'flex', gap: 8, paddingTop: 20 }}>
               {costTiles.map((tile) => (
-                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} />
+                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} hideReason />
               ))}
             </div>
+            {!isPresent(model.session) && <p style={quietReason}>{model.session.missing}</p>}
 
             <div style={{ paddingTop: 24, display: 'flex', flexDirection: 'column', gap: 9 }}>
               <span style={kickerLabelDim}>{t('fatigueNext48h')}</span>
@@ -1371,7 +1485,7 @@ function TodayViewBody({ model, control, profile }: {
                 resolve renders nothing, not a dash implying a transient gap.
                 The tiles below carry the one honest reason. */}
 
-            <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
+            <div style={{ width: '100%', display: 'flex', gap: 8, paddingTop: 20 }}>
               {costTilesRest.map((tile) => (
                 <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} hideReason />
               ))}
@@ -1393,7 +1507,7 @@ function TodayViewBody({ model, control, profile }: {
                     <span style={tickStyle} title={t('absorptionNoEndTime')}>—</span>
                     <span style={tickStyle}>{t('absorptionClearAt', { label: model.recovery.value.clearAtLabel.toUpperCase() })}</span>
                   </div>
-                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 10, fontWeight: 700, color: 'var(--e-mid)' }}>
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 700, color: 'var(--e-mid)' }}>
                     {t('absorptionSummary', { a: Math.round(absorbedH ?? 0), r: Math.round(remainingH ?? 0) })}
                   </span>
                 </>
@@ -1419,9 +1533,13 @@ function TodayViewBody({ model, control, profile }: {
             />
             <Statement claim={trainingSessionClaim} />
 
-            <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
+            {/* Dedupe reasons: `trainingSessionClaim`'s own missing fallback
+                is `model.session.missing` verbatim — the identical text
+                these four tiles would otherwise each repeat — so they hide
+                their own copy; Statement above already said it once. */}
+            <div style={{ width: '100%', display: 'flex', gap: 8, paddingTop: 20 }}>
               {trainingTiles.map((tile) => (
-                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} />
+                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} hideReason />
               ))}
             </div>
 
@@ -1447,18 +1565,29 @@ function TodayViewBody({ model, control, profile }: {
             below. */}
         {state !== 'evening' && (
           <section data-section={trajectoryIndex} style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+            {/* Cut the scaffolding (design pass, 2026-08-06): this is the
+                spec's own quoted example — `trajectorySub` ("Fitness,
+                fatigue and form from the rolling 42-day model") is a
+                data-source footnote sitting directly under `trajectoryClaim`
+                ("Fitness gesunken um 2. Form gespart."), which is the
+                actual finding. No `sub` — the Statement below is the
+                section's one sentence, and it carries information. */}
             <SecHead
               index={trajectoryIndex}
               title={t('sectionTrajectory')}
               kicker
               chip={fitnessDelta7d == null ? undefined : fitnessDelta7d > 0 ? t('chipClimbing') : fitnessDelta7d < 0 ? t('chipDeclining') : t('chipSteady')}
-              sub={state === 'resting' ? undefined : t('trajectorySub')}
             />
             <Statement claim={trajectoryClaim} />
 
-            <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
+            {/* Dedupe reasons (design pass, 2026-08-06): when `model.pmc` is
+                missing, `trajectoryClaim` above already prints the reason —
+                these three tiles would otherwise each print the identical
+                text a second, third and fourth time. `hideReason` keeps
+                each tile's honest "—" without repeating it. */}
+            <div style={{ width: '100%', display: 'flex', gap: 8, paddingTop: 20 }}>
               {trajectoryTiles.map((tile) => (
-                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} />
+                <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} hideReason />
               ))}
             </div>
 
@@ -1483,7 +1612,7 @@ function TodayViewBody({ model, control, profile }: {
                 the same session would be the exact "same content twice"
                 defect this build has already been corrected for (see
                 TomorrowPlate.tsx's own doc comment). */}
-            <div style={{ width: '100%', display: 'flex', paddingTop: 20 }}>
+            <div style={{ width: '100%', display: 'flex', gap: 8, paddingTop: 20 }}>
               {eveningTomorrowTiles.map((tile) => (
                 <StatTile key={tile.label} label={tile.label} value={tile.value} unit={tile.unit} hideReason />
               ))}
@@ -1531,26 +1660,34 @@ function TodayViewBody({ model, control, profile }: {
   )
 }
 
+// Design pass (2026-08-06): every shared caption style below now points at
+// the seven-step scale (tokens.css) instead of a one-off literal — most of
+// these were 9px, the biggest single contributor to the 42-elements-at-
+// ≤9px baseline this pass measured and is meant to beat.
 const kickerLabel: CSSProperties = {
-  fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-mid)',
+  fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-mid)',
 }
 const kickerLabelQuiet: CSSProperties = {
-  fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-quiet)',
+  fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)',
 }
 const kickerLabelDim: CSSProperties = {
-  fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-lo)',
+  fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-lo)',
 }
+// The single biggest lever in this pass: every reason line in the file
+// shares this one constant, so raising it once (12→15px, the prose step)
+// fixes the "too small to read comfortably" body-text finding everywhere
+// it appears, not just in one spot.
 const quietReason: CSSProperties = {
-  fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)', margin: '8px 0 0 0',
+  fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-quiet)', margin: '8px 0 0 0',
 }
 const condVal: CSSProperties = {
-  fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 700, color: 'var(--e-ink)',
+  fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 700, color: 'var(--e-ink)',
 }
 const condUnit: CSSProperties = {
-  fontFamily: 'var(--e-body)', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-lo)',
+  fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 700, letterSpacing: 0.8, color: 'var(--e-lo)',
 }
 const tickStyle: CSSProperties = {
-  fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.8, color: 'var(--e-lo)',
+  fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 0.8, color: 'var(--e-lo)',
 }
 
 /** One row of Evening's "Moved Key" trio (`I7AqeN`/`ppDu5`/`j7KHFv` — Label +
@@ -1577,25 +1714,25 @@ function MovedRow({ label, caption, value, unit, delta, track, trackMissingReaso
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9, paddingTop: 18 }}>
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingBottom: 4 }}>
-          <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-mid)' }}>
+          <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-mid)' }}>
             {label}
           </span>
           {caption && (
-            <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: 'var(--e-lo)' }}>
+            <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 700, letterSpacing: 1, color: 'var(--e-lo)' }}>
               {caption}
             </span>
           )}
         </div>
         <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end' }}>
-          <span style={{ fontFamily: 'var(--e-display)', fontSize: 30, fontWeight: 800, letterSpacing: -1, lineHeight: 1, color: 'var(--e-ink)' }}>
+          <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 800, letterSpacing: -0.5, lineHeight: 1, color: 'var(--e-ink)' }}>
             {isPresent(value) ? value.value : '—'}
           </span>
           <div style={{ display: 'flex', gap: 7, alignItems: 'flex-end', paddingBottom: 3 }}>
             {unit && (
-              <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 700, color: 'var(--e-lo)' }}>{unit}</span>
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 700, color: 'var(--e-lo)' }}>{unit}</span>
             )}
             {delta != null && (
-              <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 800, color: 'var(--e-ink)' }}>
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, color: 'var(--e-ink)' }}>
                 {signed(delta)}
               </span>
             )}

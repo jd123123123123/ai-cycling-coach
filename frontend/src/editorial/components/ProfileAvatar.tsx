@@ -49,7 +49,7 @@ export default function ProfileAvatar({
       {avatarUrl ? (
         <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (
-        <span style={{ fontFamily: 'var(--e-display)', fontSize: 11, fontWeight: 800, color: 'var(--e-ink)' }}>
+        <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-micro)', fontWeight: 800, color: 'var(--e-ink)' }}>
           {initial}
         </span>
       )}

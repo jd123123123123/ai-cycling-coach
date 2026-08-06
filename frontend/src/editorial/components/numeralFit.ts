@@ -4,14 +4,20 @@
  * prop added in an earlier pass of this same task; see task-8-report.md).
  *
  * 146 is a ceiling, not a fixed value: Evening's numeral is a clock time
- * ("22:30", five glyphs) which does not fit the 342px content column
- * (390px frame minus 24px padding on each side) at 146px, so it must
- * shrink. Tracking scales with the resulting size so a shrunk numeral
- * keeps the same optical tightness as the full-size one.
+ * ("22:30", five glyphs) which does not fit the content column at 146px, so
+ * it must shrink. Tracking scales with the resulting size so a shrunk
+ * numeral keeps the same optical tightness as the full-size one.
+ *
+ * CORRECTED (design pass, 2026-08-06): `CONTENT_W` was 342 (390 frame minus
+ * the pen's own 24px padding on each side) — `Cover.tsx`'s own design-pass
+ * fix widened that padding to 32px each side for photographic air, so the
+ * real column is 326px, not 342. Left at the old value this ceiling would
+ * quietly overestimate how much room a shrinking numeral or headline
+ * actually has.
  */
 export const NUMERAL_MAX = 146 // the one size, ruled 2026-08-05
 export const TRACKING_RATIO = -9 / NUMERAL_MAX
-export const CONTENT_W = 342 // 390 frame - 24 padding * 2
+export const CONTENT_W = 326 // 390 frame - 32 padding * 2
 export const GLYPH_RATIO = 0.62 // Sora 800 digit advance, in em
 
 /** One size, shrunk only when the glyphs would not fit the frame. */

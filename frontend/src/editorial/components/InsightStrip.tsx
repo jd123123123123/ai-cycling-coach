@@ -17,6 +17,14 @@ import { useCopy } from '../i18n/useCopy'
  * interface — `{ items: { label; value: Value<string> }[] }` — carries
  * neither. Flagged in task-8-report.md; every item's Value renders $e-ink.
  *
+ * Design pass (2026-08-06): the caption picks between `insightStripCaption`
+ * ("today in three numbers") and `insightStripCaptionTwo` by `items.length`
+ * — Rest/Training's own strip has always shown two signals (its third
+ * column has no data source, see below), so the fixed "three" caption was
+ * quietly wrong on two of the four states that use this component. Found
+ * live, not in a fixture: a static three-item test render never exercises
+ * the two-item case.
+ *
  * Missing-arm fix (coordinator review): the label slot must NEVER be
  * substituted with the missing reason — that was the one place in this
  * task that broke the system's own rule ("the frame always stays: labels
@@ -52,13 +60,13 @@ export default function InsightStrip({
         <span
           style={{
             fontFamily: 'var(--e-body)',
-            fontSize: 9,
+            fontSize: 'var(--t-label)',
             fontWeight: 800,
-            letterSpacing: 1.7,
+            letterSpacing: 1.4,
             color: 'var(--e-quiet)',
           }}
         >
-          {t('insightStripCaption')}
+          {t(items.length === 3 ? 'insightStripCaption' : 'insightStripCaptionTwo')}
         </span>
       </div>
       <div style={{ height: 11 }} />
@@ -73,9 +81,9 @@ export default function InsightStrip({
               <span
                 style={{
                   fontFamily: 'var(--e-display)',
-                  fontSize: 22,
+                  fontSize: 'var(--t-lead)',
                   fontWeight: 800,
-                  letterSpacing: -0.9,
+                  letterSpacing: -0.5,
                   lineHeight: 1,
                   color: 'var(--e-ink)',
                 }}
@@ -85,12 +93,11 @@ export default function InsightStrip({
               <span
                 style={{
                   fontFamily: 'var(--e-body)',
-                  fontSize: 8.5,
+                  fontSize: 'var(--t-label)',
                   fontWeight: 800,
                   letterSpacing: 0.9,
-                  lineHeight: 1.32,
+                  lineHeight: 1.25,
                   color: 'var(--e-quiet)',
-                  height: 23,
                 }}
               >
                 {item.label}
@@ -106,8 +113,8 @@ export default function InsightStrip({
               key={reason}
               style={{
                 fontFamily: 'var(--e-body)',
-                fontSize: 12,
-                fontWeight: 600,
+                fontSize: 'var(--t-body)',
+                fontWeight: 500,
                 color: 'var(--e-quiet)',
               }}
             >

@@ -63,7 +63,7 @@ export default function SecHead({ index, title, chip, sub, kicker }: {
         <span
           style={{
             fontFamily: 'var(--e-display)',
-            fontSize: 22,
+            fontSize: 'var(--t-lead)',
             fontWeight: 800,
             letterSpacing: -0.5,
             lineHeight: 1,
@@ -75,7 +75,7 @@ export default function SecHead({ index, title, chip, sub, kicker }: {
         <h2
           style={kicker ? {
             fontFamily: 'var(--e-body)',
-            fontSize: 12,
+            fontSize: 'var(--t-label)',
             fontWeight: 800,
             letterSpacing: 1.6,
             lineHeight: 1.2,
@@ -84,7 +84,7 @@ export default function SecHead({ index, title, chip, sub, kicker }: {
             flex: 1,
           } : {
             fontFamily: 'var(--e-display)',
-            fontSize: 19,
+            fontSize: 'var(--t-lead)',
             fontWeight: 800,
             letterSpacing: -0.5,
             lineHeight: 1,
@@ -107,9 +107,9 @@ export default function SecHead({ index, title, chip, sub, kicker }: {
             <span
               style={{
                 fontFamily: 'var(--e-body)',
-                fontSize: 10,
+                fontSize: 'var(--t-micro)',
                 fontWeight: 800,
-                letterSpacing: 1.4,
+                letterSpacing: 1.2,
                 color: kicker ? 'var(--e-mid)' : 'var(--st-active)',
               }}
             >
@@ -123,9 +123,9 @@ export default function SecHead({ index, title, chip, sub, kicker }: {
           data-sechead-sub=""
           style={{
             fontFamily: 'var(--e-body)',
-            fontSize: 12,
-            fontWeight: 600,
-            lineHeight: 1.35,
+            fontSize: 'var(--t-body)',
+            fontWeight: 500,
+            lineHeight: 1.4,
             color: 'var(--e-lo)',
             margin: 0,
             width: '100%',

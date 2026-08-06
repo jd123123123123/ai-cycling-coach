@@ -60,4 +60,14 @@ describe('EDITORIAL II tokens', () => {
   it('carries the Cover Meta row Avatar ring verbatim (topbar task)', () => {
     expect(css).toMatch(/--e-avatar-ring\s*:\s*#FFFFFF29\b/i)
   })
+
+  it('declares one type scale, seven steps, floor 11px (design pass, 2026-08-06)', () => {
+    const scale: Record<string, string> = {
+      '--t-display': '146px', '--t-hero': '42px', '--t-title': '34px',
+      '--t-lead': '22px', '--t-body': '15px', '--t-label': '12px', '--t-micro': '11px',
+    }
+    for (const [name, px] of Object.entries(scale)) {
+      expect(css).toMatch(new RegExp(`${name}\\s*:\\s*${px}\\b`, 'i'))
+    }
+  })
 })

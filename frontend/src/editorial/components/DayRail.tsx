@@ -164,10 +164,11 @@ export default function DayRail({
           <span
             style={{
               fontFamily: 'var(--e-body)',
-              fontSize: 9,
+              fontSize: 'var(--t-label)',
               fontWeight: 800,
-              letterSpacing: 1.7,
+              letterSpacing: 1.4,
               color: 'var(--e-quiet)',
+              textShadow: 'var(--e-label-shadow)',
             }}
           >
             {t('dayRailDayState')}
@@ -190,7 +191,7 @@ export default function DayRail({
             <span
               style={{
                 fontFamily: 'var(--e-body)',
-                fontSize: 9,
+                fontSize: 'var(--t-label)',
                 fontWeight: 800,
                 letterSpacing: 1.2,
                 color: 'var(--st-active)',
@@ -235,10 +236,29 @@ export default function DayRail({
               <span
                 style={{
                   fontFamily: 'var(--e-body)',
-                  fontSize: 9,
+                  fontSize: 'var(--t-label)',
                   fontWeight: 800,
-                  letterSpacing: 1,
+                  // Measured live at 390×844: raising this row from 9px to
+                  // --t-label (12px) without narrowing tracking made the
+                  // four columns' combined natural width exceed the 326px
+                  // rail — "LICHT AUS" (the only two-word label, so the only
+                  // one flexbox could shrink) wrapped to two lines and
+                  // collided with DayMark's glyph at the rail's right edge.
+                  // 0.3 (was 1) buys back enough width that all four labels
+                  // fit on one line at the real German strings' worst case
+                  // ("TRAININGSTAG" is the longest, an unbreakable word).
+                  letterSpacing: 0.3,
                   color: labelColor,
+                  whiteSpace: 'nowrap',
+                  // The rail sits directly on the Cover photo (see this
+                  // file's own doc comment on why it paints no background of
+                  // its own) — --e-off's dark grey label reads near-
+                  // illegible against a bright patch of photograph without
+                  // help. A text-shadow reads as a scrim on every step
+                  // (including the active/completed ones, for one consistent
+                  // rule) without repainting a bar that would block the
+                  // photo the rail is deliberately transparent to show.
+                  textShadow: 'var(--e-label-shadow)',
                 }}
               >
                 {labels[i]}
@@ -298,7 +318,7 @@ function PreviewChip({ onExit }: { onExit?: () => void }) {
       <span
         style={{
           fontFamily: 'var(--e-body)',
-          fontSize: 9,
+          fontSize: 'var(--t-label)',
           fontWeight: 800,
           letterSpacing: 1.2,
           color: 'var(--st-active)',

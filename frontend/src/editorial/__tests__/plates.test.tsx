@@ -23,14 +23,21 @@ describe('Cover', () => {
     expect(screen.getByText('hello')).toBeTruthy()
   })
 
-  it('uses the pen-verified height per state ONLY when a photo fills it', () => {
+  it('uses the pen-verified height per state as a floor ONLY when a photo fills it', () => {
+    // Design pass (2026-08-06): `height` became `minHeight` after a live
+    // check found real content (Training's own temperature/wind row)
+    // clipped by the fixed height once the photographic inset grew — the
+    // pen's per-state number is the photo's envelope, a floor, not a
+    // content budget this system gets to clip into. The photo layer still
+    // fills the box exactly at any taller height (`inset: 0` tracks the
+    // parent's real size), so this never shows less photo than before.
     const heights: Record<string, number> = { rest: 480, training: 455, trained: 436 }
     for (const [state, height] of Object.entries(heights)) {
       const { container } = render(
         <Cover state={state as 'rest' | 'training' | 'trained'} photoUrl="./ride.jpg"><span /></Cover>,
       )
       const el = container.querySelector('[data-cover]') as HTMLElement
-      expect(el.style.height).toBe(`${height}px`)
+      expect(el.style.minHeight).toBe(`${height}px`)
       cleanup()
     }
   })
@@ -38,7 +45,7 @@ describe('Cover', () => {
   it('collapses to its content height when there is no photo — never a fixed empty void', () => {
     const { container } = render(<Cover state="rest"><span /></Cover>)
     const el = container.querySelector('[data-cover]') as HTMLElement
-    expect(el.style.height).toBe('')
+    expect(el.style.minHeight).toBe('')
   })
 
   it('layers the photo/tint stack only when a photo URL is given', () => {
@@ -57,16 +64,16 @@ describe('QuotePlate', () => {
     expect(screen.getByText('WHAT REST IS FOR')).toBeTruthy()
   })
 
-  it('is 322 tall only when a photo fills it', () => {
+  it('is at least 322 tall only when a photo fills it (a floor, not a clip)', () => {
     const { container } = render(<QuotePlate state="trained" quote="q" attribution="a" photoUrl="./ride.jpg" />)
     const el = container.querySelector('[data-quote-plate]') as HTMLElement
-    expect(el.style.height).toBe('322px')
+    expect(el.style.minHeight).toBe('322px')
   })
 
   it('collapses to its content height with no photo — no void above the quote', () => {
     const { container } = render(<QuotePlate state="trained" quote="q" attribution="a" />)
     const el = container.querySelector('[data-quote-plate]') as HTMLElement
-    expect(el.style.height).toBe('')
+    expect(el.style.minHeight).toBe('')
   })
 })
 
@@ -128,7 +135,7 @@ describe('TomorrowPlate', () => {
     expect(container.querySelector('[data-tomorrow-plate]')).toBeNull()
   })
 
-  it('is 246 tall only when a photo fills it', () => {
+  it('is at least 246 tall only when a photo fills it (a floor, not a clip)', () => {
     const { container } = render(
       <TomorrowPlate
         state="rest"
@@ -137,7 +144,7 @@ describe('TomorrowPlate', () => {
       />,
     )
     const el = container.querySelector('[data-tomorrow-plate]') as HTMLElement
-    expect(el.style.height).toBe('246px')
+    expect(el.style.minHeight).toBe('246px')
   })
 
   it('collapses to its content height with no photo', () => {
@@ -149,7 +156,7 @@ describe('TomorrowPlate', () => {
       />,
     )
     const el = container.querySelector('[data-tomorrow-plate]') as HTMLElement
-    expect(el.style.height).toBe('')
+    expect(el.style.minHeight).toBe('')
   })
 })
 
