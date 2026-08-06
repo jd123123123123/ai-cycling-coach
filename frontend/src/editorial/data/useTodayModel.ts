@@ -75,6 +75,10 @@ export interface TodayModel {
   bodyBattery90DayHigh: Value<number>
   hrv: Value<{ value: number; unit: 'ms'; delta: number | null; band: RangeBand | null }>
   restingHr: Value<{ value: number; unit: 'bpm'; delta: number | null; band: RangeBand | null }>
+  /** Evening's "01 Today" resting-HR track: the last 7 daily readings, oldest
+   *  first. Derived from `recentMetrics`, which is already fetched for the
+   *  wearable-freshness label — no extra request. */
+  recentRestingHr: Value<{ date: string; bpm: number }[]>
   sleep: Value<{ totalS: number; deepS: number | null; remS: number | null; lightS: number | null; awakeS: number | null }>
   pmc: Value<{ fitness: number; fatigue: number; form: number; series: PmcPoint[] }>
   recovery: Value<{ hoursRemaining: number; clearAtLabel: string }>
@@ -284,6 +288,20 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     },
     wearableReason,
   )
+
+  // The 7-bar track beside Evening's resting-HR row. `recentMetrics` is the
+  // same daily window already loaded for the freshness label, so this is a
+  // filter, not a fetch. Days without a reading are simply absent — the track
+  // draws what was measured rather than interpolating a line through gaps.
+  const restingHrHistory = (recentMetrics ?? [])
+    .filter((m): m is DailyMetric & { date: string; resting_hr: number } =>
+      m.date != null && m.resting_hr != null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-7)
+    .map((m) => ({ date: m.date, bpm: m.resting_hr }))
+  const recentRestingHr = restingHrHistory.length > 0
+    ? present(restingHrHistory)
+    : missing<{ date: string; bpm: number }[]>(wearableReason)
 
   const sleepDetail = todayMetric?.sleep_detail ?? null
   const sleep = fromNullable(
@@ -542,6 +560,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     bodyBattery90DayHigh,
     hrv,
     restingHr,
+    recentRestingHr,
     sleep,
     pmc: pmcValue,
     recovery,

@@ -168,6 +168,7 @@ describe('Plate placement in TodayView', () => {
     bodyBattery90DayHigh: missing('No 90-day history recorded yet.'),
     hrv: missing('No wearable reading.'),
     restingHr: missing('No wearable reading.'),
+    recentRestingHr: present([{ date: '2026-07-22', bpm: 46 }]),
     sleep: missing('No wearable reading.'),
     pmc: present({ fitness: 68, fatigue: 58, form: -2, series: [] }),
     recovery: present({ hoursRemaining: 26, clearAtLabel: 'Fri 09:00' }),

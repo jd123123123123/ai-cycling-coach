@@ -635,16 +635,11 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
   // yesterday, and a 7-bar track of the trailing week (real per-day values,
   // never estimated). RESTING HR reuses `model.restingHr`'s already-real
   // value+delta (today's own morning reading — "MEASURED THIS MORNING" is
-  // therefore a true caption, not invented prose) but its own 7-bar track has
-  // NO source anywhere in TodayModel: no hook returns a per-day resting-HR
-  // series (`recentMetrics`, the closest candidate, is optional, carries
-  // whichever `DailyMetric` rows the caller passes, and today's only caller
-  // — the wrapper hook — uses it purely to date the "no wearable reading
-  // since ___" fallback, never as a value list) — so that one Track
-  // deliberately renders nothing rather than a fabricated shape. See
-  // audit-a2-resting-evening.md for the full record and the exact field this
-  // would need (a `recentRestingHr: Value<{date:string; bpm:number}[]>`, 7
-  // entries, mirroring `pmc.series`'s own shape).
+  // therefore a true caption, not invented prose) and its 7-bar track now
+  // reads `model.recentRestingHr` — the audit called for that field and it
+  // turned out `recentMetrics` was already being fetched for the freshness
+  // label, so the series was a filter away rather than a new request. Days
+  // without a reading are absent from the track rather than drawn as zero.
   const pmcSeries7 = isPresent(model.pmc) ? model.pmc.value.series.slice(-7) : []
   const pmcLast = pmcSeries7.length > 0 ? pmcSeries7[pmcSeries7.length - 1] : null
   const pmcPrior = pmcSeries7.length > 1 ? pmcSeries7[pmcSeries7.length - 2] : null
@@ -675,6 +670,9 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
 
   const trioRestingHrValue: Value<number> = mapValue(model.restingHr, (h) => h.value)
   const trioRestingHrDelta = isPresent(model.restingHr) ? model.restingHr.value.delta : null
+  const trioRestingHrTrack = isPresent(model.recentRestingHr) && model.recentRestingHr.value.length > 0
+    ? model.recentRestingHr.value.map((d) => d.bpm)
+    : null
 
   // ---- Evening: 02 Tonight ---------------------------------------------------
   // BEDTIME/WAKE/SLEEP/DEBT (`UtYXL`/`IgmOU`/`agHrh`/`N1xe2`, cx4zJ's own
@@ -998,8 +996,8 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
               value={trioRestingHrValue}
               unit={t('unitBpm')}
               delta={trioRestingHrDelta}
-              track={null}
-              trackMissingReason={t('trioRestingHrHistoryMissing')}
+              track={trioRestingHrTrack}
+              trackMissingReason={isPresent(model.recentRestingHr) ? t('trioRestingHrHistoryMissing') : model.recentRestingHr.missing}
               last
             />
           </section>

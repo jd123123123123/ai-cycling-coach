@@ -95,7 +95,14 @@ export default function MetricTrack({
 }) {
   const present = isPresent(value)
   const numeralText = present ? String(value.value) : '—'
-  const { fontSize, letterSpacing } = numeralFit(numeralText)
+  // An em dash scaled to the numeral's 146px stops reading as punctuation and
+  // renders as a filled bar — it looked like a loading skeleton on screen. The
+  // missing numeral keeps its slot and its baseline, at a size where a dash is
+  // still legibly a dash. Found by rendering Evening, whose bedtime target has
+  // no source at all, so its hero numeral is always this arm.
+  const { fontSize, letterSpacing } = present
+    ? numeralFit(numeralText)
+    : { fontSize: 64, letterSpacing: -2 }
   return (
     <div data-metric-track style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%' }}>
       {label && (

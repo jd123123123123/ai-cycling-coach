@@ -56,6 +56,7 @@ const eveningModel: TodayModel = {
   bodyBattery90DayHigh: missing('Noch keine 90-Tage-Historie erfasst.'),
   hrv: present({ value: 68, unit: 'ms', delta: 4, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 46, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'in' } }),
+  recentRestingHr: present([{ date: '2026-07-22', bpm: 46 }]),
   sleep: present({ totalS: 27000, deepS: 4800, remS: 5400, lightS: 15600, awakeS: 1200 }),
   pmc: present({ fitness: 68, fatigue: 58, form: -2, series: buildPmcSeries(42) }),
   recovery: present({ hoursRemaining: 26, clearAtLabel: 'Fr 09:00' }),
@@ -151,10 +152,22 @@ describe('Evening "01 Today" — Moved Key trio (pen cx4zJ/I7AqeN+ppDu5+j7KHFv)'
     expect(screen.getByText('STEIGEND')).toBeTruthy()
   })
 
-  it('prints the resting-HR history reason instead of fabricating a track', () => {
+  it('draws the resting-HR track from real daily readings', () => {
     render(<MemoryRouter><TodayView model={eveningModel} /></MemoryRouter>)
-    expect(screen.getByText('Kein 7-Tage-Verlauf für den Ruhepuls verfügbar.')).toBeTruthy()
     expect(screen.getByText('HEUTE MORGEN GEMESSEN')).toBeTruthy()
+    // The reason line is gone precisely because the track now has a source:
+    // `recentRestingHr` is derived from `recentMetrics`, which was already
+    // being fetched for the wearable-freshness label.
+    expect(screen.queryByText('Kein 7-Tage-Verlauf für den Ruhepuls verfügbar.')).toBeNull()
+  })
+
+  it('withholds the resting-HR track rather than fabricating one when no readings exist', () => {
+    const noHistory = {
+      ...eveningModel,
+      recentRestingHr: missing<{ date: string; bpm: number }[]>('Keine Messung seit Dienstag.'),
+    }
+    render(<MemoryRouter><TodayView model={noHistory} /></MemoryRouter>)
+    expect(screen.getAllByText('Keine Messung seit Dienstag.').length).toBeGreaterThan(0)
   })
 
   it('dashes training load and prints one fatigue-history reason when pmc.series carries no tss field', () => {

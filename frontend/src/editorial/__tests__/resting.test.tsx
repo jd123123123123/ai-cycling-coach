@@ -45,6 +45,7 @@ const restingModel: TodayModel = {
   bodyBattery: present({ wake: 88, now: 91 }),
   hrv: present({ value: 74, unit: 'ms', delta: 10, band: { low: 52, high: 80, position: 'above' } }),
   restingHr: present({ value: 46, unit: 'bpm', delta: -4, band: { low: 44, high: 55, position: 'below' } }),
+  recentRestingHr: present([{ date: '2026-07-22', bpm: 46 }]),
   sleep: present({ totalS: 29100, deepS: 5400, remS: 6600, lightS: 15900, awakeS: 1200 }),
   pmc: present({ fitness: 68, fatigue: 42, form: 22, series: [] }),
   recovery: present({ hoursRemaining: 0, clearAtLabel: 'Fresh now' }),

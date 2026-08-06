@@ -48,6 +48,7 @@ const baseModel: TodayModel = {
   bodyBattery90DayHigh: missing('No 90-day history recorded yet.'),
   hrv: present({ value: 68, unit: 'ms', delta: 6, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 48, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'below' } }),
+  recentRestingHr: present([{ date: '2026-07-22', bpm: 46 }]),
   sleep: present({ totalS: 27720, deepS: 4920, remS: 6480, lightS: 15120, awakeS: 1200 }),
   pmc: present({ fitness: 68, fatigue: 52, form: 16, series: [] }),
   recovery: present({ hoursRemaining: 22, clearAtLabel: 'Thu 17:30' }),
