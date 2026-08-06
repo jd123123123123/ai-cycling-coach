@@ -76,7 +76,7 @@
   /* Generic 22% alpha via currentColor — MetricTrack's value glow
    * (#FF5E0038 in the Trained frame, ~22% of the metric's own hue) must
    * follow whichever hue is passed into the `hue` prop, not a fixed
-   * variable, so it can't be a --st-a*/--m-* style token tied to one
+   * variable, so it can't be a --st-a-N / --m-N style token tied to one
    * source colour. Applied on the same text node whose `color` is already
    * set to `hue`, so `currentColor` resolves to that hue. */
   --a22: color-mix(in srgb, currentColor 22%, transparent);
