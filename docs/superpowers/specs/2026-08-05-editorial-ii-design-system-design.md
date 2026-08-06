@@ -284,5 +284,19 @@ compared against `get_screenshot` of the corresponding pen node — one render p
 before building on it, not a browser session per change.
 
 The old app is verified untouched by confirming `editorial/` has no inbound imports and
-that no file outside `editorial/` changed except `App.tsx` (route registration) and the
-root redirect.
+that no file outside `editorial/` changed except these four, each additive and each
+traceable to a recorded ruling:
+
+- `frontend/src/App.tsx` — route registration and the root redirect.
+- `frontend/src/api/streamAnalysis.ts` — one **optional** field (`mmp_curve?`)
+  typing the backend field exposed under the additive-exposure ruling. Optional
+  and additive, so no existing caller's types or behaviour change.
+- `backend/app/api/activities.py` — the seven lines attaching that
+  already-stored field to an existing response.
+- `frontend/public/editorial/**` — static plate imagery, served by URL and
+  verified absent from the JS bundle.
+
+Verified 2026-08-06: the full frontend suite (1007 tests) passes, as does the
+backend suite apart from `test_mesocycle_generator.py::test_z3_share_in_20_to_30_pct`,
+which is pre-existing — that file is untouched on this branch
+(`git diff f10a57b HEAD --name-only -- backend/` returns only `activities.py`).
