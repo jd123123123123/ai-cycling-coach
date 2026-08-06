@@ -122,15 +122,15 @@ export default function RouteOptions({ routes }: { routes: Value<RouteOption[]> 
           ))}
           <p
             style={{
-              margin: 0, padding: '20px 24px 8px 24px', fontFamily: 'var(--e-body)', fontSize: 11,
-              fontWeight: 600, color: 'var(--e-quiet)',
+              margin: 0, padding: '20px 24px 8px 24px', fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)',
+              fontWeight: 500, color: 'var(--e-quiet)',
             }}
           >
             {t('routeProfileMissing')}
           </p>
         </>
       ) : (
-        <p style={{ margin: 0, padding: '0 24px', fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 600, color: 'var(--e-quiet)' }}>
+        <p style={{ margin: 0, padding: '0 24px', fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-quiet)' }}>
           {routes.missing}
         </p>
       )}
@@ -168,12 +168,16 @@ function RouteCard({
       style={{ width: '100%', cursor: 'pointer' }}
     >
       <div style={{ width: '100%', padding: '0 24px' }}>
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: labelColor }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: labelColor }}>
           {t('routeOptionLabel', { letter: route.optionLetter })}
         </span>
 
+        {/* Design pass (2026-08-06): --t-title, the same step QuotePlate's
+            own quote uses — a route's real name is this card's one bold
+            statement (was 24px, one step below the ceiling like the other
+            photographic-plate titles were). */}
         <p style={{
-          margin: '10px 0 20px 0', fontFamily: 'var(--e-display)', fontSize: 24, fontWeight: 800,
+          margin: '10px 0 20px 0', fontFamily: 'var(--e-display)', fontSize: 'var(--t-title)', fontWeight: 800,
           letterSpacing: -1, lineHeight: 1.1, color: textColor,
         }}
         >
@@ -211,18 +215,18 @@ function RouteCard({
             />
           </div>
         ) : (
-          <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 600, color: 'var(--e-quiet)' }}>
+          <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-quiet)' }}>
             {route.trackPolyline.missing}
           </span>
         )}
       </div>
 
       <div style={{ width: '100%', padding: '10px 24px 0 24px' }}>
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, color: dimmed ? 'var(--d-2)' : 'var(--e-quiet)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.2, color: dimmed ? 'var(--d-2)' : 'var(--e-quiet)' }}>
           {statsLine}
         </span>
         {selected && (
-          <span style={{ display: 'block', marginTop: 6, fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--st-active)' }}>
+          <span style={{ display: 'block', marginTop: 6, fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--st-active)' }}>
             {t('routeSelected')}
           </span>
         )}

@@ -87,9 +87,9 @@ function otherState(s: SwitchableDayState): SwitchableDayState {
 
 const kLabelStyle = {
   fontFamily: 'var(--e-body)',
-  fontSize: 9,
+  fontSize: 'var(--t-label)',
   fontWeight: 800,
-  letterSpacing: 1.6,
+  letterSpacing: 1.4,
   color: 'var(--e-lo)',
 } as const
 
@@ -107,7 +107,7 @@ export default function SwitchDayTypeSheet({ open, current, onPick, onClose }: S
       </div>
       <div style={{ height: 26 }} />
       <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.7, color: 'var(--e-quiet)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)' }}>
           {t('sheetChangeDayStateHeader')}
         </span>
         <button
@@ -126,9 +126,9 @@ export default function SwitchDayTypeSheet({ open, current, onPick, onClose }: S
           <span
             style={{
               fontFamily: 'var(--e-display)',
-              fontSize: 24,
+              fontSize: 'var(--t-lead)',
               fontWeight: 800,
-              letterSpacing: -1,
+              letterSpacing: -0.5,
               lineHeight: 1.05,
               color: STATE_ACCENT[current],
             }}
@@ -142,9 +142,9 @@ export default function SwitchDayTypeSheet({ open, current, onPick, onClose }: S
           <span
             style={{
               fontFamily: 'var(--e-display)',
-              fontSize: 24,
+              fontSize: 'var(--t-lead)',
               fontWeight: 800,
-              letterSpacing: -1,
+              letterSpacing: -0.5,
               lineHeight: 1.05,
               color: targetAccent,
             }}
@@ -156,7 +156,7 @@ export default function SwitchDayTypeSheet({ open, current, onPick, onClose }: S
       <div style={{ height: 22 }} />
       <div style={{ width: '100%', height: 1, background: 'var(--e-rule)' }} />
       <div style={{ height: 20 }} />
-      <p style={{ margin: 0, width: '100%', fontFamily: 'var(--e-body)', fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: 'var(--e-mid)' }}>
+      <p style={{ margin: 0, width: '100%', fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, lineHeight: 1.5, color: 'var(--e-mid)' }}>
         {t(bodyKey)}
       </p>
       <div style={{ height: 26 }} />
@@ -178,7 +178,7 @@ export default function SwitchDayTypeSheet({ open, current, onPick, onClose }: S
         }}
       >
         <ArrowLeftRight size={16} color="var(--e-on-accent)" />
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 800, letterSpacing: 1.3, color: 'var(--e-on-accent)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.3, color: 'var(--e-on-accent)' }}>
           {t(primaryKey)}
         </span>
       </button>
@@ -198,7 +198,7 @@ export default function SwitchDayTypeSheet({ open, current, onPick, onClose }: S
           alignItems: 'center',
         }}
       >
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 800, letterSpacing: 1.3, color: 'var(--e-mid)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.3, color: 'var(--e-mid)' }}>
           {t(KEEP_CTA_KEY[current])}
         </span>
       </button>

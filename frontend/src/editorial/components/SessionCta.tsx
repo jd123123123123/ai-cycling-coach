@@ -84,16 +84,16 @@ export default function SessionCta({ onExport }: { onExport: () => void | Promis
           </svg>
         </span>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
-          <span style={{ fontFamily: 'var(--e-body)', fontSize: 11.5, fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-ink)' }}>
+          <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-ink)' }}>
             {t('sessionCtaTitle')}
           </span>
-          <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 500, lineHeight: 1.35, color: 'var(--e-quiet)' }}>
+          <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 500, lineHeight: 1.35, color: 'var(--e-quiet)' }}>
             {t('sessionCtaSubtitle')}
           </span>
         </span>
       </button>
       {failed && (
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 600, color: 'var(--e-bad)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 600, color: 'var(--e-bad)' }}>
           {t('sessionCtaFailed')}
         </span>
       )}

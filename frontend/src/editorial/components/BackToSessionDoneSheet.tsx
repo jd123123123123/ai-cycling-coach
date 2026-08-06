@@ -61,7 +61,7 @@ export default function BackToSessionDoneSheet({ open, onConfirm, onClose }: Bac
       </div>
       <div style={{ height: 26 }} />
       <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.7, color: 'var(--e-quiet)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)' }}>
           {t('sheetChangeDayStateHeader')}
         </span>
         <button
@@ -76,19 +76,19 @@ export default function BackToSessionDoneSheet({ open, onConfirm, onClose }: Bac
       <div style={{ height: 22 }} />
       <div style={{ display: 'flex', width: '100%', gap: 12 }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-lo)' }}>
+          <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-lo)' }}>
             {t('sheetFromLabel')}
           </span>
-          <span style={{ fontFamily: 'var(--e-display)', fontSize: 21, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1.05, color: 'var(--st-resting)' }}>
+          <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.05, color: 'var(--st-resting)' }}>
             {t('sheetStateRecoveringTitle')}
           </span>
         </div>
         <Undo2 size={22} color="var(--e-lo)" />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: 'var(--e-lo)' }}>
+          <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-lo)' }}>
             {t('sheetToLabel')}
           </span>
-          <span style={{ fontFamily: 'var(--e-display)', fontSize: 21, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1.05, color: 'var(--st-trained)' }}>
+          <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.05, color: 'var(--st-trained)' }}>
             {t('sheetStateSessionDoneTitle')}
           </span>
         </div>
@@ -96,7 +96,7 @@ export default function BackToSessionDoneSheet({ open, onConfirm, onClose }: Bac
       <div style={{ height: 22 }} />
       <div style={{ width: '100%', height: 1, background: 'var(--e-rule)' }} />
       <div style={{ height: 20 }} />
-      <p style={{ margin: 0, width: '100%', fontFamily: 'var(--e-body)', fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: 'var(--e-mid)' }}>
+      <p style={{ margin: 0, width: '100%', fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, lineHeight: 1.5, color: 'var(--e-mid)' }}>
         {t('sheetBackBody')}
       </p>
       <div style={{ height: 26 }} />
@@ -118,7 +118,7 @@ export default function BackToSessionDoneSheet({ open, onConfirm, onClose }: Bac
         }}
       >
         <Undo2 size={16} color="var(--e-on-accent)" />
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 800, letterSpacing: 1.3, color: 'var(--e-on-accent)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.3, color: 'var(--e-on-accent)' }}>
           {t('dayRailBackToDone')}
         </span>
       </button>
@@ -138,7 +138,7 @@ export default function BackToSessionDoneSheet({ open, onConfirm, onClose }: Bac
           alignItems: 'center',
         }}
       >
-        <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 800, letterSpacing: 1.3, color: 'var(--e-mid)' }}>
+        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1.3, color: 'var(--e-mid)' }}>
           {t('sheetStayInRecoveryCta')}
         </span>
       </button>

@@ -61,11 +61,19 @@ export default function SessionBlocks({ blocks }: { blocks: ProgrammeBlock[] }) 
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '40px 24px 8px 24px' }}>
       <SecHead index="01" title={t('sectionTheBlocks')} chip={t('chipParts', { n: blocks.length })} kicker />
 
+      {/* Design pass (2026-08-06): Claim A/B route through --t-lead (22px),
+          not --t-title (34px) — despite the doc comment above calling this
+          "the same register as QuotePlate," QuotePlate's quote is a
+          full-bleed photographic hero moment while this is a compact
+          two-line statement inside a numbered section (17px pen-audited,
+          a ~1.3× step to 22 rather than a ~2× jump to 34, matching how the
+          rest of this pass moves things one step, not straight to the
+          ceiling). */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '16px 0 22px 0' }}>
-        <p style={{ margin: 0, fontFamily: 'var(--e-display)', fontSize: 17, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.22, color: 'var(--e-ink)' }}>
+        <p style={{ margin: 0, fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.2, color: 'var(--e-ink)' }}>
           {t('blocksStatementA')}
         </p>
-        <p style={{ margin: 0, fontFamily: 'var(--e-display)', fontSize: 17, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.22, color: 'var(--e-quiet)' }}>
+        <p style={{ margin: 0, fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.2, color: 'var(--e-quiet)' }}>
           {t('blocksStatementB')}
         </p>
       </div>
@@ -73,13 +81,13 @@ export default function SessionBlocks({ blocks }: { blocks: ProgrammeBlock[] }) 
       <div data-programme style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
         <div style={{ width: '100%', display: 'flex', gap: 12, alignItems: 'center', padding: '0 0 9px 0' }}>
           <div style={{ width: 26, height: 8 }} />
-          <span style={{ flex: 1, fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)' }}>
+          <span style={{ flex: 1, fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-quiet)' }}>
             {t('colStep')}
           </span>
-          <span style={{ width: 40, textAlign: 'right', fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)' }}>
+          <span style={{ width: 40, textAlign: 'right', fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-quiet)' }}>
             {t('colTime')}
           </span>
-          <span style={{ width: 52, textAlign: 'right', fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)' }}>
+          <span style={{ width: 52, textAlign: 'right', fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-quiet)' }}>
             {t('colWatts')}
           </span>
         </div>
@@ -91,22 +99,22 @@ export default function SessionBlocks({ blocks }: { blocks: ProgrammeBlock[] }) 
             <div key={b.key} data-block-row="">
               {startsMainSet && (
                 <div style={{ width: '100%', display: 'flex', gap: 8, alignItems: 'center', padding: '12px 0 3px 0' }}>
-                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 1.4, color: 'var(--st-active)' }}>
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--st-active)' }}>
                     {t('mainSetLabel')}
                   </span>
                   <div style={{ flex: 1, height: 1, background: 'var(--st-a16)' }} />
-                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 1.1, color: 'var(--e-lo)' }}>
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, letterSpacing: 1, color: 'var(--e-lo)' }}>
                     {t('mainSetTotal', { time: formatMinSec(mainMinutes) })}
                   </span>
                 </div>
               )}
               <div style={{ width: '100%', display: 'flex', gap: 12, alignItems: 'center', padding: '12px 0' }}>
                 <div style={{ width: 26, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 1, color: 'var(--e-lo)' }}>
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, letterSpacing: 0.8, color: 'var(--e-lo)' }}>
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   {b.reps > 1 && (
-                    <span style={{ fontFamily: 'var(--e-display)', fontSize: 19, fontWeight: 800, letterSpacing: -0.8, color: 'var(--st-active)' }}>
+                    <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 800, letterSpacing: -0.5, color: 'var(--st-active)' }}>
                       {b.reps}×
                     </span>
                   )}
@@ -116,7 +124,7 @@ export default function SessionBlocks({ blocks }: { blocks: ProgrammeBlock[] }) 
                     {b.name}
                   </span>
                   {isPresent(b.note) && (
-                    <span style={{ fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, color: 'var(--e-quiet)' }}>
+                    <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 700, letterSpacing: 1, color: 'var(--e-quiet)' }}>
                       {b.note.value}
                     </span>
                   )}
@@ -124,14 +132,14 @@ export default function SessionBlocks({ blocks }: { blocks: ProgrammeBlock[] }) 
                     <div style={{ width: `${barPct}%`, height: '100%', background: b.isMain ? 'var(--st-active)' : 'var(--d-3)' }} />
                   </div>
                 </div>
-                <span style={{ width: 40, textAlign: 'right', fontFamily: 'var(--e-body)', fontSize: 11.5, fontWeight: 600, letterSpacing: 0.2, color: 'var(--e-mid)' }}>
+                <span style={{ width: 40, textAlign: 'right', fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 600, letterSpacing: 0.2, color: 'var(--e-mid)' }}>
                   {formatMinSec(b.minutes)}
                 </span>
                 <div style={{ width: 52, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                   <span style={{ fontFamily: 'var(--e-display)', fontSize: b.isMain ? 18 : 15, fontWeight: 800, letterSpacing: -0.5, color: b.isMain ? 'var(--st-active)' : 'var(--e-quiet)' }}>
                     {isPresent(b.watts) ? b.watts.value : '—'}
                   </span>
-                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 800, color: 'var(--e-lo)' }}>W</span>
+                  <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, color: 'var(--e-lo)' }}>W</span>
                 </div>
               </div>
               <div style={{ width: '100%', height: 1, background: i === blocks.length - 1 ? 'var(--d-2)' : 'var(--d-1)' }} />
@@ -142,19 +150,19 @@ export default function SessionBlocks({ blocks }: { blocks: ProgrammeBlock[] }) 
 
       <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '13px 0 4px 0' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)' }}>
+          <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-quiet)' }}>
             {t('colophonTotalSession')}
           </span>
-          <span style={{ fontFamily: 'var(--e-display)', fontSize: 17, fontWeight: 800, letterSpacing: -0.6, color: 'var(--e-ink)' }}>
+          <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 800, letterSpacing: -0.5, color: 'var(--e-ink)' }}>
             {formatMinSec(totalMinutes)}
           </span>
         </div>
         {mainMinutes > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-            <span style={{ fontFamily: 'var(--e-body)', fontSize: 8, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-quiet)' }}>
+            <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 800, letterSpacing: 1.2, color: 'var(--e-quiet)' }}>
               {t('colophonAtThreshold')}
             </span>
-            <span style={{ fontFamily: 'var(--e-display)', fontSize: 17, fontWeight: 800, letterSpacing: -0.6, color: 'var(--st-active)' }}>
+            <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 800, letterSpacing: -0.5, color: 'var(--st-active)' }}>
               {formatMinSec(mainMinutes)}
             </span>
           </div>
