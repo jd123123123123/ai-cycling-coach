@@ -7,7 +7,27 @@ import { scrimGradient, type ScrimStop } from './plateScrim'
  *  7A→48%, FF→100%. */
 const QUOTE_SCRIM: ScrimStop[] = [{ pos: 0, alpha: 16 }, { pos: 48, alpha: 48 }, { pos: 100, alpha: 100 }]
 
-const layer: CSSProperties = { position: 'absolute', inset: 0, zIndex: -1 }
+/**
+ * The photographic stack, bottom to top: photo, saturation blend, colour
+ * blend, scrim — then the plate's own content, which sits above all of them
+ * simply by being in flow.
+ *
+ * Two things make this work. The photo is its OWN layer rather than the
+ * parent's `background`, because `mix-blend-mode` composites an element
+ * against its backdrop and a blend layer cannot act on the background of its
+ * own parent — that was the bug: the pen's desaturated, olive-tinted
+ * photography rendered as raw full-colour stock. And `isolation: isolate` on
+ * the parent contains the blending inside the plate rather than letting it
+ * reach the page beneath.
+ *
+ * The layers are all negative-z so in-flow content paints over them without
+ * needing a wrapper (a `display: contents` wrapper generates no box, so it
+ * cannot carry a z-index at all).
+ */
+const photoLayer: CSSProperties = { position: 'absolute', inset: 0, zIndex: -4 }
+const satLayer: CSSProperties = { position: 'absolute', inset: 0, zIndex: -3 }
+const tintLayer: CSSProperties = { position: 'absolute', inset: 0, zIndex: -2 }
+const scrimLayer: CSSProperties = { position: 'absolute', inset: 0, zIndex: -1 }
 
 export interface QuotePlateProps {
   state: DayState
@@ -46,16 +66,18 @@ export default function QuotePlate({ state, quote, attribution, photoUrl }: Quot
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-end',
-        background: photoUrl ? `center / cover no-repeat url(${photoUrl}), var(--e-ground)` : 'var(--e-ground)',
+        background: 'var(--e-ground)',
+        isolation: 'isolate',
       }}
     >
       {photoUrl && (
         <>
-          <div data-photo-layer style={{ ...layer, background: 'var(--e-photo-sat-quote)', mixBlendMode: 'saturation' }} />
-          <div data-photo-layer style={{ ...layer, background: 'var(--e-photo-tint-quote)', mixBlendMode: 'color' }} />
+          <div data-photo style={{ ...photoLayer, background: `center / cover no-repeat url(${photoUrl})` }} />
+          <div data-photo-layer style={{ ...satLayer, background: 'var(--e-photo-sat-quote)', mixBlendMode: 'saturation' }} />
+          <div data-photo-layer style={{ ...tintLayer, background: 'var(--e-photo-tint-quote)', mixBlendMode: 'color' }} />
         </>
       )}
-      <div data-scrim style={{ ...layer, background: scrimGradient(QUOTE_SCRIM) }} />
+      <div data-scrim style={{ ...scrimLayer, background: scrimGradient(QUOTE_SCRIM) }} />
 
       <div style={{ width: 34, height: 2, background: 'var(--st-active)', marginBottom: 14 }} />
       <p
