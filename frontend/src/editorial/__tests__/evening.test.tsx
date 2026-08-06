@@ -132,3 +132,45 @@ describe('Evening screen composition', () => {
     expect(screen.getByText('DISTANZ')).toBeTruthy()
   })
 })
+
+describe('Evening "01 Today" — Moved Key trio (pen cx4zJ/I7AqeN+ppDu5+j7KHFv)', () => {
+  it('renders TRAINING LOAD, FATIGUE and RESTING HR, in that order, under the moved-key heading', () => {
+    render(<MemoryRouter><TodayView model={eveningModel} /></MemoryRouter>)
+    expect(screen.getByText('WAS SICH BEWEGT HAT · LETZTE 7 TAGE')).toBeTruthy()
+    expect(screen.getByText('TRAININGSBELASTUNG')).toBeTruthy()
+    expect(screen.getByText('ERMÜDUNG')).toBeTruthy()
+    expect(screen.getAllByText('RUHEPULS').length).toBeGreaterThan(0)
+  })
+
+  it('draws a real 7-day fatigue (ATL) track from pmc.series, with today\'s bar accented', () => {
+    const { container } = render(<MemoryRouter><TodayView model={eveningModel} /></MemoryRouter>)
+    const tracks = container.querySelectorAll('[data-day-state="evening"] section[data-section="01"] div')
+    expect(tracks.length).toBeGreaterThan(0)
+    // ATL is strictly rising in the fixture series, so the fatigue caption
+    // must read CLIMBING, not EASING or STEADY.
+    expect(screen.getByText('STEIGEND')).toBeTruthy()
+  })
+
+  it('prints the resting-HR history reason instead of fabricating a track', () => {
+    render(<MemoryRouter><TodayView model={eveningModel} /></MemoryRouter>)
+    expect(screen.getByText('Kein 7-Tage-Verlauf für den Ruhepuls verfügbar.')).toBeTruthy()
+    expect(screen.getByText('HEUTE MORGEN GEMESSEN')).toBeTruthy()
+  })
+
+  it('dashes training load and prints one fatigue-history reason when pmc.series carries no tss field', () => {
+    // The shared `eveningModel` fixture's own `buildPmcSeries` never sets
+    // `tss` (only ctl/atl/tsb) — exercising exactly this missing arm.
+    render(<MemoryRouter><TodayView model={eveningModel} /></MemoryRouter>)
+    expect(screen.getByText('Nicht genug Verlauf, um die Ermüdung einzuordnen.')).toBeTruthy()
+  })
+
+  it('computes a real training-load rank and value when pmc.series carries tss', () => {
+    const series = buildPmcSeries(7).map((p, i) => ({ ...p, tss: [40, 60, 30, 90, 20, 50, 112][i] }))
+    const model: TodayModel = { ...eveningModel, pmc: present({ fitness: 68, fatigue: 58, form: -2, series }) }
+    render(<MemoryRouter><TodayView model={model} /></MemoryRouter>)
+    // Today (last entry) is 112 TSS — the biggest of the 7 days. The default
+    // locale ('de') renders German ordinals ("1." not "1ST").
+    expect(screen.getByText('112')).toBeTruthy()
+    expect(screen.getByText('1. GRÖSSTER TAG DIESE WOCHE')).toBeTruthy()
+  })
+})

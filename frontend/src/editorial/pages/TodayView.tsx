@@ -627,6 +627,55 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
     },
   ]
 
+  // ---- Evening: 01 Today — "Moved Key" trio (`I7AqeN`/`ppDu5`/`j7KHFv`) -----
+  // Real section, confirmed present in `cx4zJ` (audit a2, 2026-08-06) but
+  // previously unbuilt entirely. TRAINING LOAD and FATIGUE both derive from
+  // `model.pmc.series` — the exact same field "03 Trajectory"'s own chart
+  // already reads elsewhere on this screen — today's own TSS/ATL, delta vs
+  // yesterday, and a 7-bar track of the trailing week (real per-day values,
+  // never estimated). RESTING HR reuses `model.restingHr`'s already-real
+  // value+delta (today's own morning reading — "MEASURED THIS MORNING" is
+  // therefore a true caption, not invented prose) but its own 7-bar track has
+  // NO source anywhere in TodayModel: no hook returns a per-day resting-HR
+  // series (`recentMetrics`, the closest candidate, is optional, carries
+  // whichever `DailyMetric` rows the caller passes, and today's only caller
+  // — the wrapper hook — uses it purely to date the "no wearable reading
+  // since ___" fallback, never as a value list) — so that one Track
+  // deliberately renders nothing rather than a fabricated shape. See
+  // audit-a2-resting-evening.md for the full record and the exact field this
+  // would need (a `recentRestingHr: Value<{date:string; bpm:number}[]>`, 7
+  // entries, mirroring `pmc.series`'s own shape).
+  const pmcSeries7 = isPresent(model.pmc) ? model.pmc.value.series.slice(-7) : []
+  const pmcLast = pmcSeries7.length > 0 ? pmcSeries7[pmcSeries7.length - 1] : null
+  const pmcPrior = pmcSeries7.length > 1 ? pmcSeries7[pmcSeries7.length - 2] : null
+  const pmcHistoryMissing = isPresent(model.pmc) ? t('notEnoughFatigueHistory') : model.pmc.missing
+
+  const trioTrainingLoadValue: Value<number> = pmcLast?.tss != null ? present(Math.round(pmcLast.tss)) : missing(pmcHistoryMissing)
+  const trioTrainingLoadDelta = pmcLast?.tss != null && pmcPrior?.tss != null ? Math.round(pmcLast.tss - pmcPrior.tss) : null
+  // A day with no matching PMC entry has `tss: undefined`, never a real
+  // zero — drawing a track of coerced-to-0 bars would fabricate a shape for
+  // days that never happened to have one, so the whole track is withheld
+  // (not just the numeral) unless EVERY one of the trailing week's entries
+  // actually carries a `tss`.
+  const trioTssTrack = pmcSeries7.length > 0 && pmcSeries7.every((p) => p.tss != null)
+    ? pmcSeries7.map((p) => p.tss as number)
+    : null
+  const trioTrainingLoadCaption = (() => {
+    if (pmcLast?.tss == null || trioTssTrack == null) return null
+    const rank = [...trioTssTrack].sort((a, b) => b - a).indexOf(pmcLast.tss) + 1
+    return t('trioTrainingLoadCaption', { rank: ordinalLabel(rank, locale) })
+  })()
+
+  const trioFatigueValue: Value<number> = pmcLast != null ? present(Math.round(pmcLast.atl)) : missing(pmcHistoryMissing)
+  const trioFatigueDelta = pmcLast != null && pmcPrior != null ? Math.round(pmcLast.atl - pmcPrior.atl) : null
+  const trioAtlTrack = pmcSeries7.map((p) => p.atl)
+  const trioFatigueCaption = trioFatigueDelta == null
+    ? null
+    : trioFatigueDelta > 0 ? t('trioFatigueCaptionRising') : trioFatigueDelta < 0 ? t('trioFatigueCaptionEasing') : t('trioFatigueCaptionSteady')
+
+  const trioRestingHrValue: Value<number> = mapValue(model.restingHr, (h) => h.value)
+  const trioRestingHrDelta = isPresent(model.restingHr) ? model.restingHr.value.delta : null
+
   // ---- Evening: 02 Tonight ---------------------------------------------------
   // BEDTIME/WAKE/SLEEP/DEBT (`UtYXL`/`IgmOU`/`agHrh`/`N1xe2`, cx4zJ's own
   // Tiles) all need the same bedtime-target/wake-alarm source the hero
@@ -921,6 +970,38 @@ function TodayViewBody({ model, control }: { model: TodayModel; control?: DaySta
                 {isPresent(rideMicro) ? rideMicro.value : rideMicro.missing}
               </span>
             </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '26px 0 0 0' }}>
+              <span style={kickerLabel}>{t('movedKeyHeading')}</span>
+              <div style={{ width: '100%', height: 1, background: 'var(--e-hairline)' }} />
+            </div>
+            <MovedRow
+              label={t('trioTrainingLoad')}
+              caption={trioTrainingLoadCaption}
+              value={trioTrainingLoadValue}
+              unit={t('unitTss')}
+              delta={trioTrainingLoadDelta}
+              track={trioTssTrack}
+              trackMissingReason={pmcHistoryMissing}
+            />
+            <MovedRow
+              label={t('pmcFatigue')}
+              caption={trioFatigueCaption}
+              value={trioFatigueValue}
+              unit=""
+              delta={trioFatigueDelta}
+              track={trioAtlTrack}
+            />
+            <MovedRow
+              label={t('labelRestingHr')}
+              caption={t('trioRestingHrCaption')}
+              value={trioRestingHrValue}
+              unit={t('unitBpm')}
+              delta={trioRestingHrDelta}
+              track={null}
+              trackMissingReason={t('trioRestingHrHistoryMissing')}
+              last
+            />
           </section>
         )}
 
@@ -1329,6 +1410,77 @@ const tickStyle: CSSProperties = {
   fontFamily: 'var(--e-body)', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.8, color: 'var(--e-lo)',
 }
 
+/** One row of Evening's "Moved Key" trio (`I7AqeN`/`ppDu5`/`j7KHFv` — Label +
+ *  Caption left, Value/Unit/Delta right, a 7-bar Track beneath, a hairline
+ *  Sep beneath that). `track` is a real 7-entry number series when one
+ *  exists (`pmc.series`, sliced to the trailing week); `null` when no source
+ *  exists at all (Resting HR — see the render site's own doc comment) — in
+ *  which case the Track is skipped and `trackMissingReason` prints instead,
+ *  same "never fabricate a shape" rule every other chart in this file
+ *  follows. `last` omits the pen's own trailing Sep rule (the third row is
+ *  the section's last child). */
+function MovedRow({ label, caption, value, unit, delta, track, trackMissingReason, last }: {
+  label: string
+  caption: string | null
+  value: Value<number>
+  unit: string
+  delta: number | null
+  track: number[] | null
+  trackMissingReason?: string
+  last?: boolean
+}) {
+  const max = track && track.length > 0 ? Math.max(1, ...track) : 1
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9, paddingTop: 18 }}>
+      <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingBottom: 4 }}>
+          <span style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4, color: 'var(--e-mid)' }}>
+            {label}
+          </span>
+          {caption && (
+            <span style={{ fontFamily: 'var(--e-body)', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: 'var(--e-lo)' }}>
+              {caption}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end' }}>
+          <span style={{ fontFamily: 'var(--e-display)', fontSize: 30, fontWeight: 800, letterSpacing: -1, lineHeight: 1, color: 'var(--e-ink)' }}>
+            {isPresent(value) ? value.value : '—'}
+          </span>
+          <div style={{ display: 'flex', gap: 7, alignItems: 'flex-end', paddingBottom: 3 }}>
+            {unit && (
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 700, color: 'var(--e-lo)' }}>{unit}</span>
+            )}
+            {delta != null && (
+              <span style={{ fontFamily: 'var(--e-body)', fontSize: 12, fontWeight: 800, color: 'var(--e-ink)' }}>
+                {signed(delta)}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      {track ? (
+        <div style={{ width: '100%', display: 'flex', gap: 4, alignItems: 'flex-end', height: 24 }}>
+          {track.map((v, i) => (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: Math.max(3, Math.round((v / max) * 24)),
+                borderRadius: 2,
+                background: i === track.length - 1 ? 'var(--st-evening)' : 'var(--d-2)',
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        trackMissingReason && <p style={quietReason}>{trackMissingReason}</p>
+      )}
+      {!last && <div style={{ width: '100%', height: 1, background: 'var(--e-hairline)' }} />}
+    </div>
+  )
+}
+
 /** Day Mark's absolute `top` offset — pen-verified per state (`K8WxOh` Rest
  *  186, `LRIzl` Training 158, `F6851` Trained 150, `RzWNl` Resting 170,
  *  task 11's own fresh read of `h54Rs`), previously hardcoded to 150 for
@@ -1355,6 +1507,22 @@ function signed(n: number): string {
   if (n > 0) return `+${n}`
   if (n < 0) return `−${Math.abs(n)}`
   return '0'
+}
+
+/** Locale-aware ordinal, e.g. "3RD"/"1ST"/"11TH" (en) or "3." (de) — used by
+ *  the Moved Key trio's "Nth biggest day this week" caption (see the
+ *  `trioTrainingLoadCaption` doc comment). German ordinals are a bare period
+ *  after the number, never an English-style letter suffix. */
+function ordinalLabel(n: number, locale: import('../i18n/copy').Locale): string {
+  if (locale === 'de') return `${n}.`
+  const mod100 = n % 100
+  if (mod100 >= 11 && mod100 <= 13) return `${n}TH`
+  switch (n % 10) {
+    case 1: return `${n}ST`
+    case 2: return `${n}ND`
+    case 3: return `${n}RD`
+    default: return `${n}TH`
+  }
 }
 
 function formatHoursMinutes(totalMinutes: number): string {
