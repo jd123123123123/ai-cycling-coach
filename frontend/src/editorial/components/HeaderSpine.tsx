@@ -5,7 +5,6 @@ import ProfileAvatar from './ProfileAvatar'
 import { isPresent, type Value } from '../data/value'
 import { useCopy } from '../i18n/useCopy'
 import type { DayState } from '../state/dayState'
-import type { DayStateControl, ProfileHeaderData } from '../pages/TodayView'
 
 /**
  * The one header spine. Every Today screen opens identically — Cover plate,
@@ -16,6 +15,55 @@ import type { DayStateControl, ProfileHeaderData } from '../pages/TodayView'
  * spine a second caller. Nothing here is new: every value is the one that
  * was inline, and the parity of the move is what Task 1's own step 4 checks.
  */
+
+/**
+ * The day-state override, supplied by TodayPage. Optional on purpose:
+ * TodayView must stay a pure function of `model` so the fixture harness can
+ * render it with no QueryClient, no auth and no backend. When it is absent
+ * the DayRail shows no action pill and no sheet mounts — which is exactly
+ * what a static render should show.
+ */
+export interface DayStateControl {
+  /** The DayRail's accent pill. The pen makes that pill the only way in. */
+  onSwapDayType: () => void
+  openSheet: 'switch' | 'back' | null
+  onPickDayType: (next: 'rest' | 'training') => void
+  onConfirmSessionDone: () => void
+  onCloseSheet: () => void
+  /** The day's real, non-overridden state (`useDayState().derived`) — lets
+   *  the Day Rail resolve step 0's day type while browsing away from it. */
+  derived: DayState
+  /** True while `onPreview` is overlaying a state other than the real one
+   *  (`useDayState().isPreviewing`). */
+  isPreviewing: boolean
+  /** Reads any other Today state WITHOUT changing the athlete's real day —
+   *  `useDayState().preview`. Pass `null` to return to the real state. This
+   *  is a strictly different action from `onPickDayType`/
+   *  `onConfirmSessionDone` above, which DO change the real day via
+   *  `setOverride`. */
+  onPreview: (next: DayState | null) => void
+  /** Real-data audit (2026-08-06): the withheld-readiness hero's sync
+   *  action (`utils/readinessGate.ts`'s 'stale' case only — "your watch
+   *  hasn't synced" is the one gap a sync can actually fix). Optional, like
+   *  every other affordance here: a fixture render without a `control`
+   *  simply shows no action, same as the Day Rail's own pill. */
+  readinessSync?: {
+    onSync: () => void
+    pending: boolean
+    done: boolean
+  }
+}
+
+/** The Cover Meta row's avatar (see `components/ProfileAvatar.tsx`) — data
+ *  enters as a prop from the page (`TodayPage`), never a hook read inside
+ *  this tree's presentational layer. Optional so the visual harness and any
+ *  fixture render (no auth, no backend) can omit it and simply show no
+ *  avatar, exactly like `control` being absent hides the DayRail's pill. */
+export interface ProfileHeaderData {
+  avatarUrl: string | null
+  initial: string
+}
+
 export interface HeaderSpineProps {
   state: DayState
   dateLabel: Value<string>
@@ -40,6 +88,12 @@ const DAY_MARK_TOP: Partial<Record<DayState, number>> & { trained: number } = {
 
 export default function HeaderSpine({ state, dateLabel, streakDays, profile, control, switchable }: HeaderSpineProps) {
   const { t } = useCopy()
+  // Find the win (design pass, 2026-08-06): real, never invented — a streak
+  // of 3+ days is a true, ordinary-but-genuine accomplishment that shows up
+  // on most real accounts most of the time (unlike a 90-day best, which is
+  // rare), so it's the header's own always-available candidate for real
+  // visual weight. Below 3 the header stays neutral rather than treating a
+  // one- or two-day streak as an event.
   const isWinStreak = isPresent(streakDays) && streakDays.value >= 3
 
   return (

@@ -5,7 +5,7 @@ import { COVER_PHOTO, QUOTE_PHOTO, TOMORROW_PHOTO } from '../components/plateIma
 import BackToSessionDoneSheet from '../components/BackToSessionDoneSheet'
 import DeltaRow from '../components/DeltaRow'
 import FatigueCurve from '../components/FatigueCurve'
-import HeaderSpine from '../components/HeaderSpine'
+import HeaderSpine, { type DayStateControl, type ProfileHeaderData } from '../components/HeaderSpine'
 import InsightStrip from '../components/InsightStrip'
 import Ledger from '../components/Ledger'
 import LiveRing from '../components/LiveRing'
@@ -29,11 +29,19 @@ import ZoneRows from '../components/ZoneRows'
 import { isPresent, mapValue, missing, present, type Value } from '../data/value'
 import type { PmcPoint, TodayModel } from '../data/useTodayModel'
 import EditorialRoot from '../EditorialRoot'
-import { dayRailStepTargets, type DayState } from '../state/dayState'
+import { dayRailStepTargets } from '../state/dayState'
 import type { CSSProperties } from 'react'
 import { useCopy, type Copy } from '../i18n/useCopy'
 import { intlLocale } from '../i18n/copy'
 import { useSwipeStep } from '../motion/useSwipeStep'
+
+// `DayStateControl` and `ProfileHeaderData` moved to `components/HeaderSpine`
+// (task 1 review, finding 2): they are the spine's own prop types, and the
+// spine now has a second caller (`TrainingDay`, task 7) that must not have to
+// reach into this page to find them — a component pointing at a page is
+// backwards. Re-exported here so every existing importer of `TodayView`
+// keeps working untouched.
+export type { DayStateControl, ProfileHeaderData } from '../components/HeaderSpine'
 
 /**
  * The Today screen's layout, as a pure function of an already-assembled
@@ -121,56 +129,8 @@ import { useSwipeStep } from '../motion/useSwipeStep'
  * below carries the entire original component; this wrapper only supplies
  * the state EditorialRoot needs.
  */
-/**
- * The day-state override, supplied by TodayPage. Optional on purpose:
- * TodayView must stay a pure function of `model` so the fixture harness can
- * render it with no QueryClient, no auth and no backend. When it is absent
- * the DayRail shows no action pill and no sheet mounts — which is exactly
- * what a static render should show.
- */
-export interface DayStateControl {
-  /** The DayRail's accent pill. The pen makes that pill the only way in. */
-  onSwapDayType: () => void
-  openSheet: 'switch' | 'back' | null
-  onPickDayType: (next: 'rest' | 'training') => void
-  onConfirmSessionDone: () => void
-  onCloseSheet: () => void
-  /** The day's real, non-overridden state (`useDayState().derived`) — lets
-   *  the Day Rail resolve step 0's day type while browsing away from it. */
-  derived: DayState
-  /** True while `onPreview` is overlaying a state other than the real one
-   *  (`useDayState().isPreviewing`). */
-  isPreviewing: boolean
-  /** Reads any other Today state WITHOUT changing the athlete's real day —
-   *  `useDayState().preview`. Pass `null` to return to the real state. This
-   *  is a strictly different action from `onPickDayType`/
-   *  `onConfirmSessionDone` above, which DO change the real day via
-   *  `setOverride`. */
-  onPreview: (next: DayState | null) => void
-  /** Real-data audit (2026-08-06): the withheld-readiness hero's sync
-   *  action (`utils/readinessGate.ts`'s 'stale' case only — "your watch
-   *  hasn't synced" is the one gap a sync can actually fix). Optional, like
-   *  every other affordance here: a fixture render without a `control`
-   *  simply shows no action, same as the Day Rail's own pill. */
-  readinessSync?: {
-    onSync: () => void
-    pending: boolean
-    done: boolean
-  }
-}
-
 /** Only these states have a sheet behind the pill (see the plan's Task 13). */
 const SWITCHABLE = new Set(['rest', 'training', 'resting'])
-
-/** The Cover Meta row's avatar (see `components/ProfileAvatar.tsx`) — data
- *  enters as a prop from the page (`TodayPage`), never a hook read inside
- *  this tree's presentational layer. Optional so the visual harness and any
- *  fixture render (no auth, no backend) can omit it and simply show no
- *  avatar, exactly like `control` being absent hides the DayRail's pill. */
-export interface ProfileHeaderData {
-  avatarUrl: string | null
-  initial: string
-}
 
 export default function TodayView({ model, control, profile }: {
   model: TodayModel
