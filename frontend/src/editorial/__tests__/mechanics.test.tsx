@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import RuleHead from '../components/RuleHead'
 import Triplet from '../components/Triplet'
 import VerdictRow from '../components/VerdictRow'
+import TwoWeightHead from '../components/TwoWeightHead'
 import { missing, present, type Value } from '../data/value'
+import { splitVerdict } from '../data/verdictSplit'
 
 afterEach(cleanup)
 
@@ -69,5 +71,39 @@ describe('VerdictRow (mechanic D)', () => {
     expect(container.querySelector('[data-verdict-row]')).not.toBeNull()
     // Exactly one dash for the missing qualifier (not one for value, which is present)
     expect(screen.getByText('—')).toBeTruthy()
+  })
+})
+
+describe('splitVerdict', () => {
+  it('splits on an em dash', () => {
+    expect(splitVerdict('VO2 heute — du bist frisch')).toEqual({ lead: 'VO2 heute', emphasis: 'du bist frisch' })
+  })
+
+  it('splits on a colon', () => {
+    expect(splitVerdict('Heute zählt: die letzten drei Minuten'))
+      .toEqual({ lead: 'Heute zählt', emphasis: 'die letzten drei Minuten' })
+  })
+
+  it('leaves a sentence with no separator whole rather than guessing a break', () => {
+    expect(splitVerdict('Ein ruhiger Tag im Grundlagenbereich'))
+      .toEqual({ lead: 'Ein ruhiger Tag im Grundlagenbereich', emphasis: null })
+  })
+
+  it('splits only once, so a second dash stays inside the emphasis', () => {
+    expect(splitVerdict('A — B — C')).toEqual({ lead: 'A', emphasis: 'B — C' })
+  })
+})
+
+describe('TwoWeightHead (mechanics B + K)', () => {
+  it('renders both weights and accents only the emphasis', () => {
+    const { container } = render(<TwoWeightHead lead="VO2 heute" emphasis="du bist frisch" />)
+    expect(screen.getByText('VO2 heute')).toBeTruthy()
+    expect(screen.getByText('du bist frisch')).toBeTruthy()
+    expect(container.querySelectorAll('[data-accent]')).toHaveLength(1)
+  })
+
+  it('spends no accent at all when there is no emphasis', () => {
+    const { container } = render(<TwoWeightHead lead="Ein ruhiger Tag" emphasis={null} />)
+    expect(container.querySelectorAll('[data-accent]')).toHaveLength(0)
   })
 })
