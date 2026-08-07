@@ -1,5 +1,7 @@
 import { Thermometer, Wind } from 'lucide-react'
 import Bars from '../components/Bars'
+import CassetteHero from '../components/CassetteHero'
+import { COG_TEETH, cogIndexFromReadiness } from '../components/cassetteScale'
 import Cover from '../components/Cover'
 import { COVER_PHOTO, QUOTE_PHOTO, TOMORROW_PHOTO } from '../components/plateImagery'
 import BackToSessionDoneSheet from '../components/BackToSessionDoneSheet'
@@ -195,6 +197,21 @@ function TodayViewBody({ model, control, profile }: {
 
   const sessionContext: Value<string> = missing(t('heroSessionContextMissing'))
 
+  // ---- Cassette hero caption, per state ------------------------------------
+  // Names the COG the rider's own readiness maps to today, via the SAME
+  // scale `CassetteHero` uses internally to place the chain
+  // (`cogIndexFromReadiness`) — so the caption's tooth count always matches
+  // the cog the chain visibly sits on, never a second, independent guess.
+  // `trained` looks back on the day just spent ("what is left"); `evening`
+  // looks ahead to tomorrow's reading; every other state reads as a
+  // same-day claim. The actual Value is computed further down, once
+  // `heroNumeralValue` exists — see the dedup comment there.
+  const cassetteCaptionKey = state === 'trained'
+    ? 'cassetteCaptionSpent'
+    : state === 'evening'
+      ? 'cassetteCaptionEvening'
+      : 'cassetteCaptionAhead'
+
   // ---- Hero headline/numeral, per state -----------------------------------
   // Rest has no session to name today, so its headline is the coach's own
   // verdict headline (M4EaH/NSNJa, "Absorb, don't add." in the pen — a
@@ -338,6 +355,49 @@ function TodayViewBody({ model, control, profile }: {
   // its own distinct reason here.
   const rcPrimaryReasonAlreadyShown = !isPresent(heroNumeralValue) && !isPresent(rcPrimaryLine)
     && heroNumeralValue.missing === rcPrimaryLine.missing
+
+  // ---- Cassette hero: series/caption/readiness dedup -----------------------
+  // `model.readiness90DaySeries` predates this task's own field-4 (Task 5);
+  // fixtures elsewhere in this suite were built before that task and never
+  // set it, so it can arrive `undefined` on a plain object cast to
+  // `TodayModel` — normalise to an honest missing `Value` here rather than
+  // let `isPresent` throw on a field that was never populated.
+  const cassetteSeries: Value<number[]> = model.readiness90DaySeries ?? missing(t('ninetyDayHistoryMissing'))
+  const cassetteSeriesValues = isPresent(cassetteSeries) ? cassetteSeries.value : []
+  // `model.readiness`'s own missing reason already surfaces on the Cover
+  // above, verbatim, in one of two spots — computed above, in this exact
+  // order:
+  //  - `heroNumeralValue` (MetricTrack's own numeral): directly on Rest, and
+  //    on Training/Resting whenever `bodyBatteryNow` falls back to it (see
+  //    its own doc comment: "the reason it prints is the dated one").
+  //  - `rcPrimaryLine` (the RC context row, Rest/Training only —
+  //    `readinessDeltaLine`'s own missing fallback), UNLESS
+  //    `rcPrimaryReasonAlreadyShown` already suppressed it as a duplicate of
+  //    the FIRST case above — in which case the first case already covers
+  //    this text, so there is nothing further to check.
+  // Handing the cassette the raw `model.readiness` when either is true would
+  // repeat that sentence a third time. Withheld with an EMPTY reason (not a
+  // fabricated second sentence) so the cassette still draws its frame — see
+  // `CassetteHero.tsx`'s own "still draws the cassette when the reading is
+  // missing" test — just without printing the same sentence again.
+  const cassetteReasonShownByNumeral = !isPresent(model.readiness) && !isPresent(heroNumeralValue)
+    && heroNumeralValue.missing === model.readiness.missing
+  const cassetteReasonShownByRcLine = !isPresent(model.readiness) && state !== 'trained' && state !== 'evening'
+    && !rcPrimaryReasonAlreadyShown && !isPresent(rcPrimaryLine) && rcPrimaryLine.missing === model.readiness.missing
+  const cassetteReasonAlreadyShown = cassetteReasonShownByNumeral || cassetteReasonShownByRcLine
+  const cassetteReadiness: Value<{ score: number; deltaVsYesterday: number | null }> =
+    cassetteReasonAlreadyShown ? missing('') : model.readiness
+  // The caption is meaningless without a readiness score to place on the
+  // cassette, and CassetteHero's own missing-readiness paragraph — printed
+  // from the SAME `cassetteReadiness` Value, immediately above this one —
+  // already explains the gap (verbatim, or silently when
+  // `cassetteReasonAlreadyShown`). An empty caption withholds it without
+  // restating that sentence a second time from within this one component.
+  const cassetteCaption: Value<string> = isPresent(model.readiness)
+    ? present(t(cassetteCaptionKey, {
+        teeth: COG_TEETH[cogIndexFromReadiness(model.readiness.value.score, cassetteSeriesValues).index],
+      }))
+    : missing('')
 
   // Find the win, continued: when the secondary RC line IS the true "best
   // in 90 days" claim, it's a real, honest win — give it the day's accent
@@ -892,6 +952,7 @@ function TodayViewBody({ model, control, profile }: {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: 'var(--e-lo)' }} />
                   <span
+                    data-testid="hero-numeral"
                     style={{
                       fontFamily: 'var(--e-body)',
                       fontSize: 'var(--t-lead)',
@@ -989,6 +1050,12 @@ function TodayViewBody({ model, control, profile }: {
         </Cover>
 
         <div data-hero-body style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '34px 24px 0 24px' }}>
+          <CassetteHero
+            readiness={cassetteReadiness}
+            series={cassetteSeries}
+            todayIso={new Date().toISOString().slice(0, 10)}
+            caption={cassetteCaption}
+          />
           {state === 'rest' && (
             <div style={{ paddingBottom: 26 }}>
               <WeekRail days={model.week} todayIndex={todayIndex} />

@@ -81,15 +81,23 @@ export default function CassetteHero({ readiness, series, todayIso, caption }: C
             )}
           </div>
         </div>
-      ) : (
+      // An EMPTY `missing` reason (as opposed to an absent one — `readiness`
+      // is still the missing arm, just with `''` for its reason) is the
+      // caller's own signal that this exact sentence already printed
+      // elsewhere on the same screen (`TodayView.tsx`'s own
+      // `cassetteReasonAlreadyShown` dedup) — render nothing rather than an
+      // empty, oddly-padded paragraph.
+      ) : readiness.missing ? (
         <p style={{ fontSize: 13, color: 'var(--e-quiet)', textAlign: 'center', padding: '0 24px' }}>
           {readiness.missing}
         </p>
-      )}
+      ) : null}
 
-      <p style={{ fontSize: 13, color: isPresent(caption) ? 'var(--e-mid)' : 'var(--e-quiet)', padding: '12px 24px 0' }}>
-        {isPresent(caption) ? caption.value : caption.missing}
-      </p>
+      {(isPresent(caption) || caption.missing) && (
+        <p style={{ fontSize: 13, color: isPresent(caption) ? 'var(--e-mid)' : 'var(--e-quiet)', padding: '12px 24px 0' }}>
+          {isPresent(caption) ? caption.value : caption.missing}
+        </p>
+      )}
 
       {placement?.basis === 'decile' && (
         <p

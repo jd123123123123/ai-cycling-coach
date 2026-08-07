@@ -22,6 +22,12 @@ import type { SessionModel } from '../data/useSessionModel'
 import TodayView from '../pages/TodayView'
 import { SessionDetailView } from '../pages/SessionDetailPage'
 
+// Task 5's cassette hero fields, backfilled onto fixtures written before
+// that task existed. Ninety readings, comfortably above
+// `MIN_SERIES_FOR_PERCENTILE` (14), so the harness exercises the cassette's
+// real percentile placement rather than its coarse decile fallback.
+const READINESS_90_DAY_SERIES = Array.from({ length: 90 }, (_, i) => 40 + ((i * 7) % 55))
+
 function buildPmcSeries(days: number) {
   const out = []
   for (let i = 0; i < days; i++) {
@@ -42,6 +48,8 @@ const model: TodayModel = {
   streakDays: present(13),
   readiness: present({ score: 74, deltaVsYesterday: 8 }),
   readiness90DayBest: present(77),
+  readiness90DaySeries: present(READINESS_90_DAY_SERIES),
+  missedYesterday: missing('Gestern war kein Fahrtag geplant.'),
   bodyBattery90DayHigh: missing('Noch keine 90-Tage-Historie erfasst.'),
   hrv: present({ value: 68, unit: 'ms', delta: 4, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 46, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'in' } }),
@@ -103,6 +111,8 @@ const restModel: TodayModel = {
   streakDays: present(12),
   readiness: present({ score: 88, deltaVsYesterday: 6 }),
   readiness90DayBest: present(91),
+  readiness90DaySeries: present(READINESS_90_DAY_SERIES),
+  missedYesterday: missing('Gestern war kein Fahrtag geplant.'),
   bodyBattery90DayHigh: missing('Noch keine 90-Tage-Historie erfasst.'),
   hrv: present({ value: 68, unit: 'ms', delta: 6, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 48, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'below' } }),
@@ -169,6 +179,8 @@ const restingModel: TodayModel = {
   streakDays: present(13),
   readiness: present({ score: 91, deltaVsYesterday: 5 }),
   readiness90DayBest: present(94),
+  readiness90DaySeries: present(READINESS_90_DAY_SERIES),
+  missedYesterday: missing('Gestern war kein Fahrtag geplant.'),
   bodyBattery90DayHigh: present(97),
   bodyBattery: present({ wake: 88, now: 91 }),
   hrv: present({ value: 74, unit: 'ms', delta: 10, band: { low: 52, high: 80, position: 'above' } }),
@@ -208,6 +220,8 @@ const eveningModel: TodayModel = {
   streakDays: present(13),
   readiness: present({ score: 74, deltaVsYesterday: 8 }),
   readiness90DayBest: present(77),
+  readiness90DaySeries: present(READINESS_90_DAY_SERIES),
+  missedYesterday: missing('Gestern war kein Fahrtag geplant.'),
   bodyBattery90DayHigh: missing('Noch keine 90-Tage-Historie erfasst.'),
   hrv: present({ value: 68, unit: 'ms', delta: 4, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 46, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'in' } }),

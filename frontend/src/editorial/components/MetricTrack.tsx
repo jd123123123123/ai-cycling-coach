@@ -169,6 +169,7 @@ export default function MetricTrack({
       {present ? (
         <div style={{ display: 'flex', width: '100%', gap: 9, alignItems: 'flex-end' }}>
           <span
+            data-testid="hero-numeral"
             style={{
               fontFamily: 'var(--e-display)',
               fontSize,
