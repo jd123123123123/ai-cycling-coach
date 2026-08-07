@@ -227,6 +227,61 @@ describe('BentoTile', () => {
     })
   })
 
+  describe('the tall tile earns its height (Change 2, owner ruling 2026-08-07)', () => {
+    it('draws the real series, not the band, when tall and a tallChart is present', () => {
+      render(
+        <BentoTile
+          label="RUHEPULS" tall accent
+          value={present({ text: '46', unit: 'bpm' })}
+          chart={present({ kind: 'band', low: 44, high: 55, today: 46 })}
+          tallChart={present({ kind: 'spark', points: [49, 48, 51, 47, 48, 46, 46], highlightIndex: 6 })}
+        />,
+      )
+      // More than the band chart's single dot — a real multi-point line.
+      const points = screen.getAllByTestId('bento-chart-point')
+      expect(points.length).toBeGreaterThan(2)
+      expect(points).toHaveLength(7)
+      expect(screen.getAllByTestId('bento-chart-highlight')).toHaveLength(1)
+    })
+
+    it('falls back to the band, not a fabricated series, when tall but no tallChart exists', () => {
+      render(
+        <BentoTile
+          label="HRV" tall accent
+          value={present({ text: '68', unit: 'ms' })}
+          chart={present({ kind: 'band', low: 52, high: 74, today: 68 })}
+        />,
+      )
+      // Exactly the band chart's own single dot — never fabricates extra points.
+      expect(screen.getAllByTestId('bento-chart-point')).toHaveLength(1)
+    })
+
+    it('falls back to the missing reason, not a fabricated series, when tall and both chart and tallChart are missing', () => {
+      render(
+        <BentoTile
+          label="Body Battery" tall accent
+          value={missing('Keine Messung seit Dienstag.')}
+          chart={missing('Keine Messung seit Dienstag.')}
+          tallChart={missing('Keine Messung seit Dienstag.')}
+        />,
+      )
+      expect(screen.queryAllByTestId('bento-chart-point')).toHaveLength(0)
+      expect(screen.getByText('Keine Messung seit Dienstag.')).toBeTruthy()
+    })
+
+    it('a single-height tile ignores tallChart entirely and keeps its band', () => {
+      render(
+        <BentoTile
+          label="RUHEPULS"
+          value={present({ text: '46', unit: 'bpm' })}
+          chart={present({ kind: 'band', low: 44, high: 55, today: 46 })}
+          tallChart={present({ kind: 'spark', points: [49, 48, 51, 47, 48, 46, 46], highlightIndex: 6 })}
+        />,
+      )
+      expect(screen.getAllByTestId('bento-chart-point')).toHaveLength(1)
+    })
+  })
+
   describe('band chart coverage', () => {
     it('renders a single highlighted dot for a normal band', () => {
       render(

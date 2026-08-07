@@ -69,23 +69,30 @@ const restingModel: TodayModel = {
 } as TodayModel
 
 describe('Resting screen composition', () => {
-  it('renders RIGHT NOW then TRAJECTORY, in that order, with no Insight Strip', () => {
+  // OWNER RULING 2026-08-07: "01 RIGHT NOW" (three `LiveRing`s for HRV/
+  // RESTING HR/SLEEP) is deleted — its own prior doc comment said it
+  // outright: "the SAME three signals Rest/Training's own '01 Recovery'
+  // shows... rendered here as rings instead." The bento directly above
+  // already shows those three readings, so this was the same duplicate
+  // under a different name and a different chart type. TRAJECTORY, its only
+  // remaining numbered section, renumbers from "02" to "01". See
+  // TodayView.tsx's own top-of-file doc comment.
+  it('renders TRAJECTORY as its only numbered section, with no Insight Strip', () => {
     const { container } = render(<MemoryRouter><TodayView model={restingModel} /></MemoryRouter>)
     const section01 = container.querySelector('[data-section="01"]')
-    const section02 = container.querySelector('[data-section="02"]')
     expect(section01).not.toBeNull()
-    expect(section02).not.toBeNull()
-    expect(section01!.querySelector('h2')?.textContent).toBe('JETZT GERADE')
-    expect(section02!.querySelector('h2')?.textContent).toBe('VERLAUF')
-    expect(container.querySelectorAll('[data-live-ring]')).toHaveLength(3)
+    expect(container.querySelector('[data-section="02"]')).toBeNull()
+    expect(section01!.querySelector('h2')?.textContent).toBe('VERLAUF')
+    expect(container.querySelectorAll('[data-live-ring]')).toHaveLength(0)
     expect(container.querySelector('[data-insight-strip]')).toBeNull()
   })
 
-  it('never renders section 03, ERHOLUNG, or ABSORPTION on a resting day', () => {
+  it('never renders section 02, JETZT GERADE, ERHOLUNG, or ABSORPTION on a resting day', () => {
     render(<MemoryRouter><TodayView model={restingModel} /></MemoryRouter>)
     expect(screen.queryByText('ABSORPTION')).toBeNull()
+    expect(screen.queryByText('JETZT GERADE')).toBeNull()
     const container = document.querySelector('main')
-    expect(container?.querySelector('[data-section="03"]')).toBeNull()
+    expect(container?.querySelector('[data-section="02"]')).toBeNull()
   })
 
   it('renders the tomorrow plate and band', () => {

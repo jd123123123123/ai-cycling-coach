@@ -13,13 +13,11 @@ import HeaderSpine, { type DayStateControl, type ProfileHeaderData } from '../co
 import InsightStrip from '../components/InsightStrip'
 import KetteStrip from '../components/KetteStrip'
 import Ledger from '../components/Ledger'
-import LiveRing from '../components/LiveRing'
 import MetricTrack, { type MetricTrackAction } from '../components/MetricTrack'
 import { headlineFit } from '../components/numeralFit'
 import PeakRows, { type PeakTotal } from '../components/PeakRows'
 import PMCChart from '../components/PMCChart'
 import QuotePlate from '../components/QuotePlate'
-import RangeRow from '../components/RangeRow'
 import SecHead from '../components/SecHead'
 import Statement from '../components/Statement'
 import SwitchDayTypeSheet from '../components/SwitchDayTypeSheet'
@@ -32,7 +30,7 @@ import WeekRail from '../components/WeekRail'
 import WhatThisChanges from '../components/WhatThisChanges'
 import ZoneRows from '../components/ZoneRows'
 import { isPresent, mapValue, missing, present, type Value } from '../data/value'
-import type { PmcPoint, TodayModel } from '../data/useTodayModel'
+import type { PmcPoint, RangeBand, TodayModel } from '../data/useTodayModel'
 import type { BlockLike } from '../data/blocks'
 import EditorialRoot from '../EditorialRoot'
 import { dayRailStepTargets } from '../state/dayState'
@@ -117,6 +115,32 @@ export type { DayStateControl, ProfileHeaderData } from '../components/HeaderSpi
  * next to "TSS". Now passed as `unitSub`; `label`/`state` are both empty,
  * so MetricTrack renders no top caption at all for this call, matching the
  * pen exactly. See MetricTrack.tsx's own doc comment for the full record.
+ *
+ * OWNER RULING 2026-08-07 — the bento REPLACES "01 RECOVERY": rendering the
+ * finished screen showed the bento (`BentoGrid`, mounted directly below
+ * `CassetteHero`) and "01 RECOVERY" printing the SAME three metrics twice,
+ * ~400px apart — HRV/RESTING HR/SLEEP with the same values, no new
+ * information. "01 RECOVERY" (Rest + Training's own `RangeRow` trio) is
+ * deleted outright; the delta and range-position ("ABOVE RANGE"/"BELOW
+ * RANGE") it alone carried are migrated onto the HRV/RESTING HR tiles' own
+ * `note` (see `bentoHrv`/`bentoRestingHr` below). Resting's own "01 RIGHT
+ * NOW" is the exact same duplicate under a different name and visual
+ * vocabulary (`LiveRing` rings instead of `RangeRow`s — see the section's
+ * own prior doc comment, now removed, which said as much: "the SAME three
+ * signals Rest/Training's own '01 Recovery' shows... rendered here as rings
+ * instead") — deleted for the same reason. Trained and Evening never showed
+ * these three labels outside the bento, so neither needed a change here.
+ * Sections renumber contiguously from 01 in every state that lost one:
+ * Rest's "02 ABSORPTION"/"03 TRAJECTORY" become "01"/"02"; Training's
+ * "02 DIE EINHEIT"/"03 TRAJECTORY" become "01"/"02"; Resting's sole
+ * remaining section ("02 TRAJECTORY") becomes "01". The sleep-composition
+ * strip ("SCHLAFPHASEN") that also lived inside "01 RECOVERY" is NOT
+ * duplicated by the bento (no tile shows deep/rem/light/awake) — kept, and
+ * moved directly under the `BentoGrid` for Rest/Training (see the render
+ * site below): it is the one piece of that section still worth a full
+ * width row, and sitting right under the tiles it elaborates keeps it next
+ * to the SCHLAF tile it belongs to instead of stranding it after a heading
+ * that no longer exists.
  */
 /**
  * Thin wrapper: `EditorialRoot` is the one place `CopyLocaleProvider` mounts
@@ -453,14 +477,6 @@ function TodayViewBody({ model, control, profile }: {
   const eveningLightsOutMissing = t('eveningLightsOutMissing')
   const eveningLightsOutHeadline = t('eveningLightsOutHeadline')
 
-  // Distinct missing-reasons across section 01's three rows, in first-seen
-  // order — the sleep-composition strip below shares them, so it suppresses
-  // any it would otherwise repeat.
-  const recoveryReasons = [...new Set(
-    ([model.hrv, model.restingHr, model.sleep] as Value<unknown>[])
-      .flatMap((v) => (isPresent(v) ? [] : [v.missing])),
-  )]
-
   // Rest / Resting / Evening look ahead to tomorrow's session; Training and
   // Trained are still inside today's.
   const showsTomorrow = state === 'rest' || state === 'resting' || state === 'evening'
@@ -570,7 +586,10 @@ function TodayViewBody({ model, control, profile }: {
     ? present(fatigueDelta1d >= 0 ? t('costClaimJumped', { n: fatigueDelta1d }) : t('costClaimEased', { n: Math.abs(fatigueDelta1d) }))
     : missing(isPresent(model.pmc) ? t('notEnoughFatigueHistory') : model.pmc.missing)
 
-  // ---- 02 Absorption (Rest) -------------------------------------------------
+  // ---- 01 Absorption (Rest) -------------------------------------------------
+  // OWNER RULING 2026-08-07: renumbered from "02" — "01 Recovery" (the
+  // section that used to precede this one) is deleted; see the top-of-file
+  // doc comment.
   // "ABSORPTION · 48 HOURS" (F42AYn) is a literal, hardcoded label in the
   // pen itself — the section's own declared window, not a value read off
   // any athlete field — so 48 is used here as that same constant, not an
@@ -597,40 +616,17 @@ function TodayViewBody({ model, control, profile }: {
     { label: t('tilePower'), value: missing(NO_LAST_SESSION), unit: t('unitWatts') },
   ]
 
-  // ---- 01 Recovery (Rest + Training) ----------------------------------------
-  // No TodayModel field synthesises a composite "all systems say go" style
-  // verdict from the three signals below (and the direction of "good" isn't
-  // uniform across them — a lower resting HR is good, a lower HRV is not —
-  // so this is not safely derivable from the band positions either). This
-  // is a permanent, never-resolves gap, not a transient one — so, matching
-  // the same rule Trained's own "01 The Session" Statement already follows
-  // (`isPresent(sessionClaim) && <Statement .../>`, TodayView.tsx), the
-  // Statement is not rendered at all rather than emitting a lone "—" whose
-  // only explanation sits several lines below (coordinator review, finding
-  // 2 — a `Statement` should never surface content that is ONLY a dash).
-
-  // ---- 01 Right Now (Resting) ------------------------------------------------
-  // Three `LiveRing`s (`h54Rs`/`W3PK3`+`HzsA8`+`L6fYBh`) — HRV / RESTING HR /
-  // SLEEP, the SAME three signals Rest/Training's own "01 Recovery" shows as
-  // `RangeRow`s, rendered here as rings instead (task 11's own visual
-  // vocabulary for this state). `wake` is each ring's own diff reference —
-  // HRV/RESTING HR reconstruct it from `TodayModel`'s already-real `delta`
-  // (so the ring's Delta line, "+10 ms"/"−4 bpm", is real data, not
-  // invented); SLEEP has no delta field anywhere in `TodayModel`, so its
-  // `wake` is honestly missing and its Delta line is silently absent — see
-  // `LiveRing.tsx`'s own doc comment for why `wake` here is NOT the same
-  // same-day body_battery/stress wake reading the brief's interface names
-  // (this screen's three rings are HRV/RHR/Sleep, none of which carry one).
-  // Same "no composite verdict" gap as "01 Recovery" above — no Statement.
-  const hrvWake: Value<number> = isPresent(model.hrv) && model.hrv.value.delta != null
-    ? present(model.hrv.value.value - model.hrv.value.delta)
-    : missing(isPresent(model.hrv) ? t('ringDeltaMissing') : model.hrv.missing)
-  const restingHrWake: Value<number> = isPresent(model.restingHr) && model.restingHr.value.delta != null
-    ? present(model.restingHr.value.value - model.restingHr.value.delta)
-    : missing(isPresent(model.restingHr) ? t('ringDeltaMissing') : model.restingHr.missing)
-  const sleepWake: Value<number> = missing(t('sleepDeltaMissing'))
-
-  // ---- 02 The Session (Training) --------------------------------------------
+  // ---- 01 The Session (Training) --------------------------------------------
+  // OWNER RULING 2026-08-07: renumbered from "02" — Rest/Training's own
+  // "01 Recovery" (three `RangeRow`s) and Resting's own "01 Right Now"
+  // (the same three signals as `LiveRing`s — see its removed doc comment,
+  // which said as much) are both deleted: the bento directly above already
+  // shows HRV/RESTING HR/SLEEP, so the section printed the same three
+  // values a second time. Their one real, non-duplicated information — the
+  // per-metric delta and range-position, and (Rest/Training only) the
+  // sleep-composition strip — are migrated onto the bento tiles and to a
+  // spot directly under `BentoGrid`, respectively; see the top-of-file doc
+  // comment and `bentoHrvNote`/`bentoRestingHrNote` below.
   const { workBlocks, uniformWork } = workIntervalsOf(sessionBlocks)
   const trainingSessionClaim: Value<string> = isPresent(model.session)
     ? uniformWork && workBlocks.length > 0
@@ -700,9 +696,17 @@ function TodayViewBody({ model, control, profile }: {
     }))
     : missing(model.session.missing)
 
-  // ---- 03 Trajectory (all states) --------------------------------------------
+  // ---- Trajectory (all states) --------------------------------------------
+  // OWNER RULING 2026-08-07: with "01 Recovery"/"01 Right Now" deleted (see
+  // this file's own top-of-file doc comment), every state's own section
+  // count drops by one — Trajectory renumbers to match. Resting now has
+  // NO other numbered section at all (its own "01 Right Now" was its only
+  // sibling), so Trajectory becomes "01" there, not "02". Rest/Training
+  // still have one section ahead of it ("01 Absorption"/"01 The Session"),
+  // so Trajectory is "02" for them. Trained is untouched by this ruling (it
+  // never had a "01 Recovery"-style duplicate section), so it keeps "03".
   const fitnessDelta7d = isPresent(model.pmc) ? pmcDelta(model.pmc.value.series, 7, (p) => p.ctl) : null
-  const trajectoryIndex = state === 'resting' ? '02' : '03'
+  const trajectoryIndex = state === 'resting' ? '01' : state === 'rest' || state === 'training' ? '02' : '03'
   const trajectoryTiles: { label: string; value: Value<number | string>; unit: string }[] = [
     { label: t('insightFitness'), value: mapValue(model.pmc, (p) => Math.round(p.fitness)), unit: fitnessDelta7d != null ? `${signed(fitnessDelta7d)} / 7D` : '' },
     { label: t('pmcFatigue'), value: mapValue(model.pmc, (p) => Math.round(p.fatigue)), unit: fatigueDelta1d != null ? `${signed(fatigueDelta1d)} / 1D` : '' },
@@ -937,11 +941,10 @@ function TodayViewBody({ model, control, profile }: {
   // both size and colour) — never zero accented tiles, never two.
   const bentoReason: string | null = isPresent(model.verdict) ? model.verdict.value.body : null
 
-  // HRV/resting HR chart as a position within the athlete's own band — the
-  // exact `RangeBand` "01 Recovery"'s own `RangeRow`s already plot a few
-  // hundred pixels below this, not a fabricated series. A present reading
-  // with no band on record (distinct from the reading itself being absent)
-  // is the one real gap, named honestly rather than silently defaulted.
+  // HRV/resting HR chart as a position within the athlete's own band — a
+  // real `RangeBand`, not a fabricated series. A present reading with no
+  // band on record (distinct from the reading itself being absent) is the
+  // one real gap, named honestly rather than silently defaulted.
   const bentoHrvBand = isPresent(model.hrv) ? model.hrv.value.band : null
   const bentoHrvChart: Value<TileChart> = !isPresent(model.hrv)
     ? missing(model.hrv.missing)
@@ -955,10 +958,37 @@ function TodayViewBody({ model, control, profile }: {
       ? present({ kind: 'band', low: bentoRestingHrBand.low, high: bentoRestingHrBand.high, today: model.restingHr.value.value })
       : missing(t('bentoNoRange'))
   // Sleep carries neither a delta nor a band anywhere in `TodayModel` (the
-  // same gap `sleepWake` above already names) — no honest chart can be
-  // built, so this reuses that exact reason rather than inventing a
-  // sleep-specific one.
+  // same gap the deleted "01 Right Now" ring's own Delta line used to name)
+  // — no honest chart can be built, so this reuses that exact reason rather
+  // than inventing a sleep-specific one.
   const bentoSleepChart: Value<TileChart> = isPresent(model.sleep) ? missing(t('sleepDeltaMissing')) : missing(model.sleep.missing)
+
+  // OWNER RULING 2026-08-07: "01 Recovery"/"01 Right Now" carried two things
+  // the tiles above don't — the per-metric delta ("+6"/"−2") and the band's
+  // own range position ("ÜBER BEREICH"/"UNTER BEREICH"/"IM BEREICH"). Both
+  // migrate onto the HRV/RESTING HR tiles' `note` (see `bentoRangeNote`
+  // below) rather than get dropped along with the section that used to show
+  // them. Sleep never had a delta or a band anywhere in `TodayModel` (see
+  // `bentoSleepChart` above), so it gets no note — nothing to migrate.
+  const bentoHrvNote = isPresent(model.hrv) ? bentoRangeNote(model.hrv.value.delta, bentoHrvBand, t) : undefined
+  const bentoRestingHrNote = isPresent(model.restingHr) ? bentoRangeNote(model.restingHr.value.delta, bentoRestingHrBand, t) : undefined
+
+  // Resting HR's own real 7-day series (`model.recentRestingHr`, already
+  // fetched for Evening's "Moved Key" trio) — the one metric among the
+  // three tiles this task found an honest multi-point history for. Used
+  // ONLY when this tile ends up in the tall/accented slot (`BentoTile`'s own
+  // `tallChart` prop decides that at render time, per whichever metric the
+  // coach's reason keys off) — HRV and Sleep have no such series anywhere on
+  // `TodayModel`, so their tiles have no `tallChart` at all and fall back to
+  // their regular band (or missing reason) when they end up tall instead,
+  // rather than fabricate a trend that was never measured.
+  const bentoRestingHrTallChart: Value<TileChart> = isPresent(model.recentRestingHr)
+    ? present({
+      kind: 'spark',
+      points: model.recentRestingHr.value.map((d) => d.bpm),
+      highlightIndex: model.recentRestingHr.value.length - 1,
+    })
+    : missing(model.recentRestingHr.missing)
 
   const bentoEntries: BentoEntry[] = [
     {
@@ -968,6 +998,7 @@ function TodayViewBody({ model, control, profile }: {
         ? present({ text: String(Math.round(model.hrv.value.value)), unit: t('unitMs') })
         : missing(model.hrv.missing),
       chart: bentoHrvChart,
+      note: bentoHrvNote,
     },
     {
       key: 'sleep',
@@ -984,6 +1015,8 @@ function TodayViewBody({ model, control, profile }: {
         ? present({ text: String(Math.round(model.restingHr.value.value)), unit: t('unitBpm') })
         : missing(model.restingHr.missing),
       chart: bentoRestingHrChart,
+      tallChart: bentoRestingHrTallChart,
+      note: bentoRestingHrNote,
     },
   ]
   // Body Battery only when the watch actually has a wake/now reading — the
@@ -1166,6 +1199,47 @@ function TodayViewBody({ model, control, profile }: {
           <div style={{ paddingTop: 20, paddingBottom: 26 }}>
             <BentoGrid entries={bentoEntries} reason={bentoReason} />
           </div>
+          {/* Sleep composition (TIEF/REM/LEICHT/WACH) — the one piece of the
+              deleted "01 Recovery" section the bento does NOT carry (no tile
+              shows a deep/rem/light/awake split). Moved here, directly under
+              the tiles it elaborates on, rather than stranded under a
+              "01 ERHOLUNG" heading that no longer exists — the SCHLAF tile
+              a few rows up is what this strip is the detail behind, so
+              reading top-to-bottom now goes "tonight's total" → "how it
+              broke down," one continuous thought instead of two headings
+              apart. Rest/Training only, matching where it always lived. */}
+          {isRestOrTraining && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 26 }}>
+              <span style={kickerLabelDim}>
+                {t('sleepComposition')}{isPresent(model.sleep) ? t('sleepCompositionTotal', { hm: formatHM(model.sleep.value.totalS) }) : ''}
+              </span>
+              {isPresent(model.sleep) ? (
+                <>
+                  <div style={{ width: '100%', height: 10, display: 'flex', borderRadius: 2, overflow: 'hidden' }}>
+                    {sleepParts(model.sleep.value, t).map((p) => (
+                      p.seconds != null && p.seconds > 0
+                        ? <div key={p.key} style={{ flex: p.seconds, height: 10, background: p.color }} />
+                        : null
+                    ))}
+                  </div>
+                  <div style={{ width: '100%', display: 'flex' }}>
+                    {sleepParts(model.sleep.value, t).map((p) => (
+                      <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1, color: 'var(--e-lo)' }}>
+                          {p.label}
+                        </span>
+                        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 700, color: 'var(--e-ink)' }}>
+                          {p.seconds != null ? formatHM(p.seconds) : '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p style={quietReason}>{model.sleep.missing}</p>
+              )}
+            </div>
+          )}
           {state === 'rest' && (
             <div style={{ paddingBottom: 26 }}>
               <WeekRail days={model.week} todayIndex={todayIndex} />
@@ -1348,44 +1422,6 @@ function TodayViewBody({ model, control, profile }: {
           </section>
         )}
 
-        {state === 'resting' && (
-          <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
-            <SecHead
-              index="01"
-              title={t('sectionRightNow')}
-              kicker
-              chip={t('rightNowChipLive')}
-            />
-            {/* No composite "every system is back" verdict anywhere on
-                TodayModel — same permanent gap as "01 Recovery" above, so no
-                Statement (matching the same rule, not a floating dash). */}
-            <div style={{ width: '100%', display: 'flex', gap: 18, paddingTop: 26 }}>
-              <LiveRing
-                label={t('labelHrv')}
-                wake={hrvWake}
-                now={mapValue(model.hrv, (h) => h.value)}
-                hue="var(--st-active)"
-                unit={t('unitMs')}
-              />
-              <LiveRing
-                label={t('labelRestingHr')}
-                wake={restingHrWake}
-                now={mapValue(model.restingHr, (h) => h.value)}
-                hue="var(--st-active)"
-                unit={t('unitBpm')}
-              />
-              <LiveRing
-                label={t('labelSleep')}
-                wake={sleepWake}
-                now={mapValue(model.sleep, (s) => s.totalS)}
-                hue="var(--st-active)"
-                unit={t('unitH')}
-                format={formatHM}
-              />
-            </div>
-          </section>
-        )}
-
         {state === 'trained' && (
           <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
             <SecHead
@@ -1451,86 +1487,6 @@ function TodayViewBody({ model, control, profile }: {
           </section>
         )}
 
-        {isRestOrTraining && (
-          <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
-            {/* Cut the scaffolding (design pass, 2026-08-06): `recoverySub`
-                ("HRV, resting heart rate and sleep — each against your own
-                30-day range") describes how the RangeRows below are built,
-                not what they say — the section's three real readings, and
-                their own bands, already carry the finding. No `sub`. */}
-            <SecHead
-              index="01"
-              title={t('sectionRecovery')}
-              kicker
-            />
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 20 }}>
-              <RangeRow
-                label={t('labelHrv')}
-                value={mapValue(model.hrv, (h) => h.value)}
-                unit={t('unitMs')}
-                band={isPresent(model.hrv) ? model.hrv.value.band : null}
-                delta={isPresent(model.hrv) ? model.hrv.value.delta : null}
-                showReason={false}
-              />
-              <RangeRow
-                label={t('labelRestingHr')}
-                value={mapValue(model.restingHr, (h) => h.value)}
-                unit={t('unitBpm')}
-                band={isPresent(model.restingHr) ? model.restingHr.value.band : null}
-                delta={isPresent(model.restingHr) ? model.restingHr.value.delta : null}
-                showReason={false}
-              />
-              <RangeRow
-                label={t('labelSleep')}
-                value={mapValue(model.sleep, (s) => s.totalS)}
-                unit={t('unitH')}
-                band={null}
-                format={formatHM}
-                showReason={false}
-              />
-              {/* One reason for the whole group. All three rows come off the
-                  same wearable, so when it has not synced they fail together
-                  and printing the sentence per row reads as the screen
-                  apologising to itself — four times, measured live. */}
-              {recoveryReasons.map((reason) => (
-                <p key={reason} style={quietReason}>{reason}</p>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 20 }}>
-              <span style={kickerLabelDim}>
-                {t('sleepComposition')}{isPresent(model.sleep) ? t('sleepCompositionTotal', { hm: formatHM(model.sleep.value.totalS) }) : ''}
-              </span>
-              {isPresent(model.sleep) ? (
-                <>
-                  <div style={{ width: '100%', height: 10, display: 'flex', borderRadius: 2, overflow: 'hidden' }}>
-                    {sleepParts(model.sleep.value, t).map((p) => (
-                      p.seconds != null && p.seconds > 0
-                        ? <div key={p.key} style={{ flex: p.seconds, height: 10, background: p.color }} />
-                        : null
-                    ))}
-                  </div>
-                  <div style={{ width: '100%', display: 'flex' }}>
-                    {sleepParts(model.sleep.value, t).map((p) => (
-                      <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, letterSpacing: 1, color: 'var(--e-lo)' }}>
-                          {p.label}
-                        </span>
-                        <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 700, color: 'var(--e-ink)' }}>
-                          {p.seconds != null ? formatHM(p.seconds) : '—'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p style={quietReason}>{model.sleep.missing}</p>
-              )}
-            </div>
-          </section>
-        )}
-
         {quoteCopy && (
           <QuotePlate state={state} quote={quoteCopy.quote} attribution={quoteCopy.attribution} photoUrl={QUOTE_PHOTO[state]} />
         )}
@@ -1585,9 +1541,9 @@ function TodayViewBody({ model, control, profile }: {
         )}
 
         {state === 'rest' && (
-          <section data-section="02" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+          <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
             <SecHead
-              index="02"
+              index="01"
               title={t('sectionAbsorption')}
               kicker
               sub={t('absorptionSub')}
@@ -1632,14 +1588,14 @@ function TodayViewBody({ model, control, profile }: {
         )}
 
         {state === 'training' && (
-          <section data-section="02" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
+          <section data-section="01" style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
             {/* No chip: the pen's own chip here (`HwC47`/`r8stp3`) is
                 "STARTS 17:30", a start-time with no TodayModel source — see
                 `workShapeChip`'s own doc comment above for the full record
                 of why this used to show a block count that disagreed with
                 the Insight Strip's real "5 BLÖCKE" a few lines up. */}
             <SecHead
-              index="02"
+              index="01"
               title={t('sectionTheSession')}
               kicker
               sub={t('absorptionSub')}
@@ -1665,17 +1621,19 @@ function TodayViewBody({ model, control, profile }: {
           </section>
         )}
 
-        {/* "03 Trajectory" is state-agnostic across Rest/Training/Trained
-            (see the top-of-file doc comment) — Resting shares the exact
-            same content but numbers it "02" (`h54Rs`'s own numbered
-            sections are only "01 Right Now" / "02 Trajectory", confirmed by
-            a fresh read; no "01 Recovery"/"02 Absorption" precede it), and
-            its own Sub node (`vs2tv/tGIwT`) is `enabled: false` in the tree
-            — unlike Rest/Training/Trained's, so it's the one field this
-            section doesn't share across every state. Evening does NOT share
-            this section at all — its own "03" is "TOMORROW" (`gvQQs`/
-            `Mfsjz`), an entirely different section, rendered separately
-            below. */}
+        {/* Trajectory is state-agnostic across Rest/Training/Trained/Resting
+            (see the top-of-file doc comment) — only its OWN section number
+            differs, via `trajectoryIndex` above. OWNER RULING 2026-08-07:
+            Resting's own "01 Right Now" is deleted, so Trajectory is now
+            Resting's ONLY numbered section ("01", not "02"); Rest/Training
+            each still have one section ahead of it ("01 Absorption"/"01 The
+            Session"), so Trajectory is "02" there; Trained is unaffected
+            ("03", unchanged). Its own Sub node (`vs2tv/tGIwT`) is `enabled:
+            false` in the pen for Resting specifically — unlike Rest/
+            Training/Trained's, so it's the one field this section doesn't
+            share across every state. Evening does NOT share this section at
+            all — its own "03" is "TOMORROW" (`gvQQs`/`Mfsjz`), an entirely
+            different section, rendered separately below. */}
         {state !== 'evening' && (
           <section data-section={trajectoryIndex} style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '42px 24px 0 24px' }}>
             {/* Cut the scaffolding (design pass, 2026-08-06): this is the
@@ -1898,6 +1856,24 @@ function signed(n: number): string {
   if (n > 0) return `+${n}`
   if (n < 0) return `−${Math.abs(n)}`
   return '0'
+}
+
+/** The delta/range-position pair the deleted "01 Recovery"/"01 Right Now"
+ *  sections used to print next to HRV/RESTING HR — migrated onto the bento
+ *  tiles' own `note` (owner ruling 2026-08-07, see the top-of-file doc
+ *  comment). `delta` uses the same `+N`/`−N`/`0` convention `signed()`
+ *  already applies everywhere else in this file; the range caption reuses
+ *  the exact three strings `RangeRow` used to render
+ *  (`rangeAbove`/`rangeBelow`/`rangeIn`). Either half can be real on its
+ *  own — a reading with no band on record, or a band with no yesterday to
+ *  diff against — so this never forces both into one template unless both
+ *  are actually present, and returns `undefined` (no note at all) rather
+ *  than an empty string when neither is. */
+function bentoRangeNote(delta: number | null | undefined, band: RangeBand | null, t: Copy['t']): string | undefined {
+  const deltaText = delta != null ? signed(delta) : null
+  const rangeText = band ? (band.position === 'below' ? t('rangeBelow') : band.position === 'above' ? t('rangeAbove') : t('rangeIn')) : null
+  if (deltaText && rangeText) return t('bentoNoteDeltaRange', { delta: deltaText, range: rangeText })
+  return deltaText ?? rangeText ?? undefined
 }
 
 /** Locale-aware ordinal, e.g. "3RD"/"1ST"/"11TH" (en) or "3." (de) — used by

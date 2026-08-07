@@ -217,12 +217,10 @@ export const COPY = {
   // every segment.
   sessionPreviewCaption: { de: '{n} TEILE · {hm}', en: '{n} PARTS · {hm}' },
 
-  // ---- 01 RECOVERY (Rest + Training) -----------------------------------------
-  sectionRecovery: { de: 'ERHOLUNG', en: 'RECOVERY' },
-  recoverySub: {
-    de: 'HRV, Ruhepuls und Schlaf — jeweils im Vergleich zu deinen eigenen 30 Tagen.',
-    en: 'HRV, resting heart rate and sleep — each against your own 30-day range.',
-  },
+  // ---- Recovery labels (bento tiles — components/BentoGrid.tsx) -------------
+  // OWNER RULING 2026-08-07: `sectionRecovery`/`recoverySub` (the deleted
+  // "01 Recovery" heading) are gone — grepped tree-wide, nothing else reads
+  // them. See this file's own top-of-file doc comment for why.
   labelHrv: { de: 'HRV', en: 'HRV' },
   labelRestingHr: { de: 'RUHEPULS', en: 'RESTING HR' },
   labelSleep: { de: 'SCHLAF', en: 'SLEEP' },
@@ -230,11 +228,18 @@ export const COPY = {
   unitBpm: { de: 'bpm', en: 'bpm' },
   unitH: { de: 'h', en: 'h' },
   // Bento Grid (Task 8): HRV/resting-HR tiles chart today's reading against
-  // the athlete's own band (`RangeBand`, same field `RangeRow` above already
-  // plots) — this is the one gap case, a present reading with no band on
-  // record, distinct from the reading itself being missing (which uses that
-  // Value's own `.missing` text instead).
+  // the athlete's own band (`RangeBand`, same field `RangeRow` used to plot)
+  // — this is the one gap case, a present reading with no band on record,
+  // distinct from the reading itself being missing (which uses that Value's
+  // own `.missing` text instead).
   bentoNoRange: { de: 'Kein Bereich hinterlegt.', en: 'No range recorded yet.' },
+  // OWNER RULING 2026-08-07: the deleted "01 Recovery" section's own per-row
+  // delta ("+6"/"−2") and range caption ("ÜBER BEREICH"/"UNTER BEREICH")
+  // migrate onto the HRV/RESTING HR tiles' `note` — this is the template
+  // that joins the two when BOTH exist for a given reading (see TodayView's
+  // own `bentoRangeNote`). Either half alone is used verbatim, with no
+  // wrapping template.
+  bentoNoteDeltaRange: { de: '{delta} · {range}', en: '{delta} · {range}' },
   sleepComposition: { de: 'SCHLAFPHASEN', en: 'SLEEP COMPOSITION' },
   sleepCompositionTotal: { de: ' · {hm} GESAMT', en: ' · {hm} TOTAL' },
   sleepDeep: { de: 'TIEF', en: 'DEEP' },
@@ -312,10 +317,7 @@ export const COPY = {
   climbSinceWoke: { de: 'SEIT DEM AUFWACHEN', en: 'SINCE YOU WOKE' },
   climbWakeLabel: { de: '{n} BEIM AUFWACHEN', en: '{n} AT WAKE' },
   climbNow: { de: 'JETZT', en: 'NOW' },
-  sectionRightNow: { de: 'JETZT GERADE', en: 'RIGHT NOW' },
-  rightNowChipLive: { de: 'LIVE', en: 'LIVE' },
   sleepDeltaMissing: { de: 'Kein Vergleichswert zum Schlaf verfügbar.', en: 'No sleep comparison available yet.' },
-  ringDeltaMissing: { de: 'Kein Vergleichswert verfügbar.', en: 'No comparison value available yet.' },
 
   // ---- data/useTodayModel.ts: reason strings ----------------------------------
   wearableLastSyncFallback: { de: 'deiner letzten Synchronisierung', en: 'your last sync' },

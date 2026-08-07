@@ -73,18 +73,21 @@ const baseModel: TodayModel = {
 } as TodayModel
 
 describe('Rest screen composition', () => {
-  it('renders RECOVERY then ABSORPTION then TRAJECTORY, each with its own frame intact', () => {
+  // OWNER RULING 2026-08-07: "01 RECOVERY" (a `RangeRow` trio of HRV/RESTING
+  // HR/SLEEP) is deleted — the bento directly above already shows those
+  // same three readings, so the section only ever repeated them. Absorption
+  // renumbers from "02" to "01"; Trajectory from "03" to "02". See
+  // TodayView.tsx's own top-of-file doc comment.
+  it('renders ABSORPTION then TRAJECTORY, with no separate RECOVERY section', () => {
     const { container } = render(<MemoryRouter><TodayView model={baseModel} /></MemoryRouter>)
     const section01 = container.querySelector('[data-section="01"]')
     const section02 = container.querySelector('[data-section="02"]')
-    const section03 = container.querySelector('[data-section="03"]')
     expect(section01).not.toBeNull()
     expect(section02).not.toBeNull()
-    expect(section03).not.toBeNull()
-    expect(section01!.querySelector('h2')?.textContent).toBe('ERHOLUNG')
-    expect(section02!.querySelector('h2')?.textContent).toBe('ABSORPTION')
-    expect(section03!.querySelector('h2')?.textContent).toBe('VERLAUF')
-    expect(container.querySelectorAll('[data-range-row]')).toHaveLength(3)
+    expect(container.querySelector('[data-section="03"]')).toBeNull()
+    expect(section01!.querySelector('h2')?.textContent).toBe('ABSORPTION')
+    expect(section02!.querySelector('h2')?.textContent).toBe('VERLAUF')
+    expect(container.querySelectorAll('[data-range-row]')).toHaveLength(0)
     expect(container.querySelector('[data-week-rail]')).not.toBeNull()
     expect(container.querySelector('[data-tomorrow-band]')).not.toBeNull()
   })
@@ -111,14 +114,16 @@ describe('Training screen composition', () => {
     conditions: present({ tempC: 13, windKmh: 14 }),
   } as TodayModel
 
-  it('orders RECOVERY then THE SESSION then TRAJECTORY, with the session-preview bars present', () => {
+  // OWNER RULING 2026-08-07: same deletion as Rest's own "01 RECOVERY" —
+  // THE SESSION renumbers from "02" to "01"; Trajectory from "03" to "02".
+  it('orders THE SESSION then TRAJECTORY, with no separate RECOVERY section, and the session-preview bars present', () => {
     const { container } = render(<MemoryRouter><TodayView model={trainingModel} /></MemoryRouter>)
     const sectionEls = Array.from(container.querySelectorAll('[data-section]'))
     const sections = sectionEls.map((s) => s.getAttribute('data-section'))
-    expect(sections).toEqual(['01', '02', '03'])
-    expect(sectionEls[0].querySelector('h2')?.textContent).toBe('ERHOLUNG')
-    expect(sectionEls[1].querySelector('h2')?.textContent).toBe('DIE EINHEIT')
-    expect(sectionEls[2].querySelector('h2')?.textContent).toBe('VERLAUF')
+    expect(sections).toEqual(['01', '02'])
+    expect(sectionEls[0].querySelector('h2')?.textContent).toBe('DIE EINHEIT')
+    expect(sectionEls[1].querySelector('h2')?.textContent).toBe('VERLAUF')
+    expect(container.querySelectorAll('[data-range-row]')).toHaveLength(0)
     expect(container.querySelectorAll('[data-bars]').length).toBeGreaterThan(0)
   })
 

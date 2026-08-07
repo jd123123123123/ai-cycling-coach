@@ -18,6 +18,16 @@ export interface BentoTileProps {
   label: string
   value: Value<{ text: string; unit?: string }>
   chart: Value<TileChart>
+  /**
+   * The tile's real multi-day series, drawn ONLY when this tile ends up in
+   * the double-height/accented slot (`tall`) — see BentoGrid.tsx's own doc
+   * comment on why the tall tile earns a fuller chart than the one-line
+   * band every single-height tile keeps. Absent, or an honestly-missing
+   * `Value`, when no such series exists for this metric; the tall tile then
+   * falls back to the regular `chart` (band, or its own missing reason)
+   * rather than fabricate points that were never measured.
+   */
+  tallChart?: Value<TileChart>
   note?: string
   accent?: boolean
   tall?: boolean
@@ -37,17 +47,34 @@ export interface BentoTileProps {
 const ACCENT_INK = 'var(--e-on-accent)'
 const ACCENT_INK_QUIET = 'color-mix(in srgb, var(--e-on-accent) 35%, transparent)'
 
-function TileChartView({ chart, accent }: { chart: TileChart; accent?: boolean }) {
+/**
+ * `tall`: the accented lead tile spans two grid rows (`gridRow: 'span 2'`
+ * below) but, left to its own intrinsic content, doesn't grow to fill that
+ * stretched height — the exact "two-thirds of the brightest element on the
+ * screen is empty" defect this prop fixes (owner ruling, Change 2). The
+ * drawing coordinate system grows from a fixed 30 units tall to 120, and
+ * both the `<svg>` and its wrapping `<div>` (in `BentoTile` below) go from a
+ * fixed pixel box to `width/height: '100%'` inside a `flex: 1` container —
+ * so the chart actually consumes whatever vertical space the tall tile's
+ * grid stretch hands it, rather than sitting pinned to a small fixed box
+ * with dead air beneath. `preserveAspectRatio="none"` lets the 130×120
+ * drawing coordinates stretch non-uniformly to fill that real box; every
+ * cx/cy/x/y computed below is still in the same 0–130 / 0–H space either
+ * way, so the point-highlighting math (and its existing tests, which never
+ * pass `tall`) is untouched.
+ */
+function TileChartView({ chart, accent, tall }: { chart: TileChart; accent?: boolean; tall?: boolean }) {
   const neutral = accent ? ACCENT_INK_QUIET : 'var(--d-2)'
   const hot = accent ? ACCENT_INK : 'var(--st-active)'
   const W = 130
-  const H = 30
+  const H = tall ? 120 : 30
+  const svgSize = tall ? { width: '100%', height: '100%' } : { width: W, height: H }
 
   if (chart.kind === 'band') {
     const span = Math.max(chart.high - chart.low, 1)
     const x = ((chart.today - chart.low) / span) * W
     return (
-      <svg width={W} height={H} aria-hidden="true">
+      <svg {...svgSize} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
         <rect x={0} y={H / 2 - 1} width={W} height={2} rx={1} fill={neutral} />
         <circle
           data-testid="bento-chart-point"
@@ -67,7 +94,7 @@ function TileChartView({ chart, accent }: { chart: TileChart; accent?: boolean }
   const y = (v: number) => H - (v / max) * (H - 6) - 3
 
   return (
-    <svg width={W} height={H} aria-hidden="true">
+    <svg {...svgSize} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
       {chart.kind === 'spark' && (
         <polyline
           points={chart.points.map((v, i) => `${i * step},${y(v)}`).join(' ')}
@@ -109,9 +136,14 @@ function TileChartView({ chart, accent }: { chart: TileChart; accent?: boolean }
   )
 }
 
-export default function BentoTile({ label, value, chart, note, accent, tall, onExpand }: BentoTileProps) {
+export default function BentoTile({ label, value, chart, tallChart, note, accent, tall, onExpand }: BentoTileProps) {
   const valuePresent = isPresent(value)
-  const chartPresent = isPresent(chart)
+  // The tall slot prefers its own real series; it falls back to the regular
+  // (band, or missing) chart when no series exists for this metric — never
+  // a fabricated multi-point line. A single-height tile never consults
+  // `tallChart` at all, so it always keeps the band it already had.
+  const effectiveChart = tall && tallChart && isPresent(tallChart) ? tallChart : chart
+  const chartPresent = isPresent(effectiveChart)
   const interactive = onExpand != null
   const labelColor = accent ? ACCENT_INK_QUIET : 'var(--e-lo)'
   const valueColor = !valuePresent ? (accent ? ACCENT_INK_QUIET : 'var(--e-quiet)') : accent ? ACCENT_INK : 'var(--e-ink)'
@@ -184,7 +216,15 @@ export default function BentoTile({ label, value, chart, note, accent, tall, onE
         </p>
       )}
 
-      {chartPresent && <TileChartView chart={chart.value} accent={accent} />}
+      {chartPresent && (
+        // `flex: 1` only when tall: the chart is the tile's remaining
+        // vertical space, not a fixed-size decoration, once it is drawing a
+        // real series rather than the one-line band. A single-height tile
+        // keeps its natural (content-sized) height, unchanged.
+        <div style={tall ? { flex: 1, minHeight: 0, display: 'flex' } : undefined}>
+          <TileChartView chart={effectiveChart.value} accent={accent} tall={tall} />
+        </div>
+      )}
 
       {note && (
         <p style={{ fontFamily: 'var(--e-body)', fontSize: 11, fontWeight: 500, color: noteColor, margin: 0 }}>{note}</p>
