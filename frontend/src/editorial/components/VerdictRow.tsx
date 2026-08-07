@@ -35,15 +35,13 @@ export default function VerdictRow({ title, qualifier, value, unit, accent = fal
         >
           {isPresent(title) ? title.value : '—'}
         </span>
-        {isPresent(qualifier) && (
-          <span
-            style={{
-              fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-mid)',
-            }}
-          >
-            {qualifier.value}
-          </span>
-        )}
+        <span
+          style={{
+            fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', fontWeight: 500, color: 'var(--e-mid)',
+          }}
+        >
+          {isPresent(qualifier) ? qualifier.value : '—'}
+        </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flexShrink: 0 }}>
         <span

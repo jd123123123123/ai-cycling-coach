@@ -59,6 +59,15 @@ describe('VerdictRow (mechanic D)', () => {
     const { container } = render(<VerdictRow title={present('T')} qualifier={missing('Kein Ziel.')}
       value={missing('Nichts geplant.')} unit="WATT" />)
     expect(container.querySelector('[data-verdict-row]')).not.toBeNull()
+    expect(screen.getAllByText('—')).toHaveLength(2)
+  })
+
+  it('renders the qualifier slot with a dash when qualifier is missing', () => {
+    const { container } = render(<VerdictRow title={present('Session Name')} qualifier={missing('No duration.')}
+      value={present(275)} unit="WATT" />)
+    // Verify the row structure is intact and qualifier slot is not collapsed
+    expect(container.querySelector('[data-verdict-row]')).not.toBeNull()
+    // Exactly one dash for the missing qualifier (not one for value, which is present)
     expect(screen.getByText('—')).toBeTruthy()
   })
 })
