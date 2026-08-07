@@ -28,6 +28,7 @@ import WhatThisChanges from '../components/WhatThisChanges'
 import ZoneRows from '../components/ZoneRows'
 import { isPresent, mapValue, missing, present, type Value } from '../data/value'
 import type { PmcPoint, TodayModel } from '../data/useTodayModel'
+import type { BlockLike } from '../data/blocks'
 import EditorialRoot from '../EditorialRoot'
 import { dayRailStepTargets } from '../state/dayState'
 import type { CSSProperties } from 'react'
@@ -1752,7 +1753,7 @@ function sleepParts(sleep: { deepS: number | null; remS: number | null; lightS: 
   ]
 }
 
-interface BlockLike { label: string; minutes: number; watts: Value<number>; delta: number | null }
+export type { BlockLike } from '../data/blocks'
 
 function sessionBlocksOf(model: TodayModel, t: Copy['t']): BlockLike[] {
   return isPresent(model.session)

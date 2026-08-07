@@ -222,4 +222,22 @@
    * rail (which would block the photo DayRail.tsx already goes out of its
    * way not to block — see that file's own doc comment). */
   --e-label-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+
+  /* Mechanic G — "pattern, not palette" (roadbook, 2026-08-06). Planned work
+   * is hatched, ridden work is solid: one hue, two materials. The hatch is
+   * built from --e-bar-ghost so a planned block never claims the accent (and
+   * therefore never claims an achieved result), matching the rule Bars.tsx
+   * already follows for its own ghost row. */
+  --e-hatch: repeating-linear-gradient(
+    45deg,
+    var(--e-bar-ghost) 0px,
+    var(--e-bar-ghost) 2px,
+    transparent 2px,
+    transparent 5px
+  );
+  /* Mechanic M — edge-bleed ground (roadbook, 2026-08-06). The state accent
+   * bleeds in from the top and bottom edges instead of tinting the ground
+   * flat. The --g-* grounds are already this idea at roughly 3%; this is the
+   * same dial at 26%, so it is a value this system owns, not a new concept. */
+  --st-a26: color-mix(in srgb, var(--st-active) 26%, transparent);
 }
