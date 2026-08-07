@@ -19,6 +19,19 @@ describe('useCountUp', () => {
     act(() => { vi.advanceTimersByTime(1200) })
     expect(result.current).toBe(74)
   })
+
+  it('starts at 0 on the very first render, before any timer fires', () => {
+    const { result } = renderHook(() => useCountUp(74, 600))
+    expect(result.current).toBe(0)
+  })
+
+  it('starts at the target immediately under reduced motion', () => {
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = (query: string) => ({ matches: query.includes('reduce') }) as MediaQueryList
+    const { result } = renderHook(() => useCountUp(74, 600))
+    expect(result.current).toBe(74)
+    window.matchMedia = originalMatchMedia
+  })
 })
 
 describe('useChainShift', () => {
@@ -40,6 +53,16 @@ describe('useChainShift', () => {
     const { result } = renderHook(() => useChainShift(3, '2026-08-07'))
     expect(result.current.isShifting).toBe(false)
     expect(result.current.index).toBe(3)
+  })
+
+  it('does not shift when the stored date is already today, even if its index differs from the target', () => {
+    window.localStorage.setItem(
+      CHAIN_SHIFT_STORAGE_KEY,
+      JSON.stringify({ date: '2026-08-07', index: 6 }),
+    )
+    const { result } = renderHook(() => useChainShift(3, '2026-08-07'))
+    expect(result.current.index).toBe(3)
+    expect(result.current.isShifting).toBe(false)
   })
 
   it('shifts from yesterday cog to today cog on a new day', () => {

@@ -7,7 +7,14 @@ import { prefersReducedMotion } from './useReveal'
  * so a withheld reading never animates from a number we do not have.
  */
 export function useCountUp(target: number | null, durationMs: number): number | null {
-  const [shown, setShown] = useState<number | null>(target)
+  // Computed synchronously, same convention as useReveal's `on` state: a
+  // non-reduced-motion mount must start at 0 on the very first paint, not
+  // flash the final target for one frame before the effect below resets it.
+  const [shown, setShown] = useState<number | null>(() => {
+    if (target == null) return null
+    if (prefersReducedMotion() || durationMs <= 0) return target
+    return 0
+  })
   const frame = useRef<number | null>(null)
 
   useEffect(() => {
