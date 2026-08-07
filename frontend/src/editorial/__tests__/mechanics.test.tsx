@@ -92,6 +92,11 @@ describe('splitVerdict', () => {
   it('splits only once, so a second dash stays inside the emphasis', () => {
     expect(splitVerdict('A — B — C')).toEqual({ lead: 'A', emphasis: 'B — C' })
   })
+
+  it('splits at the earliest separator, whatever kind it is', () => {
+    expect(splitVerdict('Heute zählt: die Sache — jetzt zählt es'))
+      .toEqual({ lead: 'Heute zählt', emphasis: 'die Sache — jetzt zählt es' })
+  })
 })
 
 describe('TwoWeightHead (mechanics B + K)', () => {

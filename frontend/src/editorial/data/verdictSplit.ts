@@ -10,11 +10,20 @@
 const SEPARATORS = [' — ', ' – ', ': ']
 
 export function splitVerdict(headline: string): { lead: string; emphasis: string | null } {
+  // AMENDED (task-4 review, 2026-08-07): split at the LEFTMOST separator of
+  // any kind, not at the first kind that happens to appear. Iterating the
+  // list and returning on the first match made separator *priority* decide
+  // the break: "Heute zählt: die Sache — jetzt zählt es" split at the em
+  // dash and swallowed the earlier colon into the quiet lead. The rule this
+  // function exists to serve is "break it where the coach already broke it",
+  // and the break the coach made first is the earliest one in the sentence.
+  let best: { at: number; sep: string } | null = null
   for (const sep of SEPARATORS) {
     const at = headline.indexOf(sep)
-    if (at > 0) {
-      return { lead: headline.slice(0, at), emphasis: headline.slice(at + sep.length) }
-    }
+    // `> 0`, never `>= 0`: a sentence that STARTS with a separator has no
+    // lead clause, and splitting it would leave an empty first half.
+    if (at > 0 && (best == null || at < best.at)) best = { at, sep }
   }
-  return { lead: headline, emphasis: null }
+  if (best == null) return { lead: headline, emphasis: null }
+  return { lead: headline.slice(0, best.at), emphasis: headline.slice(best.at + best.sep.length) }
 }
