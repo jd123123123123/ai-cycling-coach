@@ -875,14 +875,12 @@ export default function CassetteHero({ readiness, series, best, todayIso, captio
           {t('cassetteCoarse')}
         </p>
       )}
-
-      <span hidden>{COG_TEETH.length}{MIN_SERIES_FOR_PERCENTILE}</span>
     </div>
   )
 }
 ```
 
-Then delete the trailing `<span hidden>` line and the now-unused `COG_TEETH`/`MIN_SERIES_FOR_PERCENTILE` imports — it exists only to show that both are available; `noUnusedLocals` will reject them otherwise.
+Import only `cogIndexFromReadiness` from `./cassetteScale` — `COG_TEETH` and `MIN_SERIES_FOR_PERCENTILE` are not used in this file, and `noUnusedLocals` will reject them.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1587,10 +1585,14 @@ export default function KetteStrip({ streakDays, weekLoad, missedYesterday }: Ke
         <p data-testid="kette-broken" style={{ fontSize: 12, color: 'var(--s-low)' }}>
           {t('ketteBroken', { title: missedYesterday.value.title })}
         </p>
-      ) : (
+      ) : isPresent(streakDays) ? (
         <p data-testid="kette-count" style={{ fontSize: 12, color: 'var(--e-mid)' }}>
-          {t('ketteHolds', { days: String(isPresent(streakDays) ? streakDays.value : 0) })}
+          {t('ketteHolds', { days: String(streakDays.value) })}
         </p>
+      ) : (
+        // No streak recorded is not a streak of zero — say why, like every
+        // other honest-dash site in this tree.
+        <p style={{ fontSize: 12, color: 'var(--e-quiet)' }}>{streakDays.missing}</p>
       )}
 
       {isPresent(weekLoad) ? (
@@ -1623,7 +1625,7 @@ export default function KetteStrip({ streakDays, weekLoad, missedYesterday }: Ke
 }
 ```
 
-Note the streak fallback: when `streakDays` is missing, render the strip's own missing reason instead of `0` — replace the `: 0` above with a branch that renders `streakDays.missing` in the quiet style, matching every other honest-dash site in this tree.
+`KetteStripProps`, `useCopy`, `isPresent` and `Value` are imported as in every other component in this tree.
 
 Mount it in `TodayView.tsx` above the TabBar wrap, passing the three model fields.
 
