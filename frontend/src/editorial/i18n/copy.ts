@@ -229,6 +229,12 @@ export const COPY = {
   unitMs: { de: 'ms', en: 'ms' },
   unitBpm: { de: 'bpm', en: 'bpm' },
   unitH: { de: 'h', en: 'h' },
+  // Bento Grid (Task 8): HRV/resting-HR tiles chart today's reading against
+  // the athlete's own band (`RangeBand`, same field `RangeRow` above already
+  // plots) — this is the one gap case, a present reading with no band on
+  // record, distinct from the reading itself being missing (which uses that
+  // Value's own `.missing` text instead).
+  bentoNoRange: { de: 'Kein Bereich hinterlegt.', en: 'No range recorded yet.' },
   sleepComposition: { de: 'SCHLAFPHASEN', en: 'SLEEP COMPOSITION' },
   sleepCompositionTotal: { de: ' · {hm} GESAMT', en: ' · {hm} TOTAL' },
   sleepDeep: { de: 'TIEF', en: 'DEEP' },

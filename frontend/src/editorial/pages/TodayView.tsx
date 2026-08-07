@@ -1,5 +1,7 @@
 import { Thermometer, Wind } from 'lucide-react'
 import Bars from '../components/Bars'
+import BentoGrid, { type BentoEntry } from '../components/BentoGrid'
+import { type TileChart } from '../components/BentoTile'
 import CassetteHero from '../components/CassetteHero'
 import { COG_TEETH, cogIndexFromReadiness } from '../components/cassetteScale'
 import Cover from '../components/Cover'
@@ -923,6 +925,82 @@ function TodayViewBody({ model, control, profile }: {
     { label: t('tileWork'), value: missing(NO_TOMORROW_BLOCKS), unit: t('unitMin') },
   ]
 
+  // ---- Bento Grid (Task 8): size and colour earned by the reasoning --------
+  // The coach's own verdict body is the "reason" `BentoGrid` ranks its tiles
+  // against — the exact sentence `Verdict`/the hero-body paragraph below
+  // already renders on every state (Trained's own `Verdict`, Training's
+  // body-only `Verdict`, Rest's bare paragraph — see the render below).
+  // Whichever metric that sentence names gets the tile that leads; a
+  // missing verdict or a sentence naming nothing both fall back to
+  // `BentoGrid`'s own documented invariant (the first entry, HRV, gets
+  // both size and colour) — never zero accented tiles, never two.
+  const bentoReason: string | null = isPresent(model.verdict) ? model.verdict.value.body : null
+
+  // HRV/resting HR chart as a position within the athlete's own band — the
+  // exact `RangeBand` "01 Recovery"'s own `RangeRow`s already plot a few
+  // hundred pixels below this, not a fabricated series. A present reading
+  // with no band on record (distinct from the reading itself being absent)
+  // is the one real gap, named honestly rather than silently defaulted.
+  const bentoHrvBand = isPresent(model.hrv) ? model.hrv.value.band : null
+  const bentoHrvChart: Value<TileChart> = !isPresent(model.hrv)
+    ? missing(model.hrv.missing)
+    : bentoHrvBand
+      ? present({ kind: 'band', low: bentoHrvBand.low, high: bentoHrvBand.high, today: model.hrv.value.value })
+      : missing(t('bentoNoRange'))
+  const bentoRestingHrBand = isPresent(model.restingHr) ? model.restingHr.value.band : null
+  const bentoRestingHrChart: Value<TileChart> = !isPresent(model.restingHr)
+    ? missing(model.restingHr.missing)
+    : bentoRestingHrBand
+      ? present({ kind: 'band', low: bentoRestingHrBand.low, high: bentoRestingHrBand.high, today: model.restingHr.value.value })
+      : missing(t('bentoNoRange'))
+  // Sleep carries neither a delta nor a band anywhere in `TodayModel` (the
+  // same gap `sleepWake` above already names) — no honest chart can be
+  // built, so this reuses that exact reason rather than inventing a
+  // sleep-specific one.
+  const bentoSleepChart: Value<TileChart> = isPresent(model.sleep) ? missing(t('sleepDeltaMissing')) : missing(model.sleep.missing)
+
+  const bentoEntries: BentoEntry[] = [
+    {
+      key: 'hrv',
+      label: t('labelHrv'),
+      value: isPresent(model.hrv)
+        ? present({ text: String(Math.round(model.hrv.value.value)), unit: t('unitMs') })
+        : missing(model.hrv.missing),
+      chart: bentoHrvChart,
+    },
+    {
+      key: 'sleep',
+      label: t('labelSleep'),
+      value: isPresent(model.sleep)
+        ? present({ text: formatHM(model.sleep.value.totalS), unit: t('unitH') })
+        : missing(model.sleep.missing),
+      chart: bentoSleepChart,
+    },
+    {
+      key: 'rhr',
+      label: t('labelRestingHr'),
+      value: isPresent(model.restingHr)
+        ? present({ text: String(Math.round(model.restingHr.value.value)), unit: t('unitBpm') })
+        : missing(model.restingHr.missing),
+      chart: bentoRestingHrChart,
+    },
+  ]
+  // Body Battery only when the watch actually has a wake/now reading — the
+  // brief's own instruction ("model.bodyBattery when present"), matching
+  // the same rule this file already applies to Resting's own "Climb"
+  // visualisation a bit further down (`isPresent(model.bodyBattery)`).
+  // Label/unit reuse `heroUnitEnergy`/`heroUnitOutOf100` — the SAME two
+  // strings Training's own hero numeral already prints for this exact
+  // quantity, rather than a third, freshly-invented label for one number.
+  if (isPresent(model.bodyBattery)) {
+    bentoEntries.push({
+      key: 'bodyBattery',
+      label: t('heroUnitEnergy'),
+      value: present({ text: String(model.bodyBattery.value.now), unit: t('heroUnitOutOf100') }),
+      chart: present({ kind: 'spark', points: [model.bodyBattery.value.wake, model.bodyBattery.value.now], highlightIndex: 1 }),
+    })
+  }
+
   return (
       <main
         data-day-state={state}
@@ -1073,6 +1151,9 @@ function TodayViewBody({ model, control, profile }: {
             reasonShownElsewhere={cassetteReasonShownElsewhere}
             captionReasonShownElsewhere={!isPresent(model.readiness)}
           />
+          <div style={{ paddingTop: 20, paddingBottom: 26 }}>
+            <BentoGrid entries={bentoEntries} reason={bentoReason} />
+          </div>
           {state === 'rest' && (
             <div style={{ paddingBottom: 26 }}>
               <WeekRail days={model.week} todayIndex={todayIndex} />
