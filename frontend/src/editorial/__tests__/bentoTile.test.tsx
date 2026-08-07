@@ -145,7 +145,7 @@ describe('BentoTile', () => {
       expect(tile.getAttribute('tabIndex')).toBeNull()
     })
 
-    it('is keyboard-reachable and activatable with Enter when onExpand is given', () => {
+    it('is keyboard-reachable and activatable with Enter or Space when onExpand is given', () => {
       const onExpand = vi.fn()
       render(
         <BentoTile
@@ -162,6 +162,126 @@ describe('BentoTile', () => {
       expect(onExpand).toHaveBeenCalledTimes(1)
       fireEvent.keyDown(tile, { key: 'Enter' })
       expect(onExpand).toHaveBeenCalledTimes(2)
+      fireEvent.keyDown(tile, { key: ' ' })
+      expect(onExpand).toHaveBeenCalledTimes(3)
+    })
+  })
+
+  describe('exactly one highlight, tied to the requested index — not just the last point', () => {
+    it('highlights a middle index, not merely the last point in the array', () => {
+      render(
+        <BentoTile
+          label="HRV"
+          value={present({ text: '68', unit: 'ms' })}
+          chart={present({ kind: 'spark', points: [10, 20, 30, 40, 50], highlightIndex: 2 })}
+        />,
+      )
+      const points = screen.getAllByTestId('bento-chart-point')
+      expect(points).toHaveLength(5)
+      // Only the point AT the requested index carries the accent radius —
+      // a mutant that always lights the last point (index 4) would fail
+      // this, since index 4 must read neutral (r=0) here.
+      points.forEach((p, i) => {
+        expect(p.getAttribute('r')).toBe(i === 2 ? '4' : '0')
+      })
+      const highlight = screen.getByTestId('bento-chart-highlight')
+      expect(highlight.getAttribute('cx')).toBe(points[2].getAttribute('cx'))
+      expect(highlight.getAttribute('cy')).toBe(points[2].getAttribute('cy'))
+    })
+
+    it('highlights the requested index in a bars chart too, by fill not just position', () => {
+      render(
+        <BentoTile
+          label="HRV"
+          value={present({ text: '68', unit: 'ms' })}
+          chart={present({ kind: 'bars', points: [10, 20, 30, 40, 50], highlightIndex: 1 })}
+        />,
+      )
+      const points = screen.getAllByTestId('bento-chart-point')
+      expect(points).toHaveLength(5)
+      points.forEach((p, i) => {
+        expect(p.getAttribute('fill')).toBe(i === 1 ? 'var(--st-active)' : 'var(--d-2)')
+      })
+    })
+
+    it('moves the highlight to a different coordinate when a different highlightIndex is given', () => {
+      const { unmount } = render(
+        <BentoTile
+          label="HRV"
+          value={present({ text: '68', unit: 'ms' })}
+          chart={present({ kind: 'spark', points: [10, 20, 30, 40, 50], highlightIndex: 1 })}
+        />,
+      )
+      const cxAtOne = screen.getByTestId('bento-chart-highlight').getAttribute('cx')
+      unmount()
+
+      render(
+        <BentoTile
+          label="HRV"
+          value={present({ text: '68', unit: 'ms' })}
+          chart={present({ kind: 'spark', points: [10, 20, 30, 40, 50], highlightIndex: 3 })}
+        />,
+      )
+      const cxAtThree = screen.getByTestId('bento-chart-highlight').getAttribute('cx')
+      expect(cxAtOne).not.toBe(cxAtThree)
+    })
+  })
+
+  describe('band chart coverage', () => {
+    it('renders a single highlighted dot for a normal band', () => {
+      render(
+        <BentoTile
+          label="Body Battery"
+          value={present({ text: '150' })}
+          chart={present({ kind: 'band', low: 100, high: 200, today: 150 })}
+        />,
+      )
+      expect(screen.getAllByTestId('bento-chart-point')).toHaveLength(1)
+      expect(screen.getAllByTestId('bento-chart-highlight')).toHaveLength(1)
+      const cx = Number(screen.getByTestId('bento-chart-highlight').getAttribute('cx'))
+      expect(cx).toBeCloseTo(65, 0)
+      expect(cx).toBeGreaterThanOrEqual(3)
+      expect(cx).toBeLessThanOrEqual(127)
+    })
+
+    it('does not divide by zero and stays on the track when low === high', () => {
+      render(
+        <BentoTile
+          label="Body Battery"
+          value={present({ text: '100' })}
+          chart={present({ kind: 'band', low: 100, high: 100, today: 100 })}
+        />,
+      )
+      const cx = Number(screen.getByTestId('bento-chart-highlight').getAttribute('cx'))
+      expect(Number.isNaN(cx)).toBe(false)
+      expect(cx).toBeGreaterThanOrEqual(3)
+      expect(cx).toBeLessThanOrEqual(127)
+    })
+
+    it('clamps the dot inside the track when today falls outside [low, high]', () => {
+      render(
+        <BentoTile
+          label="Body Battery"
+          value={present({ text: '500' })}
+          chart={present({ kind: 'band', low: 100, high: 200, today: 500 })}
+        />,
+      )
+      const highCx = Number(screen.getByTestId('bento-chart-highlight').getAttribute('cx'))
+      expect(highCx).toBeLessThanOrEqual(127)
+      expect(highCx).toBeGreaterThanOrEqual(3)
+
+      cleanup()
+
+      render(
+        <BentoTile
+          label="Body Battery"
+          value={present({ text: '-50' })}
+          chart={present({ kind: 'band', low: 100, high: 200, today: -50 })}
+        />,
+      )
+      const lowCx = Number(screen.getByTestId('bento-chart-highlight').getAttribute('cx'))
+      expect(lowCx).toBeGreaterThanOrEqual(3)
+      expect(lowCx).toBeLessThanOrEqual(127)
     })
   })
 })

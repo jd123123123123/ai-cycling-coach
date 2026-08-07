@@ -28,12 +28,14 @@ export interface BentoTileProps {
  * On an accented tile the background itself IS the accent
  * (`var(--st-active)`), so every mark drawn on top swaps from the usual
  * light-on-dark palette to a dark ink instead — legible on a bright fill.
- * `#04120B` is the owner-specified value for that ink (task brief,
- * verbatim); it is deliberately NOT a token, the one exception to "colours
- * always come from tokens.css" this component makes.
+ * `--e-on-accent` (tokens.css) is that token, described there as "text/icon
+ * on a bright accent fill" — exactly this role, so no literal hex belongs
+ * here. The quiet/neutral variant follows the same `color-mix` pattern this
+ * tree already uses to derive accent alphas (`--st-a07`..`--st-a40` in
+ * tokens.css), rather than a hex+alpha-suffix string.
  */
-const ACCENT_INK = '#04120B'
-const ACCENT_INK_QUIET = '#04120B59'
+const ACCENT_INK = 'var(--e-on-accent)'
+const ACCENT_INK_QUIET = 'color-mix(in srgb, var(--e-on-accent) 35%, transparent)'
 
 function TileChartView({ chart, accent }: { chart: TileChart; accent?: boolean }) {
   const neutral = accent ? ACCENT_INK_QUIET : 'var(--d-2)'
