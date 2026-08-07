@@ -67,4 +67,39 @@ describe('Cassette', () => {
       expect(widths[i]).toBeGreaterThan(widths[i - 1])
     }
   })
+
+  it('clamps an out-of-range activeIndex onto the nearest real cog instead of drawing off-canvas', () => {
+    render(<Cassette activeIndex={15} />)
+    const cogs = screen.getAllByTestId('cassette-cog')
+    const lastCog = cogs[cogs.length - 1]
+    const chain = screen.getByTestId('cassette-chain')
+    const chainCenterY = Number(chain.getAttribute('y')) + Number(chain.getAttribute('height')) / 2
+    expect(chainCenterY).toBeCloseTo(Number(lastCog.getAttribute('y1')), 5)
+    expect(Number(chain.getAttribute('width'))).toBe(
+      Number(lastCog.getAttribute('x2')) - Number(lastCog.getAttribute('x1')),
+    )
+  })
+
+  it('clamps a negative activeIndex onto the first real cog instead of drawing off-canvas', () => {
+    render(<Cassette activeIndex={-1} />)
+    const cogs = screen.getAllByTestId('cassette-cog')
+    const firstCog = cogs[0]
+    const chain = screen.getByTestId('cassette-chain')
+    const chainCenterY = Number(chain.getAttribute('y')) + Number(chain.getAttribute('height')) / 2
+    expect(chainCenterY).toBeCloseTo(Number(firstCog.getAttribute('y1')), 5)
+    expect(Number(chain.getAttribute('width'))).toBe(
+      Number(firstCog.getAttribute('x2')) - Number(firstCog.getAttribute('x1')),
+    )
+  })
+
+  it('gives two cassettes different filter ids even with no idSuffix passed', () => {
+    const { container } = render(
+      <>
+        <Cassette activeIndex={2} />
+        <Cassette activeIndex={5} />
+      </>,
+    )
+    const ids = Array.from(container.querySelectorAll('filter')).map((f) => f.id)
+    expect(new Set(ids).size).toBe(2)
+  })
 })
