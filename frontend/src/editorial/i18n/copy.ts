@@ -621,6 +621,32 @@ export const COPY = {
   // calls body battery an "Energiereserve" in BiometricsDetail/IntradayModal,
   // so ENERGIE is the term the athlete has already met, not a new coinage.
   heroUnitEnergy: { de: 'ENERGIE', en: 'ENERGY' },
+
+  // ---- Trainingstag compression (roadbook rebuild, 2026-08-06) -------------
+  tripletLoad: { de: 'BELASTUNG', en: 'LOAD' },
+  /** VerdictRow's qualifier counts the session's blocks — "0:52 · IF 0,74 ·
+   *  11 Teile". Every block, not just the work intervals: this is the
+   *  session's length, not its shape (`chipWorkShape` is the shape, and the
+   *  two disagreeing under one word is a defect this build already fixed). */
+  blocksWord: { de: 'Teile', en: 'parts' },
+  weekMeterLabel: { de: 'WOCHE · {pct} % VERBRAUCHT', en: 'WEEK · {pct}% SPENT' },
+  /** The four wearable metrics named inline, so the Erholung section can say
+   *  "no reading since Monday" once instead of dashing four rows that each
+   *  repeat it. Not a chart caption: it is the list of what is missing. */
+  recoveryMetricsInline: { de: 'HRV · Ruhepuls · Schlaf · Schlafphasen', en: 'HRV · Resting HR · Sleep · Sleep stages' },
+  /** Phase + countdown. Two arms: an athlete on a fitness-builder plan has a
+   *  phase but no event, and "noch — Tage" is not a sentence. */
+  phaseWithEvent: { de: 'Phase {phase} — noch {days} Tage bis {event}.', en: 'Phase {phase} — {days} days to {event}.' },
+  phaseNoEvent: { de: 'Phase {phase}.', en: 'Phase {phase}.' },
+  /** The sync action beside the dated stale-wearable line. The design pass
+   *  cut a ~120px orange card down to this one line; the action survives
+   *  because withholding a verdict without offering the fix is a dead end. */
+  syncAction: { de: 'Synchronisieren', en: 'Sync' },
+  /** Tomorrow, as one line at the foot of the screen. `unlockLabel` has no
+   *  source on PlannedWorkout (no time-of-day field exists anywhere), so the
+   *  time arm only renders when a real one arrives. */
+  tomorrowLine: { de: 'Morgen {title}', en: 'Tomorrow {title}' },
+  tomorrowLineWithTime: { de: 'Morgen {title} · {time}', en: 'Tomorrow {title} · {time}' },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY
