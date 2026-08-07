@@ -149,6 +149,18 @@ describe('CassetteHero', () => {
     expect(chainY).toBeLessThan(markerY)
   })
 
+  it('labels the typical-reading marker with the German copy when a median exists', () => {
+    render(
+      <CassetteHero
+        readiness={present({ score: 74, deltaVsYesterday: null })}
+        series={present(series)}
+        todayIso="2026-08-07"
+        caption={present('Heute geht das 17er.')}
+      />,
+    )
+    expect(screen.getByTestId('cassette-typical-label').textContent).toBe('DEIN SCHNITT')
+  })
+
   it('draws no marker when the series is missing, so nothing is invented', () => {
     render(
       <CassetteHero

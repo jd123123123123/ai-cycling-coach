@@ -1,7 +1,8 @@
 // frontend/src/editorial/__tests__/cassette.test.tsx
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, it, expect } from 'vitest'
-import Cassette from '../components/Cassette'
+import Cassette, { CASSETTE_WIDTH } from '../components/Cassette'
+import { cogHalfWidth } from '../components/cassetteScale'
 
 afterEach(cleanup)
 
@@ -101,5 +102,31 @@ describe('Cassette', () => {
     )
     const ids = Array.from(container.querySelectorAll('filter')).map((f) => f.id)
     expect(new Set(ids).size).toBe(2)
+  })
+
+  it('labels the marker line when a marker index and label text are given', () => {
+    render(<Cassette activeIndex={5} bestIndex={1} typicalLabel="DEIN SCHNITT" />)
+    const label = screen.getByTestId('cassette-typical-label')
+    expect(label.textContent).toBe('DEIN SCHNITT')
+  })
+
+  it('renders no orphaned label when there is no marker', () => {
+    render(<Cassette activeIndex={5} bestIndex={null} typicalLabel="DEIN SCHNITT" />)
+    expect(screen.queryByTestId('cassette-typical-label')).toBeNull()
+  })
+
+  it('keeps the marker label inside the 390-wide viewBox even on the widest cog', () => {
+    // Index 9 is the bottom cog — 34 teeth, the widest one drawn — so its
+    // marker line reaches furthest right. If the label were placed with a
+    // fixed offset from the line's end regardless of cog width, this is the
+    // one case that would push text past the frame.
+    render(<Cassette activeIndex={0} bestIndex={9} typicalLabel="DEIN SCHNITT" />)
+    const label = screen.getByTestId('cassette-typical-label')
+    const lineEnd = CASSETTE_WIDTH / 2 + cogHalfWidth(9)
+    const labelX = Number(label.getAttribute('x'))
+    // Beside the line (not on top of or before it)...
+    expect(labelX).toBeGreaterThanOrEqual(lineEnd)
+    // ...and comfortably inside the frame, leaving room for the glyphs.
+    expect(labelX).toBeLessThan(CASSETTE_WIDTH)
   })
 })

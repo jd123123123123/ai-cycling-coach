@@ -48,7 +48,12 @@ export default function CassetteHero({ readiness, series, todayIso, caption }: C
 
   return (
     <div>
-      <Cassette activeIndex={index} bestIndex={typicalPlacement?.index ?? null} idSuffix="today" />
+      <Cassette
+        activeIndex={index}
+        bestIndex={typicalPlacement?.index ?? null}
+        typicalLabel={t('cassetteTypical')}
+        idSuffix="today"
+      />
 
       {isPresent(readiness) ? (
         // OWNER RULING 2026-08-07: the numeral that used to sit here (56px,
