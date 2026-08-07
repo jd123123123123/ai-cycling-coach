@@ -74,6 +74,13 @@ describe('editorial isolation', () => {
       // against tokens.css, not style values written into editorial/ code.
       // That's the same class of exception as tokens.css itself.
       if (f.endsWith(`${path.sep}__tests__${path.sep}tokens.test.ts`)) return false
+      // BentoTile.tsx (task 7 brief, verbatim): on an accented tile the
+      // background itself IS var(--st-active), so marks drawn on top need
+      // a dark ink to read against a bright fill rather than the usual
+      // light-on-dark palette. The owner specified that ink as a literal
+      // #04120B, not a token — the one documented hex exception, same
+      // class as the two exceptions already carved out above.
+      if (f.endsWith(`${path.sep}components${path.sep}BentoTile.tsx`)) return false
       const src = stripComments(readFileSync(f, 'utf8'))
       return /#[0-9a-fA-F]{6}\b/.test(src)
     })
