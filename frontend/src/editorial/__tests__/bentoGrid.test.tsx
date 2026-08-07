@@ -88,6 +88,42 @@ describe('rankTiles', () => {
     expect(entries).toEqual(copy)
     expect(entries[0].label).toBe('HRV')
   })
+
+  // ---- Fix round 1 (coordinator review, finding 1) --------------------------
+  // The body-battery entry's own label is "ENERGIE" — a common standalone
+  // German word, unlike "HRV"/"Schlaf"/"Ruhepuls" — so left to derive its
+  // match from `label` it misfires on any reason that merely uses the word
+  // "Energie" in passing, even when the sentence is actually reasoning about
+  // a different metric. `matchTerms` fixes this by replacing what an entry
+  // matches on, entry-by-entry, rather than only ever adding to key/label.
+  const bodyBatteryEntry: BentoEntry = {
+    key: 'bodyBattery',
+    label: 'ENERGIE',
+    value: present({ text: '91' }),
+    chart: present({ kind: 'spark', points: [88, 91], highlightIndex: 1 }),
+    matchTerms: ['body battery', 'körperbatterie', 'batterie'],
+  }
+  const fourEntries = [...entries, bodyBatteryEntry]
+
+  it('regression: "wenig Energie durch Schlafmangel" promotes SCHLAF, not Body Battery', () => {
+    // Without `matchTerms`, "Energie" (position ~6) would out-rank "Schlaf"
+    // (position ~17) and wrongly promote Body Battery. `matchTerms` removes
+    // "Energie" from what Body Battery can match on, so Schlaf wins here.
+    expect(rankTiles(fourEntries, 'wenig Energie durch Schlafmangel')[0].label).toBe('Schlaf')
+  })
+
+  it('an entry with explicit matchTerms is matched by a term, not by its own label', () => {
+    // "Energie" alone must NOT promote Body Battery (its label is excluded);
+    // "Batterie" (one of its explicit matchTerms) must.
+    expect(rankTiles(fourEntries, 'wenig Energie heute.')[0].label).not.toBe('ENERGIE')
+    expect(rankTiles(fourEntries, 'niedrige Batterie heute.')[0].label).toBe('ENERGIE')
+  })
+
+  it('an entry without matchTerms still matches on key and on label, unchanged', () => {
+    // `rhr`/Ruhepuls has no matchTerms — key and label both still work.
+    expect(rankTiles(fourEntries, 'rhr niedrig.')[0].label).toBe('Ruhepuls')
+    expect(rankTiles(fourEntries, 'Ruhepuls niedrig.')[0].label).toBe('Ruhepuls')
+  })
 })
 
 describe('BentoGrid', () => {

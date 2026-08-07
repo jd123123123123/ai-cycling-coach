@@ -998,6 +998,17 @@ function TodayViewBody({ model, control, profile }: {
       label: t('heroUnitEnergy'),
       value: present({ text: String(model.bodyBattery.value.now), unit: t('heroUnitOutOf100') }),
       chart: present({ kind: 'spark', points: [model.bodyBattery.value.wake, model.bodyBattery.value.now], highlightIndex: 1 }),
+      // Explicit `matchTerms` (BentoGrid.tsx review finding, task 8 fix
+      // round 1): this entry's own `label` is "ENERGIE"
+      // (`heroUnitEnergy`) — a common standalone German word, not a
+      // specific metric name like "HRV"/"Schlaf"/"Ruhepuls". Without this,
+      // a verdict sentence like "wenig Energie durch Schlafmangel" (reasoning
+      // about SLEEP) would wrongly promote Body Battery, since "Energie"
+      // sits earlier in that sentence than "Schlaf" — the grid would still
+      // satisfy its one-accent invariant, just point it at the wrong tile.
+      // Deliberately EXCLUDES the bare word "energie" for exactly that
+      // reason — do not add it back.
+      matchTerms: ['body battery', 'körperbatterie', 'batterie'],
     })
   }
 

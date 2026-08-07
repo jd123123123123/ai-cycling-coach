@@ -2,8 +2,25 @@
 import BentoTile, { type BentoTileProps } from './BentoTile'
 
 export interface BentoEntry extends Omit<BentoTileProps, 'accent' | 'tall'> {
-  /** Stable id, matched case-insensitively against the coach's reason text. */
+  /** Stable id, matched case-insensitively against the coach's reason text
+   *  (unless `matchTerms` is set — see its own doc comment). */
   key: string
+  /**
+   * Explicit terms to match against the reason text, case-insensitively.
+   * When set, these are the ONLY things matched — `key`/`label` are not
+   * consulted at all for this entry. Absent (the default), matching falls
+   * back to `key`/`label`, unchanged from before this field existed.
+   *
+   * Exists because a generic-word `label` misfires: the mount site's own
+   * body-battery entry labels itself "ENERGIE" (`heroUnitEnergy`), a common
+   * standalone German word, so a reason like "wenig Energie durch
+   * Schlafmangel" — reasoning about SLEEP — would promote Body Battery
+   * purely because "Energie" happens to appear earlier in the sentence than
+   * "Schlaf". `matchTerms` lets the mount site hand this component
+   * deliberately narrow, unambiguous terms for entries whose display label
+   * is too generic to double as a match term.
+   */
+  matchTerms?: string[]
 }
 
 /**
@@ -47,9 +64,12 @@ function orderEntries(entries: BentoEntry[], reason: string | null): BentoEntry[
   let leadIndex = 0
   let leadPos = Infinity
   entries.forEach((e, i) => {
-    const keyPos = haystack.indexOf(e.key.toLowerCase())
-    const labelPos = haystack.indexOf(e.label.toLowerCase())
-    const candidates = [keyPos, labelPos].filter((p) => p >= 0)
+    // `matchTerms`, when given, REPLACES key/label matching entirely for
+    // this entry — not adds to it — so a caller can rule out a generic
+    // label (e.g. "ENERGIE") by supplying only the narrow terms it actually
+    // wants matched.
+    const terms = e.matchTerms && e.matchTerms.length > 0 ? e.matchTerms : [e.key, e.label]
+    const candidates = terms.map((term) => haystack.indexOf(term.toLowerCase())).filter((p) => p >= 0)
     if (candidates.length === 0) return
     const pos = Math.min(...candidates)
     if (pos < leadPos) {
@@ -66,14 +86,14 @@ function orderEntries(entries: BentoEntry[], reason: string | null): BentoEntry[
 }
 
 export function rankTiles(entries: BentoEntry[], reason: string | null): BentoTileProps[] {
-  return orderEntries(entries, reason).map(({ key: _key, ...tile }, i) => ({ ...tile, accent: i === 0, tall: i === 0 }))
+  return orderEntries(entries, reason).map(({ key: _key, matchTerms: _matchTerms, ...tile }, i) => ({ ...tile, accent: i === 0, tall: i === 0 }))
 }
 
 export default function BentoGrid({ entries, reason }: { entries: BentoEntry[]; reason: string | null }) {
   if (entries.length === 0) return null
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: '100%' }}>
-      {orderEntries(entries, reason).map(({ key, ...tile }, i) => (
+      {orderEntries(entries, reason).map(({ key, matchTerms: _matchTerms, ...tile }, i) => (
         // Keyed by the entry's own stable `key`, not `${label}-${i}`: a
         // positional key would let React reuse the wrong DOM node (and
         // silently carry over its expand state) whenever ranking reorders
