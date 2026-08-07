@@ -654,7 +654,7 @@ export const COPY = {
   cassetteVerdictTired: { de: 'Ermüdet', en: 'Tired' },
   cassetteVerdictEmpty: { de: 'Leer', en: 'Empty' },
   cassetteSinceYesterday: { de: 'seit gestern', en: 'since yesterday' },
-  cassetteBest: { de: 'BEST {teeth}', en: 'BEST {teeth}' },
+  cassetteTypical: { de: 'DEIN SCHNITT', en: 'YOUR USUAL' },
   cassetteCeiling: { de: 'Deine Decke', en: 'Your ceiling' },
   cassetteCoarse: {
     de: 'Noch zu wenig Historie für deinen eigenen Bereich — grobe Einordnung.',

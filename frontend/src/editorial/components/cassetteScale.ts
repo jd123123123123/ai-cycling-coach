@@ -35,6 +35,18 @@ export function cogIndexFromReadiness(
   return { index: clamp(decile, 0, LAST), basis: 'decile' }
 }
 
+/** The athlete's typical reading — the median of their own series, not
+ *  their best (see `CassetteHero.tsx`'s own doc comment for why "best" was
+ *  wrong: ranking the maximum against the series it came from always lands
+ *  on cog 0). Sorts a COPY of `series`; the same array is handed to
+ *  `percentileRank` elsewhere and must not be mutated in place. */
+export function medianOf(series: number[]): number | null {
+  if (series.length === 0) return null
+  const sorted = [...series].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
 /** Half-width in px, linear in tooth count: 11t → 34, 34t → 118. */
 export function cogHalfWidth(index: number): number {
   const teeth = COG_TEETH[clamp(index, 0, LAST)]

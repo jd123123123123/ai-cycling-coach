@@ -1,6 +1,6 @@
 // frontend/src/editorial/components/CassetteHero.tsx
 import Cassette from './Cassette'
-import { cogIndexFromReadiness } from './cassetteScale'
+import { cogIndexFromReadiness, medianOf } from './cassetteScale'
 import { useChainShift } from '../motion/useChainShift'
 import { useCountUp } from '../motion/useCountUp'
 import { useCopy } from '../i18n/useCopy'
@@ -9,7 +9,6 @@ import { isPresent, type Value } from '../data/value'
 export interface CassetteHeroProps {
   readiness: Value<{ score: number; deltaVsYesterday: number | null }>
   series: Value<number[]>
-  best: Value<number>
   todayIso: string
   /** Rendered under the numeral, e.g. "Heute geht das 17er." */
   caption: Value<string>
@@ -30,14 +29,20 @@ function verdictKey(index: number) {
   return VERDICT_KEYS[3]
 }
 
-export default function CassetteHero({ readiness, series, best, todayIso, caption }: CassetteHeroProps) {
+export default function CassetteHero({ readiness, series, todayIso, caption }: CassetteHeroProps) {
   const { t } = useCopy()
   const values = isPresent(series) ? series.value : []
 
   const placement = isPresent(readiness)
     ? cogIndexFromReadiness(readiness.value.score, values)
     : null
-  const bestPlacement = isPresent(best) ? cogIndexFromReadiness(best.value, values) : null
+  // The marker is the athlete's TYPICAL reading (the median of their own
+  // series), not their best — ranking the maximum against the series it
+  // came from always lands on cog 0 (percentileRank(max, series) === 1.0),
+  // so a "best" marker could never move. See `cassetteScale.ts`'s own
+  // `medianOf` doc comment. Owner ruling, 2026-08-07.
+  const median = medianOf(values)
+  const typicalPlacement = median != null ? cogIndexFromReadiness(median, values) : null
 
   const { index } = useChainShift(placement?.index ?? null, todayIso)
   const score = useCountUp(isPresent(readiness) ? readiness.value.score : null, 600)
@@ -45,7 +50,7 @@ export default function CassetteHero({ readiness, series, best, todayIso, captio
 
   return (
     <div>
-      <Cassette activeIndex={index} bestIndex={bestPlacement?.index ?? null} idSuffix="today" />
+      <Cassette activeIndex={index} bestIndex={typicalPlacement?.index ?? null} idSuffix="today" />
 
       {isPresent(readiness) ? (
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 14 }}>
@@ -77,12 +82,12 @@ export default function CassetteHero({ readiness, series, best, todayIso, captio
           </div>
         </div>
       ) : (
-        <p style={{ fontSize: 13, color: 'var(--e-mid)', textAlign: 'center', padding: '0 24px' }}>
+        <p style={{ fontSize: 13, color: 'var(--e-quiet)', textAlign: 'center', padding: '0 24px' }}>
           {readiness.missing}
         </p>
       )}
 
-      <p style={{ fontSize: 13, color: 'var(--e-mid)', padding: '12px 24px 0' }}>
+      <p style={{ fontSize: 13, color: isPresent(caption) ? 'var(--e-mid)' : 'var(--e-quiet)', padding: '12px 24px 0' }}>
         {isPresent(caption) ? caption.value : caption.missing}
       </p>
 
