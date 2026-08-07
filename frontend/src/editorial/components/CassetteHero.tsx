@@ -2,7 +2,6 @@
 import Cassette from './Cassette'
 import { cogIndexFromReadiness, medianOf } from './cassetteScale'
 import { useChainShift } from '../motion/useChainShift'
-import { useCountUp } from '../motion/useCountUp'
 import { useCopy } from '../i18n/useCopy'
 import { isPresent, type Value } from '../data/value'
 
@@ -10,7 +9,7 @@ export interface CassetteHeroProps {
   readiness: Value<{ score: number; deltaVsYesterday: number | null }>
   series: Value<number[]>
   todayIso: string
-  /** Rendered under the numeral, e.g. "Heute geht das 17er." */
+  /** Rendered under the verdict/delta line, e.g. "Heute geht das 17er." */
   caption: Value<string>
 }
 
@@ -45,7 +44,6 @@ export default function CassetteHero({ readiness, series, todayIso, caption }: C
   const typicalPlacement = median != null ? cogIndexFromReadiness(median, values) : null
 
   const { index } = useChainShift(placement?.index ?? null, todayIso)
-  const score = useCountUp(isPresent(readiness) ? readiness.value.score : null, 600)
   const delta = isPresent(readiness) ? readiness.value.deltaVsYesterday : null
 
   return (
@@ -53,33 +51,34 @@ export default function CassetteHero({ readiness, series, todayIso, caption }: C
       <Cassette activeIndex={index} bestIndex={typicalPlacement?.index ?? null} idSuffix="today" />
 
       {isPresent(readiness) ? (
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 14 }}>
+        // OWNER RULING 2026-08-07: the numeral that used to sit here (56px,
+        // `useCountUp`-animated) is gone — it repeated the SAME reading the
+        // Cover's own numeral already shows a few pixels up (Rest/Training/
+        // Resting's Cover numeral IS `model.readiness`/derived from it), the
+        // one collision the design's own §0 promised would never happen. It
+        // also made the visual harness — screenshots are this project's
+        // review method — useless for this component: `useCountUp` starts
+        // at 0 and only reaches the real value after a live timer fires, so
+        // every static frame showed "0". The cog IS the reading; a numeral
+        // restating it was redundant even before either defect. Verdict word
+        // and delta now read as ONE centred line, a caption under the
+        // cassette rather than a value.
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div
-            data-testid="cassette-hero-numeral"
+            data-testid="cassette-hero-verdict"
             style={{
-              fontFamily: 'var(--e-display)', fontSize: 56, fontWeight: 800,
-              lineHeight: 0.78, letterSpacing: '-0.05em', color: 'var(--st-active)',
+              fontFamily: 'var(--e-display)', fontSize: 14, fontWeight: 700,
+              letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--e-ink)',
             }}
           >
-            {score ?? readiness.value.score}
+            {t(verdictKey(placement!.index))}
           </div>
-          <div style={{ paddingBottom: 8 }}>
-            <div
-              data-testid="cassette-hero-verdict"
-              style={{
-                fontFamily: 'var(--e-display)', fontSize: 14, fontWeight: 700,
-                letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--e-ink)',
-              }}
-            >
-              {t(verdictKey(placement!.index))}
+          {delta != null && (
+            <div data-testid="cassette-hero-delta" style={{ fontSize: 11, color: 'var(--e-mid)' }}>
+              <b style={{ color: 'var(--st-active)' }}>{delta > 0 ? `+${delta}` : delta}</b>{' '}
+              {t('cassetteSinceYesterday')}
             </div>
-            {delta != null && (
-              <div data-testid="cassette-hero-delta" style={{ fontSize: 11, color: 'var(--e-mid)', marginTop: 5 }}>
-                <b style={{ color: 'var(--st-active)' }}>{delta > 0 ? `+${delta}` : delta}</b>{' '}
-                {t('cassetteSinceYesterday')}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       // An EMPTY `missing` reason (as opposed to an absent one — `readiness`
       // is still the missing arm, just with `''` for its reason) is the

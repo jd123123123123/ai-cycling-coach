@@ -1,5 +1,5 @@
 // frontend/src/editorial/__tests__/cassetteHero.test.tsx
-import { render, screen, act, cleanup } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import CassetteHero from '../components/CassetteHero'
 import { present, missing } from '../data/value'
@@ -14,7 +14,7 @@ afterEach(() => vi.useRealTimers())
 afterEach(cleanup)
 
 describe('CassetteHero', () => {
-  it('shows the score, the top-band verdict word and the chain', () => {
+  it('shows the top-band verdict word and the chain', () => {
     render(
       <CassetteHero
         readiness={present({ score: 74, deltaVsYesterday: 8 })}
@@ -23,16 +23,30 @@ describe('CassetteHero', () => {
         caption={present('Heute geht das 17er.')}
       />,
     )
-    // jsdom has no matchMedia, and `prefersReducedMotion()` treats "can't ask"
-    // as "no preference" — so the count-up really runs here and starts at 0.
-    // Let it land before asserting the number.
-    act(() => { vi.advanceTimersByTime(1200) })
-    expect(screen.getByTestId('cassette-hero-numeral').textContent).toContain('74')
     // 74 against a 40-69 series ranks at the top (percentile 1.0 → cog 0),
     // which is the 'Bereit' (Ready) band — not just "some truthy word".
     expect(screen.getByTestId('cassette-hero-verdict').textContent).toBe('Bereit')
     expect(screen.getByTestId('cassette-chain')).toBeTruthy()
     expect(screen.getByText('Heute geht das 17er.')).toBeTruthy()
+  })
+
+  // OWNER RULING 2026-08-07: the hero's own numeral (56px, `useCountUp`-
+  // animated) is gone. It repeated the SAME reading the Cover's own numeral
+  // already shows a few pixels up on Rest/Training/Resting — the exact
+  // collision the design's own §0 promised would never happen — and made
+  // every static screenshot (this project's review method) show a
+  // permanent "0", `useCountUp`'s pre-timer starting value. The cog IS the
+  // reading; this asserts the duplication cannot silently return.
+  it('renders no numeral of its own — the cog is the reading, not a second number', () => {
+    render(
+      <CassetteHero
+        readiness={present({ score: 74, deltaVsYesterday: 8 })}
+        series={present(series)}
+        todayIso="2026-08-07"
+        caption={present('Heute geht das 17er.')}
+      />,
+    )
+    expect(screen.queryByTestId('cassette-hero-numeral')).toBeNull()
   })
 
   it('shows a different verdict word for a lower band', () => {

@@ -44,15 +44,26 @@ and the big display numeral. None of it is replaced. The cassette is **added
 below it** as the first block of the Hero Body, where the pen puts `Hero Body`
 in every flagship frame.
 
-That gives two numerals on one screen, so the scale rule is explicit:
+**The Cover keeps the only numeral on the screen.** The cassette carries no
+number of its own: the cog *is* the reading, and the verdict word, the delta and
+the caption say what it means.
 
-- **The Cover's numeral owns display scale** (the pen's size, unchanged). It is
-  the day's headline quantity — the session's TSS, the ride's number.
-- **The cassette's numeral is one step down** (56px, not 88px). It is an
-  instrument reading, not a headline, and it must never out-shout the Cover.
-
-They never show the same quantity, so the pairing reads as headline + instrument
-rather than the same fact printed twice.
+> **Corrected 2026-08-07, from a rendered frame.** This section originally gave
+> the cassette its own numeral one step down from the Cover's, on the reasoning
+> that "they never show the same quantity." That was false the moment it was
+> rendered: in Rest, Training and Resting the Cover's numeral already IS the
+> readiness, so the screen printed the same reading twice — `88 BEREITSCHAFT` on
+> the Cover and the identical value again below. Every test passed. Only the
+> screenshot showed it.
+>
+> Dropping the numeral also removed a second defect: the count-up's starting `0`
+> was being captured in every static frame, which made the visual harness unable
+> to verify any animated number — and screenshots are this project's review
+> method. With no numeral there is no count-up to catch mid-flight.
+>
+> `useCountUp` remains in `motion/` with its tests; the cassette simply no
+> longer calls it. The chain shift is now the hero's sole motion, which was
+> always the stronger of the two.
 
 ## 1. The Cassette
 
@@ -166,7 +177,7 @@ actual reasoning, so the layout changes shape day to day.**
 | Moment | Motion | Budget |
 | --- | --- | --- |
 | **The morning shift** | Chain travels from yesterday's cog to today's, one sprocket at a time, click + haptic per step | 90ms per sprocket, max 900ms |
-| Hero numeral | Counts 0 → value, easing out, finishing **with** the chain | matches the shift's own duration |
+| ~~Hero numeral~~ | ~~Counts 0 → value~~ — **cut 2026-08-07**: the cassette has no numeral (see §0) | — |
 | Cog light-up | The landed cog's glow fades in last, so the number arrives *because* the chain arrived | 200ms |
 | Tiles | Stagger in, 40ms apart | 320ms each |
 | Sparklines | Draw left→right after their tile lands | 500ms |

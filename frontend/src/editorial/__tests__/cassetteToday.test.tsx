@@ -35,15 +35,19 @@ describe('Today mounts the cassette', () => {
     expect(container.querySelector('[data-testid="hero-numeral"]')).toBeTruthy()
   })
 
-  it('keeps the cassette numeral below the Cover numeral in scale', () => {
+  // OWNER RULING 2026-08-07: the cassette's own numeral is gone (see
+  // `CassetteHero.tsx`'s own doc comment) — it repeated the SAME reading
+  // the Cover's numeral already shows. This replaces the old "cassette
+  // numeral is smaller than the Cover numeral" scale test, which is
+  // obsolete now that there is no cassette numeral to scale.
+  it('prints the reading exactly once — one Cover numeral, no cassette numeral', () => {
     const { container } = render(
       <MemoryRouter>
         <TodayView model={makeTodayModel({ state: 'training' })} />
       </MemoryRouter>,
     )
-    const px = (el: Element | null) => Number((el as HTMLElement)?.style.fontSize.replace('px', '') || 0)
-    expect(px(container.querySelector('[data-testid="cassette-hero-numeral"]')))
-      .toBeLessThan(px(container.querySelector('[data-testid="hero-numeral"]')))
+    expect(container.querySelectorAll('[data-testid="hero-numeral"]')).toHaveLength(1)
+    expect(container.querySelector('[data-testid="cassette-hero-numeral"]')).toBeNull()
   })
 
   it('drops the chain to a bigger cog once the day is ridden', () => {
