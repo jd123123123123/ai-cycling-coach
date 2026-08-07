@@ -1126,11 +1126,18 @@ Three edits, all additive:
 <CassetteHero
   readiness={model.readiness}
   series={model.readiness90DaySeries}
-  best={model.readiness90DayBest}
   todayIso={new Date().toISOString().slice(0, 10)}
   caption={cassetteCaption}
 />
 ```
+
+> **Corrected 2026-08-07 (owner ruling).** `CassetteHero` no longer takes a
+> `best` prop. The cassette's marker is the athlete's **median** — `DEIN
+> SCHNITT` — derived inside the component from `series`, because the 90-day
+> *best* is by construction the maximum of that same series and its marker could
+> therefore never leave the smallest cog. `model.readiness90DayBest` still
+> exists on the model and is still used elsewhere; it is simply not this
+> component's input. See the spec, §1.
 
 3. Compute `cassetteCaption` next to the existing per-state hero derivations (~line 197), using `mapValue` over `model.readiness` and the state's caption key, interpolating `{teeth}` from `COG_TEETH[cogIndexFromReadiness(score, series).index]`.
 
@@ -1649,6 +1656,6 @@ git commit -m "feat(kette): the chain is the streak, and a skipped session snaps
 ## Deferred, deliberately
 
 - **Session Detail and Recap** inherit these primitives in a later pass (spec §Non-goals).
-- **The record bloom** (`BEST` marker animating up a cog) needs a stored previous best to detect the change; it lands with the Recap pass, where the record is actually discovered. The marker itself ships in Task 2.
+- **The record bloom** lands with the Recap pass, where a record is actually discovered. It originally read off a rising `BEST` marker on the cassette; that marker is now the athlete's median (owner ruling, 2026-08-07), so the record needs its own signal rather than borrowing this one. Nothing in the Today pass depends on it.
 - **Tap-to-expand on a tile** ships as the `onExpand` seam in Task 7; wiring it to the full scrubbable chart reuses `useScrub` and belongs with the chart surface, not this pass.
 - **An estimated post-ride drop** (`geschätzt`) was cut from the spec during planning: the cassette renders only measured readiness, so nothing here invents a number. See spec §1, "Post-ride before the next sync".

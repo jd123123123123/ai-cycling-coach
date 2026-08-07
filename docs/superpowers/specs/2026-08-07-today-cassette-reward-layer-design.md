@@ -97,9 +97,18 @@ your own range", not a number borrowed from someone else's physiology. With
 fewer than 14 usable readiness values in the window, fall back to absolute
 deciles (`index = clamp(9 - floor(r / 10), 0, 9)`) and say so in the caption.
 
-**The 90-day best** renders as a thin accent line plus a caret on its own cog,
-labelled `BEST 13`. It is a position you can watch yourself approach, not a stat
-you read. Only a real new best moves it.
+**The athlete's typical** renders as a thin accent line plus a caret on its own
+cog, labelled `DEIN SCHNITT`. Today's chain above it means "better than your
+usual"; below it means "worse". It moves as the baseline shifts, so the
+comparison is readable every morning.
+
+> **Corrected 2026-08-07, during implementation.** This was originally the
+> *90-day best*, and that was unimplementable: the best score IS the maximum of
+> the series it is ranked against, so its percentile is always 1.0 and the
+> marker lands on the smallest cog for every athlete, every day. It could never
+> "be a position you watch yourself approach" — it was frozen by construction.
+> Found by the Task 4 review before any of it reached the screen. The median is
+> the value that actually moves and actually informs. Ruled by the owner.
 
 ### Per day state
 
@@ -187,11 +196,16 @@ days is thirteen links.
 ## 5. Celebration
 
 A record is **a gear you could not reach before**. When a peak power beats the
-90-day curve, the `BEST` marker shifts up the cassette, blooms, and stays there.
-No confetti — a permanent, visible ladder. Only a real record moves it, so it
-can never lie.
+90-day curve, the cassette blooms and the moment is marked. No confetti — the
+claim is a real one or it is not made at all.
 
 Records come from `peaks` / the MMP curve already in the model.
+
+> **Amended 2026-08-07.** This mechanic originally read the record off a rising
+> `BEST` marker on the cassette. That marker is now the athlete's median (see
+> §1), so the record needs its own signal rather than borrowing this one. It
+> ships with the Recap pass, where a record is actually discovered — see
+> "Deferred, deliberately" in the plan. Nothing in the Today pass depends on it.
 
 ## Data
 
