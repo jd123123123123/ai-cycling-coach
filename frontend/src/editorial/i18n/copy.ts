@@ -647,6 +647,19 @@ export const COPY = {
    *  time arm only renders when a real one arrives. */
   tomorrowLine: { de: 'Morgen {title}', en: 'Tomorrow {title}' },
   tomorrowLineWithTime: { de: 'Morgen {title} · {time}', en: 'Tomorrow {title} · {time}' },
+
+  // ---- Task 4: CassetteHero (components/CassetteHero.tsx) -----------------
+  cassetteVerdictReady: { de: 'Bereit', en: 'Ready' },
+  cassetteVerdictLoaded: { de: 'Geladen', en: 'Loaded' },
+  cassetteVerdictTired: { de: 'Ermüdet', en: 'Tired' },
+  cassetteVerdictEmpty: { de: 'Leer', en: 'Empty' },
+  cassetteSinceYesterday: { de: 'seit gestern', en: 'since yesterday' },
+  cassetteBest: { de: 'BEST {teeth}', en: 'BEST {teeth}' },
+  cassetteCeiling: { de: 'Deine Decke', en: 'Your ceiling' },
+  cassetteCoarse: {
+    de: 'Noch zu wenig Historie für deinen eigenen Bereich — grobe Einordnung.',
+    en: 'Not enough history for your own range yet — coarse placement.',
+  },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY
