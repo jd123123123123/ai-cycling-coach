@@ -485,6 +485,9 @@ export const COPY = {
   heroRecoveryRange90Off: { de: '{n} unter deiner 90-Tage-Bestmarke', en: '{n} off your 90-day peak' },
   heroRecoveryRange90Best: { de: 'Spitze deiner 90-Tage-Spanne', en: 'Top of your 90-day range' },
 
+  // ---- Cassette reward layer (Task 5): 90-day series + missed-yesterday ---
+  missedYesterdayNone: { de: 'Keine ausgelassene Einheit.', en: 'No skipped session.' },
+
   // ---- Editorial II audit (a2, 2026-08-06): Evening's "01 Today" trio -----
   // (`cx4zJ`/`I7AqeN`+`ppDu5`+`j7KHFv`, "WHAT IT MOVED · LAST 7 DAYS") — real
   // section confirmed present in the pen, previously unbuilt. See

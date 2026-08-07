@@ -89,6 +89,21 @@ export interface TodayModel {
    *  7-day one. `TodayView.tsx` turns this + `readiness` into the actual
    *  sentence; this field is only the raw best score. */
   readiness90DayBest: Value<number>
+  /** The full trailing 90-day `training_readiness` SERIES behind
+   *  `readiness90DayBest` above (same source array, one fewer reduction —
+   *  the cassette hero's percentile mapping needs every point, not just the
+   *  max). Additive: no new query, `ninetyDayMetrics` is already fetched for
+   *  `readiness90DayBest`. Withheld — never `present([])` — when there is
+   *  nothing to rank against, so the hero can say "not enough history for
+   *  your own range" instead of silently ranking against an empty set. */
+  readiness90DaySeries: Value<number[]>
+  /** Yesterday's planned-but-unridden bike ride — the cassette's chain-break
+   *  signal. Sourced from `WeekResponse.missed_yesterday`
+   *  (`frontend/src/api/weeks.ts`), which is already `null` when yesterday
+   *  was a planned rest day, was ridden, or had no plan — exactly the rule
+   *  this field needs, so there is no second rule to keep in sync with it.
+   *  Prefers `title_de` over `title` when the localized title is present. */
+  missedYesterday: Value<{ title: string; dateIso: string }>
   /** Trailing 90-day HIGH `body_battery`, including today's wake/now pair
    *  (audit-b-data gap 2 — Resting's "top of your 90-day range" line). Same
    *  source table, same client-side max, no new query. */
@@ -453,6 +468,27 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     t('ninetyDayHistoryMissing'),
   )
 
+  // The percentile mapping behind the cassette needs the SERIES, not the max
+  // the hero used to show. Same input array, one fewer reduction — additive,
+  // no new query. Withheld (not `[]`) when there is nothing to rank against,
+  // so the hero can say "coarse placement" instead of silently ranking
+  // against nothing.
+  const readiness90DaySeries: Value<number[]> =
+    ninetyDayReadinessValues.length > 0
+      ? present(ninetyDayReadinessValues)
+      : missing(t('ninetyDayHistoryMissing'))
+
+  // Yesterday's planned-but-unridden bike ride. `weeks.ts` already returns null
+  // when yesterday was a planned rest day, was ridden, or had no plan — so a
+  // present value here IS a broken chain, with no second rule to keep in sync.
+  const missedYesterdayPlan = weekPlan?.missed_yesterday ?? null
+  const missedYesterday: Value<{ title: string; dateIso: string }> = fromNullable(
+    missedYesterdayPlan
+      ? { title: missedYesterdayPlan.title_de ?? missedYesterdayPlan.title, dateIso: missedYesterdayPlan.date }
+      : null,
+    t('missedYesterdayNone'),
+  )
+
   const ninetyDayBodyBatteryValues = [
     ...(ninetyDayMetrics ?? []).map((m) => m.body_battery).filter((v): v is number => v != null),
     ...(bbPair?.now != null ? [bbPair.now] : []),
@@ -689,6 +725,8 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     readinessGate,
     readinessGateHeadline,
     readiness90DayBest,
+    readiness90DaySeries,
+    missedYesterday,
     bodyBattery90DayHigh,
     hrv,
     restingHr,

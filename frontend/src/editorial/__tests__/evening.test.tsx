@@ -55,6 +55,8 @@ const eveningModel: TodayModel = {
   readinessGate: 'fresh',
   readinessGateHeadline: null,
   readiness90DayBest: present(77),
+  readiness90DaySeries: missing('Noch keine 90-Tage-Historie erfasst.'),
+  missedYesterday: missing('Keine ausgelassene Einheit.'),
   bodyBattery90DayHigh: missing('Noch keine 90-Tage-Historie erfasst.'),
   hrv: present({ value: 68, unit: 'ms', delta: 4, band: { low: 52, high: 74, position: 'above' } }),
   restingHr: present({ value: 46, unit: 'bpm', delta: -2, band: { low: 44, high: 55, position: 'in' } }),

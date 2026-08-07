@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildTodayModel, compassPoint, type TodayModelInputs } from '../data/useTodayModel'
 import { isPresent } from '../data/value'
 import type { WeekResponse } from '../../api/weeks'
+import type { DailyMetric } from '../../api/dashboard'
 
 const base = (over: Partial<TodayModelInputs> = {}): TodayModelInputs => ({
   now: new Date(2026, 6, 22, 9, 0),
@@ -14,6 +15,35 @@ const base = (over: Partial<TodayModelInputs> = {}): TodayModelInputs => ({
   tomorrowWorkout: null, isLoading: false,
   ...over,
 })
+
+// ---- Thin local helpers for the reward-layer fields (Task 5) --------------
+// `base()`'s own default snapshot carries `training_readiness: 74`, which
+// `readiness90DaySeries` (reusing the SAME array `readiness90DayBest` folds
+// today's reading into, by design) would otherwise silently append to every
+// series here. Neutralised to `null` so a test that only sets
+// `ninetyDayMetrics` observes exactly that array, not that array plus a
+// stray "today" — `buildModel`'s own override still wins whenever a test
+// passes its own `snapshot`.
+const READINESS_NEUTRAL_SNAPSHOT = { ...base().snapshot!, training_readiness: null }
+const buildModel = (over: Partial<TodayModelInputs> = {}) =>
+  buildTodayModel(base({ snapshot: READINESS_NEUTRAL_SNAPSHOT, ...over }))
+
+const emptyMetric: DailyMetric = {
+  id: 0, user_id: 0, date: null, recorded_at: '', sleep_score: null, hrv_status: null,
+  body_battery: null, resting_hr: null, stress_level: null, steps: null, weight_kg: null,
+  source: null, sleep_detail: null, vo2max: null, training_readiness: null, recovery_time_hours: null,
+}
+
+const emptyWeekPlan: WeekResponse = {
+  week_start: '2026-07-20', week_end: '2026-07-26', language: 'simple', preface: '',
+  meso_block: {
+    phase: 'Grundlage 1', block_position: 'accumulation', block_index_in_meso: 0,
+    weekly_tss_target: 0, days_to_event: null, target_event_type: null, hours_note: null,
+    progression: null,
+  },
+  projection: null, readiness: null, plan_changes: null, days: [],
+  planned_tss_total: null, missed_yesterday: null,
+}
 
 describe('buildTodayModel', () => {
   it('formats the date meta in German by default — EDITORIAL II ships in German', () => {
@@ -315,5 +345,43 @@ describe('compassPoint', () => {
     expect(compassPoint(null)).toBeNull()
     expect(compassPoint(undefined)).toBeNull()
     expect(compassPoint(Number.NaN)).toBeNull()
+  })
+})
+
+describe('reward-layer fields', () => {
+  it('exposes the 90-day readiness series, not just its max', () => {
+    const model = buildModel({
+      ninetyDayMetrics: [
+        { ...emptyMetric, training_readiness: 61 },
+        { ...emptyMetric, training_readiness: null },
+        { ...emptyMetric, training_readiness: 78 },
+      ],
+    })
+    expect(isPresent(model.readiness90DaySeries)).toBe(true)
+    expect(isPresent(model.readiness90DaySeries) && model.readiness90DaySeries.value).toEqual([61, 78])
+  })
+
+  it('withholds the series rather than returning an empty array', () => {
+    const model = buildModel({ ninetyDayMetrics: [] })
+    expect(isPresent(model.readiness90DaySeries)).toBe(false)
+  })
+
+  it("reports yesterday's skipped session when the plan says one was missed", () => {
+    const model = buildModel({
+      weekPlan: {
+        ...emptyWeekPlan,
+        missed_yesterday: {
+          date: '2026-08-06', title: 'Threshold 4x8', title_de: 'Schwelle 4×8',
+          target_tss: 98, template_id: null, category: 'bike', is_quality: true,
+        },
+      },
+    })
+    expect(isPresent(model.missedYesterday)).toBe(true)
+    expect(isPresent(model.missedYesterday) && model.missedYesterday.value.title).toBe('Schwelle 4×8')
+  })
+
+  it('has no missed session when the plan carries none', () => {
+    const model = buildModel({ weekPlan: { ...emptyWeekPlan, missed_yesterday: null } })
+    expect(isPresent(model.missedYesterday)).toBe(false)
   })
 })
