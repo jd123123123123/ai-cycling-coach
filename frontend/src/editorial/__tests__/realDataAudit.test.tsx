@@ -69,6 +69,8 @@ const baseModel: TodayModel = {
     { letter: 'SA', tss: present(68) }, { letter: 'SO', tss: present(44) },
   ],
   energyOut: missing('Kein stündlicher Energieverbrauch für heute verfügbar.'),
+  missedYesterday: missing('Keine ausgelassene Einheit.'),
+  weekLoad: present({ spent: 256, planned: 340 }),
   isLoading: false,
 } as TodayModel
 

@@ -11,6 +11,7 @@ import DeltaRow from '../components/DeltaRow'
 import FatigueCurve from '../components/FatigueCurve'
 import HeaderSpine, { type DayStateControl, type ProfileHeaderData } from '../components/HeaderSpine'
 import InsightStrip from '../components/InsightStrip'
+import KetteStrip from '../components/KetteStrip'
 import Ledger from '../components/Ledger'
 import LiveRing from '../components/LiveRing'
 import MetricTrack, { type MetricTrackAction } from '../components/MetricTrack'
@@ -1771,6 +1772,12 @@ function TodayViewBody({ model, control, profile }: {
             />
           </div>
         )}
+
+        <KetteStrip
+          streakDays={model.streakDays}
+          weekLoad={model.weekLoad}
+          missedYesterday={model.missedYesterday}
+        />
 
         <TabBar active="today" />
       </main>

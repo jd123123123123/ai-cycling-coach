@@ -14,6 +14,16 @@
  * (`readiness90DaySeries`, `missedYesterday`) — the harness fixtures predate
  * that task and needed the same two fields backfilled (see this directory's
  * sibling `visualHarness.test.tsx`).
+ *
+ * Also carries `weekLoad`/`phaseContext` (Task 2's week-load budget and
+ * phase-context line) as honest `Value`s — Task 9's `KetteStrip` reads
+ * `weekLoad` directly off the model, and this fixture previously omitted
+ * both fields entirely behind the `as TodayModel` cast below, which made
+ * `weekLoad` `undefined` for any test mounting `TodayView` through this
+ * helper. Given real present values here, not a second cast or a
+ * neutralised default — a plan that "exists" with a real spent/planned pair
+ * is what most fixture callers actually want, and a test that specifically
+ * needs the missing arm still overrides it per-call.
  */
 import { present, missing } from '../../data/value'
 import type { PmcPoint, TodayModel } from '../../data/useTodayModel'
@@ -111,6 +121,8 @@ export function makeTodayModel(overrides: {
       { letter: 'S', tss: present(68) }, { letter: 'S', tss: present(44) },
     ],
     energyOut: missing('Kein stündlicher Energieverbrauch für heute verfügbar.'),
+    weekLoad: present({ spent: 256, planned: 340 }),
+    phaseContext: present({ phase: 'Build', daysToEvent: 21, eventType: 'road_race' }),
     isLoading: false,
   } as TodayModel
 }

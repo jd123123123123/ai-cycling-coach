@@ -672,6 +672,16 @@ export const COPY = {
   cassetteCaptionAhead: { de: 'Heute geht das {teeth}er.', en: 'The {teeth} is in you today.' },
   cassetteCaptionSpent: { de: 'Nach der Einheit bleibt das {teeth}er.', en: 'After the session, the {teeth} is what is left.' },
   cassetteCaptionEvening: { de: 'Morgen wieder das {teeth}er, wenn du schläfst.', en: 'The {teeth} again tomorrow, if you sleep.' },
+
+  // ---- Task 9: KetteStrip (components/KetteStrip.tsx) — the chain is the
+  // streak, the break, and the week's XP bar. `ketteBroken` names the
+  // planned session that was skipped (`model.missedYesterday`, Task 5) —
+  // guilt attaches only to a chosen skip, never to a rest day or a
+  // physiological reading, so this key stays factual and direct, not cruel
+  // and not softened (owner ruling, 2026-08-07).
+  ketteHolds: { de: 'Heute fahren hält die Kette bei {days} Tagen.', en: 'Riding today holds the chain at {days} days.' },
+  ketteBroken: { de: 'Die Kette ist gerissen — {title} ausgelassen.', en: 'The chain broke — {title} skipped.' },
+  ketteXp: { de: '{spent} / {planned} XP', en: '{spent} / {planned} XP' },
 } as const satisfies Record<string, CopyEntry>
 
 export type CopyKey = keyof typeof COPY

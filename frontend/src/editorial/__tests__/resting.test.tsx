@@ -63,6 +63,8 @@ const restingModel: TodayModel = {
     { letter: 'T', tss: missing('No ride logged.') }, { letter: 'F', tss: present(24) },
     { letter: 'S', tss: present(68) }, { letter: 'S', tss: present(44) },
   ],
+  missedYesterday: missing('No skipped session.'),
+  weekLoad: present({ spent: 256, planned: 340 }),
   isLoading: false,
 } as TodayModel
 

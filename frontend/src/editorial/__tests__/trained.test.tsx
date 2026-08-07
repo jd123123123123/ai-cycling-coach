@@ -147,6 +147,8 @@ describe('01 The Session composition', () => {
     whatThisChanges: missing('The coach has not weighed in on this ride yet.'),
     conditions: missing('No location from a recent ride.'),
     tomorrow: missing("Tomorrow's plan is not set yet."),
+    missedYesterday: missing('No skipped session.'),
+    weekLoad: present({ spent: 256, planned: 340 }),
     isLoading: false,
   } as TodayModel
 

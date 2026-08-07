@@ -192,6 +192,8 @@ describe('Plate placement in TodayView', () => {
     whatThisChanges: missing('The coach has not weighed in on this ride yet.'),
     conditions: missing('No location from a recent ride.'),
     tomorrow: present({ title: 'Recovery spin', detail: 'Easy.', unlockLabel: missing('No unlock time.') }),
+    missedYesterday: missing('No skipped session.'),
+    weekLoad: present({ spent: 256, planned: 340 }),
     isLoading: false,
   } as TodayModel
 

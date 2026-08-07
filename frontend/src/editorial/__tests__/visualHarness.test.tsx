@@ -102,6 +102,7 @@ const model: TodayModel = {
   }),
   conditions: present({ tempC: 19, windKmh: 12 }),
   tomorrow: present({ title: 'Lockere Runde', detail: 'Fünfundvierzig Minuten, locker.', unlockLabel: missing('Keine Startzeit im morgigen Plan.') }),
+  weekLoad: present({ spent: 256, planned: 340 }),
   isLoading: false,
 } as TodayModel
 
@@ -143,6 +144,7 @@ const restModel: TodayModel = {
     { letter: 'T', tss: missing('Keine Fahrt erfasst.') }, { letter: 'F', tss: present(24) },
     { letter: 'S', tss: present(68) }, { letter: 'S', tss: present(44) },
   ],
+  weekLoad: present({ spent: 256, planned: 340 }),
   isLoading: false,
 } as TodayModel
 
@@ -211,6 +213,7 @@ const restingModel: TodayModel = {
     { letter: 'D', tss: missing('Keine Fahrt erfasst.') }, { letter: 'F', tss: present(24) },
     { letter: 'S', tss: present(68) }, { letter: 'S', tss: present(44) },
   ],
+  weekLoad: present({ spent: 256, planned: 340 }),
   isLoading: false,
 } as TodayModel
 
@@ -253,6 +256,7 @@ const eveningModel: TodayModel = {
     { letter: 'SA', tss: present(68) }, { letter: 'SO', tss: present(44) },
   ],
   energyOut: missing('Kein stündlicher Energieverbrauch für heute verfügbar.'),
+  weekLoad: present({ spent: 256, planned: 340 }),
   isLoading: false,
 } as TodayModel
 
