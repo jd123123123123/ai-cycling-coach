@@ -36,6 +36,24 @@ the app lying to earn that feeling.
 skipped planned session, an unlogged check-in — never to the physiological
 verdict. An app that shames a low-HRV rest day contradicts its own coaching.
 
+## 0. The Cover stays
+
+**Owner ruling, 2026-08-07: the editorial header keeps the pen's treatment** —
+the background photograph, its scrim, the Day Rail, the Meta row, the headline
+and the big display numeral. None of it is replaced. The cassette is **added
+below it** as the first block of the Hero Body, where the pen puts `Hero Body`
+in every flagship frame.
+
+That gives two numerals on one screen, so the scale rule is explicit:
+
+- **The Cover's numeral owns display scale** (the pen's size, unchanged). It is
+  the day's headline quantity — the session's TSS, the ride's number.
+- **The cassette's numeral is one step down** (56px, not 88px). It is an
+  instrument reading, not a headline, and it must never out-shout the Cover.
+
+They never show the same quantity, so the pairing reads as headline + instrument
+rather than the same fact printed twice.
+
 ## 1. The Cassette
 
 ### Geometry
@@ -101,10 +119,14 @@ you read. Only a real new best moves it.
   second gate.
 - **No readiness at all** — the hero collapses to the day's claim in type, with
   one quiet line saying why. No empty cassette skeleton.
-- **Post-ride before the next sync** — when a ride lands, the chain drops by the
-  session's *recorded* cost and the caption carries `geschätzt`. It settles to
-  the measured value at the next wearable sync. We never present the estimate as
-  a measurement.
+- **Post-ride before the next sync** — the chain only ever renders a **measured**
+  readiness. It does not model what a ride "should have" cost, because the app
+  has no measurement to back that until the next wearable sync. So in `trained`
+  and `evening` the cassette shows the last measured value, and the drop
+  animates when a genuinely lower reading arrives. An estimated drop with a
+  `geschätzt` label was considered and cut: it would be the one number on the
+  screen the app invented, and it belongs with the Recap pass (where a modelled
+  post-ride state is the surface's whole job) if it is built at all.
 
 ## 2. The Bento
 
@@ -182,10 +204,13 @@ local (`ninetyDayReadinessValues`, built from the `ninetyDayMetrics` input and
 collapsed to a single `Math.max`). Exposing that array on the model is an
 additive change to an already-computed value — no new query, no backend work.
 
-**One dependency to verify during planning:** whether "a planned session was
-skipped" is derivable from the current week plan plus completed activities on
-the client, or needs a backend field. The chain-break rule cannot ship on a
-guess.
+**Resolved during planning:** "a planned session was skipped" needs no new
+backend work — `WeekResponse.missed_yesterday` (`api/weeks.ts`) already carries
+yesterday's planned-but-unridden bike ride, with `title`, `title_de`,
+`target_tss` and `date`, and is `null` when yesterday was a planned rest day,
+was ridden, or had no plan. That null-case list is exactly the chain-break rule
+this spec needs. The field's own comment describes a non-guilt treatment; the
+data is unchanged, only the presentation the owner ruled for on 2026-08-06.
 
 ## Non-goals
 
