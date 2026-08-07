@@ -366,38 +366,53 @@ function TodayViewBody({ model, control, profile }: {
   const cassetteSeriesValues = isPresent(cassetteSeries) ? cassetteSeries.value : []
   // `model.readiness`'s own missing reason already surfaces on the Cover
   // above, verbatim, in one of two spots — computed above, in this exact
-  // order:
-  //  - `heroNumeralValue` (MetricTrack's own numeral): directly on Rest, and
-  //    on Training/Resting whenever `bodyBatteryNow` falls back to it (see
+  // order. Both checks are gated by where the OTHER Value is actually
+  // RENDERED per day state, not merely by content matching — a bug this
+  // build shipped once already (coordinator review, 2026-08-07): `evening`
+  // never mounts `MetricTrack` (it renders a bespoke lights-out clock block
+  // instead — see the render site below), so on that state
+  // `heroNumeralValue`'s missing reason, even though it IS `model.readiness`
+  // by reference (`mapValue` passes the missing arm through unchanged), is
+  // never actually on screen. Without the state guard, the string
+  // comparison below was always true whenever readiness was missing,
+  // silently suppressing the cassette's own reason for a sentence that had
+  // in fact printed nowhere — ten dim cogs, no chain, no explanation.
+  //  - `heroNumeralValue` (MetricTrack's own numeral): rendered via
+  //    `MetricTrack` on every state EXCEPT `evening` (directly on Rest, and
+  //    on Training/Resting whenever `bodyBatteryNow` falls back to it — see
   //    its own doc comment: "the reason it prints is the dated one").
-  //  - `rcPrimaryLine` (the RC context row, Rest/Training only —
-  //    `readinessDeltaLine`'s own missing fallback), UNLESS
+  //  - `rcPrimaryLine` (the RC context row): rendered on every state except
+  //    `trained` and `evening` (see the render site below), UNLESS
   //    `rcPrimaryReasonAlreadyShown` already suppressed it as a duplicate of
   //    the FIRST case above — in which case the first case already covers
   //    this text, so there is nothing further to check.
   // Handing the cassette the raw `model.readiness` when either is true would
-  // repeat that sentence a third time. Withheld with an EMPTY reason (not a
-  // fabricated second sentence) so the cassette still draws its frame — see
-  // `CassetteHero.tsx`'s own "still draws the cassette when the reading is
-  // missing" test — just without printing the same sentence again.
-  const cassetteReasonShownByNumeral = !isPresent(model.readiness) && !isPresent(heroNumeralValue)
+  // repeat that sentence a third time, so `CassetteHero` gets the REAL
+  // `Value` (never a doctored one) plus an explicit boolean telling it
+  // whether to print its own copy — see `CassetteHero.tsx`'s own
+  // `reasonShownElsewhere` doc comment. When in doubt, this stays false: a
+  // duplicated sentence is a small blemish, a missing one is a broken
+  // contract.
+  const heroNumeralRendersReason = state !== 'evening'
+  const cassetteReasonShownByNumeral = heroNumeralRendersReason && !isPresent(model.readiness) && !isPresent(heroNumeralValue)
     && heroNumeralValue.missing === model.readiness.missing
   const cassetteReasonShownByRcLine = !isPresent(model.readiness) && state !== 'trained' && state !== 'evening'
     && !rcPrimaryReasonAlreadyShown && !isPresent(rcPrimaryLine) && rcPrimaryLine.missing === model.readiness.missing
-  const cassetteReasonAlreadyShown = cassetteReasonShownByNumeral || cassetteReasonShownByRcLine
-  const cassetteReadiness: Value<{ score: number; deltaVsYesterday: number | null }> =
-    cassetteReasonAlreadyShown ? missing('') : model.readiness
+  const cassetteReasonShownElsewhere = cassetteReasonShownByNumeral || cassetteReasonShownByRcLine
   // The caption is meaningless without a readiness score to place on the
-  // cassette, and CassetteHero's own missing-readiness paragraph — printed
-  // from the SAME `cassetteReadiness` Value, immediately above this one —
-  // already explains the gap (verbatim, or silently when
-  // `cassetteReasonAlreadyShown`). An empty caption withholds it without
-  // restating that sentence a second time from within this one component.
+  // cassette, and its own "why" is always the exact reason `readiness`
+  // already carries — printed either by `CassetteHero`'s own reason
+  // paragraph a few lines up (when `!cassetteReasonShownElsewhere`) or by
+  // the page elsewhere (when it is). Either way the caption never needs a
+  // second copy of that same sentence, so its own reason paragraph stays
+  // suppressed via `captionReasonShownElsewhere`, always true here — an
+  // explicit flag `CassetteHero` reads, not an empty-reason `Value` it has
+  // to infer intent from.
   const cassetteCaption: Value<string> = isPresent(model.readiness)
     ? present(t(cassetteCaptionKey, {
         teeth: COG_TEETH[cogIndexFromReadiness(model.readiness.value.score, cassetteSeriesValues).index],
       }))
-    : missing('')
+    : missing(model.readiness.missing)
 
   // Find the win, continued: when the secondary RC line IS the true "best
   // in 90 days" claim, it's a real, honest win — give it the day's accent
@@ -1051,10 +1066,12 @@ function TodayViewBody({ model, control, profile }: {
 
         <div data-hero-body style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '34px 24px 0 24px' }}>
           <CassetteHero
-            readiness={cassetteReadiness}
+            readiness={model.readiness}
             series={cassetteSeries}
             todayIso={new Date().toISOString().slice(0, 10)}
             caption={cassetteCaption}
+            reasonShownElsewhere={cassetteReasonShownElsewhere}
+            captionReasonShownElsewhere={!isPresent(model.readiness)}
           />
           {state === 'rest' && (
             <div style={{ paddingBottom: 26 }}>

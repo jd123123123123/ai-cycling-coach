@@ -66,3 +66,43 @@ describe('Today mounts the cassette', () => {
     expect(cogOf('trained')).toBeGreaterThan(cogOf('training'))
   })
 })
+
+// Regression: the cassette's own suppression check used to compare
+// `heroNumeralValue.missing === model.readiness.missing` with no day-state
+// guard. `mapValue` passes a missing arm through BY REFERENCE, so on
+// `evening` — the one state whose hero numeral is a bespoke lights-out
+// clock block that never mounts `MetricTrack` — `heroNumeralValue` literally
+// IS `model.readiness`, and the comparison was always true whenever
+// readiness was missing. The cassette suppressed its own reason for a
+// sentence that had in fact printed nowhere on screen: ten dim cogs, no
+// chain, no explanation. See TodayView.tsx's own `cassetteReasonShownByNumeral`.
+describe('Today explains a missing readiness reading wherever the cassette renders', () => {
+  const REASON = 'Letzte Messung 3. August.'
+
+  it('evening: the reason appears at least once even though MetricTrack never mounts on this state', () => {
+    render(
+      <MemoryRouter>
+        <TodayView model={makeTodayModel({ state: 'evening', readinessMissingReason: REASON })} />
+      </MemoryRouter>,
+    )
+    expect(screen.getAllByText(REASON).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it.each(STATES)('%s: the reason appears at least once when readiness is missing', (state) => {
+    render(
+      <MemoryRouter>
+        <TodayView model={makeTodayModel({ state, readinessMissingReason: REASON })} />
+      </MemoryRouter>,
+    )
+    expect(screen.getAllByText(REASON).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it.each(STATES)('%s: the dedup still holds — the reason never prints more than twice', (state) => {
+    render(
+      <MemoryRouter>
+        <TodayView model={makeTodayModel({ state, readinessMissingReason: REASON })} />
+      </MemoryRouter>,
+    )
+    expect(screen.getAllByText(REASON).length).toBeLessThanOrEqual(2)
+  })
+})

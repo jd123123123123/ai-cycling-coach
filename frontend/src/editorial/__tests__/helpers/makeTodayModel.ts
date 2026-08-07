@@ -38,13 +38,22 @@ function buildPmcSeries(days: number): PmcPoint[] {
 // (`MIN_SERIES_FOR_PERCENTILE`, 14) rather than its coarse decile fallback.
 const READINESS_90_DAY_SERIES = Array.from({ length: 90 }, (_, i) => 40 + ((i * 7) % 55))
 
-export function makeTodayModel(overrides: { state: DayState; readinessScore?: number }): TodayModel {
+export function makeTodayModel(overrides: {
+  state: DayState
+  readinessScore?: number
+  /** When set, `readiness` is the missing arm carrying this exact reason
+   *  instead of a present score — for tests exercising the "reason must
+   *  appear somewhere on screen, exactly once or twice" contract. */
+  readinessMissingReason?: string
+}): TodayModel {
   const score = overrides.readinessScore ?? 74
   return {
     state: overrides.state,
     dateLabel: present('MI 22 JUL'),
     streakDays: present(13),
-    readiness: present({ score, deltaVsYesterday: 8 }),
+    readiness: overrides.readinessMissingReason != null
+      ? missing(overrides.readinessMissingReason)
+      : present({ score, deltaVsYesterday: 8 }),
     readinessGate: 'fresh',
     readinessGateHeadline: null,
     readiness90DayBest: present(Math.max(...READINESS_90_DAY_SERIES)),

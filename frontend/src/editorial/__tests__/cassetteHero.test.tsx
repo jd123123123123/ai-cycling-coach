@@ -183,7 +183,54 @@ describe('CassetteHero', () => {
       />,
     )
     expect(screen.getByText('Keine Messung seit Dienstag.').style.color).toBe('var(--e-quiet)')
+  })
+
+  // The caption's own reason is only ever independent of `readiness`'s own
+  // reason when `readiness` itself is present (a genuinely separate caption
+  // gap) — real callers never hit this (a caption naming a cog cannot exist
+  // without a readiness score), but the component still honours it rather
+  // than assuming the coupling.
+  it('renders a caption-specific missing reason in the quiet colour when readiness is present', () => {
+    render(
+      <CassetteHero
+        readiness={present({ score: 74, deltaVsYesterday: null })}
+        series={present(series)}
+        todayIso="2026-08-07"
+        caption={missing('Noch keine Einordnung.')}
+      />,
+    )
     expect(screen.getByText('Noch keine Einordnung.').style.color).toBe('var(--e-quiet)')
+  })
+
+  // The reported bug: an empty-reason `Value` used to be a sentinel the
+  // caller passed to mean "the reason already printed elsewhere" —
+  // invisible to this component and to every other `Value` consumer in the
+  // tree. This component must always print a reason it is handed unless
+  // explicitly told not to via `reasonShownElsewhere`, never by checking
+  // string content.
+  it('prints the reason whenever one is present in the Value, with no suppression flag passed', () => {
+    render(
+      <CassetteHero
+        readiness={missing('Letzte Messung 3. August.')}
+        series={present(series)}
+        todayIso="2026-08-07"
+        caption={missing('Noch keine Einordnung.')}
+      />,
+    )
+    expect(screen.getByText('Letzte Messung 3. August.')).toBeTruthy()
+  })
+
+  it('omits the readiness reason only when reasonShownElsewhere is explicitly true', () => {
+    render(
+      <CassetteHero
+        readiness={missing('Letzte Messung 3. August.')}
+        series={present(series)}
+        todayIso="2026-08-07"
+        caption={missing('Noch keine Einordnung.')}
+        reasonShownElsewhere
+      />,
+    )
+    expect(screen.queryByText('Letzte Messung 3. August.')).toBeNull()
   })
 
   it('renders a present caption in the normal-content colour, not the quiet reason colour', () => {

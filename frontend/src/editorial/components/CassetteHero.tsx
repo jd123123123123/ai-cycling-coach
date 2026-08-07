@@ -11,6 +11,30 @@ export interface CassetteHeroProps {
   todayIso: string
   /** Rendered under the verdict/delta line, e.g. "Heute geht das 17er." */
   caption: Value<string>
+  /** True when `readiness`'s own missing reason is already printed
+   *  somewhere else on the same screen (the Cover, above) — the caller's
+   *  job to determine, from where things actually render, never this
+   *  component's. When true, the local reason paragraph is omitted; when
+   *  false or absent (every caller that doesn't pass it), it prints. This
+   *  replaces a former convention where the caller signalled "already shown
+   *  elsewhere" by handing `readiness` an EMPTY reason string — invisible to
+   *  every other `Value` consumer in this tree (15+ components that render
+   *  `.missing` unconditionally), any of which would have silently rendered
+   *  an empty, padded element had it received that same empty-reason value
+   *  by accident. This component now always receives the real `Value` with
+   *  its real reason; suppression is this explicit, typed prop, not string
+   *  content. */
+  reasonShownElsewhere?: boolean
+  /** Same idea, scoped to `caption`: true when the caption's own missing
+   *  reason should stay silent. In practice the caller only ever needs
+   *  this true when `readiness` is ALSO missing — a caption naming a cog
+   *  can never exist without a readiness score, so its own "why" is always
+   *  the exact reason `readiness` already carries, printed either by this
+   *  component's own reason paragraph a few lines up or by the page
+   *  elsewhere. Left false/absent, the caption prints its own reason,
+   *  which matters for a caller with a genuinely independent caption gap
+   *  (`readiness` present, `caption` missing for some other reason). */
+  captionReasonShownElsewhere?: boolean
 }
 
 const VERDICT_KEYS = [
@@ -28,7 +52,14 @@ function verdictKey(index: number) {
   return VERDICT_KEYS[3]
 }
 
-export default function CassetteHero({ readiness, series, todayIso, caption }: CassetteHeroProps) {
+export default function CassetteHero({
+  readiness,
+  series,
+  todayIso,
+  caption,
+  reasonShownElsewhere = false,
+  captionReasonShownElsewhere = false,
+}: CassetteHeroProps) {
   const { t } = useCopy()
   const values = isPresent(series) ? series.value : []
 
@@ -85,23 +116,25 @@ export default function CassetteHero({ readiness, series, todayIso, caption }: C
             </div>
           )}
         </div>
-      // An EMPTY `missing` reason (as opposed to an absent one — `readiness`
-      // is still the missing arm, just with `''` for its reason) is the
-      // caller's own signal that this exact sentence already printed
-      // elsewhere on the same screen (`TodayView.tsx`'s own
-      // `cassetteReasonAlreadyShown` dedup) — render nothing rather than an
-      // empty, oddly-padded paragraph.
-      ) : readiness.missing ? (
+      // `reasonShownElsewhere` is the caller's own explicit signal — never
+      // inferred from the reason string itself — that this exact sentence
+      // already prints elsewhere on the same screen (see `TodayView.tsx`'s
+      // own derivation, which checks what actually renders per day state).
+      ) : !reasonShownElsewhere ? (
         <p style={{ fontSize: 13, color: 'var(--e-quiet)', textAlign: 'center', padding: '0 24px' }}>
           {readiness.missing}
         </p>
       ) : null}
 
-      {(isPresent(caption) || caption.missing) && (
-        <p style={{ fontSize: 13, color: isPresent(caption) ? 'var(--e-mid)' : 'var(--e-quiet)', padding: '12px 24px 0' }}>
-          {isPresent(caption) ? caption.value : caption.missing}
+      {isPresent(caption) ? (
+        <p style={{ fontSize: 13, color: 'var(--e-mid)', padding: '12px 24px 0' }}>
+          {caption.value}
         </p>
-      )}
+      ) : !captionReasonShownElsewhere ? (
+        <p style={{ fontSize: 13, color: 'var(--e-quiet)', padding: '12px 24px 0' }}>
+          {caption.missing}
+        </p>
+      ) : null}
 
       {placement?.basis === 'decile' && (
         <p
