@@ -17,16 +17,7 @@ const base = (over: Partial<TodayModelInputs> = {}): TodayModelInputs => ({
 })
 
 // ---- Thin local helpers for the reward-layer fields (Task 5) --------------
-// `base()`'s own default snapshot carries `training_readiness: 74`, which
-// `readiness90DaySeries` (reusing the SAME array `readiness90DayBest` folds
-// today's reading into, by design) would otherwise silently append to every
-// series here. Neutralised to `null` so a test that only sets
-// `ninetyDayMetrics` observes exactly that array, not that array plus a
-// stray "today" — `buildModel`'s own override still wins whenever a test
-// passes its own `snapshot`.
-const READINESS_NEUTRAL_SNAPSHOT = { ...base().snapshot!, training_readiness: null }
-const buildModel = (over: Partial<TodayModelInputs> = {}) =>
-  buildTodayModel(base({ snapshot: READINESS_NEUTRAL_SNAPSHOT, ...over }))
+const buildModel = (over: Partial<TodayModelInputs> = {}) => buildTodayModel(base(over))
 
 const emptyMetric: DailyMetric = {
   id: 0, user_id: 0, date: null, recorded_at: '', sleep_score: null, hrv_status: null,
@@ -358,11 +349,23 @@ describe('reward-layer fields', () => {
       ],
     })
     expect(isPresent(model.readiness90DaySeries)).toBe(true)
-    expect(isPresent(model.readiness90DaySeries) && model.readiness90DaySeries.value).toEqual([61, 78])
+    // `base()`'s default snapshot carries `training_readiness: 74` (today's
+    // reading) — the trailing 74 here is not fixture noise. It is the same
+    // fold-in `readiness90DayBest` relies on (see that field's own comment):
+    // today's own reading is deliberately included so a personal best set
+    // TODAY is never reported as "off" a best that excludes it. Do not
+    // "fix" this back to `[61, 78]`.
+    expect(isPresent(model.readiness90DaySeries) && model.readiness90DaySeries.value).toEqual([61, 78, 74])
   })
 
   it('withholds the series rather than returning an empty array', () => {
-    const model = buildModel({ ninetyDayMetrics: [] })
+    // Also nulls out today's own reading (present in `base()`'s default
+    // snapshot) — otherwise the fold-in exercised by the test above would
+    // leave a single-entry series here instead of a genuinely empty one.
+    const model = buildModel({
+      ninetyDayMetrics: [],
+      snapshot: { ...base().snapshot!, training_readiness: null },
+    })
     expect(isPresent(model.readiness90DaySeries)).toBe(false)
   })
 

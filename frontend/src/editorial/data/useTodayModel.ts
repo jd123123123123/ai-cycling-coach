@@ -484,7 +484,10 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
   const missedYesterdayPlan = weekPlan?.missed_yesterday ?? null
   const missedYesterday: Value<{ title: string; dateIso: string }> = fromNullable(
     missedYesterdayPlan
-      ? { title: missedYesterdayPlan.title_de ?? missedYesterdayPlan.title, dateIso: missedYesterdayPlan.date }
+      // `||`, not `??` — matches the same fallback already used at the
+      // sibling call sites (TodayTab.tsx, PlanTab.tsx): an empty-string
+      // `title_de` also falls back to `title`, not just null/undefined.
+      ? { title: missedYesterdayPlan.title_de || missedYesterdayPlan.title, dateIso: missedYesterdayPlan.date }
       : null,
     t('missedYesterdayNone'),
   )
