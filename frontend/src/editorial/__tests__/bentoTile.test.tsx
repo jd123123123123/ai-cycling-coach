@@ -339,4 +339,107 @@ describe('BentoTile', () => {
       expect(lowCx).toBeLessThanOrEqual(127)
     })
   })
+
+  // A line on its own says nothing: 48 bpm is only meaningful against the
+  // range you normally sit in. These three kinds all exist to draw the
+  // reference, not just the reading.
+  describe('charts that carry a reference', () => {
+    const band = { low: 44, high: 52 }
+
+    it('band draws the normal range, not only the reading', () => {
+      render(
+        <BentoTile
+          label="RUHEPULS"
+          value={present({ text: '48', unit: 'bpm' })}
+          chart={present({ kind: 'band', ...band, today: 48 })}
+        />,
+      )
+      const zone = screen.getByTestId('bento-chart-band')
+      expect(Number(zone.getAttribute('width'))).toBeGreaterThan(0)
+    })
+
+    it('band places a reading above the range outside it, never clamped onto the edge', () => {
+      const { container } = render(
+        <BentoTile
+          label="RUHEPULS"
+          value={present({ text: '61', unit: 'bpm' })}
+          chart={present({ kind: 'band', ...band, today: 61 })}
+        />,
+      )
+      const zone = container.querySelector('[data-testid="bento-chart-band"]')!
+      const dot = container.querySelector('[data-testid="bento-chart-highlight"]')!
+      const bandRight = Number(zone.getAttribute('x')) + Number(zone.getAttribute('width'))
+      expect(Number(dot.getAttribute('cx'))).toBeGreaterThan(bandRight)
+    })
+
+    it('deviation draws one column per day plus the band behind them', () => {
+      render(
+        <BentoTile
+          label="RUHEPULS"
+          value={present({ text: '48', unit: 'bpm' })}
+          chart={present({ kind: 'deviation', points: [49, 48, 51, 47, 48, 46, 48], ...band, highlightIndex: 6 })}
+        />,
+      )
+      expect(screen.getAllByTestId('bento-chart-point')).toHaveLength(7)
+      expect(screen.getAllByTestId('bento-chart-highlight')).toHaveLength(1)
+      expect(screen.getByTestId('bento-chart-band')).toBeTruthy()
+    })
+
+    it('deviation keeps a value far outside the band inside the drawing box', () => {
+      const { container } = render(
+        <BentoTile
+          label="RUHEPULS"
+          value={present({ text: '70', unit: 'bpm' })}
+          chart={present({ kind: 'deviation', points: [48, 48, 70], ...band, highlightIndex: 2 })}
+        />,
+      )
+      for (const bar of container.querySelectorAll('[data-testid="bento-chart-point"]')) {
+        const y = Number(bar.getAttribute('y'))
+        const h = Number(bar.getAttribute('height'))
+        expect(Number.isNaN(y)).toBe(false)
+        expect(y).toBeGreaterThanOrEqual(0)
+        expect(y + h).toBeLessThanOrEqual(30.01)
+      }
+    })
+
+    it('stages draws one segment per sleep stage and accents exactly one', () => {
+      render(
+        <BentoTile
+          label="SCHLAF"
+          value={present({ text: '7:42' })}
+          chart={present({
+            kind: 'stages',
+            segments: [
+              { label: 'deep', seconds: 4920 },
+              { label: 'rem', seconds: 6480 },
+              { label: 'light', seconds: 15120 },
+              { label: 'awake', seconds: 1200 },
+            ],
+            highlightIndex: 0,
+          })}
+        />,
+      )
+      expect(screen.getAllByTestId('bento-chart-point')).toHaveLength(4)
+      expect(screen.getAllByTestId('bento-chart-highlight')).toHaveLength(1)
+    })
+
+    it('stages drops zero-length stages rather than drawing a sliver of nothing', () => {
+      render(
+        <BentoTile
+          label="SCHLAF"
+          value={present({ text: '7:42' })}
+          chart={present({
+            kind: 'stages',
+            segments: [
+              { label: 'deep', seconds: 4920 },
+              { label: 'rem', seconds: 0 },
+              { label: 'light', seconds: 15120 },
+            ],
+            highlightIndex: 0,
+          })}
+        />,
+      )
+      expect(screen.getAllByTestId('bento-chart-point')).toHaveLength(2)
+    })
+  })
 })

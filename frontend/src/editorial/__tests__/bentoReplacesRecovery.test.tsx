@@ -130,13 +130,14 @@ describe('Change 2: the tall tile earns its height', () => {
     expect(tall!.textContent).toContain('RUHEPULS')
     const points = tall!.querySelectorAll('[data-testid="bento-chart-point"]')
     expect(points.length).toBeGreaterThan(2)
-    // The other band-chart tiles (HRV, SCHLAF) stay single-height and keep
-    // their one-point band — Body Battery is excluded here, since it draws
-    // a 2-point wake→now spark regardless of tall state (a real, honest
-    // reading, unaffected by this change).
+    // HRV stays single-height and keeps its one-point band. SCHLAF is NOT
+    // checked here any more: it now draws a `stages` composition chart
+    // (deep/REM/light/awake), so it legitimately renders one point per
+    // stage — see BentoTile's `stages` kind. Body Battery is excluded for
+    // the same reason it always was: a 2-point wake→now spark regardless of
+    // tall state, a real reading unaffected by this change.
     const others = tiles.filter((t) => (
-      t.getAttribute('data-accent') !== 'true'
-      && (t.textContent?.includes('HRV') || t.textContent?.includes('SCHLAF'))
+      t.getAttribute('data-accent') !== 'true' && t.textContent?.includes('HRV')
     ))
     expect(others.length).toBeGreaterThan(0)
     for (const other of others) {

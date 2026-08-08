@@ -961,7 +961,24 @@ function TodayViewBody({ model, control, profile }: {
   // same gap the deleted "01 Right Now" ring's own Delta line used to name)
   // — no honest chart can be built, so this reuses that exact reason rather
   // than inventing a sleep-specific one.
-  const bentoSleepChart: Value<TileChart> = isPresent(model.sleep) ? missing(t('sleepDeltaMissing')) : missing(model.sleep.missing)
+  // Sleep has no delta and no band, but it does have the thing that actually
+  // says something about a night: how the total split across the stages.
+  // Drawn as `stages` with deep accented, since deep is the stage the
+  // coaching keys off. Falls back to its own missing reason when Garmin
+  // recorded a total but no breakdown — never a fabricated split.
+  const bentoSleepStages = isPresent(model.sleep)
+    ? [
+      { label: 'deep', seconds: model.sleep.value.deepS ?? 0 },
+      { label: 'rem', seconds: model.sleep.value.remS ?? 0 },
+      { label: 'light', seconds: model.sleep.value.lightS ?? 0 },
+      { label: 'awake', seconds: model.sleep.value.awakeS ?? 0 },
+    ].filter((s) => s.seconds > 0)
+    : []
+  const bentoSleepChart: Value<TileChart> = !isPresent(model.sleep)
+    ? missing(model.sleep.missing)
+    : bentoSleepStages.length > 0
+      ? present({ kind: 'stages', segments: bentoSleepStages, highlightIndex: 0 })
+      : missing(t('sleepDeltaMissing'))
 
   // OWNER RULING 2026-08-07: "01 Recovery"/"01 Right Now" carried two things
   // the tiles above don't — the per-metric delta ("+6"/"−2") and the band's
@@ -982,12 +999,29 @@ function TodayViewBody({ model, control, profile }: {
   // `TodayModel`, so their tiles have no `tallChart` at all and fall back to
   // their regular band (or missing reason) when they end up tall instead,
   // rather than fabricate a trend that was never measured.
+  //
+  // Drawn as `deviation`, not `spark`: a bare line of seven resting-HR
+  // values tells you nothing, because 48 is only meaningful against the band
+  // you normally sit in. Handing the chart the band as well turns each day
+  // into a column measured off your own normal range — direction, distance
+  // and the week's shape, all readable at a glance. Falls back to a plain
+  // column run when no band is on record, rather than inventing one.
   const bentoRestingHrTallChart: Value<TileChart> = isPresent(model.recentRestingHr)
-    ? present({
-      kind: 'spark',
-      points: model.recentRestingHr.value.map((d) => d.bpm),
-      highlightIndex: model.recentRestingHr.value.length - 1,
-    })
+    ? present(
+      bentoRestingHrBand
+        ? {
+          kind: 'deviation',
+          points: model.recentRestingHr.value.map((d) => d.bpm),
+          low: bentoRestingHrBand.low,
+          high: bentoRestingHrBand.high,
+          highlightIndex: model.recentRestingHr.value.length - 1,
+        }
+        : {
+          kind: 'bars',
+          points: model.recentRestingHr.value.map((d) => d.bpm),
+          highlightIndex: model.recentRestingHr.value.length - 1,
+        },
+    )
     : missing(model.recentRestingHr.missing)
 
   const bentoEntries: BentoEntry[] = [
@@ -1215,13 +1249,11 @@ function TodayViewBody({ model, control, profile }: {
               </span>
               {isPresent(model.sleep) ? (
                 <>
-                  <div style={{ width: '100%', height: 10, display: 'flex', borderRadius: 2, overflow: 'hidden' }}>
-                    {sleepParts(model.sleep.value, t).map((p) => (
-                      p.seconds != null && p.seconds > 0
-                        ? <div key={p.key} style={{ flex: p.seconds, height: 10, background: p.color }} />
-                        : null
-                    ))}
-                  </div>
+                  {/* The proportional bar that used to sit here is now the
+                      SCHLAF tile's own `stages` chart a few rows up — drawing
+                      it twice on one screen said the same thing twice. What
+                      the tile can't carry is the per-stage DURATION, so that
+                      is what stays: the numbers behind the picture. */}
                   <div style={{ width: '100%', display: 'flex' }}>
                     {sleepParts(model.sleep.value, t).map((p) => (
                       <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>

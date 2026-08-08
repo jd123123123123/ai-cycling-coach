@@ -13,6 +13,28 @@ export type TileChart =
   | { kind: 'spark'; points: number[]; highlightIndex: number; star?: boolean }
   | { kind: 'bars'; points: number[]; highlightIndex: number; star?: boolean }
   | { kind: 'band'; low: number; high: number; today: number }
+  /**
+   * The informative one, and the default for any metric that has a personal
+   * range. A line on its own says nothing — 68 is only meaningful against
+   * the band you normally sit in. So the band is drawn as a shaded zone and
+   * each day is a column measured against it: you read direction (above or
+   * below), distance (how far), and the week's shape, in one glance.
+   */
+  | {
+      kind: 'deviation'
+      points: number[]
+      low: number
+      high: number
+      highlightIndex: number
+      star?: boolean
+    }
+  /**
+   * Composition, for a metric whose story is how a total splits rather than
+   * how it moved: sleep's deep/REM/light/awake. One segment is the one that
+   * matters (deep) and carries the accent; the rest stay neutral, so the
+   * same "exactly one thing is highlighted" rule holds here too.
+   */
+  | { kind: 'stages'; segments: { label: string; seconds: number }[]; highlightIndex: number }
 
 export interface BentoTileProps {
   label: string
@@ -70,21 +92,213 @@ function TileChartView({ chart, accent, tall }: { chart: TileChart; accent?: boo
   const H = tall ? 120 : 30
   const svgSize = tall ? { width: '100%', height: '100%' } : { width: W, height: H }
 
-  if (chart.kind === 'band') {
-    const span = Math.max(chart.high - chart.low, 1)
-    const x = ((chart.today - chart.low) / span) * W
+  if (chart.kind === 'stages') {
+    const segs = chart.segments.filter((s) => s.seconds > 0)
+    const total = segs.reduce((sum, s) => sum + s.seconds, 0)
+    if (segs.length === 0 || total <= 0) return null
+    const gap = 2
+    const usable = Math.max(W - gap * (segs.length - 1), 1)
+    let x = 0
+    const barH = tall ? Math.min(H * 0.42, 54) : Math.min(H, 14)
+    const yTop = tall ? H / 2 - barH / 2 : H - barH
+
     return (
       <svg {...svgSize} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-        <rect x={0} y={H / 2 - 1} width={W} height={2} rx={1} fill={neutral} />
+        {segs.map((s, i) => {
+          const w = Math.max((s.seconds / total) * usable, 1)
+          const isHot = i === chart.highlightIndex
+          const rect = (
+            <rect
+              key={i}
+              data-testid="bento-chart-point"
+              {...(isHot ? { 'data-highlight': true } : {})}
+              x={x}
+              y={yTop}
+              width={w}
+              height={barH}
+              rx={2}
+              fill={isHot ? hot : neutral}
+              opacity={isHot ? 1 : 0.6}
+            />
+          )
+          x += w + gap
+          return rect
+        })}
+        {/* the highlight duplicate keeps this chart obeying the same
+            one-point-highlighted contract every other kind here follows */}
+        {segs[chart.highlightIndex] != null && (
+          <rect
+            data-testid="bento-chart-highlight"
+            x={segs.slice(0, chart.highlightIndex).reduce((acc, s) => acc + (s.seconds / total) * usable + gap, 0)}
+            y={yTop}
+            width={Math.max((segs[chart.highlightIndex].seconds / total) * usable, 1)}
+            height={barH}
+            rx={2}
+            fill={hot}
+          />
+        )}
+      </svg>
+    )
+  }
+
+  if (chart.kind === 'deviation') {
+    const pts = chart.points
+    const lo = Math.min(chart.low, chart.high)
+    const hi = Math.max(chart.low, chart.high)
+    // Scale to whichever is wider — the band or the data — so a value far
+    // outside the band still lands inside the box instead of being clipped,
+    // and a quiet week doesn't get magnified into drama.
+    const dMin = Math.min(lo, ...pts)
+    const dMax = Math.max(hi, ...pts)
+    const pad = Math.max((dMax - dMin) * 0.18, 1)
+    const vMin = dMin - pad
+    const vMax = dMax + pad
+    const y = (v: number) => H - ((v - vMin) / Math.max(vMax - vMin, 1)) * H
+    const slot = W / Math.max(pts.length, 1)
+    const barW = Math.max(slot - (tall ? 5 : 3), 2)
+    const bandTop = y(hi)
+    const bandBottom = y(lo)
+    const mid = (bandTop + bandBottom) / 2
+
+    return (
+      <svg {...svgSize} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+        {/* your normal range — the reference that makes every column mean something */}
+        <rect
+          data-testid="bento-chart-band"
+          x={0}
+          y={bandTop}
+          width={W}
+          height={Math.max(bandBottom - bandTop, 1)}
+          fill={neutral}
+          opacity={accent ? 0.45 : 0.3}
+        />
+        {pts.map((v, i) => {
+          const isHot = i === chart.highlightIndex
+          const vy = y(v)
+          const top = Math.min(vy, mid)
+          const height = Math.max(Math.abs(vy - mid), 1.5)
+          return (
+            <g key={i}>
+              <rect
+                data-testid="bento-chart-point"
+                x={i * slot + (slot - barW) / 2}
+                y={top}
+                width={barW}
+                height={height}
+                rx={Math.min(barW / 2, 2)}
+                fill={isHot ? hot : neutral}
+                opacity={isHot ? 1 : 0.75}
+              />
+              {isHot && (
+                <>
+                  <rect
+                    data-testid="bento-chart-highlight"
+                    x={i * slot + (slot - barW) / 2}
+                    y={top}
+                    width={barW}
+                    height={height}
+                    rx={Math.min(barW / 2, 2)}
+                    fill={hot}
+                  />
+                  <circle cx={i * slot + slot / 2} cy={vy} r={tall ? 3.5 : 2.5} fill={hot} />
+                </>
+              )}
+              {isHot && chart.star && (
+                <text
+                  data-testid="bento-chart-star"
+                  x={i * slot + slot / 2}
+                  y={Math.max(vy - 6, 8)}
+                  fontSize={tall ? 11 : 9}
+                  textAnchor="middle"
+                  fill={hot}
+                >
+                  ★
+                </text>
+              )}
+            </g>
+          )
+        })}
+      </svg>
+    )
+  }
+
+  if (chart.kind === 'band') {
+    // The band itself has to be VISIBLE or the dot has nothing to mean. The
+    // old version drew a flat rule and a dot on it: the reading's position
+    // was plotted, but the range it was being judged against was invisible,
+    // so the chart argued nothing. Here the normal range is a shaded segment
+    // of the track, and today's marker reads as inside it, above it, or
+    // below it without needing the numbers.
+    const lo = Math.min(chart.low, chart.high)
+    const hi = Math.max(chart.low, chart.high)
+    // Extend the track past whichever is more extreme — the band or today's
+    // reading — so a value outside the band is still drawn outside it rather
+    // than clamped onto the edge and silently misreported as "at the limit".
+    const tMin = Math.min(lo, chart.today)
+    const tMax = Math.max(hi, chart.today)
+    const pad = Math.max((tMax - tMin) * 0.25, (hi - lo) * 0.25, 1)
+    const vMin = tMin - pad
+    const vMax = tMax + pad
+    const px = (v: number) => ((v - vMin) / Math.max(vMax - vMin, 1)) * W
+    // Tall tiles turn the range on its side: a vertical scale filling the
+    // whole tile, your normal range as a shaded zone on it, today's reading
+    // as a full-width rule across it. Same information as the horizontal
+    // track, but it uses the height the tall slot actually hands us instead
+    // of leaving two thirds of the brightest tile on the screen empty.
+    if (tall) {
+      const py = (v: number) => H - ((v - vMin) / Math.max(vMax - vMin, 1)) * H
+      const todayY = Math.max(3, Math.min(H - 3, py(chart.today)))
+      const bandTop = py(hi)
+      const bandBottom = py(lo)
+      return (
+        <svg {...svgSize} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+          <rect x={0} y={0} width={W} height={H} rx={3} fill={neutral} opacity={0.22} />
+          <rect
+            data-testid="bento-chart-band"
+            x={0}
+            y={bandTop}
+            width={W}
+            height={Math.max(bandBottom - bandTop, 2)}
+            rx={3}
+            fill={neutral}
+          />
+          <rect data-testid="bento-chart-highlight" x={0} y={todayY - 2} width={W} height={4} rx={2} fill={hot} />
+          <circle data-testid="bento-chart-point" data-highlight cx={W - 10} cy={todayY} r={6} fill={hot} />
+        </svg>
+      )
+    }
+
+    const cy = H / 2
+    const trackH = 5
+    const r = 4.5
+
+    return (
+      <svg {...svgSize} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+        <rect x={0} y={cy - trackH / 2} width={W} height={trackH} rx={trackH / 2} fill={neutral} opacity={0.35} />
+        <rect
+          data-testid="bento-chart-band"
+          x={px(lo)}
+          y={cy - trackH / 2}
+          width={Math.max(px(hi) - px(lo), 2)}
+          height={trackH}
+          rx={trackH / 2}
+          fill={neutral}
+        />
         <circle
           data-testid="bento-chart-point"
           data-highlight
-          cx={Math.max(3, Math.min(W - 3, x))}
-          cy={H / 2}
-          r={4}
+          cx={Math.max(r, Math.min(W - r, px(chart.today)))}
+          cy={cy}
+          r={r}
           fill={hot}
         />
-        <circle data-testid="bento-chart-highlight" cx={Math.max(3, Math.min(W - 3, x))} cy={H / 2} r={4} fill={hot} />
+        <circle
+          data-testid="bento-chart-highlight"
+          cx={Math.max(r, Math.min(W - r, px(chart.today)))}
+          cy={cy}
+          r={r}
+          fill={hot}
+        />
       </svg>
     )
   }
