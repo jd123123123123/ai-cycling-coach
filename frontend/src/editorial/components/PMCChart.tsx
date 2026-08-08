@@ -117,6 +117,30 @@ export default function PMCChart({ series, days }: { series: Value<PmcPoint[]>; 
                 />
               )
             })}
+            {/* Today, marked at rest. Without this the three lines end in
+                mid-air and nothing says which end is now — the same "a chart
+                has to argue one point" rule the bento tiles follow. Hidden
+                while scrubbing, so the scrub's own dots are the only marks
+                competing for the eye at that moment. */}
+            {scrubIndex == null && points.length > 0 && lines.map((l) => {
+              const end = l.coords[l.coords.length - 1]
+              return (
+                <circle
+                  key={`now-${l.key}`}
+                  data-pmc-now={l.key}
+                  cx={end.x}
+                  cy={end.y}
+                  r={tap.isDimmed(l.key) ? 2.5 : 3.5}
+                  fill={tap.isDimmed(l.key) ? 'var(--d-2)' : l.color}
+                  style={{
+                    opacity: on ? 1 : 0,
+                    transition: reduced
+                      ? undefined
+                      : `opacity 200ms ${MOTION_EASE} ${MOTION_DURATION_MS}ms`,
+                  }}
+                />
+              )
+            })}
             {scrubIndex != null && (
               <>
                 <line

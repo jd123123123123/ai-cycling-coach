@@ -2,9 +2,10 @@ import { act } from 'react'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Bars from '../components/Bars'
+import PMCChart from '../components/PMCChart'
 import WeekRail from '../components/WeekRail'
 import ZoneRows from '../components/ZoneRows'
-import { present } from '../data/value'
+import { missing, present } from '../data/value'
 
 afterEach(cleanup)
 
@@ -111,5 +112,26 @@ describe('reduced motion disables the transition entirely', () => {
     for (const bar of bars) {
       expect((bar as HTMLElement).style.transition).toBe('')
     }
+  })
+})
+
+describe('PMCChart marks today at rest', () => {
+  const series = Array.from({ length: 42 }, (_, i) => ({
+    date: `2026-06-${String((i % 28) + 1).padStart(2, '0')}`,
+    ctl: 44 + i * 0.5,
+    atl: 40 + i * 0.7,
+    tsb: 4 - i * 0.2,
+  }))
+
+  it('draws a now-dot on every line without any interaction', () => {
+    // Three lines (fitness, fatigue, form) each get their own end marker, so
+    // the chart says which end is today instead of trailing off into air.
+    render(<PMCChart series={present(series)} days={42} />)
+    expect(document.querySelectorAll('[data-pmc-now]')).toHaveLength(3)
+  })
+
+  it('withholds the now-dots when there is no series to end', () => {
+    render(<PMCChart series={missing('Noch keine Historie.')} days={42} />)
+    expect(document.querySelectorAll('[data-pmc-now]')).toHaveLength(0)
   })
 })
