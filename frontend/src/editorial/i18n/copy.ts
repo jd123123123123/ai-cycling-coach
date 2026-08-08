@@ -660,20 +660,6 @@ export const COPY = {
   tomorrowLineWithTime: { de: 'Morgen {title} · {time}', en: 'Tomorrow {title} · {time}' },
 
   // ---- Task 4: CassetteHero (components/CassetteHero.tsx) -----------------
-  cassetteVerdictReady: { de: 'Bereit', en: 'Ready' },
-  cassetteVerdictLoaded: { de: 'Geladen', en: 'Loaded' },
-  cassetteVerdictTired: { de: 'Ermüdet', en: 'Tired' },
-  cassetteVerdictEmpty: { de: 'Leer', en: 'Empty' },
-  cassetteSinceYesterday: { de: 'seit gestern', en: 'since yesterday' },
-  cassetteTypical: { de: 'DEIN SCHNITT', en: 'YOUR USUAL' },
-  cassetteCeiling: { de: 'Deine Decke', en: 'Your ceiling' },
-  cassetteCoarse: {
-    de: 'Noch zu wenig Historie für deinen eigenen Bereich — grobe Einordnung.',
-    en: 'Not enough history for your own range yet — coarse placement.',
-  },
-  cassetteCaptionAhead: { de: 'Heute geht das {teeth}er.', en: 'The {teeth} is in you today.' },
-  cassetteCaptionSpent: { de: 'Nach der Einheit bleibt das {teeth}er.', en: 'After the session, the {teeth} is what is left.' },
-  cassetteCaptionEvening: { de: 'Morgen wieder das {teeth}er, wenn du schläfst.', en: 'The {teeth} again tomorrow, if you sleep.' },
 
   // ---- Task 9: KetteStrip (components/KetteStrip.tsx) — the chain is the
   // streak, the break, and the week's XP bar. `ketteBroken` names the

@@ -15,9 +15,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import TodayView from '../pages/TodayView'
 import { makeTodayModel } from './helpers/makeTodayModel'
-import { present } from '../data/value'
 import type { DayState } from '../state/dayState'
-import type { TodayModel } from '../data/useTodayModel'
 
 afterEach(cleanup)
 
@@ -40,7 +38,7 @@ const STATES: DayState[] = ['rest', 'training', 'trained', 'resting', 'evening']
  */
 function metricMentions(container: HTMLElement, label: string): number {
   return within(container).getAllByText(label, { exact: true })
-    .filter((el) => el.closest('[data-testid="bento-tile"], [data-range-row], [data-live-ring]') != null)
+    .filter((el) => el.closest('[data-testid="big-number-row"], [data-range-row], [data-live-ring]') != null)
     .length
 }
 
@@ -114,49 +112,5 @@ describe('Change 1: the bento replaces 01 Recovery / 01 Right Now', () => {
     expect(screen.getByText('+4 · ÜBER BEREICH')).toBeTruthy()
     // restingHr delta -2, band position 'in'.
     expect(screen.getByText('−2 · IM BEREICH')).toBeTruthy()
-  })
-})
-
-describe('Change 2: the tall tile earns its height', () => {
-  it('when the coach reasons about Ruhepuls, the tall tile is Resting HR and draws its real 7-day series', () => {
-    const model: TodayModel = {
-      ...makeTodayModel({ state: 'rest' }),
-      verdict: present({ headline: 'Ruhig.', body: 'Ruhepuls war niedrig heute — gutes Zeichen.' }),
-    }
-    render(<MemoryRouter><TodayView model={model} /></MemoryRouter>)
-    const tiles = screen.getAllByTestId('bento-tile')
-    const tall = tiles.find((t) => t.getAttribute('data-accent') === 'true')
-    expect(tall).toBeTruthy()
-    expect(tall!.textContent).toContain('RUHEPULS')
-    const points = tall!.querySelectorAll('[data-testid="bento-chart-point"]')
-    expect(points.length).toBeGreaterThan(2)
-    // HRV stays single-height and keeps its one-point band. SCHLAF is NOT
-    // checked here any more: it now draws a `stages` composition chart
-    // (deep/REM/light/awake), so it legitimately renders one point per
-    // stage — see BentoTile's `stages` kind. Body Battery is excluded for
-    // the same reason it always was: a 2-point wake→now spark regardless of
-    // tall state, a real reading unaffected by this change.
-    const others = tiles.filter((t) => (
-      t.getAttribute('data-accent') !== 'true' && t.textContent?.includes('HRV')
-    ))
-    expect(others.length).toBeGreaterThan(0)
-    for (const other of others) {
-      const otherPoints = other.querySelectorAll('[data-testid="bento-chart-point"]')
-      expect(otherPoints.length).toBeLessThanOrEqual(1)
-    }
-  })
-
-  it('when the tall tile has no real series (HRV, the default lead), it falls back to its band honestly', () => {
-    // makeTodayModel's default verdict body names nothing HRV/Sleep/RHR-
-    // specific, so BentoGrid's own "names nothing" rule promotes the first
-    // entry — HRV, which has no `tallChart` anywhere on TodayModel.
-    render(<MemoryRouter><TodayView model={makeTodayModel({ state: 'rest' })} /></MemoryRouter>)
-    const tiles = screen.getAllByTestId('bento-tile')
-    const tall = tiles.find((t) => t.getAttribute('data-accent') === 'true')
-    expect(tall).toBeTruthy()
-    expect(tall!.textContent).toContain('HRV')
-    const points = tall!.querySelectorAll('[data-testid="bento-chart-point"]')
-    // The band's own single dot — never a fabricated multi-point line.
-    expect(points).toHaveLength(1)
   })
 })

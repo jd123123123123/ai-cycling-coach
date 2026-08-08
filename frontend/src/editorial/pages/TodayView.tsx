@@ -1,9 +1,8 @@
 import { Thermometer, Wind } from 'lucide-react'
 import Bars from '../components/Bars'
-import BentoGrid, { type BentoEntry } from '../components/BentoGrid'
+import { rankTiles, type BentoEntry } from '../components/BentoGrid'
 import { type TileChart } from '../components/BentoTile'
-import CassetteHero from '../components/CassetteHero'
-import { COG_TEETH, cogIndexFromReadiness } from '../components/cassetteScale'
+import BigNumbers, { type BigNumberRow } from '../components/BigNumbers'
 import Cover from '../components/Cover'
 import { COVER_PHOTO, QUOTE_PHOTO, TOMORROW_PHOTO } from '../components/plateImagery'
 import BackToSessionDoneSheet from '../components/BackToSessionDoneSheet'
@@ -224,20 +223,6 @@ function TodayViewBody({ model, control, profile }: {
 
   const sessionContext: Value<string> = missing(t('heroSessionContextMissing'))
 
-  // ---- Cassette hero caption, per state ------------------------------------
-  // Names the COG the rider's own readiness maps to today, via the SAME
-  // scale `CassetteHero` uses internally to place the chain
-  // (`cogIndexFromReadiness`) — so the caption's tooth count always matches
-  // the cog the chain visibly sits on, never a second, independent guess.
-  // `trained` looks back on the day just spent ("what is left"); `evening`
-  // looks ahead to tomorrow's reading; every other state reads as a
-  // same-day claim. The actual Value is computed further down, once
-  // `heroNumeralValue` exists — see the dedup comment there.
-  const cassetteCaptionKey = state === 'trained'
-    ? 'cassetteCaptionSpent'
-    : state === 'evening'
-      ? 'cassetteCaptionEvening'
-      : 'cassetteCaptionAhead'
 
   // ---- Hero headline/numeral, per state -----------------------------------
   // Rest has no session to name today, so its headline is the coach's own
@@ -383,63 +368,6 @@ function TodayViewBody({ model, control, profile }: {
   const rcPrimaryReasonAlreadyShown = !isPresent(heroNumeralValue) && !isPresent(rcPrimaryLine)
     && heroNumeralValue.missing === rcPrimaryLine.missing
 
-  // ---- Cassette hero: series/caption/readiness dedup -----------------------
-  // `model.readiness90DaySeries` predates this task's own field-4 (Task 5);
-  // fixtures elsewhere in this suite were built before that task and never
-  // set it, so it can arrive `undefined` on a plain object cast to
-  // `TodayModel` — normalise to an honest missing `Value` here rather than
-  // let `isPresent` throw on a field that was never populated.
-  const cassetteSeries: Value<number[]> = model.readiness90DaySeries ?? missing(t('ninetyDayHistoryMissing'))
-  const cassetteSeriesValues = isPresent(cassetteSeries) ? cassetteSeries.value : []
-  // `model.readiness`'s own missing reason already surfaces on the Cover
-  // above, verbatim, in one of two spots — computed above, in this exact
-  // order. Both checks are gated by where the OTHER Value is actually
-  // RENDERED per day state, not merely by content matching — a bug this
-  // build shipped once already (coordinator review, 2026-08-07): `evening`
-  // never mounts `MetricTrack` (it renders a bespoke lights-out clock block
-  // instead — see the render site below), so on that state
-  // `heroNumeralValue`'s missing reason, even though it IS `model.readiness`
-  // by reference (`mapValue` passes the missing arm through unchanged), is
-  // never actually on screen. Without the state guard, the string
-  // comparison below was always true whenever readiness was missing,
-  // silently suppressing the cassette's own reason for a sentence that had
-  // in fact printed nowhere — ten dim cogs, no chain, no explanation.
-  //  - `heroNumeralValue` (MetricTrack's own numeral): rendered via
-  //    `MetricTrack` on every state EXCEPT `evening` (directly on Rest, and
-  //    on Training/Resting whenever `bodyBatteryNow` falls back to it — see
-  //    its own doc comment: "the reason it prints is the dated one").
-  //  - `rcPrimaryLine` (the RC context row): rendered on every state except
-  //    `trained` and `evening` (see the render site below), UNLESS
-  //    `rcPrimaryReasonAlreadyShown` already suppressed it as a duplicate of
-  //    the FIRST case above — in which case the first case already covers
-  //    this text, so there is nothing further to check.
-  // Handing the cassette the raw `model.readiness` when either is true would
-  // repeat that sentence a third time, so `CassetteHero` gets the REAL
-  // `Value` (never a doctored one) plus an explicit boolean telling it
-  // whether to print its own copy — see `CassetteHero.tsx`'s own
-  // `reasonShownElsewhere` doc comment. When in doubt, this stays false: a
-  // duplicated sentence is a small blemish, a missing one is a broken
-  // contract.
-  const heroNumeralRendersReason = state !== 'evening'
-  const cassetteReasonShownByNumeral = heroNumeralRendersReason && !isPresent(model.readiness) && !isPresent(heroNumeralValue)
-    && heroNumeralValue.missing === model.readiness.missing
-  const cassetteReasonShownByRcLine = !isPresent(model.readiness) && state !== 'trained' && state !== 'evening'
-    && !rcPrimaryReasonAlreadyShown && !isPresent(rcPrimaryLine) && rcPrimaryLine.missing === model.readiness.missing
-  const cassetteReasonShownElsewhere = cassetteReasonShownByNumeral || cassetteReasonShownByRcLine
-  // The caption is meaningless without a readiness score to place on the
-  // cassette, and its own "why" is always the exact reason `readiness`
-  // already carries — printed either by `CassetteHero`'s own reason
-  // paragraph a few lines up (when `!cassetteReasonShownElsewhere`) or by
-  // the page elsewhere (when it is). Either way the caption never needs a
-  // second copy of that same sentence, so its own reason paragraph stays
-  // suppressed via `captionReasonShownElsewhere`, always true here — an
-  // explicit flag `CassetteHero` reads, not an empty-reason `Value` it has
-  // to infer intent from.
-  const cassetteCaption: Value<string> = isPresent(model.readiness)
-    ? present(t(cassetteCaptionKey, {
-        teeth: COG_TEETH[cogIndexFromReadiness(model.readiness.value.score, cassetteSeriesValues).index],
-      }))
-    : missing(model.readiness.missing)
 
   // Find the win, continued: when the secondary RC line IS the true "best
   // in 90 days" claim, it's a real, honest win — give it the day's accent
@@ -1080,6 +1008,21 @@ function TodayViewBody({ model, control, profile }: {
     })
   }
 
+  // The big-number rows reuse the bento entries' own values, labels and
+  // notes — one source for "what the day's readings are", rendered as type
+  // instead of tiles. The lead row is picked by the SAME rule the tiles
+  // used: whichever metric the coach's own reasoning names first
+  // (`rankTiles`), so the emphasis still follows the reasoning rather than
+  // array order.
+  const bigNumberRows: BigNumberRow[] = bentoEntries.map((e) => ({
+    key: e.key,
+    label: e.label,
+    value: e.value,
+    note: e.note,
+  }))
+  const bigNumbersLead = rankTiles(bentoEntries, bentoReason)[0]?.label ?? null
+  const bigNumbersLeadKey = bentoEntries.find((e) => e.label === bigNumbersLead)?.key ?? null
+
   return (
       <main
         data-day-state={state}
@@ -1222,16 +1165,12 @@ function TodayViewBody({ model, control, profile }: {
         </Cover>
 
         <div data-hero-body style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '34px 24px 0 24px' }}>
-          <CassetteHero
-            readiness={model.readiness}
-            series={cassetteSeries}
-            todayIso={new Date().toISOString().slice(0, 10)}
-            caption={cassetteCaption}
-            reasonShownElsewhere={cassetteReasonShownElsewhere}
-            captionReasonShownElsewhere={!isPresent(model.readiness)}
-          />
-          <div style={{ paddingTop: 20, paddingBottom: 26 }}>
-            <BentoGrid entries={bentoEntries} reason={bentoReason} />
+          {/* OWNER RULING 2026-08-08: the photographic Cover carries the
+              screen, and the numbers follow it at size. The cassette that
+              used to sit here is gone — a cog standing in for a body asked
+              the reader to translate, and they shouldn't have to. */}
+          <div style={{ paddingBottom: 26 }}>
+            <BigNumbers rows={bigNumberRows} leadKey={bigNumbersLeadKey} />
           </div>
           {/* Sleep composition (TIEF/REM/LEICHT/WACH) — the one piece of the
               deleted "01 Recovery" section the bento does NOT carry (no tile
