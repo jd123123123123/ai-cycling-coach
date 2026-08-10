@@ -1,0 +1,80 @@
+/* frontend/src/editorial/archive/archive.css
+ *
+ * LAYOUT ONLY. Every colour token lives in tokens.css beside EDITORIAL II's,
+ * because one file naming colours is what `isolation.test.ts` protects — a
+ * second declaring its own hexes is the drift that guard exists to catch.
+ *
+ * Transcribed from pencil-new.pen frames `A · MONTH · 00…05`. Values are the
+ * pen's own — do not "improve" them here; change the pen and re-transcribe.
+ *
+ * Scoped under .archive-root so nothing leaks into :root or EDITORIAL II's
+ * palette, the same isolation rule the rest of this tree obeys.
+ *
+ * Two hues by design. Gold marks THE ONE highlighted thing on a screen; an
+ * accent used everywhere marks nothing. Cool carries insight and the prior
+ * period. Gold/cool is also the most colour-vision-deficiency-robust pair —
+ * blue survives protanopia and deuteranopia, red/green does not, and ~8% of
+ * men are affected.
+ */
+.archive-root {
+
+  --ar-num: "Anton", system-ui, sans-serif;
+  --ar-serif: "Instrument Serif", Georgia, serif;
+  --ar-sans: "Archivo", system-ui, sans-serif;
+
+  /* the pen's scale, after the type floor was raised — nothing below 11px */
+  --ar-t-hero: 78px;
+  --ar-t-lead: 21px;
+  --ar-t-body: 16.5px;
+  --ar-t-label: 13.5px;
+  --ar-t-micro: 12px;
+
+  background: var(--ar-ground);
+  color: var(--ar-ink);
+  font-family: var(--ar-sans);
+  width: 100%;
+  max-width: 390px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* One continuous scroll with snap points: the chapters are sections of a
+   story, not steps of a wizard, so the forward affordance is a scroll hint
+   rather than a button that competes with the deep link beside it. */
+.archive-deck {
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+}
+.archive-deck::-webkit-scrollbar { display: none; }
+
+.archive-chapter {
+  min-height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* the pen's Wrap: 24px sides, 18px gap */
+.ar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0 24px;
+  width: 100%;
+}
+
+.ar-plot { touch-action: pan-y; cursor: crosshair; }
+
+@keyframes arDrift {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50%      { transform: translateY(4px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archive-chapter *, .archive-root * { animation: none !important; transition: none !important; }
+}

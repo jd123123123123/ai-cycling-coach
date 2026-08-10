@@ -241,3 +241,28 @@
    * same dial at 26%, so it is a value this system owns, not a new concept. */
   --st-a26: color-mix(in srgb, var(--st-active) 26%, transparent);
 }
+
+/* ── Archive deck ────────────────────────────────────────────────────────
+ * Transcribed from pencil-new.pen frames `A · MONTH · 00…05`. Scoped under
+ * .archive-root so it cannot reach EDITORIAL II's palette or :root.
+ *
+ * Two hues on purpose. Gold marks THE ONE highlighted thing on a screen; an
+ * accent used everywhere marks nothing. Cool carries insight and the prior
+ * period. Gold/cool is also the most colour-vision-deficiency-robust pair —
+ * blue survives protanopia and deuteranopia where red/green does not, and
+ * roughly 8% of men are affected.
+ */
+.archive-root {
+  --ar-ground: #0D0B06;
+  --ar-lift: #141109;
+  --ar-gold: #FFD166;
+  --ar-gold-dim: #FFD16652;
+  --ar-gold-ghost: #FFD16617;
+  --ar-cool: #7FD4E8;
+  --ar-cool-dim: #7FD4E852;
+  --ar-ink: #FFFFFF;
+  --ar-ink-2: #A8AEB8;
+  --ar-quiet: #6E7681;
+  --ar-rule: #FFFFFF1F;
+  --ar-rule-soft: #FFFFFF0F;
+}

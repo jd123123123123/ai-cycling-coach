@@ -57,6 +57,7 @@ const RouteRehearsalView = lazyWithRetry(() => import('./pages/RouteRehearsalVie
 const EditorialTodayPage = lazyWithRetry(() => import('./editorial/pages/TodayPage'))
 const EditorialSessionDetailPage = lazyWithRetry(() => import('./editorial/pages/SessionDetailPage'))
 const EditorialTabPlate = lazyWithRetry(() => import('./editorial/pages/TabPlate'))
+const EditorialArchiveDeck = lazyWithRetry(() => import('./editorial/archive/ArchiveDeckPage'))
 
 function App() {
   return (
@@ -295,6 +296,7 @@ function AppRoutes() {
               older link still resolves rather than 404ing. */}
           <Route path="/e/session" element={<ProtectedRoute checkOnboarding><EditorialSessionDetailPage /></ProtectedRoute>} />
           <Route path="/e/session/:id" element={<ProtectedRoute checkOnboarding><EditorialSessionDetailPage /></ProtectedRoute>} />
+          <Route path="/e/archive" element={<ProtectedRoute checkOnboarding><EditorialArchiveDeck /></ProtectedRoute>} />
           <Route path="/e/:tab" element={<ProtectedRoute checkOnboarding><EditorialTabPlate /></ProtectedRoute>} />
 
           {/* Default redirect */}
