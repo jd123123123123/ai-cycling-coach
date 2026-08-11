@@ -142,52 +142,13 @@ export default function MorningWrapView({ model }: { model: MorningWrapModel }) 
         </div>
       </Cover>
 
-      {/* ── Hero Body: what the night actually means ────────────────── */}
-      <section style={{ ...PAD, paddingTop: 12, paddingBottom: 24 }}>
-        <Statement claim={m.nightClaim} />
-      </section>
-
-      {/* ── Brief Strip: the verdict, before any evidence ───────────── */}
+      {/* ── Brief Strip (lifted above the night's detail: the verdict is
+          what a rider came for at 06:32): the verdict, before any evidence ───────────── */}
       <section style={{ ...PAD, paddingBottom: 26 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16 }}>
           <Kicker>This morning's brief</Kicker>
           <Kicker>Body · Training · Today</Kicker>
         </div>
-
-        {!isPresent(m.brief) && (
-          <p data-testid="brief-missing" style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', lineHeight: 1.45, color: 'var(--e-quiet)', margin: 0 }}>
-            {m.brief.missing}
-          </p>
-        )}
-        {isPresent(m.brief) && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div style={{ gridRow: 'span 2', display: 'flex', flexDirection: 'column', gap: 10, padding: 16, borderRadius: 16, background: 'var(--e-glass)', border: '1px solid var(--e-rule)' }}>
-              <Kicker tone="accent">Readiness</Kicker>
-              <span style={{ display: 'flex', alignItems: 'flex-end', gap: 7 }}>
-                <span style={{ fontFamily: 'var(--e-display)', fontSize: 54, fontWeight: 800, lineHeight: 0.86, letterSpacing: '-0.04em', color: 'var(--st-active)' }}>
-                  {m.brief.value.readiness.value}
-                </span>
-                <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, color: 'var(--e-mid)', paddingBottom: 5 }}>
-                  {m.brief.value.readiness.delta}
-                </span>
-              </span>
-              <span style={{ marginTop: 'auto', fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--e-quiet)' }}>
-                {m.brief.value.readiness.band}
-              </span>
-            </div>
-
-            {m.brief.value.tiles.map((t) => (
-              <div key={t.label} style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: 14, borderRadius: 16, background: 'var(--e-glass)', border: '1px solid var(--e-rule)' }}>
-                <Kicker>{t.label}</Kicker>
-                <span style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <span style={{ fontFamily: 'var(--e-display)', fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: t.tone === 'accent' ? 'var(--st-active)' : 'var(--e-ink)' }}>{t.value}</span>
-                  {t.unit && <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', color: 'var(--e-quiet)' }}>{t.unit}</span>}
-                </span>
-                <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', color: 'var(--e-quiet)' }}>{t.sub}</span>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* THE CALL — the one instruction, given early and stated plainly.
             Withheld, it still says why: silence would read as "no view", when
@@ -217,13 +178,58 @@ export default function MorningWrapView({ model }: { model: MorningWrapModel }) 
             </span>
           </div>
         )}
+
+        <div style={{ height: 14 }} />
+        {!isPresent(m.brief) && (
+          <p data-testid="brief-missing" style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', lineHeight: 1.45, color: 'var(--e-quiet)', margin: 0 }}>
+            {m.brief.missing}
+          </p>
+        )}
+        {isPresent(m.brief) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Readiness is the day's one number, so it takes the full width
+                rather than competing inside a grid cell. */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, padding: '14px 16px', borderRadius: 16, background: 'var(--e-glass)', border: '1px solid var(--e-rule)' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <Kicker tone="accent">Readiness</Kicker>
+                <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', fontWeight: 600, letterSpacing: '0.04em', color: 'var(--e-quiet)' }}>
+                  {m.brief.value.readiness.band}
+                </span>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+                <span style={{ fontFamily: 'var(--e-display)', fontSize: 46, fontWeight: 800, lineHeight: 0.86, letterSpacing: '-0.04em', color: 'var(--st-active)' }}>
+                  {m.brief.value.readiness.value}
+                </span>
+                <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', fontWeight: 800, color: 'var(--e-mid)', paddingBottom: 4 }}>
+                  {m.brief.value.readiness.delta}
+                </span>
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {m.brief.value.tiles.slice(0, 4).map((t) => (
+              <div key={t.label} style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: 14, borderRadius: 16, background: 'var(--e-glass)', border: '1px solid var(--e-rule)' }}>
+                <Kicker>{t.label}</Kicker>
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontFamily: 'var(--e-display)', fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: t.tone === 'accent' ? 'var(--st-active)' : 'var(--e-ink)' }}>{t.value}</span>
+                  {t.unit && <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', color: 'var(--e-quiet)' }}>{t.unit}</span>}
+                </span>
+                <span style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-micro)', color: 'var(--e-quiet)' }}>{t.sub}</span>
+              </div>
+            ))}
+            </div>
+          </div>
+        )}
+
       </section>
 
       {/* ── 01 The Night: four signals against the rider's own range ── */}
       <section data-section="01" style={{ ...PAD, paddingBottom: 26 }}>
         <SecHead index="01" title="The Night" sub={isPresent(m.sleepWindow) ? `${m.sleepWindow.value.lightsOut[0]} → ${m.sleepWindow.value.awake[0]}` : undefined} />
         <div style={{ height: 12 }} />
-        <Statement claim={m.signalsClaim} />
+        <Statement claim={m.nightClaim} />
+        <div style={{ height: 14 }} />
+        <Statement claim={m.signalsClaim} showReason={false} />
         <div style={{ height: 8 }} />
         {m.signals.map((s, i) => <SignalRow key={i} signal={s} index={i} />)}
         <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 14 }}>
@@ -306,7 +312,7 @@ export default function MorningWrapView({ model }: { model: MorningWrapModel }) 
       {isPresent(m.close) && (
         <section style={{ ...PAD, paddingBottom: 40, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Kicker>{m.close.value.kicker}</Kicker>
-          <p style={{ fontFamily: 'var(--e-display)', fontSize: 27, fontWeight: 800, lineHeight: 1.12, letterSpacing: '-0.03em', color: 'var(--e-ink)', margin: 0 }}>
+          <p style={{ fontFamily: 'var(--e-display)', fontSize: 23, fontWeight: 800, lineHeight: 1.14, letterSpacing: '-0.03em', color: 'var(--e-ink)', margin: 0 }}>
             {m.close.value.claim}
           </p>
           <p style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', lineHeight: 1.5, color: 'var(--e-mid)', margin: 0 }}>
