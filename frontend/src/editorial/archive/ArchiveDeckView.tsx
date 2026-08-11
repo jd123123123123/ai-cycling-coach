@@ -4,6 +4,13 @@ import PowerCurve, { type CurvePoint } from './charts/PowerCurve'
 import FitnessForm, { type PmcDay } from './charts/FitnessForm'
 import Projection from './charts/Projection'
 import ScrollHint from './ScrollHint'
+// The `--ar-*` palette lives in tokens.css (archive.css is layout only, by the
+// rule isolation.test.ts enforces), and this deck is one of the two editorial
+// screens that never mounts EditorialRoot — the only other importer of that
+// file. `/e/archive` is a lazy route, so landing on it directly loaded this
+// chunk without the palette and painted the whole deck black on black. Found
+// while fixing the identical bug on the Morning Wrap deck.
+import '../tokens.css'
 import './archive.css'
 
 export interface ArchiveDeckModel {
