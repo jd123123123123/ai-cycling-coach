@@ -1,3 +1,11 @@
+// ⚠ NOT THE LIVE SHADER. Nothing imports this file — it is a reference copy.
+// The shader the app actually compiles is `FRAG_AURA`, inlined in
+// `src/components/wrapped/ShaderCanvas.tsx`. Editing this file changes
+// nothing on screen, and because the aura breathes on u_time, two
+// screenshots taken seconds apart differ on their own — which makes a
+// no-op edit here look like it worked. Change ShaderCanvas.tsx; mirror it
+// here afterwards if you want the reference to stay honest.
+//
 // readiness-aura.glsl — the flagship "Morning Readiness Moment" backdrop.
 //
 // The state colour as LIGHT EMITTED from behind the readiness ring into a

@@ -143,23 +143,28 @@ void main(){
 
   // Contained emission: a tight core, a wide soft halo, and one offset lobe
   // low-right so the field has mesh-gradient depth rather than one flat radial.
-  float core=pow(smoothstep(0.44,0.0,r),2.5);
-  float halo=pow(smoothstep(0.85,0.05,r),3.6)*0.26;
+  float core=pow(smoothstep(0.34,0.0,r),2.6);
+  float halo=pow(smoothstep(0.78,0.04,r),4.0)*0.17;
   vec2 p2=(uv-vec2(0.82,0.08))*vec2(aspect,1.0);
-  float lobe=pow(smoothstep(0.55,0.0,length(p2)),2.8)*0.14;
-  // ENERGY 0.86 overall: at 1.0 the field still read as coloured wallpaper
-  // rather than as a light source with darkness around it.
-  float energy=clamp((core*(0.70+0.16*breath)+halo+lobe)*(0.86+0.26*flow),0.0,1.0)*0.86;
+  float lobe=pow(smoothstep(0.48,0.0,length(p2)),3.0)*0.08;
+  // ENERGY 0.62 (was 0.86, itself down from 1.0). Rendered at 390x844 the
+  // 0.86 field still filled the whole upper screen with saturated mint and
+  // read dated. The modern register is a restrained near-black ground with
+  // saturation spent only where the data is -- the ring's own gradient. So
+  // the pool is tighter (core 0.44 -> 0.34), carries far less pure hue
+  // (0.52 -> 0.30), and the vignette pulls harder: wallpaper becomes a light
+  // source in a dark room.
+  float energy=clamp((core*(0.70+0.16*breath)+halo+lobe)*(0.86+0.26*flow),0.0,1.0)*0.62;
 
   vec3 col=u_bg;
   col=mix(col,deep,energy);
-  col=mix(col,u_aura,clamp(core*(0.52+0.12*breath)+core*flow*0.12,0.0,1.0)*0.86);
-  col=mix(col,light,clamp(pow(core,2.3)*0.52,0.0,1.0)*0.86);
+  col=mix(col,u_aura,clamp(core*(0.30+0.08*breath)+core*flow*0.08,0.0,1.0)*0.62);
+  col=mix(col,light,clamp(pow(core,2.6)*0.34,0.0,1.0)*0.62);
 
   // Vignette — pulls the corners down so the emission reads as a light source
   // in a room rather than a full-bleed gradient.
   vec2 vp=(uv-0.5)*vec2(aspect,1.0);
-  col*=1.0-0.46*pow(clamp(length(vp)/1.05,0.0,1.0),1.7);
+  col*=1.0-0.58*pow(clamp(length(vp)/1.02,0.0,1.0),1.6);
 
   // Film grain. Slightly stronger than the old pure-dither so the large flat
   // dark areas have tactility instead of reading as empty #0A0C0F.
