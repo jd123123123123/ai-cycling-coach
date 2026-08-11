@@ -59,6 +59,7 @@ const EditorialSessionDetailPage = lazyWithRetry(() => import('./editorial/pages
 const EditorialTabPlate = lazyWithRetry(() => import('./editorial/pages/TabPlate'))
 const EditorialArchiveDeck = lazyWithRetry(() => import('./editorial/archive/ArchiveDeckPage'))
 const EditorialMorningWrap = lazyWithRetry(() => import('./editorial/pages/MorningWrapPage'))
+const EditorialHistory = lazyWithRetry(() => import('./editorial/history/HistoryPage'))
 
 function App() {
   return (
@@ -299,6 +300,11 @@ function AppRoutes() {
           <Route path="/e/session/:id" element={<ProtectedRoute checkOnboarding><EditorialSessionDetailPage /></ProtectedRoute>} />
           <Route path="/e/morning" element={<ProtectedRoute checkOnboarding><EditorialMorningWrap /></ProtectedRoute>} />
           <Route path="/e/archive" element={<ProtectedRoute checkOnboarding><EditorialArchiveDeck /></ProtectedRoute>} />
+          {/* Must precede /e/:tab, which is the catch-all stub. The TabBar's
+              History tab has always pointed here; until now it landed on
+              "not in this system" while the finished deck sat unlinked at
+              /e/archive. */}
+          <Route path="/e/history" element={<ProtectedRoute checkOnboarding><EditorialHistory /></ProtectedRoute>} />
           <Route path="/e/:tab" element={<ProtectedRoute checkOnboarding><EditorialTabPlate /></ProtectedRoute>} />
 
           {/* Default redirect */}

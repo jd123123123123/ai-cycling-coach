@@ -72,15 +72,51 @@ function Rail({ index }: { index: number }) {
   )
 }
 
-function Masthead({ scope, period }: { scope: string; period: string }) {
+/** Optional period navigation. Absent, the masthead is the static label it has
+ *  always been (the fixture deck passes nothing); present, the period becomes
+ *  a stepper. It lives in the masthead precisely because the masthead repeats
+ *  on every chapter — so on a deck you page through, the control to change
+ *  what you are reading is never more than a glance away. */
+export interface PeriodNav {
+  onStep: (dir: -1 | 1) => void
+  canPrev: boolean
+  canNext: boolean
+}
+
+function Masthead({ scope, period, nav }: { scope: string; period: string; nav?: PeriodNav }) {
   const t = {
     fontFamily: 'var(--ar-sans)', fontSize: 'var(--ar-t-micro)', fontWeight: 700,
     letterSpacing: '0.16em', textTransform: 'uppercase' as const,
   }
+  const arrow = (dir: -1 | 1, enabled: boolean) => (
+    <button
+      type="button"
+      data-testid={dir === -1 ? 'period-prev' : 'period-next'}
+      aria-label={dir === -1 ? 'Previous month' : 'Next month'}
+      disabled={!enabled}
+      onClick={() => nav?.onStep(dir)}
+      style={{
+        background: 'none', border: 'none', padding: '4px 6px', lineHeight: 1,
+        cursor: enabled ? 'pointer' : 'default',
+        color: enabled ? 'var(--ar-gold)' : 'var(--ar-rule)',
+        fontFamily: 'var(--ar-sans)', fontSize: 'var(--ar-t-label)', fontWeight: 700,
+      }}
+    >
+      {dir === -1 ? '‹' : '›'}
+    </button>
+  )
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
       <span style={{ ...t, color: 'var(--ar-quiet)' }}>{scope}</span>
-      <span style={{ ...t, color: 'var(--ar-ink-2)' }}>{period}</span>
+      {nav ? (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 2, marginRight: -6 }}>
+          {arrow(-1, nav.canPrev)}
+          <span data-testid="period-label" style={{ ...t, color: 'var(--ar-ink-2)', minWidth: 104, textAlign: 'center' }}>{period}</span>
+          {arrow(1, nav.canNext)}
+        </span>
+      ) : (
+        <span style={{ ...t, color: 'var(--ar-ink-2)' }}>{period}</span>
+      )}
     </div>
   )
 }
@@ -195,7 +231,7 @@ function Chapter({ children, hint, dim }: { children: ReactNode; hint?: string; 
   )
 }
 
-export default function ArchiveDeckView({ model }: { model: ArchiveDeckModel }) {
+export default function ArchiveDeckView({ model, nav }: { model: ArchiveDeckModel; nav?: PeriodNav }) {
   const deckRef = useRef<HTMLDivElement>(null)
   const [index, setIndex] = useState(0)
 
@@ -210,7 +246,7 @@ export default function ArchiveDeckView({ model }: { model: ArchiveDeckModel }) 
   const m = model
   const head = (kicker: string) => (
     <>
-      <Masthead scope={m.scope} period={m.period} />
+      <Masthead scope={m.scope} period={m.period} nav={nav} />
       <Kicker>{kicker}</Kicker>
     </>
   )
