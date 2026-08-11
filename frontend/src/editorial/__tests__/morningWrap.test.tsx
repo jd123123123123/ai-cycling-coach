@@ -7,7 +7,7 @@ afterEach(cleanup)
 
 describe('Morning Wrap', () => {
   it('leads with the call, before any of the evidence', () => {
-    const { container } = render(<MorningWrapView model={MORNING_WRAP_FIXTURE} />)
+    render(<MorningWrapView model={MORNING_WRAP_FIXTURE} />)
     const call = screen.getByTestId('the-call')
     const firstSignal = screen.getAllByTestId('signal-row')[0]
     // A rider checking their phone at 06:32 must not scroll past four signal
