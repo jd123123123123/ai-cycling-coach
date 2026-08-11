@@ -1,0 +1,119 @@
+/* frontend/src/editorial/morning/morning.css
+ *
+ * LAYOUT ONLY. Every colour lives in tokens.css under `.morning-root`, the
+ * same rule archive.css follows and `isolation.test.ts` protects.
+ *
+ * The deck is CSS scroll-snap, not a transform pager: `scroll-snap-stop:
+ * always` is what makes a flick land on exactly one chapter and never skip
+ * past one, and the browser's own scroller keeps momentum, rubber-banding and
+ * accessibility behaviour that a JS pager would have to re-invent badly.
+ * React only OBSERVES the scroll position to derive the active index; it
+ * never drives it except when the rail or the peek strip is tapped.
+ */
+.morning-root {
+  /* The chrome is absolutely positioned against this box rather than `fixed`,
+     so it stays inside the 390px column on a desktop viewport instead of
+     stretching across the whole window. */
+  position: relative;
+  width: 100%;
+  max-width: 390px;
+  margin: 0 auto;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--e-ground);
+  color: var(--e-ink);
+  font-family: var(--e-body);
+
+  --m-rail-h: 50px;
+  --m-peek-h: 74px;
+}
+
+.morning-deck {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  /* A focusable scroll container — the archive deck's own gap. Without it,
+     PageDown/Home/arrows have nothing to act on until the visitor tabs into
+     something inside a chapter. */
+  outline: none;
+}
+.morning-deck::-webkit-scrollbar { display: none; }
+
+.morning-chapter {
+  /* min-height, not height: a chapter whose content genuinely outgrows the
+     viewport (five expanded tasks, a long claim at large text sizes) must
+     scroll to reveal the rest and then snap onward, never clip it. */
+  min-height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  position: relative;
+  isolation: isolate;
+  padding-top: calc(var(--m-rail-h) + env(safe-area-inset-top));
+  padding-bottom: calc(var(--m-peek-h) + env(safe-area-inset-bottom));
+}
+
+/* The reading column. 24px sides, matching every other editorial section. */
+.m-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 24px;
+  width: 100%;
+}
+
+/* A plate bleeds under BOTH pieces of chrome — the photograph is the chapter,
+   and stopping it at the rail would read as a cropped card sitting on a page.
+   Content stays inset because it lives in .m-wrap, inside the padding. */
+.m-plate {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.morning-rail,
+.morning-peek {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+}
+.morning-rail { top: 0; }
+.morning-peek { bottom: 0; }
+
+/* The rail scrolls horizontally only as a fallback: at 390px the seven labels
+   fit, but a larger system text size must not truncate the last chapter. */
+.m-rail-track {
+  display: flex;
+  align-items: center;
+  /* Measured, not guessed: at gap 12 / padding 14 the seven labels came to
+     394px and "Close" was clipped off the right edge of a 390 phone with no
+     visible scrollbar to explain it — which reads as a bug, not as a rail
+     that scrolls. These numbers fit all seven with room to spare; the
+     overflow below stays as the fallback for large system text sizes. */
+  gap: 9px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 12px;
+  height: var(--m-rail-h);
+}
+.m-rail-track::-webkit-scrollbar { display: none; }
+
+@keyframes mDrift {
+  0%, 100% { transform: translateY(0); opacity: 0.45; }
+  50%      { transform: translateY(3px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .morning-root *, .morning-chapter * { animation: none !important; transition: none !important; }
+  .morning-deck { scroll-behavior: auto; }
+}

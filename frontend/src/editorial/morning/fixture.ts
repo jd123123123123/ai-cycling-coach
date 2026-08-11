@@ -1,5 +1,5 @@
 import { present, missing } from '../data/value'
-import type { MorningWrapModel } from './MorningWrapView'
+import type { MorningWrapModel } from './model'
 
 /** Fixture transcribed from the pen frame `iV2fb` so the composition can be
  *  looked at before the adapter exists. Values are the pen's own. */
@@ -7,7 +7,7 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
   dateLabel: present('Thu 23 Jul · 06:32'),
   streakDays: present(13),
   greeting: present('Good morning,\nJannis.'),
-  sleepScore: present({ score: 91, context: 'Best night since 4 June' }),
+  sleepScore: present({ score: 91, context: 'Your best night since 4 June' }),
   sleepWindow: present({ lightsOut: ['22:47', 'lights out'], asleep: ['7 h 45', 'asleep'], awake: ['06:32', 'awake'] }),
   stages: present([
     { key: 'deep', label: 'Deep', seconds: 4920 },
@@ -23,26 +23,46 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
     { stage: 'rem', minutes: 24 }, { stage: 'light', minutes: 38 }, { stage: 'rem', minutes: 22 },
     { stage: 'light', minutes: 32 }, { stage: 'awake', minutes: 20 },
   ]),
-  nightClaim: present('Deep sleep landed early and stayed. Your body did the repair work while you were gone.'),
+  nightClaim: present('You went deep early, and stayed. Deep sleep is when your body does the repair work, and yours came in the first two hours — before the night had a chance to go wrong.'),
 
   brief: present({
     readiness: { value: 88, delta: '+9', band: 'Your 30-day band: 61–88' },
     tiles: [
-      { label: 'HRV', value: '112', unit: 'ms', sub: '+12' },
-      { label: 'Resting HR', value: '42', unit: 'bpm', sub: '−3' },
-      { label: 'Form', value: '+19', sub: 'Since March', tone: 'accent' },
-      { label: '7d load', value: '412', sub: '−28% on plan' },
-      { label: 'Sleep', value: '7:48', sub: '4 nights >7 h' },
+      {
+        label: 'HRV', value: '112', unit: 'ms', sub: '+12', glyph: 'hrv',
+        dir: 'up', good: true, spark: [98, 102, 95, 104, 101, 108, 112],
+        note: 'Your highest reading since this block started.',
+      },
+      {
+        label: 'Resting HR', value: '42', unit: 'bpm', sub: '−3', glyph: 'cardiac',
+        dir: 'down', good: true, spark: [45, 44, 46, 44, 43, 43, 42],
+        note: 'Three beats under your usual. Your heart settled early and stayed there.',
+      },
+      {
+        label: 'Form', value: '+19', sub: '+6 this week', tone: 'accent', glyph: 'form',
+        dir: 'up', good: true, spark: [4, 6, 9, 11, 13, 16, 19],
+        note: 'Anything over +10 is race-ready. You have not been this fresh since March.',
+      },
+      {
+        label: '7d load', value: '412', sub: '−28%', glyph: 'load',
+        dir: 'down', good: true, spark: [560, 548, 520, 498, 470, 440, 412],
+        note: 'Down 28% on plan, and falling on purpose. This is your taper doing its job.',
+      },
+      {
+        label: 'Sleep', value: '7:48', sub: '+0.2 h', glyph: 'sleep',
+        dir: 'up', good: true, spark: [6.4, 7.1, 6.9, 7.4, 7.2, 7.6, 7.8],
+        note: 'Four nights over seven hours now. The streak matters more than any one night.',
+      },
     ],
   }),
   call: present({
-    agree: '4 of 4 signals agree',
-    claim: 'Hold the taper. Bank the freshness.',
-    reason: 'Readiness peaked while 7d load fell 28%. The adaptation is still landing.',
+    agree: 'All 4 of your signals agree',
+    claim: 'Hold your taper. Bank the freshness you have earned.',
+    reason: 'Your readiness peaked while your 7-day load fell 28%. The adaptation is still landing.',
     prescription: '0 TSS · 40 min walk · lights out 22:30',
   }),
 
-  signalsClaim: present('Two signals broke your range. Both the way you want.'),
+  signalsClaim: present('Two of your signals broke their range. Both of them the way you want.'),
   signals: [
     present({ key: 'hrv', label: 'HRV', value: 71, unit: 'ms', delta: '+9', band: { low: 52, high: 66 }, position: 'above', outsideIsGood: true, note: '15% above your 30-day band — the strongest single read of this block.' }),
     present({ key: 'rhr', label: 'Resting HR', value: 42, unit: 'bpm', delta: '−3', band: { low: 44, high: 52 }, position: 'below', outsideIsGood: true, note: '7% under your usual 45. The heart settled early and never climbed back.' }),
@@ -50,8 +70,8 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
     present({ key: 'temp', label: 'Skin temp', value: -0.1, unit: '°C', delta: 'Flat', band: { low: -0.4, high: 0.4 }, position: 'in', outsideIsGood: false, note: 'Flat against baseline — the quiet reading you want after a hard week.' }),
   ],
 
-  standClaim: present('Freshest you have been since March.'),
-  standBody: present('Fitness is what you built. Fatigue is what it cost. Form is what is left.'),
+  standClaim: present('You are the freshest you have been since March.'),
+  standBody: present('Fitness is what you built. Fatigue is what it cost you. Form is what you have left to spend.'),
   form: present({
     fitness: 78, fatigue: 59, form: 19,
     note: 'Your widest gap since 14 March. Anything over +10 is race-ready.',
@@ -61,7 +81,7 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
     })),
   }),
 
-  todayClaim: present('Nothing is asked of you. That is the assignment.'),
+  todayClaim: present('Nothing is asked of you today. That is your assignment — five things, none of them training, each with a number so you know when it is done.'),
   todayBody: present('Five things, none of them training. Each one has a number so you know when it is done.'),
   tasks: present([
     { key: 'wake', time: '06:32', title: "You're awake", metric: 'Now', now: true, detail: '500 ml before the coffee. You lost close to a litre overnight.' },
@@ -73,14 +93,14 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
 
   tomorrow: present({ when: '06:00', away: '23 h from now', title: '4 × 8 at 320 W.', cost: '82 TSS · 1 h 45' }),
   close: present({
-    kicker: 'Before you start the day',
+    kicker: 'Before you start your day',
     claim: 'Yesterday you did the work. Today you collect it.',
-    body: 'Thirteen days in a row you have shown up. Today the only thing on the list is to stay out of your own way.',
-    cta: "Open today's plan",
+    body: 'Thirteen days in a row you have shown up. Today the only thing on your list is to stay out of your own way.',
+    cta: 'Open your plan for today',
   }),
   quote: present({
     text: "You don't get fitter on the bike. You get fitter on the days you leave it alone.",
-    attribution: 'What today is for',
+    attribution: 'What your day is for',
   }),
 }
 
@@ -88,20 +108,20 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
  *  section must still hold its frame and say why, never invent a number. */
 export const MORNING_WRAP_NO_DATA: MorningWrapModel = {
   ...MORNING_WRAP_FIXTURE,
-  sleepScore: missing('No sleep recorded since Tuesday.'),
+  sleepScore: missing('Your watch has not recorded a night since Tuesday.'),
   // The window goes with the sleep. Keeping 22:47 → 06:32 on screen while the
   // score says nothing was recorded is the screen contradicting itself.
-  sleepWindow: missing('No sleep window recorded.'),
-  stages: missing('No sleep stages recorded last night.'),
-  hypnogram: missing('No sleep stages recorded last night.'),
-  nightClaim: missing('Nothing measured overnight, so there is nothing to read into.'),
-  brief: missing('No wearable reading since Tuesday.'),
-  call: missing('The coach withholds a call until a fresh reading lands.'),
+  sleepWindow: missing('Your watch recorded no sleep window.'),
+  stages: missing('Your watch recorded no sleep stages last night.'),
+  hypnogram: missing('Your watch recorded no sleep stages last night.'),
+  nightClaim: missing('Nothing was measured while you slept, so there is nothing to read into.'),
+  brief: missing('No reading from your watch since Tuesday.'),
+  call: missing('Your coach withholds a call until a fresh reading lands.'),
   // A claim and its evidence go missing TOGETHER. "Two signals broke your
   // range" asserts a fact the rows below can no longer show.
-  signalsClaim: missing('No overnight signals to read.'),
-  signals: [missing('No overnight signals recorded.')],
-  standClaim: missing('Not enough history to place today yet.'),
-  standBody: missing('Fitness and fatigue need a fuller history than this.'),
-  form: missing('Not enough history for a form curve yet.'),
+  signalsClaim: missing('None of your overnight signals came through.'),
+  signals: [missing('None of your overnight signals were recorded.')],
+  standClaim: missing('Not enough of your history to place today yet.'),
+  standBody: missing('Fitness and fatigue need more of your history than this.'),
+  form: missing('Not enough of your history for a form curve yet.'),
 }

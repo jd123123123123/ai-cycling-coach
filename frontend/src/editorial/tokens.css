@@ -252,6 +252,49 @@
  * blue survives protanopia and deuteranopia where red/green does not, and
  * roughly 8% of men are affected.
  */
+/* ── Morning Wrap deck ───────────────────────────────────────────────────
+ * Layered ON TOP of .editorial-root (the deck's root carries both classes),
+ * so every reused component — Hypnogram, SignalRow, DayTimeline, SecHead,
+ * Statement — keeps working untouched and simply re-tints, exactly the
+ * mechanism EditorialRoot already established for the day states.
+ *
+ * Its own accent, on purpose. The Morning Wrap used to run on --st-resting
+ * (#00E5FF), and cyan is the wrong argument for the first ninety seconds of
+ * a rider's day: it reads clinical, like a monitor, and it fights the warm
+ * sunrise register Today's readiness bloom already set. Dawn amber is the
+ * same information in the emotional key the screen is actually in.
+ *
+ * The two dawn hues are NOT an accent — they never mark data. They drive one
+ * fixed bloom behind the deck that turns over as you move through the
+ * chapters: indigo before the verdict, risen orange by the close. Colour
+ * carries the passage of the morning; the accent keeps carrying meaning.
+ * Keeping those two jobs on separate hues is what stops a shifting palette
+ * from making the numbers feel arbitrary.
+ */
+.morning-root {
+  --st-morning: #FFB24D;
+  --g-morning: #0A0705;
+  /* Warm counterpart to --e-photo-tint-rest's olive, for the two plates. */
+  --e-photo-tint-morning: #7A5730;
+
+  --e-dawn-night: #3B2A6B;
+  --e-dawn-risen: #FF7A2F;
+
+  --st-active: var(--st-morning);
+  --e-ground: var(--g-morning);
+  --e-photo-tint: var(--e-photo-tint-morning);
+
+  /* Warmer plates than the rest of EDITORIAL II, measured at 390×844 rather
+   * than assumed: at the shared 65% desaturation / 26% tint the cover
+   * photograph rendered as flat grey-green — technically the house treatment,
+   * emotionally a rainy Tuesday. These two stops keep more of the photo's own
+   * colour and push more of the dawn hue through it. The plate is 100dvh here
+   * and every other screen's is 322–486px, so it is doing a different job and
+   * earns its own pair of stops. */
+  --e-photo-sat-cover: color-mix(in srgb, var(--e-photo-sat) 44%, transparent);
+  --e-photo-tint-cover: color-mix(in srgb, var(--e-photo-tint) 40%, transparent);
+}
+
 .archive-root {
   --ar-ground: #0D0B06;
   --ar-lift: #141109;
