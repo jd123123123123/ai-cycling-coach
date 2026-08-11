@@ -43,6 +43,8 @@ import { usePlanAdaptations } from '../../../hooks/usePlanAdaptations'
 import { useTodaySession, sessionIntensity } from '../../../hooks/useTodaySession'
 import { useTodayWeather } from '../../../hooks/useTodayWeather'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
+import type { DailyMetric } from '../../../api/dashboard'
+import DriverChip from '../today/DriverChip'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
 import { usePMC } from '../../../hooks/usePMC'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
@@ -1075,19 +1077,28 @@ export default function TodayTab() {
     : fState === 'post' ? { word: tFor(locale, 'pill_banked'), color: '#16E08A' }
     : { word: tFor(locale, 'pill_fresh'), color: '#38B6FF' }
   // Readiness drivers — real overnight signals, honest "—" when absent.
-  const driverChips: { icon: typeof HeartPulse; label: string; value: string; unit?: string; delta?: string | null; deltaColor?: string }[] = [
+  // The trailing series behind each driver. `useDailyMetrics` already fetches
+  // thirty days on every load and only the newest value was ever read — the
+  // shape behind the number costs one more field and no extra request.
+  const driverTrend = (pick: (m: DailyMetric) => number | null | undefined): number[] =>
+    metrics.map(pick).filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+
+  const driverChips: { icon: typeof HeartPulse; label: string; value: number | null; unit?: string; delta?: string | null; deltaColor?: string; trend: number[] }[] = [
     {
       icon: Activity, label: tFor(locale, 'driver_hrv'),
-      value: hrvNow != null ? `${Math.round(hrvNow)}` : '—', unit: hrvNow != null ? 'ms' : undefined,
+      value: hrvNow ?? null, unit: 'ms',
       delta: hrvPct, deltaColor: typeof hrvDelta === 'number' ? (hrvDelta >= 0 ? '#16E08A' : '#FF9E3D') : undefined,
+      trend: driverTrend((m) => m.hrv_status),
     },
     {
       icon: HeartPulse, label: tFor(locale, 'driver_rhr'),
-      value: restingHr != null ? `${Math.round(restingHr)}` : '—', unit: restingHr != null ? 'bpm' : undefined,
+      value: restingHr ?? null, unit: 'bpm',
+      trend: driverTrend((m) => m.resting_hr),
     },
     {
       icon: Moon, label: tFor(locale, 'driver_sleep'),
-      value: sleepScore != null ? `${Math.round(sleepScore)}` : '—',
+      value: sleepScore ?? null,
+      trend: driverTrend((m) => m.sleep_score),
     },
   ]
   // Coach card message — prefer the brief's own rationale; else the
@@ -1305,22 +1316,20 @@ export default function TodayTab() {
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-2.5">
-                {driverChips.map((d, i) => {
-                  const Icon = d.icon
-                  return (
-                    <div key={i} className="flex flex-col gap-1.5 rounded-[16px] p-3" style={{ background: '#14181DCC', border: '1px solid #FFFFFF14', backdropFilter: 'blur(10px)' }}>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Icon size={12} style={{ color: '#9BA4AF' }} />
-                        <span className="eyebrow" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: '#9BA4AF' }}>{d.label}</span>
-                      </span>
-                      <span className="flex items-baseline gap-1">
-                        <span className="num-display" style={{ fontSize: 20, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>{d.value}</span>
-                        {d.unit && <span style={{ fontSize: 10, color: '#5C6570' }}>{d.unit}</span>}
-                      </span>
-                      {d.delta && <span style={{ fontSize: 10.5, fontWeight: 700, color: d.deltaColor ?? '#9BA4AF' }}>{d.delta}</span>}
-                    </div>
-                  )
-                })}
+                {driverChips.map((d, i) => (
+                  <DriverChip
+                    key={d.label}
+                    icon={d.icon}
+                    label={d.label}
+                    value={d.value}
+                    unit={d.unit}
+                    delta={d.delta}
+                    deltaColor={d.deltaColor}
+                    trend={d.trend}
+                    tone={auraColor}
+                    index={i}
+                  />
+                ))}
               </div>
             </div>
           ) : (
