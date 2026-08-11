@@ -106,7 +106,7 @@ export default function MorningWrapView({ model }: { model: MorningWrapModel }) 
             {isPresent(m.streakDays) && <Kicker tone="accent">{m.streakDays.value} days</Kicker>}
           </div>
 
-          <h1 style={{ fontFamily: 'var(--e-display)', fontSize: 34, fontWeight: 800, lineHeight: 1.06, letterSpacing: '-0.03em', color: 'var(--e-ink)', margin: 0 }}>
+          <h1 style={{ fontFamily: 'var(--e-display)', fontSize: 30, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.03em', color: 'var(--e-ink)', margin: 0 }}>
             {isPresent(m.greeting) ? m.greeting.value : ''}
           </h1>
 
@@ -143,12 +143,12 @@ export default function MorningWrapView({ model }: { model: MorningWrapModel }) 
       </Cover>
 
       {/* ── Hero Body: what the night actually means ────────────────── */}
-      <section style={{ ...PAD, paddingTop: 14, paddingBottom: 30 }}>
+      <section style={{ ...PAD, paddingTop: 12, paddingBottom: 24 }}>
         <Statement claim={m.nightClaim} />
       </section>
 
       {/* ── Brief Strip: the verdict, before any evidence ───────────── */}
-      <section style={{ ...PAD, paddingBottom: 34 }}>
+      <section style={{ ...PAD, paddingBottom: 26 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16 }}>
           <Kicker>This morning's brief</Kicker>
           <Kicker>Body · Training · Today</Kicker>
@@ -220,9 +220,9 @@ export default function MorningWrapView({ model }: { model: MorningWrapModel }) 
       </section>
 
       {/* ── 01 The Night: four signals against the rider's own range ── */}
-      <section data-section="01" style={{ ...PAD, paddingBottom: 34 }}>
+      <section data-section="01" style={{ ...PAD, paddingBottom: 26 }}>
         <SecHead index="01" title="The Night" sub={isPresent(m.sleepWindow) ? `${m.sleepWindow.value.lightsOut[0]} → ${m.sleepWindow.value.awake[0]}` : undefined} />
-        <div style={{ height: 16 }} />
+        <div style={{ height: 12 }} />
         <Statement claim={m.signalsClaim} />
         <div style={{ height: 8 }} />
         {m.signals.map((s, i) => <SignalRow key={i} signal={s} index={i} />)}
@@ -234,15 +234,15 @@ export default function MorningWrapView({ model }: { model: MorningWrapModel }) 
       <QuotePlate state="resting" quote={isPresent(m.quote) ? m.quote.value.text : ''} attribution={isPresent(m.quote) ? m.quote.value.attribution : ''} photoUrl={QUOTE_PHOTO.resting} />
 
       {/* ── 02 Where You Stand ──────────────────────────────────────── */}
-      <section data-section="02" style={{ ...PAD, paddingTop: 34, paddingBottom: 34 }}>
+      <section data-section="02" style={{ ...PAD, paddingTop: 34, paddingBottom: 26 }}>
         <SecHead index="02" title="Where You Stand" />
-        <div style={{ height: 16 }} />
+        <div style={{ height: 12 }} />
         <Statement claim={m.standClaim} />
         <div style={{ height: 12 }} />
         {isPresent(m.standBody) && (
           <p style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', lineHeight: 1.5, color: 'var(--e-mid)', margin: 0 }}>{m.standBody.value}</p>
         )}
-        <div style={{ height: 22 }} />
+        <div style={{ height: 16 }} />
         {!isPresent(m.form) && (
           <p style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', lineHeight: 1.45, color: 'var(--e-quiet)', margin: 0 }}>{m.form.missing}</p>
         )}
@@ -272,9 +272,9 @@ export default function MorningWrapView({ model }: { model: MorningWrapModel }) 
       </section>
 
       {/* ── 03 Today: the assignment ────────────────────────────────── */}
-      <section data-section="03" style={{ ...PAD, paddingBottom: 34 }}>
+      <section data-section="03" style={{ ...PAD, paddingBottom: 26 }}>
         <SecHead index="03" title="Today" chip="Rest day · nothing planned" />
-        <div style={{ height: 16 }} />
+        <div style={{ height: 12 }} />
         <Statement claim={m.todayClaim} />
         <div style={{ height: 12 }} />
         {isPresent(m.todayBody) && (
@@ -285,7 +285,7 @@ export default function MorningWrapView({ model }: { model: MorningWrapModel }) 
 
       {/* ── Tomorrow: what today is buying ──────────────────────────── */}
       {isPresent(m.tomorrow) && (
-        <section style={{ ...PAD, paddingBottom: 34 }}>
+        <section style={{ ...PAD, paddingBottom: 26 }}>
           <div style={{ padding: 18, borderRadius: 18, background: 'var(--e-glass)', border: '1px solid var(--e-rule)', display: 'flex', flexDirection: 'column', gap: 11 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Kicker tone="accent">Tomorrow · {m.tomorrow.value.when}</Kicker>

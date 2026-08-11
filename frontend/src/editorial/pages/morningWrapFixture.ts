@@ -28,8 +28,8 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
   brief: present({
     readiness: { value: 88, delta: '+9', band: 'Your 30-day band: 61–88' },
     tiles: [
-      { label: 'HRV', value: '112', unit: 'ms', sub: '+12', tone: 'accent' },
-      { label: 'Resting HR', value: '42', unit: 'bpm', sub: '−3', tone: 'accent' },
+      { label: 'HRV', value: '112', unit: 'ms', sub: '+12' },
+      { label: 'Resting HR', value: '42', unit: 'bpm', sub: '−3' },
       { label: 'Form', value: '+19', sub: 'Since March', tone: 'accent' },
       { label: '7d load', value: '412', sub: '−28% on plan' },
       { label: 'Sleep', value: '7:48', sub: '4 nights >7 h' },
@@ -38,7 +38,7 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
   call: present({
     agree: '4 of 4 signals agree',
     claim: 'Hold the taper. Bank the freshness.',
-    reason: 'Readiness peaked while 7d load fell 28%. Adding intensity today costs more than it buys — the adaptation is still landing.',
+    reason: 'Readiness peaked while 7d load fell 28%. The adaptation is still landing.',
     prescription: '0 TSS · 40 min walk · lights out 22:30',
   }),
 
@@ -51,7 +51,7 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
   ],
 
   standClaim: present('Freshest you have been since March.'),
-  standBody: present('Fitness is what you have built. Fatigue is what it cost. Form is what is left over — and today there is more of it than on any day this block.'),
+  standBody: present('Fitness is what you built. Fatigue is what it cost. Form is what is left.'),
   form: present({
     fitness: 78, fatigue: 59, form: 19,
     note: 'Your widest gap since 14 March. Anything over +10 is race-ready.',
@@ -64,11 +64,11 @@ export const MORNING_WRAP_FIXTURE: MorningWrapModel = {
   todayClaim: present('Nothing is asked of you. That is the assignment.'),
   todayBody: present('Five things, none of them training. Each one has a number so you know when it is done.'),
   tasks: present([
-    { key: 'wake', time: '06:32', title: "You're awake", metric: 'Now', now: true, detail: '500 ml before the coffee. You lost close to a litre overnight and rehydrating is the cheapest thing you will do all day.' },
-    { key: 'mob', time: '09:00', title: 'Mobility, not training', metric: '20 min', detail: 'Hips and thoracic spine — the joints the bike holds still for twelve hours a week. No load, no stretching to pain.' },
-    { key: 'eat', time: '13:00', title: 'Eat like you rode', metric: '3.5 g/kg', detail: '250 g carbohydrate, 120 g protein across the day. Adaptation is paid for on the rest day, not the hard one.' },
-    { key: 'walk', time: '17:30', title: "Walk, don't ride", metric: '40 min · 14°C', detail: 'Easy blood flow, zero load. Heavy legs at the start and light legs at the end means the taper is working.' },
-    { key: 'bed', time: '22:47', title: 'Lights out, same as last night', metric: 'Target', detail: '22:47 gave you a 91. Repeat the input and you keep the output — and you start tomorrow where you finished today.' },
+    { key: 'wake', time: '06:32', title: "You're awake", metric: 'Now', now: true, detail: '500 ml before the coffee. You lost close to a litre overnight.' },
+    { key: 'mob', time: '09:00', title: 'Mobility, not training', metric: '20 min', detail: 'Hips and thoracic spine — the joints the bike holds still. No load.' },
+    { key: 'eat', time: '13:00', title: 'Eat like you rode', metric: '3.5 g/kg', detail: '250 g carbs, 120 g protein. Adaptation is paid for on the rest day.' },
+    { key: 'walk', time: '17:30', title: "Walk, don't ride", metric: '40 min · 14°C', detail: 'Easy blood flow, zero load. Light legs by the end means the taper works.' },
+    { key: 'bed', time: '22:47', title: 'Lights out, same as last night', metric: 'Target', detail: '22:47 gave you a 91. Repeat the input, keep the output.' },
   ]),
 
   tomorrow: present({ when: '06:00', away: '23 h from now', title: '4 × 8 at 320 W.', cost: '82 TSS · 1 h 45' }),

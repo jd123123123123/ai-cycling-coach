@@ -17,7 +17,6 @@ import SessionOfTheDay from '../../dashboard/SessionOfTheDay'
 import SessionReviewCard from '../../dashboard/SessionReviewCard'
 import { useAthleteProfile } from '../../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
-import Scene from '../../scene/Scene'
 import { useLocale } from '../../../contexts/LocaleContext'
 import AdaptiveCard from '../../plan/AdaptiveCard'
 import PlanChangeInterview from '../../plan/PlanChangeInterview'
@@ -241,9 +240,6 @@ export default function PlanTab() {
   const thrPaceSPerKm = profile?.running_threshold_pace_ms ? 1000 / profile.running_threshold_pace_ms : null
   const meso = week?.meso_block
   const days = week?.days ?? []
-  // Planned load per day, in week order. Rest days are a real 0 -- a valley in
-  // the ridge is exactly what a rest day should look like.
-  const weekTerrain = useMemo(() => days.map((d) => d.target_tss ?? 0), [days])
   // Yesterday's planned-but-missed bike ride — the week strip only spans
   // today→+6, so yesterday's row can't carry the marker; a small honest chip
   // (non-guilt) surfaces the miss instead. The AdaptiveCard below carries the
@@ -514,17 +510,6 @@ export default function PlanTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
-      {/* The week as ground: seven days of planned load drawn as terrain, so
-          the shape of the week is legible before a single number is read -- a
-          block with one big Sunday looks different from an even week at a
-          glance. Hidden until the plan actually carries load, so an unplanned
-          week gets no invented landscape. */}
-      {weekTerrain.some((v) => v > 0) && (
-        <section className="-mt-2 -mx-4 overflow-hidden">
-          <Scene kind="terrain" values={weekTerrain} seed={`week:${days[0]?.date ?? 'x'}`} height={124} />
-        </section>
-      )}
-
       {/* Top PlanCard (.pen TqTJw) — the season-summary card the V3 · Train
           frame leads with. Tapping it opens the Season & Race Day detail
           (.pen pTlXd → /season). Real meso data; honest "—" where absent. */}

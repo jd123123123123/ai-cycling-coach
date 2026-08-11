@@ -12,7 +12,6 @@ import {
   Activity, Heart, Wind, Droplet, Thermometer, Moon, Zap, Sunset,
   ChevronRight, LineChart, type LucideIcon,
 } from 'lucide-react'
-import Scene from '../../scene/Scene'
 import { useDailyMetrics } from '../../../hooks/useDailyMetrics'
 import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import { useTodaySnapshot } from '../../../hooks/useTodaySnapshot'
@@ -550,21 +549,6 @@ export default function RecoveryTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
-      {/* The morning's sky, scaled by the SAME gated readiness the hero shows.
-          It reads `scoreTxt` -- the value the hero prints, already null when
-          the gate withholds -- not the raw `score`. On a morning where the
-          wearable never synced, the sky stays neutral instead of promising a
-          bright day the data cannot support: the stale-wearable rule applies to
-          pictures exactly as it does to numbers. */}
-      <section className="-mt-3 -mx-4 overflow-hidden">
-        <Scene
-          kind="sky"
-          readiness={scoreTxt != null ? scoreTxt / 100 : null}
-          seed={`recovery:${todayKey}`}
-          height={96}
-        />
-      </section>
-
       {/* 1 · Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col" style={{ gap: 2 }}>

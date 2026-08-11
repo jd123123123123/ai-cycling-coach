@@ -35,7 +35,6 @@ import { useActivitiesRange } from '../../../hooks/useActivitiesRange'
 import ExtraSessionsCard from '../ExtraSessionsCard'
 import RouteSketch from '../../ui/RouteSketch'
 import { useStreak } from '../../../hooks/useStreak'
-import Scene from '../../scene/Scene'
 import { useLocale } from '../../../contexts/LocaleContext'
 import { useRehearseRoute } from '../../../hooks/useRehearseRoute'
 import { formatDate, formatTime24 } from '../../../utils/format'
@@ -140,24 +139,6 @@ export default function HistoryTab() {
   // A full year of history (API caps a single range at 366 days).
   const { data: acts } = useActivitiesRange(useMemo(() => subDays(today, 365), [today]), today)
 
-  // WEEKLY buckets, not daily. Daily TSS across a year is impulse data -- a few
-  // hundred spikes separated by zeros -- and drawn as a ridge it reads as an
-  // EKG rather than as terrain (verified at 390x844 before this changed).
-  // Weekly load is also the honest unit for a season: it is how blocks, taper
-  // and time off actually present themselves. 52 points, no invented smoothing.
-  const seasonTerrain = useMemo(() => {
-    const buckets = new Map<string, number>()
-    for (let i = 51; i >= 0; i--) {
-      buckets.set(format(startOfWeek(subDays(today, i * 7), { weekStartsOn: 1 }), 'yyyy-MM-dd'), 0)
-    }
-    for (const a of acts?.activities ?? []) {
-      const iso = a.started_at ?? a.date
-      if (!iso) continue
-      const key = format(startOfWeek(parseISO(iso), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      if (buckets.has(key)) buckets.set(key, (buckets.get(key) ?? 0) + (a.tss ?? 0))
-    }
-    return [...buckets.values()]
-  }, [acts, today])
   const { data: streakData } = useStreak()
   const { rehearse, pendingRef, failed: rehearseFailed, error: rehearseError } = useRehearseRoute()
 
@@ -402,16 +383,6 @@ export default function HistoryTab() {
 
   return (
     <div className="flex flex-col gap-6 pb-5">
-      {/* A year of training as a mountain range: each point is one day's TSS,
-          so the athlete's actual season -- the build blocks, the taper, the
-          three weeks off with flu -- is the skyline. Hidden until there is
-          something to draw; an empty history gets no invented range. */}
-      {seasonTerrain.some((v) => v > 0) && (
-        <section className="-mt-2 -mx-4 overflow-hidden">
-          <Scene kind="terrain" values={seasonTerrain} seed="history:year" height={132} />
-        </section>
-      )}
-
       {/* ── 1. Header ── */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">

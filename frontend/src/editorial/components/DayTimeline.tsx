@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useReveal, MOTION_EASE, staggerDelay } from '../motion/useReveal'
 import { isPresent, type Value } from '../data/value'
 
@@ -23,6 +24,9 @@ export interface DayTask {
  */
 export default function DayTimeline({ tasks }: { tasks: Value<DayTask[]> }) {
   const { ref, on, reduced } = useReveal<HTMLDivElement>()
+  // Only the task you are on is expanded. Five items × three lines of prose is
+  // a wall; five titles with a time and a number is a day you can read.
+  const [open, setOpen] = useState<string | null>(null)
 
   if (!isPresent(tasks)) {
     return <p style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', color: 'var(--e-quiet)', margin: 0 }}>{tasks.missing}</p>
@@ -52,8 +56,13 @@ export default function DayTimeline({ tasks }: { tasks: Value<DayTask[]> }) {
           </span>
 
           <span style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: 1 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
-              <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-lead)', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--e-ink)' }}>
+            <button
+              type="button"
+              onClick={() => setOpen((o) => (o === t.key ? null : t.key))}
+              aria-expanded={open === t.key || !!t.now}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', width: '100%', textAlign: 'left' }}
+            >
+              <span style={{ fontFamily: 'var(--e-display)', fontSize: 'var(--t-body)', fontWeight: 700, letterSpacing: '-0.01em', color: t.now ? 'var(--e-ink)' : 'var(--e-mid)' }}>
                 {t.title}
               </span>
               <span
@@ -67,10 +76,12 @@ export default function DayTimeline({ tasks }: { tasks: Value<DayTask[]> }) {
               >
                 {t.metric}
               </span>
-            </span>
-            <p style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-body)', lineHeight: 1.45, color: 'var(--e-mid)', margin: 0 }}>
-              {t.detail}
-            </p>
+            </button>
+            {(t.now || open === t.key) && (
+              <p style={{ fontFamily: 'var(--e-body)', fontSize: 'var(--t-label)', lineHeight: 1.45, color: 'var(--e-mid)', margin: 0 }}>
+                {t.detail}
+              </p>
+            )}
           </span>
         </div>
       ))}
