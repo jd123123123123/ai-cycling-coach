@@ -58,3 +58,8 @@
 .w3-root *,
 .w3-root *::before,
 .w3-root *::after { box-sizing: border-box; }
+
+/* Coach-chat streaming spinner. */
+@keyframes w3-spin { to { transform: rotate(360deg); } }
+.w3-spin { animation: w3-spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .w3-spin { animation: none; } }

@@ -10,6 +10,7 @@ import { STARTER_BIKE } from './starterBike'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryInsight from './W3RecoveryInsight'
+import { W3CoachFab } from './W3CoachChat'
 import './w3.css'
 
 export type { W3DayFull, W3Weather, W3Mirror, W3Block, OnAdapt, AdaptResult } from './W3Sections'
@@ -434,6 +435,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           </div>
         </div>
 
+        <W3CoachFab />
         <W3TabBar />
 
       </div>
