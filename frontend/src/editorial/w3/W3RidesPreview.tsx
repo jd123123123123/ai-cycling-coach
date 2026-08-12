@@ -1,30 +1,44 @@
 import W3RidesView, { type W3RidesVm } from './W3RidesView'
 
-/** TEMP preview — pen-exact fixture, no backend. /e/w3-rides-preview is
- *  unguarded; remove before merge. Shows the full "Confirm your rides" concept
- *  including the (fixture) unconfirmed-claim mechanic the live page omits. */
+/** TEMP preview — pen-exact fixture (frame `zMKRG`), no backend. Route
+ *  /e/w3-rides-preview is unguarded; remove before merge. Every number here is a
+ *  DESIGN FIXTURE transcribed from the pen (incl. the synthetic route traces and
+ *  the coaching bullets) — the live /e/w3-rides page derives all of this from
+ *  real activities. */
+
+// synthetic route shapes purely for the preview thumbnails ([lat, lng])
+const LOOP: [number, number][] = [[3, 1], [3.4, 2.2], [2.8, 3], [3.2, 3.9], [2.4, 4], [1.6, 3.4], [1.9, 2.3], [1.2, 1.8], [1.7, 0.9], [2.5, 0.7], [3, 1]]
+const BLOB: [number, number][] = [[2, 0.5], [3.4, 0.9], [3.9, 2], [3.6, 3.2], [2.6, 3.9], [1.4, 3.6], [0.7, 2.4], [1, 1.2], [2, 0.5]]
+const PROFILE: [number, number][] = [[3.4, 0.4], [3, 1], [3.2, 1.6], [2.6, 2], [2.9, 2.6], [2.2, 3], [2.5, 3.6], [1.8, 4]]
+const ZIG: [number, number][] = [[3.6, 0.5], [1, 1.2], [3.4, 1.9], [1.2, 2.6], [3.2, 3.3], [1.4, 4]]
 
 const FIXTURE: W3RidesVm = {
-  title: 'Confirm\nyour rides',
-  subtitle: 'Pulled automatically from Strava, Garmin and Wahoo. Confirm to bank the training load and the reward.',
-  monthStats: [
-    { v: '14', l: 'RIDES · AUG' },
-    { v: '11h 20m', l: 'TIME · AUG' },
-    { v: '1,842', l: 'TSS · AUG' },
+  title: 'Rides',
+  loggedLabel: 'LOGGED',
+  count: '142 rides',
+  seasonLabel: 'SEASON TOTAL',
+  totalKm: '4 812',
+  totalUnit: 'km',
+  ofGoalLabel: 'OF GOAL',
+  bars: [0.42, 0.5, 0.4, 0.55, 0.48, 0.62, 0.44, 0.66, 0.72, 0.52, 0.9, 0.86],
+  barsAccentFrom: 7,
+  avgSpeed: '29.4',
+  avgPower: '214',
+  saddleTime: '168:24',
+  rides: [
+    { id: 1, title: 'Evening threshold', dateLabel: 'TUE 12 AUG', km: '40.34', speed: '31.5', power: '248', dur: '1:16', note: '+14 W on your last threshold', indoor: false, race: false, recent: true, polyline: LOOP },
+    { id: 2, title: 'Sunday long', dateLabel: 'SUN 10 AUG', km: '128.6', speed: '28.9', power: '196', dur: '4:26', note: 'Longest ride since April', indoor: false, race: false, recent: true, polyline: BLOB },
+    { id: 3, title: 'Recovery spin', dateLabel: 'SAT 09 AUG', km: '32.1', speed: '25.4', power: '132', dur: '1:15', note: 'Held under 60% — exactly as asked', indoor: false, race: false, recent: true, polyline: PROFILE },
+    { id: 4, title: 'Hill repeats', dateLabel: 'THU 07 AUG', km: '54.8', speed: '27.2', power: '231', dur: '2:01', note: 'Third-best VAM this season', indoor: false, race: false, recent: false, polyline: ZIG },
+    { id: 5, title: 'Turbo threshold', dateLabel: 'TUE 05 AUG', km: '35.0', speed: '33.1', power: '262', dur: '1:03', note: '2 W off your indoor best', indoor: true, race: false, recent: false, polyline: null },
   ],
-  unconfirmed: [
-    { key: 'a', title: 'Threshold 4 × 8', source: 'Garmin', dur: '1:15', tss: '112 TSS', watts: '285 W', power: 112, cycle: 0 },
-    { key: 'b', title: 'Endurance ride', source: 'Strava', dur: '2:04', tss: '96 TSS', watts: '198 W', power: 96, cycle: 0 },
-    { key: 'c', title: 'Recovery spin', source: 'Wahoo', dur: '0:45', tss: '28 TSS', watts: '142 W', power: 28, cycle: 0 },
-  ],
-  historyLabel: 'CONFIRMED · AUGUST',
-  history: [
-    { day: '08', title: 'Sweet spot 3 × 15', tss: '98 TSS', power: '+98', fill: 0.64, rested: false },
-    { day: '07', title: 'Rest day walk', tss: '—', power: '—', fill: 0.05, rested: true },
-    { day: '06', title: 'Hill repeats', tss: '124 TSS', power: '+124', fill: 0.47, rested: false },
-    { day: '04', title: 'Long endurance', tss: '150 TSS', power: '+150', fill: 0.58, rested: false },
-    { day: '03', title: 'Openers', tss: '41 TSS', power: '+41', fill: 0.3, rested: false },
-  ],
+  // fixture: goal-tracking block
+  goalChip: 'GOAL 12 000 KM',
+  ofGoalPct: '40%',
+  progress: 0.4,
+  toGoLabel: '7 188 KM TO GO',
+  paceLabel: '312 KM AHEAD OF PACE',
+  paceAhead: true,
 }
 
 export default function W3RidesPreview() {

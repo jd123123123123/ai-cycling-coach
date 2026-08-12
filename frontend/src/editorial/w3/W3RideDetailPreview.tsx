@@ -48,16 +48,9 @@ const FIXTURE: W3RideVm = {
     { dur: '12 MIN', watts: '279 W', note: 'BEST 288 W · 12 MAY', pr: false, fill: 0.66 },
     { dur: '20 MIN', watts: '268 W', note: 'BEST 276 IN JULY', pr: false, fill: 0.58 },
   ],
-  onYouDelta: '+14', ceilingBefore: '328', ceilingAfter: '342',
+  onYouDelta: '+14', ceilingLabel: 'CP', ceilingBefore: '328', ceilingAfter: '342',
   fitness: '78', fitnessD: '+2', fatigue: '68', fatigueD: '+14', form: '+10', formD: '-12',
   changesBody: 'Form dips for three days. That is the price of the ceiling — pay it and it comes back higher.',
-  seasonSub: 'Sixty-two kilometres and 1240 metres of climbing, spent on the year.',
-  season: [
-    { label: 'Season distance', delta: '+62 km', value: '4 812', target: '12 000 km', pct: 0.4 },
-    { label: 'Climbing', delta: '+1240 m', value: '41 260', target: '100 000 m', pct: 0.41 },
-    { label: 'Rides logged', delta: '+1', value: '142', target: '200', pct: 0.71 },
-  ],
-  seasonBody: 'Two more rides like this and the twelve thousand lands in October, not December.',
 }
 
 export default function W3RideDetailPreview() {

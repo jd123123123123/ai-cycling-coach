@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { ArrowLeft, Share2, Zap, Hexagon, Flame, Users, Trophy, ArrowRight, Watch } from 'lucide-react'
 import { T, FONT, grow, Kicker, band, card, DASH } from './w3tokens'
 import './w3.css'
+import W3StatusBar from './W3StatusBar'
 
 /**
  * W3 · 06 SESSION DETAIL — 1:1 code rebuild of `w3.pen` frame `B1iV8n`.
@@ -72,7 +73,7 @@ export default function W3SessionView({ vm, onBack }: { vm: W3SessionVm; onBack?
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
 
         {/* StatusBar */}
-        <div style={{ height: 44, padding: '0 22px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 5, fontSize: 12, color: T.mid }}>9:41</div>
+        <W3StatusBar />
 
         {/* Nav */}
         <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

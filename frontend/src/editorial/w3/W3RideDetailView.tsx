@@ -1,23 +1,24 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { ArrowLeft, Share2 } from 'lucide-react'
 import { T, FONT, grow, Kicker, band, card, DASH } from './w3tokens'
+import W3StatusBar from './W3StatusBar'
 import './w3.css'
 
 /**
  * W3 · 07 RIDE DETAIL — 1:1 code rebuild of `w3.pen` frame `zaZ4s`. Pure
- * function of `vm`; `W3RideDetailPage` builds it from `fetchActivityDebrief`.
- * Nearly all of it is REAL post-ride data (header, stats, zone split, power
- * PRs, the AI execution verdict, CP/form changes). The per-repeat "held it"
- * rows come from the ride's interval segments when present, else an honest
- * empty note; the season-progress targets are the rider's real totals against
- * their goals. POWER/reward numbers, where shown, are the unbuilt economy.
+ * function of `vm`; `W3RideDetailPage` builds it from `fetchActivityDebrief`
+ * + `usePMC`. Every number is REAL post-ride data: header, stat cards, zone
+ * split, power PRs, the AI execution verdict, the 5-min ceiling change from
+ * the effort matches, and the fitness/fatigue/form (CTL/ATL/TSB) trend from
+ * the PMC series. The per-repeat "held it" rows come from the ride's climb
+ * segments (this is a hill-repeat ride); the section is omitted when the ride
+ * has no repeatable climbs. Absent signals render as an honest "—".
  */
 
 export interface W3Repeat { label: string; watts: string; delta: number; verdict: string }
 export interface W3Zone { z: string; name: string; min: string; pct: number; peak: boolean }
 export interface W3Rank { dur: string; watts: string; note: string; pr: boolean; fill: number }
 export interface W3StatCard { v: string; l: string; s: string }
-export interface W3SeasonRow { label: string; delta: string; value: string; target: string; pct: number }
 
 export interface W3RideVm {
   dateChip: string; sportChip: string; recordChip: string | null
@@ -30,11 +31,9 @@ export interface W3RideVm {
   repeatsScore: string; repeatsSub: string; repeats: W3Repeat[]
   zonesSub: string; zones: W3Zone[]
   ranksSub: string; ranks: W3Rank[]
-  onYouDelta: string; ceilingBefore: string; ceilingAfter: string
+  onYouDelta: string; ceilingLabel: string; ceilingBefore: string; ceilingAfter: string
   fitness: string; fitnessD: string; fatigue: string; fatigueD: string; form: string; formD: string
   changesBody: string
-  seasonSub: string; season: W3SeasonRow[]
-  seasonBody: string
 }
 
 const SectionHead = ({ n, t, s }: { n: string; t: string; s: string }) => (
@@ -67,7 +66,7 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-        <div style={{ height: 44, padding: '0 22px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', fontSize: 12, color: T.mid }}>9:41</div>
+        <W3StatusBar />
 
         {/* Nav */}
         <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -232,7 +231,7 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
         </div>
 
         {/* 04 What this changes */}
-        <div style={{ ...band(28), gap: 12 }}>
+        <div style={{ ...band(44), gap: 12 }}>
           <SectionHead n="04" t="What this changes" s="The ride is over. These are the numbers it moved." />
           <div style={{ ...card(), gap: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -241,7 +240,7 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
                 <span style={{ fontSize: 42, fontWeight: 700, letterSpacing: -2, color: T.acid }}>{vm.onYouDelta}<span style={{ fontSize: 16, letterSpacing: 0 }}> W</span></span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
-                <Kicker>5-min ceiling</Kicker>
+                <Kicker>{vm.ceilingLabel}</Kicker>
                 <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{vm.ceilingBefore} → {vm.ceilingAfter}</span>
               </div>
             </div>
@@ -258,28 +257,6 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
               ))}
             </div>
             <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{vm.changesBody}</span>
-          </div>
-        </div>
-
-        {/* 05 What it moved you toward */}
-        <div style={{ ...band(40), gap: 12 }}>
-          <SectionHead n="05" t="What it moved you toward" s={vm.seasonSub} />
-          <div style={{ ...card(), gap: 16 }}>
-            {vm.season.map((r) => (
-              <div key={r.label} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>{r.label}</span>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: T.bg, padding: '2px 6px', borderRadius: 100, background: T.acid }}>{r.delta}</span>
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{r.value} <span style={{ color: T.quiet, fontWeight: 600 }}>/ {r.target}</span></span>
-                </div>
-                <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
-                  <motion.div initial={reduce ? false : { width: 0 }} whileInView={{ width: `${Math.round(r.pct * 100)}%` }} viewport={{ once: true }} transition={{ duration: 0.8 }} style={{ height: '100%', borderRadius: 100, background: T.acid }} />
-                </div>
-              </div>
-            ))}
-            <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{vm.seasonBody}</span>
           </div>
         </div>
 

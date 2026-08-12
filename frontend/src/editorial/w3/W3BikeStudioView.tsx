@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Camera, Sparkles, RefreshCw, Check, Bike } from 'lucide-react'
 import { T, FONT, EASE, band } from './w3tokens'
 import './w3.css'
+import W3StatusBar from './W3StatusBar'
 
 /**
  * W3 · Bike Studio — photo of your real bike → a W3:Ride-style collectible
@@ -64,7 +65,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-        <div style={{ height: 44, padding: '0 22px', display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: T.ink }}>9:41</div>
+        <W3StatusBar />
 
         {/* Header */}
         <div style={{ ...band(20), padding: '10px 20px 18px', gap: 8 }}>

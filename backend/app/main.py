@@ -225,6 +225,7 @@ from app.api.crew_reactions import router as crew_reactions_router  # noqa: E402
 from app.api.rehearsals import router as rehearsals_router  # noqa: E402
 from app.api.rewards import router as rewards_router  # noqa: E402
 from app.api.challenges import router as challenges_router  # noqa: E402
+from app.api.referral import router as referral_router  # noqa: E402
 
 app.include_router(push_router)
 app.include_router(climbs_router)
@@ -241,6 +242,7 @@ app.include_router(crew_reactions_router)
 app.include_router(rehearsals_router)
 app.include_router(rewards_router)
 app.include_router(challenges_router)
+app.include_router(referral_router)
 app.include_router(garage_router)
 
 

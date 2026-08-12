@@ -5,6 +5,7 @@ import {
 import { T, FONT, grow, band, Kicker } from './w3tokens'
 import W3TabBar from './W3TabBar'
 import './w3.css'
+import W3StatusBar from './W3StatusBar'
 
 /**
  * W3 · 08 CHALLENGES ("Challenges") — 1:1 code rebuild of the `w3.pen`
@@ -87,7 +88,7 @@ export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; o
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
 
         {/* StatusBar */}
-        <div style={{ height: 44, padding: '0 22px', display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: T.ink }}>9:41</div>
+        <W3StatusBar />
 
         {/* Header nav */}
         <div style={{ ...band(0), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 6 }}>

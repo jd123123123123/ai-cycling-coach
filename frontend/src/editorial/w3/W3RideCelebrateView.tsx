@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { T, FONT, EASE, grow, band } from './w3tokens'
 import './w3.css'
+import W3StatusBar from './W3StatusBar'
 
 /**
  * W3 · Post-ride celebration — 1:1 with `w3.pen` frames `gVMos` (PENDING) and
@@ -90,7 +91,7 @@ export default function W3RideCelebrateView({
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
 
         {/* StatusBar */}
-        <div style={{ height: 44, padding: '0 22px', display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: T.ink }}>9:41</div>
+        <W3StatusBar />
 
         {/* Top row: synced pill + share/close */}
         <div style={{ padding: '4px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

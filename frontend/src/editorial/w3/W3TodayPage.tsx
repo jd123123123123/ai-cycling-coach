@@ -131,9 +131,18 @@ export default function W3TodayPage() {
       }
     })
 
+    // Real week-progress label from the week strip (days trained/rested vs planned).
+    const weekDone = weekDays.filter((d) => d.status === 'hit' || d.status === 'rest').length
+    const weekPlanned = weekDays.filter((d) => d.status !== 'upcoming').length
+    const weekDoneLabel = weekPlanned > 0 ? `${weekDone} of ${weekPlanned} done` : null
+    const zoneTag = session?.intensityFactor != null ? `${Math.round(session.intensityFactor * 100)}% FTP` : null
+
     return {
       handle: user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider'),
       tierLine: 'Silver Tier · Week 6 of 16', // fixture: tier/season not modelled yet
+      bikeName: 'Starter Bike', // fixture: bike economy not built (starter frame)
+      weekDoneLabel,
+      zoneTag,
       avatarUrl: user?.avatar_url ?? null,
       avatarInitial: (user?.display_name || user?.email || '?').charAt(0).toUpperCase(),
       streak: isPresent(model.streakDays) ? model.streakDays.value : null,

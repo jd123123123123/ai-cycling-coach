@@ -1,64 +1,136 @@
 import { useMemo } from 'react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
-import W3RidesView, { type W3RidesVm, type W3HistoryRow } from './W3RidesView'
+import W3RidesView, { type W3RidesVm, type W3RideCard } from './W3RidesView'
 
 /**
- * W3 · 03 RIDES, wired to live data. Route /e/w3-rides.
+ * W3 · 08 RIDES ("Rides"), wired to live data. Route /e/w3-rides.
  *
- * REAL: the month summary (count / total time / total TSS) and the confirmed
- * history list come from `useActivitiesRange` over the current month. Honest
- * "—" for a ride with no training load (e.g. a walk). FIXTURE: the
- * "Unconfirmed" claim rows and every POWER/CYCLE number — this app
- * auto-ingests from Garmin (no confirm step) and the reward economy is the
- * unbuilt `garage-composable-figures` layer.
+ * REAL: the logged-rides count, the season distance total, the monthly-distance
+ * bar chart, the AVG SPEED / AVG POWER / SADDLE TIME footer, and every ride card
+ * come from `useActivitiesRange` over the trailing 12 months (cycling only).
+ * Honest "—" wherever a field is missing. FIXTURE: the GOAL / OF-GOAL /
+ * KM-TO-GO / AHEAD-OF-PACE block — the app has no season-goal model, so those
+ * are derived against a placeholder 12,000 km goal, marked `fixture:` below.
  */
 
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+const GOAL_KM = 12000 // fixture: no season-goal model — placeholder target
+
+/** "4 812" — thin-spaced thousands, matching the pen. */
+const spaced = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ')
+
+/** "TUE 12 AUG" */
+function dateLabel(d: Date): string {
+  const wd = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()
+  const mo = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+  return `${wd} ${String(d.getDate()).padStart(2, '0')} ${mo}`
+}
+
+/** seconds → "H:MM" */
+function hm(sec: number): string {
+  const h = Math.floor(sec / 3600)
+  const m = Math.round((sec % 3600) / 60)
+  return `${h}:${String(m).padStart(2, '0')}`
+}
+
+const RACE_RE = /\brace\b|\bcrit\b|gran ?fondo|\btt\b|time ?trial|\brr\b/i
 
 export default function W3RidesPage() {
   const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const { data } = useActivitiesRange(monthStart, monthEnd)
-  const mon = MONTHS[now.getMonth()]
+  const start = new Date(now.getFullYear(), now.getMonth() - 11, 1) // trailing 12 months
+  const { data } = useActivitiesRange(start, now)
 
   const vm = useMemo<W3RidesVm>(() => {
-    const acts = (data?.activities ?? []).slice().sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
-    const totalTss = acts.reduce((s, a) => s + (a.tss ?? 0), 0)
-    const totalSec = acts.reduce((s, a) => s + (a.duration_seconds ?? 0), 0)
-    const maxTss = Math.max(1, ...acts.map((a) => a.tss ?? 0))
-    const hrs = Math.floor(totalSec / 3600)
-    const mins = Math.round((totalSec % 3600) / 60)
+    const acts = (data?.activities ?? [])
+      .filter((a) => a.sport === 'cycling')
+      .slice()
+      .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
 
-    const history: W3HistoryRow[] = acts.slice(0, 12).map((a) => {
-      const rested = a.tss == null || a.tss === 0
-      // reward is a fixture — a legible function of TSS so the column reads,
-      // clearly not a real balance.
-      const power = a.tss != null ? Math.round(a.tss * 38) : null
+    // ── Season aggregates (real) ──────────────────────────────────────────────
+    const totalDistM = acts.reduce((s, a) => s + (a.distance_meters ?? 0), 0)
+    const totalSec = acts.reduce((s, a) => s + (a.duration_seconds ?? 0), 0)
+    const totalKm = totalDistM / 1000
+
+    // duration-weighted average speed / power over rides that carry the field
+    let movingSec = 0, distForSpeed = 0, pWeighted = 0, pSec = 0
+    for (const a of acts) {
+      const dur = a.duration_seconds ?? 0
+      if (dur > 0 && a.distance_meters) { movingSec += dur; distForSpeed += a.distance_meters }
+      const pw = a.average_power ?? a.normalized_power
+      if (dur > 0 && pw != null) { pWeighted += pw * dur; pSec += dur }
+    }
+    const avgSpeed = movingSec > 0 ? `${((distForSpeed / movingSec) * 3.6).toFixed(1)}` : '—'
+    const avgPower = pSec > 0 ? `${Math.round(pWeighted / pSec)}` : '—'
+    const saddleTime = totalSec > 0 ? hm(totalSec) : '—'
+
+    // ── Monthly distance bars (real) — trailing 12 months, oldest → newest ────
+    const buckets = new Array(12).fill(0) as number[]
+    for (const a of acts) {
+      const d = new Date(a.started_at)
+      const idx = (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth()) + 11
+      if (idx >= 0 && idx < 12) buckets[idx] += (a.distance_meters ?? 0) / 1000
+    }
+    const maxBar = Math.max(1, ...buckets)
+    const bars = buckets.map((b) => b / maxBar)
+
+    // ── Goal-tracking block (FIXTURE: derived vs placeholder GOAL_KM) ─────────
+    const progress = Math.min(1, totalKm / GOAL_KM)
+    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 864e5)
+    const expected = GOAL_KM * (dayOfYear / 365)
+    const paceDelta = totalKm - expected
+    const paceAhead = paceDelta >= 0
+
+    // ── Ride cards (real) ─────────────────────────────────────────────────────
+    const rides: W3RideCard[] = acts.slice(0, 14).map((a) => {
+      const d = new Date(a.started_at)
+      const km = a.distance_meters != null ? a.distance_meters / 1000 : null
+      const dur = a.duration_seconds ?? 0
+      const speed = km != null && dur > 0 ? `${(km / (dur / 3600)).toFixed(1)}` : '—'
+      const pw = a.average_power ?? a.normalized_power
+      // real secondary fact for the bullet: prefer climbing, else training load
+      const note = a.elevation_gain_m != null && a.elevation_gain_m > 0
+        ? `${Math.round(a.elevation_gain_m)} m climbed`
+        : a.tss != null && a.tss > 0
+          ? `${Math.round(a.tss)} TSS`
+          : null
       return {
-        day: String(new Date(a.started_at).getDate()).padStart(2, '0'),
+        id: a.id,
         title: a.title ?? 'Ride',
-        tss: a.tss != null ? `${Math.round(a.tss)} TSS` : '—',
-        power: power != null ? `+${power.toLocaleString('en-US')}` : '—',
-        fill: a.tss != null ? Math.min(1, a.tss / maxTss) : 0.05,
-        rested,
+        dateLabel: dateLabel(d),
+        km: km != null ? (km >= 100 ? km.toFixed(1) : km.toFixed(2)) : '—',
+        speed,
+        power: pw != null ? `${Math.round(pw)}` : '—',
+        dur: dur > 0 ? hm(dur) : '—',
+        note,
+        indoor: !(a.route_polyline && a.route_polyline.length > 1),
+        race: RACE_RE.test(a.title ?? ''),
+        recent: (now.getTime() - d.getTime()) <= 7 * 864e5,
+        polyline: a.route_polyline ?? null,
       }
     })
 
     return {
-      title: 'Your rides,\nthis month',
-      subtitle: 'Pulled automatically from Garmin. Your training load, banked as you ride.',
-      monthStats: [
-        { v: String(acts.length), l: `RIDES · ${mon}` },
-        { v: totalSec > 0 ? `${hrs}h ${mins}m` : '—', l: `TIME · ${mon}` },
-        { v: totalTss > 0 ? Math.round(totalTss).toLocaleString('en-US') : '—', l: `TSS · ${mon}` },
-      ],
-      // fixture: the app has no unconfirmed-ride concept (auto-ingest).
-      unconfirmed: [],
-      historyLabel: `THIS MONTH · ${mon}`,
-      history,
+      title: 'Rides',
+      loggedLabel: 'LOGGED',
+      count: `${acts.length} ride${acts.length === 1 ? '' : 's'}`,
+      seasonLabel: 'SEASON TOTAL',
+      totalKm: spaced(totalKm),
+      totalUnit: 'km',
+      ofGoalLabel: 'OF GOAL',
+      bars,
+      barsAccentFrom: 7, // trailing 5 months render acid, matching the pen
+      avgSpeed,
+      avgPower,
+      saddleTime,
+      rides,
+      // fixture: goal-tracking (no season-goal model)
+      goalChip: `GOAL ${spaced(GOAL_KM)} KM`,
+      ofGoalPct: `${Math.round(progress * 100)}%`,
+      progress,
+      toGoLabel: `${spaced(Math.max(0, GOAL_KM - totalKm))} KM TO GO`,
+      paceLabel: `${spaced(Math.abs(paceDelta))} KM ${paceAhead ? 'AHEAD OF' : 'BEHIND'} PACE`,
+      paceAhead,
     }
-  }, [data, mon])
+  }, [data, now])
 
   return <W3RidesView vm={vm} />
 }

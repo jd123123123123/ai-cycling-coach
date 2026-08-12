@@ -31,6 +31,7 @@ REASON_ONBOARDING_DEVICE = "onboarding_device"
 REASON_RIDE_EARN = "ride_earn"
 REASON_STREAK_BONUS = "streak_bonus"
 REASON_CHALLENGE_BONUS = "challenge_bonus"
+REASON_REFERRAL_BONUS = "referral_bonus"
 REASON_PART_PURCHASE = "part_purchase"
 REASON_ADJUSTMENT = "adjustment"
 

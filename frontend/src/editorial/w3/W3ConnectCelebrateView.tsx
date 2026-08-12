@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Check, Sparkles, Clock, Mountain, Flame, ArrowRight, Trophy, Globe } from 'lucide-react'
 import { T, FONT, EASE, Kicker, band } from './w3tokens'
 import './w3.css'
+import W3StatusBar from './W3StatusBar'
 
 /**
  * W3 · Connect celebration — after linking Garmin / COROS / Wahoo, celebrate
@@ -65,7 +66,7 @@ export default function W3ConnectCelebrateView({ vm, onContinue }: { vm: W3Conne
           {/* ambient radial glow */}
           <div style={{ position: 'absolute', top: -80, left: '50%', transform: 'translateX(-50%)', width: 460, height: 460, borderRadius: '50%', background: `radial-gradient(circle, ${T.acid}22 0%, ${VIOLET}14 40%, transparent 68%)`, pointerEvents: 'none' }} />
 
-          <div style={{ height: 44, padding: '0 22px', display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: T.ink, position: 'relative' }}>9:41</div>
+          <W3StatusBar />
 
           {/* success chip */}
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12, position: 'relative' }}>

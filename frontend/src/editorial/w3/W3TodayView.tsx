@@ -1,54 +1,38 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
-  Battery, Bell, Bike, Flame, Signal,
-  Sparkles, Wifi, Star, Gauge as GaugeIcon,
+  Bell, Bike, Flame, Share2, Pencil,
+  Sparkles, Star, Gauge as GaugeIcon,
 } from 'lucide-react'
 import { WeekSection, WeatherRoute, MirrorChart, TrainingSection, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt } from './W3Sections'
+import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
+import { STARTER_BIKE } from './starterBike'
+import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import './w3.css'
 
 export type { W3DayFull, W3Weather, W3Mirror, W3Block, OnAdapt, AdaptResult } from './W3Sections'
 
-// Shared spring for the graph reveals — snappy, slightly overshooting, the
-// register the pen's motion notes call for. All animation is opt-out via
-// `useReducedMotion()` (the app's standing accessibility contract).
-const EASE = [0.22, 1, 0.36, 1] as const
-const grow = (delay: number) => ({ duration: 0.55, ease: EASE, delay })
-
 /**
- * W3 · 01 TODAY — a 1:1 code rebuild of the `w3.pen` frame `gx4WA`.
+ * W3 · 01 TODAY — a 1:1 code rebuild of the `w3.pen` frames `gx4WA` / `i5cVpB`.
  *
- * Every dimension, colour, radius, gap, font size, weight and letter-spacing
- * below is transcribed VERBATIM from the pen node tree (read via the Pencil
- * MCP, 2026-08-11), the same way `pages/BikeProgressView.tsx` mirrors its pen
- * frame. The block → pen-node map:
+ * The flagship TODAY screen. Layout, order and W3 styling are transcribed from
+ * the pen: a real bike hero, the readiness card with its acid charge-meter, the
+ * AI-coach verdict, the three overnight signals, and then the pen's repeating
+ * section pattern — a bold title + "Earned by training, not bought" subtitle +
+ * an acid pill tag — over Your Week, Todays Training, Details, Your Current
+ * Status, Your Rank and Your Progress.
  *
- *   StatusBar    component/StatusBar d6mot0      Header       WubXb
- *   Bike Hero    rMjk7                           Hero         k4XB0
- *   Signals      n6GuHK                          Week Wrap    TPyRo
- *   Session Wrap z3sbp                           Load Wrap    Traqf
- *   Crew Wrap    Krj7x                           Garage Band  DMsjq
- *   TabBar       component/TabBar qUhCj
+ * The device chrome (clock / wifi / battery) is NOT faked — the OS draws it, so
+ * the top is just `W3StatusBar` breathing room.
  *
- * This file is a PURE function of `vm`; `W3TodayPage` builds the vm from
- * `useTodayModel` so a fixture can render it without a backend. Fields that
- * map to real coaching data resolve to a value or an honest `null` (rendered
- * as "—"); fields that belong to the not-yet-built reward economy (earn rate,
- * Power/Cycle balances, the Garage upgrade, the crew standings) are DESIGN
- * FIXTURES that reproduce the pen, marked `fixture:` in the vm.
+ * This file is a PURE function of `vm`; `W3TodayPage` builds the vm from real
+ * hooks (`useTodayModel`, `useStreak`, `useWallet`). Fields that map to real
+ * coaching data resolve to a value or an honest `null` (rendered "—"); fields
+ * that belong to the not-yet-built reward economy (earn rate, per-ride earn,
+ * the Garage upgrade + second currency, the crew standings) are DESIGN FIXTURES
+ * reproducing the pen, each marked `fixture:` in the vm.
  */
-
-// ── tokens (mirror w3.css, inlined so the styles read as one unit) ──
-const T = {
-  bg: '#0B0B0B', surface: '#161616', surface2: '#202020',
-  acid: '#C8FF00', acidDim: '#C8FF001F', acidDeep: '#8FBF00',
-  ink: '#FFFFFF', mid: '#9BA0A6', quiet: '#6E7379',
-  rule: '#FFFFFF14', stroke: '#FFFFFF1A',
-  d2: '#FFFFFF33', d3: '#FFFFFF4D', d4: '#FFFFFF8C',
-  training: '#2BE68F', evening: '#7B5CFF', cool: '#6B8CFF',
-}
-const FONT = '"Inter Tight", ui-sans-serif, system-ui, sans-serif'
 
 // ── view model ──
 export interface W3Spark { bars: number[]; hi: string }
@@ -59,6 +43,7 @@ export interface W3Vm {
   tierLine: string
   avatarUrl: string | null
   avatarInitial: string
+  bikeName: string
   streak: number | null
 
   readiness: number | null
@@ -73,7 +58,10 @@ export interface W3Vm {
   sleep: W3Signal | null
 
   weekMeta: string
+  weekDoneLabel: string | null
   weekDays: W3DayFull[]
+
+  zoneTag: string | null
 
   weather: W3Weather
 
@@ -101,18 +89,13 @@ export interface W3Vm {
   garageName: string // fixture
   garageRidesLine: string // fixture
   garageMakesLine: string // fixture
-  power: string // fixture
+  power: string // real (wallet balance) — "—" when the wallet hasn't loaded
   cycle: string // fixture
   mRides: { pct: number; label: string }
   mDist: { pct: number; label: string }
 }
 
 // ── primitives ──
-const Kicker = ({ children }: { children: ReactNode }) => (
-  <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>{children}</span>
-)
-const DASH = '—'
-
 function Spark({ spark, h = 22 }: { spark: W3Spark; h?: number }) {
   const reduce = useReducedMotion()
   return (
@@ -126,7 +109,7 @@ function Spark({ spark, h = 22 }: { spark: W3Spark; h?: number }) {
             whileInView={{ height: bh }}
             viewport={{ once: true, amount: 0.6 }}
             transition={grow(i * 0.04)}
-            style={{ flex: 1, height: bh, borderRadius: 1.5, background: last ? spark.hi : T.d2 }} />
+            style={{ flex: 1, height: bh, borderRadius: 1.5, background: last ? spark.hi : T.d2, boxShadow: last ? `0 0 8px ${spark.hi}66` : 'none' }} />
         )
       })}
     </div>
@@ -140,15 +123,38 @@ function SignalCard({ label, sig }: { label: string; sig: W3Signal | null }) {
       {sig ? (
         <>
           <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end' }}>
-            <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, color: T.ink, lineHeight: 1 }}>{sig.value}</span>
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet, lineHeight: 1.9 }}>{sig.unit}</span>
+            <span style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.8, color: T.ink, lineHeight: 0.9 }}>{sig.value}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, lineHeight: 2 }}>{sig.unit}</span>
           </div>
           <Spark spark={sig.spark} />
           <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.25, color: sig.sub ? sig.subHue : T.quiet }}>{sig.sub ?? DASH}</span>
         </>
       ) : (
-        <span style={{ fontSize: 26, fontWeight: 700, color: T.quiet, lineHeight: 1 }}>{DASH}</span>
+        <span style={{ fontSize: 32, fontWeight: 700, color: T.quiet, lineHeight: 0.9 }}>{DASH}</span>
       )}
+    </div>
+  )
+}
+
+/** The readiness charge-meter — a row of acid bars filled in proportion to the
+ *  real readiness score (an honest gauge, not a fixture). Animates in. */
+function ChargeMeter({ score }: { score: number | null }) {
+  const reduce = useReducedMotion()
+  const N = 18
+  const filled = score == null ? 0 : Math.max(0, Math.min(N, Math.round((score / 100) * N)))
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 26, width: '100%' }}>
+      {Array.from({ length: N }).map((_, i) => {
+        const on = i < filled
+        return (
+          <motion.div key={i}
+            initial={reduce ? false : { scaleY: 0 }}
+            whileInView={{ scaleY: 1 }}
+            viewport={{ once: true, amount: 0.8 }}
+            transition={grow(i * 0.03)}
+            style={{ flex: 1, height: 26, transformOrigin: 'bottom', borderRadius: 3, background: on ? T.acid : T.surface2, boxShadow: on ? `0 0 10px ${T.acid}55` : 'none' }} />
+        )
+      })}
     </div>
   )
 }
@@ -173,11 +179,34 @@ function Ring({ pct, size = 46 }: { pct: number; size?: number }) {
   )
 }
 
+/** The pen's repeating section header: bold title, "Earned by training, not
+ *  bought" subtitle, and an acid pill tag on the right. */
+function SectionHead({ title, subtitle, tag }: { title: string; subtitle?: string; tag: string | null }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', background: T.bg, padding: '0 20px 12px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{title}</span>
+        {subtitle && <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{subtitle}</span>}
+      </div>
+      {tag && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '7px 13px', borderRadius: 100, background: T.acidDim, flex: 'none' }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: T.acid }}>{tag}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const IconBtn = ({ children }: { children: ReactNode }) => (
+  <div style={{ width: 34, height: 34, borderRadius: 100, background: T.surface, display: 'grid', placeItems: 'center', flex: 'none' }}>{children}</div>
+)
+
 // ── band scaffold: every section is a full-width vertical band on w-bg ──
 const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: `0 20px ${padBottom}px` })
 const card = (): CSSProperties => ({ background: T.surface, borderRadius: 24, padding: 20, display: 'flex', flexDirection: 'column', width: '100%' })
 
 export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAdapt }) {
+  const reduce = useReducedMotion()
   // The week strip and the training card share ONE selection: tapping a day
   // drives which recommendation the card shows. Defaults to today.
   const todayIdx = Math.max(0, vm.weekDays.findIndex((d) => d.status === 'today'))
@@ -188,16 +217,11 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
 
-        {/* ── StatusBar ── */}
-        <div style={{ height: 44, padding: '0 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>9:41</span>
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-            <Signal size={15} color={T.ink} /><Wifi size={15} color={T.ink} /><Battery size={15} color={T.ink} />
-          </div>
-        </div>
+        {/* ── Safe-area breathing room — NOT a faked status bar ── */}
+        <W3StatusBar />
 
-        {/* ── Header ── */}
-        <div style={{ padding: '10px 20px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* ── Header: rider + streak + bell ── */}
+        <div style={{ padding: '10px 20px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <div style={{ width: 34, height: 34, borderRadius: 100, overflow: 'hidden', background: T.surface2, flex: 'none', display: 'grid', placeItems: 'center' }}>
               {vm.avatarUrl
@@ -214,35 +238,51 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
               <Flame size={13} color={T.acid} />
               <span style={{ fontSize: 13, fontWeight: 600, color: T.acid }}>{vm.streak ?? DASH}</span>
             </div>
-            <div style={{ width: 34, height: 34, borderRadius: 100, background: T.surface, display: 'grid', placeItems: 'center' }}><Bell size={16} color={T.ink} /></div>
+            <IconBtn><Bell size={16} color={T.ink} /></IconBtn>
           </div>
         </div>
 
-        {/* ── Bike Hero (fixture: no bike render exists; faithful placeholder) ── */}
-        <div style={{ position: 'relative', height: 300, background: T.bg, overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
-          <div style={{ position: 'absolute', width: 320, height: 200, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}22, transparent)` }} />
-          <Bike size={180} strokeWidth={1} color="#3A3A3A" style={{ position: 'relative' }} />
-          <div style={{ position: 'absolute', top: 16, left: 20, display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px', borderRadius: 100, background: '#161616CC' }}>
-            <Bike size={13} color={T.acid} /><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: T.ink }}>GHOST AERO 01</span>
+        {/* ── Garage band: the current bike + share / edit ── */}
+        <div style={{ padding: '0 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 12px 7px 10px', borderRadius: 100, background: T.surface }}>
+            <Bike size={13} color={T.acid} /><span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: T.ink }}>{vm.bikeName}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <IconBtn><Share2 size={15} color={T.mid} /></IconBtn>
+            <IconBtn><Pencil size={15} color={T.mid} /></IconBtn>
           </div>
         </div>
 
-        {/* ── Hero: readiness + coach ── */}
-        <div style={{ ...band(26), paddingTop: 24, gap: 12 }}>
-          <div style={{ width: '100%', maxWidth: 350, alignSelf: 'center', padding: '16px 18px', borderRadius: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-              <span style={{ fontSize: 76, fontWeight: 700, letterSpacing: -3, lineHeight: 0.86, color: vm.readiness != null ? T.acid : T.quiet }}>{vm.readiness ?? DASH}</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 6 }}>
-                <Kicker>Readiness</Kicker>
-                <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>{vm.readinessWord ?? DASH}</span>
+        {/* ── Bike Hero: the rider's real bike photo, faded into the page ── */}
+        <motion.div
+          initial={reduce ? false : { opacity: 0, scale: 1.04 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.7, ease: EASE }}
+          style={{ position: 'relative', height: 300, background: T.bg, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', width: 320, height: 150, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}1F, transparent)` }} />
+          <img src={STARTER_BIKE} alt={vm.bikeName} style={{ position: 'relative', width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 45%' }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
+        </motion.div>
+
+        {/* ── Hero: readiness + charge meter ── */}
+        <div style={{ ...band(24), paddingTop: 20, gap: 14 }}>
+          <div style={{ width: '100%', padding: '18px 18px 16px', borderRadius: 22, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <span style={{ fontSize: 68, fontWeight: 700, letterSpacing: -3, lineHeight: 0.82, color: vm.readiness != null ? T.acid : T.quiet, textShadow: vm.readiness != null ? `0 0 26px ${T.acid}66` : 'none' }}>{vm.readiness ?? DASH}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <Kicker>Readiness</Kicker>
+                  <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{vm.readinessWord ?? DASH}</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                <Kicker>Earn rate</Kicker>
+                <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                  <Star size={14} color={T.acid} fill={T.acid} /><span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{vm.earnRate}</span>
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', paddingBottom: 6 }}>
-              <Kicker>Earn rate</Kicker>
-              <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                <Star size={13} color={T.acid} fill={T.acid} /><span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>{vm.earnRate}</span>
-              </div>
-            </div>
+            <ChargeMeter score={vm.readiness} />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -262,20 +302,22 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           <SignalCard label="Sleep" sig={vm.sleep} />
         </div>
 
-        {/* ── Week (controlled: tap a day → the training card below reflects it) ── */}
+        {/* ── Your Week ── */}
+        <SectionHead title="Your Week" subtitle="Earned by training, not bought" tag={vm.weekDoneLabel} />
         <WeekSection days={vm.weekDays} meta={vm.weekMeta} selected={selDay} onSelect={setSelDay} />
 
-        {/* ── Training recommendation for the selected day
-            (today → adapt; future → plan; past → plan vs. ridden / skipped) ── */}
+        {/* ── Todays Training — the card renders its own header/tag ── */}
         <TrainingSection
           day={selectedDay}
           session={{ dur: vm.sessionDur, blocks: vm.sessionBlocks, ftpTag: vm.sessionFtpTag, earn: vm.sessionEarn }}
           onAdapt={onAdapt} />
 
-        {/* ── Weather + route recommendation ── */}
+        {/* ── Details: weather window + route recommendation ── */}
+        <SectionHead title="Details" subtitle="Earned by training, not bought" tag={vm.zoneTag} />
         <WeatherRoute w={vm.weather} />
 
-        {/* ── Load: interactive 6-week fitness/fatigue mirror + form ── */}
+        {/* ── Your Current Status: 6-week fitness/fatigue mirror + form ── */}
+        <SectionHead title="Your Current Status" subtitle="Earned by training, not bought" tag={vm.zoneTag} />
         {vm.form
           ? <MirrorChart m={vm.mirror} fitness={vm.form.fitness} fatigue={vm.form.fatigue} form={vm.form.formVal} />
           : (
@@ -287,7 +329,8 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
             </div>
           )}
 
-        {/* ── Crew (fixture) ── */}
+        {/* ── Your Rank (fixture: crew standings not wired) ── */}
+        <SectionHead title="Your Rank" subtitle="Earned by training, not bought" tag={vm.zoneTag} />
         <div style={band(26)}>
           <div style={{ ...card(), gap: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -324,7 +367,8 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           </div>
         </div>
 
-        {/* ── Garage (fixture) ── */}
+        {/* ── Your Progress (fixture economy; POWER = real wallet balance) ── */}
+        <SectionHead title="Your Progress" subtitle="Earned by training, not bought" tag={vm.zoneTag} />
         <div style={{ ...band(30), gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>What the training is buying</span>

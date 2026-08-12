@@ -328,9 +328,19 @@ async def create_activity(
         from app.services.streak import build_streak
 
         streak = await build_streak(db, user_id)
-        await rewards.award_ride(
+        award = await rewards.award_ride(
             db, user_id, activity.id, activity.tss, int(streak.get("streak", 0)),
         )
+        # If this rider was recruited via a referral and is inside their 30-day
+        # window, accrue the recruiter's 10% cut of what this ride just earned.
+        # Only on a genuinely-new award (award_ride returns None on a re-sync),
+        # so a ride accrues at most once. Runs on a system session (the
+        # recruiter's row is invisible to this rider's RLS session) and commits
+        # independently, so it can never roll back the ride itself.
+        if award and award.get("total", 0) > 0:
+            from app.services import referral
+
+            await referral.accrue_for_ride(user_id, int(award["total"]))
     except Exception as exc:
         logger.warning(
             "RideCoin award failed for user_id=%s after activity create (non-fatal): %s",

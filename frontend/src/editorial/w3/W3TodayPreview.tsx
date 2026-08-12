@@ -11,6 +11,9 @@ const spark = (bars: number[], hi: string) => ({ bars, hi })
 const FIXTURE: W3Vm = {
   handle: '@jonathan.ghost',
   tierLine: 'Silver Tier · Week 6 of 16',
+  bikeName: 'Starter Bike',
+  weekDoneLabel: '4 of 6 done',
+  zoneTag: '88% FTP',
   avatarUrl: null,
   avatarInitial: 'J',
   streak: 17,

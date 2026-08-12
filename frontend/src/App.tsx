@@ -76,6 +76,14 @@ const W3FirstBikePage = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePa
 const W3FirstBikePreview = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePreview'))
 const W3RideCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3RideCelebratePage'))
 const W3RideCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3RideCelebratePreview'))
+const W3OnboardWelcomePage = lazyWithRetry(() => import('./editorial/w3/W3OnboardWelcomePage'))
+const W3OnboardWelcomePreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardWelcomePreview'))
+const W3OnboardDevicesPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardDevicesPage'))
+const W3OnboardDevicesPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardDevicesPreview'))
+const W3OnboardRewardsPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardRewardsPage'))
+const W3OnboardRewardsPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardRewardsPreview'))
+const W3OnboardGaragePage = lazyWithRetry(() => import('./editorial/w3/W3OnboardGaragePage'))
+const W3OnboardGaragePreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardGaragePreview'))
 const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
@@ -337,6 +345,15 @@ function AppRoutes() {
           <Route path="/e/w3-first-bike-preview" element={<W3FirstBikePreview />} />
           <Route path="/e/w3-ride-celebrate/:id" element={<ProtectedRoute checkOnboarding><W3RideCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-ride-celebrate-preview" element={<W3RideCelebratePreview />} />
+          {/* W3 first-open onboarding chain: welcome → devices → rewards → garage → today */}
+          <Route path="/e/w3-onboard-welcome" element={<ProtectedRoute><W3OnboardWelcomePage /></ProtectedRoute>} />
+          <Route path="/e/w3-onboard-welcome-preview" element={<W3OnboardWelcomePreview />} />
+          <Route path="/e/w3-onboard-devices" element={<ProtectedRoute><W3OnboardDevicesPage /></ProtectedRoute>} />
+          <Route path="/e/w3-onboard-devices-preview" element={<W3OnboardDevicesPreview />} />
+          <Route path="/e/w3-onboard-rewards" element={<ProtectedRoute><W3OnboardRewardsPage /></ProtectedRoute>} />
+          <Route path="/e/w3-onboard-rewards-preview" element={<W3OnboardRewardsPreview />} />
+          <Route path="/e/w3-onboard-garage" element={<ProtectedRoute><W3OnboardGaragePage /></ProtectedRoute>} />
+          <Route path="/e/w3-onboard-garage-preview" element={<W3OnboardGaragePreview />} />
           <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />
