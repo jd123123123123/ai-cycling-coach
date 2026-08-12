@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
+import { useStreak } from '../../hooks/useStreak'
 import { isPresent, type Value } from '../data/value'
 import { previewPlan } from '../../api/coach'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type OnAdapt } from './W3TodayView'
@@ -36,6 +37,7 @@ export default function W3TodayPage() {
   const { state } = useDayState()
   const model = useTodayModel(state)
   const { user } = useAuth()
+  const { data: streak } = useStreak()
 
   const vm = useMemo<W3Vm>(() => {
     const readiness = isPresent(model.readiness) ? model.readiness.value.score : null
@@ -93,22 +95,33 @@ export default function W3TodayPage() {
         }
       : { fitness: [], fatigue: [], fitnessRaw: [], fatigueRaw: [], todayIndex: 0 }
 
-    // Weekday letters + per-day TSS from the model; status vs a nominal daily
-    // target (fixture until per-day planned load is modelled). This is the
-    // hit / missed / overdid rule the strip needs.
+    // Weekday letters + per-day TSS from the model; the hit / missed / rested
+    // status comes from the REAL forgiving streak (services/streak.py), which
+    // reads actual activities + planned workouts + athlete status. This is the
+    // honest, no-guilt rule: a planned rest day reads "rest" (never "missed"),
+    // an unplanned quiet day isn't a failure, and only a genuinely skipped
+    // planned session is "missed". Mon→Sun, aligned by index with model.week.
     const WD = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     const todayDow = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1
+    const streakStates = streak?.week?.map((w) => w.state) ?? []
     const weekDays = model.week.map((d, i) => {
       const actual = isPresent(d.tss) ? d.tss.value : 0
-      const planned = 70 // fixture: per-day planned load not modelled yet
-      const status: 'today' | 'hit' | 'missed' | 'over' | 'rest' | 'upcoming' =
-        i === todayDow ? 'today'
-          : i > todayDow ? 'upcoming'
-            : actual === 0 ? 'missed'
-              : actual > planned * 1.25 ? 'over'
-                : actual >= planned * 0.75 ? 'hit' : 'missed'
       const isToday = i === todayDow
-      const plannedTss = isToday && session?.tss != null ? session.tss : planned
+      // Map the real streak day-state onto the strip's visual status. Fall back
+      // (before the streak loads) to an honest, non-guilt read: past days with
+      // a ride are "hit", quiet past days are "rest" — never a fabricated miss.
+      const st = streakStates[i]
+      const status: 'today' | 'hit' | 'missed' | 'over' | 'rest' | 'upcoming' =
+        isToday ? 'today'
+          : st === 'upcoming' || i > todayDow ? 'upcoming'
+            : st === 'missed' ? 'missed'
+              : st === 'rest' || st === 'paused' ? 'rest'
+                : st === 'trained' ? 'hit'
+                  : st === 'unplanned' ? (actual > 0 ? 'hit' : 'rest')
+                    : actual > 0 ? 'hit' : 'rest'
+      // Today's planned target is real (from the session). Past days carry no
+      // stored per-day planned TSS, so the label shows the actual, not a guess.
+      const plannedTss = isToday && session?.tss != null ? session.tss : actual
       return {
         letter: d.letter, num: '', actual, planned: plannedTss, status,
         title: isToday && session ? session.title : null,
@@ -181,13 +194,16 @@ export default function W3TodayPage() {
       mRides: { pct: 50, label: '25 rides' },
       mDist: { pct: 73, label: '200 km' },
     }
-  }, [model, user])
+  }, [model, user, streak])
 
-  // Real AI adapt: Easier/Harder run the coach's plan-adaptation endpoint
-  // (`/coach/plan/preview` → LLM + plan engine + safety rails). The returned
-  // target/TSS/FTP and rationale are the model's. Rest is deterministic and
+  // Real adapt: Easier/Harder run the coach's plan-adaptation endpoint
+  // (`/coach/plan/preview` → deterministic plan engine + safety rails, a
+  // dry-run that persists nothing). The returned target/TSS/FTP and rationale
+  // are computed from the athlete's real FTP + planned session, with the
+  // intensity ceiling enforced (`rails_downgraded`). Rest is deterministic and
   // never hits the endpoint. `applicable:false` (no plan today) → null, which
-  // the card surfaces as an honest "no plan to adapt".
+  // the card surfaces as an honest "no plan to adapt". (The LLM coaching voice
+  // lives in the readiness verdict above, not in this load-safety math.)
   const onAdapt = useCallback<OnAdapt>(async (kind) => {
     if (kind === 'rest') return { targetW: '—', tss: 0, ftpPct: '—', rationale: 'Full rest today. Let the load settle — tomorrow’s block hits harder for it.', railsDowngraded: false }
     const p = await previewPlan({ modification_type: kind, scope: 'day' })
