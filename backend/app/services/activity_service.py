@@ -319,6 +319,25 @@ async def create_activity(
                 exc,
             )
 
+    # Award RideCoin for the ride at ingestion (push, not pull): base from TSS,
+    # lifted by the athlete's forgiving streak. Idempotent per activity, so a
+    # re-sync never double-pays. Defensive: the reward layer must never break
+    # activity creation — a rider's ride is sacred, the game on top is not.
+    try:
+        from app.services import rewards
+        from app.services.streak import build_streak
+
+        streak = await build_streak(db, user_id)
+        await rewards.award_ride(
+            db, user_id, activity.id, activity.tss, int(streak.get("streak", 0)),
+        )
+    except Exception as exc:
+        logger.warning(
+            "RideCoin award failed for user_id=%s after activity create (non-fatal): %s",
+            user_id,
+            exc,
+        )
+
     return activity
 
 

@@ -23,6 +23,7 @@ from app.models.activity_stream import ActivityStream  # noqa: F401
 from app.models.plan_adaptation import PlanAdaptation  # noqa: F401
 from app.models.ride_feedback import RideFeedback  # noqa: F401
 from app.models.custom_workout import CustomWorkout  # noqa: F401
+from app.models.rewards import Wallet, PointsLedger  # noqa: F401
 from app.models.strength import (  # noqa: F401
     StrengthRoutine,
     RoutineExercise,
@@ -40,4 +41,5 @@ __all__ = [
     "CrewEvent", "CrewEventAttendee", "CrewMessage", "CrewReaction", "ActivityStream",
     "RideFeedback", "CustomWorkout",
     "StrengthRoutine", "RoutineExercise", "StrengthSession", "StrengthSetLog",
+    "Wallet", "PointsLedger",
 ]

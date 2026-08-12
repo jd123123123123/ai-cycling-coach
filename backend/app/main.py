@@ -223,6 +223,7 @@ from app.api.crew_events import router as crew_events_router  # noqa: E402
 from app.api.crew_chat import router as crew_chat_router  # noqa: E402
 from app.api.crew_reactions import router as crew_reactions_router  # noqa: E402
 from app.api.rehearsals import router as rehearsals_router  # noqa: E402
+from app.api.rewards import router as rewards_router  # noqa: E402
 
 app.include_router(push_router)
 app.include_router(climbs_router)
@@ -237,6 +238,8 @@ app.include_router(crew_events_router)
 app.include_router(crew_chat_router)
 app.include_router(crew_reactions_router)
 app.include_router(rehearsals_router)
+app.include_router(rewards_router)
+app.include_router(garage_router)
 
 
 @app.get("/healthz", tags=["health"])
