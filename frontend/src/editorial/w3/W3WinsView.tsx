@@ -28,7 +28,7 @@ export interface W3Hero {
   progressLabel: string
   reward: string
 }
-export interface W3Challenge { key: string; title: string; reward: string; sub: string; fill: number }
+export interface W3Challenge { key: string; title: string; reward: string; sub: string; fill: number; custom?: boolean }
 export interface W3Record { key: string; label: string; value: string; note: string; past: number; best: boolean }
 export interface W3CommunityHero { title: string; pct: string; sub: string; foot: string; fill: number }
 export interface W3Community { key: string; title: string; pct: string; sub: string; you: string; fill: number }
@@ -96,7 +96,7 @@ const SectionHead = ({ title, sub, chip, count }: { title: string; sub?: string;
   </div>
 )
 
-export default function W3WinsView({ vm }: { vm: W3WinsVm }) {
+export default function W3WinsView({ vm, onNewChallenge, onEditChallenge }: { vm: W3WinsVm; onNewChallenge?: () => void; onEditChallenge?: (key: string) => void }) {
   const reduce = useReducedMotion()
 
   return (
@@ -165,13 +165,15 @@ export default function W3WinsView({ vm }: { vm: W3WinsVm }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{c.title}</span>
                   <span style={{ marginLeft: 'auto', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.acid }}>{c.reward}</span>
-                  <MoreHorizontal size={16} color={T.quiet} />
+                  {c.custom
+                    ? <button onClick={() => onEditChallenge?.(c.key)} aria-label="Edit challenge" style={{ background: 'transparent', border: 0, padding: 0, cursor: 'pointer', display: 'grid', placeItems: 'center' }}><MoreHorizontal size={16} color={T.mid} /></button>
+                    : <MoreHorizontal size={16} color={T.quiet} />}
                 </div>
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{c.sub}</span>
                 <SegGauge lit={Math.round(c.fill * 20)} total={20} reduce={reduce} delay={i * 0.03} />
               </div>
             ))}
-            <button style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0 12px', borderTop: `1px solid ${T.rule}`, background: 'transparent', border: 0, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: T.rule, fontFamily: FONT, cursor: 'pointer', color: T.acid, textAlign: 'left' }}>
+            <button onClick={onNewChallenge} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0 12px', borderTop: `1px solid ${T.rule}`, background: 'transparent', border: 0, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: T.rule, fontFamily: FONT, cursor: 'pointer', color: T.acid, textAlign: 'left' }}>
               <Plus size={16} color={T.acid} strokeWidth={2.5} />
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: T.acid }}>{vm.newChallengeLabel}</span>
             </button>

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
@@ -126,6 +127,148 @@ def _serialize(t: ChallengeTemplate, *, value: float, enrolled: bool,
     }
 
 
+# --- Custom (rider-created) challenges --------------------------------------
+# A rider defines their own monthly target. The metric must be one the score
+# engine computes for real; the tier (and thus the reward) is derived from how
+# ambitious the target is relative to the catalog's reference targets, so a
+# rider can't mint a gold reward from a trivial goal.
+CUSTOM_PREFIX = "custom:"
+MAX_CUSTOM_ACTIVE = 5
+
+# Reference monthly targets per metric → what a "silver" month looks like. Tier
+# scales off the ratio to this reference.
+_REFERENCE_TARGET = {
+    "active_days": 20, "distance_km": 600, "tss": 1800,
+    "rides": 15, "hours": 40, "kj": 24000,
+}
+
+
+def tier_for_custom(metric: str, target: float) -> str:
+    """Derive a tier from how ambitious a custom target is vs the reference."""
+    ref = _REFERENCE_TARGET.get(metric)
+    if not ref or target <= 0:
+        return "bronze"
+    ratio = target / ref
+    if ratio >= 1.5:
+        return "gold"
+    if ratio >= 0.75:
+        return "silver"
+    return "bronze"
+
+
+def _serialize_row(row: ChallengeEnrollment, *, value: float) -> dict:
+    """Serialize a stored enrollment (used for custom challenges, which have no
+    catalog template)."""
+    return {
+        "key": row.challenge_key,
+        "title": row.title or "My challenge",
+        "detail": f"{_fmt_target(row.metric, row.target)} this month.",
+        "metric": row.metric,
+        "target": row.target,
+        "tier": row.tier,
+        "reward_rc": row.reward_rc,
+        "value": value,
+        "pct": pct(value, row.target),
+        "enrolled": True,
+        "completed": row.awarded_rc is not None,
+        "awarded_rc": row.awarded_rc,
+        "custom": True,
+    }
+
+
+def _fmt_target(metric: str, target: float) -> str:
+    unit = {"active_days": "days", "distance_km": "km", "tss": "TSS",
+            "rides": "rides", "hours": "h", "kj": "kJ"}.get(metric, "")
+    return f"{round(target):,} {unit}".strip()
+
+
+async def create_custom(
+    db: AsyncSession, user_id: int, title: str, metric: str, target: float,
+) -> dict:
+    """Create a rider-defined monthly challenge. Validates the metric + target,
+    derives the tier/reward, and enrolls the rider for the current month."""
+    if metric not in CHALLENGE_METRICS:
+        raise ValueError(f"unknown metric: {metric}")
+    if target <= 0:
+        raise ValueError("target must be positive")
+    title = (title or "").strip()[:80] or "My challenge"
+
+    period = current_period()
+    # Cap how many custom challenges run at once, so the reward faucet stays sane.
+    existing = await db.execute(
+        select(ChallengeEnrollment).where(
+            ChallengeEnrollment.user_id == user_id,
+            ChallengeEnrollment.period == period,
+            ChallengeEnrollment.challenge_key.startswith(CUSTOM_PREFIX),
+        )
+    )
+    if len(list(existing.scalars().all())) >= MAX_CUSTOM_ACTIVE:
+        raise ValueError("too_many_custom")
+
+    tier = tier_for_custom(metric, target)
+    starts_on, ends_on = period_bounds(period)
+    key = f"{CUSTOM_PREFIX}{uuid.uuid4().hex[:12]}"
+    row = ChallengeEnrollment(
+        user_id=user_id, challenge_key=key, period=period,
+        metric=metric, target=float(target), tier=tier, reward_rc=TIER_REWARD[tier],
+        title=title, starts_on=starts_on, ends_on=ends_on,
+    )
+    db.add(row)
+    await db.flush()
+    await db.commit()
+    return {"created": key, "tier": tier, "reward_rc": TIER_REWARD[tier]}
+
+
+async def _get_own_custom(
+    db: AsyncSession, user_id: int, key: str
+) -> ChallengeEnrollment | None:
+    if not key.startswith(CUSTOM_PREFIX):
+        return None
+    res = await db.execute(
+        select(ChallengeEnrollment).where(
+            ChallengeEnrollment.user_id == user_id,
+            ChallengeEnrollment.challenge_key == key,
+            ChallengeEnrollment.period == current_period(),
+        )
+    )
+    return res.scalar_one_or_none()
+
+
+async def edit_custom(
+    db: AsyncSession, user_id: int, key: str,
+    title: str | None = None, target: float | None = None,
+) -> dict:
+    """Edit a custom challenge's title/target (recomputing tier+reward) — only
+    before it has been completed/paid."""
+    row = await _get_own_custom(db, user_id, key)
+    if row is None:
+        raise ValueError("not_found")
+    if row.awarded_rc is not None:
+        raise ValueError("already_completed")
+    if title is not None:
+        row.title = title.strip()[:80] or row.title
+    if target is not None:
+        if target <= 0:
+            raise ValueError("target must be positive")
+        row.target = float(target)
+        row.tier = tier_for_custom(row.metric, row.target)
+        row.reward_rc = TIER_REWARD[row.tier]
+    await db.commit()
+    return {"edited": key, "tier": row.tier, "reward_rc": row.reward_rc, "target": row.target}
+
+
+async def delete_custom(db: AsyncSession, user_id: int, key: str) -> dict:
+    """Drop a custom challenge — only before it has paid out."""
+    row = await _get_own_custom(db, user_id, key)
+    if row is None:
+        raise ValueError("not_found")
+    if row.awarded_rc is not None:
+        raise ValueError("already_completed")
+    await db.delete(row)
+    await db.commit()
+    return {"deleted": key}
+
+
 async def join(db: AsyncSession, user_id: int, key: str) -> dict:
     """Enroll the rider in a catalog challenge for the current month (idempotent
     — re-joining returns the existing enrollment)."""
@@ -188,8 +331,9 @@ async def list_mine(db: AsyncSession, user_id: int) -> dict:
     active: list[dict] = []
     awarded_any = False
     for key, row in enrolled.items():
+        is_custom = key.startswith(CUSTOM_PREFIX)
         t = _BY_KEY.get(key)
-        if t is None:
+        if t is None and not is_custom:
             continue  # a retired catalog entry — skip from the live view
         value = await challenge_value_for_user(
             db, user_id, row.starts_on, row.ends_on, row.metric,
@@ -199,10 +343,13 @@ async def list_mine(db: AsyncSession, user_id: int) -> dict:
             await _award_if_complete(db, row, value)
             if row.awarded_rc != before:
                 awarded_any = True
-        active.append(_serialize(
-            t, value=value, enrolled=True,
-            completed=row.awarded_rc is not None, awarded_rc=row.awarded_rc,
-        ))
+        if is_custom:
+            active.append(_serialize_row(row, value=value))
+        else:
+            active.append(_serialize(
+                t, value=value, enrolled=True,
+                completed=row.awarded_rc is not None, awarded_rc=row.awarded_rc,
+            ))
 
     if awarded_any:
         await db.commit()

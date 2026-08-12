@@ -23,7 +23,17 @@ export interface RewardChallenge {
   enrolled: boolean
   completed: boolean
   awarded_rc: number | null
+  custom?: boolean       // rider-created (editable/deletable)
 }
+
+export const CHALLENGE_METRICS: { metric: ChallengeMetric; label: string; unit: string }[] = [
+  { metric: 'active_days', label: 'Ride days', unit: 'days' },
+  { metric: 'distance_km', label: 'Distance', unit: 'km' },
+  { metric: 'tss', label: 'Training load', unit: 'TSS' },
+  { metric: 'rides', label: 'Rides', unit: 'rides' },
+  { metric: 'hours', label: 'Hours', unit: 'h' },
+  { metric: 'kj', label: 'Energy', unit: 'kJ' },
+]
 
 export interface MyChallenges {
   period: string         // "YYYY-MM"
@@ -42,5 +52,23 @@ export async function joinChallenge(key: string): Promise<{ joined: string; peri
   const res = await apiClient.post<{ joined: string; period: string }>(
     `/challenges/${key}/join`,
   )
+  return res.data
+}
+
+// POST /challenges/custom — create a rider-defined challenge.
+export async function createCustomChallenge(input: { title: string; metric: ChallengeMetric; target: number }) {
+  const res = await apiClient.post<{ created: string; tier: ChallengeTier; reward_rc: number }>('/challenges/custom', input)
+  return res.data
+}
+
+// PATCH /challenges/{key} — edit a custom challenge's title/target.
+export async function editCustomChallenge(key: string, input: { title?: string; target?: number }) {
+  const res = await apiClient.patch<{ edited: string; tier: ChallengeTier; reward_rc: number; target: number }>(`/challenges/${key}`, input)
+  return res.data
+}
+
+// DELETE /challenges/{key} — drop a custom challenge.
+export async function deleteCustomChallenge(key: string) {
+  const res = await apiClient.delete<{ deleted: string }>(`/challenges/${key}`)
   return res.data
 }

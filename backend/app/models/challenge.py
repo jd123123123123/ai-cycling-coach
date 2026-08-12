@@ -41,6 +41,9 @@ class ChallengeEnrollment(Base):
     target: Mapped[float] = mapped_column(Float, nullable=False)
     tier: Mapped[str] = mapped_column(String(12), nullable=False)
     reward_rc: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Title for a rider-created ("custom:*") challenge; catalog challenges take
+    # their title from services/challenges.py and leave this NULL.
+    title: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False,

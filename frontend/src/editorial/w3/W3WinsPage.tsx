@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { AnimatePresence } from 'motion/react'
 import { usePowerProfileView } from '../../hooks/usePowerProfileView'
 import { useWallet } from '../../hooks/useWallet'
 import { useAchievements } from '../../hooks/useAchievements'
 import { useRewardChallenges } from '../../hooks/useRewardChallenges'
 import type { RewardChallenge, ChallengeMetric } from '../../api/rewardChallenges'
 import W3WinsView, { type W3WinsVm, type W3Record, type W3Badge, type W3Hero, type W3Challenge } from './W3WinsView'
+import W3ChallengeEditor from './W3ChallengeEditor'
 
 // Map the server achievement icon vocabulary onto the W3 badge icon set.
 function w3BadgeIcon(icon: string): W3Badge['icon'] {
@@ -41,6 +43,7 @@ function challengeCardFrom(c: RewardChallenge): W3Challenge {
     reward: `${c.completed ? '✓ ' : '+'}${chNf.format(c.reward_rc)} RIDECOIN`,
     sub: `${chNf.format(Math.round(c.value))} of ${chNf.format(c.target)} ${unit}`,
     fill: c.pct / 100,
+    custom: !!c.custom && !c.completed,   // only an in-flight custom is editable
   }
 }
 
@@ -74,6 +77,8 @@ export default function W3WinsPage() {
   const { data: wallet } = useWallet()
   const { data: ach } = useAchievements()
   const { data: challenges } = useRewardChallenges()
+  // null = closed; {existing:null} = create; {existing:card} = edit.
+  const [editor, setEditor] = useState<{ existing: RewardChallenge | null } | null>(null)
 
   const vm = useMemo<W3WinsVm>(() => {
     // Real monthly challenges: hero = the one nearest completion; the rest fill
@@ -164,5 +169,20 @@ export default function W3WinsPage() {
     }
   }, [data, wallet, ach, challenges])
 
-  return <W3WinsView vm={vm} />
+  // Find a card's live challenge (for edit prefill) by key.
+  const findChallenge = (key: string): RewardChallenge | null =>
+    challenges?.active.find((c) => c.key === key) ?? null
+
+  return (
+    <>
+      <W3WinsView
+        vm={vm}
+        onNewChallenge={() => setEditor({ existing: null })}
+        onEditChallenge={(key) => { const c = findChallenge(key); if (c) setEditor({ existing: c }) }}
+      />
+      <AnimatePresence>
+        {editor && <W3ChallengeEditor existing={editor.existing} onClose={() => setEditor(null)} />}
+      </AnimatePresence>
+    </>
+  )
 }
