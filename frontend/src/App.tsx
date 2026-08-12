@@ -68,9 +68,11 @@ const W3RideDetailPage = lazyWithRetry(() => import('./editorial/w3/W3RideDetail
 const W3RideDetailPreview = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPreview'))
 const W3ConnectCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePage'))
 const W3ConnectCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePreview'))
+const W3AvatarOnboardPage = lazyWithRetry(() => import('./editorial/w3/W3AvatarOnboardPage'))
 const W3AvatarOnboardPreview = lazyWithRetry(() => import('./editorial/w3/W3AvatarOnboardPreview'))
 const W3BikerPage = lazyWithRetry(() => import('./editorial/w3/W3BikerPage'))
 const W3BikerPreview = lazyWithRetry(() => import('./editorial/w3/W3BikerPreview'))
+const W3FirstBikePage = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePage'))
 const W3FirstBikePreview = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePreview'))
 const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
@@ -325,9 +327,11 @@ function AppRoutes() {
           <Route path="/e/w3-ride-preview" element={<W3RideDetailPreview />} />
           <Route path="/e/w3-connected" element={<ProtectedRoute checkOnboarding><W3ConnectCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-connected-preview" element={<W3ConnectCelebratePreview />} />
+          <Route path="/e/w3-avatar-onboard" element={<ProtectedRoute checkOnboarding><W3AvatarOnboardPage /></ProtectedRoute>} />
           <Route path="/e/w3-avatar-onboard-preview" element={<W3AvatarOnboardPreview />} />
           <Route path="/e/w3-biker" element={<ProtectedRoute checkOnboarding><W3BikerPage /></ProtectedRoute>} />
           <Route path="/e/w3-biker-preview" element={<W3BikerPreview />} />
+          <Route path="/e/w3-first-bike" element={<ProtectedRoute checkOnboarding><W3FirstBikePage /></ProtectedRoute>} />
           <Route path="/e/w3-first-bike-preview" element={<W3FirstBikePreview />} />
           <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />

@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useGrantOnboarding } from '../../hooks/useWallet'
 import W3ConnectCelebrateView, { type W3ConnectVm, type W3CelebrateStat } from './W3ConnectCelebrateView'
 
 /**
@@ -9,6 +10,8 @@ import W3ConnectCelebrateView, { type W3ConnectVm, type W3CelebrateStat } from '
  * After a Garmin/COROS/Wahoo sync, this celebrates the history the rider just
  * shared. Every figure is REAL, computed from the imported activities over a
  * wide window (`useActivitiesRange`). `?source=Garmin` names the provider.
+ * Reaching this screen means a device is connected, so it fires the equal
+ * 125 RC device grant (idempotent), then chains on to the avatar step.
  */
 
 const fmtInt = (n: number) => Math.round(n).toLocaleString('en-US')
@@ -17,6 +20,17 @@ export default function W3ConnectCelebratePage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const source = params.get('source') || 'Garmin'
+
+  // The device is connected by the time this screen shows — award the one-time
+  // device grant once on mount (server enforces once-ever; failures are silent
+  // so a reward hiccup never blocks onboarding).
+  const grant = useGrantOnboarding()
+  const grantedRef = useRef(false)
+  useEffect(() => {
+    if (grantedRef.current) return
+    grantedRef.current = true
+    grant.mutate('device')
+  }, [grant])
 
   // Wide window so a multi-year backfill is fully counted.
   const end = new Date()
@@ -85,5 +99,5 @@ export default function W3ConnectCelebratePage() {
     }
   }, [data, source])
 
-  return <W3ConnectCelebrateView vm={vm} onContinue={() => navigate('/e/w3-bike-studio')} />
+  return <W3ConnectCelebrateView vm={vm} onContinue={() => navigate('/e/w3-avatar-onboard')} />
 }
