@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Activity, Route as RouteIcon, Bike, Trophy, UserRound, Check } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { T, FONT, EASE, grow, band } from './w3tokens'
+import W3TabBar from './W3TabBar'
 import './w3.css'
 
 /**
@@ -27,7 +28,6 @@ export interface W3RidesVm {
   history: W3HistoryRow[]          // real
 }
 
-const NAV = [['TODAY', Activity, false], ['RIDES', RouteIcon, true], ['GARAGE', Bike, false], ['WINS', Trophy, false], ['BIKER', UserRound, false]] as const
 
 export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
   const reduce = useReducedMotion()
@@ -103,7 +103,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
               disabled={chosen.length === 0}
               style={{ height: 54, borderRadius: 100, border: 0, fontFamily: FONT, cursor: chosen.length ? 'pointer' : 'default',
                 background: chosen.length ? T.acid : T.surface, color: chosen.length ? T.bg : T.quiet, fontSize: 15, fontWeight: 700, letterSpacing: -0.2 }}>
-              {chosen.length ? `Confirm ${chosen.length} ride${chosen.length > 1 ? 's' : ''} · +${totalPower.toLocaleString('en-US')} POWER` : 'Select rides to confirm'}
+              {chosen.length ? `Confirm ${chosen.length} ride${chosen.length > 1 ? 's' : ''} · +${totalPower.toLocaleString('en-US')} RIDECOIN` : 'Select rides to confirm'}
             </motion.button>
           </div>
         )}
@@ -131,21 +131,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
           </div>
         </div>
 
-        {/* TabBar */}
-        <div style={{ marginTop: 'auto', position: 'sticky', bottom: 0, width: '100%', height: 92, padding: '12px 18px 0', background: '#0B0B0BF2', backdropFilter: 'blur(12px)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {NAV.map(([label, Ic, active]) => {
-              const col = active ? T.acid : T.quiet
-              return (
-                <div key={label} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-                  <Ic size={22} color={col} />
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: col }}>{label}</span>
-                </div>
-              )
-            })}
-          </div>
-          <div style={{ height: 34, display: 'grid', placeItems: 'center' }}><div style={{ width: 134, height: 5, borderRadius: 100, background: '#FFFFFF59' }} /></div>
-        </div>
+        <W3TabBar />
 
       </div>
     </div>

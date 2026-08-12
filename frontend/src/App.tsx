@@ -66,6 +66,16 @@ const W3BikeStudioPage = lazyWithRetry(() => import('./editorial/w3/W3BikeStudio
 const W3BikeStudioPreview = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPreview'))
 const W3RideDetailPage = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPage'))
 const W3RideDetailPreview = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPreview'))
+const W3ConnectCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePage'))
+const W3ConnectCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePreview'))
+const W3AvatarOnboardPreview = lazyWithRetry(() => import('./editorial/w3/W3AvatarOnboardPreview'))
+const W3BikerPage = lazyWithRetry(() => import('./editorial/w3/W3BikerPage'))
+const W3BikerPreview = lazyWithRetry(() => import('./editorial/w3/W3BikerPreview'))
+const W3FirstBikePreview = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePreview'))
+const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
+const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
+const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
+const W3ChallengesPreview = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPreview'))
 const EditorialTabPlate = lazyWithRetry(() => import('./editorial/pages/TabPlate'))
 const EditorialArchiveDeck = lazyWithRetry(() => import('./editorial/archive/ArchiveDeckPage'))
 const EditorialMorningWrap = lazyWithRetry(() => import('./editorial/pages/MorningWrapPage'))
@@ -313,6 +323,16 @@ function AppRoutes() {
           <Route path="/e/w3-bike-studio-preview" element={<W3BikeStudioPreview />} />
           <Route path="/e/w3-ride/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />
           <Route path="/e/w3-ride-preview" element={<W3RideDetailPreview />} />
+          <Route path="/e/w3-connected" element={<ProtectedRoute checkOnboarding><W3ConnectCelebratePage /></ProtectedRoute>} />
+          <Route path="/e/w3-connected-preview" element={<W3ConnectCelebratePreview />} />
+          <Route path="/e/w3-avatar-onboard-preview" element={<W3AvatarOnboardPreview />} />
+          <Route path="/e/w3-biker" element={<ProtectedRoute checkOnboarding><W3BikerPage /></ProtectedRoute>} />
+          <Route path="/e/w3-biker-preview" element={<W3BikerPreview />} />
+          <Route path="/e/w3-first-bike-preview" element={<W3FirstBikePreview />} />
+          <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
+          <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
+          <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />
+          <Route path="/e/w3-challenges-preview" element={<W3ChallengesPreview />} />
           {/* Session Detail renders TODAY's session — `useSessionModel` takes no
               id and this backend has no id-scoped session endpoint. The bare
               path is therefore the honest one; `/:id` stays registered so an

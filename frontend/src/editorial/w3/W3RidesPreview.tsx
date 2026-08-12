@@ -13,17 +13,17 @@ const FIXTURE: W3RidesVm = {
     { v: '1,842', l: 'TSS · AUG' },
   ],
   unconfirmed: [
-    { key: 'a', title: 'Threshold 4 × 8', source: 'Garmin', dur: '1:15', tss: '112 TSS', watts: '285 W', power: 4200, cycle: 12 },
-    { key: 'b', title: 'Endurance ride', source: 'Strava', dur: '2:04', tss: '96 TSS', watts: '198 W', power: 3100, cycle: 8 },
-    { key: 'c', title: 'Recovery spin', source: 'Wahoo', dur: '0:45', tss: '28 TSS', watts: '142 W', power: 900, cycle: 2 },
+    { key: 'a', title: 'Threshold 4 × 8', source: 'Garmin', dur: '1:15', tss: '112 TSS', watts: '285 W', power: 112, cycle: 0 },
+    { key: 'b', title: 'Endurance ride', source: 'Strava', dur: '2:04', tss: '96 TSS', watts: '198 W', power: 96, cycle: 0 },
+    { key: 'c', title: 'Recovery spin', source: 'Wahoo', dur: '0:45', tss: '28 TSS', watts: '142 W', power: 28, cycle: 0 },
   ],
   historyLabel: 'CONFIRMED · AUGUST',
   history: [
-    { day: '08', title: 'Sweet spot 3 × 15', tss: '98 TSS', power: '+3,400', fill: 0.64, rested: false },
+    { day: '08', title: 'Sweet spot 3 × 15', tss: '98 TSS', power: '+98', fill: 0.64, rested: false },
     { day: '07', title: 'Rest day walk', tss: '—', power: '—', fill: 0.05, rested: true },
-    { day: '06', title: 'Hill repeats', tss: '124 TSS', power: '+4,800', fill: 0.47, rested: false },
-    { day: '04', title: 'Long endurance', tss: '152 TSS', power: '+5,900', fill: 0.58, rested: false },
-    { day: '03', title: 'Openers', tss: '41 TSS', power: '+1,200', fill: 0.3, rested: false },
+    { day: '06', title: 'Hill repeats', tss: '124 TSS', power: '+124', fill: 0.47, rested: false },
+    { day: '04', title: 'Long endurance', tss: '150 TSS', power: '+150', fill: 0.58, rested: false },
+    { day: '03', title: 'Openers', tss: '41 TSS', power: '+41', fill: 0.3, rested: false },
   ],
 }
 

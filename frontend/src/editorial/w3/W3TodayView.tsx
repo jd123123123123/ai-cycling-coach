@@ -1,10 +1,11 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
-  Activity, Battery, Bell, Bike, Flame, Route, Signal,
-  Sparkles, Trophy, UserRound, Wifi, Star, Gauge as GaugeIcon,
+  Battery, Bell, Bike, Flame, Signal,
+  Sparkles, Wifi, Star, Gauge as GaugeIcon,
 } from 'lucide-react'
 import { WeekSection, WeatherRoute, MirrorChart, TrainingSection, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt } from './W3Sections'
+import W3TabBar from './W3TabBar'
 import './w3.css'
 
 export type { W3DayFull, W3Weather, W3Mirror, W3Block, OnAdapt, AdaptResult } from './W3Sections'
@@ -385,23 +386,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           </div>
         </div>
 
-        {/* ── TabBar (sticky in-flow: pins to the viewport bottom while
-            scrolling, rests at the frame bottom at page end) ── */}
-        <div style={{ marginTop: 'auto', position: 'sticky', bottom: 0, width: '100%', height: 92, padding: '12px 18px 0', background: '#0B0B0BF2', backdropFilter: 'blur(12px)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {[['TODAY', Activity, true], ['RIDES', Route, false], ['GARAGE', Bike, false], ['WINS', Trophy, false], ['BIKER', UserRound, false]].map(([label, Ic, active]) => {
-              const Icon = Ic as typeof Activity
-              const col = active ? T.acid : T.quiet
-              return (
-                <div key={label as string} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-                  <Icon size={22} color={col} />
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: col }}>{label as string}</span>
-                </div>
-              )
-            })}
-          </div>
-          <div style={{ height: 34, display: 'grid', placeItems: 'center' }}><div style={{ width: 134, height: 5, borderRadius: 100, background: '#FFFFFF59' }} /></div>
-        </div>
+        <W3TabBar />
 
       </div>
     </div>

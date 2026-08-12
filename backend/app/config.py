@@ -144,11 +144,18 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-4o-mini"
-    # Image-generation model for the Garage bike render (e.g. "gpt-image-1").
-    # Unset by default: the bike-render pipeline runs the vision ANALYSIS but
-    # returns no image until an image model is provisioned. See
-    # services/bike_render.py.
-    IMAGE_MODEL: str = ""
+
+    # ---- Generative image compositing (living hero + exchangeable parts) ----
+    # See docs/superpowers/specs/2026-08-12-living-hero-generative-figures-design.md
+    # and the 2026 research. The compositor must PRESERVE the canonical base
+    # while editing — the research disqualifies gpt-image (re-renders the whole
+    # frame). Primary provider is Gemini ("Nano Banana Pro"); fal/Flux is the
+    # cheap fallback. All UNSET by default → the pipeline runs the vision
+    # analysis and returns the deterministic/placeholder fallback, never a fake.
+    IMAGE_PROVIDER: str = ""          # "gemini" | "fal" | "openai" | "" (none)
+    IMAGE_MODEL: str = ""             # e.g. "gemini-3-pro-image" / "fal-ai/flux/schnell" / "gpt-image-2"
+    GEMINI_API_KEY: str | None = None
+    FAL_KEY: str | None = None
 
     @field_validator("DATABASE_URL")
     @classmethod

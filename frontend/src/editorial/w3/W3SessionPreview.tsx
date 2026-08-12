@@ -64,7 +64,7 @@ const FIXTURE: W3SessionVm = {
     foot: '19° feels 17 · 8 km/h SW · light till 20:41',
   },
   unlocks: [
-    { icon: 'zap', v: '4,200', l: 'POWER', s: 'Banked the moment you confirm' },
+    { icon: 'zap', v: '112', l: 'RIDECOIN', s: 'Earned by this session’s TSS' },
     { icon: 'hexagon', v: '18/25', l: 'CARBON FRAME', s: 'Seven rides from unlocked' },
     { icon: 'flame', v: 'DAY 18', l: 'STREAK', s: 'Your longest run yet' },
     { icon: 'users', v: '#3', l: 'IN YOUR CLUB', s: 'Up two places this week' },
