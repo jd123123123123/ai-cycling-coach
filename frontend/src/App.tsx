@@ -74,6 +74,8 @@ const W3BikerPage = lazyWithRetry(() => import('./editorial/w3/W3BikerPage'))
 const W3BikerPreview = lazyWithRetry(() => import('./editorial/w3/W3BikerPreview'))
 const W3FirstBikePage = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePage'))
 const W3FirstBikePreview = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePreview'))
+const W3RideCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3RideCelebratePage'))
+const W3RideCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3RideCelebratePreview'))
 const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
@@ -333,6 +335,8 @@ function AppRoutes() {
           <Route path="/e/w3-biker-preview" element={<W3BikerPreview />} />
           <Route path="/e/w3-first-bike" element={<ProtectedRoute checkOnboarding><W3FirstBikePage /></ProtectedRoute>} />
           <Route path="/e/w3-first-bike-preview" element={<W3FirstBikePreview />} />
+          <Route path="/e/w3-ride-celebrate/:id" element={<ProtectedRoute checkOnboarding><W3RideCelebratePage /></ProtectedRoute>} />
+          <Route path="/e/w3-ride-celebrate-preview" element={<W3RideCelebratePreview />} />
           <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />

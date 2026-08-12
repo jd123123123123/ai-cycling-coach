@@ -247,6 +247,40 @@ async def grant_onboarding(db: AsyncSession, user_id: int, reason: str) -> int:
     return amount
 
 
+async def ride_breakdown(
+    db: AsyncSession, user_id: int, activity_id: int
+) -> dict | None:
+    """How a single ride's RideCoin was made, from the ledger — the data behind
+    the post-ride celebration's "how the N was made" bar. Returns the base
+    (ride_earn), the streak bonus and its multiplier, and the total, or ``None``
+    when the ride earned nothing / isn't awarded yet.
+    """
+    rows = await db.execute(
+        select(PointsLedger).where(
+            PointsLedger.user_id == user_id,
+            PointsLedger.activity_id == activity_id,
+        )
+    )
+    entries = list(rows.scalars().all())
+    if not entries:
+        return None
+
+    base = next((e for e in entries if e.reason == REASON_RIDE_EARN), None)
+    streak = next((e for e in entries if e.reason == REASON_STREAK_BONUS), None)
+    base_rc = int(base.amount) if base else 0
+    streak_rc = int(streak.amount) if streak else 0
+    return {
+        "activity_id": activity_id,
+        "base": base_rc,
+        "streak_bonus": streak_rc,
+        "multiplier": float(streak.multiplier) if streak and streak.multiplier else 1.0,
+        "base_tss": base.base_tss if base else None,
+        "total": base_rc + streak_rc,
+        "banked": base is not None,
+        "at": (base.created_at.isoformat() if base and base.created_at else None),
+    }
+
+
 async def get_wallet(db: AsyncSession, user_id: int, ledger_limit: int = 25) -> dict:
     """The rider's balance plus their most recent ledger entries."""
     wallet = await db.get(Wallet, user_id)

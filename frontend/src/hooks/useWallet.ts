@@ -1,5 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchWallet, grantOnboarding, type Wallet } from '../api/rewards'
+import { fetchWallet, fetchRideEarning, grantOnboarding, type RideEarning, type Wallet } from '../api/rewards'
+
+// The RideCoin one ride earned — powers the post-ride celebration.
+export function useRideEarning(activityId: number | null | undefined) {
+  return useQuery<RideEarning>({
+    queryKey: ['rewards', 'ride', activityId],
+    queryFn: () => fetchRideEarning(activityId as number),
+    enabled: activityId != null,
+    staleTime: 5 * 60 * 1000,
+  })
+}
 
 // RideCoin wallet — the real balance/ledger/tier behind the reward screens.
 // A cosmetic layer on top of real training, so a slightly stale read is fine.

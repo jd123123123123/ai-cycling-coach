@@ -32,6 +32,24 @@ async def get_wallet(
     return {**wallet, "tier": rewards.tier_progress(wallet["balance"])}
 
 
+@router.get(
+    "/ride/{activity_id}",
+    summary="How a single ride's RideCoin was made (for the post-ride celebration)",
+)
+async def get_ride_breakdown(
+    activity_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """The base + streak-bonus breakdown for one ride, or ``banked: false`` when
+    the ride hasn't earned RideCoin (no TSS, or not yet ingested)."""
+    result = await rewards.ride_breakdown(db, current_user.id, activity_id)
+    if result is None:
+        return {"activity_id": activity_id, "banked": False, "total": 0,
+                "base": 0, "streak_bonus": 0, "multiplier": 1.0}
+    return result
+
+
 @router.post(
     "/onboarding/{kind}",
     summary="Award a one-time onboarding grant (photo or device); idempotent",

@@ -45,9 +45,27 @@ export interface OnboardingGrantResult extends Wallet {
   reason: string
 }
 
+// The RideCoin a single ride earned, broken down (for the celebration screen).
+export interface RideEarning {
+  activity_id: number
+  banked: boolean
+  total: number
+  base: number
+  streak_bonus: number
+  multiplier: number
+  base_tss?: number | null
+  at?: string | null
+}
+
 // GET /rewards/wallet — balance, recent ledger, and shop-tier progress.
 export async function fetchWallet(): Promise<Wallet> {
   const res = await apiClient.get<Wallet>('/rewards/wallet')
+  return res.data
+}
+
+// GET /rewards/ride/{id} — how one ride's RideCoin was made.
+export async function fetchRideEarning(activityId: number): Promise<RideEarning> {
+  const res = await apiClient.get<RideEarning>(`/rewards/ride/${activityId}`)
   return res.data
 }
 
