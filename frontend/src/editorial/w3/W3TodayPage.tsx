@@ -1,10 +1,12 @@
 import { useCallback, useMemo } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
 import { useStreak } from '../../hooks/useStreak'
 import { isPresent, type Value } from '../data/value'
 import { previewPlan } from '../../api/coach'
+import { hasSeenW3Onboarding } from './w3Onboarding'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type OnAdapt } from './W3TodayView'
 
 type SignalValue = { value: number; delta: number | null }
@@ -228,6 +230,14 @@ export default function W3TodayPage() {
       railsDowngraded: p.rails_downgraded,
     }
   }, [])
+
+  // First-open gate: a rider who has never seen the W3 intro lands on the
+  // onboarding chain instead of a cold Today. localStorage-backed, so it fires
+  // once per browser; the Garage step marks it seen. (After all hooks, so the
+  // Rules of Hooks hold regardless of this branch.)
+  if (user && !hasSeenW3Onboarding()) {
+    return <Navigate to="/e/w3-onboard-welcome" replace />
+  }
 
   return <W3TodayView vm={vm} onAdapt={onAdapt} />
 }

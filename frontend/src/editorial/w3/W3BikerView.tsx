@@ -29,7 +29,7 @@ export interface W3BikerVm {
 
 const DEV_ICONS = { watch: Watch, activity: ActivityIcon, zap: Zap, heart: HeartPulse }
 
-export default function W3BikerView({ vm, onBack }: { vm: W3BikerVm; onBack?: () => void }) {
+export default function W3BikerView({ vm, onBack, onReferral }: { vm: W3BikerVm; onBack?: () => void; onReferral?: () => void }) {
   const reduce = useReducedMotion()
   const avatar = vm.avatarUrl ?? SHOWCASE_RIDER
   const SEG = 24, litSeg = Math.round((vm.tierPct / 100) * SEG)
@@ -113,12 +113,12 @@ export default function W3BikerView({ vm, onBack }: { vm: W3BikerVm; onBack?: ()
           <Kicker>Referrals</Kicker>
           <div style={{ ...card(), gap: 14 }}>
             <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>{vm.referralBody}</span>
-            <div style={{ height: 52, borderRadius: 100, background: '#FFFFFF0F', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 18px' }}>
+            <button onClick={onReferral} style={{ height: 52, borderRadius: 100, background: '#FFFFFF0F', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 18px', border: 0, cursor: 'pointer', fontFamily: FONT, width: '100%' }}>
               <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: 2.5, color: T.ink }}>{vm.referralCode}</span>
               <div style={{ height: 38, borderRadius: 100, background: T.acid, display: 'flex', gap: 7, alignItems: 'center', padding: '0 16px' }}>
                 <Share2 size={14} color={T.bg} /><span style={{ fontSize: 12.5, fontWeight: 700, color: T.bg }}>Share</span>
               </div>
-            </div>
+            </button>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', paddingTop: 14, borderTop: `1px solid ${T.rule}` }}>
               <div style={{ display: 'flex' }}>
                 {['#B9A7EE', '#A7D8EE', '#EEC7A7'].map((c, i) => <div key={i} style={{ width: 28, height: 28, borderRadius: 100, background: c, marginLeft: i ? -8 : 0, border: `2px solid ${T.surface}` }} />)}

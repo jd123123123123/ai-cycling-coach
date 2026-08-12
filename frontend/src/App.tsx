@@ -84,6 +84,10 @@ const W3OnboardRewardsPage = lazyWithRetry(() => import('./editorial/w3/W3Onboar
 const W3OnboardRewardsPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardRewardsPreview'))
 const W3OnboardGaragePage = lazyWithRetry(() => import('./editorial/w3/W3OnboardGaragePage'))
 const W3OnboardGaragePreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardGaragePreview'))
+const W3ReferralsPage = lazyWithRetry(() => import('./editorial/w3/W3ReferralsPage'))
+const W3ReferralsPreview = lazyWithRetry(() => import('./editorial/w3/W3ReferralsPreview'))
+const W3ReferralUserPage = lazyWithRetry(() => import('./editorial/w3/W3ReferralUserPage'))
+const W3ReferralUserPreview = lazyWithRetry(() => import('./editorial/w3/W3ReferralUserPreview'))
 const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
@@ -354,6 +358,11 @@ function AppRoutes() {
           <Route path="/e/w3-onboard-rewards-preview" element={<W3OnboardRewardsPreview />} />
           <Route path="/e/w3-onboard-garage" element={<ProtectedRoute><W3OnboardGaragePage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-garage-preview" element={<W3OnboardGaragePreview />} />
+          {/* Referrals: recruit riders, earn 10% for 30 days, claim on close. */}
+          <Route path="/e/w3-referrals" element={<ProtectedRoute checkOnboarding><W3ReferralsPage /></ProtectedRoute>} />
+          <Route path="/e/w3-referrals-preview" element={<W3ReferralsPreview />} />
+          <Route path="/e/w3-referral-user/:id" element={<ProtectedRoute checkOnboarding><W3ReferralUserPage /></ProtectedRoute>} />
+          <Route path="/e/w3-referral-user-preview" element={<W3ReferralUserPreview />} />
           <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />

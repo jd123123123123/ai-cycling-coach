@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useWallet } from '../../hooks/useWallet'
@@ -19,6 +20,7 @@ const nf = new Intl.NumberFormat('en-US')
  * layer where no field exists yet (honest "—" / fixtures, marked below).
  */
 export default function W3BikerPage() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { data: profile } = useAthleteProfile()
   const { data: wallet } = useWallet()
@@ -64,5 +66,5 @@ export default function W3BikerPage() {
     }
   }, [user, profile, wallet])
 
-  return <W3BikerView vm={vm} />
+  return <W3BikerView vm={vm} onReferral={() => navigate('/e/w3-referrals')} />
 }
