@@ -37,22 +37,29 @@ export default function W3TabBar() {
   }
 
   return (
-    <div style={{ marginTop: 'auto', position: 'sticky', bottom: 0, width: '100%', height: 92, padding: '10px 14px 0', background: '#0B0B0BF2', backdropFilter: 'blur(14px)', borderTop: `1px solid ${T.rule}`, fontFamily: FONT, zIndex: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch' }}>
-        {TABS.map(({ key, label, icon: Icon, route }) => {
-          const active = key === activeKey
-          const col = active ? T.acid : T.quiet
-          return (
-            <button key={key} onClick={() => go(route)} aria-label={label} aria-current={active ? 'page' : undefined}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', justifyContent: 'center', padding: '8px 0 6px', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, position: 'relative' }}>
-              {active && <div style={{ position: 'absolute', top: 2, width: 46, height: 30, borderRadius: 100, background: T.acidDim, boxShadow: `0 0 18px ${T.acid}33` }} />}
-              <Icon size={21} color={col} style={{ position: 'relative' }} />
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: col, position: 'relative' }}>{label}</span>
-            </button>
-          )
-        })}
+    <>
+      {/* In-flow spacer: reserves the bar's height so page content never hides
+          behind the fixed bar. Only screens that render the bar reserve space. */}
+      <div aria-hidden style={{ marginTop: 'auto', height: 'calc(92px + env(safe-area-inset-bottom))' }} />
+      {/* The bar itself is viewport-fixed → always visible regardless of scroll,
+          centered within the 390px frame on desktop. */}
+      <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: 390, maxWidth: '100%', height: 'calc(92px + env(safe-area-inset-bottom))', padding: '10px 14px calc(0px + env(safe-area-inset-bottom))', background: '#0B0B0BF2', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', borderTop: `1px solid ${T.rule}`, fontFamily: FONT, zIndex: 50 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch' }}>
+          {TABS.map(({ key, label, icon: Icon, route }) => {
+            const active = key === activeKey
+            const col = active ? T.acid : T.quiet
+            return (
+              <button key={key} onClick={() => go(route)} aria-label={label} aria-current={active ? 'page' : undefined}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', justifyContent: 'center', padding: '8px 0 6px', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, position: 'relative' }}>
+                {active && <div style={{ position: 'absolute', top: 2, width: 46, height: 30, borderRadius: 100, background: T.acidDim, boxShadow: `0 0 18px ${T.acid}33` }} />}
+                <Icon size={21} color={col} style={{ position: 'relative' }} />
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: col, position: 'relative' }}>{label}</span>
+              </button>
+            )
+          })}
+        </div>
+        <div style={{ height: 30, display: 'grid', placeItems: 'center' }}><div style={{ width: 134, height: 5, borderRadius: 100, background: '#FFFFFF59' }} /></div>
       </div>
-      <div style={{ height: 30, display: 'grid', placeItems: 'center' }}><div style={{ width: 134, height: 5, borderRadius: 100, background: '#FFFFFF59' }} /></div>
-    </div>
+    </>
   )
 }

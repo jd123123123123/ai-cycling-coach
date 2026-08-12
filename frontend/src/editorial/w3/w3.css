@@ -37,7 +37,10 @@
 }
 
 /* The device frame: the pen frame is 390 wide, clipped. On desktop we center
- * it; on a phone it fills the viewport. */
+ * it; on a phone it fills the viewport. The page body is the scroll container
+ * (native momentum scroll); the bottom nav is viewport-fixed (see W3TabBar), so
+ * the frame must NOT create its own overflow/scroll context — an overflow value
+ * here would trap the fixed bar and break momentum scrolling. */
 .w3-frame {
   width: 390px;
   max-width: 100%;
@@ -45,8 +48,12 @@
   background: var(--w-bg);
   min-height: 100dvh;
   position: relative;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
+/* Wide children (charts, rows) scroll inside their own container instead of
+ * pushing the frame sideways — the frame itself never scrolls horizontally. */
+.w3-frame > * { min-width: 0; }
 
 .w3-root *,
 .w3-root *::before,

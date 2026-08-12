@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Share2, Settings, Crown, Watch, Activity as ActivityIcon, Zap, HeartPulse } from 'lucide-react'
 import { SHOWCASE_RIDER } from './showcaseRider'
 import W3TabBar from './W3TabBar'
+import W3StatusBar from './W3StatusBar'
 import { T, FONT, grow, Kicker, band, card } from './w3tokens'
 import './w3.css'
 
@@ -36,7 +37,7 @@ export default function W3BikerView({ vm, onBack }: { vm: W3BikerVm; onBack?: ()
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
-        <div style={{ height: 44, padding: '0 22px', display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: T.ink }}>9:41</div>
+        <W3StatusBar />
 
         {/* Nav */}
         <div style={{ padding: '0 20px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
