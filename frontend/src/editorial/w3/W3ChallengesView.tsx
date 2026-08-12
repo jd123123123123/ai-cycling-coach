@@ -77,7 +77,7 @@ function sealPath(bumps: number, R: number, C: number) {
 }
 const SEAL = sealPath(11, 46, 60)
 
-export default function W3ChallengesView({ vm }: { vm: W3ChallengesVm }) {
+export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; onJoin?: (key: string) => void }) {
   const reduce = useReducedMotion()
   const m = vm.monthly
   const segs = Array.from({ length: m.total }, (_, i) => i < m.done)
@@ -186,7 +186,7 @@ export default function W3ChallengesView({ vm }: { vm: W3ChallengesVm }) {
             {vm.open.map((o, i) => {
               const Ic = OPEN_ICON[o.icon]
               return (
-                <button key={o.key} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: '14px 0', border: 0, background: 'transparent', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}`, cursor: 'pointer', fontFamily: FONT, textAlign: 'left', width: '100%' }}>
+                <button key={o.key} onClick={() => onJoin?.(o.key)} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: '14px 0', border: 0, background: 'transparent', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}`, cursor: onJoin ? 'pointer' : 'default', fontFamily: FONT, textAlign: 'left', width: '100%' }}>
                   <div style={{ width: 44, height: 44, borderRadius: 14, flex: 'none', display: 'grid', placeItems: 'center', background: o.accent ? T.acid : T.surface2 }}>
                     <Ic size={20} color={o.accent ? '#0B0B0B' : T.mid} strokeWidth={2.2} />
                   </div>

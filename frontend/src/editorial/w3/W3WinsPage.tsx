@@ -2,7 +2,9 @@ import { useMemo } from 'react'
 import { usePowerProfileView } from '../../hooks/usePowerProfileView'
 import { useWallet } from '../../hooks/useWallet'
 import { useAchievements } from '../../hooks/useAchievements'
-import W3WinsView, { type W3WinsVm, type W3Record, type W3Badge } from './W3WinsView'
+import { useRewardChallenges } from '../../hooks/useRewardChallenges'
+import type { RewardChallenge, ChallengeMetric } from '../../api/rewardChallenges'
+import W3WinsView, { type W3WinsVm, type W3Record, type W3Badge, type W3Hero, type W3Challenge } from './W3WinsView'
 
 // Map the server achievement icon vocabulary onto the W3 badge icon set.
 function w3BadgeIcon(icon: string): W3Badge['icon'] {
@@ -11,17 +13,49 @@ function w3BadgeIcon(icon: string): W3Badge['icon'] {
   return 'medal'
 }
 
+const CH_UNIT: Record<ChallengeMetric, string> = {
+  active_days: 'days', distance_km: 'km', tss: 'TSS', rides: 'rides', hours: 'h', kj: 'kJ',
+}
+const chNf = new Intl.NumberFormat('en-US')
+const chSegs = (target: number) => { const t = Math.round(target); return t > 0 && t <= 31 ? t : 20 }
+
+function heroFrom(c: RewardChallenge): W3Hero {
+  const total = chSegs(c.target)
+  const unit = CH_UNIT[c.metric]
+  return {
+    title: c.title,
+    daysLeft: c.completed ? 'COMPLETED' : 'THIS MONTH',
+    body: c.detail,
+    lit: Math.round((c.pct / 100) * total),
+    total,
+    progressLabel: `${chNf.format(Math.round(c.value))} of ${chNf.format(c.target)} ${unit}`,
+    reward: `${c.completed ? 'EARNED' : 'REWARD'} · ${chNf.format(c.reward_rc)} RIDECOIN`,
+  }
+}
+
+function challengeCardFrom(c: RewardChallenge): W3Challenge {
+  const unit = CH_UNIT[c.metric]
+  return {
+    key: c.key,
+    title: c.title,
+    reward: `${c.completed ? '✓ ' : '+'}${chNf.format(c.reward_rc)} RIDECOIN`,
+    sub: `${chNf.format(Math.round(c.value))} of ${chNf.format(c.target)} ${unit}`,
+    fill: c.pct / 100,
+  }
+}
+
 /**
  * W3 · 04 WINS, wired to live data. Route /e/w3-wins.
  *
  * REAL: the Personal records watts come from the athlete's own mean-max curve
- * (`usePowerProfileView` → `curve`); the RideCoin balance from the wallet; and
- * the Badges grid + count from the server-detected achievements
- * (`useAchievements` → `/achievements/mine`, earned by riding, never bought).
- * Honest "—" when a signal is absent. FIXTURE: the challenge economy — the Hot
- * Streak hero, personal & community challenges, the community pools, and the
- * "+N on <month>" old-best deltas — is the unbuilt challenge/catalog layer
- * (`ridecoin-point-system`), clearly a designed reward, not a fabricated stat.
+ * (`usePowerProfileView` → `curve`); the RideCoin balance from the wallet; the
+ * Badges grid + count from server-detected achievements (`/achievements/mine`);
+ * and the challenge hero + personal-challenge cards from the monthly challenge
+ * subsystem (`useRewardChallenges` → `/challenges/mine`) — real progress from
+ * the rider's rides and a real RideCoin payout on completion. Honest "—" when a
+ * signal is absent. FIXTURE: only the community pools ("% of the whole
+ * community") and the "+N on <month>" record deltas remain — no backend concept
+ * to map onto yet, clearly a designed reward, not a fabricated stat.
  */
 
 // Personal records: (label, seconds, best-flag, fixture note, fixture past-fraction)
@@ -39,8 +73,15 @@ export default function W3WinsPage() {
   const { data } = usePowerProfileView()
   const { data: wallet } = useWallet()
   const { data: ach } = useAchievements()
+  const { data: challenges } = useRewardChallenges()
 
   const vm = useMemo<W3WinsVm>(() => {
+    // Real monthly challenges: hero = the one nearest completion; the rest fill
+    // the personal-challenge cards. Falls back to the pen copy until first read.
+    const chAll = challenges ? [...challenges.active, ...challenges.available] : []
+    const chSorted = [...chAll].sort((a, b) => Number(b.enrolled) - Number(a.enrolled) || b.pct - a.pct)
+    const chHero = chSorted[0] ?? null
+    const chCards = chSorted.slice(1, 4)
     const curve = data?.available ? data.curve ?? [] : []
     const wattsAt = (seconds: number): number | null => {
       const p = curve.find((c) => c.seconds === seconds)
@@ -58,28 +99,20 @@ export default function W3WinsPage() {
       subtitle: 'Every badge here is a training outcome. Nothing is bought.',
       balance: wallet ? wallet.balance.toLocaleString('en-US') : null,  // REAL: RideCoin wallet
 
-      // fixture: reward layer (challenges / POWER economy not built)
+      // REAL: monthly challenges (useRewardChallenges) — hero + personal cards
+      // show real progress from the rider's activities and real RideCoin rewards.
       challengesHeader: 'Your challenges',
-      challengesSub: 'Targets you set yourself · edit or drop any time',
-      challengesChip: '4 ACTIVE',
-      hero: {
-        title: 'Hot Streak',
-        daysLeft: '19 DAYS LEFT',
-        body: 'Hit your prescribed session on 20 days in August. Recovery days count when you take them.',
-        lit: 9,
-        total: 20,
-        progressLabel: '9 of 20 days',
-        reward: 'REWARD · 1,000 RIDECOIN',
+      challengesSub: 'Real targets, paid in RideCoin when you hit them',
+      challengesChip: challenges ? `${challenges.active.length} ACTIVE` : '—',
+      hero: chHero ? heroFrom(chHero) : {
+        title: 'Monthly challenge', daysLeft: 'THIS MONTH',
+        body: 'Join a challenge to start earning RideCoin for hitting real training targets.',
+        lit: 0, total: 20, progressLabel: '—', reward: 'REWARD · RIDECOIN',
       },
 
-      // fixture: reward layer
       personalHeader: 'Personal challenges',
-      personalSub: 'Targets you set yourself · edit or drop any time',
-      challenges: [
-        { key: 'climb', title: 'Climb 10 000 m', reward: '+500 RIDECOIN', sub: '6 240 of 10 000 m · 19 days left', fill: 0.624 },
-        { key: 'dawn', title: 'Dawn patrol ×8', reward: '+350 RIDECOIN', sub: '3 of 8 rides before 07:00 · 19 days left', fill: 0.375 },
-        { key: 'zone', title: 'Hold the zone', reward: '+300 RIDECOIN', sub: '14 of 20 sessions in the band', fill: 0.7 },
-      ],
+      personalSub: 'Scored from your own rides · paid on completion',
+      challenges: chCards.map(challengeCardFrom),
       newChallengeLabel: 'NEW CHALLENGE',
 
       // REAL: watts from the athlete's mean-max curve; notes/deltas are fixture
@@ -129,7 +162,7 @@ export default function W3WinsPage() {
           ]
         : [],
     }
-  }, [data, wallet, ach])
+  }, [data, wallet, ach, challenges])
 
   return <W3WinsView vm={vm} />
 }
