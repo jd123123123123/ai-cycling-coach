@@ -1,19 +1,27 @@
 import { useMemo } from 'react'
 import { usePowerProfileView } from '../../hooks/usePowerProfileView'
 import { useWallet } from '../../hooks/useWallet'
-import W3WinsView, { type W3WinsVm, type W3Record } from './W3WinsView'
+import { useAchievements } from '../../hooks/useAchievements'
+import W3WinsView, { type W3WinsVm, type W3Record, type W3Badge } from './W3WinsView'
+
+// Map the server achievement icon vocabulary onto the W3 badge icon set.
+function w3BadgeIcon(icon: string): W3Badge['icon'] {
+  if (icon === 'mountain') return 'mountain'
+  if (icon === 'flame' || icon === 'sunrise') return 'sunrise'
+  return 'medal'
+}
 
 /**
  * W3 · 04 WINS, wired to live data. Route /e/w3-wins.
  *
  * REAL: the Personal records watts come from the athlete's own mean-max curve
- * (`usePowerProfileView` → `curve`), the same numbers the Power Profile screen
- * renders. Honest "—" when a duration has no recorded power. FIXTURE: the whole
- * reward economy — the Hot Streak hero, personal & community challenges, every
- * POWER number, the community pools, the badge grid, and the "+N on <month>"
- * old-best deltas — is the unbuilt reward layer (`garage-composable-figures`).
- * The record watts are the one honest signal on the page; everything else is
- * clearly a designed reward, not a fabricated stat.
+ * (`usePowerProfileView` → `curve`); the RideCoin balance from the wallet; and
+ * the Badges grid + count from the server-detected achievements
+ * (`useAchievements` → `/achievements/mine`, earned by riding, never bought).
+ * Honest "—" when a signal is absent. FIXTURE: the challenge economy — the Hot
+ * Streak hero, personal & community challenges, the community pools, and the
+ * "+N on <month>" old-best deltas — is the unbuilt challenge/catalog layer
+ * (`ridecoin-point-system`), clearly a designed reward, not a fabricated stat.
  */
 
 // Personal records: (label, seconds, best-flag, fixture note, fixture past-fraction)
@@ -30,6 +38,7 @@ const RECORD_FALLBACK: Record<string, string> = { '5s': '1,240 W', '1m': '620 W'
 export default function W3WinsPage() {
   const { data } = usePowerProfileView()
   const { data: wallet } = useWallet()
+  const { data: ach } = useAchievements()
 
   const vm = useMemo<W3WinsVm>(() => {
     const curve = data?.available ? data.curve ?? [] : []
@@ -95,19 +104,32 @@ export default function W3WinsPage() {
         { key: 'elbe', title: 'Elbe Loop relay', pct: '78%', sub: '312 of 400 laps · 3 days left', you: 'YOU 9 LAPS · TOP 31%', fill: 0.78 },
       ],
 
-      // fixture: reward layer (badge economy not built)
+      // REAL: training milestones detected server-side (achievement_service).
+      // Earned badges come from `unlocked`, locked-with-progress from
+      // `in_progress`; the count is the real unlocked/total. Falls back to the
+      // pen fixture only until the first achievements read resolves.
       badgesHeader: 'Badges',
-      badgesCount: '12 of 34',
-      badges: [
-        { key: 'century', icon: 'medal', name: 'First century', caption: '200 KM', earned: true },
-        { key: '10k', icon: 'mountain', name: '10k metres', caption: 'CLIMBED', earned: true },
-        { key: 'dawn', icon: 'sunrise', name: 'Dawn patrol', caption: '×14 RIDES', earned: true },
-        { key: 'ftp', icon: 'lock', name: '300 W FTP', caption: '8 W SHORT', earned: false },
-        { key: 'streak', icon: 'lock', name: '30-day streak', caption: '17 OF 30', earned: false },
-        { key: 'everest', icon: 'lock', name: 'Everest', caption: '3,140 M LEFT', earned: false },
-      ],
+      badgesCount: ach ? `${ach.counts.unlocked} of ${ach.counts.total}` : '— of —',
+      badges: ach
+        ? [
+            ...ach.unlocked.slice(0, 3).map<W3Badge>((u) => ({
+              key: u.key,
+              icon: w3BadgeIcon(u.icon),
+              name: u.title,
+              caption: (u.value_label ?? u.detail ?? '').toUpperCase(),
+              earned: true,
+            })),
+            ...ach.in_progress.slice(0, 3).map<W3Badge>((p) => ({
+              key: p.key,
+              icon: 'lock',
+              name: p.title,
+              caption: (p.progress?.label ?? p.detail ?? '').toUpperCase(),
+              earned: false,
+            })),
+          ]
+        : [],
     }
-  }, [data, wallet])
+  }, [data, wallet, ach])
 
   return <W3WinsView vm={vm} />
 }
