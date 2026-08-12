@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { usePowerProfileView } from '../../hooks/usePowerProfileView'
+import { useWallet } from '../../hooks/useWallet'
 import W3WinsView, { type W3WinsVm, type W3Record } from './W3WinsView'
 
 /**
@@ -28,6 +29,7 @@ const RECORD_FALLBACK: Record<string, string> = { '5s': '1,240 W', '1m': '620 W'
 
 export default function W3WinsPage() {
   const { data } = usePowerProfileView()
+  const { data: wallet } = useWallet()
 
   const vm = useMemo<W3WinsVm>(() => {
     const curve = data?.available ? data.curve ?? [] : []
@@ -45,6 +47,7 @@ export default function W3WinsPage() {
     return {
       title: 'Wins',
       subtitle: 'Every badge here is a training outcome. Nothing is bought.',
+      balance: wallet ? wallet.balance.toLocaleString('en-US') : null,  // REAL: RideCoin wallet
 
       // fixture: reward layer (challenges / POWER economy not built)
       challengesHeader: 'Your challenges',
@@ -104,7 +107,7 @@ export default function W3WinsPage() {
         { key: 'everest', icon: 'lock', name: 'Everest', caption: '3,140 M LEFT', earned: false },
       ],
     }
-  }, [data])
+  }, [data, wallet])
 
   return <W3WinsView vm={vm} />
 }

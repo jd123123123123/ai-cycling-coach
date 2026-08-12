@@ -37,6 +37,7 @@ export interface W3Badge { key: string; icon: 'medal' | 'mountain' | 'sunrise' |
 export interface W3WinsVm {
   title: string
   subtitle: string
+  balance: string | null   // REAL: RideCoin wallet balance (null until loaded)
   challengesHeader: string
   challengesSub: string
   challengesChip: string
@@ -107,7 +108,15 @@ export default function W3WinsView({ vm }: { vm: W3WinsVm }) {
 
         {/* Title */}
         <div style={{ ...band(0), padding: '14px 20px 22px', gap: 8 }}>
-          <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.05, color: T.ink }}>{vm.title}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.05, color: T.ink }}>{vm.title}</span>
+            {vm.balance != null && (
+              <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, padding: '8px 13px', borderRadius: 14, background: T.acidDim, marginTop: 2 }}>
+                <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.5, color: T.acid, fontVariantNumeric: 'tabular-nums' }}>{vm.balance}</span>
+                <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 1, color: T.acid, opacity: 0.7 }}>RIDECOIN</span>
+              </div>
+            )}
+          </div>
           <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>{vm.subtitle}</span>
         </div>
 

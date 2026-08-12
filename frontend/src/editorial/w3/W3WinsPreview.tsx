@@ -8,6 +8,7 @@ import W3WinsView, { type W3WinsVm } from './W3WinsView'
 const FIXTURE: W3WinsVm = {
   title: 'Wins',
   subtitle: 'Every badge here is a training outcome. Nothing is bought.',
+  balance: '315',
 
   challengesHeader: 'Your challenges',
   challengesSub: 'Targets you set yourself · edit or drop any time',
