@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
 import { useStreak } from '../../hooks/useStreak'
+import { useCrewStandings } from '../../hooks/useCrew'
 import { isPresent, type Value } from '../data/value'
 import { previewPlan } from '../../api/coach'
 import { hasSeenW3Onboarding } from './w3Onboarding'
@@ -40,8 +41,32 @@ export default function W3TodayPage() {
   const model = useTodayModel(state)
   const { user } = useAuth()
   const { data: streak } = useStreak()
+  const { data: standings } = useCrewStandings('week')
 
   const vm = useMemo<W3Vm>(() => {
+    // Real crew standings (top 3 by weekly score, you highlighted). Each bar is
+    // the member's share of the crew's leader; honest fallback to the fixture
+    // only when the athlete is in no crew / standings haven't loaded.
+    const CREW_COLORS = ['#7B5CFF', '#6B8CFF', '#EEC7A7', '#A7D8EE']
+    const rows = standings?.standings ?? []
+    let realCrew: { name: string; color: string; pct: number; me: boolean }[] | null = null
+    let realCrewCaption: string | null = null
+    let realCrewRank: string | null = null
+    if (rows.length > 0) {
+      const top = Math.max(...rows.map((r) => r.weekly_score), 1)
+      const ranked = [...rows].sort((a, b) => b.weekly_score - a.weekly_score)
+      realCrew = ranked.slice(0, 3).map((r, i) => ({
+        name: r.is_you ? 'You' : `@${r.handle}`,
+        color: r.is_you ? '#2BE68F' : CREW_COLORS[i % CREW_COLORS.length],
+        pct: Math.round((r.weekly_score / top) * 100),
+        me: r.is_you,
+      }))
+      const myIdx = ranked.findIndex((r) => r.is_you)
+      if (myIdx >= 0) realCrewRank = `#${myIdx + 1}`
+      const me = rows.find((r) => r.is_you)
+      if (me) realCrewCaption = `You've banked ${Math.round(me.weekly_tss)} TSS with your crew this week.`
+    }
+
     const readiness = isPresent(model.readiness) ? model.readiness.value.score : null
     const verdict = isPresent(model.verdict) ? model.verdict.value : null
 
@@ -183,15 +208,16 @@ export default function W3TodayPage() {
 
       form: pmc ? { fitness: Math.round(pmc.fitness), fatigue: Math.round(pmc.fatigue), formVal: Math.round(pmc.form) } : null,
 
-      // ── fixtures: crew standings (share-of-own-target) — spec'd, not wired ──
-      crewCaption: "You're pulling your weight — 131% of your own target, and up a place this week.",
-      crew: [
+      // ── crew standings: REAL from useCrewStandings; honest fixture only when
+      //    the athlete is in no crew yet (no standings to show) ──
+      crewCaption: realCrewCaption ?? 'Join a crew to see how your week stacks up against your riders.',
+      crew: realCrew ?? [
         { name: 'Mara', color: '#7B5CFF', pct: 143, me: false },
         { name: 'You', color: '#2BE68F', pct: 131, me: true },
         { name: 'Timo', color: '#6B8CFF', pct: 104, me: false },
       ],
-      crewRank: '↑1',
-      challengeLabel: 'CREW-CHALLENGE · AROUND THE WORLD',
+      crewRank: realCrewRank ?? '↑1',
+      challengeLabel: 'CREW-CHALLENGE · AROUND THE WORLD',   // fixture: crew-challenge banner not wired
       challengeValue: '412 / 500 km',
       challengePct: 82,
 
@@ -205,7 +231,7 @@ export default function W3TodayPage() {
       mRides: { pct: 50, label: '25 rides' },
       mDist: { pct: 73, label: '200 km' },
     }
-  }, [model, user, streak])
+  }, [model, user, streak, standings])
 
   // Real adapt: Easier/Harder run the coach's plan-adaptation endpoint
   // (`/coach/plan/preview` → deterministic plan engine + safety rails, a
