@@ -1,0 +1,289 @@
+import { motion, useReducedMotion } from 'motion/react'
+import { ArrowLeft, Share2 } from 'lucide-react'
+import { T, FONT, grow, Kicker, band, card, DASH } from './w3tokens'
+import './w3.css'
+
+/**
+ * W3 · 07 RIDE DETAIL — 1:1 code rebuild of `w3.pen` frame `zaZ4s`. Pure
+ * function of `vm`; `W3RideDetailPage` builds it from `fetchActivityDebrief`.
+ * Nearly all of it is REAL post-ride data (header, stats, zone split, power
+ * PRs, the AI execution verdict, CP/form changes). The per-repeat "held it"
+ * rows come from the ride's interval segments when present, else an honest
+ * empty note; the season-progress targets are the rider's real totals against
+ * their goals. POWER/reward numbers, where shown, are the unbuilt economy.
+ */
+
+export interface W3Repeat { label: string; watts: string; delta: number; verdict: string }
+export interface W3Zone { z: string; name: string; min: string; pct: number; peak: boolean }
+export interface W3Rank { dur: string; watts: string; note: string; pr: boolean; fill: number }
+export interface W3StatCard { v: string; l: string; s: string }
+export interface W3SeasonRow { label: string; delta: string; value: string; target: string; pct: number }
+
+export interface W3RideVm {
+  dateChip: string; sportChip: string; recordChip: string | null
+  title: string
+  bigStat: string; bigStatUnit: string; climb: string; avgSpeed: string
+  power: number[]; powerNote: string
+  stats: W3StatCard[]                // 4
+  execScore: string; execTotal: string
+  verdictHeadline: string; verdictBody: string; aiModel: string | null
+  repeatsScore: string; repeatsSub: string; repeats: W3Repeat[]
+  zonesSub: string; zones: W3Zone[]
+  ranksSub: string; ranks: W3Rank[]
+  onYouDelta: string; ceilingBefore: string; ceilingAfter: string
+  fitness: string; fitnessD: string; fatigue: string; fatigueD: string; form: string; formD: string
+  changesBody: string
+  seasonSub: string; season: W3SeasonRow[]
+  seasonBody: string
+}
+
+const SectionHead = ({ n, t, s }: { n: string; t: string; s: string }) => (
+  <div style={{ display: 'flex', gap: 12, paddingBottom: 4 }}>
+    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>{n}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
+      <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{t}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{s}</span>
+    </div>
+  </div>
+)
+
+function SegGauge({ fill, on, delay }: { fill: number; on: boolean; delay: number }) {
+  const reduce = useReducedMotion()
+  return (
+    <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 10, width: '100%' }}>
+      {Array.from({ length: 20 }, (_, k) => {
+        const lit = k / 20 < fill
+        return <motion.div key={k} initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.7 }} transition={grow(delay + k * 0.01)}
+          style={{ flex: 1, height: lit ? (on ? 10 : 8) : 5, transformOrigin: 'bottom', borderRadius: 1, background: lit ? (on ? T.acid : T.d3) : T.rule }} />
+      })}
+    </div>
+  )
+}
+
+export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?: () => void }) {
+  const reduce = useReducedMotion()
+  const pMax = Math.max(1, ...vm.power)
+
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+        <div style={{ height: 44, padding: '0 22px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', fontSize: 12, color: T.mid }}>9:41</div>
+
+        {/* Nav */}
+        <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button onClick={onBack} aria-label="Back" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={18} color={T.ink} /></button>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Ride detail</span>
+          <button aria-label="Share" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>
+        </div>
+
+        {/* Cover */}
+        <div style={{ height: 190, margin: '8px 0 0', background: `radial-gradient(120% 90% at 60% 25%, #26301c, ${T.bg})` }} />
+
+        {/* Hero card */}
+        <div style={{ ...band(20), marginTop: -54 }}>
+          <div style={{ padding: '16px 18px', borderRadius: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {[vm.dateChip, vm.sportChip].map((c) => <span key={c} style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.mid, padding: '5px 9px', borderRadius: 100, background: T.rule }}>{c}</span>)}
+              {vm.recordChip && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.bg, padding: '5px 9px', borderRadius: 100, background: T.acid }}>{vm.recordChip}</span>}
+            </div>
+            <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, color: T.ink }}>{vm.title}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+                <span style={{ fontSize: 62, fontWeight: 700, letterSpacing: -3, lineHeight: 0.8, color: T.acid }}>{vm.bigStat}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 6 }}>
+                  <Kicker>{vm.bigStatUnit}</Kicker>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{vm.climb}</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', paddingBottom: 6 }}>
+                <Kicker>Avg speed</Kicker>
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{vm.avgSpeed}</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Kicker>Power · whole ride</Kicker><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>{vm.powerNote}</span>
+              </div>
+              <div style={{ height: 46, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+                {vm.power.map((p, i) => (
+                  <motion.div key={i} initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.5 }} transition={grow(i * 0.015)}
+                    style={{ flex: 1, height: Math.max(3, Math.round((p / pMax) * 46)), transformOrigin: 'bottom', borderRadius: 1, background: p / pMax > 0.7 ? T.acid : '#FFFFFF33' }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Hero stats */}
+        <div style={{ ...band(26), gap: 8 }}>
+          {[[0, 1], [2, 3]].map((row, ri) => (
+            <div key={ri} style={{ display: 'flex', gap: 8 }}>
+              {row.map((i) => {
+                const s = vm.stats[i]
+                return (
+                  <div key={i} style={{ flex: 1, padding: '15px 16px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.7, color: s.v === DASH ? T.quiet : T.ink }}>{s.v}</span>
+                    <Kicker>{s.l}</Kicker>
+                    <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{s.s}</span>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+
+        {/* Execution + AI verdict */}
+        <div style={{ ...band(28), gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+            <span style={{ fontSize: 94, fontWeight: 700, letterSpacing: -4, lineHeight: 0.8, color: T.acid }}>{vm.execScore}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12 }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: T.quiet }}>/ {vm.execTotal}</span>
+              <Kicker>Execution</Kicker>
+            </div>
+          </div>
+          <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
+            <motion.div initial={reduce ? false : { width: 0 }} whileInView={{ width: `${(Number(vm.execScore) / Number(vm.execTotal)) * 100}%` }} viewport={{ once: true }} transition={{ duration: 0.9 }} style={{ height: '100%', background: T.acid, borderRadius: 100 }} />
+          </div>
+          <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.25, color: T.ink }}>{vm.verdictHeadline}</span>
+          <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{vm.verdictBody}</span>
+          {vm.aiModel && <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet }}>AI verdict · {vm.aiModel}</span>}
+        </div>
+
+        {/* 01 Did you hold it */}
+        {vm.repeats.length > 0 && (
+          <div style={{ ...band(28), gap: 12 }}>
+            <SectionHead n="01" t="Did you hold it?" s="Each repeat against its target. Right of the line is above target." />
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', paddingBottom: 4 }}>
+              <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: -1.5, color: T.acid }}>{vm.repeatsScore}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 4 }}>
+                <Kicker>Repeats on or above target</Kicker>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: T.ink }}>{vm.repeatsSub}</span>
+              </div>
+            </div>
+            <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
+              {vm.repeats.map((r, i) => {
+                const held = r.delta >= 0
+                const mag = Math.min(1, Math.abs(r.delta) / 12)
+                return (
+                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '13px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
+                    <div style={{ width: 66, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{r.label}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{r.watts}</span>
+                    </div>
+                    <div style={{ flex: 1, height: 24, display: 'flex', alignItems: 'center', position: 'relative' }}>
+                      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>{!held && <motion.div initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={grow(i * 0.04)} style={{ transformOrigin: 'right', width: `${mag * 100}%`, height: 14, borderRadius: '3px 0 0 3px', background: T.d3 }} />}</div>
+                      <div style={{ width: 1, height: 24, background: '#FFFFFF8C' }} />
+                      <div style={{ flex: 1 }}>{held && <motion.div initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={grow(i * 0.04)} style={{ transformOrigin: 'left', width: `${mag * 100}%`, height: 14, borderRadius: '0 3px 3px 0', background: T.acid }} />}</div>
+                    </div>
+                    <div style={{ width: 56, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: held ? T.acid : T.mid }}>{r.delta >= 0 ? '+' : ''}{r.delta} W</span>
+                      <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>{r.verdict}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 02 What it asked of you */}
+        <div style={{ ...band(28), gap: 12 }}>
+          <SectionHead n="02" t="What it asked of you" s={vm.zonesSub} />
+          <div style={{ padding: 18, borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 1, height: 16 }}>
+              {vm.zones.map((z, i) => (
+                <motion.div key={z.z} initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={grow(i * 0.06)}
+                  style={{ flexGrow: Math.max(0.4, z.pct), transformOrigin: 'left', height: 16, background: z.peak ? T.acid : `rgba(255,255,255,${0.08 + i * 0.1})`,
+                    borderRadius: i === 0 ? '4px 0 0 4px' : i === vm.zones.length - 1 ? '0 4px 4px 0' : 0 }} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {vm.zones.map((z) => (
+                <div key={z.z} style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '9px 0' }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 2, background: z.peak ? T.acid : 'rgba(255,255,255,.3)' }} />
+                  <span style={{ width: 48, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{z.z}</span>
+                  <span style={{ width: 74, fontSize: 11.5, fontWeight: 700, color: z.peak ? T.acid : T.ink }}>{z.name}</span>
+                  <div style={{ flex: 1, height: 1, background: T.rule }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.mid }}>{z.min}</span>
+                  <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 700, color: T.quiet }}>{z.pct}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 03 Where it ranks */}
+        <div style={{ ...band(28), gap: 12 }}>
+          <SectionHead n="03" t="Where it ranks" s={vm.ranksSub} />
+          <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
+            {vm.ranks.map((r, i) => (
+              <div key={r.dur} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.quiet, width: 36 }}>{r.dur}</span>
+                    <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.5, color: r.pr ? T.acid : T.ink }}>{r.watts}</span>
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: r.pr ? T.acid : T.quiet }}>{r.note}</span>
+                </div>
+                <SegGauge fill={r.fill} on={r.pr} delay={i * 0.03} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 04 What this changes */}
+        <div style={{ ...band(28), gap: 12 }}>
+          <SectionHead n="04" t="What this changes" s="The ride is over. These are the numbers it moved." />
+          <div style={{ ...card(), gap: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <Kicker>On you</Kicker>
+                <span style={{ fontSize: 42, fontWeight: 700, letterSpacing: -2, color: T.acid }}>{vm.onYouDelta}<span style={{ fontSize: 16, letterSpacing: 0 }}> W</span></span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                <Kicker>5-min ceiling</Kicker>
+                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{vm.ceilingBefore} → {vm.ceilingAfter}</span>
+              </div>
+            </div>
+            <div style={{ height: 1, background: T.rule }} />
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[['FITNESS', vm.fitness, vm.fitnessD], ['FATIGUE', vm.fatigue, vm.fatigueD], ['FORM', vm.form, vm.formD]].map(([l, v, d]) => (
+                <div key={l} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div style={{ display: 'flex', gap: 5, alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>{v}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: d.startsWith('-') ? T.cool : T.acid }}>{d}</span>
+                  </div>
+                  <Kicker>{l}</Kicker>
+                </div>
+              ))}
+            </div>
+            <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{vm.changesBody}</span>
+          </div>
+        </div>
+
+        {/* 05 What it moved you toward */}
+        <div style={{ ...band(40), gap: 12 }}>
+          <SectionHead n="05" t="What it moved you toward" s={vm.seasonSub} />
+          <div style={{ ...card(), gap: 16 }}>
+            {vm.season.map((r) => (
+              <div key={r.label} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>{r.label}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: T.bg, padding: '2px 6px', borderRadius: 100, background: T.acid }}>{r.delta}</span>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{r.value} <span style={{ color: T.quiet, fontWeight: 600 }}>/ {r.target}</span></span>
+                </div>
+                <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
+                  <motion.div initial={reduce ? false : { width: 0 }} whileInView={{ width: `${Math.round(r.pct * 100)}%` }} viewport={{ once: true }} transition={{ duration: 0.8 }} style={{ height: '100%', borderRadius: 100, background: T.acid }} />
+                </div>
+              </div>
+            ))}
+            <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{vm.seasonBody}</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
+}

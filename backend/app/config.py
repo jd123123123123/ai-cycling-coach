@@ -144,6 +144,11 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-4o-mini"
+    # Image-generation model for the Garage bike render (e.g. "gpt-image-1").
+    # Unset by default: the bike-render pipeline runs the vision ANALYSIS but
+    # returns no image until an image model is provisioned. See
+    # services/bike_render.py.
+    IMAGE_MODEL: str = ""
 
     @field_validator("DATABASE_URL")
     @classmethod

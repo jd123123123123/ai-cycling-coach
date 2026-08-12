@@ -56,6 +56,16 @@ const RouteRehearsalView = lazyWithRetry(() => import('./pages/RouteRehearsalVie
 // EDITORIAL II — a second design system, mounted alongside the first.
 const EditorialTodayPage = lazyWithRetry(() => import('./editorial/pages/TodayPage'))
 const EditorialSessionDetailPage = lazyWithRetry(() => import('./editorial/pages/SessionDetailPage'))
+const W3TodayPage = lazyWithRetry(() => import('./editorial/w3/W3TodayPage'))
+const W3TodayPreview = lazyWithRetry(() => import('./editorial/w3/W3TodayPreview'))
+const W3SessionPage = lazyWithRetry(() => import('./editorial/w3/W3SessionPage'))
+const W3SessionPreview = lazyWithRetry(() => import('./editorial/w3/W3SessionPreview'))
+const W3RidesPage = lazyWithRetry(() => import('./editorial/w3/W3RidesPage'))
+const W3RidesPreview = lazyWithRetry(() => import('./editorial/w3/W3RidesPreview'))
+const W3BikeStudioPage = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPage'))
+const W3BikeStudioPreview = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPreview'))
+const W3RideDetailPage = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPage'))
+const W3RideDetailPreview = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPreview'))
 const EditorialTabPlate = lazyWithRetry(() => import('./editorial/pages/TabPlate'))
 const EditorialArchiveDeck = lazyWithRetry(() => import('./editorial/archive/ArchiveDeckPage'))
 const EditorialMorningWrap = lazyWithRetry(() => import('./editorial/pages/MorningWrapPage'))
@@ -292,6 +302,17 @@ function AppRoutes() {
 
           {/* EDITORIAL II — a second design system, mounted alongside the first. */}
           <Route path="/e/today" element={<ProtectedRoute checkOnboarding><EditorialTodayPage /></ProtectedRoute>} />
+          <Route path="/e/w3-today" element={<ProtectedRoute checkOnboarding><W3TodayPage /></ProtectedRoute>} />
+          <Route path="/e/w3-today-preview" element={<W3TodayPreview />} />
+          <Route path="/e/w3-session" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
+          <Route path="/e/w3-session/:id" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
+          <Route path="/e/w3-session-preview" element={<W3SessionPreview />} />
+          <Route path="/e/w3-rides" element={<ProtectedRoute checkOnboarding><W3RidesPage /></ProtectedRoute>} />
+          <Route path="/e/w3-rides-preview" element={<W3RidesPreview />} />
+          <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />
+          <Route path="/e/w3-bike-studio-preview" element={<W3BikeStudioPreview />} />
+          <Route path="/e/w3-ride/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />
+          <Route path="/e/w3-ride-preview" element={<W3RideDetailPreview />} />
           {/* Session Detail renders TODAY's session — `useSessionModel` takes no
               id and this backend has no id-scoped session endpoint. The bare
               path is therefore the honest one; `/:id` stays registered so an

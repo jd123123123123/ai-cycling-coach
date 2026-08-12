@@ -1,0 +1,53 @@
+/* frontend/src/editorial/w3/w3.css
+ * W3 · 01 TODAY — a 1:1 code rebuild of the `w3.pen` frame `gx4WA`.
+ * Tokens are transcribed VERBATIM from the pen document's `w-*` variables
+ * (read via the Pencil MCP, 2026-08-11). Do not "improve" them.
+ * Scoped under .w3-root so nothing leaks into the app's or EDITORIAL II's palette.
+ */
+.w3-root {
+  /* Palette — pen `w-*` variables, verbatim. */
+  --w-bg: #0B0B0B;
+  --w-surface: #161616;
+  --w-surface-2: #202020;
+  --w-acid: #C8FF00;
+  --w-acid-deep: #8FBF00;
+  --w-ink: #FFFFFF;
+  --w-mid: #9BA0A6;
+  --w-quiet: #6E7379;
+  --w-rule: #FFFFFF14;
+  --w-stroke: #FFFFFF1A;
+
+  /* State hues reused from the pen (st-training green, st-evening violet). */
+  --w-training: #2BE68F;
+  --w-cool: #6B8CFF;
+  --w-evening: #7B5CFF;
+
+  /* Type — pen `w-font` is Inter Tight; the decks use Archivo Narrow for the
+   * big condensed display numerals. Both are loaded by index.html. */
+  --w-font: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --w-display: "Archivo Narrow", "Inter Tight", ui-sans-serif, sans-serif;
+
+  --w-radius-card: 24px;
+  --w-radius-pill: 100px;
+
+  background: var(--w-bg);
+  color: var(--w-ink);
+  font-family: var(--w-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The device frame: the pen frame is 390 wide, clipped. On desktop we center
+ * it; on a phone it fills the viewport. */
+.w3-frame {
+  width: 390px;
+  max-width: 100%;
+  margin: 0 auto;
+  background: var(--w-bg);
+  min-height: 100dvh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.w3-root *,
+.w3-root *::before,
+.w3-root *::after { box-sizing: border-box; }
