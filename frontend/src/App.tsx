@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from '
 import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
 import { CelebrationProvider } from './contexts/CelebrationContext'
+import W3RideCelebrationWatcher from './editorial/w3/W3RideCelebrationWatcher'
 import ProtectedRoute from './components/ProtectedRoute'
 import ScrollToTop from './components/ScrollToTop'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -139,6 +140,8 @@ function App() {
 function AppRoutes() {
   const location = useLocation()
   return (
+    <>
+    <W3RideCelebrationWatcher />
     <PageTransition routeKey={location.pathname}>
       <Suspense fallback={<AppSplash />}>
         <Routes location={location}>
@@ -427,6 +430,7 @@ function AppRoutes() {
         </Routes>
       </Suspense>
     </PageTransition>
+    </>
   )
 }
 

@@ -15,7 +15,6 @@ import { isPresent, type Value } from '../data/value'
 import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
 import { hasSeenW3Onboarding } from './w3Onboarding'
-import { useRideCelebration } from './useRideCelebration'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type W3Block, type OnAdapt } from './W3TodayView'
 import type { W3Weather } from './W3Sections'
 
@@ -182,9 +181,6 @@ export default function W3TodayPage() {
   const { state } = useDayState()
   const model = useTodayModel(state)
   const { user } = useAuth()
-  // Auto-open the post-ride celebration when a fresh ride has synced (once per
-  // ride). Only for an onboarded rider — a first-time user hasn't ridden yet.
-  useRideCelebration(!!user && hasSeenW3Onboarding())
   const { data: streak } = useStreak()
   const { data: standings } = useCrewStandings('week')
   const { data: adaptive } = useAdaptive()
