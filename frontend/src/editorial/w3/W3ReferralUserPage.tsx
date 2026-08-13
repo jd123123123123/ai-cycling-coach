@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useReferralUser, useClaimReferral } from '../../hooks/useReferrals'
 import type { ReferralCard } from '../../api/referral'
 import W3ReferralUserView, { type W3ReferralUserVm } from './W3ReferralUserView'
+import W3Loading from './W3Loading'
 
 /**
  * W3 · Referral user detail, wired. Route /e/w3-referral-user/:id. Real referred
@@ -35,7 +36,7 @@ export default function W3ReferralUserPage() {
   const claim = useClaimReferral()
 
   const vm = useMemo(() => (data ? toVm(data) : null), [data])
-  if (!vm) return <div className="w3-root"><div className="w3-frame" style={{ minHeight: '100dvh' }} /></div>
+  if (!vm) return <W3Loading />
 
   return (
     <W3ReferralUserView

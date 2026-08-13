@@ -6,6 +6,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
 import W3RideDetailView, { type W3RideVm, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
+import W3Loading from './W3Loading'
 
 /**
  * W3 · 07 RIDE DETAIL, wired to live data. Route /e/w3-ride/:id.
@@ -207,6 +208,6 @@ export default function W3RideDetailPage() {
   const { data: season } = useActivitiesRange(seasonStart, new Date())
   const activity = useMemo(() => (season?.activities ?? []).find((a) => a.id === Number(id)) ?? null, [season, id])
   const vm = useMemo(() => (data ? toVm(data, pmc, activity, season?.activities ?? []) : null), [data, pmc, activity, season])
-  if (!vm) return <div className="w3-root"><div className="w3-frame" style={{ minHeight: '100dvh' }} /></div>
+  if (!vm) return <W3Loading label="Lade deine Fahrt…" />
   return <W3RideDetailView vm={vm} onBack={() => navigate(-1)} onShare={() => id && navigate(`/e/w3-share/${id}`)} />
 }

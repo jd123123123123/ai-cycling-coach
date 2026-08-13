@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
+import { STARTER_BIKE } from './starterBike'
 
 /** TEMP preview — drives the studio states with a fixture, no backend.
  *  /e/w3-bike-studio-preview is unguarded; remove before merge. Cycles
@@ -23,8 +24,8 @@ export default function W3BikeStudioPreview() {
         state={state}
         photoUrl={null}
         description={state === 'intro' ? null : DESCRIPTION}
-        imageUrl={null}            // no image model → shows the honest "studio unavailable" state
-        renderStatus={state === 'reveal' ? 'image_model_unavailable' : null}
+        imageUrl={state === 'reveal' ? STARTER_BIKE : null}   // fixture render → shows the BIKE UNLOCKED celebration
+        renderStatus={state === 'reveal' ? 'ok' : null}
         prompt="A single road bicycle, matte teal frame, lime accents, deep-section carbon wheels, drop bars…"
         error={state === 'error' ? 'Couldn’t find a bike in that photo. Try the whole bike, side-on.' : null}
         onBack={() => setState('intro')}

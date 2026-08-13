@@ -55,6 +55,16 @@ ISOLATED_BIKE_STYLE = (
     "(accurate triangular frame) but with slightly chunky, premium proportions to match the 3D "
     "toy aesthetic."
 )
+# The SAME starter kit for every rider — cosmetics (new kits/looks) are unlocked
+# later with points, never taken from the source photo. This keeps avatars
+# consistent and app-branded from day one.
+DEFAULT_KIT = (
+    "MANDATORY STARTER KIT: Dress the character in the app's default cycling kit — a fitted "
+    "lime-green (#C8FF00) and matte-black cycling jersey with a bold 'W3' wordmark logo centred on "
+    "the chest and a thin lime accent stripe, plus matching black bib shorts. IGNORE any clothing "
+    "from the source photo and use this EXACT kit, identical for every rider, so the starter look "
+    "is always consistent."
+)
 
 _ANALYSIS = {
     "rider": (
@@ -140,8 +150,8 @@ def _isolated_prompt(description: str, kind: str) -> str:
             f"inspired by this description: [{description}]. CAMERA FRAMING: The character MUST be "
             f"shot from a direct frontal angle (0-degree profile). They must be looking dead "
             f"straight into the lens, perfectly centered. Do NOT show a side profile. Do NOT show "
-            f"the full body or legs. Focus on translating the distinct features, expression, skin "
-            f"tone, and clothing to the figure while maintaining the toy aesthetic. "
+            f"the full body or legs. Focus on translating the distinct features, expression, and skin "
+            f"tone to the figure while maintaining the toy aesthetic. {DEFAULT_KIT} "
             f"{GENERAL_STYLE} {CHARACTER_STYLE}"
         )
     return f"An isolated 3D bicycle inspired by this description: [{description}]. {GENERAL_STYLE} {ISOLATED_BIKE_STYLE}"
@@ -171,9 +181,9 @@ def _scene_prompt(rider_desc: str, bike_desc: str, training_context: str) -> str
     for a ride, built from the GPX via `ride_scene.scene_descriptor`."""
     return (
         f"LOCKED CAMERA ANGLE: A wide-angle, full-body shot of a 3D character and their bicycle. "
-        f"CRITICAL INSTRUCTION: The character's face, hair, and clothing MUST be 100% identical to "
+        f"CRITICAL INSTRUCTION: The character's face and hair MUST be 100% identical to "
         f"this exact description: [{rider_desc}]. Do not alter their facial features or expression "
-        f"from the description. You MUST strictly adhere to the exact details in this bicycle "
+        f"from the description. {DEFAULT_KIT} You MUST strictly adhere to the exact details in this bicycle "
         f"description: [{bike_desc}]. The action/scene is: {training_context}. CRITICAL ANATOMY: "
         f"The character MUST be rendered with complete, correct human anatomy. Both arms, both "
         f"hands, both legs, and both feet MUST be fully visible, distinct, and flawlessly rendered "
@@ -209,8 +219,8 @@ def _rider_compose_prompt() -> str:
         "(idealized into a cute, deeply likable 3D toy face, but unmistakably them). "
         "IMAGE 2 is the BIKE — reproduce its frame geometry, colours and components "
         "faithfully with slightly chunky premium toy proportions. IMAGE 3 is the HELMET "
-        "— the character MUST wear this exact helmet (shape, colour, straps). The rider "
-        "wears a sleek modern cycling kit with hyper-realistic fabric. "
+        "— the character MUST wear this exact helmet (shape, colour, straps). "
+        f"{DEFAULT_KIT} "
         "COMPOSITION: complete correct anatomy (both arms, both hands, both legs, both "
         "feet visible, feet on the pedals), the whole bike and rider centered with clean "
         "padding, a clean minimalist solid soft pastel studio background, soft studio "

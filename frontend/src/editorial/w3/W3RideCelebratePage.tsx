@@ -7,6 +7,7 @@ import type { RideEarning } from '../../api/rewards'
 import W3RideCelebrateView, {
   type W3CelebrateVm, type W3CelebStat, type W3CelebZone, type W3CelebFirst,
 } from './W3RideCelebrateView'
+import W3Loading from './W3Loading'
 
 /**
  * W3 · Post-ride celebration, wired. Route /e/w3-ride-celebrate/:id.
@@ -89,7 +90,7 @@ export default function W3RideCelebratePage() {
   const { data: earn } = useRideEarning(activityId)
 
   const vm = useMemo(() => (debrief ? toVm(debrief, earn) : null), [debrief, earn])
-  if (!vm) return <div className="w3-root"><div className="w3-frame" style={{ minHeight: '100dvh' }} /></div>
+  if (!vm) return <W3Loading label="Zähle deine Punkte…" />
   return (
     <W3RideCelebrateView
       vm={vm}
