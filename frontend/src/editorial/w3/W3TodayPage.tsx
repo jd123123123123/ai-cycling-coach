@@ -218,7 +218,13 @@ export default function W3TodayPage() {
       streak: isPresent(model.streakDays) ? model.streakDays.value : null,
 
       readiness,
-      readinessWord: verdict ? verdict.headline.split('.')[0] : (isPresent(model.dateLabel) ? null : null),
+      // A one-word readiness read from the score (not the session name, which
+      // is redundant with Today's Training below).
+      readinessWord: readiness == null ? null
+        : readiness >= 80 ? 'Primed'
+          : readiness >= 65 ? 'Ready'
+            : readiness >= 45 ? 'Steady'
+              : readiness >= 30 ? 'Easy' : 'Rest',
       earnRate: '1.75×', // fixture: earn-rate economy not built
       coachDate: isPresent(model.dateLabel) ? model.dateLabel.value : '',
       coachLead: verdict ? verdict.headline : null,
