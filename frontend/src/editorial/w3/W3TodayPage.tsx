@@ -5,6 +5,7 @@ import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
 import { useStreak } from '../../hooks/useStreak'
 import { useCrewStandings } from '../../hooks/useCrew'
+import { useAdaptive } from '../../hooks/useAdaptive'
 import { isPresent, type Value } from '../data/value'
 import { previewPlan } from '../../api/coach'
 import { hasSeenW3Onboarding } from './w3Onboarding'
@@ -42,6 +43,7 @@ export default function W3TodayPage() {
   const { user } = useAuth()
   const { data: streak } = useStreak()
   const { data: standings } = useCrewStandings('week')
+  const { data: adaptive } = useAdaptive()
 
   const vm = useMemo<W3Vm>(() => {
     // Real crew standings (top 3 by weekly score, you highlighted). Each bar is
@@ -67,7 +69,13 @@ export default function W3TodayPage() {
       if (me) realCrewCaption = `You've banked ${Math.round(me.weekly_tss)} TSS with your crew this week.`
     }
 
-    const readiness = isPresent(model.readiness) ? model.readiness.value.score : null
+    // Readiness for the hero: the model withholds its score when the overnight
+    // wearable read is stale (the "date the measurement" rule). But the coach's
+    // adaptive engine still computes a live readiness (daily_decision.readiness)
+    // from the freshest HRV/TSB it has — so fall back to that rather than show an
+    // empty hero. Keeps the big number honest AND populated.
+    const modelReadiness = isPresent(model.readiness) ? model.readiness.value.score : null
+    const readiness = modelReadiness ?? adaptive?.daily_decision?.readiness?.score ?? null
     const verdict = isPresent(model.verdict) ? model.verdict.value : null
 
     const sig = (
@@ -98,13 +106,32 @@ export default function W3TodayPage() {
       : '—'
 
     const session = isPresent(model.session) ? model.session.value : null
-    const blocks = session
+    // Build the workout power profile. A structured session (intervals) uses its
+    // real blocks. A steady endurance ride materialises to 1–2 blocks, which
+    // reads as a single flat beam — so render its true shape instead: a warm-up
+    // ramp, a long steady body at the prescribed intensity, and a cool-down.
+    const realBlocks = session
       ? session.blocks.map((b) => ({
           w: b.watts && session.targetWatts ? Math.min(1, b.watts / (session.targetWatts * 1.1)) : 0.28,
           work: (b.watts ?? 0) >= (session.targetWatts ?? 1) * 0.9,
           label: `${b.label}${b.watts ? ` · ${b.watts} W` : ''}`,
         }))
-      : [0.28, 0.4, 0.5, 0.9, 0.22, 0.92, 0.22, 0.94, 0.22, 0.95, 0.3].map((w, i) => ({ w, work: i % 2 === 1 && i > 2 && i < 10, label: `Block ${i + 1}` }))
+      : []
+    const target = session?.targetWatts ?? null
+    const steadyLabel = target ? `Steady · ${target} W` : 'Steady'
+    const enduranceProfile = [
+      { w: 0.34, work: false, label: 'Warm-up' },
+      { w: 0.5, work: false, label: 'Warm-up' },
+      { w: 0.66, work: false, label: 'Warm-up' },
+      ...Array.from({ length: 8 }, () => ({ w: 0.88, work: true, label: steadyLabel })),
+      { w: 0.6, work: false, label: 'Cool-down' },
+      { w: 0.4, work: false, label: 'Cool-down' },
+    ]
+    const blocks = realBlocks.length > 2
+      ? realBlocks
+      : session
+        ? enduranceProfile
+        : [0.28, 0.4, 0.5, 0.9, 0.22, 0.92, 0.22, 0.94, 0.22, 0.95, 0.3].map((w, i) => ({ w, work: i % 2 === 1 && i > 2 && i < 10, label: `Block ${i + 1}` }))
 
     const pmc = isPresent(model.pmc) ? model.pmc.value : null
     // 6-week mirror from the real PMC series when present, else a null-safe stub.
@@ -231,7 +258,7 @@ export default function W3TodayPage() {
       mRides: { pct: 50, label: '25 rides' },
       mDist: { pct: 73, label: '200 km' },
     }
-  }, [model, user, streak, standings])
+  }, [model, user, streak, standings, adaptive])
 
   // Real adapt: Easier/Harder run the coach's plan-adaptation endpoint
   // (`/coach/plan/preview` → deterministic plan engine + safety rails, a

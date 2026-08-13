@@ -257,18 +257,15 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           initial={reduce ? false : { opacity: 0, scale: 1.04 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.7, ease: EASE }}
-          style={{ position: 'relative', height: 300, background: T.bg, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          {/* The pedestal box — a raised surface the bike stands ON. */}
-          <div style={{ position: 'absolute', left: 20, right: 20, bottom: 22, height: 132, borderRadius: 26, background: `linear-gradient(180deg, ${T.surface2}, ${T.surface})`, border: `1px solid ${T.stroke}`, overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(120% 90% at 50% 0%, ${T.acid}22, transparent 60%)` }} />
-          </div>
-          {/* Contact shadow so the bike reads as sitting on the box, not floating. */}
-          <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', width: 210, height: 26, borderRadius: '50%', background: '#000000', filter: 'blur(12px)', opacity: 0.55 }} />
-          {/* The bike, popping OUT above the box top for a 3D standing effect. */}
+          style={{ position: 'relative', height: 300, background: T.bg, overflow: 'hidden' }}>
+          {/* Ambient acid bloom behind the bike. */}
+          <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', width: 320, height: 150, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}1F, transparent)` }} />
+          {/* Full-bleed bike hero in the background. */}
           <motion.img
             src={STARTER_BIKE} alt={vm.bikeName}
-            initial={reduce ? false : { y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.7, ease: EASE }}
-            style={{ position: 'relative', width: '82%', height: '92%', objectFit: 'contain', objectPosition: 'center bottom', filter: 'drop-shadow(0 10px 24px #000000AA)', marginBottom: 44 }} />
+            initial={reduce ? false : { scale: 1.05, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.8, ease: EASE }}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 45%' }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
         </motion.div>
 
         {/* ── Hero: readiness + charge meter ── */}
