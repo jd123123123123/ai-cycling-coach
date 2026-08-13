@@ -4,6 +4,7 @@ import { ArrowLeft, Share2, ArrowRight, Download, Clock, Flame, Zap, Gauge, Targ
 import { T, FONT, grow, Kicker, band, card, DASH } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import { STARTER_BIKE } from './starterBike'
 
 /**
@@ -110,11 +111,8 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
         <W3StatusBar />
 
         {/* Nav */}
-        <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={onBack} aria-label="Back" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={18} color={T.ink} /></button>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>{vm.navTitle}</span>
-          <button onClick={onShare} aria-label="Share session" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>
-        </div>
+        <W3TopBar title={vm.navTitle} onBack={onBack}
+          extra={<button onClick={onShare} aria-label="Share session" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>} />
 
         {/* Cover — the rider's bike, faded into the page (real header image). */}
         <div style={{ position: 'relative', height: 224, marginTop: 6, overflow: 'hidden' }}>

@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useAdaptive } from '../../hooks/useAdaptive'
-import { computeReadiness, canonicalReadiness } from '../../utils/metrics'
+import { usePMC } from '../../hooks/usePMC'
+import { computeReadiness, canonicalReadiness, readinessTier } from '../../utils/metrics'
 import type { DailyMetric } from '../../api/dashboard'
-import W3ReadinessView, { type W3ReadinessVm, type DriverVm, type DriverIcon } from './W3ReadinessView'
+import W3ReadinessView, { type W3ReadinessVm, type DriverVm, type DriverIcon, type SleepStage } from './W3ReadinessView'
 
 /**
  * W3 · READINESS, wired to real data. Route /e/w3-readiness.
@@ -36,6 +37,7 @@ export default function W3ReadinessPage() {
   const start = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d }, [])
   const { data: metricsResp } = useDailyMetrics(start, end)
   const { data: adaptive } = useAdaptive()
+  const { data: pmc } = usePMC(90)
 
   const vm = useMemo<W3ReadinessVm>(() => {
     const metrics = (metricsResp?.metrics ?? []).slice().sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
@@ -47,7 +49,10 @@ export default function W3ReadinessPage() {
       num(snapshot?.body_battery.now ?? latest?.body_battery ?? null),
       num(latest?.sleep_score ?? null),
     )
-    const { score } = canonicalReadiness(adaptive?.daily_decision?.readiness ?? null, fallback)
+    const { score, tier } = canonicalReadiness(adaptive?.daily_decision?.readiness ?? null, fallback)
+    const rtier = tier ?? readinessTier(score)
+    const TIER_DE: Record<string, string> = { peak: 'Spitzenform', ready: 'Bereit', caution: 'Vorsicht', rest: 'Ruhen' }
+    const tierLabel = rtier ? (TIER_DE[rtier] ?? null) : null
     const word = score == null ? null
       : score >= 80 ? 'Bereit für Leistung'
         : score >= 65 ? 'Gut erholt'
@@ -113,8 +118,45 @@ export default function W3ReadinessPage() {
       ? `Overnight-Signale · Stand ${new Date(latest.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' })}`
       : 'Overnight-Signale erscheinen nach der ersten Nacht mit deiner Uhr.'
 
-    return { score, word, guidanceTitle: guide.t, guidanceBody: guide.b, dateNote, trend, drivers, limiterNote }
-  }, [metricsResp, snapshot, adaptive])
+    // ── sleep breakdown ──
+    const sd = latest?.sleep_detail ?? null
+    const sleep = sd && sd.total_s && sd.total_s > 0 ? (() => {
+      const tot = sd.total_s as number
+      const h = Math.floor(tot / 3600), m = Math.round((tot % 3600) / 60)
+      const stage = (s: number | null, label: string, hue: string): SleepStage | null => (s != null && s > 0 ? { label, frac: s / tot, hue } : null)
+      const stages = [stage(sd.deep_s, 'Tief', '#7B5CFF'), stage(sd.rem_s, 'REM', '#00E5FF'), stage(sd.light_s, 'Leicht', '#6B8CFF'), stage(sd.awake_s, 'Wach', '#FFB020')].filter((x): x is SleepStage => x != null)
+      const deepPct = sd.deep_s != null ? Math.round((sd.deep_s / tot) * 100) : null
+      return {
+        total: `${h}:${String(m).padStart(2, '0')} h`,
+        stages,
+        spo2: sd.spo2_avg != null ? `${Math.round(sd.spo2_avg)}%` : null,
+        resp: sd.respiration_avg != null ? `${Math.round(sd.respiration_avg)}/min Atmung` : null,
+        note: deepPct != null ? `Tiefschlaf ${deepPct}% der Nacht — ${deepPct >= 13 ? 'solide Erholung.' : 'etwas knapp, beobachten.'}` : 'Schlafphasen aus deiner Uhr.',
+      }
+    })() : null
+
+    // ── recovery ETA ──
+    const recH = num(latest?.recovery_time_hours ?? null) ?? num(snapshot?.recovery_time_hours ?? null)
+    const recovery = recH != null ? {
+      hours: `${Math.round(recH)}h`,
+      frac: Math.min(1, recH / 48),
+      note: recH <= 6 ? 'Fast frisch — heute geht Belastung.' : recH <= 18 ? 'Noch etwas Erholung offen.' : 'Länger erholen, bevor es hart wird.',
+    } : null
+
+    // ── fitness / freshness (PMC) ──
+    const pe = pmc?.entries ?? []
+    const lastPmc = pe[pe.length - 1] ?? null
+    const fitness = lastPmc ? {
+      ctl: String(Math.round(lastPmc.ctl)),
+      atl: String(Math.round(lastPmc.atl)),
+      tsb: `${lastPmc.tsb >= 0 ? '+' : ''}${Math.round(lastPmc.tsb)}`,
+      verdict: lastPmc.tsb >= 5 ? 'Frisch — die Form ist da.' : lastPmc.tsb >= -10 ? 'Im Trainingsbereich.' : 'Ermüdet — Form kommt nach der Erholung.',
+    } : null
+
+    const vo2 = num(latest?.vo2max ?? null) != null ? `${Math.round(latest!.vo2max as number)}` : null
+
+    return { score, word, tierLabel, guidanceTitle: guide.t, guidanceBody: guide.b, dateNote, trend, drivers, limiterNote, sleep, recovery, fitness, vo2 }
+  }, [metricsResp, snapshot, adaptive, pmc])
 
   return <W3ReadinessView vm={vm} onBack={() => navigate(-1)} />
 }

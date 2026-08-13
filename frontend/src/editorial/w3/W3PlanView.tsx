@@ -1,11 +1,12 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
-  ArrowLeft, SlidersHorizontal, Pencil, Flag, ChevronRight, Activity,
+  SlidersHorizontal, Pencil, Flag, ChevronRight, Activity,
   Zap, ArrowRight, RefreshCw, Repeat, ChevronDown, ChevronUp, X, Minus, Plus, Check,
 } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import type { PhaseSeg, WeekBar } from './w3plan'
 import './w3.css'
 
@@ -446,11 +447,8 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
         <W3StatusBar />
 
         {/* Nav */}
-        <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <IconBtn onClick={onBack} label="Zurück"><ArrowLeft size={18} color={T.ink} /></IconBtn>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Trainingsplan</span>
-          <IconBtn onClick={() => setSheet('adjust')} label="Plan anpassen"><SlidersHorizontal size={17} color={T.ink} /></IconBtn>
-        </div>
+        <W3TopBar title="Trainingsplan" onBack={onBack}
+          extra={<IconBtn onClick={() => setSheet('adjust')} label="Plan anpassen"><SlidersHorizontal size={17} color={T.ink} /></IconBtn>} />
 
         {/* Goal header */}
         <div style={{ ...band(20), paddingTop: 8, gap: 14 }}>

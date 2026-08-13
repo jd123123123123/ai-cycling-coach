@@ -1,8 +1,9 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { useState } from 'react'
-import { ArrowLeft, Share2, Zap, Timer, Gauge, HeartPulse, type LucideIcon } from 'lucide-react'
+import { Share2, Zap, Timer, Gauge, HeartPulse, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import './w3.css'
 
 /**
@@ -100,11 +101,8 @@ export default function W3RideDetailView({ vm, onBack, onShare }: { vm: W3RideVm
         <W3StatusBar />
 
         {/* Nav */}
-        <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={onBack} aria-label="Back" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={18} color={T.ink} /></button>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Ride detail</span>
-          <button onClick={onShare} aria-label="Share" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>
-        </div>
+        <W3TopBar title="Ride detail" onBack={onBack}
+          extra={<button onClick={onShare} aria-label="Share" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>} />
 
         {/* Cover — GENERATED from the GPX route, tinted by the ride's intensity:
              the route shape glows in the intensity accent, over an intensity-lit

@@ -1,11 +1,12 @@
 import { useState, type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
-  ArrowLeft, Pencil, Mountain, Calendar, Flag, GitBranch, Route as RouteIcon,
+  Pencil, Mountain, Calendar, Flag, GitBranch, Route as RouteIcon,
   Timer, ChevronRight, Repeat, X, Check, Info,
 } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import './w3.css'
 
 /**
@@ -157,11 +158,8 @@ export default function W3GoalView({ vm, onBack, onSwitch, onRemove, onSave, onR
         <W3StatusBar />
 
         {/* Nav */}
-        <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={onBack} aria-label="Zurück" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={18} color={T.ink} /></button>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Dein Ziel</span>
-          <button onClick={() => setEditing(true)} aria-label="Ziel bearbeiten" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Pencil size={16} color={T.ink} /></button>
-        </div>
+        <W3TopBar title="Dein Ziel" onBack={onBack}
+          extra={<button onClick={() => setEditing(true)} aria-label="Ziel bearbeiten" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Pencil size={16} color={T.ink} /></button>} />
 
         {/* Header */}
         <div style={{ ...band(20), paddingTop: 10, gap: 14 }}>

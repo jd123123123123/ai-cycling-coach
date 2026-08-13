@@ -8,6 +8,22 @@ const sp = (n: number[]) => { const m = Math.max(...n, 1); return n.map((v) => M
 const FIXTURE: W3ReadinessVm = {
   score: 78,
   word: 'Gut erholt',
+  tierLabel: 'Bereit',
+  sleep: {
+    total: '7:42 h',
+    stages: [
+      { label: 'Tief', frac: 0.19, hue: '#7B5CFF' },
+      { label: 'REM', frac: 0.22, hue: '#00E5FF' },
+      { label: 'Leicht', frac: 0.54, hue: '#6B8CFF' },
+      { label: 'Wach', frac: 0.05, hue: '#FFB020' },
+    ],
+    spo2: '95%',
+    resp: '14/min Atmung',
+    note: 'Tiefschlaf 19% der Nacht — solide Erholung.',
+  },
+  recovery: { hours: '9h', frac: 0.19, note: 'Noch etwas Erholung offen.' },
+  fitness: { ctl: '78', atl: '68', tsb: '+10', verdict: 'Frisch — die Form ist da.' },
+  vo2: '54',
   guidanceTitle: 'Du bist bereit für Leistung',
   guidanceBody: 'HRV und Ruhepuls sind im gesunden Bereich. Heute darf die Belastung höher liegen.',
   dateNote: 'Overnight-Signale · Stand Di, 12. Aug',

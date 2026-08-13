@@ -1,8 +1,9 @@
 import { type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, SlidersHorizontal, ArrowUpRight } from 'lucide-react'
+import { SlidersHorizontal, ArrowUpRight } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import './w3.css'
 
 /**
@@ -70,11 +71,7 @@ export default function W3LoadForecastView({ vm, onBack, onAdjust }: { vm: W3Loa
         <W3StatusBar />
 
         {/* Nav */}
-        <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={onBack} aria-label="Zurück" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={18} color={T.ink} /></button>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Belastung & Prognose</span>
-          <div style={{ width: 40 }} />
-        </div>
+        <W3TopBar title="Belastung & Prognose" onBack={onBack} />
 
         {/* Hero */}
         <div style={{ ...band(24), paddingTop: 10, gap: 14 }}>
