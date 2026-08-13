@@ -23,6 +23,12 @@ import W3RideDetailView, { type W3RideVm, type W3Zone, type W3Rank, type W3Repea
  */
 
 const DASH = '—'
+// Format the ride's date chip: raw ISO → "12 Aug 2026" (never the raw timestamp).
+const fmtDate = (iso: string | null | undefined): string => {
+  if (!iso) return DASH
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
 const fmtHms = (s: number) => `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`
 const ZONE_NAMES = ['Recovery', 'Endurance', 'Tempo', 'Threshold', 'VO2 max']
 const sgn = (n: number) => `${n >= 0 ? '+' : ''}${Math.round(n)}`
@@ -133,7 +139,7 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined): W3RideVm {
     : (v.watch_out[0] ?? '')
 
   return {
-    dateChip: h.date, sportChip: h.sport?.toUpperCase() ?? 'RIDE', recordChip: bestEffort?.is_pr ? 'NEW RECORD' : null,
+    dateChip: fmtDate(h.date), sportChip: h.sport?.toUpperCase() ?? 'RIDE', recordChip: bestEffort?.is_pr ? 'NEW RECORD' : null,
     title: h.title,
     bigStat: h.distance_km != null ? String(Math.round(h.distance_km)) : DASH, bigStatUnit: 'Kilometres',
     climb: h.elevation_m != null ? `${Math.round(h.elevation_m)} m up` : DASH,
