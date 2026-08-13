@@ -28,6 +28,7 @@ serialised into JSON on Today's critical path, where base64 adds another third.
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -81,6 +82,16 @@ class RideScene(Base):
     text sent to the image model — both stored so the cached image can be
     explained, and so a recipe change can be detected and the row refreshed
     rather than silently serving a stale look.
+
+    ``activity_id`` carries NO foreign key, matching `RideFeedback`. `activities`
+    is a Timescale hypertable whose primary key must include the partition
+    column, so it is composite ``(id, started_at)`` — `activities.id` alone has
+    no unique constraint and Postgres refuses to reference it
+    (``InvalidForeignKey: there is no unique constraint matching given keys``).
+    The sequence still makes the id unique in practice. The cost is no
+    DB-level cascade when an activity is deleted; a scene orphaned that way is
+    inert (it is only ever read while opening that activity), and the row still
+    disappears with its rider via ``user_id``.
     """
 
     __tablename__ = "ride_scenes"
@@ -92,9 +103,7 @@ class RideScene(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
     )
-    activity_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("activities.id", ondelete="CASCADE"), nullable=False, index=True,
-    )
+    activity_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     training_context: Mapped[str | None] = mapped_column(Text, nullable=True)
     prompt: Mapped[str | None] = mapped_column(Text, nullable=True)

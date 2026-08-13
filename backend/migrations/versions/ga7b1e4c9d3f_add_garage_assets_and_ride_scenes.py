@@ -50,7 +50,10 @@ def upgrade() -> None:
         "ride_scenes",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("activity_id", sa.Integer(), nullable=False),
+        # BigInteger and NO foreign key — `activities` is a Timescale hypertable
+        # with a composite PK (id, started_at), so `activities.id` has no unique
+        # constraint to reference. Same shape as ride_feedback.activity_id.
+        sa.Column("activity_id", sa.BigInteger(), nullable=False),
         sa.Column("image_url", sa.Text(), nullable=True),
         sa.Column("training_context", sa.Text(), nullable=True),
         sa.Column("prompt", sa.Text(), nullable=True),
@@ -59,7 +62,6 @@ def upgrade() -> None:
             server_default=sa.text("now()"), nullable=False,
         ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["activity_id"], ["activities.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("activity_id", name="uq_ride_scene_activity"),
     )
