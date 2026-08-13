@@ -5,6 +5,7 @@ import { Gauge, Zap, Timer, TrendingUp, Bike, Trophy } from 'lucide-react'
 import { T, FONT, EASE, grow, band } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
+import W3TopBar from './W3TopBar'
 import './w3.css'
 
 /**
@@ -219,6 +220,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
 
         <W3StatusBar />
+        <W3TopBar />
 
         {/* Header */}
         <div style={{ ...band(0), padding: '14px 20px 18px', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>

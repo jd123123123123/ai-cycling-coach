@@ -1,8 +1,9 @@
 import { type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { X, Download, Camera, Users, Link2, MoreHorizontal, Share2 } from 'lucide-react'
+import { Download, Camera, Users, Link2, MoreHorizontal, Share2 } from 'lucide-react'
 import { T, FONT, EASE } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import type { ShareAngle } from './w3share'
 import './w3.css'
 
@@ -59,11 +60,8 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
         <W3StatusBar />
 
         {/* Nav */}
-        <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={onClose} aria-label="Schließen" style={iconBtn}><X size={18} color={T.ink} /></button>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Fahrt teilen</span>
-          <button onClick={onDownload} aria-label="Bild speichern" style={iconBtn}><Download size={17} color={T.ink} /></button>
-        </div>
+        <W3TopBar title="Fahrt teilen" onBack={onClose}
+          extra={<button onClick={onDownload} aria-label="Bild speichern" style={iconBtn}><Download size={17} color={T.ink} /></button>} />
 
         {/* Poster preview (the exact bitmap that gets shared) */}
         <div style={{ padding: '10px 20px 4px', display: 'flex', justifyContent: 'center' }}>

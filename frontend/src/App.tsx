@@ -110,6 +110,7 @@ const W3ReadinessPreview = lazyWithRetry(() => import('./editorial/w3/W3Readines
 const W3LoginPage = lazyWithRetry(() => import('./editorial/w3/W3LoginPage'))
 const W3RegisterPage = lazyWithRetry(() => import('./editorial/w3/W3RegisterPage'))
 const W3AuthPreview = lazyWithRetry(() => import('./editorial/w3/W3AuthPreview'))
+const W3ScenePreview = lazyWithRetry(() => import('./editorial/w3/W3ScenePreview'))
 const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
@@ -413,6 +414,7 @@ function AppRoutes() {
           <Route path="/e/w3-login" element={<W3LoginPage />} />
           <Route path="/e/w3-register" element={<W3RegisterPage />} />
           <Route path="/e/w3-auth-preview" element={<W3AuthPreview />} />
+          <Route path="/e/w3-scene-preview" element={<W3ScenePreview />} />
           <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />
