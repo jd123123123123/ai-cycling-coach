@@ -11,6 +11,7 @@ import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWee
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useTodayWeather, type TodayWeather } from '../../hooks/useTodayWeather'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { isPresent, type Value } from '../data/value'
 import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
@@ -190,6 +191,10 @@ export default function W3TodayPage() {
   const { data: week } = useCurrentWeek(0)
   const { data: profile } = useAthleteProfile()
   const { data: todayWeather } = useTodayWeather()
+  // The week's real activities — for a past day's ACTUAL duration / power / HR.
+  const { data: weekActs } = useActivitiesRange(
+    new Date(Date.now() - 8 * 86_400_000), new Date(),
+  )
   const qc = useQueryClient()
   const ftp = profile?.ftp_watts ?? null
 
@@ -258,6 +263,22 @@ export default function W3TodayPage() {
     // up its own DayPlan (title / TSS / category / intervals).
     const planByDate = new Map<string, DayPlan>()
     for (const dp of week?.days ?? []) planByDate.set(dp.date.slice(0, 10), dp)
+    // Actual ridden cycling activity per local date (biggest-TSS ride wins).
+    const actByDate = new Map<string, { durMin: number; w: number | null; hr: number | null; tss: number }>()
+    for (const a of weekActs?.activities ?? []) {
+      if (a.sport !== 'cycling') continue
+      const key = new Date(a.started_at).toISOString().slice(0, 10)
+      const cur = actByDate.get(key)
+      const tss = a.tss ?? 0
+      if (!cur || tss > cur.tss) {
+        actByDate.set(key, {
+          durMin: (a.duration_seconds ?? 0) / 60,
+          w: a.normalized_power ?? a.average_power ?? null,
+          hr: a.average_hr ?? null,
+          tss,
+        })
+      }
+    }
     const todayPlan = (week?.days ?? []).find((d) => d.is_today) ?? null
     const todayPlanSession = todayPlan != null && isSessionDay(todayPlan)
 
@@ -398,11 +419,17 @@ export default function W3TodayPage() {
         ? blocks
         : planIsSession && (plan!.intervals?.length ?? 0) > 0 ? blocksFromIntervals(plan!.intervals, ftp)
           : []
+      // What was actually ridden on a past day (real activity), for the
+      // planned-vs-done stats — only for past days that carry a ride.
+      const act = !isToday && i < todayDow ? actByDate.get(isoForIndex(i)) : undefined
       return {
         letter: d.letter, num: '', actual, planned: plannedTss, status,
         title,
         dateLabel: WD[i] ?? d.letter, weekday: WD[i] ?? d.letter,
         targetW, ftpPct, blocks: dayBlocks,
+        actualDurMin: act?.durMin ?? null,
+        actualW: act?.w ?? null,
+        actualHr: act?.hr ?? null,
       }
     })
 
@@ -487,7 +514,7 @@ export default function W3TodayPage() {
       mRides: { pct: 50, label: '25 rides' },
       mDist: { pct: 73, label: '200 km' },
     }
-  }, [model, user, streak, standings, adaptive, week, ftp, todayWeather])
+  }, [model, user, streak, standings, adaptive, week, ftp, todayWeather, weekActs])
 
   // Real adapt that PERSISTS: Easier/Harder/Shorter/Indoor hit POST
   // /workouts/today/modify (the audited workout modifier — writes the new

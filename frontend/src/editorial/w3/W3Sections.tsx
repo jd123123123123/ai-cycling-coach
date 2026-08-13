@@ -23,6 +23,11 @@ export interface W3DayFull {
   // (today, or a future day whose session is set). Optional: past days and the
   // preview fixture omit it, and the card falls back to today's bars.
   blocks?: W3Block[]
+  // What was ACTUALLY ridden on a past day (from the day's real activity) — the
+  // real duration / avg power / avg HR beside the planned-vs-done TSS bars.
+  actualDurMin?: number | null
+  actualW?: number | null
+  actualHr?: number | null
 }
 
 export const STATUS: Record<DayStatus, { label: string; hue: string; icon: typeof Check }> = {
@@ -310,6 +315,21 @@ function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null
           </div>
         ))}
       </div>
+      {/* What you actually rode — real duration / avg power / avg HR. */}
+      {(day.actualDurMin != null || day.actualW != null || day.actualHr != null) && (
+        <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: `1px solid ${T.rule}` }}>
+          {[
+            ['DURATION', day.actualDurMin != null ? `${Math.floor(day.actualDurMin / 60)}:${String(Math.round(day.actualDurMin % 60)).padStart(2, '0')}` : '—'],
+            ['AVG POWER', day.actualW != null ? `${Math.round(day.actualW)} W` : '—'],
+            ['AVG HR', day.actualHr != null ? `${Math.round(day.actualHr)}` : '—'],
+          ].map(([l, v]) => (
+            <div key={l} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', borderRadius: 14, background: T.surface2 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
+              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>{l}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         {delta != null && (
           <span style={{ display: 'flex', gap: 5, alignItems: 'center', padding: '5px 11px', borderRadius: 100, background: `${doneHue}1F`, fontSize: 11, fontWeight: 800, color: doneHue }}>
