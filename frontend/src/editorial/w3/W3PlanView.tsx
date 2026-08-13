@@ -45,6 +45,8 @@ export interface W3PlanVm {
   planWeekLabel: string
   phases: PhaseSeg[]
   railProgress: number
+  planWeekNum: number
+  totalWeeks: number
   reqSummary: string
   daysRight: string
   phaseOfTotal: string
@@ -118,35 +120,45 @@ const IconBtn = ({ children, onClick, label }: { children: ReactNode; onClick?: 
 )
 
 // ── phase rail ──
-function PhaseRail({ phases, progress }: { phases: PhaseSeg[]; progress: number }) {
+const parseWeeks = (w: string): [number, number] => { const m = w.replace('W', '').split('–').map(Number); return [m[0] || 1, m[1] || m[0] || 1] }
+
+/** The pen `GjCmn` plan rail: a per-WEEK segmented track (current week acid-lit,
+ *  past weeks filled, future weeks empty) with an acid underline spanning the
+ *  ACTIVE phase, and the four phase labels sized to their week span. */
+function PhaseRail({ phases, currentWeek, totalWeeks }: { phases: PhaseSeg[]; currentWeek: number; totalWeeks: number }) {
   const reduce = useReducedMotion()
+  const active = phases.find((p) => p.active)
+  const [aFrom, aTo] = active ? parseWeeks(active.weeks) : [0, 0]
+  const weeks = Array.from({ length: Math.max(1, totalWeeks) }, (_, i) => i + 1)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-      <div style={{ display: 'flex', gap: 4, height: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {/* per-week segments */}
+        <div style={{ display: 'flex', gap: 3, height: 10 }}>
+          {weeks.map((w) => {
+            const cur = w === currentWeek
+            const fill = cur ? T.acid : w < currentWeek ? T.d3 : T.surface2
+            return <motion.div key={w} initial={reduce ? false : { opacity: 0, scaleY: 0.4 }} animate={{ opacity: 1, scaleY: 1 }} transition={grow(w * 0.02)}
+              style={{ flex: 1, height: 10, borderRadius: 3, background: fill, boxShadow: cur ? `0 0 10px ${T.acid}77` : 'none' }} />
+          })}
+        </div>
+        {/* active-phase underline */}
+        <div style={{ display: 'flex', gap: 3, height: 2 }}>
+          {weeks.map((w) => <div key={w} style={{ flex: 1, height: 2, borderRadius: 100, background: w >= aFrom && w <= aTo ? T.acid : 'transparent' }} />)}
+        </div>
+      </div>
+      {/* phase labels, sized to their week span */}
+      <div style={{ display: 'flex', gap: 4 }}>
         {phases.map((p, i) => {
-          const active = p.active
+          const [f, t] = parseWeeks(p.weeks)
           return (
-            <div key={i} style={{ flex: 1, height: 8, borderRadius: 100, background: T.surface2, overflow: 'hidden', position: 'relative' }}>
-              {active && (
-                <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(0.1 + i * 0.05)}
-                  style={{ position: 'absolute', inset: 0, transformOrigin: 'left', background: T.acid, borderRadius: 100 }} />
-              )}
-              {!active && i < phases.findIndex((x) => x.active) && (
-                <div style={{ position: 'absolute', inset: 0, background: T.d3, borderRadius: 100 }} />
-              )}
+            <div key={i} style={{ flex: Math.max(1, t - f + 1), display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: p.active ? T.acid : T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: p.active ? T.acidDeep : T.quiet }}>{p.weeks}</span>
             </div>
           )
         })}
       </div>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {phases.map((p, i) => (
-          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: p.active ? T.acid : T.mid }}>{p.name}</span>
-            <span style={{ fontSize: 10, fontWeight: 600, color: p.active ? T.acidDeep : T.quiet }}>{p.weeks}</span>
-          </div>
-        ))}
-      </div>
-      <span style={{ fontSize: 0, height: 0 }} aria-hidden>{Math.round(progress * 100)}</span>
     </div>
   )
 }
@@ -463,7 +475,7 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
 
         {/* Phase rail */}
         <div style={{ ...band(20) }}>
-          <PhaseRail phases={vm.phases} progress={vm.railProgress} />
+          <PhaseRail phases={vm.phases} currentWeek={vm.planWeekNum} totalWeeks={vm.totalWeeks} />
         </div>
 
         {/* Ziel & Anforderungen link */}

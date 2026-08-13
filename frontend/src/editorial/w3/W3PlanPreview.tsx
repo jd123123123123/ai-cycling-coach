@@ -19,6 +19,8 @@ const FIXTURE: W3PlanVm = {
     { name: 'Taper', weeks: 'W11–12', active: false },
   ],
   railProgress: 0.4,
+  planWeekNum: 5,
+  totalWeeks: 12,
   reqSummary: 'Strecke, Anforderungsprofil und Renntag',
   daysRight: '53 Tage',
   phaseOfTotal: 'Phase 2 von 4',

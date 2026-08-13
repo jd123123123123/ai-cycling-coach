@@ -211,6 +211,8 @@ export default function W3PlanPage() {
       planWeekLabel: `Planwoche ${planWeek} von ${totalWeeks}`,
       phases,
       railProgress: currentIdx / Math.max(1, totalWeeks),
+      planWeekNum: planWeek,
+      totalWeeks,
       reqSummary: 'Strecke, Anforderungsprofil und Renntag',
       daysRight: daysToStart != null ? `${daysToStart} Tage` : '—',
       phaseOfTotal: `Phase ${activeSegIdx + 1} von ${phases.length}`,

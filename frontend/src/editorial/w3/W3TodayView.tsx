@@ -258,7 +258,8 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
 
         {/* ── Hero: readiness + charge meter ── */}
         <div style={{ ...band(24), paddingTop: 20, gap: 14 }}>
-          <div style={{ width: '100%', padding: '18px 18px 16px', borderRadius: 22, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <button onClick={() => navigate('/e/w3-readiness')} aria-label="Readiness-Details"
+            style={{ width: '100%', padding: '18px 18px 16px', borderRadius: 22, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
                 <span style={{ fontSize: 68, fontWeight: 700, letterSpacing: -3, lineHeight: 0.82, color: vm.readiness != null ? T.acid : T.quiet, textShadow: vm.readiness != null ? `0 0 26px ${T.acid}66` : 'none' }}>{vm.readiness ?? DASH}</span>
@@ -275,7 +276,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
               </div>
             </div>
             <ChargeMeter score={vm.readiness} />
-          </div>
+          </button>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px 6px 9px', borderRadius: 100, background: T.acidDim }}>

@@ -408,6 +408,10 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
   const curFtp = result ? (parseInt(result.ftpPct) || baseFtp) : baseFtp
   const isRest = adapt === 'rest'
   const adapted = adapt !== 'none'
+  // Pen `c22vzW` structure line under the beam: how to ride it + fuelling (the
+  // 60 g/h is standard endurance guidance, not a fabricated per-ride number).
+  const tw = day.targetW && day.targetW !== '—' ? day.targetW : 'im Zielbereich'
+  const workDesc = `Intervalle bei ${tw} halten · locker ein- und ausfahren · ~60 g Kohlenhydrate pro Stunde`
 
   // Run the real coach adapt (or clear it when the same option is tapped off).
   const runAdapt = async (kind: Exclude<Adapt, 'none'>) => {
@@ -432,10 +436,10 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 2 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>
-          {isToday ? 'Today’s Training' : `${day.weekday}’s session`}
+          {isToday ? 'Heutige Einheit' : 'Einheit'}
         </span>
         <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
-          {isToday ? 'Earned by training, not bought' : day.dateLabel}
+          {isToday ? 'Auf dein Ziel eingerechnet' : day.dateLabel}
         </span>
       </div>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '7px 12px', borderRadius: 100, background: `${st.hue}1F` }}>
@@ -458,8 +462,8 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <div style={{ width: 44, height: 44, borderRadius: 14, background: '#00E5FF1F', display: 'grid', placeItems: 'center' }}><Moon size={20} color="#00E5FF" /></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 22, fontWeight: 700, color: T.ink }}>Rest day</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>{isToday ? 'Let today’s load settle — 0 TSS. Tomorrow’s block hits harder for it.' : 'Recovery is scheduled here — 0 TSS. The coach fills training days a week ahead and re-plans each morning.'}</span>
+              <span style={{ fontSize: 22, fontWeight: 700, color: T.ink }}>Ruhetag</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>{isToday ? 'Lass die Belastung von heute setzen — 0 TSS. Der nächste Block trifft dafür härter.' : 'Hier ist Erholung eingeplant — 0 TSS. Der Coach füllt Trainingstage eine Woche im Voraus und rechnet jeden Morgen neu.'}</span>
             </div>
           </div>
           {isToday && <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />}
@@ -475,21 +479,21 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
         style={{ ...card(), opacity: day.status === 'missed' ? 0.72 : 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>
-            {isToday ? 'Today’s session' : isFuture ? 'Planned session' : 'The plan was'}
+            {isToday ? 'Heute' : isFuture ? 'Geplant' : 'Der Plan war'}
           </span>
           <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid }}>{isToday ? session.dur : ''}</span>
         </div>
         <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1, color: day.title ? T.ink : T.mid, marginBottom: 16 }}>
-          {day.title ?? (isFuture ? `${day.weekday}’s ride isn’t set yet` : 'Rest day')}
+          {day.title ?? (isFuture ? 'Noch nicht festgelegt' : 'Ruhetag')}
         </div>
 
         {/* Stats only when there's a real prescription (title + a number). A
             future day with no plan yet hides the empty dash row. */}
         {(day.title != null && (curTss > 0 || curT > 0)) && (
           <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-            <StatCol v={curT ? `${curT} W` : '—'} l="TARGET" hue={adapted && isToday ? T.acid : undefined} />
-            <StatCol v={curTss ? `${curTss}` : '—'} l="PLANNED TSS" hue={adapted && isToday ? T.acid : undefined} />
-            <StatCol v={curFtp ? `${curFtp}%` : '—'} l="OF FTP" />
+            <StatCol v={curT ? `${curT} W` : '—'} l="ZIEL" hue={adapted && isToday ? T.acid : undefined} />
+            <StatCol v={curTss ? `${curTss}` : '—'} l="TSS" hue={adapted && isToday ? T.acid : undefined} />
+            <StatCol v={curFtp ? `${curFtp}%` : '—'} l="DER FTP" />
           </div>
         )}
 
@@ -507,12 +511,13 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
         {isToday && (
           <>
             <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} />
+            <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.45, color: T.mid, marginBottom: 4 }}>{workDesc}</span>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 13, borderTop: `1px solid ${T.rule}`, marginBottom: 4 }}>
               <Zap size={14} color={T.acid} /><span style={{ fontSize: 11.5, color: T.mid }}>{session.earn}</span>
             </div>
             <button onClick={() => navigate('/e/w3-session')}
               style={{ height: 54, width: '100%', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', marginTop: 12 }}>
-              <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: -0.2, color: T.bg }}>View workout</span>
+              <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: -0.2, color: T.bg }}>Training ansehen</span>
               <div style={{ width: 38, height: 38, borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
             </button>
           </>
