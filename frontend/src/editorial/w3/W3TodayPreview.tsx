@@ -27,6 +27,11 @@ const FIXTURE: W3Vm = {
   rhr: { value: '42', unit: 'bpm', sub: '−3 vs baseline', subHue: '#C8FF00', spark: spark([0.32, 0.45, 0.18, 0.6, 0.72, 0.72, 1], '#C8FF00') },
   sleep: { value: '7:42', unit: 'hrs', sub: '91 quality', subHue: '#C8FF00', spark: spark([0.18, 0.55, 0.4, 1, 0.63, 0.82, 0.9], '#C8FF00') },
   weekMeta: '486 of 620 TSS',
+  weekBlockLabel: 'Aufbaublock · Woche 2',
+  weekDoneChip: '1 / 6 erledigt',
+  weekLoadLabel: '65 von 540 TSS',
+  weekGoal: { name: 'Harz Extrem Marathon · 212 km', right: 'in 8 Wochen', sub: '4. Okt' },
+  planWeeks: '12 Wochen',
   weekDays: [
     { letter: 'M', num: '11', actual: 62, planned: 60, status: 'hit', title: 'Endurance · 2h', dateLabel: 'Mon 11 Aug', weekday: 'Monday', targetW: '205 W', ftpPct: '70%' },
     { letter: 'T', num: '12', actual: 0, planned: 112, status: 'today', title: '4 × 8 Threshold', dateLabel: 'Tue 12 Aug', weekday: 'Tuesday', targetW: '285 W', ftpPct: '98%' },

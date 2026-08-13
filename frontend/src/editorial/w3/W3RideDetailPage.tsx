@@ -2,9 +2,10 @@ import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { usePMC } from '../../hooks/usePMC'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { RaceDebrief, EffortMatch } from '../../api/debrief'
-import type { PMCResponse } from '../../api/dashboard'
-import W3RideDetailView, { type W3RideVm, type W3Zone, type W3Rank, type W3Repeat } from './W3RideDetailView'
+import type { PMCResponse, ActivityRead } from '../../api/dashboard'
+import W3RideDetailView, { type W3RideVm, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
 
 /**
  * W3 · 07 RIDE DETAIL, wired to live data. Route /e/w3-ride/:id.
@@ -103,10 +104,41 @@ function toCeiling(efforts: EffortMatch[]): { label: string; before: string; aft
   return { label, before: `${ceiling}`, after: `${ceiling}`, delta: '+0' }
 }
 
-function toVm(d: RaceDebrief, pmc: PMCResponse | undefined): W3RideVm {
+// fixture: the app has no season-goal model yet, so "toward the year" tracks
+// real season totals against placeholder targets (mirrors the Rides page).
+const KM_GOAL = 12000, M_GOAL = 100000, RIDES_GOAL = 200
+const spaceK = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ')
+
+function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRead | null, season: ActivityRead[]): W3RideVm {
   const h = d.header
   const v = d.verdict
   const eff = d.efficiency
+
+  // Intensity (IF) from the ride's real TSS × duration (Coggan) — colours the hero.
+  const hrs = h.moving_time_s / 3600
+  const intensity = h.tss > 0 && hrs > 0 ? Math.sqrt(h.tss / (hrs * 100)) : 0
+
+  // "What it moved you toward" — real season totals + this ride's contribution.
+  const cyc = season.filter((a) => a.sport === 'cycling')
+  const totalKm = cyc.reduce((s, a) => s + (a.distance_meters ?? 0), 0) / 1000
+  const totalM = cyc.reduce((s, a) => s + (a.elevation_gain_m ?? 0), 0)
+  const totalRides = cyc.length
+  const thisKm = h.distance_km ?? (activity?.distance_meters ?? 0) / 1000
+  const thisM = h.elevation_m ?? activity?.elevation_gain_m ?? 0
+  const clamp = (x: number) => Math.max(0, Math.min(1, x))
+  const moved: MovedRow[] = totalRides > 0 ? [
+    { label: 'Season distance', delta: `+${Math.round(thisKm)} km`, value: spaceK(totalKm), goal: `${spaceK(KM_GOAL)} km`, beforePct: clamp((totalKm - thisKm) / KM_GOAL), pct: clamp(totalKm / KM_GOAL) },
+    { label: 'Climbing', delta: `+${spaceK(thisM)} m`, value: spaceK(totalM), goal: `${spaceK(M_GOAL)} m`, beforePct: clamp((totalM - thisM) / M_GOAL), pct: clamp(totalM / M_GOAL) },
+    { label: 'Rides logged', delta: '+1', value: String(totalRides), goal: String(RIDES_GOAL), beforePct: clamp((totalRides - 1) / RIDES_GOAL), pct: clamp(totalRides / RIDES_GOAL) },
+  ] : []
+  const remainKm = Math.max(0, KM_GOAL - totalKm)
+  const moreRides = thisKm > 0 ? Math.ceil(remainKm / thisKm) : null
+  const movedSub = `${Math.round(thisKm)} km and ${spaceK(thisM)} m of climbing, added to your year.`
+  const movedFoot = remainKm <= 0
+    ? 'Season distance goal reached — everything from here is a bonus.'
+    : moreRides != null
+      ? `About ${moreRides} more rides like this and the ${spaceK(KM_GOAL)} km lands.`
+      : `${spaceK(remainKm)} km still to the season goal.`
 
   const zones: W3Zone[] = (() => {
     const pct = d.pacing?.zone_time_pct ?? {}
@@ -142,6 +174,8 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined): W3RideVm {
     dateChip: fmtDate(h.date), sportChip: h.sport?.toUpperCase() ?? 'RIDE', recordChip: bestEffort?.is_pr ? 'NEW RECORD' : null,
     title: h.title,
     bigStat: h.distance_km != null ? String(Math.round(h.distance_km)) : DASH, bigStatUnit: 'Kilometres',
+    polyline: activity?.route_polyline ?? null, intensity,
+    movedSub, moved, movedFoot,
     climb: h.elevation_m != null ? `${Math.round(h.elevation_m)} m up` : DASH,
     avgSpeed: h.avg_speed_kmh != null ? `${Math.round(h.avg_speed_kmh)} km/h` : DASH,
     power: d.story?.power?.filter((_, i) => i % Math.max(1, Math.floor((d.story?.power.length ?? 1) / 40)) === 0).slice(0, 40) ?? [],
@@ -169,7 +203,10 @@ export default function W3RideDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { data } = useRaceDebrief(id ? Number(id) : undefined)
   const { data: pmc } = usePMC()
-  const vm = useMemo(() => (data ? toVm(data, pmc) : null), [data, pmc])
+  const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
+  const { data: season } = useActivitiesRange(seasonStart, new Date())
+  const activity = useMemo(() => (season?.activities ?? []).find((a) => a.id === Number(id)) ?? null, [season, id])
+  const vm = useMemo(() => (data ? toVm(data, pmc, activity, season?.activities ?? []) : null), [data, pmc, activity, season])
   if (!vm) return <div className="w3-root"><div className="w3-frame" style={{ minHeight: '100dvh' }} /></div>
   return <W3RideDetailView vm={vm} onBack={() => navigate(-1)} onShare={() => id && navigate(`/e/w3-share/${id}`)} />
 }

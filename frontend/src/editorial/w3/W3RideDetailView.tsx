@@ -21,11 +21,18 @@ export interface W3Zone { z: string; name: string; min: string; pct: number; pea
 export interface W3Rank { dur: string; watts: string; note: string; pr: boolean; fill: number }
 export interface W3StatCard { v: string; l: string; s: string }
 
+export interface MovedRow { label: string; delta: string; value: string; goal: string; beforePct: number; pct: number }
+
 export interface W3RideVm {
   dateChip: string; sportChip: string; recordChip: string | null
   title: string
   bigStat: string; bigStatUnit: string; climb: string; avgSpeed: string
   power: number[]; powerNote: string
+  // The GPX of the route + the ride's intensity (IF) — the header is generated
+  // from these: the route shape, tinted by how hard the ride was.
+  polyline: [number, number][] | null; intensity: number
+  // "What it moved you toward" — real season totals + this ride's contribution.
+  movedSub: string; moved: MovedRow[]; movedFoot: string
   stats: W3StatCard[]                // 4
   execScore: string; execTotal: string
   verdictHeadline: string; verdictBody: string; aiModel: string | null
@@ -60,6 +67,18 @@ function SegGauge({ fill, on, delay }: { fill: number; on: boolean; delay: numbe
   )
 }
 
+/** GPX [lat,lng] → an SVG path normalised into a 0..100 box (lat flipped). */
+function routePath(pts: [number, number][]): string {
+  const lats = pts.map((p) => p[0]), lngs = pts.map((p) => p[1])
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
+  const sLat = Math.max(1e-6, maxLat - minLat), sLng = Math.max(1e-6, maxLng - minLng)
+  const s = Math.min(94 / sLng, 94 / sLat), ox = (100 - sLng * s) / 2, oy = (100 - sLat * s) / 2
+  return pts.map((p, i) => `${i ? 'L' : 'M'}${(ox + (p[1] - minLng) * s).toFixed(1)} ${(oy + (maxLat - p[0]) * s).toFixed(1)}`).join(' ')
+}
+/** Ride intensity (IF) → the hero's accent colour + a plain-word label. */
+const intensityColor = (iff: number): string => iff >= 1.02 ? '#FF6A3D' : iff >= 0.92 ? T.warn : iff >= 0.8 ? T.acid : T.training
+const intensityLabel = (iff: number): string => iff >= 1.02 ? 'VO2 · anaerob' : iff >= 0.92 ? 'Schwelle' : iff >= 0.8 ? 'Tempo' : iff >= 0.6 ? 'Ausdauer' : 'Recovery'
+
 // Icon per stat card, matched by its label keyword — supports the storytelling.
 const STAT_ICON = (label: string): LucideIcon => {
   const l = label.toLowerCase()
@@ -87,28 +106,54 @@ export default function W3RideDetailView({ vm, onBack, onShare }: { vm: W3RideVm
           <button onClick={onShare} aria-label="Share" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>
         </div>
 
-        {/* Cover — the ride's own power silhouette as an atmospheric trace
-             (real data, not a placeholder image). */}
-        <div style={{ height: 190, margin: '8px 0 0', position: 'relative', background: `radial-gradient(120% 90% at 60% 20%, #1a2416, ${T.bg})`, overflow: 'hidden' }}>
-          {vm.power.length > 1 && (() => {
-            const n = vm.power.length
-            const pts = vm.power.map((p, i) => `${(i / (n - 1)) * 100},${100 - Math.max(2, (p / pMax) * 92)}`).join(' ')
-            return (
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-                <defs>
-                  <linearGradient id="rdfill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={T.acid} stopOpacity="0.34" />
-                    <stop offset="100%" stopColor={T.acid} stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <motion.polygon points={`0,100 ${pts} 100,100`} fill="url(#rdfill)"
-                  initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, ease: EASE }} />
-                <polyline points={pts} fill="none" stroke={T.acid} strokeWidth={0.8} strokeOpacity={0.85} vectorEffect="non-scaling-stroke" />
-              </svg>
-            )
-          })()}
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 90, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
-        </div>
+        {/* Cover — GENERATED from the GPX route, tinted by the ride's intensity:
+             the route shape glows in the intensity accent, over an intensity-lit
+             wash. Falls back to the ride's power silhouette when there's no GPS. */}
+        {(() => {
+          const acc = intensityColor(vm.intensity)
+          const hasRoute = vm.polyline != null && vm.polyline.length > 1
+          return (
+            <div style={{ height: 210, margin: '8px 0 0', position: 'relative', overflow: 'hidden', background: `radial-gradient(120% 95% at 60% 12%, ${acc}2E, ${T.bg})` }}>
+              {hasRoute ? (
+                <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                  <defs>
+                    <linearGradient id="rdroute" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor={acc} />
+                      <stop offset="100%" stopColor={T.acid} />
+                    </linearGradient>
+                  </defs>
+                  {/* soft glow underlay */}
+                  <path d={routePath(vm.polyline!)} fill="none" stroke={acc} strokeWidth={6} strokeOpacity={0.22} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" style={{ filter: 'blur(3px)' }} />
+                  <motion.path d={routePath(vm.polyline!)} fill="none" stroke="url(#rdroute)" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+                    initial={reduce ? false : { pathLength: 0, opacity: 0.3 }} animate={{ pathLength: 1, opacity: 1 }} transition={{ duration: 1.15, ease: EASE }} />
+                </svg>
+              ) : vm.power.length > 1 ? (() => {
+                const n = vm.power.length
+                const pts = vm.power.map((p, i) => `${(i / (n - 1)) * 100},${100 - Math.max(2, (p / pMax) * 92)}`).join(' ')
+                return (
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                    <defs>
+                      <linearGradient id="rdfill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={acc} stopOpacity="0.34" />
+                        <stop offset="100%" stopColor={acc} stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <motion.polygon points={`0,100 ${pts} 100,100`} fill="url(#rdfill)"
+                      initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, ease: EASE }} />
+                    <polyline points={pts} fill="none" stroke={acc} strokeWidth={0.9} strokeOpacity={0.9} vectorEffect="non-scaling-stroke" />
+                  </svg>
+                )
+              })() : null}
+              {/* intensity chip */}
+              <div style={{ position: 'absolute', top: 14, left: 20, display: 'flex', gap: 7, alignItems: 'center', padding: '6px 12px 6px 10px', borderRadius: 100, background: '#000000A6' }}>
+                <Zap size={12} color={acc} fill={acc} />
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, color: T.ink }}>{intensityLabel(vm.intensity)}</span>
+                {vm.intensity > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: T.quiet }}>· IF {vm.intensity.toFixed(2)}</span>}
+              </div>
+              <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 96, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
+            </div>
+          )
+        })()}
 
         {/* Hero card */}
         <div style={{ ...band(20), marginTop: -54 }}>
@@ -280,7 +325,7 @@ export default function W3RideDetailView({ vm, onBack, onShare }: { vm: W3RideVm
         </div>
 
         {/* 04 What this changes */}
-        <div style={{ ...band(44), gap: 12 }}>
+        <div style={{ ...band(28), gap: 12 }}>
           <SectionHead n="04" t="What this changes" s="The ride is over. These are the numbers it moved." />
           <div style={{ ...card(), gap: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -308,6 +353,34 @@ export default function W3RideDetailView({ vm, onBack, onShare }: { vm: W3RideVm
             <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{vm.changesBody}</span>
           </div>
         </div>
+
+        {/* 05 What it moved you toward — this ride's push toward the season goals */}
+        {vm.moved.length > 0 && (
+          <div style={{ ...band(44), gap: 12 }}>
+            <SectionHead n="05" t="What it moved you toward" s={vm.movedSub} />
+            <div style={{ ...card(), gap: 18 }}>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>TOWARD THE YEAR</span>
+              {vm.moved.map((m, i) => (
+                <div key={m.label} style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet }}>{m.label}</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: T.bg, padding: '3px 8px', borderRadius: 100, background: T.acid }}>{m.delta}</span>
+                    </div>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>{m.value} <span style={{ color: T.quiet, fontWeight: 600 }}>/ {m.goal}</span></span>
+                  </div>
+                  <div style={{ height: 8, borderRadius: 100, background: T.surface2, overflow: 'hidden', display: 'flex' }}>
+                    <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(m.beforePct * 100)}%` }} transition={{ duration: 0.7, ease: EASE, delay: i * 0.08 }}
+                      style={{ height: '100%', background: T.acidDeep }} />
+                    <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(Math.max(0, m.pct - m.beforePct) * 100)}%` }} transition={{ duration: 0.7, ease: EASE, delay: i * 0.08 + 0.25 }}
+                      style={{ height: '100%', background: T.acid, boxShadow: `0 0 8px ${T.acid}` }} />
+                  </div>
+                </div>
+              ))}
+              <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>{vm.movedFoot}</span>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

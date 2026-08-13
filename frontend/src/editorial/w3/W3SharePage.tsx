@@ -132,6 +132,8 @@ export default function W3SharePage() {
       angle,
       handle,
       club: dateStr,
+      // Real ride intensity (IF) — tints the route glow on the poster.
+      intensity: iff ?? (h?.tss != null && durS ? Math.sqrt(h.tss / ((durS / 3600) * 100)) : undefined),
       polyline: activity?.route_polyline ?? null,
       bikeSrc: STARTER_BIKE,
       avatarUrl: user?.avatar_url ?? null,

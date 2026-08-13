@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { Gauge, Zap, Timer, TrendingUp, Bike, Flame, Mountain, Trophy } from 'lucide-react'
+import { Gauge, Zap, Timer, TrendingUp, Bike, Trophy } from 'lucide-react'
 import { T, FONT, EASE, grow, band } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -140,84 +140,59 @@ function RideThumb({ ride, accent, reduce, delay }: { ride: W3RideCard; accent: 
   )
 }
 
-/** Read the Page's real secondary fact: "142 TSS" → a training-load bar,
- *  "620 m climbed" → an elevation note. Never fabricates a number. */
-function parseLoad(note: string | null): { tss: number | null; climb: string | null } {
-  if (!note) return { tss: null, climb: null }
-  const m = note.match(/^(\d+)\s*TSS$/i)
-  if (m) return { tss: parseInt(m[1], 10), climb: null }
-  return { tss: null, climb: note }
-}
-
-/** Subtle training-load bar off the ride's real TSS (capped at ~220 = a big day). */
-function LoadBar({ tss, accent }: { tss: number; accent: boolean }) {
-  const pct = Math.max(0.06, Math.min(1, tss / 220))
-  const fill = accent ? T.acid : tss >= 150 ? T.acid : tss >= 80 ? T.acidDeep : T.cool
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-      <Flame size={12} color={fill} strokeWidth={2.2} style={{ flex: 'none' }} />
-      <div style={{ flex: 1, height: 4, borderRadius: 100, background: '#FFFFFF12', overflow: 'hidden' }}>
-        <div style={{ width: `${Math.round(pct * 100)}%`, height: '100%', borderRadius: 100, background: fill }} />
-      </div>
-      <span style={{ flex: 'none', fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: accent ? T.acid : T.mid }}>{tss} <span style={{ color: T.quiet }}>TSS</span></span>
-    </div>
-  )
-}
-
-/** One of the three metric icons in the ride row / season footer. */
+/** One of the three metric icons in the ride row / season footer. Icons render
+ *  in a uniform, subtle ink so the acid distance stays the card's one hero — the
+ *  pen `RideRow` treatment (not three competing colours). */
 const STAT = {
-  speed: { Icon: Gauge, color: T.cool },
-  power: { Icon: Zap, color: T.evening },
-  time: { Icon: Timer, color: T.training },
+  speed: { Icon: Gauge },
+  power: { Icon: Zap },
+  time: { Icon: Timer },
 } as const
 
 function StatChip({ kind, value, unit }: { kind: keyof typeof STAT; value: string; unit?: string }) {
-  const { Icon, color } = STAT[kind]
+  const { Icon } = STAT[kind]
+  const dim = value === '—'
   return (
-    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-      <Icon size={14} color={value === '—' ? T.quiet : color} strokeWidth={2} />
-      <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, color: value === '—' ? T.quiet : T.ink }}>{value}</span>
-      {unit && value !== '—' && <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{unit}</span>}
+    <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+      <Icon size={13} color={dim ? T.quiet : T.mid} strokeWidth={2} />
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: dim ? T.quiet : T.ink }}>{value}</span>
+      {unit && !dim && <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{unit}</span>}
     </span>
   )
 }
 
 function RideRow({ ride, accent, reduce, index, onOpen }: { ride: W3RideCard; accent: boolean; reduce: boolean | null; index: number; onOpen: () => void }) {
   const tappable = ride.id != null
-  const { tss, climb } = parseLoad(ride.note)
   return (
     <motion.button
       onClick={tappable ? onOpen : undefined} disabled={!tappable}
       initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE, delay: index * 0.05 }}
       style={{
-        display: 'flex', gap: 15, alignItems: 'stretch', width: '100%', textAlign: 'left', fontFamily: FONT,
-        padding: 18, borderRadius: 24, background: T.surface, cursor: tappable ? 'pointer' : 'default',
-        border: `1.5px solid ${accent ? T.acid : T.rule}`,
-        boxShadow: accent ? `0 0 26px ${T.acid}24` : 'none',
+        display: 'flex', gap: 14, alignItems: 'center', width: '100%', textAlign: 'left', fontFamily: FONT,
+        padding: 16, borderRadius: 22, background: T.surface, cursor: tappable ? 'pointer' : 'default',
+        border: `1px solid ${accent ? T.acid + '4D' : T.rule}`,
       }}>
       <RideThumb ride={ride} accent={accent} reduce={reduce} delay={index * 0.05 + 0.1} />
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 11 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-          <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.5, lineHeight: 1.15, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ride.title}</span>
-          <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, letterSpacing: 0.7, color: T.quiet, padding: '4px 8px', borderRadius: 100, background: T.surface2 }}>{ride.dateLabel}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.15, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ride.title}</span>
+          <span style={{ flex: 'none', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.7, color: T.quiet }}>{ride.dateLabel}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
-          <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1.2, lineHeight: 0.9, color: ride.km === '—' ? T.quiet : T.acid }}>{ride.km}</span>
+          <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: -1.1, lineHeight: 0.9, color: ride.km === '—' ? T.quiet : T.acid }}>{ride.km}</span>
           <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, paddingBottom: 2 }}>km</span>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 13, alignItems: 'center' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
             <StatChip kind="speed" value={ride.speed} />
             <StatChip kind="power" value={ride.power} />
             <StatChip kind="time" value={ride.dur} />
           </div>
         </div>
-        {tss != null ? (
-          <LoadBar tss={tss} accent={accent} />
-        ) : climb ? (
-          <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-            <Mountain size={12} color={accent ? T.acid : T.mid} strokeWidth={2} style={{ flex: 'none' }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: accent ? T.acid : T.mid }}>{climb}</span>
+        {ride.note && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ width: 5, height: 5, borderRadius: 100, flex: 'none', background: accent ? T.acid : T.mid }} />
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: accent ? T.acid : T.mid }}>{ride.note}</span>
           </div>
-        ) : null}
+        )}
       </div>
     </motion.button>
   )

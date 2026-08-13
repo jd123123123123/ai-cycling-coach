@@ -8,11 +8,25 @@ const power = Array.from({ length: 40 }, (_, i) => {
   return inRep ? 0.85 + Math.random() * 0.12 : 0.28 + Math.random() * 0.12
 })
 
+// A synthetic winding GPX track (lat/lng) for the generated hero.
+const polyline: [number, number][] = Array.from({ length: 44 }, (_, i) => {
+  const t = i / 43
+  return [51.74 + 0.05 * Math.sin(t * 6.5) + t * 0.015, 10.6 + t * 0.11 + 0.03 * Math.cos(t * 5)]
+})
+
 const FIXTURE: W3RideVm = {
   dateChip: 'Wed 06 Aug · 09:12', sportChip: 'Outdoor', recordChip: 'New record',
   title: 'Hill repeats',
   bigStat: '62', bigStatUnit: 'Kilometres', climb: '1240 m up', avgSpeed: '30 km/h',
   power, powerNote: 'Six repeats · none dropped',
+  polyline, intensity: 0.94,
+  movedSub: '62 km and 1 240 m of climbing, added to your year.',
+  moved: [
+    { label: 'Season distance', delta: '+62 km', value: '4 812', goal: '12 000 km', beforePct: 0.396, pct: 0.401 },
+    { label: 'Climbing', delta: '+1 240 m', value: '41 260', goal: '100 000 m', beforePct: 0.4, pct: 0.413 },
+    { label: 'Rides logged', delta: '+1', value: '142', goal: '200', beforePct: 0.705, pct: 0.71 },
+  ],
+  movedFoot: 'About 116 more rides like this and the 12 000 km lands — you are on for October, not December.',
   stats: [
     { v: '198 W', l: 'AVERAGE POWER', s: '244 W normalised' },
     { v: '2:04', l: 'MOVING TIME', s: '62 km at 30 km/h' },

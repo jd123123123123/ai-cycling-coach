@@ -187,10 +187,11 @@ export default function W3SessionPage() {
     }
   }, [model, session.workout, adaptive, streak, seasonActs])
 
-  const onExport = useCallback(() => {
+  const onExport = useCallback(async () => {
     // The real export path — GET /coach/workout/export serves today's
     // prescribed workout as a .fit for a head unit. Client-side Blob download.
-    void downloadWorkoutExport('fit')
+    // Returns the promise so the view can await it and surface a failure.
+    await downloadWorkoutExport('fit')
   }, [])
 
   const onToday = useCallback(() => navigate('/e/w3-today'), [navigate])

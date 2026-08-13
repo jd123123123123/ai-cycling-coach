@@ -31,6 +31,9 @@ export interface PosterData {
   footer: string
   /** GPX track as [lat, lng] pairs (downsampled). Null → a stylised route. */
   polyline: [number, number][] | null
+  /** Ride intensity (IF). When set, the route glows in the intensity accent
+   *  (green→lime→amber→orange) instead of the angle's default colour. */
+  intensity?: number
   bikeSrc: string
   avatarUrl: string | null
   avatarInitial: string
@@ -84,7 +87,12 @@ function mountainPath(ctx: CanvasRenderingContext2D, baseY: number, amp: number,
   ctx.fill()
 }
 
-function drawRoute(ctx: CanvasRenderingContext2D, pts: [number, number][] | null, theme: Theme, heroH: number) {
+/** IF → route accent, matching the ride-detail hero's intensity colours. */
+function intensityHue(iff: number): string {
+  return iff >= 1.02 ? '#FF6A3D' : iff >= 0.92 ? '#FFB020' : iff >= 0.8 ? '#C8FF00' : '#2BE68F'
+}
+
+function drawRoute(ctx: CanvasRenderingContext2D, pts: [number, number][] | null, theme: Theme, heroH: number, routeColor: string) {
   // Target rect in the lower hero band.
   const rx = 90, ry = heroH * 0.5, rw = W - 180, rh = heroH * 0.34
   let path: { x: number; y: number }[]
@@ -106,8 +114,8 @@ function drawRoute(ctx: CanvasRenderingContext2D, pts: [number, number][] | null
   }
   ctx.save()
   ctx.lineJoin = 'round'; ctx.lineCap = 'round'
-  ctx.shadowColor = theme.route; ctx.shadowBlur = 26
-  ctx.strokeStyle = theme.route; ctx.lineWidth = 12
+  ctx.shadowColor = routeColor; ctx.shadowBlur = 26
+  ctx.strokeStyle = routeColor; ctx.lineWidth = 12
   ctx.beginPath()
   path.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)))
   ctx.stroke()
@@ -170,8 +178,8 @@ async function paint(ctx: CanvasRenderingContext2D, d: PosterData, avatarImg: HT
   mountainPath(ctx, heroH * 0.74, 150, 2.1, t.mtnMid, heroH)
   mountainPath(ctx, heroH * 0.86, 120, 4.0, t.mtnFront, heroH)
 
-  // route (the GPX)
-  drawRoute(ctx, d.polyline, t, heroH)
+  // route (the GPX), glowing in the intensity accent when we know it
+  drawRoute(ctx, d.polyline, t, heroH, d.intensity != null ? intensityHue(d.intensity) : t.route)
 
   // hero→panel fade
   const fade = ctx.createLinearGradient(0, heroH - 220, 0, heroH)

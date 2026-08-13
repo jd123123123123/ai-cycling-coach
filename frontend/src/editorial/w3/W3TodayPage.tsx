@@ -10,6 +10,7 @@ import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { parseISO, fmtDEShort } from './w3plan'
 import { useTodayWeather, type TodayWeather } from '../../hooks/useTodayWeather'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { isPresent, type Value } from '../data/value'
@@ -439,6 +440,26 @@ export default function W3TodayPage() {
     const weekDoneLabel = weekPlanned > 0 ? `${weekDone} of ${weekPlanned} done` : null
     const zoneTag = session?.intensityFactor != null ? `${Math.round(session.intensityFactor * 100)}% FTP` : null
 
+    // ── "Deine Woche": real meso block + the season goal this week feeds ──
+    const meso = week?.meso_block ?? null
+    const BLOCK_DE: Record<string, string> = { accumulation: 'Aufbaublock', transmutation: 'Spezifischer Block', realization: 'Wettkampfblock', recovery: 'Ruhewoche' }
+    const blockName = meso ? (BLOCK_DE[meso.block_position] ?? 'Trainingsblock') : 'Trainingsblock'
+    const weekBlockLabel = meso
+      ? `${blockName}${meso.block_index_in_meso ? ` · Woche ${meso.block_index_in_meso}` : ''}`
+      : 'Deine Trainingswoche'
+    const weekDoneChip = weekPlanned > 0 ? `${weekDone} / ${weekPlanned} erledigt` : null
+    const weekLoadLabel = isPresent(model.weekLoad)
+      ? `${model.weekLoad.value.spent} von ${model.weekLoad.value.planned} TSS`
+      : '—'
+    const evName = profile?.goals?.target_event_name ?? null
+    const evDate = profile?.target_event_date ? parseISO(profile.target_event_date) : null
+    const daysToEv = meso?.days_to_event ?? (evDate ? Math.max(0, Math.round((evDate.getTime() - Date.now()) / 86400000)) : null)
+    const weeksToEv = daysToEv != null ? Math.ceil(daysToEv / 7) : null
+    const weekGoal = evName && evDate
+      ? { name: evName, right: weeksToEv != null ? `in ${weeksToEv} Wochen` : '—', sub: fmtDEShort(evDate) }
+      : null
+    const planWeeks = weeksToEv != null ? `${weeksToEv} Wochen` : ''
+
     return {
       handle: user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider'),
       tierLine: 'Silver Tier · Week 6 of 16', // fixture: tier/season not modelled yet
@@ -466,6 +487,11 @@ export default function W3TodayPage() {
 
       weekMeta,
       weekDays,
+      weekBlockLabel,
+      weekDoneChip,
+      weekLoadLabel,
+      weekGoal,
+      planWeeks,
 
       // REAL weather from /weather/today (buildWeather); honest fixture only when
       // no forecast is available (no GPS ride location yet). Route rec is still fixture.

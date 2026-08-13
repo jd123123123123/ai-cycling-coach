@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Share2, ArrowRight, Download, Clock, Flame, Zap, Gauge, Target, Activity } from 'lucide-react'
+import { ArrowLeft, Share2, ArrowRight, Download, Clock, Flame, Zap, Gauge, Target, Activity, Home, MapPin } from 'lucide-react'
 import { T, FONT, grow, Kicker, band, card, DASH } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
+import { STARTER_BIKE } from './starterBike'
 
 /**
  * W3 · 06 SESSION DETAIL — pure function of `vm`; `W3SessionPage` builds the
@@ -62,7 +63,7 @@ const ICONS: Record<StatIcon, typeof Clock> = { clock: Clock, flame: Flame, zap:
 export interface W3SessionActions {
   onBack?: () => void
   onShare?: () => void
-  onExport?: () => void
+  onExport?: () => void | Promise<void>
   onToday?: () => void
 }
 
@@ -81,6 +82,18 @@ function GaugeBar({ segs, delay = 0 }: { segs: { h: number; on: boolean }[]; del
 export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }: { vm: W3SessionVm } & W3SessionActions) {
   const reduce = useReducedMotion()
   const [openStep, setOpenStep] = useState<number | null>(null)
+  const [place, setPlace] = useState<'outdoor' | 'indoor'>(vm.route ? 'outdoor' : 'indoor')
+  const [exporting, setExporting] = useState(false)
+  const [exportErr, setExportErr] = useState<string | null>(null)
+
+  // Robust primary action: when a real workout exists, await the export and
+  // surface a failure instead of silently no-op'ing; otherwise go to today.
+  const handlePrimary = async () => {
+    if (!vm.canExport) { onToday?.(); return }
+    setExporting(true); setExportErr(null)
+    try { await onExport?.() } catch { setExportErr('Export fehlgeschlagen — prüfe die Verbindung und versuch es nochmal.') }
+    finally { setExporting(false) }
+  }
 
   const heroSegs = vm.gauge.map((on) => ({ h: on ? 18 : 8, on }))
 
@@ -103,11 +116,17 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
           <button onClick={onShare} aria-label="Share session" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>
         </div>
 
-        {/* Cover (atmospheric plate — no photo, per the editorial "ground, never a photo" rule) */}
-        <div style={{ height: 210, margin: '8px 0 0', background: `radial-gradient(120% 90% at 50% 20%, #1c2a1a, ${T.bg})`, position: 'relative' }} />
+        {/* Cover — the rider's bike, faded into the page (real header image). */}
+        <div style={{ position: 'relative', height: 224, marginTop: 6, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', bottom: 34, left: '50%', transform: 'translateX(-50%)', width: 300, height: 150, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}24, transparent)` }} />
+          <motion.img src={STARTER_BIKE} alt=""
+            initial={reduce ? false : { opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7 }}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 44%' }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 130, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
+        </div>
 
-        {/* Hero: fun name + real title + numeral + gauge */}
-        <div style={{ ...band(0), paddingTop: 0, marginTop: -62, gap: 14 }}>
+        {/* Hero: fun name + real title + numeral + gauge — lifted above the cover */}
+        <div style={{ ...band(0), paddingTop: 0, marginTop: -62, gap: 14, position: 'relative', zIndex: 2 }}>
           <div style={{ width: '100%', padding: '16px 18px', borderRadius: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.2, lineHeight: 0.95, color: T.ink }}>{vm.funName}<span style={{ color: T.acid }}>.</span></span>
@@ -176,7 +195,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
                 const h = Math.max(6, Math.round(b.w * 132))
                 return (
                   <motion.div key={i} initial={reduce ? false : { height: 0 }} animate={{ height: h }} transition={grow(i * 0.03)}
-                    style={{ width: b.work ? 42 : undefined, flex: b.work ? 'none' : 1, height: h, borderRadius: '4px 4px 0 0', background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : '#FFFFFF1F' }} />
+                    style={{ flex: b.work ? '2 1 0' : '1 1 0', minWidth: 0, height: h, borderRadius: '4px 4px 0 0', background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : '#FFFFFF1F' }} />
                 )
               })}
               {/* FTP line at the work-block ceiling, labelled at the right. */}
@@ -266,13 +285,43 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
           </div>
         )}
 
-        {/* Where to ride it — real recorded route */}
-        {vm.route && (
-          <div style={{ ...band(28), gap: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Where to ride it</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: T.acid }}>Outdoor alternative</span>
+        {/* Where to ride it — Outdoor route from history OR Indoor on the trainer.
+            Always available: the Outdoor/Indoor switch is the real place choice. */}
+        <div style={{ ...band(28), gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Where to ride it</span>
+            <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 100, background: T.surface }}>
+              {(['outdoor', 'indoor'] as const).map((p) => {
+                const on = place === p
+                const Ic = p === 'outdoor' ? MapPin : Home
+                return (
+                  <button key={p} onClick={() => setPlace(p)}
+                    style={{ display: 'flex', gap: 5, alignItems: 'center', padding: '6px 12px', borderRadius: 100, border: 0, cursor: 'pointer', fontFamily: FONT, background: on ? T.acid : 'transparent' }}>
+                    <Ic size={12} color={on ? T.bg : T.mid} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: on ? T.bg : T.mid }}>{p === 'outdoor' ? 'Outdoor' : 'Indoor'}</span>
+                  </button>
+                )
+              })}
             </div>
+          </div>
+          {place === 'indoor' ? (
+            <div style={{ ...card(), gap: 14 }}>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 14, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Home size={20} color={T.acid} /></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>Indoor · Smart-Trainer</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>ERG MODE</span>
+                </div>
+              </div>
+              <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>
+                {vm.thresholdW !== DASH
+                  ? `ERG hält die Zielwatt automatisch — ${vm.thresholdW} im Hauptteil. Kein Verkehr, keine Ampeln, exakt die geplante Belastung.`
+                  : 'ERG hält die geplante Belastung automatisch — kein Verkehr, keine Ampeln, exakt die Vorgabe.'}
+              </span>
+              <div style={{ height: 1, background: T.rule }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>Exportiere den Workout unten und lade ihn in Zwift, MyWhoosh oder auf deinen Head-Unit.</span>
+            </div>
+          ) : vm.route ? (
             <div style={{ ...card(), gap: 16 }}>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
                 <div style={{ width: 44, height: 44, borderRadius: 14, background: T.acidDim, display: 'grid', placeItems: 'center' }}><ArrowRight size={20} color={T.acid} style={{ transform: 'rotate(-45deg)' }} /></div>
@@ -297,8 +346,15 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
               <div style={{ height: 1, background: T.rule }} />
               <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>{vm.route.foot}</span>
             </div>
-          </div>
-        )}
+          ) : (
+            <div style={{ ...card(), gap: 12 }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 14, background: T.surface2, display: 'grid', placeItems: 'center' }}><MapPin size={20} color={T.mid} /></div>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid, lineHeight: 1.4 }}>Noch keine passende Strecke aus deinen Fahrten — wähle Indoor oder fahr deine Lieblingsrunde.</span>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* What it earns — REAL streak + TSS; RideCoin line is fixture */}
         {vm.earns.length > 0 && (
@@ -328,13 +384,14 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
 
         {/* CTAs — all real actions */}
         <div style={{ ...band(40), paddingTop: 4, gap: 10 }}>
-          <button onClick={vm.canExport ? onExport : onToday}
-            style={{ height: 54, borderRadius: 100, background: T.acid, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', border: 0, cursor: 'pointer', fontFamily: FONT, width: '100%' }}>
-            <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>{vm.primaryLabel}</span>
+          <button onClick={handlePrimary} disabled={exporting}
+            style={{ height: 54, borderRadius: 100, background: T.acid, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', border: 0, cursor: exporting ? 'default' : 'pointer', fontFamily: FONT, width: '100%', opacity: exporting ? 0.7 : 1 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>{exporting ? 'Exportiere…' : vm.primaryLabel}</span>
             <div style={{ width: 38, height: 38, borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}>
               {vm.canExport ? <Download size={17} color={T.acid} /> : <ArrowRight size={18} color={T.acid} />}
             </div>
           </button>
+          {exportErr && <span style={{ fontSize: 11.5, fontWeight: 600, color: T.bad, textAlign: 'center' }}>{exportErr}</span>}
           {vm.canExport && (
             <button onClick={onToday}
               style={{ height: 48, borderRadius: 100, background: '#FFFFFF0A', display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center', border: 0, cursor: 'pointer', fontFamily: FONT, width: '100%' }}>

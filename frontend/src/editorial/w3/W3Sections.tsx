@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { CloudSun, Route as RouteIcon, MapPin, Mountain, Trophy, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home } from 'lucide-react'
+import { CloudSun, Route as RouteIcon, MapPin, Mountain, Trophy, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, card, band } from './w3tokens'
 
 // ────────────────────────────────────────────────────────────────────────
@@ -39,42 +39,82 @@ export const STATUS: Record<DayStatus, { label: string; hue: string; icon: typeo
   upcoming: { label: 'Upcoming', hue: T.quiet, icon: Minus },
 }
 
-/** The week strip — now CONTROLLED: selecting a day drives the training
- *  recommendation card below (there is no separate detail box). */
-export function WeekSection({ days, meta, selected, onSelect }: { days: W3DayFull[]; meta: string; selected: number; onSelect: (i: number) => void }) {
+export interface W3WeekGoal { name: string; right: string; sub: string }
+
+/** "Deine Woche" — a 1:1 rebuild of the pen `TPyRo` block: block label +
+ *  "X / Y erledigt" chip, the week's load, a per-day load strip (CONTROLLED —
+ *  selecting a day drives the training card below), and the two dopamine payoff
+ *  cards: the SEASON GOAL this week feeds, and the whole-plan link. */
+export function WeekSection({ days, selected, onSelect, blockLabel, doneChip, loadLabel, goal, planWeeks, onGoal, onPlan }: {
+  days: W3DayFull[]; selected: number; onSelect: (i: number) => void
+  blockLabel: string; doneChip: string | null; loadLabel: string
+  goal: W3WeekGoal | null; planWeeks: string; onGoal?: () => void; onPlan?: () => void
+}) {
   const reduce = useReducedMotion()
   const max = Math.max(1, ...days.map((d) => Math.max(d.actual, d.planned ?? 0)))
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: '0 20px 14px', gap: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>This week</span>
-        <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid }}>{meta}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: '0 20px 24px', gap: 14 }}>
+      {/* header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Deine Woche</span>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>{blockLabel}</span>
+        </div>
+        {doneChip && <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, color: T.acid, padding: '6px 12px', borderRadius: 100, background: T.acidDim, flex: 'none' }}>{doneChip}</span>}
       </div>
+      {/* week load */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.3, color: T.quiet }}>Belastung</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.mid }}>{loadLabel}</span>
+      </div>
+      {/* day strip with per-day load bars */}
       <div style={{ display: 'flex', gap: 6 }}>
         {days.map((day, i) => {
-          const active = i === selected
           const isToday = day.status === 'today'
-          const barH = Math.max(3, Math.round((day.actual / max) * 34))
-          const planH = day.planned ? Math.max(3, Math.round((day.planned / max) * 34)) : 0
-          const hue = day.status === 'hit' || isToday ? T.acid : day.status === 'over' ? T.cool : day.status === 'missed' ? T.warn : T.d2
+          const active = i === selected
+          const val = Math.max(day.actual, day.planned ?? 0)
+          const barH = day.status === 'rest' ? 6 : Math.max(6, Math.round((val / max) * 40))
+          const barHue = isToday ? T.acid : day.status === 'hit' ? T.d4 : day.status === 'over' ? T.cool : day.status === 'missed' ? T.warn : T.d2
           return (
             <button key={i} onClick={() => onSelect(i)} aria-label={`${day.dateLabel}, ${STATUS[day.status].label}`}
-              style={{
-                flex: 1, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: '10px 0 11px',
-                borderRadius: 14, cursor: 'pointer', border: active ? `1.5px solid ${hue}` : '1.5px solid transparent',
-                background: isToday ? T.acidDim : active ? '#FFFFFF0A' : T.surface, fontFamily: FONT,
-              }}>
-              <span style={{ fontSize: 9, fontWeight: 600, color: isToday ? T.acid : T.quiet }}>{day.letter}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: isToday || active ? T.ink : T.mid }}>{day.num}</span>
-              <div style={{ position: 'relative', height: 34, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0 7px', width: '100%' }}>
-                {planH > 0 && <div style={{ position: 'absolute', bottom: 0, left: 7, right: 7, height: planH, borderRadius: 2, border: `1px dashed ${T.d3}`, borderBottom: 'none' }} />}
-                <motion.div initial={reduce ? false : { height: 0 }} animate={{ height: barH }} transition={grow(i * 0.05)}
-                  style={{ height: barH, borderRadius: 2, width: '100%', background: hue, position: 'relative' }} />
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, padding: 0 }}>
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '9px 0', borderRadius: 14,
+                background: isToday ? T.acidDim : active ? '#FFFFFF0A' : T.surface,
+                border: `1px solid ${isToday ? T.acid + '66' : active ? T.stroke : 'transparent'}` }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: isToday ? T.acid : T.quiet }}>{day.letter}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: isToday ? T.acid : active ? T.ink : T.mid }}>{day.num}</span>
+              </div>
+              <div style={{ width: '100%', height: 44, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', borderRadius: 10, background: isToday ? T.acidDim : T.surface2, padding: 4 }}>
+                <motion.div initial={reduce ? false : { height: 0 }} animate={{ height: barH }} transition={grow(i * 0.04)}
+                  style={{ width: '100%', height: barH, borderRadius: 5, background: barHue, boxShadow: isToday ? `0 0 10px ${T.acid}55` : 'none' }} />
               </div>
             </button>
           )
         })}
       </div>
+      {/* SEASON GOAL this week feeds — the payoff */}
+      {goal && (
+        <button onClick={onGoal} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 16, borderRadius: 20, background: T.surface, border: 0, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: T.acidDim, display: 'grid', placeItems: 'center', flex: 'none' }}><Flag size={18} color={T.acid} /></div>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>SAISONZIEL</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{goal.name}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flex: 'none' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.acid }}>{goal.right}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{goal.sub}</span>
+          </div>
+        </button>
+      )}
+      {/* whole-plan link */}
+      <button onClick={onPlan} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 16, borderRadius: 20, background: T.surface, border: 0, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
+        <div style={{ width: 40, height: 40, borderRadius: 12, background: T.surface2, display: 'grid', placeItems: 'center', flex: 'none' }}><Calendar size={18} color={T.mid} /></div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Ganzer Plan{planWeeks ? ` · ${planWeeks}` : ''}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>Ziel, Phasen und Wochen anpassen</span>
+        </div>
+        <ChevronRight size={18} color={T.mid} />
+      </button>
     </div>
   )
 }

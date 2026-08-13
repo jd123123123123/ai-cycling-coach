@@ -1,10 +1,11 @@
 import { useState, type CSSProperties } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import {
   Bike, Flame, Pencil, CalendarRange,
   Sparkles, Star,
 } from 'lucide-react'
-import { WeekSection, WeatherRoute, MirrorChart, TrainingSection, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt } from './W3Sections'
+import { WeekSection, WeatherRoute, MirrorChart, TrainingSection, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
 import { STARTER_BIKE } from './starterBike'
 import W3StatusBar from './W3StatusBar'
@@ -64,6 +65,12 @@ export interface W3Vm {
   weekMeta: string
   weekDoneLabel: string | null
   weekDays: W3DayFull[]
+  // "Deine Woche" — block context + the season goal this week feeds.
+  weekBlockLabel: string
+  weekDoneChip: string | null
+  weekLoadLabel: string
+  weekGoal: W3WeekGoal | null
+  planWeeks: string
 
   zoneTag: string | null
 
@@ -186,6 +193,7 @@ const card = (): CSSProperties => ({ background: T.surface, borderRadius: 24, pa
 
 export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAdapt }) {
   const reduce = useReducedMotion()
+  const navigate = useNavigate()
   // The week strip and the training card share ONE selection: tapping a day
   // drives which recommendation the card shows. Defaults to today.
   const todayIdx = Math.max(0, vm.weekDays.findIndex((d) => d.status === 'today'))
@@ -288,9 +296,11 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           <SignalCard label="Sleep" sig={vm.sleep} />
         </div>
 
-        {/* ── Your Week ── */}
-        <SectionHead title="Your Week" subtitle="Earned by training, not bought" tag={vm.weekDoneLabel} />
-        <WeekSection days={vm.weekDays} meta={vm.weekMeta} selected={selDay} onSelect={setSelDay} />
+        {/* ── Deine Woche — block, load strip, and the season goal it feeds ── */}
+        <WeekSection days={vm.weekDays} selected={selDay} onSelect={setSelDay}
+          blockLabel={vm.weekBlockLabel} doneChip={vm.weekDoneChip} loadLabel={vm.weekLoadLabel}
+          goal={vm.weekGoal} planWeeks={vm.planWeeks}
+          onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
 
         {/* ── Todays Training — the card renders its own header/tag ── */}
         <TrainingSection
