@@ -47,7 +47,11 @@ export default function W3BikerPage() {
     return {
       avatarUrl: user?.avatar_url ?? null,
       handle: user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider'),
-      tierChip: 'SILVER TIER', sinceChip: 'RIDING SINCE 2021', locationChip: 'HAMBURG, DE', // fixture: tier/since/location not modelled
+      // Real rider-identity chips from FTP + W/kg (a real cycling category),
+      // replacing the fixture tier/since/location.
+      tierChip: wkg !== '—' ? `CAT ${Number(wkg) >= 4 ? 1 : Number(wkg) >= 3.5 ? 2 : Number(wkg) >= 3 ? 3 : Number(wkg) >= 2.5 ? 4 : 5}` : 'UNRANKED',
+      sinceChip: wkg !== '—' ? `${wkg} W/KG` : '—',
+      locationChip: ftp ? `${ftp} W FTP` : '—',
       name: user?.display_name ?? 'Rider',
       stats: [
         { v: nf.format(balance), l: 'RideCoin', s: '' },  // real: wallet balance
