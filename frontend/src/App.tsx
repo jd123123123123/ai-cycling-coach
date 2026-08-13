@@ -102,6 +102,8 @@ const W3GoalPage = lazyWithRetry(() => import('./editorial/w3/W3GoalPage'))
 const W3GoalPreview = lazyWithRetry(() => import('./editorial/w3/W3GoalPreview'))
 const W3LoadForecastPage = lazyWithRetry(() => import('./editorial/w3/W3LoadForecastPage'))
 const W3LoadForecastPreview = lazyWithRetry(() => import('./editorial/w3/W3LoadForecastPreview'))
+const W3SharePage = lazyWithRetry(() => import('./editorial/w3/W3SharePage'))
+const W3SharePreview = lazyWithRetry(() => import('./editorial/w3/W3SharePreview'))
 const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
@@ -394,6 +396,10 @@ function AppRoutes() {
           <Route path="/e/w3-goal-preview" element={<W3GoalPreview />} />
           <Route path="/e/w3-load" element={<ProtectedRoute checkOnboarding><W3LoadForecastPage /></ProtectedRoute>} />
           <Route path="/e/w3-load-preview" element={<W3LoadForecastPreview />} />
+          {/* Ride sharing */}
+          <Route path="/e/w3-share" element={<ProtectedRoute checkOnboarding><W3SharePage /></ProtectedRoute>} />
+          <Route path="/e/w3-share/:id" element={<ProtectedRoute checkOnboarding><W3SharePage /></ProtectedRoute>} />
+          <Route path="/e/w3-share-preview" element={<W3SharePreview />} />
           <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />

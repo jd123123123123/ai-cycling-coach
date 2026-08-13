@@ -171,5 +171,5 @@ export default function W3RideDetailPage() {
   const { data: pmc } = usePMC()
   const vm = useMemo(() => (data ? toVm(data, pmc) : null), [data, pmc])
   if (!vm) return <div className="w3-root"><div className="w3-frame" style={{ minHeight: '100dvh' }} /></div>
-  return <W3RideDetailView vm={vm} onBack={() => navigate(-1)} />
+  return <W3RideDetailView vm={vm} onBack={() => navigate(-1)} onShare={() => id && navigate(`/e/w3-share/${id}`)} />
 }

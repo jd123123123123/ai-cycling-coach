@@ -69,7 +69,7 @@ const STAT_ICON = (label: string): LucideIcon => {
   return Gauge // load / TSS / everything else
 }
 
-export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?: () => void }) {
+export default function W3RideDetailView({ vm, onBack, onShare }: { vm: W3RideVm; onBack?: () => void; onShare?: () => void }) {
   const reduce = useReducedMotion()
   const pMax = Math.max(1, ...vm.power)
   const pAvg = vm.power.length ? vm.power.reduce((a, b) => a + b, 0) / vm.power.length : 0
@@ -84,7 +84,7 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
         <div style={{ padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <button onClick={onBack} aria-label="Back" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={18} color={T.ink} /></button>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Ride detail</span>
-          <button aria-label="Share" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>
+          <button onClick={onShare} aria-label="Share" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>
         </div>
 
         {/* Cover — the ride's own power silhouette as an atmospheric trace
