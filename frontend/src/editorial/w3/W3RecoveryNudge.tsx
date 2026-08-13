@@ -69,20 +69,20 @@ export default function W3RecoveryNudge() {
 
   return (
     <div style={{ ...band(26), gap: 12 }}>
-      <div style={{ borderRadius: 24, padding: 18, background: T.surface, border: `1px solid ${accent}44`, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: `0 0 30px ${accent}14` }}>
+      <div style={{ borderRadius: 24, padding: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Header */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span style={{ width: 42, height: 42, borderRadius: 100, background: `${accent}22`, display: 'grid', placeItems: 'center', flex: 'none' }}>
-            {warning ? <AlertTriangle size={20} color={accent} /> : <Activity size={20} color={accent} />}
+          <span style={{ width: 40, height: 40, borderRadius: 14, background: `${accent}1F`, display: 'grid', placeItems: 'center', flex: 'none' }}>
+            {warning ? <AlertTriangle size={19} color={accent} /> : <Activity size={19} color={accent} />}
           </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1.4, color: accent }}>{eyebrow}</span>
-            <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>{data.headline}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', color: accent }}>{eyebrow}</span>
+            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>{data.headline}</span>
           </div>
         </div>
 
-        {/* Signal chips */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Signal chips — W3 pills, per-signal colour on the trend + delta */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {data.signals.slice(0, 3).map((s) => {
             const label = (METRIC_LABEL[s.metric]?.[de ? 'de' : 'en']) ?? s.metric
             const d = s.delta ?? 0
@@ -91,11 +91,13 @@ export default function W3RecoveryNudge() {
             const deltaStr = s.delta == null ? '—' : s.unit === '%' ? `${sign}${mag.toFixed(0)}%` : `${sign}${mag % 1 === 0 ? mag : mag.toFixed(1)}`
             const c = signalColor(s.metric, s.direction, s.severity)
             return (
-              <div key={s.metric} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 100, border: `1px solid ${c}33` }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.ink, width: 74, flex: 'none' }}>{label}</span>
+              <div key={s.metric} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderRadius: 16, background: T.surface2 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.mid, width: 78, flex: 'none' }}>{label}</span>
                 <Sparkline series={s.series} color={c} />
-                <span style={{ marginLeft: 'auto', fontSize: 15, fontWeight: 800, color: c }}>{deltaStr}</span>
-                {s.baseline != null && <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, flex: 'none' }}>vs {Math.round(s.baseline)}</span>}
+                <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.4, color: c }}>{deltaStr}</span>
+                  {s.baseline != null && <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet, flex: 'none' }}>vs {Math.round(s.baseline)}</span>}
+                </span>
               </div>
             )
           })}
@@ -103,7 +105,7 @@ export default function W3RecoveryNudge() {
 
         {/* Body */}
         {data.recommendation && (
-          <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>{data.recommendation}</span>
+          <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>{data.recommendation}</span>
         )}
       </div>
     </div>

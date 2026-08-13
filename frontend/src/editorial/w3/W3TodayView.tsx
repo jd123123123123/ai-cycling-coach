@@ -9,7 +9,6 @@ import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
 import { STARTER_BIKE } from './starterBike'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
-import W3RecoveryInsight from './W3RecoveryInsight'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import { W3CoachFab } from './W3CoachChat'
 import './w3.css'
@@ -308,9 +307,6 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           <SignalCard label="Resting HR" sig={vm.rhr} />
           <SignalCard label="Sleep" sig={vm.sleep} />
         </div>
-
-        {/* ── Recovery insight: real /coach/adaptive push-vs-gentle read ── */}
-        <W3RecoveryInsight />
 
         {/* ── Your Week ── */}
         <SectionHead title="Your Week" subtitle="Earned by training, not bought" tag={vm.weekDoneLabel} />

@@ -105,7 +105,23 @@ export default function W3TodayPage() {
       ? `${model.weekLoad.value.spent} of ${model.weekLoad.value.planned} TSS`
       : '—'
 
-    const session = isPresent(model.session) ? model.session.value : null
+    // Today's session: prefer the model's, else fall back to the coach's
+    // prescribed session from the daily decision (title + TSS + duration are
+    // real; intensity is derived from TSS×duration via the Coggan relation, and
+    // watts stay honest "—" without an FTP anchor here).
+    const modelSession = isPresent(model.session) ? model.session.value : null
+    const planned = adaptive?.daily_decision?.planned ?? null
+    const session = modelSession ?? (planned?.title
+      ? {
+          title: planned.title,
+          targetWatts: null as number | null,
+          tss: planned.target_tss != null ? Math.round(planned.target_tss) : null,
+          intensityFactor: planned.target_tss && planned.duration_minutes
+            ? Math.sqrt(planned.target_tss / ((planned.duration_minutes / 60) * 100))
+            : null,
+          blocks: [] as { label: string; minutes: number; watts: number | null }[],
+        }
+      : null)
     // Build the workout power profile. A structured session (intervals) uses its
     // real blocks. A steady endurance ride materialises to 1–2 blocks, which
     // reads as a single flat beam — so render its true shape instead: a warm-up
