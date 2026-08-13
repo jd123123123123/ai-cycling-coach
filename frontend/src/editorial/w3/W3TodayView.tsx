@@ -318,9 +318,15 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           session={{ dur: vm.sessionDur, blocks: vm.sessionBlocks, ftpTag: vm.sessionFtpTag, earn: vm.sessionEarn }}
           onAdapt={onAdapt} />
 
-        {/* ── Details: weather window + route recommendation ── */}
-        <SectionHead title="Details" subtitle="Earned by training, not bought" tag={vm.zoneTag} />
-        <WeatherRoute w={vm.weather} />
+        {/* ── Details: weather window + route recommendation. Only meaningful
+             for today (or an upcoming day you can still plan) — a "ride now"
+             recommendation makes no sense for a past day, so it's hidden then. ── */}
+        {(selectedDay.status === 'today' || selectedDay.status === 'upcoming') && (
+          <>
+            <SectionHead title="Details" subtitle="Where and when to ride it" tag={vm.zoneTag} />
+            <WeatherRoute w={vm.weather} />
+          </>
+        )}
 
         {/* ── Your Current Status: 6-week fitness/fatigue mirror + form ── */}
         <SectionHead title="Your Current Status" subtitle="Earned by training, not bought" tag={vm.zoneTag} />

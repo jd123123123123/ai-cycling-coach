@@ -277,6 +277,49 @@ function StatCol({ v, l, hue }: { v: string; l: string; hue?: string }) {
   )
 }
 
+/** Past-day planned-vs-done — a visual two-bar comparison (no overflowing
+ *  number columns): the plan and what was actually ridden on the same scale,
+ *  with the delta and a short verdict. */
+function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null }) {
+  const planned = day.planned ?? 0
+  const actual = day.actual
+  const max = Math.max(planned, actual, 1)
+  const delta = planned > 0 ? actual - planned : null
+  const over = day.status === 'over'
+  const doneHue = over ? T.cool : T.acid
+  const rows: { label: string; val: number; hue: string; dashed?: boolean }[] = [
+    { label: 'Planned', val: planned, hue: T.d3, dashed: true },
+    { label: 'You rode', val: actual, hue: doneHue },
+  ]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {rows.map((r) => (
+          <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ width: 62, flex: 'none', fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet }}>{r.label}</span>
+            <div style={{ flex: 1, height: 14, borderRadius: 100, background: '#FFFFFF0A', overflow: 'hidden' }}>
+              <motion.div
+                initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round((r.val / max) * 100)}%` }} transition={{ duration: 0.6, ease: EASE }}
+                style={{ height: '100%', borderRadius: 100, background: r.dashed ? 'transparent' : r.hue, border: r.dashed ? `1.5px dashed ${T.d3}` : 'none' }} />
+            </div>
+            <span style={{ width: 42, flex: 'none', textAlign: 'right', fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: r.dashed ? T.mid : r.hue, fontVariantNumeric: 'tabular-nums' }}>{Math.round(r.val)}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        {delta != null && (
+          <span style={{ display: 'flex', gap: 5, alignItems: 'center', padding: '5px 11px', borderRadius: 100, background: `${doneHue}1F`, fontSize: 11, fontWeight: 800, color: doneHue }}>
+            {over ? <TrendingUp size={12} /> : <Check size={12} />}{delta > 0 ? '+' : ''}{delta} TSS
+          </span>
+        )}
+        <span style={{ flex: 1, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, color: T.mid }}>
+          {over ? 'Over the plan — watch fatigue tomorrow.' : 'Right on the number. That’s how fitness compounds.'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; session: TodaySession; onAdapt?: OnAdapt }) {
   const [adapt, setAdapt] = useState<Adapt>('none')
   const [busy, setBusy] = useState<Adapt>('none')
@@ -417,22 +460,7 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
                 <Minus size={15} color={T.warn} /><span style={{ fontSize: 13, fontWeight: 600, color: T.warn }}>Skipped — no ride logged for this session.</span>
               </div>
             ) : (
-              <>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <StatCol v={`${day.planned ?? '—'}`} l="PLANNED TSS" />
-                  <StatCol v={`${day.actual}`} l="YOU RODE" />
-                  <StatCol
-                    v={day.planned != null ? `${day.actual - day.planned > 0 ? '+' : ''}${day.actual - day.planned}` : '—'}
-                    l="Δ TSS"
-                    hue={day.status === 'over' ? T.cool : T.acid} />
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {day.status === 'over' ? <TrendingUp size={15} color={T.cool} /> : <Check size={15} color={T.acid} />}
-                  <span style={{ fontSize: 12, fontWeight: 600, color: day.status === 'over' ? T.cool : T.acid }}>
-                    {day.status === 'over' ? 'You went over the plan — watch fatigue tomorrow.' : 'Right on the number. That’s how fitness compounds.'}
-                  </span>
-                </div>
-              </>
+              <PlannedVsDone day={day} reduce={reduce} />
             )}
           </div>
         )}
