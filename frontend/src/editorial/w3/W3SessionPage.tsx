@@ -4,6 +4,7 @@ import { useSessionModel } from '../data/useSessionModel'
 import { useTodaySession } from '../../hooks/useTodaySession'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useStreak } from '../../hooks/useStreak'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { downloadWorkoutExport } from '../../api/coach'
 import { isPresent } from '../data/value'
 import { funName, powerProfile, effortGuide } from './w3session'
@@ -36,8 +37,13 @@ export default function W3SessionPage() {
   const session = useTodaySession()
   const { data: adaptive } = useAdaptive()
   const { data: streak } = useStreak()
+  // Season-to-date totals for the saddle-time + TSS earn tiles.
+  const { data: seasonActs } = useActivitiesRange(new Date(new Date().getFullYear(), 0, 1), new Date())
 
   const vm = useMemo<W3SessionVm>(() => {
+    const acts = seasonActs?.activities ?? []
+    const seasonTss = acts.length ? Math.round(acts.reduce((s, a) => s + (a.tss ?? 0), 0)) : null
+    const seasonSaddleMin = acts.length ? Math.round(acts.reduce((s, a) => s + (a.duration_seconds ?? 0), 0) / 60) : null
     const workout = session.workout
     const planned = adaptive?.daily_decision?.planned ?? null
 
@@ -99,11 +105,23 @@ export default function W3SessionPage() {
     if (streakDays != null) {
       earns.push({ icon: 'flame', v: `DAY ${streakDays + 1}`, l: 'STREAK', s: streakDays > 0 ? `Extends your ${streakDays}-day run` : 'Starts a new run' })
     }
-    if (effTss != null) {
-      earns.push({ icon: 'zap', v: `+${effTss}`, l: 'TSS BANKED', s: 'Added to this week’s load' })
+    // TSS + saddle time as SEASON-to-date totals, with this ride's increase.
+    if (seasonTss != null || effTss != null) {
+      earns.push({
+        icon: 'zap',
+        v: seasonTss != null ? seasonTss.toLocaleString('en-US') : '—',
+        l: 'SEASON TSS',
+        s: effTss != null ? `+${effTss} this ride` : 'Season training load',
+      })
     }
-    if (durHr != null && durHr > 0) {
-      earns.push({ icon: 'clock', v: fmtMin(effDurMin ?? 0), l: 'SADDLE TIME', s: 'Logged to your season' })
+    if (seasonSaddleMin != null || (durHr != null && durHr > 0)) {
+      const h = seasonSaddleMin != null ? Math.floor(seasonSaddleMin / 60) : null
+      earns.push({
+        icon: 'clock',
+        v: h != null ? `${h}h` : '—',
+        l: 'SADDLE · SEASON',
+        s: effDurMin ? `+${fmtMin(effDurMin)} this ride` : 'Time on the bike this year',
+      })
     }
     // fixture: RideCoin conversion — the reward economy (wallet/ledger) is not
     // wired into this screen, so no coin figure is shown; the note names the
@@ -167,7 +185,7 @@ export default function W3SessionPage() {
       canExport: workout != null,
       primaryLabel: workout != null ? 'Export to your head unit' : 'Back to today',
     }
-  }, [model, session.workout, adaptive, streak])
+  }, [model, session.workout, adaptive, streak, seasonActs])
 
   const onExport = useCallback(() => {
     // The real export path — GET /coach/workout/export serves today's
