@@ -46,6 +46,35 @@ async def render_asset(
                                image_base64=out["image"], status=out["status"])
 
 
+class RiderComposeRequest(BaseModel):
+    # base64 data URIs (or raw base64) of the three real photos.
+    self_base64: str = Field(min_length=32, max_length=12_000_000)
+    bike_base64: str = Field(min_length=32, max_length=12_000_000)
+    helmet_base64: str = Field(min_length=32, max_length=12_000_000)
+
+
+class RiderComposeResponse(BaseModel):
+    prompt: str
+    image_base64: str | None
+    status: str
+
+
+@router.post("/rider/compose", response_model=RiderComposeResponse)
+async def compose_rider(
+    body: RiderComposeRequest,
+    current_user: User = Depends(get_current_active_user),
+) -> RiderComposeResponse:
+    """The onboarding hero: from the rider's own photo + their bike + their
+    helmet, compose ONE stylised W3 collectible rider (them, on their bike,
+    wearing their helmet). Honestly gated when no image model is provisioned."""
+    out = await cyclr_studio.compose_rider(
+        body.self_base64, body.bike_base64, body.helmet_base64,
+    )
+    return RiderComposeResponse(
+        prompt=out["prompt"], image_base64=out["image"], status=out["status"],
+    )
+
+
 class SceneRequest(BaseModel):
     rider_description: str
     bike_description: str

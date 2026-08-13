@@ -70,7 +70,7 @@ export default function W3OnboardDevicesPage() {
   ]
 
   return (
-    <W3OnboardDevicesView onNext={() => navigate('/e/w3-onboard-rewards')} onSkip={skip}>
+    <W3OnboardDevicesView onNext={() => navigate('/e/w3-onboard-rider')} onSkip={skip}>
       {rows.map((r) => (
         <div
           key={r.key}

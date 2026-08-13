@@ -1,5 +1,6 @@
+import type { ComponentType } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Zap } from 'lucide-react'
+import { Zap, Wallet, Gift, Flame } from 'lucide-react'
 import { T, FONT, EASE } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import { W3OnboardTopBar, W3OnboardDots, W3OnboardCta, W3OnboardHeadline } from './W3OnboardKit'
@@ -11,12 +12,22 @@ import './w3.css'
  * head start (125 photo + 125 device) and ~1 RC per TSS earn rate. The three
  * tiles are supplied by the Page (real wallet balance + real constants).
  */
-export interface W3RewardTile { value: string; label: string }
+export interface W3RewardTile { value: string; label: string; story?: string }
 export interface W3OnboardRewardsProps {
   tiles: [W3RewardTile, W3RewardTile, W3RewardTile]
   onNext: () => void
   onSkip: () => void
 }
+
+/** The three tiles always arrive in the same order (balance → head-start grant →
+ *  earn rate), so each gets a fixed icon, step marker and default story line that
+ *  turns the bare numbers into a start → how → why sequence. A tile may override
+ *  the copy via `story`; otherwise these defaults tell the RideCoin story. */
+const STORY: { Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; step: string; story: string; accent: boolean }[] = [
+  { Icon: Wallet, step: '01 · WHERE YOU START', accent: true, story: 'Everyone opens on the same 250 — no head start you can buy.' },
+  { Icon: Gift, step: '02 · HOW YOU GOT IT', accent: false, story: '125 for adding your photo, 125 for linking a device. Claimed once.' },
+  { Icon: Flame, step: '03 · HOW IT GROWS', accent: false, story: 'Every ride banks ~1 RC per point of training stress — harder session, bigger payout.' },
+]
 
 export default function W3OnboardRewardsView({ tiles, onNext, onSkip }: W3OnboardRewardsProps) {
   const reduce = useReducedMotion()
@@ -71,25 +82,39 @@ export default function W3OnboardRewardsView({ tiles, onNext, onSkip }: W3Onboar
             body="Every ride banks RideCoin — about 1 RC per TSS of training stress, so the harder the session the more you earn. No junk-mile farming, no pay-to-win."
           />
 
-          {/* Real RideCoin tiles */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            {tiles.map((t, i) => (
-              <motion.div
-                key={t.label}
-                initial={reduce ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: EASE, delay: 0.15 + i * 0.08 }}
-                style={{ flex: 1, padding: '16px 12px', borderRadius: 18, background: T.surface, border: `1px solid ${T.rule}`, display: 'flex', flexDirection: 'column', gap: 6 }}
-              >
-                <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, color: T.ink }}>{t.value}</span>
-                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet, lineHeight: 1.3 }}>{t.label}</span>
-              </motion.div>
-            ))}
+          {/* Real RideCoin tiles, read as a start → how → why story */}
+          <div style={{ position: 'relative', borderRadius: 22, background: T.surface, border: `1px solid ${T.rule}`, padding: '4px 18px 6px' }}>
+            {tiles.map((t, i) => {
+              const meta = STORY[i] ?? STORY[0]
+              const { Icon } = meta
+              const isLast = i === tiles.length - 1
+              return (
+                <motion.div
+                  key={t.label}
+                  initial={reduce ? false : { opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, ease: EASE, delay: 0.15 + i * 0.09 }}
+                  style={{ display: 'flex', gap: 15, padding: '16px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}
+                >
+                  {/* icon rail — a connector line threads the three steps together */}
+                  <div style={{ position: 'relative', width: 44, flex: 'none', display: 'flex', justifyContent: 'center' }}>
+                    <div style={{ position: 'absolute', left: 'calc(50% - 1px)', width: 2, top: i === 0 ? 22 : 0, bottom: isLast ? 'calc(100% - 22px)' : 0, background: T.rule }} />
+                    <div style={{ position: 'relative', width: 44, height: 44, borderRadius: 13, display: 'grid', placeItems: 'center', background: meta.accent ? T.acid : T.surface2, border: `1px solid ${meta.accent ? 'transparent' : T.stroke}`, boxShadow: meta.accent ? `0 0 18px ${T.acid}44` : 'none' }}>
+                      <Icon size={20} color={meta.accent ? T.bg : T.acid} strokeWidth={2} />
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 1 }}>
+                    <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 1, color: T.quiet }}>{meta.step}</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1, color: meta.accent ? T.acid : T.ink }}>{t.value}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.mid }}>{t.label}</span>
+                    </div>
+                    <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>{t.story ?? meta.story}</span>
+                  </div>
+                </motion.div>
+              )
+            })}
           </div>
-
-          <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.45, color: T.quiet }}>
-            Your 250 RC head start is the same for everyone — 125 for your photo, 125 for linking a device. Earning takes over from there.
-          </span>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 'auto' }}>
             <W3OnboardDots step={2} />

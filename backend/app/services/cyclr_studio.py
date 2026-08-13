@@ -194,3 +194,69 @@ async def compose_scene(rider_desc: str, bike_desc: str, training_context: str) 
         return None, prompt, "image_model_unavailable"
     img = await _generate(prompt, prompt)
     return img, prompt, "ok" if img else "image_model_unavailable"
+
+
+def _rider_compose_prompt() -> str:
+    """The final composed rider: the person on their bike, wearing their helmet,
+    as one premium W3 3D collectible. The three reference photos are provided as
+    image inputs (rider first, then bike, then helmet)."""
+    return (
+        "Create ONE premium 3D designer-vinyl-toy collectible: a full-body, side-profile "
+        "shot of a cyclist actively riding a road bike, in a dynamic athletic riding "
+        "posture (hands on the drops, leaning forward). Use the THREE reference images: "
+        "IMAGE 1 is the PERSON — the character's face, hair, skin tone, eyebrows and "
+        "facial hair MUST be an exact, highly flattering 1:1 likeness of this person "
+        "(idealized into a cute, deeply likable 3D toy face, but unmistakably them). "
+        "IMAGE 2 is the BIKE — reproduce its frame geometry, colours and components "
+        "faithfully with slightly chunky premium toy proportions. IMAGE 3 is the HELMET "
+        "— the character MUST wear this exact helmet (shape, colour, straps). The rider "
+        "wears a sleek modern cycling kit with hyper-realistic fabric. "
+        "COMPOSITION: complete correct anatomy (both arms, both hands, both legs, both "
+        "feet visible, feet on the pedals), the whole bike and rider centered with clean "
+        "padding, a clean minimalist solid soft pastel studio background, soft studio "
+        "lighting, high-quality octane render. "
+        f"{GENERAL_STYLE} {CHARACTER_STYLE} {BIKE_STYLE}"
+    )
+
+
+def _img_part(photo_b64: str):
+    from google.genai import types
+    mime = "image/jpeg"
+    raw = photo_b64
+    if photo_b64.startswith("data:"):
+        header, raw = photo_b64.split(",", 1)
+        if "image/png" in header:
+            mime = "image/png"
+        elif "image/webp" in header:
+            mime = "image/webp"
+    return types.Part.from_bytes(data=base64.b64decode(raw), mime_type=mime)
+
+
+async def compose_rider(
+    self_b64: str, bike_b64: str, helmet_b64: str, size: str = "2K"
+) -> dict[str, Any]:
+    """Compose the final rider from three real photos (self, bike, helmet) in one
+    multi-image generation. Returns {image, prompt, status}. Honestly gated."""
+    prompt = _rider_compose_prompt()
+    if not _gemini_ready():
+        return {"image": None, "prompt": prompt, "status": "image_model_unavailable"}
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model = getattr(settings, "IMAGE_MODEL", "") or "gemini-3-pro-image"
+    resp = client.models.generate_content(
+        model=model,
+        contents=[prompt, _img_part(self_b64), _img_part(bike_b64), _img_part(helmet_b64)],
+        config=types.GenerateContentConfig(
+            response_modalities=["Image"],
+            seed=_seed(self_b64[:64] + bike_b64[:32] + helmet_b64[:32]),
+            image_config=types.ImageConfig(aspect_ratio="1:1", image_size=size),
+        ),
+    )
+    for part in resp.candidates[0].content.parts:
+        data = getattr(part, "inline_data", None)
+        if data and data.data:
+            img = "data:image/png;base64," + base64.b64encode(data.data).decode()
+            return {"image": img, "prompt": prompt, "status": "ok"}
+    return {"image": None, "prompt": prompt, "status": "image_model_unavailable"}

@@ -88,6 +88,14 @@ const W3ReferralsPage = lazyWithRetry(() => import('./editorial/w3/W3ReferralsPa
 const W3ReferralsPreview = lazyWithRetry(() => import('./editorial/w3/W3ReferralsPreview'))
 const W3ReferralUserPage = lazyWithRetry(() => import('./editorial/w3/W3ReferralUserPage'))
 const W3ReferralUserPreview = lazyWithRetry(() => import('./editorial/w3/W3ReferralUserPreview'))
+const W3CrewPage = lazyWithRetry(() => import('./editorial/w3/W3CrewPage'))
+const W3CrewPreview = lazyWithRetry(() => import('./editorial/w3/W3CrewPreview'))
+const W3OnboardPlanPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardPlanPage'))
+const W3OnboardPlanPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardPlanPreview'))
+const W3OnboardGoalsPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardGoalsPage'))
+const W3OnboardGoalsPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardGoalsPreview'))
+const W3OnboardRiderPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardRiderPage'))
+const W3OnboardRiderPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardRiderPreview'))
 const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
@@ -363,6 +371,16 @@ function AppRoutes() {
           <Route path="/e/w3-referrals-preview" element={<W3ReferralsPreview />} />
           <Route path="/e/w3-referral-user/:id" element={<ProtectedRoute checkOnboarding><W3ReferralUserPage /></ProtectedRoute>} />
           <Route path="/e/w3-referral-user-preview" element={<W3ReferralUserPreview />} />
+          {/* Crew */}
+          <Route path="/e/w3-crew" element={<ProtectedRoute checkOnboarding><W3CrewPage /></ProtectedRoute>} />
+          <Route path="/e/w3-crew-preview" element={<W3CrewPreview />} />
+          {/* Onboarding: training-plan + yearly-goals + rider studio */}
+          <Route path="/e/w3-onboard-plan" element={<ProtectedRoute><W3OnboardPlanPage /></ProtectedRoute>} />
+          <Route path="/e/w3-onboard-plan-preview" element={<W3OnboardPlanPreview />} />
+          <Route path="/e/w3-onboard-goals" element={<ProtectedRoute><W3OnboardGoalsPage /></ProtectedRoute>} />
+          <Route path="/e/w3-onboard-goals-preview" element={<W3OnboardGoalsPreview />} />
+          <Route path="/e/w3-onboard-rider" element={<ProtectedRoute><W3OnboardRiderPage /></ProtectedRoute>} />
+          <Route path="/e/w3-onboard-rider-preview" element={<W3OnboardRiderPreview />} />
           <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />
