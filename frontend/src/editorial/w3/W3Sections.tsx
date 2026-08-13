@@ -412,15 +412,19 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
           </span>
           <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid }}>{isToday ? session.dur : ''}</span>
         </div>
-        <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1, color: T.ink, marginBottom: 16 }}>
-          {day.title ?? 'No session'}
+        <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1, color: day.title ? T.ink : T.mid, marginBottom: 16 }}>
+          {day.title ?? (isFuture ? `${day.weekday}’s ride isn’t set yet` : 'Rest day')}
         </div>
 
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-          <StatCol v={curT ? `${curT} W` : '—'} l="TARGET" hue={adapted && isToday ? T.acid : undefined} />
-          <StatCol v={curTss ? `${curTss}` : '—'} l="PLANNED TSS" hue={adapted && isToday ? T.acid : undefined} />
-          <StatCol v={curFtp ? `${curFtp}%` : '—'} l="OF FTP" />
-        </div>
+        {/* Stats only when there's a real prescription (title + a number). A
+            future day with no plan yet hides the empty dash row. */}
+        {(day.title != null && (curTss > 0 || curT > 0)) && (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+            <StatCol v={curT ? `${curT} W` : '—'} l="TARGET" hue={adapted && isToday ? T.acid : undefined} />
+            <StatCol v={curTss ? `${curTss}` : '—'} l="PLANNED TSS" hue={adapted && isToday ? T.acid : undefined} />
+            <StatCol v={curFtp ? `${curFtp}%` : '—'} l="OF FTP" />
+          </div>
+        )}
 
         {/* the coach's own explanation of the re-plan (real AI rationale) */}
         {isToday && adapted && (result || error) && (
