@@ -383,7 +383,10 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
     </div>
   )
 
-  if ((isRest || day.status === 'rest') && !isPast) {
+  // A future day with no prescribed session IS a rest day (the plan schedules
+  // rest; the coach fills training days a week ahead and re-plans each morning).
+  const restDay = isRest || day.status === 'rest' || (isFuture && !day.title)
+  if (restDay && !isPast) {
     return (
       <div style={{ ...band(26), gap: 10 }}>
         {header}
@@ -392,7 +395,7 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
             <div style={{ width: 44, height: 44, borderRadius: 14, background: '#00E5FF1F', display: 'grid', placeItems: 'center' }}><Moon size={20} color="#00E5FF" /></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: T.ink }}>Rest day</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>Let today’s load settle — 0 TSS. Tomorrow’s block hits harder for it.</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>{isToday ? 'Let today’s load settle — 0 TSS. Tomorrow’s block hits harder for it.' : 'Recovery is scheduled here — 0 TSS. The coach fills training days a week ahead and re-plans each morning.'}</span>
             </div>
           </div>
           {isToday && <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />}
