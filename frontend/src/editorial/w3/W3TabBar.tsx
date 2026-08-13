@@ -26,9 +26,18 @@ export default function W3TabBar() {
   const loc = useLocation()
   const preview = loc.pathname.includes('-preview')
 
-  // active = the tab whose route base appears in the current path
-  const activeKey = TABS.find((t) => loc.pathname.includes(t.route))?.key
-    ?? (loc.pathname.includes('w3-session') || loc.pathname.includes('w3-ride') ? 'rides' : 'today')
+  // active = the tab whose route base appears in the current path; secondary
+  // screens map to their closest tab so the bar never wrongly lights "Today".
+  const p = loc.pathname
+  const related: [RegExp, string][] = [
+    [/w3-session|w3-ride/, 'rides'],
+    [/w3-crew|w3-referral/, 'biker'],
+    [/w3-challenge/, 'wins'],
+    [/w3-plan|w3-goal/, 'today'],
+  ]
+  const activeKey = TABS.find((t) => p.includes(t.route))?.key
+    ?? related.find(([re]) => re.test(p))?.[1]
+    ?? 'today'
 
   const go = (route: string) => {
     // GARAGE (bike-studio) has a preview; map others to their -preview twin in preview mode.

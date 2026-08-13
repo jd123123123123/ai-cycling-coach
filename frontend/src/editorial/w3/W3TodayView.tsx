@@ -1,7 +1,7 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
-  Bell, Bike, Flame, Share2, Pencil,
+  Bike, Flame, Pencil, CalendarRange,
   Sparkles, Star,
 } from 'lucide-react'
 import { WeekSection, WeatherRoute, MirrorChart, TrainingSection, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt } from './W3Sections'
@@ -12,6 +12,7 @@ import W3TabBar from './W3TabBar'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3TodayProgress from './W3TodayProgress'
 import { W3CoachFab } from './W3CoachChat'
+import W3NavMenu, { W3NavIcon } from './W3NavMenu'
 import './w3.css'
 
 export type { W3DayFull, W3Weather, W3Mirror, W3Block, OnAdapt, AdaptResult } from './W3Sections'
@@ -179,10 +180,6 @@ function SectionHead({ title, subtitle, tag }: { title: string; subtitle?: strin
   )
 }
 
-const IconBtn = ({ children }: { children: ReactNode }) => (
-  <div style={{ width: 34, height: 34, borderRadius: 100, background: T.surface, display: 'grid', placeItems: 'center', flex: 'none' }}>{children}</div>
-)
-
 // ── band scaffold: every section is a full-width vertical band on w-bg ──
 const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: `0 20px ${padBottom}px` })
 const card = (): CSSProperties => ({ background: T.surface, borderRadius: 24, padding: 20, display: 'flex', flexDirection: 'column', width: '100%' })
@@ -220,7 +217,8 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
               <Flame size={13} color={T.acid} />
               <span style={{ fontSize: 13, fontWeight: 600, color: T.acid }}>{vm.streak ?? DASH}</span>
             </div>
-            <IconBtn><Bell size={16} color={T.ink} /></IconBtn>
+            <W3NavIcon to="/e/w3-plan" label="Training plan"><CalendarRange size={16} color={T.ink} /></W3NavIcon>
+            <W3NavMenu />
           </div>
         </div>
 
@@ -230,8 +228,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
             <Bike size={13} color={T.acid} /><span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: T.ink }}>{vm.bikeName}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <IconBtn><Share2 size={15} color={T.mid} /></IconBtn>
-            <IconBtn><Pencil size={15} color={T.mid} /></IconBtn>
+            <W3NavIcon to="/e/w3-bike-studio" label="Edit bike"><Pencil size={15} color={T.mid} /></W3NavIcon>
           </div>
         </div>
 
