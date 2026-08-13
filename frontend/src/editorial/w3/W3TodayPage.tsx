@@ -257,7 +257,7 @@ export default function W3TodayPage() {
       : null
 
     const weekMeta = isPresent(model.weekLoad)
-      ? `${model.weekLoad.value.spent} of ${model.weekLoad.value.planned} TSS`
+      ? `${Math.round(model.weekLoad.value.spent)} of ${Math.round(model.weekLoad.value.planned)} TSS`
       : '—'
 
     // The real week-ahead plan, indexed by ISO date so each strip day can look
@@ -449,7 +449,7 @@ export default function W3TodayPage() {
       : 'Deine Trainingswoche'
     const weekDoneChip = weekPlanned > 0 ? `${weekDone} / ${weekPlanned} erledigt` : null
     const weekLoadLabel = isPresent(model.weekLoad)
-      ? `${model.weekLoad.value.spent} von ${model.weekLoad.value.planned} TSS`
+      ? `${Math.round(model.weekLoad.value.spent)} von ${Math.round(model.weekLoad.value.planned)} TSS`
       : '—'
     const evName = profile?.goals?.target_event_name ?? null
     const evDate = profile?.target_event_date ? parseISO(profile.target_event_date) : null
