@@ -13,6 +13,7 @@ export default function W3FirstBikePage() {
     <W3FirstBikeView
       bikeImageUrl={STARTER_BIKE}
       onContinue={() => navigate('/e/w3-today')}
+      onDigitalize={() => navigate('/e/w3-bike-studio')}
     />
   )
 }

@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { Sparkles, ArrowRight, Wrench, TrendingUp, Palette, Bike } from 'lucide-react'
+import { Sparkles, ArrowRight, Wrench, TrendingUp, Palette, Bike, Camera } from 'lucide-react'
 import { T, FONT, EASE, band } from './w3tokens'
 import './w3.css'
 
@@ -13,6 +13,8 @@ import './w3.css'
 export interface W3FirstBikeProps {
   bikeImageUrl: string | null
   onContinue: () => void
+  /** Route into the LLM pipeline (bike studio): photo → generated collectible. */
+  onDigitalize?: () => void
 }
 
 const UPGRADES: { icon: typeof Wrench; title: string; body: string }[] = [
@@ -21,7 +23,7 @@ const UPGRADES: { icon: typeof Wrench; title: string; body: string }[] = [
   { icon: Palette, title: 'Make it yours', body: 'Frame paint, finishes and rare seasonal drops. Cosmetic only — never pay-to-win.' },
 ]
 
-export default function W3FirstBikeView({ bikeImageUrl, onContinue }: W3FirstBikeProps) {
+export default function W3FirstBikeView({ bikeImageUrl, onContinue, onDigitalize }: W3FirstBikeProps) {
   const reduce = useReducedMotion()
 
   return (
@@ -72,11 +74,16 @@ export default function W3FirstBikeView({ bikeImageUrl, onContinue }: W3FirstBik
 
         {/* CTA */}
         <div style={{ ...band(38), paddingTop: 6, marginTop: 'auto' }}>
-          <button onClick={onContinue} style={{ height: 56, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-            This is my bike<ArrowRight size={18} color={T.bg} />
+          {onDigitalize && (
+            <button onClick={onDigitalize} style={{ height: 56, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+              <Camera size={19} color={T.bg} />Turn my real bike into a collectible
+            </button>
+          )}
+          <button onClick={onContinue} style={{ height: onDigitalize ? 48 : 56, marginTop: onDigitalize ? 8 : 0, borderRadius: 100, border: onDigitalize ? `1px solid ${T.stroke}` : 0, background: onDigitalize ? 'transparent' : T.acid, color: onDigitalize ? T.ink : T.bg, fontFamily: FONT, fontSize: onDigitalize ? 14 : 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+            {onDigitalize ? 'Start with this starter bike' : 'This is my bike'}<ArrowRight size={16} color={onDigitalize ? T.ink : T.bg} />
           </button>
           <span style={{ display: 'block', textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: T.quiet, marginTop: 10, lineHeight: 1.4 }}>
-            Got a real bike? Snap it in the Garage anytime to ride your own.
+            Snap your real bike and we style it into a collectible. You can also do it later in the Garage.
           </span>
         </div>
       </div>
