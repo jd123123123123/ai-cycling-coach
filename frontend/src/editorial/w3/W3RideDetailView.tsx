@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { useState } from 'react'
 import { ArrowLeft, Share2, Zap, Timer, Gauge, HeartPulse, type LucideIcon } from 'lucide-react'
-import { T, FONT, grow, Kicker, band, card, DASH } from './w3tokens'
+import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import './w3.css'
 
@@ -87,8 +87,28 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
           <button aria-label="Share" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>
         </div>
 
-        {/* Cover */}
-        <div style={{ height: 190, margin: '8px 0 0', background: `radial-gradient(120% 90% at 60% 25%, #26301c, ${T.bg})` }} />
+        {/* Cover — the ride's own power silhouette as an atmospheric trace
+             (real data, not a placeholder image). */}
+        <div style={{ height: 190, margin: '8px 0 0', position: 'relative', background: `radial-gradient(120% 90% at 60% 20%, #1a2416, ${T.bg})`, overflow: 'hidden' }}>
+          {vm.power.length > 1 && (() => {
+            const n = vm.power.length
+            const pts = vm.power.map((p, i) => `${(i / (n - 1)) * 100},${100 - Math.max(2, (p / pMax) * 92)}`).join(' ')
+            return (
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                <defs>
+                  <linearGradient id="rdfill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={T.acid} stopOpacity="0.34" />
+                    <stop offset="100%" stopColor={T.acid} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <motion.polygon points={`0,100 ${pts} 100,100`} fill="url(#rdfill)"
+                  initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, ease: EASE }} />
+                <polyline points={pts} fill="none" stroke={T.acid} strokeWidth={0.8} strokeOpacity={0.85} vectorEffect="non-scaling-stroke" />
+              </svg>
+            )
+          })()}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 90, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
+        </div>
 
         {/* Hero card */}
         <div style={{ ...band(20), marginTop: -54 }}>
