@@ -108,8 +108,7 @@ function Spark({ spark, h = 22 }: { spark: W3Spark; h?: number }) {
         return (
           <motion.div key={i}
             initial={reduce ? false : { height: 0 }}
-            whileInView={{ height: bh }}
-            viewport={{ once: true, amount: 0.6 }}
+            animate={{ height: bh }}
             transition={grow(i * 0.04)}
             style={{ flex: 1, height: bh, borderRadius: 1.5, background: last ? spark.hi : T.d2, boxShadow: last ? `0 0 8px ${spark.hi}66` : 'none' }} />
         )
@@ -151,8 +150,7 @@ function ChargeMeter({ score }: { score: number | null }) {
         return (
           <motion.div key={i}
             initial={reduce ? false : { scaleY: 0 }}
-            whileInView={{ scaleY: 1 }}
-            viewport={{ once: true, amount: 0.8 }}
+            animate={{ scaleY: 1 }}
             transition={grow(i * 0.03)}
             style={{ flex: 1, height: 26, transformOrigin: 'bottom', borderRadius: 3, background: on ? T.acid : T.surface2, boxShadow: on ? `0 0 10px ${T.acid}55` : 'none' }} />
         )
@@ -172,8 +170,7 @@ function Ring({ pct, size = 46 }: { pct: number; size?: number }) {
       <motion.circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.acid} strokeWidth={5} strokeLinecap="round"
         strokeDasharray={c}
         initial={reduce ? false : { strokeDashoffset: c }}
-        whileInView={{ strokeDashoffset: off }}
-        viewport={{ once: true, amount: 0.8 }}
+        animate={{ strokeDashoffset: off }}
         transition={{ duration: 0.9, ease: EASE }}
         transform={`rotate(-90 ${size / 2} ${size / 2})`} />
       <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" fontSize={12} fontWeight={600} fill={T.ink} fontFamily={FONT}>{Math.round(pct)}%</text>
@@ -260,10 +257,18 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           initial={reduce ? false : { opacity: 0, scale: 1.04 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.7, ease: EASE }}
-          style={{ position: 'relative', height: 300, background: T.bg, overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', width: 320, height: 150, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}1F, transparent)` }} />
-          <img src={STARTER_BIKE} alt={vm.bikeName} style={{ position: 'relative', width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 45%' }} />
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
+          style={{ position: 'relative', height: 300, background: T.bg, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          {/* The pedestal box — a raised surface the bike stands ON. */}
+          <div style={{ position: 'absolute', left: 20, right: 20, bottom: 22, height: 132, borderRadius: 26, background: `linear-gradient(180deg, ${T.surface2}, ${T.surface})`, border: `1px solid ${T.stroke}`, overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(120% 90% at 50% 0%, ${T.acid}22, transparent 60%)` }} />
+          </div>
+          {/* Contact shadow so the bike reads as sitting on the box, not floating. */}
+          <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', width: 210, height: 26, borderRadius: '50%', background: '#000000', filter: 'blur(12px)', opacity: 0.55 }} />
+          {/* The bike, popping OUT above the box top for a 3D standing effect. */}
+          <motion.img
+            src={STARTER_BIKE} alt={vm.bikeName}
+            initial={reduce ? false : { y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.7, ease: EASE }}
+            style={{ position: 'relative', width: '82%', height: '92%', objectFit: 'contain', objectPosition: 'center bottom', filter: 'drop-shadow(0 10px 24px #000000AA)', marginBottom: 44 }} />
         </motion.div>
 
         {/* ── Hero: readiness + charge meter ── */}
@@ -348,7 +353,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
                   <div style={{ width: 34, height: 34, borderRadius: 100, background: r.color, flex: 'none', border: r.me ? `2px solid ${T.acid}` : 'none' }} />
                   <div style={{ width: 64 }}><span style={{ fontSize: 13, fontWeight: r.me ? 700 : 600, color: r.me ? T.acid : T.ink }}>{r.name}</span></div>
                   <div style={{ flex: 1, height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
-                    <motion.div initial={{ width: 0 }} whileInView={{ width: `${Math.min(100, (r.pct / 150) * 100)}%` }} viewport={{ once: true, amount: 0.8 }} transition={{ duration: 0.7, ease: EASE }}
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (r.pct / 150) * 100)}%` }} transition={{ duration: 0.7, ease: EASE }}
                       style={{ height: '100%', borderRadius: 100, background: r.me ? T.acid : T.d3 }} />
                   </div>
                   <div style={{ width: 42, textAlign: 'right' }}>
@@ -365,7 +370,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
                 <span style={{ fontSize: 11, fontWeight: 700, color: T.ink }}>{vm.challengeValue}</span>
               </div>
               <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
-                <motion.div initial={{ width: 0 }} whileInView={{ width: `${vm.challengePct}%` }} viewport={{ once: true, amount: 0.8 }} transition={{ duration: 0.8, ease: EASE }}
+                <motion.div initial={{ width: 0 }} animate={{ width: `${vm.challengePct}%` }} transition={{ duration: 0.8, ease: EASE }}
                   style={{ height: '100%', borderRadius: 100, background: T.acid }} />
               </div>
             </div>
@@ -393,7 +398,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
                 const on = i < Math.round(vm.garagePct / 100 * 25)
                 return (
                   <motion.div key={i}
-                    initial={{ scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.8 }} transition={grow(i * 0.02)}
+                    initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(i * 0.02)}
                     style={{ flex: 1, height: on ? 10 : 5, alignSelf: 'flex-end', transformOrigin: 'bottom', borderRadius: 1.5, background: on ? T.acid : T.rule }} />
                 )
               })}

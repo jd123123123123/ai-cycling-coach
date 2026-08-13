@@ -97,7 +97,7 @@ export default function W3BikerView({ vm, onBack, onReferral }: { vm: W3BikerVm;
             </div>
             <div style={{ display: 'flex', gap: 2, height: 12 }}>
               {Array.from({ length: SEG }).map((_, i) => (
-                <motion.div key={i} initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.6 }} transition={grow(i * 0.015)}
+                <motion.div key={i} initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(i * 0.015)}
                   style={{ flex: 1, height: i < litSeg ? 12 : 6, alignSelf: 'flex-end', transformOrigin: 'bottom', borderRadius: 2, background: i < litSeg ? T.acid : T.rule }} />
               ))}
             </div>

@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Share2 } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeft, Share2, Zap, Timer, Gauge, HeartPulse, type LucideIcon } from 'lucide-react'
 import { T, FONT, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import './w3.css'
@@ -52,16 +53,27 @@ function SegGauge({ fill, on, delay }: { fill: number; on: boolean; delay: numbe
     <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 10, width: '100%' }}>
       {Array.from({ length: 20 }, (_, k) => {
         const lit = k / 20 < fill
-        return <motion.div key={k} initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.7 }} transition={grow(delay + k * 0.01)}
+        return <motion.div key={k} initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(delay + k * 0.01)}
           style={{ flex: 1, height: lit ? (on ? 10 : 8) : 5, transformOrigin: 'bottom', borderRadius: 1, background: lit ? (on ? T.acid : T.d3) : T.rule }} />
       })}
     </div>
   )
 }
 
+// Icon per stat card, matched by its label keyword — supports the storytelling.
+const STAT_ICON = (label: string): LucideIcon => {
+  const l = label.toLowerCase()
+  if (l.includes('power') || l.includes('watt')) return Zap
+  if (l.includes('time') || l.includes('moving') || l.includes('dur')) return Timer
+  if (l.includes('hr') || l.includes('heart') || l.includes('bpm')) return HeartPulse
+  return Gauge // load / TSS / everything else
+}
+
 export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?: () => void }) {
   const reduce = useReducedMotion()
   const pMax = Math.max(1, ...vm.power)
+  const pAvg = vm.power.length ? vm.power.reduce((a, b) => a + b, 0) / vm.power.length : 0
+  const [hov, setHov] = useState<number | null>(null)
 
   return (
     <div className="w3-root">
@@ -101,13 +113,28 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Kicker>Power · whole ride</Kicker><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>{vm.powerNote}</span>
+                <Kicker>Power · whole ride</Kicker>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>
+                  {hov != null ? `${Math.round(vm.power[hov])} W` : vm.powerNote}
+                </span>
               </div>
-              <div style={{ height: 46, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-                {vm.power.map((p, i) => (
-                  <motion.div key={i} initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.5 }} transition={grow(i * 0.015)}
-                    style={{ flex: 1, height: Math.max(3, Math.round((p / pMax) * 46)), transformOrigin: 'bottom', borderRadius: 1, background: p / pMax > 0.7 ? T.acid : '#FFFFFF33' }} />
-                ))}
+              {/* Interactive power trace with an average trend line. Hover a bar
+                  to read its watts (touch-friendly: pointer events). */}
+              <div style={{ position: 'relative', height: 46, display: 'flex', gap: 2, alignItems: 'flex-end' }}
+                onPointerLeave={() => setHov(null)}>
+                {/* average trend line */}
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: Math.round((pAvg / pMax) * 46), height: 1, background: `${T.ink}55`, zIndex: 1, pointerEvents: 'none' }}>
+                  <span style={{ position: 'absolute', right: 0, top: -12, fontSize: 8, fontWeight: 700, color: T.mid }}>AVG</span>
+                </div>
+                {vm.power.map((p, i) => {
+                  const on = hov === i
+                  return (
+                    <motion.div key={i} onPointerEnter={() => setHov(i)}
+                      initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(i * 0.012)}
+                      style={{ flex: 1, height: Math.max(3, Math.round((p / pMax) * 46)), transformOrigin: 'bottom', borderRadius: 1, cursor: 'pointer',
+                        background: on ? T.ink : p / pMax > 0.7 ? T.acid : '#FFFFFF33' }} />
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -119,8 +146,10 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
             <div key={ri} style={{ display: 'flex', gap: 8 }}>
               {row.map((i) => {
                 const s = vm.stats[i]
+                const Ic = STAT_ICON(s.l)
                 return (
-                  <div key={i} style={{ flex: 1, padding: '15px 16px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div key={i} style={{ flex: 1, padding: '15px 16px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 9, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Ic size={16} color={T.acid} /></div>
                     <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.7, color: s.v === DASH ? T.quiet : T.ink }}>{s.v}</span>
                     <Kicker>{s.l}</Kicker>
                     <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{s.s}</span>
@@ -141,7 +170,7 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
             </div>
           </div>
           <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
-            <motion.div initial={reduce ? false : { width: 0 }} whileInView={{ width: `${(Number(vm.execScore) / Number(vm.execTotal)) * 100}%` }} viewport={{ once: true }} transition={{ duration: 0.9 }} style={{ height: '100%', background: T.acid, borderRadius: 100 }} />
+            <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${(Number(vm.execScore) / Number(vm.execTotal)) * 100}%` }} transition={{ duration: 0.9 }} style={{ height: '100%', background: T.acid, borderRadius: 100 }} />
           </div>
           <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.25, color: T.ink }}>{vm.verdictHeadline}</span>
           <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{vm.verdictBody}</span>
@@ -170,9 +199,9 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
                       <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{r.watts}</span>
                     </div>
                     <div style={{ flex: 1, height: 24, display: 'flex', alignItems: 'center', position: 'relative' }}>
-                      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>{!held && <motion.div initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={grow(i * 0.04)} style={{ transformOrigin: 'right', width: `${mag * 100}%`, height: 14, borderRadius: '3px 0 0 3px', background: T.d3 }} />}</div>
+                      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>{!held && <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.04)} style={{ transformOrigin: 'right', width: `${mag * 100}%`, height: 14, borderRadius: '3px 0 0 3px', background: T.d3 }} />}</div>
                       <div style={{ width: 1, height: 24, background: '#FFFFFF8C' }} />
-                      <div style={{ flex: 1 }}>{held && <motion.div initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={grow(i * 0.04)} style={{ transformOrigin: 'left', width: `${mag * 100}%`, height: 14, borderRadius: '0 3px 3px 0', background: T.acid }} />}</div>
+                      <div style={{ flex: 1 }}>{held && <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.04)} style={{ transformOrigin: 'left', width: `${mag * 100}%`, height: 14, borderRadius: '0 3px 3px 0', background: T.acid }} />}</div>
                     </div>
                     <div style={{ width: 56, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
                       <span style={{ fontSize: 12.5, fontWeight: 700, color: held ? T.acid : T.mid }}>{r.delta >= 0 ? '+' : ''}{r.delta} W</span>
@@ -191,7 +220,7 @@ export default function W3RideDetailView({ vm, onBack }: { vm: W3RideVm; onBack?
           <div style={{ padding: 18, borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', gap: 1, height: 16 }}>
               {vm.zones.map((z, i) => (
-                <motion.div key={z.z} initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={grow(i * 0.06)}
+                <motion.div key={z.z} initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.06)}
                   style={{ flexGrow: Math.max(0.4, z.pct), transformOrigin: 'left', height: 16, background: z.peak ? T.acid : `rgba(255,255,255,${0.08 + i * 0.1})`,
                     borderRadius: i === 0 ? '4px 0 0 4px' : i === vm.zones.length - 1 ? '0 4px 4px 0' : 0 }} />
               ))}

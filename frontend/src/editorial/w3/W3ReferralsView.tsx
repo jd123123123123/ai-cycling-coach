@@ -41,7 +41,7 @@ function AvatarCard({ row, i, onTap, reduce }: { row: W3ReferralRow; i: number; 
   return (
     <motion.button
       onClick={onTap}
-      initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.45, ease: EASE, delay: i * 0.06 }}
+      initial={reduce ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE, delay: i * 0.06 }}
       style={{ position: 'relative', flex: 1, minWidth: 0, aspectRatio: '0.86', borderRadius: 22, overflow: 'hidden', border: 0, padding: 0, cursor: 'pointer', background: `linear-gradient(160deg, ${tint}, #16131f)`, fontFamily: FONT }}
     >
       {row.avatarUrl
@@ -117,7 +117,7 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
                 {pair.map((row, ci) => (
                   row.claimable
                     ? (
-                      <motion.button key={row.id} onClick={() => onOpenUser?.(row.referredId)} initial={reduce ? false : { scale: 0.96 }} whileInView={{ scale: 1 }} viewport={{ once: true }}
+                      <motion.button key={row.id} onClick={() => onOpenUser?.(row.referredId)} initial={reduce ? false : { scale: 0.96 }} animate={{ scale: 1 }}
                         style={{ flex: 1, minWidth: 0, aspectRatio: '0.86', borderRadius: 22, border: 0, cursor: 'pointer', background: T.acid, display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center', alignItems: 'center', fontFamily: FONT }}>
                         <Gift size={30} color={T.bg} />
                         <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: 0.5, color: T.bg }}>CLAIM NOW</span>

@@ -102,7 +102,7 @@ function RideThumb({ ride, accent, reduce, delay }: { ride: W3RideCard; accent: 
             d={pathFromPolyline(ride.polyline)} fill="none" stroke={stroke} strokeWidth={5}
             strokeLinejoin="round" strokeLinecap="round"
             initial={reduce ? false : { pathLength: 0, opacity: 0.4 }}
-            whileInView={{ pathLength: 1, opacity: 1 }} viewport={{ once: true, amount: 0.6 }}
+            animate={{ pathLength: 1, opacity: 1 }}
             transition={{ duration: 0.9, ease: EASE, delay }}
           />
         </svg>
@@ -113,8 +113,7 @@ function RideThumb({ ride, accent, reduce, delay }: { ride: W3RideCard; accent: 
   return (
     <div style={box}>
       <motion.div
-        initial={reduce ? false : { scale: 0.7, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }}
-        viewport={{ once: true, amount: 0.6 }} transition={grow(delay)}
+        initial={reduce ? false : { scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={grow(delay)}
         style={{ display: 'grid', placeItems: 'center' }}>
         <Bike size={26} color={T.d4} strokeWidth={1.6} />
       </motion.div>
@@ -145,8 +144,7 @@ function RideRow({ ride, accent, reduce, index, onOpen }: { ride: W3RideCard; ac
   return (
     <motion.button
       onClick={tappable ? onOpen : undefined} disabled={!tappable}
-      initial={reduce ? false : { opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.4 }} transition={{ duration: 0.5, ease: EASE, delay: index * 0.05 }}
+      initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE, delay: index * 0.05 }}
       style={{
         display: 'flex', gap: 14, alignItems: 'center', width: '100%', textAlign: 'left', fontFamily: FONT,
         padding: 16, borderRadius: 24, background: T.surface, cursor: tappable ? 'pointer' : 'default',
@@ -248,8 +246,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
             {/* progress (fixture: real km against a placeholder goal) */}
             <div style={{ position: 'relative', height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'visible' }}>
               <motion.div
-                initial={reduce ? false : { width: 0 }} whileInView={{ width: `${Math.round(vm.progress * 100)}%` }}
-                viewport={{ once: true, amount: 0.8 }} transition={grow(0.05)}
+                initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(vm.progress * 100)}%` }} transition={grow(0.05)}
                 style={{ position: 'relative', height: '100%', borderRadius: 100, background: T.acid }}>
                 <div style={{ position: 'absolute', right: -1, top: -3, width: 3, height: 12, borderRadius: 2, background: T.ink }} />
               </motion.div>
@@ -268,7 +265,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
                 const on = i >= vm.barsAccentFrom
                 return (
                   <motion.div key={i}
-                    initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.6 }}
+                    initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }}
                     transition={grow(i * 0.03)}
                     style={{ flex: 1, height: `${Math.max(8, Math.round((b / maxBar) * 100))}%`, transformOrigin: 'bottom', borderRadius: 4,
                       background: on ? T.acid : '#2C2C2C', boxShadow: on ? `0 0 12px ${T.acid}40` : 'none' }} />

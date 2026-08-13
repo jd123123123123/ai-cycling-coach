@@ -70,7 +70,7 @@ export default function W3RecoveryInsight() {
     <div style={{ ...band(26), gap: 12 }}>
       <SectionHead />
       <motion.div
-        initial={reduce ? false : { opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, ease: EASE }}
+        initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
         style={{ padding: 20, borderRadius: 24, background: T.surface, display: 'flex', flexDirection: 'column', gap: 18, border: `1px solid ${meta.color}33` }}>
 
         {/* Verdict row: score ring + directive stance */}
@@ -90,7 +90,7 @@ export default function W3RecoveryInsight() {
         {/* Signal split: what says push (good) vs be gentle (warn/bad) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 16, borderTop: `1px solid ${T.rule}` }}>
           {ordered.map((s, i) => (
-            <motion.div key={i} initial={reduce ? false : { opacity: 0, x: -8 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: 0.06 * i, ease: EASE }}
+            <motion.div key={i} initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.06 * i, ease: EASE }}
               style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <span style={{ marginTop: 2, flex: 'none' }}><ToneIcon tone={s.tone} /></span>
               <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, lineHeight: 1.4, color: s.tone === 'neutral' ? T.mid : T.ink }}>{s.text}</span>
@@ -123,7 +123,7 @@ function ScoreRing({ score, color, reduce }: { score: number; color: string; red
       <svg width={64} height={64} style={{ transform: 'rotate(-90deg)' }}>
         <circle cx={32} cy={32} r={R} fill="none" stroke={T.rule} strokeWidth={6} />
         <motion.circle cx={32} cy={32} r={R} fill="none" stroke={color} strokeWidth={6} strokeLinecap="round"
-          strokeDasharray={C} initial={reduce ? false : { strokeDashoffset: C }} whileInView={{ strokeDashoffset: C * (1 - frac) }} viewport={{ once: true }} transition={{ duration: 0.9, ease: EASE }} />
+          strokeDasharray={C} initial={reduce ? false : { strokeDashoffset: C }} animate={{ strokeDashoffset: C * (1 - frac) }} transition={{ duration: 0.9, ease: EASE }} />
       </svg>
       <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
         <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: -1, color: T.ink, fontVariantNumeric: 'tabular-nums' }}>{Math.round(score)}</span>

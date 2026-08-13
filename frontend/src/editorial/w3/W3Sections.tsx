@@ -58,7 +58,7 @@ export function WeekSection({ days, meta, selected, onSelect }: { days: W3DayFul
               <span style={{ fontSize: 13, fontWeight: 600, color: isToday || active ? T.ink : T.mid }}>{day.num}</span>
               <div style={{ position: 'relative', height: 34, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0 7px', width: '100%' }}>
                 {planH > 0 && <div style={{ position: 'absolute', bottom: 0, left: 7, right: 7, height: planH, borderRadius: 2, border: `1px dashed ${T.d3}`, borderBottom: 'none' }} />}
-                <motion.div initial={reduce ? false : { height: 0 }} whileInView={{ height: barH }} viewport={{ once: true, amount: 0.6 }} transition={grow(i * 0.05)}
+                <motion.div initial={reduce ? false : { height: 0 }} animate={{ height: barH }} transition={grow(i * 0.05)}
                   style={{ height: barH, borderRadius: 2, width: '100%', background: hue, position: 'relative' }} />
               </div>
             </button>
@@ -111,7 +111,7 @@ export function WeatherRoute({ w }: { w: W3Weather }) {
               const bh = Math.max(4, Math.round(h.q * 34))
               return (
                 <motion.div key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
-                  initial={reduce ? false : { height: 0 }} whileInView={{ height: bh }} viewport={{ once: true, amount: 0.6 }} transition={grow(i * 0.02)}
+                  initial={reduce ? false : { height: 0 }} animate={{ height: bh }} transition={grow(i * 0.02)}
                   style={{ flex: 1, height: bh, borderRadius: 1.5, cursor: 'pointer', background: on ? T.acid : (h.peak ? '#C8FF0088' : T.d2) }} />
               )
             })}
@@ -173,7 +173,7 @@ export function MirrorChart({ m, fitness, fatigue, form }: { m: W3Mirror; fitnes
     const h = Math.max(2, Math.round(series[i] * H))
     return (
       <motion.div key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
-        initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.5 }} transition={grow((i / n) * 0.3)}
+        initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow((i / n) * 0.3)}
         style={{ flex: 1, height: h, alignSelf: top ? 'flex-end' : 'flex-start', transformOrigin: top ? 'bottom' : 'top', borderRadius: 1.5, cursor: 'pointer',
           background: on ? (top ? T.acid : '#C8FF0080') : isHov ? T.d4 : T.d2 }} />
     )
@@ -245,7 +245,7 @@ export function IntervalBars({ blocks, ftpTag }: { blocks: W3Block[]; ftpTag: st
         const on = hov === i
         return (
           <motion.div key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
-            initial={reduce ? false : { height: 0 }} whileInView={{ height: bh }} viewport={{ once: true, amount: 0.5 }} transition={grow(i * 0.05)}
+            initial={reduce ? false : { height: 0 }} animate={{ height: bh }} transition={grow(i * 0.05)}
             style={{ width: b.work ? 39 : 20, height: bh, borderRadius: '3px 3px 0 0', flex: b.work ? 'none' : 1, cursor: 'pointer',
               background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : '#FFFFFF2B', outline: on ? `1px solid ${T.ink}` : 'none' }} />
         )

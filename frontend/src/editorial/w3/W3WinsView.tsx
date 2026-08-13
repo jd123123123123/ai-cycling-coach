@@ -68,7 +68,7 @@ function SegGauge({ lit, total, reduce, litH = 10, unlitH = 5, delay = 0 }: { li
   return (
     <div style={{ display: 'flex', gap: 3, height: litH, alignItems: 'center', width: '100%' }}>
       {Array.from({ length: total }).map((_, i) => (
-        <motion.div key={i} initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.6 }} transition={grow(delay + i * 0.015)}
+        <motion.div key={i} initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(delay + i * 0.015)}
           style={{ flex: 1, height: i < lit ? litH : unlitH, alignSelf: 'center', transformOrigin: 'center', borderRadius: 1, background: i < lit ? T.acid : T.rule }} />
       ))}
     </div>
@@ -79,7 +79,7 @@ function SegGauge({ lit, total, reduce, litH = 10, unlitH = 5, delay = 0 }: { li
 function Bar({ fill, reduce, delay = 0 }: { fill: number; reduce: boolean | null; delay?: number }) {
   return (
     <div style={{ height: 5, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
-      <motion.div initial={reduce ? false : { width: 0 }} whileInView={{ width: `${Math.round(fill * 100)}%` }} viewport={{ once: true, amount: 0.8 }} transition={grow(delay)}
+      <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(fill * 100)}%` }} transition={grow(delay)}
         style={{ height: '100%', borderRadius: 100, background: T.acid }} />
     </div>
   )
