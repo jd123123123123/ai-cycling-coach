@@ -1,8 +1,33 @@
 import W3AvatarOnboardView from './W3AvatarOnboardView'
 import { SHOWCASE_RIDER } from './showcaseRider'
 
-/** TEMP preview — /e/w3-avatar-onboard-preview (unguarded). Shows an example
- *  cute collectible rider in the showcase box so the payoff is visible. */
+/** TEMP preview — the "AVATAR UNLOCKED" reveal (pen lQimK, reworked).
+ *  /e/w3-avatar-onboard-preview is unguarded. */
 export default function W3AvatarOnboardPreview() {
-  return <W3AvatarOnboardView heroImageUrl={SHOWCASE_RIDER} onPick={() => {}} onSkip={() => {}} />
+  return (
+    <W3AvatarOnboardView
+      heroImageUrl={SHOWCASE_RIDER}
+      stage="revealed"
+      reveal={{
+        avatarUrl: SHOWCASE_RIDER,
+        handle: '@jannis',
+        role: 'Climber',
+        level: 12,
+        levelPct: 0.64,
+        xpNote: '210 XP bis Level 13',
+        headline: '4.812 km — 12 % um die Erde',
+        primary: { totalDistance: '4,812 km', totalRides: '318', saddleTime: '214 h' },
+        secondary: [
+          { key: 'elevation', label: 'ELEVATION', value: '61.4 km', caption: '≈ 7× Mount Everest' },
+          { key: 'longest', label: 'LONGEST', value: '187 km', caption: 'dein größter Tag im Sattel' },
+          { key: 'speed', label: 'AVG SPEED', value: '27.4', caption: 'km/h über alle Fahrten' },
+          { key: 'burned', label: 'BURNED', value: '142.6K', caption: 'kcal · ≈ 168 Pizzen' },
+        ],
+        syncNote: 'Garmin synced · 4 years of riding',
+      }}
+      onPick={() => {}}
+      onSkip={() => {}}
+      onTake={() => {}}
+    />
+  )
 }

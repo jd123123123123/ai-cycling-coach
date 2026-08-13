@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useGrantOnboarding } from '../../hooks/useWallet'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { updateUser } from '../../api/auth'
 import { apiClient } from '../../api/client'
 import { SHOWCASE_RIDER } from './showcaseRider'
-import W3AvatarOnboardView, { type AvatarStage } from './W3AvatarOnboardView'
+import W3AvatarOnboardView, { type AvatarStage, type AvatarReveal, type AvatarInsight } from './W3AvatarOnboardView'
 
 /**
  * W3 · Avatar onboarding, wired to the LLM pipeline. Route /e/w3-avatar-onboard.
@@ -52,6 +53,70 @@ export default function W3AvatarOnboardPage() {
   const onPick = () => inputRef.current?.click()
   const handle = user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider')
 
+  // Real lifetime stats for the "AVATAR UNLOCKED" reveal (pen lQimK).
+  const seasonsAgo = useMemo(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 6); return d }, [])
+  const { data: acts } = useActivitiesRange(seasonsAgo, new Date())
+  const reveal = useMemo<AvatarReveal>(() => {
+    const cyc = (acts?.activities ?? []).filter((a) => a.sport === 'cycling')
+    const rides = cyc.length
+    const distKm = cyc.reduce((s, a) => s + (a.distance_meters ?? 0), 0) / 1000
+    const saddleH = cyc.reduce((s, a) => s + (a.duration_seconds ?? 0), 0) / 3600
+    const elevM = cyc.reduce((s, a) => s + (a.elevation_gain_m ?? 0), 0)
+    const longestKm = cyc.length ? Math.max(0, ...cyc.map((a) => (a.distance_meters ?? 0) / 1000)) : 0
+    const kcal = cyc.reduce((s, a) => s + (a.calories ?? 0), 0)
+    const avgSpeed = saddleH > 0 ? distKm / saddleH : 0
+    const fmtK = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(Math.round(n)))
+
+    // ── Level system — everyone starts at LEVEL 1 and levels up from lifetime
+    //    riding (distance + climbing + rides + hours as XP). ~600 XP per level. ──
+    const xp = Math.round(distKm + elevM / 100 + rides * 4 + saddleH * 3)
+    const XP_PER = 600
+    const level = 1 + Math.floor(xp / XP_PER)
+    const intoLevel = xp % XP_PER
+    const levelPct = xp > 0 ? intoLevel / XP_PER : 0
+    const xpNote = `${XP_PER - intoLevel} XP bis Level ${level + 1}`
+
+    // Role from riding character (real): lots of vertical → Climber, fast → Rouleur.
+    const elevPerKm = distKm > 0 ? elevM / distKm : 0
+    const role = rides === 0 ? 'Rookie' : elevPerKm >= 12 ? 'Climber' : avgSpeed >= 30 ? 'Rouleur' : 'Rider'
+
+    // Headline insight — the distance, made human (fraction of the Earth).
+    const earthPct = (distKm / 40075) * 100
+    const headline = distKm <= 0 ? 'Deine erste Fahrt schreibt hier deine Zahlen.'
+      : distKm >= 40075 ? `${Math.round(distKm).toLocaleString('de-DE')} km — ${(distKm / 40075).toFixed(1)}× um die Erde`
+        : `${Math.round(distKm).toLocaleString('de-DE')} km — ${earthPct < 1 ? earthPct.toFixed(1) : Math.round(earthPct)} % um die Erde`
+
+    // Dopamine insight tiles — each raw number made meaningful.
+    const everest = elevM / 8849
+    const pizzas = Math.round(kcal / 850)
+    const secondary: AvatarInsight[] = [
+      { key: 'elevation', label: 'ELEVATION', value: elevM > 0 ? `${(elevM / 1000).toFixed(1)} km` : '—', caption: elevM > 0 ? `≈ ${everest.toFixed(everest < 10 ? 1 : 0)}× Mount Everest` : 'noch offen' },
+      { key: 'longest', label: 'LONGEST', value: rides ? `${Math.round(longestKm)} km` : '—', caption: rides ? 'dein größter Tag im Sattel' : 'noch offen' },
+      { key: 'speed', label: 'AVG SPEED', value: avgSpeed > 0 ? avgSpeed.toFixed(1) : '—', caption: 'km/h über alle Fahrten' },
+      { key: 'burned', label: 'BURNED', value: kcal > 0 ? fmtK(kcal) : '—', caption: kcal > 0 ? `kcal · ≈ ${pizzas} Pizzen` : 'kcal' },
+    ]
+
+    const earliest = cyc.reduce<number | null>((m, a) => { const t = new Date(a.started_at).getTime(); return m == null || t < m ? t : m }, null)
+    const years = earliest ? Math.max(1, Math.floor((Date.now() - earliest) / (365.25 * 864e5))) : 0
+    const garmin = cyc.some((a) => (a.source ?? '').toLowerCase().includes('garmin'))
+    const syncNote = years > 0
+      ? `${garmin ? 'Garmin synced · ' : ''}${years} ${years === 1 ? 'year' : 'years'} of riding`
+      : (garmin ? 'Garmin synced' : '')
+
+    return {
+      avatarUrl: hero,
+      handle,
+      role, level, levelPct, xpNote, headline,
+      primary: {
+        totalDistance: rides ? `${Math.round(distKm).toLocaleString('en-US')} km` : '—',
+        totalRides: rides ? String(rides) : '—',
+        saddleTime: rides ? `${Math.round(saddleH)} h` : '—',
+      },
+      secondary,
+      syncNote,
+    }
+  }, [acts, hero, handle])
+
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -83,7 +148,7 @@ export default function W3AvatarOnboardPage() {
       <W3AvatarOnboardView
         heroImageUrl={hero}
         stage={stage}
-        handle={handle}
+        reveal={reveal}
         onPick={onPick}
         onSkip={() => navigate(NEXT)}
         onTake={() => navigate(NEXT)}
