@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { T, FONT, grow, band } from './w3tokens'
 import W3TabBar from './W3TabBar'
+import W3StatusBar from './W3StatusBar'
 import './w3.css'
 
 /**
@@ -104,7 +105,7 @@ export default function W3WinsView({ vm, onNewChallenge, onEditChallenge }: { vm
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
 
         {/* StatusBar */}
-        <div style={{ height: 44, padding: '0 22px', display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: T.ink }}>9:41</div>
+        <W3StatusBar />
 
         {/* Title */}
         <div style={{ ...band(0), padding: '14px 20px 22px', gap: 8 }}>

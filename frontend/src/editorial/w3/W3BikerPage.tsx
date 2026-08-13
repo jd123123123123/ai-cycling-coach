@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useWallet } from '../../hooks/useWallet'
+import { useMyReferrals } from '../../hooks/useReferrals'
 import W3BikerView, { type W3BikerVm } from './W3BikerView'
 
 // Title-case the shop tier slug for the gauge label ("prestige" → "Prestige").
@@ -24,6 +25,7 @@ export default function W3BikerPage() {
   const { user } = useAuth()
   const { data: profile } = useAthleteProfile()
   const { data: wallet } = useWallet()
+  const { data: referrals } = useMyReferrals()
 
   const vm = useMemo<W3BikerVm>(() => {
     const ftp = (profile as { ftp_watts?: number } | undefined)?.ftp_watts ?? null
@@ -54,9 +56,11 @@ export default function W3BikerPage() {
         { v: wkg, l: 'W/kg', s: weight ? `${weight} kg` : '' },
       ],
       tierFrom, tierTo, tierPct, tierFoot, tierRate,
-      referralCode: 'HYXBS9',
-      referralBody: 'Bring a training partner. You both get 250 RideCoin when they log their first three rides.',
-      referralActive: '3 active · 750 RideCoin earned',
+      referralCode: referrals?.code ?? '—',   // real referral code
+      referralBody: 'Bring a training partner. You earn a 10% bonus on every ride they log for 30 days.',
+      referralActive: referrals
+        ? `${referrals.active_count} active · ${referrals.completed_count} completed`
+        : '—',
       devices: [
         { name: 'Garmin', sub: 'Connected', icon: 'watch', on: true },
         { name: 'Strava', sub: 'Not connected', icon: 'activity', on: false },
@@ -64,7 +68,7 @@ export default function W3BikerPage() {
         { name: 'Apple Health', sub: 'Not connected', icon: 'heart', on: false },
       ],
     }
-  }, [user, profile, wallet])
+  }, [user, profile, wallet, referrals])
 
   return <W3BikerView vm={vm} onReferral={() => navigate('/e/w3-referrals')} />
 }
