@@ -49,7 +49,7 @@ export default function W3FirstBikeView({ bikeImageUrl, onContinue, onDigitalize
               <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(58% 46% at 50% 44%, #FFFFFF14, transparent 70%)' }} />
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: '0 50px' }}>
                 <div style={{ width: '100%', maxWidth: 280, opacity: 0.24 }}>
-                  <GhostBike stroke={T.d4} glow="#FFFFFF14" />
+                  <GhostBike />
                 </div>
               </div>
               <button onClick={onDigitalize} aria-label="Add a photo of your bike"

@@ -186,7 +186,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
                   <div style={{ position: 'absolute', inset: 0 }}>
                     <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(56% 44% at 50% 48%, #FFFFFF12, transparent 70%)' }} />
                     <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: '0 40px' }}>
-                      <div style={{ width: '100%', opacity: 0.24 }}><GhostBike stroke={T.d4} glow="#FFFFFF14" /></div>
+                      <div style={{ width: '100%', opacity: 0.24 }}><GhostBike /></div>
                     </div>
                     <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
                       <button onClick={p.onPick} aria-label="Foto deines Bikes hinzufügen"

@@ -6,6 +6,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { updateUser } from '../../api/auth'
 import { apiClient } from '../../api/client'
 import { SHOWCASE_RIDER } from './showcaseRider'
+import { HIDDEN_FILE_INPUT } from './w3tokens'
 import W3AvatarOnboardView, { type AvatarStage, type AvatarReveal, type AvatarInsight } from './W3AvatarOnboardView'
 
 /**
@@ -145,7 +146,7 @@ export default function W3AvatarOnboardPage() {
 
   return (
     <>
-      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFile} />
+      <input ref={inputRef} type="file" accept="image/*" style={HIDDEN_FILE_INPUT} onChange={onFile} />
       <W3AvatarOnboardView
         heroImageUrl={hero}
         stage={stage}

@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Camera, Sparkles, UserRound, Plus } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useGarage } from '../../hooks/useGarage'
 import { T, FONT } from './w3tokens'
 import './w3.css'
 
@@ -10,8 +11,8 @@ import './w3.css'
  * W3 · Avatar gate — the open-the-app invitation to build your rider.
  *
  * A watcher mounted once inside the Router (next to W3RideCelebrationWatcher).
- * A rider with no generated avatar (`user.avatar_url == null`) is invited to
- * make one ONCE PER APP OPEN — the seen-flag lives in sessionStorage, never
+ * A rider with no DIGITALISED rider in their garage (`garage.rider == null`) is
+ * invited to make one ONCE PER APP OPEN — the flag lives in sessionStorage, never
  * localStorage, so "Später" is honest: it goes away now and comes back the next
  * time they open the app. It is an invitation, never a scold; the empty ring is
  * the whole argument.
@@ -49,16 +50,24 @@ export default function W3AvatarGate() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, isLoading } = useAuth()
+  const { data: garage, isLoading: garageLoading } = useGarage()
   const reduce = useReducedMotion()
   const [open, setOpen] = useState(false)
   const firedRef = useRef(false)
   const primaryRef = useRef<HTMLButtonElement>(null)
 
   const path = location.pathname
+  // "Has a rider" means a DIGITALISED rider in the garage, not merely a
+  // `users.avatar_url`. Those are two different things: avatar_url also holds
+  // the raw-photo fallback from before the garage existed (and from a render
+  // that ran with no image model), so a rider can have an avatar_url and still
+  // have no rider figure — in which case the ride hero reports `needs_rider`
+  // while this gate stayed silent. The garage is the source of truth.
   const eligible =
     !isLoading &&
     !!user &&
-    !user.avatar_url &&
+    !garageLoading &&
+    !garage?.rider?.image_base64 &&
     path.startsWith('/e/w3-') &&
     !path.endsWith('-preview') &&
     !BLOCKED_PREFIXES.some((p) => path.startsWith(p))

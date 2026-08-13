@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { updateUser } from '../../api/auth'
 import { composeRider } from '../../api/riderStudio'
+import { HIDDEN_FILE_INPUT } from './w3tokens'
 import W3OnboardRiderView, { type RiderSlot, type RiderPhase } from './W3OnboardRiderView'
 
 /**
@@ -68,7 +69,7 @@ export default function W3OnboardRiderPage() {
 
   return (
     <>
-      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFile} />
+      <input ref={inputRef} type="file" accept="image/*" style={HIDDEN_FILE_INPUT} onChange={onFile} />
       <W3OnboardRiderView
         thumbs={thumbs}
         phase={phase}

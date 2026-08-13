@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGarage, useRenderAsset } from '../../hooks/useGarage'
+import { HIDDEN_FILE_INPUT } from './w3tokens'
 import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
 
 /**
@@ -122,7 +123,7 @@ export default function W3BikeStudioPage() {
     <>
       {/* No `capture` attr → the picker offers the photo library / files, not
           just the camera. accept limits to images. */}
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
+      <input ref={fileRef} type="file" accept="image/*" style={HIDDEN_FILE_INPUT}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = '' }} />
       <W3BikeStudioView
         state={garageLoading && state === 'intro' ? 'loading' : state}

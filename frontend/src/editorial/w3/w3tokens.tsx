@@ -24,3 +24,21 @@ export const Kicker = ({ children }: { children: ReactNode }) => (
 export const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', background: T.bg, padding: `0 20px ${padBottom}px` })
 /** Surface card, r24. */
 export const card = () => ({ background: T.surface, borderRadius: 24, padding: 20, display: 'flex', flexDirection: 'column' as const, width: '100%' })
+
+/**
+ * Style for an `<input type="file">` that is opened programmatically.
+ *
+ * NOT `display: none`. A display:none input is out of the layout entirely, and
+ * iOS Safari will not open the picker for `ref.current.click()` on one — the tap
+ * silently does nothing, no request is ever made, and it looks exactly like a
+ * broken upload pipeline from the outside. Keep the input rendered but
+ * invisible and parked off-screen instead.
+ */
+export const HIDDEN_FILE_INPUT = {
+  position: 'absolute' as const,
+  left: -9999,
+  width: 1,
+  height: 1,
+  opacity: 0,
+  pointerEvents: 'none' as const,
+}

@@ -13,41 +13,34 @@ import { T, FONT, EASE } from './w3tokens'
  * modes: a collectible the rider actually rendered, or a bike-shaped absence
  * that asks for a photo.
  *
- * The empty state is the pen's `QK4WB` — a ghost bike under a studio spotlight
- * with one acid affordance in the middle of it. The ghost is drawn as an SVG
- * outline rather than a dimmed stock photo, so it reads unmistakably as the
- * *shape* where a bike goes and can never be mistaken for a real one.
+ * The empty state is the pen's `QK4WB` — a bike under a studio spotlight with
+ * one acid affordance in the middle of it, over an EXAMPLE label. The example
+ * is a real drive-side road bike shot the same way the studio renders, so the
+ * empty frame previews what the rider is about to get.
  */
 
-/** A drop-bar road bike in outline: two wheels, the double triangle, fork,
- *  bars and saddle. Proportioned off real road geometry so the silhouette is
- *  recognisable at a glance rather than a generic icon. */
-export function GhostBike({ stroke, glow }: { stroke: string; glow: string }) {
+/** Served from `frontend/public/w3/` rather than inlined as base64: it is 54 KB,
+ *  every rider without a bike loads it, and as a static file it is cached by the
+ *  browser instead of riding inside the JS bundle on every deploy. */
+const EXAMPLE_BIKE = '/w3/example-bike.webp'
+
+/** The example bike shown in an empty garage slot — a real drive-side road bike
+ *  on white, matching the camera the studio renders at, so the empty state
+ *  previews the shape the rider's own collectible will take.
+ *
+ *  It is deliberately knocked back (dimmed, desaturated, blended into the dark
+ *  ground) and always sits under an explicit "example" label. This screen exists
+ *  BECAUSE showing a stock bike as "yours" was wrong; an example that announces
+ *  itself is the opposite of that, but only while it keeps announcing itself —
+ *  never brighten this to look like a real collectible. */
+export function GhostBike({ opacity = 0.3 }: { opacity?: number }) {
   return (
-    <svg viewBox="0 0 200 112" width="100%" height="100%" fill="none" aria-hidden
-      style={{ display: 'block', overflow: 'visible' }}>
-      <g stroke={stroke} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"
-        style={{ filter: `drop-shadow(0 0 12px ${glow})` }}>
-        {/* wheels */}
-        <circle cx={44} cy={72} r={32} />
-        <circle cx={156} cy={72} r={32} />
-        {/* main triangle: seat tube, top tube, down tube */}
-        <path d="M100 72 L82 34" />
-        <path d="M82 34 L138 34" />
-        <path d="M100 72 L136 52" />
-        {/* head tube + fork */}
-        <path d="M138 34 L134 52" />
-        <path d="M134 52 L156 72" />
-        {/* rear triangle: chainstay + seatstay */}
-        <path d="M100 72 L44 72" />
-        <path d="M82 36 L44 72" />
-        {/* saddle + drop bar */}
-        <path d="M72 30 L92 30" />
-        <path d="M132 30 L146 30 Q152 30 152 38 L152 44" />
-        {/* cranks */}
-        <circle cx={100} cy={72} r={7} />
-      </g>
-    </svg>
+    <img src={EXAMPLE_BIKE} alt="" aria-hidden
+      style={{
+        width: '100%', height: '100%', objectFit: 'contain', display: 'block',
+        opacity, filter: 'grayscale(1) brightness(1.6) contrast(0.85)',
+        mixBlendMode: 'screen',
+      }} />
   )
 }
 
@@ -73,7 +66,7 @@ export default function W3BikeHero({ image, name, loading }: W3BikeHeroProps) {
           animate={reduce ? undefined : { opacity: [0.06, 0.14, 0.06] }}
           transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
           style={{ width: '100%', maxWidth: 260, opacity: 0.1 }}>
-          <GhostBike stroke={T.d4} glow="transparent" />
+          <GhostBike opacity={0.16} />
         </motion.div>
       </div>
     )
@@ -109,10 +102,15 @@ export default function W3BikeHero({ image, name, loading }: W3BikeHeroProps) {
       <motion.div
         initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }}
         style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: '0 44px' }}>
-        <div style={{ width: '100%', maxWidth: 260, opacity: 0.26 }}>
-          <GhostBike stroke={T.d4} glow="#FFFFFF14" />
+        <div style={{ width: '100%', maxWidth: 300, opacity: 0.34 }}>
+          <GhostBike />
         </div>
       </motion.div>
+
+      {/* Says what it is. The example only stays honest while it is labelled. */}
+      <span style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', fontSize: 8.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>
+        BEISPIEL
+      </span>
 
       {/* One affordance, dead centre in the frame the bike will fill. */}
       <button
