@@ -94,6 +94,7 @@ export default function W3RideCelebratePage() {
     <W3RideCelebrateView
       vm={vm}
       onClose={() => navigate('/e/w3-today')}
+      onShare={() => id && navigate(`/e/w3-share/${id}`)}
       onFullDetail={() => navigate(`/e/w3-ride/${id}`)}
     />
   )
