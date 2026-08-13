@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { Share2, Settings, Crown, Watch, Activity as ActivityIcon, Zap, HeartPulse } from 'lucide-react'
+import { Share2, Crown, Watch, Activity as ActivityIcon, Zap, HeartPulse } from 'lucide-react'
+import W3NavMenu from './W3NavMenu'
 import { SHOWCASE_RIDER } from './showcaseRider'
 import W3TabBar from './W3TabBar'
 import W3StatusBar from './W3StatusBar'
@@ -44,7 +45,7 @@ export default function W3BikerView({ vm, onBack, onReferral }: { vm: W3BikerVm;
           <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Biker</span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={onBack} aria-label="Share" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>
-            <button aria-label="Settings" style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Settings size={16} color={T.ink} /></button>
+            <W3NavMenu />
           </div>
         </div>
 

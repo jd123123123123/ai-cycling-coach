@@ -6,6 +6,7 @@ import {
 import { T, FONT, grow, band } from './w3tokens'
 import W3TabBar from './W3TabBar'
 import W3StatusBar from './W3StatusBar'
+import W3NavMenu from './W3NavMenu'
 import './w3.css'
 
 /**
@@ -111,12 +112,15 @@ export default function W3WinsView({ vm, onNewChallenge, onEditChallenge }: { vm
         <div style={{ ...band(0), padding: '14px 20px 22px', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
             <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.05, color: T.ink }}>{vm.title}</span>
-            {vm.balance != null && (
-              <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, padding: '8px 13px', borderRadius: 14, background: T.acidDim, marginTop: 2 }}>
-                <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.5, color: T.acid, fontVariantNumeric: 'tabular-nums' }}>{vm.balance}</span>
-                <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 1, color: T.acid, opacity: 0.7 }}>RIDECOIN</span>
-              </div>
-            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flex: 'none' }}>
+              {vm.balance != null && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, padding: '8px 13px', borderRadius: 14, background: T.acidDim, marginTop: 2 }}>
+                  <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.5, color: T.acid, fontVariantNumeric: 'tabular-nums' }}>{vm.balance}</span>
+                  <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 1, color: T.acid, opacity: 0.7 }}>RIDECOIN</span>
+                </div>
+              )}
+              <W3NavMenu />
+            </div>
           </div>
           <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>{vm.subtitle}</span>
         </div>
