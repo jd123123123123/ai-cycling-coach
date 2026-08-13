@@ -84,6 +84,12 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
 
   const heroSegs = vm.gauge.map((on) => ({ h: on ? 18 : 8, on }))
 
+  // Pen `gdFSz` beam annotation: time spent in the work blocks ("AT THRESHOLD")
+  // next to the session total. Summed from the real per-block durations.
+  const parseDur = (s: string) => { const [m, ss] = s.split(':').map(Number); return (m || 0) * 60 + (ss || 0) }
+  const thresholdSec = vm.steps.filter((s) => s.isMain).reduce((a, s) => a + parseDur(s.dur), 0)
+  const thresholdTime = thresholdSec > 0 ? `${Math.floor(thresholdSec / 60)}:${String(thresholdSec % 60).padStart(2, '0')}` : null
+
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
@@ -104,7 +110,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
         <div style={{ ...band(0), paddingTop: 0, marginTop: -62, gap: 14 }}>
           <div style={{ width: '100%', padding: '16px 18px', borderRadius: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.2, lineHeight: 0.95, color: T.ink }}>{vm.funName}</span>
+              <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.2, lineHeight: 0.95, color: T.ink }}>{vm.funName}<span style={{ color: T.acid }}>.</span></span>
               {vm.title && vm.title !== vm.funName && (
                 <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: T.mid }}>{vm.title}</span>
               )}
@@ -156,25 +162,40 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
           </div>
         </div>
 
-        {/* The shape of it — power profile bars (real blocks, or honest envelope) */}
+        {/* The shape of it — the power beam (pen `gdFSz`): tall acid work blocks
+            over shorter grey recovery, an FTP line, and the AT THRESHOLD / TOTAL
+            read under a segmented timeline. */}
         {vm.shapeBars.length > 0 && (
           <div style={{ ...band(28), gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Kicker>The shape of it</Kicker>
               {vm.shapeFtpTag && <span style={{ fontSize: 10, fontWeight: 700, color: T.mid }}>{vm.shapeFtpTag}</span>}
             </div>
-            <div style={{ position: 'relative', height: 106, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+            <div style={{ position: 'relative', height: 132, display: 'flex', gap: 3, alignItems: 'flex-end' }}>
               {vm.shapeBars.map((b, i) => {
-                const h = Math.round(b.w * 106)
+                const h = Math.max(6, Math.round(b.w * 132))
                 return (
                   <motion.div key={i} initial={reduce ? false : { height: 0 }} animate={{ height: h }} transition={grow(i * 0.03)}
-                    style={{ width: b.work ? 45 : 22, flex: b.work ? 'none' : 1, height: h, borderRadius: '3px 3px 0 0', background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : '#FFFFFF2B' }} />
+                    style={{ width: b.work ? 42 : undefined, flex: b.work ? 'none' : 1, height: h, borderRadius: '4px 4px 0 0', background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : '#FFFFFF1F' }} />
                 )
               })}
-              <div style={{ position: 'absolute', top: 13, left: 0, right: 0, height: 1, background: '#FFFFFFA6' }} />
+              {/* FTP line at the work-block ceiling, labelled at the right. */}
+              <div style={{ position: 'absolute', top: 12, left: 0, right: 0, height: 1, borderTop: `1px dashed ${T.d4}` }} />
+              <span style={{ position: 'absolute', top: 0, right: 0, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: T.mid }}>FTP</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              {vm.shapeLabels.map((l, i) => <span key={i} style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.6, color: T.quiet }}>{l}</span>)}
+            {/* Segmented timeline — where the work blocks fall across the ride. */}
+            <div style={{ display: 'flex', gap: 2, height: 6 }}>
+              {vm.shapeBars.map((b, i) => (
+                <div key={i} style={{ flex: b.work ? 2 : 1, height: 6, borderRadius: 100, background: b.work ? T.acid : '#FFFFFF24' }} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: T.acid }}>
+                {thresholdTime ? `${thresholdTime} AT THRESHOLD` : vm.shapeLabels[1]}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: T.quiet }}>
+                {vm.totalTime !== DASH ? `${vm.totalTime} TOTAL` : vm.shapeLabels[2]}
+              </span>
             </div>
           </div>
         )}
