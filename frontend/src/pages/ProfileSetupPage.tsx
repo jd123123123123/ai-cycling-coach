@@ -1,13 +1,16 @@
 import { useState, type FormEvent, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { UserCircle2 } from 'lucide-react'
 import { updateProfile, updateGoals } from '../api/athletes'
+import { ONBOARDING_STATUS_KEY } from '../hooks/useOnboarding'
 import { useLocale } from '../contexts/LocaleContext'
 
 const ACTIVE_STEP = 2
 
 export default function ProfileSetupPage() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const { locale } = useLocale()
 
   // Onboarding flow: Register (Account) → Consent → Profile Setup (Goals)
@@ -82,6 +85,11 @@ export default function ProfileSetupPage() {
       if (Object.keys(goalsData).length > 0) {
         await updateGoals(goalsData)
       }
+
+      // The onboarding verdict is cached now (so it doesn't re-block every
+      // navigation) — this flow is the thing that changes it, so it re-asks.
+      await qc.invalidateQueries({ queryKey: ONBOARDING_STATUS_KEY })
+      await qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
 
       navigate('/dashboard', { replace: true })
     } catch (err: unknown) {

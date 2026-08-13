@@ -5,7 +5,8 @@ import { usePMC } from '../../hooks/usePMC'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
-import W3RideDetailView, { type W3RideVm, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
+import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
+import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
 import W3Loading from './W3Loading'
 
 /**
@@ -199,15 +200,49 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
   }
 }
 
+/** Only the statuses the screen knows how to answer; anything else the backend
+ *  might one day return is treated like "no studio" — the route trace holds the
+ *  cover and nothing is offered. */
+const SCENE_STATUSES: W3SceneStatus[] = ['ok', 'not_generated', 'needs_rider', 'needs_bike', 'image_model_unavailable']
+
 export default function W3RideDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
-  const { data } = useRaceDebrief(id ? Number(id) : undefined)
+  const activityId = id ? Number(id) : undefined
+  const { data } = useRaceDebrief(activityId)
   const { data: pmc } = usePMC()
   const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
   const { data: season } = useActivitiesRange(seasonStart, new Date())
   const activity = useMemo(() => (season?.activities ?? []).find((a) => a.id === Number(id)) ?? null, [season, id])
   const vm = useMemo(() => (data ? toVm(data, pmc, activity, season?.activities ?? []) : null), [data, pmc, activity, season])
+
+  // The composed hero: a cheap cache read on open (it never generates), plus the
+  // slow compose behind an explicit tap. While the read is in flight the View
+  // shows the route trace — instant and real — instead of a spinner.
+  const { data: sceneData } = useRideScene(activityId)
+  const compose = useRenderRideScene()
+  const scene: W3RideSceneState = useMemo(() => {
+    const raw = sceneData?.status
+    const status: W3SceneStatus = raw != null && (SCENE_STATUSES as string[]).includes(raw)
+      ? (raw as W3SceneStatus)
+      : raw != null ? 'image_model_unavailable' : 'loading'
+    return {
+      status: status === 'ok' && !sceneData?.image_base64 ? 'not_generated' : status,
+      image: sceneData?.image_base64 ?? null,
+      pending: compose.isPending,
+      failed: compose.isError,
+    }
+  }, [sceneData, compose.isPending, compose.isError])
+
   if (!vm) return <W3Loading label="Lade deine Fahrt…" />
-  return <W3RideDetailView vm={vm} onBack={() => navigate(-1)} onShare={() => id && navigate(`/e/w3-share/${id}`)} />
+  return (
+    <W3RideDetailView
+      vm={vm}
+      scene={scene}
+      onCompose={() => { if (activityId != null && !compose.isPending) compose.mutate(activityId) }}
+      onOpenStudio={(kind) => navigate(kind === 'rider' ? '/e/w3-avatar-onboard' : '/e/w3-bike-studio')}
+      onBack={() => navigate(-1)}
+      onShare={() => id && navigate(`/e/w3-share/${id}`)}
+    />
+  )
 }

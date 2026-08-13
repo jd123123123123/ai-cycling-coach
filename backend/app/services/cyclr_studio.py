@@ -77,14 +77,39 @@ _ANALYSIS = {
         "stylish protagonist). The hair description must be perfectly accurate to guarantee a 1:1 match."
     ),
     "bike": (
-        "You are an expert prompt engineer and cycling aficionado. Analyze this bicycle and extract "
-        "a highly structured, dense description for a highly accurate 3D model. Detail the: 1. Frame "
-        "(exact geometry, tube shapes, primary/secondary colors). 2. Cockpit (handlebar type, "
-        "tape/grip color). 3. Wheels (rim depth, rim color, tire wall color). 4. Components (saddle "
-        "color, pedals). Be extremely literal. The description must ensure the generated bike "
-        "maintains physically accurate double-triangle geometry and matching colors."
+        "You are an expert prompt engineer and cycling aficionado. Analyze this bicycle. "
+        "FIRST LINE, exactly: 'NAME: <short name>' — the brand and model if you can read them off "
+        "the frame (e.g. 'Specialized Allez'), otherwise a short descriptive name of at most three "
+        "words (e.g. 'Steel Fixie', 'Black Gravel'). Never invent a brand you cannot see. "
+        "THEN, from the second line on, extract a highly structured, dense description for a highly "
+        "accurate 3D model. Detail the: 1. Frame (exact geometry, tube shapes, primary/secondary "
+        "colors). 2. Cockpit (handlebar type, tape/grip color). 3. Wheels (rim depth, rim color, "
+        "tire wall color). 4. Components (saddle color, pedals). Be extremely literal. The "
+        "description must ensure the generated bike maintains physically accurate double-triangle "
+        "geometry and matching colors."
     ),
 }
+
+# The bike collectible's locked camera. Every bike in the garage is shot the
+# same way — drive-side profile, eye level, whole bike in frame — so a rider's
+# bike reads as one consistent collectible next to everyone else's, and so the
+# Today hero can crop it predictably. Without this the model wanders between
+# three-quarter views and crops, and no two renders are comparable.
+BIKE_CAMERA = (
+    "LOCKED CAMERA ANGLE: a strict side-on profile view of the bicycle from its DRIVE SIDE (the "
+    "right-hand side, so the chainring, chain and rear cassette all face the camera), shot at "
+    "eye level with a straight-on, non-perspective framing. The bike faces to the RIGHT of frame. "
+    "Both wheels must be fully visible and perfectly circular (not foreshortened), the whole bike "
+    "centered with clean even padding on all sides, nothing cropped. Do NOT use a three-quarter "
+    "angle, a low hero angle, or a top-down view."
+)
+
+
+# The image model used when `IMAGE_MODEL` isn't set. Nano Banana 2 Lite — the
+# cheap tier, and verified against this file's exact call shape (locked-camera
+# bike prompt, deterministic seed, 1:1). NOTE: the flash models only render at
+# 1K; see `_generate`.
+DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-lite-image"
 
 
 def _seed(s: str) -> int:
@@ -121,12 +146,17 @@ async def analyze_asset(photo_b64: str, kind: str) -> str | None:
     return (resp.text or "").strip() or None
 
 
-async def _generate(prompt: str, seed_src: str, size: str = "2K") -> str | None:
+async def _generate(prompt: str, seed_src: str, size: str = "1K") -> str | None:
+    """Render one image. `size` is 1K by default and MUST stay 1K on the flash
+    models: `gemini-3.1-flash-lite-image` (Nano Banana 2 Lite) rejects 2K with
+    `400 Image size 2K is not supported for this model`, so a 2K default would
+    fail every render. 1K (1024²) is also more than the app ever displays — the
+    Today hero paints at 252 px and the share card at 1080 px wide."""
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    model = getattr(settings, "IMAGE_MODEL", "") or "gemini-3-pro-image"
+    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
     resp = client.models.generate_content(
         model=model,
         contents=[prompt],
@@ -139,8 +169,33 @@ async def _generate(prompt: str, seed_src: str, size: str = "2K") -> str | None:
     for part in resp.candidates[0].content.parts:
         data = getattr(part, "inline_data", None)
         if data and data.data:
-            return "data:image/png;base64," + base64.b64encode(data.data).decode()
+            return _to_data_url(data.data)
     return None
+
+
+def _to_data_url(png: bytes) -> str:
+    """Pack rendered bytes into a data URL, transcoding PNG → WebP first.
+
+    These images are stored inline (garage_assets.image_url, ride_scenes) and
+    ride in JSON on Today's critical path, where base64's 33% inflation lands on
+    top of the file size. A 1K render is ~525 KB as PNG (~700 KB base64) and
+    ~43 KB as WebP q85 (~57 KB base64) — a 12× cut for output that is displayed
+    at 252 px, with no visible loss on flat toy-render shading.
+
+    Pillow is a hard dependency (requirements.txt), but a missing or broken
+    encoder must never cost the rider the bike they just made — we fall back to
+    the original PNG rather than failing the render.
+    """
+    try:
+        import io
+
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.open(io.BytesIO(png)).convert("RGB").save(buf, "WEBP", quality=85, method=6)
+        return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return "data:image/png;base64," + base64.b64encode(png).decode()
 
 
 def _isolated_prompt(description: str, kind: str) -> str:
@@ -154,7 +209,33 @@ def _isolated_prompt(description: str, kind: str) -> str:
             f"tone to the figure while maintaining the toy aesthetic. {DEFAULT_KIT} "
             f"{GENERAL_STYLE} {CHARACTER_STYLE}"
         )
-    return f"An isolated 3D bicycle inspired by this description: [{description}]. {GENERAL_STYLE} {ISOLATED_BIKE_STYLE}"
+    return (
+        f"An isolated 3D bicycle inspired by this description: [{description}]. "
+        f"{BIKE_CAMERA} {GENERAL_STYLE} {ISOLATED_BIKE_STYLE}"
+    )
+
+
+def split_name(description: str | None) -> tuple[str | None, str | None]:
+    """Split a bike analysis into its ``NAME:`` line and the rest.
+
+    The vision pass is asked for `NAME: <short name>` on the first line so the
+    collectible can carry a real name without a second model call. The name is
+    stripped from the description before rendering — it is a label, not a
+    modelling instruction. Older rows (and the rider kind, which is never asked
+    for a name) simply have no NAME line, so this returns `(None, description)`
+    and nothing downstream changes.
+    """
+    if not description:
+        return None, description
+    head, sep, rest = description.partition("\n")
+    if not head.strip().upper().startswith("NAME:"):
+        return None, description
+    # Models decorate: `**"Steel Fixie"**`. Strip quotes and emphasis from both
+    # ends in one pass, in any order they were layered on.
+    name = head.split(":", 1)[1].strip().strip("*\"'“”‘’ ") or None
+    if name and len(name) > 80:
+        name = name[:80].rstrip()
+    return name, (rest.strip() if sep else None) or None
 
 
 async def render_isolated(description: str, kind: str) -> tuple[str | None, str, str]:
@@ -168,12 +249,19 @@ async def render_isolated(description: str, kind: str) -> tuple[str | None, str,
 
 async def render_from_photo(photo_b64: str, kind: str) -> dict[str, Any]:
     """Full asset pipeline: analyse the photo, then render the isolated asset.
-    `kind` ∈ {'rider','bike'}."""
-    description = await analyze_asset(photo_b64, kind)
-    if description is None:
-        return {"description": None, "image": None, "prompt": _isolated_prompt("", kind), "status": "image_model_unavailable"}
+    `kind` ∈ {'rider','bike'}. For a bike the analysis also yields the
+    collectible's `name` (see `split_name`); for a rider `name` is always None."""
+    raw = await analyze_asset(photo_b64, kind)
+    if raw is None:
+        return {"name": None, "description": None, "image": None,
+                "prompt": _isolated_prompt("", kind), "status": "image_model_unavailable"}
+    name, description = split_name(raw) if kind == "bike" else (None, raw)
+    if not description:
+        # The model returned only a name line — nothing to render from.
+        return {"name": name, "description": None, "image": None,
+                "prompt": _isolated_prompt("", kind), "status": "image_model_unavailable"}
     img, prompt, status = await render_isolated(description, kind)
-    return {"description": description, "image": img, "prompt": prompt, "status": status}
+    return {"name": name, "description": description, "image": img, "prompt": prompt, "status": status}
 
 
 def _scene_prompt(rider_desc: str, bike_desc: str, training_context: str) -> str:
@@ -190,8 +278,12 @@ def _scene_prompt(rider_desc: str, bike_desc: str, training_context: str) -> str
         f"(no missing limbs, no clipping into the bike or ground). CRITICAL CAMERA FRAMING: The "
         f"camera angle, lens focal length, height, and framing MUST be 100% identical and static "
         f"across all images. The character and bicycle MUST occupy the exact same scale and "
-        f"proportions in the center of the frame, regardless of the pose. Use a fixed eye-level, "
-        f"straight-on medium-wide shot. Do not crop or zoom in; both wheels, the rider's head, and "
+        f"proportions in the center of the frame, regardless of the pose. Use a fixed eye-level "
+        f"SIDE-ON PROFILE from the bike's DRIVE SIDE (its right-hand side, chainring and cassette "
+        f"facing the camera), with the rider and bike travelling to the RIGHT of frame — the same "
+        f"locked camera the isolated bike collectible uses, so a rider's scenes and their garage "
+        f"bike read as one set. Do not use a three-quarter or front-on angle. "
+        f"Do not crop or zoom in; both wheels, the rider's head, and "
         f"BOTH FEET must be 100% visible with consistent padding around the edges. "
         f"{GENERAL_STYLE} {CHARACTER_STYLE} {BIKE_STYLE}"
     )
@@ -254,7 +346,7 @@ async def compose_rider(
     from google.genai import types
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    model = getattr(settings, "IMAGE_MODEL", "") or "gemini-3-pro-image"
+    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
     resp = client.models.generate_content(
         model=model,
         contents=[prompt, _img_part(self_b64), _img_part(bike_b64), _img_part(helmet_b64)],

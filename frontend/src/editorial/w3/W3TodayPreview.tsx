@@ -1,4 +1,5 @@
 import W3TodayView, { type W3Vm } from './W3TodayView'
+import { STARTER_BIKE } from './starterBike'
 
 /**
  * TEMP preview harness — renders W3TodayView with a pen-faithful fixture so the
@@ -11,7 +12,11 @@ const spark = (bars: number[], hi: string) => ({ bars, hi })
 const FIXTURE: W3Vm = {
   handle: '@jonathan.ghost',
   tierLine: 'Silver Tier · Week 6 of 16',
+  // The preview demos the "rider HAS a bike" hero; the empty state is what a
+  // real rider sees until they render one in the studio.
   bikeName: 'Starter Bike',
+  bikeImage: STARTER_BIKE,
+  bikeLoading: false,
   weekDoneLabel: '4 of 6 done',
   zoneTag: '88% FTP',
   avatarUrl: null,
@@ -33,25 +38,19 @@ const FIXTURE: W3Vm = {
   weekGoal: { name: 'Harz Extrem Marathon · 212 km', right: 'in 8 Wochen', sub: '4. Okt' },
   planWeeks: '12 Wochen',
   weekDays: [
-    { letter: 'M', num: '11', actual: 62, planned: 60, status: 'hit', title: 'Endurance · 2h', dateLabel: 'Mon 11 Aug', weekday: 'Monday', targetW: '205 W', ftpPct: '70%' },
-    { letter: 'T', num: '12', actual: 0, planned: 112, status: 'today', title: '4 × 8 Threshold', dateLabel: 'Tue 12 Aug', weekday: 'Tuesday', targetW: '285 W', ftpPct: '98%' },
-    { letter: 'W', num: '13', actual: 0, planned: 45, status: 'upcoming', title: 'Recovery spin', dateLabel: 'Wed 13 Aug', weekday: 'Wednesday', targetW: '160 W', ftpPct: '55%' },
-    { letter: 'T', num: '14', actual: 0, planned: 95, status: 'upcoming', title: 'VO₂ · 5 × 4', dateLabel: 'Thu 14 Aug', weekday: 'Thursday', targetW: '330 W', ftpPct: '113%' },
-    { letter: 'F', num: '15', actual: 0, planned: null, status: 'upcoming', title: null, dateLabel: 'Fri 15 Aug', weekday: 'Friday', targetW: '—', ftpPct: '—' },
-    { letter: 'S', num: '16', actual: 132, planned: 90, status: 'over', title: 'Group ride', dateLabel: 'Sat 16 Aug', weekday: 'Saturday', targetW: '230 W', ftpPct: '79%' },
-    { letter: 'S', num: '17', actual: 28, planned: 70, status: 'missed', title: 'Tempo · 3 × 10', dateLabel: 'Sun 17 Aug', weekday: 'Sunday', targetW: '250 W', ftpPct: '86%' },
+    { letter: 'M', num: '11', actual: 62, planned: 60, status: 'hit', title: 'Endurance · 2h', dateLabel: 'Mo, 11. Aug.', weekday: 'Montag', targetW: '205 W', ftpPct: '70%', actualDurMin: 118, actualW: 198, actualHr: 132 },
+    { letter: 'D', num: '12', actual: 0, planned: 112, status: 'today', title: '4 × 8 Threshold', dateLabel: 'Di, 12. Aug.', weekday: 'Dienstag', targetW: '285 W', ftpPct: '98%' },
+    { letter: 'M', num: '13', actual: 0, planned: 45, status: 'upcoming', title: 'Recovery spin', dateLabel: 'Mi, 13. Aug.', weekday: 'Mittwoch', targetW: '160 W', ftpPct: '55%' },
+    { letter: 'D', num: '14', actual: 0, planned: 95, status: 'upcoming', title: 'VO₂ · 5 × 4', dateLabel: 'Do, 14. Aug.', weekday: 'Donnerstag', targetW: '330 W', ftpPct: '113%' },
+    { letter: 'F', num: '15', actual: 0, planned: null, status: 'upcoming', title: null, dateLabel: 'Fr, 15. Aug.', weekday: 'Freitag', targetW: '—', ftpPct: '—' },
+    { letter: 'S', num: '16', actual: 132, planned: 90, status: 'over', title: 'Group ride', dateLabel: 'Sa, 16. Aug.', weekday: 'Samstag', targetW: '230 W', ftpPct: '79%', actualDurMin: 194, actualW: 224, actualHr: 148 },
+    { letter: 'S', num: '17', actual: 28, planned: 70, status: 'missed', title: 'Tempo · 3 × 10', dateLabel: 'So, 17. Aug.', weekday: 'Sonntag', targetW: '250 W', ftpPct: '86%' },
   ],
   weather: {
     window: '16:00–18:00', temp: '19°', feels: '17°',
-    hours: [
-      { label: '09:00', q: 0.3 }, { label: '10:00', q: 0.35 }, { label: '11:00', q: 0.4 }, { label: '12:00', q: 0.5 },
-      { label: '13:00', q: 0.55 }, { label: '14:00', q: 0.6 }, { label: '15:00', q: 0.8 }, { label: '16:00', q: 1, peak: true },
-      { label: '17:00', q: 0.95, peak: true }, { label: '18:00', q: 0.7 }, { label: '19:00', q: 0.45 }, { label: '20:00', q: 0.3 },
-    ],
-    meta: 'Bar is ride quality — wind, rain and temperature combined. 8 km/h SW, dry until 21:00, light till 20:41.',
-    routeName: 'Elbe Loop · Nord', routeStats: '48 km · 320 m · 3 ramps', routeTag: 'RIDDEN 6× · BEST MATCH',
-    routeWhy: 'Its three ramps run 8–9 minutes at 4–5% — the exact length of today’s blocks, so you can hold 285 W without traffic breaking the effort.',
-    recordProof: 'Your 288 W record was set on this loop',
+    short: '8 km/h SW · trocken',
+    verdict: 'GO OUTSIDE',
+    meta: 'Bestes 2-Stunden-Fenster aus Wind, Regen und Temperatur.',
   },
   mirror: {
     fitness: [0.5, 0.52, 0.55, 0.5, 0.58, 0.6, 0.62, 0.6, 0.63, 0.66, 0.62, 0.68, 0.7, 0.72, 0.7, 0.73, 0.76, 0.74, 0.78, 0.8, 0.82, 0.8, 0.83, 0.86, 0.84, 0.88, 0.9, 0.92, 0.9, 0.93, 0.96, 0.94, 0.98, 1, 0.98, 0.99, 1, 0.98, 1, 0.99, 1, 0.97],

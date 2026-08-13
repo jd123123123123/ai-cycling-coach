@@ -1,9 +1,11 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike, Star, Asterisk, Share2 } from 'lucide-react'
+import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike, Star, Asterisk, Share2, Plus } from 'lucide-react'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
+import W3Loading from './W3Loading'
+import { GhostBike } from './W3BikeHero'
 
 /**
  * W3 · Bike Studio (the GARAGE tab) — photo of your real bike → a W3:Ride-style
@@ -15,7 +17,7 @@ import W3TabBar from './W3TabBar'
  * a faked photo. Output is a stylised, identity-preserving render, not a mesh.
  */
 
-export type StudioState = 'intro' | 'analyzing' | 'rendering' | 'reveal' | 'error'
+export type StudioState = 'loading' | 'intro' | 'analyzing' | 'rendering' | 'reveal' | 'error'
 
 export interface W3BikeStudioProps {
   state: StudioState
@@ -29,6 +31,11 @@ export interface W3BikeStudioProps {
   onPick: () => void               // open the photo-library / file picker
   onReset: () => void
   onSave: () => void               // download the rendered collectible (image present only)
+  bikeName?: string                // the collectible's real name, from the vision pass
+  /** True only for a bike rendered JUST NOW. The unlock celebration is a
+   *  one-time moment; walking into your own garage must not re-fire confetti
+   *  and "BIKE UNLOCKED" for a bike you've owned for weeks. */
+  celebrate?: boolean
 }
 
 // pastel gradient card grounds keyed off the description, à la w3:browser
@@ -50,11 +57,16 @@ function Card({ children, grad }: { children?: React.ReactNode; grad: string }) 
 export default function W3BikeStudioView(p: W3BikeStudioProps) {
   const reduce = useReducedMotion()
   const grad = GRADIENTS[(p.description?.length ?? 0) % GRADIENTS.length]
+  // Reading the garage — hold the frame with the branded wait, never a blank one.
+  if (p.state === 'loading') return <W3Loading label="Garage wird geöffnet…" />
   const busy = p.state === 'analyzing' || p.state === 'rendering'
   const unavailable = p.state === 'reveal' && (!p.imageUrl || p.renderStatus !== 'ok')
+  // The rider's existing bike, opened from the Garage tab — same layout, but it
+  // reads as "here it is" rather than "make one".
+  const owned = p.state === 'reveal' && !p.celebrate && !!p.imageUrl && p.renderStatus === 'ok'
 
   // ── BIKE UNLOCKED celebration (pen j9jH7) — only with a real render, one page ──
-  if (p.state === 'reveal' && p.imageUrl && p.renderStatus === 'ok') {
+  if (p.celebrate && p.state === 'reveal' && p.imageUrl && p.renderStatus === 'ok') {
     // fixture: rarity + reward chips (the reward economy has no per-unlock grant).
     const rewards: { icon: typeof Star; label: string }[] = [
       { icon: Sparkles, label: '+250' }, { icon: Star, label: '+1.75' }, { icon: Asterisk, label: '+40K' },
@@ -92,7 +104,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, textAlign: 'center' }}>
               <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1, color: T.ink }}>BIKE UNLOCKED</span>
-              <span style={{ fontSize: 15, fontWeight: 500, color: T.mid }}>Dein W3-Collectible · frisch gerendert</span>
+              <span style={{ fontSize: 15, fontWeight: 500, color: T.mid }}>{p.bikeName ?? 'Allez'} · dein W3-Collectible</span>
               <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.4, color: T.quiet, maxWidth: 300 }}>Es steht in deiner Garage. Jede Fahrt, die du loggst, levelt es weiter.</span>
             </div>
 
@@ -135,9 +147,13 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
 
         {/* Header */}
         <div style={{ ...band(20), padding: '4px 20px 18px', gap: 8 }}>
-          <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, lineHeight: 1.05, color: T.ink }}>Bike studio</span>
+          <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, lineHeight: 1.05, color: T.ink }}>
+            {owned ? (p.bikeName ?? 'Your bike') : 'Bike studio'}
+          </span>
           <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>
-            Add a photo of your real bike. We render it as your collectible — same frame, same colours, W3 finish.
+            {owned
+              ? 'In deiner Garage. Jede Fahrt, die du loggst, levelt es weiter.'
+              : 'Add a photo of your real bike. We render it as your collectible — same frame, same colours, W3 finish.'}
           </span>
         </div>
 
@@ -160,14 +176,26 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
               </div>
             )}
 
-            {/* intro: the uploaded photo, or the prompt to add one */}
+            {/* intro: the uploaded photo, or the empty stand — the pen's spotlit
+                ghost bike (QK4WB), the same bike-shaped absence the Today hero
+                shows, so the two screens speak about the empty slot the same way. */}
             {p.state === 'intro' && (
               p.photoUrl
                 ? <img src={p.photoUrl} alt="Your bike" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', color: T.quiet }}>
-                    <Camera size={40} color={T.acid} />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>No bike yet</span>
+                : (
+                  <div style={{ position: 'absolute', inset: 0 }}>
+                    <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(56% 44% at 50% 48%, #FFFFFF12, transparent 70%)' }} />
+                    <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: '0 40px' }}>
+                      <div style={{ width: '100%', opacity: 0.24 }}><GhostBike stroke={T.d4} glow="#FFFFFF14" /></div>
+                    </div>
+                    <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+                      <button onClick={p.onPick} aria-label="Foto deines Bikes hinzufügen"
+                        style={{ width: 62, height: 62, borderRadius: 100, background: T.bg, border: `1px solid ${T.acid}59`, boxShadow: `0 0 30px ${T.acid}26`, display: 'grid', placeItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
+                        <Plus size={26} color={T.acid} strokeWidth={2.6} />
+                      </button>
+                    </div>
                   </div>
+                )
             )}
 
             {/* busy overlay */}
@@ -221,16 +249,29 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
             </button>
           )}
           {p.state === 'reveal' && (
-            <>
-              {p.imageUrl && (
-                <button onClick={p.onSave} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-                  <Download size={19} color={T.bg} strokeWidth={2.5} />Save image
+            // Owning a bike changes what you came here to do: swapping it is
+            // the primary action, saving the image the quiet one.
+            owned ? (
+              <>
+                <button onClick={p.onReset} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+                  <RefreshCw size={18} color={T.bg} strokeWidth={2.5} />Anderes Bike rendern
                 </button>
-              )}
-              <button onClick={p.onReset} style={{ height: 48, borderRadius: 100, border: 0, background: '#FFFFFF0A', color: T.ink, fontFamily: FONT, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center' }}>
-                <RefreshCw size={15} color={T.ink} />{p.imageUrl ? 'Render another' : 'Try another photo'}
-              </button>
-            </>
+                <button onClick={p.onSave} style={{ height: 48, borderRadius: 100, border: 0, background: '#FFFFFF0A', color: T.ink, fontFamily: FONT, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center' }}>
+                  <Download size={15} color={T.ink} />Bild speichern
+                </button>
+              </>
+            ) : (
+              <>
+                {p.imageUrl && (
+                  <button onClick={p.onSave} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+                    <Download size={19} color={T.bg} strokeWidth={2.5} />Save image
+                  </button>
+                )}
+                <button onClick={p.onReset} style={{ height: 48, borderRadius: 100, border: 0, background: '#FFFFFF0A', color: T.ink, fontFamily: FONT, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center' }}>
+                  <RefreshCw size={15} color={T.ink} />{p.imageUrl ? 'Render another' : 'Try another photo'}
+                </button>
+              </>
+            )
           )}
           {p.state === 'error' && (
             <button onClick={p.onReset} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>Try again</button>

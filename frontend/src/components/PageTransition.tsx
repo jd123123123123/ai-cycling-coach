@@ -32,9 +32,16 @@ import type { ReactNode } from 'react'
  * Collapses to a near-instant (60 ms) opacity swap.
  *
  * `initial={false}` suppresses the very first mount so the cold app load
- * doesn't flash-fade — only *subsequent* navigations animate. Lazy routes that
- * suspend show their AppSplash fallback inside the already-faded-in wrapper, so
- * the fallback never double-animates.
+ * doesn't flash-fade — only *subsequent* navigations animate.
+ *
+ * ── The Suspense boundary lives ABOVE this component ──────────────────────
+ * Deliberately: a boundary rendered *inside* the pathname-keyed subtree would
+ * be re-mounted by every navigation, and a freshly mounted boundary always
+ * paints its fallback (React only holds the old UI for a boundary that has
+ * already revealed content). Keeping it above means a lazy route's chunk
+ * downloads while the OUTGOING page is still on screen, and this crossfade only
+ * ever runs between two ready screens — never page → splash → page. See the
+ * long note in App.tsx's AppRoutes.
  */
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const // native-feeling deceleration

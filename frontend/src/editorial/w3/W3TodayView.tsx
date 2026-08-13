@@ -5,9 +5,9 @@ import {
   Bike, Flame, Pencil, CalendarRange,
   Sparkles, Star,
 } from 'lucide-react'
-import { WeekSection, WeatherRoute, MirrorChart, TrainingSection, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
+import { WeekTrainingCard, WeekNavCards, MirrorChart, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
-import { STARTER_BIKE } from './starterBike'
+import W3BikeHero from './W3BikeHero'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryNudge from './W3RecoveryNudge'
@@ -48,7 +48,11 @@ export interface W3Vm {
   tierLine: string
   avatarUrl: string | null
   avatarInitial: string
+  // The rider's digitalised bike (garage). `bikeImage` is null until they've
+  // rendered one — that absence is what the hero's empty state is for.
   bikeName: string
+  bikeImage: string | null
+  bikeLoading: boolean
   streak: number | null
 
   readiness: number | null
@@ -192,7 +196,6 @@ const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirec
 const card = (): CSSProperties => ({ background: T.surface, borderRadius: 24, padding: 20, display: 'flex', flexDirection: 'column', width: '100%' })
 
 export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAdapt }) {
-  const reduce = useReducedMotion()
   const navigate = useNavigate()
   // The week strip and the training card share ONE selection: tapping a day
   // drives which recommendation the card shows. Defaults to today.
@@ -230,31 +233,23 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           </div>
         </div>
 
-        {/* ── Garage band: the current bike + share / edit ── */}
+        {/* ── Garage band: the current bike + edit. The chip names the bike the
+             rider actually has; with an empty garage it says so. ── */}
         <div style={{ padding: '0 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 12px 7px 10px', borderRadius: 100, background: T.surface }}>
-            <Bike size={13} color={T.acid} /><span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: T.ink }}>{vm.bikeName}</span>
+            <Bike size={13} color={vm.bikeImage ? T.acid : T.quiet} />
+            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: vm.bikeImage ? T.ink : T.quiet }}>
+              {vm.bikeImage ? vm.bikeName : 'NO BIKE YET'}
+            </span>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <W3NavIcon to="/e/w3-bike-studio" label="Edit bike"><Pencil size={15} color={T.mid} /></W3NavIcon>
+            <W3NavIcon to="/e/w3-bike-studio" label={vm.bikeImage ? 'Edit bike' : 'Add your bike'}><Pencil size={15} color={T.mid} /></W3NavIcon>
           </div>
         </div>
 
-        {/* ── Bike Hero: the rider's real bike photo, faded into the page ── */}
-        <motion.div
-          initial={reduce ? false : { opacity: 0, scale: 1.04 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.7, ease: EASE }}
-          style={{ position: 'relative', height: 300, background: T.bg, overflow: 'hidden' }}>
-          {/* Ambient acid bloom behind the bike. */}
-          <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', width: 320, height: 150, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}1F, transparent)` }} />
-          {/* Full-bleed bike hero in the background. */}
-          <motion.img
-            src={STARTER_BIKE} alt={vm.bikeName}
-            initial={reduce ? false : { scale: 1.05, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.8, ease: EASE }}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 45%' }} />
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
-        </motion.div>
+        {/* ── Bike Hero: the rider's OWN digitalised bike — or, when the garage
+             slot is empty, the offer to make one. Never a stock stand-in. ── */}
+        <W3BikeHero image={vm.bikeImage} name={vm.bikeName} loading={vm.bikeLoading} />
 
         {/* ── Hero: readiness + charge meter ── */}
         <div style={{ ...band(24), paddingTop: 20, gap: 14 }}>
@@ -297,14 +292,12 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           <SignalCard label="Sleep" sig={vm.sleep} />
         </div>
 
-        {/* ── Deine Woche — block, load strip, and the season goal it feeds ── */}
-        <WeekSection days={vm.weekDays} selected={selDay} onSelect={setSelDay}
+        {/* ── Deine Woche — ONE card: the day selector, the SELECTED day's
+             training (plan / adapt / planned-vs-done), and that day's weather.
+             Tapping a day drives everything below the strip inside the card. ── */}
+        <WeekTrainingCard
+          days={vm.weekDays} selected={selDay} onSelect={setSelDay}
           blockLabel={vm.weekBlockLabel} doneChip={vm.weekDoneChip} loadLabel={vm.weekLoadLabel}
-          goal={vm.weekGoal} planWeeks={vm.planWeeks}
-          onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
-
-        {/* ── Todays Training — the card renders its own header/tag ── */}
-        <TrainingSection
           day={selectedDay}
           session={{
             dur: vm.sessionDur,
@@ -314,17 +307,12 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
             ftpTag: vm.sessionFtpTag,
             earn: vm.sessionEarn,
           }}
+          weather={vm.weather}
           onAdapt={onAdapt} />
 
-        {/* ── Details: weather window + route recommendation. Only meaningful
-             for today (or an upcoming day you can still plan) — a "ride now"
-             recommendation makes no sense for a past day, so it's hidden then. ── */}
-        {(selectedDay.status === 'today' || selectedDay.status === 'upcoming') && (
-          <>
-            <SectionHead title="Details" subtitle="Where and when to ride it" tag={vm.zoneTag} />
-            <WeatherRoute w={vm.weather} />
-          </>
-        )}
+        {/* ── Navigation, not week content: the season goal + the whole plan ── */}
+        <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks}
+          onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
 
         {/* ── Your Current Status: 6-week fitness/fatigue mirror + form ── */}
         <SectionHead title="Your Current Status" subtitle="Earned by training, not bought" tag={vm.zoneTag} />

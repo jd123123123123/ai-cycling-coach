@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { Gauge, Zap, Timer, TrendingUp, Bike, Trophy } from 'lucide-react'
+import { Gauge, Zap, Timer, TrendingUp, Bike, Trophy, ChevronRight } from 'lucide-react'
 import { T, FONT, EASE, grow, band } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -154,47 +154,72 @@ function StatChip({ kind, value, unit }: { kind: keyof typeof STAT; value: strin
   const { Icon } = STAT[kind]
   const dim = value === '—'
   return (
-    <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
-      <Icon size={13} color={dim ? T.quiet : T.mid} strokeWidth={2} />
-      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: dim ? T.quiet : T.ink }}>{value}</span>
-      {unit && !dim && <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{unit}</span>}
+    <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', minWidth: 0, maxWidth: '100%' }}>
+      <Icon size={13} color={dim ? T.quiet : T.mid} strokeWidth={2} style={{ flex: 'none' }} />
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: dim ? T.quiet : T.ink, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
+      {unit && !dim && <span style={{ flex: 'none', fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{unit}</span>}
     </span>
   )
 }
 
+/** One ride card. Two tiers, so nothing ever competes for the same line at 390:
+ *  a head (route thumb · date kicker · title · the acid distance hero) and, under
+ *  a hairline, a full-width three-column stat strip. Every flex child carries
+ *  `minWidth: 0`, so a long title or a four-digit metric truncates instead of
+ *  overrunning the card. The acid distance is the card's only hero. */
 function RideRow({ ride, accent, reduce, index, onOpen }: { ride: W3RideCard; accent: boolean; reduce: boolean | null; index: number; onOpen: () => void }) {
   const tappable = ride.id != null
+  const noKm = ride.km === '—'
+  const stats = [
+    { key: 'speed' as const, value: ride.speed, unit: 'km/h' },
+    { key: 'power' as const, value: ride.power, unit: 'w' },
+    { key: 'time' as const, value: ride.dur, unit: 'h' },
+  ]
   return (
     <motion.button
       onClick={tappable ? onOpen : undefined} disabled={!tappable}
       initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE, delay: index * 0.05 }}
       style={{
-        display: 'flex', gap: 14, alignItems: 'center', width: '100%', textAlign: 'left', fontFamily: FONT,
-        padding: 16, borderRadius: 22, background: T.surface, cursor: tappable ? 'pointer' : 'default',
-        border: `1px solid ${accent ? T.acid + '4D' : T.rule}`,
+        display: 'flex', flexDirection: 'column', gap: 12, width: '100%', minWidth: 0, textAlign: 'left', fontFamily: FONT,
+        padding: 16, borderRadius: 22, overflow: 'hidden', cursor: tappable ? 'pointer' : 'default',
+        background: accent ? `linear-gradient(180deg, #1B1C19, ${T.surface} 62%)` : T.surface,
+        border: `1px solid ${accent ? T.acid + '33' : T.rule}`,
       }}>
-      <RideThumb ride={ride} accent={accent} reduce={reduce} delay={index * 0.05 + 0.1} />
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.15, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ride.title}</span>
-          <span style={{ flex: 'none', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.7, color: T.quiet }}>{ride.dateLabel}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
-          <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: -1.1, lineHeight: 0.9, color: ride.km === '—' ? T.quiet : T.acid }}>{ride.km}</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, paddingBottom: 2 }}>km</span>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
-            <StatChip kind="speed" value={ride.speed} />
-            <StatChip kind="power" value={ride.power} />
-            <StatChip kind="time" value={ride.dur} />
+
+      {/* Head — route trace, identity, and the one hero number */}
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', width: '100%', minWidth: 0 }}>
+        <RideThumb ride={ride} accent={accent} reduce={reduce} delay={index * 0.05 + 0.1} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span style={{ minWidth: 0, fontSize: 9, fontWeight: 700, letterSpacing: 1.4, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ride.dateLabel}</span>
+            {tappable && <ChevronRight size={14} color={T.d2} strokeWidth={2.5} style={{ flex: 'none', marginLeft: 'auto' }} />}
+          </div>
+          <span style={{ minWidth: 0, fontSize: 15.5, fontWeight: 700, letterSpacing: -0.35, lineHeight: 1.15, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ride.title}</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0, whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1.4, lineHeight: 0.92, color: noKm ? T.quiet : T.acid, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{ride.km}</span>
+            {!noKm && <span style={{ flex: 'none', fontSize: 11, fontWeight: 600, color: T.quiet }}>km</span>}
           </div>
         </div>
-        {ride.note && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ width: 5, height: 5, borderRadius: 100, flex: 'none', background: accent ? T.acid : T.mid }} />
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: accent ? T.acid : T.mid }}>{ride.note}</span>
-          </div>
-        )}
       </div>
+
+      <div style={{ height: 1, background: T.rule }} />
+
+      {/* Stat strip — full card width (318 at 390), so the metrics never crowd
+          the hero. Three equal minmax(0,1fr) columns: they cannot overflow. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', alignItems: 'center', minWidth: 0 }}>
+        {stats.map((s, i) => (
+          <div key={s.key} style={{ minWidth: 0, paddingLeft: i === 0 ? 0 : 12, borderLeft: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
+            <StatChip kind={s.key} value={s.value} unit={s.unit} />
+          </div>
+        ))}
+      </div>
+
+      {ride.note && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+          <div style={{ width: 5, height: 5, borderRadius: 100, flex: 'none', background: accent ? T.acid : T.quiet }} />
+          <span style={{ minWidth: 0, fontSize: 11.5, fontWeight: 600, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ride.note}</span>
+        </div>
+      )}
     </motion.button>
   )
 }

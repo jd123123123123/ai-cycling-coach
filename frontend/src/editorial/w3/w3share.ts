@@ -337,10 +337,202 @@ export async function sharePoster(blob: Blob | null, caption: string, filename =
   return 'downloaded'
 }
 
+/**
+ * Last-resort share: no image at all (canvas failed / tainted). Uses the native
+ * sheet with text when it exists, otherwise copies the caption + link. Never
+ * throws; a cancelled sheet counts as shared.
+ */
+export async function shareTextOrCopy(text: string, url?: string): Promise<'shared' | 'copied' | 'failed'> {
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    try {
+      await navigator.share(url ? { title: 'w3.ride', text, url } : { title: 'w3.ride', text })
+      return 'shared'
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return 'shared'
+    }
+  }
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(url ? `${text} ${url}` : text)
+      return 'copied'
+    }
+  } catch { /* ignore */ }
+  return 'failed'
+}
+
 export function downloadPoster(blob: Blob, filename = 'w3-ride.png') {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url; a.download = filename
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * "AVATAR UNLOCKED" card — the reveal, as a postable 3:4 bitmap.
+ *
+ * Same renderer discipline as the ride poster above: one canvas, one bitmap,
+ * shared through the SAME `sharePoster` plumbing (native sheet → PNG download →
+ * copied caption). What's shared is the CARD (rider + @handle + role/LVL + the
+ * headline stat), never the raw avatar file. The avatar is a data: URL, so the
+ * canvas stays clean — but `crossOrigin` is set defensively and a tainted or
+ * missing image just drops the portrait instead of failing the export.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const AW = 1080
+const AH = 1440
+const ACID = '#C8FF00'
+
+export interface AvatarCardData {
+  avatarUrl: string | null
+  avatarInitial: string
+  handle: string
+  role: string
+  level: number
+  /** "4.812 km — 12 % um die Erde" — the one stat that carries the card. */
+  headline: string
+  stats: [PosterStat, PosterStat, PosterStat]
+  footer: string
+}
+
+function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avatar: HTMLImageElement | null) {
+  const coverH = 760
+  const px = 64
+
+  // ── ground ──
+  ctx.fillStyle = '#0B0B0B'; ctx.fillRect(0, 0, AW, AH)
+
+  // ── cover: the acid bloom + the rider ──
+  ctx.fillStyle = '#141414'; ctx.fillRect(0, 0, AW, coverH)
+  const halo = ctx.createRadialGradient(AW / 2, 250, 0, AW / 2, 250, 540)
+  halo.addColorStop(0, 'rgba(200,255,0,0.20)'); halo.addColorStop(1, 'rgba(200,255,0,0)')
+  ctx.fillStyle = halo; ctx.fillRect(0, 0, AW, coverH)
+
+  if (avatar && avatar.width > 0 && avatar.height > 0) {
+    // object-fit: cover, object-position: center 18% — same crop as the reveal.
+    const scale = Math.max(AW / avatar.width, coverH / avatar.height)
+    const dw = avatar.width * scale, dh = avatar.height * scale
+    ctx.drawImage(avatar, (AW - dw) / 2, -(dh - coverH) * 0.18, dw, dh)
+  } else {
+    ctx.save()
+    ctx.beginPath(); ctx.arc(AW / 2, coverH / 2 - 30, 168, 0, Math.PI * 2); ctx.closePath()
+    ctx.fillStyle = '#202020'; ctx.fill()
+    ctx.restore()
+    text(ctx, d.avatarInitial, AW / 2, coverH / 2 + 30, 150, '700', '#6E7379', 0, 'center')
+  }
+
+  // confetti — the reveal's falling ribbons, frozen
+  const CONF = ['#C8FF00', '#7B5CFF', '#00E5FF', '#FFB020', '#C8FF00', '#7B5CFF']
+  CONF.forEach((c, i) => {
+    ctx.save()
+    ctx.translate(AW * (0.12 + i * 0.14), 70 + ((i * 97) % 260))
+    ctx.rotate((i % 2 ? 0.5 : -0.35))
+    ctx.fillStyle = c
+    roundRect(ctx, -8, -18, 16, 36, 5); ctx.fill()
+    ctx.restore()
+  })
+
+  // cover → panel fade
+  const fade = ctx.createLinearGradient(0, coverH - 330, 0, coverH)
+  fade.addColorStop(0, 'rgba(11,11,11,0)'); fade.addColorStop(1, '#0B0B0B')
+  ctx.fillStyle = fade; ctx.fillRect(0, coverH - 330, AW, 330)
+
+  // ── acid "AVATAR UNLOCKED" pill, straddling the seam ──
+  const pillLabel = 'AVATAR UNLOCKED'
+  ctx.font = `700 28px ${FONT}`
+  const labelW = ctx.measureText(pillLabel).width + 3 * (pillLabel.length - 1)
+  const pillW = labelW + 122, pillH = 72, pillX = (AW - pillW) / 2, pillY = coverH - 40
+  ctx.save()
+  ctx.shadowColor = 'rgba(200,255,0,0.55)'; ctx.shadowBlur = 44
+  roundRect(ctx, pillX, pillY, pillW, pillH, pillH / 2)
+  ctx.fillStyle = ACID; ctx.fill()
+  ctx.restore()
+  star(ctx, pillX + 44, pillY + pillH / 2, 15, '#121212')
+  text(ctx, pillLabel, pillX + 74, pillY + pillH / 2 + 10, 28, '700', '#121212', 3)
+
+  // ── handle chip + LVL badge (the reveal's identity row) ──
+  const rowY = pillY + pillH + 86
+  const av = 116
+  ctx.save()
+  ctx.beginPath(); ctx.arc(px + av / 2, rowY, av / 2, 0, Math.PI * 2); ctx.closePath()
+  ctx.fillStyle = '#202020'; ctx.fill(); ctx.clip()
+  if (avatar && avatar.width > 0) {
+    const s = Math.max(av / avatar.width, av / avatar.height)
+    ctx.drawImage(avatar, px + av / 2 - (avatar.width * s) / 2, rowY - (avatar.height * s) / 2, avatar.width * s, avatar.height * s)
+  } else {
+    text(ctx, d.avatarInitial, px + av / 2, rowY + 16, 46, '700', '#9BA0A6', 0, 'center')
+  }
+  ctx.restore()
+  ctx.save()
+  ctx.beginPath(); ctx.arc(px + av / 2, rowY, av / 2 - 3, 0, Math.PI * 2)
+  ctx.strokeStyle = ACID; ctx.lineWidth = 6; ctx.stroke()
+  ctx.restore()
+  text(ctx, d.handle, px + av + 30, rowY - 4, 44, '700', '#FFFFFF')
+  text(ctx, d.role, px + av + 30, rowY + 44, 30, '600', '#9BA0A6')
+
+  const lvl = `LVL ${d.level}`
+  ctx.font = `800 32px ${FONT}`
+  const lvlW = ctx.measureText(lvl).width + 60
+  roundRect(ctx, AW - px - lvlW, rowY - 32, lvlW, 64, 32)
+  ctx.fillStyle = ACID; ctx.fill()
+  text(ctx, lvl, AW - px - lvlW / 2, rowY + 11, 32, '800', '#121212', 0, 'center')
+
+  // ── headline stat ──
+  let y = rowY + 120
+  if (d.headline) {
+    for (const line of wrap(ctx, d.headline, 42, '600', AW - px * 2).slice(0, 2)) {
+      text(ctx, line, px, y, 42, '600', 'rgba(255,255,255,0.86)')
+      y += 56
+    }
+    y += 22
+  }
+
+  // ── three stat tiles (TOTAL DISTANCE / TOTAL RIDES / SADDLE TIME) ──
+  const gap = 20, tileW = (AW - px * 2 - gap * 2) / 3, tileH = 186
+  const tileY = Math.min(Math.max(y, coverH + 330), AH - tileH - 130)
+  d.stats.forEach((s, i) => {
+    const x = px + i * (tileW + gap)
+    ctx.save()
+    roundRect(ctx, x, tileY, tileW, tileH, 26)
+    ctx.fillStyle = '#161616'; ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 2; ctx.stroke()
+    ctx.restore()
+    text(ctx, s.l, x + 28, tileY + 52, 22, '700', 'rgba(255,255,255,0.45)', 1)
+    text(ctx, s.v, x + 28, tileY + 128, 46, '700', s.v === '—' ? '#6E7379' : '#FFFFFF')
+  })
+
+  // ── footer ──
+  const fy = AH - 72
+  if (d.footer) text(ctx, d.footer, px, fy, 26, '600', 'rgba(255,255,255,0.55)')
+  star(ctx, AW - px - 150, fy - 8, 12, ACID)
+  text(ctx, 'w3.ride', AW - px - 128, fy, 28, '700', '#FFFFFF')
+}
+
+/** Render the "AVATAR UNLOCKED" card. Never throws: a missing or tainting
+ *  avatar simply drops the portrait so the export still succeeds. */
+export async function renderAvatarCard(d: AvatarCardData): Promise<{ blob: Blob | null; dataUrl: string }> {
+  const canvas = document.createElement('canvas')
+  canvas.width = AW; canvas.height = AH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return { blob: null, dataUrl: '' }
+
+  // data: URLs are same-origin, but crossOrigin is set defensively in case the
+  // avatar is ever served from storage.
+  let avatar: HTMLImageElement | null = d.avatarUrl ? await loadImage(d.avatarUrl, 'anonymous').catch(() => null) : null
+
+  const tryExport = async (): Promise<{ blob: Blob | null; dataUrl: string } | 'tainted'> => {
+    ctx.clearRect(0, 0, AW, AH)
+    paintAvatarCard(ctx, d, avatar)
+    try {
+      const dataUrl = canvas.toDataURL('image/png')
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+      return { blob, dataUrl }
+    } catch {
+      return 'tainted'
+    }
+  }
+
+  let out = await tryExport()
+  if (out === 'tainted') { avatar = null; out = await tryExport() }
+  return out === 'tainted' ? { blob: null, dataUrl: '' } : out
 }

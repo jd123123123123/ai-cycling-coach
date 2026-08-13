@@ -1,24 +1,23 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { apiClient } from '../../api/client'
+import { useGarage, useRenderAsset } from '../../hooks/useGarage'
 import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
 
 /**
  * W3 · Bike Studio, wired live. Route /e/w3-bike-studio (the GARAGE tab).
  *
  * Add a bike photo → `POST /garage/asset/render` (kind:'bike'). The vision
- * `description` is real; the render image is present only when the server has an
- * image model provisioned (see backend `services/cyclr_studio.py`) — otherwise
- * `status !== 'ok'` and the view shows an honest "studio unavailable" state, not
- * a faked image. The photo is read to a downscaled base64 data URL client-side.
+ * `description` and `name` are real; the render image is present only when the
+ * server has an image model provisioned (see backend `services/cyclr_studio.py`)
+ * — otherwise `status !== 'ok'` and the view shows an honest "studio
+ * unavailable" state, not a faked image. The photo is read to a downscaled
+ * base64 data URL client-side.
+ *
+ * A successful render is KEPT: it becomes the rider's garage bike server-side,
+ * which is what the Today hero and the ride hero read. Opening the studio with
+ * a bike already in the garage shows that bike rather than an empty camera
+ * frame — the garage is a place you visit, not just a one-shot flow.
  */
-
-interface AssetRenderResponse {
-  description: string | null
-  prompt: string
-  image_base64: string | null
-  status: string
-}
 
 // Downscale the photo before upload — keeps the request small and the vision
 // call fast; the model needs shape/colour, not megapixels.
@@ -45,17 +44,41 @@ function fileToDownscaledDataUrl(file: File, max = 1024): Promise<string> {
 export default function W3BikeStudioPage() {
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
+  const { data: garage, isLoading: garageLoading } = useGarage()
+  const render = useRenderAsset()
   const [state, setState] = useState<StudioState>('intro')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [description, setDescription] = useState<string | null>(null)
+  const [name, setName] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [renderStatus, setRenderStatus] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The unlock celebration belongs to a bike made just now, never to the one
+  // already sitting in the garage.
+  const [celebrate, setCelebrate] = useState(false)
+
+  // Show the bike the rider already owns — ONCE, when the garage first resolves.
+  // Not on every render pass: "Anderes Bike rendern" returns to the camera
+  // frame, and re-hydrating there would bounce them straight back to the bike
+  // they were trying to replace.
+  const stored = garage?.bike ?? null
+  const hydrated = useRef(false)
+  useEffect(() => {
+    if (hydrated.current || !stored?.image_base64) return
+    hydrated.current = true
+    setImageUrl(stored.image_base64)
+    setDescription(stored.description)
+    setName(stored.name)
+    setRenderStatus('ok')
+    setCelebrate(false)
+    setState('reveal')
+  }, [stored])
 
   const reset = useCallback(() => {
-    setState('intro'); setPhotoUrl(null); setDescription(null); setImageUrl(null)
-    setRenderStatus(null); setPrompt(null); setError(null)
+    setState('intro'); setPhotoUrl(null); setDescription(null); setName(null)
+    setImageUrl(null); setRenderStatus(null); setPrompt(null); setError(null)
+    setCelebrate(false)
   }, [])
 
   const onFile = useCallback(async (file: File) => {
@@ -63,30 +86,33 @@ export default function W3BikeStudioPage() {
       const dataUrl = await fileToDownscaledDataUrl(file)
       setPhotoUrl(dataUrl)
       setState('analyzing')
-      const res = await apiClient.post<AssetRenderResponse>('/garage/asset/render', {
-        photo_base64: dataUrl, kind: 'bike',
-      })
-      setDescription(res.data.description)
-      setPrompt(res.data.prompt)
+      const result = await render.mutateAsync({ kind: 'bike', photoBase64: dataUrl })
+      setDescription(result.description)
+      setName(result.name)
+      setPrompt(result.prompt)
       setState('rendering')
       // the server does both stages in one call; the 'rendering' beat is just
       // the reveal choreography for the description before the image lands.
-      setImageUrl(res.data.image_base64)
-      setRenderStatus(res.data.status)
+      setImageUrl(result.image_base64)
+      setRenderStatus(result.status)
+      setCelebrate(true)
       setTimeout(() => setState('reveal'), 500)
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setError(detail ?? 'Couldn’t render this photo. Try another shot of the whole bike.')
       setState('error')
     }
-  }, [])
+  }, [render])
 
-  // Save = download the rendered collectible (a real data-URL PNG) to the device.
+  // Save = download the rendered collectible to the device. The extension is
+  // read off the data URL's own mime (renders are WebP; PNG is the fallback),
+  // so the saved file isn't mislabelled and refused by the OS previewer.
   const onSave = useCallback(() => {
     if (!imageUrl) return
+    const ext = /^data:image\/([a-z]+)/.exec(imageUrl)?.[1] ?? 'png'
     const a = document.createElement('a')
     a.href = imageUrl
-    a.download = 'w3-bike-collectible.png'
+    a.download = `w3-bike-collectible.${ext}`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -99,10 +125,14 @@ export default function W3BikeStudioPage() {
       <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = '' }} />
       <W3BikeStudioView
-        state={state} photoUrl={photoUrl} description={description} imageUrl={imageUrl}
+        state={garageLoading && state === 'intro' ? 'loading' : state}
+        photoUrl={photoUrl} description={description} imageUrl={imageUrl} bikeName={name ?? undefined}
         renderStatus={renderStatus} prompt={prompt} error={error}
-        onBack={() => navigate(-1)}
+        // The reveal's primary action lands on Today, where the bike they just
+        // made is now the hero — the payoff, not a dead-end back-stack pop.
+        onBack={() => navigate('/e/w3-today')}
         onPick={() => fileRef.current?.click()}
+        celebrate={celebrate}
         onReset={reset}
         onSave={onSave} />
     </>

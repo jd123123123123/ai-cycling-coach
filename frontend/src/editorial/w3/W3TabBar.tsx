@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Activity, Route as RouteIcon, Bike, Trophy, UserRound } from 'lucide-react'
 import { T, FONT } from './w3tokens'
+import { scheduleW3TabPrefetch } from './w3TabChunks'
 
 /**
  * The shared W3 bottom navigation. One source of truth for the 5-tab bar, so
@@ -11,6 +13,18 @@ import { T, FONT } from './w3tokens'
  *
  * W3 style: glassy blurred bar, acid active tab lifted in an acid-tinted pill
  * with a soft glow, quiet inactive tabs, the home indicator.
+ *
+ * ── Making the tabs instant ───────────────────────────────────────────────
+ * 1. On mount we queue an idle-time warm-up of all five destination chunks
+ *    (`scheduleW3TabPrefetch`). Idle rather than hover/touchstart because this
+ *    is a 390px touch UI: there is no hover, and touchstart→click is ~0 ms, so
+ *    an intent-triggered prefetch would arrive far too late to help. The bar
+ *    only renders inside the W3 shell, so nobody outside it pays the bytes, and
+ *    the loaders stay dynamic imports — the entry bundle is untouched.
+ * 2. Because App's Suspense boundary now holds the OUTGOING screen while a cold
+ *    chunk loads, a tap on a not-yet-warm tab would otherwise look like nothing
+ *    happened for as long as the download takes. `pending` lights the acid pill
+ *    on the tapped tab immediately, so the bar always answers the touch.
  */
 
 const TABS: { key: string; label: string; icon: typeof Activity; route: string }[] = [
@@ -39,9 +53,20 @@ export default function W3TabBar() {
     ?? related.find(([re]) => re.test(p))?.[1]
     ?? 'today'
 
-  const go = (route: string) => {
+  // Warm the five destination chunks once the current screen has settled.
+  useEffect(() => scheduleW3TabPrefetch(), [])
+
+  // Optimistic active tab: the pill moves on tap, not on arrival. We remember
+  // the path we were LEAVING, so the guess expires by derivation the moment the
+  // location actually changes — no effect, no setState-after-render.
+  const [pending, setPending] = useState<{ from: string; key: string } | null>(null)
+  const shownKey = pending && pending.from === p ? pending.key : activeKey
+
+  const go = (key: string, route: string) => {
     // GARAGE (bike-studio) has a preview; map others to their -preview twin in preview mode.
     const path = preview ? `/e/${route}-preview` : `/e/${route}`
+    if (path === p) return
+    setPending({ from: p, key })
     nav(path)
   }
 
@@ -55,10 +80,10 @@ export default function W3TabBar() {
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: 390, maxWidth: '100%', height: 'calc(92px + env(safe-area-inset-bottom))', padding: '10px 14px calc(0px + env(safe-area-inset-bottom))', background: '#0B0B0BF2', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', borderTop: `1px solid ${T.rule}`, fontFamily: FONT, zIndex: 50 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch' }}>
           {TABS.map(({ key, label, icon: Icon, route }) => {
-            const active = key === activeKey
+            const active = key === shownKey
             const col = active ? T.acid : T.quiet
             return (
-              <button key={key} onClick={() => go(route)} aria-label={label} aria-current={active ? 'page' : undefined}
+              <button key={key} onClick={() => go(key, route)} aria-label={label} aria-current={key === activeKey ? 'page' : undefined}
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', justifyContent: 'center', padding: '8px 0 6px', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, position: 'relative' }}>
                 {active && <div style={{ position: 'absolute', top: 2, width: 46, height: 30, borderRadius: 100, background: T.acidDim, boxShadow: `0 0 18px ${T.acid}33` }} />}
                 <Icon size={21} color={col} style={{ position: 'relative' }} />

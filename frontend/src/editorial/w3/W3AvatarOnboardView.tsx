@@ -1,6 +1,8 @@
+import { useCallback, useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Camera, Sparkles, Mountain, Users, Trophy, ArrowRight, ArrowLeft, Bike, Loader2, Route as RouteIcon, Timer, Plus, BadgeCheck, Gauge, Flame } from 'lucide-react'
-import { T, FONT, EASE, band } from './w3tokens'
+import { Camera, Sparkles, Mountain, Users, Trophy, ArrowRight, ArrowLeft, Bike, Loader2, Route as RouteIcon, Timer, Plus, BadgeCheck, Gauge, Flame, Share2 } from 'lucide-react'
+import { T, FONT, EASE, DASH, band } from './w3tokens'
+import { renderAvatarCard, sharePoster, shareTextOrCopy } from './w3share'
 import './w3.css'
 
 /**
@@ -11,6 +13,12 @@ import './w3.css'
  * stats, a real LEVEL (everyone starts at 1, grows with lifetime riding) with
  * its progress bar, a ShareCard-style handle chip, and dopamine insight tiles
  * that contextualise the raw numbers ("≈ 7× Mount Everest", "12% um die Erde").
+ *
+ * The reveal is shareable: the CARD (rider + @handle + role/LVL + the headline
+ * stat) is composed on a canvas by `w3share.renderAvatarCard` and handed to the
+ * same share plumbing the ride poster uses — native sheet with the PNG file,
+ * else a PNG download, else a copied link. The bitmap is rendered ahead of the
+ * tap so `navigator.share` still runs inside the user gesture (Safari).
  */
 
 export type AvatarStage = 'intro' | 'generating' | 'revealed'
@@ -58,6 +66,69 @@ const INSIGHT_META: Record<InsightKey, { icon: typeof Mountain; hue: string }> =
 
 export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', reveal, onPick, onSkip, onTake }: W3AvatarOnboardProps) {
   const reduce = useReducedMotion()
+
+  // ── Shareable reveal card ──
+  // Every dep is a primitive so callers can pass an inline `reveal` literal
+  // without re-triggering the render on every commit.
+  const revealed = stage === 'revealed' && !!reveal
+  const rAvatar = reveal?.avatarUrl ?? null
+  const rHandle = reveal?.handle ?? ''
+  const rRole = reveal?.role ?? ''
+  const rLevel = reveal?.level ?? 1
+  const rHeadline = reveal?.headline ?? ''
+  const rDistance = reveal?.primary.totalDistance ?? DASH
+  const rRides = reveal?.primary.totalRides ?? DASH
+  const rSaddle = reveal?.primary.saddleTime ?? DASH
+  const rSync = reveal?.syncNote ?? ''
+  // The rendered bitmap is stamped with the payload it was drawn from, so
+  // "ready" is derived — no state reset inside the effect.
+  // (the avatar is a fat data: URL — key off its length + tail, not the bytes)
+  const avatarKey = rAvatar ? `${rAvatar.length}:${rAvatar.slice(-24)}` : ''
+  const cardKey = [avatarKey, rHandle, rRole, rLevel, rHeadline, rDistance, rRides, rSaddle, rSync].join('|')
+  const [card, setCard] = useState<{ key: string; blob: Blob | null } | null>(null)
+  const [shareNote, setShareNote] = useState<string | null>(null)
+  const cardReady = revealed && card?.key === cardKey
+  const cardBlob = cardReady ? card.blob : null
+
+  useEffect(() => {
+    if (!revealed) return
+    let alive = true
+    renderAvatarCard({
+      avatarUrl: rAvatar,
+      avatarInitial: rHandle.replace('@', '').charAt(0).toUpperCase() || '?',
+      handle: rHandle || '@rider',
+      role: rRole,
+      level: rLevel,
+      headline: rHeadline,
+      stats: [
+        { v: rDistance, l: 'TOTAL DISTANCE' },
+        { v: rRides, l: 'TOTAL RIDES' },
+        { v: rSaddle, l: 'SADDLE TIME' },
+      ],
+      footer: rSync,
+    })
+      .then((out) => { if (alive) setCard({ key: cardKey, blob: out.blob }) })
+      .catch(() => { if (alive) setCard({ key: cardKey, blob: null }) })
+    return () => { alive = false }
+  }, [revealed, cardKey, rAvatar, rHandle, rRole, rLevel, rHeadline, rDistance, rRides, rSaddle, rSync])
+
+  const onShareCard = useCallback(() => {
+    const who = rHandle || '@rider'
+    const caption = [`${who} · LVL ${rLevel}${rRole ? ` ${rRole}` : ''}`, rHeadline, '#w3ride'].filter(Boolean).join(' — ')
+    setShareNote(null)
+    if (cardBlob) {
+      // Native sheet with the PNG → else download + copied caption.
+      void sharePoster(cardBlob, caption, 'w3-avatar.png').then((how) => {
+        setShareNote(how === 'downloaded' ? 'Karte gespeichert · Text kopiert' : null)
+      })
+      return
+    }
+    // No bitmap at all (canvas unavailable) → text/link only.
+    const link = typeof window !== 'undefined' ? window.location.origin : undefined
+    void shareTextOrCopy(caption, link).then((how) => {
+      setShareNote(how === 'copied' ? 'Link kopiert' : how === 'failed' ? 'Teilen geht hier nicht' : null)
+    })
+  }, [cardBlob, rHandle, rRole, rLevel, rHeadline])
 
   // ── Reveal: "AVATAR UNLOCKED" ──
   if (stage === 'revealed' && reveal) {
@@ -150,9 +221,17 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
               })}
             </div>
 
-            <button onClick={onTake} style={{ width: '100%', height: 52, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 2 }}>
-              Take it<ArrowRight size={18} color="#0B0B0B" />
-            </button>
+            <div style={{ width: '100%', display: 'flex', gap: 8, marginTop: 2 }}>
+              <button onClick={onTake} style={{ flex: 1, height: 52, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+                Take it<ArrowRight size={18} color="#0B0B0B" />
+              </button>
+              <button onClick={onShareCard} disabled={!cardReady} aria-label="Karte teilen"
+                style={{ flex: 'none', height: 52, padding: '0 18px', borderRadius: 100, background: T.surface2, border: `1px solid ${T.stroke}`, color: T.ink, fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: cardReady ? 'pointer' : 'default', opacity: cardReady ? 1 : 0.55, display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
+                {cardReady ? <Share2 size={17} color={T.acid} /> : <Loader2 size={17} color={T.quiet} className="w3-spin" />}
+                Teilen
+              </button>
+            </div>
+            {shareNote && <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{shareNote}</span>}
 
             {r.syncNote && (
               <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>

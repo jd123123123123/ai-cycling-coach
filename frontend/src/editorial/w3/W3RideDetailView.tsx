@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { useState } from 'react'
-import { Share2, Zap, Timer, Gauge, HeartPulse, type LucideIcon } from 'lucide-react'
+import { useState, type CSSProperties } from 'react'
+import { Share2, Zap, Timer, Gauge, HeartPulse, Sparkles, ChevronRight, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
@@ -43,6 +43,43 @@ export interface W3RideVm {
   onYouDelta: string; ceilingLabel: string; ceilingBefore: string; ceilingAfter: string
   fitness: string; fitnessD: string; fatigue: string; fatigueD: string; form: string; formD: string
   changesBody: string
+}
+
+/**
+ * The composed hero for this ride — the rider's own avatar, on their own bike,
+ * in a scene built from this ride's terrain. Read-only state: the View never
+ * fetches or renders anything, `W3RideDetailPage` owns the calls.
+ *
+ * `loading` covers the cache read still being in flight (and any read error):
+ * the route trace is instant and real, so it stands in rather than a spinner.
+ */
+export type W3SceneStatus =
+  | 'loading'
+  | 'ok'                       // `image` is a data URI, ready to be the cover
+  | 'not_generated'            // rider + bike exist — composing is one tap away
+  | 'needs_rider'              // send them to the avatar studio first
+  | 'needs_bike'               // send them to the bike studio first
+  | 'image_model_unavailable'  // no image model server-side; offer nothing
+
+export interface W3RideSceneState {
+  status: W3SceneStatus
+  image: string | null   // data:image/png;base64,… — only ever set with 'ok'
+  pending: boolean       // the compose call is in flight (it can take ~2 min)
+  failed: boolean        // the last explicit compose attempt errored out
+}
+
+/** No scene prop → the cover behaves exactly as it did before: the route trace. */
+const SCENE_IDLE: W3RideSceneState = { status: 'loading', image: null, pending: false, failed: false }
+
+export interface W3RideDetailProps {
+  vm: W3RideVm
+  /** Omitted → the cover stays the route trace, exactly as before. */
+  scene?: W3RideSceneState
+  /** Explicit intent only: this fires the slow, paid image-model call. */
+  onCompose?: () => void
+  onOpenStudio?: (kind: 'rider' | 'bike') => void
+  onBack?: () => void
+  onShare?: () => void
 }
 
 const SectionHead = ({ n, t, s }: { n: string; t: string; s: string }) => (
@@ -89,7 +126,69 @@ const STAT_ICON = (label: string): LucideIcon => {
   return Gauge // load / TSS / everything else
 }
 
-export default function W3RideDetailView({ vm, onBack, onShare }: { vm: W3RideVm; onBack?: () => void; onShare?: () => void }) {
+/** The wait while the scene composes — W3Loading's language (acid bloom,
+ *  spinning arc, the ✱ mark), sized down to live inside the cover. Never a dead
+ *  frame: it says what is being made and roughly how long it takes. */
+function SceneComposing() {
+  const reduce = useReducedMotion()
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, paddingBottom: 46, background: `${T.bg}D9` }}>
+      <div style={{ position: 'relative', width: 56, height: 56, display: 'grid', placeItems: 'center' }}>
+        <motion.div
+          animate={reduce ? undefined : { scale: [1, 1.35, 1], opacity: [0.5, 0.15, 0.5] }}
+          transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ position: 'absolute', width: 56, height: 56, borderRadius: 100, background: T.acid, filter: 'blur(16px)', opacity: 0.4 }} />
+        <motion.svg width={56} height={56} viewBox="0 0 76 76"
+          animate={reduce ? undefined : { rotate: 360 }} transition={{ duration: 1.1, repeat: Infinity, ease: 'linear' }}
+          style={{ position: 'absolute' }}>
+          <circle cx={38} cy={38} r={32} fill="none" stroke={T.rule} strokeWidth={4} />
+          <path d="M38 6 a32 32 0 0 1 32 32" fill="none" stroke={T.acid} strokeWidth={4} strokeLinecap="round" />
+        </motion.svg>
+        <motion.span
+          animate={reduce ? undefined : { scale: [1, 1.08, 1] }}
+          transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ fontSize: 19, fontWeight: 800, color: T.acid, letterSpacing: -1 }}>✱</motion.span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '0 30px', textAlign: 'center' }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>Painting you onto this road…</span>
+        <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>Your rider, your bike, this ride's terrain. Up to two minutes.</span>
+      </div>
+    </div>
+  )
+}
+
+/** The one affordance that composes the scene. Acid on black, top-right of the
+ *  cover so it never fights the hero card overlapping the bottom. */
+const ScenePill = ({ label, onClick }: { label: string; onClick?: () => void }) => (
+  <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px 7px 10px', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT }}>
+    <Sparkles size={12} color={T.bg} />
+    <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase', color: T.bg }}>{label}</span>
+  </button>
+)
+
+/** A quiet line in the cover: what is missing, and the studio that fixes it. */
+function SceneNote({ text, action, onClick }: { text: string; action?: string; onClick?: () => void }) {
+  const box: CSSProperties = {
+    position: 'absolute', top: 48, left: 20, zIndex: 4, maxWidth: 272, textAlign: 'left',
+    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6,
+    padding: '9px 12px', borderRadius: 14, background: '#000000A6', border: 0, fontFamily: FONT,
+  }
+  const body = (
+    <>
+      <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.35, color: T.mid }}>{text}</span>
+      {action && (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase', color: T.acid }}>
+          {action}<ChevronRight size={12} color={T.acid} />
+        </span>
+      )}
+    </>
+  )
+  return onClick
+    ? <button onClick={onClick} style={{ ...box, cursor: 'pointer' }}>{body}</button>
+    : <div style={box}>{body}</div>
+}
+
+export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare }: W3RideDetailProps) {
   const reduce = useReducedMotion()
   const pMax = Math.max(1, ...vm.power)
   const pAvg = vm.power.length ? vm.power.reduce((a, b) => a + b, 0) / vm.power.length : 0
@@ -104,15 +203,33 @@ export default function W3RideDetailView({ vm, onBack, onShare }: { vm: W3RideVm
         <W3TopBar title="Ride detail" onBack={onBack}
           extra={<button onClick={onShare} aria-label="Share" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>} />
 
-        {/* Cover — GENERATED from the GPX route, tinted by the ride's intensity:
-             the route shape glows in the intensity accent, over an intensity-lit
-             wash. Falls back to the ride's power silhouette when there's no GPS. */}
+        {/* Cover — the rider's own avatar on their own bike, in a scene composed
+             from this ride's terrain, when one has been composed. Until then the
+             cover is GENERATED from the GPX route, tinted by the ride's
+             intensity: the route shape glows in the intensity accent, over an
+             intensity-lit wash. Falls back to the ride's power silhouette when
+             there's no GPS. The route trace is instant and real, so it also
+             stands in while the scene is being read or made. */}
         {(() => {
           const acc = intensityColor(vm.intensity)
           const hasRoute = vm.polyline != null && vm.polyline.length > 1
+          const showScene = scene.status === 'ok' && !!scene.image && !scene.pending
+          const canCompose = scene.status === 'not_generated' && !scene.pending
+          const note: { text: string; action?: string; onClick?: () => void } | null = scene.pending ? null
+            : scene.failed ? { text: "That render didn't come through. Your road is still here — give it another go." }
+            : scene.status === 'needs_rider' ? { text: 'Digitalise your rider once, and every ride gets a cover with you in it.', action: 'Create your avatar', onClick: () => onOpenStudio?.('rider') }
+            : scene.status === 'needs_bike' ? { text: 'Put your bike in the garage, and this road gets ridden by the real thing.', action: 'Add your bike', onClick: () => onOpenStudio?.('bike') }
+            : scene.status === 'image_model_unavailable' ? { text: 'The studio is not connected right now. Your route holds the cover.' }
+            : null
           return (
-            <div style={{ height: 210, margin: '8px 0 0', position: 'relative', overflow: 'hidden', background: `radial-gradient(120% 95% at 60% 12%, ${acc}2E, ${T.bg})` }}>
-              {hasRoute ? (
+            <div style={{ height: showScene ? 264 : 210, margin: '8px 0 0', position: 'relative', overflow: 'hidden', background: `radial-gradient(120% 95% at 60% 12%, ${acc}2E, ${T.bg})` }}>
+              {/* The scene is a square render; the cover grows for it so the crop
+                  keeps the rider clear of the scrim and the overlapping card. */}
+              {showScene ? (
+                <motion.img src={scene.image!} alt="You, on your bike, on this ride"
+                  initial={reduce ? false : { opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, ease: EASE }}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 42%' }} />
+              ) : hasRoute ? (
                 <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
                   <defs>
                     <linearGradient id="rdroute" x1="0" y1="0" x2="1" y2="1">
@@ -142,13 +259,19 @@ export default function W3RideDetailView({ vm, onBack, onShare }: { vm: W3RideVm
                   </svg>
                 )
               })() : null}
-              {/* intensity chip */}
-              <div style={{ position: 'absolute', top: 14, left: 20, display: 'flex', gap: 7, alignItems: 'center', padding: '6px 12px 6px 10px', borderRadius: 100, background: '#000000A6' }}>
-                <Zap size={12} color={acc} fill={acc} />
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, color: T.ink }}>{intensityLabel(vm.intensity)}</span>
-                {vm.intensity > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: T.quiet }}>· IF {vm.intensity.toFixed(2)}</span>}
+              {/* intensity chip — stays on top of the scene — and, opposite it,
+                  the single affordance that composes one. */}
+              <div style={{ position: 'absolute', top: 14, left: 20, right: 20, zIndex: 4, display: 'flex', gap: 10, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '6px 12px 6px 10px', borderRadius: 100, background: '#000000A6' }}>
+                  <Zap size={12} color={acc} fill={acc} />
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, color: T.ink }}>{intensityLabel(vm.intensity)}</span>
+                  {vm.intensity > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: T.quiet }}>· IF {vm.intensity.toFixed(2)}</span>}
+                </div>
+                {canCompose && <ScenePill label={scene.failed ? 'Try again' : 'See yourself here'} onClick={onCompose} />}
               </div>
-              <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 96, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
+              {note && <SceneNote {...note} />}
+              {scene.pending && <SceneComposing />}
+              <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 96, zIndex: 2, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
             </div>
           )
         })()}

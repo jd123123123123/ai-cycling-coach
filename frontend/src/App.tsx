@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
 import { CelebrationProvider } from './contexts/CelebrationContext'
 import W3RideCelebrationWatcher from './editorial/w3/W3RideCelebrationWatcher'
+import W3AvatarGate from './editorial/w3/W3AvatarGate'
 import ProtectedRoute from './components/ProtectedRoute'
 import ScrollToTop from './components/ScrollToTop'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -57,6 +58,11 @@ const RouteRehearsalView = lazyWithRetry(() => import('./pages/RouteRehearsalVie
 // EDITORIAL II — a second design system, mounted alongside the first.
 const EditorialTodayPage = lazyWithRetry(() => import('./editorial/pages/TodayPage'))
 const EditorialSessionDetailPage = lazyWithRetry(() => import('./editorial/pages/SessionDetailPage'))
+// The five bottom-tab destinations (today / rides / bike-studio / wins / biker)
+// are also listed in `editorial/w3/w3TabChunks.ts`, which the tab bar uses to
+// warm them on idle. Same module specifier → same emitted chunk → after a
+// prefetch these React.lazy factories resolve straight from the ES module
+// registry with no second request. Keep the two lists in step.
 const W3TodayPage = lazyWithRetry(() => import('./editorial/w3/W3TodayPage'))
 const W3TodayPreview = lazyWithRetry(() => import('./editorial/w3/W3TodayPreview'))
 const W3SessionPage = lazyWithRetry(() => import('./editorial/w3/W3SessionPage'))
@@ -137,18 +143,34 @@ function App() {
 }
 
 // Routed content lives in its own component so it can read the active location
-// (hooks can't run in <App> — that renders <BrowserRouter> itself). Wrapping
-// the Suspense/Routes in <PageTransition> keyed on the pathname gives every
-// navigation a quick, subtle crossfade. ScrollToTop still resets scroll per
-// route, and the CelebrationProvider overlay + all fixed chrome stay OUTSIDE
-// this wrapper (or are position:fixed and untouched by an opacity-only fade).
+// (hooks can't run in <App> — that renders <BrowserRouter> itself).
+// <PageTransition>, keyed on the pathname, gives every navigation a quick,
+// subtle crossfade. ScrollToTop still resets scroll per route, and the
+// CelebrationProvider overlay + all fixed chrome stay OUTSIDE this wrapper (or
+// are position:fixed and untouched by an opacity-only fade).
+//
+// ── Why <Suspense> sits OUTSIDE <PageTransition>, not inside it ────────────
+// It used to wrap only the <Routes>, i.e. it lived INSIDE the pathname-keyed
+// <motion.div>. React's "hold the old screen instead of showing the fallback"
+// behaviour — which react-router v7 already opts us into, since BrowserRouter
+// wraps every location update in startTransition — only applies to a Suspense
+// boundary that is ALREADY MOUNTED and has already revealed content. A boundary
+// that mounts fresh has revealed nothing, so it paints its fallback
+// immediately. Because the key changed on every navigation, every navigation
+// tore down the old boundary and mounted a brand-new one, which is exactly why
+// tapping a tab flashed <AppSplash> even between two already-visited screens.
+// Hoisting the boundary above the key makes it stable for the app's lifetime:
+// React now keeps the outgoing screen on-screen until the incoming chunk has
+// arrived, and the crossfade runs on ready content. The splash is left with the
+// only job it was written for — the cold first paint.
 function AppRoutes() {
   const location = useLocation()
   return (
     <>
     <W3RideCelebrationWatcher />
-    <PageTransition routeKey={location.pathname}>
-      <Suspense fallback={<AppSplash />}>
+    <W3AvatarGate />
+    <Suspense fallback={<AppSplash />}>
+      <PageTransition routeKey={location.pathname}>
         <Routes location={location}>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -438,8 +460,8 @@ function AppRoutes() {
           {/* Catch-all: redirect unknown paths to dashboard (ProtectedRoute handles auth check) */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-      </Suspense>
-    </PageTransition>
+      </PageTransition>
+    </Suspense>
     </>
   )
 }

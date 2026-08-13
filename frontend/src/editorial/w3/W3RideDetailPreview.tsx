@@ -1,4 +1,5 @@
-import W3RideDetailView, { type W3RideVm } from './W3RideDetailView'
+import { useState } from 'react'
+import W3RideDetailView, { type W3RideVm, type W3RideSceneState } from './W3RideDetailView'
 
 /** TEMP preview — pen-exact fixture, no backend. /e/w3-ride-preview is
  *  unguarded; remove before merge. */
@@ -68,5 +69,22 @@ const FIXTURE: W3RideVm = {
 }
 
 export default function W3RideDetailPreview() {
-  return <W3RideDetailView vm={FIXTURE} onBack={() => history.back()} />
+  // The cover demos the offer state: the rider has both a figure and a bike, so
+  // composing is one tap away. Tapping it plays the real waiting choreography —
+  // and, since a preview has no backend behind it, lands honestly on the failed
+  // state rather than pretending an image arrived.
+  const [scene, setScene] = useState<W3RideSceneState>({ status: 'not_generated', image: null, pending: false, failed: false })
+  const compose = () => {
+    setScene({ status: 'not_generated', image: null, pending: true, failed: false })
+    setTimeout(() => setScene({ status: 'not_generated', image: null, pending: false, failed: true }), 2600)
+  }
+  return (
+    <W3RideDetailView
+      vm={FIXTURE}
+      scene={scene}
+      onCompose={compose}
+      onOpenStudio={(kind) => console.log('studio', kind)}
+      onBack={() => history.back()}
+    />
+  )
 }

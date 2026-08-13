@@ -5,12 +5,13 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
 import { useStreak } from '../../hooks/useStreak'
+import { useGarage } from '../../hooks/useGarage'
 import { useCrewStandings } from '../../hooks/useCrew'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
-import { parseISO, fmtDEShort } from './w3plan'
+import { parseISO, fmtDEShort, DE_WD2 } from './w3plan'
 import { useTodayWeather, type TodayWeather } from '../../hooks/useTodayWeather'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { isPresent, type Value } from '../data/value'
@@ -32,10 +33,12 @@ type SignalValue = { value: number; delta: number | null }
  * Honesty contract (mirrors the rest of the editorial system): the real
  * coaching metrics — readiness, HRV/RHR/sleep, the week strip, the session,
  * fitness/fatigue/form — resolve to a value or `null` (the View renders "—").
- * The reward-economy layer (earn rate, Power/Cycle balances, the Garage
- * upgrade, the crew standings) has no backend yet, so those fields are DESIGN
- * FIXTURES reproducing the pen; each is marked `fixture:` below and is the
- * seam the `2026-08-11-garage-composable-figures` spec will wire.
+ * The bike hero is real too: `useGarage()` returns the collectible the rider
+ * actually rendered in the studio, or null, and the View shows the offer to
+ * make one rather than a stock stand-in.
+ * What remains of the reward-economy layer (earn rate, Power/Cycle balances,
+ * the Garage upgrade, the crew standings) has no backend yet, so those fields
+ * are DESIGN FIXTURES reproducing the pen; each is marked `fixture:` below.
  */
 
 /** Build a 7-bar spark from a series, normalised to its own max, last = today. */
@@ -147,7 +150,9 @@ function hourQuality(h: TodayWeather['hours'][number]): number {
   return Math.max(0.06, Math.min(1, q))
 }
 const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
-/** Build the real weather VM from /weather/today, or null when unavailable. */
+/** Build the real weather VM from /weather/today, or null when unavailable.
+ *  TODAY ONLY — the endpoint has no multi-day forecast, and the card refuses to
+ *  show these numbers under any other date. */
 function buildWeather(tw: TodayWeather | undefined): W3Weather | null {
   if (!tw?.available || !tw.hours?.length) return null
   // Daytime ride window: 07:00–21:00 local.
@@ -170,12 +175,12 @@ function buildWeather(tw: TodayWeather | undefined): W3Weather | null {
     window: `${pad(a.hour)}–${pad(b.hour + 1)}`,
     temp: pk.temp_c != null ? `${Math.round(pk.temp_c)}°` : '—',
     feels: pk.temp_c != null ? `${Math.round(pk.temp_c - (pk.wind_kmh ?? 0) / 15)}°` : '—',
-    hours: hrs.map((h) => ({ label: pad(h.hour), q: h.q, peak: h.hour === a.hour || h.hour === b.hour })),
-    meta: `Bar is ride quality — wind, rain and temperature combined. ${wind}${dry ? ', dry today.' : ', showers about.'}`,
-    // Route recommendation stays a fixture (no route-recommender backend yet).
-    routeName: 'Your usual loop', routeStats: '—', routeTag: 'FROM YOUR RIDES',
-    routeWhy: 'Route matching to today’s session isn’t wired yet — pick your favourite loop.',
-    recordProof: '',
+    // Real conditions in one line: wind at the peak hour + whether the day stays dry.
+    short: `${wind} · ${dry ? 'trocken' : 'Schauer möglich'}`,
+    // The verdict is EARNED by the best window's real ride quality, not a badge
+    // that's always on.
+    verdict: bestAvg >= 0.72 ? 'GO OUTSIDE' : bestAvg >= 0.45 ? 'DOABLE' : 'INDOOR BETTER',
+    meta: 'Bestes 2-Stunden-Fenster aus Wind, Regen und Temperatur.',
   }
 }
 
@@ -184,6 +189,9 @@ export default function W3TodayPage() {
   const model = useTodayModel(state)
   const { user } = useAuth()
   const { data: streak } = useStreak()
+  // The rider's garage — real state now, so the hero can show THEIR bike (or
+  // honestly show that they don't have one yet).
+  const { data: garage, isLoading: garageLoading } = useGarage()
   const { data: standings } = useCrewStandings('week')
   const { data: adaptive } = useAdaptive()
   // The REAL week-ahead plan (today + next 6 days) — the same source the Train
@@ -363,14 +371,15 @@ export default function W3TodayPage() {
     // honest, no-guilt rule: a planned rest day reads "rest" (never "missed"),
     // an unplanned quiet day isn't a failure, and only a genuinely skipped
     // planned session is "missed". Mon→Sun, aligned by index with model.week.
-    const WD = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    const WD = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
     const now = new Date()
     const todayDow = now.getDay() === 0 ? 6 : now.getDay() - 1
     const pad = (n: number) => String(n).padStart(2, '0')
-    // ISO date for strip index i (Mon=0 … Sun=6), anchored on today's real date
-    // so each day can find its own DayPlan in the week-ahead response.
+    // The real calendar date behind strip index i (Mon=0 … Sun=6), anchored on
+    // today — it drives the day cell's number, its label and its DayPlan lookup.
+    const dateForIndex = (i: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + (i - todayDow))
     const isoForIndex = (i: number) => {
-      const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (i - todayDow))
+      const dt = dateForIndex(i)
       return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`
     }
     const streakStates = streak?.week?.map((w) => w.state) ?? []
@@ -423,10 +432,11 @@ export default function W3TodayPage() {
       // What was actually ridden on a past day (real activity), for the
       // planned-vs-done stats — only for past days that carry a ride.
       const act = !isToday && i < todayDow ? actByDate.get(isoForIndex(i)) : undefined
+      const dt = dateForIndex(i)
       return {
-        letter: d.letter, num: '', actual, planned: plannedTss, status,
+        letter: d.letter, num: String(dt.getDate()), actual, planned: plannedTss, status,
         title,
-        dateLabel: WD[i] ?? d.letter, weekday: WD[i] ?? d.letter,
+        dateLabel: `${DE_WD2[i] ?? d.letter}, ${fmtDEShort(dt)}`, weekday: WD[i] ?? d.letter,
         targetW, ftpPct, blocks: dayBlocks,
         actualDurMin: act?.durMin ?? null,
         actualW: act?.w ?? null,
@@ -463,7 +473,13 @@ export default function W3TodayPage() {
     return {
       handle: user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider'),
       tierLine: 'Silver Tier · Week 6 of 16', // fixture: tier/season not modelled yet
-      bikeName: 'Starter Bike', // fixture: bike economy not built (starter frame)
+      // REAL: the rider's own digitalised bike. The name comes from the vision
+      // pass reading their photo; "Your bike" is only a label fallback for a
+      // render the model couldn't name — never a stand-in for a missing bike,
+      // which stays `bikeImage: null` and gets the hero's empty state.
+      bikeName: garage?.bike?.name ?? 'Your bike',
+      bikeImage: garage?.bike?.image_base64 ?? null,
+      bikeLoading: garageLoading,
       weekDoneLabel,
       zoneTag,
       avatarUrl: user?.avatar_url ?? null,
@@ -493,15 +509,11 @@ export default function W3TodayPage() {
       weekGoal,
       planWeeks,
 
-      // REAL weather from /weather/today (buildWeather); honest fixture only when
-      // no forecast is available (no GPS ride location yet). Route rec is still fixture.
+      // REAL weather from /weather/today (buildWeather) — today only. Without a
+      // forecast there are no numbers at all, just the honest reason why.
       weather: realWeather ?? {
-        window: '—', temp: '—', feels: '—',
-        hours: Array.from({ length: 12 }, (_, i) => ({ label: `${9 + i}:00`, q: 0.4, peak: false })),
-        meta: 'Weather appears once you’ve logged a ride with GPS — then this shows your local hourly ride quality.',
-        routeName: 'Your usual loop', routeStats: '—', routeTag: 'FROM YOUR RIDES',
-        routeWhy: 'Route matching to today’s session isn’t wired yet — pick your favourite loop.',
-        recordProof: '',
+        window: '—', temp: '—', feels: '—', short: null, verdict: null,
+        meta: 'Wetter erscheint, sobald du eine Fahrt mit GPS geloggt hast — dann steht hier dein bestes Fenster für heute.',
       },
 
       mirror,
@@ -540,7 +552,7 @@ export default function W3TodayPage() {
       mRides: { pct: 50, label: '25 rides' },
       mDist: { pct: 73, label: '200 km' },
     }
-  }, [model, user, streak, standings, adaptive, week, ftp, todayWeather, weekActs])
+  }, [model, user, streak, standings, adaptive, week, ftp, todayWeather, weekActs, garage, garageLoading])
 
   // Real adapt that PERSISTS: Easier/Harder/Shorter/Indoor hit POST
   // /workouts/today/modify (the audited workout modifier — writes the new

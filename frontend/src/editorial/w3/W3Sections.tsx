@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { CloudSun, Route as RouteIcon, MapPin, Mountain, Trophy, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight } from 'lucide-react'
+import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, card, band } from './w3tokens'
 
 // ────────────────────────────────────────────────────────────────────────
-// Interactive Week strip + Day detail
+// "Deine Woche" — ONE card: the week's day selector, the selected day's
+// training, and the selected day's weather. Selecting a day drives all three.
 // ────────────────────────────────────────────────────────────────────────
 export type DayStatus = 'today' | 'hit' | 'missed' | 'over' | 'rest' | 'upcoming'
 export interface W3DayFull {
@@ -15,8 +16,8 @@ export interface W3DayFull {
   planned: number | null // planned TSS (null = no plan / rest)
   status: DayStatus
   title: string | null   // session name for that day
-  dateLabel: string      // "Mon 11 Aug"
-  weekday: string        // "Saturday" — for the training-card header
+  dateLabel: string      // "Mo, 11. Aug"
+  weekday: string        // "Samstag" — for the training header
   targetW: string        // recommendation target, e.g. "285 W" ("—" when none)
   ftpPct: string         // e.g. "98%"
   // The day's REAL power-profile bars, built from its planned interval blocks
@@ -31,68 +32,454 @@ export interface W3DayFull {
 }
 
 export const STATUS: Record<DayStatus, { label: string; hue: string; icon: typeof Check }> = {
-  today: { label: 'Today', hue: T.acid, icon: TrendingUp },
+  today: { label: 'Heute', hue: T.acid, icon: TrendingUp },
   hit: { label: 'Nailed it', hue: T.acid, icon: Check },
   missed: { label: 'Missed', hue: T.warn, icon: Minus },
   over: { label: 'Overdid it', hue: T.cool, icon: TrendingUp },
-  rest: { label: 'Rest day', hue: T.mid, icon: Minus },
-  upcoming: { label: 'Upcoming', hue: T.quiet, icon: Minus },
+  rest: { label: 'Ruhetag', hue: T.mid, icon: Minus },
+  upcoming: { label: 'Geplant', hue: T.quiet, icon: Minus },
 }
 
 export interface W3WeekGoal { name: string; right: string; sub: string }
 
-/** "Deine Woche" — a 1:1 rebuild of the pen `TPyRo` block: block label +
- *  "X / Y erledigt" chip, the week's load, a per-day load strip (CONTROLLED —
- *  selecting a day drives the training card below), and the two dopamine payoff
- *  cards: the SEASON GOAL this week feeds, and the whole-plan link. */
-export function WeekSection({ days, selected, onSelect, blockLabel, doneChip, loadLabel, goal, planWeeks, onGoal, onPlan }: {
+/** Hairline divider between the card's three zones. */
+const Rule = () => <div style={{ height: 1, background: T.rule, width: '100%' }} />
+
+// ────────────────────────────────────────────────────────────────────────
+// Weather — ONE minimal line, and ONLY for today.
+//   `/weather/today` is a TODAY-ONLY hourly forecast (backend/app/api/weather.py).
+//   There is no multi-day forecast, so any other selected day says so plainly
+//   rather than borrowing today's numbers. Past days get nothing at all — a
+//   "ride now" window is meaningless once the day is gone.
+// ────────────────────────────────────────────────────────────────────────
+export interface W3Weather {
+  /** Best 2-hour ride window today, "16:00–18:00" — or "—" when unavailable. */
+  window: string
+  temp: string
+  feels: string
+  /** Short real conditions line, "8 km/h SW · trocken". Null when unavailable. */
+  short: string | null
+  /** Ride-quality verdict for the best window. Null when there's no forecast. */
+  verdict: string | null
+  /** Honest explanation shown when there is no forecast at all. */
+  meta: string
+}
+
+function WeatherLine({ w, isToday, dateLabel }: { w: W3Weather; isToday: boolean; dateLabel: string }) {
+  if (!isToday) {
+    return (
+      <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+        <CloudSun size={14} color={T.quiet} style={{ flex: 'none', marginTop: 1 }} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>
+          Für {dateLabel} gibt es noch keine Vorhersage — das Wetter kommt nur für heute.
+        </span>
+      </div>
+    )
+  }
+  const has = w.verdict != null && w.window !== '—'
+  if (!has) {
+    return (
+      <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+        <CloudSun size={14} color={T.quiet} style={{ flex: 'none', marginTop: 1 }} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>{w.meta}</span>
+      </div>
+    )
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <CloudSun size={15} color={T.mid} style={{ flex: 'none' }} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Kicker>Bestes Fenster</Kicker>
+          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.3, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.window}</span>
+        </div>
+        <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{w.temp}</span>
+          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.6, color: T.quiet }}>gefühlt {w.feels}</span>
+        </div>
+        <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.mid, padding: '6px 9px', borderRadius: 100, background: T.surface2 }}>{w.verdict}</span>
+      </div>
+      {w.short && <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.35, color: T.quiet }}>{w.short}</span>}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Training — the selected day's session, living INSIDE the week card.
+//   • today   → plan + interval bars + weather + Start + adapt
+//   • future  → the plan only, marked "Geplant"
+//   • past+ridden → plan vs. what was actually ridden (Δ TSS + verdict)
+//   • past+skipped → the plan, marked "Missed"
+// ────────────────────────────────────────────────────────────────────────
+export interface W3Block { w: number; work: boolean; label: string }
+export interface TodaySession {
+  dur: string | null; blocks: W3Block[]; ftpTag: string; earn: string
+}
+
+export function IntervalBars({ blocks, ftpTag, h = 96 }: { blocks: W3Block[]; ftpTag: string; h?: number }) {
+  const reduce = useReducedMotion()
+  const [hov, setHov] = useState<number | null>(null)
+  return (
+    <div style={{ position: 'relative', height: h, display: 'flex', gap: 2, alignItems: 'flex-end', width: '100%' }}>
+      {blocks.map((b, i) => {
+        const bh = Math.round(b.w * h)
+        const on = hov === i
+        return (
+          <motion.div key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
+            initial={reduce ? false : { height: 0 }} animate={{ height: bh }} transition={grow(i * 0.05)}
+            // Work bars want 34px but MUST be allowed to shrink — a long session
+            // (6 reps + recoveries) would otherwise overflow a 390px card.
+            style={{ flex: b.work ? '0 1 34px' : '1 1 18px', minWidth: 0, height: bh, borderRadius: '3px 3px 0 0', cursor: 'pointer',
+              background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : '#FFFFFF2B', outline: on ? `1px solid ${T.ink}` : 'none' }} />
+        )
+      })}
+      <div style={{ position: 'absolute', top: Math.round(h * 0.19), left: 0, right: 0, height: 1, background: '#FFFFFF66' }} />
+      <span style={{ position: 'absolute', top: 2, left: 0, fontSize: 9, fontWeight: 600, letterSpacing: 1, color: T.mid, maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {hov != null ? blocks[hov].label : ftpTag}
+      </span>
+    </div>
+  )
+}
+
+export type Adapt = 'none' | 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest'
+
+/** A real coach re-plan result. For the intensity/exchange options `onAdapt`
+ *  PERSISTS the change (POST /workouts/today/modify) and the numbers/`title`
+ *  come from the modifier + the refreshed week. Rest is deterministic (0 TSS).
+ *  Returns null when the day has no plan to adapt. */
+export interface AdaptResult { targetW: string; tss: number | null; ftpPct: string; rationale: string; railsDowngraded: boolean; title?: string | null }
+export type OnAdapt = (kind: Exclude<Adapt, 'none'>) => Promise<AdaptResult | null>
+
+function StatCol({ v, l, hue }: { v: string; l: string; hue?: string }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.3, color: hue ?? T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
+      <Kicker>{l}</Kicker>
+    </div>
+  )
+}
+
+/** Past-day planned-vs-done — a visual two-bar comparison (no overflowing
+ *  number columns): the plan and what was actually ridden on the same scale,
+ *  with the delta and a short verdict. */
+function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null }) {
+  const planned = day.planned ?? 0
+  const actual = day.actual
+  const max = Math.max(planned, actual, 1)
+  const delta = planned > 0 ? actual - planned : null
+  const over = day.status === 'over'
+  const doneHue = over ? T.cool : T.acid
+  const rows: { label: string; val: number; hue: string; dashed?: boolean }[] = [
+    { label: 'Planned', val: planned, hue: T.d3, dashed: true },
+    { label: 'You rode', val: actual, hue: doneHue },
+  ]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {rows.map((r) => (
+          <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ width: 62, flex: 'none', fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet }}>{r.label}</span>
+            <div style={{ flex: 1, minWidth: 0, height: 14, borderRadius: 100, background: '#FFFFFF0A', overflow: 'hidden' }}>
+              <motion.div
+                initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round((r.val / max) * 100)}%` }} transition={{ duration: 0.6, ease: EASE }}
+                style={{ height: '100%', borderRadius: 100, background: r.dashed ? 'transparent' : r.hue, border: r.dashed ? `1.5px dashed ${T.d3}` : 'none' }} />
+            </div>
+            <span style={{ width: 42, flex: 'none', textAlign: 'right', fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: r.dashed ? T.mid : r.hue, fontVariantNumeric: 'tabular-nums' }}>{Math.round(r.val)}</span>
+          </div>
+        ))}
+      </div>
+      {/* What you actually rode — real duration / avg power / avg HR. */}
+      {(day.actualDurMin != null || day.actualW != null || day.actualHr != null) && (
+        <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: `1px solid ${T.rule}` }}>
+          {[
+            ['DURATION', day.actualDurMin != null ? `${Math.floor(day.actualDurMin / 60)}:${String(Math.round(day.actualDurMin % 60)).padStart(2, '0')}` : '—'],
+            ['AVG POWER', day.actualW != null ? `${Math.round(day.actualW)} W` : '—'],
+            ['AVG HR', day.actualHr != null ? `${Math.round(day.actualHr)}` : '—'],
+          ].map(([l, v]) => (
+            <div key={l} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', borderRadius: 14, background: T.surface2 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
+              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>{l}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        {delta != null && (
+          <span style={{ flex: 'none', display: 'flex', gap: 5, alignItems: 'center', padding: '5px 11px', borderRadius: 100, background: `${doneHue}1F`, fontSize: 11, fontWeight: 800, color: doneHue }}>
+            {over ? <TrendingUp size={12} /> : <Check size={12} />}{delta > 0 ? '+' : ''}{delta} TSS
+          </span>
+        )}
+        <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, color: T.mid }}>
+          {over ? 'Over the plan — watch fatigue tomorrow.' : 'Right on the number. That’s how fitness compounds.'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** The selected day's training, weather and actions — the lower two thirds of
+ *  the week card. Mounted with a per-day key, so switching days resets the
+ *  adapt state and replays the entrance. */
+function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt }) {
+  const [adapt, setAdapt] = useState<Adapt>('none')
+  const [busy, setBusy] = useState<Adapt>('none')
+  const [result, setResult] = useState<AdaptResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [showAdapt, setShowAdapt] = useState(false)
+  const navigate = useNavigate()
+  const reduce = useReducedMotion()
+  const isToday = day.status === 'today'
+  const isPast = day.status === 'hit' || day.status === 'over' || day.status === 'missed' || day.status === 'rest'
+  const isFuture = day.status === 'upcoming'
+  const st = STATUS[day.status]
+  const StIcon = st.icon
+  // Quiet by default: only a genuinely off-plan day earns a coloured chip, so
+  // the card keeps exactly one acid voice (today / the CTA).
+  const chipHue = day.status === 'missed' ? T.warn : day.status === 'over' ? T.cool : T.mid
+  const chipBg = day.status === 'missed' || day.status === 'over' ? `${chipHue}1F` : T.surface2
+
+  // Base numbers are the plan's; when the coach has re-planned (`result`), its
+  // values win. No client-side scaling — the AI owns the adapted target.
+  const baseT = parseInt(day.targetW) || 0
+  const baseTss = day.planned ?? 0
+  const baseFtp = parseInt(day.ftpPct) || 0
+  const curT = result ? (parseInt(result.targetW) || baseT) : baseT
+  const curTss = result ? (result.tss ?? baseTss) : baseTss
+  const curFtp = result ? (parseInt(result.ftpPct) || baseFtp) : baseFtp
+  const isRest = adapt === 'rest'
+  const adapted = adapt !== 'none'
+  // How to ride it + fuelling (the 60 g/h is standard endurance guidance, not a
+  // fabricated per-ride number).
+  const tw = day.targetW && day.targetW !== '—' ? day.targetW : 'im Zielbereich'
+  const workDesc = `Intervalle bei ${tw} halten · locker ein- und ausfahren · ~60 g Kohlenhydrate pro Stunde`
+
+  // Run the real coach adapt (or clear it when the same option is tapped off).
+  const runAdapt = async (kind: Exclude<Adapt, 'none'>) => {
+    if (adapt === kind) { setAdapt('none'); setResult(null); setError(null); return }
+    setAdapt(kind); setError(null)
+    if (kind === 'rest') { setResult(null); return } // rest is deterministic
+    if (!onAdapt) return
+    setBusy(kind)
+    try {
+      const r = await onAdapt(kind)
+      setResult(r)
+      if (!r) setError('No plan to adapt today.')
+    } catch {
+      setError('Coach couldn’t re-plan right now.')
+      setAdapt('none')
+    } finally {
+      setBusy('none')
+    }
+  }
+
+  const header = (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.4, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {isToday ? 'Heutige Einheit' : day.weekday}
+        </span>
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{day.dateLabel}</span>
+      </div>
+      <div style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px', borderRadius: 100, background: chipBg }}>
+        <StIcon size={11} color={chipHue} />
+        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: chipHue }}>{st.label}</span>
+      </div>
+    </div>
+  )
+
+  // A future day with no prescribed session IS a rest day (the plan schedules
+  // rest; the coach fills training days a week ahead and re-plans each morning).
+  const restDay = isRest || day.status === 'rest' || (isFuture && !day.title)
+  if (restDay && !isPast) {
+    return (
+      <motion.div initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Rule />
+        {header}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ width: 40, height: 40, flex: 'none', borderRadius: 13, background: '#00E5FF1F', display: 'grid', placeItems: 'center' }}><Moon size={19} color="#00E5FF" /></div>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.4, color: T.ink }}>Ruhetag</span>
+            <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, color: T.mid }}>
+              {isToday
+                ? 'Lass die Belastung von heute setzen — 0 TSS. Der nächste Block trifft dafür härter.'
+                : 'Hier ist Erholung eingeplant — 0 TSS. Der Coach füllt Trainingstage eine Woche im Voraus und rechnet jeden Morgen neu.'}
+            </span>
+          </div>
+        </div>
+        {isToday && (showAdapt
+          ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
+          : <AdjustButton onOpen={() => setShowAdapt(true)} />)}
+      </motion.div>
+    )
+  }
+
+  return (
+    <motion.div key={adapt} initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: day.status === 'missed' ? 0.75 : 1 }}>
+      <Rule />
+      {header}
+
+      <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.1, color: day.title ? T.ink : T.mid }}>
+        {day.title ?? (isFuture ? 'Noch nicht festgelegt' : 'Ruhetag')}
+      </div>
+
+      {/* Stats only when there's a real prescription (title + a number). A
+          future day with no plan yet hides the empty dash row. */}
+      {(day.title != null && (curTss > 0 || curT > 0)) && (
+        <div style={{ display: 'flex', gap: 10 }}>
+          {isToday && session.dur && <StatCol v={session.dur} l="DAUER" />}
+          <StatCol v={curT ? `${curT} W` : '—'} l="ZIEL" hue={adapted && isToday ? T.acid : undefined} />
+          <StatCol v={curTss ? `${curTss}` : '—'} l="TSS" hue={adapted && isToday ? T.acid : undefined} />
+          <StatCol v={curFtp ? `${curFtp}%` : '—'} l="DER FTP" />
+        </div>
+      )}
+
+      {/* the coach's own explanation of the re-plan (real AI rationale) */}
+      {isToday && adapted && (result || error) && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', borderRadius: 12, background: T.acidDim }}>
+          <Sparkles size={13} color={T.acid} style={{ flex: 'none', marginTop: 1 }} />
+          <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: error ? T.warn : T.ink }}>
+            {error ?? result?.rationale}
+            {result?.railsDowngraded && <span style={{ color: T.warn }}> · Eased for safety.</span>}
+          </span>
+        </div>
+      )}
+
+      {isToday && (
+        <>
+          <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={76} />
+          <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{workDesc}</span>
+        </>
+      )}
+
+      {isFuture && (
+        <>
+          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={76} />}
+          <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>
+            Eine Woche im Voraus geplant — festgezurrt wird am Morgen, sobald deine Nachtwerte da sind.
+          </span>
+        </>
+      )}
+
+      {isPast && day.status !== 'rest' && (
+        day.status === 'missed' ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Minus size={15} color={T.warn} style={{ flex: 'none' }} />
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.warn }}>Skipped — no ride logged for this session.</span>
+          </div>
+        ) : (
+          <PlannedVsDone day={day} reduce={reduce} />
+        )
+      )}
+
+      {/* ── Weather: the selected DATE's line. Real numbers for today only. ── */}
+      {!isPast && (
+        <>
+          <Rule />
+          <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} />
+        </>
+      )}
+
+      {isToday && (
+        <>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Zap size={14} color={T.acid} style={{ flex: 'none' }} />
+            <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.earn}</span>
+          </div>
+          <button onClick={() => navigate('/e/w3-session')}
+            style={{ height: 52, width: '100%', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 7px 0 20px' }}>
+            <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>Training ansehen</span>
+            <div style={{ width: 38, height: 38, flex: 'none', borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
+          </button>
+          {showAdapt
+            ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
+            : <AdjustButton onOpen={() => setShowAdapt(true)} />}
+        </>
+      )}
+    </motion.div>
+  )
+}
+
+function AdjustButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button onClick={onOpen}
+      style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', height: 42, width: '100%', borderRadius: 100, background: T.surface2, border: 0, cursor: 'pointer', fontFamily: FONT }}>
+      <SlidersHorizontal size={14} color={T.mid} />
+      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 0.3, color: T.mid }}>Anpassen</span>
+      <ChevronDown size={14} color={T.quiet} />
+    </button>
+  )
+}
+
+/** THE card: week selector + selected day's training + selected day's weather.
+ *  Controlled — `selected` lives in W3TodayView, so the whole card is one
+ *  pure function of the day you tapped. */
+export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChip, loadLabel, day, session, weather, onAdapt }: {
   days: W3DayFull[]; selected: number; onSelect: (i: number) => void
   blockLabel: string; doneChip: string | null; loadLabel: string
-  goal: W3WeekGoal | null; planWeeks: string; onGoal?: () => void; onPlan?: () => void
+  day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt
 }) {
   const reduce = useReducedMotion()
   const max = Math.max(1, ...days.map((d) => Math.max(d.actual, d.planned ?? 0)))
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: '0 20px 24px', gap: 14 }}>
-      {/* header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Deine Woche</span>
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>{blockLabel}</span>
+    <div style={band(20)}>
+      <div style={{ ...card(), padding: 18, gap: 14 }}>
+
+        {/* header — the week, its block, and how much of it is done */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Deine Woche</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{blockLabel}</span>
+          </div>
+          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+            {doneChip && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, color: T.mid, padding: '5px 10px', borderRadius: 100, background: T.surface2 }}>{doneChip}</span>}
+            <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{loadLabel}</span>
+          </div>
         </div>
-        {doneChip && <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, color: T.acid, padding: '6px 12px', borderRadius: 100, background: T.acidDim, flex: 'none' }}>{doneChip}</span>}
+
+        {/* the 7 day cells — letter over number over a load tick */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {days.map((d, i) => {
+            const isToday = d.status === 'today'
+            const active = i === selected
+            const val = Math.max(d.actual, d.planned ?? 0)
+            const tick = val <= 0 ? 2 : Math.max(3, Math.round((val / max) * 14))
+            const hue = isToday ? T.acid
+              : d.status === 'missed' ? T.warn
+                : d.status === 'over' ? T.cool
+                  : active ? T.d4
+                    : d.status === 'hit' ? T.d3 : T.d2
+            return (
+              <button key={i} onClick={() => onSelect(i)} aria-pressed={active} aria-label={`${d.dateLabel}, ${STATUS[d.status].label}`}
+                style={{
+                  flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                  padding: '8px 0 7px', borderRadius: 13, cursor: 'pointer', fontFamily: FONT,
+                  background: active ? (isToday ? T.acidDim : T.surface2) : 'transparent',
+                  border: `1px solid ${active && isToday ? `${T.acid}59` : 'transparent'}`,
+                }}>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: isToday ? T.acid : active ? T.mid : T.quiet }}>{d.letter}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.4, fontVariantNumeric: 'tabular-nums', color: isToday ? T.acid : active ? T.ink : T.mid }}>{d.num}</span>
+                <div style={{ width: '100%', height: 14, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                  <motion.div initial={reduce ? false : { height: 0 }} animate={{ height: tick }} transition={grow(i * 0.03)}
+                    style={{ width: '58%', height: tick, borderRadius: 2, background: hue }} />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        <DayTraining key={day.dateLabel} day={day} session={session} weather={weather} onAdapt={onAdapt} />
       </div>
-      {/* week load */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.3, color: T.quiet }}>Belastung</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.mid }}>{loadLabel}</span>
-      </div>
-      {/* day strip with per-day load bars */}
-      <div style={{ display: 'flex', gap: 6 }}>
-        {days.map((day, i) => {
-          const isToday = day.status === 'today'
-          const active = i === selected
-          const val = Math.max(day.actual, day.planned ?? 0)
-          const barH = day.status === 'rest' ? 6 : Math.max(6, Math.round((val / max) * 40))
-          const barHue = isToday ? T.acid : day.status === 'hit' ? T.d4 : day.status === 'over' ? T.cool : day.status === 'missed' ? T.warn : T.d2
-          return (
-            <button key={i} onClick={() => onSelect(i)} aria-label={`${day.dateLabel}, ${STATUS[day.status].label}`}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, padding: 0 }}>
-              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '9px 0', borderRadius: 14,
-                background: isToday ? T.acidDim : active ? '#FFFFFF0A' : T.surface,
-                border: `1px solid ${isToday ? T.acid + '66' : active ? T.stroke : 'transparent'}` }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: isToday ? T.acid : T.quiet }}>{day.letter}</span>
-                <span style={{ fontSize: 15, fontWeight: 700, color: isToday ? T.acid : active ? T.ink : T.mid }}>{day.num}</span>
-              </div>
-              <div style={{ width: '100%', height: 44, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', borderRadius: 10, background: isToday ? T.acidDim : T.surface2, padding: 4 }}>
-                <motion.div initial={reduce ? false : { height: 0 }} animate={{ height: barH }} transition={grow(i * 0.04)}
-                  style={{ width: '100%', height: barH, borderRadius: 5, background: barHue, boxShadow: isToday ? `0 0 10px ${T.acid}55` : 'none' }} />
-              </div>
-            </button>
-          )
-        })}
-      </div>
-      {/* SEASON GOAL this week feeds — the payoff */}
+    </div>
+  )
+}
+
+/** Navigation, not week content: the season goal this week feeds, and the whole
+ *  plan. Their own bands BELOW the week card. */
+export function WeekNavCards({ goal, planWeeks, onGoal, onPlan }: { goal: W3WeekGoal | null; planWeeks: string; onGoal?: () => void; onPlan?: () => void }) {
+  return (
+    <div style={{ ...band(26), gap: 10 }}>
       {goal && (
         <button onClick={onGoal} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 16, borderRadius: 20, background: T.surface, border: 0, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: T.acidDim, display: 'grid', placeItems: 'center', flex: 'none' }}><Flag size={18} color={T.acid} /></div>
@@ -106,101 +493,14 @@ export function WeekSection({ days, selected, onSelect, blockLabel, doneChip, lo
           </div>
         </button>
       )}
-      {/* whole-plan link */}
       <button onClick={onPlan} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 16, borderRadius: 20, background: T.surface, border: 0, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
         <div style={{ width: 40, height: 40, borderRadius: 12, background: T.surface2, display: 'grid', placeItems: 'center', flex: 'none' }}><Calendar size={18} color={T.mid} /></div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Ganzer Plan{planWeeks ? ` · ${planWeeks}` : ''}</span>
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>Ziel, Phasen und Wochen anpassen</span>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ganzer Plan{planWeeks ? ` · ${planWeeks}` : ''}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Ziel, Phasen und Wochen anpassen</span>
         </div>
-        <ChevronRight size={18} color={T.mid} />
+        <ChevronRight size={18} color={T.mid} style={{ flex: 'none' }} />
       </button>
-    </div>
-  )
-}
-
-// ────────────────────────────────────────────────────────────────────────
-// Weather window + Route recommendation  (pen: "Where and when to ride it")
-// ────────────────────────────────────────────────────────────────────────
-export interface W3Weather {
-  window: string; temp: string; feels: string
-  hours: { label: string; q: number; peak?: boolean }[]
-  meta: string
-  routeName: string; routeStats: string; routeTag: string; routeWhy: string; recordProof: string
-}
-
-export function WeatherRoute({ w }: { w: W3Weather }) {
-  const reduce = useReducedMotion()
-  const [hov, setHov] = useState<number | null>(null)
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: '0 20px 26px' }}>
-      <div style={{ ...card(), gap: 16, padding: '20px 18px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>Where and when to ride it</span>
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center', padding: '5px 10px 5px 8px', borderRadius: 100, background: T.acidDim }}>
-            <CloudSun size={12} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.acid }}>GO OUTSIDE</span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Kicker>Best window</Kicker>
-            <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.8, color: T.ink }}>{w.window}</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-            <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.8, color: T.ink }}>{w.temp}</span>
-            <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>Feels {w.feels}</span>
-          </div>
-        </div>
-
-        {/* Interactive hourly quality bars */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <div style={{ position: 'relative', height: 34, display: 'flex', gap: 3, alignItems: 'flex-end' }}>
-            {w.hours.map((h, i) => {
-              const on = hov === i || (hov == null && h.peak)
-              const bh = Math.max(4, Math.round(h.q * 34))
-              return (
-                <motion.div key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
-                  initial={reduce ? false : { height: 0 }} animate={{ height: bh }} transition={grow(i * 0.02)}
-                  style={{ flex: 1, height: bh, borderRadius: 1.5, cursor: 'pointer', background: on ? T.acid : (h.peak ? '#C8FF0088' : T.d2) }} />
-              )
-            })}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', height: 11 }}>
-            {['08:00', '14:00', '20:00'].map((t) => <span key={t} style={{ fontSize: 9, fontWeight: 600, color: T.quiet }}>{t}</span>)}
-          </div>
-          <span style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.4, color: hov != null ? T.ink : T.quiet }}>
-            {hov != null ? `${w.hours[hov].label} · ride quality ${Math.round(w.hours[hov].q * 100)}%` : w.meta}
-          </span>
-        </div>
-
-        {/* Route recommendation */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 16, borderTop: `1px solid ${T.rule}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Kicker>Recommended route</Kicker>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: T.acid }}>{w.routeTag}</span>
-          </div>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <div style={{ width: 52, height: 52, borderRadius: 14, background: T.acidDim, display: 'grid', placeItems: 'center', flex: 'none' }}>
-              <RouteIcon size={22} color={T.acid} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{w.routeName}</span>
-              <div style={{ display: 'flex', gap: 10 }}>
-                {w.routeStats.split('·').map((s, i) => (
-                  <span key={i} style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 11, fontWeight: 600, color: T.mid }}>
-                    {i === 0 ? <MapPin size={11} color={T.quiet} /> : i === 1 ? <Mountain size={11} color={T.quiet} /> : <RouteIcon size={11} color={T.quiet} />}{s.trim()}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-          <span style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.45, color: T.mid }}>{w.routeWhy}</span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '12px 14px', borderRadius: 14, background: '#FFFFFF0A' }}>
-            <Trophy size={15} color={T.acid} /><span style={{ fontSize: 11.5, fontWeight: 600, color: T.ink }}>{w.recordProof}</span>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
@@ -273,296 +573,6 @@ export function MirrorChart({ m, fitness, fatigue, form }: { m: W3Mirror; fitnes
   )
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// Training recommendation — the ONE card that reflects the selected day.
-//   • today   → plan + interval bars + Start + adapt (Easier / Harder / Rest)
-//   • future  → the plan only, marked "Planned"
-//   • past+ridden → plan vs. what was actually ridden (Δ TSS + verdict)
-//   • past+skipped → the plan, marked "Skipped"
-// ────────────────────────────────────────────────────────────────────────
-export interface W3Block { w: number; work: boolean; label: string }
-export interface TodaySession {
-  dur: string | null; blocks: W3Block[]; ftpTag: string; earn: string
-}
-
-export function IntervalBars({ blocks, ftpTag }: { blocks: W3Block[]; ftpTag: string }) {
-  const reduce = useReducedMotion()
-  const [hov, setHov] = useState<number | null>(null)
-  return (
-    <div style={{ position: 'relative', height: 96, display: 'flex', gap: 2, alignItems: 'flex-end', marginBottom: 16 }}>
-      {blocks.map((b, i) => {
-        const bh = Math.round(b.w * 96)
-        const on = hov === i
-        return (
-          <motion.div key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
-            initial={reduce ? false : { height: 0 }} animate={{ height: bh }} transition={grow(i * 0.05)}
-            style={{ width: b.work ? 39 : 20, height: bh, borderRadius: '3px 3px 0 0', flex: b.work ? 'none' : 1, cursor: 'pointer',
-              background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : '#FFFFFF2B', outline: on ? `1px solid ${T.ink}` : 'none' }} />
-        )
-      })}
-      <div style={{ position: 'absolute', top: 18, left: 0, right: 0, height: 1, background: '#FFFFFF66' }} />
-      <span style={{ position: 'absolute', top: 4, left: 0, fontSize: 9, fontWeight: 600, letterSpacing: 1, color: T.mid }}>
-        {hov != null ? blocks[hov].label : ftpTag}
-      </span>
-    </div>
-  )
-}
-
-export type Adapt = 'none' | 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest'
-
-/** A real coach re-plan result. For the intensity/exchange options `onAdapt`
- *  PERSISTS the change (POST /workouts/today/modify) and the numbers/`title`
- *  come from the modifier + the refreshed week. Rest is deterministic (0 TSS).
- *  Returns null when the day has no plan to adapt. */
-export interface AdaptResult { targetW: string; tss: number | null; ftpPct: string; rationale: string; railsDowngraded: boolean; title?: string | null }
-export type OnAdapt = (kind: Exclude<Adapt, 'none'>) => Promise<AdaptResult | null>
-
-function StatCol({ v, l, hue }: { v: string; l: string; hue?: string }) {
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <span style={{ fontSize: 17, fontWeight: 700, color: hue ?? T.ink }}>{v}</span>
-      <Kicker>{l}</Kicker>
-    </div>
-  )
-}
-
-/** Past-day planned-vs-done — a visual two-bar comparison (no overflowing
- *  number columns): the plan and what was actually ridden on the same scale,
- *  with the delta and a short verdict. */
-function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null }) {
-  const planned = day.planned ?? 0
-  const actual = day.actual
-  const max = Math.max(planned, actual, 1)
-  const delta = planned > 0 ? actual - planned : null
-  const over = day.status === 'over'
-  const doneHue = over ? T.cool : T.acid
-  const rows: { label: string; val: number; hue: string; dashed?: boolean }[] = [
-    { label: 'Planned', val: planned, hue: T.d3, dashed: true },
-    { label: 'You rode', val: actual, hue: doneHue },
-  ]
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {rows.map((r) => (
-          <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ width: 62, flex: 'none', fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet }}>{r.label}</span>
-            <div style={{ flex: 1, height: 14, borderRadius: 100, background: '#FFFFFF0A', overflow: 'hidden' }}>
-              <motion.div
-                initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round((r.val / max) * 100)}%` }} transition={{ duration: 0.6, ease: EASE }}
-                style={{ height: '100%', borderRadius: 100, background: r.dashed ? 'transparent' : r.hue, border: r.dashed ? `1.5px dashed ${T.d3}` : 'none' }} />
-            </div>
-            <span style={{ width: 42, flex: 'none', textAlign: 'right', fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: r.dashed ? T.mid : r.hue, fontVariantNumeric: 'tabular-nums' }}>{Math.round(r.val)}</span>
-          </div>
-        ))}
-      </div>
-      {/* What you actually rode — real duration / avg power / avg HR. */}
-      {(day.actualDurMin != null || day.actualW != null || day.actualHr != null) && (
-        <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: `1px solid ${T.rule}` }}>
-          {[
-            ['DURATION', day.actualDurMin != null ? `${Math.floor(day.actualDurMin / 60)}:${String(Math.round(day.actualDurMin % 60)).padStart(2, '0')}` : '—'],
-            ['AVG POWER', day.actualW != null ? `${Math.round(day.actualW)} W` : '—'],
-            ['AVG HR', day.actualHr != null ? `${Math.round(day.actualHr)}` : '—'],
-          ].map(([l, v]) => (
-            <div key={l} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', borderRadius: 14, background: T.surface2 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
-              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>{l}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        {delta != null && (
-          <span style={{ display: 'flex', gap: 5, alignItems: 'center', padding: '5px 11px', borderRadius: 100, background: `${doneHue}1F`, fontSize: 11, fontWeight: 800, color: doneHue }}>
-            {over ? <TrendingUp size={12} /> : <Check size={12} />}{delta > 0 ? '+' : ''}{delta} TSS
-          </span>
-        )}
-        <span style={{ flex: 1, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, color: T.mid }}>
-          {over ? 'Over the plan — watch fatigue tomorrow.' : 'Right on the number. That’s how fitness compounds.'}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; session: TodaySession; onAdapt?: OnAdapt }) {
-  const [adapt, setAdapt] = useState<Adapt>('none')
-  const [busy, setBusy] = useState<Adapt>('none')
-  const [result, setResult] = useState<AdaptResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [showAdapt, setShowAdapt] = useState(false)
-  const navigate = useNavigate()
-  const reduce = useReducedMotion()
-  const isToday = day.status === 'today'
-  const isPast = day.status === 'hit' || day.status === 'over' || day.status === 'missed' || day.status === 'rest'
-  const isFuture = day.status === 'upcoming'
-  const st = STATUS[day.status]
-  const StIcon = st.icon
-
-  // Base numbers are the plan's; when the coach has re-planned (`result`), its
-  // values win. No client-side scaling — the AI owns the adapted target.
-  const baseT = parseInt(day.targetW) || 0
-  const baseTss = day.planned ?? 0
-  const baseFtp = parseInt(day.ftpPct) || 0
-  const curT = result ? (parseInt(result.targetW) || baseT) : baseT
-  const curTss = result ? (result.tss ?? baseTss) : baseTss
-  const curFtp = result ? (parseInt(result.ftpPct) || baseFtp) : baseFtp
-  const isRest = adapt === 'rest'
-  const adapted = adapt !== 'none'
-  // Pen `c22vzW` structure line under the beam: how to ride it + fuelling (the
-  // 60 g/h is standard endurance guidance, not a fabricated per-ride number).
-  const tw = day.targetW && day.targetW !== '—' ? day.targetW : 'im Zielbereich'
-  const workDesc = `Intervalle bei ${tw} halten · locker ein- und ausfahren · ~60 g Kohlenhydrate pro Stunde`
-
-  // Run the real coach adapt (or clear it when the same option is tapped off).
-  const runAdapt = async (kind: Exclude<Adapt, 'none'>) => {
-    if (adapt === kind) { setAdapt('none'); setResult(null); setError(null); return }
-    setAdapt(kind); setError(null)
-    if (kind === 'rest') { setResult(null); return } // rest is deterministic
-    if (!onAdapt) return
-    setBusy(kind)
-    try {
-      const r = await onAdapt(kind)
-      setResult(r)
-      if (!r) setError('No plan to adapt today.')
-    } catch {
-      setError('Coach couldn’t re-plan right now.')
-      setAdapt('none')
-    } finally {
-      setBusy('none')
-    }
-  }
-
-  const header = (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 2 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>
-          {isToday ? 'Heutige Einheit' : 'Einheit'}
-        </span>
-        <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
-          {isToday ? 'Auf dein Ziel eingerechnet' : day.dateLabel}
-        </span>
-      </div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '7px 12px', borderRadius: 100, background: `${st.hue}1F` }}>
-        <StIcon size={12} color={st.hue} />
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: st.hue }}>
-          {isToday ? 'Threshold' : st.label}
-        </span>
-      </div>
-    </div>
-  )
-
-  // A future day with no prescribed session IS a rest day (the plan schedules
-  // rest; the coach fills training days a week ahead and re-plans each morning).
-  const restDay = isRest || day.status === 'rest' || (isFuture && !day.title)
-  if (restDay && !isPast) {
-    return (
-      <div style={{ ...band(26), gap: 10 }}>
-        {header}
-        <div style={{ ...card(), gap: 14, alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <div style={{ width: 44, height: 44, borderRadius: 14, background: '#00E5FF1F', display: 'grid', placeItems: 'center' }}><Moon size={20} color="#00E5FF" /></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 22, fontWeight: 700, color: T.ink }}>Ruhetag</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>{isToday ? 'Lass die Belastung von heute setzen — 0 TSS. Der nächste Block trifft dafür härter.' : 'Hier ist Erholung eingeplant — 0 TSS. Der Coach füllt Trainingstage eine Woche im Voraus und rechnet jeden Morgen neu.'}</span>
-            </div>
-          </div>
-          {isToday && <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />}
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ ...band(26), gap: 10 }}>
-      {header}
-      <motion.div key={day.dateLabel + adapt} initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
-        style={{ ...card(), opacity: day.status === 'missed' ? 0.72 : 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>
-            {isToday ? 'Heute' : isFuture ? 'Geplant' : 'Der Plan war'}
-          </span>
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid }}>{isToday ? session.dur : ''}</span>
-        </div>
-        <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1, color: day.title ? T.ink : T.mid, marginBottom: 16 }}>
-          {day.title ?? (isFuture ? 'Noch nicht festgelegt' : 'Ruhetag')}
-        </div>
-
-        {/* Stats only when there's a real prescription (title + a number). A
-            future day with no plan yet hides the empty dash row. */}
-        {(day.title != null && (curTss > 0 || curT > 0)) && (
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-            <StatCol v={curT ? `${curT} W` : '—'} l="ZIEL" hue={adapted && isToday ? T.acid : undefined} />
-            <StatCol v={curTss ? `${curTss}` : '—'} l="TSS" hue={adapted && isToday ? T.acid : undefined} />
-            <StatCol v={curFtp ? `${curFtp}%` : '—'} l="DER FTP" />
-          </div>
-        )}
-
-        {/* the coach's own explanation of the re-plan (real AI rationale) */}
-        {isToday && adapted && (result || error) && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', marginBottom: 12, borderRadius: 12, background: T.acidDim }}>
-            <Sparkles size={13} color={T.acid} style={{ flex: 'none', marginTop: 1 }} />
-            <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: error ? T.warn : T.ink }}>
-              {error ?? result?.rationale}
-              {result?.railsDowngraded && <span style={{ color: T.warn }}> · Eased for safety.</span>}
-            </span>
-          </div>
-        )}
-
-        {isToday && (
-          <>
-            <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} />
-            <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.45, color: T.mid, marginBottom: 4 }}>{workDesc}</span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 13, borderTop: `1px solid ${T.rule}`, marginBottom: 4 }}>
-              <Zap size={14} color={T.acid} /><span style={{ fontSize: 11.5, color: T.mid }}>{session.earn}</span>
-            </div>
-            <button onClick={() => navigate('/e/w3-session')}
-              style={{ height: 54, width: '100%', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', marginTop: 12 }}>
-              <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: -0.2, color: T.bg }}>Training ansehen</span>
-              <div style={{ width: 38, height: 38, borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
-            </button>
-          </>
-        )}
-
-        {isFuture && (
-          <>
-            {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} />}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 13, borderTop: `1px solid ${T.rule}` }}>
-              <span style={{ fontSize: 11.5, color: T.quiet }}>Planned a week ahead — locks in the morning of, once your overnight signals are in.</span>
-            </div>
-          </>
-        )}
-
-        {isPast && day.status !== 'rest' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 14, borderTop: `1px solid ${T.rule}` }}>
-            {day.status === 'missed' ? (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <Minus size={15} color={T.warn} /><span style={{ fontSize: 13, fontWeight: 600, color: T.warn }}>Skipped — no ride logged for this session.</span>
-              </div>
-            ) : (
-              <PlannedVsDone day={day} reduce={reduce} />
-            )}
-          </div>
-        )}
-      </motion.div>
-
-      {/* Adapt options hidden behind an "Adjust" toggle (like the old Today's
-          "anpassen") — the plan reads clean; tap to re-plan with the coach. */}
-      {isToday && (
-        showAdapt ? (
-          <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
-        ) : (
-          <button onClick={() => setShowAdapt(true)}
-            style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 100, background: T.surface, border: `1px solid ${T.rule}`, cursor: 'pointer', fontFamily: FONT }}>
-            <SlidersHorizontal size={14} color={T.mid} />
-            <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 0.3, color: T.mid }}>Adjust</span>
-            <ChevronDown size={14} color={T.quiet} />
-          </button>
-        )
-      )}
-    </div>
-  )
-}
-
 type AdaptOpt = { key: Exclude<Adapt, 'none'>; label: string; sub: string; icon: typeof Zap }
 // Intensity — persists via the modifier's easier/harder cascade (rails watch it).
 const INTENSITY_OPTS: AdaptOpt[] = [
@@ -591,8 +601,8 @@ function AdaptGroup({ label, opts, adapt, busy, onPick }: { label: string; opts:
           return (
             <button key={o.key} onClick={() => onPick(o.key)} disabled={busy !== 'none'} aria-pressed={on}
               style={{
-                flex: 1, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', padding: '11px 0', cursor: busy !== 'none' ? 'default' : 'pointer',
-                borderRadius: 14, fontFamily: FONT, background: on ? T.acidDim : T.surface, border: `1px solid ${on ? T.acid : 'transparent'}`, opacity: busy !== 'none' && !loading ? 0.5 : 1,
+                flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', padding: '11px 0', cursor: busy !== 'none' ? 'default' : 'pointer',
+                borderRadius: 14, fontFamily: FONT, background: on ? T.acidDim : T.surface2, border: `1px solid ${on ? T.acid : 'transparent'}`, opacity: busy !== 'none' && !loading ? 0.5 : 1,
               }}>
               <Ic size={15} color={on ? T.acid : T.mid} />
               <span style={{ fontSize: 12, fontWeight: 700, color: on ? T.acid : T.ink }}>{o.label}</span>
