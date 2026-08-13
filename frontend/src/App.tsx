@@ -96,6 +96,12 @@ const W3OnboardGoalsPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardG
 const W3OnboardGoalsPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardGoalsPreview'))
 const W3OnboardRiderPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardRiderPage'))
 const W3OnboardRiderPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardRiderPreview'))
+const W3PlanPage = lazyWithRetry(() => import('./editorial/w3/W3PlanPage'))
+const W3PlanPreview = lazyWithRetry(() => import('./editorial/w3/W3PlanPreview'))
+const W3GoalPage = lazyWithRetry(() => import('./editorial/w3/W3GoalPage'))
+const W3GoalPreview = lazyWithRetry(() => import('./editorial/w3/W3GoalPreview'))
+const W3LoadForecastPage = lazyWithRetry(() => import('./editorial/w3/W3LoadForecastPage'))
+const W3LoadForecastPreview = lazyWithRetry(() => import('./editorial/w3/W3LoadForecastPreview'))
 const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
@@ -381,6 +387,13 @@ function AppRoutes() {
           <Route path="/e/w3-onboard-goals-preview" element={<W3OnboardGoalsPreview />} />
           <Route path="/e/w3-onboard-rider" element={<ProtectedRoute><W3OnboardRiderPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-rider-preview" element={<W3OnboardRiderPreview />} />
+          {/* Trainingsplan: periodized plan, goal detail, load forecast */}
+          <Route path="/e/w3-plan" element={<ProtectedRoute checkOnboarding><W3PlanPage /></ProtectedRoute>} />
+          <Route path="/e/w3-plan-preview" element={<W3PlanPreview />} />
+          <Route path="/e/w3-goal" element={<ProtectedRoute checkOnboarding><W3GoalPage /></ProtectedRoute>} />
+          <Route path="/e/w3-goal-preview" element={<W3GoalPreview />} />
+          <Route path="/e/w3-load" element={<ProtectedRoute checkOnboarding><W3LoadForecastPage /></ProtectedRoute>} />
+          <Route path="/e/w3-load-preview" element={<W3LoadForecastPreview />} />
           <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />
