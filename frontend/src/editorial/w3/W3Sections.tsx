@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { CloudSun, Route as RouteIcon, MapPin, Mountain, Trophy, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import { CloudSun, Route as RouteIcon, MapPin, Mountain, Trophy, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, card, band } from './w3tokens'
 
 // ────────────────────────────────────────────────────────────────────────
@@ -19,6 +19,10 @@ export interface W3DayFull {
   weekday: string        // "Saturday" — for the training-card header
   targetW: string        // recommendation target, e.g. "285 W" ("—" when none)
   ftpPct: string         // e.g. "98%"
+  // The day's REAL power-profile bars, built from its planned interval blocks
+  // (today, or a future day whose session is set). Optional: past days and the
+  // preview fixture omit it, and the card falls back to today's bars.
+  blocks?: W3Block[]
 }
 
 export const STATUS: Record<DayStatus, { label: string; hue: string; icon: typeof Check }> = {
@@ -259,13 +263,13 @@ export function IntervalBars({ blocks, ftpTag }: { blocks: W3Block[]; ftpTag: st
   )
 }
 
-export type Adapt = 'none' | 'easier' | 'harder' | 'rest'
+export type Adapt = 'none' | 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest'
 
-/** A real coach re-plan result. `onAdapt` runs the backend AI (`/coach/plan/
- *  preview` → LLM + plan-adaptation engine + safety rails); the numbers and the
- *  `rationale` are the model's, not arithmetic. Rest is deterministic (0 TSS).
+/** A real coach re-plan result. For the intensity/exchange options `onAdapt`
+ *  PERSISTS the change (POST /workouts/today/modify) and the numbers/`title`
+ *  come from the modifier + the refreshed week. Rest is deterministic (0 TSS).
  *  Returns null when the day has no plan to adapt. */
-export interface AdaptResult { targetW: string; tss: number | null; ftpPct: string; rationale: string; railsDowngraded: boolean }
+export interface AdaptResult { targetW: string; tss: number | null; ftpPct: string; rationale: string; railsDowngraded: boolean; title?: string | null }
 export type OnAdapt = (kind: Exclude<Adapt, 'none'>) => Promise<AdaptResult | null>
 
 function StatCol({ v, l, hue }: { v: string; l: string; hue?: string }) {
@@ -455,9 +459,12 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
         )}
 
         {isFuture && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 13, borderTop: `1px solid ${T.rule}` }}>
-            <span style={{ fontSize: 11.5, color: T.quiet }}>Locks in the morning of, once your overnight signals are in.</span>
-          </div>
+          <>
+            {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} />}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 13, borderTop: `1px solid ${T.rule}` }}>
+              <span style={{ fontSize: 11.5, color: T.quiet }}>Planned a week ahead — locks in the morning of, once your overnight signals are in.</span>
+            </div>
+          </>
         )}
 
         {isPast && day.status !== 'rest' && (
@@ -491,15 +498,26 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
   )
 }
 
-function AdaptRow({ adapt, busy, onPick }: { adapt: Adapt; busy: Adapt; onPick: (k: Exclude<Adapt, 'none'>) => void }) {
-  const opts: { key: Exclude<Adapt, 'none'>; label: string; sub: string; icon: typeof Zap }[] = [
-    { key: 'easier', label: 'Easier', sub: 'ease it', icon: TrendingDown },
-    { key: 'harder', label: 'Harder', sub: 'push it', icon: TrendingUp },
-    { key: 'rest', label: 'Rest day', sub: '0 TSS', icon: Moon },
-  ]
+type AdaptOpt = { key: Exclude<Adapt, 'none'>; label: string; sub: string; icon: typeof Zap }
+// Intensity — persists via the modifier's easier/harder cascade (rails watch it).
+const INTENSITY_OPTS: AdaptOpt[] = [
+  { key: 'easier', label: 'Easier', sub: 'ease it', icon: TrendingDown },
+  { key: 'harder', label: 'Harder', sub: 'push it', icon: TrendingUp },
+]
+// Exchange — swap the session for a different real modification the backend
+// supports. There is no swap endpoint, so these are the honest levers: shorten
+// to 45 min, move indoors (watts unchanged), or take the day off. Rest is the
+// only deterministic one (the modifier has no rest type); the rest persist.
+const EXCHANGE_OPTS: AdaptOpt[] = [
+  { key: 'shorter', label: 'Shorter', sub: '45 min', icon: Clock },
+  { key: 'indoor', label: 'Indoor', sub: 'trainer', icon: Home },
+  { key: 'rest', label: 'Rest day', sub: '0 TSS', icon: Moon },
+]
+
+function AdaptGroup({ label, opts, adapt, busy, onPick }: { label: string; opts: AdaptOpt[]; adapt: Adapt; busy: Adapt; onPick: (k: Exclude<Adapt, 'none'>) => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>Not feeling it? The coach re-plans it</span>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>{label}</span>
       <div style={{ display: 'flex', gap: 7 }}>
         {opts.map((o) => {
           const on = adapt === o.key
@@ -513,11 +531,20 @@ function AdaptRow({ adapt, busy, onPick }: { adapt: Adapt; busy: Adapt; onPick: 
               }}>
               <Ic size={15} color={on ? T.acid : T.mid} />
               <span style={{ fontSize: 12, fontWeight: 700, color: on ? T.acid : T.ink }}>{o.label}</span>
-              <span style={{ fontSize: 10, fontWeight: 600, color: on ? T.acid : T.quiet }}>{loading ? 'thinking…' : o.sub}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: on ? T.acid : T.quiet }}>{loading ? 'saving…' : o.sub}</span>
             </button>
           )
         })}
       </div>
+    </div>
+  )
+}
+
+function AdaptRow({ adapt, busy, onPick }: { adapt: Adapt; busy: Adapt; onPick: (k: Exclude<Adapt, 'none'>) => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <AdaptGroup label="Not feeling it? The coach re-plans it" opts={INTENSITY_OPTS} adapt={adapt} busy={busy} onPick={onPick} />
+      <AdaptGroup label="Exchange the session" opts={EXCHANGE_OPTS} adapt={adapt} busy={busy} onPick={onPick} />
     </div>
   )
 }

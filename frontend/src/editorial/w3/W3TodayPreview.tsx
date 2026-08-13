@@ -90,14 +90,16 @@ const FIXTURE: W3Vm = {
   mDist: { pct: 73, label: '200 km' },
 }
 
-// Mock coach adapt — mimics the shape `/coach/plan/preview` returns, so the
-// interaction/visual can be verified WITHOUT the backend. The live page uses
-// the real AI endpoint.
-const MOCK_ADAPT = async (kind: 'easier' | 'harder' | 'rest') => {
+// Mock coach adapt — mimics the persisting /workouts/today/modify result, so
+// the interaction/visual can be verified WITHOUT the backend. The live page
+// hits the real endpoint.
+const MOCK_ADAPT = async (kind: 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest') => {
   await new Promise((r) => setTimeout(r, 550))
-  if (kind === 'rest') return { targetW: '—', tss: 0, ftpPct: '—', rationale: 'Full rest today. Let the load settle — tomorrow’s block hits harder for it.', railsDowngraded: false }
-  if (kind === 'easier') return { targetW: '255 W', tss: 92, ftpPct: '87%', rationale: 'Trimmed to 3 × 8 at 255 W — your HRV is fine but yesterday’s ride ran long, so I pulled ~20 TSS to protect Thursday’s VO₂ block.', railsDowngraded: false }
-  return { targetW: '305 W', tss: 131, ftpPct: '104%', rationale: 'Pushed to 4 × 9 at 305 W. You’re fresh (TSB +19) and holding — this banks real threshold work without spiking fatigue past the plan.', railsDowngraded: false }
+  if (kind === 'rest') return { targetW: '—', tss: 0, ftpPct: '—', rationale: 'Full rest today. Let the load settle — tomorrow’s block hits harder for it.', railsDowngraded: false, title: 'Rest day' }
+  if (kind === 'easier') return { targetW: '255 W', tss: 92, ftpPct: '87%', rationale: 'Adjusted — 3 × 8 Threshold. HRV is fine but yesterday ran long, so ~20 TSS came off to protect Thursday’s VO₂ block.', railsDowngraded: false, title: '3 × 8 Threshold' }
+  if (kind === 'harder') return { targetW: '305 W', tss: 131, ftpPct: '104%', rationale: 'Adjusted — 4 × 9 Threshold. You’re fresh (TSB +19) — this banks real threshold work without spiking fatigue past the plan.', railsDowngraded: false, title: '4 × 9 Threshold' }
+  if (kind === 'shorter') return { targetW: '285 W', tss: 78, ftpPct: '98%', rationale: 'Adjusted — 4 × 6 Threshold · 45 min. Same threshold intent, less time on the clock.', railsDowngraded: false, title: '4 × 6 Threshold' }
+  return { targetW: '285 W', tss: 112, ftpPct: '98%', rationale: 'Adjusted — Threshold · Indoor. Same watts on the trainer — weather and traffic out of the equation.', railsDowngraded: false, title: '4 × 8 Threshold · Indoor' }
 }
 
 export default function W3TodayPreview() {

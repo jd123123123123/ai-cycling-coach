@@ -298,7 +298,14 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
         {/* ── Todays Training — the card renders its own header/tag ── */}
         <TrainingSection
           day={selectedDay}
-          session={{ dur: vm.sessionDur, blocks: vm.sessionBlocks, ftpTag: vm.sessionFtpTag, earn: vm.sessionEarn }}
+          session={{
+            dur: vm.sessionDur,
+            // The card follows the selected day: its own real power profile when
+            // it has one (today, or a set future day), else today's bars.
+            blocks: selectedDay.blocks && selectedDay.blocks.length > 0 ? selectedDay.blocks : vm.sessionBlocks,
+            ftpTag: vm.sessionFtpTag,
+            earn: vm.sessionEarn,
+          }}
           onAdapt={onAdapt} />
 
         {/* ── Details: weather window + route recommendation. Only meaningful
