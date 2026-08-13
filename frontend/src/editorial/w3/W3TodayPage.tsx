@@ -10,11 +10,13 @@ import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { useTodayWeather, type TodayWeather } from '../../hooks/useTodayWeather'
 import { isPresent, type Value } from '../data/value'
 import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
 import { hasSeenW3Onboarding } from './w3Onboarding'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type W3Block, type OnAdapt } from './W3TodayView'
+import type { W3Weather } from './W3Sections'
 
 type SignalValue = { value: number; delta: number | null }
 
@@ -131,6 +133,50 @@ function blocksFromIntervals(ivs: IntervalBlockOut[], ftp: number | null): W3Blo
   return bars
 }
 
+// ── Real weather → the "Where and when to ride it" card ─────────────────────
+const WMO_DRY = new Set([0, 1, 2, 3, 45, 48])
+/** A 0–1 ride-quality score per hour from real precip / wind / temp. */
+function hourQuality(h: TodayWeather['hours'][number]): number {
+  let q = 1
+  if (h.precip_prob != null) q -= (h.precip_prob / 100) * 0.6
+  if (h.wind_kmh != null) q -= Math.min(0.3, h.wind_kmh / 60)
+  if (h.temp_c != null) { if (h.temp_c < 6 || h.temp_c > 30) q -= 0.35; else if (h.temp_c < 10 || h.temp_c > 26) q -= 0.15 }
+  if (h.code != null && !WMO_DRY.has(h.code)) q -= 0.1
+  return Math.max(0.06, Math.min(1, q))
+}
+const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+/** Build the real weather VM from /weather/today, or null when unavailable. */
+function buildWeather(tw: TodayWeather | undefined): W3Weather | null {
+  if (!tw?.available || !tw.hours?.length) return null
+  // Daytime ride window: 07:00–21:00 local.
+  const hrs = tw.hours
+    .map((h) => ({ ...h, hour: new Date(h.time).getHours(), q: hourQuality(h) }))
+    .filter((h) => h.hour >= 7 && h.hour <= 21)
+  if (hrs.length < 2) return null
+  // Best 2-hour window = highest average quality.
+  let bestI = 0, bestAvg = -1
+  for (let i = 0; i < hrs.length - 1; i++) {
+    const avg = (hrs[i].q + hrs[i + 1].q) / 2
+    if (avg > bestAvg) { bestAvg = avg; bestI = i }
+  }
+  const a = hrs[bestI], b = hrs[bestI + 1]
+  const pk = a.q >= b.q ? a : b
+  const pad = (n: number) => `${String(n).padStart(2, '0')}:00`
+  const dry = hrs.every((h) => (h.precip_prob ?? 0) < 40)
+  const wind = pk.wind_kmh != null ? `${Math.round(pk.wind_kmh)} km/h${pk.wind_dir_deg != null ? ` ${DIRS[Math.round(pk.wind_dir_deg / 45) % 8]}` : ''}` : 'calm'
+  return {
+    window: `${pad(a.hour)}–${pad(b.hour + 1)}`,
+    temp: pk.temp_c != null ? `${Math.round(pk.temp_c)}°` : '—',
+    feels: pk.temp_c != null ? `${Math.round(pk.temp_c - (pk.wind_kmh ?? 0) / 15)}°` : '—',
+    hours: hrs.map((h) => ({ label: pad(h.hour), q: h.q, peak: h.hour === a.hour || h.hour === b.hour })),
+    meta: `Bar is ride quality — wind, rain and temperature combined. ${wind}${dry ? ', dry today.' : ', showers about.'}`,
+    // Route recommendation stays a fixture (no route-recommender backend yet).
+    routeName: 'Your usual loop', routeStats: '—', routeTag: 'FROM YOUR RIDES',
+    routeWhy: 'Route matching to today’s session isn’t wired yet — pick your favourite loop.',
+    recordProof: '',
+  }
+}
+
 export default function W3TodayPage() {
   const { state } = useDayState()
   const model = useTodayModel(state)
@@ -143,10 +189,12 @@ export default function W3TodayPage() {
   // blocks, so every day in the strip (not just today) gets its real session.
   const { data: week } = useCurrentWeek(0)
   const { data: profile } = useAthleteProfile()
+  const { data: todayWeather } = useTodayWeather()
   const qc = useQueryClient()
   const ftp = profile?.ftp_watts ?? null
 
   const vm = useMemo<W3Vm>(() => {
+    const realWeather = buildWeather(todayWeather)
     // Real crew standings (top 3 by weekly score, you highlighted). Each bar is
     // the member's share of the crew's leader; honest fallback to the fixture
     // only when the athlete is in no crew / standings haven't loaded.
@@ -392,14 +440,16 @@ export default function W3TodayPage() {
       weekMeta,
       weekDays,
 
-      weather: {
-        window: '16:00–18:00', temp: '19°', feels: '17°',
-        hours: Array.from({ length: 12 }, (_, i) => ({ label: `${9 + i}:00`, q: [0.3, 0.35, 0.4, 0.5, 0.55, 0.6, 0.8, 1, 0.95, 0.7, 0.45, 0.3][i], peak: i === 7 || i === 8 })),
-        meta: 'Bar is ride quality — wind, rain and temperature combined. 8 km/h SW, dry until 21:00.',
-        routeName: 'Elbe Loop · Nord', routeStats: '48 km · 320 m · 3 ramps', routeTag: 'RIDDEN 6× · BEST MATCH',
-        routeWhy: 'Its three ramps run 8–9 minutes at 4–5% — the exact length of today’s blocks, so you can hold 285 W without traffic breaking the effort.',
-        recordProof: 'Your 288 W record was set on this loop',
-      }, // fixture: weather/route recommendation service not wired yet
+      // REAL weather from /weather/today (buildWeather); honest fixture only when
+      // no forecast is available (no GPS ride location yet). Route rec is still fixture.
+      weather: realWeather ?? {
+        window: '—', temp: '—', feels: '—',
+        hours: Array.from({ length: 12 }, (_, i) => ({ label: `${9 + i}:00`, q: 0.4, peak: false })),
+        meta: 'Weather appears once you’ve logged a ride with GPS — then this shows your local hourly ride quality.',
+        routeName: 'Your usual loop', routeStats: '—', routeTag: 'FROM YOUR RIDES',
+        routeWhy: 'Route matching to today’s session isn’t wired yet — pick your favourite loop.',
+        recordProof: '',
+      },
 
       mirror,
 
@@ -437,7 +487,7 @@ export default function W3TodayPage() {
       mRides: { pct: 50, label: '25 rides' },
       mDist: { pct: 73, label: '200 km' },
     }
-  }, [model, user, streak, standings, adaptive, week, ftp])
+  }, [model, user, streak, standings, adaptive, week, ftp, todayWeather])
 
   // Real adapt that PERSISTS: Easier/Harder/Shorter/Indoor hit POST
   // /workouts/today/modify (the audited workout modifier — writes the new
