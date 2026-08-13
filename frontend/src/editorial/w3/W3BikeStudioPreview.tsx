@@ -1,14 +1,13 @@
 import { useState } from 'react'
-import W3BikeStudioView, { type BikeAnalysis, type StudioState } from './W3BikeStudioView'
+import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
 
 /** TEMP preview — drives the studio states with a fixture, no backend.
  *  /e/w3-bike-studio-preview is unguarded; remove before merge. Cycles
  *  intro → analyzing → rendering → reveal so the whole flow is visible. */
 
-const ANALYSIS: BikeAnalysis = {
-  bike_type: 'road', frame_color: 'matte teal', accent_color: 'lime', wheels: 'deep-section carbon',
-  groupset: 'Shimano 105', handlebar: 'drop bars', distinctive: 'clean build with a lime bar tape and a single bottle cage', confidence: 0.86,
-}
+const DESCRIPTION =
+  'A road bike with a matte teal frame and lime accents, deep-section carbon wheels, ' +
+  'Shimano 105 groupset and drop bars — a clean build with lime bar tape and a single bottle cage.'
 
 export default function W3BikeStudioPreview() {
   const [state, setState] = useState<StudioState>('reveal')
@@ -23,14 +22,15 @@ export default function W3BikeStudioPreview() {
       <W3BikeStudioView
         state={state}
         photoUrl={null}
-        analysis={state === 'intro' ? null : ANALYSIS}
-        imageUrl={null}            // no image model → shows the honest styled placeholder
+        description={state === 'intro' ? null : DESCRIPTION}
+        imageUrl={null}            // no image model → shows the honest "studio unavailable" state
         renderStatus={state === 'reveal' ? 'image_model_unavailable' : null}
         prompt="A single road bicycle, matte teal frame, lime accents, deep-section carbon wheels, drop bars…"
         error={state === 'error' ? 'Couldn’t find a bike in that photo. Try the whole bike, side-on.' : null}
+        onBack={() => setState('intro')}
         onPick={() => setState('analyzing')}
         onReset={() => setState('intro')}
-        onSave={() => setState('intro')}
+        onSave={() => { /* preview: no real image to download */ }}
       />
     </div>
   )

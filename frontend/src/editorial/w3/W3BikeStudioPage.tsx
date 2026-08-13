@@ -1,18 +1,20 @@
 import { useCallback, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../../api/client'
-import W3BikeStudioView, { type BikeAnalysis, type StudioState } from './W3BikeStudioView'
+import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
 
 /**
- * W3 · Bike Studio, wired live. Route /e/w3-bike-studio.
+ * W3 · Bike Studio, wired live. Route /e/w3-bike-studio (the GARAGE tab).
  *
- * Capture a photo → `POST /garage/bike/render`. The vision analysis is real;
- * the render image is present only when the server has an image model
- * provisioned (see backend `services/bike_render.py`). The photo is read to a
- * base64 data URL client-side (same shape the avatar upload uses).
+ * Add a bike photo → `POST /garage/asset/render` (kind:'bike'). The vision
+ * `description` is real; the render image is present only when the server has an
+ * image model provisioned (see backend `services/cyclr_studio.py`) — otherwise
+ * `status !== 'ok'` and the view shows an honest "studio unavailable" state, not
+ * a faked image. The photo is read to a downscaled base64 data URL client-side.
  */
 
-interface RenderResponse {
-  analysis: BikeAnalysis
+interface AssetRenderResponse {
+  description: string | null
   prompt: string
   image_base64: string | null
   status: string
@@ -41,17 +43,18 @@ function fileToDownscaledDataUrl(file: File, max = 1024): Promise<string> {
 }
 
 export default function W3BikeStudioPage() {
+  const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<StudioState>('intro')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
-  const [analysis, setAnalysis] = useState<BikeAnalysis | null>(null)
+  const [description, setDescription] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [renderStatus, setRenderStatus] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const reset = useCallback(() => {
-    setState('intro'); setPhotoUrl(null); setAnalysis(null); setImageUrl(null)
+    setState('intro'); setPhotoUrl(null); setDescription(null); setImageUrl(null)
     setRenderStatus(null); setPrompt(null); setError(null)
   }, [])
 
@@ -60,12 +63,14 @@ export default function W3BikeStudioPage() {
       const dataUrl = await fileToDownscaledDataUrl(file)
       setPhotoUrl(dataUrl)
       setState('analyzing')
-      const res = await apiClient.post<RenderResponse>('/garage/bike/render', { photo_base64: dataUrl })
-      setAnalysis(res.data.analysis)
+      const res = await apiClient.post<AssetRenderResponse>('/garage/asset/render', {
+        photo_base64: dataUrl, kind: 'bike',
+      })
+      setDescription(res.data.description)
       setPrompt(res.data.prompt)
       setState('rendering')
       // the server does both stages in one call; the 'rendering' beat is just
-      // the reveal choreography for the analysis chips before the image lands.
+      // the reveal choreography for the description before the image lands.
       setImageUrl(res.data.image_base64)
       setRenderStatus(res.data.status)
       setTimeout(() => setState('reveal'), 500)
@@ -76,16 +81,30 @@ export default function W3BikeStudioPage() {
     }
   }, [])
 
+  // Save = download the rendered collectible (a real data-URL PNG) to the device.
+  const onSave = useCallback(() => {
+    if (!imageUrl) return
+    const a = document.createElement('a')
+    a.href = imageUrl
+    a.download = 'w3-bike-collectible.png'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }, [imageUrl])
+
   return (
     <>
-      <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+      {/* No `capture` attr → the picker offers the photo library / files, not
+          just the camera. accept limits to images. */}
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = '' }} />
       <W3BikeStudioView
-        state={state} photoUrl={photoUrl} analysis={analysis} imageUrl={imageUrl}
+        state={state} photoUrl={photoUrl} description={description} imageUrl={imageUrl}
         renderStatus={renderStatus} prompt={prompt} error={error}
+        onBack={() => navigate(-1)}
         onPick={() => fileRef.current?.click()}
         onReset={reset}
-        onSave={reset /* TODO: persist to a bike record once the garage model lands */} />
+        onSave={onSave} />
     </>
   )
 }

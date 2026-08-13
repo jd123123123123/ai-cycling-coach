@@ -1,8 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMyCrew, useCrewStandings } from '../../hooks/useCrew'
+import { useToggleReaction } from '../../hooks/useCrewReactions'
+import { useCrewChallenges, useCreateChallenge } from '../../hooks/useChallenges'
 import type { StandingRow } from '../../api/crew'
 import W3CrewView, { type W3CrewVm, type W3CrewMember, type W3ShowedUpRow, type W3Highlight } from './W3CrewView'
+import W3CrewGoalEditor from './W3CrewGoalEditor'
 
 /**
  * W3 · 10 CREW, wired. Route /e/w3-crew.
@@ -55,6 +58,15 @@ export default function W3CrewPage() {
   const navigate = useNavigate()
   const { data: mine } = useMyCrew()
   const { data: standings } = useCrewStandings('week')
+  const { data: crewChallenges } = useCrewChallenges()
+  const toggleProps = useToggleReaction()
+  const createChallenge = useCreateChallenge()
+  const [editingGoal, setEditingGoal] = useState(false)
+  const [propsGiven, setPropsGiven] = useState(false)
+
+  // The crew's distance goal is a REAL crew challenge (metric distance_km) when
+  // one exists — editable below. Falls back to an honest auto-ring otherwise.
+  const distanceChallenge = (crewChallenges ?? []).find((c) => c.metric === 'distance_km') ?? null
 
   const vm = useMemo<W3CrewVm>(() => {
     const rows = standings?.standings ?? []
@@ -87,11 +99,14 @@ export default function W3CrewPage() {
     const showedUpFilled = showedUp.reduce((n, row) => n + row.days.filter(Boolean).length, 0)
     const showedUpTotal = total * 7
 
-    // ── Around the world: summed crew distance (real); goal ceiling (fixture) ──
+    // ── Around the world: summed crew distance (real). The goal is a REAL crew
+    // distance_km challenge when the crew has set one (editable); otherwise an
+    // honest auto-ring the crew can replace by tapping "edit". ──
     const crewKm = Math.round(rows.reduce((n, r) => n + dist(r), 0))
     const yourKm = me ? Math.round(dist(me)) : 0
-    // fixture: no crew distance target exists server-side — round up to a 500 km ring.
-    const distanceGoalKm = Math.max(500, Math.ceil((crewKm || 1) / 500) * 500)
+    const distanceGoalKm = distanceChallenge
+      ? Math.round(distanceChallenge.target)
+      : Math.max(500, Math.ceil((crewKm || 1) / 500) * 500)
     const distancePct = Math.round((crewKm / distanceGoalKm) * 100)
     const distanceToGo = Math.max(0, distanceGoalKm - crewKm)
     const yourSharePct = crewKm > 0 ? Math.round((yourKm / crewKm) * 100) : 0
@@ -148,7 +163,7 @@ export default function W3CrewPage() {
         ? 'Crews of six to eight hold each other best. Fewer, and a quiet week goes unnoticed.'
         : 'This crew is at full strength — every seat is taken.',
     }
-  }, [standings, mine])
+  }, [standings, mine, distanceChallenge])
 
   // Honest invite: share an invite message (no props/discover picker built here yet).
   const invite = async () => {
@@ -160,12 +175,36 @@ export default function W3CrewPage() {
     } catch { /* user dismissed the share sheet — no-op */ }
   }
 
+  // Give props — a real crew_week cheer (toggles the caller's 👏 on the crew's
+  // week). Optimistic on the button.
+  const giveProps = () => {
+    setPropsGiven((v) => !v)
+    toggleProps.mutate({ targetType: 'crew_week', emoji: '👏' })
+  }
+
+  // Set/replace the crew's distance goal as a real weekly crew challenge.
+  const saveGoal = async (km: number) => {
+    await createChallenge.mutateAsync({ name: 'Around the world', metric: 'distance_km', target: km, period: 'week' })
+    setEditingGoal(false)
+  }
+
   return (
-    <W3CrewView
-      vm={vm}
-      onBack={() => navigate('/e/w3-wins')}
-      onProps={() => { /* fixture: props economy not wired to a backend yet */ }}
-      onInvite={invite}
-    />
+    <>
+      <W3CrewView
+        vm={{ ...vm, propsGiven }}
+        onBack={() => navigate('/e/w3-wins')}
+        onProps={giveProps}
+        onInvite={invite}
+        onEditGoal={vm.inCrew ? () => setEditingGoal(true) : undefined}
+      />
+      {editingGoal && (
+        <W3CrewGoalEditor
+          currentKm={vm.distanceGoalKm}
+          onSave={saveGoal}
+          onClose={() => setEditingGoal(false)}
+          saving={createChallenge.isPending}
+        />
+      )}
+    </>
   )
 }

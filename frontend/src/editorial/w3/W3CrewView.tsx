@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Sparkles, UserPlus, Activity as ActivityIcon } from 'lucide-react'
+import { ArrowLeft, Sparkles, UserPlus, Activity as ActivityIcon, Pencil } from 'lucide-react'
 import { T, FONT, EASE, grow, band, card } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -61,8 +61,9 @@ export interface W3CrewVm {
   showedUpTotal: number
   showedUpNote: string
   distanceKm: number
-  distanceGoalKm: number    // fixture: crew distance goal
+  distanceGoalKm: number    // real when a crew distance challenge is set; editable
   distancePct: number       // real: total vs goal
+  propsGiven?: boolean      // caller has cheered the crew this week
   distanceToGo: number
   yourDistanceKm: number
   yourDistanceNote: string  // real: "more than four of the six"
@@ -97,8 +98,8 @@ function MemberCard({ m, i, reduce }: { m: W3CrewMember; i: number; reduce: bool
   )
 }
 
-export default function W3CrewView({ vm, onBack, onProps, onInvite }: {
-  vm: W3CrewVm; onBack?: () => void; onProps?: () => void; onInvite?: () => void
+export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal }: {
+  vm: W3CrewVm; onBack?: () => void; onProps?: () => void; onInvite?: () => void; onEditGoal?: () => void
 }) {
   const reduce = useReducedMotion()
   const memberRows: W3CrewMember[][] = []
@@ -142,10 +143,10 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite }: {
               </div>
             </div>
 
-            {/* Gib Props (fixture: props economy) */}
+            {/* Give props — a real crew_week cheer */}
             <div style={{ ...band(10) }}>
-              <button onClick={onProps} style={{ width: '100%', height: 60, borderRadius: 100, background: VIOLET, border: 0, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
-                <Sparkles size={19} color="#fff" /><span style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Give props</span>
+              <button onClick={onProps} style={{ width: '100%', height: 60, borderRadius: 100, background: vm.propsGiven ? T.acid : VIOLET, border: 0, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
+                <Sparkles size={19} color={vm.propsGiven ? T.bg : '#fff'} /><span style={{ fontSize: 16, fontWeight: 700, color: vm.propsGiven ? T.bg : '#fff' }}>{vm.propsGiven ? 'Props given 👏' : 'Give props'}</span>
               </button>
             </div>
             <div style={{ ...band(26) }}>
@@ -197,7 +198,9 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite }: {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                     <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: -1.6, color: T.ink }}>{vm.distanceKm}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: T.mid }}>of {vm.distanceGoalKm} km</span>
+                    <button onClick={onEditGoal} disabled={!onEditGoal} style={{ background: 'transparent', border: 0, padding: 0, cursor: onEditGoal ? 'pointer' : 'default', fontSize: 13, fontWeight: 600, color: onEditGoal ? VIOLET : T.mid, display: 'flex', gap: 4, alignItems: 'center', fontFamily: FONT }}>
+                      of {vm.distanceGoalKm} km{onEditGoal && <Pencil size={11} />}
+                    </button>
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, color: T.quiet }}>{vm.distanceToGo} KM TO GO</span>
                 </div>

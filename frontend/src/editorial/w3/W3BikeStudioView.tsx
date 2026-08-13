@@ -1,40 +1,37 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { Camera, Sparkles, RefreshCw, Check, Bike } from 'lucide-react'
-import { T, FONT, EASE, band } from './w3tokens'
+import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike } from 'lucide-react'
+import { T, FONT, EASE, band, Kicker } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
+import W3TabBar from './W3TabBar'
 
 /**
- * W3 · Bike Studio — photo of your real bike → a W3:Ride-style collectible
- * render. Pure function of props; `W3BikeStudioPage` owns the capture + the
- * `/garage/bike/render` call. Honest by construction: the analysis chips are
- * REAL vision output; the render image appears only when an image model is
- * provisioned (`status`), otherwise the card shows a styled placeholder plus
- * the exact prompt — never a faked photo. Output is a stylised, identity-
- * preserving render, not an exact 3D mesh.
+ * W3 · Bike Studio (the GARAGE tab) — photo of your real bike → a W3:Ride-style
+ * collectible render. Pure function of props; `W3BikeStudioPage` owns the
+ * capture + the `POST /garage/asset/render` call. Honest by construction: the
+ * `description` line is the REAL vision output; the render image appears only
+ * when an image model is provisioned (`renderStatus === 'ok'`), otherwise the
+ * card shows an honest "studio unavailable" state plus the exact prompt — never
+ * a faked photo. Output is a stylised, identity-preserving render, not a mesh.
  */
 
-export interface BikeAnalysis {
-  bike_type: string; frame_color: string; accent_color: string | null
-  wheels: string; groupset: string | null; handlebar: string
-  distinctive: string; confidence: number
-}
 export type StudioState = 'intro' | 'analyzing' | 'rendering' | 'reveal' | 'error'
 
 export interface W3BikeStudioProps {
   state: StudioState
-  photoUrl: string | null          // the rider's uploaded photo (data URL)
-  analysis: BikeAnalysis | null
+  photoUrl: string | null          // the uploaded bike photo (data URL)
+  description: string | null       // real vision analysis text
   imageUrl: string | null          // rendered collectible (data URL) or null
-  renderStatus: string | null      // "ok" | "image_model_unavailable"
-  prompt: string | null
+  renderStatus: string | null      // 'ok' | 'image_model_unavailable'
+  prompt: string | null            // the prompt we'd send — surfaced when unavailable
   error: string | null
-  onPick: () => void               // open file/camera picker
+  onBack: () => void               // top-nav back
+  onPick: () => void               // open the photo-library / file picker
   onReset: () => void
-  onSave: () => void
+  onSave: () => void               // download the rendered collectible (image present only)
 }
 
-// pastel gradient card grounds keyed off the bike's colour, à la w3:browser
+// pastel gradient card grounds keyed off the description, à la w3:browser
 const GRADIENTS = [
   'radial-gradient(120% 90% at 50% 32%, #E9D8C4, #BFA98F)',
   'radial-gradient(120% 90% at 50% 32%, #D6E4DC, #9DB6AC)',
@@ -50,44 +47,49 @@ function Card({ children, grad }: { children?: React.ReactNode; grad: string }) 
   )
 }
 
-const Chip = ({ k, v }: { k: string; v: string }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '11px 13px', borderRadius: 14, background: T.surface, flex: 1, minWidth: 0 }}>
-    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>{k}</span>
-    <span style={{ fontSize: 13, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
-  </div>
-)
-
 export default function W3BikeStudioView(p: W3BikeStudioProps) {
   const reduce = useReducedMotion()
-  const grad = GRADIENTS[(p.analysis?.frame_color?.length ?? 0) % GRADIENTS.length]
+  const grad = GRADIENTS[(p.description?.length ?? 0) % GRADIENTS.length]
   const busy = p.state === 'analyzing' || p.state === 'rendering'
+  const unavailable = p.state === 'reveal' && (!p.imageUrl || p.renderStatus !== 'ok')
 
   return (
     <div className="w3-root">
-      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
         <W3StatusBar />
 
+        {/* Top nav — back + screen title */}
+        <div style={{ padding: '0 12px 0 8px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button onClick={p.onBack} aria-label="Back" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+            <ArrowLeft size={20} color={T.ink} />
+          </button>
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Garage</span>
+          <div style={{ width: 40, height: 40 }} aria-hidden />
+        </div>
+
         {/* Header */}
-        <div style={{ ...band(20), padding: '10px 20px 18px', gap: 8 }}>
+        <div style={{ ...band(20), padding: '4px 20px 18px', gap: 8 }}>
           <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, lineHeight: 1.05, color: T.ink }}>Bike studio</span>
           <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>
-            Snap your real bike. We render it as your collectible — same frame, same colours, W3 finish.
+            Add a photo of your real bike. We render it as your collectible — same frame, same colours, W3 finish.
           </span>
         </div>
 
         {/* The card */}
         <div style={{ ...band(18) }}>
           <Card grad={busy || p.state === 'reveal' ? grad : 'linear-gradient(180deg, #161616, #0F0F0F)'}>
-            {/* rendered collectible */}
-            {p.state === 'reveal' && p.imageUrl && <img src={p.imageUrl} alt="Your bike collectible" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
+            {/* rendered collectible — only with a real image */}
+            {p.state === 'reveal' && p.imageUrl && (
+              <img src={p.imageUrl} alt="Your bike collectible" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            )}
 
-            {/* reveal but no image model → styled placeholder over the real photo */}
-            {p.state === 'reveal' && !p.imageUrl && (
+            {/* reveal but no image model → honest "studio unavailable" over the real photo */}
+            {unavailable && (
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
                 {p.photoUrl && <img src={p.photoUrl} alt="Your bike" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.18, filter: 'saturate(1.3)' }} />}
                 <Bike size={120} strokeWidth={1.2} color="#0B0B0B" style={{ opacity: 0.55, position: 'relative' }} />
                 <div style={{ position: 'absolute', bottom: 14, left: 14, right: 14, padding: '9px 12px', borderRadius: 12, background: 'rgba(11,11,11,.72)', fontSize: 10.5, fontWeight: 600, color: '#fff', textAlign: 'center' }}>
-                  Preview — connect an image model to render the collectible
+                  Studio unavailable — no image model connected
                 </div>
               </div>
             )}
@@ -116,21 +118,24 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
           </Card>
         </div>
 
-        {/* Analysis chips — real vision output */}
-        {(p.state === 'reveal' || p.state === 'rendering') && p.analysis && (
+        {/* Analysis — real vision description */}
+        {(p.state === 'reveal' || p.state === 'rendering') && p.description && (
           <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE }} style={{ ...band(18), gap: 8 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Chip k="Type" v={p.analysis.bike_type} />
-              <Chip k="Frame" v={p.analysis.frame_color} />
-              <Chip k="Wheels" v={p.analysis.wheels} />
+            <Kicker>What we see</Kicker>
+            <div style={{ padding: 14, borderRadius: 16, background: T.surface }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.5, color: T.mid }}>{p.description}</span>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Chip k="Bars" v={p.analysis.handlebar} />
-              <Chip k="Groupset" v={p.analysis.groupset ?? '—'} />
-              <Chip k="Accent" v={p.analysis.accent_color ?? '—'} />
-            </div>
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid, padding: '2px 2px 0' }}>“{p.analysis.distinctive}”</span>
           </motion.div>
+        )}
+
+        {/* Honest prompt reveal — what we'd render, when the studio is unavailable */}
+        {unavailable && p.prompt && (
+          <div style={{ ...band(18), gap: 8 }}>
+            <Kicker>The render we'd make</Kicker>
+            <div style={{ padding: 14, borderRadius: 16, background: T.surface }}>
+              <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.5, color: T.quiet }}>{p.prompt}</span>
+            </div>
+          </div>
         )}
 
         {/* error */}
@@ -143,26 +148,30 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
         )}
 
         {/* Actions */}
-        <div style={{ ...band(40), paddingTop: 4, gap: 10, marginTop: 'auto' }}>
+        <div style={{ ...band(24), paddingTop: 4, gap: 10 }}>
           {p.state === 'intro' && (
             <button onClick={p.onPick} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-              <Camera size={19} color={T.bg} />{p.photoUrl ? 'Render this bike' : 'Take a photo'}
+              <Camera size={19} color={T.bg} />{p.photoUrl ? 'Render this bike' : 'Add a photo'}
             </button>
           )}
           {p.state === 'reveal' && (
             <>
-              <button onClick={p.onSave} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-                <Check size={19} color={T.bg} strokeWidth={2.5} />Save to garage
-              </button>
+              {p.imageUrl && (
+                <button onClick={p.onSave} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+                  <Download size={19} color={T.bg} strokeWidth={2.5} />Save image
+                </button>
+              )}
               <button onClick={p.onReset} style={{ height: 48, borderRadius: 100, border: 0, background: '#FFFFFF0A', color: T.ink, fontFamily: FONT, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center' }}>
-                <RefreshCw size={15} color={T.ink} />Retake
+                <RefreshCw size={15} color={T.ink} />{p.imageUrl ? 'Render another' : 'Try another photo'}
               </button>
             </>
           )}
-          {(p.state === 'error') && (
+          {p.state === 'error' && (
             <button onClick={p.onReset} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>Try again</button>
           )}
         </div>
+
+        <W3TabBar />
       </div>
     </div>
   )
