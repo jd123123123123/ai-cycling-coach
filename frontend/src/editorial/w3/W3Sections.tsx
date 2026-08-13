@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { CloudSun, Route as RouteIcon, MapPin, Mountain, Trophy, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles } from 'lucide-react'
+import { CloudSun, Route as RouteIcon, MapPin, Mountain, Trophy, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, card, band } from './w3tokens'
 
 // ────────────────────────────────────────────────────────────────────────
@@ -281,6 +282,8 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
   const [busy, setBusy] = useState<Adapt>('none')
   const [result, setResult] = useState<AdaptResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showAdapt, setShowAdapt] = useState(false)
+  const navigate = useNavigate()
   const reduce = useReducedMotion()
   const isToday = day.status === 'today'
   const isPast = day.status === 'hit' || day.status === 'over' || day.status === 'missed' || day.status === 'rest'
@@ -393,10 +396,11 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 13, borderTop: `1px solid ${T.rule}`, marginBottom: 4 }}>
               <Zap size={14} color={T.acid} /><span style={{ fontSize: 11.5, color: T.mid }}>{session.earn}</span>
             </div>
-            <div style={{ height: 54, borderRadius: 100, background: T.acid, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', marginTop: 12 }}>
-              <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: -0.2, color: T.bg }}>Start the ride</span>
+            <button onClick={() => navigate('/e/w3-session')}
+              style={{ height: 54, width: '100%', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', marginTop: 12 }}>
+              <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: -0.2, color: T.bg }}>View workout</span>
               <div style={{ width: 38, height: 38, borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
-            </div>
+            </button>
           </>
         )}
 
@@ -434,7 +438,20 @@ export function TrainingSection({ day, session, onAdapt }: { day: W3DayFull; ses
         )}
       </motion.div>
 
-      {isToday && <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />}
+      {/* Adapt options hidden behind an "Adjust" toggle (like the old Today's
+          "anpassen") — the plan reads clean; tap to re-plan with the coach. */}
+      {isToday && (
+        showAdapt ? (
+          <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
+        ) : (
+          <button onClick={() => setShowAdapt(true)}
+            style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 100, background: T.surface, border: `1px solid ${T.rule}`, cursor: 'pointer', fontFamily: FONT }}>
+            <SlidersHorizontal size={14} color={T.mid} />
+            <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 0.3, color: T.mid }}>Adjust</span>
+            <ChevronDown size={14} color={T.quiet} />
+          </button>
+        )
+      )}
     </div>
   )
 }

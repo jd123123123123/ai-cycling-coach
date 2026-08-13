@@ -10,6 +10,7 @@ import { STARTER_BIKE } from './starterBike'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryInsight from './W3RecoveryInsight'
+import W3RecoveryNudge from './W3RecoveryNudge'
 import { W3CoachFab } from './W3CoachChat'
 import './w3.css'
 
@@ -295,9 +296,11 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
             </div>
             <span style={{ fontSize: 10, fontWeight: 500, color: T.quiet }}>{vm.coachDate}</span>
           </div>
-          <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.28, color: T.ink }}>{vm.coachLead ?? DASH}</div>
-          {vm.coachWhy && <div style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{vm.coachWhy}</div>}
         </div>
+
+        {/* ── Recovery nudge: the real "Erholungssignal / Gute Erholung" morning
+             signal (HRV/sleep/RHR vs baseline), replacing the long coach text ── */}
+        <W3RecoveryNudge />
 
         {/* ── Signals ── */}
         <div style={{ ...band(26), flexDirection: 'row', gap: 8 }}>
