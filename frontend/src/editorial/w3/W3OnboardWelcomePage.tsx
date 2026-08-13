@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { SHOWCASE_RIDER } from './showcaseRider'
+import { W3_ONBOARD_HERO } from './w3OnboardHero'
 import { markW3OnboardingSeen } from './w3Onboarding'
 import W3OnboardWelcomeView from './W3OnboardWelcomeView'
 
@@ -15,7 +15,7 @@ export default function W3OnboardWelcomePage() {
   }
   return (
     <W3OnboardWelcomeView
-      heroImageUrl={SHOWCASE_RIDER}
+      heroImageUrl={W3_ONBOARD_HERO}
       onNext={() => navigate('/e/w3-onboard-devices')}
       onSkip={skip}
     />
