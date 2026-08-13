@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike } from 'lucide-react'
+import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike, Star, Asterisk, Share2 } from 'lucide-react'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
@@ -52,6 +52,72 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
   const grad = GRADIENTS[(p.description?.length ?? 0) % GRADIENTS.length]
   const busy = p.state === 'analyzing' || p.state === 'rendering'
   const unavailable = p.state === 'reveal' && (!p.imageUrl || p.renderStatus !== 'ok')
+
+  // ── BIKE UNLOCKED celebration (pen j9jH7) — only with a real render, one page ──
+  if (p.state === 'reveal' && p.imageUrl && p.renderStatus === 'ok') {
+    // fixture: rarity + reward chips (the reward economy has no per-unlock grant).
+    const rewards: { icon: typeof Star; label: string }[] = [
+      { icon: Sparkles, label: '+250' }, { icon: Star, label: '+1.75' }, { icon: Asterisk, label: '+40K' },
+    ]
+    return (
+      <div className="w3-root">
+        <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg, position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 120, left: '50%', transform: 'translateX(-50%)', width: 460, height: 460, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}1F, transparent)` }} />
+          {['#C8FF00', '#7B5CFF', '#00E5FF', '#FFB020', '#C8FF00', '#7B5CFF'].map((c, i) => (
+            <motion.div key={i} initial={reduce ? false : { y: -20, opacity: 0 }} animate={{ y: [-20, 700], opacity: [0, 1, 0], rotate: [0, 220] }} transition={{ duration: 2.6, delay: i * 0.14, repeat: Infinity, repeatDelay: 0.8 }}
+              style={{ position: 'absolute', top: 0, left: `${12 + i * 14}%`, width: 6, height: 12, borderRadius: 2, background: c, zIndex: 1 }} />
+          ))}
+          <W3StatusBar />
+
+          <div style={{ padding: '0 12px 0 8px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', zIndex: 2 }}>
+            <button onClick={p.onBack} aria-label="Back" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={20} color={T.ink} /></button>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Garage</span>
+            <div style={{ width: 40 }} />
+          </div>
+
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '4px 20px 28px', position: 'relative', zIndex: 2 }}>
+            <motion.div initial={reduce ? false : { scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.4, ease: EASE }}
+              style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 14px', borderRadius: 100, background: T.acidDim, border: `1px solid ${T.acid}44` }}>
+              <Sparkles size={13} color={T.acid} /><span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.acid }}>NEW UNLOCK</span>
+            </motion.div>
+
+            {/* Bike card + rarity tag */}
+            <motion.div initial={reduce ? false : { scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, ease: EASE, delay: 0.1 }}
+              style={{ width: '100%', maxWidth: 320, aspectRatio: '1 / 1', borderRadius: 24, background: grad, overflow: 'hidden', position: 'relative' }}>
+              <img src={p.imageUrl} alt="Dein Bike" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 5, alignItems: 'center', padding: '5px 10px', borderRadius: 100, background: '#0B0B0BB0', backdropFilter: 'blur(3px)' }}>
+                <Star size={11} color={T.acid} fill={T.acid} /><span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: T.ink }}>RARE · 16</span>
+              </div>
+            </motion.div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, textAlign: 'center' }}>
+              <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1, color: T.ink }}>BIKE UNLOCKED</span>
+              <span style={{ fontSize: 15, fontWeight: 500, color: T.mid }}>Dein W3-Collectible · frisch gerendert</span>
+              <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.4, color: T.quiet, maxWidth: 300 }}>Es steht in deiner Garage. Jede Fahrt, die du loggst, levelt es weiter.</span>
+            </div>
+
+            {/* Reward chips (fixture) */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              {rewards.map((rw) => { const Ic = rw.icon; return (
+                <div key={rw.label} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '9px 14px', borderRadius: 100, background: T.surface, border: `1px solid ${T.stroke}` }}>
+                  <Ic size={14} color={T.acid} /><span style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{rw.label}</span>
+                </div>
+              ) })}
+            </div>
+
+            <div style={{ width: '100%', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button onClick={p.onBack} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+                In die Garage
+              </button>
+              <button onClick={p.onSave} style={{ height: 46, borderRadius: 100, border: 0, background: 'transparent', color: T.mid, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
+                <Share2 size={15} color={T.mid} />Share the moment
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w3-root">

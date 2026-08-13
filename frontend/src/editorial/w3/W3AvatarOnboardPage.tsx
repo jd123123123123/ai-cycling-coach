@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { useGrantOnboarding } from '../../hooks/useWallet'
+import { useGrantOnboarding, useWallet } from '../../hooks/useWallet'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { updateUser } from '../../api/auth'
 import { apiClient } from '../../api/client'
@@ -56,6 +56,7 @@ export default function W3AvatarOnboardPage() {
   // Real lifetime stats for the "AVATAR UNLOCKED" reveal (pen lQimK).
   const seasonsAgo = useMemo(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 6); return d }, [])
   const { data: acts } = useActivitiesRange(seasonsAgo, new Date())
+  const { data: wallet } = useWallet()
   const reveal = useMemo<AvatarReveal>(() => {
     const cyc = (acts?.activities ?? []).filter((a) => a.sport === 'cycling')
     const rides = cyc.length
@@ -67,14 +68,14 @@ export default function W3AvatarOnboardPage() {
     const avgSpeed = saddleH > 0 ? distKm / saddleH : 0
     const fmtK = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(Math.round(n)))
 
-    // ── Level system — everyone starts at LEVEL 1 and levels up from lifetime
-    //    riding (distance + climbing + rides + hours as XP). ~600 XP per level. ──
-    const xp = Math.round(distKm + elevM / 100 + rides * 4 + saddleH * 3)
-    const XP_PER = 600
-    const level = 1 + Math.floor(xp / XP_PER)
-    const intoLevel = xp % XP_PER
-    const levelPct = xp > 0 ? intoLevel / XP_PER : 0
-    const xpNote = `${XP_PER - intoLevel} XP bis Level ${level + 1}`
+    // ── Level — IN-APP progression only (RideCoin earned in the app). Everyone
+    //    starts at LEVEL 1; lifetime riding fills the STATS, never the level. ──
+    const rc = Math.max(0, wallet?.balance ?? 0)
+    const XP_PER = 500
+    const level = 1 + Math.floor(rc / XP_PER)
+    const intoLevel = rc % XP_PER
+    const levelPct = intoLevel / XP_PER
+    const xpNote = `${XP_PER - intoLevel} RC bis Level ${level + 1}`
 
     // Role from riding character (real): lots of vertical → Climber, fast → Rouleur.
     const elevPerKm = distKm > 0 ? elevM / distKm : 0
@@ -115,7 +116,7 @@ export default function W3AvatarOnboardPage() {
       secondary,
       syncNote,
     }
-  }, [acts, hero, handle])
+  }, [acts, hero, handle, wallet])
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
