@@ -2,7 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
   Bell, Bike, Flame, Share2, Pencil,
-  Sparkles, Star, Gauge as GaugeIcon,
+  Sparkles, Star,
 } from 'lucide-react'
 import { WeekSection, WeatherRoute, MirrorChart, TrainingSection, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt } from './W3Sections'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
@@ -10,6 +10,7 @@ import { STARTER_BIKE } from './starterBike'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryNudge from './W3RecoveryNudge'
+import W3TodayProgress from './W3TodayProgress'
 import { W3CoachFab } from './W3CoachChat'
 import './w3.css'
 
@@ -159,24 +160,6 @@ function ChargeMeter({ score }: { score: number | null }) {
   )
 }
 
-function Ring({ pct, size = 46 }: { pct: number; size?: number }) {
-  const reduce = useReducedMotion()
-  const r = (size - 5) / 2
-  const c = 2 * Math.PI * r
-  const off = c * (1 - pct / 100)
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flex: 'none' }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#FFFFFF14" strokeWidth={5} />
-      <motion.circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.acid} strokeWidth={5} strokeLinecap="round"
-        strokeDasharray={c}
-        initial={reduce ? false : { strokeDashoffset: c }}
-        animate={{ strokeDashoffset: off }}
-        transition={{ duration: 0.9, ease: EASE }}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-      <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" fontSize={12} fontWeight={600} fill={T.ink} fontFamily={FONT}>{Math.round(pct)}%</text>
-    </svg>
-  )
-}
 
 /** The pen's repeating section header: bold title, "Earned by training, not
  *  bought" subtitle, and an acid pill tag on the right. */
@@ -379,68 +362,8 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           </div>
         </div>
 
-        {/* ── Your Progress (fixture economy; POWER = real wallet balance) ── */}
-        <SectionHead title="Your Progress" subtitle="Earned by training, not bought" tag={vm.zoneTag} />
-        <div style={{ ...band(30), gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>What the training is buying</span>
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: T.acid }}>Garage →</span>
-          </div>
-          <div style={{ ...card(), gap: 14, padding: '18px 18px 20px' }}>
-            <div style={{ display: 'flex', gap: 13, alignItems: 'center' }}>
-              <div style={{ width: 44, height: 44, borderRadius: 14, background: T.acidDim, display: 'grid', placeItems: 'center' }}><GaugeIcon size={20} color={T.acid} /></div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>Next upgrade</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>{vm.garageName}</span>
-              </div>
-              <span style={{ fontSize: 20, fontWeight: 600, letterSpacing: -0.3, color: T.acid }}>{vm.garagePct}%</span>
-            </div>
-            <div style={{ display: 'flex', gap: 2, height: 10 }}>
-              {Array.from({ length: 25 }).map((_, i) => {
-                const on = i < Math.round(vm.garagePct / 100 * 25)
-                return (
-                  <motion.div key={i}
-                    initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(i * 0.02)}
-                    style={{ flex: 1, height: on ? 10 : 5, alignSelf: 'flex-end', transformOrigin: 'bottom', borderRadius: 1.5, background: on ? T.acid : T.rule }} />
-                )
-              })}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid }}>{vm.garageRidesLine}</span>
-              <span style={{ fontSize: 10, fontWeight: 500, color: T.acid }}>{vm.garageMakesLine}</span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[['POWER', vm.power], ['CYCLE', vm.cycle]].map(([l, v]) => (
-              <div key={l} style={{ flex: 1, display: 'flex', gap: 10, alignItems: 'center', padding: '14px 16px', borderRadius: 18, background: T.surface }}>
-                <div style={{ width: 30, height: 30, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center' }}>
-                  {l === 'POWER' ? <Sparkles size={15} color={T.acid} /> : <Star size={15} color={T.acid} />}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Kicker>{l}</Kicker>
-                  <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>{v}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[[vm.mRides, 'rides'], [vm.mDist, 'dist']].map(([m], i) => {
-              const mi = m as { pct: number; label: string }
-              return (
-                <div key={i} style={{ flex: 1, display: 'flex', gap: 12, alignItems: 'center', padding: 16, borderRadius: 20, background: T.surface }}>
-                  <Ring pct={mi.pct} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>Next milestone</span>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {i === 0 ? <Bike size={15} color={T.ink} /> : <GaugeIcon size={15} color={T.ink} />}
-                      <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{mi.label}</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        {/* ── Your progress: real fitness goals (FTP/VO2max/20-min) + challenges ── */}
+        <W3TodayProgress />
 
         <W3CoachFab />
         <W3TabBar />
