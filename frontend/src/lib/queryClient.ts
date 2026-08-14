@@ -6,7 +6,23 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,         // 1 minute — dashboard data is not real-time
-      gcTime: 5 * 60_000,        // 5 minutes
+      // ── Why 30 minutes and not 5 ──────────────────────────────────────
+      // gcTime is NOT a freshness setting. It only decides how long an entry
+      // with no observers survives before being thrown away; `staleTime`
+      // alone decides when the data is re-fetched, and it is untouched here.
+      // So every query still revalidates on exactly the schedule it did
+      // before. What changes is the SECOND visit to a screen: at 5 minutes,
+      // stepping away from Today for six minutes evicted its cache, so
+      // coming back re-entered the "no data yet" branch and the screen
+      // blocked on a full-screen loader. At 30 minutes it paints the data it
+      // already had — immediately — while the refetch that would have run
+      // anyway lands underneath and swaps in the fresh numbers. A rider never
+      // sees older data than they'd have seen; they just stop seeing a
+      // spinner in front of data the app is holding. Anything genuinely
+      // time-sensitive stays honest through its own means (readinessGate
+      // dates the MEASUREMENT, not the cache entry).
+      gcTime: 30 * 60_000,       // 30 minutes — retention only; see above
+
       refetchOnWindowFocus: false,
       retry: (failureCount, error: unknown) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

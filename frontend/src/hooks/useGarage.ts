@@ -10,15 +10,30 @@ export const GARAGE_KEY = ['garage'] as const
  * The rider's garage — their digitalised rider figure and bike.
  *
  * This is the surface that answers "does this rider have a bike?". It is read
- * by the Today hero and the ride hero, so it's cached generously: a collectible
- * only changes when the rider deliberately re-renders one, and that path
- * invalidates this key itself.
+ * by the Today hero, the ride hero, the top-bar avatar, the biker page, the
+ * bike studio and the avatar gate — six call sites, ONE query. They all pass
+ * this same module-level constant as the key, so react-query serves them from a
+ * single cache entry and de-duplicates the in-flight request: the response is
+ * fetched once per staleTime window no matter how many of them are on screen.
+ *
+ * That matters more here than anywhere else in the app, because the payload is
+ * not JSON-shaped metadata — `/garage` inlines the rider and bike collectibles
+ * as base64 WebP, roughly 43 KB each. Refetching it per component would put
+ * ~90 KB on the wire for pixels the app is already holding.
+ *
+ * `gcTime` is pinned rather than left to the client default because the default
+ * used to be SHORTER than this staleTime (5 min vs 10), which quietly defeated
+ * the caching: with every observer unmounted the entry was evicted at 5 minutes
+ * and the next screen re-downloaded both images despite the 10-minute promise.
+ * A collectible only changes when the rider deliberately re-renders one, and
+ * that path invalidates this key itself.
  */
 export function useGarage() {
   return useQuery<Garage>({
     queryKey: GARAGE_KEY,
     queryFn: fetchGarage,
     staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   })
 }
 
@@ -47,7 +62,11 @@ export function useRideScene(activityId: number | null | undefined) {
     queryKey: ['garage', 'scene', activityId],
     queryFn: () => fetchRideScene(activityId as number),
     enabled: activityId != null,
+    // Same reasoning as the garage: this returns an inlined base64 hero, and a
+    // gcTime shorter than the staleTime would have evicted it long before it
+    // went stale, re-downloading the image on every reopen of the ride.
     staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   })
 }
 

@@ -8,7 +8,7 @@ import W3AvatarGate from './editorial/w3/W3AvatarGate'
 import ProtectedRoute from './components/ProtectedRoute'
 import ScrollToTop from './components/ScrollToTop'
 import ErrorBoundary from './components/ErrorBoundary'
-import AppSplash from './components/AppSplash'
+import AppLoading from './components/AppLoading'
 import PageTransition from './components/PageTransition'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 import { resolveLandingPath } from './editorial/state/designSystem'
@@ -58,11 +58,12 @@ const RouteRehearsalView = lazyWithRetry(() => import('./pages/RouteRehearsalVie
 // EDITORIAL II — a second design system, mounted alongside the first.
 const EditorialTodayPage = lazyWithRetry(() => import('./editorial/pages/TodayPage'))
 const EditorialSessionDetailPage = lazyWithRetry(() => import('./editorial/pages/SessionDetailPage'))
-// The five bottom-tab destinations (today / rides / bike-studio / wins / biker)
-// are also listed in `editorial/w3/w3TabChunks.ts`, which the tab bar uses to
-// warm them on idle. Same module specifier → same emitted chunk → after a
-// prefetch these React.lazy factories resolve straight from the ES module
-// registry with no second request. Keep the two lists in step.
+// Most of the W3 destinations below are ALSO listed in
+// `editorial/w3/w3TabChunks.ts`, which the tab bar uses to warm them on idle
+// (the five bottom tabs first, then the screens reached through Today/Rides).
+// Same module specifier → same emitted chunk → after a prefetch these
+// React.lazy factories resolve straight from the ES module registry with no
+// second request. Keep the two lists in step.
 const W3TodayPage = lazyWithRetry(() => import('./editorial/w3/W3TodayPage'))
 const W3TodayPreview = lazyWithRetry(() => import('./editorial/w3/W3TodayPreview'))
 const W3SessionPage = lazyWithRetry(() => import('./editorial/w3/W3SessionPage'))
@@ -158,18 +159,23 @@ function App() {
 // that mounts fresh has revealed nothing, so it paints its fallback
 // immediately. Because the key changed on every navigation, every navigation
 // tore down the old boundary and mounted a brand-new one, which is exactly why
-// tapping a tab flashed <AppSplash> even between two already-visited screens.
+// tapping a tab flashed the fallback even between two already-visited screens.
 // Hoisting the boundary above the key makes it stable for the app's lifetime:
 // React now keeps the outgoing screen on-screen until the incoming chunk has
-// arrived, and the crossfade runs on ready content. The splash is left with the
-// only job it was written for — the cold first paint.
+// arrived, and the crossfade runs on ready content. The fallback is left with
+// the only job it was written for — the cold first paint.
+//
+// That fallback is <AppLoading>, the SAME branded acid-bloom loader every W3
+// screen uses (editorial/w3/W3Loading re-exports it). The old light-themed
+// "Coach" splash is gone: it flashed white in a black app and was the only
+// place in the product that still introduced itself as "Coach".
 function AppRoutes() {
   const location = useLocation()
   return (
     <>
     <W3RideCelebrationWatcher />
     <W3AvatarGate />
-    <Suspense fallback={<AppSplash />}>
+    <Suspense fallback={<AppLoading />}>
       <PageTransition routeKey={location.pathname}>
         <Routes location={location}>
           {/* Public routes */}

@@ -501,3 +501,25 @@ a, button, [role="button"], [role="tab"] {
   /* Reclaim the notch/status-bar area the black-translucent bar draws over. */
   body { padding-top: env(safe-area-inset-top); }
 }
+
+/* ── The one loading treatment (components/AppLoading.tsx) ─────────────────
+   A literal transcription of the motion/react variants this replaced, so the
+   branded W3 wait state can render from the ENTRY chunk without dragging the
+   animation runtime in front of the first paint. */
+@keyframes app-loading-bloom {
+  0%, 100% { transform: scale(1);    opacity: 0.5; }
+  50%      { transform: scale(1.35); opacity: 0.15; }
+}
+@keyframes app-loading-spin { to { transform: rotate(360deg); } }
+@keyframes app-loading-mark {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+.app-loading-bloom { opacity: 0.5; animation: app-loading-bloom 1.8s ease-in-out infinite; }
+.app-loading-arc   { animation: app-loading-spin 1.1s linear infinite; }
+.app-loading-mark  { animation: app-loading-mark 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .app-loading-bloom { animation: none; opacity: 0.4; }
+  .app-loading-arc,
+  .app-loading-mark  { animation: none; }
+}

@@ -15,8 +15,10 @@ import { scheduleW3TabPrefetch } from './w3TabChunks'
  * with a soft glow, quiet inactive tabs, the home indicator.
  *
  * ── Making the tabs instant ───────────────────────────────────────────────
- * 1. On mount we queue an idle-time warm-up of all five destination chunks
- *    (`scheduleW3TabPrefetch`). Idle rather than hover/touchstart because this
+ * 1. On mount we queue an idle-time warm-up of every W3 destination chunk
+ *    (`scheduleW3TabPrefetch`) — the five tabs together, then the non-tab
+ *    screens reached through Today and Rides, one at a time; see w3TabChunks
+ *    for the tiering. Idle rather than hover/touchstart because this
  *    is a 390px touch UI: there is no hover, and touchstart→click is ~0 ms, so
  *    an intent-triggered prefetch would arrive far too late to help. The bar
  *    only renders inside the W3 shell, so nobody outside it pays the bytes, and
@@ -53,7 +55,7 @@ export default function W3TabBar() {
     ?? related.find(([re]) => re.test(p))?.[1]
     ?? 'today'
 
-  // Warm the five destination chunks once the current screen has settled.
+  // Warm the destination chunks once the current screen has settled.
   useEffect(() => scheduleW3TabPrefetch(), [])
 
   // Optimistic active tab: the pill moves on tap, not on arrival. We remember
