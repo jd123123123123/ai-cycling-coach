@@ -14,14 +14,27 @@ import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { parseISO, fmtDEShort, DE_WD2 } from './w3plan'
 import { useTodayWeather, type TodayWeather } from '../../hooks/useTodayWeather'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
-import { isPresent, type Value } from '../data/value'
+import { isPresent } from '../data/value'
+import { formatMultiplier, nextStreakTier, streakMultiplier } from '../../api/rewards'
+import { DASH, T } from './w3tokens'
 import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
 import { hasSeenW3Onboarding } from './w3Onboarding'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type W3Block, type OnAdapt } from './W3TodayView'
 import type { W3Weather } from './W3Sections'
 
-type SignalValue = { value: number; delta: number | null }
+/** A signal card's baseline comparison, computed from the rider's OWN recent
+ *  readings: the mean of every day in the window EXCEPT the one on display.
+ *  Returns null below `MIN_BASELINE_DAYS` prior readings — an "average" of one
+ *  or two nights is not a baseline, and the card says "—" instead. `n` rides
+ *  along so the label can name the real window ("vs 5-day avg"), never claim a
+ *  7-day mean the rider's data can't support. */
+const MIN_BASELINE_DAYS = 3
+function baselineOf(series: number[] | null | undefined): { mean: number; n: number } | null {
+  if (!series || series.length < MIN_BASELINE_DAYS + 1) return null
+  const prior = series.slice(0, -1)
+  return { mean: prior.reduce((s, v) => s + v, 0) / prior.length, n: prior.length }
+}
 
 /**
  * W3 · 01 TODAY, wired to live data. Route: /e/w3-today.
@@ -36,17 +49,29 @@ type SignalValue = { value: number; delta: number | null }
  * The bike hero is real too: `useGarage()` returns the collectible the rider
  * actually rendered in the studio, or null, and the View shows the offer to
  * make one rather than a stock stand-in.
- * What remains of the reward-economy layer (earn rate, Power/Cycle balances,
- * the Garage upgrade, the crew standings) has no backend yet, so those fields
- * are DESIGN FIXTURES reproducing the pen; each is marked `fixture:` below.
+ * What remains of the reward-economy layer (Power/Cycle balances, the Garage
+ * upgrade, the crew challenge) has no backend yet, so those fields are DESIGN
+ * FIXTURES reproducing the pen; each is marked `fixture:` below. The EARN RATE
+ * left that list on 2026-08-13: it is now derived from the rider's real streak
+ * through `api/rewards.ts`'s single tier table, which mirrors the server's
+ * `rewards.streak_multiplier()` (hard-capped at ×1.5 — the old hardcoded
+ * "1.75×" was a rate the backend could never actually pay out).
  */
 
-/** Build a 7-bar spark from a series, normalised to its own max, last = today. */
-function sparkFrom(series: number[] | null, hi: string): W3Spark {
-  if (!series || series.length === 0) return { bars: [0.3, 0.5, 0.4, 0.7, 0.55, 0.8, 1], hi } // fixture shape when no series
+/** Build a spark from a REAL series, or null when there isn't one (the card
+ *  then draws an empty track — see `Spark` in W3TodayView).
+ *
+ *  Normalised across the window's own min→max rather than to zero: resting HR
+ *  lives in a 54-62 bpm band and sleep in a 6-8 h one, so a zero-based scale
+ *  renders every night as a full bar and hides the very movement the card
+ *  exists to show. Floor of 0.22 keeps the low bar visible. */
+function sparkFrom(series: number[] | null | undefined, hi: string): W3Spark | null {
+  if (!series || series.length < 2) return null
   const tail = series.slice(-7)
-  const max = Math.max(...tail, 1)
-  return { bars: tail.map((v) => v / max), hi }
+  const lo = Math.min(...tail)
+  const span = Math.max(...tail) - lo
+  const bars = span > 0 ? tail.map((v) => 0.22 + ((v - lo) / span) * 0.78) : tail.map(() => 0.6)
+  return { bars, hi }
 }
 
 // ── Real per-day session math (mirrors PlanTab's interval→bar + Ø-watts logic
@@ -241,26 +266,111 @@ export default function W3TodayPage() {
     const readiness = modelReadiness ?? adaptive?.daily_decision?.readiness?.score ?? null
     const verdict = isPresent(model.verdict) ? model.verdict.value : null
 
-    const sig = (
-      v: Value<SignalValue>,
-      unit: string,
-      fmt: (x: number) => string,
-      hi: string,
-    ): W3Signal | null => {
-      if (!isPresent(v)) return null
-      const { value, delta } = v.value
-      const sub = delta == null ? null : `${delta > 0 ? '+' : ''}${delta} vs baseline`
-      return { value: fmt(value), unit, sub, subHue: '#C8FF00', spark: sparkFrom(null, hi) }
+    // ── Readiness vs yesterday ─────────────────────────────────────────────
+    // REAL, from `model.readinessVsPrevious` — the two most recent DATED
+    // `training_readiness` readings in the `/daily-metrics` window. Shown only
+    // when the score on the hero IS the reading the delta was computed on
+    // (`score` match): the moment readiness comes from the adaptive-engine
+    // fallback instead, the two numbers are different quantities and the delta
+    // would be measuring something the big number isn't showing.
+    const rvp = isPresent(model.readinessVsPrevious) ? model.readinessVsPrevious.value : null
+    const dayGapLabel = (onIso: string, vsIso: string): string => {
+      const days = Math.round((Date.parse(`${onIso}T00:00:00`) - Date.parse(`${vsIso}T00:00:00`)) / 86_400_000)
+      if (days <= 1) return 'vs yesterday'
+      return `vs ${days} days ago`
     }
+    const readinessDelta = rvp != null && readiness != null && rvp.score === readiness
+      ? {
+          text: `${rvp.delta > 0 ? '+' : rvp.delta < 0 ? '−' : '±'}${Math.abs(rvp.delta)} ${dayGapLabel(rvp.onIso, rvp.vsIso)}`,
+          favourable: rvp.delta >= 0,
+        }
+      : null
 
-    const hrv = sig(model.hrv, 'ms', (x) => String(Math.round(x)), '#00E5FF')
-    const rhr = sig(model.restingHr, 'bpm', (x) => String(Math.round(x)), '#C8FF00')
+    // ── Earn rate ──────────────────────────────────────────────────────────
+    // REAL: the rider's forgiving streak (`GET /athletes/me/streak` via
+    // `useStreak`) run through `streakMultiplier()` — the ONE frontend copy of
+    // rewards.py's `_STREAK_TIERS`, living in `api/rewards.ts` so the two can't
+    // drift. Nothing on the wire carries a current multiplier (`/rewards/wallet`
+    // returns balance/ledger/tier; the ledger's `multiplier` is per past ride),
+    // so deriving it here is the only honest route to a forward-looking rate.
+    // No streak yet → "—", never a number the server can't pay.
+    const streakDays = streak?.streak ?? null
+    const earnRate = streakDays == null ? DASH : formatMultiplier(streakMultiplier(streakDays))
+    const nextTier = streakDays == null ? null : nextStreakTier(streakDays)
+    const toGo = nextTier != null && streakDays != null ? nextTier.days - streakDays : null
+    const earnRateWhy = streakDays == null
+      ? null
+      : streakDays < 3
+        // Below the first tier there is no bonus to name — say what unlocks one.
+        ? (nextTier && toGo != null ? `${toGo} ${toGo === 1 ? 'day' : 'days'} to ${formatMultiplier(nextTier.multiplier)}` : null)
+        : nextTier && toGo != null
+          ? `${streakDays}-day streak · ${toGo} to ${formatMultiplier(nextTier.multiplier)}`
+          : `${streakDays}-day streak · max rate`
+
+    // ── The three overnight signals ────────────────────────────────────────
+    // Each card shows the real reading AND how it sits against the rider's own
+    // recent history. The baselines are NOT interchangeable, so each card names
+    // the one it actually used:
+    //  · HRV       — `/health/morning-check`'s 28-day personal baseline
+    //                (morning_health_detector.py). Real, but INTERMITTENT: the
+    //                detector emits a signal only on a morning the metric is
+    //                genuinely off baseline, so most days it has no delta and
+    //                the card honestly prints "—". There is no second HRV
+    //                series to fill the gap with (see model.hrv.series).
+    //  · Resting HR — the mean of the OTHER days in `model.recentRestingHr`
+    //                (the real 7-day `/daily-metrics` window). Available every
+    //                day, so this is what the card leads with; the
+    //                morning-check delta is used when the detector did fire,
+    //                since that's the sharper 28-day read.
+    //  · Sleep     — the mean of the other nights in `model.recentSleep`
+    //                (same `/daily-metrics` window). The morning-check's sleep
+    //                signal is a 0-100 SCORE and can never be a baseline for a
+    //                duration, so it is deliberately not used here.
+    const NEUTRAL = T.mid
+    /** Sub-line for a card: signed delta, coloured by whether the move is the
+     *  good direction for that metric. Calm, never alarming — favourable is
+     *  acid, everything else is quiet grey rather than a red warning. */
+    const subOf = (text: string, favourable: boolean) => ({ sub: text, subHue: favourable ? T.acid : NEUTRAL })
+    const signed = (n: number, digits = 0) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n).toFixed(digits)}`
+
+    const hrvSeries = isPresent(model.hrv) ? model.hrv.value.series : null
+    const hrv: W3Signal | null = isPresent(model.hrv)
+      ? (() => {
+          const { value, delta } = model.hrv.value
+          const s = delta == null ? { sub: null, subHue: NEUTRAL } : subOf(`${signed(delta)} vs baseline`, delta >= 0)
+          return { value: String(Math.round(value)), unit: 'ms', ...s, spark: sparkFrom(hrvSeries, '#00E5FF') }
+        })()
+      : null
+
+    const rhrSeries = isPresent(model.recentRestingHr) ? model.recentRestingHr.value.map((d) => d.bpm) : null
+    const rhr: W3Signal | null = isPresent(model.restingHr)
+      ? (() => {
+          const { value, delta } = model.restingHr.value
+          const base = baselineOf(rhrSeries)
+          // Lower resting HR is the favourable direction.
+          const s = delta != null
+            ? subOf(`${signed(delta)} vs baseline`, delta <= 0)
+            : base != null
+              ? subOf(`${signed(value - base.mean)} vs ${base.n}-day avg`, value - base.mean <= 0)
+              : { sub: null, subHue: NEUTRAL }
+          return { value: String(Math.round(value)), unit: 'bpm', ...s, spark: sparkFrom(rhrSeries, '#C8FF00') }
+        })()
+      : null
+
+    const sleepSeries = isPresent(model.recentSleep) ? model.recentSleep.value.map((d) => d.totalS) : null
     const sleep: W3Signal | null = isPresent(model.sleep)
       ? (() => {
-          const s = model.sleep.value
-          const hrs = Math.floor(s.totalS / 3600)
-          const mins = Math.round((s.totalS % 3600) / 60)
-          return { value: `${hrs}:${String(mins).padStart(2, '0')}`, unit: 'hrs', sub: null, subHue: '#C8FF00', spark: sparkFrom(null, '#ED29FF') }
+          const totalS = model.sleep.value.totalS
+          const hrs = Math.floor(totalS / 3600)
+          const mins = Math.round((totalS % 3600) / 60)
+          const base = baselineOf(sleepSeries)
+          // More sleep is the favourable direction; the delta reads in minutes,
+          // which is the unit a rider actually feels a night's difference in.
+          const deltaMin = base != null ? Math.round((totalS - base.mean) / 60) : null
+          const s = deltaMin != null && base != null
+            ? subOf(`${signed(deltaMin)} min vs ${base.n}-day avg`, deltaMin >= 0)
+            : { sub: null, subHue: NEUTRAL }
+          return { value: `${hrs}:${String(mins).padStart(2, '0')}`, unit: 'hrs', ...s, spark: sparkFrom(sleepSeries, '#ED29FF') }
         })()
       : null
 
@@ -494,7 +604,9 @@ export default function W3TodayPage() {
           : readiness >= 65 ? 'Ready'
             : readiness >= 45 ? 'Steady'
               : readiness >= 30 ? 'Easy' : 'Rest',
-      earnRate: '1.75×', // fixture: earn-rate economy not built
+      readinessDelta,
+      earnRate,
+      earnRateWhy,
       coachDate: isPresent(model.dateLabel) ? model.dateLabel.value : '',
       coachLead: verdict ? verdict.headline : null,
       coachWhy: verdict ? verdict.body : null,

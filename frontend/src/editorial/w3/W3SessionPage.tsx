@@ -8,7 +8,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { downloadWorkoutExport } from '../../api/coach'
 import { isPresent } from '../data/value'
 import { funName, powerProfile, effortGuide } from './w3session'
-import W3SessionView, { type W3SessionVm, type W3Step, type W3ShapeBar, type W3EarnTile } from './W3SessionView'
+import W3SessionView, { type W3SessionVm, type W3Step, type W3ShapeBar, type W3EarnTile, type W3EarnLedger } from './W3SessionView'
 
 /**
  * W3 · 06 SESSION DETAIL, wired to live data. Route /e/w3-session(/:id).
@@ -21,15 +21,30 @@ import W3SessionView, { type W3SessionVm, type W3Step, type W3ShapeBar, type W3E
  *
  * The hero name is a characterful `funName` over the real prescribed title
  * (kept as the subtitle). "How to ride it" is the session's zone definition,
- * not a fabricated read-out. "What it earns" shows the REAL streak + TSS this
- * session banks; the one `fixture:` is the RideCoin conversion line, since the
- * reward economy isn't wired into this screen.
+ * not a fabricated read-out. "What it earns" shows the REAL streak this session
+ * extends plus the season ledgers it pays into (season TSS, season saddle
+ * time): banked + this session = the season on completion, with this session's
+ * exact share of that sum and its size against the season's average ride. All
+ * of it is arithmetic over totals already fetched here — no rate is assumed, so
+ * nothing is projected. The one `fixture:` is the RideCoin conversion line,
+ * since the reward economy isn't wired into this screen.
  *
  * Buttons: back, share (Web Share / clipboard), export the workout (.fit,
  * `downloadWorkoutExport` — the real export path), and back-to-today.
  */
 
+const DASH = '—'
 const fmtMin = (min: number) => `${Math.floor(min / 60)}:${String(Math.round(min % 60)).padStart(2, '0')}`
+const fmtInt = (n: number) => Math.round(n).toLocaleString('en-US')
+/** This session against the season's average ride — a ratio of two real
+ *  totals, not a forecast. Below 0.05× the "0.0×" read-out is meaningless, so
+ *  it says so in words instead. */
+const vsAvg = (x: number, kind: 'load' | 'length'): string =>
+  x < 0.05
+    ? (kind === 'load' ? 'A fraction of your average ride’s load this season.' : 'A fraction of the length of your average ride this season.')
+    : kind === 'load'
+      ? `${x.toFixed(1)}× the load of your average ride so far this season.`
+      : `${x.toFixed(1)}× as long as your average ride so far this season.`
 
 export default function W3SessionPage() {
   const navigate = useNavigate()
@@ -41,9 +56,16 @@ export default function W3SessionPage() {
   const { data: seasonActs } = useActivitiesRange(new Date(new Date().getFullYear(), 0, 1), new Date())
 
   const vm = useMemo<W3SessionVm>(() => {
+    // Season-to-date, counted only over the activities that actually carry the
+    // metric — so the totals are unchanged, but the per-ride averages below
+    // divide by a real denominator instead of silently by the null rides too.
     const acts = seasonActs?.activities ?? []
-    const seasonTss = acts.length ? Math.round(acts.reduce((s, a) => s + (a.tss ?? 0), 0)) : null
-    const seasonSaddleMin = acts.length ? Math.round(acts.reduce((s, a) => s + (a.duration_seconds ?? 0), 0) / 60) : null
+    const tssActs = acts.filter((a) => a.tss != null)
+    const durActs = acts.filter((a) => a.duration_seconds != null)
+    const seasonTss = tssActs.length ? Math.round(tssActs.reduce((s, a) => s + (a.tss as number), 0)) : null
+    const seasonSaddleMin = durActs.length ? Math.round(durActs.reduce((s, a) => s + (a.duration_seconds as number), 0) / 60) : null
+    const avgTss = seasonTss != null && tssActs.length > 0 ? seasonTss / tssActs.length : null
+    const avgSaddleMin = seasonSaddleMin != null && durActs.length > 0 ? seasonSaddleMin / durActs.length : null
     const workout = session.workout
     const planned = adaptive?.daily_decision?.planned ?? null
 
@@ -99,26 +121,58 @@ export default function W3SessionPage() {
       }
     })
 
-    // What it earns — REAL: the streak this session extends + the TSS it banks.
+    // What it earns — REAL: the streak this session extends, plus the season
+    // ledgers it pays into.
     const streakDays = streak?.streak ?? null
     const earns: W3EarnTile[] = []
     if (streakDays != null) {
       earns.push({ icon: 'flame', v: `DAY ${streakDays + 1}`, l: 'STREAK', s: streakDays > 0 ? `Extends your ${streakDays}-day run` : 'Starts a new run' })
     }
-    // TSS + saddle time as SEASON-to-date totals, with this ride's increase.
-    if (seasonTss != null || effTss != null) {
+
+    // Season TSS + saddle time as LEDGERS rather than flat tiles: banked
+    // (season to date) + this session = the season on completion, plus this
+    // session's exact share of that sum. Every figure is arithmetic over
+    // numbers already on this page — no future rate is assumed anywhere, so
+    // none of it is a projection. The session is today's PRESCRIPTION, not a
+    // logged ride, so it is ADDED to the season rather than counted in it
+    // (the section header says "On completion"). When the season total isn't
+    // known the old plain tile stands in, so the "—" contract still holds.
+    const ledgers: W3EarnLedger[] = []
+    if (seasonTss != null && effTss != null && effTss > 0) {
+      const total = seasonTss + effTss
+      ledgers.push({
+        icon: 'zap',
+        label: 'SEASON TSS',
+        banked: fmtInt(seasonTss),
+        delta: `+${effTss}`,
+        total: fmtInt(total),
+        share: total > 0 ? effTss / total : null,
+        note: avgTss != null && avgTss > 0 ? vsAvg(effTss / avgTss, 'load') : '',
+      })
+    } else if (seasonTss != null || effTss != null) {
       earns.push({
         icon: 'zap',
-        v: seasonTss != null ? seasonTss.toLocaleString('en-US') : '—',
+        v: seasonTss != null ? fmtInt(seasonTss) : DASH,
         l: 'SEASON TSS',
         s: effTss != null ? `+${effTss} this ride` : 'Season training load',
       })
     }
-    if (seasonSaddleMin != null || (durHr != null && durHr > 0)) {
+    if (seasonSaddleMin != null && effDurMin != null && effDurMin > 0) {
+      const total = seasonSaddleMin + effDurMin
+      ledgers.push({
+        icon: 'clock',
+        label: 'SADDLE · SEASON · H:MM',
+        banked: fmtMin(seasonSaddleMin),
+        delta: `+${fmtMin(effDurMin)}`,
+        total: fmtMin(total),
+        share: total > 0 ? effDurMin / total : null,
+        note: avgSaddleMin != null && avgSaddleMin > 0 ? vsAvg(effDurMin / avgSaddleMin, 'length') : '',
+      })
+    } else if (seasonSaddleMin != null || (durHr != null && durHr > 0)) {
       const h = seasonSaddleMin != null ? Math.floor(seasonSaddleMin / 60) : null
       earns.push({
         icon: 'clock',
-        v: h != null ? `${h}h` : '—',
+        v: h != null ? `${h}h` : DASH,
         l: 'SADDLE · SEASON',
         s: effDurMin ? `+${fmtMin(effDurMin)} this ride` : 'Time on the bike this year',
       })
@@ -180,6 +234,7 @@ export default function W3SessionPage() {
         : null,
 
       earns,
+      ledgers,
       earnNote,
 
       canExport: workout != null,

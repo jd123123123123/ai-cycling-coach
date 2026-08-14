@@ -21,7 +21,10 @@ import './w3.css'
  * tap so `navigator.share` still runs inside the user gesture (Safari).
  */
 
-export type AvatarStage = 'intro' | 'generating' | 'revealed'
+/** `unavailable` = the studio could not produce a real figurine (no image model,
+ *  or the call failed). It is its own stage on purpose: the alternative was
+ *  navigating away silently, which read as the app skipping the whole flow. */
+export type AvatarStage = 'intro' | 'generating' | 'revealed' | 'unavailable'
 export type InsightKey = 'elevation' | 'longest' | 'speed' | 'burned'
 export interface AvatarInsight { key: InsightKey; label: string; value: string; caption: string }
 export interface AvatarReveal {
@@ -276,6 +279,37 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
   }
 
   if (stage === 'generating') return <W3AvatarGenerating heroImageUrl={heroImageUrl} />
+
+  // The studio couldn't render. Honest, and recoverable in place — the rider
+  // stays on this screen with their photo and a retry, instead of being moved
+  // on as though nothing had been attempted.
+  if (stage === 'unavailable') {
+    return (
+      <div className="w3-root">
+        <div className="w3-frame" style={{ fontFamily: FONT, minHeight: '100dvh', background: T.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '0 26px', textAlign: 'center' }}>
+          {heroImageUrl && (
+            <div style={{ width: 132, height: 132, borderRadius: 26, overflow: 'hidden', border: `1px solid ${T.stroke}`, opacity: 0.5 }}>
+              <img src={heroImageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            </div>
+          )}
+          <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.8, lineHeight: 1.15, color: T.ink }}>
+            Das Studio hat gerade nicht geantwortet
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: T.mid, maxWidth: 300 }}>
+            Dein Foto ist noch da. Probier es nochmal — oder mach es später in der Garage.
+          </span>
+          <button onClick={onPick}
+            style={{ width: '100%', maxWidth: 320, height: 54, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 6 }}>
+            Nochmal versuchen
+          </button>
+          <button onClick={onSkip}
+            style={{ height: 44, background: 'transparent', border: 0, color: T.quiet, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+            Später
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // ── Intro: ONE PAGE at 390×844, safe areas included, nothing scrolls ──
   // The hero is the only flexible box (`flex: 1`), so every copy-length or

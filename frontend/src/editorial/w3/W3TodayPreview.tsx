@@ -24,7 +24,11 @@ const FIXTURE: W3Vm = {
   streak: 17,
   readiness: 88,
   readinessWord: 'Green light',
-  earnRate: '1.75×',
+  readinessDelta: { text: '+6 vs yesterday', favourable: true },
+  // ×1.4 is what a real 17-day streak buys under rewards.py's tier table —
+  // the old "1.75×" here was above the server's hard ×1.5 ceiling.
+  earnRate: '1.4×',
+  earnRateWhy: '17-day streak · 13 to 1.5×',
   coachDate: 'Tue 12 Aug · Week 6 of 16',
   coachLead: '88 is a green light. Your body will absorb everything today’s session asks of it.',
   coachWhy: 'All three overnight signals moved the same way for the first time in nine days: HRV 71 ms (+9 on baseline), resting HR 42 (−3), sleep 7:42 at 91 quality.',

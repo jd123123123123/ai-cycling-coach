@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight } from 'lucide-react'
-import { T, FONT, EASE, grow, Kicker, card, band } from './w3tokens'
+import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, type LucideIcon } from 'lucide-react'
+import { T, FONT, EASE, grow, Kicker, card, band, DASH } from './w3tokens'
 
 // ────────────────────────────────────────────────────────────────────────
 // "Deine Woche" — ONE card: the week's day selector, the selected day's
@@ -150,11 +150,32 @@ export type Adapt = 'none' | 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest'
 export interface AdaptResult { targetW: string; tss: number | null; ftpPct: string; rationale: string; railsDowngraded: boolean; title?: string | null }
 export type OnAdapt = (kind: Exclude<Adapt, 'none'>) => Promise<AdaptResult | null>
 
-function StatCol({ v, l, hue }: { v: string; l: string; hue?: string }) {
+interface DayStat { icon: LucideIcon; v: string; l: string; hue?: string }
+
+/** One supporting number of the selected day's prescription, as its own mini
+ *  card: icon chip left, number over kicker right.
+ *
+ *  Deliberately quiet — the session title and the CTA keep the card's only acid
+ *  voices. `hue` is passed ONLY when the coach has just re-planned that number,
+ *  and a missing value ("—") stays T.quiet and keeps the chip grey, so an
+ *  adapted-but-unknown number can never look like a real one.
+ *
+ *  Width (390 viewport): 390 − 40 band − 36 card padding = 314 usable; two
+ *  columns at gap 8 → 153 per card, minus 24 padding = 129 for chip (28) + gap
+ *  (10) + text (91). "285 W" at 17/700 Inter Tight is ~46, "DER FTP" ~42 — both
+ *  clear, and every child carries minWidth: 0 so nothing can push the row wide. */
+function StatCard({ icon: Ic, v, l, hue, span }: DayStat & { span?: boolean }) {
+  const has = v !== DASH
+  const on = has && hue != null
   return (
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.3, color: hue ?? T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
-      <Kicker>{l}</Kicker>
+    <div style={{ gridColumn: span ? '1 / -1' : undefined, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 16, background: T.surface2 }}>
+      <div style={{ width: 28, height: 28, flex: 'none', borderRadius: 9, background: on ? T.acidDim : '#FFFFFF0F', display: 'grid', placeItems: 'center' }}>
+        <Ic size={15} color={on ? T.acid : T.mid} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.3, fontVariantNumeric: 'tabular-nums', color: has ? (hue ?? T.ink) : T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
+        <Kicker>{l}</Kicker>
+      </div>
     </div>
   )
 }
@@ -248,6 +269,16 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
   const curFtp = result ? (parseInt(result.ftpPct) || baseFtp) : baseFtp
   const isRest = adapt === 'rest'
   const adapted = adapt !== 'none'
+  // The four supporting numbers. Duration is today-only (the view only knows
+  // today's session length), so other days show three and the last card spans
+  // the row rather than leaving a hole in the grid.
+  const replanned = adapted && isToday ? T.acid : undefined
+  const stats: DayStat[] = [
+    ...(isToday && session.dur ? [{ icon: Timer, v: session.dur, l: 'DAUER' }] : []),
+    { icon: Zap, v: curT ? `${curT} W` : DASH, l: 'ZIEL', hue: replanned },
+    { icon: Gauge, v: curTss ? `${curTss}` : DASH, l: 'TSS', hue: replanned },
+    { icon: Percent, v: curFtp ? `${curFtp}%` : DASH, l: 'DER FTP' },
+  ]
   // How to ride it + fuelling (the 60 g/h is standard endurance guidance, not a
   // fabricated per-ride number).
   const tw = day.targetW && day.targetW !== '—' ? day.targetW : 'im Zielbereich'
@@ -327,11 +358,10 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
       {/* Stats only when there's a real prescription (title + a number). A
           future day with no plan yet hides the empty dash row. */}
       {(day.title != null && (curTss > 0 || curT > 0)) && (
-        <div style={{ display: 'flex', gap: 10 }}>
-          {isToday && session.dur && <StatCol v={session.dur} l="DAUER" />}
-          <StatCol v={curT ? `${curT} W` : '—'} l="ZIEL" hue={adapted && isToday ? T.acid : undefined} />
-          <StatCol v={curTss ? `${curTss}` : '—'} l="TSS" hue={adapted && isToday ? T.acid : undefined} />
-          <StatCol v={curFtp ? `${curFtp}%` : '—'} l="DER FTP" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+          {stats.map((s, i) => (
+            <StatCard key={s.l} {...s} span={stats.length % 2 === 1 && i === stats.length - 1} />
+          ))}
         </div>
       )}
 

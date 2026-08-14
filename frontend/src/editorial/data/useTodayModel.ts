@@ -108,13 +108,26 @@ export interface TodayModel {
    *  (audit-b-data gap 2 — Resting's "top of your 90-day range" line). Same
    *  source table, same client-side max, no new query. */
   bodyBattery90DayHigh: Value<number>
-  hrv: Value<{ value: number; unit: 'ms'; delta: number | null; band: RangeBand | null }>
+  /** Today's readiness against the previous day that actually has a reading,
+   *  with both dates. Built from the real dated `/daily-metrics` window rather
+   *  than from `snapshot.training_readiness` (which silently falls back to
+   *  yesterday's row, making a naive today-minus-yesterday come out 0 on every
+   *  morning Garmin hasn't post-processed yet — see the field's construction
+   *  for the full reasoning). Missing when there's only one dated reading. */
+  readinessVsPrevious: Value<{ delta: number; onIso: string; vsIso: string; score: number }>
+  hrv: Value<{ value: number; unit: 'ms'; delta: number | null; band: RangeBand | null; series: number[] | null }>
   restingHr: Value<{ value: number; unit: 'bpm'; delta: number | null; band: RangeBand | null }>
   /** Evening's "01 Today" resting-HR track: the last 7 daily readings, oldest
    *  first. Derived from `recentMetrics`, which is already fetched for the
    *  wearable-freshness label — no extra request. */
   recentRestingHr: Value<{ date: string; bpm: number }[]>
   sleep: Value<{ totalS: number; deepS: number | null; remS: number | null; lightS: number | null; awakeS: number | null }>
+  /** The last 7 daily sleep DURATIONS, oldest first — the sibling of
+   *  `recentRestingHr`, derived from the same already-fetched `recentMetrics`
+   *  window. This is the only honest personal baseline a sleep-duration
+   *  reading can be compared against (the morning-check's `sleep_score` signal
+   *  is a 0-100 score, a different quantity entirely). */
+  recentSleep: Value<{ date: string; totalS: number }[]>
   pmc: Value<{ fitness: number; fatigue: number; form: number; series: PmcPoint[] }>
   recovery: Value<{ hoursRemaining: number; clearAtLabel: string }>
   /** Resting's Hero Body "Climb" visualisation (`h54Rs`/`z46aUu`, "SINCE YOU
@@ -371,6 +384,32 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       t('readinessMissing'),
     )
 
+  // ── Readiness against the PREVIOUS DAY'S OWN reading ────────────────────
+  // Distinct from `readiness.deltaVsYesterday` above, which subtracts
+  // yesterday's row from `snapshot.training_readiness` — and the snapshot
+  // itself already falls back to yesterday's row when today's is still a stub
+  // (biometrics_snapshot.py), so on most mornings that subtraction is one
+  // reading minus ITSELF and reports a confident, meaningless 0.
+  //
+  // This field instead walks the real dated `/daily-metrics` window and takes
+  // the two most recent DISTINCT days that actually carry a
+  // `training_readiness`, so the delta is always two different measurements
+  // and always knows which two days it compared. Missing — never 0 — when
+  // there is only one reading to go on.
+  const datedReadiness = (recentMetrics ?? [])
+    .filter((m): m is DailyMetric & { date: string; training_readiness: number } =>
+      m.date != null && m.training_readiness != null)
+    .sort((a, b) => b.date.localeCompare(a.date))
+  const readinessVsPrevious: Value<{ delta: number; onIso: string; vsIso: string; score: number }> =
+    datedReadiness.length >= 2
+      ? present({
+        delta: datedReadiness[0].training_readiness - datedReadiness[1].training_readiness,
+        onIso: datedReadiness[0].date,
+        vsIso: datedReadiness[1].date,
+        score: datedReadiness[0].training_readiness,
+      })
+      : missing(t('readinessMissing'))
+
   const wearableReason = wearableMissingReason(now, recentMetrics, locale)
 
   const hrvSignal = health?.signals.find((s) => s.metric === 'hrv')
@@ -380,14 +419,39 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       unit: 'ms' as const,
       delta: hrvSignal?.delta ?? null,
       band: buildRangeBand(hrvSignal, hrvState),
+      // The morning-check's own real trailing series for this metric — present
+      // only on mornings the detector actually fired (it returns signals only
+      // when a metric is off baseline), so it is `null` far more often than
+      // not. No second HRV series exists to stand in for it: `/daily-metrics`
+      // exposes `hrv_status` (a different column from the snapshot's
+      // `hrv_overnight_avg`, which `DailyMetricRead` does not carry at all),
+      // and charting one against the other would be two quantities in one line.
+      series: hrvSignal?.series ?? null,
     },
     wearableReason,
   )
 
+  // ── Overnight-row resolution (bug fix, 2026-08-13) ──────────────────────
+  // Garmin files the metrics for the night that ENDED this morning under
+  // YESTERDAY's date (the day the sleep started); today's row stays a stub
+  // until Garmin post-processes the day. `backend/app/services/
+  // biometrics_snapshot.py` documents this and already resolves it field-by-
+  // field (today ?? yesterday) for hrv_overnight_avg / training_readiness /
+  // recovery_time_hours — which is exactly why the HRV card renders a number
+  // while Resting HR and Sleep, read straight off `todayMetric`, render "—"
+  // for the SAME rider on the SAME morning.
+  //
+  // This is not a stale-data fallback: yesterday's row IS last night's
+  // reading. Same rule as the backend's, one day only — never a reach further
+  // back, which would be a different night dressed as this one.
+  const overnight = <K extends keyof DailyMetric>(field: K): DailyMetric[K] | null =>
+    (todayMetric?.[field] ?? yesterdayMetric?.[field]) ?? null
+
+  const overnightRestingHr = overnight('resting_hr')
   const restingHrSignal = health?.signals.find((s) => s.metric === 'resting_hr')
   const restingHr = fromNullable(
-    todayMetric?.resting_hr == null ? null : {
-      value: todayMetric.resting_hr,
+    overnightRestingHr == null ? null : {
+      value: overnightRestingHr,
       unit: 'bpm' as const,
       delta: restingHrSignal?.delta ?? null,
       band: buildRangeBand(restingHrSignal),
@@ -409,7 +473,12 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     ? present(restingHrHistory)
     : missing<{ date: string; bpm: number }[]>(wearableReason)
 
-  const sleepDetail = todayMetric?.sleep_detail ?? null
+  // Same Garmin filing convention as `restingHr` above — last night's sleep is
+  // stored on the night-start date, so today's stub row has no `sleep_detail`
+  // and yesterday's does. Prefer today's whenever it exists.
+  const sleepDetail = (todayMetric?.sleep_detail?.total_s != null
+    ? todayMetric.sleep_detail
+    : yesterdayMetric?.sleep_detail) ?? null
   const sleep = fromNullable(
     sleepDetail == null || sleepDetail.total_s == null ? null : {
       totalS: sleepDetail.total_s,
@@ -420,6 +489,20 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     },
     wearableReason,
   )
+
+  // The 7-day sleep-duration track — the sibling of `recentRestingHr` above,
+  // built from the SAME already-fetched `recentMetrics` window (a filter, not a
+  // fetch). Gives the Sleep card a real personal baseline instead of the
+  // morning-check's `sleep_score` signal, which is a 0-100 score and therefore
+  // not a baseline any duration may honestly be measured against.
+  const sleepHistory = (recentMetrics ?? [])
+    .filter((m): m is DailyMetric & { date: string } => m.date != null && m.sleep_detail?.total_s != null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-7)
+    .map((m) => ({ date: m.date, totalS: m.sleep_detail!.total_s! }))
+  const recentSleep = sleepHistory.length > 0
+    ? present(sleepHistory)
+    : missing<{ date: string; totalS: number }[]>(wearableReason)
 
   const pmcEntries = pmc?.entries ?? []
   const latestPmc = pmcEntries[pmcEntries.length - 1] ?? null
@@ -725,6 +808,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     dateLabel,
     streakDays,
     readiness,
+    readinessVsPrevious,
     readinessGate,
     readinessGateHeadline,
     readiness90DayBest,
@@ -735,6 +819,7 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     restingHr,
     recentRestingHr,
     sleep,
+    recentSleep,
     pmc: pmcValue,
     recovery,
     bodyBattery,

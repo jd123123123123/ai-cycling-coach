@@ -18,9 +18,10 @@ import { STARTER_BIKE } from './starterBike'
  *    bars and the per-block list are the session's own real numbers.
  *  - "How to ride it" is the session's training-zone definition (RPE / talk
  *    test / pacing) — honest coaching, never a fabricated read-out.
- *  - "What it earns" shows the REAL streak + TSS this session banks; the
- *    RideCoin conversion line is the one `fixture:` (economy spec'd, not
- *    wired into this screen).
+ *  - "What it earns" shows the REAL streak this session extends, plus the
+ *    season ledgers it pays into (TSS, saddle time) drawn as banked + this
+ *    ride + the sum; the RideCoin conversion line is the one `fixture:`
+ *    (economy spec'd, not wired into this screen).
  *
  * Buttons are all live: back, share (Web Share / clipboard), export the
  * workout (.fit), and back-to-today. Animations use `animate` (mount), not
@@ -33,6 +34,25 @@ export interface W3PrescStat { v: string; l: string; s: string; icon: StatIcon }
 export interface W3ShapeBar { w: number; work: boolean }
 export interface W3EffortRow { label: string; value: string; hint: string; band: 'low' | 'mid' | 'high' }
 export interface W3EarnTile { icon: StatIcon; v: string; l: string; s: string }
+
+/**
+ * A season ledger this session pays into — season TSS, season saddle time.
+ * The point of the row is the RELATIONSHIP: what is already banked, what this
+ * one session adds, and what that adds up to. Every field is a real number or
+ * an honest "—"; `share` is pure arithmetic over the other two (no future rate
+ * is assumed anywhere, so nothing here is a projection).
+ */
+export interface W3EarnLedger {
+  icon: StatIcon
+  label: string          // "SEASON TSS"
+  banked: string         // the season so far, before this session
+  delta: string          // "+112" / "+1:33" — what this session adds
+  total: string          // the season on completion
+  /** This session ÷ the season on completion, 0..1. `null` → draw no bar. */
+  share: number | null
+  /** Optional honest scale line, e.g. "1.3× the load of your average ride." */
+  note: string
+}
 export interface W3RouteInfo { name: string; lastRidden: string; stats: { v: string; l: string }[]; notes: string[]; foot: string }
 
 export interface W3SessionVm {
@@ -53,7 +73,8 @@ export interface W3SessionVm {
   steps: W3Step[]
   effort: W3EffortRow[]      // honest zone-derived effort guide
   route: W3RouteInfo | null
-  earns: W3EarnTile[]        // real: streak + TSS this session banks
+  earns: W3EarnTile[]        // real: the streak this session extends
+  ledgers: W3EarnLedger[]    // real: the season totals this session pays into
   earnNote: string           // fixture: RideCoin economy line
   canExport: boolean         // a real prescribed workout exists to export
   primaryLabel: string       // export label, or "Back to today" when nothing to export
@@ -76,6 +97,68 @@ function GaugeBar({ segs, delay = 0 }: { segs: { h: number; on: boolean }[]; del
         <motion.div key={i} initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(delay + i * 0.012)}
           style={{ flex: 1, height: s.h, transformOrigin: 'bottom', borderRadius: 1, background: s.on ? T.acid : '#FFFFFF14' }} />
       ))}
+    </div>
+  )
+}
+
+/** Exact share, never rounded up in the reader's favour: 12%, 1.4%, "<0.1%". */
+const sharePct = (x: number): string =>
+  x >= 0.095 ? `${Math.round(x * 100)}%` : x >= 0.001 ? `${(x * 100).toFixed(1)}%` : '<0.1%'
+
+/** A slice this thin would be sub-pixel, so it is floored — see LedgerRow.
+ *  ~6px of the ~310px bar inside the card at 390. */
+const TIP_FLOOR_SHARE = 0.02
+
+/**
+ * One season ledger, made legible as a CONTRIBUTION rather than a stat: the
+ * arithmetic reads on one line (banked + this ride → the season on
+ * completion), and the bar underneath IS that season total — deep acid for
+ * what was already banked, bright acid for the slice this one session adds.
+ *
+ * The real design problem is that a single session against a whole season is a
+ * 1–2% sliver, which a naive proportional bar renders invisible. The slice is
+ * amplified by GLOW, not by geometry: it keeps its true share of the bar,
+ * floored only at 6px so it can never disappear, and the exact percentage is
+ * printed beside it. No future rate is assumed anywhere in this row, so
+ * nothing here is a projection.
+ */
+function LedgerRow({ row, delay }: { row: W3EarnLedger; delay: number }) {
+  const reduce = useReducedMotion()
+  const Ic = ICONS[row.icon]
+  const share = row.share != null ? Math.max(0, Math.min(1, row.share)) : null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+      <div style={{ display: 'flex', gap: 9, alignItems: 'center', minWidth: 0 }}>
+        <div style={{ width: 26, height: 26, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+          <Ic size={13} color={T.acid} />
+        </div>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.label}</span>
+      </div>
+
+      {/* The contribution as arithmetic: what you had, what today adds, the sum. */}
+      <div style={{ display: 'flex', gap: 7, alignItems: 'baseline', flexWrap: 'wrap', minWidth: 0 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: T.quiet }}>{row.banked}</span>
+        <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.2, color: T.acid }}>{row.delta}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.d3 }}>→</span>
+        <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -1, color: row.total === DASH ? T.quiet : T.ink }}>{row.total}</span>
+      </div>
+
+      {share != null && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 2, height: 10, width: '100%' }}>
+            <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(delay)}
+              style={{ flexGrow: Math.max(0.0001, 1 - share), flexBasis: 0, minWidth: 0, height: 10, transformOrigin: 'left', borderRadius: '100px 2px 2px 100px', background: `linear-gradient(90deg, ${T.acidDeep}2E, ${T.acidDeep})` }} />
+            <motion.div initial={reduce ? false : { scaleX: 0, opacity: 0 }} animate={{ scaleX: 1, opacity: 1 }} transition={grow(delay + 0.28)}
+              style={{ flexGrow: Math.max(0.0001, share), flexBasis: 0, minWidth: 6, height: 10, transformOrigin: 'right', borderRadius: '2px 100px 100px 2px', background: T.acid, boxShadow: `0 0 12px ${T.acid}8C, 0 0 4px ${T.acid}` }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, minWidth: 0 }}>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>SEASON SO FAR</span>
+            <span style={{ flexShrink: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>THIS RIDE · {sharePct(share)}</span>
+          </div>
+        </div>
+      )}
+
+      {row.note && <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>{row.note}</span>}
     </div>
   )
 }
@@ -354,28 +437,47 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
           )}
         </div>
 
-        {/* What it earns — REAL streak + TSS; RideCoin line is fixture */}
-        {vm.earns.length > 0 && (
+        {/* What it earns — REAL: the streak this session extends, and the season
+            ledgers (TSS, saddle time) it pays into. One card so the section
+            reads as one account being credited; the RideCoin line is fixture. */}
+        {(vm.earns.length > 0 || vm.ledgers.length > 0) && (
           <div style={{ ...band(28), gap: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>What it earns</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: T.mid }}>On completion</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink, minWidth: 0 }}>What it earns</span>
+              <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: T.mid }}>On completion</span>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ ...card(), gap: 16 }}>
               {vm.earns.map((u, i) => {
                 const Ic = ICONS[u.icon]
                 return (
-                  <div key={i} style={{ flex: 1, padding: '14px 13px 16px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Ic size={14} color={T.acid} /></div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.9, color: u.v === DASH ? T.quiet : T.ink }}>{u.v}</span>
-                      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, color: T.acid }}>{u.l}</span>
-                      <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{u.s}</span>
+                  <div key={`t${i}`} style={{ display: 'flex', gap: 11, alignItems: 'center', minWidth: 0, paddingTop: i === 0 ? 0 : 16, borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Ic size={15} color={T.acid} /></div>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0 }}>
+                        <span style={{ flexShrink: 0, fontSize: 19, fontWeight: 700, letterSpacing: -0.6, color: u.v === DASH ? T.quiet : T.ink }}>{u.v}</span>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, color: T.acid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.l}</span>
+                      </div>
+                      <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.s}</span>
                     </div>
                   </div>
                 )
               })}
+              {vm.ledgers.map((l, i) => {
+                const first = i === 0 && vm.earns.length === 0
+                return (
+                  <div key={l.label} style={{ paddingTop: first ? 0 : 16, borderTop: first ? 'none' : `1px solid ${T.rule}`, minWidth: 0 }}>
+                    <LedgerRow row={l} delay={0.08 + i * 0.12} />
+                  </div>
+                )
+              })}
             </div>
+            {/* The one thing the bars can't say for themselves: a sliver this
+                small is drawn at a floor so it stays visible. Say it plainly. */}
+            {vm.ledgers.some((l) => l.share != null && l.share > 0 && l.share < TIP_FLOOR_SHARE) && (
+              <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>
+                Each bar is the whole season. A slice under 2% is drawn at a minimum width so today still shows — the percentages beside it are exact.
+              </span>
+            )}
             {vm.earnNote && <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>{vm.earnNote}</span>}
           </div>
         )}

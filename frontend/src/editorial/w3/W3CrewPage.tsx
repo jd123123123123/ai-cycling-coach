@@ -4,24 +4,35 @@ import { useMyCrew, useCrewStandings } from '../../hooks/useCrew'
 import { useToggleReaction } from '../../hooks/useCrewReactions'
 import { useCrewChallenges, useCreateChallenge } from '../../hooks/useChallenges'
 import type { StandingRow } from '../../api/crew'
+import { DASH } from './w3tokens'
 import W3CrewView, { type W3CrewVm, type W3CrewMember, type W3ShowedUpRow, type W3Highlight } from './W3CrewView'
 import W3CrewGoalEditor from './W3CrewGoalEditor'
+import W3Loading from './W3Loading'
+import { bucketMeta, periodWord, thisPeriod, windowChip, windowDays, windowEdges, type W3Period } from './w3crew'
 
 /**
  * W3 · 10 CREW, wired. Route /e/w3-crew.
  *
- * REAL from `useMyCrew` + `useCrewStandings('week')`:
- *  - crew name, member roster + your rank on the board
- *  - each rider's active days (sessions) and score vs the crew leader (the %)
- *  - the who-showed-up week grid (from each rider's daily_pct)
- *  - summed crew distance, your share, and who you out-rode
- *  - the "this week" highlights, all derived from the standings numbers
+ * WEEK / MONTH / SEASON is one piece of state that becomes the standings
+ * `period` param (season → `year`); the server returns the caller-local window
+ * in `period_start`/`period_end` and every row total is for THAT window. The
+ * `weekly_*` field names are back-compat only — nothing below calls a season
+ * total "weekly".
+ *
+ * REAL from `useMyCrew` + `useCrewStandings(period)`:
+ *  - crew TSS (Σ weekly_tss) and crew kilometres (Σ distance_km) for the window
+ *  - per rider: window TSS, distance, score vs the crew leader, rank
+ *  - the who-showed-up strip, one block per real `daily_pct` bucket
+ *  - your share of the crew's TSS and distance, and the derived highlights
+ *
+ * HONEST AGGREGATION: `distance_km` is nullable per rider. The kilometre total
+ * only sums the riders who HAVE the field and says so when that is a subset;
+ * with nobody reporting distance it renders "—", never 0.
  *
  * FIXTURE (reward / flavor layer, no backend field — marked inline):
  *  - the props economy (Give props button + "three a week" hint)
- *  - the 500 km "Around the world" goal ceiling
+ *  - the 500 km "Around the world" ring fallback when no crew challenge is set
  *  - the 8-seat crew cap → "seats open"
- *  - the "up one" rank delta (no prior-week rank stored) — omitted live, honest
  */
 
 const SEAT_CAP = 8 // fixture: crew size ceiling not modelled server-side
@@ -34,30 +45,27 @@ const ORD = (n: number) => {
 const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
 const words = (n: number) => WORDS[n] ?? String(n)
 
-// Each rider's ≤14 daily buckets → the 7 most recent days as filled/empty.
-function weekGrid(daily: number[] | undefined): boolean[] {
-  const a = (daily ?? []).slice(-7).map((v) => v > 0)
-  while (a.length < 7) a.unshift(false)
-  return a
-}
-const activeDays = (daily: number[] | undefined) => (daily ?? []).filter((v) => v > 0).length
-const dist = (r: StandingRow) => Math.max(0, r.distance_km ?? 0)
+const kmLabel = (v: number) => (v >= 10 ? nf.format(Math.round(v)) : v.toFixed(1))
 
 const EMPTY: W3CrewVm = {
   inCrew: false,
   crewName: 'Your crew',
   blurb: 'A crew scores each rider against their own weekly plan — so a short week and a big week sit on the same board. Invite a few riders to start yours.',
-  rankOrdinal: '—', rankSub: '', propsHint: '', periodChip: 'MON–SUN',
-  members: [], showedUp: [], showedUpFilled: 0, showedUpTotal: 0, showedUpNote: '',
+  period: 'week', windowChip: '',
+  rankOrdinal: DASH, rankSub: '', propsHint: '',
+  crewTss: DASH, crewTssSub: '', crewKm: DASH, crewKmCoverage: null, avgTss: DASH, yourShare: DASH, outputNote: '',
+  members: [], showedUp: [], showedUpFilled: 0, showedUpTotal: 0, showedUpNote: '', gridDow: false, gridEdges: null,
+  showDistanceGoal: false,
   distanceKm: 0, distanceGoalKm: 0, distancePct: 0, distanceToGo: 0,
-  yourDistanceKm: 0, yourDistanceNote: '', yourSharePct: 0,
-  highlights: [], seatsOpen: SEAT_CAP, seatsCopy: '',
+  yourDistanceNote: '', yourSharePct: 0,
+  highlights: [], highlightsTitle: '', seatsOpen: SEAT_CAP, seatsCopy: '',
 }
 
 export default function W3CrewPage() {
   const navigate = useNavigate()
-  const { data: mine } = useMyCrew()
-  const { data: standings } = useCrewStandings('week')
+  const [period, setPeriod] = useState<W3Period>('week')
+  const { data: mine, isError: mineError } = useMyCrew()
+  const { data: standings, isError: standingsError } = useCrewStandings(period)
   const { data: crewChallenges } = useCrewChallenges()
   const toggleProps = useToggleReaction()
   const createChallenge = useCreateChallenge()
@@ -71,7 +79,7 @@ export default function W3CrewPage() {
   const vm = useMemo<W3CrewVm>(() => {
     const rows = standings?.standings ?? []
     if (rows.length === 0) {
-      return { ...EMPTY, crewName: mine?.crew?.name ?? EMPTY.crewName }
+      return { ...EMPTY, period, crewName: mine?.crew?.name ?? EMPTY.crewName }
     }
 
     const total = rows.length
@@ -79,64 +87,104 @@ export default function W3CrewPage() {
     const topScore = Math.max(...rows.map((r) => r.weekly_score), 1)
     const me = rows.find((r) => r.is_you) ?? null
     const myRank = ranked.findIndex((r) => r.is_you) + 1
-
     const label = (r: StandingRow) => (r.is_you ? 'You' : `@${r.handle}`)
 
-    // ── The crew: rank, active days, score vs leader (real) ──
+    // The window the server actually computed, in the caller's own timezone.
+    const startISO = standings?.period_start ?? standings?.week_start
+    const endISO = standings?.period_end ?? standings?.week_end
+
+    // Buckets: how many, and what ONE of them covers (a day on a week, roughly
+    // a week on a month, roughly a month on a season).
+    const cols = ranked[0]?.daily_pct?.length ?? 0
+    const bm = bucketMeta(windowDays(startISO, endISO), cols)
+
+    // ── 1 · Crew output — summed from the real rows ──
+    const crewTssNum = rows.reduce((n, r) => n + (r.weekly_tss ?? 0), 0)
+    const kmRows = rows.filter((r) => r.distance_km != null)
+    const crewKmNum = kmRows.reduce((n, r) => n + (r.distance_km as number), 0)
+    const myTss = me?.weekly_tss ?? 0
+    const myKm = me?.distance_km ?? null
+
+    // Never sum a partial set as if it were the whole crew.
+    const crewKmCoverage = kmRows.length === 0
+      ? 'No rider in this crew has distance data for this window yet.'
+      : kmRows.length < total
+        ? `Kilometres cover ${words(kmRows.length)} of the ${words(total)} riders — the rest have no distance data.`
+        : null
+
+    // ── 2 · The crew ──
     const members: W3CrewMember[] = ranked.map((r, i) => ({
       id: r.user_id,
       name: label(r),
       rank: i + 1,
-      sessions: activeDays(r.daily_pct),
+      tssLabel: nf.format(r.weekly_tss ?? 0),
+      kmLabel: r.distance_km != null ? `${kmLabel(r.distance_km)} km` : null,
       pct: Math.round((r.weekly_score / topScore) * 100),
       isYou: r.is_you,
     }))
 
-    // ── Who showed up: week grid from each rider's daily_pct (real) ──
+    // ── 3 · Who showed up — one block per REAL bucket, never padded to seven ──
     const showedUp: W3ShowedUpRow[] = ranked.map((r) => ({
-      id: r.user_id, name: label(r), isYou: r.is_you, days: weekGrid(r.daily_pct),
+      id: r.user_id, name: label(r), isYou: r.is_you,
+      days: (r.daily_pct ?? []).map((v) => v > 0),
     }))
     const showedUpFilled = showedUp.reduce((n, row) => n + row.days.filter(Boolean).length, 0)
-    const showedUpTotal = total * 7
+    const showedUpTotal = total * cols
+    const gridDow = period === 'week' && cols === 7 && bm.unit === 'day'
+    const showedUpNote = bm.unit === 'day'
+      ? 'A filled block is a day a rider actually logged a session.'
+      : `A filled block is a stretch of about ${Math.round(bm.daysPerBucket)} days with at least one logged session.`
 
-    // ── Around the world: summed crew distance (real). The goal is a REAL crew
-    // distance_km challenge when the crew has set one (editable); otherwise an
-    // honest auto-ring the crew can replace by tapping "edit". ──
-    const crewKm = Math.round(rows.reduce((n, r) => n + dist(r), 0))
-    const yourKm = me ? Math.round(dist(me)) : 0
+    // ── 4 · Around the world — the crew goal is a WEEKLY challenge, so the ring
+    // is only honest on the week window. ──
+    const crewKmRounded = Math.round(crewKmNum)
+    const yourKmRounded = myKm != null ? Math.round(myKm) : 0
     const distanceGoalKm = distanceChallenge
       ? Math.round(distanceChallenge.target)
-      : Math.max(500, Math.ceil((crewKm || 1) / 500) * 500)
-    const distancePct = Math.round((crewKm / distanceGoalKm) * 100)
-    const distanceToGo = Math.max(0, distanceGoalKm - crewKm)
-    const yourSharePct = crewKm > 0 ? Math.round((yourKm / crewKm) * 100) : 0
-    const beaten = me ? rows.filter((r) => !r.is_you && dist(r) < dist(me)).length : 0
-    const yourDistanceNote = yourKm > 0
-      ? (beaten > 0 ? `You've put in ${nf.format(yourKm)} km — more than ${words(beaten)} of the ${words(total)}` : `You've put in ${nf.format(yourKm)} km this week`)
-      : 'You have no distance logged this week yet'
+      : Math.max(500, Math.ceil((crewKmRounded || 1) / 500) * 500)
+    const distancePct = Math.round((crewKmRounded / distanceGoalKm) * 100)
+    const distanceToGo = Math.max(0, distanceGoalKm - crewKmRounded)
+    const yourSharePct = crewKmRounded > 0 ? Math.round((yourKmRounded / crewKmRounded) * 100) : 0
+    const beaten = myKm != null
+      ? rows.filter((r) => !r.is_you && r.distance_km != null && (r.distance_km as number) < myKm).length
+      : 0
+    const yourDistanceNote = yourKmRounded > 0
+      ? (beaten > 0
+        ? `You've put in ${nf.format(yourKmRounded)} km — more than ${words(beaten)} of the ${words(total)}`
+        : `You've put in ${nf.format(yourKmRounded)} km ${thisPeriod(period)}`)
+      : `You have no distance logged ${thisPeriod(period)} yet`
 
-    // ── This week in the crew: derived from the standings numbers (real) ──
+    // ── 5 · Highlights — every line derived from the standings numbers ──
     const highlights: W3Highlight[] = []
     const leader = ranked[0]
     highlights.push({
       id: `lead-${leader.user_id}`, name: label(leader), isYou: leader.is_you,
-      text: leader.is_you ? 'Top of the crew board this week' : 'Leads the crew board this week',
+      text: leader.is_you ? `Top of the crew board ${thisPeriod(period)}` : `Leads the crew board ${thisPeriod(period)}`,
       badge: `${nf.format(Math.round(leader.weekly_score))} PTS`,
     })
     if (me && myRank > 1) {
-      // "me" exists and isn't already the leader → add a personal line
       highlights.push({
         id: `you-${me.user_id}`, name: 'You', isYou: true,
-        text: `${activeDays(me.daily_pct)} session${activeDays(me.daily_pct) === 1 ? '' : 's'} in${yourKm > 0 ? ` · ${nf.format(yourKm)} km` : ''}`,
-        badge: `${ORD(myRank).toUpperCase()}`,
+        text: `${nf.format(myTss)} TSS${myKm != null && myKm > 0 ? ` · ${kmLabel(myKm)} km` : ''} ${thisPeriod(period)}`,
+        badge: ORD(myRank).toUpperCase(),
       })
     }
-    const topKm = [...rows].sort((a, b) => dist(b) - dist(a))[0]
-    if (topKm && dist(topKm) > 0 && !highlights.some((h) => h.id.endsWith(`-${topKm.user_id}`))) {
+    const topKm = [...kmRows].sort((a, b) => (b.distance_km as number) - (a.distance_km as number))[0]
+    if (topKm && (topKm.distance_km as number) > 0 && !highlights.some((h) => h.id.endsWith(`-${topKm.user_id}`))) {
       highlights.push({
         id: `km-${topKm.user_id}`, name: label(topKm), isYou: topKm.is_you,
         text: 'Most kilometres logged in the crew',
-        badge: `${nf.format(Math.round(dist(topKm)))} KM`,
+        badge: `${kmLabel(topKm.distance_km as number)} KM`,
+      })
+    }
+    // Most consistent — the rider with the most active buckets (real).
+    const byActive = [...showedUp].sort((a, b) => b.days.filter(Boolean).length - a.days.filter(Boolean).length)[0]
+    const activeCount = byActive ? byActive.days.filter(Boolean).length : 0
+    if (byActive && activeCount > 0 && !highlights.some((h) => h.id.endsWith(`-${byActive.id}`))) {
+      highlights.push({
+        id: `act-${byActive.id}`, name: byActive.name, isYou: byActive.isYou,
+        text: `Showed up in ${activeCount} of ${cols} ${activeCount === 1 ? bm.one : bm.many}`,
+        badge: `${activeCount}/${cols}`,
       })
     }
 
@@ -144,26 +192,37 @@ export default function W3CrewPage() {
 
     return {
       inCrew: true,
+      period,
       crewName: mine?.crew?.name ?? 'Your crew',
       // honest description of how the board is scored (matches weekly_score semantics)
       blurb: 'Each rider is scored against their own weekly plan — so a short week and a big week sit on the same board.',
-      rankOrdinal: myRank > 0 ? ORD(myRank) : '—',
-      rankSub: myRank > 0 ? `of ${words(total)} this week` : `${words(total)} riders this week`,
+      windowChip: windowChip(startISO, endISO),
+      rankOrdinal: myRank > 0 ? ORD(myRank) : DASH,
+      rankSub: myRank > 0 ? `of ${words(total)} ${thisPeriod(period)}` : `${words(total)} riders ${thisPeriod(period)}`,
       propsHint: 'Three a week. Spend them on the effort, not the number.', // fixture: props economy copy
-      periodChip: 'MON–SUN',
+      crewTss: nf.format(crewTssNum),
+      crewTssSub: `${words(total)} riders · ${thisPeriod(period)}`,
+      crewKm: kmRows.length > 0 ? `${nf.format(crewKmRounded)} km` : DASH,
+      crewKmCoverage,
+      avgTss: nf.format(Math.round(crewTssNum / total)),
+      yourShare: me && crewTssNum > 0 ? `${Math.round((myTss / crewTssNum) * 100)}%` : DASH,
+      outputNote: 'Points are each rider’s share of their own weekly bar. TSS and kilometres are the raw totals for this window.',
       members,
-      showedUp, showedUpFilled, showedUpTotal,
-      showedUpNote: 'A filled block is a session a rider actually logged this week.',
-      distanceKm: crewKm, distanceGoalKm, distancePct, distanceToGo,
-      yourDistanceKm: yourKm, yourDistanceNote, yourSharePct,
+      showedUp, showedUpFilled, showedUpTotal, showedUpNote,
+      gridDow,
+      gridEdges: gridDow ? null : windowEdges(startISO, endISO),
+      showDistanceGoal: period === 'week' && kmRows.length > 0,
+      distanceKm: crewKmRounded, distanceGoalKm, distancePct, distanceToGo,
+      yourDistanceNote, yourSharePct,
       highlights,
+      highlightsTitle: `This ${periodWord(period)} in the crew`,
       seatsOpen,
       // fixture: the "six to eight" crew-size guidance is a product rule, not a stored field
       seatsCopy: seatsOpen > 0
         ? 'Crews of six to eight hold each other best. Fewer, and a quiet week goes unnoticed.'
         : 'This crew is at full strength — every seat is taken.',
     }
-  }, [standings, mine, distanceChallenge])
+  }, [standings, mine, distanceChallenge, period])
 
   // Honest invite: share an invite message (no props/discover picker built here yet).
   const invite = async () => {
@@ -183,19 +242,27 @@ export default function W3CrewPage() {
   }
 
   // Set/replace the crew's distance goal as a real weekly crew challenge.
-  const saveGoal = async (km: number) => {
-    await createChallenge.mutateAsync({ name: 'Around the world', metric: 'distance_km', target: km, period: 'week' })
+  const saveGoal = async (target: number) => {
+    await createChallenge.mutateAsync({ name: 'Around the world', metric: 'distance_km', target, period: 'week' })
     setEditingGoal(false)
   }
+
+  // Wait for the selected window's OWN numbers rather than showing another
+  // period's under the newly tapped tab. "Not in a crew" (404) falls through to
+  // the honest empty state instead of spinning forever.
+  const inCrewOrUnknown = mine === undefined || mine?.crew != null
+  if (!standings && !standingsError && !mineError && inCrewOrUnknown) return <W3Loading label="Crew wird geladen…" />
 
   return (
     <>
       <W3CrewView
         vm={{ ...vm, propsGiven }}
         onBack={() => navigate('/e/w3-wins')}
+        onPeriod={setPeriod}
+        onOpenMember={(id) => navigate(`/e/w3-crew-member/${id}?period=${period}`)}
         onProps={giveProps}
         onInvite={invite}
-        onEditGoal={vm.inCrew ? () => setEditingGoal(true) : undefined}
+        onEditGoal={vm.inCrew && vm.showDistanceGoal ? () => setEditingGoal(true) : undefined}
       />
       {editingGoal && (
         <W3CrewGoalEditor

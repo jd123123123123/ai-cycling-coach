@@ -48,6 +48,10 @@ export interface StandingRow {
   distance_km?: number | null  // cumulative ridden distance (km)
   wkg?: number | null          // ftp_watts / weight_kg (threshold W/kg)
   vo2max?: number | null       // latest VO2max on/before window end
+  // Each rider's OWN bar (4-week avg weekly TSS × 1.05, floor 60) — the honest
+  // denominator behind the points. Nullable on older payloads.
+  weekly_target_tss?: number | null
+  daily_target_tss?: number | null
 }
 
 export interface StandingsResponse {
@@ -59,6 +63,8 @@ export interface StandingsResponse {
   period?: CrewPeriod
   period_start?: string | null
   period_end?: string | null
+  weekly_target_tss?: number | null   // the CALLER's own weekly bar
+  points_basis?: string               // "own_weekly_target"
 }
 
 // ──────────────────────────────────────────────────────────────────────

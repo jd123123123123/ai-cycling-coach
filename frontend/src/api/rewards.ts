@@ -57,6 +57,61 @@ export interface RideEarning {
   at?: string | null
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Streak → earn multiplier. THE ONE FRONTEND COPY of the server's earn rule.
+//
+// SOURCE OF TRUTH: `backend/app/services/rewards.py` — `_STREAK_TIERS` +
+// `streak_multiplier()`, which is what actually mints RideCoin at ride
+// ingestion (`ride_award`), with a documented HARD CEILING of ×1.5.
+//
+// Nothing on the wire carries the rider's CURRENT multiplier: `/rewards/wallet`
+// returns `{balance, ledger, tier}`, and the only `multiplier` fields there are
+// historical — one per past ledger line (what THAT ride was paid at). The
+// forward-looking "if you ride today, you earn ×N" number therefore has to be
+// derived client-side, from the same real streak the server would read
+// (`GET /athletes/me/streak` → `streak`).
+//
+// Keep these tiers byte-for-byte in step with rewards.py. A number here that
+// the server can't pay is a promise the app breaks the moment a ride lands.
+// ──────────────────────────────────────────────────────────────────────
+
+/** [minimum streak days, multiplier], highest tier first — mirrors `_STREAK_TIERS`. */
+export const STREAK_MULTIPLIER_TIERS: readonly (readonly [number, number])[] = [
+  [30, 1.5],
+  [14, 1.4],
+  [7, 1.25],
+  [3, 1.1],
+  [0, 1.0],
+] as const
+
+/** The ceiling rewards.py enforces — no rider ever earns above this. */
+export const STREAK_MULTIPLIER_CAP = 1.5
+
+/** The earn multiplier a streak of `streakDays` buys, capped at ×1.5.
+ *  Port of `rewards.streak_multiplier()`. */
+export function streakMultiplier(streakDays: number): number {
+  for (const [threshold, mult] of STREAK_MULTIPLIER_TIERS) {
+    if (streakDays >= threshold) return mult
+  }
+  return 1.0
+}
+
+/** The next tier up from `streakDays`, or null once the rider is at the cap.
+ *  Lets a surface say "3 more days → ×1.4" from the same table, never a second
+ *  hand-written ladder. */
+export function nextStreakTier(streakDays: number): { days: number; multiplier: number } | null {
+  const ascending = [...STREAK_MULTIPLIER_TIERS].sort((a, b) => a[0] - b[0])
+  for (const [threshold, mult] of ascending) {
+    if (streakDays < threshold) return { days: threshold, multiplier: mult }
+  }
+  return null
+}
+
+/** "1.25×" / "1×" — the multiplier as the reward surfaces print it. */
+export function formatMultiplier(mult: number): string {
+  return `${Number(mult.toFixed(2))}×`
+}
+
 // GET /rewards/wallet — balance, recent ledger, and shop-tier progress.
 export async function fetchWallet(): Promise<Wallet> {
   const res = await apiClient.get<Wallet>('/rewards/wallet')

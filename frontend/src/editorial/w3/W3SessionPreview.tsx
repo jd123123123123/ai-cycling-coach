@@ -62,8 +62,13 @@ const FIXTURE: W3SessionVm = {
   },
   earns: [
     { icon: 'flame', v: 'DAY 19', l: 'STREAK', s: 'Extends your 18-day run' },
-    { icon: 'zap', v: '+112', l: 'TSS BANKED', s: 'Added to this week’s load' },
-    { icon: 'clock', v: '1:15', l: 'SADDLE TIME', s: 'Logged to your season' },
+  ],
+  // The hard case on purpose: 112 TSS against a season of 12 480 is 0.9%, and
+  // 1:15 against 168:24 is 0.7% — the slivers the ledger bar has to keep
+  // readable without inflating them.
+  ledgers: [
+    { icon: 'zap', label: 'SEASON TSS', banked: '12,480', delta: '+112', total: '12,592', share: 112 / 12592, note: '1.3× the load of your average ride so far this season.' },
+    { icon: 'clock', label: 'SADDLE · SEASON · H:MM', banked: '168:24', delta: '+1:15', total: '169:39', share: 75 / 10179, note: '0.9× as long as your average ride so far this season.' },
   ],
   earnNote: 'Finishing this ride also awards RideCoin, scaled to its TSS.',
   canExport: true,

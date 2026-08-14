@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useGrantOnboarding, useWallet } from '../../hooks/useWallet'
+import { GARAGE_KEY } from '../../hooks/useGarage'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { updateUser } from '../../api/auth'
 import { apiClient } from '../../api/client'
@@ -16,8 +18,8 @@ import W3AvatarOnboardView, { type AvatarStage, type AvatarReveal, type AvatarIn
  * `services/cyclr_studio` analyse-then-render pipeline): the vision pass reads
  * the rider, the image model renders the collectible figurine. That generated
  * figurine becomes the avatar and reveals as "AVATAR UNLOCKED". If the image
- * model isn't provisioned (`status !== 'ok'`, no image) we fall back to the raw
- * photo so onboarding never dead-ends. Then the equal 125 RC photo grant fires.
+ * model is not provisioned (`status !== "ok"`) the rider lands on an honest
+ * "studio unavailable" stage with a retry — never silently skipped onward.
  */
 const NEXT = '/e/w3-first-bike'
 
@@ -47,6 +49,7 @@ export default function W3AvatarOnboardPage() {
   const navigate = useNavigate()
   const { user, refreshUser } = useAuth()
   const grant = useGrantOnboarding()
+  const qc = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
   const [stage, setStage] = useState<AvatarStage>('intro')
   // The intro hero is the SHOWCASE rider — never `user.avatar_url`. This screen
@@ -132,20 +135,36 @@ export default function W3AvatarOnboardPage() {
     try {
       const photo = await fileToDownscaledDataUrl(file)
       setHero(photo) // show their photo while the studio renders
+
       // The LLM pipeline: analyse the rider + render the collectible figurine.
-      let avatar = photo
-      try {
-        const res = await apiClient.post<AssetRenderResponse>('/garage/asset/render', { photo_base64: photo, kind: 'rider' })
-        if (res.data.status === 'ok' && res.data.image_base64) avatar = res.data.image_base64
-      } catch { /* image model unavailable → keep the raw photo */ }
-      await updateUser({ avatar_url: avatar })
-      await refreshUser()
+      // This call PERSISTS the result as the garage's rider asset, so from here
+      // on the garage — not `users.avatar_url` — is what the app reads.
+      const res = await apiClient.post<AssetRenderResponse>(
+        '/garage/asset/render', { photo_base64: photo, kind: 'rider' },
+        { timeout: 180_000 },
+      )
+      const rendered = res.data.status === 'ok' ? res.data.image_base64 : null
+      if (!rendered) { setStage('unavailable'); return }
+
+      // Mirror it into the legacy `avatar_url` for the non-W3 surfaces that
+      // still read it — BEST EFFORT ONLY. This used to be awaited outside the
+      // inner try, so a rejection here threw past the reveal and dumped the
+      // rider on the first-bike screen having seen neither the generating
+      // state nor their unlock. The collectible is already saved server-side;
+      // failing to copy it into a legacy column must never cost them the
+      // moment. (The old raw-photo fallback also blew the endpoint's 300 KB
+      // avatar cap, which is what made that rejection routine rather than rare.)
+      await updateUser({ avatar_url: rendered }).catch(() => {})
+      await refreshUser().catch(() => {})
       await grant.mutateAsync('photo').catch(() => {})
-      setHero(avatar)
+
+      qc.invalidateQueries({ queryKey: GARAGE_KEY })
+      setHero(rendered)
       setStage('revealed')
     } catch {
-      // A failed pipeline shouldn't trap the rider in onboarding.
-      navigate(NEXT)
+      // Reading the file or reaching the studio failed. Say so and let them
+      // retry — silently skipping to the next step looks like a broken app.
+      setStage('unavailable')
     }
   }
 

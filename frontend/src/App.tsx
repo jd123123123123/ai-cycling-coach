@@ -98,6 +98,8 @@ const W3ReferralUserPage = lazyWithRetry(() => import('./editorial/w3/W3Referral
 const W3ReferralUserPreview = lazyWithRetry(() => import('./editorial/w3/W3ReferralUserPreview'))
 const W3CrewPage = lazyWithRetry(() => import('./editorial/w3/W3CrewPage'))
 const W3CrewPreview = lazyWithRetry(() => import('./editorial/w3/W3CrewPreview'))
+const W3CrewMemberPage = lazyWithRetry(() => import('./editorial/w3/W3CrewMemberPage'))
+const W3CrewMemberPreview = lazyWithRetry(() => import('./editorial/w3/W3CrewMemberPreview'))
 const W3OnboardPlanPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardPlanPage'))
 const W3OnboardPlanPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardPlanPreview'))
 const W3OnboardGoalsPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardGoalsPage'))
@@ -418,6 +420,8 @@ function AppRoutes() {
           {/* Crew */}
           <Route path="/e/w3-crew" element={<ProtectedRoute checkOnboarding><W3CrewPage /></ProtectedRoute>} />
           <Route path="/e/w3-crew-preview" element={<W3CrewPreview />} />
+          <Route path="/e/w3-crew-member/:id" element={<ProtectedRoute checkOnboarding><W3CrewMemberPage /></ProtectedRoute>} />
+          <Route path="/e/w3-crew-member-preview" element={<W3CrewMemberPreview />} />
           {/* Onboarding: training-plan + yearly-goals + rider studio */}
           <Route path="/e/w3-onboard-plan" element={<ProtectedRoute><W3OnboardPlanPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-plan-preview" element={<W3OnboardPlanPreview />} />

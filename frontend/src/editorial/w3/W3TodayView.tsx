@@ -35,14 +35,27 @@ export type { W3DayFull, W3Weather, W3Mirror, W3Block, OnAdapt, AdaptResult } fr
  * This file is a PURE function of `vm`; `W3TodayPage` builds the vm from real
  * hooks (`useTodayModel`, `useStreak`, `useWallet`). Fields that map to real
  * coaching data resolve to a value or an honest `null` (rendered "—"); fields
- * that belong to the not-yet-built reward economy (earn rate, per-ride earn,
- * the Garage upgrade + second currency, the crew standings) are DESIGN FIXTURES
- * reproducing the pen, each marked `fixture:` in the vm.
+ * that belong to the not-yet-built reward economy (per-ride earn, the Garage
+ * upgrade + second currency, the crew challenge) are DESIGN FIXTURES
+ * reproducing the pen, each marked `fixture:` in the vm. The earn rate is NOT
+ * one of them any more — it is derived from the rider's real streak through
+ * the single tier table in `api/rewards.ts`, which mirrors rewards.py.
  */
 
 // ── view model ──
 export interface W3Spark { bars: number[]; hi: string }
-export interface W3Signal { value: string; unit: string; sub: string | null; subHue: string; spark: W3Spark }
+export interface W3Signal {
+  value: string
+  unit: string
+  /** The baseline comparison, e.g. "−2 vs 7-day". Null when the rider has no
+   *  history for this metric — the card prints "—", never a padded 0. */
+  sub: string | null
+  subHue: string
+  /** The metric's own real recent series. NULL, not a stand-in shape, when no
+   *  series exists for it (see W3TodayPage) — the card then draws an empty
+   *  track so the three cards stay the same height without faking a trend. */
+  spark: W3Spark | null
+}
 export interface W3CrewRow { name: string; color: string; pct: number; me: boolean }
 export interface W3Vm {
   handle: string
@@ -58,7 +71,16 @@ export interface W3Vm {
 
   readiness: number | null
   readinessWord: string | null
-  earnRate: string // fixture
+  /** Readiness against the previous day that has a real reading — a small
+   *  signed kicker, never a second big number competing with the score.
+   *  `null` whenever there aren't two dated readings to subtract. */
+  readinessDelta: { text: string; favourable: boolean } | null
+  /** REAL: the rider's current earn multiplier, derived from their real streak
+   *  via the ONE tier table in `api/rewards.ts` (mirrors rewards.py). "—" when
+   *  the streak hasn't loaded. */
+  earnRate: string
+  /** What earns that multiplier — "14-day streak", or the next tier to reach. */
+  earnRateWhy: string | null
   coachDate: string
   coachLead: string | null
   coachWhy: string | null
@@ -112,8 +134,17 @@ export interface W3Vm {
 }
 
 // ── primitives ──
-function Spark({ spark, h = 22 }: { spark: W3Spark; h?: number }) {
+function Spark({ spark, h = 22 }: { spark: W3Spark | null; h?: number }) {
   const reduce = useReducedMotion()
+  // No real series for this metric — hold the height with an empty track
+  // rather than draw a shape the rider's data never made.
+  if (!spark || spark.bars.length === 0) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%', height: h }}>
+        <div style={{ width: '100%', height: 2, borderRadius: 1, background: T.d2, opacity: 0.5 }} />
+      </div>
+    )
+  }
   return (
     <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', width: '100%', height: h }}>
       {spark.bars.map((b, i) => {
@@ -259,6 +290,14 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <Kicker>Readiness</Kicker>
                   <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{vm.readinessWord ?? DASH}</span>
+                  {/* The day-over-day move: a small signed kicker, deliberately
+                      not a second big number next to the score. Absent — not
+                      zeroed — when there aren't two dated readings. */}
+                  {vm.readinessDelta && (
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: -0.1, color: vm.readinessDelta.favourable ? T.acid : T.mid }}>
+                      {vm.readinessDelta.text}
+                    </span>
+                  )}
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
@@ -266,6 +305,9 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
                 <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
                   <Star size={14} color={T.acid} fill={T.acid} /><span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{vm.earnRate}</span>
                 </div>
+                {vm.earnRateWhy && (
+                  <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.3, color: T.quiet, textAlign: 'right', maxWidth: 140 }}>{vm.earnRateWhy}</span>
+                )}
               </div>
             </div>
             <ChargeMeter score={vm.readiness} />
