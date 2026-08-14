@@ -21,3 +21,5 @@ anthropic>=0.42.0
 openai>=1.40.0
 # WebP transcode for generated collectibles — see services/cyclr_studio._to_data_url
 pillow>=11.0.0
+# Gemini SDK for the cyclr_studio image pipeline (services/cyclr_studio.py)
+google-genai>=2.17.0

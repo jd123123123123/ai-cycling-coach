@@ -23,6 +23,7 @@ the prompt it *would* send and `status="image_model_unavailable"`, never a fake.
 from __future__ import annotations
 
 import base64
+import importlib.util
 import json
 from typing import Any
 
@@ -123,9 +124,21 @@ def _seed(s: str) -> int:
 
 
 def _gemini_ready() -> bool:
-    return (getattr(settings, "IMAGE_PROVIDER", "") or "").lower() == "gemini" and bool(
-        getattr(settings, "GEMINI_API_KEY", None)
-    )
+    """Provider configured, key present, AND the SDK actually importable.
+
+    The import check is not paranoia — it is the bug this module shipped with.
+    `google-genai` was imported lazily inside each call but declared in neither
+    requirements.txt nor pyproject.toml, so every render in production died on
+    `from google import genai` with a 500. Locally it passed, because the dev
+    venv happened to have the package. This module's whole contract is that a
+    missing image model degrades to `image_model_unavailable` and never fakes
+    or crashes; a missing SDK is exactly that case, so it belongs here.
+    """
+    if (getattr(settings, "IMAGE_PROVIDER", "") or "").lower() != "gemini":
+        return False
+    if not getattr(settings, "GEMINI_API_KEY", None):
+        return False
+    return importlib.util.find_spec("google.genai") is not None
 
 
 async def analyze_asset(photo_b64: str, kind: str) -> str | None:

@@ -50,11 +50,43 @@ const FIXTURE: W3Vm = {
     { letter: 'S', num: '16', actual: 132, planned: 90, status: 'over', title: 'Group ride', dateLabel: 'Sa, 16. Aug.', weekday: 'Samstag', targetW: '230 W', ftpPct: '79%', actualDurMin: 194, actualW: 224, actualHr: 148 },
     { letter: 'S', num: '17', actual: 28, planned: 70, status: 'missed', title: 'Tempo · 3 × 10', dateLabel: 'So, 17. Aug.', weekday: 'Sonntag', targetW: '250 W', ftpPct: '86%' },
   ],
+  // A representative real day: cool windy morning, gusty warm midday, a calm
+  // late-afternoon window, then a shower rolling in after 19:00. `q` values are
+  // exactly what W3TodayPage.hourQuality scores these numbers, so the fixture
+  // and the live page draw the same bars.
   weather: {
-    window: '16:00–18:00', temp: '19°', feels: '17°',
-    short: '8 km/h SW · trocken',
+    window: '17:00–19:00', temp: '20°', feels: '20°',
+    short: '7 km/h SW · Schauer möglich',
     verdict: 'GO OUTSIDE',
     meta: 'Bestes 2-Stunden-Fenster aus Wind, Regen und Temperatur.',
+    bestFrom: 17, bestTo: 18, peak: 17,
+    hours: [
+      { hour: 0, q: 0.87, temp: 13, rain: 5, wind: 6, dir: 'SW', rideable: false },
+      { hour: 1, q: 0.87, temp: 13, rain: 5, wind: 6, dir: 'SW', rideable: false },
+      { hour: 2, q: 0.89, temp: 12, rain: 5, wind: 5, dir: 'SW', rideable: false },
+      { hour: 3, q: 0.89, temp: 12, rain: 5, wind: 5, dir: 'SW', rideable: false },
+      { hour: 4, q: 0.86, temp: 12, rain: 10, wind: 5, dir: 'SW', rideable: false },
+      { hour: 5, q: 0.84, temp: 12, rain: 10, wind: 6, dir: 'W', rideable: false },
+      { hour: 6, q: 0.82, temp: 13, rain: 10, wind: 7, dir: 'W', rideable: false },
+      { hour: 7, q: 0.81, temp: 14, rain: 10, wind: 8, dir: 'W', rideable: true },
+      { hour: 8, q: 0.79, temp: 15, rain: 10, wind: 9, dir: 'W', rideable: true },
+      { hour: 9, q: 0.8, temp: 17, rain: 5, wind: 10, dir: 'SW', rideable: true },
+      { hour: 10, q: 0.79, temp: 18, rain: 5, wind: 11, dir: 'SW', rideable: true },
+      { hour: 11, q: 0.77, temp: 20, rain: 5, wind: 12, dir: 'SW', rideable: true },
+      { hour: 12, q: 0.71, temp: 21, rain: 10, wind: 14, dir: 'SW', rideable: true },
+      { hour: 13, q: 0.69, temp: 22, rain: 10, wind: 15, dir: 'SW', rideable: true },
+      { hour: 14, q: 0.64, temp: 22, rain: 15, wind: 16, dir: 'SW', rideable: true },
+      // a real gap in the feed: no readings for 15:00 — a stub bar and "—", never a guess
+      { hour: 15, q: null, temp: null, rain: null, wind: null, dir: null, rideable: true },
+      { hour: 16, q: 0.84, temp: 21, rain: 5, wind: 8, dir: 'SW', rideable: true },
+      { hour: 17, q: 0.85, temp: 20, rain: 5, wind: 7, dir: 'SW', rideable: true },
+      { hour: 18, q: 0.85, temp: 19, rain: 5, wind: 7, dir: 'W', rideable: true },
+      { hour: 19, q: 0.73, temp: 18, rain: 20, wind: 9, dir: 'W', rideable: true },
+      { hour: 20, q: 0.41, temp: 17, rain: 60, wind: 14, dir: 'W', rideable: true },
+      { hour: 21, q: 0.31, temp: 16, rain: 70, wind: 16, dir: 'W', rideable: true },
+      { hour: 22, q: 0.44, temp: 15, rain: 55, wind: 14, dir: 'W', rideable: false },
+      { hour: 23, q: 0.56, temp: 15, rain: 40, wind: 12, dir: 'W', rideable: false },
+    ],
   },
   mirror: {
     fitness: [0.5, 0.52, 0.55, 0.5, 0.58, 0.6, 0.62, 0.6, 0.63, 0.66, 0.62, 0.68, 0.7, 0.72, 0.7, 0.73, 0.76, 0.74, 0.78, 0.8, 0.82, 0.8, 0.83, 0.86, 0.84, 0.88, 0.9, 0.92, 0.9, 0.93, 0.96, 0.94, 0.98, 1, 0.98, 0.99, 1, 0.98, 1, 0.99, 1, 0.97],

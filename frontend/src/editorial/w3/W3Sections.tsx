@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, type LucideIcon } from 'lucide-react'
+import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, Wind, Droplets, Thermometer, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, card, band, DASH } from './w3tokens'
 
 // ────────────────────────────────────────────────────────────────────────
@@ -63,6 +63,148 @@ export interface W3Weather {
   verdict: string | null
   /** Honest explanation shown when there is no forecast at all. */
   meta: string
+  /** Every hour `/weather/today` returned, ascending. Empty ⇒ no hourly detail
+   *  and the zone falls back to the one-line summary. */
+  hours: W3WeatherHour[]
+  /** Inclusive hour bounds of the best window (17 and 18 for "17:00–19:00"). */
+  bestFrom: number | null
+  bestTo: number | null
+  /** The better of the best window's two hours — the readout's default pick. */
+  peak: number | null
+}
+
+/** One real forecast hour. Every measurement is nullable and renders "—" when
+ *  missing — never 0, never interpolated. `q` is the SAME ride-quality score
+ *  that picks the best window (W3TodayPage.hourQuality), and is null when the
+ *  hour carries no readings at all, so an empty hour can't look perfect. */
+export interface W3WeatherHour {
+  hour: number          // 0–23, athlete-local
+  q: number | null      // 0–1 ride quality
+  temp: number | null   // °C
+  rain: number | null   // precipitation probability, %
+  wind: number | null   // km/h
+  dir: string | null    // 'SW'
+  rideable: boolean     // inside the 07–21 daylight riding window
+}
+
+const hhmm = (h: number) => `${String(h).padStart(2, '0')}:00`
+
+/** The day as bars — the readiness ChargeMeter's language (a row of rails,
+ *  acid where it's "on") applied to the hourly forecast.
+ *
+ *  Why a scrubber and not labelled bars: 24 hours across the card's 314 usable
+ *  px is ~11 px per bar. Three numbers on each is unreadable at 390, and three
+ *  stacked tracks (wind/rain/temp) would make the reader integrate three charts
+ *  to answer the only question that matters — "when do I ride". So the BARS
+ *  answer that question alone (bar height = ride quality, acid = the best
+ *  window), and the numbers live in ONE readout that follows your finger.
+ *  Default selection is the best window's peak hour, so the resting state
+ *  already shows the numbers behind the recommendation. */
+function WeatherDay({ w }: { w: W3Weather }) {
+  const reduce = useReducedMotion()
+  const trackRef = useRef<HTMLDivElement>(null)
+  const drag = useRef(false)
+  const hours = w.hours
+  const [sel, setSel] = useState<number>(w.peak ?? hours[0].hour)
+  const idx = Math.max(0, hours.findIndex((h) => h.hour === sel))
+  const cur = hours[idx]
+  const inBest = w.bestFrom != null && w.bestTo != null && cur.hour >= w.bestFrom && cur.hour <= w.bestTo
+  const H = 46
+
+  const pickAt = (clientX: number) => {
+    const el = trackRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const i = Math.floor(((clientX - r.left) / r.width) * hours.length)
+    setSel(hours[Math.min(hours.length - 1, Math.max(0, i))].hour)
+  }
+  const step = (d: number) => setSel(hours[Math.min(hours.length - 1, Math.max(0, idx + d))].hour)
+
+  // Best-window underline: index bounds inside the hour list (the list may not
+  // start at 00, so positions are computed from indices, not from the clock).
+  const fromI = w.bestFrom != null ? hours.findIndex((h) => h.hour === w.bestFrom) : -1
+  const toI = w.bestTo != null ? hours.findIndex((h) => h.hour === w.bestTo) : -1
+
+  const metrics: { icon: LucideIcon; v: string; l: string }[] = [
+    { icon: Wind, v: cur.wind != null ? `${Math.round(cur.wind)} km/h` : DASH, l: cur.dir ?? 'WIND' },
+    { icon: Droplets, v: cur.rain != null ? `${Math.round(cur.rain)}%` : DASH, l: 'REGEN' },
+    { icon: Thermometer, v: cur.temp != null ? `${Math.round(cur.temp)}°` : DASH, l: 'TEMP' },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* the day, hour by hour */}
+      <div
+        ref={trackRef}
+        role="slider" tabIndex={0}
+        aria-label="Stunde wählen"
+        aria-valuemin={hours[0].hour} aria-valuemax={hours[hours.length - 1].hour}
+        aria-valuenow={cur.hour} aria-valuetext={`${hhmm(cur.hour)}${inBest ? ' · bestes Fenster' : ''}`}
+        onPointerDown={(e) => { drag.current = true; e.currentTarget.setPointerCapture(e.pointerId); pickAt(e.clientX) }}
+        onPointerMove={(e) => { if (drag.current) pickAt(e.clientX) }}
+        onPointerUp={() => { drag.current = false }}
+        onPointerCancel={() => { drag.current = false }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight') { e.preventDefault(); step(1) }
+          if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1) }
+        }}
+        // pan-y: a vertical swipe still scrolls the page; only sideways drags scrub.
+        style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: H, width: '100%', touchAction: 'pan-y', cursor: 'pointer' }}>
+        {hours.map((h, i) => {
+          const best = w.bestFrom != null && w.bestTo != null && h.hour >= w.bestFrom && h.hour <= w.bestTo
+          const on = h.hour === sel
+          // No readings ⇒ a flat stub, never a full-height bar built from nothing.
+          const fill = h.q == null ? 3 : Math.max(6, Math.round(h.q * H))
+          return (
+            <div key={h.hour} style={{ flex: 1, minWidth: 0, height: H, display: 'flex', alignItems: 'flex-end', borderRadius: 3, background: T.surface2, opacity: h.rideable ? 1 : 0.45, outline: on ? `1px solid ${T.d4}` : 'none', outlineOffset: 1 }}>
+              <motion.div
+                initial={reduce ? false : { height: 0 }} animate={{ height: fill }} transition={grow(i * 0.015)}
+                style={{ width: '100%', height: fill, borderRadius: 3, background: best ? T.acid : h.q == null ? T.d2 : h.rideable ? T.d3 : T.d2, boxShadow: best ? `0 0 10px ${T.acid}55` : 'none' }} />
+            </div>
+          )
+        })}
+      </div>
+
+      {/* the best stretch, marked under the bars it belongs to */}
+      <div style={{ position: 'relative', height: 2, width: '100%' }}>
+        {fromI >= 0 && toI >= fromI && (
+          <div style={{ position: 'absolute', top: 0, left: `${(fromI / hours.length) * 100}%`, width: `${((toI - fromI + 1) / hours.length) * 100}%`, height: 2, borderRadius: 2, background: T.acid }} />
+        )}
+      </div>
+
+      {/* morning / midday / evening, placed on their real hours */}
+      <div style={{ position: 'relative', height: 11, width: '100%' }}>
+        {([[8, 'MORGENS'], [13, 'MITTAGS'], [19, 'ABENDS']] as [number, string][]).map(([hr, label]) => {
+          const i = hours.findIndex((h) => h.hour === hr)
+          if (i < 0) return null
+          return (
+            <span key={label} style={{ position: 'absolute', left: `${((i + 0.5) / hours.length) * 100}%`, transform: 'translateX(-50%)', fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet, whiteSpace: 'nowrap' }}>{label}</span>
+          )
+        })}
+      </div>
+
+      {/* the scrubbed hour's real numbers — one row, not 24 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 14, background: T.surface2 }}>
+        <div style={{ flex: 'none', width: 50, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, fontVariantNumeric: 'tabular-nums', color: inBest ? T.acid : T.ink }}>{hhmm(cur.hour)}</span>
+          <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: inBest ? T.acid : T.quiet }}>{inBest ? 'BESTES' : 'UHR'}</span>
+        </div>
+        {metrics.map((m) => {
+          const Ic = m.icon
+          const has = m.v !== DASH
+          return (
+            <div key={m.l} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                <Ic size={12} color={T.mid} style={{ flex: 'none' }} />
+                <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, letterSpacing: -0.2, fontVariantNumeric: 'tabular-nums', color: has ? T.ink : T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.v}</span>
+              </div>
+              <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.l}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function WeatherLine({ w, isToday, dateLabel }: { w: W3Weather; isToday: boolean; dateLabel: string }) {
@@ -85,21 +227,26 @@ function WeatherLine({ w, isToday, dateLabel }: { w: W3Weather; isToday: boolean
       </div>
     )
   }
+  // With real hours we show the WHOLE day as bars and the numbers per hour; the
+  // one-line summary stays as the fallback for a forecast without hourly detail.
+  const day = w.hours.length > 0
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: day ? 12 : 7 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <CloudSun size={15} color={T.mid} style={{ flex: 'none' }} />
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Kicker>Bestes Fenster</Kicker>
           <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.3, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.window}</span>
         </div>
-        <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{w.temp}</span>
-          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.6, color: T.quiet }}>gefühlt {w.feels}</span>
-        </div>
+        {!day && (
+          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{w.temp}</span>
+            <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.6, color: T.quiet }}>gefühlt {w.feels}</span>
+          </div>
+        )}
         <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.mid, padding: '6px 9px', borderRadius: 100, background: T.surface2 }}>{w.verdict}</span>
       </div>
-      {w.short && <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.35, color: T.quiet }}>{w.short}</span>}
+      {day ? <WeatherDay w={w} /> : w.short && <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.35, color: T.quiet }}>{w.short}</span>}
     </div>
   )
 }
@@ -161,19 +308,24 @@ interface DayStat { icon: LucideIcon; v: string; l: string; hue?: string }
  *  adapted-but-unknown number can never look like a real one.
  *
  *  Width (390 viewport): 390 − 40 band − 36 card padding = 314 usable; two
- *  columns at gap 8 → 153 per card, minus 24 padding = 129 for chip (28) + gap
- *  (10) + text (91). "285 W" at 17/700 Inter Tight is ~46, "DER FTP" ~42 — both
- *  clear, and every child carries minWidth: 0 so nothing can push the row wide. */
+ *  columns at gap 8 → 153 per card, minus 22 padding = 131 for chip (24) + gap
+ *  (9) + text (98). "285 W" at 13.5/700 Inter Tight is ~37, "DER FTP" ~42 — both
+ *  clear, and every child carries minWidth: 0 so nothing can push the row wide.
+ *
+ *  Sizing is deliberately SMALL (13.5 px numbers, 24 px chips): these are the
+ *  session's supporting numbers, and at 17 px they out-shouted the interval
+ *  profile — which is the thing you actually read to know what the ride is. The
+ *  ~17 px of row height this gives back goes straight into IntervalBars. */
 function StatCard({ icon: Ic, v, l, hue, span }: DayStat & { span?: boolean }) {
   const has = v !== DASH
   const on = has && hue != null
   return (
-    <div style={{ gridColumn: span ? '1 / -1' : undefined, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 16, background: T.surface2 }}>
-      <div style={{ width: 28, height: 28, flex: 'none', borderRadius: 9, background: on ? T.acidDim : '#FFFFFF0F', display: 'grid', placeItems: 'center' }}>
-        <Ic size={15} color={on ? T.acid : T.mid} />
+    <div style={{ gridColumn: span ? '1 / -1' : undefined, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9, padding: '9px 11px', borderRadius: 14, background: T.surface2 }}>
+      <div style={{ width: 24, height: 24, flex: 'none', borderRadius: 8, background: on ? T.acidDim : '#FFFFFF0F', display: 'grid', placeItems: 'center' }}>
+        <Ic size={13} color={on ? T.acid : T.mid} />
       </div>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.3, fontVariantNumeric: 'tabular-nums', color: has ? (hue ?? T.ink) : T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
+        <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, fontVariantNumeric: 'tabular-nums', color: has ? (hue ?? T.ink) : T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
         <Kicker>{l}</Kicker>
       </div>
     </div>
@@ -378,14 +530,14 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
 
       {isToday && (
         <>
-          <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={76} />
+          <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} />
           <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{workDesc}</span>
         </>
       )}
 
       {isFuture && (
         <>
-          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={76} />}
+          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} />}
           <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>
             Eine Woche im Voraus geplant — festgezurrt wird am Morgen, sobald deine Nachtwerte da sind.
           </span>
