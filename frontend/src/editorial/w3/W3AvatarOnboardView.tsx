@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Camera, Sparkles, Mountain, Users, Trophy, ArrowRight, ArrowLeft, Bike, Loader2, Route as RouteIcon, Timer, Plus, BadgeCheck, Gauge, Flame, Share2 } from 'lucide-react'
+import { Camera, Sparkles, Mountain, Users, Trophy, ArrowRight, ArrowLeft, Bike, Loader2, Route as RouteIcon, Timer, Plus, BadgeCheck, Gauge, Flame, Share2, Check, ScanFace, Wand2 } from 'lucide-react'
 import { T, FONT, EASE, DASH, band } from './w3tokens'
 import { renderAvatarCard, sharePoster, shareTextOrCopy } from './w3share'
 import './w3.css'
@@ -45,11 +45,40 @@ export interface W3AvatarOnboardProps {
   onTake?: () => void
 }
 
-const REASONS: { icon: typeof Mountain; title: string; body: string }[] = [
-  { icon: Bike, title: 'You, on your own bike', body: 'Your real bike, restyled as a collectible you ride in every scene.' },
-  { icon: Mountain, title: 'Every ride becomes a scene', body: 'Nail a threshold set and your rider is out there, hammering a climb.' },
-  { icon: Users, title: 'Your crew sees the real you', body: 'A rider that’s unmistakably yours on every leaderboard and challenge.' },
-  { icon: Trophy, title: 'It grows with your training', body: 'Earn parts and looks as your fitness climbs. It’s yours to build.' },
+/**
+ * The four reasons, folded into one 44px proof strip. They used to be four
+ * stacked cards (~272px) — the intro has to be a true one-pager at 390×844, and
+ * a promise the rider has to scroll to reach is worth less than the hero above
+ * it. Icon + two words each is enough to carry the same four ideas.
+ */
+const PERKS: { icon: typeof Mountain; label: string }[] = [
+  { icon: Bike, label: 'YOUR BIKE' },
+  { icon: Mountain, label: 'EVERY RIDE' },
+  { icon: Users, label: 'YOUR CREW' },
+  { icon: Trophy, label: 'LEVELS UP' },
+]
+
+/** Reveal confetti palette — the generating stage falls in the same colours so
+ *  the wait and the unlock read as one continuous moment. */
+const CONFETTI = ['#C8FF00', '#7B5CFF', '#00E5FF', '#FFB020', '#C8FF00', '#7B5CFF']
+
+/**
+ * The two phases the render pipeline genuinely runs, in this order: the vision
+ * pass reads the photo, then the image model renders the figurine. The endpoint
+ * (`/garage/asset/render`) is ONE call with no progress events, so the switch is
+ * time-based (typical vision pass ≈ 10s) — copy only, never a fake percentage.
+ */
+const PHASES: { icon: typeof Mountain; label: string; note: string }[] = [
+  { icon: ScanFace, label: 'Dein Foto wird gelesen', note: 'Gesicht, Haltung, Farben — Cycl_r Studio schaut genau hin.' },
+  { icon: Wand2, label: 'Dein Rider wird gebaut', note: 'Das Bildmodell formt daraus deine Collectible-Figur.' },
+]
+const PHASE_SWITCH_S = 10
+/** Anticipation, not filler — rotates so the wait never looks frozen. */
+const TEASERS = [
+  'Gleich fährt er deine erste Szene.',
+  'Auf jedem Leaderboard steht dann dein Gesicht.',
+  'Er wächst mit jedem Watt, den du trittst.',
+  'Gute Sachen brauchen kurz. Fast da.',
 ]
 
 const PRIMARY = [
@@ -66,6 +95,7 @@ const INSIGHT_META: Record<InsightKey, { icon: typeof Mountain; hue: string }> =
 
 export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', reveal, onPick, onSkip, onTake }: W3AvatarOnboardProps) {
   const reduce = useReducedMotion()
+
 
   // ── Shareable reveal card ──
   // Every dep is a primitive so callers can pass an inline `reveal` literal
@@ -141,7 +171,7 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
           {/* Cover: rider + header + confetti */}
           <div style={{ position: 'relative', height: 264, background: '#141414', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', width: 320, height: 240, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}33, transparent)` }} />
-            {['#C8FF00', '#7B5CFF', '#00E5FF', '#FFB020', '#C8FF00', '#7B5CFF'].map((c, i) => (
+            {CONFETTI.map((c, i) => (
               <motion.div key={i} initial={reduce ? false : { y: -20, opacity: 0 }} animate={{ y: [-20, 264], opacity: [0, 1, 0], rotate: [0, 180] }} transition={{ duration: 2.4, delay: i * 0.13, repeat: Infinity, repeatDelay: 0.8 }}
                 style={{ position: 'absolute', top: 0, left: `${12 + i * 14}%`, width: 6, height: 12, borderRadius: 2, background: c }} />
             ))}
@@ -245,72 +275,177 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
     )
   }
 
-  const generating = stage === 'generating'
+  if (stage === 'generating') return <W3AvatarGenerating heroImageUrl={heroImageUrl} />
+
+  // ── Intro: ONE PAGE at 390×844, safe areas included, nothing scrolls ──
+  // The hero is the only flexible box (`flex: 1`), so every copy-length or
+  // safe-area difference is absorbed by the photo instead of pushing the CTA
+  // off-screen. Fixed stack below = 408px; top inset ≈ 47px; hero ≈ 389px.
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
 
-        <div style={{ position: 'relative', height: 460, background: '#232427', overflow: 'hidden' }}>
+        <div style={{ height: 'max(12px, env(safe-area-inset-top))' }} />
+
+        {/* The hero is the only flexible box. Its image is ABSOLUTE so the box
+            contributes zero intrinsic height: the flex base is 0, the fixed
+            stack below is the whole content height, and the photo takes exactly
+            what is left of the viewport. An in-flow `height: 100%` img would
+            resolve to its intrinsic height here and push the CTA off-screen. */}
+        <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 200, background: '#232427', overflow: 'hidden' }}>
           {heroImageUrl
-            ? <img src={heroImageUrl} alt="Your collectible rider" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%', filter: generating ? 'brightness(0.55)' : 'none' }} />
+            ? <img src={heroImageUrl} alt="Your collectible rider" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 28%' }} />
             : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: T.quiet }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
                   <Bike size={72} strokeWidth={1.2} color="#3A3A3A" /><span style={{ fontSize: 12, fontWeight: 600 }}>Your rider goes here</span>
                 </div>
               </div>}
-          {generating && (
-            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}><Loader2 size={34} color={T.acid} /></motion.div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>Dein Rider wird erstellt…</span>
-                <span style={{ fontSize: 11, fontWeight: 500, color: T.quiet }}>Cycl_r Studio stylt dein Foto zum Collectible.</span>
-              </div>
-            </div>
-          )}
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 160, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 150, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
         </div>
 
-        <div style={{ ...band(4), paddingTop: 0, marginTop: -78, position: 'relative', zIndex: 2 }}>
-          <motion.div initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
-            style={{ width: '100%', padding: '18px 18px 20px', borderRadius: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', alignSelf: 'flex-start', padding: '5px 11px', borderRadius: 100, background: T.acidDim }}>
-              <Sparkles size={11} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.acid }}>ONE LAST THING</span>
-            </div>
-            <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: -1, lineHeight: 1.05, color: T.ink }}>Bring yourself into it</span>
-            <span style={{ fontSize: 13.5, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>
-              Add one photo and we turn you into a cute collectible rider — the face of every ride you do.
-            </span>
-          </motion.div>
-        </div>
+        <motion.div initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
+          style={{ display: 'flex', flexDirection: 'column', width: '100%', flex: 'none', padding: '16px 20px calc(20px + env(safe-area-inset-bottom))', background: T.bg, position: 'relative', zIndex: 2 }}>
 
-        <div>
-          <div style={{ ...band(10), gap: 8, paddingTop: 16 }}>
-            {REASONS.map((rr, i) => {
-              const Ic = rr.icon
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', alignSelf: 'flex-start', padding: '5px 11px', borderRadius: 100, background: T.acidDim }}>
+            <Sparkles size={11} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.acid }}>ONE LAST THING</span>
+          </div>
+
+          <span style={{ marginTop: 10, fontSize: 30, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.05, color: T.ink }}>Bring yourself into it</span>
+          <span style={{ marginTop: 8, fontSize: 13.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>
+            One photo — and you become a collectible rider, the face of every ride you do.
+          </span>
+
+          {/* The four reasons, folded into one strip */}
+          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            {PERKS.map((p, i) => {
+              const Ic = p.icon
               return (
-                <motion.div key={rr.title} initial={reduce ? false : { opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, ease: EASE, delay: 0.12 + i * 0.07 }}
-                  style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '12px 14px', borderRadius: 16, background: T.surface, border: `1px solid ${T.rule}` }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 10, background: T.acidDim, display: 'grid', placeItems: 'center', flex: 'none' }}><Ic size={16} color={T.acid} /></div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>{rr.title}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.35, color: T.mid }}>{rr.body}</span>
-                  </div>
+                <motion.div key={p.label} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: EASE, delay: 0.12 + i * 0.05 }}
+                  style={{ height: 44, borderRadius: 14, background: T.surface, border: `1px solid ${T.rule}`, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ic size={15} color={T.acid} />
+                  <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.4, color: T.mid, whiteSpace: 'nowrap' }}>{p.label}</span>
                 </motion.div>
               )
             })}
           </div>
 
-          <div style={{ ...band(38), paddingTop: 6, marginTop: 'auto' }}>
-            <button onClick={onPick} disabled={generating} style={{ height: 56, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.6 : 1, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-              <Camera size={19} color={T.bg} />{generating ? 'Wird erstellt…' : 'Add your photo'}
-            </button>
-            <button onClick={onSkip} disabled={generating} style={{ height: 46, marginTop: 8, background: 'transparent', border: 0, color: T.quiet, fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: generating ? 'default' : 'pointer', display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-              Maybe later<ArrowRight size={14} color={T.quiet} />
-            </button>
-            <span style={{ display: 'block', textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: T.quiet, marginTop: 8, lineHeight: 1.4 }}>
-              Your photo is used once to create your avatar, then discarded. Never shared.
-            </span>
+          <button onClick={onPick} style={{ marginTop: 16, height: 56, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+            <Camera size={19} color={T.bg} />Add your photo
+          </button>
+          <button onClick={onSkip} style={{ marginTop: 4, height: 44, background: 'transparent', border: 0, color: T.quiet, fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+            Maybe later<ArrowRight size={14} color={T.quiet} />
+          </button>
+          <span style={{ marginTop: 2, display: 'block', textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: T.quiet, lineHeight: 1.4 }}>
+            Used once to create your avatar, then discarded. Never shared.
+          </span>
+        </motion.div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * W3 · UNLOCK 02, first half — the 10–60s render, staged as the run-up to the
+ * reveal instead of a spinner apologising for the delay.
+ *
+ * Same vocabulary as "AVATAR UNLOCKED": the acid bloom, the falling confetti,
+ * the pill kicker, the 28px display line — so the wait and the unlock read as
+ * one continuous moment. The rider's own photo stays on screen the whole time,
+ * because it is the thing being transformed; the acid sweep runs over it.
+ *
+ * Its own component so the wait clock starts at 0 on every entry (a retry from
+ * the reveal's "Neues Foto" remounts it), and so the interval only exists while
+ * this screen does.
+ */
+function W3AvatarGenerating({ heroImageUrl }: { heroImageUrl: string | null }) {
+  const reduce = useReducedMotion()
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const phase = elapsed < PHASE_SWITCH_S ? 0 : 1
+  const teaser = TEASERS[Math.floor(elapsed / 5) % TEASERS.length]
+  const CARD_W = 210, CARD_H = 264
+
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ fontFamily: FONT, position: 'relative', display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
+
+        {/* Ambient acid bloom — the reveal's cover glow, held for the wait */}
+        <div aria-hidden style={{ position: 'absolute', top: 80, left: '50%', transform: 'translateX(-50%)', width: 420, height: 420, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}26, transparent)`, pointerEvents: 'none' }} />
+        {!reduce && (
+          <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+            {CONFETTI.map((c, i) => (
+              <motion.div key={i} initial={{ y: -24, opacity: 0 }} animate={{ y: [-24, 900], opacity: [0, 0.85, 0], rotate: [0, 180] }}
+                transition={{ duration: 3.6, delay: i * 0.5, repeat: Infinity, repeatDelay: 1.8, ease: 'linear' }}
+                style={{ position: 'absolute', top: 0, left: `${9 + i * 15}%`, width: 5, height: 11, borderRadius: 2, background: c }} />
+            ))}
           </div>
+        )}
+
+        <div style={{ height: 'max(12px, env(safe-area-inset-top))' }} />
+
+        <div style={{ position: 'relative', zIndex: 1, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 20px calc(24px + env(safe-area-inset-bottom))' }}>
+
+          {/* Chapter kicker — the chapter the reveal lands in */}
+          <motion.div initial={reduce ? false : { scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.45, ease: EASE }}
+            style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '6px 13px', borderRadius: 100, background: T.acidDim, border: `1px solid ${T.acid}44` }}>
+            <Sparkles size={11} color={T.acid} />
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.acid }}>W3 · UNLOCK 02</span>
+          </motion.div>
+
+          {/* The photo, being minted */}
+          <div style={{ position: 'relative', width: CARD_W + 4, height: CARD_H + 4, marginTop: 20, borderRadius: 26, overflow: 'hidden', background: `${T.acid}2E`, display: 'grid', placeItems: 'center' }}>
+            {!reduce && (
+              <motion.div aria-hidden animate={{ rotate: 360 }} transition={{ duration: 5.5, repeat: Infinity, ease: 'linear' }}
+                style={{ position: 'absolute', width: CARD_H * 2, height: CARD_H * 2, background: `conic-gradient(from 0deg, transparent 0deg, ${T.acid} 45deg, transparent 110deg)` }} />
+            )}
+            <div style={{ position: 'absolute', inset: 2, borderRadius: 24, overflow: 'hidden', background: '#232427' }}>
+              {heroImageUrl
+                ? <img src={heroImageUrl} alt="Dein Foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 25%', filter: 'brightness(0.62) saturate(0.85)' }} />
+                : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}><Bike size={64} strokeWidth={1.2} color="#3A3A3A" /></div>}
+              {/* acid scan sweep — the transformation, running over their face */}
+              {!reduce && (
+                <motion.div aria-hidden animate={{ y: [-82, CARD_H] }} transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 82, background: `linear-gradient(180deg, transparent, ${T.acid}26)` }}>
+                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, background: `linear-gradient(90deg, transparent, ${T.acid}, transparent)`, boxShadow: `0 0 16px ${T.acid}` }} />
+                </motion.div>
+              )}
+              <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 90, background: 'linear-gradient(180deg, transparent, #0B0B0BCC)' }} />
+            </div>
+          </div>
+
+          <span style={{ marginTop: 22, fontSize: 28, fontWeight: 700, letterSpacing: -1, lineHeight: 1.05, color: T.ink, textAlign: 'center' }}>Dein Rider entsteht</span>
+          {/* rotating anticipation line — it's copy, so it still lands under reduced motion */}
+          <motion.span key={teaser} initial={reduce ? false : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}
+            style={{ marginTop: 8, fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: T.acid, textAlign: 'center', minHeight: 36 }}>{teaser}</motion.span>
+
+          {/* Honest phase copy — no percentage, because there is no progress signal */}
+          <div style={{ width: '100%', marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {PHASES.map((p, i) => {
+              const Ic = p.icon
+              const done = i < phase
+              const active = i === phase
+              return (
+                <div key={p.label} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '11px 13px', borderRadius: 16, background: active ? T.surface : 'transparent', border: `1px solid ${active ? `${T.acid}3D` : T.rule}`, opacity: done || active ? 1 : 0.55 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 10, flex: 'none', background: done || active ? T.acidDim : T.surface, display: 'grid', placeItems: 'center' }}>
+                    {done ? <Check size={15} color={T.acid} strokeWidth={3} /> : <Ic size={15} color={active ? T.acid : T.quiet} />}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: done || active ? T.ink : T.mid }}>{p.label}</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 500, lineHeight: 1.3, color: T.quiet }}>{p.note}</span>
+                  </div>
+                  {active && <Loader2 size={15} color={T.acid} className="w3-spin" style={{ marginLeft: 'auto', flex: 'none' }} />}
+                </div>
+              )
+            })}
+          </div>
+
+          <span style={{ marginTop: 14, fontSize: 10.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet, textAlign: 'center' }}>
+            Dauert meist 10–60 Sekunden. Bleib kurz hier — dein Avatar wartet schon.
+          </span>
         </div>
       </div>
     </div>

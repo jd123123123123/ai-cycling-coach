@@ -49,7 +49,12 @@ export default function W3AvatarOnboardPage() {
   const grant = useGrantOnboarding()
   const inputRef = useRef<HTMLInputElement>(null)
   const [stage, setStage] = useState<AvatarStage>('intro')
-  const [hero, setHero] = useState<string | null>(user?.avatar_url ?? SHOWCASE_RIDER)
+  // The intro hero is the SHOWCASE rider — never `user.avatar_url`. This screen
+  // is only ever reached by someone who has no digitalised rider, and their
+  // avatar_url at that point is a leftover: a raw photo from an older
+  // onboarding or from a render that ran with no image model. Showing it back
+  // to them presents an old snapshot as the thing they're being asked to make.
+  const [hero, setHero] = useState<string | null>(SHOWCASE_RIDER)
 
   const onPick = () => inputRef.current?.click()
   const handle = user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider')

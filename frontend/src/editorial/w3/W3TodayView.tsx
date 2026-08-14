@@ -8,6 +8,7 @@ import {
 import { WeekTrainingCard, WeekNavCards, MirrorChart, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
 import W3BikeHero from './W3BikeHero'
+import W3RiderAvatar from './W3RiderAvatar'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryNudge from './W3RecoveryNudge'
@@ -213,11 +214,8 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
         {/* ── Header: rider + streak + bell ── */}
         <div style={{ padding: '10px 20px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <div style={{ width: 34, height: 34, borderRadius: 100, overflow: 'hidden', background: T.surface2, flex: 'none', display: 'grid', placeItems: 'center' }}>
-              {vm.avatarUrl
-                ? <img src={vm.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <span style={{ fontSize: 14, fontWeight: 700, color: T.mid }}>{vm.avatarInitial}</span>}
-            </div>
+            {/* Reads the garage, not `users.avatar_url` — see W3RiderAvatar. */}
+            <W3RiderAvatar size={34} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>{vm.handle}</span>
               <span style={{ fontSize: 11.5, fontWeight: 400, color: T.quiet }}>{vm.tierLine}</span>

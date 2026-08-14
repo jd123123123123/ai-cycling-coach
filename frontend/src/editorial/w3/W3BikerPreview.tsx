@@ -1,26 +1,40 @@
 import W3BikerView, { type W3BikerVm } from './W3BikerView'
+import { SHOWCASE_RIDER } from './showcaseRider'
 
-/** TEMP preview — pen-exact fixture. /e/w3-biker-preview (unguarded). */
+/** TEMP preview — design fixture only. /e/w3-biker-preview (unguarded).
+ *  The LIVE page (`W3BikerPage`) renders none of these numbers: it reads the
+ *  rider's real rides, wallet, profile, streak, badges and devices. */
 const FIXTURE: W3BikerVm = {
-  avatarUrl: null, // → SHOWCASE_RIDER figurine
-  handle: '@jonathan.ghost',
-  tierChip: 'SILVER TIER', sinceChip: 'RIDING SINCE 2021', locationChip: 'HAMBURG, DE',
+  avatarUrl: SHOWCASE_RIDER, // design fixture only — the live page shows the rider's OWN garage figurine
   name: 'Jonathan Ghost',
-  stats: [
-    { v: '4,182 km', l: 'This season', s: '+18% vs 2024' },
-    { v: '61,400 m', l: 'Climbed', s: 'top 6% locally' },
-    { v: '292 W', l: 'FTP', s: '+11 W in 16 weeks' },
-    { v: '4.1', l: 'W/kg', s: '71.2 kg' },
+  handle: '@jonathan.ghost',
+  ready: true,
+  role: 'Climber',
+  level: 7,
+  levelPct: 0.62,
+  levelNote: '190 RC to Level 8',
+  chips: ['CAT 2', '3.8 W/KG', '292 W FTP', 'SINCE 2021'],
+  headline: '1.2× around the Earth',
+  headlineCaption: 'every kilometre you have ever ridden',
+  primary: { totalDistance: '48,120 km', totalRides: '1,204', saddleTime: '1,760 h' },
+  insights: [
+    { key: 'elevation', label: 'ELEVATION', value: '61.4 km', caption: '≈ 6.9× Mount Everest' },
+    { key: 'longest', label: 'LONGEST', value: '233 km', caption: 'your biggest day in the saddle' },
+    { key: 'speed', label: 'AVG SPEED', value: '27.4', caption: 'km/h across every ride' },
+    { key: 'burned', label: 'BURNED', value: '184.2K', caption: 'kcal · ≈ 216 pizzas' },
   ],
-  tierFrom: 'Silver', tierTo: 'Gold', tierPct: 63, tierFoot: '15,800 of 25,000 RIDECOIN', tierRate: '~13 WEEKS AT THIS RATE',
-  referralCode: 'HYXBS9',
-  referralBody: 'Bring a training partner. You both get 250 RideCoin when they log their first three rides.',
-  referralActive: '3 active · 750 RideCoin earned',
+  engine: [
+    { label: 'FTP', value: '292 W', caption: 'watts at threshold' },
+    { label: 'W/KG', value: '4.1', caption: 'at 71.2 kg' },
+    { label: 'FITNESS', value: '68', caption: 'CTL · 42-day load' },
+  ],
+  streak: { label: 'STREAK', value: '12', caption: 'days in a row' },
+  badges: { label: 'BADGES', value: '14/38', caption: 'milestones earned by riding' },
+  coin: { balance: '15,800', pct: 63, foot: 'RIDECOIN · earned from real rides', note: '9,200 TO PRESTIGE TIER' },
+  referral: { code: 'HYXBS9', note: '3 active · 1 completed' },
   devices: [
-    { name: 'Garmin Edge 840', sub: 'Synced 2 min ago', icon: 'watch', on: true },
-    { name: 'Strava', sub: 'Synced today', icon: 'activity', on: true },
-    { name: 'Wahoo KICKR', sub: 'Synced 3 days ago', icon: 'zap', on: true },
-    { name: 'Apple Health', sub: 'Not connected', icon: 'heart', on: false },
+    { name: 'Garmin', sub: 'Synced 2 min ago', icon: 'watch', on: true },
+    { name: 'Wahoo', sub: 'Not connected', icon: 'zap', on: false },
   ],
 }
 

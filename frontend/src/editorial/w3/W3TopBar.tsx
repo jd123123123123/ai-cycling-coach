@@ -1,9 +1,9 @@
 import { type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { useAuth } from '../../contexts/AuthContext'
-import { T, FONT } from './w3tokens'
+import { T } from './w3tokens'
 import W3NavMenu from './W3NavMenu'
+import W3RiderAvatar from './W3RiderAvatar'
 
 /**
  * W3 · Top bar — the consistent header across every W3 screen: an optional back
@@ -14,8 +14,6 @@ import W3NavMenu from './W3NavMenu'
  */
 export default function W3TopBar({ title, onBack, extra }: { title?: string; onBack?: () => void; extra?: ReactNode }) {
   const nav = useNavigate()
-  const { user } = useAuth()
-  const initial = (user?.display_name || user?.email || '?').charAt(0).toUpperCase()
   return (
     <div style={{ padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', gap: 10 }}>
       {onBack
@@ -26,9 +24,7 @@ export default function W3TopBar({ title, onBack, extra }: { title?: string; onB
         {extra}
         <button onClick={() => nav('/e/w3-biker')} aria-label="Profil & Einstellungen"
           style={{ width: 38, height: 38, borderRadius: 100, overflow: 'hidden', background: T.surface2, border: `1px solid ${T.stroke}`, display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 0, flex: 'none' }}>
-          {user?.avatar_url
-            ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <span style={{ fontSize: 13, fontWeight: 700, color: T.mid, fontFamily: FONT }}>{initial}</span>}
+          <W3RiderAvatar size={36} />
         </button>
         <W3NavMenu />
       </div>
