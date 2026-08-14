@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGarage, useRenderAsset } from '../../hooks/useGarage'
 import { HIDDEN_FILE_INPUT } from './w3tokens'
+import { fileToDownscaledDataUrl } from './w3photo'
 import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
 
 /**
@@ -19,28 +20,6 @@ import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
  * a bike already in the garage shows that bike rather than an empty camera
  * frame — the garage is a place you visit, not just a one-shot flow.
  */
-
-// Downscale the photo before upload — keeps the request small and the vision
-// call fast; the model needs shape/colour, not megapixels.
-function fileToDownscaledDataUrl(file: File, max = 1024): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      const scale = Math.min(1, max / Math.max(img.width, img.height))
-      const c = document.createElement('canvas')
-      c.width = Math.round(img.width * scale)
-      c.height = Math.round(img.height * scale)
-      const ctx = c.getContext('2d')
-      if (!ctx) return reject(new Error('no canvas'))
-      ctx.drawImage(img, 0, 0, c.width, c.height)
-      URL.revokeObjectURL(url)
-      resolve(c.toDataURL('image/jpeg', 0.85))
-    }
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')) }
-    img.src = url
-  })
-}
 
 export default function W3BikeStudioPage() {
   const navigate = useNavigate()
@@ -99,8 +78,16 @@ export default function W3BikeStudioPage() {
       setCelebrate(true)
       setTimeout(() => setState('reveal'), 500)
     } catch (e: unknown) {
+      // Name the real cause. A generic "try another photo" sent us looking at
+      // server logs for a failure that never left the browser (an unreadable
+      // HEIC decodes to nothing and no request is made).
+      const status = (e as { response?: { status?: number } })?.response?.status
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail ?? 'Couldn’t render this photo. Try another shot of the whole bike.')
+      const msg = (e as { message?: string })?.message
+      setError(
+        status === 401 ? 'Deine Sitzung ist abgelaufen. Lade die Seite neu und probier es nochmal.'
+          : detail ?? msg ?? 'Dieses Foto ließ sich nicht rendern. Versuch eine Aufnahme vom ganzen Bike.',
+      )
       setState('error')
     }
   }, [render])

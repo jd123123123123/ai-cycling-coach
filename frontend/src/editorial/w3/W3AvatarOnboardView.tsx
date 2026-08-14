@@ -43,6 +43,10 @@ export interface W3AvatarOnboardProps {
   heroImageUrl: string | null
   stage?: AvatarStage
   reveal?: AvatarReveal
+  /** Why the studio stage failed, in plain language. Shown on `unavailable` so
+   *  the rider (and whoever they report it to) can tell an unreadable photo
+   *  apart from a server that didn't answer. */
+  failure?: string | null
   onPick: () => void
   onSkip: () => void
   onTake?: () => void
@@ -96,7 +100,7 @@ const INSIGHT_META: Record<InsightKey, { icon: typeof Mountain; hue: string }> =
   burned: { icon: Flame, hue: '#FFB020' },
 }
 
-export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', reveal, onPick, onSkip, onTake }: W3AvatarOnboardProps) {
+export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', reveal, failure, onPick, onSkip, onTake }: W3AvatarOnboardProps) {
   const reduce = useReducedMotion()
 
 
@@ -298,6 +302,11 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
           <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: T.mid, maxWidth: 300 }}>
             Dein Foto ist noch da. Probier es nochmal — oder mach es später in der Garage.
           </span>
+          {failure && (
+            <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, color: T.quiet, maxWidth: 300, padding: '8px 12px', borderRadius: 12, background: T.surface }}>
+              {failure}
+            </span>
+          )}
           <button onClick={onPick}
             style={{ width: '100%', maxWidth: 320, height: 54, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 6 }}>
             Nochmal versuchen

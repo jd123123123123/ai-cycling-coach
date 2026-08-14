@@ -9,6 +9,7 @@ import { updateUser } from '../../api/auth'
 import { apiClient } from '../../api/client'
 import { SHOWCASE_RIDER } from './showcaseRider'
 import { HIDDEN_FILE_INPUT } from './w3tokens'
+import { fileToDownscaledDataUrl } from './w3photo'
 import W3AvatarOnboardView, { type AvatarStage, type AvatarReveal, type AvatarInsight } from './W3AvatarOnboardView'
 
 /**
@@ -25,25 +26,7 @@ const NEXT = '/e/w3-first-bike'
 
 interface AssetRenderResponse { description: string | null; prompt: string; image_base64: string | null; status: string }
 
-/** Downscale before upload — the vision model needs shape/colour, not megapixels. */
-function fileToDownscaledDataUrl(file: File, max = 1024): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      const scale = Math.min(1, max / Math.max(img.width, img.height))
-      const c = document.createElement('canvas')
-      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale)
-      const ctx = c.getContext('2d')
-      if (!ctx) { URL.revokeObjectURL(url); return reject(new Error('no canvas')) }
-      ctx.drawImage(img, 0, 0, c.width, c.height)
-      URL.revokeObjectURL(url)
-      resolve(c.toDataURL('image/jpeg', 0.85))
-    }
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')) }
-    img.src = url
-  })
-}
+
 
 export default function W3AvatarOnboardPage() {
   const navigate = useNavigate()
@@ -58,8 +41,9 @@ export default function W3AvatarOnboardPage() {
   // onboarding or from a render that ran with no image model. Showing it back
   // to them presents an old snapshot as the thing they're being asked to make.
   const [hero, setHero] = useState<string | null>(SHOWCASE_RIDER)
+  const [failure, setFailure] = useState<string | null>(null)
 
-  const onPick = () => inputRef.current?.click()
+  const onPick = () => { setFailure(null); inputRef.current?.click() }
   const handle = user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider')
 
   // Real lifetime stats for the "AVATAR UNLOCKED" reveal (pen lQimK).
@@ -161,9 +145,21 @@ export default function W3AvatarOnboardPage() {
       qc.invalidateQueries({ queryKey: GARAGE_KEY })
       setHero(rendered)
       setStage('revealed')
-    } catch {
+    } catch (e: unknown) {
       // Reading the file or reaching the studio failed. Say so and let them
       // retry — silently skipping to the next step looks like a broken app.
+      // The REASON matters: "couldn't read this photo (image/heic)" and "the
+      // studio didn't answer" need different things from the rider, and a
+      // single generic message sent us hunting server-side for a failure that
+      // never left the browser.
+      const status = (e as { response?: { status?: number } })?.response?.status
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      const msg = (e as { message?: string })?.message
+      setFailure(
+        status === 401 ? 'Deine Sitzung ist abgelaufen. Lade die Seite neu und probier es nochmal.'
+          : status ? `Das Studio antwortete mit ${status}.${detail ? ` ${detail}` : ''}`
+            : msg || 'Unbekannter Fehler beim Lesen des Fotos.',
+      )
       setStage('unavailable')
     }
   }
@@ -175,6 +171,7 @@ export default function W3AvatarOnboardPage() {
         heroImageUrl={hero}
         stage={stage}
         reveal={reveal}
+        failure={failure}
         onPick={onPick}
         onSkip={() => navigate(NEXT)}
         onTake={() => navigate(NEXT)}
