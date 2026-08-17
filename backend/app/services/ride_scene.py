@@ -30,13 +30,13 @@ class RideGeo:
     place_name: str | None = None
 
 
-# terrain bucket -> stylised background clause (matte toy-diorama style, matching
-# the collectible character; verified against the generated look).
+# terrain bucket -> background clause. Same restrained, cinematic register as
+# the character and the bike art — atmospheric places, not toy dioramas.
 _TERRAIN = {
-    "mountain": "a stylized cartoon mountain pass — dramatic pale-grey peaks, green switchback slopes and a winding hairpin road climbing steeply",
-    "hilly": "stylized rolling green hills with gentle climbs and a curving country road",
-    "flat": "a stylized flat open landscape — wide green fields and a long straight road to the horizon",
-    "coastal": "a stylized sunny coastline — turquoise sea, a cliffside road and soft dunes",
+    "mountain": "a high mountain pass at first light — dark rock faces, deep shadowed valleys below, cold mist between the switchbacks and a hairpin road climbing steeply",
+    "hilly": "rolling hills under low, heavy cloud — muted greens, long shadows and a curving country road",
+    "flat": "a wide open plain in flat overcast light — muted fields, a low horizon and a long straight road running to it",
+    "coastal": "a windswept coastline — dark water, a cliffside road and cold light breaking over the sea",
 }
 
 
@@ -65,9 +65,11 @@ def _terrain_key(g: RideGeo) -> str:
 # How the background must be RENDERED — appended to every backdrop, ride-derived
 # or starter, so a scene never drifts into photorealism away from the character.
 _RENDER_STYLE = (
-    "Render the background in the SAME matte, simplified, glossy toy-collectible / "
-    "clay-render style as the character — a stylized cartoon miniature diorama, NOT a "
-    "photograph. Bright, sunny, clean poster-like collectible feel."
+    "Render the background in the SAME restrained, cinematic style as the character: "
+    "matte surfaces, atmospheric depth, controlled directional light and deep shadow, "
+    "muted palette with one lime-green (#C8FF00) accent in the light. Simplified and "
+    "stylised rather than photoreal, but never a cartoon, never a toy diorama, never "
+    "bright and sunny."
 )
 
 # The SHARED starter backdrop: the one scene every rider begins in.
@@ -79,9 +81,10 @@ _RENDER_STYLE = (
 # every rider, the way the starter kit is identical for every rider. Personal
 # terrain stays where it is earned: the ride scenes, built from real GPS.
 STARTER_BACKDROP = (
-    "the W3 starter road — a stylized cartoon countryside road in bright morning light, "
-    "soft green fields either side, a few rounded toy trees, gentle hills on the horizon "
-    "and a clean ribbon of tarmac running off to the right of frame"
+    "the W3 starter road — a dark, moody stretch of empty tarmac at dawn, deep near-black "
+    "surroundings falling away into shadow, a low horizon with the faintest cold light on it, "
+    "and a thin lime-green edge of first sun catching the road as it runs off to the right of "
+    "frame. Atmospheric and restrained — no cartoon scenery, no toy trees, no bright blue sky"
 )
 
 
@@ -92,71 +95,70 @@ def scene_descriptor(g: RideGeo) -> str:
     stylised outdoor road (never a fabricated location).
     """
     if (g.distance_m or 0) <= 0 and g.elevation_gain_m is None:
-        base = "a stylized bright outdoor cartoon road scene, sunny and uplifting"
+        base = "an empty stretch of road in soft directional light, quiet and atmospheric"
     else:
         base = _TERRAIN[_terrain_key(g)]
     # Prepend the real place only when a geocoder resolved it upstream.
     if g.place_name:
-        base = f"{base}, a stylized cartoon version of {g.place_name}"
+        base = f"{base}, a stylised interpretation of {g.place_name}"
     return f"BACKGROUND: {base}. {_RENDER_STYLE}"
 
 
 # Day-state → riding pose (what the scene depicts). Fed, with a backdrop, into
 # cyclr_studio.compose_scene's `training_context`.
 #
-# These are deliberately COMIC. The hero is a collectible, not a training log:
-# the day's recommendation should be readable at a glance from the rider's body
-# language alone — flat out, pottering, or fast asleep. Every pose keeps both
+# The day's recommendation must be readable at a glance from the rider's body
+# language alone — flat out, pottering, or done for the day. Every pose keeps both
 # feet, both hands and both wheels in frame, because the scene prompt's anatomy
 # and framing rules are absolute and a pose that fights them renders as a
 # clipped, three-limbed mess.
 #
 # English on purpose: these strings are image-model prompt text, never UI copy.
+# Character comes from POSTURE, not cartoon devices. The first version of these poses
+# leaned on sleep bubbles, puffed cheeks, speed lines and comic tongues; against
+# W3's near-black, single-accent ground that read as childish and clashed with
+# the bike art, which is premium product photography. Every pose below says the
+# same thing with body language a real cyclist would recognise — a rest day is
+# still unmistakably a rest day, it just isn't a cartoon about one.
 _POSE = {
-    # The owner's brief, literally: on a rest day the avatar is asleep on the bike.
+    # A rest day: the rider is draped over the bike, not riding it.
     "rest": (
-        "FAST ASLEEP on the moving bike — eyes shut in two happy curved lines, head "
-        "slumped forward onto the handlebars using the bar tape as a pillow, cheek "
-        "squashed, mouth slightly open, arms draped loosely over the bars, one foot "
-        "still on its pedal and the other leg hanging lazily off the side, a small "
-        "cartoon sleep bubble floating above the helmet. The bike rolls along perfectly "
-        "upright as if nothing at all were wrong. Comically peaceful and cosy, never "
-        "distressed or falling"
+        "completely switched off and slumped over the stationary bike — forearms folded on "
+        "the bars with the head resting down on them, eyes closed, shoulders dropped, one "
+        "foot on the ground. Utterly still. The picture of a body being allowed to do "
+        "nothing at all"
     ),
-    # A rest day that is already underway: awake, but doing absolutely nothing.
+    # A rest day already under way: awake, deliberately idle.
     "lazy": (
-        "doing absolutely nothing on a rolling bike — leaning way back off the saddle "
-        "like it is a deckchair, both feet propped up on the handlebars with the ankles "
-        "crossed, hands folded behind the helmet, eyes half closed, wearing an "
-        "insufferably smug little grin. Not pedalling even slightly. Peak holiday energy"
+        "sitting up off the saddle at a standstill, one foot down, both hands resting on the "
+        "bars, head tipped back with eyes half closed and a faint satisfied half-smile — "
+        "unhurried, in no rush to clip in, entirely content to be off the gas"
     ),
     "endurance": (
-        "cruising forever at an easy steady rhythm, sitting comfortably upright with "
-        "elbows loose, chin up and a big content grin, legs turning in lazy perfect "
-        "circles — the look of somebody who could keep this going all day and knows it"
+        "settled into an easy sustainable rhythm — upright and relaxed on the hoods, elbows "
+        "soft, shoulders low, gaze level down the road, legs turning smooth even circles. "
+        "Calm and economical, the posture of someone who could hold this for hours"
     ),
     "hard": (
-        "absolutely hammering — out of the saddle, body slammed low over the bars, "
-        "hands in the drops, cheeks puffed out, eyes wide with comic determination, "
-        "tongue poking out of the corner of the mouth, sweat droplets flying off in "
-        "little cartoon arcs and speed lines trailing behind. Full gas, deeply silly"
+        "at full effort — out of the saddle, hands in the drops, torso low and driving, back "
+        "flat, jaw set and eyes locked hard on the road ahead, every tendon and the tension "
+        "in the kit visible. Explosive and controlled, sweat on the skin. Serious, never comic"
     ),
     "recovery": (
-        "spinning ludicrously gently in the easiest gear imaginable, sitting bolt "
-        "upright with a blissed-out sleepy smile, legs barely turning, as if the bike "
-        "were doing all of the work as a favour. Featherlight and floaty"
+        "spinning gently in an easy gear, sitting tall and loose with hands resting on the "
+        "tops, shoulders dropped, face calm and unbothered, legs light. Deliberately, almost "
+        "lazily easy"
     ),
     # The session is already in the legs — this is the ride home.
     "trained": (
-        "riding home victorious with the session done — sitting up no-handed, both arms "
-        "flung wide in a triumphant cartoon celebration, chest puffed out, helmet "
-        "slightly askew, grinning ear to ear at nobody in particular. Both hands clearly "
-        "visible, palms open"
+        "riding home with the work done — sitting up off the bars, one hand loosely on the "
+        "tops, chin lifted, a quiet closed-mouth smile of genuine satisfaction, kit marked "
+        "with the effort. Spent and pleased, not showboating"
     ),
     "evening": (
-        "winding the day down on a soft easy cruise, sitting up with one hand resting on "
-        "the bars and the other stretching in a giant yawn, eyelids heavy, wearing a "
-        "satisfied sleepy smile — done, fed, and heading home"
+        "winding down in low golden light on a soft easy cruise, sitting upright with hands "
+        "resting on the tops, shoulders loose, eyes soft and heavy-lidded, wearing a quiet "
+        "tired smile — the last kilometres home"
     ),
 }
 

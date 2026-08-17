@@ -30,21 +30,33 @@ from typing import Any
 from app.config import settings
 
 # ── Style constants (verbatim from the cycl_r-studio reference) ──
+# ── Art direction ──
+#
+# W3 is near-black, one acid accent, tight type, disciplined. The original
+# direction here — "kawaii vinyl toy", "chunky toy proportions", "cute" — was
+# inherited from the cycl_r-studio reference and read as CHILDISH against that
+# ground. It also clashed with the bike ladder, whose art is premium product
+# photography on a studio sweep: two different products in one app.
+#
+# The direction now matches the bikes: stylised realism, matte materials,
+# controlled studio light with one acid rim, believable athletic proportions.
+# Character comes from posture and attitude, never from cartoon devices.
 GENERAL_STYLE = (
-    "Playful, cool, highly attractive, and extremely likable 3D designer vinyl toy aesthetic "
-    "(similar to premium kawaii Web3 avatars). It must look stylish, awesome, and aesthetically "
-    "pleasing. Bold vibrant colors, clean soft studio lighting, minimalist soft solid color "
-    "background, chunky toy proportions, high-quality octane render."
+    "Premium editorial 3D render in a restrained, grown-up style — the look of a high-end product "
+    "campaign, not a toy or a cartoon. Matte, tactile materials with fine surface detail, a single "
+    "controlled key light plus soft fill, and one crisp lime-green (#C8FF00) rim light picking out "
+    "the silhouette. Deep near-black or dark neutral ground, restrained palette, cinematic contrast, "
+    "sharp focus, high-quality octane render. NOT cute, NOT kawaii, NOT a vinyl toy, NOT chibi — no "
+    "oversized heads, no glossy plastic sheen, no comic effects, no emoji, no text."
 )
 CHARACTER_STYLE = (
-    "The character must be an incredibly cool, charming, and stylish 3D vinyl toy figure (think "
-    "beloved protagonist). CRITICAL: The character's hair MUST be an exact 1:1 match to the "
-    "described person (exact cut, color, volume, and style), sculpted with bold 3D toy geometry "
-    "but matching the real hairstyle perfectly. The face MUST be highly flattering, cute, and "
-    "deeply likable (an idealized, highly appealing sweet 3D feature set) with accurate skin tone "
-    "and eyebrows. CRITICAL: The clothing MUST be hyper-realistic, highly detailed (intricate "
-    "folds, seams, zippers, and realistic fabric materials like glossy nylon, knit, or denim) to "
-    "create a striking textural contrast with the smooth 3D toy face."
+    "The character is a stylised but believable athlete with realistic human proportions — a "
+    "cyclist's build, NOT a toy figurine and NOT an oversized head. CRITICAL: hair MUST be an exact "
+    "1:1 match to the described person (exact cut, colour, volume, style), and the face must be a "
+    "flattering but adult likeness with accurate skin tone and eyebrows — composed and determined, "
+    "never cutesy, never a wide-eyed cartoon. CRITICAL: the kit MUST be hyper-realistic and highly "
+    "detailed — intricate folds under tension, seams, zip, the sheen of technical lycra — so the "
+    "fabric reads as real even though the figure is stylised."
 )
 BIKE_STYLE = (
     "The bicycle must maintain perfect, realistic mechanical geometry (accurate triangular frame) "
