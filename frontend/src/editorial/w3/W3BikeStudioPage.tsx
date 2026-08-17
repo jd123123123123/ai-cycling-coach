@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGarage, useRenderAsset } from '../../hooks/useGarage'
+import { useGrantOnboarding } from '../../hooks/useWallet'
 import { HIDDEN_FILE_INPUT } from './w3tokens'
 import { fileToDownscaledDataUrl } from './w3photo'
 import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
@@ -19,6 +20,13 @@ import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
  * which is what the Today hero and the ride hero read. Opening the studio with
  * a bike already in the garage shows that bike rather than an empty camera
  * frame — the garage is a place you visit, not just a one-shot flow.
+ *
+ * A kept render also PAYS: `POST /rewards/onboarding/bike` credits the one-time
+ * 150 RC bike grant (`backend/app/services/rewards.py` → ONBOARDING_GRANT_RC),
+ * the same idempotent mechanism the photo and device grants use. It is fired
+ * once, only for a render that actually landed in the garage, and the screen
+ * shows what the SERVER says it credited — `granted: 0` on a rider who already
+ * claimed it says exactly that instead of promising RideCoin twice.
  */
 
 export default function W3BikeStudioPage() {
@@ -26,6 +34,7 @@ export default function W3BikeStudioPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const { data: garage, isLoading: garageLoading } = useGarage()
   const render = useRenderAsset()
+  const grant = useGrantOnboarding()
   const [state, setState] = useState<StudioState>('intro')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [description, setDescription] = useState<string | null>(null)
@@ -37,6 +46,10 @@ export default function W3BikeStudioPage() {
   // The unlock celebration belongs to a bike made just now, never to the one
   // already sitting in the garage.
   const [celebrate, setCelebrate] = useState(false)
+  // What the grant actually paid, straight from the server. `null` until it
+  // answers (or if it fails) — the reveal then shows no RideCoin at all.
+  const [reward, setReward] = useState<{ granted: number; balance: number } | null>(null)
+  const [rewardPending, setRewardPending] = useState(false)
 
   // Show the bike the rider already owns — ONCE, when the garage first resolves.
   // Not on every render pass: "Anderes Bike rendern" returns to the camera
@@ -58,7 +71,7 @@ export default function W3BikeStudioPage() {
   const reset = useCallback(() => {
     setState('intro'); setPhotoUrl(null); setDescription(null); setName(null)
     setImageUrl(null); setRenderStatus(null); setPrompt(null); setError(null)
-    setCelebrate(false)
+    setCelebrate(false); setReward(null); setRewardPending(false)
   }, [])
 
   const onFile = useCallback(async (file: File) => {
@@ -77,6 +90,25 @@ export default function W3BikeStudioPage() {
       setRenderStatus(result.status)
       setCelebrate(true)
       setTimeout(() => setState('reveal'), 500)
+
+      // The reward rides on the RENDER THAT LANDED. A studio that couldn't
+      // produce an image saved no bike, so there is nothing to pay for — and
+      // the server refuses it anyway (`no_bike_yet`). Fired exactly once per
+      // successful render, and never awaited into the reveal: the moment must
+      // not wait on the wallet, and a failing grant must not cost the unlock.
+      if (result.status === 'ok' && result.image_base64) {
+        setRewardPending(true)
+        grant.mutateAsync('bike')
+          // `granted: 0` means "already claimed" — but ONLY when the server
+          // actually looked at the grant. `no_bike_yet` is a different zero
+          // (it found no garage bike), and must not be read back to the rider
+          // as "you've had this reward before"; that shows no RideCoin at all.
+          .then((r) => setReward(r.reason === 'no_bike_yet'
+            ? null
+            : { granted: r.granted, balance: r.balance }))
+          .catch(() => setReward(null))
+          .finally(() => setRewardPending(false))
+      }
     } catch (e: unknown) {
       // Name the real cause. A generic "try another photo" sent us looking at
       // server logs for a failure that never left the browser (an unreadable
@@ -90,7 +122,7 @@ export default function W3BikeStudioPage() {
       )
       setState('error')
     }
-  }, [render])
+  }, [render, grant])
 
   // Save = download the rendered collectible to the device. The extension is
   // read off the data URL's own mime (renders are WebP; PNG is the fallback),
@@ -116,6 +148,7 @@ export default function W3BikeStudioPage() {
         state={garageLoading && state === 'intro' ? 'loading' : state}
         photoUrl={photoUrl} description={description} imageUrl={imageUrl} bikeName={name ?? undefined}
         renderStatus={renderStatus} prompt={prompt} error={error}
+        reward={reward} rewardPending={rewardPending}
         // The reveal's primary action lands on Today, where the bike they just
         // made is now the hero — the payoff, not a dead-end back-stack pop.
         onBack={() => navigate('/e/w3-today')}

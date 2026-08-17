@@ -1,13 +1,10 @@
 import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import {
-  Bike, Flame, Pencil, CalendarRange,
-  Sparkles, Star,
-} from 'lucide-react'
+import { Flame, CalendarRange, Sparkles, Star } from 'lucide-react'
 import { WeekTrainingCard, WeekNavCards, MirrorChart, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
-import W3BikeHero from './W3BikeHero'
+import W3BikeHero, { type W3BikeHeroScene } from './W3BikeHero'
 import W3RiderAvatar from './W3RiderAvatar'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -67,6 +64,15 @@ export interface W3Vm {
   bikeName: string
   bikeImage: string | null
   bikeLoading: boolean
+  /** The rider's digitalised portrait (garage), or null — the identity card
+   *  shows an empty seat rather than a photo they never chose. */
+  riderImage: string | null
+  /** Today's composed rider-on-bike scene + why there isn't one. Null until the
+   *  cheap cached read lands. Composing is never automatic. */
+  scene: W3BikeHeroScene | null
+  sceneComposing: boolean
+  /** REAL RideCoin balance (`useWallet`), localised — null → "—". */
+  coins: string | null
   streak: number | null
 
   readiness: number | null
@@ -123,14 +129,6 @@ export interface W3Vm {
   challengeValue: string // fixture
   challengePct: number // fixture
 
-  garagePct: number // fixture
-  garageName: string // fixture
-  garageRidesLine: string // fixture
-  garageMakesLine: string // fixture
-  power: string // real (wallet balance) — "—" when the wallet hasn't loaded
-  cycle: string // fixture
-  mRides: { pct: number; label: string }
-  mDist: { pct: number; label: string }
 }
 
 // ── primitives ──
@@ -227,7 +225,13 @@ function SectionHead({ title, subtitle, tag }: { title: string; subtitle?: strin
 const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: `0 20px ${padBottom}px` })
 const card = (): CSSProperties => ({ background: T.surface, borderRadius: 24, padding: 20, display: 'flex', flexDirection: 'column', width: '100%' })
 
-export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAdapt }) {
+export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
+  vm: W3Vm
+  onAdapt?: OnAdapt
+  /** Explicit intent to compose today's hero scene — a slow, paid image-model
+   *  call, so it is only ever reachable through a tap. */
+  onComposeScene?: () => void
+}) {
   const navigate = useNavigate()
   // The week strip and the training card share ONE selection: tapping a day
   // drives which recommendation the card shows. Defaults to today.
@@ -262,23 +266,15 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           </div>
         </div>
 
-        {/* ── Garage band: the current bike + edit. The chip names the bike the
-             rider actually has; with an empty garage it says so. ── */}
-        <div style={{ padding: '0 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 12px 7px 10px', borderRadius: 100, background: T.surface }}>
-            <Bike size={13} color={vm.bikeImage ? T.acid : T.quiet} />
-            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: vm.bikeImage ? T.ink : T.quiet }}>
-              {vm.bikeImage ? vm.bikeName : 'NOCH KEIN BIKE'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <W3NavIcon to="/e/w3-bike-studio" label={vm.bikeImage ? 'Bike bearbeiten' : 'Bike hinzufügen'}><Pencil size={15} color={T.mid} /></W3NavIcon>
-          </div>
-        </div>
-
-        {/* ── Bike Hero: the rider's OWN digitalised bike — or, when the garage
-             slot is empty, the offer to make one. Never a stock stand-in. ── */}
-        <W3BikeHero image={vm.bikeImage} name={vm.bikeName} loading={vm.bikeLoading} />
+        {/* ── Hero: the rider ON their own bike, in the scene today's plan calls
+             for — flowing into their identity card (pen `GSdj0`). Degrades to
+             the bike collectible alone, then to a labelled example. The bike
+             name, the balance and the streak live in the card now; the old
+             separate garage band above the hero was folded into it. ── */}
+        <W3BikeHero
+          image={vm.bikeImage} name={vm.bikeName} loading={vm.bikeLoading}
+          scene={vm.scene} composing={vm.sceneComposing} onCompose={onComposeScene}
+          identity={{ handle: vm.handle, rider: vm.riderImage, coins: vm.coins, streak: vm.streak }} />
 
         {/* ── Hero: readiness + charge meter ── */}
         <div style={{ ...band(24), paddingTop: 20, gap: 14 }}>

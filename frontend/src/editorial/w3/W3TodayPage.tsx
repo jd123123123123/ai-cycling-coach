@@ -5,7 +5,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
 import { useStreak } from '../../hooks/useStreak'
-import { useGarage } from '../../hooks/useGarage'
+import { useGarage, useDayScene, useRenderDayScene } from '../../hooks/useGarage'
+import { useWallet } from '../../hooks/useWallet'
+import type { DayPose } from '../../api/garage'
 import { useCrewStandings } from '../../hooks/useCrew'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
@@ -20,6 +22,7 @@ import { DASH, T } from './w3tokens'
 import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
 import { hasSeenW3Onboarding } from './w3Onboarding'
+import { poseForDay } from './w3Pose'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type W3Block, type OnAdapt } from './W3TodayView'
 import type { W3Weather, W3WeatherHour } from './W3Sections'
 
@@ -254,8 +257,39 @@ export default function W3TodayPage() {
   const { data: weekActs } = useActivitiesRange(
     new Date(Date.now() - 8 * 86_400_000), new Date(),
   )
+  // REAL RideCoin balance for the hero's identity card.
+  const { data: wallet } = useWallet()
   const qc = useQueryClient()
   const ftp = profile?.ftp_watts ?? null
+
+  // ── Which scene today asks for ──────────────────────────────────────────
+  // The hero puts the rider on their bike doing what the day actually calls
+  // for, so the pose is derived from the SAME real inputs the rest of the page
+  // reads: the day-state, and — on a training day — the prescribed intensity of
+  // the real session. The IF thresholds mirror the server's `_pose_for`, so a
+  // ride and the day that prescribed it never disagree about how hard it was.
+  //
+  // This is also the cache key: one composed image per pose, forever. It has to
+  // be computed OUTSIDE the vm memo because the cached-scene read hangs off it.
+  const scenePose = useMemo<DayPose>(() => {
+    const plan = (week?.days ?? []).find((d) => d.is_today) ?? null
+    const dd = adaptive?.daily_decision?.planned ?? null
+    // The real prescribed intensity: the week plan's, else the coach's daily
+    // decision via the Coggan relation. Null when neither carries TSS AND a
+    // duration — nothing is claimed about an effort we can't compute.
+    const iff = plan && isSessionDay(plan)
+      ? planIF(plan)
+      : dd?.target_tss && dd?.duration_minutes
+        ? Math.sqrt(dd.target_tss / ((dd.duration_minutes / 60) * 100))
+        : null
+    return poseForDay(state, iff)
+  }, [state, week, adaptive])
+
+  // The cheap cached read — never composes. `isLoading` folds into the hero's
+  // loading state so the bike doesn't flash in before its scene.
+  const { data: dayScene, isLoading: sceneLoading } = useDayScene(scenePose)
+  const renderScene = useRenderDayScene()
+  const composeScene = useCallback(() => { renderScene.mutate(scenePose) }, [renderScene, scenePose])
 
   const vm = useMemo<W3Vm>(() => {
     const realWeather = buildWeather(todayWeather)
@@ -570,6 +604,12 @@ export default function W3TodayPage() {
       const dt = dateForIndex(i)
       return {
         letter: d.letter, num: String(dt.getDate()), actual, planned: plannedTss, status,
+        // The day TYPE, which `status` cannot carry: for today `status` is
+        // always 'today', so a prescribed rest day looked like a session and
+        // rendered interval beams under the heading "Ruhetag". Today is rest
+        // when the coach handed us no session; any other day when its plan
+        // exists and prescribes no work.
+        rest: isToday ? !session : (plan != null && !planIsSession),
         title,
         dateLabel: `${DE_WD2[i] ?? d.letter}, ${fmtDEShort(dt)}`, weekday: WD[i] ?? d.letter,
         targetW, ftpPct, blocks: dayBlocks,
@@ -614,7 +654,18 @@ export default function W3TodayPage() {
       // which stays `bikeImage: null` and gets the hero's empty state.
       bikeName: garage?.bike?.name ?? 'Dein Bike',
       bikeImage: garage?.bike?.image_base64 ?? null,
-      bikeLoading: garageLoading,
+      bikeLoading: garageLoading || sceneLoading,
+      riderImage: garage?.rider?.image_base64 ?? null,
+      // REAL: today's composed hero, read from the server cache. Null until the
+      // read lands; `status` is the honest reason there is no image yet, and
+      // composing only ever happens on the rider's tap (`composeScene`).
+      scene: dayScene
+        ? { image: dayScene.image_base64, status: dayScene.status, pose: scenePose }
+        : null,
+      sceneComposing: renderScene.isPending,
+      // REAL: the RideCoin wallet balance. "—" until it loads — never a number
+      // the ledger can't account for.
+      coins: wallet ? wallet.balance.toLocaleString('de-DE') : null,
       weekDoneLabel,
       zoneTag,
       avatarUrl: user?.avatar_url ?? null,
@@ -679,18 +730,11 @@ export default function W3TodayPage() {
       challengeLabel: 'CREW-CHALLENGE · UM DIE WELT',   // fixture: crew-challenge banner not wired
       challengeValue: '412 / 500 km',
       challengePct: 82,
-
-      // ── fixtures: Garage economy — spec'd, not wired ──
-      garagePct: 68,
-      garageName: 'Carbon-Rahmen',
-      garageRidesLine: '17 von 25 Fahrten',
-      garageMakesLine: 'Heute wird es die 18.',
-      power: '625,3 Tsd.',
-      cycle: '1.448',
-      mRides: { pct: 50, label: '25 Fahrten' },
-      mDist: { pct: 73, label: '200 km' },
     }
-  }, [model, user, streak, standings, adaptive, week, ftp, todayWeather, weekActs, garage, garageLoading])
+  }, [
+    model, user, streak, standings, adaptive, week, ftp, todayWeather, weekActs,
+    garage, garageLoading, sceneLoading, dayScene, scenePose, renderScene.isPending, wallet,
+  ])
 
   // Real adapt that PERSISTS: Easier/Harder/Shorter/Indoor hit POST
   // /workouts/today/modify (the audited workout modifier — writes the new
@@ -729,5 +773,5 @@ export default function W3TodayPage() {
     return <Navigate to="/e/w3-onboard-welcome" replace />
   }
 
-  return <W3TodayView vm={vm} onAdapt={onAdapt} />
+  return <W3TodayView vm={vm} onAdapt={onAdapt} onComposeScene={composeScene} />
 }

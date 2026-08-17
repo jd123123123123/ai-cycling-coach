@@ -2,14 +2,15 @@ import { apiClient } from './client'
 
 // ──────────────────────────────────────────────────────────────────────
 // RideCoin — the cosmetic reward currency. Earned server-side from TSS at ride
-// ingestion (base × forgiving-streak multiplier), plus the fixed 250 RC
-// onboarding grant. Balances are permanent; only competitions reset.
+// ingestion (base × forgiving-streak multiplier), plus the fixed 400 RC
+// onboarding grants. Balances are permanent; only competitions reset.
 // Spec: docs/superpowers/specs/2026-08-12-ridecoin-point-system-design.md
 // ──────────────────────────────────────────────────────────────────────
 
 export type LedgerReason =
   | 'onboarding_photo'
   | 'onboarding_device'
+  | 'onboarding_bike'
   | 'ride_earn'
   | 'streak_bonus'
   | 'challenge_bonus'
@@ -41,9 +42,32 @@ export interface Wallet {
 }
 
 export interface OnboardingGrantResult extends Wallet {
+  /** RC actually credited by this call. 0 when the grant was already claimed
+   *  (idempotent server-side) or when the step isn't done yet — see `reason`
+   *  (`no_avatar_yet` / `no_bike_yet`). */
   granted: number
   reason: string
 }
+
+/** The one-time onboarding steps, and what each pays.
+ *
+ *  SOURCE OF TRUTH: `backend/app/services/rewards.py` → `ONBOARDING_GRANT_RC`,
+ *  which is what actually credits the ledger. These are mirrored here (the same
+ *  arrangement `STREAK_MULTIPLIER_TIERS` already uses) so a screen can name the
+ *  reward BEFORE the rider earns it — "digitalise your bike → +150 RC" — without
+ *  a second hand-written number somewhere in a view. What was actually granted
+ *  always comes from the server's `granted`, never from this table. */
+export const ONBOARDING_GRANT_RC: Record<OnboardingKind, number> = {
+  photo: 125,
+  device: 125,
+  bike: 150,
+} as const
+
+/** The equal head start every rider gets, once all three steps are done. */
+export const ONBOARDING_TOTAL_RC = Object.values(ONBOARDING_GRANT_RC).reduce((a, b) => a + b, 0)
+
+/** The onboarding steps that pay RideCoin — the `{kind}` of the grant route. */
+export type OnboardingKind = 'photo' | 'device' | 'bike'
 
 // The RideCoin a single ride earned, broken down (for the celebration screen).
 export interface RideEarning {
@@ -124,10 +148,10 @@ export async function fetchRideEarning(activityId: number): Promise<RideEarning>
   return res.data
 }
 
-// POST /rewards/onboarding/{kind} — award the one-time photo/device grant
+// POST /rewards/onboarding/{kind} — award the one-time photo/device/bike grant
 // (idempotent; server returns granted:0 on repeat).
 export async function grantOnboarding(
-  kind: 'photo' | 'device',
+  kind: OnboardingKind,
 ): Promise<OnboardingGrantResult> {
   const res = await apiClient.post<OnboardingGrantResult>(
     `/rewards/onboarding/${kind}`,

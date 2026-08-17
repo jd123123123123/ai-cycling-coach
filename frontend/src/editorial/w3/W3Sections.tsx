@@ -29,6 +29,10 @@ export interface W3DayFull {
   actualDurMin?: number | null
   actualW?: number | null
   actualHr?: number | null
+  /** True when the PLAN prescribes rest, independently of `status`. Needed
+   *  because `status` is 'today' for today whatever the day type is, so it
+   *  cannot answer "is this a rest day?" for the one day that matters most. */
+  rest?: boolean
 }
 
 export const STATUS: Record<DayStatus, { label: string; hue: string; icon: typeof Check }> = {
@@ -472,7 +476,12 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
 
   // A future day with no prescribed session IS a rest day (the plan schedules
   // rest; the coach fills training days a week ahead and re-plans each morning).
-  const restDay = isRest || day.status === 'rest' || (isFuture && !day.title)
+  // A rest day is a day TYPE; `status` is a position marker and 'today' always
+  // wins over it (W3TodayPage: `isToday ? 'today' : …`). So a rest day that
+  // happens to be today never carried status 'rest', fell through to the
+  // session branch, and drew interval beams under the heading "Ruhetag".
+  // `day.rest` states the type independently of where the day sits.
+  const restDay = isRest || day.rest === true || day.status === 'rest' || (isFuture && !day.title)
   if (restDay && !isPast) {
     return (
       <motion.div initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}

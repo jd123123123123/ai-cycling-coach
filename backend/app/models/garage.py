@@ -110,3 +110,41 @@ class RideScene(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False,
     )
+
+
+class DayScene(Base):
+    """The composed rider-on-bike hero for one DAY-STATE, cached per pose.
+
+    Today's hero is not about a ride that happened — it is about what the day is
+    asking of the rider, so it is keyed on the POSE (`services/ride_scene`'s
+    `DAY_POSES`: rest / lazy / endurance / hard / recovery / trained / evening),
+    not on a date and not on an activity. A rider therefore accumulates at most
+    seven of these for their whole membership: the first rest day composes the
+    dozing scene, and every rest day after that reads it back for free.
+
+    That key is the entire point. Composing is a slow paid image-model call, and
+    a per-DATE cache would bill a fresh render every single morning for a picture
+    that is identical to yesterday's. The pose is also what makes the cache
+    self-invalidating in the way that matters: re-rendering the rider or the bike
+    drops these rows (see `api/garage.render_asset`), because the scenes were
+    composed FROM those descriptions.
+
+    Same RLS + inline-WebP storage reasoning as ``RideScene`` above.
+    """
+
+    __tablename__ = "day_scenes"
+    __table_args__ = (
+        UniqueConstraint("user_id", "pose", name="uq_day_scene_user_pose"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    pose: Mapped[str] = mapped_column(String(16), nullable=False)
+    image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    training_context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )

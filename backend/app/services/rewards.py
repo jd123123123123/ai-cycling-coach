@@ -24,6 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.rewards import (
     ONBOARDING_REASONS,
     REASON_CHALLENGE_BONUS,
+    REASON_ONBOARDING_BIKE,
+    REASON_ONBOARDING_DEVICE,
+    REASON_ONBOARDING_PHOTO,
     REASON_RIDE_EARN,
     REASON_STREAK_BONUS,
     PointsLedger,
@@ -37,7 +40,37 @@ RC_PER_TSS = 1.0            # k = 1: 1 RideCoin per TSS point
 PER_RIDE_SOFT_CAP = 150     # a ride's *earning* plateaus at TSS 150
 ONBOARDING_PHOTO_RC = 125   # add your photo / create avatar
 ONBOARDING_DEVICE_RC = 125  # connect your watch
-ONBOARDING_TOTAL_RC = ONBOARDING_PHOTO_RC + ONBOARDING_DEVICE_RC  # everyone starts at 250
+ONBOARDING_BIKE_RC = 150    # digitalise your bike in the studio (garage bike asset)
+
+# reason -> amount, EXPLICIT. This used to be inferred from the reason string
+# (`reason.endswith("photo")` picking one of two amounts), which silently paid
+# the device amount for anything that wasn't the photo grant — a third grant
+# would have been mispriced with no error anywhere. Every onboarding reason must
+# appear here; `_check_onboarding_prices()` below fails the import if one
+# doesn't, so the two definitions can never drift apart.
+ONBOARDING_GRANT_RC: dict[str, int] = {
+    REASON_ONBOARDING_PHOTO: ONBOARDING_PHOTO_RC,
+    REASON_ONBOARDING_DEVICE: ONBOARDING_DEVICE_RC,
+    REASON_ONBOARDING_BIKE: ONBOARDING_BIKE_RC,
+}
+
+
+def _check_onboarding_prices() -> None:
+    missing = ONBOARDING_REASONS - set(ONBOARDING_GRANT_RC)
+    extra = set(ONBOARDING_GRANT_RC) - ONBOARDING_REASONS
+    if missing or extra:
+        raise RuntimeError(
+            f"onboarding grant prices out of step with ONBOARDING_REASONS: "
+            f"missing={sorted(missing)} extra={sorted(extra)}"
+        )
+
+
+_check_onboarding_prices()
+
+# Everyone starts at the same number — 125 photo + 125 device + 150 bike.
+# The onboarding rewards screen quotes this total; keep the two in step
+# (frontend/src/api/rewards.ts → ONBOARDING_TOTAL_RC).
+ONBOARDING_TOTAL_RC = sum(ONBOARDING_GRANT_RC.values())  # 400
 
 # Streak multiplier tiers — hard ceiling ×1.5 (§5a). (min_streak_days, multiplier),
 # highest threshold first so the first match wins.
@@ -227,7 +260,7 @@ async def award_ride(
 
 
 async def grant_onboarding(db: AsyncSession, user_id: int, reason: str) -> int:
-    """Award a fixed, identical, one-time onboarding grant (photo or device).
+    """Award a fixed, identical, one-time onboarding grant (photo/device/bike).
 
     Idempotent — each grant is awarded once, ever. Returns the RC granted (0 if
     it was already granted). The caller commits."""
@@ -242,7 +275,7 @@ async def grant_onboarding(db: AsyncSession, user_id: int, reason: str) -> int:
     if existing.first() is not None:
         return 0
 
-    amount = ONBOARDING_PHOTO_RC if reason.endswith("photo") else ONBOARDING_DEVICE_RC
+    amount = ONBOARDING_GRANT_RC[reason]
     await _credit(db, user_id, reason, amount)
     return amount
 

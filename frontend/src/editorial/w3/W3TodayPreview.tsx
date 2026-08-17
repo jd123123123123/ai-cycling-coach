@@ -17,6 +17,12 @@ const FIXTURE: W3Vm = {
   bikeName: 'Starter Bike',
   bikeImage: STARTER_BIKE,
   bikeLoading: false,
+  // The preview has no garage and no image model, so it demos the hero's SECOND
+  // fallback: the bike collectible with the offer to compose today's scene.
+  riderImage: null,
+  scene: { image: null, status: 'not_generated', pose: 'hard' },
+  sceneComposing: false,
+  coins: '1.448',
   weekDoneLabel: '4 von 6 erledigt',
   zoneTag: '88% FTP',
   avatarUrl: null,
@@ -120,14 +126,6 @@ const FIXTURE: W3Vm = {
   challengeLabel: 'CREW-CHALLENGE · UM DIE WELT',
   challengeValue: '412 / 500 km',
   challengePct: 82,
-  garagePct: 68,
-  garageName: 'Carbon-Rahmen',
-  garageRidesLine: '17 von 25 Fahrten',
-  garageMakesLine: 'Heute wird es die 18.',
-  power: '625,3 Tsd.',
-  cycle: '1.448',
-  mRides: { pct: 50, label: '25 Fahrten' },
-  mDist: { pct: 73, label: '200 km' },
 }
 
 // Mock coach adapt — mimics the persisting /workouts/today/modify result, so

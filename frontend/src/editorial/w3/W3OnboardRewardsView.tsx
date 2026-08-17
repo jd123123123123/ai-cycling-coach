@@ -8,9 +8,10 @@ import './w3.css'
 
 /**
  * W3 · Onboarding 03 — Ride and get rewarded (pen b5Bzg). The pen's XP/level
- * gamification is rewritten to the REAL RideCoin economy: the equal 250 RC
- * head start (125 photo + 125 device) and ~1 RC per TSS earn rate. The three
- * tiles are supplied by the Page (real wallet balance + real constants).
+ * gamification is rewritten to the REAL RideCoin economy: the equal 400 RC
+ * head start (125 photo + 125 device + 150 bike) and ~1 RC per TSS earn rate.
+ * The three tiles are supplied by the Page (real wallet balance + real
+ * constants from `api/rewards.ts`, mirroring `services/rewards.py`).
  */
 export interface W3RewardTile { value: string; label: string; story?: string }
 export interface W3OnboardRewardsProps {
@@ -24,8 +25,8 @@ export interface W3OnboardRewardsProps {
  *  turns the bare numbers into a start → how → why sequence. A tile may override
  *  the copy via `story`; otherwise these defaults tell the RideCoin story. */
 const STORY: { Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; step: string; story: string; accent: boolean }[] = [
-  { Icon: Wallet, step: '01 · DEIN START', accent: true, story: 'Alle starten mit denselben 250 — Vorsprung gibt es nicht zu kaufen.' },
-  { Icon: Gift, step: '02 · WO ES HERKOMMT', accent: false, story: '125 fürs Foto, 125 fürs Verbinden eines Geräts. Einmalig.' },
+  { Icon: Wallet, step: '01 · DEIN START', accent: true, story: 'Alle starten mit denselben 400 — Vorsprung gibt es nicht zu kaufen.' },
+  { Icon: Gift, step: '02 · WO ES HERKOMMT', accent: false, story: '125 fürs Foto, 125 fürs Gerät, 150 für dein digitalisiertes Bike. Einmalig.' },
   { Icon: Flame, step: '03 · WIE ES WÄCHST', accent: false, story: 'Jede Fahrt bringt ~1 RC pro TSS — härtere Einheit, größere Auszahlung.' },
 ]
 
@@ -69,7 +70,7 @@ export default function W3OnboardRewardsView({ tiles, onNext, onSkip }: W3Onboar
             <Zap size={72} color={T.bg} fill={T.bg} strokeWidth={1.5} />
           </motion.div>
           {/* fixture: floating chips illustrating the loop; the +RC value below is real */}
-          <Chip top={44} left={30} delay={0.25}>+250 RC</Chip>
+          <Chip top={44} left={30} delay={0.25}>+400 RC</Chip>
           <Chip top={30} right={34} delay={0.35}>NEUES TEIL</Chip>
           <Chip top={188} right={48} delay={0.45}>LEVEL UP</Chip>
         </div>

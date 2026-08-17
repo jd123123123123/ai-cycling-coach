@@ -50,6 +50,41 @@ export interface RideScene {
   status: SceneStatus
 }
 
+/**
+ * The poses Today's hero can be in — mirrors `services/ride_scene.DAY_POSES`,
+ * which the endpoint validates against (anything else is a 422).
+ *
+ * These are day-STATES, not dates: 'rest' is the avatar asleep on the bike,
+ * 'hard' is it flat out. The server caches one composed image per pose per
+ * rider, so a rider only ever pays for each of these once.
+ */
+export type DayPose = 'rest' | 'lazy' | 'endurance' | 'hard' | 'recovery' | 'trained' | 'evening'
+
+export interface DayScene {
+  pose: DayPose
+  image_base64: string | null
+  training_context: string | null
+  prompt: string | null
+  status: SceneStatus
+}
+
+/** The cheap read: today's cached hero for a pose, or the reason there isn't
+ *  one. Never generates, so it is safe on every Today open. */
+export async function fetchDayScene(pose: DayPose): Promise<DayScene> {
+  const res = await apiClient.get<DayScene>('/garage/scene/today', { params: { pose } })
+  return res.data
+}
+
+/** Compose (and cache) today's hero for one pose. Slow and paid — explicit
+ *  intent only, never on mount. Re-posting a composed pose is free: the server
+ *  returns the cached image rather than re-rendering. */
+export async function renderDayScene(pose: DayPose): Promise<DayScene> {
+  const res = await apiClient.post<DayScene>('/garage/scene/today', undefined, {
+    params: { pose }, timeout: 180_000,
+  })
+  return res.data
+}
+
 export async function fetchGarage(): Promise<Garage> {
   const res = await apiClient.get<Garage>('/garage')
   return res.data

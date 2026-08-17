@@ -62,6 +62,29 @@ def _terrain_key(g: RideGeo) -> str:
     return "flat"
 
 
+# How the background must be RENDERED — appended to every backdrop, ride-derived
+# or starter, so a scene never drifts into photorealism away from the character.
+_RENDER_STYLE = (
+    "Render the background in the SAME matte, simplified, glossy toy-collectible / "
+    "clay-render style as the character — a stylized cartoon miniature diorama, NOT a "
+    "photograph. Bright, sunny, clean poster-like collectible feel."
+)
+
+# The SHARED starter backdrop: the one scene every rider begins in.
+#
+# Today's hero is not tied to a ride, so there is no GPX to derive terrain from —
+# and inventing one per rider would make the same pose look like a different
+# place for everyone, which is exactly the consistency the locked camera exists
+# to protect. So the day-state scenes all play out on ONE road, identical for
+# every rider, the way the starter kit is identical for every rider. Personal
+# terrain stays where it is earned: the ride scenes, built from real GPS.
+STARTER_BACKDROP = (
+    "the W3 starter road — a stylized cartoon countryside road in bright morning light, "
+    "soft green fields either side, a few rounded toy trees, gentle hills on the horizon "
+    "and a clean ribbon of tarmac running off to the right of frame"
+)
+
+
 def scene_descriptor(g: RideGeo) -> str:
     """A stylised background clause for the hero prompt, from the real ride.
 
@@ -75,22 +98,73 @@ def scene_descriptor(g: RideGeo) -> str:
     # Prepend the real place only when a geocoder resolved it upstream.
     if g.place_name:
         base = f"{base}, a stylized cartoon version of {g.place_name}"
-    return (
-        f"BACKGROUND: {base}. Render the background in the SAME matte, simplified, glossy "
-        "toy-collectible / clay-render style as the character — a stylized cartoon miniature "
-        "diorama, NOT a photograph. Bright, sunny, clean poster-like collectible feel."
-    )
+    return f"BACKGROUND: {base}. {_RENDER_STYLE}"
 
 
-# Day-state → riding pose (the effort the scene depicts). Fed, with the GPX
-# scene, into cyclr_studio.compose_scene's `training_context`.
+# Day-state → riding pose (what the scene depicts). Fed, with a backdrop, into
+# cyclr_studio.compose_scene's `training_context`.
+#
+# These are deliberately COMIC. The hero is a collectible, not a training log:
+# the day's recommendation should be readable at a glance from the rider's body
+# language alone — flat out, pottering, or fast asleep. Every pose keeps both
+# feet, both hands and both wheels in frame, because the scene prompt's anatomy
+# and framing rules are absolute and a pose that fights them renders as a
+# clipped, three-limbed mess.
+#
+# English on purpose: these strings are image-model prompt text, never UI copy.
 _POSE = {
-    "rest": "riding relaxed and easy, sitting up, calm and content",
-    "endurance": "riding steady and comfortable, cruising happily",
-    "hard": "riding super fast and low, out of the saddle, driving hard up a climb in a funny determined effort",
-    "recovery": "spinning very gently, soft and easy",
-    "evening": "riding an easy relaxed cruise, satisfied at the end of the day",
+    # The owner's brief, literally: on a rest day the avatar is asleep on the bike.
+    "rest": (
+        "FAST ASLEEP on the moving bike — eyes shut in two happy curved lines, head "
+        "slumped forward onto the handlebars using the bar tape as a pillow, cheek "
+        "squashed, mouth slightly open, arms draped loosely over the bars, one foot "
+        "still on its pedal and the other leg hanging lazily off the side, a small "
+        "cartoon sleep bubble floating above the helmet. The bike rolls along perfectly "
+        "upright as if nothing at all were wrong. Comically peaceful and cosy, never "
+        "distressed or falling"
+    ),
+    # A rest day that is already underway: awake, but doing absolutely nothing.
+    "lazy": (
+        "doing absolutely nothing on a rolling bike — leaning way back off the saddle "
+        "like it is a deckchair, both feet propped up on the handlebars with the ankles "
+        "crossed, hands folded behind the helmet, eyes half closed, wearing an "
+        "insufferably smug little grin. Not pedalling even slightly. Peak holiday energy"
+    ),
+    "endurance": (
+        "cruising forever at an easy steady rhythm, sitting comfortably upright with "
+        "elbows loose, chin up and a big content grin, legs turning in lazy perfect "
+        "circles — the look of somebody who could keep this going all day and knows it"
+    ),
+    "hard": (
+        "absolutely hammering — out of the saddle, body slammed low over the bars, "
+        "hands in the drops, cheeks puffed out, eyes wide with comic determination, "
+        "tongue poking out of the corner of the mouth, sweat droplets flying off in "
+        "little cartoon arcs and speed lines trailing behind. Full gas, deeply silly"
+    ),
+    "recovery": (
+        "spinning ludicrously gently in the easiest gear imaginable, sitting bolt "
+        "upright with a blissed-out sleepy smile, legs barely turning, as if the bike "
+        "were doing all of the work as a favour. Featherlight and floaty"
+    ),
+    # The session is already in the legs — this is the ride home.
+    "trained": (
+        "riding home victorious with the session done — sitting up no-handed, both arms "
+        "flung wide in a triumphant cartoon celebration, chest puffed out, helmet "
+        "slightly askew, grinning ear to ear at nobody in particular. Both hands clearly "
+        "visible, palms open"
+    ),
+    "evening": (
+        "winding the day down on a soft easy cruise, sitting up with one hand resting on "
+        "the bars and the other stretching in a giant yawn, eyelids heavy, wearing a "
+        "satisfied sleepy smile — done, fed, and heading home"
+    ),
 }
+
+# The poses Today's hero may ask for — the day-states the app can actually be in,
+# plus the three effort reads a training day resolves to. The endpoint validates
+# against this list, and the cached scene is keyed on the pose, so a rider ends
+# up with at most one composed image per pose no matter how many days pass.
+DAY_POSES = ("rest", "lazy", "endurance", "hard", "recovery", "trained", "evening")
 
 
 def training_context(pose_key: str, g: RideGeo) -> str:
@@ -99,3 +173,15 @@ def training_context(pose_key: str, g: RideGeo) -> str:
     This is the session-detail 'background generated from the GPX' idea."""
     pose = _POSE.get(pose_key, _POSE["endurance"])
     return f"{pose}. {scene_descriptor(g)}"
+
+
+def day_context(pose_key: str) -> str:
+    """The `training_context` for TODAY's hero: the day-state's pose on the
+    shared starter backdrop.
+
+    No ride, no GPX, no invented location — the same road for every rider, so
+    the only thing that changes between two riders' Today heroes is the rider,
+    the bike and what the day is asking of them.
+    """
+    pose = _POSE.get(pose_key, _POSE["endurance"])
+    return f"{pose}. BACKGROUND: {STARTER_BACKDROP}. {_RENDER_STYLE}"

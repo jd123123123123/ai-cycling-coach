@@ -9,6 +9,12 @@ These lock the spec's guardrails
 """
 import pytest
 
+from app.models.rewards import (
+    ONBOARDING_REASONS,
+    REASON_ONBOARDING_BIKE,
+    REASON_ONBOARDING_DEVICE,
+    REASON_ONBOARDING_PHOTO,
+)
 from app.services import rewards
 
 
@@ -78,15 +84,58 @@ class TestChallengeBonus:
 
 
 class TestOnboardingGrant:
-    def test_equal_start_totals_250(self):
-        # Requirement #1: everyone starts at exactly 250 RC.
-        assert rewards.ONBOARDING_TOTAL_RC == 250
+    def test_equal_start_totals_400(self):
+        # Requirement #1: everyone starts at exactly the same number —
+        # 125 photo + 125 device + 150 bike. The onboarding rewards screen and
+        # frontend/src/api/rewards.ts quote this total.
+        assert rewards.ONBOARDING_TOTAL_RC == 400
         assert rewards.ONBOARDING_PHOTO_RC == rewards.ONBOARDING_DEVICE_RC == 125
+        assert rewards.ONBOARDING_BIKE_RC == 150
+
+    def test_every_reason_has_an_explicit_price(self):
+        # The amount must never be inferred from the reason string again: the
+        # map and the closed reason vocabulary cover each other exactly.
+        assert set(rewards.ONBOARDING_GRANT_RC) == ONBOARDING_REASONS
+        assert sum(rewards.ONBOARDING_GRANT_RC.values()) == rewards.ONBOARDING_TOTAL_RC
+
+    def test_bike_is_priced_as_a_bike_not_as_a_device(self):
+        # Regression: the old `reason.endswith("photo") else DEVICE` guess paid
+        # the device amount for anything that wasn't the photo grant.
+        assert rewards.ONBOARDING_GRANT_RC[REASON_ONBOARDING_BIKE] == 150
+        assert rewards.ONBOARDING_GRANT_RC[REASON_ONBOARDING_BIKE] != rewards.ONBOARDING_DEVICE_RC
+        assert rewards.ONBOARDING_GRANT_RC[REASON_ONBOARDING_PHOTO] == 125
+        assert rewards.ONBOARDING_GRANT_RC[REASON_ONBOARDING_DEVICE] == 125
+
+    def test_price_map_and_reason_vocabulary_cannot_drift(self):
+        # The import-time guard is the thing that makes adding a fourth grant
+        # loud instead of silent.
+        original = dict(rewards.ONBOARDING_GRANT_RC)
+        try:
+            rewards.ONBOARDING_GRANT_RC.pop(REASON_ONBOARDING_BIKE)
+            with pytest.raises(RuntimeError):
+                rewards._check_onboarding_prices()
+        finally:
+            rewards.ONBOARDING_GRANT_RC.clear()
+            rewards.ONBOARDING_GRANT_RC.update(original)
+        rewards._check_onboarding_prices()  # restored -> quiet again
+
+    @pytest.mark.asyncio
+    async def test_unknown_reason_is_rejected(self):
+        # A non-onboarding reason never reaches the ledger (raises before any
+        # DB work, so no session is needed).
+        with pytest.raises(ValueError):
+            await rewards.grant_onboarding(None, 1, "ride_earn")  # type: ignore[arg-type]
 
 
 class TestTierProgress:
-    def test_head_start_sits_partway_to_entry(self):
-        # 250 grant against the 300 entry tier -> 83% of the way, one ride to go.
+    def test_head_start_clears_the_entry_tier(self):
+        # The 400 RC head start is past the 300 entry tier; next target is mid.
+        p = rewards.tier_progress(rewards.ONBOARDING_TOTAL_RC)
+        assert p["next_tier"] == "mid"
+        assert p["next_price"] == 900
+
+    def test_partway_to_entry(self):
+        # 250 against the 300 entry tier -> 83% of the way, one ride to go.
         p = rewards.tier_progress(250)
         assert p["next_tier"] == "entry"
         assert p["next_price"] == 300

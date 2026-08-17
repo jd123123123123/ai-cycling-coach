@@ -9,13 +9,19 @@ Outputs are stylised, identity-preserving renders — not exact 3D meshes.
 
 Renders PERSIST (models/garage.py). A rendered bike becomes the rider's garage
 bike, which is what lets the Today hero show *their* bike instead of a stock
-photo — and what lets a ride hero put them on it. Composing a ride scene is a
-slow paid call, so it is cached per activity and only ever generated on demand.
+photo — and what lets a ride hero put them on it. Composing a scene is a slow
+paid call, so it is cached and only ever generated on demand:
+
+  · `/scene/{activity_id}` — one ride's hero, keyed on the activity, background
+    derived from that ride's real distance and elevation.
+  · `/scene/today`         — the day-state hero, keyed on the POSE, on the
+    shared starter backdrop. Two rest days are the same picture, so they are the
+    same cached row; a rider ever only pays for each pose once.
 """
 from __future__ import annotations
 
 import math
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, status as http_status
 from pydantic import BaseModel, Field
@@ -24,10 +30,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
-from app.models.garage import GarageAsset, RideScene
+from app.models.garage import DayScene, GarageAsset, RideScene
 from app.models.user import User
 from app.services import cyclr_studio
-from app.services.ride_scene import RideGeo, training_context
+from app.services.ride_scene import DAY_POSES, RideGeo, day_context, training_context
 
 router = APIRouter(prefix="/garage", tags=["garage"])
 
@@ -75,6 +81,26 @@ class SceneOut(BaseModel):
     status: str
 
 
+# The poses Today's hero may ask for. Declared as a Literal so FastAPI rejects
+# anything else at the edge (422) rather than letting an unknown key fall
+# through to the endurance default and cache a scene under a name that means
+# nothing. Kept in step with `ride_scene.DAY_POSES` by the assertion below —
+# these are two spellings of one list and must never drift.
+DayPose = Literal["rest", "lazy", "endurance", "hard", "recovery", "trained", "evening"]
+assert set(get_args(DayPose)) == set(DAY_POSES), "DayPose and ride_scene.DAY_POSES drifted"
+
+
+class DaySceneOut(BaseModel):
+    """Today's hero: the rider on their bike, posed for what the day asks."""
+
+    pose: str
+    image_base64: str | None
+    training_context: str | None
+    prompt: str | None
+    # Same vocabulary as SceneOut, so one frontend type covers both.
+    status: str
+
+
 def _to_out(asset: GarageAsset | None) -> AssetOut | None:
     if asset is None:
         return None
@@ -119,10 +145,11 @@ async def render_asset(
     Nothing is saved when the studio couldn't produce a real image: a failed
     render must not wipe the bike the rider already has.
 
-    Replacing an asset also drops the rider's cached ride scenes. Those scenes
-    were composed FROM the old rider/bike descriptions, so keeping them would
-    leave every past ride showing a bike the rider no longer owns — the cache
-    would quietly outlive the thing it was caching.
+    Replacing an asset also drops the rider's cached ride AND day scenes. Those
+    scenes were composed FROM the old rider/bike descriptions, so keeping them
+    would leave every past ride — and tomorrow's Today hero — showing a bike the
+    rider no longer owns; the cache would quietly outlive the thing it was
+    caching. Dropped, they simply recompose on the next explicit tap.
     """
     out = await cyclr_studio.render_from_photo(body.photo_base64, body.kind)
 
@@ -138,6 +165,7 @@ async def render_asset(
         asset.image_url = out["image"]
         if replaced:
             await db.execute(delete(RideScene).where(RideScene.user_id == current_user.id))
+            await db.execute(delete(DayScene).where(DayScene.user_id == current_user.id))
         await db.commit()
         saved = True
 
@@ -217,6 +245,101 @@ async def _load_activity(db: AsyncSession, user_id: int, activity_id: int) -> Ac
     if activity is None:
         raise HTTPException(status_code=404, detail="Activity not found")
     return activity
+
+
+async def _missing_asset(db: AsyncSession, user_id: int) -> str | None:
+    """Which half of the composition the rider hasn't digitalised yet, if any.
+
+    A scene needs BOTH descriptions; without one there is nothing to compose and
+    the screen must send them to the studio rather than spin on a call that can
+    only fail.
+    """
+    rider = await _get_asset(db, user_id, "rider")
+    if not (rider and rider.description):
+        return "needs_rider"
+    bike = await _get_asset(db, user_id, "bike")
+    if not (bike and bike.description):
+        return "needs_bike"
+    return None
+
+
+async def _cached_day_scene(db: AsyncSession, user_id: int, pose: str) -> DayScene | None:
+    return (await db.execute(
+        select(DayScene).where(DayScene.user_id == user_id, DayScene.pose == pose)
+    )).scalar_one_or_none()
+
+
+# ── today's hero ────────────────────────────────────────────────────────────
+# Keyed on the POSE, not the date: the scene depicts what the day is asking of
+# the rider, and two rest days are the same picture. See models/garage.DayScene.
+@router.get("/scene/today", response_model=DaySceneOut)
+async def get_day_scene(
+    pose: DayPose,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> DaySceneOut:
+    """Read today's cached hero for a pose. NEVER generates.
+
+    This is what Today calls on open, so it has to be cheap and silent: it says
+    whether a composed scene exists and, when it doesn't, why — `not_generated`
+    (a tap away), or `needs_rider` / `needs_bike` (the studio first). Composing
+    costs money and minutes and only ever happens on an explicit POST.
+    """
+    scene = await _cached_day_scene(db, current_user.id, pose)
+    if scene is not None and scene.image_url:
+        return DaySceneOut(pose=pose, image_base64=scene.image_url,
+                           training_context=scene.training_context,
+                           prompt=scene.prompt, status="ok")
+    missing = await _missing_asset(db, current_user.id)
+    return DaySceneOut(pose=pose, image_base64=None, training_context=None,
+                       prompt=None, status=missing or "not_generated")
+
+
+@router.post("/scene/today", response_model=DaySceneOut)
+async def render_day_scene(
+    pose: DayPose,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> DaySceneOut:
+    """Compose (and cache) today's hero for one pose — the rider, on their own
+    bike, doing what the day asks (see `ride_scene._POSE`).
+
+    The rider and bike come from their garage; the backdrop is the SHARED
+    starter road, identical for every rider, because there is no ride here to
+    derive terrain from and a per-rider invention would be exactly the kind of
+    fabricated place `ride_scene` refuses to produce. An already-composed pose
+    returns its cached image without re-rendering — this endpoint is safe to hit
+    twice, it just isn't safe to hit automatically.
+    """
+    cached = await _cached_day_scene(db, current_user.id, pose)
+    if cached is not None and cached.image_url:
+        return DaySceneOut(pose=pose, image_base64=cached.image_url,
+                           training_context=cached.training_context,
+                           prompt=cached.prompt, status="ok")
+
+    missing = await _missing_asset(db, current_user.id)
+    if missing:
+        return DaySceneOut(pose=pose, image_base64=None, training_context=None,
+                           prompt=None, status=missing)
+
+    rider = await _get_asset(db, current_user.id, "rider")
+    bike = await _get_asset(db, current_user.id, "bike")
+    assert rider is not None and bike is not None  # _missing_asset just proved it
+    ctx = day_context(pose)
+    image, prompt, render_status = await cyclr_studio.compose_scene(
+        rider.description or "", bike.description or "", ctx,
+    )
+    if image:
+        if cached is None:
+            cached = DayScene(user_id=current_user.id, pose=pose)
+            db.add(cached)
+        cached.image_url = image
+        cached.training_context = ctx
+        cached.prompt = prompt
+        await db.commit()
+
+    return DaySceneOut(pose=pose, image_base64=image, training_context=ctx,
+                       prompt=prompt, status=render_status)
 
 
 @router.get("/scene/{activity_id}", response_model=SceneOut)

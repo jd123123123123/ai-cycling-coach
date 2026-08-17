@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  fetchGarage, fetchRideScene, renderAsset, renderRideScene,
-  type Garage, type GarageKind, type RideScene,
+  fetchDayScene, fetchGarage, fetchRideScene, renderAsset, renderDayScene, renderRideScene,
+  type DayPose, type DayScene, type Garage, type GarageKind, type RideScene,
 } from '../api/garage'
 
 export const GARAGE_KEY = ['garage'] as const
@@ -79,6 +79,40 @@ export function useRenderRideScene() {
     mutationFn: (activityId: number) => renderRideScene(activityId),
     onSuccess: (scene) => {
       qc.setQueryData(['garage', 'scene', scene.activity_id], scene)
+    },
+  })
+}
+
+/**
+ * Today's hero for the day's pose, read from the cache only — the same contract
+ * as `useRideScene`: safe on every Today open, never triggers a render, and
+ * reports why there isn't one (`needs_rider` / `needs_bike` / `not_generated`).
+ *
+ * The key carries the pose because the server's cache does: one composed image
+ * per pose per rider. Crossing from a rest day into a training day therefore
+ * asks a DIFFERENT question rather than invalidating an answer, and the rest
+ * scene is still there, already paid for, tomorrow morning.
+ */
+export function useDayScene(pose: DayPose | null | undefined) {
+  return useQuery<DayScene>({
+    queryKey: ['garage', 'scene', 'today', pose],
+    queryFn: () => fetchDayScene(pose as DayPose),
+    enabled: pose != null,
+    // Inlined base64 image, like the garage read — see that hook for why gcTime
+    // is pinned at least as long as staleTime.
+    staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  })
+}
+
+/** Compose today's hero for one pose. Explicit intent only (a tap), slow and
+ *  paid; the composed scene lands straight in the cache for that pose. */
+export function useRenderDayScene() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (pose: DayPose) => renderDayScene(pose),
+    onSuccess: (scene) => {
+      qc.setQueryData(['garage', 'scene', 'today', scene.pose], scene)
     },
   })
 }

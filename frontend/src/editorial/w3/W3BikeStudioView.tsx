@@ -1,11 +1,13 @@
+import { useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike, Star, Asterisk, Share2, Plus } from 'lucide-react'
+import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike, Plus, Loader2, Coins } from 'lucide-react'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3Loading from './W3Loading'
 import { GhostBike } from './W3BikeHero'
+import { parseBikeSpec } from '../../utils/bikeSpec'
 
 /**
  * W3 · Bike Studio (the GARAGE tab) — photo of your real bike → a W3:Ride-style
@@ -36,6 +38,115 @@ export interface W3BikeStudioProps {
    *  one-time moment; walking into your own garage must not re-fire confetti
    *  and "BIKE UNLOCKED" for a bike you've owned for weeks. */
   celebrate?: boolean
+  /** The RideCoin this unlock actually paid, straight from the server
+   *  (`POST /rewards/onboarding/bike` → `{granted, balance}`).
+   *  - `granted > 0` — credited just now; the screen shows that number.
+   *  - `granted === 0` — the one-time bike grant was already claimed on an
+   *    earlier bike. The screen says so; it never shows a fresh +150 twice.
+   *  - `null` — no answer (in flight, or the call failed). Then NO RideCoin
+   *    figure is shown at all, rather than a number nothing stands behind. */
+  reward?: { granted: number; balance: number } | null
+  rewardPending?: boolean
+}
+
+/**
+ * The bike's spec sheet — the vision pass's own words, split into the sections
+ * it was asked for (`utils/bikeSpec`). Nothing is inferred: when the text isn't
+ * confidently structured, the whole description is printed as the sentence it
+ * is. "Ganze Analyse" always gets the rider back to the unabridged text, so the
+ * rows are a reading order, never an edit.
+ */
+function SpecSheet({ description, kicker = 'Specs · aus deinem Foto gelesen', padded = true }: { description: string; kicker?: string; padded?: boolean }) {
+  const rows = useMemo(() => parseBikeSpec(description), [description])
+  const [full, setFull] = useState(false)
+  const asRows = rows.length > 0 && !full
+
+  const outer = padded
+    ? { ...band(18), gap: 8 }
+    : { display: 'flex', flexDirection: 'column' as const, width: '100%', minWidth: 0, gap: 8 }
+
+  return (
+    <div style={outer}>
+      <Kicker>{kicker}</Kicker>
+      <div style={{ borderRadius: 16, background: T.surface, border: `1px solid ${T.stroke}`, overflow: 'hidden' }}>
+        {asRows
+          ? rows.map((r, i) => (
+            <div key={r.key} style={{ display: 'flex', gap: 12, padding: '11px 14px', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}`, alignItems: 'baseline' }}>
+              <span style={{ flex: 'none', width: 74, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet }}>{r.label}</span>
+              <span style={{
+                flex: '1 1 auto', minWidth: 0, fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.ink,
+                display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                overflowWrap: 'anywhere',
+              }}>{r.value}</span>
+            </div>
+          ))
+          : (
+            <div style={{ padding: '12px 14px' }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.5, color: T.mid, overflowWrap: 'anywhere' }}>{description}</span>
+            </div>
+          )}
+        {rows.length > 0 && (
+          <button onClick={() => setFull((v) => !v)}
+            style={{ width: '100%', height: 38, background: 'transparent', border: 0, borderTop: `1px solid ${T.rule}`, color: T.mid, fontFamily: FONT, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.2, cursor: 'pointer' }}>
+            {full ? 'Zurück zu den Specs' : 'Ganze Analyse'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What the unlock actually paid. Every number here comes off the wallet
+ * endpoint's response — there is no client-side arithmetic and no fallback
+ * amount. When the server hasn't answered, this renders nothing.
+ */
+function RewardBlock({ reward, pending }: { reward?: { granted: number; balance: number } | null; pending?: boolean }) {
+  if (!reward) {
+    if (!pending) return null
+    return (
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 14px', borderRadius: 100, background: T.surface, border: `1px solid ${T.stroke}` }}>
+        <Loader2 size={14} color={T.quiet} className="w3-spin" />
+        <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>RideCoin wird gutgeschrieben…</span>
+      </div>
+    )
+  }
+  const balance = `${reward.balance.toLocaleString('de-DE')} RC`
+  return (
+    <div style={{
+      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      padding: '13px 16px', borderRadius: 18,
+      background: reward.granted > 0 ? `linear-gradient(180deg, ${T.acidDim}, ${T.surface})` : T.surface,
+      border: `1px solid ${reward.granted > 0 ? `${T.acid}3D` : T.stroke}`,
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: 'uppercase', color: T.quiet }}>
+          {reward.granted > 0 ? 'Belohnung · gutgeschrieben' : 'Belohnung · schon kassiert'}
+        </span>
+        {reward.granted > 0
+          ? (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0 }}>
+              <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.4, lineHeight: 1, color: T.acid }}>
+                +{reward.granted.toLocaleString('de-DE')}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.acid }}>RC</span>
+            </div>
+          )
+          : (
+            <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.35, color: T.mid, overflowWrap: 'anywhere' }}>
+              Das gibt es einmal — für dein erstes Bike.
+            </span>
+          )}
+      </div>
+      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: 'uppercase', color: T.quiet }}>Guthaben</span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <Coins size={14} color={T.mid} />
+          <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap' }}>{balance}</span>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // pastel gradient card grounds keyed off the description, à la w3:browser
@@ -65,12 +176,12 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
   // reads as "here it is" rather than "make one".
   const owned = p.state === 'reveal' && !p.celebrate && !!p.imageUrl && p.renderStatus === 'ok'
 
-  // ── BIKE UNLOCKED celebration (pen j9jH7) — only with a real render, one page ──
+  // ── BIKE UNLOCKED celebration (pen j9jH7) — only with a real render ──
+  // Everything on this screen is earned: the image is the rider's own bike, the
+  // spec rows are the vision pass's words about it, and the RideCoin is what the
+  // ledger actually credited. The pen's rarity tag and its `+250 / +1.75 / +40K`
+  // chips were fixtures for economies that don't exist, and are gone.
   if (p.celebrate && p.state === 'reveal' && p.imageUrl && p.renderStatus === 'ok') {
-    // fixture: rarity + reward chips (the reward economy has no per-unlock grant).
-    const rewards: { icon: typeof Star; label: string }[] = [
-      { icon: Sparkles, label: '+250' }, { icon: Star, label: '+1.75' }, { icon: Asterisk, label: '+40K' },
-    ]
     return (
       <div className="w3-root">
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg, position: 'relative', overflow: 'hidden' }}>
@@ -93,36 +204,45 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
               <Sparkles size={13} color={T.acid} /><span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.acid }}>NEU ENTSPERRT</span>
             </motion.div>
 
-            {/* Bike card + rarity tag */}
+            {/* The collectible itself — the render, nothing stuck on top of it */}
             <motion.div initial={reduce ? false : { scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, ease: EASE, delay: 0.1 }}
-              style={{ width: '100%', maxWidth: 320, aspectRatio: '1 / 1', borderRadius: 24, background: grad, overflow: 'hidden', position: 'relative' }}>
+              style={{ width: '100%', maxWidth: 292, aspectRatio: '1 / 1', borderRadius: 24, background: grad, overflow: 'hidden', position: 'relative' }}>
               <img src={p.imageUrl} alt="Dein Bike" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 5, alignItems: 'center', padding: '5px 10px', borderRadius: 100, background: '#0B0B0BB0', backdropFilter: 'blur(3px)' }}>
-                <Star size={11} color={T.acid} fill={T.acid} /><span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: T.ink }}>RARE · 16</span>
-              </div>
             </motion.div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, textAlign: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, textAlign: 'center', minWidth: 0 }}>
               <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1, color: T.ink }}>BIKE ENTSPERRT</span>
-              <span style={{ fontSize: 15, fontWeight: 500, color: T.mid }}>{p.bikeName ?? 'Allez'} · dein W3-Collectible</span>
+              {/* The name is the vision pass's own read of the frame — never a
+                  stand-in. Unnamed bikes simply say what they are. */}
+              <span style={{ fontSize: 15, fontWeight: 500, color: T.mid, overflowWrap: 'anywhere' }}>
+                {p.bikeName ? `${p.bikeName} · dein W3-Collectible` : 'Dein W3-Collectible'}
+              </span>
               <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.4, color: T.quiet, maxWidth: 300 }}>Es steht in deiner Garage. Jede Fahrt, die du loggst, levelt es weiter.</span>
             </div>
 
-            {/* Reward chips (fixture) */}
-            <div style={{ display: 'flex', gap: 8 }}>
-              {rewards.map((rw) => { const Ic = rw.icon; return (
-                <div key={rw.label} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '9px 14px', borderRadius: 100, background: T.surface, border: `1px solid ${T.stroke}` }}>
-                  <Ic size={14} color={T.acid} /><span style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{rw.label}</span>
-                </div>
-              ) })}
-            </div>
+            {/* What it paid — real ledger numbers, or nothing at all */}
+            <motion.div initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE, delay: 0.25 }}
+              style={{ width: '100%', display: 'flex', justifyContent: 'center', minWidth: 0 }}>
+              <RewardBlock reward={p.reward} pending={p.rewardPending} />
+            </motion.div>
 
-            <div style={{ width: '100%', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* The spec sheet — the reason this bike is THEIRS and not a stock one */}
+            {p.description && (
+              <motion.div initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE, delay: 0.35 }}
+                style={{ width: '100%', minWidth: 0 }}>
+                <SpecSheet description={p.description} padded={false} kicker="Was wir an deinem Bike gelesen haben" />
+              </motion.div>
+            )}
+
+            <div style={{ width: '100%', marginTop: 'auto', paddingTop: 4, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <button onClick={p.onBack} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
                 In die Garage
               </button>
+              {/* `onSave` downloads the render to the device — so it says that.
+                  The pen's "share the moment" promised a share sheet this
+                  screen has never had. */}
               <button onClick={p.onSave} style={{ height: 46, borderRadius: 100, border: 0, background: 'transparent', color: T.mid, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
-                <Share2 size={15} color={T.mid} />Moment teilen
+                <Download size={15} color={T.mid} />Bild speichern
               </button>
             </div>
           </div>
@@ -212,13 +332,12 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
           </Card>
         </div>
 
-        {/* Analysis — real vision description */}
+        {/* Analysis — the real vision description, read as a spec sheet. Same
+            text as before; it just stops being a grey paragraph that looks like
+            a prompt dump and becomes the bike's own data sheet. */}
         {(p.state === 'reveal' || p.state === 'rendering') && p.description && (
-          <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE }} style={{ ...band(18), gap: 8 }}>
-            <Kicker>Was wir sehen</Kicker>
-            <div style={{ padding: 14, borderRadius: 16, background: T.surface }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.5, color: T.mid }}>{p.description}</span>
-            </div>
+          <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE }} style={{ width: '100%', minWidth: 0 }}>
+            <SpecSheet description={p.description} kicker={owned ? 'Deine Specs · aus deinem Foto gelesen' : 'Was wir an deinem Bike gelesen haben'} />
           </motion.div>
         )}
 

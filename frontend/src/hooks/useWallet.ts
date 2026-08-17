@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchWallet, fetchRideEarning, grantOnboarding, type RideEarning, type Wallet } from '../api/rewards'
+import { fetchWallet, fetchRideEarning, grantOnboarding, type OnboardingKind, type RideEarning, type Wallet } from '../api/rewards'
 
 // The RideCoin one ride earned — powers the post-ride celebration.
 export function useRideEarning(activityId: number | null | undefined) {
@@ -21,12 +21,13 @@ export function useWallet() {
   })
 }
 
-// The one-time onboarding grants (photo / device). Idempotent server-side;
-// on success we refresh the wallet so the balance reflects the head start.
+// The one-time onboarding grants (photo / device / bike). Idempotent
+// server-side; on success we refresh the wallet so the balance reflects the
+// head start.
 export function useGrantOnboarding() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (kind: 'photo' | 'device') => grantOnboarding(kind),
+    mutationFn: (kind: OnboardingKind) => grantOnboarding(kind),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rewards', 'wallet'] })
     },

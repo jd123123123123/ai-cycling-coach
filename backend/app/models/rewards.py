@@ -28,6 +28,7 @@ from app.database import Base
 # Ledger reasons — the closed vocabulary of why RideCoin moved.
 REASON_ONBOARDING_PHOTO = "onboarding_photo"
 REASON_ONBOARDING_DEVICE = "onboarding_device"
+REASON_ONBOARDING_BIKE = "onboarding_bike"
 REASON_RIDE_EARN = "ride_earn"
 REASON_STREAK_BONUS = "streak_bonus"
 REASON_CHALLENGE_BONUS = "challenge_bonus"
@@ -35,7 +36,11 @@ REASON_REFERRAL_BONUS = "referral_bonus"
 REASON_PART_PURCHASE = "part_purchase"
 REASON_ADJUSTMENT = "adjustment"
 
-ONBOARDING_REASONS = {REASON_ONBOARDING_PHOTO, REASON_ONBOARDING_DEVICE}
+ONBOARDING_REASONS = {
+    REASON_ONBOARDING_PHOTO,
+    REASON_ONBOARDING_DEVICE,
+    REASON_ONBOARDING_BIKE,
+}
 
 
 class Wallet(Base):
