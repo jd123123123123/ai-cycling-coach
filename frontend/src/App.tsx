@@ -105,7 +105,6 @@ const W3OnboardPlanPreview = lazyWithRetry(() => import('./editorial/w3/W3Onboar
 const W3OnboardGoalsPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardGoalsPage'))
 const W3OnboardGoalsPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardGoalsPreview'))
 const W3OnboardRiderPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardRiderPage'))
-const W3OnboardRiderPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardRiderPreview'))
 const W3PlanPage = lazyWithRetry(() => import('./editorial/w3/W3PlanPage'))
 const W3PlanPreview = lazyWithRetry(() => import('./editorial/w3/W3PlanPreview'))
 const W3GoalPage = lazyWithRetry(() => import('./editorial/w3/W3GoalPage'))
@@ -428,7 +427,6 @@ function AppRoutes() {
           <Route path="/e/w3-onboard-goals" element={<ProtectedRoute><W3OnboardGoalsPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-goals-preview" element={<W3OnboardGoalsPreview />} />
           <Route path="/e/w3-onboard-rider" element={<ProtectedRoute><W3OnboardRiderPage /></ProtectedRoute>} />
-          <Route path="/e/w3-onboard-rider-preview" element={<W3OnboardRiderPreview />} />
           {/* Trainingsplan: periodized plan, goal detail, load forecast */}
           <Route path="/e/w3-plan" element={<ProtectedRoute checkOnboarding><W3PlanPage /></ProtectedRoute>} />
           <Route path="/e/w3-plan-preview" element={<W3PlanPreview />} />

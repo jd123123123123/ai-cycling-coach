@@ -28,7 +28,14 @@ interface AssetRenderResponse { description: string | null; prompt: string; imag
 
 
 
+/** The default export stays prop-less because `lazyWithRetry` in App.tsx types
+ *  routes as `ComponentType<unknown>`. The onboarding variant of this screen
+ *  (same flow, different next step) uses the named export instead. */
 export default function W3AvatarOnboardPage() {
+  return <W3RiderOnboarding next={NEXT} />
+}
+
+export function W3RiderOnboarding({ next }: { next: string }) {
   const navigate = useNavigate()
   const { user, refreshUser } = useAuth()
   const grant = useGrantOnboarding()
@@ -173,8 +180,8 @@ export default function W3AvatarOnboardPage() {
         reveal={reveal}
         failure={failure}
         onPick={onPick}
-        onSkip={() => navigate(NEXT)}
-        onTake={() => navigate(NEXT)}
+        onSkip={() => navigate(next)}
+        onTake={() => navigate(next)}
       />
     </>
   )
