@@ -112,7 +112,7 @@ export default function W3ReadinessPage() {
     // ── limiter ──
     const present = drivers.filter((x) => x.value !== '—')
     const worst = present.length ? present.reduce((m, x) => (x.frac < m.frac ? x : m), present[0]) : null
-    const limiterNote = worst && worst.frac < 0.5 ? `${worst.label} begrenzt deine Readiness heute am stärksten.` : null
+    const limiterNote = worst && worst.frac < 0.5 ? `${worst.label} begrenzt deine Bereitschaft heute am stärksten.` : null
 
     const dateNote = latest?.date
       ? `Overnight-Signale · Stand ${new Date(latest.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' })}`

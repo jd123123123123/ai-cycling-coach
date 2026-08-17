@@ -59,9 +59,9 @@ const DEV_ICONS: Record<W3Device['icon'], ComponentType<{ size?: number; color?:
   watch: Watch, activity: ActivityIcon, zap: Zap, heart: HeartPulse,
 }
 const PRIMARY = [
-  { key: 'totalDistance' as const, icon: RouteIcon, label: 'TOTAL DISTANCE' },
-  { key: 'totalRides' as const, icon: Bike, label: 'TOTAL RIDES' },
-  { key: 'saddleTime' as const, icon: Timer, label: 'SADDLE TIME' },
+  { key: 'totalDistance' as const, icon: RouteIcon, label: 'GESAMTDISTANZ' },
+  { key: 'totalRides' as const, icon: Bike, label: 'FAHRTEN GESAMT' },
+  { key: 'saddleTime' as const, icon: Timer, label: 'SATTELZEIT' },
 ]
 const INSIGHT_META: Record<W3InsightKey, { icon: ComponentType<{ size?: number; color?: string }>; hue: string }> = {
   elevation: { icon: Mountain, hue: '#7B5CFF' },
@@ -95,7 +95,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
         <div style={{ position: 'relative', height: 306, background: '#141414', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)', width: 340, height: 280, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}26, transparent)` }} />
           {vm.avatarUrl ? (
-            <img src={vm.avatarUrl} alt="Your rider" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%' }} />
+            <img src={vm.avatarUrl} alt="Dein Fahrer" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%' }} />
           ) : (
             /* The empty seat. Never someone else's showcase rider on a page
                whose whole job is to say who YOU are. */
@@ -104,8 +104,8 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
                 <div style={{ width: 92, height: 92, borderRadius: 100, display: 'grid', placeItems: 'center', background: T.surface, border: `1.5px dashed ${T.acid}59` }}>
                   <UserRound size={40} strokeWidth={1.5} color={T.acid} />
                 </div>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>No rider yet</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>Make yours in the studio</span>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>Noch kein Fahrer</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>Erstell deinen im Studio</span>
               </div>
             </button>
           )}
@@ -167,7 +167,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
 
         {/* ── Lifetime ── */}
         <div style={{ ...band(26), gap: 10 }}>
-          <Kicker>Lifetime</Kicker>
+          <Kicker>Gesamt</Kicker>
 
           {/* The headline: the distance, made human. */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 16px', borderRadius: 20, background: T.surface, border: `1px solid ${T.rule}` }}>
@@ -219,7 +219,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
 
         {/* ── Engine ── */}
         <div style={{ ...band(26), gap: 10 }}>
-          <Kicker>Engine</Kicker>
+          <Kicker>Motor</Kicker>
           <div style={{ display: 'flex', gap: 8, width: '100%' }}>
             {vm.engine.map((f) => <FactCell key={f.label} f={f} />)}
           </div>
@@ -227,7 +227,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
 
         {/* ── Rhythm ── */}
         <div style={{ ...band(26), gap: 10 }}>
-          <Kicker>Rhythm</Kicker>
+          <Kicker>Rhythmus</Kicker>
           <div style={{ display: 'flex', gap: 8, width: '100%' }}>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '13px 12px 14px', borderRadius: 18, background: T.surface, border: `1px solid ${T.rule}` }}>
               <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
@@ -284,7 +284,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
 
         {/* ── Connected: real device state ── */}
         <div style={{ ...band(30), gap: 10 }}>
-          <Kicker>Connected</Kicker>
+          <Kicker>Verbunden</Kicker>
           <div style={{ padding: '4px 18px 8px', borderRadius: 22, background: T.surface }}>
             {vm.devices.map((d, i) => {
               const Ic = DEV_ICONS[d.icon]

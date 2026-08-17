@@ -11,7 +11,7 @@ import W3Loading from './W3Loading'
  * ended and is unclaimed, the lime button claims the accrued bonus.
  */
 
-const compact = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(Math.round(n))
+const compact = (n: number) => n >= 1000 ? `${(n / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })}k` : String(Math.round(n))
 
 function toVm(c: ReferralCard): W3ReferralUserVm {
   const t = c.time_left
@@ -19,12 +19,12 @@ function toVm(c: ReferralCard): W3ReferralUserVm {
     handle: `@${c.handle}`,
     avatarUrl: c.avatar_url,
     powerClaimed: compact(c.power_claimed),
-    totalDistance: `${c.distance_km.toFixed(2)} km`,
+    totalDistance: `${c.distance_km.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km`,
     totalRides: String(c.rides),
     rewardLabel: compact(c.accrued_rc),
     ended: c.ended,
     claimed: c.claimed,
-    timeLeftLabel: `${t.days}d ${t.hours}h ${t.minutes}m`,
+    timeLeftLabel: `${t.days}T ${t.hours}h ${t.minutes}m`,
   }
 }
 

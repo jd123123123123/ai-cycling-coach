@@ -16,9 +16,9 @@ function w3BadgeIcon(icon: string): W3Badge['icon'] {
 }
 
 const CH_UNIT: Record<ChallengeMetric, string> = {
-  active_days: 'days', distance_km: 'km', tss: 'TSS', rides: 'rides', hours: 'h', kj: 'kJ',
+  active_days: 'Tage', distance_km: 'km', tss: 'TSS', rides: 'Fahrten', hours: 'h', kj: 'kJ',
 }
-const chNf = new Intl.NumberFormat('en-US')
+const chNf = new Intl.NumberFormat('de-DE')
 const chSegs = (target: number) => { const t = Math.round(target); return t > 0 && t <= 31 ? t : 20 }
 
 function heroFrom(c: RewardChallenge): W3Hero {
@@ -26,12 +26,12 @@ function heroFrom(c: RewardChallenge): W3Hero {
   const unit = CH_UNIT[c.metric]
   return {
     title: c.title,
-    daysLeft: c.completed ? 'COMPLETED' : 'THIS MONTH',
+    daysLeft: c.completed ? 'GESCHAFFT' : 'DIESEN MONAT',
     body: c.detail,
     lit: Math.round((c.pct / 100) * total),
     total,
-    progressLabel: `${chNf.format(Math.round(c.value))} of ${chNf.format(c.target)} ${unit}`,
-    reward: `${c.completed ? 'EARNED' : 'REWARD'} · ${chNf.format(c.reward_rc)} RIDECOIN`,
+    progressLabel: `${chNf.format(Math.round(c.value))} von ${chNf.format(c.target)} ${unit}`,
+    reward: `${c.completed ? 'VERDIENT' : 'BELOHNUNG'} · ${chNf.format(c.reward_rc)} RIDECOIN`,
   }
 }
 
@@ -41,7 +41,7 @@ function challengeCardFrom(c: RewardChallenge): W3Challenge {
     key: c.key,
     title: c.title,
     reward: `${c.completed ? '✓ ' : '+'}${chNf.format(c.reward_rc)} RIDECOIN`,
-    sub: `${chNf.format(Math.round(c.value))} of ${chNf.format(c.target)} ${unit}`,
+    sub: `${chNf.format(Math.round(c.value))} von ${chNf.format(c.target)} ${unit}`,
     fill: c.pct / 100,
     custom: !!c.custom && !c.completed,   // only an in-flight custom is editable
   }
@@ -61,16 +61,25 @@ function challengeCardFrom(c: RewardChallenge): W3Challenge {
  * to map onto yet, clearly a designed reward, not a fabricated stat.
  */
 
+// Month names always come from the locale, never a hand-written table.
+const monthBack = (n: number): string => {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() - n)
+  return d.toLocaleDateString('de-DE', { month: 'long' })
+}
+const thisMonth = () => monthBack(0)
+
 // Personal records: (label, seconds, best-flag, fixture note, fixture past-fraction)
 const RECORD_SPEC: Array<{ key: string; label: string; seconds: number; best: boolean; note: string; past: number }> = [
-  { key: '5s', label: '5 SEC', seconds: 5, best: false, note: '+40 on May', past: 0.16 },
-  { key: '1m', label: '1 MIN', seconds: 60, best: false, note: '+8 on June', past: 0.08 },
-  { key: '12m', label: '12 MIN', seconds: 720, best: true, note: 'YOUR BEST · 12 MAY', past: 1 },
-  { key: '20m', label: '20 MIN', seconds: 1200, best: false, note: '+3 on July', past: 0.05 },
+  { key: '5s', label: '5 SEK', seconds: 5, best: false, note: `+40 ggü. ${monthBack(3)}`, past: 0.16 },
+  { key: '1m', label: '1 MIN', seconds: 60, best: false, note: `+8 ggü. ${monthBack(2)}`, past: 0.08 },
+  { key: '12m', label: '12 MIN', seconds: 720, best: true, note: `BESTWERT · 12. ${monthBack(3).toUpperCase()}`, past: 1 },
+  { key: '20m', label: '20 MIN', seconds: 1200, best: false, note: `+3 ggü. ${monthBack(1)}`, past: 0.05 },
 ]
 
 // Fallback record watts when the athlete has no power curve yet (pen-exact).
-const RECORD_FALLBACK: Record<string, string> = { '5s': '1,240 W', '1m': '620 W', '12m': '288 W', '20m': '276 W' }
+const RECORD_FALLBACK: Record<string, string> = { '5s': '1.240 W', '1m': '620 W', '12m': '288 W', '20m': '276 W' }
 
 export default function W3WinsPage() {
   const { data } = usePowerProfileView()
@@ -95,59 +104,59 @@ export default function W3WinsPage() {
 
     const records: W3Record[] = RECORD_SPEC.map((s) => {
       const w = wattsAt(s.seconds)
-      const value = w != null ? `${Math.round(w).toLocaleString('en-US')} W` : RECORD_FALLBACK[s.key] ?? '—'
+      const value = w != null ? `${Math.round(w).toLocaleString('de-DE')} W` : RECORD_FALLBACK[s.key] ?? '—'
       return { key: s.key, label: s.label, value, note: s.note, past: s.past, best: s.best }
     })
 
     return {
-      title: 'Wins',
-      subtitle: 'Every badge here is a training outcome. Nothing is bought.',
-      balance: wallet ? wallet.balance.toLocaleString('en-US') : null,  // REAL: RideCoin wallet
+      title: 'Erfolge',
+      subtitle: 'Jedes Abzeichen hier ist ein Trainingsergebnis. Nichts davon ist gekauft.',
+      balance: wallet ? wallet.balance.toLocaleString('de-DE') : null,  // REAL: RideCoin wallet
 
       // REAL: monthly challenges (useRewardChallenges) — hero + personal cards
       // show real progress from the rider's activities and real RideCoin rewards.
-      challengesHeader: 'Your challenges',
-      challengesSub: 'Real targets, paid in RideCoin when you hit them',
-      challengesChip: challenges ? `${challenges.active.length} ACTIVE` : '—',
+      challengesHeader: 'Deine Challenges',
+      challengesSub: 'Echte Ziele — in RideCoin bezahlt, wenn du sie triffst',
+      challengesChip: challenges ? `${challenges.active.length} AKTIV` : '—',
       hero: chHero ? heroFrom(chHero) : {
-        title: 'Monthly challenge', daysLeft: 'THIS MONTH',
-        body: 'Join a challenge to start earning RideCoin for hitting real training targets.',
-        lit: 0, total: 20, progressLabel: '—', reward: 'REWARD · RIDECOIN',
+        title: 'Monats-Challenge', daysLeft: 'DIESEN MONAT',
+        body: 'Tritt einer Challenge bei und verdiene RideCoin für echte Trainingsziele.',
+        lit: 0, total: 20, progressLabel: '—', reward: 'BELOHNUNG · RIDECOIN',
       },
 
-      personalHeader: 'Personal challenges',
-      personalSub: 'Scored from your own rides · paid on completion',
+      personalHeader: 'Persönliche Challenges',
+      personalSub: 'Aus deinen eigenen Fahrten · Auszahlung bei Abschluss',
       challenges: chCards.map(challengeCardFrom),
-      newChallengeLabel: 'NEW CHALLENGE',
+      newChallengeLabel: 'NEUE CHALLENGE',
 
       // REAL: watts from the athlete's mean-max curve; notes/deltas are fixture
-      recordsHeader: 'Personal records',
-      recordsSub: 'Bar shows how far past your old best you went',
+      recordsHeader: 'Persönliche Rekorde',
+      recordsSub: 'Der Balken zeigt, wie weit über deinem alten Bestwert du liegst',
       records,
 
       // fixture: reward layer (community pools not built)
-      communityHeader: 'Community challenges',
-      communitySub: "Everyone's kilometres in one pot · your share counts",
-      communityChip: '4 JOINED',
+      communityHeader: 'Community-Challenges',
+      communitySub: 'Alle Kilometer in einem Topf · dein Anteil zählt',
+      communityChip: '4 DABEI',
       communityHero: {
-        title: 'Around the world ×2',
-        pct: '26%',
-        sub: '20,840 of 80,150 km · 4 weeks left',
-        foot: 'You have put in 412 km. Top 8% of the community.',
+        title: 'Um die Welt ×2',
+        pct: '26 %',
+        sub: '20.840 von 80.150 km · noch 4 Wochen',
+        foot: 'Du hast 412 km beigetragen. Top 8 % der Community.',
         fill: 0.26,
       },
       community: [
-        { key: 'everest', title: 'Everest the Alps', pct: '41%', sub: '1.24M of 3.00M m · 6 days left', you: 'YOU 1 240 M · TOP 12%', fill: 0.41 },
-        { key: 'aug1000', title: 'August 1 000', pct: '61%', sub: '2.39M of 3.90M km · 19 days left', you: 'YOU 612 KM · TOP 22%', fill: 0.61 },
-        { key: 'elbe', title: 'Elbe Loop relay', pct: '78%', sub: '312 of 400 laps · 3 days left', you: 'YOU 9 LAPS · TOP 31%', fill: 0.78 },
+        { key: 'everest', title: 'Alpen-Everesting', pct: '41 %', sub: '1,24 Mio. von 3,00 Mio. m · noch 6 Tage', you: 'DU 1 240 M · TOP 12 %', fill: 0.41 },
+        { key: 'aug1000', title: `${thisMonth()} 1 000`, pct: '61 %', sub: '2,39 Mio. von 3,90 Mio. km · noch 19 Tage', you: 'DU 612 KM · TOP 22 %', fill: 0.61 },
+        { key: 'elbe', title: 'Elbe-Runde Staffel', pct: '78 %', sub: '312 von 400 Runden · noch 3 Tage', you: 'DU 9 RUNDEN · TOP 31 %', fill: 0.78 },
       ],
 
       // REAL: training milestones detected server-side (achievement_service).
       // Earned badges come from `unlocked`, locked-with-progress from
       // `in_progress`; the count is the real unlocked/total. Falls back to the
       // pen fixture only until the first achievements read resolves.
-      badgesHeader: 'Badges',
-      badgesCount: ach ? `${ach.counts.unlocked} of ${ach.counts.total}` : '— of —',
+      badgesHeader: 'Abzeichen',
+      badgesCount: ach ? `${ach.counts.unlocked} von ${ach.counts.total}` : '— von —',
       badges: ach
         ? [
             ...ach.unlocked.slice(0, 3).map<W3Badge>((u) => ({

@@ -38,7 +38,7 @@ export default function W3CrewGoalEditor({ currentKm, onSave, onClose, saving }:
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
           <button onClick={() => nudge(-STEP)} aria-label="Less" style={{ width: 56, height: 56, borderRadius: 100, background: T.surface, border: `1px solid ${T.rule}`, display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none' }}><Minus size={20} color={T.ink} /></button>
           <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: -1.6, color: VIOLET, fontVariantNumeric: 'tabular-nums' }}>{km.toLocaleString('en-US')}</span>
+            <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: -1.6, color: VIOLET, fontVariantNumeric: 'tabular-nums' }}>{km.toLocaleString('de-DE')}</span>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>KM · THIS WEEK</span>
           </div>
           <button onClick={() => nudge(STEP)} aria-label="More" style={{ width: 56, height: 56, borderRadius: 100, background: T.surface, border: `1px solid ${T.rule}`, display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none' }}><Plus size={20} color={T.ink} /></button>

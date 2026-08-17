@@ -39,20 +39,20 @@ import W3BikerView, { type W3BikerVm, type W3Device, type W3Insight } from './W3
  */
 
 const DASH = '—'
-const nf = new Intl.NumberFormat('en-US')
-const TIER_LABEL: Record<string, string> = { entry: 'ENTRY', mid: 'MID', prestige: 'PRESTIGE', rare: 'RARE' }
+const nf = new Intl.NumberFormat('de-DE')
+const TIER_LABEL: Record<string, string> = { entry: 'EINSTIEG', mid: 'MITTEL', prestige: 'PRESTIGE', rare: 'SELTEN' }
 
 /** "Synced 2 h ago" from a real timestamp; never a guess when there is none. */
 function syncedLabel(iso: string | null | undefined): string {
-  if (!iso) return 'Connected'
+  if (!iso) return 'Verbunden'
   const t = new Date(iso).getTime()
-  if (!Number.isFinite(t)) return 'Connected'
+  if (!Number.isFinite(t)) return 'Verbunden'
   const min = Math.max(0, Math.round((Date.now() - t) / 60000))
-  if (min < 2) return 'Synced just now'
-  if (min < 60) return `Synced ${min} min ago`
+  if (min < 2) return 'Gerade synchronisiert'
+  if (min < 60) return `Sync vor ${min} min`
   const h = Math.round(min / 60)
-  if (h < 36) return `Synced ${h} h ago`
-  return `Synced ${Math.round(h / 24)} d ago`
+  if (h < 36) return `Sync vor ${h} h`
+  return `Sync vor ${Math.round(h / 24)} Tagen`
 }
 
 export default function W3BikerPage() {
@@ -85,44 +85,44 @@ export default function W3BikerPage() {
       cat != null ? `CAT ${cat}` : null,
       wkg != null ? `${wkg.toFixed(1)} W/KG` : null,
       ftp != null ? `${ftp} W FTP` : null,
-      life.firstYear != null ? `SINCE ${life.firstYear}` : null,
+      life.firstYear != null ? `SEIT ${life.firstYear}` : null,
     ].filter((c): c is string => c != null)
 
     // ── the headline: the distance, made human (never repeats the number,
     //    which lives one card below as TOTAL DISTANCE) ──
     const earthPct = life.earthLaps * 100
     const headline = !has ? DASH
-      : life.earthLaps >= 1 ? `${life.earthLaps.toFixed(1)}× around the Earth`
-        : `${earthPct < 1 ? earthPct.toFixed(1) : Math.round(earthPct)} % around the Earth`
+      : life.earthLaps >= 1 ? `${life.earthLaps.toFixed(1)}× um die Erde`
+        : `${earthPct < 1 ? earthPct.toFixed(1) : Math.round(earthPct)} % um die Erde`
     const headlineCaption = has
-      ? 'every kilometre you have ever ridden'
-      : 'your first ride writes these numbers'
+      ? 'jeder Kilometer, den du je gefahren bist'
+      : 'deine erste Fahrt schreibt diese Zahlen'
 
     // ── the reveal's dopamine tiles, in this page's voice ──
     const insights: W3Insight[] = [
       {
         key: 'elevation',
-        label: 'ELEVATION',
+        label: 'HÖHENMETER',
         value: life.elevM > 0 ? `${(life.elevM / 1000).toFixed(1)} km` : DASH,
-        caption: life.elevM > 0 ? `≈ ${life.everest.toFixed(life.everest < 10 ? 1 : 0)}× Mount Everest` : 'no climbing recorded yet',
+        caption: life.elevM > 0 ? `≈ ${life.everest.toFixed(life.everest < 10 ? 1 : 0)}× Mount Everest` : 'noch keine Höhenmeter erfasst',
       },
       {
         key: 'longest',
-        label: 'LONGEST',
+        label: 'LÄNGSTE',
         value: has ? `${Math.round(life.longestKm)} km` : DASH,
-        caption: has ? 'your biggest day in the saddle' : 'still ahead of you',
+        caption: has ? 'dein größter Tag im Sattel' : 'liegt noch vor dir',
       },
       {
         key: 'speed',
-        label: 'AVG SPEED',
+        label: 'Ø TEMPO',
         value: life.avgSpeedKmh > 0 ? life.avgSpeedKmh.toFixed(1) : DASH,
-        caption: 'km/h across every ride',
+        caption: 'km/h über alle Fahrten',
       },
       {
         key: 'burned',
-        label: 'BURNED',
+        label: 'VERBRANNT',
         value: life.kcal > 0 ? compactNumber(life.kcal) : DASH,
-        caption: life.kcal > 0 ? `kcal · ≈ ${nf.format(life.pizzas)} pizzas` : 'kcal',
+        caption: life.kcal > 0 ? `kcal · ≈ ${nf.format(life.pizzas)} Pizzen` : 'kcal',
       },
     ]
 
@@ -130,9 +130,9 @@ export default function W3BikerPage() {
     const pe = pmc?.entries ?? []
     const ctl = pe.length ? pe[pe.length - 1].ctl : null
     const engine = [
-      { label: 'FTP', value: ftp != null ? `${ftp} W` : DASH, caption: ftp != null ? 'watts at threshold' : 'not tested yet' },
-      { label: 'W/KG', value: wkg != null ? wkg.toFixed(1) : DASH, caption: weight != null ? `at ${weight} kg` : 'add your weight' },
-      { label: 'FITNESS', value: ctl != null ? String(Math.round(ctl)) : DASH, caption: 'CTL · 42-day load' },
+      { label: 'FTP', value: ftp != null ? `${ftp} W` : DASH, caption: ftp != null ? 'Watt an der Schwelle' : 'noch nicht getestet' },
+      { label: 'W/KG', value: wkg != null ? wkg.toFixed(1) : DASH, caption: weight != null ? `bei ${weight} kg` : 'Gewicht ergänzen' },
+      { label: 'FITNESS', value: ctl != null ? String(Math.round(ctl)) : DASH, caption: 'CTL · 42-Tage-Belastung' },
     ]
 
     // ── rhythm ──
@@ -141,42 +141,42 @@ export default function W3BikerPage() {
     const rhythmStreak = {
       label: 'STREAK',
       value: streakDays != null ? String(streakDays) : DASH,
-      caption: streak?.paused ? 'paused — status set' : streakDays === 1 ? 'day in a row' : 'days in a row',
+      caption: streak?.paused ? 'pausiert — Status gesetzt' : streakDays === 1 ? 'Tag in Folge' : 'Tage in Folge',
     }
     const rhythmBadges = {
-      label: 'BADGES',
+      label: 'ABZEICHEN',
       value: counts ? `${counts.unlocked}/${counts.total}` : DASH,
-      caption: 'milestones earned by riding',
+      caption: 'Meilensteine, erfahren im Sattel',
     }
 
     // ── RideCoin: real balance, real next shop tier ──
     const tier = wallet?.tier
     const coin = {
       balance: wallet ? nf.format(wallet.balance) : DASH,
-      foot: 'RIDECOIN · earned from real rides',
+      foot: 'RIDECOIN · aus echten Fahrten verdient',
       pct: tier?.pct ?? 0,
       note: !tier ? ''
-        : tier.next_tier ? `${nf.format(tier.to_go)} TO ${TIER_LABEL[tier.next_tier] ?? 'NEXT'} TIER` : 'TOP TIER',
+        : tier.next_tier ? `${nf.format(tier.to_go)} BIS STUFE ${TIER_LABEL[tier.next_tier] ?? 'NÄCHSTE'}` : 'HÖCHSTE STUFE',
     }
 
     // ── devices: only ones with a real backend status ──
     const devices: W3Device[] = [
-      { name: 'Garmin', sub: garmin?.connected ? syncedLabel(garmin.last_sync_at) : 'Not connected', icon: 'watch', on: !!garmin?.connected },
-      { name: 'Wahoo', sub: wahoo?.connected ? syncedLabel(wahoo.last_sync) : 'Not connected', icon: 'zap', on: !!wahoo?.connected },
+      { name: 'Garmin', sub: garmin?.connected ? syncedLabel(garmin.last_sync_at) : 'Nicht verbunden', icon: 'watch', on: !!garmin?.connected },
+      { name: 'Wahoo', sub: wahoo?.connected ? syncedLabel(wahoo.last_sync) : 'Nicht verbunden', icon: 'zap', on: !!wahoo?.connected },
     ]
     if (coros?.configured) {
-      devices.push({ name: 'Coros', sub: coros.connected ? syncedLabel(coros.last_sync) : 'Not connected', icon: 'activity', on: !!coros.connected })
+      devices.push({ name: 'Coros', sub: coros.connected ? syncedLabel(coros.last_sync) : 'Nicht verbunden', icon: 'activity', on: !!coros.connected })
     }
 
     return {
       avatarUrl: garage?.rider?.image_base64 ?? null,
-      name: user?.display_name ?? 'Rider',
+      name: user?.display_name ?? 'Fahrer',
       handle: user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider'),
       ready,
       role: life.role,
       level: life.level,
       levelPct: ready ? life.levelPct : 0,
-      levelNote: ready ? `${nf.format(life.toNextLevel)} RC to Level ${life.level + 1}` : '',
+      levelNote: ready ? `${nf.format(life.toNextLevel)} RC bis Level ${life.level + 1}` : '',
       chips,
       headline,
       headlineCaption,
@@ -191,7 +191,7 @@ export default function W3BikerPage() {
       badges: rhythmBadges,
       coin,
       referral: referrals?.code
-        ? { code: referrals.code, note: `${referrals.active_count} active · ${referrals.completed_count} completed` }
+        ? { code: referrals.code, note: `${referrals.active_count} aktiv · ${referrals.completed_count} abgeschlossen` }
         : null,
       devices,
     }

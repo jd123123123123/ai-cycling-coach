@@ -576,13 +576,13 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
         <div style={{ ...band(26) }}>
           <div style={{ ...card(), gap: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Kicker>TODAY'S SESSION</Kicker>
+              <Kicker>HEUTIGE EINHEIT</Kicker>
               <span style={{ fontSize: 11, fontWeight: 700, color: T.mid }}>{vm.sessionDur ?? DASH}</span>
             </div>
             <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.9, color: vm.sessionTitle ? T.ink : T.ink }}>{vm.sessionTitle ?? 'Ruhetag'}</span>
             {vm.sessionTitle ? (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                {[[vm.targetW, 'TARGET'], [vm.sessionTss, 'TSS'], [vm.ftpPct, 'OF FTP']].map(([v, l]) => (
+                {[[vm.targetW, 'ZIEL'], [vm.sessionTss, 'TSS'], [vm.ftpPct, 'DER FTP']].map(([v, l]) => (
                   <div key={l} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
                     <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{l}</span>
@@ -601,9 +601,9 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>COACH RECHNET DIE WOCHE NEU</span>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <AdaptBtn label="Easier" sub={vm.easierTss} icon={<ChevronDown size={13} color={T.mid} />} busy={adaptBusy === 'easier'} onClick={() => doAdapt('easier')} />
-                <AdaptBtn label="Harder" sub={vm.harderTss} icon={<ChevronUp size={13} color={T.mid} />} busy={adaptBusy === 'harder'} onClick={() => doAdapt('harder')} />
-                <AdaptBtn label="Swap" sub="3 Optionen" icon={<Repeat size={13} color={T.mid} />} busy={false} onClick={() => setSwapOpen((v) => !v)} active={swapOpen} />
+                <AdaptBtn label="Leichter" sub={vm.easierTss} icon={<ChevronDown size={13} color={T.mid} />} busy={adaptBusy === 'easier'} onClick={() => doAdapt('easier')} />
+                <AdaptBtn label="Härter" sub={vm.harderTss} icon={<ChevronUp size={13} color={T.mid} />} busy={adaptBusy === 'harder'} onClick={() => doAdapt('harder')} />
+                <AdaptBtn label="Tauschen" sub="3 Optionen" icon={<Repeat size={13} color={T.mid} />} busy={false} onClick={() => setSwapOpen((v) => !v)} active={swapOpen} />
               </div>
               {swapOpen && (
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -622,7 +622,7 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
             {vm.sessionTitle && (
               <button onClick={onStartRide}
                 style={{ height: 54, borderRadius: 100, background: T.acid, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', border: 0, cursor: 'pointer', fontFamily: FONT, width: '100%' }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: T.bg }}>Start the ride</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: T.bg }}>Fahrt starten</span>
                 <div style={{ width: 38, height: 38, borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
               </button>
             )}

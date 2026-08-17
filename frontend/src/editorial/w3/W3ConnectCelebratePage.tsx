@@ -14,7 +14,7 @@ import W3ConnectCelebrateView, { type W3ConnectVm, type W3CelebrateStat } from '
  * 125 RC device grant (idempotent), then chains on to the avatar step.
  */
 
-const fmtInt = (n: number) => Math.round(n).toLocaleString('en-US')
+const fmtInt = (n: number) => Math.round(n).toLocaleString('de-DE')
 
 export default function W3ConnectCelebratePage() {
   const navigate = useNavigate()
@@ -52,35 +52,35 @@ export default function W3ConnectCelebratePage() {
     const spanDays = (Date.now() - earliest) / 86_400_000
     const years = spanDays / 365
     const headline = rides === 0
-      ? 'Connected. Your rides will flow in.'
-      : years >= 1.5 ? `${Math.round(years)} years of riding, in.`
-        : spanDays >= 45 ? `${Math.round(spanDays / 30)} months of riding, in.`
-          : 'Your riding history, in.'
+      ? 'Verbunden. Deine Fahrten laufen ein.'
+      : years >= 1.5 ? `${Math.round(years)} Jahre Fahrten. Alles drin.`
+        : spanDays >= 45 ? `${Math.round(spanDays / 30)} Monate Fahrten. Alles drin.`
+          : 'Dein Fahrten-Verlauf. Alles drin.'
     const rangeLabel = dates.length
-      ? `From ${new Date(earliest).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })} to today — nothing left behind.`
-      : 'Your coach will read every ride as it arrives.'
+      ? `Von ${new Date(earliest).toLocaleDateString('de-DE', { month: 'short', year: 'numeric' })} bis heute — nichts fehlt.`
+      : 'Dein Coach liest jede Fahrt, sobald sie ankommt.'
 
     // biggest ride by distance = the standout
     const biggest = acts.reduce<typeof acts[number] | null>((m, a) => ((a.distance_meters ?? 0) > (m?.distance_meters ?? 0) ? a : m), null)
     const standout = biggest && (biggest.distance_meters ?? 0) > 0
       ? {
-          title: biggest.title ?? 'Longest ride',
-          detail: `${fmtInt((biggest.distance_meters ?? 0) / 1000)} km${biggest.elevation_gain_m ? ` · ${fmtInt(biggest.elevation_gain_m)} m climbed` : ''} · ${new Date(biggest.started_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`,
+          title: biggest.title ?? 'Längste Fahrt',
+          detail: `${fmtInt((biggest.distance_meters ?? 0) / 1000)} km${biggest.elevation_gain_m ? ` · ${fmtInt(biggest.elevation_gain_m)} m hoch` : ''} · ${new Date(biggest.started_at).toLocaleDateString('de-DE', { month: 'short', year: 'numeric' })}`,
         }
       : null
 
     // epic comparisons — turn raw data into something that feels earned.
     const earthKm = 40075
     const earthPct = km / earthKm
-    const earthLine = earthPct >= 1 ? `${earthPct.toFixed(1)}× around the Earth` : `${Math.round(earthPct * 100)}% around the Earth`
+    const earthLine = earthPct >= 1 ? `${earthPct.toFixed(1)}× um die Erde` : `${Math.round(earthPct * 100)}% um die Erde`
     const everest = 8849
     const everests = Math.floor(totalElev / everest)
-    const everestLine = everests >= 1 ? `${fmtInt(everests)} Everests climbed` : null
+    const everestLine = everests >= 1 ? `${fmtInt(everests)}× Everest` : null
 
     const stats: W3CelebrateStat[] = [
-      { icon: 'clock', value: hours > 0 ? `${fmtInt(hours)} h` : '—', label: 'in the saddle' },
-      { icon: 'mountain', value: totalElev > 0 ? `${fmtInt(totalElev)} m` : '—', label: 'total climbing' },
-      { icon: 'flame', value: rides > 0 ? fmtInt(rides) : '—', label: 'rides logged' },
+      { icon: 'clock', value: hours > 0 ? `${fmtInt(hours)} h` : '—', label: 'im Sattel' },
+      { icon: 'mountain', value: totalElev > 0 ? `${fmtInt(totalElev)} m` : '—', label: 'Höhenmeter' },
+      { icon: 'flame', value: rides > 0 ? fmtInt(rides) : '—', label: 'Fahrten' },
     ]
 
     return {
@@ -88,14 +88,14 @@ export default function W3ConnectCelebratePage() {
       headline,
       sub: rangeLabel,
       ridesCount: rides,
-      ridesLabel: 'rides imported',
+      ridesLabel: 'Fahrten importiert',
       km,
       earthPct,
       earthLine,
       everestLine,
       stats,
       standout,
-      ctaLabel: 'Meet your rider',
+      ctaLabel: 'Lern deinen Rider kennen',
     }
   }, [data, source])
 

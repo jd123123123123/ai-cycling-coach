@@ -27,12 +27,15 @@ export interface RewardChallenge {
 }
 
 export const CHALLENGE_METRICS: { metric: ChallengeMetric; label: string; unit: string }[] = [
-  { metric: 'active_days', label: 'Ride days', unit: 'days' },
-  { metric: 'distance_km', label: 'Distance', unit: 'km' },
-  { metric: 'tss', label: 'Training load', unit: 'TSS' },
-  { metric: 'rides', label: 'Rides', unit: 'rides' },
-  { metric: 'hours', label: 'Hours', unit: 'h' },
-  { metric: 'kj', label: 'Energy', unit: 'kJ' },
+  // Labels are DISPLAYED (the metric chips in the challenge editor, and the
+  // unit in "ZIEL · KM"), so they are German like the rest of the W3 app.
+  // The `metric` keys are the API contract and stay untouched.
+  { metric: 'active_days', label: 'Fahrtage', unit: 'Tage' },
+  { metric: 'distance_km', label: 'Distanz', unit: 'km' },
+  { metric: 'tss', label: 'Belastung', unit: 'TSS' },
+  { metric: 'rides', label: 'Fahrten', unit: 'Fahrten' },
+  { metric: 'hours', label: 'Stunden', unit: 'h' },
+  { metric: 'kj', label: 'Energie', unit: 'kJ' },
 ]
 
 export interface MyChallenges {

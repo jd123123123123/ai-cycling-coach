@@ -54,21 +54,21 @@ export default function W3ChallengeEditor({ existing, onClose }: {
         style={{ width: 390, maxWidth: '100%', background: T.bg, borderRadius: '28px 28px 0 0', border: `1px solid ${T.rule}`, borderBottom: 0, fontFamily: FONT, display: 'flex', flexDirection: 'column', padding: '18px 20px calc(24px + env(safe-area-inset-bottom))', gap: 18 }}>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>{editing ? 'Edit challenge' : 'New challenge'}</span>
-          <button onClick={onClose} aria-label="Close" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={18} color={T.mid} /></button>
+          <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>{editing ? 'Challenge bearbeiten' : 'Neue Challenge'}</span>
+          <button onClick={onClose} aria-label="Schließen" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={18} color={T.mid} /></button>
         </div>
 
         {/* Title */}
         <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>NAME</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="e.g. Big August"
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="z. B. Großer Monat"
             style={{ height: 50, padding: '0 16px', borderRadius: 14, background: T.surface, border: `1px solid ${T.rule}`, color: T.ink, fontFamily: FONT, fontSize: 15, outline: 'none' }} />
         </label>
 
         {/* Metric — locked on edit (changing the metric would be a different challenge) */}
         {!editing && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>MEASURE</span>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>MESSGRÖSSE</span>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {CHALLENGE_METRICS.map((m) => {
                 const on = m.metric === metric
@@ -83,23 +83,23 @@ export default function W3ChallengeEditor({ existing, onClose }: {
 
         {/* Target */}
         <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>TARGET · {unit.toUpperCase()}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>ZIEL · {unit.toUpperCase()}</span>
           <input value={target} onChange={(e) => setTarget(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="numeric" placeholder="0"
             style={{ height: 50, padding: '0 16px', borderRadius: 14, background: T.surface, border: `1px solid ${T.rule}`, color: T.ink, fontFamily: FONT, fontSize: 15, outline: 'none' }} />
         </label>
 
         {(create.isError || edit.isError || del.isError) && (
-          <span style={{ fontSize: 12, fontWeight: 600, color: T.bad }}>Something went wrong. Try again.</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: T.bad }}>Etwas ist schiefgelaufen. Nochmal versuchen.</span>
         )}
 
         <div style={{ display: 'flex', gap: 10 }}>
           {editing && (
-            <button onClick={remove} disabled={busy} aria-label="Delete challenge"
+            <button onClick={remove} disabled={busy} aria-label="Challenge löschen"
               style={{ width: 56, height: 56, borderRadius: 100, border: `1px solid ${T.bad}55`, background: 'transparent', display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none' }}><Trash2 size={19} color={T.bad} /></button>
           )}
           <button onClick={submit} disabled={!valid || busy}
             style={{ flex: 1, height: 56, borderRadius: 100, border: 0, background: valid && !busy ? T.acid : T.surface2, color: valid && !busy ? T.bg : T.quiet, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: valid && !busy ? 'pointer' : 'default', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
-            <Check size={19} />{editing ? 'Save' : 'Create challenge'}
+            <Check size={19} />{editing ? 'Speichern' : 'Challenge erstellen'}
           </button>
         </div>
       </motion.div>

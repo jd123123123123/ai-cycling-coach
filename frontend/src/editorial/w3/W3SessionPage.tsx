@@ -35,16 +35,16 @@ import W3SessionView, { type W3SessionVm, type W3Step, type W3ShapeBar, type W3E
 
 const DASH = '—'
 const fmtMin = (min: number) => `${Math.floor(min / 60)}:${String(Math.round(min % 60)).padStart(2, '0')}`
-const fmtInt = (n: number) => Math.round(n).toLocaleString('en-US')
+const fmtInt = (n: number) => Math.round(n).toLocaleString('de-DE')
 /** This session against the season's average ride — a ratio of two real
  *  totals, not a forecast. Below 0.05× the "0.0×" read-out is meaningless, so
  *  it says so in words instead. */
 const vsAvg = (x: number, kind: 'load' | 'length'): string =>
   x < 0.05
-    ? (kind === 'load' ? 'A fraction of your average ride’s load this season.' : 'A fraction of the length of your average ride this season.')
+    ? (kind === 'load' ? 'Ein Bruchteil der Belastung deiner Durchschnittsfahrt dieser Saison.' : 'Ein Bruchteil der Länge deiner Durchschnittsfahrt dieser Saison.')
     : kind === 'load'
-      ? `${x.toFixed(1)}× the load of your average ride so far this season.`
-      : `${x.toFixed(1)}× as long as your average ride so far this season.`
+      ? `${x.toFixed(1)}× die Belastung deiner bisherigen Durchschnittsfahrt dieser Saison.`
+      : `${x.toFixed(1)}× so lang wie deine bisherige Durchschnittsfahrt dieser Saison.`
 
 export default function W3SessionPage() {
   const navigate = useNavigate()
@@ -126,7 +126,7 @@ export default function W3SessionPage() {
     const streakDays = streak?.streak ?? null
     const earns: W3EarnTile[] = []
     if (streakDays != null) {
-      earns.push({ icon: 'flame', v: `DAY ${streakDays + 1}`, l: 'STREAK', s: streakDays > 0 ? `Extends your ${streakDays}-day run` : 'Starts a new run' })
+      earns.push({ icon: 'flame', v: `TAG ${streakDays + 1}`, l: 'STREAK', s: streakDays > 0 ? `Verlängert deinen ${streakDays}-Tage-Streak` : 'Startet einen neuen Streak' })
     }
 
     // Season TSS + saddle time as LEDGERS rather than flat tiles: banked
@@ -142,7 +142,7 @@ export default function W3SessionPage() {
       const total = seasonTss + effTss
       ledgers.push({
         icon: 'zap',
-        label: 'SEASON TSS',
+        label: 'SAISON-TSS',
         banked: fmtInt(seasonTss),
         delta: `+${effTss}`,
         total: fmtInt(total),
@@ -153,15 +153,15 @@ export default function W3SessionPage() {
       earns.push({
         icon: 'zap',
         v: seasonTss != null ? fmtInt(seasonTss) : DASH,
-        l: 'SEASON TSS',
-        s: effTss != null ? `+${effTss} this ride` : 'Season training load',
+        l: 'SAISON-TSS',
+        s: effTss != null ? `+${effTss} diese Fahrt` : 'Saison-Belastung',
       })
     }
     if (seasonSaddleMin != null && effDurMin != null && effDurMin > 0) {
       const total = seasonSaddleMin + effDurMin
       ledgers.push({
         icon: 'clock',
-        label: 'SADDLE · SEASON · H:MM',
+        label: 'SATTEL · SAISON · H:MM',
         banked: fmtMin(seasonSaddleMin),
         delta: `+${fmtMin(effDurMin)}`,
         total: fmtMin(total),
@@ -173,27 +173,27 @@ export default function W3SessionPage() {
       earns.push({
         icon: 'clock',
         v: h != null ? `${h}h` : DASH,
-        l: 'SADDLE · SEASON',
-        s: effDurMin ? `+${fmtMin(effDurMin)} this ride` : 'Time on the bike this year',
+        l: 'SATTEL · SAISON',
+        s: effDurMin ? `+${fmtMin(effDurMin)} diese Fahrt` : 'Zeit auf dem Rad dieses Jahr',
       })
     }
     // fixture: RideCoin conversion — the reward economy (wallet/ledger) is not
     // wired into this screen, so no coin figure is shown; the note names the
     // real rule (RideCoin is awarded by a completed session's TSS on ingest).
     const earnNote = effTss != null
-      ? 'Finishing this ride also awards RideCoin, scaled to its TSS.'
+      ? 'Fährst du sie zu Ende, gibt es zusätzlich RideCoin — skaliert nach TSS.'
       : ''
 
     const prescriptionClaim = isPresent(model.claim)
       ? model.claim.value
-      : (title ? `Today’s prescription: ${title}.` : 'No session is prescribed for today.')
+      : (title ? `Heute vorgegeben: ${title}.` : 'Für heute ist keine Einheit vorgegeben.')
 
-    const shapeLabels: [string, string, string] = ['WARM UP', num ? (num.qualifier || 'MAIN SET') : 'STEADY', 'COOL']
+    const shapeLabels: [string, string, string] = ['EINROLLEN', num ? (num.qualifier || 'HAUPTTEIL') : 'KONSTANT', 'AUSROLLEN']
 
     return {
-      navTitle: 'Today’s session',
+      navTitle: 'Einheit heute',
       funName: hero,
-      title: title ?? 'Session',
+      title: title ?? 'Einheit',
       numeral: num ? num.text : '—',
       qualifier: num ? num.sub : '',
       thresholdW: watts != null ? `${watts} W` : '—',
@@ -201,15 +201,15 @@ export default function W3SessionPage() {
       gauge,
       prescriptionClaim,
       stats: [
-        { icon: 'clock', v: effDurMin != null ? fmtMin(effDurMin) : '—', l: 'DURATION', s: inZone != null ? `${inZone} min in zone` : '' },
-        { icon: 'flame', v: effTss != null ? String(effTss) : '—', l: 'LOAD · TSS', s: ftpPct ? `${ftpPct} of FTP` : '' },
-        { icon: 'zap', v: watts != null ? `${watts} W` : '—', l: 'TARGET', s: watts != null ? 'work interval' : 'no FTP anchor' },
-        { icon: 'gauge', v: inZone != null ? `${inZone}` : '—', l: 'MIN IN ZONE', s: inZone != null ? 'at or above target' : '' },
+        { icon: 'clock', v: effDurMin != null ? fmtMin(effDurMin) : '—', l: 'DAUER', s: inZone != null ? `${inZone} min in Zone` : '' },
+        { icon: 'flame', v: effTss != null ? String(effTss) : '—', l: 'BELASTUNG · TSS', s: ftpPct ? `${ftpPct} von FTP` : '' },
+        { icon: 'zap', v: watts != null ? `${watts} W` : '—', l: 'ZIEL', s: watts != null ? 'im Hauptteil' : 'kein FTP-Anker' },
+        { icon: 'gauge', v: inZone != null ? `${inZone}` : '—', l: 'MIN IN ZONE', s: inZone != null ? 'auf Ziel oder darüber' : '' },
       ],
       shapeBars,
-      shapeFtpTag: watts != null ? `Target ${watts} W` : (ftpPct ? `${ftpPct} of FTP` : ''),
+      shapeFtpTag: watts != null ? `Ziel ${watts} W` : (ftpPct ? `${ftpPct} von FTP` : ''),
       shapeLabels,
-      stepsMeta: steps.length > 0 ? `${blocks.length} steps · ${effDurMin != null ? fmtMin(effDurMin) : '—'}` : '',
+      stepsMeta: steps.length > 0 ? `${blocks.length} Blöcke · ${effDurMin != null ? fmtMin(effDurMin) : '—'}` : '',
       steps,
 
       // Honest zone-derived effort guide (replaces the old fabricated HR/cadence read-outs).
@@ -220,15 +220,15 @@ export default function W3SessionPage() {
             const r = model.routes.value[0]
             return {
               name: r.name,
-              lastRidden: `RIDDEN ${r.rideCount}×`,
+              lastRidden: `${r.rideCount}× GEFAHREN`,
               stats: [
-                { v: `${Math.round(r.distanceKm)} km`, l: 'DISTANCE' },
-                { v: isPresent(r.ascentM) ? `${Math.round(r.ascentM.value)} m` : '—', l: 'CLIMBING' },
-                { v: effDurMin != null ? fmtMin(effDurMin) : '—', l: 'EXPECTED' },
-                { v: `${r.rideCount}×`, l: 'RIDDEN' },
+                { v: `${Math.round(r.distanceKm)} km`, l: 'DISTANZ' },
+                { v: isPresent(r.ascentM) ? `${Math.round(r.ascentM.value)} m` : '—', l: 'HÖHENMETER' },
+                { v: effDurMin != null ? fmtMin(effDurMin) : '—', l: 'ERWARTET' },
+                { v: `${r.rideCount}×`, l: 'GEFAHREN' },
               ],
-              notes: ['Matched to today’s blocks from your own rides.'],
-              foot: 'Drawn from your recorded track for this route.',
+              notes: ['Aus deinen eigenen Fahrten zu den heutigen Blöcken passend.'],
+              foot: 'Aus deinem aufgezeichneten Track für diese Strecke.',
             }
           })()
         : null,
@@ -238,7 +238,7 @@ export default function W3SessionPage() {
       earnNote,
 
       canExport: workout != null,
-      primaryLabel: workout != null ? 'Export to your head unit' : 'Back to today',
+      primaryLabel: workout != null ? 'Zum Head-Unit exportieren' : 'Zurück zu heute',
     }
   }, [model, session.workout, adaptive, streak, seasonActs])
 

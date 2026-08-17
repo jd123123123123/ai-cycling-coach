@@ -5,17 +5,17 @@ import W3RideCelebrateView, { type W3CelebrateVm } from './W3RideCelebrateView'
  *  ride stats + the ledger's RideCoin breakdown. Remove before merge. */
 export const CELEBRATE_FIXTURE: W3CelebrateVm = {
   provider: 'WAHOO',
-  kicker: 'POINTS EARNED',
-  title: 'Ride', titleAccent: 'banked.',
-  settledTitle: 'Points', settledAccent: 'earned.',
+  kicker: 'PUNKTE VERDIENT',
+  title: 'Fahrt', titleAccent: 'gebucht.',
+  settledTitle: 'Punkte', settledAccent: 'verdient.',
   total: 840,
-  coinsPending: '73 coins on the road',
-  coinsSettled: '73 coins · all banked',
+  coinsPending: '73 Coins auf der Straße',
+  coinsSettled: '73 Coins · alle gebucht',
   stats: [
-    { icon: 'route', label: 'DISTANCE', value: '28', unit: 'km' },
-    { icon: 'timer', label: 'MOVING', value: '2h04', unit: '' },
-    { icon: 'power', label: 'AVG POWER', value: '186', unit: 'W' },
-    { icon: 'climb', label: 'CLIMBED', value: '412', unit: 'm' },
+    { icon: 'route', label: 'DISTANZ', value: '28', unit: 'km' },
+    { icon: 'timer', label: 'FAHRZEIT', value: '2h04', unit: '' },
+    { icon: 'power', label: 'Ø WATT', value: '186', unit: 'W' },
+    { icon: 'climb', label: 'ANSTIEG', value: '412', unit: 'm' },
   ],
   zones: [
     { z: 'ZONE 1', name: 'Recovery', min: '14 min', pct: 24, peak: false },
@@ -27,19 +27,19 @@ export const CELEBRATE_FIXTURE: W3CelebrateVm = {
   ],
   ftp: 'FTP 250 W',
   bestEffortW: '271 W',
-  bestEffortNote: 'for 8 min · NEW BEST',
+  bestEffortNote: '8 min lang · BESTWERT',
   firstsCount: 3,
   firsts: [
-    { icon: 'route', title: 'Longest ride', sub: 'IN 6 WEEKS' },
-    { icon: 'flame', title: '3rd hardest', sub: 'RIDE EVER' },
-    { icon: 'climb', title: '412 m up', sub: 'MOST SINCE APRIL' },
+    { icon: 'route', title: 'Längste Fahrt', sub: 'SEIT 6 WOCHEN' },
+    { icon: 'flame', title: '3.-schwerste', sub: 'ALLER ZEITEN' },
+    { icon: 'climb', title: '412 m hoch', sub: 'MEISTE SEIT APRIL' },
   ],
   breakMeta: '2h04 · 28 KM · 186 W',
   breakdown: [
-    { label: 'RIDE', value: '702' },
+    { label: 'FAHRT', value: '702' },
     { label: 'STREAK ×1.2', value: '+138' },
   ],
-  bankedNote: 'BANKED TO YOUR LEDGER',
+  bankedNote: 'AUFS KONTO GEBUCHT',
   alreadyClaimed: false,
 }
 

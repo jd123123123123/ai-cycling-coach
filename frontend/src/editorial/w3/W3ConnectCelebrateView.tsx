@@ -73,7 +73,7 @@ export default function W3ConnectCelebrateView({ vm, onContinue }: { vm: W3Conne
             <motion.div initial={reduce ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.1 }}
               style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 14px', borderRadius: 100, background: T.acidDim, border: `1px solid ${T.acid}55` }}>
               <Check size={13} color={T.acid} strokeWidth={3} />
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, color: T.acid }}>{vm.source.toUpperCase()} CONNECTED</span>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, color: T.acid }}>{vm.source.toUpperCase()} VERBUNDEN</span>
             </motion.div>
           </div>
 
@@ -97,10 +97,10 @@ export default function W3ConnectCelebrateView({ vm, onContinue }: { vm: W3Conne
               </svg>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
-                  <Globe size={13} color={VIOLET} /><Kicker>Distance ridden</Kicker>
+                  <Globe size={13} color={VIOLET} /><Kicker>Gefahrene Distanz</Kicker>
                 </div>
-                <span style={{ fontSize: 52, fontWeight: 700, letterSpacing: -2, lineHeight: 1, color: T.ink }}>{km.toLocaleString('en-US')}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.quiet, marginTop: 2 }}>KILOMETRES</span>
+                <span style={{ fontSize: 52, fontWeight: 700, letterSpacing: -2, lineHeight: 1, color: T.ink }}>{km.toLocaleString('de-DE')}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.quiet, marginTop: 2 }}>KILOMETER</span>
                 <div style={{ marginTop: 12, padding: '6px 13px', borderRadius: 100, background: `${VIOLET}22`, border: `1px solid ${VIOLET}55` }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#B9A6FF' }}>🌍 {vm.earthLine}</span>
                 </div>
@@ -139,7 +139,7 @@ export default function W3ConnectCelebrateView({ vm, onContinue }: { vm: W3Conne
             <div style={{ padding: 15, borderRadius: 18, background: `linear-gradient(120deg, ${T.surface}, ${VIOLET}12)`, display: 'flex', gap: 13, alignItems: 'center', border: `1px solid ${T.rule}` }}>
               <div style={{ width: 42, height: 42, borderRadius: 12, background: T.acidDim, display: 'grid', placeItems: 'center', flex: 'none' }}><Trophy size={20} color={T.acid} /></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <Kicker>Your all-time standout</Kicker>
+                <Kicker>Dein Highlight aller Zeiten</Kicker>
                 <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>{vm.standout.title}</span>
                 <span style={{ fontSize: 11.5, fontWeight: 500, color: T.mid }}>{vm.standout.detail}</span>
               </div>
@@ -151,7 +151,7 @@ export default function W3ConnectCelebrateView({ vm, onContinue }: { vm: W3Conne
         <div style={{ ...band(38), paddingTop: 14 }}>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
             <Sparkles size={13} color={T.acid} />
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid, textAlign: 'center' }}>Every ride is yours — your coach reads all of it.</span>
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid, textAlign: 'center' }}>Jede Fahrt gehört dir — dein Coach liest sie alle.</span>
           </div>
           <button onClick={onContinue} style={{ height: 56, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
             {vm.ctaLabel}<ArrowRight size={18} color={T.bg} />

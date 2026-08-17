@@ -28,10 +28,10 @@ function toVm(d: RaceDebrief, earn: RideEarning | undefined): W3CelebrateVm {
   const total = earn?.total ?? 0
 
   const stats: W3CelebStat[] = [
-    { icon: 'route', label: 'DISTANCE', value: h.distance_km != null ? String(Math.round(h.distance_km)) : '—', unit: 'km' },
-    { icon: 'timer', label: 'MOVING', value: fmtHms(h.moving_time_s), unit: '' },
-    { icon: 'power', label: 'AVG POWER', value: h.np_watts != null ? String(Math.round(h.np_watts)) : '—', unit: 'W' },
-    { icon: 'climb', label: 'CLIMBED', value: h.elevation_m != null ? String(Math.round(h.elevation_m)) : '—', unit: 'm' },
+    { icon: 'route', label: 'DISTANZ', value: h.distance_km != null ? String(Math.round(h.distance_km)) : '—', unit: 'km' },
+    { icon: 'timer', label: 'FAHRZEIT', value: fmtHms(h.moving_time_s), unit: '' },
+    { icon: 'power', label: 'Ø WATT', value: h.np_watts != null ? String(Math.round(h.np_watts)) : '—', unit: 'W' },
+    { icon: 'climb', label: 'ANSTIEG', value: h.elevation_m != null ? String(Math.round(h.elevation_m)) : '—', unit: 'm' },
   ]
 
   const pct = d.pacing?.zone_time_pct ?? {}
@@ -48,12 +48,12 @@ function toVm(d: RaceDebrief, earn: RideEarning | undefined): W3CelebrateVm {
   const firsts: W3CelebFirst[] = prs.slice(0, 3).map((e) => ({
     icon: 'flame',
     title: e.duration_s < 60 ? `${e.duration_s}s · ${e.ride_watts} W` : `${Math.round(e.duration_s / 60)} min · ${e.ride_watts} W`,
-    sub: 'NEW BEST',
+    sub: 'BESTWERT',
   }))
 
   // Real earning breakdown from the ledger: base (ride) + streak bonus.
   const breakdown = []
-  if (earn && earn.base > 0) breakdown.push({ label: 'RIDE', value: String(earn.base) })
+  if (earn && earn.base > 0) breakdown.push({ label: 'FAHRT', value: String(earn.base) })
   if (earn && earn.streak_bonus > 0) {
     const mult = earn.multiplier && earn.multiplier > 1 ? ` ×${earn.multiplier.toFixed(2).replace(/0$/, '')}` : ''
     breakdown.push({ label: `STREAK${mult}`, value: `+${earn.streak_bonus}` })
@@ -61,23 +61,23 @@ function toVm(d: RaceDebrief, earn: RideEarning | undefined): W3CelebrateVm {
 
   return {
     provider: null,   // sync provider isn't on the debrief header
-    kicker: 'POINTS EARNED',
-    title: 'Ride', titleAccent: 'banked.',
-    settledTitle: 'Points', settledAccent: 'earned.',
+    kicker: 'PUNKTE VERDIENT',
+    title: 'Fahrt', titleAccent: 'gebucht.',
+    settledTitle: 'Punkte', settledAccent: 'verdient.',
     total,
-    coinsPending: `${tss} coins on the road`,
-    coinsSettled: `${tss} coins · all banked`,
+    coinsPending: `${tss} Coins auf der Straße`,
+    coinsSettled: `${tss} Coins · alle gebucht`,
     stats, zones,
     ftp: d.wko?.mftp_watts != null ? `FTP ${Math.round(d.wko.mftp_watts)} W` : '',
     bestEffortW: bestEffort?.ride_watts != null ? `${bestEffort.ride_watts} W` : null,
     bestEffortNote: bestEffort
-      ? `for ${bestEffort.duration_s < 60 ? `${bestEffort.duration_s} sec` : `${Math.round(bestEffort.duration_s / 60)} min`}${bestEffort.is_pr ? ' · NEW BEST' : ''}`
+      ? `${bestEffort.duration_s < 60 ? `${bestEffort.duration_s} Sek` : `${Math.round(bestEffort.duration_s / 60)} min`} lang${bestEffort.is_pr ? ' · BESTWERT' : ''}`
       : '',
     firstsCount: prs.length,
     firsts,
     breakMeta: `${fmtHms(h.moving_time_s)} · ${h.distance_km != null ? Math.round(h.distance_km) : '—'} KM · ${h.np_watts != null ? Math.round(h.np_watts) : '—'} W`,
     breakdown,
-    bankedNote: 'BANKED TO YOUR LEDGER',
+    bankedNote: 'AUFS KONTO GEBUCHT',
     alreadyClaimed: false,
   }
 }

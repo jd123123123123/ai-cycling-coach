@@ -26,7 +26,7 @@ import { AVATAR_TINTS, bucketMeta, periodWord, thisPeriod, windowChip, windowDay
  * Elevation and PRs have no source in this payload and are simply absent.
  */
 
-const nf = new Intl.NumberFormat('en-US')
+const nf = new Intl.NumberFormat('de-DE')
 const ORD = (n: number) => {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100
   return n + (s[(v - 20) % 10] || s[v] || s[0])

@@ -9,8 +9,8 @@ import W3ReferralsView, { type W3ReferralsVm, type W3ReferralRow } from './W3Ref
  * riders' stats + accrued 10% cut from /referrals/mine. Share copies the code.
  */
 
-const compact = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K` : String(Math.round(n))
-const timeLabel = (c: ReferralCard) => c.time_left.ended ? 'Ended' : `${c.time_left.days}d ${String(c.time_left.hours).padStart(2, '0')}h`
+const compact = (n: number) => n >= 1000 ? `${(n / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })}K` : String(Math.round(n))
+const timeLabel = (c: ReferralCard) => c.time_left.ended ? 'Beendet' : `${c.time_left.days}T ${String(c.time_left.hours).padStart(2, '0')}h`
 
 function toRow(c: ReferralCard): W3ReferralRow {
   return {
@@ -25,18 +25,18 @@ export default function W3ReferralsPage() {
 
   const vm = useMemo<W3ReferralsVm>(() => ({
     code: data?.code ?? '—',
-    blurb: 'Recruit new riders and earn a 10% bonus on every ride they claim for 30 days when signing up.',
+    blurb: 'Hol neue Fahrer dazu und verdiene 30 Tage lang 10 % Bonus auf jede Fahrt, die sie nach der Anmeldung einlösen.',
     activeCount: data?.active_count ?? 0,
     active: (data?.active ?? []).map(toRow),
     completedCount: data?.completed_count ?? 0,
     completed: (data?.completed ?? []).map(toRow),
-    howItWorks: 'The total amount of your bonus will be available for you to claim at the end of the 30-day period.',
+    howItWorks: 'Dein gesamter Bonus steht dir am Ende der 30 Tage zum Einlösen bereit.',
   }), [data])
 
   const share = async () => {
     const code = data?.code
     if (!code) return
-    const text = `Ride with me — use my code ${code} to start.`
+    const text = `Fahr mit mir — mit meinem Code ${code} geht's los.`
     try {
       if (navigator.share) await navigator.share({ text })
       else await navigator.clipboard.writeText(code)

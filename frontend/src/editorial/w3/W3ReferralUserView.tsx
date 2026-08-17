@@ -31,9 +31,9 @@ export default function W3ReferralUserView({ vm, onBack, onClaim }: {
   const reduce = useReducedMotion()
   const accent = vm.ended ? T.acid : VIOLET
   const stats: { icon: typeof Sparkles; label: string; value: string }[] = [
-    { icon: Sparkles, label: 'POWER CLAIMED', value: vm.powerClaimed },
-    { icon: RouteIcon, label: 'TOTAL DISTANCE', value: vm.totalDistance },
-    { icon: Bike, label: 'TOTAL RIDES', value: vm.totalRides },
+    { icon: Sparkles, label: 'POWER EINGELÖST', value: vm.powerClaimed },
+    { icon: RouteIcon, label: 'GESAMTDISTANZ', value: vm.totalDistance },
+    { icon: Bike, label: 'FAHRTEN GESAMT', value: vm.totalRides },
   ]
 
   return (
@@ -50,7 +50,7 @@ export default function W3ReferralUserView({ vm, onBack, onClaim }: {
         {/* Back */}
         <div style={{ position: 'relative', padding: '10px 20px 0' }}>
           <div style={{ height: 'max(12px, env(safe-area-inset-top))' }} />
-          <button onClick={onBack} aria-label="Back" style={{ width: 44, height: 44, borderRadius: 100, background: '#fff', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color="#000" /></button>
+          <button onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: '#fff', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color="#000" /></button>
         </div>
 
         {/* Bottom content */}
@@ -74,7 +74,7 @@ export default function W3ReferralUserView({ vm, onBack, onClaim }: {
             initial={reduce ? false : { scale: 0.97 }} animate={{ scale: 1 }}
             style={{ height: 64, borderRadius: 100, border: 0, background: accent, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', cursor: vm.ended && !vm.claimed ? 'pointer' : 'default', fontFamily: FONT }}>
             <span style={{ fontSize: 18, fontWeight: 800, color: vm.ended ? T.bg : '#fff' }}>
-              {vm.claimed ? 'Claimed' : vm.ended ? 'Total earned' : 'Your Reward'} ✱ {vm.rewardLabel}
+              {vm.claimed ? 'Eingelöst' : vm.ended ? 'Gesamt verdient' : 'Deine Belohnung'} ✱ {vm.rewardLabel}
             </span>
           </motion.button>
 

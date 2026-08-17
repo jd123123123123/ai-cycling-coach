@@ -171,7 +171,7 @@ export default function W3WinsView({ vm, onNewChallenge, onEditChallenge }: { vm
                   <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{c.title}</span>
                   <span style={{ marginLeft: 'auto', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.acid }}>{c.reward}</span>
                   {c.custom
-                    ? <button onClick={() => onEditChallenge?.(c.key)} aria-label="Edit challenge" style={{ background: 'transparent', border: 0, padding: 0, cursor: 'pointer', display: 'grid', placeItems: 'center' }}><MoreHorizontal size={16} color={T.mid} /></button>
+                    ? <button onClick={() => onEditChallenge?.(c.key)} aria-label="Challenge bearbeiten" style={{ background: 'transparent', border: 0, padding: 0, cursor: 'pointer', display: 'grid', placeItems: 'center' }}><MoreHorizontal size={16} color={T.mid} /></button>
                     : <MoreHorizontal size={16} color={T.quiet} />}
                 </div>
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{c.sub}</span>

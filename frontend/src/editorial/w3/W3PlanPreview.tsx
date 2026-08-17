@@ -57,7 +57,7 @@ const FIXTURE: W3PlanVm = {
     { letter: 'S', date: '16', frac: 140, isToday: false, isRest: false },
     { letter: 'S', date: '17', frac: 70, isToday: false, isRest: false },
   ],
-  sessionTitle: '4 × 8 Threshold',
+  sessionTitle: '4 × 8 Schwelle',
   sessionDur: '1h 15m',
   targetW: '285 W',
   sessionTss: '112',

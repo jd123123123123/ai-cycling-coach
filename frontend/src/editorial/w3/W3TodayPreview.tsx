@@ -135,11 +135,11 @@ const FIXTURE: W3Vm = {
 // hits the real endpoint.
 const MOCK_ADAPT = async (kind: 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest') => {
   await new Promise((r) => setTimeout(r, 550))
-  if (kind === 'rest') return { targetW: '—', tss: 0, ftpPct: '—', rationale: 'Full rest today. Let the load settle — tomorrow’s block hits harder for it.', railsDowngraded: false, title: 'Rest day' }
-  if (kind === 'easier') return { targetW: '255 W', tss: 92, ftpPct: '87%', rationale: 'Adjusted — 3 × 8 Threshold. HRV is fine but yesterday ran long, so ~20 TSS came off to protect Thursday’s VO₂ block.', railsDowngraded: false, title: '3 × 8 Threshold' }
-  if (kind === 'harder') return { targetW: '305 W', tss: 131, ftpPct: '104%', rationale: 'Adjusted — 4 × 9 Threshold. You’re fresh (TSB +19) — this banks real threshold work without spiking fatigue past the plan.', railsDowngraded: false, title: '4 × 9 Threshold' }
-  if (kind === 'shorter') return { targetW: '285 W', tss: 78, ftpPct: '98%', rationale: 'Adjusted — 4 × 6 Threshold · 45 min. Same threshold intent, less time on the clock.', railsDowngraded: false, title: '4 × 6 Threshold' }
-  return { targetW: '285 W', tss: 112, ftpPct: '98%', rationale: 'Adjusted — Threshold · Indoor. Same watts on the trainer — weather and traffic out of the equation.', railsDowngraded: false, title: '4 × 8 Threshold · Indoor' }
+  if (kind === 'rest') return { targetW: '—', tss: 0, ftpPct: '—', rationale: 'Heute komplette Ruhe. Lass die Belastung setzen — der Block morgen trifft dafür härter.', railsDowngraded: false, title: 'Ruhetag' }
+  if (kind === 'easier') return { targetW: '255 W', tss: 92, ftpPct: '87%', rationale: 'Angepasst — 3 × 8 Schwelle. HRV ist in Ordnung, aber gestern wurde es lang — also gehen ~20 TSS runter, um den VO₂-Block am Donnerstag zu schützen.', railsDowngraded: false, title: '3 × 8 Schwelle' }
+  if (kind === 'harder') return { targetW: '305 W', tss: 131, ftpPct: '104%', rationale: 'Angepasst — 4 × 9 Schwelle. Du bist frisch (TSB +19) — das bringt echte Schwellenarbeit, ohne die Ermüdung über den Plan zu treiben.', railsDowngraded: false, title: '4 × 9 Schwelle' }
+  if (kind === 'shorter') return { targetW: '285 W', tss: 78, ftpPct: '98%', rationale: 'Angepasst — 4 × 6 Schwelle · 45 min. Gleiche Absicht an der Schwelle, weniger Zeit auf der Uhr.', railsDowngraded: false, title: '4 × 6 Schwelle' }
+  return { targetW: '285 W', tss: 112, ftpPct: '98%', rationale: 'Angepasst — Schwelle · Indoor. Gleiche Watt auf der Rolle — Wetter und Verkehr fallen raus.', railsDowngraded: false, title: '4 × 8 Schwelle · Indoor' }
 }
 
 export default function W3TodayPreview() {

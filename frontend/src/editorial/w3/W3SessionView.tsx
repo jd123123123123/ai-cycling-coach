@@ -152,8 +152,8 @@ function LedgerRow({ row, delay }: { row: W3EarnLedger; delay: number }) {
               style={{ flexGrow: Math.max(0.0001, share), flexBasis: 0, minWidth: 6, height: 10, transformOrigin: 'right', borderRadius: '2px 100px 100px 2px', background: T.acid, boxShadow: `0 0 12px ${T.acid}8C, 0 0 4px ${T.acid}` }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, minWidth: 0 }}>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>SEASON SO FAR</span>
-            <span style={{ flexShrink: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>THIS RIDE · {sharePct(share)}</span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>SAISON BISHER</span>
+            <span style={{ flexShrink: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>DIESE FAHRT · {sharePct(share)}</span>
           </div>
         </div>
       )}
@@ -195,7 +195,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
 
         {/* Nav */}
         <W3TopBar title={vm.navTitle} onBack={onBack}
-          extra={<button onClick={onShare} aria-label="Share session" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>} />
+          extra={<button onClick={onShare} aria-label="Einheit teilen" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>} />
 
         {/* Cover — the rider's bike, faded into the page (real header image). */}
         <div style={{ position: 'relative', height: 224, marginTop: 6, overflow: 'hidden' }}>
@@ -220,12 +220,12 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
               <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end' }}>
                 <span style={{ fontSize: 68, fontWeight: 700, letterSpacing: -3, lineHeight: 0.8, color: vm.numeral === DASH ? T.quiet : T.acid }}>{vm.numeral}</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 7 }}>
-                  <Kicker>Target</Kicker>
+                  <Kicker>Ziel</Kicker>
                   <span style={{ fontSize: 15, fontWeight: 700, color: vm.thresholdW === DASH ? T.quiet : T.ink }}>{vm.thresholdW}</span>
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', paddingBottom: 7 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: T.quiet }}>TOTAL TIME</span>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: T.quiet }}>GESAMTZEIT</span>
                 <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
                   <Clock size={13} color={T.mid} />
                   <span style={{ fontSize: 15, fontWeight: 700, color: vm.totalTime === DASH ? T.quiet : T.ink }}>{vm.totalTime}</span>
@@ -238,7 +238,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
 
         {/* The Prescription — real stat cards with icons */}
         <div style={{ ...band(26), paddingTop: 26, gap: 14 }}>
-          <Kicker>The prescription</Kicker>
+          <Kicker>Die Vorgabe</Kicker>
           <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.28, color: T.ink }}>{vm.prescriptionClaim}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 10 }}>
             {[[0, 1], [2, 3]].map((row, ri) => (
@@ -268,7 +268,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
         {vm.shapeBars.length > 0 && (
           <div style={{ ...band(28), gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Kicker>The shape of it</Kicker>
+              <Kicker>Das Profil</Kicker>
               {vm.shapeFtpTag && <span style={{ fontSize: 10, fontWeight: 700, color: T.mid }}>{vm.shapeFtpTag}</span>}
             </div>
             <div style={{ position: 'relative', height: 132, display: 'flex', gap: 3, alignItems: 'flex-end' }}>
@@ -291,10 +291,10 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: T.acid }}>
-                {thresholdTime ? `${thresholdTime} AT THRESHOLD` : vm.shapeLabels[1]}
+                {thresholdTime ? `${thresholdTime} AN DER SCHWELLE` : vm.shapeLabels[1]}
               </span>
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: T.quiet }}>
-                {vm.totalTime !== DASH ? `${vm.totalTime} TOTAL` : vm.shapeLabels[2]}
+                {vm.totalTime !== DASH ? `${vm.totalTime} GESAMT` : vm.shapeLabels[2]}
               </span>
             </div>
           </div>
@@ -304,7 +304,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
         {vm.steps.length > 0 && (
           <div style={{ ...band(28), gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>The blocks</span>
+              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Die Blöcke</span>
               <span style={{ fontSize: 10.5, fontWeight: 700, color: T.mid }}>{vm.stepsMeta}</span>
             </div>
             <div style={{ padding: '6px 20px 12px', borderRadius: 24, background: T.surface, display: 'flex', flexDirection: 'column' }}>
@@ -340,8 +340,8 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
         {vm.effort.length > 0 && (
           <div style={{ ...band(28), gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>How to ride it</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: T.mid }}>By feel · no numbers to chase</span>
+              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>So fährst du sie</span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: T.mid }}>Nach Gefühl · keine Zahlen jagen</span>
             </div>
             <div style={{ padding: '20px 20px 22px', borderRadius: 24, background: T.surface, display: 'flex', flexDirection: 'column', gap: 14 }}>
               {vm.effort.map((r, i) => (
@@ -370,7 +370,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
             Always available: the Outdoor/Indoor switch is the real place choice. */}
         <div style={{ ...band(28), gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Where to ride it</span>
+            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Wo du sie fährst</span>
             <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 100, background: T.surface }}>
               {(['outdoor', 'indoor'] as const).map((p) => {
                 const on = place === p
@@ -443,8 +443,8 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
         {(vm.earns.length > 0 || vm.ledgers.length > 0) && (
           <div style={{ ...band(28), gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink, minWidth: 0 }}>What it earns</span>
-              <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: T.mid }}>On completion</span>
+              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink, minWidth: 0 }}>Was sie einbringt</span>
+              <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: T.mid }}>Bei Abschluss</span>
             </div>
             <div style={{ ...card(), gap: 16 }}>
               {vm.earns.map((u, i) => {
@@ -475,7 +475,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
                 small is drawn at a floor so it stays visible. Say it plainly. */}
             {vm.ledgers.some((l) => l.share != null && l.share > 0 && l.share < TIP_FLOOR_SHARE) && (
               <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>
-                Each bar is the whole season. A slice under 2% is drawn at a minimum width so today still shows — the percentages beside it are exact.
+                Jeder Balken ist die ganze Saison. Ein Anteil unter 2 % wird mit Mindestbreite gezeichnet, damit heute sichtbar bleibt — die Prozentwerte daneben sind exakt.
               </span>
             )}
             {vm.earnNote && <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>{vm.earnNote}</span>}
@@ -495,7 +495,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
           {vm.canExport && (
             <button onClick={onToday}
               style={{ height: 48, borderRadius: 100, background: '#FFFFFF0A', display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center', border: 0, cursor: 'pointer', fontFamily: FONT, width: '100%' }}>
-              <ArrowLeft size={15} color={T.ink} /><span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>Back to today</span>
+              <ArrowLeft size={15} color={T.ink} /><span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>Zurück zu heute</span>
             </button>
           )}
         </div>

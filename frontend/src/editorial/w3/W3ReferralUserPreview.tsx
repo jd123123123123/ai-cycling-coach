@@ -7,18 +7,18 @@ const BASE: W3ReferralUserVm = {
   handle: '@WillyWonka',
   avatarUrl: null,
   powerClaimed: '126k',
-  totalDistance: '140.22 km',
+  totalDistance: '140,22 km',
   totalRides: '16',
-  rewardLabel: '12.6k',
+  rewardLabel: '12,6k',
   ended: false,
   claimed: false,
-  timeLeftLabel: '16d 12h 33m',
+  timeLeftLabel: '16T 12h 33m',
 }
 
 export default function W3ReferralUserPreview() {
   const [ended, setEnded] = useState(false)
   return (
-    <div onClick={() => setEnded((e) => !e)} title="tap to toggle pending/ended">
+    <div onClick={() => setEnded((e) => !e)} title="Tippen zum Umschalten: laufend/beendet">
       <W3ReferralUserView vm={{ ...BASE, ended }} />
     </div>
   )

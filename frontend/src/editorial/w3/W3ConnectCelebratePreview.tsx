@@ -3,21 +3,21 @@ import W3ConnectCelebrateView, { type W3ConnectVm } from './W3ConnectCelebrateVi
 /** TEMP preview — fixture, no backend. /e/w3-connected-preview is unguarded. */
 const FIXTURE: W3ConnectVm = {
   source: 'Garmin',
-  headline: '6 years of riding, in.',
-  sub: 'From Mar 2020 to today — nothing left behind.',
+  headline: '6 Jahre Fahrten. Alles drin.',
+  sub: 'Von Mär 2020 bis heute — nichts fehlt.',
   ridesCount: 842,
-  ridesLabel: 'rides imported',
+  ridesLabel: 'Fahrten importiert',
   km: 34910,
   earthPct: 0.87,
-  earthLine: '87% around the Earth',
-  everestLine: '46 Everests climbed',
+  earthLine: '87% um die Erde',
+  everestLine: '46× Everest',
   stats: [
-    { icon: 'clock', value: '1,204 h', label: 'in the saddle' },
-    { icon: 'mountain', value: '412,600 m', label: 'total climbing' },
-    { icon: 'flame', value: '842', label: 'rides logged' },
+    { icon: 'clock', value: '1,204 h', label: 'im Sattel' },
+    { icon: 'mountain', value: '412,600 m', label: 'Höhenmeter' },
+    { icon: 'flame', value: '842', label: 'Fahrten' },
   ],
-  standout: { title: 'Stelvio Pass', detail: '182 km · 4,240 m climbed · Jul 2023' },
-  ctaLabel: 'Meet your rider',
+  standout: { title: 'Stelvio Pass', detail: '182 km · 4,240 m hoch · Jul 2023' },
+  ctaLabel: 'Lern deinen Rider kennen',
 }
 
 export default function W3ConnectCelebratePreview() {

@@ -23,10 +23,10 @@ const METRIC_ICON: Record<ChallengeMetric, W3OpenChallenge['icon']> = {
   rides: 'sunrise', hours: 'repeat', kj: 'zap',
 }
 const METRIC_UNIT: Record<ChallengeMetric, string> = {
-  active_days: 'days', distance_km: 'km', tss: 'TSS',
-  rides: 'rides', hours: 'h', kj: 'kJ',
+  active_days: 'Tage', distance_km: 'km', tss: 'TSS',
+  rides: 'Fahrten', hours: 'h', kj: 'kJ',
 }
-const nf = new Intl.NumberFormat('en-US')
+const nf = new Intl.NumberFormat('de-DE')
 
 // Segment count for the monthly hero gauge — sane for any metric (a 600 km
 // target must not render 600 bars).
@@ -39,13 +39,13 @@ function monthlyFrom(c: RewardChallenge, period: string): W3MonthlyChallenge {
   const total = segCount(c.target)
   const done = Math.round((c.pct / 100) * total)
   const unit = METRIC_UNIT[c.metric]
-  const rewardWord = c.completed ? 'EARNED' : 'REWARD'
+  const rewardWord = c.completed ? 'VERDIENT' : 'BELOHNUNG'
   return {
     name: c.title,
-    daysLeftLabel: c.completed ? 'Completed' : `${period} · in progress`,
+    daysLeftLabel: c.completed ? 'Geschafft' : `${period} · läuft`,
     blurb: c.detail,
     done, total,
-    progressLabel: `${nf.format(Math.round(c.value))} of ${nf.format(c.target)} ${unit}`,
+    progressLabel: `${nf.format(Math.round(c.value))} von ${nf.format(c.target)} ${unit}`,
     reward: `${rewardWord} · ${nf.format(c.reward_rc)} RIDECOIN`,
   }
 }
@@ -76,16 +76,16 @@ export default function W3ChallengesPage() {
 
     return {
       title: 'Challenges',
-      subtitle: 'Training targets with a payout. Every one is completed by riding, never by paying.',
-      monthlyKicker: 'Monthly challenge',
-      monthlyStatus: active.length ? 'Joined' : 'Open',
+      subtitle: 'Trainingsziele mit Auszahlung. Jede schaffst du durch Fahren, nie durch Bezahlen.',
+      monthlyKicker: 'Monats-Challenge',
+      monthlyStatus: active.length ? 'Dabei' : 'Offen',
       monthly,
       // FIXTURE: community pools have no backend concept yet (see docstring).
       communityKicker: CHALLENGES_FIXTURE.communityKicker,
       community: CHALLENGES_FIXTURE.community,
-      openKicker: 'Open to join',
+      openKicker: 'Offen zum Mitmachen',
       open: open.length ? open : CHALLENGES_FIXTURE.open,
-      footnote: 'A challenge pays its RideCoin the moment you hit the target. Nothing here can be bought.',
+      footnote: 'Eine Challenge zahlt ihre RideCoin in dem Moment aus, in dem du das Ziel triffst. Nichts hier lässt sich kaufen.',
     }
   }, [data])
 

@@ -100,7 +100,7 @@ export default function W3ReadinessView({ vm, onBack }: { vm: W3ReadinessVm } & 
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <W3StatusBar />
 
-        <W3TopBar title="Readiness" onBack={onBack} />
+        <W3TopBar title="Bereitschaft" onBack={onBack} />
 
         {/* Hero ring */}
         <div style={{ ...band(24), paddingTop: 6, gap: 16, alignItems: 'center' }}>
@@ -234,7 +234,7 @@ export default function W3ReadinessView({ vm, onBack }: { vm: W3ReadinessVm } & 
         {vm.trend.length > 1 && (
           <div style={{ ...band(40) }}>
             <div style={{ ...bubble(), gap: 14 }}>
-              <Kicker>Readiness · letzte 7 Tage</Kicker>
+              <Kicker>Bereitschaft · letzte 7 Tage</Kicker>
               <div style={{ display: 'flex', gap: 7, alignItems: 'flex-end', height: 76 }}>
                 {vm.trend.map((t, i) => {
                   const last = i === vm.trend.length - 1

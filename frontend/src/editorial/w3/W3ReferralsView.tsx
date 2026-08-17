@@ -74,9 +74,9 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
         <W3StatusBar />
 
         <div style={{ ...band(20), gap: 14, paddingTop: 6 }}>
-          <button onClick={onBack} aria-label="Back" style={{ width: 44, height: 44, borderRadius: 100, background: '#fff', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color="#000" /></button>
+          <button onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: '#fff', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color="#000" /></button>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.4, color: T.ink }}>Referrals</span>
+            <span style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.4, color: T.ink }}>Empfehlungen</span>
             <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{vm.blurb}</span>
           </div>
         </div>
@@ -85,7 +85,7 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
         <div style={{ ...band(28), gap: 16, alignItems: 'center' }}>
           <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: 6, color: T.ink }}>{vm.code}</span>
           <button onClick={onShare} style={{ width: '100%', height: 60, borderRadius: 100, background: VIOLET, border: 0, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
-            <Users size={19} color="#fff" /><span style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Share your code</span>
+            <Users size={19} color="#fff" /><span style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Code teilen</span>
           </button>
         </div>
 
@@ -94,7 +94,7 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
           <div style={{ ...band(26), gap: 14 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <span style={{ width: 30, height: 30, borderRadius: 100, background: VIOLET, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 800, color: '#fff' }}>{vm.activeCount}</span>
-              <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Active rewards</span>
+              <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Aktive Belohnungen</span>
             </div>
             {rows(vm.active).map((pair, ri) => (
               <div key={ri} style={{ display: 'flex', gap: 12 }}>
@@ -110,7 +110,7 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
           <div style={{ ...band(26), gap: 14 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <span style={{ width: 30, height: 30, borderRadius: 100, background: T.surface2, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 800, color: T.mid }}>{vm.completedCount}</span>
-              <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Completed Referrals</span>
+              <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Abgeschlossen</span>
             </div>
             {rows(vm.completed).map((pair, ri) => (
               <div key={ri} style={{ display: 'flex', gap: 12 }}>
@@ -120,7 +120,7 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
                       <motion.button key={row.id} onClick={() => onOpenUser?.(row.referredId)} initial={reduce ? false : { scale: 0.96 }} animate={{ scale: 1 }}
                         style={{ flex: 1, minWidth: 0, aspectRatio: '0.86', borderRadius: 22, border: 0, cursor: 'pointer', background: T.acid, display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center', alignItems: 'center', fontFamily: FONT }}>
                         <Gift size={30} color={T.bg} />
-                        <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: 0.5, color: T.bg }}>CLAIM NOW</span>
+                        <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: 0.5, color: T.bg }}>JETZT HOLEN</span>
                         <span style={{ fontSize: 12, fontWeight: 700, color: T.bg }}>{row.accruedLabel} ✱</span>
                       </motion.button>
                     )
@@ -135,7 +135,7 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
         {/* How it works */}
         <div style={{ ...band(40), gap: 12 }}>
           <div style={{ padding: 20, borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={16} color={T.acid} /><span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>How it works</span></div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Check size={16} color={T.acid} /><span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>So funktioniert's</span></div>
             <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>{vm.howItWorks}</span>
           </div>
         </div>

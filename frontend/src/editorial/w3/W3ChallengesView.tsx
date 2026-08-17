@@ -92,11 +92,11 @@ export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; o
 
         {/* Header nav */}
         <div style={{ ...band(0), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 6 }}>
-          <button style={{ width: 40, height: 40, borderRadius: 100, border: 0, background: T.surface, display: 'grid', placeItems: 'center', cursor: 'pointer' }} aria-label="Back">
+          <button style={{ width: 40, height: 40, borderRadius: 100, border: 0, background: T.surface, display: 'grid', placeItems: 'center', cursor: 'pointer' }} aria-label="Zurück">
             <ArrowLeft size={18} color={T.ink} />
           </button>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', color: T.quiet }}>Challenges</span>
-          <button style={{ width: 40, height: 40, borderRadius: 100, border: 0, background: T.surface, display: 'grid', placeItems: 'center', cursor: 'pointer' }} aria-label="History">
+          <button style={{ width: 40, height: 40, borderRadius: 100, border: 0, background: T.surface, display: 'grid', placeItems: 'center', cursor: 'pointer' }} aria-label="Verlauf">
             <History size={18} color={T.mid} />
           </button>
         </div>

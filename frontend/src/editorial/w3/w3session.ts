@@ -27,23 +27,23 @@ export function funName(
   const hay = `${templateId ?? ''} ${title ?? ''}`.toLowerCase()
   const has = (...ks: string[]) => ks.some((k) => hay.includes(k))
 
-  if (has('recovery', 'recover', 'regen', 'erholung', 'shakeout', 'spin')) return 'Legs on holiday'
-  if (has('vo2', 'anaerobic', 'sprint', 'attack', 'maximal', 'max ')) return 'Red-line rodeo'
-  if (has('threshold', 'ftp', 'sweetspot', 'sweet-spot', 'schwelle')) return 'The lung-buster'
-  if (has('tempo', 'sst')) return 'Cruise control'
-  if (has('endurance', 'long', 'base', 'grundlage', 'z2', 'zone 2', 'zone2', 'lsd')) return 'The long game'
-  if (has('interval', 'over-under', 'over/under', 'block')) return 'Rinse and repeat'
+  if (has('recovery', 'recover', 'regen', 'erholung', 'shakeout', 'spin')) return 'Beine im Urlaub'
+  if (has('vo2', 'anaerobic', 'sprint', 'attack', 'maximal', 'max ')) return 'Rodeo am Limit'
+  if (has('threshold', 'ftp', 'sweetspot', 'sweet-spot', 'schwelle')) return 'Der Lungenbrenner'
+  if (has('tempo', 'sst')) return 'Tempomat'
+  if (has('endurance', 'long', 'base', 'grundlage', 'z2', 'zone 2', 'zone2', 'lsd')) return 'Die lange Bank'
+  if (has('interval', 'over-under', 'over/under', 'block')) return 'Wieder und wieder'
 
   const iff = intensityFactor ?? null
   if (iff != null && Number.isFinite(iff)) {
-    if (iff < 0.6) return 'Legs on holiday'
-    if (iff < 0.72) return 'The long game'
-    if (iff < 0.85) return 'Cruise control'
-    if (iff < 0.95) return 'The lung-buster'
-    return 'Red-line rodeo'
+    if (iff < 0.6) return 'Beine im Urlaub'
+    if (iff < 0.72) return 'Die lange Bank'
+    if (iff < 0.85) return 'Tempomat'
+    if (iff < 0.95) return 'Der Lungenbrenner'
+    return 'Rodeo am Limit'
   }
   const t = (title ?? '').trim()
-  return t !== '' ? t : 'Today’s session'
+  return t !== '' ? t : 'Deine Einheit'
 }
 
 /** The "shape of it" bars. Real, structured sessions (3+ blocks) draw their
@@ -88,29 +88,29 @@ export function effortGuide(intensityFactor: number | null | undefined): W3Effor
   if (!tier) return []
   const guides: Record<Tier, W3EffortRow[]> = {
     recovery: [
-      { label: 'EFFORT', value: 'Barely there', hint: 'If it starts to feel like training, ease off.', band: 'low' },
-      { label: 'BREATHING', value: 'Nose-easy', hint: 'You could hold a full conversation the whole way.', band: 'low' },
-      { label: 'ON THE PEDALS', value: 'Spin, don’t push', hint: 'High cadence, feather the pressure — it’s about blood flow, not load.', band: 'low' },
+      { label: 'BELASTUNG', value: 'Kaum spürbar', hint: 'Sobald es sich nach Training anfühlt, nimm zurück.', band: 'low' },
+      { label: 'ATMUNG', value: 'Durch die Nase', hint: 'Du könntest die ganze Zeit ein Gespräch führen.', band: 'low' },
+      { label: 'AUF DEN PEDALEN', value: 'Kurbeln, nicht drücken', hint: 'Hohe Trittfrequenz, kaum Druck — es geht um Durchblutung, nicht um Last.', band: 'low' },
     ],
     endurance: [
-      { label: 'EFFORT', value: 'All-day pace', hint: 'The pace you could keep up for hours without emptying out.', band: 'low' },
-      { label: 'BREATHING', value: 'Full sentences', hint: 'Talk test: chatty, never gasping.', band: 'low' },
-      { label: 'ON THE PEDALS', value: 'Steady beam', hint: 'Even pressure — resist the urge to chase every rise.', band: 'mid' },
+      { label: 'BELASTUNG', value: 'Tagestempo', hint: 'Das Tempo, das du stundenlang halten könntest, ohne leer zu werden.', band: 'low' },
+      { label: 'ATMUNG', value: 'Ganze Sätze', hint: 'Sprechtest: plaudern ja, keuchen nein.', band: 'low' },
+      { label: 'AUF DEN PEDALEN', value: 'Gleichmäßig', hint: 'Konstanter Druck — widersteh dem Drang, jede Kuppe zu attackieren.', band: 'mid' },
     ],
     tempo: [
-      { label: 'EFFORT', value: 'Comfortably brisk', hint: 'Working, but firmly in control the whole time.', band: 'mid' },
-      { label: 'BREATHING', value: 'Short sentences', hint: 'A sentence at a time — not a conversation.', band: 'mid' },
-      { label: 'ON THE PEDALS', value: 'Hold the rhythm', hint: 'One gear, one cadence — let it settle and stay there.', band: 'mid' },
+      { label: 'BELASTUNG', value: 'Angenehm zügig', hint: 'Du arbeitest, hast es aber durchgehend im Griff.', band: 'mid' },
+      { label: 'ATMUNG', value: 'Kurze Sätze', hint: 'Ein Satz am Stück — kein Gespräch.', band: 'mid' },
+      { label: 'AUF DEN PEDALEN', value: 'Rhythmus halten', hint: 'Ein Gang, eine Trittfrequenz — einpendeln und dabei bleiben.', band: 'mid' },
     ],
     threshold: [
-      { label: 'EFFORT', value: 'Comfortably hard', hint: 'The edge of sustainable — right up to it, never over.', band: 'high' },
-      { label: 'BREATHING', value: 'Three to four words', hint: 'Words come out in short bursts, not sentences.', band: 'high' },
-      { label: 'ON THE PEDALS', value: 'Meter it out', hint: 'Even pressure across every block — the last one should feel the hardest, not the first.', band: 'mid' },
+      { label: 'BELASTUNG', value: 'Angenehm hart', hint: 'Direkt an der Schwelle — bis heran, nie darüber.', band: 'high' },
+      { label: 'ATMUNG', value: 'Drei bis vier Wörter', hint: 'Wörter kommen stoßweise, keine Sätze mehr.', band: 'high' },
+      { label: 'AUF DEN PEDALEN', value: 'Einteilen', hint: 'Gleicher Druck über alle Blöcke — der letzte soll der härteste sein, nicht der erste.', band: 'mid' },
     ],
     vo2: [
-      { label: 'EFFORT', value: 'All you’ve got', hint: 'Each rep should sting by the end — that’s the point.', band: 'high' },
-      { label: 'BREATHING', value: 'One word at a time', hint: 'Talking is off the table.', band: 'high' },
-      { label: 'ON THE PEDALS', value: 'Empty the tank', hint: 'Pace the first rep so you can still match it on the last.', band: 'high' },
+      { label: 'BELASTUNG', value: 'Alles, was du hast', hint: 'Jede Wiederholung soll am Ende brennen — genau das ist der Sinn.', band: 'high' },
+      { label: 'ATMUNG', value: 'Ein Wort am Stück', hint: 'Reden ist nicht mehr drin.', band: 'high' },
+      { label: 'AUF DEN PEDALEN', value: 'Alles rausholen', hint: 'Teil die erste Wiederholung so ein, dass du sie in der letzten noch triffst.', band: 'high' },
     ],
   }
   return guides[tier]

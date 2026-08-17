@@ -84,7 +84,7 @@ export default function W3RideCelebrateView({
   const [claimed, setClaimed] = useState(vm.alreadyClaimed)
   const accent = claimed ? T.acid : VIOLET
   const count = useCountUp(vm.total, true, reduce)
-  const nf = (x: number) => x.toLocaleString('en-US')
+  const nf = (x: number) => x.toLocaleString('de-DE')
 
   return (
     <div className="w3-root">
@@ -97,11 +97,11 @@ export default function W3RideCelebrateView({
         <div style={{ padding: '4px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 14px 7px 8px', borderRadius: 100, background: T.surface }}>
             <span style={{ width: 20, height: 20, borderRadius: 100, background: T.acid, display: 'grid', placeItems: 'center' }}><Check size={12} color={T.bg} strokeWidth={3.5} /></span>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.ink }}>RIDE SYNCED{vm.provider ? ` · ${vm.provider}` : ''}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.ink }}>SYNCHRONISIERT{vm.provider ? ` · ${vm.provider}` : ''}</span>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={onShare} aria-label="Share" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={17} color={T.mid} /></button>
-            <button onClick={onClose} aria-label="Close" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={19} color={T.mid} /></button>
+            <button onClick={onShare} aria-label="Teilen" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={17} color={T.mid} /></button>
+            <button onClick={onClose} aria-label="Schließen" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={19} color={T.mid} /></button>
           </div>
         </div>
 
@@ -136,7 +136,7 @@ export default function W3RideCelebrateView({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, paddingBottom: 6 }}>
                 <span style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 13px', borderRadius: 100, border: `1px solid ${accent}`, fontSize: 11, fontWeight: 800, letterSpacing: 1, color: accent }}>
-                  <span style={{ width: 6, height: 6, borderRadius: 100, background: accent }} />{claimed ? 'SETTLED' : 'PENDING'}
+                  <span style={{ width: 6, height: 6, borderRadius: 100, background: accent }} />{claimed ? 'GEBUCHT' : 'OFFEN'}
                 </span>
                 <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>{claimed ? vm.coinsSettled : vm.coinsPending}</span>
               </div>
@@ -150,7 +150,7 @@ export default function W3RideCelebrateView({
             <div style={{ ...band(22), gap: 14 }}>
               <div style={{ ...cardBox(), gap: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>How the {nf(vm.total)} was made</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>So entstanden die {nf(vm.total)}</span>
                   <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, letterSpacing: 0.3 }}>{vm.breakMeta}</span>
                 </div>
                 {/* proportional breakdown bar */}
@@ -175,17 +175,17 @@ export default function W3RideCelebrateView({
             <div style={{ ...band(24), gap: 8 }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <span style={{ width: 22, height: 22, borderRadius: 100, border: `1.5px solid ${T.acid}`, display: 'grid', placeItems: 'center' }}><Check size={12} color={T.acid} strokeWidth={3} /></span>
-                <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Settled <span style={{ color: T.mid }}>just now</span></span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Gebucht <span style={{ color: T.mid }}>gerade eben</span></span>
                 <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, letterSpacing: 0.8, color: T.acid }}>{vm.bankedNote}</span>
               </div>
             </div>
 
             <div style={{ ...band(30), gap: 12 }}>
               <div style={{ height: 60, borderRadius: 100, background: T.acidDim, border: `1px solid ${T.acid}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px 0 24px' }}>
-                <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: 0.5, color: T.acid }}>CLAIMED ✦ {nf(vm.total)}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: 0.5, color: T.acid }}>EINGELÖST ✦ {nf(vm.total)}</span>
                 <span style={{ width: 46, height: 46, borderRadius: 100, background: T.acid, display: 'grid', placeItems: 'center' }}><Check size={22} color={T.bg} strokeWidth={3} /></span>
               </div>
-              <button onClick={onFullDetail} style={{ height: 54, borderRadius: 100, background: T.surface, border: 0, fontFamily: FONT, fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: T.ink, cursor: 'pointer' }}>FULL RIDE DETAIL</button>
+              <button onClick={onFullDetail} style={{ height: 54, borderRadius: 100, background: T.surface, border: 0, fontFamily: FONT, fontSize: 14, fontWeight: 700, letterSpacing: 0.5, color: T.ink, cursor: 'pointer' }}>ALLE FAHRTDETAILS</button>
             </div>
           </>
         ) : (
@@ -210,7 +210,7 @@ export default function W3RideCelebrateView({
               <div style={band(24)}>
                 <div style={{ ...cardBox(), gap: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>You were strongest here</span>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Hier warst du am stärksten</span>
                     <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: T.quiet }}>{vm.ftp}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: 96 }}>
@@ -243,8 +243,8 @@ export default function W3RideCelebrateView({
             {vm.firsts.length > 0 && (
               <div style={{ ...band(26), gap: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Firsts and bests</span>
-                  <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, color: T.acid }}>{vm.firstsCount} NEW</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Premieren und Bestwerte</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, color: T.acid }}>{vm.firstsCount} NEU</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {vm.firsts.map((f, i) => {
@@ -266,10 +266,10 @@ export default function W3RideCelebrateView({
               <button onClick={() => setClaimed(true)}
                 style={{ position: 'relative', height: 62, borderRadius: 100, background: VIOLET_DIM, border: `1px solid ${VIOLET}`, cursor: 'pointer', fontFamily: FONT, display: 'flex', alignItems: 'center', padding: '0 8px', overflow: 'hidden' }}>
                 <span style={{ width: 46, height: 46, borderRadius: 100, background: VIOLET, display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronsRight size={22} color="#fff" strokeWidth={2.5} /></span>
-                <span style={{ flex: 1, textAlign: 'center', fontSize: 15, fontWeight: 800, letterSpacing: 1, color: '#fff' }}>SLIDE TO CLAIM ✱ {nf(vm.total)}</span>
+                <span style={{ flex: 1, textAlign: 'center', fontSize: 15, fontWeight: 800, letterSpacing: 1, color: '#fff' }}>JETZT EINLÖSEN ✱ {nf(vm.total)}</span>
               </button>
               <button onClick={onFullDetail} style={{ height: 20, background: 'transparent', border: 0, fontFamily: FONT, fontSize: 13, fontWeight: 700, letterSpacing: 0.5, color: T.mid, cursor: 'pointer', display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
-                FULL RIDE DETAIL <TrendingUp size={13} />
+                ALLE FAHRTDETAILS <TrendingUp size={13} />
               </button>
             </div>
           </>
