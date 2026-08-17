@@ -5,7 +5,7 @@ end-to-end design. This module ships Phase 1 (solo + pair).
 """
 
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from secrets import token_urlsafe
 from typing import Annotated
 from zoneinfo import ZoneInfo
@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
+from app.models.activity import Activity
 from app.models.athlete_profile import AthleteProfile
 from app.models.crew import Crew, CrewInvite, CrewMembership
 from app.models.crew_challenge import CrewChallenge
@@ -26,6 +27,8 @@ from app.schemas.crew import (
     CrewInviteCreate,
     CrewInviteRead,
     CrewMemberRead,
+    CrewMemberRide,
+    CrewMemberRides,
     CrewMineResponse,
     CrewRead,
     DiscoverMember,
@@ -593,6 +596,83 @@ class IncomingInvite(BaseModel):
     crew_name: str
     inviter_handle: str
     created_at: datetime
+
+
+@router.get("/members/{member_id}/rides", response_model=CrewMemberRides)
+async def member_rides(
+    member_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    period: str = "month",
+    limit: int = 30,
+) -> CrewMemberRides:
+    """A crew mate's rides in the selected window.
+
+    ACCESS: the caller and `member_id` must be in the SAME crew — checked here,
+    following this module's established rule that crew-shared data is scoped by
+    membership in the API. A rider outside the crew gets 404, not 403, so the
+    endpoint does not confirm that a given user id exists.
+
+    The payload is deliberately narrow (see `CrewMemberRides`): training facts
+    only, never GPS. Sharing that a crew mate rode 82 km is the point; sharing
+    the track that starts at their house is not, and was never asked for.
+    """
+    mine = await _user_membership(db, current_user.id)
+    if mine is None:
+        raise HTTPException(status_code=404, detail="not in a crew")
+    if member_id != current_user.id and not await _is_member(db, member_id, mine.crew_id):
+        raise HTTPException(status_code=404, detail="not in your crew")
+
+    today = await _athlete_local_today(db, current_user.id)
+    name = (period or "month").lower()
+    if name == "week":
+        start_on = _monday_of(today)
+    elif name == "year":
+        start_on = today.replace(month=1, day=1)
+    else:
+        name = "month"
+        start_on = today.replace(day=1)
+    end_on = today
+
+    member = (await db.execute(select(User).where(User.id == member_id))).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=404, detail="not in your crew")
+
+    start_utc = datetime.combine(start_on, time.min, tzinfo=UTC)
+    end_utc = datetime.combine(end_on, time.max, tzinfo=UTC)
+    rows = (await db.execute(
+        select(Activity)
+        .where(
+            Activity.user_id == member_id,
+            Activity.started_at >= start_utc,
+            Activity.started_at <= end_utc,
+        )
+        .order_by(Activity.started_at.desc())
+    )).scalars().all()
+
+    def to_ride(a: Activity) -> CrewMemberRide:
+        return CrewMemberRide(
+            activity_id=int(a.id),
+            started_at=a.started_at,
+            title=a.title,
+            sport=a.sport,
+            distance_km=round(a.distance_meters / 1000, 2) if a.distance_meters else None,
+            duration_s=a.duration_seconds,
+            tss=int(round(a.tss)) if a.tss is not None else None,
+            elevation_m=a.elevation_gain_m,
+            avg_power_w=int(round(a.average_power)) if a.average_power is not None else None,
+        )
+
+    handle = member.display_name or (member.email.split("@")[0] if member.email else "rider")
+    return CrewMemberRides(
+        user_id=member_id,
+        handle=f"@{handle}",
+        period=name,
+        period_start=start_on.isoformat(),
+        period_end=end_on.isoformat(),
+        rides=[to_ride(a) for a in rows[:max(1, min(limit, 100))]],
+        total_rides=len(rows),
+    )
 
 
 @router.get("/invites/incoming", response_model=list[IncomingInvite])

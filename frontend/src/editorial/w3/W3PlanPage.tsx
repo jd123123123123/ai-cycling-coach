@@ -280,6 +280,13 @@ export default function W3PlanPage() {
       void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
       void qc.invalidateQueries({ queryKey: ['plan', 'build'] })
       void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
+      // The dialog seeds its hours slider from `profile.weekly_hours_available`
+      // (see `adjustHours` above), and the server writes the new value onto the
+      // profile. Without this the athlete changed 12 h to 6 h, saved, reopened
+      // "Plan anpassen" and was shown 12 again — the change HAD been applied,
+      // the form was just reading a stale cache. `onSwitchGoal` below always
+      // invalidated this key; this handler didn't.
+      void qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
       return true
     } catch { return false }
   }, [qc])

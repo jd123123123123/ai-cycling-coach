@@ -78,6 +78,49 @@ class DiscoverMember(BaseModel):
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Crew-mate ride history
+# ──────────────────────────────────────────────────────────────────────
+
+
+class CrewMemberRide(BaseModel):
+    """One ride of a crew mate, as shown on their detail screen.
+
+    DELIBERATELY NARROW. The crew has until now shared only aggregates, so
+    listing a member's individual rides widens what riders reveal to each
+    other; the owner approved that on 2026-08-17 for the training facts only.
+
+    What is NOT here, and must not be added without a fresh decision:
+    - **`route_polyline` / any GPS.** A track starting at someone's front door
+      is their home address. Distance and duration say how hard they trained;
+      a map says where they live.
+    - `external_id`, `source`, `raw_data` — plumbing, not training.
+
+    `title` IS included because it is what the rider themselves chose to call
+    the ride, but it is nullable and never invented.
+    """
+
+    activity_id: int
+    started_at: datetime
+    title: str | None = None
+    sport: str
+    distance_km: float | None = None
+    duration_s: int | None = None
+    tss: int | None = None
+    elevation_m: float | None = None
+    avg_power_w: int | None = None
+
+
+class CrewMemberRides(BaseModel):
+    user_id: int
+    handle: str
+    period: str                  # week | month | year — the window asked for
+    period_start: str            # ISO yyyy-mm-dd
+    period_end: str
+    rides: list[CrewMemberRide]
+    total_rides: int             # rides in the window (may exceed `rides` length)
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Standings
 # ──────────────────────────────────────────────────────────────────────
 
