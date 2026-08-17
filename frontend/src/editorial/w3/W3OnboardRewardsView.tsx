@@ -24,9 +24,9 @@ export interface W3OnboardRewardsProps {
  *  turns the bare numbers into a start → how → why sequence. A tile may override
  *  the copy via `story`; otherwise these defaults tell the RideCoin story. */
 const STORY: { Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; step: string; story: string; accent: boolean }[] = [
-  { Icon: Wallet, step: '01 · WHERE YOU START', accent: true, story: 'Everyone opens on the same 250 — no head start you can buy.' },
-  { Icon: Gift, step: '02 · HOW YOU GOT IT', accent: false, story: '125 for adding your photo, 125 for linking a device. Claimed once.' },
-  { Icon: Flame, step: '03 · HOW IT GROWS', accent: false, story: 'Every ride banks ~1 RC per point of training stress — harder session, bigger payout.' },
+  { Icon: Wallet, step: '01 · DEIN START', accent: true, story: 'Alle starten mit denselben 250 — Vorsprung gibt es nicht zu kaufen.' },
+  { Icon: Gift, step: '02 · WO ES HERKOMMT', accent: false, story: '125 fürs Foto, 125 fürs Verbinden eines Geräts. Einmalig.' },
+  { Icon: Flame, step: '03 · WIE ES WÄCHST', accent: false, story: 'Jede Fahrt bringt ~1 RC pro TSS — härtere Einheit, größere Auszahlung.' },
 ]
 
 export default function W3OnboardRewardsView({ tiles, onNext, onSkip }: W3OnboardRewardsProps) {
@@ -70,16 +70,16 @@ export default function W3OnboardRewardsView({ tiles, onNext, onSkip }: W3Onboar
           </motion.div>
           {/* fixture: floating chips illustrating the loop; the +RC value below is real */}
           <Chip top={44} left={30} delay={0.25}>+250 RC</Chip>
-          <Chip top={30} right={34} delay={0.35}>NEW PART</Chip>
+          <Chip top={30} right={34} delay={0.35}>NEUES TEIL</Chip>
           <Chip top={188} right={48} delay={0.45}>LEVEL UP</Chip>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '6px 20px 28px', flex: 1 }}>
           <W3OnboardHeadline
-            kicker="03 — THE LOOP"
-            line1="Ride and get"
-            line2="rewarded."
-            body="Every ride banks RideCoin — about 1 RC per TSS of training stress, so the harder the session the more you earn. No junk-mile farming, no pay-to-win."
+            kicker="03 — DER LOOP"
+            line1="Fahr und werde"
+            line2="belohnt."
+            body="Jede Fahrt bringt RideCoin — etwa 1 RC pro TSS. Je härter die Einheit, desto mehr. Kein Kilometer-Schinden, kein Pay-to-win."
           />
 
           {/* Real RideCoin tiles, read as a start → how → why story */}
@@ -118,7 +118,7 @@ export default function W3OnboardRewardsView({ tiles, onNext, onSkip }: W3Onboar
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 'auto' }}>
             <W3OnboardDots step={2} />
-            <W3OnboardCta label="NEXT" onClick={onNext} />
+            <W3OnboardCta label="WEITER" onClick={onNext} />
           </div>
         </div>
       </div>

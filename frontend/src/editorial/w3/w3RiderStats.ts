@@ -50,7 +50,7 @@ export interface RiderLifetime {
   firstYear: number | null
   garminSynced: boolean
   /** Riding character, from the rides themselves. */
-  role: 'Rookie' | 'Climber' | 'Rouleur' | 'Rider'
+  role: 'Neuling' | 'Kletterer' | 'Rouleur' | 'Fahrer'
   rideCoin: number
   level: number
   /** 0..1 progress through the current level. */
@@ -61,7 +61,7 @@ export interface RiderLifetime {
 export const EMPTY_LIFETIME: RiderLifetime = {
   loaded: false, rides: 0, distKm: 0, saddleH: 0, elevM: 0, longestKm: 0,
   avgSpeedKmh: 0, kcal: 0, everest: 0, pizzas: 0, earthLaps: 0, years: 0,
-  firstYear: null, garminSynced: false, role: 'Rookie',
+  firstYear: null, garminSynced: false, role: 'Neuling',
   rideCoin: 0, level: 1, levelPct: 0, toNextLevel: XP_PER_LEVEL,
 }
 
@@ -88,9 +88,9 @@ export function computeRiderLifetime(
 
   // Riding character (real): lots of vertical → Climber, fast → Rouleur.
   const elevPerKm = distKm > 0 ? elevM / distKm : 0
-  const role: RiderLifetime['role'] = rides === 0 ? 'Rookie'
-    : elevPerKm >= 12 ? 'Climber'
-      : avgSpeedKmh >= 30 ? 'Rouleur' : 'Rider'
+  const role: RiderLifetime['role'] = rides === 0 ? 'Neuling'
+    : elevPerKm >= 12 ? 'Kletterer'
+      : avgSpeedKmh >= 30 ? 'Rouleur' : 'Fahrer'
 
   // Level — in-app progression only. Lifetime riding fills the STATS, never
   // the level; the level is what you earned inside the app.
@@ -130,7 +130,9 @@ export function useRiderLifetime(): RiderLifetime {
   )
 }
 
-/** "12.4K" / "184" — big counts without the noise. */
+/** "12,4K" / "184" — big counts without the noise. */
 export function compactNumber(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(Math.round(n))
+  return n >= 1000
+    ? `${(n / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}K`
+    : String(Math.round(n))
 }

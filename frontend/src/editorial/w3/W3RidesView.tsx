@@ -63,10 +63,10 @@ export interface W3RidesVm {
 }
 
 const FILTERS: { key: W3RideFilter; label: string }[] = [
-  { key: 'all', label: 'ALL' },
+  { key: 'all', label: 'ALLE' },
   { key: 'outdoor', label: 'OUTDOOR' },
   { key: 'indoor', label: 'INDOOR' },
-  { key: 'race', label: 'RACE' },
+  { key: 'race', label: 'RENNEN' },
 ]
 
 /** Normalise a GPS track into an SVG path within a 0..100 box, aspect-preserved. */
@@ -325,9 +325,9 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
             {/* season footer stats (real) */}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               {[
-                { k: 'speed' as const, l: 'AVG SPEED', v: vm.avgSpeed, u: 'km/h' },
-                { k: 'power' as const, l: 'AVG POWER', v: vm.avgPower, u: 'w' },
-                { k: 'time' as const, l: 'SADDLE TIME', v: vm.saddleTime, u: 'h' },
+                { k: 'speed' as const, l: 'Ø TEMPO', v: vm.avgSpeed, u: 'km/h' },
+                { k: 'power' as const, l: 'Ø LEISTUNG', v: vm.avgPower, u: 'w' },
+                { k: 'time' as const, l: 'SATTELZEIT', v: vm.saddleTime, u: 'h' },
               ].map((s) => (
                 <div key={s.l} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{s.l}</span>
@@ -342,7 +342,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
         {shown.length === 0 && (
           <div style={{ ...band(30) }}>
             <div style={{ padding: '26px 20px', borderRadius: 24, background: T.surface, textAlign: 'center', color: T.quiet, fontSize: 12.5, fontWeight: 600 }}>
-              No rides in this filter yet.
+              Noch keine Fahrten in diesem Filter.
             </div>
           </div>
         )}
@@ -350,7 +350,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
         {recent.length > 0 && (
           <div style={{ ...band(28), gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.acid }}>PAST 7 DAYS</span>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.acid }}>LETZTE 7 TAGE</span>
               <div style={{ flex: 1, height: 1, background: T.rule }} />
               <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>{recent.length}</span>
             </div>
@@ -364,7 +364,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
         {earlier.length > 0 && (
           <div style={{ ...band(34), gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>EARLIER</span>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>FRÜHER</span>
               <div style={{ flex: 1, height: 1, background: T.rule }} />
               <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>{earlier.length}</span>
             </div>

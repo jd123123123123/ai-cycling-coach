@@ -6,9 +6,9 @@ import W3OnboardDevicesView from './W3OnboardDevicesView'
 export default function W3OnboardDevicesPreview() {
   // fixture: static rows so the layout renders without the live status hooks.
   const rows = [
-    { icon: <Watch size={20} color={T.acid} strokeWidth={2} />, name: 'Garmin', sub: 'Auto-sync every ride', connected: true },
-    { icon: <Gauge size={20} color={T.acid} strokeWidth={2} />, name: 'Wahoo', sub: 'Power, cadence, HR', connected: true },
-    { icon: <Heart size={20} color={T.acid} strokeWidth={2} />, name: 'Apple Health', sub: 'Recovery & HRV baseline', connected: false },
+    { icon: <Watch size={20} color={T.acid} strokeWidth={2} />, name: 'Garmin', sub: 'Jede Fahrt automatisch', connected: true },
+    { icon: <Gauge size={20} color={T.acid} strokeWidth={2} />, name: 'Wahoo', sub: 'Watt, Trittfrequenz, HF', connected: true },
+    { icon: <Heart size={20} color={T.acid} strokeWidth={2} />, name: 'Apple Health', sub: 'Erholung & HRV-Basiswert', connected: false },
   ]
   return (
     <W3OnboardDevicesView onNext={() => {}} onSkip={() => {}}>
@@ -21,10 +21,10 @@ export default function W3OnboardDevicesPreview() {
           </div>
           {r.connected ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 100, background: T.acid, color: T.bg, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, flex: 'none' }}>
-              <Check size={13} strokeWidth={3} />LINKED
+              <Check size={13} strokeWidth={3} />VERBUNDEN
             </span>
           ) : (
-            <span style={{ padding: '8px 16px', borderRadius: 100, border: `1px solid ${T.stroke}`, color: T.ink, fontFamily: FONT, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, flex: 'none' }}>CONNECT</span>
+            <span style={{ padding: '8px 16px', borderRadius: 100, border: `1px solid ${T.stroke}`, color: T.ink, fontFamily: FONT, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, flex: 'none' }}>VERBINDEN</span>
           )}
         </div>
       ))}

@@ -14,10 +14,10 @@ import { T, FONT } from './w3tokens'
  */
 
 const SUGGESTIONS = [
-  'Should I push hard today or take it easy?',
-  'Why am I tired?',
-  'Make today easier',
-  "How's my form trending?",
+  'Heute Vollgas oder lieber locker?',
+  'Warum bin ich müde?',
+  'Mach heute leichter',
+  'Wie entwickelt sich meine Form?',
 ]
 
 const FACT_TONE: Record<AnswerFact['tone'], { c: string; Icon: typeof TrendingUp }> = {
@@ -69,7 +69,7 @@ function Bubble({ m }: { m: ChatMessage }) {
   return (
     <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 8, alignItems: 'center', padding: '10px 14px', borderRadius: 14, background: T.surface2 }}>
       <Wrench size={13} color={T.acid} />
-      <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>{r.title || r.reason || 'Plan updated'}{r.predicted_tss ? ` · ${Math.round(r.predicted_tss)} TSS` : ''}</span>
+      <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>{r.title || r.reason || 'Plan aktualisiert'}{r.predicted_tss ? ` · ${Math.round(r.predicted_tss)} TSS` : ''}</span>
     </div>
   )
 }
@@ -103,10 +103,10 @@ export default function W3CoachChat({ onClose }: { onClose: () => void }) {
             <span style={{ width: 34, height: 34, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Sparkles size={17} color={T.acid} /></span>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>Coach</span>
-              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Reads your real training</span>
+              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Liest dein echtes Training</span>
             </div>
           </div>
-          <button onClick={onClose} aria-label="Close" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={18} color={T.mid} /></button>
+          <button onClick={onClose} aria-label="Schließen" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={18} color={T.mid} /></button>
         </div>
 
         {/* Messages */}
@@ -114,8 +114,8 @@ export default function W3CoachChat({ onClose }: { onClose: () => void }) {
           {empty && (
             <div style={{ margin: 'auto 0', display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', padding: '20px 8px' }}>
               <span style={{ width: 56, height: 56, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Sparkles size={26} color={T.acid} /></span>
-              <span style={{ fontSize: 17, fontWeight: 700, color: T.ink, textAlign: 'center' }}>Ask your coach anything</span>
-              <span style={{ fontSize: 12.5, fontWeight: 500, color: T.quiet, textAlign: 'center', lineHeight: 1.5, maxWidth: 260 }}>It reads your HRV, form and recent rides — and can adjust today's session.</span>
+              <span style={{ fontSize: 17, fontWeight: 700, color: T.ink, textAlign: 'center' }}>Frag deinen Coach alles</span>
+              <span style={{ fontSize: 12.5, fontWeight: 500, color: T.quiet, textAlign: 'center', lineHeight: 1.5, maxWidth: 260 }}>Er liest HRV, Form und deine letzten Fahrten — und kann die heutige Einheit anpassen.</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', marginTop: 6 }}>
                 {SUGGESTIONS.map((s) => (
                   <button key={s} onClick={() => { setText(''); void chat.send(s) }}
@@ -133,7 +133,7 @@ export default function W3CoachChat({ onClose }: { onClose: () => void }) {
           {chat.currentToolUse && (
             <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 8, alignItems: 'center', padding: '10px 14px', borderRadius: 14, background: T.surface2 }}>
               <Loader2 size={13} color={T.acid} className="w3-spin" />
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>Reading your training data…</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>Liest deine Trainingsdaten…</span>
             </div>
           )}
           {chat.error && (
@@ -146,9 +146,9 @@ export default function W3CoachChat({ onClose }: { onClose: () => void }) {
           <textarea
             value={text} onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() } }}
-            placeholder="Ask your coach…" rows={1}
+            placeholder="Frag deinen Coach…" rows={1}
             style={{ flex: 1, resize: 'none', maxHeight: 120, padding: '13px 16px', borderRadius: 20, background: T.surface, border: `1px solid ${T.rule}`, color: T.ink, fontFamily: FONT, fontSize: 14, outline: 'none' }} />
-          <button onClick={submit} disabled={!text.trim() || chat.isStreaming} aria-label="Send"
+          <button onClick={submit} disabled={!text.trim() || chat.isStreaming} aria-label="Senden"
             style={{ width: 46, height: 46, borderRadius: 100, border: 0, flex: 'none', background: text.trim() && !chat.isStreaming ? T.acid : T.surface2, display: 'grid', placeItems: 'center', cursor: text.trim() ? 'pointer' : 'default' }}>
             {chat.isStreaming ? <Loader2 size={19} color={T.bg} className="w3-spin" /> : <ArrowUp size={20} color={text.trim() ? T.bg : T.quiet} />}
           </button>
@@ -163,7 +163,7 @@ export function W3CoachFab() {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <button onClick={() => setOpen(true)} aria-label="Ask coach"
+      <button onClick={() => setOpen(true)} aria-label="Coach fragen"
         style={{ position: 'fixed', right: 'max(16px, calc(50vw - 179px))', bottom: 'calc(104px + env(safe-area-inset-bottom))', zIndex: 60, width: 56, height: 56, borderRadius: 100, border: 0, background: T.acid, boxShadow: `0 6px 24px ${T.acid}55`, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
         <Sparkles size={24} color={T.bg} />
       </button>

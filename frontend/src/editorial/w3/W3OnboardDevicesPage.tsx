@@ -47,7 +47,7 @@ export default function W3OnboardDevicesPage() {
       key: 'garmin',
       icon: <Watch size={20} color={T.acid} strokeWidth={2} />,
       name: 'Garmin',
-      sub: 'Auto-sync every ride',
+      sub: 'Jede Fahrt automatisch',
       connected: !!garmin?.connected,
       panel: <GarminInline qc={qc} />,
     },
@@ -55,7 +55,7 @@ export default function W3OnboardDevicesPage() {
       key: 'wahoo',
       icon: <Gauge size={20} color={T.acid} strokeWidth={2} />,
       name: 'Wahoo',
-      sub: 'Power, cadence, HR',
+      sub: 'Watt, Trittfrequenz, HF',
       connected: !!wahoo?.connected,
       panel: <WahooInline />,
     },
@@ -63,7 +63,7 @@ export default function W3OnboardDevicesPage() {
       key: 'apple',
       icon: <Heart size={20} color={T.acid} strokeWidth={2} />,
       name: 'Apple Health',
-      sub: 'Recovery & HRV baseline',
+      sub: 'Erholung & HRV-Basiswert',
       connected: false,
       panel: <AppleInline />,
     },
@@ -84,14 +84,14 @@ export default function W3OnboardDevicesPage() {
             </div>
             {r.connected ? (
               <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 100, background: T.acid, color: T.bg, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, flex: 'none' }}>
-                <Check size={13} strokeWidth={3} />LINKED
+                <Check size={13} strokeWidth={3} />VERBUNDEN
               </span>
             ) : (
               <button
                 onClick={() => setOpen((o) => (o === r.key ? null : r.key))}
                 style={{ padding: '8px 16px', borderRadius: 100, background: 'transparent', border: `1px solid ${T.stroke}`, color: T.ink, fontFamily: FONT, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer', flex: 'none' }}
               >
-                CONNECT
+                VERBINDEN
               </button>
             )}
           </div>
@@ -131,7 +131,7 @@ function GarminInline({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
       setDone(true)
     } catch (e) {
       const status = (e as { response?: { status?: number } })?.response?.status
-      setErr(status === 401 ? 'Credentials rejected.' : 'Connection failed.')
+      setErr(status === 401 ? 'Zugangsdaten abgelehnt.' : 'Verbindung fehlgeschlagen.')
     } finally {
       setBusy(false)
     }
@@ -140,20 +140,20 @@ function GarminInline({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
   if (done) {
     return (
       <p style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, fontWeight: 700, color: T.acid, margin: 0 }}>
-        <Check size={14} strokeWidth={2.6} />Garmin connected — first sync running.
+        <Check size={14} strokeWidth={2.6} />Garmin verbunden — erste Synchronisation läuft.
       </p>
     )
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Garmin email" style={field} />
-      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Garmin password" style={field} />
+      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Garmin-E-Mail" style={field} />
+      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Garmin-Passwort" style={field} />
       {err && <span style={{ fontSize: 11.5, color: T.bad }}>{err}</span>}
       <button onClick={connect} disabled={busy || !email || !password} style={{ ...smallBtn, opacity: busy || !email || !password ? 0.55 : 1 }}>
         {busy && <Loader2 size={13} className="animate-spin" />}
-        {busy ? 'Connecting…' : 'Connect Garmin'}
+        {busy ? 'Verbinde…' : 'Garmin verbinden'}
       </button>
-      <p style={{ fontSize: 10.5, color: T.quiet, margin: 0, lineHeight: 1.4 }}>Stored encrypted — the first sync pulls 90 days of history.</p>
+      <p style={{ fontSize: 10.5, color: T.quiet, margin: 0, lineHeight: 1.4 }}>Verschlüsselt gespeichert — die erste Synchronisation holt 90 Tage Verlauf.</p>
     </div>
   )
 }
@@ -174,12 +174,12 @@ function WahooInline() {
   }
 
   if (notConfigured) {
-    return <p style={{ fontSize: 12, color: T.quiet, margin: 0 }}>Wahoo isn’t configured on this server yet.</p>
+    return <p style={{ fontSize: 12, color: T.quiet, margin: 0 }}>Wahoo ist auf diesem Server noch nicht eingerichtet.</p>
   }
   return (
     <button onClick={connect} disabled={busy} style={{ ...smallBtn, width: '100%', opacity: busy ? 0.6 : 1 }}>
       {busy && <Loader2 size={13} className="animate-spin" />}
-      {busy ? 'Opening Wahoo…' : 'Sign in with Wahoo'}
+      {busy ? 'Wahoo wird geöffnet…' : 'Mit Wahoo anmelden'}
     </button>
   )
 }
@@ -204,9 +204,9 @@ function AppleInline() {
   if (!setup) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <p style={{ fontSize: 11.5, color: T.quiet, margin: 0, lineHeight: 1.45 }}>Apple Health pushes via the “Auto Health Export” iOS app (REST API destination).</p>
+        <p style={{ fontSize: 11.5, color: T.quiet, margin: 0, lineHeight: 1.45 }}>Apple Health sendet über die iOS-App „Auto Health Export“ (REST-API-Ziel).</p>
         <button onClick={load} disabled={busy} style={{ ...smallBtn, opacity: busy ? 0.6 : 1 }}>
-          {busy && <Loader2 size={13} className="animate-spin" />}Show setup
+          {busy && <Loader2 size={13} className="animate-spin" />}Setup anzeigen
         </button>
       </div>
     )
@@ -221,7 +221,7 @@ function AppleInline() {
           </button>
         </div>
       ))}
-      <p style={{ fontSize: 10.5, color: T.quiet, margin: 0, lineHeight: 1.4 }}>Paste as a REST destination in “Auto Health Export” — header “Authorization: Bearer &lt;token&gt;”.</p>
+      <p style={{ fontSize: 10.5, color: T.quiet, margin: 0, lineHeight: 1.4 }}>In „Auto Health Export“ als REST-Ziel einfügen — Header „Authorization: Bearer &lt;token&gt;“.</p>
     </div>
   )
 }

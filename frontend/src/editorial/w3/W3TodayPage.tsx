@@ -150,7 +150,7 @@ function blocksFromIntervals(ivs: IntervalBlockOut[], ftp: number | null): W3Blo
       const offW = wattsOf(iv.off_pct_ftp, null)
       const onS = iv.on_s
       const onLabel = `${iv.reps}×${onS % 60 === 0 ? `${onS / 60} min` : `${onS}s`} · ${wLabel}`
-      const offLabel = offW != null ? `Recover · ${offW} W` : 'Recover'
+      const offLabel = offW != null ? `Erholen · ${offW} W` : 'Erholen'
       for (let r = 0; r < n; r++) {
         bars.push({ w: ivFrac(iv), work, label: onLabel })
         bars.push({ w: offFrac, work: false, label: offLabel })
@@ -218,7 +218,7 @@ function buildWeather(tw: TodayWeather | undefined): W3Weather | null {
   const to = b ? b.hour : a.hour
   const pad = (n: number) => `${String(n).padStart(2, '0')}:00`
   const dry = hrs.every((h) => (h.rain ?? 0) < 40)
-  const wind = pk.wind != null ? `${Math.round(pk.wind)} km/h${pk.dir ? ` ${pk.dir}` : ''}` : 'calm'
+  const wind = pk.wind != null ? `${Math.round(pk.wind)} km/h${pk.dir ? ` ${pk.dir}` : ''}` : 'windstill'
   return {
     window: `${pad(a.hour)}–${pad(to + 1)}`,
     temp: pk.temp != null ? `${Math.round(pk.temp)}°` : '—',
@@ -227,7 +227,7 @@ function buildWeather(tw: TodayWeather | undefined): W3Weather | null {
     short: `${wind} · ${dry ? 'trocken' : 'Schauer möglich'}`,
     // The verdict is EARNED by the best window's real ride quality, not a badge
     // that's always on.
-    verdict: bestAvg >= 0.72 ? 'GO OUTSIDE' : bestAvg >= 0.45 ? 'DOABLE' : 'INDOOR BETTER',
+    verdict: bestAvg >= 0.72 ? 'RAUS DAMIT' : bestAvg >= 0.45 ? 'MACHBAR' : 'BESSER DRINNEN',
     meta: 'Bestes 2-Stunden-Fenster aus Wind, Regen und Temperatur.',
     hours: all,
     bestFrom: a.hour, bestTo: to, peak: pk.hour,
@@ -271,7 +271,7 @@ export default function W3TodayPage() {
       const top = Math.max(...rows.map((r) => r.weekly_score), 1)
       const ranked = [...rows].sort((a, b) => b.weekly_score - a.weekly_score)
       realCrew = ranked.slice(0, 3).map((r, i) => ({
-        name: r.is_you ? 'You' : `@${r.handle}`,
+        name: r.is_you ? 'Du' : `@${r.handle}`,
         color: r.is_you ? '#2BE68F' : CREW_COLORS[i % CREW_COLORS.length],
         pct: Math.round((r.weekly_score / top) * 100),
         me: r.is_you,
@@ -279,7 +279,7 @@ export default function W3TodayPage() {
       const myIdx = ranked.findIndex((r) => r.is_you)
       if (myIdx >= 0) realCrewRank = `#${myIdx + 1}`
       const me = rows.find((r) => r.is_you)
-      if (me) realCrewCaption = `You've banked ${Math.round(me.weekly_tss)} TSS with your crew this week.`
+      if (me) realCrewCaption = `Du hast diese Woche ${Math.round(me.weekly_tss)} TSS mit deiner Crew gesammelt.`
     }
 
     // Readiness for the hero: the model withholds its score when the overnight
@@ -301,8 +301,8 @@ export default function W3TodayPage() {
     const rvp = isPresent(model.readinessVsPrevious) ? model.readinessVsPrevious.value : null
     const dayGapLabel = (onIso: string, vsIso: string): string => {
       const days = Math.round((Date.parse(`${onIso}T00:00:00`) - Date.parse(`${vsIso}T00:00:00`)) / 86_400_000)
-      if (days <= 1) return 'vs yesterday'
-      return `vs ${days} days ago`
+      if (days <= 1) return 'ggü. gestern'
+      return `ggü. vor ${days} Tagen`
     }
     const readinessDelta = rvp != null && readiness != null && rvp.score === readiness
       ? {
@@ -327,10 +327,10 @@ export default function W3TodayPage() {
       ? null
       : streakDays < 3
         // Below the first tier there is no bonus to name — say what unlocks one.
-        ? (nextTier && toGo != null ? `${toGo} ${toGo === 1 ? 'day' : 'days'} to ${formatMultiplier(nextTier.multiplier)}` : null)
+        ? (nextTier && toGo != null ? `noch ${toGo} ${toGo === 1 ? 'Tag' : 'Tage'} bis ${formatMultiplier(nextTier.multiplier)}` : null)
         : nextTier && toGo != null
-          ? `${streakDays}-day streak · ${toGo} to ${formatMultiplier(nextTier.multiplier)}`
-          : `${streakDays}-day streak · max rate`
+          ? `${streakDays} Tage Streak · noch ${toGo} bis ${formatMultiplier(nextTier.multiplier)}`
+          : `${streakDays} Tage Streak · Maximum`
 
     // ── The three overnight signals ────────────────────────────────────────
     // Each card shows the real reading AND how it sits against the rider's own
@@ -362,7 +362,7 @@ export default function W3TodayPage() {
     const hrv: W3Signal | null = isPresent(model.hrv)
       ? (() => {
           const { value, delta } = model.hrv.value
-          const s = delta == null ? { sub: null, subHue: NEUTRAL } : subOf(`${signed(delta)} vs baseline`, delta >= 0)
+          const s = delta == null ? { sub: null, subHue: NEUTRAL } : subOf(`${signed(delta)} ggü. Basiswert`, delta >= 0)
           return { value: String(Math.round(value)), unit: 'ms', ...s, spark: sparkFrom(hrvSeries, '#00E5FF') }
         })()
       : null
@@ -374,9 +374,9 @@ export default function W3TodayPage() {
           const base = baselineOf(rhrSeries)
           // Lower resting HR is the favourable direction.
           const s = delta != null
-            ? subOf(`${signed(delta)} vs baseline`, delta <= 0)
+            ? subOf(`${signed(delta)} ggü. Basiswert`, delta <= 0)
             : base != null
-              ? subOf(`${signed(value - base.mean)} vs ${base.n}-day avg`, value - base.mean <= 0)
+              ? subOf(`${signed(value - base.mean)} ggü. ${base.n}-Tage-Ø`, value - base.mean <= 0)
               : { sub: null, subHue: NEUTRAL }
           return { value: String(Math.round(value)), unit: 'bpm', ...s, spark: sparkFrom(rhrSeries, '#C8FF00') }
         })()
@@ -393,14 +393,14 @@ export default function W3TodayPage() {
           // which is the unit a rider actually feels a night's difference in.
           const deltaMin = base != null ? Math.round((totalS - base.mean) / 60) : null
           const s = deltaMin != null && base != null
-            ? subOf(`${signed(deltaMin)} min vs ${base.n}-day avg`, deltaMin >= 0)
+            ? subOf(`${signed(deltaMin)} min ggü. ${base.n}-Tage-Ø`, deltaMin >= 0)
             : { sub: null, subHue: NEUTRAL }
-          return { value: `${hrs}:${String(mins).padStart(2, '0')}`, unit: 'hrs', ...s, spark: sparkFrom(sleepSeries, '#ED29FF') }
+          return { value: `${hrs}:${String(mins).padStart(2, '0')}`, unit: 'h', ...s, spark: sparkFrom(sleepSeries, '#ED29FF') }
         })()
       : null
 
     const weekMeta = isPresent(model.weekLoad)
-      ? `${Math.round(model.weekLoad.value.spent)} of ${Math.round(model.weekLoad.value.planned)} TSS`
+      ? `${Math.round(model.weekLoad.value.spent)} von ${Math.round(model.weekLoad.value.planned)} TSS`
       : '—'
 
     // The real week-ahead plan, indexed by ISO date so each strip day can look
@@ -464,14 +464,14 @@ export default function W3TodayPage() {
         }))
       : []
     const target = session?.targetWatts ?? null
-    const steadyLabel = target ? `Steady · ${target} W` : 'Steady'
+    const steadyLabel = target ? `Konstant · ${target} W` : 'Konstant'
     const enduranceProfile = [
-      { w: 0.34, work: false, label: 'Warm-up' },
-      { w: 0.5, work: false, label: 'Warm-up' },
-      { w: 0.66, work: false, label: 'Warm-up' },
+      { w: 0.34, work: false, label: 'Einfahren' },
+      { w: 0.5, work: false, label: 'Einfahren' },
+      { w: 0.66, work: false, label: 'Einfahren' },
       ...Array.from({ length: 8 }, () => ({ w: 0.88, work: true, label: steadyLabel })),
-      { w: 0.6, work: false, label: 'Cool-down' },
-      { w: 0.4, work: false, label: 'Cool-down' },
+      { w: 0.6, work: false, label: 'Ausfahren' },
+      { w: 0.4, work: false, label: 'Ausfahren' },
     ]
     // Today's power profile: the REAL interval blocks when the plan has them;
     // else the model's blocks; else the synthesized endurance envelope (only
@@ -582,7 +582,7 @@ export default function W3TodayPage() {
     // Real week-progress label from the week strip (days trained/rested vs planned).
     const weekDone = weekDays.filter((d) => d.status === 'hit' || d.status === 'rest').length
     const weekPlanned = weekDays.filter((d) => d.status !== 'upcoming').length
-    const weekDoneLabel = weekPlanned > 0 ? `${weekDone} of ${weekPlanned} done` : null
+    const weekDoneLabel = weekPlanned > 0 ? `${weekDone} von ${weekPlanned} erledigt` : null
     const zoneTag = session?.intensityFactor != null ? `${Math.round(session.intensityFactor * 100)}% FTP` : null
 
     // ── "Deine Woche": real meso block + the season goal this week feeds ──
@@ -607,12 +607,12 @@ export default function W3TodayPage() {
 
     return {
       handle: user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider'),
-      tierLine: 'Silver Tier · Week 6 of 16', // fixture: tier/season not modelled yet
+      tierLine: 'Silber · Woche 6 von 16', // fixture: tier/season not modelled yet
       // REAL: the rider's own digitalised bike. The name comes from the vision
       // pass reading their photo; "Your bike" is only a label fallback for a
       // render the model couldn't name — never a stand-in for a missing bike,
       // which stays `bikeImage: null` and gets the hero's empty state.
-      bikeName: garage?.bike?.name ?? 'Your bike',
+      bikeName: garage?.bike?.name ?? 'Dein Bike',
       bikeImage: garage?.bike?.image_base64 ?? null,
       bikeLoading: garageLoading,
       weekDoneLabel,
@@ -625,10 +625,10 @@ export default function W3TodayPage() {
       // A one-word readiness read from the score (not the session name, which
       // is redundant with Today's Training below).
       readinessWord: readiness == null ? null
-        : readiness >= 80 ? 'Primed'
-          : readiness >= 65 ? 'Ready'
-            : readiness >= 45 ? 'Steady'
-              : readiness >= 30 ? 'Easy' : 'Rest',
+        : readiness >= 80 ? 'Topfit'
+          : readiness >= 65 ? 'Bereit'
+            : readiness >= 45 ? 'Solide'
+              : readiness >= 30 ? 'Locker' : 'Ruhe',
       readinessDelta,
       earnRate,
       earnRateWhy,
@@ -663,31 +663,31 @@ export default function W3TodayPage() {
       sessionFtpPct: session?.intensityFactor != null ? `${Math.round(session.intensityFactor * 100)}%` : '—',
       sessionBlocks: blocks,
       sessionFtpTag: 'FTP',
-      sessionEarn: 'This ride earns RideCoin by its TSS', // fixture: RideCoin not built
+      sessionEarn: 'Diese Fahrt bringt RideCoin nach TSS', // fixture: RideCoin not built
 
       form: pmc ? { fitness: Math.round(pmc.fitness), fatigue: Math.round(pmc.fatigue), formVal: Math.round(pmc.form) } : null,
 
       // ── crew standings: REAL from useCrewStandings; honest fixture only when
       //    the athlete is in no crew yet (no standings to show) ──
-      crewCaption: realCrewCaption ?? 'Join a crew to see how your week stacks up against your riders.',
+      crewCaption: realCrewCaption ?? 'Tritt einer Crew bei und sieh, wie deine Woche gegen deine Fahrer steht.',
       crew: realCrew ?? [
         { name: 'Mara', color: '#7B5CFF', pct: 143, me: false },
-        { name: 'You', color: '#2BE68F', pct: 131, me: true },
+        { name: 'Du', color: '#2BE68F', pct: 131, me: true },
         { name: 'Timo', color: '#6B8CFF', pct: 104, me: false },
       ],
       crewRank: realCrewRank ?? '↑1',
-      challengeLabel: 'CREW-CHALLENGE · AROUND THE WORLD',   // fixture: crew-challenge banner not wired
+      challengeLabel: 'CREW-CHALLENGE · UM DIE WELT',   // fixture: crew-challenge banner not wired
       challengeValue: '412 / 500 km',
       challengePct: 82,
 
       // ── fixtures: Garage economy — spec'd, not wired ──
       garagePct: 68,
-      garageName: 'Carbon frame',
-      garageRidesLine: '17 of 25 rides',
-      garageMakesLine: "Today's session makes 18",
-      power: '625.3K',
-      cycle: '1,448',
-      mRides: { pct: 50, label: '25 rides' },
+      garageName: 'Carbon-Rahmen',
+      garageRidesLine: '17 von 25 Fahrten',
+      garageMakesLine: 'Heute wird es die 18.',
+      power: '625,3 Tsd.',
+      cycle: '1.448',
+      mRides: { pct: 50, label: '25 Fahrten' },
       mDist: { pct: 73, label: '200 km' },
     }
   }, [model, user, streak, standings, adaptive, week, ftp, todayWeather, weekActs, garage, garageLoading])
@@ -700,7 +700,7 @@ export default function W3TodayPage() {
   // deterministic (the modifier has no rest type) and never hits the endpoint.
   // A failed/absent modify → null, surfaced as an honest "no plan to adapt".
   const onAdapt = useCallback<OnAdapt>(async (kind) => {
-    if (kind === 'rest') return { targetW: '—', tss: 0, ftpPct: '—', rationale: 'Full rest today. Let the load settle — tomorrow’s block hits harder for it.', railsDowngraded: false, title: 'Rest day' }
+    if (kind === 'rest') return { targetW: '—', tss: 0, ftpPct: '—', rationale: 'Heute komplette Ruhe. Lass die Belastung setzen — der Block morgen trifft dafür härter.', railsDowngraded: false, title: 'Ruhetag' }
     const modType: TodayModificationType = kind === 'shorter' ? 'shorten' : kind
     const durationMin = kind === 'shorter' ? 45 : undefined
     const res = await modifyTodayWorkout(modType, durationMin)
@@ -715,7 +715,7 @@ export default function W3TodayPage() {
       targetW: '—',
       tss: res.predicted_tss ?? null,
       ftpPct: '—',
-      rationale: res.title ? `Adjusted — ${res.title}${durTail}` : (res.reason || 'Coach adjusted the session.'),
+      rationale: res.title ? `Angepasst — ${res.title}${durTail}` : (res.reason || 'Der Coach hat die Einheit angepasst.'),
       railsDowngraded: res.rails_downgraded ?? false,
       title: res.title ?? null,
     }

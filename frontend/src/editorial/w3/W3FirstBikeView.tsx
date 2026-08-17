@@ -36,9 +36,9 @@ export interface W3FirstBikeProps {
 /** The upgrade loop, one line each — title carries the promise, tail carries
  *  the honesty (no junk-mile farming, never pay-to-win). */
 const UPGRADES: { icon: typeof Wrench; title: string; body: string }[] = [
-  { icon: TrendingUp, title: 'Every ride earns RideCoin', body: '— harder sessions pay more.' },
-  { icon: Wrench, title: 'Upgrade the parts', body: '— wheels, tyres, a drivetrain.' },
-  { icon: Palette, title: 'Make it yours', body: '— paint and rare drops, never pay-to-win.' },
+  { icon: TrendingUp, title: 'Jede Fahrt bringt RideCoin', body: '— härter zahlt mehr.' },
+  { icon: Wrench, title: 'Teile aufrüsten', body: '— Laufräder, Reifen, Antrieb.' },
+  { icon: Palette, title: 'Mach es zu deinem', body: '— Lack, rare Drops, nie Pay-to-win.' },
 ]
 
 export default function W3FirstBikeView({ bikeImageUrl, onContinue, onDigitalize }: W3FirstBikeProps) {
@@ -54,7 +54,7 @@ export default function W3FirstBikeView({ bikeImageUrl, onContinue, onDigitalize
             the copy and the CTAs never need a scrollbar. */}
         <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 170, maxHeight: 340, background: '#151615', overflow: 'hidden' }}>
           {bikeImageUrl ? (
-            <img src={bikeImageUrl} alt="Your bike" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 45%' }} />
+            <img src={bikeImageUrl} alt="Dein Bike" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 45%' }} />
           ) : (
             <>
               <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(58% 46% at 50% 44%, #FFFFFF14, transparent 70%)' }} />
@@ -63,7 +63,7 @@ export default function W3FirstBikeView({ bikeImageUrl, onContinue, onDigitalize
                   <GhostBike />
                 </div>
               </div>
-              <button onClick={onDigitalize} aria-label="Add a photo of your bike"
+              <button onClick={onDigitalize} aria-label="Foto deines Bikes hinzufügen"
                 style={{ position: 'absolute', top: '48%', left: '50%', transform: 'translate(-50%, -50%)', width: 66, height: 66, borderRadius: 100, background: T.bg, border: `1px solid ${T.acid}59`, boxShadow: `0 0 34px ${T.acid}26`, display: 'grid', placeItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
                 <Plus size={28} color={T.acid} strokeWidth={2.6} />
               </button>
@@ -78,15 +78,15 @@ export default function W3FirstBikeView({ bikeImageUrl, onContinue, onDigitalize
           <motion.div initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
             style={{ width: '100%', padding: '16px 16px 18px', borderRadius: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', alignSelf: 'flex-start', padding: '5px 11px', borderRadius: 100, background: T.acidDim }}>
-              <Sparkles size={11} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.acid }}>YOUR GARAGE</span>
+              <Sparkles size={11} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.acid }}>DEINE GARAGE</span>
             </div>
             <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -1, lineHeight: 1.05, color: T.ink }}>
-              {empty ? 'One photo. That’s your bike.' : 'Start here. Build it up.'}
+              {empty ? 'Ein Foto. Das ist dein Bike.' : 'Start hier. Bau es aus.'}
             </span>
             <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>
               {empty
-                ? 'Snap your real bike and we render it as your collectible — same frame, same colours, W3 finish.'
-                : 'This bike is yours — here’s how it grows with your fitness.'}
+                ? 'Foto deines Bikes — wir rendern dein Collectible: gleicher Rahmen, gleiche Farben, W3-Finish.'
+                : 'Das Bike gehört dir — so wächst es mit deiner Fitness.'}
             </span>
           </motion.div>
         </div>
@@ -111,16 +111,16 @@ export default function W3FirstBikeView({ bikeImageUrl, onContinue, onDigitalize
         <div style={{ ...band(0), flex: 'none', paddingTop: 14, paddingBottom: 'calc(18px + env(safe-area-inset-bottom))', marginTop: 'auto' }}>
           {onDigitalize && (
             <button onClick={onDigitalize} style={{ height: 52, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', width: '100%', flex: 'none' }}>
-              <Camera size={19} color={T.bg} />{empty ? 'Add my bike' : 'Render a different bike'}
+              <Camera size={19} color={T.bg} />{empty ? 'Mein Bike hinzufügen' : 'Anderes Bike rendern'}
             </button>
           )}
           <button onClick={onContinue} style={{ height: onDigitalize ? 44 : 52, marginTop: onDigitalize ? 8 : 0, borderRadius: 100, border: onDigitalize ? `1px solid ${T.stroke}` : 0, background: onDigitalize ? 'transparent' : T.acid, color: onDigitalize ? T.ink : T.bg, fontFamily: FONT, fontSize: onDigitalize ? 14 : 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', width: '100%', flex: 'none' }}>
-            {empty ? 'Skip for now' : 'This is my bike'}<ArrowRight size={16} color={onDigitalize ? T.ink : T.bg} />
+            {empty ? 'Später' : 'Das ist mein Bike'}<ArrowRight size={16} color={onDigitalize ? T.ink : T.bg} />
           </button>
           <span style={{ display: 'block', textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: T.quiet, marginTop: 8, lineHeight: 1.4 }}>
             {empty
-              ? 'Skipping leaves the garage empty — add your bike any time from the Garage tab.'
-              : 'You can re-render it any time from the Garage tab.'}
+              ? 'Ohne Bike bleibt die Garage leer — du kannst es jederzeit im Garage-Tab hinzufügen.'
+              : 'Du kannst es jederzeit im Garage-Tab neu rendern.'}
           </span>
         </div>
       </div>

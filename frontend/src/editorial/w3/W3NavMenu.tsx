@@ -14,16 +14,16 @@ import { T, FONT } from './w3tokens'
  * state + navigation); drop <W3NavMenu/> into any screen header.
  */
 const ITEMS: { label: string; sub: string; icon: typeof Activity; route: string }[] = [
-  { label: 'Today', sub: 'Your day', icon: Activity, route: '/e/w3-today' },
-  { label: 'Training plan', sub: 'The periodized plan', icon: CalendarRange, route: '/e/w3-plan' },
-  { label: 'Your goal', sub: 'Target event + gaps', icon: Target, route: '/e/w3-goal' },
-  { label: 'Rides', sub: 'Your history', icon: RouteIcon, route: '/e/w3-rides' },
-  { label: 'Garage', sub: 'Your bike studio', icon: Bike, route: '/e/w3-bike-studio' },
-  { label: 'Wins', sub: 'Badges + challenges', icon: Trophy, route: '/e/w3-wins' },
-  { label: 'Challenges', sub: 'Monthly targets', icon: Flag, route: '/e/w3-challenges' },
-  { label: 'Crew', sub: 'Your riders', icon: Users, route: '/e/w3-crew' },
-  { label: 'Referrals', sub: 'Bring a partner', icon: UserRound, route: '/e/w3-referrals' },
-  { label: 'Biker', sub: 'Profile + devices', icon: Settings, route: '/e/w3-biker' },
+  { label: 'Heute', sub: 'Dein Tag', icon: Activity, route: '/e/w3-today' },
+  { label: 'Trainingsplan', sub: 'Der periodisierte Plan', icon: CalendarRange, route: '/e/w3-plan' },
+  { label: 'Dein Ziel', sub: 'Zielevent + Lücken', icon: Target, route: '/e/w3-goal' },
+  { label: 'Fahrten', sub: 'Dein Verlauf', icon: RouteIcon, route: '/e/w3-rides' },
+  { label: 'Garage', sub: 'Dein Bike-Studio', icon: Bike, route: '/e/w3-bike-studio' },
+  { label: 'Erfolge', sub: 'Abzeichen + Challenges', icon: Trophy, route: '/e/w3-wins' },
+  { label: 'Challenges', sub: 'Monatsziele', icon: Flag, route: '/e/w3-challenges' },
+  { label: 'Crew', sub: 'Deine Fahrer', icon: Users, route: '/e/w3-crew' },
+  { label: 'Empfehlungen', sub: 'Bring jemanden mit', icon: UserRound, route: '/e/w3-referrals' },
+  { label: 'Biker', sub: 'Profil + Geräte', icon: Settings, route: '/e/w3-biker' },
 ]
 
 /** A self-contained round header icon that navigates to a route on tap. */
@@ -44,7 +44,7 @@ export default function W3NavMenu({ color = T.ink }: { color?: string }) {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} aria-label="Menu"
+      <button onClick={() => setOpen(true)} aria-label="Menü"
         style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
         <Menu size={17} color={color} />
       </button>
@@ -59,8 +59,8 @@ export default function W3NavMenu({ color = T.ink }: { color?: string }) {
               onClick={(e) => e.stopPropagation()}
               style={{ width: 390, maxWidth: '100%', maxHeight: '86dvh', overflowY: 'auto', background: T.bg, borderRadius: '28px 28px 0 0', border: `1px solid ${T.rule}`, borderBottom: 0, fontFamily: FONT, padding: '18px 16px calc(20px + env(safe-area-inset-bottom))' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px 12px' }}>
-                <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>Go to</span>
-                <button onClick={() => setOpen(false)} aria-label="Close" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={18} color={T.mid} /></button>
+                <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>Gehe zu</span>
+                <button onClick={() => setOpen(false)} aria-label="Schließen" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={18} color={T.mid} /></button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {ITEMS.map((it, i) => (

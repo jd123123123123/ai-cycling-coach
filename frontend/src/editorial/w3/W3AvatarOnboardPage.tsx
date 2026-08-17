@@ -84,25 +84,25 @@ export default function W3AvatarOnboardPage() {
     const everest = elevM / 8849
     const pizzas = Math.round(kcal / 850)
     const secondary: AvatarInsight[] = [
-      { key: 'elevation', label: 'ELEVATION', value: elevM > 0 ? `${(elevM / 1000).toFixed(1)} km` : '—', caption: elevM > 0 ? `≈ ${everest.toFixed(everest < 10 ? 1 : 0)}× Mount Everest` : 'noch offen' },
-      { key: 'longest', label: 'LONGEST', value: rides ? `${Math.round(longestKm)} km` : '—', caption: rides ? 'dein größter Tag im Sattel' : 'noch offen' },
-      { key: 'speed', label: 'AVG SPEED', value: avgSpeed > 0 ? avgSpeed.toFixed(1) : '—', caption: 'km/h über alle Fahrten' },
-      { key: 'burned', label: 'BURNED', value: kcal > 0 ? fmtK(kcal) : '—', caption: kcal > 0 ? `kcal · ≈ ${pizzas} Pizzen` : 'kcal' },
+      { key: 'elevation', label: 'HÖHENMETER', value: elevM > 0 ? `${(elevM / 1000).toFixed(1)} km` : '—', caption: elevM > 0 ? `≈ ${everest.toFixed(everest < 10 ? 1 : 0)}× Mount Everest` : 'noch offen' },
+      { key: 'longest', label: 'LÄNGSTE', value: rides ? `${Math.round(longestKm)} km` : '—', caption: rides ? 'dein größter Tag im Sattel' : 'noch offen' },
+      { key: 'speed', label: 'Ø TEMPO', value: avgSpeed > 0 ? avgSpeed.toFixed(1) : '—', caption: 'km/h über alle Fahrten' },
+      { key: 'burned', label: 'VERBRANNT', value: kcal > 0 ? fmtK(kcal) : '—', caption: kcal > 0 ? `kcal · ≈ ${pizzas} Pizzen` : 'kcal' },
     ]
 
     const earliest = cyc.reduce<number | null>((m, a) => { const t = new Date(a.started_at).getTime(); return m == null || t < m ? t : m }, null)
     const years = earliest ? Math.max(1, Math.floor((Date.now() - earliest) / (365.25 * 864e5))) : 0
     const garmin = cyc.some((a) => (a.source ?? '').toLowerCase().includes('garmin'))
     const syncNote = years > 0
-      ? `${garmin ? 'Garmin synced · ' : ''}${years} ${years === 1 ? 'year' : 'years'} of riding`
-      : (garmin ? 'Garmin synced' : '')
+      ? `${garmin ? 'Garmin synchronisiert · ' : ''}${years} ${years === 1 ? 'Jahr' : 'Jahre'} im Sattel`
+      : (garmin ? 'Garmin synchronisiert' : '')
 
     return {
       avatarUrl: hero,
       handle,
       role, level, levelPct, xpNote, headline,
       primary: {
-        totalDistance: rides ? `${Math.round(distKm).toLocaleString('en-US')} km` : '—',
+        totalDistance: rides ? `${Math.round(distKm).toLocaleString('de-DE')} km` : '—',
         totalRides: rides ? String(rides) : '—',
         saddleTime: rides ? `${Math.round(saddleH)} h` : '—',
       },

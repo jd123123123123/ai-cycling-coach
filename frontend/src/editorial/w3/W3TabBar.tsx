@@ -30,10 +30,10 @@ import { scheduleW3TabPrefetch } from './w3TabChunks'
  */
 
 const TABS: { key: string; label: string; icon: typeof Activity; route: string }[] = [
-  { key: 'today', label: 'TODAY', icon: Activity, route: 'w3-today' },
-  { key: 'rides', label: 'RIDES', icon: RouteIcon, route: 'w3-rides' },
+  { key: 'today', label: 'HEUTE', icon: Activity, route: 'w3-today' },
+  { key: 'rides', label: 'FAHRTEN', icon: RouteIcon, route: 'w3-rides' },
   { key: 'garage', label: 'GARAGE', icon: Bike, route: 'w3-bike-studio' },
-  { key: 'wins', label: 'WINS', icon: Trophy, route: 'w3-wins' },
+  { key: 'wins', label: 'ERFOLGE', icon: Trophy, route: 'w3-wins' },
   { key: 'biker', label: 'BIKER', icon: UserRound, route: 'w3-biker' },
 ]
 

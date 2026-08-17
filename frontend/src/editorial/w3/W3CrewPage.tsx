@@ -8,7 +8,7 @@ import { DASH } from './w3tokens'
 import W3CrewView, { type W3CrewVm, type W3CrewMember, type W3ShowedUpRow, type W3Highlight } from './W3CrewView'
 import W3CrewGoalEditor from './W3CrewGoalEditor'
 import W3Loading from './W3Loading'
-import { bucketMeta, periodWord, thisPeriod, windowChip, windowDays, windowEdges, type W3Period } from './w3crew'
+import { bucketMeta, thisPeriod, windowChip, windowDays, windowEdges, type W3Period } from './w3crew'
 
 /**
  * W3 · 10 CREW, wired. Route /e/w3-crew.
@@ -36,21 +36,18 @@ import { bucketMeta, periodWord, thisPeriod, windowChip, windowDays, windowEdges
  */
 
 const SEAT_CAP = 8 // fixture: crew size ceiling not modelled server-side
-const nf = new Intl.NumberFormat('en-US')
+const nf = new Intl.NumberFormat('de-DE')
 
-const ORD = (n: number) => {
-  const s = ['th', 'st', 'nd', 'rd'], v = n % 100
-  return n + (s[(v - 20) % 10] || s[v] || s[0])
-}
-const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
+const ORD = (n: number) => `${n}.`
+const WORDS = ['null', 'ein', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun', 'zehn', 'elf', 'zwölf']
 const words = (n: number) => WORDS[n] ?? String(n)
 
 const kmLabel = (v: number) => (v >= 10 ? nf.format(Math.round(v)) : v.toFixed(1))
 
 const EMPTY: W3CrewVm = {
   inCrew: false,
-  crewName: 'Your crew',
-  blurb: 'A crew scores each rider against their own weekly plan — so a short week and a big week sit on the same board. Invite a few riders to start yours.',
+  crewName: 'Deine Crew',
+  blurb: 'Eine Crew misst jeden Fahrer an seinem eigenen Wochenplan — so stehen eine kurze und eine große Woche auf demselben Board. Lade ein paar Fahrer ein und starte deine.',
   period: 'week', windowChip: '',
   rankOrdinal: DASH, rankSub: '', propsHint: '',
   crewTss: DASH, crewTssSub: '', crewKm: DASH, crewKmCoverage: null, avgTss: DASH, yourShare: DASH, outputNote: '',
@@ -87,7 +84,7 @@ export default function W3CrewPage() {
     const topScore = Math.max(...rows.map((r) => r.weekly_score), 1)
     const me = rows.find((r) => r.is_you) ?? null
     const myRank = ranked.findIndex((r) => r.is_you) + 1
-    const label = (r: StandingRow) => (r.is_you ? 'You' : `@${r.handle}`)
+    const label = (r: StandingRow) => (r.is_you ? 'Du' : `@${r.handle}`)
 
     // The window the server actually computed, in the caller's own timezone.
     const startISO = standings?.period_start ?? standings?.week_start
@@ -107,9 +104,9 @@ export default function W3CrewPage() {
 
     // Never sum a partial set as if it were the whole crew.
     const crewKmCoverage = kmRows.length === 0
-      ? 'No rider in this crew has distance data for this window yet.'
+      ? 'Noch kein Fahrer in dieser Crew hat Distanzdaten für dieses Fenster.'
       : kmRows.length < total
-        ? `Kilometres cover ${words(kmRows.length)} of the ${words(total)} riders — the rest have no distance data.`
+        ? `Die Kilometer decken ${words(kmRows.length)} von ${words(total)} Fahrern ab — der Rest hat keine Distanzdaten.`
         : null
 
     // ── 2 · The crew ──
@@ -132,8 +129,8 @@ export default function W3CrewPage() {
     const showedUpTotal = total * cols
     const gridDow = period === 'week' && cols === 7 && bm.unit === 'day'
     const showedUpNote = bm.unit === 'day'
-      ? 'A filled block is a day a rider actually logged a session.'
-      : `A filled block is a stretch of about ${Math.round(bm.daysPerBucket)} days with at least one logged session.`
+      ? 'Ein gefüllter Block ist ein Tag, an dem ein Fahrer wirklich eine Einheit erfasst hat.'
+      : `Ein gefüllter Block ist ein Abschnitt von rund ${Math.round(bm.daysPerBucket)} Tagen mit mindestens einer erfassten Einheit.`
 
     // ── 4 · Around the world — the crew goal is a WEEKLY challenge, so the ring
     // is only honest on the week window. ──
@@ -150,21 +147,21 @@ export default function W3CrewPage() {
       : 0
     const yourDistanceNote = yourKmRounded > 0
       ? (beaten > 0
-        ? `You've put in ${nf.format(yourKmRounded)} km — more than ${words(beaten)} of the ${words(total)}`
-        : `You've put in ${nf.format(yourKmRounded)} km ${thisPeriod(period)}`)
-      : `You have no distance logged ${thisPeriod(period)} yet`
+        ? `Du hast ${nf.format(yourKmRounded)} km eingefahren — mehr als ${words(beaten)} von ${words(total)}`
+        : `Du hast ${thisPeriod(period)} ${nf.format(yourKmRounded)} km eingefahren`)
+      : `Du hast ${thisPeriod(period)} noch keine Distanz erfasst`
 
     // ── 5 · Highlights — every line derived from the standings numbers ──
     const highlights: W3Highlight[] = []
     const leader = ranked[0]
     highlights.push({
       id: `lead-${leader.user_id}`, name: label(leader), isYou: leader.is_you,
-      text: leader.is_you ? `Top of the crew board ${thisPeriod(period)}` : `Leads the crew board ${thisPeriod(period)}`,
-      badge: `${nf.format(Math.round(leader.weekly_score))} PTS`,
+      text: leader.is_you ? `Spitze des Crew-Boards ${thisPeriod(period)}` : `Führt das Crew-Board ${thisPeriod(period)}`,
+      badge: `${nf.format(Math.round(leader.weekly_score))} PKT`,
     })
     if (me && myRank > 1) {
       highlights.push({
-        id: `you-${me.user_id}`, name: 'You', isYou: true,
+        id: `you-${me.user_id}`, name: 'Du', isYou: true,
         text: `${nf.format(myTss)} TSS${myKm != null && myKm > 0 ? ` · ${kmLabel(myKm)} km` : ''} ${thisPeriod(period)}`,
         badge: ORD(myRank).toUpperCase(),
       })
@@ -173,7 +170,7 @@ export default function W3CrewPage() {
     if (topKm && (topKm.distance_km as number) > 0 && !highlights.some((h) => h.id.endsWith(`-${topKm.user_id}`))) {
       highlights.push({
         id: `km-${topKm.user_id}`, name: label(topKm), isYou: topKm.is_you,
-        text: 'Most kilometres logged in the crew',
+        text: 'Die meisten Kilometer in der Crew',
         badge: `${kmLabel(topKm.distance_km as number)} KM`,
       })
     }
@@ -183,7 +180,7 @@ export default function W3CrewPage() {
     if (byActive && activeCount > 0 && !highlights.some((h) => h.id.endsWith(`-${byActive.id}`))) {
       highlights.push({
         id: `act-${byActive.id}`, name: byActive.name, isYou: byActive.isYou,
-        text: `Showed up in ${activeCount} of ${cols} ${activeCount === 1 ? bm.one : bm.many}`,
+        text: `An ${activeCount} von ${cols} ${activeCount === 1 ? bm.one : bm.many} dabei`,
         badge: `${activeCount}/${cols}`,
       })
     }
@@ -193,20 +190,20 @@ export default function W3CrewPage() {
     return {
       inCrew: true,
       period,
-      crewName: mine?.crew?.name ?? 'Your crew',
+      crewName: mine?.crew?.name ?? 'Deine Crew',
       // honest description of how the board is scored (matches weekly_score semantics)
-      blurb: 'Each rider is scored against their own weekly plan — so a short week and a big week sit on the same board.',
+      blurb: 'Jeder Fahrer wird an seinem eigenen Wochenplan gemessen — so stehen eine kurze und eine große Woche auf demselben Board.',
       windowChip: windowChip(startISO, endISO),
       rankOrdinal: myRank > 0 ? ORD(myRank) : DASH,
-      rankSub: myRank > 0 ? `of ${words(total)} ${thisPeriod(period)}` : `${words(total)} riders ${thisPeriod(period)}`,
-      propsHint: 'Three a week. Spend them on the effort, not the number.', // fixture: props economy copy
+      rankSub: myRank > 0 ? `von ${words(total)} · ${thisPeriod(period)}` : `${words(total)} Fahrer · ${thisPeriod(period)}`,
+      propsHint: 'Drei pro Woche. Gib sie für den Einsatz, nicht für die Zahl.', // fixture: props economy copy
       crewTss: nf.format(crewTssNum),
-      crewTssSub: `${words(total)} riders · ${thisPeriod(period)}`,
+      crewTssSub: `${words(total)} Fahrer · ${thisPeriod(period)}`,
       crewKm: kmRows.length > 0 ? `${nf.format(crewKmRounded)} km` : DASH,
       crewKmCoverage,
       avgTss: nf.format(Math.round(crewTssNum / total)),
       yourShare: me && crewTssNum > 0 ? `${Math.round((myTss / crewTssNum) * 100)}%` : DASH,
-      outputNote: 'Points are each rider’s share of their own weekly bar. TSS and kilometres are the raw totals for this window.',
+      outputNote: 'Punkte sind der Anteil jedes Fahrers an seiner eigenen Wochenvorgabe. TSS und Kilometer sind die rohen Summen für dieses Fenster.',
       members,
       showedUp, showedUpFilled, showedUpTotal, showedUpNote,
       gridDow,
@@ -215,19 +212,19 @@ export default function W3CrewPage() {
       distanceKm: crewKmRounded, distanceGoalKm, distancePct, distanceToGo,
       yourDistanceNote, yourSharePct,
       highlights,
-      highlightsTitle: `This ${periodWord(period)} in the crew`,
+      highlightsTitle: `In der Crew ${thisPeriod(period)}`,
       seatsOpen,
       // fixture: the "six to eight" crew-size guidance is a product rule, not a stored field
       seatsCopy: seatsOpen > 0
-        ? 'Crews of six to eight hold each other best. Fewer, and a quiet week goes unnoticed.'
-        : 'This crew is at full strength — every seat is taken.',
+        ? 'Crews von sechs bis acht halten sich am besten. Weniger, und eine stille Woche fällt niemandem auf.'
+        : 'Diese Crew ist komplett — jeder Platz ist besetzt.',
     }
   }, [standings, mine, distanceChallenge, period])
 
   // Honest invite: share an invite message (no props/discover picker built here yet).
   const invite = async () => {
     const name = mine?.crew?.name
-    const text = name ? `Join my crew "${name}" and ride the week with us.` : 'Join my crew and ride the week with us.'
+    const text = name ? `Komm in meine Crew „${name}“ und fahr die Woche mit uns.` : 'Komm in meine Crew und fahr die Woche mit uns.'
     try {
       if (navigator.share) await navigator.share({ text })
       else await navigator.clipboard.writeText(text)
@@ -243,7 +240,7 @@ export default function W3CrewPage() {
 
   // Set/replace the crew's distance goal as a real weekly crew challenge.
   const saveGoal = async (target: number) => {
-    await createChallenge.mutateAsync({ name: 'Around the world', metric: 'distance_km', target, period: 'week' })
+    await createChallenge.mutateAsync({ name: 'Einmal um die Welt', metric: 'distance_km', target, period: 'week' })
     setEditingGoal(false)
   }
 

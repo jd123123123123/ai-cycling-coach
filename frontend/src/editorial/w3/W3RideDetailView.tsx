@@ -115,7 +115,7 @@ function routePath(pts: [number, number][]): string {
 }
 /** Ride intensity (IF) → the hero's accent colour + a plain-word label. */
 const intensityColor = (iff: number): string => iff >= 1.02 ? '#FF6A3D' : iff >= 0.92 ? T.warn : iff >= 0.8 ? T.acid : T.training
-const intensityLabel = (iff: number): string => iff >= 1.02 ? 'VO2 · anaerob' : iff >= 0.92 ? 'Schwelle' : iff >= 0.8 ? 'Tempo' : iff >= 0.6 ? 'Ausdauer' : 'Recovery'
+const intensityLabel = (iff: number): string => iff >= 1.02 ? 'VO2 · anaerob' : iff >= 0.92 ? 'Schwelle' : iff >= 0.8 ? 'Tempo' : iff >= 0.6 ? 'Ausdauer' : 'Erholung'
 
 // Icon per stat card, matched by its label keyword — supports the storytelling.
 const STAT_ICON = (label: string): LucideIcon => {
@@ -150,8 +150,8 @@ function SceneComposing() {
           style={{ fontSize: 19, fontWeight: 800, color: T.acid, letterSpacing: -1 }}>✱</motion.span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '0 30px', textAlign: 'center' }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>Painting you onto this road…</span>
-        <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>Your rider, your bike, this ride's terrain. Up to two minutes.</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>Wir malen dich auf diese Straße…</span>
+        <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>Dein Fahrer, dein Rad, das Terrain dieser Fahrt. Bis zu zwei Minuten.</span>
       </div>
     </div>
   )
@@ -200,8 +200,8 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
         <W3StatusBar />
 
         {/* Nav */}
-        <W3TopBar title="Ride detail" onBack={onBack}
-          extra={<button onClick={onShare} aria-label="Share" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>} />
+        <W3TopBar title="Fahrt im Detail" onBack={onBack}
+          extra={<button onClick={onShare} aria-label="Teilen" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>} />
 
         {/* Cover — the rider's own avatar on their own bike, in a scene composed
              from this ride's terrain, when one has been composed. Until then the
@@ -216,17 +216,17 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
           const showScene = scene.status === 'ok' && !!scene.image && !scene.pending
           const canCompose = scene.status === 'not_generated' && !scene.pending
           const note: { text: string; action?: string; onClick?: () => void } | null = scene.pending ? null
-            : scene.failed ? { text: "That render didn't come through. Your road is still here — give it another go." }
-            : scene.status === 'needs_rider' ? { text: 'Digitalise your rider once, and every ride gets a cover with you in it.', action: 'Create your avatar', onClick: () => onOpenStudio?.('rider') }
-            : scene.status === 'needs_bike' ? { text: 'Put your bike in the garage, and this road gets ridden by the real thing.', action: 'Add your bike', onClick: () => onOpenStudio?.('bike') }
-            : scene.status === 'image_model_unavailable' ? { text: 'The studio is not connected right now. Your route holds the cover.' }
+            : scene.failed ? { text: 'Das Bild kam nicht durch. Deine Straße ist noch da — versuch es nochmal.' }
+            : scene.status === 'needs_rider' ? { text: 'Digitalisiere deinen Fahrer einmal, und jede Fahrt bekommt ein Titelbild mit dir darauf.', action: 'Avatar erstellen', onClick: () => onOpenStudio?.('rider') }
+            : scene.status === 'needs_bike' ? { text: 'Stell dein Rad in die Garage, und diese Straße wird vom echten Rad gefahren.', action: 'Rad hinzufügen', onClick: () => onOpenStudio?.('bike') }
+            : scene.status === 'image_model_unavailable' ? { text: 'Das Studio ist gerade nicht verbunden. Deine Route hält das Titelbild.' }
             : null
           return (
             <div style={{ height: showScene ? 264 : 210, margin: '8px 0 0', position: 'relative', overflow: 'hidden', background: `radial-gradient(120% 95% at 60% 12%, ${acc}2E, ${T.bg})` }}>
               {/* The scene is a square render; the cover grows for it so the crop
                   keeps the rider clear of the scrim and the overlapping card. */}
               {showScene ? (
-                <motion.img src={scene.image!} alt="You, on your bike, on this ride"
+                <motion.img src={scene.image!} alt="Du, auf deinem Rad, auf dieser Fahrt"
                   initial={reduce ? false : { opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, ease: EASE }}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 42%' }} />
               ) : hasRoute ? (
@@ -267,7 +267,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, color: T.ink }}>{intensityLabel(vm.intensity)}</span>
                   {vm.intensity > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: T.quiet }}>· IF {vm.intensity.toFixed(2)}</span>}
                 </div>
-                {canCompose && <ScenePill label={scene.failed ? 'Try again' : 'See yourself here'} onClick={onCompose} />}
+                {canCompose && <ScenePill label={scene.failed ? 'Nochmal versuchen' : 'Sieh dich hier'} onClick={onCompose} />}
               </div>
               {note && <SceneNote {...note} />}
               {scene.pending && <SceneComposing />}
@@ -293,13 +293,13 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', paddingBottom: 6 }}>
-                <Kicker>Avg speed</Kicker>
+                <Kicker>Ø Tempo</Kicker>
                 <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{vm.avgSpeed}</span>
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Kicker>Power · whole ride</Kicker>
+                <Kicker>Leistung · ganze Fahrt</Kicker>
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>
                   {hov != null ? `${Math.round(vm.power[hov])} W` : vm.powerNote}
                 </span>
@@ -310,7 +310,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                 onPointerLeave={() => setHov(null)}>
                 {/* average trend line */}
                 <div style={{ position: 'absolute', left: 0, right: 0, bottom: Math.round((pAvg / pMax) * 46), height: 1, background: `${T.ink}55`, zIndex: 1, pointerEvents: 'none' }}>
-                  <span style={{ position: 'absolute', right: 0, top: -12, fontSize: 8, fontWeight: 700, color: T.mid }}>AVG</span>
+                  <span style={{ position: 'absolute', right: 0, top: -12, fontSize: 8, fontWeight: 700, color: T.mid }}>Ø</span>
                 </div>
                 {vm.power.map((p, i) => {
                   const on = hov === i
@@ -352,7 +352,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
             <span style={{ fontSize: 94, fontWeight: 700, letterSpacing: -4, lineHeight: 0.8, color: T.acid }}>{vm.execScore}</span>
             <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12 }}>
               <span style={{ fontSize: 16, fontWeight: 700, color: T.quiet }}>/ {vm.execTotal}</span>
-              <Kicker>Execution</Kicker>
+              <Kicker>Ausführung</Kicker>
             </div>
           </div>
           <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
@@ -360,17 +360,17 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
           </div>
           <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.25, color: T.ink }}>{vm.verdictHeadline}</span>
           <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{vm.verdictBody}</span>
-          {vm.aiModel && <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet }}>AI verdict · {vm.aiModel}</span>}
+          {vm.aiModel && <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet }}>KI-Urteil · {vm.aiModel}</span>}
         </div>
 
         {/* 01 Did you hold it */}
         {vm.repeats.length > 0 && (
           <div style={{ ...band(28), gap: 12 }}>
-            <SectionHead n="01" t="Did you hold it?" s="Each repeat against its target. Right of the line is above target." />
+            <SectionHead n="01" t="Hast du gehalten?" s="Jede Wiederholung gegen ihr Ziel. Rechts der Linie heißt über Ziel." />
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', paddingBottom: 4 }}>
               <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: -1.5, color: T.acid }}>{vm.repeatsScore}</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 4 }}>
-                <Kicker>Repeats on or above target</Kicker>
+                <Kicker>Wdh. auf oder über Ziel</Kicker>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: T.ink }}>{vm.repeatsSub}</span>
               </div>
             </div>
@@ -402,7 +402,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
 
         {/* 02 What it asked of you */}
         <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n="02" t="What it asked of you" s={vm.zonesSub} />
+          <SectionHead n="02" t="Was sie dir abverlangt hat" s={vm.zonesSub} />
           <div style={{ padding: 18, borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', gap: 1, height: 16 }}>
               {vm.zones.map((z, i) => (
@@ -428,7 +428,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
 
         {/* 03 Where it ranks */}
         <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n="03" t="Where it ranks" s={vm.ranksSub} />
+          <SectionHead n="03" t="Wo sie steht" s={vm.ranksSub} />
           <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
             {vm.ranks.map((r, i) => (
               <div key={r.dur} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
@@ -447,11 +447,11 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
 
         {/* 04 What this changes */}
         <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n="04" t="What this changes" s="The ride is over. These are the numbers it moved." />
+          <SectionHead n="04" t="Was das verändert" s="Die Fahrt ist vorbei. Das sind die Zahlen, die sie bewegt hat." />
           <div style={{ ...card(), gap: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <Kicker>On you</Kicker>
+                <Kicker>An dir</Kicker>
                 <span style={{ fontSize: 42, fontWeight: 700, letterSpacing: -2, color: T.acid }}>{vm.onYouDelta}<span style={{ fontSize: 16, letterSpacing: 0 }}> W</span></span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
@@ -461,7 +461,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
             </div>
             <div style={{ height: 1, background: T.rule }} />
             <div style={{ display: 'flex', gap: 10 }}>
-              {[['FITNESS', vm.fitness, vm.fitnessD], ['FATIGUE', vm.fatigue, vm.fatigueD], ['FORM', vm.form, vm.formD]].map(([l, v, d]) => (
+              {[['FITNESS', vm.fitness, vm.fitnessD], ['ERMÜDUNG', vm.fatigue, vm.fatigueD], ['FORM', vm.form, vm.formD]].map(([l, v, d]) => (
                 <div key={l} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <div style={{ display: 'flex', gap: 5, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>{v}</span>
@@ -478,9 +478,9 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
         {/* 05 What it moved you toward — this ride's push toward the season goals */}
         {vm.moved.length > 0 && (
           <div style={{ ...band(44), gap: 12 }}>
-            <SectionHead n="05" t="What it moved you toward" s={vm.movedSub} />
+            <SectionHead n="05" t="Worauf sie dich zubewegt hat" s={vm.movedSub} />
             <div style={{ ...card(), gap: 18 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>TOWARD THE YEAR</span>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>AUF DAS JAHR</span>
               {vm.moved.map((m, i) => (
                 <div key={m.label} style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>

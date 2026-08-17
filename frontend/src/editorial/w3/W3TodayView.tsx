@@ -257,7 +257,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
               <Flame size={13} color={T.acid} />
               <span style={{ fontSize: 13, fontWeight: 600, color: T.acid }}>{vm.streak ?? DASH}</span>
             </div>
-            <W3NavIcon to="/e/w3-plan" label="Training plan"><CalendarRange size={16} color={T.ink} /></W3NavIcon>
+            <W3NavIcon to="/e/w3-plan" label="Trainingsplan"><CalendarRange size={16} color={T.ink} /></W3NavIcon>
             <W3NavMenu />
           </div>
         </div>
@@ -268,11 +268,11 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 12px 7px 10px', borderRadius: 100, background: T.surface }}>
             <Bike size={13} color={vm.bikeImage ? T.acid : T.quiet} />
             <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: vm.bikeImage ? T.ink : T.quiet }}>
-              {vm.bikeImage ? vm.bikeName : 'NO BIKE YET'}
+              {vm.bikeImage ? vm.bikeName : 'NOCH KEIN BIKE'}
             </span>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <W3NavIcon to="/e/w3-bike-studio" label={vm.bikeImage ? 'Edit bike' : 'Add your bike'}><Pencil size={15} color={T.mid} /></W3NavIcon>
+            <W3NavIcon to="/e/w3-bike-studio" label={vm.bikeImage ? 'Bike bearbeiten' : 'Bike hinzufügen'}><Pencil size={15} color={T.mid} /></W3NavIcon>
           </div>
         </div>
 
@@ -288,7 +288,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
               <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
                 <span style={{ fontSize: 68, fontWeight: 700, letterSpacing: -3, lineHeight: 0.82, color: vm.readiness != null ? T.acid : T.quiet, textShadow: vm.readiness != null ? `0 0 26px ${T.acid}66` : 'none' }}>{vm.readiness ?? DASH}</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <Kicker>Readiness</Kicker>
+                  <Kicker>Bereitschaft</Kicker>
                   <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{vm.readinessWord ?? DASH}</span>
                   {/* The day-over-day move: a small signed kicker, deliberately
                       not a second big number next to the score. Absent — not
@@ -301,7 +301,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                <Kicker>Earn rate</Kicker>
+                <Kicker>Multiplikator</Kicker>
                 <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
                   <Star size={14} color={T.acid} fill={T.acid} /><span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{vm.earnRate}</span>
                 </div>
@@ -315,7 +315,7 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px 6px 9px', borderRadius: 100, background: T.acidDim }}>
-              <Sparkles size={12} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, color: T.acid }}>AI COACH</span>
+              <Sparkles size={12} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, color: T.acid }}>KI-COACH</span>
             </div>
             <span style={{ fontSize: 10, fontWeight: 500, color: T.quiet }}>{vm.coachDate}</span>
           </div>
@@ -328,8 +328,8 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
         {/* ── Signals ── */}
         <div style={{ ...band(26), flexDirection: 'row', gap: 8 }}>
           <SignalCard label="HRV" sig={vm.hrv} />
-          <SignalCard label="Resting HR" sig={vm.rhr} />
-          <SignalCard label="Sleep" sig={vm.sleep} />
+          <SignalCard label="Ruhepuls" sig={vm.rhr} />
+          <SignalCard label="Schlaf" sig={vm.sleep} />
         </div>
 
         {/* ── Deine Woche — ONE card: the day selector, the SELECTED day's
@@ -355,24 +355,24 @@ export default function W3TodayView({ vm, onAdapt }: { vm: W3Vm; onAdapt?: OnAda
           onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
 
         {/* ── Your Current Status: 6-week fitness/fatigue mirror + form ── */}
-        <SectionHead title="Your Current Status" subtitle="Earned by training, not bought" tag={vm.zoneTag} />
+        <SectionHead title="Dein aktueller Status" subtitle="Erarbeitet, nicht gekauft" tag={vm.zoneTag} />
         {vm.form
           ? <MirrorChart m={vm.mirror} fitness={vm.form.fitness} fatigue={vm.form.fatigue} form={vm.form.formVal} />
           : (
             <div style={band(26)}>
               <div style={{ ...card(), alignItems: 'center' }}>
-                <Kicker>Where you stand</Kicker>
+                <Kicker>Wo du stehst</Kicker>
                 <span style={{ fontSize: 26, fontWeight: 700, color: T.quiet, marginTop: 8 }}>{DASH}</span>
               </div>
             </div>
           )}
 
         {/* ── Your Rank (fixture: crew standings not wired) ── */}
-        <SectionHead title="Your Rank" subtitle="Earned by training, not bought" tag={vm.zoneTag} />
+        <SectionHead title="Dein Rang" subtitle="Erarbeitet, nicht gekauft" tag={vm.zoneTag} />
         <div style={band(26)}>
           <div style={{ ...card(), gap: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <Kicker>This week · your crew</Kicker>
+              <Kicker>Diese Woche · deine Crew</Kicker>
               <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, lineHeight: 1.35 }}>{vm.crewCaption}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

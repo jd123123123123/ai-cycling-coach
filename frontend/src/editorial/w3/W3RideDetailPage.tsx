@@ -26,16 +26,16 @@ import W3Loading from './W3Loading'
  */
 
 const DASH = '—'
-// Format the ride's date chip: raw ISO → "12 Aug 2026" (never the raw timestamp).
+// Format the ride's date chip: raw ISO → "12. Aug. 2026" (never the raw timestamp).
 const fmtDate = (iso: string | null | undefined): string => {
   if (!iso) return DASH
   const d = new Date(iso)
-  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 const fmtHms = (s: number) => `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`
-const ZONE_NAMES = ['Recovery', 'Endurance', 'Tempo', 'Threshold', 'VO2 max']
+const ZONE_NAMES = ['Erholung', 'Ausdauer', 'Tempo', 'Schwelle', 'VO2max']
 const sgn = (n: number) => `${n >= 0 ? '+' : ''}${Math.round(n)}`
-const durLabel = (s: number) => (s < 60 ? `${s} sec` : `${Math.round(s / 60)} min`)
+const durLabel = (s: number) => (s < 60 ? `${s} Sek` : `${Math.round(s / 60)} Min`)
 
 /** Fitness / fatigue / form from the PMC series: latest CTL/ATL/TSB plus the
  *  7-day change. Honest "—" when the series is missing or too short. */
@@ -71,34 +71,34 @@ function toRepeats(d: RaceDebrief): { repeats: W3Repeat[]; score: string; sub: s
   const maxIdx = deltas.reduce((mi, dlt, i) => (dlt > deltas[mi] ? i : mi), 0)
 
   const repeats: W3Repeat[] = climbs.map((c, i) => ({
-    label: `REPEAT ${i + 1}`,
+    label: `WDH. ${i + 1}`,
     watts: `${c.w} W`,
     delta: deltas[i],
-    verdict: i === maxIdx && deltas[i] >= 0 ? 'STRONGEST' : deltas[i] >= 0 ? 'HELD' : 'FADED',
+    verdict: i === maxIdx && deltas[i] >= 0 ? 'STÄRKSTE' : deltas[i] >= 0 ? 'GEHALTEN' : 'ABGEBAUT',
   }))
 
   const held = deltas.filter((x) => x >= 0).length
   const slipped = deltas.map((x, i) => ({ x, i })).filter((o) => o.x < 0)
   const sub =
     slipped.length === 0
-      ? 'Every repeat on or above the set average.'
+      ? 'Jede Wiederholung auf oder über dem Schnitt.'
       : slipped.length === 1
-        ? `Only repeat ${slipped[0].i + 1} slipped, by ${Math.abs(slipped[0].x)} W.`
-        : `${slipped.length} repeats slipped below the set average.`
+        ? `Nur Wiederholung ${slipped[0].i + 1} fiel ab, um ${Math.abs(slipped[0].x)} W.`
+        : `${slipped.length} Wiederholungen fielen unter den Schnitt.`
 
   const dropped = climbs.filter((c) => c.w < target * 0.9).length
-  const note = `${climbs.length} REPEATS · ${dropped === 0 ? 'NONE DROPPED' : `${dropped} DROPPED`}`
+  const note = `${climbs.length} WDH. · ${dropped === 0 ? 'KEINE ABGEBAUT' : `${dropped} ABGEBAUT`}`
 
-  return { repeats, score: `${held} of ${climbs.length}`, sub, note }
+  return { repeats, score: `${held} von ${climbs.length}`, sub, note }
 }
 
 /** The ceiling that this ride moved: the best PR effort match. When the ride
  *  set no new best, the ceiling is unchanged (delta 0). Honest "—" when there
  *  are no effort matches at all. */
 function toCeiling(efforts: EffortMatch[]): { label: string; before: string; after: string; delta: string } {
-  if (efforts.length === 0) return { label: 'Power ceiling', before: DASH, after: DASH, delta: DASH }
+  if (efforts.length === 0) return { label: 'Bestwert', before: DASH, after: DASH, delta: DASH }
   const best = efforts.reduce((m, e) => ((e.pct_of_best ?? 0) > (m.pct_of_best ?? 0) ? e : m), efforts[0])
-  const label = `${durLabel(best.duration_s)} ceiling`
+  const label = `${durLabel(best.duration_s)} Bestwert`
   if (best.is_pr && best.best_watts != null) {
     return { label, before: `${best.best_watts}`, after: `${best.ride_watts}`, delta: sgn(best.ride_watts - best.best_watts) }
   }
@@ -129,18 +129,18 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
   const thisM = h.elevation_m ?? activity?.elevation_gain_m ?? 0
   const clamp = (x: number) => Math.max(0, Math.min(1, x))
   const moved: MovedRow[] = totalRides > 0 ? [
-    { label: 'Season distance', delta: `+${Math.round(thisKm)} km`, value: spaceK(totalKm), goal: `${spaceK(KM_GOAL)} km`, beforePct: clamp((totalKm - thisKm) / KM_GOAL), pct: clamp(totalKm / KM_GOAL) },
-    { label: 'Climbing', delta: `+${spaceK(thisM)} m`, value: spaceK(totalM), goal: `${spaceK(M_GOAL)} m`, beforePct: clamp((totalM - thisM) / M_GOAL), pct: clamp(totalM / M_GOAL) },
-    { label: 'Rides logged', delta: '+1', value: String(totalRides), goal: String(RIDES_GOAL), beforePct: clamp((totalRides - 1) / RIDES_GOAL), pct: clamp(totalRides / RIDES_GOAL) },
+    { label: 'Saison-Distanz', delta: `+${Math.round(thisKm)} km`, value: spaceK(totalKm), goal: `${spaceK(KM_GOAL)} km`, beforePct: clamp((totalKm - thisKm) / KM_GOAL), pct: clamp(totalKm / KM_GOAL) },
+    { label: 'Höhenmeter', delta: `+${spaceK(thisM)} m`, value: spaceK(totalM), goal: `${spaceK(M_GOAL)} m`, beforePct: clamp((totalM - thisM) / M_GOAL), pct: clamp(totalM / M_GOAL) },
+    { label: 'Fahrten erfasst', delta: '+1', value: String(totalRides), goal: String(RIDES_GOAL), beforePct: clamp((totalRides - 1) / RIDES_GOAL), pct: clamp(totalRides / RIDES_GOAL) },
   ] : []
   const remainKm = Math.max(0, KM_GOAL - totalKm)
   const moreRides = thisKm > 0 ? Math.ceil(remainKm / thisKm) : null
-  const movedSub = `${Math.round(thisKm)} km and ${spaceK(thisM)} m of climbing, added to your year.`
+  const movedSub = `${Math.round(thisKm)} km und ${spaceK(thisM)} Höhenmeter, auf dein Jahr gerechnet.`
   const movedFoot = remainKm <= 0
-    ? 'Season distance goal reached — everything from here is a bonus.'
+    ? 'Saisonziel erreicht — alles ab hier ist Zugabe.'
     : moreRides != null
-      ? `About ${moreRides} more rides like this and the ${spaceK(KM_GOAL)} km lands.`
-      : `${spaceK(remainKm)} km still to the season goal.`
+      ? `Noch etwa ${moreRides} Fahrten wie diese, dann stehen die ${spaceK(KM_GOAL)} km.`
+      : `Noch ${spaceK(remainKm)} km bis zum Saisonziel.`
 
   const zones: W3Zone[] = (() => {
     const pct = d.pacing?.zone_time_pct ?? {}
@@ -149,15 +149,15 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     return keys.slice(0, 5).map((k, i) => {
       const p = Math.round((pct[k] ?? 0) * (pct[k] > 1 ? 1 : 100))
       const min = Math.round(((pct[k] > 1 ? pct[k] / 100 : pct[k]) * h.moving_time_s) / 60)
-      return { z: `ZONE ${i + 1}`, name: ZONE_NAMES[i] ?? k, min: `${min} min`, pct: p, peak: i === 3 }
+      return { z: `ZONE ${i + 1}`, name: ZONE_NAMES[i] ?? k, min: `${min} Min`, pct: p, peak: i === 3 }
     })
   })()
 
   const bestEffort = d.efforts.reduce((m, e) => (e.pct_of_best ?? 0) > (m?.pct_of_best ?? 0) ? e : m, d.efforts[0])
   const ranks: W3Rank[] = d.efforts.slice(0, 5).map((e) => ({
-    dur: e.duration_s < 60 ? `${e.duration_s} SEC` : `${Math.round(e.duration_s / 60)} MIN`,
+    dur: e.duration_s < 60 ? `${e.duration_s} SEK` : `${Math.round(e.duration_s / 60)} MIN`,
     watts: `${e.ride_watts} W`,
-    note: e.is_pr ? 'NEW BEST' : e.best_watts != null ? `BEST ${e.best_watts} W` : '',
+    note: e.is_pr ? 'NEUER BESTWERT' : e.best_watts != null ? `BESTWERT ${e.best_watts} W` : '',
     pr: e.is_pr,
     fill: e.pct_of_best != null ? Math.min(1, e.pct_of_best / (e.pct_of_best > 1 ? 100 : 1)) : 0.6,
   }))
@@ -169,31 +169,31 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
   // A factual line about the 7-day fitness/form window (never a fabricated
   // narrative); falls back to the AI verdict's watch-out when PMC is absent.
   const changesBody = pmcT.hasTrend
-    ? `Over the last seven days fitness moved ${sgn(pmcT.ctlDelta)} and form ${sgn(pmcT.tsbDelta)} — the cost of the work, and where it leaves you now.`
+    ? `In den letzten sieben Tagen: Fitness ${sgn(pmcT.ctlDelta)}, Form ${sgn(pmcT.tsbDelta)} — der Preis der Arbeit, und wo er dich jetzt hinstellt.`
     : (v.watch_out[0] ?? '')
 
   return {
-    dateChip: fmtDate(h.date), sportChip: h.sport?.toUpperCase() ?? 'RIDE', recordChip: bestEffort?.is_pr ? 'NEW RECORD' : null,
+    dateChip: fmtDate(h.date), sportChip: h.sport?.toUpperCase() ?? 'FAHRT', recordChip: bestEffort?.is_pr ? 'NEUER REKORD' : null,
     title: h.title,
-    bigStat: h.distance_km != null ? String(Math.round(h.distance_km)) : DASH, bigStatUnit: 'Kilometres',
+    bigStat: h.distance_km != null ? String(Math.round(h.distance_km)) : DASH, bigStatUnit: 'Kilometer',
     polyline: activity?.route_polyline ?? null, intensity,
     movedSub, moved, movedFoot,
-    climb: h.elevation_m != null ? `${Math.round(h.elevation_m)} m up` : DASH,
+    climb: h.elevation_m != null ? `${Math.round(h.elevation_m)} m hoch` : DASH,
     avgSpeed: h.avg_speed_kmh != null ? `${Math.round(h.avg_speed_kmh)} km/h` : DASH,
     power: d.story?.power?.filter((_, i) => i % Math.max(1, Math.floor((d.story?.power.length ?? 1) / 40)) === 0).slice(0, 40) ?? [],
     powerNote: rep.note,
     stats: [
-      { v: `${Math.round(h.np_watts)} W`, l: 'AVERAGE POWER', s: `${Math.round(h.np_watts)} W normalised` },
-      { v: fmtHms(h.moving_time_s), l: 'MOVING TIME', s: h.avg_speed_kmh != null ? `${Math.round(h.distance_km)} km at ${Math.round(h.avg_speed_kmh)}` : '' },
-      { v: String(Math.round(h.tss)), l: 'LOAD · TSS', s: '' },
-      { v: eff?.avg_hr != null ? `${Math.round(eff.avg_hr)}` : DASH, l: 'AVG HR · BPM', s: eff?.decoupling_pct != null ? `${eff.decoupling_pct.toFixed(1)}% drift` : '' },
+      { v: `${Math.round(h.np_watts)} W`, l: 'Ø LEISTUNG', s: `${Math.round(h.np_watts)} W normalisiert` },
+      { v: fmtHms(h.moving_time_s), l: 'FAHRZEIT', s: h.avg_speed_kmh != null ? `${Math.round(h.distance_km)} km bei ${Math.round(h.avg_speed_kmh)}` : '' },
+      { v: String(Math.round(h.tss)), l: 'BELASTUNG · TSS', s: '' },
+      { v: eff?.avg_hr != null ? `${Math.round(eff.avg_hr)}` : DASH, l: 'Ø HF · BPM', s: eff?.decoupling_pct != null ? `${eff.decoupling_pct.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} % Drift` : '' },
     ],
     execScore: String(v.grade_score), execTotal: '100',
     verdictHeadline: v.went_well[0] ?? v.ai_verdict.split('.')[0] ?? '',
     verdictBody: v.ai_verdict, aiModel: v.ai_model || null,
     repeatsScore: rep.score, repeatsSub: rep.sub, repeats: rep.repeats,
-    zonesSub: `${Math.round(h.moving_time_s / 60)} minutes recorded.`, zones,
-    ranksSub: 'Every duration against your best.', ranks,
+    zonesSub: `${Math.round(h.moving_time_s / 60)} Minuten aufgezeichnet.`, zones,
+    ranksSub: 'Jede Dauer gegen deinen Bestwert.', ranks,
     onYouDelta: ceil.delta, ceilingLabel: ceil.label, ceilingBefore: ceil.before, ceilingAfter: ceil.after,
     fitness: pmcT.fitness, fitnessD: pmcT.fitnessD, fatigue: pmcT.fatigue, fatigueD: pmcT.fatigueD, form: pmcT.form, formD: pmcT.formD,
     changesBody,

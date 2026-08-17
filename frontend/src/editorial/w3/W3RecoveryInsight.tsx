@@ -23,11 +23,11 @@ import { T, EASE, band } from './w3tokens'
 
 // Directive → the push/gentle stance it represents.
 const DIRECTIVE_META: Record<DirectiveKind, { verb: string; push: boolean; color: string }> = {
-  escalate: { verb: 'Escalate', push: true, color: T.acid },
-  push: { verb: 'Push', push: true, color: T.training },
-  hold: { verb: 'Hold', push: false, color: T.warn },
-  deload: { verb: 'Deload', push: false, color: T.warn },
-  rest: { verb: 'Rest', push: false, color: T.bad },
+  escalate: { verb: 'Steigern', push: true, color: T.acid },
+  push: { verb: 'Vollgas', push: true, color: T.training },
+  hold: { verb: 'Halten', push: false, color: T.warn },
+  deload: { verb: 'Entlasten', push: false, color: T.warn },
+  rest: { verb: 'Ruhen', push: false, color: T.bad },
 }
 
 const TONE_COLOR: Record<Tone, string> = {
@@ -49,10 +49,10 @@ export default function W3RecoveryInsight() {
         <SectionHead />
         <div style={{ padding: 20, borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: T.mid }}>
-            {isLoading ? 'Reading your recovery…' : 'No recovery signal yet'}
+            {isLoading ? 'Lese deine Erholung…' : 'Noch kein Erholungssignal'}
           </span>
           <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.5, color: T.quiet }}>
-            {isLoading ? 'Checking HRV, sleep and load.' : 'Connect a wearable and log a morning HRV to see whether your body is primed to push or asking for a gentler day.'}
+            {isLoading ? 'Prüfe HRV, Schlaf und Belastung.' : 'Verbinde ein Wearable und logge eine Morgen-HRV — dann siehst du, ob dein Körper Vollgas verträgt oder einen ruhigeren Tag braucht.'}
           </span>
         </div>
       </div>
@@ -81,7 +81,7 @@ export default function W3RecoveryInsight() {
               <span style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '5px 11px', borderRadius: 100, background: `${meta.color}22`, fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: meta.color }}>
                 {meta.push ? <TrendingUp size={12} /> : <TrendingDown size={12} />}{meta.verb.toUpperCase()}
               </span>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>CEILING · {data.intensity_ceiling.toUpperCase()}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>LIMIT · {data.intensity_ceiling.toUpperCase()}</span>
             </div>
             <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, letterSpacing: -0.3, color: T.ink }}>{data.headline}</span>
           </div>
@@ -94,8 +94,8 @@ export default function W3RecoveryInsight() {
               style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <span style={{ marginTop: 2, flex: 'none' }}><ToneIcon tone={s.tone} /></span>
               <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, lineHeight: 1.4, color: s.tone === 'neutral' ? T.mid : T.ink }}>{s.text}</span>
-              {s.evidence === 'RCT' && <span style={{ flex: 'none', marginTop: 1, display: 'flex', gap: 3, alignItems: 'center', fontSize: 8, fontWeight: 700, letterSpacing: 0.5, color: T.quiet }}><ShieldCheck size={10} />STUDY</span>}
-              {s.evidence === 'guardrail' && <span style={{ flex: 'none', marginTop: 1, fontSize: 8, fontWeight: 700, letterSpacing: 0.5, color: T.warn }}>GUARDRAIL</span>}
+              {s.evidence === 'RCT' && <span style={{ flex: 'none', marginTop: 1, display: 'flex', gap: 3, alignItems: 'center', fontSize: 8, fontWeight: 700, letterSpacing: 0.5, color: T.quiet }}><ShieldCheck size={10} />STUDIE</span>}
+              {s.evidence === 'guardrail' && <span style={{ flex: 'none', marginTop: 1, fontSize: 8, fontWeight: 700, letterSpacing: 0.5, color: T.warn }}>SCHUTZ</span>}
             </motion.div>
           ))}
         </div>
@@ -108,8 +108,8 @@ function SectionHead() {
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
       <Activity size={15} color={T.acid} />
-      <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.4, color: T.ink }}>Recovery</span>
-      <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>· push or be gentle</span>
+      <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.4, color: T.ink }}>Erholung</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>· Vollgas oder schonen</span>
     </div>
   )
 }

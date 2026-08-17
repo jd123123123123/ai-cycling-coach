@@ -7,8 +7,8 @@ import { STARTER_BIKE } from './starterBike'
  *  intro → analyzing → rendering → reveal so the whole flow is visible. */
 
 const DESCRIPTION =
-  'A road bike with a matte teal frame and lime accents, deep-section carbon wheels, ' +
-  'Shimano 105 groupset and drop bars — a clean build with lime bar tape and a single bottle cage.'
+  'Ein Rennrad mit mattem petrolfarbenem Rahmen und Limetten-Akzenten, hohen Carbon-Laufrädern, ' +
+  'Shimano-105-Gruppe und Rennlenker — ein cleaner Aufbau mit limettenfarbenem Lenkerband und einem Flaschenhalter.'
 
 export default function W3BikeStudioPreview() {
   const [state, setState] = useState<StudioState>('reveal')
@@ -27,7 +27,7 @@ export default function W3BikeStudioPreview() {
         imageUrl={state === 'reveal' ? STARTER_BIKE : null}   // fixture render → shows the BIKE UNLOCKED celebration
         renderStatus={state === 'reveal' ? 'ok' : null}
         prompt="A single road bicycle, matte teal frame, lime accents, deep-section carbon wheels, drop bars…"
-        error={state === 'error' ? 'Couldn’t find a bike in that photo. Try the whole bike, side-on.' : null}
+        error={state === 'error' ? 'Auf dem Foto war kein Bike zu finden. Nimm das ganze Bike, von der Seite.' : null}
         onBack={() => setState('intro')}
         onPick={() => setState('analyzing')}
         onReset={() => setState('intro')}

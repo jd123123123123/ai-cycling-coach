@@ -82,7 +82,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
           <W3StatusBar />
 
           <div style={{ padding: '0 12px 0 8px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', zIndex: 2 }}>
-            <button onClick={p.onBack} aria-label="Back" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={20} color={T.ink} /></button>
+            <button onClick={p.onBack} aria-label="Zurück" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={20} color={T.ink} /></button>
             <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Garage</span>
             <div style={{ width: 40 }} />
           </div>
@@ -90,7 +90,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '4px 20px 28px', position: 'relative', zIndex: 2 }}>
             <motion.div initial={reduce ? false : { scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.4, ease: EASE }}
               style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 14px', borderRadius: 100, background: T.acidDim, border: `1px solid ${T.acid}44` }}>
-              <Sparkles size={13} color={T.acid} /><span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.acid }}>NEW UNLOCK</span>
+              <Sparkles size={13} color={T.acid} /><span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.acid }}>NEU ENTSPERRT</span>
             </motion.div>
 
             {/* Bike card + rarity tag */}
@@ -103,7 +103,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
             </motion.div>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, textAlign: 'center' }}>
-              <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1, color: T.ink }}>BIKE UNLOCKED</span>
+              <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1, color: T.ink }}>BIKE ENTSPERRT</span>
               <span style={{ fontSize: 15, fontWeight: 500, color: T.mid }}>{p.bikeName ?? 'Allez'} · dein W3-Collectible</span>
               <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.4, color: T.quiet, maxWidth: 300 }}>Es steht in deiner Garage. Jede Fahrt, die du loggst, levelt es weiter.</span>
             </div>
@@ -122,7 +122,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
                 In die Garage
               </button>
               <button onClick={p.onSave} style={{ height: 46, borderRadius: 100, border: 0, background: 'transparent', color: T.mid, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
-                <Share2 size={15} color={T.mid} />Share the moment
+                <Share2 size={15} color={T.mid} />Moment teilen
               </button>
             </div>
           </div>
@@ -138,7 +138,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
 
         {/* Top nav — back + screen title */}
         <div style={{ padding: '0 12px 0 8px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={p.onBack} aria-label="Back" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+          <button onClick={p.onBack} aria-label="Zurück" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
             <ArrowLeft size={20} color={T.ink} />
           </button>
           <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Garage</span>
@@ -148,12 +148,12 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
         {/* Header */}
         <div style={{ ...band(20), padding: '4px 20px 18px', gap: 8 }}>
           <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, lineHeight: 1.05, color: T.ink }}>
-            {owned ? (p.bikeName ?? 'Your bike') : 'Bike studio'}
+            {owned ? (p.bikeName ?? 'Dein Bike') : 'Bike Studio'}
           </span>
           <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>
             {owned
               ? 'In deiner Garage. Jede Fahrt, die du loggst, levelt es weiter.'
-              : 'Add a photo of your real bike. We render it as your collectible — same frame, same colours, W3 finish.'}
+              : 'Füg ein Foto deines Bikes hinzu. Wir rendern es als dein Collectible — gleicher Rahmen, gleiche Farben, W3-Finish.'}
           </span>
         </div>
 
@@ -162,16 +162,16 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
           <Card grad={busy || p.state === 'reveal' ? grad : 'linear-gradient(180deg, #161616, #0F0F0F)'}>
             {/* rendered collectible — only with a real image */}
             {p.state === 'reveal' && p.imageUrl && (
-              <img src={p.imageUrl} alt="Your bike collectible" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              <img src={p.imageUrl} alt="Dein Collectible-Bike" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             )}
 
             {/* reveal but no image model → honest "studio unavailable" over the real photo */}
             {unavailable && (
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-                {p.photoUrl && <img src={p.photoUrl} alt="Your bike" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.18, filter: 'saturate(1.3)' }} />}
+                {p.photoUrl && <img src={p.photoUrl} alt="Dein Bike" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.18, filter: 'saturate(1.3)' }} />}
                 <Bike size={120} strokeWidth={1.2} color="#0B0B0B" style={{ opacity: 0.55, position: 'relative' }} />
                 <div style={{ position: 'absolute', bottom: 14, left: 14, right: 14, padding: '9px 12px', borderRadius: 12, background: 'rgba(11,11,11,.72)', fontSize: 10.5, fontWeight: 600, color: '#fff', textAlign: 'center' }}>
-                  Studio unavailable — no image model connected
+                  Studio nicht verfügbar — kein Bildmodell verbunden
                 </div>
               </div>
             )}
@@ -181,7 +181,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
                 shows, so the two screens speak about the empty slot the same way. */}
             {p.state === 'intro' && (
               p.photoUrl
-                ? <img src={p.photoUrl} alt="Your bike" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ? <img src={p.photoUrl} alt="Dein Bike" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : (
                   <div style={{ position: 'absolute', inset: 0 }}>
                     <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(56% 44% at 50% 48%, #FFFFFF12, transparent 70%)' }} />
@@ -205,7 +205,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
                   <motion.div animate={reduce ? undefined : { rotate: 360 }} transition={{ duration: 1.4, repeat: Infinity, ease: 'linear' }}>
                     <Sparkles size={34} color={T.acid} />
                   </motion.div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{p.state === 'analyzing' ? 'Reading your bike…' : 'Rendering your collectible…'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{p.state === 'analyzing' ? 'Dein Bike wird gelesen…' : 'Dein Collectible entsteht…'}</span>
                 </div>
               </div>
             )}
@@ -215,7 +215,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
         {/* Analysis — real vision description */}
         {(p.state === 'reveal' || p.state === 'rendering') && p.description && (
           <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE }} style={{ ...band(18), gap: 8 }}>
-            <Kicker>What we see</Kicker>
+            <Kicker>Was wir sehen</Kicker>
             <div style={{ padding: 14, borderRadius: 16, background: T.surface }}>
               <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.5, color: T.mid }}>{p.description}</span>
             </div>
@@ -225,7 +225,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
         {/* Honest prompt reveal — what we'd render, when the studio is unavailable */}
         {unavailable && p.prompt && (
           <div style={{ ...band(18), gap: 8 }}>
-            <Kicker>The render we'd make</Kicker>
+            <Kicker>Was wir rendern würden</Kicker>
             <div style={{ padding: 14, borderRadius: 16, background: T.surface }}>
               <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.5, color: T.quiet }}>{p.prompt}</span>
             </div>
@@ -236,7 +236,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
         {p.state === 'error' && (
           <div style={{ ...band(18) }}>
             <div style={{ padding: 16, borderRadius: 16, background: T.surface }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: T.warn }}>{p.error ?? 'Something went wrong. Try another photo.'}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: T.warn }}>{p.error ?? 'Etwas ist schiefgelaufen. Versuch ein anderes Foto.'}</span>
             </div>
           </div>
         )}
@@ -245,7 +245,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
         <div style={{ ...band(24), paddingTop: 4, gap: 10 }}>
           {p.state === 'intro' && (
             <button onClick={p.onPick} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-              <Camera size={19} color={T.bg} />{p.photoUrl ? 'Render this bike' : 'Add a photo'}
+              <Camera size={19} color={T.bg} />{p.photoUrl ? 'Dieses Bike rendern' : 'Foto hinzufügen'}
             </button>
           )}
           {p.state === 'reveal' && (
@@ -264,17 +264,17 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
               <>
                 {p.imageUrl && (
                   <button onClick={p.onSave} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-                    <Download size={19} color={T.bg} strokeWidth={2.5} />Save image
+                    <Download size={19} color={T.bg} strokeWidth={2.5} />Bild speichern
                   </button>
                 )}
                 <button onClick={p.onReset} style={{ height: 48, borderRadius: 100, border: 0, background: '#FFFFFF0A', color: T.ink, fontFamily: FONT, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center' }}>
-                  <RefreshCw size={15} color={T.ink} />{p.imageUrl ? 'Render another' : 'Try another photo'}
+                  <RefreshCw size={15} color={T.ink} />{p.imageUrl ? 'Anderes Bike rendern' : 'Anderes Foto versuchen'}
                 </button>
               </>
             )
           )}
           {p.state === 'error' && (
-            <button onClick={p.onReset} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>Try again</button>
+            <button onClick={p.onReset} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>Nochmal versuchen</button>
           )}
         </div>
 

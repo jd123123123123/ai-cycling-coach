@@ -22,7 +22,7 @@ export function W3OnboardTopBar({ onSkip }: { onSkip?: () => void }) {
           onClick={onSkip}
           style={{ background: 'transparent', border: 0, color: T.quiet, fontFamily: FONT, fontSize: 12, fontWeight: 700, letterSpacing: 1.5, cursor: 'pointer' }}
         >
-          SKIP
+          SPÄTER
         </button>
       )}
     </div>

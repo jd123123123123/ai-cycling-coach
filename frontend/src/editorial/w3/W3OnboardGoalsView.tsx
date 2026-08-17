@@ -16,13 +16,13 @@ import './w3.css'
 export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
 export const WEEKDAYS: { key: Weekday; short: string }[] = [
-  { key: 'mon', short: 'Mon' },
-  { key: 'tue', short: 'Tue' },
-  { key: 'wed', short: 'Wed' },
-  { key: 'thu', short: 'Thu' },
-  { key: 'fri', short: 'Fri' },
-  { key: 'sat', short: 'Sat' },
-  { key: 'sun', short: 'Sun' },
+  { key: 'mon', short: 'Mo' },
+  { key: 'tue', short: 'Di' },
+  { key: 'wed', short: 'Mi' },
+  { key: 'thu', short: 'Do' },
+  { key: 'fri', short: 'Fr' },
+  { key: 'sat', short: 'Sa' },
+  { key: 'sun', short: 'So' },
 ]
 
 export interface W3YearGoals {
@@ -40,13 +40,13 @@ export const DISTANCE_MIN = 1000
 export const DISTANCE_MAX = 20000
 export const DISTANCE_STEP = 500
 
-const fmtKm = (km: number) => km.toLocaleString('en-US')
+const fmtKm = (km: number) => km.toLocaleString('de-DE')
 
-/** One-line human read-back of the plan, e.g. "8,000 km · 4 days/week · long rides on Sat". */
+/** One-line human read-back of the plan, e.g. "8.000 km · 4 Tage/Woche · lange Fahrt am Sa". */
 export function summarize(g: W3YearGoals): string {
-  const parts = [`${fmtKm(g.distanceKm)} km`, `${g.daysPerWeek} day${g.daysPerWeek === 1 ? '' : 's'}/week`]
+  const parts = [`${fmtKm(g.distanceKm)} km`, `${g.daysPerWeek} Tag${g.daysPerWeek === 1 ? '' : 'e'}/Woche`]
   const longs = WEEKDAYS.filter((d) => g.longRideDays.includes(d.key)).map((d) => d.short)
-  parts.push(longs.length ? `long ride${longs.length === 1 ? '' : 's'} on ${longs.join(' & ')}` : 'no long ride set')
+  parts.push(longs.length ? `lange Fahrt${longs.length === 1 ? '' : 'en'} am ${longs.join(' & ')}` : 'keine lange Fahrt')
   return parts.join(' · ')
 }
 
@@ -109,18 +109,18 @@ export default function W3OnboardGoalsView({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22, padding: '14px 20px 28px', flex: 1 }}>
           <motion.div {...enter(0.05)}>
             <W3OnboardHeadline
-              kicker="04 — YOUR SEASON"
-              line1="Set your"
-              line2="year."
-              body="Give the coach the shape of your season. You can change any of this later in Settings."
+              kicker="04 — DEINE SAISON"
+              line1="Setz dein"
+              line2="Jahr."
+              body="Gib dem Coach die Form deiner Saison. Alles davon kannst du später in den Einstellungen ändern."
             />
           </motion.div>
 
           {/* Distance target */}
           <motion.section {...enter(0.12)} style={sectionStyle}>
-            <Label>Distance goal · this year</Label>
+            <Label>Distanzziel · dieses Jahr</Label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <StepButton ariaLabel="Decrease distance" onClick={() => bumpDistance(-DISTANCE_STEP)} disabled={goals.distanceKm <= DISTANCE_MIN}>
+              <StepButton ariaLabel="Distanz verringern" onClick={() => bumpDistance(-DISTANCE_STEP)} disabled={goals.distanceKm <= DISTANCE_MIN}>
                 <Minus size={20} strokeWidth={2.6} color={T.ink} />
               </StepButton>
               <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -129,7 +129,7 @@ export default function W3OnboardGoalsView({
                 </span>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>KM</span>
               </div>
-              <StepButton ariaLabel="Increase distance" onClick={() => bumpDistance(DISTANCE_STEP)} disabled={goals.distanceKm >= DISTANCE_MAX}>
+              <StepButton ariaLabel="Distanz erhöhen" onClick={() => bumpDistance(DISTANCE_STEP)} disabled={goals.distanceKm >= DISTANCE_MAX}>
                 <Plus size={20} strokeWidth={2.6} color={T.ink} />
               </StepButton>
             </div>
@@ -140,7 +140,7 @@ export default function W3OnboardGoalsView({
               step={DISTANCE_STEP}
               value={goals.distanceKm}
               onChange={(e) => onChange({ distanceKm: clampDistance(Number(e.target.value)) })}
-              aria-label="Distance goal in kilometres"
+              aria-label="Distanzziel in Kilometern"
               style={{ width: '100%', accentColor: T.acid, height: 28, marginTop: 4, colorScheme: 'dark' }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -151,7 +151,7 @@ export default function W3OnboardGoalsView({
 
           {/* Days per week */}
           <motion.section {...enter(0.18)} style={sectionStyle}>
-            <Label>Training days · per week</Label>
+            <Label>Trainingstage · pro Woche</Label>
             <div style={{ display: 'flex', gap: 8 }}>
               {[1, 2, 3, 4, 5, 6, 7].map((n) => {
                 const active = goals.daysPerWeek === n
@@ -178,7 +178,7 @@ export default function W3OnboardGoalsView({
 
           {/* Favourite training days */}
           <motion.section {...enter(0.24)} style={sectionStyle}>
-            <Label>Favourite days</Label>
+            <Label>Lieblingstage</Label>
             <DayChips
               selected={goals.trainingDays}
               onToggle={(d) => toggleDay('trainingDays', d)}
@@ -188,7 +188,7 @@ export default function W3OnboardGoalsView({
 
           {/* Long-ride day(s) */}
           <motion.section {...enter(0.3)} style={sectionStyle}>
-            <Label>Long-ride day{goals.longRideDays.length === 1 ? '' : 's'}</Label>
+            <Label>Tag{goals.longRideDays.length === 1 ? '' : 'e'} der langen Fahrt</Label>
             <DayChips
               selected={goals.longRideDays}
               onToggle={(d) => toggleDay('longRideDays', d)}
@@ -204,13 +204,13 @@ export default function W3OnboardGoalsView({
               background: T.acidDim, border: `1px solid ${T.acid}44`,
             }}
           >
-            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', color: T.acidDeep }}>Your year</span>
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.4, textTransform: 'uppercase', color: T.acidDeep }}>Dein Jahr</span>
             <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: -0.3, color: T.ink, lineHeight: 1.35 }}>{summarize(goals)}</span>
           </motion.div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 'auto', paddingTop: 8 }}>
             <W3OnboardDots step={step} total={total} />
-            <W3OnboardCta label={saving ? 'SAVING…' : 'NEXT'} onClick={onNext} />
+            <W3OnboardCta label={saving ? 'SPEICHERN…' : 'WEITER'} onClick={onNext} />
           </div>
         </div>
       </div>

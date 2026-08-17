@@ -18,10 +18,10 @@ const GOAL_KM = 12000 // fixture: no season-goal model — placeholder target
 /** "4 812" — thin-spaced thousands, matching the pen. */
 const spaced = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ')
 
-/** "TUE 12 AUG" */
+/** "DI 12 AUG" */
 function dateLabel(d: Date): string {
-  const wd = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()
-  const mo = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+  const wd = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '').toUpperCase()
+  const mo = d.toLocaleDateString('de-DE', { month: 'short' }).replace('.', '').toUpperCase()
   return `${wd} ${String(d.getDate()).padStart(2, '0')} ${mo}`
 }
 
@@ -88,13 +88,13 @@ export default function W3RidesPage() {
       const pw = a.average_power ?? a.normalized_power
       // real secondary fact for the bullet: prefer climbing, else training load
       const note = a.elevation_gain_m != null && a.elevation_gain_m > 0
-        ? `${Math.round(a.elevation_gain_m)} m climbed`
+        ? `${Math.round(a.elevation_gain_m)} Höhenmeter`
         : a.tss != null && a.tss > 0
           ? `${Math.round(a.tss)} TSS`
           : null
       return {
         id: a.id,
-        title: a.title ?? 'Ride',
+        title: a.title ?? 'Fahrt',
         dateLabel: dateLabel(d),
         km: km != null ? (km >= 100 ? km.toFixed(1) : km.toFixed(2)) : '—',
         speed,
@@ -109,13 +109,13 @@ export default function W3RidesPage() {
     })
 
     return {
-      title: 'Rides',
-      loggedLabel: 'LOGGED',
-      count: `${acts.length} ride${acts.length === 1 ? '' : 's'}`,
-      seasonLabel: 'SEASON TOTAL',
+      title: 'Fahrten',
+      loggedLabel: 'ERFASST',
+      count: `${acts.length} ${acts.length === 1 ? 'Fahrt' : 'Fahrten'}`,
+      seasonLabel: 'SAISON GESAMT',
       totalKm: spaced(totalKm),
       totalUnit: 'km',
-      ofGoalLabel: 'OF GOAL',
+      ofGoalLabel: 'VOM ZIEL',
       bars,
       barsAccentFrom: 7, // trailing 5 months render acid, matching the pen
       avgSpeed,
@@ -123,11 +123,11 @@ export default function W3RidesPage() {
       saddleTime,
       rides,
       // fixture: goal-tracking (no season-goal model)
-      goalChip: `GOAL ${spaced(GOAL_KM)} KM`,
+      goalChip: `ZIEL ${spaced(GOAL_KM)} KM`,
       ofGoalPct: `${Math.round(progress * 100)}%`,
       progress,
-      toGoLabel: `${spaced(Math.max(0, GOAL_KM - totalKm))} KM TO GO`,
-      paceLabel: `${spaced(Math.abs(paceDelta))} KM ${paceAhead ? 'AHEAD OF' : 'BEHIND'} PACE`,
+      toGoLabel: `NOCH ${spaced(Math.max(0, GOAL_KM - totalKm))} KM`,
+      paceLabel: `${spaced(Math.abs(paceDelta))} KM ${paceAhead ? 'VOR' : 'HINTER'} PLAN`,
       paceAhead,
     }
   }, [data, now])

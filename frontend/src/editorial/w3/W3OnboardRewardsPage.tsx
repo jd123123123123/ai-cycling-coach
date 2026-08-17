@@ -21,9 +21,9 @@ export default function W3OnboardRewardsPage() {
   }
 
   const tiles: [W3RewardTile, W3RewardTile, W3RewardTile] = [
-    { value: wallet ? wallet.balance.toLocaleString('en-US') : '—', label: 'Your balance · RC' },
-    { value: '250', label: 'Head start grant' },
-    { value: '~1', label: 'RC per TSS' },
+    { value: wallet ? wallet.balance.toLocaleString('de-DE') : '—', label: 'Dein Guthaben · RC' },
+    { value: '250', label: 'Startbonus' },
+    { value: '~1', label: 'RC pro TSS' },
   ]
 
   return (

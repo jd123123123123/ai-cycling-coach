@@ -59,10 +59,10 @@ export interface W3AvatarOnboardProps {
  * it. Icon + two words each is enough to carry the same four ideas.
  */
 const PERKS: { icon: typeof Mountain; label: string }[] = [
-  { icon: Bike, label: 'YOUR BIKE' },
-  { icon: Mountain, label: 'EVERY RIDE' },
-  { icon: Users, label: 'YOUR CREW' },
-  { icon: Trophy, label: 'LEVELS UP' },
+  { icon: Bike, label: 'DEIN BIKE' },
+  { icon: Mountain, label: 'JEDE FAHRT' },
+  { icon: Users, label: 'DEINE CREW' },
+  { icon: Trophy, label: 'LEVELT MIT' },
 ]
 
 /** Reveal confetti palette — the generating stage falls in the same colours so
@@ -89,9 +89,9 @@ const TEASERS = [
 ]
 
 const PRIMARY = [
-  { icon: RouteIcon, label: 'TOTAL DISTANCE', key: 'totalDistance' as const },
-  { icon: Bike, label: 'TOTAL RIDES', key: 'totalRides' as const },
-  { icon: Timer, label: 'SADDLE TIME', key: 'saddleTime' as const },
+  { icon: RouteIcon, label: 'GESAMTDISTANZ', key: 'totalDistance' as const },
+  { icon: Bike, label: 'FAHRTEN GESAMT', key: 'totalRides' as const },
+  { icon: Timer, label: 'SATTELZEIT', key: 'saddleTime' as const },
 ]
 const INSIGHT_META: Record<InsightKey, { icon: typeof Mountain; hue: string }> = {
   elevation: { icon: Mountain, hue: '#7B5CFF' },
@@ -138,9 +138,9 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
       level: rLevel,
       headline: rHeadline,
       stats: [
-        { v: rDistance, l: 'TOTAL DISTANCE' },
-        { v: rRides, l: 'TOTAL RIDES' },
-        { v: rSaddle, l: 'SADDLE TIME' },
+        { v: rDistance, l: 'GESAMTDISTANZ' },
+        { v: rRides, l: 'FAHRTEN GESAMT' },
+        { v: rSaddle, l: 'SATTELZEIT' },
       ],
       footer: rSync,
     })
@@ -200,7 +200,7 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
           <div style={{ ...band(16), paddingTop: 0, marginTop: -14, gap: 9, alignItems: 'center', position: 'relative', zIndex: 2 }}>
             <motion.div initial={reduce ? false : { scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, ease: EASE, delay: 0.2 }}
               style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 14px', borderRadius: 100, background: T.acid, boxShadow: `0 0 24px ${T.acid}88` }}>
-              <Sparkles size={13} color="#121212" /><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: '#121212' }}>AVATAR UNLOCKED</span>
+              <Sparkles size={13} color="#121212" /><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: '#121212' }}>AVATAR ENTSPERRT</span>
             </motion.div>
 
             {/* Handle chip (ShareCard style) + LVL badge */}
@@ -260,7 +260,7 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
 
             <div style={{ width: '100%', display: 'flex', gap: 8, marginTop: 2 }}>
               <button onClick={onTake} style={{ flex: 1, height: 52, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-                Take it<ArrowRight size={18} color="#0B0B0B" />
+                Übernehmen<ArrowRight size={18} color="#0B0B0B" />
               </button>
               <button onClick={onShareCard} disabled={!cardReady} aria-label="Karte teilen"
                 style={{ flex: 'none', height: 52, padding: '0 18px', borderRadius: 100, background: T.surface2, border: `1px solid ${T.stroke}`, color: T.ink, fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: cardReady ? 'pointer' : 'default', opacity: cardReady ? 1 : 0.55, display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
@@ -337,10 +337,10 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
             resolve to its intrinsic height here and push the CTA off-screen. */}
         <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 200, background: '#232427', overflow: 'hidden' }}>
           {heroImageUrl
-            ? <img src={heroImageUrl} alt="Your collectible rider" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 28%' }} />
+            ? <img src={heroImageUrl} alt="Dein Collectible-Rider" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 28%' }} />
             : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: T.quiet }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-                  <Bike size={72} strokeWidth={1.2} color="#3A3A3A" /><span style={{ fontSize: 12, fontWeight: 600 }}>Your rider goes here</span>
+                  <Bike size={72} strokeWidth={1.2} color="#3A3A3A" /><span style={{ fontSize: 12, fontWeight: 600 }}>Hier steht dein Rider</span>
                 </div>
               </div>}
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 150, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
@@ -350,12 +350,12 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
           style={{ display: 'flex', flexDirection: 'column', width: '100%', flex: 'none', padding: '16px 20px calc(20px + env(safe-area-inset-bottom))', background: T.bg, position: 'relative', zIndex: 2 }}>
 
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', alignSelf: 'flex-start', padding: '5px 11px', borderRadius: 100, background: T.acidDim }}>
-            <Sparkles size={11} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.acid }}>ONE LAST THING</span>
+            <Sparkles size={11} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.acid }}>NOCH EINE SACHE</span>
           </div>
 
-          <span style={{ marginTop: 10, fontSize: 30, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.05, color: T.ink }}>Bring yourself into it</span>
+          <span style={{ marginTop: 10, fontSize: 30, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.05, color: T.ink }}>Jetzt kommst du rein</span>
           <span style={{ marginTop: 8, fontSize: 13.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>
-            One photo — and you become a collectible rider, the face of every ride you do.
+            Ein Foto — und du wirst zum Collectible-Rider, das Gesicht jeder deiner Fahrten.
           </span>
 
           {/* The four reasons, folded into one strip */}
@@ -373,13 +373,13 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
           </div>
 
           <button onClick={onPick} style={{ marginTop: 16, height: 56, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-            <Camera size={19} color={T.bg} />Add your photo
+            <Camera size={19} color={T.bg} />Foto hinzufügen
           </button>
           <button onClick={onSkip} style={{ marginTop: 4, height: 44, background: 'transparent', border: 0, color: T.quiet, fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-            Maybe later<ArrowRight size={14} color={T.quiet} />
+            Vielleicht später<ArrowRight size={14} color={T.quiet} />
           </button>
           <span style={{ marginTop: 2, display: 'block', textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: T.quiet, lineHeight: 1.4 }}>
-            Used once to create your avatar, then discarded. Never shared.
+            Einmal für deinen Avatar genutzt, danach verworfen. Nie geteilt.
           </span>
         </motion.div>
       </div>

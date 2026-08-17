@@ -33,9 +33,9 @@ export interface W3DayFull {
 
 export const STATUS: Record<DayStatus, { label: string; hue: string; icon: typeof Check }> = {
   today: { label: 'Heute', hue: T.acid, icon: TrendingUp },
-  hit: { label: 'Nailed it', hue: T.acid, icon: Check },
-  missed: { label: 'Missed', hue: T.warn, icon: Minus },
-  over: { label: 'Overdid it', hue: T.cool, icon: TrendingUp },
+  hit: { label: 'Geschafft', hue: T.acid, icon: Check },
+  missed: { label: 'Verpasst', hue: T.warn, icon: Minus },
+  over: { label: 'Zu viel', hue: T.cool, icon: TrendingUp },
   rest: { label: 'Ruhetag', hue: T.mid, icon: Minus },
   upcoming: { label: 'Geplant', hue: T.quiet, icon: Minus },
 }
@@ -343,8 +343,8 @@ function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null
   const over = day.status === 'over'
   const doneHue = over ? T.cool : T.acid
   const rows: { label: string; val: number; hue: string; dashed?: boolean }[] = [
-    { label: 'Planned', val: planned, hue: T.d3, dashed: true },
-    { label: 'You rode', val: actual, hue: doneHue },
+    { label: 'Geplant', val: planned, hue: T.d3, dashed: true },
+    { label: 'Gefahren', val: actual, hue: doneHue },
   ]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -365,9 +365,9 @@ function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null
       {(day.actualDurMin != null || day.actualW != null || day.actualHr != null) && (
         <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: `1px solid ${T.rule}` }}>
           {[
-            ['DURATION', day.actualDurMin != null ? `${Math.floor(day.actualDurMin / 60)}:${String(Math.round(day.actualDurMin % 60)).padStart(2, '0')}` : '—'],
-            ['AVG POWER', day.actualW != null ? `${Math.round(day.actualW)} W` : '—'],
-            ['AVG HR', day.actualHr != null ? `${Math.round(day.actualHr)}` : '—'],
+            ['DAUER', day.actualDurMin != null ? `${Math.floor(day.actualDurMin / 60)}:${String(Math.round(day.actualDurMin % 60)).padStart(2, '0')}` : '—'],
+            ['Ø LEISTUNG', day.actualW != null ? `${Math.round(day.actualW)} W` : '—'],
+            ['Ø HF', day.actualHr != null ? `${Math.round(day.actualHr)}` : '—'],
           ].map(([l, v]) => (
             <div key={l} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', borderRadius: 14, background: T.surface2 }}>
               <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
@@ -383,7 +383,7 @@ function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null
           </span>
         )}
         <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, color: T.mid }}>
-          {over ? 'Over the plan — watch fatigue tomorrow.' : 'Right on the number. That’s how fitness compounds.'}
+          {over ? 'Über dem Plan — achte morgen auf die Ermüdung.' : 'Genau auf den Punkt. So wächst Fitness.'}
         </span>
       </div>
     </div>
@@ -446,9 +446,9 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
     try {
       const r = await onAdapt(kind)
       setResult(r)
-      if (!r) setError('No plan to adapt today.')
+      if (!r) setError('Heute gibt es keinen Plan zum Anpassen.')
     } catch {
-      setError('Coach couldn’t re-plan right now.')
+      setError('Der Coach konnte gerade nicht neu planen.')
       setAdapt('none')
     } finally {
       setBusy('none')
@@ -523,7 +523,7 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
           <Sparkles size={13} color={T.acid} style={{ flex: 'none', marginTop: 1 }} />
           <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: error ? T.warn : T.ink }}>
             {error ?? result?.rationale}
-            {result?.railsDowngraded && <span style={{ color: T.warn }}> · Eased for safety.</span>}
+            {result?.railsDowngraded && <span style={{ color: T.warn }}> · Sicherheitshalber abgemildert.</span>}
           </span>
         </div>
       )}
@@ -548,7 +548,7 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
         day.status === 'missed' ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <Minus size={15} color={T.warn} style={{ flex: 'none' }} />
-            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.warn }}>Skipped — no ride logged for this session.</span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.warn }}>Ausgelassen — keine Fahrt für diese Einheit.</span>
           </div>
         ) : (
           <PlannedVsDone day={day} reduce={reduce} />
@@ -716,13 +716,13 @@ export function MirrorChart({ m, fitness, fatigue, form }: { m: W3Mirror; fitnes
       <div style={card()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <Kicker>Where you stand · last 6 weeks</Kicker>
-            <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, lineHeight: 1.35 }}>Fitness and fatigue on the same scale — the gap is your form.</span>
+            <Kicker>Wo du stehst · letzte 6 Wochen</Kicker>
+            <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, lineHeight: 1.35 }}>Fitness und Ermüdung auf einer Skala — der Abstand ist deine Form.</span>
           </div>
           {hov != null && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: T.acid }}>{m.fitnessRaw[cur]} <span style={{ color: T.quiet, fontWeight: 600 }}>fit</span></span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.cool }}>{m.fatigueRaw[cur]} <span style={{ color: T.quiet, fontWeight: 600 }}>fat</span></span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.cool }}>{m.fatigueRaw[cur]} <span style={{ color: T.quiet, fontWeight: 600 }}>müde</span></span>
             </div>
           )}
         </div>
@@ -734,12 +734,12 @@ export function MirrorChart({ m, fitness, fatigue, form }: { m: W3Mirror; fitnes
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 8.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}><span style={{ width: 8, height: 8, borderRadius: 2, background: T.acid }} />FITNESS · ABOVE</span>
-          <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 8.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#C8FF0080' }} />FATIGUE · BELOW</span>
+          <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 8.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}><span style={{ width: 8, height: 8, borderRadius: 2, background: T.acid }} />FITNESS · OBEN</span>
+          <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 8.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#C8FF0080' }} />ERMÜDUNG · UNTEN</span>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          {[['FITNESS', String(fitness), T.ink, 30], ['−', '', T.quiet, 20], ['FATIGUE', String(fatigue), T.ink, 30], ['=', '', T.quiet, 20], ['FORM', form >= 0 ? `+${form}` : String(form), T.acid, 42]].map(([l, v, hue, size], i) => (
+          {[['FITNESS', String(fitness), T.ink, 30], ['−', '', T.quiet, 20], ['ERMÜDUNG', String(fatigue), T.ink, 30], ['=', '', T.quiet, 20], ['FORM', form >= 0 ? `+${form}` : String(form), T.acid, 42]].map(([l, v, hue, size], i) => (
             l === '−' || l === '=' ? (
               <span key={i} style={{ fontSize: size as number, color: hue as string, paddingBottom: 14 }}>{l}</span>
             ) : (
@@ -758,17 +758,17 @@ export function MirrorChart({ m, fitness, fatigue, form }: { m: W3Mirror; fitnes
 type AdaptOpt = { key: Exclude<Adapt, 'none'>; label: string; sub: string; icon: typeof Zap }
 // Intensity — persists via the modifier's easier/harder cascade (rails watch it).
 const INTENSITY_OPTS: AdaptOpt[] = [
-  { key: 'easier', label: 'Easier', sub: 'ease it', icon: TrendingDown },
-  { key: 'harder', label: 'Harder', sub: 'push it', icon: TrendingUp },
+  { key: 'easier', label: 'Leichter', sub: 'nimm raus', icon: TrendingDown },
+  { key: 'harder', label: 'Härter', sub: 'gib Gas', icon: TrendingUp },
 ]
 // Exchange — swap the session for a different real modification the backend
 // supports. There is no swap endpoint, so these are the honest levers: shorten
 // to 45 min, move indoors (watts unchanged), or take the day off. Rest is the
 // only deterministic one (the modifier has no rest type); the rest persist.
 const EXCHANGE_OPTS: AdaptOpt[] = [
-  { key: 'shorter', label: 'Shorter', sub: '45 min', icon: Clock },
-  { key: 'indoor', label: 'Indoor', sub: 'trainer', icon: Home },
-  { key: 'rest', label: 'Rest day', sub: '0 TSS', icon: Moon },
+  { key: 'shorter', label: 'Kürzer', sub: '45 min', icon: Clock },
+  { key: 'indoor', label: 'Drinnen', sub: 'Rolle', icon: Home },
+  { key: 'rest', label: 'Ruhetag', sub: '0 TSS', icon: Moon },
 ]
 
 function AdaptGroup({ label, opts, adapt, busy, onPick }: { label: string; opts: AdaptOpt[]; adapt: Adapt; busy: Adapt; onPick: (k: Exclude<Adapt, 'none'>) => void }) {
@@ -788,7 +788,7 @@ function AdaptGroup({ label, opts, adapt, busy, onPick }: { label: string; opts:
               }}>
               <Ic size={15} color={on ? T.acid : T.mid} />
               <span style={{ fontSize: 12, fontWeight: 700, color: on ? T.acid : T.ink }}>{o.label}</span>
-              <span style={{ fontSize: 10, fontWeight: 600, color: on ? T.acid : T.quiet }}>{loading ? 'saving…' : o.sub}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: on ? T.acid : T.quiet }}>{loading ? 'speichert…' : o.sub}</span>
             </button>
           )
         })}
@@ -800,8 +800,8 @@ function AdaptGroup({ label, opts, adapt, busy, onPick }: { label: string; opts:
 function AdaptRow({ adapt, busy, onPick }: { adapt: Adapt; busy: Adapt; onPick: (k: Exclude<Adapt, 'none'>) => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <AdaptGroup label="Not feeling it? The coach re-plans it" opts={INTENSITY_OPTS} adapt={adapt} busy={busy} onPick={onPick} />
-      <AdaptGroup label="Exchange the session" opts={EXCHANGE_OPTS} adapt={adapt} busy={busy} onPick={onPick} />
+      <AdaptGroup label="Keine Lust? Der Coach plant neu" opts={INTENSITY_OPTS} adapt={adapt} busy={busy} onPick={onPick} />
+      <AdaptGroup label="Einheit tauschen" opts={EXCHANGE_OPTS} adapt={adapt} busy={busy} onPick={onPick} />
     </div>
   )
 }

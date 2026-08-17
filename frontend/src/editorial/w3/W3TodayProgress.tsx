@@ -27,8 +27,8 @@ import { T, FONT, grow } from './w3tokens'
  */
 
 const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', background: T.bg, padding: `0 20px ${padBottom}px`, fontFamily: FONT })
-const CH_UNIT: Record<ChallengeMetric, string> = { active_days: 'days', distance_km: 'km', tss: 'TSS', rides: 'rides', hours: 'h', kj: 'kJ' }
-const nf = new Intl.NumberFormat('en-US')
+const CH_UNIT: Record<ChallengeMetric, string> = { active_days: 'Tage', distance_km: 'km', tss: 'TSS', rides: 'Fahrten', hours: 'h', kj: 'kJ' }
+const nf = new Intl.NumberFormat('de-DE')
 const ellipsis = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
 const cardBtn = { width: '100%', border: 0, background: T.surface, fontFamily: FONT, textAlign: 'left' as const, cursor: 'pointer' }
 
@@ -74,7 +74,7 @@ function ChallengeRow({ c, lead, i, daysLeft, reduce, onOpen }: { c: RewardChall
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
         <span style={{ ...ellipsis, flex: 1, fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{c.title}</span>
         <span style={{ flex: 'none', fontSize: 15, fontWeight: 700, letterSpacing: -0.4, fontVariantNumeric: 'tabular-nums', color: c.completed || lead ? T.acid : T.mid }}>
-          {c.completed ? 'DONE' : `${c.pct}%`}
+          {c.completed ? 'FERTIG' : `${c.pct}%`}
         </span>
       </div>
       <div style={{ height: lead ? 7 : 5, width: '100%', borderRadius: 100, background: '#FFFFFF0F', overflow: 'hidden' }}>
@@ -82,12 +82,12 @@ function ChallengeRow({ c, lead, i, daysLeft, reduce, onOpen }: { c: RewardChall
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
         <span style={{ ...ellipsis, flex: 1, fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
-          {nf.format(Math.round(c.value))} of {nf.format(c.target)} {unit}
+          {nf.format(Math.round(c.value))} von {nf.format(c.target)} {unit}
         </span>
         <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: c.completed ? T.acid : T.quiet }}>
           {c.completed
-            ? `+${nf.format(c.awarded_rc ?? c.reward_rc)} RC EARNED`
-            : daysLeft != null ? `${daysLeft}D LEFT · +${nf.format(c.reward_rc)} RC` : `+${nf.format(c.reward_rc)} RC`}
+            ? `+${nf.format(c.awarded_rc ?? c.reward_rc)} RC ERHALTEN`
+            : daysLeft != null ? `NOCH ${daysLeft} T · +${nf.format(c.reward_rc)} RC` : `+${nf.format(c.reward_rc)} RC`}
         </span>
       </div>
     </button>
@@ -118,7 +118,7 @@ export default function W3TodayProgress() {
     .sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0))[0] ?? null
 
   const tag = challenges
-    ? active.length > 0 ? `${active.length} ACTIVE` : available.length > 0 ? `${available.length} TO JOIN` : null
+    ? active.length > 0 ? `${active.length} AKTIV` : available.length > 0 ? `${available.length} OFFEN` : null
     : null
 
   return (
@@ -126,8 +126,8 @@ export default function W3TodayProgress() {
       {/* Section head — Today's rhythm: title + subtitle + acid pill */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-          <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Your progress</span>
-          <span style={{ ...ellipsis, fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Earned by training, not bought</span>
+          <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Dein Fortschritt</span>
+          <span style={{ ...ellipsis, fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Erarbeitet, nicht gekauft</span>
         </div>
         {tag && (
           <div style={{ flex: 'none', padding: '7px 13px', borderRadius: 100, background: T.acidDim }}>
@@ -151,7 +151,7 @@ export default function W3TodayProgress() {
           ))}
           {active.length > 3 && (
             <button onClick={openChallenges} style={{ ...cardBtn, background: 'transparent', padding: '12px 0 8px', borderTop: `1px solid ${T.rule}`, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, color: T.mid }}>
-              ALL {active.length} CHALLENGES →
+              ALLE {active.length} CHALLENGES →
             </button>
           )}
         </div>
@@ -163,7 +163,7 @@ export default function W3TodayProgress() {
       {challenges && active.length === 0 && available.length > 0 && (
         <div style={{ padding: '16px 18px 10px', borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, color: T.mid, paddingBottom: 4 }}>
-            No challenge running. Join one — it scores from the rides you have already done this month.
+            Keine Challenge aktiv. Mach mit — sie zählt die Fahrten, die du diesen Monat schon gemacht hast.
           </span>
           {available.slice(0, 3).map((c, i) => (
             <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 0', borderTop: `1px solid ${T.rule}`, marginTop: i === 0 ? 12 : 0 }}>
@@ -177,7 +177,7 @@ export default function W3TodayProgress() {
                 onClick={() => join.mutate(c.key)}
                 disabled={join.isPending}
                 style={{ flex: 'none', border: 0, borderRadius: 100, padding: '8px 15px', background: i === 0 ? T.acid : T.surface2, color: i === 0 ? T.bg : T.ink, fontFamily: FONT, fontSize: 10, fontWeight: 700, letterSpacing: 0.8, cursor: join.isPending ? 'default' : 'pointer', opacity: join.isPending ? 0.5 : 1 }}>
-                JOIN
+                MITMACHEN
               </button>
             </div>
           ))}
@@ -190,7 +190,7 @@ export default function W3TodayProgress() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
             <div style={{ width: 26, height: 26, flex: 'none', borderRadius: 8, background: T.surface2, display: 'grid', placeItems: 'center' }}><Trophy size={13} color={T.mid} /></div>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>NEXT BADGE</span>
+              <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>NÄCHSTES ABZEICHEN</span>
               <span style={{ ...ellipsis, fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{nextBadge.title}</span>
             </div>
             {ach && <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 700, color: T.mid, fontVariantNumeric: 'tabular-nums' }}>{ach.counts.unlocked}/{ach.counts.total}</span>}

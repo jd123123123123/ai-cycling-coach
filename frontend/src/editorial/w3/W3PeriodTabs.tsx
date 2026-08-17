@@ -11,7 +11,7 @@ import { W3_PERIODS, type W3Period } from './w3crew'
  */
 export default function W3PeriodTabs({ value, onChange }: { value: W3Period; onChange: (p: W3Period) => void }) {
   return (
-    <div role="tablist" aria-label="Period" style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 100, background: T.surface, width: '100%' }}>
+    <div role="tablist" aria-label="Zeitraum" style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 100, background: T.surface, width: '100%' }}>
       {W3_PERIODS.map(({ key, label }) => {
         const on = key === value
         return (

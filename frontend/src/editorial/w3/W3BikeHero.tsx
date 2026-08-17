@@ -125,9 +125,9 @@ export default function W3BikeHero({ image, name, loading }: W3BikeHeroProps) {
       </button>
 
       <div style={{ position: 'absolute', left: 20, right: 20, bottom: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center' }}>
-        <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Put your bike in the garage</span>
+        <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Stell dein Bike in die Garage</span>
         <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4, color: T.quiet, maxWidth: 280 }}>
-          One photo of your real bike. We render it as your collectible — and every ride you log levels it up.
+          Ein Foto deines echten Bikes. Wir rendern es als dein Collectible — und jede Fahrt, die du loggst, levelt es.
         </span>
       </div>
     </div>

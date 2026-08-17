@@ -27,19 +27,19 @@ export type W3GoalKey = 'vo2max' | 'ftp' | 'endurance' | 'climbing' | 'sprint' |
 
 export const W3_GOALS: Array<{ key: W3GoalKey; label: string; icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }> }> = [
   { key: 'vo2max', label: 'VO₂max', icon: Wind },
-  { key: 'ftp', label: 'FTP / threshold', icon: TrendingUp },
-  { key: 'endurance', label: 'Endurance', icon: Route },
-  { key: 'climbing', label: 'Climbing', icon: Mountain },
-  { key: 'sprint', label: 'Sprint / power', icon: Zap },
-  { key: 'consistency', label: 'Consistency', icon: CalendarCheck },
+  { key: 'ftp', label: 'FTP / Schwelle', icon: TrendingUp },
+  { key: 'endurance', label: 'Ausdauer', icon: Route },
+  { key: 'climbing', label: 'Berge', icon: Mountain },
+  { key: 'sprint', label: 'Sprint / Kraft', icon: Zap },
+  { key: 'consistency', label: 'Konstanz', icon: CalendarCheck },
 ]
 
 export const MAX_GOALS = 3
 
 const MODES: Array<{ key: W3PlanMode; icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; title: string; sub: string }> = [
-  { key: 'build', icon: Wrench, title: 'Build a plan for me', sub: 'The coach writes your week around 1–3 focus areas.' },
-  { key: 'own', icon: Upload, title: 'I have my own plan', sub: 'Bring a workout file — .zwo, .ics, PDF or a photo.' },
-  { key: 'insights', icon: BarChart3, title: 'No plan — just insights', sub: 'Skip planning; only analyse the rides you already do.' },
+  { key: 'build', icon: Wrench, title: 'Bau mir einen Plan', sub: 'Der Coach baut deine Woche um 1–3 Schwerpunkte.' },
+  { key: 'own', icon: Upload, title: 'Ich habe meinen Plan', sub: 'Bring eine Trainingsdatei mit — .zwo, .ics, PDF oder Foto.' },
+  { key: 'insights', icon: BarChart3, title: 'Kein Plan — nur Analyse', sub: 'Ohne Planung; wir lesen nur die Fahrten, die du machst.' },
 ]
 
 /** True when the current selection is enough to advance. */
@@ -91,10 +91,10 @@ export default function W3OnboardPlanView({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '18px 20px 28px', flex: 1 }}>
           <W3OnboardHeadline
-            kicker="YOUR PLAN"
-            line1="How do you want"
-            line2="to train?"
-            body="Pick the way you like to ride. You can change this any time — nothing here is locked in."
+            kicker="DEIN PLAN"
+            line1="Wie willst du"
+            line2="trainieren?"
+            body="Wähl die Art, wie du fährst. Du kannst das jederzeit ändern — nichts hier ist festgezurrt."
           />
 
           {/* Mutually-exclusive mode cards */}
@@ -139,7 +139,7 @@ export default function W3OnboardPlanView({
                   {selected && m.key === 'build' && reveal(
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 2px 2px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.4, color: T.quiet }}>WHAT TO IMPROVE</span>
+                        <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.4, color: T.quiet }}>WAS BESSER WERDEN SOLL</span>
                         <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, color: goals.length ? T.acid : T.quiet }}>{goals.length}/{MAX_GOALS}</span>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9 }}>
@@ -172,7 +172,7 @@ export default function W3OnboardPlanView({
                         })}
                       </div>
                       <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>
-                        Choose 1–3. The coach balances your week around these and adapts as your numbers move.
+                        Wähl 1–3. Der Coach baut deine Woche darum und passt an, sobald sich deine Zahlen bewegen.
                       </span>
                     </div>,
                     'build-panel',
@@ -208,15 +208,15 @@ export default function W3OnboardPlanView({
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
                           <span style={{ fontSize: 13.5, fontWeight: 800, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {fileName ?? 'Upload your plan'}
+                            {fileName ?? 'Plan hochladen'}
                           </span>
                           <span style={{ fontSize: 11.5, fontWeight: 500, color: T.mid }}>
-                            {fileName ? 'Tap to choose a different file' : '.zwo · .ics · PDF · image — from Files or Photos'}
+                            {fileName ? 'Für eine andere Datei tippen' : '.zwo · .ics · PDF · Bild — aus Dateien oder Fotos'}
                           </span>
                         </div>
                       </button>
                       <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>
-                        We keep your file and read the sessions off it — your structure, our tracking.
+                        Wir behalten deine Datei und lesen die Einheiten daraus — deine Struktur, unser Tracking.
                       </span>
                     </div>,
                     'own-panel',
@@ -226,7 +226,7 @@ export default function W3OnboardPlanView({
                   {selected && m.key === 'insights' && reveal(
                     <div style={{ padding: '14px 2px 2px' }}>
                       <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.45, color: T.quiet }}>
-                        No schedule, no nudges to hit a target. Every ride still lands in W3 and gets the full read — form, fitness, fatigue.
+                        Kein Zeitplan, keine Zielvorgaben. Jede Fahrt landet trotzdem in W3 und bekommt die volle Analyse — Form, Fitness, Ermüdung.
                       </span>
                     </div>,
                     'insights-panel',
@@ -239,7 +239,7 @@ export default function W3OnboardPlanView({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 'auto', paddingTop: 8 }}>
             <W3OnboardDots step={2} total={5} />
             <div style={{ opacity: ready ? 1 : 0.4, pointerEvents: ready ? 'auto' : 'none', transition: 'opacity 160ms' }}>
-              <W3OnboardCta label="NEXT" onClick={onNext} />
+              <W3OnboardCta label="WEITER" onClick={onNext} />
             </div>
           </div>
         </div>

@@ -51,17 +51,17 @@ export default function W3OnboardWelcomeView({ heroImageUrl, onNext, onSkip }: W
             transition={{ duration: 0.55, ease: EASE, delay: 0.15 }}
             style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
           >
-            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2, color: T.acid }}>01 — THE IDEA</span>
+            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2, color: T.acid }}>01 — DIE IDEE</span>
             <h1 style={{ margin: 0, fontSize: 44, fontWeight: 800, letterSpacing: -1.8, lineHeight: 0.98, color: T.ink }}>
-              Training that<br /><span style={{ color: T.acid }}>plays back.</span>
+              Training, das<br /><span style={{ color: T.acid }}>sich auszahlt.</span>
             </h1>
             <p style={{ margin: 0, fontSize: 15, fontWeight: 500, lineHeight: 1.5, color: T.mid, maxWidth: 340 }}>
-              Every watt you push turns into progress you can see — levels, upgrades and a bike that grows with you.
+              Jedes Watt wird zu sichtbarem Fortschritt — Level, Upgrades und ein Bike, das mit dir wächst.
             </p>
           </motion.div>
 
           <W3OnboardDots step={0} />
-          <W3OnboardCta label="NEXT" onClick={onNext} />
+          <W3OnboardCta label="WEITER" onClick={onNext} />
         </div>
       </div>
     </div>

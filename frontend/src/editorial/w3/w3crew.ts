@@ -13,22 +13,22 @@
 export type W3Period = 'week' | 'month' | 'year'
 
 export const W3_PERIODS: { key: W3Period; label: string }[] = [
-  { key: 'week', label: 'WEEK' },
-  { key: 'month', label: 'MONTH' },
-  { key: 'year', label: 'SEASON' },
+  { key: 'week', label: 'WOCHE' },
+  { key: 'month', label: 'MONAT' },
+  { key: 'year', label: 'SAISON' },
 ]
 
-/** "week" | "month" | "season" — the noun, for prose. */
-export const periodWord = (p: W3Period) => (p === 'year' ? 'season' : p)
-/** "this week" | "this month" | "this season". */
-export const thisPeriod = (p: W3Period) => `this ${periodWord(p)}`
+/** "Woche" | "Monat" | "Saison" — the noun, for prose. */
+export const periodWord = (p: W3Period) => (p === 'year' ? 'Saison' : p === 'month' ? 'Monat' : 'Woche')
+/** "diese Woche" | "diesen Monat" | "diese Saison" (adverbial accusative). */
+export const thisPeriod = (p: W3Period) => (p === 'month' ? 'diesen Monat' : `diese ${periodWord(p)}`)
 
 /** Per-rider board colours, in board order (rank 1 first). */
 export const AVATAR_TINTS = ['#B9A7EE', '#A7D8EE', '#EEC7A7', '#A7EEC0', '#EEA7D2', '#EED7A7', '#A7C4EE', '#D2A7EE']
 /** The dark end of a tint gradient. */
 export const TINT_BASE = '#16131F'
 
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+const MONTHS = ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ']
 
 /** ISO yyyy-mm-dd → local Date (no tz shift from `new Date('yyyy-mm-dd')` UTC parsing). */
 function parseISO(iso: string | null | undefined): Date | null {
@@ -45,28 +45,28 @@ export function windowDays(startISO?: string | null, endISO?: string | null): nu
   return Math.max(1, Math.round((b.getTime() - a.getTime()) / 86400000) + 1)
 }
 
-/** "AUG 10–16" / "JUL 28–AUG 3" / "JAN 1–AUG 14" — the real window, never a guess. */
+/** "10.–16. AUG" / "28. JUL – 3. AUG" — the real window, never a guess. */
 export function windowChip(startISO?: string | null, endISO?: string | null): string {
   const a = parseISO(startISO), b = parseISO(endISO)
   if (!a || !b) return ''
   const sameMonth = a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
-  const left = `${MONTHS[a.getMonth()]} ${a.getDate()}`
-  const right = sameMonth ? String(b.getDate()) : `${MONTHS[b.getMonth()]} ${b.getDate()}`
-  return `${left}–${right}`
+  return sameMonth
+    ? `${a.getDate()}.–${b.getDate()}. ${MONTHS[b.getMonth()]}`
+    : `${a.getDate()}. ${MONTHS[a.getMonth()]} – ${b.getDate()}. ${MONTHS[b.getMonth()]}`
 }
 
 /** The left/right edge captions for a bucket strip. */
 export function windowEdges(startISO?: string | null, endISO?: string | null): { left: string; right: string } | null {
   const a = parseISO(startISO), b = parseISO(endISO)
   if (!a || !b) return null
-  return { left: `${MONTHS[a.getMonth()]} ${a.getDate()}`, right: `${MONTHS[b.getMonth()]} ${b.getDate()}` }
+  return { left: `${a.getDate()}. ${MONTHS[a.getMonth()]}`, right: `${b.getDate()}. ${MONTHS[b.getMonth()]}` }
 }
 
 export interface BucketMeta {
   /** What ONE `daily_pct` bucket actually covers. */
   unit: 'day' | 'week' | 'month'
-  one: string       // "day"
-  many: string      // "days"
+  one: string       // "Tag"
+  many: string      // "Tagen"
   daysPerBucket: number
 }
 
@@ -79,7 +79,7 @@ export interface BucketMeta {
  */
 export function bucketMeta(days: number | null, buckets: number): BucketMeta {
   const per = days && buckets > 0 ? days / buckets : 1
-  if (per <= 1.5) return { unit: 'day', one: 'day', many: 'days', daysPerBucket: per }
-  if (per <= 12) return { unit: 'week', one: 'week', many: 'weeks', daysPerBucket: per }
-  return { unit: 'month', one: 'month', many: 'months', daysPerBucket: per }
+  if (per <= 1.5) return { unit: 'day', one: 'Tag', many: 'Tagen', daysPerBucket: per }
+  if (per <= 12) return { unit: 'week', one: 'Woche', many: 'Wochen', daysPerBucket: per }
+  return { unit: 'month', one: 'Monat', many: 'Monaten', daysPerBucket: per }
 }

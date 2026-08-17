@@ -54,7 +54,7 @@ export default function W3OnboardDevicesView({ children, onNext, onSkip }: W3Onb
               <Activity size={30} color={T.acid} strokeWidth={2.4} />
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.5, color: T.ink }}>1:42:09</span>
-                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.5, color: T.quiet }}>LIVE SESSION</span>
+                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.5, color: T.quiet }}>LIVE-EINHEIT</span>
               </div>
             </div>
           </motion.div>
@@ -64,16 +64,16 @@ export default function W3OnboardDevicesView({ children, onNext, onSkip }: W3Onb
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '10px 20px 28px', flex: 1 }}>
           <W3OnboardHeadline
             kicker="02 — SETUP"
-            line1="Connect your"
-            line2="devices."
-            body="Link your head unit or watch once. Every ride lands in W3 automatically and starts earning."
+            line1="Verbinde deine"
+            line2="Geräte."
+            body="Radcomputer oder Uhr einmal verbinden. Jede Fahrt landet automatisch in W3 und bringt RideCoin."
           />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{children}</div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 'auto' }}>
             <W3OnboardDots step={1} />
-            <W3OnboardCta label="NEXT" onClick={onNext} />
+            <W3OnboardCta label="WEITER" onClick={onNext} />
           </div>
         </div>
       </div>
