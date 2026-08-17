@@ -8,7 +8,6 @@ import { useStreak } from '../../hooks/useStreak'
 import { useGarage, useDayScene, useRenderDayScene } from '../../hooks/useGarage'
 import { useWallet } from '../../hooks/useWallet'
 import type { DayPose } from '../../api/garage'
-import { useCrewStandings } from '../../hooks/useCrew'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
@@ -245,7 +244,6 @@ export default function W3TodayPage() {
   // The rider's garage — real state now, so the hero can show THEIR bike (or
   // honestly show that they don't have one yet).
   const { data: garage, isLoading: garageLoading } = useGarage()
-  const { data: standings } = useCrewStandings('week')
   const { data: adaptive } = useAdaptive()
   // The REAL week-ahead plan (today + next 6 days) — the same source the Train
   // tab reads. Each DayPlan carries its title / target_tss / category / interval
@@ -293,28 +291,10 @@ export default function W3TodayPage() {
 
   const vm = useMemo<W3Vm>(() => {
     const realWeather = buildWeather(todayWeather)
-    // Real crew standings (top 3 by weekly score, you highlighted). Each bar is
-    // the member's share of the crew's leader; honest fallback to the fixture
-    // only when the athlete is in no crew / standings haven't loaded.
-    const CREW_COLORS = ['#7B5CFF', '#6B8CFF', '#EEC7A7', '#A7D8EE']
-    const rows = standings?.standings ?? []
-    let realCrew: { name: string; color: string; pct: number; me: boolean }[] | null = null
-    let realCrewCaption: string | null = null
-    let realCrewRank: string | null = null
-    if (rows.length > 0) {
-      const top = Math.max(...rows.map((r) => r.weekly_score), 1)
-      const ranked = [...rows].sort((a, b) => b.weekly_score - a.weekly_score)
-      realCrew = ranked.slice(0, 3).map((r, i) => ({
-        name: r.is_you ? 'Du' : `@${r.handle}`,
-        color: r.is_you ? '#2BE68F' : CREW_COLORS[i % CREW_COLORS.length],
-        pct: Math.round((r.weekly_score / top) * 100),
-        me: r.is_you,
-      }))
-      const myIdx = ranked.findIndex((r) => r.is_you)
-      if (myIdx >= 0) realCrewRank = `#${myIdx + 1}`
-      const me = rows.find((r) => r.is_you)
-      if (me) realCrewCaption = `Du hast diese Woche ${Math.round(me.weekly_tss)} TSS mit deiner Crew gesammelt.`
-    }
+    // NOTE: the crew standings no longer travel through this vm. "Dein Rang"
+    // is `W3TodayRank`, which reads GET /crews/me + /crews/me/standings itself
+    // and renders an honest empty state instead of the fixture riders that used
+    // to live here.
 
     // Readiness for the hero: the model withholds its score when the overnight
     // wearable read is stale (the "date the measurement" rule). But the coach's
@@ -518,21 +498,11 @@ export default function W3TodayPage() {
           ? enduranceProfile
           : [0.28, 0.4, 0.5, 0.9, 0.22, 0.92, 0.22, 0.94, 0.22, 0.95, 0.3].map((w, i) => ({ w, work: i % 2 === 1 && i > 2 && i < 10, label: `Block ${i + 1}` }))
 
-    const pmc = isPresent(model.pmc) ? model.pmc.value : null
-    // 6-week mirror from the real PMC series when present, else a null-safe stub.
-    const series = pmc?.series ?? []
-    const maxCtl = Math.max(1, ...series.map((p) => p.ctl))
-    const maxAtl = Math.max(1, ...series.map((p) => p.atl))
-    const tail = series.slice(-42)
-    const mirror = tail.length > 0
-      ? {
-          fitness: tail.map((p) => p.ctl / maxCtl),
-          fatigue: tail.map((p) => p.atl / maxAtl),
-          fitnessRaw: tail.map((p) => Math.round(p.ctl)),
-          fatigueRaw: tail.map((p) => Math.round(p.atl)),
-          todayIndex: tail.length - 1,
-        }
-      : { fitness: [], fatigue: [], fitnessRaw: [], fatigueRaw: [], todayIndex: 0 }
+    // NOTE: CTL/ATL/TSB no longer travel through this vm either. "Dein
+    // aktueller Status" is `W3TodayStatus`, which reads the full 90-day
+    // /training-load/pmc series itself — the old 42-bar mirror normalised each
+    // series to its own max, which made two different quantities look like one
+    // scale and hid where the numbers actually sat.
 
     // Weekday letters + per-day TSS from the model; the hit / missed / rested
     // status comes from the REAL forgiving streak (services/streak.py), which
@@ -623,7 +593,6 @@ export default function W3TodayPage() {
     const weekDone = weekDays.filter((d) => d.status === 'hit' || d.status === 'rest').length
     const weekPlanned = weekDays.filter((d) => d.status !== 'upcoming').length
     const weekDoneLabel = weekPlanned > 0 ? `${weekDone} von ${weekPlanned} erledigt` : null
-    const zoneTag = session?.intensityFactor != null ? `${Math.round(session.intensityFactor * 100)}% FTP` : null
 
     // ── "Deine Woche": real meso block + the season goal this week feeds ──
     const meso = week?.meso_block ?? null
@@ -667,7 +636,6 @@ export default function W3TodayPage() {
       // the ledger can't account for.
       coins: wallet ? wallet.balance.toLocaleString('de-DE') : null,
       weekDoneLabel,
-      zoneTag,
       avatarUrl: user?.avatar_url ?? null,
       avatarInitial: (user?.display_name || user?.email || '?').charAt(0).toUpperCase(),
       streak: isPresent(model.streakDays) ? model.streakDays.value : null,
@@ -705,8 +673,6 @@ export default function W3TodayPage() {
         hours: [], bestFrom: null, bestTo: null, peak: null,
       },
 
-      mirror,
-
       sessionTitle: session ? session.title : null,
       sessionDur: session && session.tss ? `${Math.round((session.tss / 100) * 68)} min` : null,
       sessionTargetW: session?.targetWatts != null ? `${session.targetWatts} W` : '—',
@@ -715,24 +681,9 @@ export default function W3TodayPage() {
       sessionBlocks: blocks,
       sessionFtpTag: 'FTP',
       sessionEarn: 'Diese Fahrt bringt RideCoin nach TSS', // fixture: RideCoin not built
-
-      form: pmc ? { fitness: Math.round(pmc.fitness), fatigue: Math.round(pmc.fatigue), formVal: Math.round(pmc.form) } : null,
-
-      // ── crew standings: REAL from useCrewStandings; honest fixture only when
-      //    the athlete is in no crew yet (no standings to show) ──
-      crewCaption: realCrewCaption ?? 'Tritt einer Crew bei und sieh, wie deine Woche gegen deine Fahrer steht.',
-      crew: realCrew ?? [
-        { name: 'Mara', color: '#7B5CFF', pct: 143, me: false },
-        { name: 'Du', color: '#2BE68F', pct: 131, me: true },
-        { name: 'Timo', color: '#6B8CFF', pct: 104, me: false },
-      ],
-      crewRank: realCrewRank ?? '↑1',
-      challengeLabel: 'CREW-CHALLENGE · UM DIE WELT',   // fixture: crew-challenge banner not wired
-      challengeValue: '412 / 500 km',
-      challengePct: 82,
     }
   }, [
-    model, user, streak, standings, adaptive, week, ftp, todayWeather, weekActs,
+    model, user, streak, adaptive, week, ftp, todayWeather, weekActs,
     garage, garageLoading, sceneLoading, dayScene, scenePose, renderScene.isPending, wallet,
   ])
 

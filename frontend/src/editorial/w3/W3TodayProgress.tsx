@@ -1,29 +1,38 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { Zap, HeartPulse, Target, TrendingUp, TrendingDown, Trophy } from 'lucide-react'
+import { HeartPulse, Target, TrendingUp, TrendingDown, Trophy, Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useSeasonTrends } from '../../hooks/useSeasonTrends'
+import { useSeasonTrends, type MetricSummary, type TrendPoint } from '../../hooks/useSeasonTrends'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useAchievements } from '../../hooks/useAchievements'
 import { useRewardChallenges, useJoinChallenge } from '../../hooks/useRewardChallenges'
 import type { ChallengeMetric, RewardChallenge } from '../../api/rewardChallenges'
-import { T, FONT, grow } from './w3tokens'
+import { T, FONT, EASE, grow } from './w3tokens'
 
 /**
- * W3 · Today "Your progress" — the athlete's real fitness goals (FTP, VO₂max,
+ * W3 · Today "Dein Fortschritt" — the athlete's real fitness goals (FTP, VO₂max,
  * 20-min power), their live monthly challenges, and the next badge they are
  * actually working toward. Every number is the rider's own:
  *
- *   • FTP            — /athletes/me (`ftp_watts`)
- *   • VO₂max, 20-min — /analytics/season-trends (latest + season delta)
+ *   • FTP            — /athletes/me (`ftp_watts`), with W/kg from the stored
+ *                      `weight_kg` and, when the rider has SET one, progress
+ *                      against their own `goals.target_ftp`. No goal on file →
+ *                      no bar (an invented target would be the worst kind of
+ *                      motivation).
+ *   • VO₂max, 20-min — /analytics/season-trends: the season's real MONTHLY
+ *                      series is drawn as a sparkline, the delta is the
+ *                      server's own first→latest, and the sub-line names the
+ *                      real month the comparison starts in.
  *   • challenges     — /challenges/mine `active[]` (value/target/pct computed
  *                      server-side from the rider's own rides this month)
  *   • next badge     — /achievements/mine `in_progress[]` (real current/target)
  *
- * Honest "—" where a signal is absent. The joinable catalog
- * (`/challenges/mine` → `available[]`) deliberately shows NO progress bar: the
- * server returns a placeholder `value: 0` for challenges the rider has not
- * joined, so a bar there would be a fabricated stat. Joining backfills to the
- * 1st of the month, so progress becomes real the instant you tap JOIN.
+ * Honest "—" where a signal is absent, and a metric with fewer than two stored
+ * months gets NO line rather than a two-point shape that implies a trend. The
+ * joinable catalog (`/challenges/mine` → `available[]`) deliberately shows NO
+ * progress bar: the server returns a placeholder `value: 0` for challenges the
+ * rider has not joined, so a bar there would be a fabricated stat. Joining
+ * backfills to the 1st of the month, so progress becomes real the instant you
+ * tap MITMACHEN.
  */
 
 const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', background: T.bg, padding: `0 20px ${padBottom}px`, fontFamily: FONT })
@@ -31,6 +40,7 @@ const CH_UNIT: Record<ChallengeMetric, string> = { active_days: 'Tage', distance
 const nf = new Intl.NumberFormat('de-DE')
 const ellipsis = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
 const cardBtn = { width: '100%', border: 0, background: T.surface, fontFamily: FONT, textAlign: 'left' as const, cursor: 'pointer' }
+const dec = (n: number, d = 1) => n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d })
 
 /** Days left in the challenge period ("YYYY-MM"), computed from the calendar —
  *  the enrolment window IS the calendar month (services/challenges.period_bounds).
@@ -44,19 +54,75 @@ function daysLeftIn(period: string | undefined): number | null {
   return Math.max(0, new Date(y, m, 0).getDate() - now.getDate())
 }
 
-function Metric({ icon: Icon, label, value, unit, delta }: { icon: typeof Zap; label: string; value: string; unit: string; delta: number | null }) {
-  const up = delta != null && delta > 0
-  const flat = delta == null || Math.abs(delta) < 0.05
-  const dHue = flat ? T.quiet : up ? T.training : T.warn
+/** The metric's REAL monthly series, drawn small: a line with an emphasised
+ *  endpoint and no gridlines. Fewer than two stored months → an empty track,
+ *  never an invented shape. */
+function Spark({ values, hue, reduce }: { values: number[]; hue: string; reduce: boolean | null }) {
+  const H = 20
+  const W = 100
+  if (values.length < 2) {
+    return (
+      <div style={{ height: H, display: 'flex', alignItems: 'center' }}>
+        <div style={{ width: '100%', height: 2, borderRadius: 1, background: T.surface2 }} />
+      </div>
+    )
+  }
+  const lo = Math.min(...values)
+  const hi = Math.max(...values)
+  const span = hi - lo || 1
+  const x = (i: number) => (i / (values.length - 1)) * W
+  const y = (v: number) => H - 3 - ((v - lo) / span) * (H - 6)
+  const d = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
   return (
-    <div style={{ flex: 1, minWidth: 0, padding: '15px 13px 16px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ width: 30, height: 30, borderRadius: 9, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Icon size={15} color={T.acid} /></div>
-      <span style={{ ...ellipsis, fontSize: 22, fontWeight: 800, letterSpacing: -0.7, color: value === '—' ? T.quiet : T.ink }}>{value}<span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}> {unit}</span></span>
-      <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
+      <motion.path d={d} fill="none" stroke={T.d3} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
+        initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.7, ease: EASE }} />
+      <circle cx={x(values.length - 1)} cy={y(values[values.length - 1])} r={2.6} fill={hue} style={{ filter: `drop-shadow(0 0 5px ${hue})` }} />
+    </svg>
+  )
+}
+
+/** One season metric: its real latest value, its real monthly line, and the
+ *  real month the season delta is measured from. */
+function Metric({ icon: Icon, label, unit, sum, points, pick, reduce }: {
+  icon: typeof Zap
+  label: string
+  unit: string
+  sum: MetricSummary | undefined
+  points: TrendPoint[]
+  pick: (p: TrendPoint) => number | null
+  reduce: boolean | null
+}) {
+  const series = points.map(pick).filter((v): v is number => v != null)
+  const firstMonth = points.find((p) => pick(p) != null)?.month_de ?? null
+  const latest = sum?.latest ?? null
+  const delta = sum?.delta ?? null
+  const flat = delta == null || Math.abs(delta) < 0.05
+  const good = delta != null && (sum?.lower_is_better ? delta < 0 : delta > 0)
+  const dHue = flat ? T.quiet : good ? T.acid : T.mid
+  return (
+    <div style={{ flex: 1, minWidth: 0, padding: '14px 13px 15px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span style={{ width: 24, height: 24, flex: 'none', borderRadius: 8, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Icon size={12} color={T.acid} /></span>
         <span style={{ ...ellipsis, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{label}</span>
-        {delta != null && !flat && (
-          <span style={{ flex: 'none', marginLeft: 'auto', display: 'flex', gap: 2, alignItems: 'center', fontSize: 10, fontWeight: 700, color: dHue }}>
-            {up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}{Math.abs(delta) % 1 === 0 ? Math.abs(delta) : Math.abs(delta).toFixed(1)}
+      </div>
+      <span style={{ ...ellipsis, fontSize: 24, fontWeight: 800, letterSpacing: -0.8, color: latest == null ? T.quiet : T.ink }}>
+        {latest == null ? '—' : nf.format(Math.round(latest))}
+        {unit && latest != null && <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}> {unit}</span>}
+      </span>
+      <Spark values={series} hue={T.acid} reduce={reduce} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+        {delta != null && !flat ? (
+          <>
+            <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 2, fontSize: 10.5, fontWeight: 700, color: dHue }}>
+              {delta > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+              {Math.abs(delta) % 1 === 0 ? Math.abs(delta) : dec(Math.abs(delta))}
+            </span>
+            <span style={{ ...ellipsis, fontSize: 9.5, fontWeight: 600, color: T.quiet }}>seit {firstMonth ?? 'Saisonstart'}</span>
+          </>
+        ) : (
+          <span style={{ ...ellipsis, fontSize: 9.5, fontWeight: 600, color: T.quiet }}>
+            {series.length > 1 ? `stabil seit ${firstMonth ?? 'Saisonstart'}` : 'noch keine Saisonreihe'}
           </span>
         )}
       </div>
@@ -83,6 +149,7 @@ function ChallengeRow({ c, lead, i, daysLeft, reduce, onOpen }: { c: RewardChall
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
         <span style={{ ...ellipsis, flex: 1, fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
           {nf.format(Math.round(c.value))} von {nf.format(c.target)} {unit}
+          {!c.completed && c.target > c.value ? ` · noch ${nf.format(Math.ceil(c.target - c.value))} ${unit}` : ''}
         </span>
         <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: c.completed ? T.acid : T.quiet }}>
           {c.completed
@@ -103,13 +170,19 @@ export default function W3TodayProgress() {
   const { data: ach } = useAchievements()
   const join = useJoinChallenge()
 
-  const ftp = (profile as { ftp_watts?: number } | undefined)?.ftp_watts ?? null
-  const vo2 = trends?.vo2max
-  const p20 = trends?.p20min_w
+  const ftp = profile?.ftp_watts ?? null
+  const weight = profile?.weight_kg ?? null
+  // The rider's OWN declared FTP goal. Absent → no goal bar at all.
+  const ftpGoal = profile?.goals?.target_ftp ?? null
+  const wkg = ftp != null && weight != null && weight > 0 ? ftp / weight : null
+  const points = trends?.points ?? []
   const active = challenges?.active ?? []
   const available = challenges?.available ?? []
   const daysLeft = daysLeftIn(challenges?.period)
   const openChallenges = () => navigate('/e/w3-challenges')
+
+  const goalPct = ftp != null && ftpGoal != null && ftpGoal > 0 ? Math.min(100, Math.round((ftp / ftpGoal) * 100)) : null
+  const goalToGo = ftp != null && ftpGoal != null ? Math.round(ftpGoal - ftp) : null
 
   // Next badge: the in-progress milestone the rider is closest to, with a real
   // current/target behind it. Milestones without a number are skipped.
@@ -136,11 +209,45 @@ export default function W3TodayProgress() {
         )}
       </div>
 
-      {/* Fitness goals — real */}
+      {/* ── FTP — the number a cyclist actually trains for. Real watts, real
+           W/kg, and progress only against a goal the rider set themselves. ── */}
+      <div style={{ borderRadius: 22, background: T.surface, padding: '16px 18px 17px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ width: 24, height: 24, flex: 'none', borderRadius: 8, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Zap size={12} color={T.acid} /></span>
+              <span style={{ ...ellipsis, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>FTP · SCHWELLENLEISTUNG</span>
+            </div>
+            <span style={{ ...ellipsis, fontSize: 34, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1, color: ftp == null ? T.quiet : T.ink }}>
+              {ftp == null ? '—' : nf.format(Math.round(ftp))}
+              {ftp != null && <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}> W</span>}
+            </span>
+          </div>
+          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+            <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.5, color: wkg == null ? T.quiet : T.ink }}>{wkg == null ? '—' : dec(wkg, 2)}</span>
+            <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>W/KG</span>
+          </div>
+        </div>
+
+        {goalPct != null && goalToGo != null && ftpGoal != null && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0 }}>
+            <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF0F', overflow: 'hidden' }}>
+              <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${goalPct}%` }} transition={grow(0.1)}
+                style={{ height: '100%', borderRadius: 100, background: goalToGo <= 0 ? T.acid : T.d3 }} />
+            </div>
+            <span style={{ ...ellipsis, fontSize: 10.5, fontWeight: 600, color: goalToGo <= 0 ? T.acid : T.quiet }}>
+              {goalToGo <= 0
+                ? `Ziel-FTP ${nf.format(ftpGoal)} W erreicht — Zeit für ein neues Ziel.`
+                : `Noch ${nf.format(goalToGo)} W bis zu deinem Ziel-FTP ${nf.format(ftpGoal)} W · ${goalPct} %`}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Season metrics — the rider's own monthly series, not a single number */}
       <div style={{ display: 'flex', gap: 8 }}>
-        <Metric icon={Zap} label="FTP · W" value={ftp != null ? String(Math.round(ftp)) : '—'} unit="W" delta={null} />
-        <Metric icon={HeartPulse} label="VO₂MAX" value={vo2?.latest != null ? String(Math.round(vo2.latest)) : '—'} unit="" delta={vo2?.delta ?? null} />
-        <Metric icon={Target} label="20-MIN" value={p20?.latest != null ? String(Math.round(p20.latest)) : '—'} unit="W" delta={p20?.delta ?? null} />
+        <Metric icon={HeartPulse} label="VO₂MAX" unit="" sum={trends?.vo2max} points={points} pick={(p) => p.vo2max} reduce={reduce} />
+        <Metric icon={Target} label="20-MIN" unit="W" sum={trends?.p20min_w} points={points} pick={(p) => p.p20min_w} reduce={reduce} />
       </div>
 
       {/* Live challenges — real progress toward each real target */}

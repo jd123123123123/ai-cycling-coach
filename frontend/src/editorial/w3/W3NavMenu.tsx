@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react'
 import {
-  Menu, X, Activity, CalendarRange, Target, Route as RouteIcon, Bike, Trophy,
+  Menu, X, Activity, CalendarRange, CalendarCheck, Target, Route as RouteIcon, Bike, Trophy,
   Flag, Users, UserRound, Settings,
 } from 'lucide-react'
 import { T, FONT } from './w3tokens'
@@ -16,6 +16,7 @@ import { T, FONT } from './w3tokens'
 const ITEMS: { label: string; sub: string; icon: typeof Activity; route: string }[] = [
   { label: 'Heute', sub: 'Dein Tag', icon: Activity, route: '/e/w3-today' },
   { label: 'Trainingsplan', sub: 'Der periodisierte Plan', icon: CalendarRange, route: '/e/w3-plan' },
+  { label: 'Wochenrückblick', sub: 'Letzte Woche + diese Woche', icon: CalendarCheck, route: '/e/w3-week-review' },
   { label: 'Dein Ziel', sub: 'Zielevent + Lücken', icon: Target, route: '/e/w3-goal' },
   { label: 'Fahrten', sub: 'Dein Verlauf', icon: RouteIcon, route: '/e/w3-rides' },
   { label: 'Garage', sub: 'Dein Bike-Studio', icon: Bike, route: '/e/w3-bike-studio' },

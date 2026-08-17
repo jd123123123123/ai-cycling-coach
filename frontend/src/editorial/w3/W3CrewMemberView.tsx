@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Route as RouteIcon, CalendarCheck, Sparkles, Zap, HeartPulse, Gauge, Users } from 'lucide-react'
+import { ArrowLeft, Route as RouteIcon, CalendarCheck, Sparkles, Zap, HeartPulse, Gauge, Users, Bike } from 'lucide-react'
 import { T, FONT, EASE, grow, band, card } from './w3tokens'
 import W3PeriodTabs from './W3PeriodTabs'
 import { type W3Period } from './w3crew'
@@ -10,12 +10,18 @@ import './w3.css'
  * W3 · 11 CREW MEMBER DETAIL — the REFERRAL USER DETAIL language (`w3.pen`
  * Z2ryuL: full-bleed tinted hero, the handle on a dark pill, a row of stat
  * tiles on surface-2, one loud number) re-pointed at a crew-mate's own
- * training, with WEEK / MONTH / SEASON sub-tabs.
+ * training, with WOCHE / MONAT / SAISON sub-tabs.
+ *
+ * The centrepiece is the DUEL: you against them, on the fair axis first
+ * (points = each rider's share of their OWN target), so a stronger rider does
+ * not win by being stronger. The duel owns the screen's one loud acid number;
+ * everything below it (their totals, their rhythm, their rides) is ink.
  *
  * Pure function of `vm`; `W3CrewMemberPage` builds it from that rider's real
- * `StandingRow` in `GET /crews/me/standings?period=…`. There is no avatar in
- * the crew payload, so the hero is the rider's board tint rather than a
- * fabricated portrait, and every tile is either their real value or "—".
+ * `StandingRow` in `GET /crews/me/standings?period=…` plus their rows in the
+ * crew ride feed `GET /crews/me/rides`. There is no avatar in the crew payload,
+ * so the hero is the rider's board tint rather than a fabricated portrait, and
+ * every value is either real or an explicit "—".
  */
 
 export type W3MemberStatIcon = 'route' | 'calendar' | 'sparkles' | 'zap' | 'heart' | 'gauge'
@@ -31,25 +37,64 @@ export interface W3CrewMemberStat {
   missing?: boolean  // renders quiet — the source isn't there
 }
 
+/** One head-to-head axis. Both sides are real numbers both riders actually have. */
+export interface W3DuelRow {
+  key: string
+  label: string
+  chip?: string            // "FAIRSTER VERGLEICH" on the points axis
+  mine: string             // your value, formatted
+  theirs: string           // their value, formatted
+  minePct: number          // 0..1 share of the pair (bar split), 0/0 = no data
+  theirsPct: number
+  gap: string              // "120 zurück" · "37 km vor" · "gleichauf"
+  youAhead: boolean | null // null = level
+}
+
+export interface W3Duel {
+  theirName: string        // "@mara"
+  headline: string         // "120" — the one loud number on this screen
+  headlineKicker: string   // "PUNKTE RÜCKSTAND"
+  status: string           // the honest, closeable framing
+  daysLeft: string | null  // "Noch 3 Tage in diesem Fenster."
+  rows: W3DuelRow[]
+  note: string             // why points are the fair axis
+}
+
+export interface W3MemberRide {
+  id: number
+  date: string             // "Sa · 10. Aug"
+  title: string
+  distance: string         // "42,1 km" or "—"
+  meta: string             // "1:32 h · 620 hm" — only the parts that exist
+  distancePct: number      // 0..1 vs their longest ride in this list
+}
+
+export interface W3RidesBlock {
+  countChip: string        // "6 FAHRTEN" · "LETZTE 6"
+  rides: W3MemberRide[]
+  note: string             // what the feed does and does not cover
+  empty: string | null     // set instead of rides when there are none
+}
+
 export interface W3CrewMemberVm {
   found: boolean
-  handle: string          // "@mara" or "You"
+  handle: string          // "@mara" or "Du"
   isYou: boolean
   tint: string            // their colour on the crew board
   period: W3Period
-  windowChip: string      // "AUG 10–16"
-  rankLine: string        // "2nd of six · this month"
-  headlineKicker: string  // "TSS · THIS MONTH"
-  headline: string        // "1,240"
-  headlineSub: string     // "19% of the crew's 6,410 TSS"
+  windowChip: string      // "10.–16. AUG"
+  rankLine: string        // "2. von sechs · diesen Monat"
+  headlineKicker: string  // "TSS · DIESEN MONAT"
+  headline: string        // "1.240"
+  headlineSub: string     // "19 % der 6.410 TSS der Crew"
   stats: W3CrewMemberStat[]
   bars: number[]          // one per real daily_pct bucket, 0..1 of their own peak
   barsFilled: number
   barsTotal: number
   barsNote: string
   barsEdges: { left: string; right: string } | null
-  vsYou: { label: string; value: string; ahead: boolean }[] | null
-  vsYouNote: string | null
+  duel: W3Duel | null
+  rides: W3RidesBlock | null
   footnote: string
   missingCopy: string     // shown when the rider isn't on this crew's board
 }
@@ -68,6 +113,63 @@ const Tile = ({ s, i, reduce }: { s: W3CrewMemberStat; i: number; reduce: boolea
     </motion.div>
   )
 }
+
+/** One duel axis: your value | split bar | their value, with the gap named. */
+const DuelRow = ({ r, tint, i, reduce }: { r: W3DuelRow; tint: string; i: number; reduce: boolean | null }) => {
+  const none = r.minePct <= 0 && r.theirsPct <= 0
+  /* Your own number is never dimmed — being behind is a gap, not a verdict.
+   * The acid stays on the headline, so the gap lines read ink / mid only. */
+  const gapColor = r.chip ? T.ink : T.mid
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>{r.label}</span>
+        {r.chip
+          ? <span style={{ flex: 'none', fontSize: 8, fontWeight: 800, letterSpacing: 0.8, color: T.acid, padding: '4px 8px', borderRadius: 100, background: T.acidDim, whiteSpace: 'nowrap' }}>{r.chip}</span>
+          : <span style={{ flex: 'none', fontSize: 10, fontWeight: 700, color: gapColor, whiteSpace: 'nowrap' }}>{r.gap}</span>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ flex: 'none', maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 15, fontWeight: 800, letterSpacing: -0.3, color: T.ink }}>{r.mine}</span>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 3, height: 10 }}>
+          {none ? (
+            <div style={{ flex: 1, borderRadius: 100, background: T.rule }} />
+          ) : (
+            <>
+              {/* flex-grow, not width % — percentage widths plus a gap overflow the track */}
+              <motion.div
+                initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(0.08 + i * 0.05)}
+                style={{ flexGrow: Math.max(0.03, r.minePct), flexBasis: 0, minWidth: 0, transformOrigin: 'right', borderRadius: 100, background: T.acid }} />
+              <motion.div
+                initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(0.08 + i * 0.05)}
+                style={{ flexGrow: Math.max(0.03, r.theirsPct), flexBasis: 0, minWidth: 0, transformOrigin: 'left', borderRadius: 100, background: tint }} />
+            </>
+          )}
+        </div>
+        <span style={{ flex: 'none', maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right', fontSize: 15, fontWeight: 800, letterSpacing: -0.3, color: r.youAhead === true ? T.mid : T.ink }}>{r.theirs}</span>
+      </div>
+      {r.chip && (
+        <span style={{ fontSize: 10, fontWeight: 700, color: gapColor, textAlign: 'center' }}>{r.gap}</span>
+      )}
+    </div>
+  )
+}
+
+const RideRow = ({ r, tint, i, reduce, last }: { r: W3MemberRide; tint: string; i: number; reduce: boolean | null; last: boolean }) => (
+  <motion.div
+    initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: EASE, delay: 0.04 * i }}
+    style={{
+      position: 'relative', display: 'flex', gap: 12, alignItems: 'center', padding: '13px 12px', borderRadius: 14,
+      borderBottom: last ? 'none' : `1px solid ${T.rule}`,
+      background: r.distancePct > 0 ? `linear-gradient(90deg, ${tint}1F ${Math.max(4, Math.round(r.distancePct * 100))}%, transparent ${Math.max(4, Math.round(r.distancePct * 100))}%)` : 'transparent',
+    }}>
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.8, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.date}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 500, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.meta}</span>
+    </div>
+    <span style={{ flex: 'none', maxWidth: 104, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: T.ink }}>{r.distance}</span>
+  </motion.div>
+)
 
 export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
   vm: W3CrewMemberVm; onBack?: () => void; onPeriod?: (p: W3Period) => void
@@ -88,7 +190,7 @@ export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, background: `linear-gradient(0deg, ${T.bg}, transparent)` }} />
           <div style={{ position: 'relative', padding: '10px 20px 0' }}>
             <div style={{ height: 'max(12px, env(safe-area-inset-top))' }} />
-            <button onClick={onBack} aria-label="Back" style={{ width: 44, height: 44, borderRadius: 100, background: T.ink, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color={T.bg} /></button>
+            <button onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: T.ink, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color={T.bg} /></button>
           </div>
           {/* handle + standing, in the referral card's pill language */}
           <div style={{ position: 'absolute', left: 20, right: 20, bottom: 14, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
@@ -102,7 +204,7 @@ export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
           <div style={{ ...band(30), gap: 16, paddingTop: 20 }}>
             <div style={{ ...card(), gap: 10, alignItems: 'center', textAlign: 'center', padding: 26 }}>
               <div style={{ width: 52, height: 52, borderRadius: 100, background: T.surface2, display: 'grid', placeItems: 'center' }}><Users size={22} color={T.mid} /></div>
-              <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.4, color: T.ink }}>No board entry</span>
+              <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.4, color: T.ink }}>Kein Eintrag im Board</span>
               <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>{vm.missingCopy}</span>
             </div>
           </div>
@@ -113,7 +215,54 @@ export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
               <W3PeriodTabs value={vm.period} onChange={(p) => onPeriod?.(p)} />
             </div>
 
-            {/* The one loud number: their load for this window */}
+            {/* ── THE DUEL — the centrepiece, and this screen's one loud number ── */}
+            {vm.duel && (
+              <div style={{ ...band(24) }}>
+                <div style={{ ...card(), gap: 18, padding: 20, position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(90% 70% at 100% 0%, ${vm.tint}1A, transparent 62%)`, pointerEvents: 'none' }} />
+                  <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    {/* Who, and over which window */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>DU GEGEN {vm.duel.theirName.toUpperCase()}</span>
+                      {vm.windowChip && <span style={{ flex: 'none', fontSize: 9, fontWeight: 800, letterSpacing: 0.8, color: T.mid, padding: '5px 10px', borderRadius: 100, background: T.surface2, whiteSpace: 'nowrap' }}>{vm.windowChip}</span>}
+                    </div>
+
+                    {/* The gap, named and closeable */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <motion.span
+                        initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
+                        style={{ fontSize: 64, fontWeight: 800, letterSpacing: -2.8, lineHeight: 0.95, color: T.acid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vm.duel.headline}</motion.span>
+                      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.2, color: T.mid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vm.duel.headlineKicker}</span>
+                      <span style={{ marginTop: 4, fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: T.ink }}>{vm.duel.status}</span>
+                      {vm.duel.daysLeft && (
+                        <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid }}>{vm.duel.daysLeft}</span>
+                      )}
+                    </div>
+
+                    {/* Legend — one place where the two colours are named */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 3, background: T.acid, flex: 'none' }} />
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: T.mid }}>Du</span>
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 3, background: vm.tint, flex: 'none' }} />
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10.5, fontWeight: 700, color: T.mid }}>{vm.duel.theirName}</span>
+                      </span>
+                    </div>
+
+                    {/* The axes */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {vm.duel.rows.map((r, i) => <DuelRow key={r.key} r={r} tint={vm.tint} i={i} reduce={reduce} />)}
+                    </div>
+
+                    <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.45, color: T.quiet }}>{vm.duel.note}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Their load for this window */}
             <div style={{ ...band(20) }}>
               <div style={{ ...card(), gap: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
@@ -122,7 +271,7 @@ export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
                 </div>
                 <motion.span
                   initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
-                  style={{ fontSize: 60, fontWeight: 800, letterSpacing: -2.6, lineHeight: 1, color: T.acid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vm.headline}</motion.span>
+                  style={{ fontSize: 60, fontWeight: 800, letterSpacing: -2.6, lineHeight: 1, color: vm.duel ? T.ink : T.acid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vm.headline}</motion.span>
                 <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{vm.headlineSub}</span>
               </div>
             </div>
@@ -151,7 +300,7 @@ export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
               <div style={{ ...band(20), gap: 10 }}>
                 <div style={{ ...card(), gap: 12, padding: 18 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>RHYTHM</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>RHYTHMUS</span>
                     <span style={{ flex: 'none', fontSize: 9, fontWeight: 800, letterSpacing: 0.8, color: T.mid, whiteSpace: 'nowrap' }}>{vm.barsFilled} / {vm.barsTotal}</span>
                   </div>
                   <div style={{ display: 'flex', gap: barGap, alignItems: 'flex-end', height: 72 }}>
@@ -172,18 +321,25 @@ export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
               </div>
             )}
 
-            {/* Against you — only from numbers both riders actually have */}
-            {vm.vsYou && vm.vsYou.length > 0 && (
-              <div style={{ ...band(20) }}>
-                <div style={{ ...card(), gap: 12, border: `1px solid ${T.stroke}`, background: 'transparent' }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>AGAINST YOU</span>
-                  {vm.vsYou.map((r) => (
-                    <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
-                      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, fontWeight: 600, color: T.mid }}>{r.label}</span>
-                      <span style={{ flex: 'none', fontSize: 17, fontWeight: 800, letterSpacing: -0.4, color: r.ahead ? T.ink : T.mid }}>{r.value}</span>
-                    </div>
-                  ))}
-                  {vm.vsYouNote && <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>{vm.vsYouNote}</span>}
+            {/* Their rides — the real feed rows for this rider in this window */}
+            {vm.rides && (
+              <div style={{ ...band(20), gap: 10 }}>
+                <div style={{ ...card(), gap: 4, padding: '18px 8px 18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '0 12px 6px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <Bike size={15} color={T.mid} />
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>FAHRTEN</span>
+                    </span>
+                    <span style={{ flex: 'none', fontSize: 9, fontWeight: 800, letterSpacing: 0.8, color: T.mid, whiteSpace: 'nowrap' }}>{vm.rides.countChip}</span>
+                  </div>
+                  {vm.rides.empty ? (
+                    <span style={{ padding: '8px 12px 0', fontSize: 12, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>{vm.rides.empty}</span>
+                  ) : (
+                    vm.rides.rides.map((r, i) => (
+                      <RideRow key={r.id} r={r} tint={vm.tint} i={i} reduce={reduce} last={i === vm.rides!.rides.length - 1} />
+                    ))
+                  )}
+                  <span style={{ padding: '10px 12px 0', fontSize: 11, fontWeight: 500, lineHeight: 1.45, color: T.quiet }}>{vm.rides.note}</span>
                 </div>
               </div>
             )}

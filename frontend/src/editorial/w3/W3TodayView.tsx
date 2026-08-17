@@ -2,19 +2,23 @@ import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { Flame, CalendarRange, Sparkles, Star } from 'lucide-react'
-import { WeekTrainingCard, WeekNavCards, MirrorChart, type W3DayFull, type W3Weather, type W3Mirror, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
-import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
+import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
+import { T, FONT, grow, Kicker, DASH } from './w3tokens'
 import W3BikeHero, { type W3BikeHeroScene } from './W3BikeHero'
 import W3RiderAvatar from './W3RiderAvatar'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3TodayProgress from './W3TodayProgress'
+import W3TodayStatus from './W3TodayStatus'
+import W3TodayRank from './W3TodayRank'
+import W3WhyToday from './W3WhyToday'
+import W3ScoreCard from './W3ScoreCard'
 import { W3CoachFab } from './W3CoachChat'
 import W3NavMenu, { W3NavIcon } from './W3NavMenu'
 import './w3.css'
 
-export type { W3DayFull, W3Weather, W3Mirror, W3Block, OnAdapt, AdaptResult } from './W3Sections'
+export type { W3DayFull, W3Weather, W3Block, OnAdapt, AdaptResult } from './W3Sections'
 
 /**
  * W3 · 01 TODAY — a 1:1 code rebuild of the `w3.pen` frames `gx4WA` / `i5cVpB`.
@@ -53,7 +57,6 @@ export interface W3Signal {
    *  track so the three cards stay the same height without faking a trend. */
   spark: W3Spark | null
 }
-export interface W3CrewRow { name: string; color: string; pct: number; me: boolean }
 export interface W3Vm {
   handle: string
   tierLine: string
@@ -105,11 +108,7 @@ export interface W3Vm {
   weekGoal: W3WeekGoal | null
   planWeeks: string
 
-  zoneTag: string | null
-
   weather: W3Weather
-
-  mirror: W3Mirror
 
   sessionTitle: string | null
   sessionDur: string | null
@@ -119,16 +118,6 @@ export interface W3Vm {
   sessionBlocks: W3Block[]
   sessionFtpTag: string
   sessionEarn: string // fixture
-
-  form: { fitness: number; fatigue: number; formVal: number } | null
-
-  crewCaption: string
-  crew: W3CrewRow[] // fixture
-  crewRank: string // fixture
-  challengeLabel: string // fixture
-  challengeValue: string // fixture
-  challengePct: number // fixture
-
 }
 
 // ── primitives ──
@@ -180,50 +169,12 @@ function SignalCard({ label, sig }: { label: string; sig: W3Signal | null }) {
   )
 }
 
-/** The readiness charge-meter — a row of acid bars filled in proportion to the
- *  real readiness score (an honest gauge, not a fixture). Animates in. */
-function ChargeMeter({ score }: { score: number | null }) {
-  const reduce = useReducedMotion()
-  const N = 18
-  const filled = score == null ? 0 : Math.max(0, Math.min(N, Math.round((score / 100) * N)))
-  return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 26, width: '100%' }}>
-      {Array.from({ length: N }).map((_, i) => {
-        const on = i < filled
-        return (
-          <motion.div key={i}
-            initial={reduce ? false : { scaleY: 0 }}
-            animate={{ scaleY: 1 }}
-            transition={grow(i * 0.03)}
-            style={{ flex: 1, height: 26, transformOrigin: 'bottom', borderRadius: 3, background: on ? T.acid : T.surface2, boxShadow: on ? `0 0 10px ${T.acid}55` : 'none' }} />
-        )
-      })}
-    </div>
-  )
-}
-
-
-/** The pen's repeating section header: bold title, "Earned by training, not
- *  bought" subtitle, and an acid pill tag on the right. */
-function SectionHead({ title, subtitle, tag }: { title: string; subtitle?: string; tag: string | null }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', background: T.bg, padding: '0 20px 12px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{title}</span>
-        {subtitle && <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{subtitle}</span>}
-      </div>
-      {tag && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '7px 13px', borderRadius: 100, background: T.acidDim, flex: 'none' }}>
-          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: T.acid }}>{tag}</span>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ── band scaffold: every section is a full-width vertical band on w-bg ──
+// The pen's repeating section header now lives inside each self-fetching
+// section (W3TodayStatus / W3TodayRank / W3TodayProgress), because only the
+// section itself knows what its acid pill should say.
 const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: `0 20px ${padBottom}px` })
-const card = (): CSSProperties => ({ background: T.surface, borderRadius: 24, padding: 20, display: 'flex', flexDirection: 'column', width: '100%' })
 
 export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
   vm: W3Vm
@@ -238,6 +189,9 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
   const todayIdx = Math.max(0, vm.weekDays.findIndex((d) => d.status === 'today'))
   const [selDay, setSelDay] = useState(todayIdx)
   const selectedDay = vm.weekDays[selDay] ?? vm.weekDays[todayIdx]
+  // Does the PLAN prescribe rest today? `status` can't answer this — it is
+  // 'today' for today whatever the day type is — so read the day's own `rest`.
+  const todayIsRest = vm.weekDays[todayIdx]?.rest === true
 
   return (
     <div className="w3-root">
@@ -276,38 +230,41 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
           scene={vm.scene} composing={vm.sceneComposing} onCompose={onComposeScene}
           identity={{ handle: vm.handle, rider: vm.riderImage, coins: vm.coins, streak: vm.streak }} />
 
-        {/* ── Hero: readiness + charge meter ── */}
+        {/* ── Hero: readiness + charge meter ──
+             The card is `W3ScoreCard` now — the same element grades a finished
+             ride's execution score. Everything it prints is passed in from real
+             data; it owns no copy of its own.
+
+             REST-DAY RECONCILIATION: a 76 next to "Bereit" on a day the plan
+             prescribes rest reads as a contradiction the rider has to solve.
+             Both facts are true — readiness measures the BODY, the plan decides
+             the DAY — so the card says so instead of hiding the number. The
+             rest flag comes from `day.rest` (the plan's day TYPE), never from
+             `status`, which is 'today' whatever kind of day it is. ── */}
         <div style={{ ...band(24), paddingTop: 20, gap: 14 }}>
-          <button onClick={() => navigate('/e/w3-readiness')} aria-label="Readiness-Details"
-            style={{ width: '100%', padding: '18px 18px 16px', borderRadius: 22, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 14, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                <span style={{ fontSize: 68, fontWeight: 700, letterSpacing: -3, lineHeight: 0.82, color: vm.readiness != null ? T.acid : T.quiet, textShadow: vm.readiness != null ? `0 0 26px ${T.acid}66` : 'none' }}>{vm.readiness ?? DASH}</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <Kicker>Bereitschaft</Kicker>
-                  <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{vm.readinessWord ?? DASH}</span>
-                  {/* The day-over-day move: a small signed kicker, deliberately
-                      not a second big number next to the score. Absent — not
-                      zeroed — when there aren't two dated readings. */}
-                  {vm.readinessDelta && (
-                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: -0.1, color: vm.readinessDelta.favourable ? T.acid : T.mid }}>
-                      {vm.readinessDelta.text}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                <Kicker>Multiplikator</Kicker>
-                <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                  <Star size={14} color={T.acid} fill={T.acid} /><span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{vm.earnRate}</span>
-                </div>
-                {vm.earnRateWhy && (
-                  <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.3, color: T.quiet, textAlign: 'right', maxWidth: 140 }}>{vm.earnRateWhy}</span>
-                )}
-              </div>
-            </div>
-            <ChargeMeter score={vm.readiness} />
-          </button>
+          <W3ScoreCard
+            score={vm.readiness}
+            label="Bereitschaft"
+            word={vm.readinessWord}
+            // The day-over-day move: a small signed kicker, deliberately not a
+            // second big number next to the score. Absent — not zeroed — when
+            // there aren't two dated readings.
+            note={vm.readinessDelta}
+            aside={{
+              label: 'Multiplikator',
+              value: vm.earnRate,
+              caption: vm.earnRateWhy,
+              icon: <Star size={14} color={T.acid} fill={T.acid} />,
+            }}
+            context={todayIsRest && vm.readiness != null ? (
+              <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>
+                Ruhetag — die {vm.readiness} beschreibt deinen Körper, nicht den Plan.
+                Heute wird die Erholung angelegt, nicht ausgegeben.
+              </span>
+            ) : null}
+            onClick={() => navigate('/e/w3-readiness')}
+            ariaLabel="Readiness-Details"
+          />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px 6px 9px', borderRadius: 100, background: T.acidDim }}>
@@ -315,6 +272,28 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
             </div>
             <span style={{ fontSize: 10, fontWeight: 500, color: T.quiet }}>{vm.coachDate}</span>
           </div>
+
+          {/* ── The coach's own verdict (pen frame `k4XB0`): the DAY-level call
+               in the coach's voice — headline, then the body that names the
+               evidence it read. REAL: GET /coach/brief → `verdict` / `rationale`
+               (via useTodayModel). Both nullable; an absent verdict renders
+               nothing rather than an empty block. The SESSION-level "why THIS
+               session" lives further down in `W3WhyToday`, structured, so the
+               two never narrate the same thing twice. ── */}
+          {(vm.coachLead || vm.coachWhy) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+              {vm.coachLead && (
+                <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: -0.75, lineHeight: 1.18, color: T.ink, minWidth: 0 }}>
+                  {vm.coachLead}
+                </span>
+              )}
+              {vm.coachWhy && (
+                <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.6, color: T.mid, minWidth: 0 }}>
+                  {vm.coachWhy}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Recovery nudge: the real "Erholungssignal / Gute Erholung" morning
@@ -346,60 +325,26 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
           weather={vm.weather}
           onAdapt={onAdapt} />
 
+        {/* ── "Warum diese Einheit?" — the session-level why, every day. Reads
+             the brief's adaptation explainer + the real mesocycle block, and
+             renders nothing when neither is on the wire. ── */}
+        <W3WhyToday />
+
         {/* ── Navigation, not week content: the season goal + the whole plan ── */}
         <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks}
           onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
 
-        {/* ── Your Current Status: 6-week fitness/fatigue mirror + form ── */}
-        <SectionHead title="Dein aktueller Status" subtitle="Erarbeitet, nicht gekauft" tag={vm.zoneTag} />
-        {vm.form
-          ? <MirrorChart m={vm.mirror} fitness={vm.form.fitness} fatigue={vm.form.fatigue} form={vm.form.formVal} />
-          : (
-            <div style={band(26)}>
-              <div style={{ ...card(), alignItems: 'center' }}>
-                <Kicker>Wo du stehst</Kicker>
-                <span style={{ fontSize: 26, fontWeight: 700, color: T.quiet, marginTop: 8 }}>{DASH}</span>
-              </div>
-            </div>
-          )}
+        {/* ── Dein aktueller Status — the real 90-day CTL/ATL curve on a proper
+             axis, what the number MEANS (peak / "so fit wie zuletzt am …" /
+             the 4-week move), the form band, and the server's own forward
+             projection. Self-fetching (usePMC + /weeks + /coach/trajectory),
+             like W3WhyToday and W3TodayProgress. ── */}
+        <W3TodayStatus />
 
-        {/* ── Your Rank (fixture: crew standings not wired) ── */}
-        <SectionHead title="Dein Rang" subtitle="Erarbeitet, nicht gekauft" tag={vm.zoneTag} />
-        <div style={band(26)}>
-          <div style={{ ...card(), gap: 16 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <Kicker>Diese Woche · deine Crew</Kicker>
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, lineHeight: 1.35 }}>{vm.crewCaption}</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {vm.crew.map((r) => (
-                <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 100, background: r.color, flex: 'none', border: r.me ? `2px solid ${T.acid}` : 'none' }} />
-                  <div style={{ width: 64 }}><span style={{ fontSize: 13, fontWeight: r.me ? 700 : 600, color: r.me ? T.acid : T.ink }}>{r.name}</span></div>
-                  <div style={{ flex: 1, height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (r.pct / 150) * 100)}%` }} transition={{ duration: 0.7, ease: EASE }}
-                      style={{ height: '100%', borderRadius: 100, background: r.me ? T.acid : T.d3 }} />
-                  </div>
-                  <div style={{ width: 42, textAlign: 'right' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: r.me ? T.acid : T.mid }}>{r.pct}%</span>
-                    {r.me && <div style={{ fontSize: 10, fontWeight: 700, color: T.acid }}>{vm.crewRank}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ height: 1, background: T.rule }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', color: T.quiet }}>{vm.challengeLabel}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: T.ink }}>{vm.challengeValue}</span>
-              </div>
-              <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
-                <motion.div initial={{ width: 0 }} animate={{ width: `${vm.challengePct}%` }} transition={{ duration: 0.8, ease: EASE }}
-                  style={{ height: '100%', borderRadius: 100, background: T.acid }} />
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* ── Dein Rang — REAL crew standings (GET /crews/me/standings). The old
+             fixture leaderboard and its invented "um die Welt" challenge are
+             gone; no crew now renders an honest empty state. ── */}
+        <W3TodayRank />
 
         {/* ── Your progress: real fitness goals (FTP/VO2max/20-min) + challenges ── */}
         <W3TodayProgress />

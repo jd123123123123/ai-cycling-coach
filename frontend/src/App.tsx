@@ -5,6 +5,7 @@ import { LocaleProvider } from './contexts/LocaleContext'
 import { CelebrationProvider } from './contexts/CelebrationContext'
 import W3RideCelebrationWatcher from './editorial/w3/W3RideCelebrationWatcher'
 import W3AvatarGate from './editorial/w3/W3AvatarGate'
+import W3WeekReviewGate from './editorial/w3/W3WeekReviewGate'
 import ProtectedRoute from './components/ProtectedRoute'
 import ScrollToTop from './components/ScrollToTop'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -84,6 +85,8 @@ const W3FirstBikePage = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePa
 const W3FirstBikePreview = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePreview'))
 const W3RideCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3RideCelebratePage'))
 const W3RideCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3RideCelebratePreview'))
+const W3WeekReviewPage = lazyWithRetry(() => import('./editorial/w3/W3WeekReviewPage'))
+const W3WeekReviewPreview = lazyWithRetry(() => import('./editorial/w3/W3WeekReviewPreview'))
 const W3OnboardWelcomePage = lazyWithRetry(() => import('./editorial/w3/W3OnboardWelcomePage'))
 const W3OnboardWelcomePreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardWelcomePreview'))
 const W3OnboardDevicesPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardDevicesPage'))
@@ -176,6 +179,7 @@ function AppRoutes() {
     <>
     <W3RideCelebrationWatcher />
     <W3AvatarGate />
+    <W3WeekReviewGate />
     <Suspense fallback={<AppLoading />}>
       <PageTransition routeKey={location.pathname}>
         <Routes location={location}>
@@ -402,6 +406,8 @@ function AppRoutes() {
           <Route path="/e/w3-first-bike-preview" element={<W3FirstBikePreview />} />
           <Route path="/e/w3-ride-celebrate/:id" element={<ProtectedRoute checkOnboarding><W3RideCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-ride-celebrate-preview" element={<W3RideCelebratePreview />} />
+          <Route path="/e/w3-week-review" element={<ProtectedRoute checkOnboarding><W3WeekReviewPage /></ProtectedRoute>} />
+          <Route path="/e/w3-week-review-preview" element={<W3WeekReviewPreview />} />
           {/* W3 first-open onboarding chain: welcome → devices → rewards → garage → today */}
           <Route path="/e/w3-onboard-welcome" element={<ProtectedRoute><W3OnboardWelcomePage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-welcome-preview" element={<W3OnboardWelcomePreview />} />

@@ -24,7 +24,6 @@ const FIXTURE: W3Vm = {
   sceneComposing: false,
   coins: '1.448',
   weekDoneLabel: '4 von 6 erledigt',
-  zoneTag: '88% FTP',
   avatarUrl: null,
   avatarInitial: 'J',
   streak: 17,
@@ -94,13 +93,6 @@ const FIXTURE: W3Vm = {
       { hour: 23, q: 0.56, temp: 15, rain: 40, wind: 12, dir: 'W', rideable: false },
     ],
   },
-  mirror: {
-    fitness: [0.5, 0.52, 0.55, 0.5, 0.58, 0.6, 0.62, 0.6, 0.63, 0.66, 0.62, 0.68, 0.7, 0.72, 0.7, 0.73, 0.76, 0.74, 0.78, 0.8, 0.82, 0.8, 0.83, 0.86, 0.84, 0.88, 0.9, 0.92, 0.9, 0.93, 0.96, 0.94, 0.98, 1, 0.98, 0.99, 1, 0.98, 1, 0.99, 1, 0.97],
-    fatigue: [0.6, 0.55, 0.7, 0.5, 0.65, 0.72, 0.5, 0.62, 0.68, 0.55, 0.7, 0.6, 0.75, 0.52, 0.66, 0.7, 0.58, 0.72, 0.6, 0.78, 0.55, 0.68, 0.74, 0.6, 0.8, 0.58, 0.7, 0.76, 0.62, 0.82, 0.6, 0.72, 0.78, 0.64, 0.84, 0.66, 0.74, 0.8, 0.68, 0.86, 0.7, 0.75],
-    fitnessRaw: Array.from({ length: 42 }, (_, i) => 40 + Math.round(i * 0.9)),
-    fatigueRaw: Array.from({ length: 42 }, (_, i) => 45 + Math.round(Math.sin(i / 3) * 12)),
-    todayIndex: 41,
-  },
   sessionTitle: '4 × 8 Schwelle',
   sessionDur: '1 Std. 15 min',
   sessionTargetW: '285 W',
@@ -115,17 +107,11 @@ const FIXTURE: W3Vm = {
   ],
   sessionFtpTag: 'FTP 292 W',
   sessionEarn: 'Diese Fahrt bringt 4.200 POWER · 12 CYCLE',
-  form: { fitness: 78, fatigue: 59, formVal: 19 },
-  crewCaption: 'Du ziehst deinen Teil — 131 % deines eigenen Ziels und diese Woche einen Platz nach vorn. Jeder wird am eigenen Plan gemessen, niemand jagt die Watt eines Profis.',
-  crew: [
-    { name: 'Mara', color: '#7B5CFF', pct: 143, me: false },
-    { name: 'Du', color: '#2BE68F', pct: 131, me: true },
-    { name: 'Timo', color: '#6B8CFF', pct: 104, me: false },
-  ],
-  crewRank: '↑1',
-  challengeLabel: 'CREW-CHALLENGE · UM DIE WELT',
-  challengeValue: '412 / 500 km',
-  challengePct: 82,
+  // NOTE: "Dein aktueller Status", "Dein Rang" and "Dein Fortschritt" are no
+  // longer part of this vm — they are self-fetching sections (W3TodayStatus /
+  // W3TodayRank / W3TodayProgress) reading /training-load/pmc, /crews/me and
+  // /analytics/season-trends directly. In this backend-less preview they render
+  // their own honest empty states, which is exactly what they should do.
 }
 
 // Mock coach adapt — mimics the persisting /workouts/today/modify result, so

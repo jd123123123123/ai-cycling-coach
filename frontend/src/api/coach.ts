@@ -466,6 +466,11 @@ export interface AdaptationChange {
   action: string
   principle: string
   severity: 'boost' | 'hold' | 'ease'
+  // Where the number came from: 'recovery' = measured off the body overnight
+  // (HRV, sleep), 'load' = derived from training history (TSB, CTL ramp,
+  // ACWR, yesterday's TSS). Optional — briefs cached before the field existed
+  // simply carry no provenance.
+  kind?: 'recovery' | 'load'
 }
 export interface Adaptations {
   summary: string

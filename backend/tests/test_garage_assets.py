@@ -9,7 +9,13 @@ from typing import get_args
 from app.api.garage import DayPose, _pose_for
 from app.models.activity import Activity
 from app.services.cyclr_studio import split_name
-from app.services.ride_scene import DAY_POSES, RideGeo, day_context, training_context
+from app.services.ride_scene import (
+    DAY_POSES,
+    STARTER_BACKDROP,
+    RideGeo,
+    day_context,
+    training_context,
+)
 
 
 class TestSplitName:
@@ -74,9 +80,23 @@ class TestDayContext:
         seen = {pose: day_context(pose) for pose in DAY_POSES}
         assert len(set(seen.values())) == len(DAY_POSES)
 
-    def test_rest_day_reads_as_asleep_on_the_bike(self):
-        ctx = day_context("rest").lower()
-        assert "asleep" in ctx and "handlebars" in ctx
+    def test_rest_day_reads_as_not_riding(self):
+        """A rest day must be unmistakably NOT a riding pose.
+
+        Asserts the INTENT, not the prose. The first version of this test
+        pinned the exact words "asleep" and "handlebars", so the art-direction
+        change (away from cartoon sleep-bubbles toward a slumped, cinematic
+        rest) failed a test that nothing was actually wrong with. Wording is
+        art direction and will move again; "a rest day does not look like
+        riding" is the rule worth protecting.
+        """
+        rest = day_context("rest").lower()
+        riding = day_context("hard").lower()
+        assert rest != riding
+        # Stillness, however it is phrased this season.
+        assert any(w in rest for w in ("still", "slumped", "switched off", "resting", "asleep"))
+        # And never the language of effort.
+        assert "full effort" not in rest and "out of the saddle" not in rest
 
     def test_backdrop_is_identical_for_every_pose(self):
         # The starter road is the same for every rider and every day-state — the
@@ -85,10 +105,19 @@ class TestDayContext:
         assert len(backdrops) == 1
 
     def test_never_invents_a_place(self):
-        assert "BACKGROUND:" in day_context("rest")
-        # The ride path is the only one allowed to name a location, and only from
-        # a real geocoder result.
-        assert "stylized cartoon countryside road" in day_context("hard")
+        """Day scenes always play out on the SHARED starter road.
+
+        The ride path is the only one allowed to name a location, and only from
+        a real geocoder result — so a day context must carry the starter
+        backdrop verbatim and nothing that looks like a place name. Asserted
+        against `STARTER_BACKDROP` itself rather than a copied string, so the
+        test tracks the constant instead of going stale next time the art
+        direction is rewritten.
+        """
+        for pose in DAY_POSES:
+            ctx = day_context(pose)
+            assert "BACKGROUND:" in ctx
+            assert STARTER_BACKDROP in ctx
 
     def test_unknown_pose_degrades_to_a_rideable_scene(self):
         # Reachable only if a caller bypasses the endpoint's Literal validation;

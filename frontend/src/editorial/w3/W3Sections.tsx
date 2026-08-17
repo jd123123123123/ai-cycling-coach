@@ -696,73 +696,11 @@ export function WeekNavCards({ goal, planWeeks, onGoal, onPlan }: { goal: W3Week
   )
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// 6-week Fitness / Fatigue mirror chart (pen: "Where you stand · last 6 weeks")
-// ────────────────────────────────────────────────────────────────────────
-export interface W3Mirror { fitness: number[]; fatigue: number[]; fitnessRaw: number[]; fatigueRaw: number[]; todayIndex: number }
-
-export function MirrorChart({ m, fitness, fatigue, form }: { m: W3Mirror; fitness: number; fatigue: number; form: number }) {
-  const reduce = useReducedMotion()
-  const [hov, setHov] = useState<number | null>(null)
-  const H = 40
-  const n = m.fitness.length
-  const cur = hov ?? m.todayIndex
-
-  const bar = (series: number[], i: number, top: boolean) => {
-    const on = i === m.todayIndex
-    const isHov = i === hov
-    const h = Math.max(2, Math.round(series[i] * H))
-    return (
-      <motion.div key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
-        initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow((i / n) * 0.3)}
-        style={{ flex: 1, height: h, alignSelf: top ? 'flex-end' : 'flex-start', transformOrigin: top ? 'bottom' : 'top', borderRadius: 1.5, cursor: 'pointer',
-          background: on ? (top ? T.acid : '#C8FF0080') : isHov ? T.d4 : T.d2 }} />
-    )
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: '0 20px 26px' }}>
-      <div style={card()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <Kicker>Wo du stehst · letzte 6 Wochen</Kicker>
-            <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, lineHeight: 1.35 }}>Fitness und Ermüdung auf einer Skala — der Abstand ist deine Form.</span>
-          </div>
-          {hov != null && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.acid }}>{m.fitnessRaw[cur]} <span style={{ color: T.quiet, fontWeight: 600 }}>fit</span></span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.cool }}>{m.fatigueRaw[cur]} <span style={{ color: T.quiet, fontWeight: 600 }}>müde</span></span>
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 16 }}>
-          <div style={{ display: 'flex', gap: 1.5, alignItems: 'flex-end', height: H }}>{m.fitness.map((_, i) => bar(m.fitness, i, true))}</div>
-          <div style={{ height: 1, background: T.d3, margin: '3px 0' }} />
-          <div style={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', height: H }}>{m.fatigue.map((_, i) => bar(m.fatigue, i, false))}</div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 8.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}><span style={{ width: 8, height: 8, borderRadius: 2, background: T.acid }} />FITNESS · OBEN</span>
-          <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 8.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#C8FF0080' }} />ERMÜDUNG · UNTEN</span>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          {[['FITNESS', String(fitness), T.ink, 30], ['−', '', T.quiet, 20], ['ERMÜDUNG', String(fatigue), T.ink, 30], ['=', '', T.quiet, 20], ['FORM', form >= 0 ? `+${form}` : String(form), T.acid, 42]].map(([l, v, hue, size], i) => (
-            l === '−' || l === '=' ? (
-              <span key={i} style={{ fontSize: size as number, color: hue as string, paddingBottom: 14 }}>{l}</span>
-            ) : (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                <span style={{ fontSize: size as number, fontWeight: 700, color: hue as string, lineHeight: 1 }}>{v}</span>
-                <span style={{ fontSize: 8.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>{l}</span>
-              </div>
-            )
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
+// The 6-week fitness/fatigue MirrorChart used to live here. It was replaced
+// by `W3TodayStatus`, which draws the real 90-day CTL/ATL series on a
+// zero-based axis with real dates — the mirror normalised each series to
+// its own max, so two different quantities shared one invented scale and
+// neither could be read off the chart.
 
 type AdaptOpt = { key: Exclude<Adapt, 'none'>; label: string; sub: string; icon: typeof Zap }
 // Intensity — persists via the modifier's easier/harder cascade (rails watch it).
