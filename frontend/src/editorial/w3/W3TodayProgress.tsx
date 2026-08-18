@@ -188,6 +188,17 @@ export default function W3TodayProgress() {
   const wkg = ftp != null && weight != null && weight > 0 ? ftp / weight : null
   const points = trends?.points ?? []
   const active = challenges?.active ?? []
+
+  // THREE EMPTY CARDS ARE WORSE THAN ONE HONEST SENTENCE. With no season data
+  // this section ended the whole Today scroll on a dashed FTP, a dashed W/kg and
+  // two metric tiles that both printed "noch keine Saisonreihe" — the same
+  // non-answer three times, in the last thing the rider sees. When nothing has
+  // been measured yet the section says so once, and still names what will fill
+  // it, so the slot keeps its meaning without pretending to hold a value.
+  const hasFtp = ftp != null
+  const hasVo2 = trends?.vo2max != null || points.some((p) => p.vo2max != null)
+  const has20min = trends?.p20min_w != null || points.some((p) => p.p20min_w != null)
+  const noSeasonValues = !hasFtp && !hasVo2 && !has20min
   const available = challenges?.available ?? []
   const daysLeft = daysLeftIn(challenges?.period)
   const openChallenges = () => navigate('/e/w3-challenges')
@@ -221,8 +232,31 @@ export default function W3TodayProgress() {
         )}
       </div>
 
+      {noSeasonValues && (
+        <div style={{ ...lux(22), padding: S.xl, gap: 13, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[
+              { icon: Zap, label: 'FTP' },
+              { icon: HeartPulse, label: 'VO₂MAX' },
+              { icon: Target, label: '20-MIN' },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px 6px 7px', borderRadius: 100, background: T.acidDim, border: `1px solid ${T.acid}24` }}>
+                <Icon size={11} color={T.acid} />
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: T.acid }}>{label}</span>
+              </div>
+            ))}
+          </div>
+          <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.5, color: T.mid }}>
+            Noch keine Saisonwerte. Diese drei Zahlen wachsen aus deinen
+            aufgezeichneten Fahrten — sobald genug ausgewertet sind, steht deine
+            Saisonkurve hier.
+          </span>
+        </div>
+      )}
+
       {/* ── FTP — the number a cyclist actually trains for. Real watts, real
            W/kg, and progress only against a goal the rider set themselves. ── */}
+      {!noSeasonValues && (
       <div style={{ ...lux(22), padding: S.xl, gap: S.md, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: S.md, minWidth: 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: 1 }}>
@@ -255,12 +289,15 @@ export default function W3TodayProgress() {
           </div>
         )}
       </div>
+      )}
 
       {/* Season metrics — the rider's own monthly series, not a single number */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <Metric icon={HeartPulse} label="VO₂MAX" unit="" sum={trends?.vo2max} points={points} pick={(p) => p.vo2max} reduce={reduce} />
-        <Metric icon={Target} label="20-MIN" unit="W" sum={trends?.p20min_w} points={points} pick={(p) => p.p20min_w} reduce={reduce} />
-      </div>
+      {!noSeasonValues && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Metric icon={HeartPulse} label="VO₂MAX" unit="" sum={trends?.vo2max} points={points} pick={(p) => p.vo2max} reduce={reduce} />
+          <Metric icon={Target} label="20-MIN" unit="W" sum={trends?.p20min_w} points={points} pick={(p) => p.p20min_w} reduce={reduce} />
+        </div>
+      )}
 
       {/* Live challenges — real progress toward each real target */}
       {active.length > 0 && (
