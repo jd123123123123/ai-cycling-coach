@@ -245,7 +245,8 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
              the DAY — so the card says so instead of hiding the number. The
              rest flag comes from `day.rest` (the plan's day TYPE), never from
              `status`, which is 'today' whatever kind of day it is. ── */}
-        <div style={{ ...band(24), paddingTop: 20, gap: 14 }}>
+        {/* band(26) — every content band on Today now shares one bottom gap. */}
+        <div style={{ ...band(26), paddingTop: 20, gap: 14 }}>
           <W3ScoreCard
             score={vm.readiness}
             label="Bereitschaft"

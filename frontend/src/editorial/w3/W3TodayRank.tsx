@@ -102,12 +102,16 @@ function Row({ r, rank, hue, reduce, delay, leader }: {
   )
 }
 
+/** No subtitle here on purpose. "Erarbeitet, nicht gekauft" ran under all three
+ *  lower section titles; three identical lines in one scroll read as filler,
+ *  and none of them said anything about the section they sat on. The motto now
+ *  appears ONCE, on the first of the three (W3TodayStatus), and the cards carry
+ *  their own context — the crew name is already this card's own kicker. */
 function Head({ tag }: { tag: string | null }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
         <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Dein Rang</span>
-        <span style={{ ...ellipsis, fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Erarbeitet, nicht gekauft</span>
       </div>
       {/* Neutral on purpose: the pill repeats the rank the card states one line
           below in 40px type. The acid here belongs to the rider's own row. */}
@@ -210,25 +214,30 @@ export default function W3TodayRank() {
 
       <div style={{ ...lux(26), padding: S.xl, gap: S.lg, minWidth: 0 }}>
 
-        {/* ── Headline: the rank, and the one thing to do about it ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, minWidth: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: 1 }}>
-            <Kicker>Diese Woche{crew?.crew ? ` · ${crew.crew.name}` : ''}</Kicker>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-              {/* Leading a crew of one is not a win — no acid for that. */}
-              <span style={{ ...TNUM, fontSize: 46, fontWeight: 700, letterSpacing: -2.2, lineHeight: 0.94, color: rank === 1 && total > 1 ? T.acid : T.ink, textShadow: rank === 1 && total > 1 ? `0 0 26px ${T.acid}4D` : 'none' }}>#{rank}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>von {total}</span>
-            </div>
-            <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid, minWidth: 0, paddingTop: 2 }}>{gapLine}</span>
+        {/* ── Headline: the rank, and the one thing to do about it ──
+             Three stacked rows, not two side-by-side columns. The points block
+             used to sit in a column beside a 46px "#2", so whichever alignment
+             was chosen it either hung off the tiny kicker or floated in the
+             corner. Now the kicker spans the width, the two headline numbers
+             share ONE baseline row, and the gap sentence spans the width under
+             both — which is also the order they should be read in. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+          <Kicker>Diese Woche{crew?.crew ? ` · ${crew.crew.name}` : ''}</Kicker>
+
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
+            {/* Leading a crew of one is not a win — no acid for that. */}
+            <span style={{ ...TNUM, fontSize: 46, fontWeight: 700, letterSpacing: -2.2, lineHeight: 1, color: rank === 1 && total > 1 ? T.acid : T.ink, textShadow: rank === 1 && total > 1 ? `0 0 26px ${T.acid}4D` : 'none' }}>#{rank}</span>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: T.quiet }}>von {total}</span>
+            <span style={{ ...TNUM, flex: 'none', fontSize: 20, fontWeight: 700, letterSpacing: -0.7, color: T.ink }}>{num(me.weekly_score)}</span>
+            <span style={{ flex: 'none', fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>PUNKTE</span>
           </div>
-          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-            <span style={{ ...TNUM, fontSize: 18, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{num(me.weekly_score)}</span>
-            <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>PUNKTE</span>
-            {/* The honest reference: 100 points per day IS the rider's own
-                full target, so `perfect` is "week fully hit", not a ceiling
-                (the daily cap is 150, so a big day can push you past it). */}
-            <span style={{ ...TNUM, fontSize: 9.5, fontWeight: 600, color: T.quiet, paddingTop: 2 }}>{num(perfect)} = Ziel erfüllt</span>
-          </div>
+
+          {/* The honest reference: 100 points per day IS the rider's own full
+              target, so `perfect` is "week fully hit", not a ceiling (the daily
+              cap is 150, so a big day can push you past it). */}
+          <span style={{ ...TNUM, fontSize: 9.5, fontWeight: 600, color: T.quiet, textAlign: 'right' }}>{num(perfect)} Punkte = Ziel voll erfüllt</span>
+
+          <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid, minWidth: 0, paddingTop: 4 }}>{gapLine}</span>
         </div>
 
         <div style={hairline(-S.xs)} />
@@ -250,8 +259,11 @@ export default function W3TodayRank() {
              not a competition — it is why the crew is worth being in. ── */}
         {crewTss > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', borderRadius: 14, background: '#FFFFFF08', minWidth: 0 }}>
-            <RouteIcon size={13} color={T.mid} style={{ flex: 'none' }} />
-            <span style={{ ...ellipsis, flex: 1, fontSize: 11, fontWeight: 600, color: T.mid }}>
+            <RouteIcon size={13} color={T.mid} style={{ flex: 'none', marginTop: 1 }} />
+            {/* WRAPS — it does not ellipsize. With km + TSS + starters this line
+                is ~52 characters, which truncated to "· 5 v…" at 390px and lost
+                the very fact it exists to state. */}
+            <span style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>
               Zusammen diese Woche: {crewKm != null ? `${num(Math.round(crewKm))} km · ` : ''}{num(crewTss)} TSS
               {crewRides > 0 ? ` · ${crewRides} von ${total} am Start` : ''}
             </span>

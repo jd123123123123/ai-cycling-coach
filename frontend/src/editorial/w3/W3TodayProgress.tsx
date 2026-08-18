@@ -206,12 +206,13 @@ export default function W3TodayProgress() {
     : null
 
   return (
-    <div style={{ ...band(30), gap: 14 }}>
+    <div style={{ ...band(26), gap: 14 }}>
       {/* Section head — Today's rhythm: title + subtitle + acid pill */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        {/* Subtitle dropped — see the note in W3TodayRank's Head: the motto ran
+            under all three lower titles and now appears once, on the first. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
           <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Dein Fortschritt</span>
-          <span style={{ ...ellipsis, fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Erarbeitet, nicht gekauft</span>
         </div>
         {tag && (
           <div style={{ flex: 'none', padding: '7px 13px', borderRadius: 100, background: T.acidDim }}>

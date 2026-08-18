@@ -620,8 +620,11 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
 }) {
   const reduce = useReducedMotion()
   const max = Math.max(1, ...days.map((d) => Math.max(d.actual, d.planned ?? 0)))
+  // band(26), like every other band on Today. This one sat at 20 and was the
+  // only section whose bottom gap did not match its neighbours — the eye reads
+  // that inconsistency as a mistake long before it can name it.
   return (
-    <div style={band(20)}>
+    <div style={band(26)}>
       <div style={{ ...card(), padding: 18, gap: 14 }}>
 
         {/* header — the week, its block, and how much of it is done */}
