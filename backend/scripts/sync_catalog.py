@@ -38,6 +38,12 @@ _BIKE_RE = re.compile(
 _PART_RE = re.compile(
     rf"\{{\s*id:\s*'({_STR})',\s*name:\s*'({_STR})',\s*slot:\s*'({_STR})',\s*price:\s*(\d+)"
 )
+# The literal description each item's art was generated from. Lazy from the id
+# to the FIRST prompt, which is safe because every catalogue object carries
+# exactly one and they are written in sequence. The server needs these because
+# the composed bike render (`services/bike_render`) asks the image model for
+# "this bike, with these components" — and the prompt IS the component.
+_PROMPT_RE = re.compile(rf"\{{\s*id:\s*'({_STR})'.*?prompt:\s*'({_STR})'", re.S)
 _STARTER_RE = re.compile(rf"STARTER_BIKE_ID\s*=\s*'({_STR})'")
 _STOCK_BLOCK_RE = re.compile(r"STOCK_PARTS:\s*Record<PartSlot,\s*string>\s*=\s*\{(.*?)\}", re.S)
 _STOCK_PAIR_RE = re.compile(rf"(\w+):\s*'({_STR})'")
@@ -56,6 +62,11 @@ def build_catalog() -> dict:
     bikes_src = BIKES_TS.read_text(encoding="utf-8")
     parts_src = PARTS_TS.read_text(encoding="utf-8")
 
+    prompts: dict[str, str] = {
+        _unescape(i): _unescape(p)
+        for i, p in _PROMPT_RE.findall(bikes_src) + _PROMPT_RE.findall(parts_src)
+    }
+
     items: dict[str, dict] = {}
     for item_id, name, tier, price in _BIKE_RE.findall(bikes_src):
         items[_unescape(item_id)] = {
@@ -65,6 +76,7 @@ def build_catalog() -> dict:
             "tier": _unescape(tier),
             "slot": None,
             "price": int(price),
+            "prompt": prompts.get(_unescape(item_id), ""),
         }
     n_bikes = len(items)
     for item_id, name, slot, price in _PART_RE.findall(parts_src):
@@ -75,7 +87,12 @@ def build_catalog() -> dict:
             "tier": None,
             "slot": _unescape(slot),
             "price": int(price),
+            "prompt": prompts.get(_unescape(item_id), ""),
         }
+
+    missing = [i for i, it in items.items() if not it["prompt"]]
+    if missing:
+        raise SystemExit(f"catalogue items with no prompt (art cannot be composed): {missing}")
 
     if not n_bikes or len(items) == n_bikes:
         raise SystemExit(
@@ -125,9 +142,11 @@ client thinks an item costs. `tests/test_shop.py::TestCatalogDrift` re-parses th
 TypeScript and fails if this file is stale — editing the catalogue without
 re-running the sync script breaks the build rather than mispricing the shop.
 
-Only the four fields the server actually needs are mirrored (id, name, kind,
-tier/slot, price). Blurbs, prompts and art paths stay in the frontend, where
-they belong.
+Only what the server actually needs is mirrored (id, name, kind, tier/slot,
+price, prompt). Blurbs and art paths stay in the frontend, where they belong.
+The PROMPT is here because the composed bike render asks the image model for
+"this bike, wearing these components", and the prompt is how a component is
+described — see `services/bike_render`.
 """
 from __future__ import annotations
 
@@ -148,6 +167,7 @@ class CatalogItem:
     tier: str | None
     slot: str | None
     price: int
+    prompt: str = ""
 
 
 '''
@@ -187,6 +207,7 @@ def render(catalog: dict) -> str:
             f"    {_q(item['id'])}: CatalogItem(\n"
             f"        id={_q(item['id'])}, name={_q(item['name'])}, kind={_q(item['kind'])},\n"
             f"        tier={_q(item['tier'])}, slot={_q(item['slot'])}, price={item['price']},\n"
+            f"        prompt={_q(item['prompt'])},\n"
             f"    ),\n"
         )
     out.append("}\n")

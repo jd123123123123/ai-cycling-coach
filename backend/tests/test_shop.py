@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -43,7 +44,7 @@ from app.dependencies import (
 from app.main import app
 from app.models.rewards import REASON_ONBOARDING_BIKE, REASON_PART_PURCHASE, PointsLedger, Wallet
 from app.models.shop import GarageItem, GarageLoadout
-from app.services import shop, w3catalog
+from app.services import bike_render, shop, w3catalog
 from app.services.rewards import ONBOARDING_GRANT_RC
 
 USER = 7
@@ -84,6 +85,8 @@ class FakeDB:
     """
 
     def __init__(self, balance: int = 0, *, race_on: str | None = None):
+        # (started_at, distance_meters) — only what the odometer reads.
+        self.activities: list[tuple[datetime, float]] = []
         self.items: list[GarageItem] = []
         self.ledger: list[PointsLedger] = []
         self.wallets: dict[int, Wallet] = {}
@@ -167,8 +170,27 @@ class FakeDB:
         entity = next(
             (d["entity"] for d in stmt.column_descriptions if d.get("entity") is not None), None
         )
+        # The odometer's SUM selects a function, not an entity, so it has to be
+        # recognised by the table it reads rather than by a column description.
+        if any(getattr(f, "name", None) == "activities" for f in stmt.get_final_froms()):
+            since = next(
+                (v for v in stmt.compile().params.values() if isinstance(v, datetime)), None
+            )
+            return _Result([sum(
+                m for at, m in self.activities if since is None or at >= since
+            )])
         if entity is GarageItem:
             uid = _int_param(stmt)
+            # `_bike_km` asks this table for ONE bike's acquisition date; every
+            # other read wants the owned ids.
+            if stmt.column_descriptions[0]["name"] == "acquired_at":
+                wanted = next(
+                    (v for v in stmt.compile().params.values() if isinstance(v, str)), None
+                )
+                return _Result(
+                    i.acquired_at for i in self.items
+                    if i.user_id == uid and i.item_id == wanted
+                )
             return _Result(i.item_id for i in self.items if i.user_id == uid)
         if entity is PointsLedger:
             # `ensure_starter` pays the onboarding bike grant, and
@@ -363,7 +385,7 @@ class TestClaimFirstBike:
         assert db.balance == 250 + BIKE_GRANT
 
         # Same shape as a purchase, at price 0.
-        assert set(out) == {"item_id", "price", "balance", "owned", "loadout"}
+        assert set(out) == {"item_id", "price", "balance", "owned", "loadout", "bike_km", "build_key", "render_status", "render"}
         assert out["item_id"] == w3catalog.STARTER_BIKE_ID
         assert out["price"] == 0
         assert out["balance"] == 250 + BIKE_GRANT
@@ -667,6 +689,71 @@ class TestGetGarage:
 
 
 # --------------------------------------------------------------------------- #
+# 5b. The odometer. The garage draws this number ON the bike, so it must be
+#     THIS bike's mileage — anything else makes the drawing tell a lie.
+# --------------------------------------------------------------------------- #
+async def _garage_with_bike(db, *, acquired: datetime):
+    """Claim the starter bike and back-date it, since `acquired_at` is a server
+    default that no fake can produce."""
+    await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+    for item in db.items:
+        if item.item_id == w3catalog.STARTER_BIKE_ID:
+            item.acquired_at = acquired
+    return await shop.get_garage(db, USER)
+
+
+class TestOdometer:
+    async def test_counts_only_the_rides_since_the_bike_was_claimed(self):
+        """THE BUG THIS EXISTS FOR. A bike claimed today must not claim credit
+        for the years of riding that came before it."""
+        now = datetime.now(UTC)
+        db = FakeDB(balance=250)
+        db.activities = [
+            (now - timedelta(days=400), 8_000_000.0),  # 8 000 km, before this bike
+            (now - timedelta(days=2), 40_000.0),       # 40 km, on it
+        ]
+        garage = await _garage_with_bike(db, acquired=now - timedelta(days=7))
+
+        assert garage["bike_km"] == 40.0
+
+    async def test_a_bike_claimed_today_reads_zero_not_a_lifetime(self):
+        now = datetime.now(UTC)
+        db = FakeDB(balance=250)
+        db.activities = [(now - timedelta(days=30), 5_000_000.0)]
+        garage = await _garage_with_bike(db, acquired=now)
+
+        assert garage["bike_km"] == 0.0
+
+    async def test_no_bike_means_no_number_rather_than_zero(self):
+        """"You own no bike" and "you have ridden 0 km on it" are different
+        statements; the garage must not be handed the second when the first is
+        true, because it draws a plate for any number it is given."""
+        db = FakeDB(balance=250)
+        db.activities = [(datetime.now(UTC), 30_000.0)]
+        garage = await shop.get_garage(db, USER)
+
+        assert garage["loadout"]["bike"] is None
+        assert garage["bike_km"] is None
+
+    async def test_a_rider_with_no_rides_at_all_reads_zero(self):
+        db = FakeDB(balance=250)
+        garage = await _garage_with_bike(db, acquired=datetime.now(UTC))
+        assert garage["bike_km"] == 0.0
+
+    async def test_the_claim_returns_the_same_shape_the_garage_read_does(self):
+        """The claim response is written STRAIGHT into the client's garage cache,
+        so a key it omits lands there as `undefined` — on the one request every
+        new rider makes. Both responses must carry the same keys."""
+        db = FakeDB(balance=250)
+        claimed = await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+        garage = await shop.get_garage(db, USER)
+
+        assert set(garage) <= set(claimed)
+        for key in ("build_key", "render_status", "render", "bike_km"):
+            assert key in claimed, f"claim response is missing {key}"
+
+
+# --------------------------------------------------------------------------- #
 # 6. The HTTP contract the frontend is built against.
 # --------------------------------------------------------------------------- #
 # The onboarding bike grant, paid by `claim_first_bike` (it used to be claimable
@@ -697,11 +784,18 @@ class TestShopApi:
         r = client.get("/shop")
         assert r.status_code == 200
         body = r.json()
-        assert set(body) == {"balance", "owned", "loadout"}
+        assert set(body) == {
+            "balance", "owned", "loadout", "bike_km",
+            # The composed build photograph. Null here because this rider has no
+            # bike at all — see TestBuildRender for the stock/pending/ok states.
+            "build_key", "render_status", "render",
+        }
         assert body["balance"] == CLIENT_BALANCE
         # No bike until it is claimed — and `bike` is a present, null key, which
         # is what the onboarding gate reads over the wire.
         assert "bike" in body["loadout"] and body["loadout"]["bike"] is None
+        # No bike, so no mileage — null, never 0.
+        assert body["bike_km"] is None
         assert w3catalog.STARTER_BIKE_ID not in body["owned"]
 
     def test_claim_returns_the_full_contract_and_pays_the_grant(self, client_db):
@@ -709,7 +803,7 @@ class TestShopApi:
         r = client.post(f"/shop/claim/{w3catalog.STARTER_BIKE_ID}")
         assert r.status_code == 200
         body = r.json()
-        assert set(body) == {"item_id", "price", "balance", "owned", "loadout"}
+        assert set(body) == {"item_id", "price", "balance", "owned", "loadout", "bike_km", "build_key", "render_status", "render"}
         assert body["item_id"] == w3catalog.STARTER_BIKE_ID
         assert body["price"] == 0
         assert body["balance"] == CLIENT_BALANCE + BIKE_GRANT
@@ -742,7 +836,7 @@ class TestShopApi:
         r = client.post(f"/shop/buy/{FIXIE}")
         assert r.status_code == 200
         body = r.json()
-        assert set(body) == {"item_id", "price", "balance", "owned", "loadout"}
+        assert set(body) == {"item_id", "price", "balance", "owned", "loadout", "bike_km", "build_key", "render_status", "render"}
         assert body["item_id"] == FIXIE
         assert body["price"] == FIXIE_PRICE
         assert body["balance"] == CLIENT_BALANCE - FIXIE_PRICE
@@ -815,3 +909,83 @@ def test_owned_select_is_scoped_to_the_rider():
     # WHERE here would leak another rider's garage in any non-RLS context.
     stmt = select(GarageItem.item_id).where(GarageItem.user_id == USER)
     assert "user_id" in str(stmt)
+
+
+class TestBuildRender:
+    """The composed build photograph — key collapsing, honest states, the lock.
+
+    None of these call an image model. What is worth testing is the CACHE KEY
+    (it decides what is free and what is paid for), the stock shortcut, and the
+    prompt built from the same descriptions the part art came from.
+    """
+
+    def _slots(self, **over) -> dict:
+        base = {s: None for s in w3catalog.PART_SLOTS}
+        base.update(over)
+        return base
+
+    def test_no_bike_has_nothing_to_render(self):
+        assert bike_render.build_key(None, self._slots()) is None
+
+    def test_an_unknown_bike_is_never_rendered(self):
+        assert bike_render.build_key("not-a-bike", self._slots()) is None
+
+    def test_a_bare_build_and_a_stock_build_are_the_same_key(self):
+        """Wearing the bike's own stock part is wearing nothing. If these two
+        keyed differently, every rider would pay for a render of the picture
+        that already ships as static art."""
+        bare = bike_render.build_key(w3catalog.STARTER_BIKE_ID, self._slots())
+        stock = bike_render.build_key(
+            w3catalog.STARTER_BIKE_ID, self._slots(**dict(w3catalog.STOCK_PARTS)),
+        )
+        assert bare == stock == f"{w3catalog.STARTER_BIKE_ID}|-|-|-|-"
+        assert bike_render.is_stock(bare)
+
+    def test_a_bought_part_makes_a_distinct_paid_key(self):
+        key = bike_render.build_key(w3catalog.STARTER_BIKE_ID, self._slots(frame="frame-lime"))
+        assert key == f"{w3catalog.STARTER_BIKE_ID}|frame-lime|-|-|-"
+        assert not bike_render.is_stock(key)
+
+    def test_the_key_does_not_depend_on_the_rider(self):
+        """The whole economics: two riders with the same build share one render."""
+        a = bike_render.build_key("carbon-race", self._slots(wheels="wheels-gold"))
+        b = bike_render.build_key("carbon-race", self._slots(wheels="wheels-gold"))
+        assert a == b
+
+    def test_slot_order_is_fixed_so_one_build_has_one_key(self):
+        key = bike_render.build_key(
+            "carbon-race", self._slots(saddle="saddle-carbon", frame="frame-lime"),
+        )
+        assert key == "carbon-race|frame-lime|-|-|saddle-carbon"
+
+    def test_describe_uses_the_part_s_own_art_prompt(self):
+        """The part on the bike and the part in the shop must be one object."""
+        key = bike_render.build_key(w3catalog.STARTER_BIKE_ID, self._slots(wheels="wheels-gold"))
+        lines = bike_render.describe(key)
+        assert len(lines) == 1
+        assert w3catalog.get("wheels-gold").prompt in lines[0]
+        assert "BOTH" in lines[0]  # a bicycle has two wheels and one description
+
+    def test_describe_skips_stock_slots(self):
+        key = bike_render.build_key(w3catalog.STARTER_BIKE_ID, self._slots(frame="frame-stock"))
+        assert bike_render.describe(key) == []
+
+    def test_the_prompt_locks_the_camera_and_forbids_changing_the_bike(self):
+        key = bike_render.build_key(w3catalog.STARTER_BIKE_ID, self._slots(frame="frame-lime"))
+        prompt = bike_render.compose_prompt(key)
+        assert "LOCKED CAMERA ANGLE" in prompt
+        assert "Change ONLY the components listed below" in prompt
+
+    def test_every_catalogue_item_carries_the_prompt_the_renderer_needs(self):
+        """Without a prompt a bought part cannot be described to the model, so
+        it would silently render as if it were never equipped."""
+        missing = [i for i, item in w3catalog.CATALOG.items() if not item.prompt]
+        assert missing == []
+
+    def test_every_bike_has_the_base_photograph_a_build_composes_from(self):
+        missing = [
+            item.id
+            for item in w3catalog.CATALOG.values()
+            if item.kind == "bike" and not bike_render.base_art_path(item.id).exists()
+        ]
+        assert missing == []

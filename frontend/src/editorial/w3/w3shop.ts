@@ -37,15 +37,20 @@ export interface ShopItem {
   slot?: PartSlot
   /** Static WebP, shipped with the app. */
   art: string
+  /** The literal description this item's art was generated from — and the same
+   *  one the server hands the image model when it composes a BUILD (this bike,
+   *  wearing these parts). A part without it cannot be described, so it would
+   *  render as though it were never fitted. */
+  prompt: string
 }
 
 const bikeItem = (b: (typeof BIKES)[number]): ShopItem => ({
   id: b.id, name: b.name, kind: 'bike', price: b.price, blurb: b.blurb,
-  tier: b.tier, art: bikeArt(b.id),
+  tier: b.tier, art: bikeArt(b.id), prompt: b.prompt,
 })
 const partItem = (p: (typeof PARTS)[number]): ShopItem => ({
   id: p.id, name: p.name, kind: 'part', price: p.price, blurb: p.blurb,
-  slot: p.slot, art: partArt(p.id),
+  slot: p.slot, art: partArt(p.id), prompt: p.prompt,
 })
 
 export const SHOP_BIKES: ShopItem[] = BIKES.map(bikeItem)

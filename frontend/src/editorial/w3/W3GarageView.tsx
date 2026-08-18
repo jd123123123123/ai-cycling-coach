@@ -9,7 +9,6 @@ import { W3Coin, W3Price } from './W3Coin'
 import { artFit, itemById, type ShopItem } from './w3shop'
 import { LIGHT_WASH, type BikeSoul } from './w3BikeSoul'
 import W3BikeStage from './W3BikeStage'
-import { BIKE_LOOK, resolveLook } from '../../utils/w3bikePaint'
 import { SLOTS, type PartSlot } from './w3parts'
 import { TIERS } from './w3bikes'
 import type { Loadout } from '../../api/shop'
@@ -42,21 +41,27 @@ export interface W3GarageProps {
    *  it, and the one honest line about it. Null until the ride feed answers;
    *  the hero then renders unlit rather than inventing a mood. */
   soul: BikeSoul | null
+  /** The composed photograph of this exact build, or null — in which case the
+   *  hero shows the bike's own catalogue photo, which is the same bike without
+   *  its cosmetics rather than a stand-in for one. */
+  render: string | null
+  /** True while this build is being photographed. */
+  rendering?: boolean
   onEquip: (item: ShopItem) => void
   onOpenShop: () => void
 }
 
 const TIER_LABEL = new Map(TIERS.map((t) => [t.tier, t.label]))
 
-export default function W3GarageView({ balance, owned, loadout, busyId, soul, onEquip, onOpenShop }: W3GarageProps) {
+export default function W3GarageView({
+  balance, owned, loadout, busyId, soul, render, rendering, onEquip, onOpenShop,
+}: W3GarageProps) {
   const reduce = useReducedMotion()
   const bike = itemById(loadout?.bike)
-  // The bike AS RIDDEN: the model plus every equipped part layered over it.
-  // Everything the rider bought is in this one object, which is why the hero
-  // finally changes when they buy something.
-  const look = resolveLook(loadout?.bike, [
-    loadout?.frame ?? null, loadout?.wheels ?? null, loadout?.bars ?? null, loadout?.saddle ?? null,
-  ])
+  // The bike AS RIDDEN. The composed build when it exists — that photograph is
+  // the whole point, because it is the one picture that actually shows what the
+  // rider bought — and the bike's own catalogue photo until then.
+  const hero = render ?? bike?.art ?? null
 
   // Owned bikes, cheapest first — the ladder read as a collection. The one
   // being ridden is pulled out into the hero, so it isn't repeated here.
@@ -89,9 +94,11 @@ export default function W3GarageView({ balance, owned, loadout, busyId, soul, on
               already grown to — the bike overflowed its 210px stage by 59px and
               sat on top of its own name. */}
           <div style={{ position: 'relative', height: 232, overflow: 'hidden' }}>
-            {bike && look ? (
+            {bike && hero ? (
               <motion.div
-                key={`${bike.id}-${look.frame}-${look.wheel}-${look.bar}-${look.saddle}-${look.tape}`}
+                // Keyed on the picture, so the composed build cross-fades in
+                // when it lands instead of popping.
+                key={hero.slice(-40)}
                 initial={reduce ? false : { opacity: 0, scale: 1.02 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.42, ease: EASE }}
@@ -99,7 +106,7 @@ export default function W3GarageView({ balance, owned, loadout, busyId, soul, on
               >
                 {/* One stage, shared with the shop and the first-bike screen,
                     so the same bike never looks like two different objects. */}
-                <W3BikeStage look={look} pad="18px 12px 30px" />
+                <W3BikeStage src={hero} alt={bike.name} rendering={rendering} />
               </motion.div>
             ) : (
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
@@ -222,13 +229,11 @@ export default function W3GarageView({ balance, owned, loadout, busyId, soul, on
                   border: `1px solid ${ridden ? T.acid : 'transparent'}`,
                   cursor: ridden ? 'default' : 'pointer',
                 }}>
-                {/* Drawn, not photographed: this is the same bike as the hero
-                    above it, and two renderings of one object in one scroll is
-                    the inconsistency the vector figure exists to remove. */}
-                <div style={{ flex: 'none', position: 'relative', width: 68, height: 50, borderRadius: 11, background: T.surface2, overflow: 'hidden' }}>
-                  {BIKE_LOOK[b.id]
-                    ? <W3BikeStage look={BIKE_LOOK[b.id]} pad="4px 2px 7px" shadow={false} />
-                    : <img src={b.art} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: artFit(b) }} />}
+                {/* The bike's own catalogue photo, not the composed build: this
+                    row is "which bike", and the build belongs to whichever one
+                    is being ridden — shown once, in the hero. */}
+                <div style={{ flex: 'none', width: 68, height: 50, borderRadius: 11, background: T.surface2, overflow: 'hidden' }}>
+                  <img src={b.art} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: artFit(b) }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>

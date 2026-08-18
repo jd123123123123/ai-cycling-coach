@@ -59,6 +59,10 @@ export default function W3GaragePreview() {
         ))}
       </div>
       <W3GarageView
+        // The preview has no server, so no composed build — the hero falls back
+        // to the bike's catalogue photo, which is the same path a rider sees
+        // before their first render lands.
+        render={null}
         soul={bikeSoul({
           now: new Date(2026, 7, 18, 18, 30),   // dusk, so the wash is visible
           km: 8214, km7d: 218, rodeToday: false,

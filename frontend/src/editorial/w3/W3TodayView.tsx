@@ -5,7 +5,6 @@ import { Flame, CalendarRange, Sparkles, Star } from 'lucide-react'
 import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, grow, Kicker, DASH } from './w3tokens'
 import W3BikeHero, { type W3BikeHeroScene } from './W3BikeHero'
-import type { BikeLook } from '../../utils/w3bikePaint'
 import W3RiderAvatar from './W3RiderAvatar'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -70,9 +69,10 @@ export interface W3Vm {
   bikeName: string
   bikeImage: string | null
   bikeLoading: boolean
-  /** The RideCoin bike they own, as ridden — the hero's honest fallback when no
-   *  photographed bike has been rendered yet. Null only until the garage loads. */
-  collectible: BikeLook | null
+  /** The RideCoin bike they own, as ridden — the composed build photograph, or
+   *  the bike's catalogue photo. The hero's honest fallback when no photographed
+   *  real bike exists yet. Null only until the garage loads. */
+  collectible: string | null
   collectibleName: string | null
   /** The rider's digitalised portrait (garage), or null — the identity card
    *  shows an empty seat rather than a photo they never chose. */

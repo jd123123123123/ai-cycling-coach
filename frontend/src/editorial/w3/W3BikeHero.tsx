@@ -5,7 +5,6 @@ import { Plus, Pencil, Sparkles, UserRound } from 'lucide-react'
 import { T, FONT, EASE, DASH, Kicker } from './w3tokens'
 import { POSE_LABEL } from './w3Pose'
 import W3BikeStage from './W3BikeStage'
-import type { BikeLook } from '../../utils/w3bikePaint'
 import type { DayPose, SceneStatus } from '../../api/garage'
 
 /**
@@ -91,7 +90,8 @@ export interface W3BikeHeroProps {
   onCompose?: () => void
   identity: W3BikeHeroIdentity
   /**
-   * The RideCoin bike the rider owns, as ridden — model plus equipped parts.
+   * The RideCoin bike the rider owns, as ridden — the composed photograph of
+   * their build, or the bike's catalogue photo until one exists.
    *
    * This is a DIFFERENT bike from `image`: that one is a render of their real
    * machine from a photo they uploaded, this one is the collectible they claimed
@@ -99,7 +99,7 @@ export interface W3BikeHeroProps {
    * first-bike step cannot be skipped), which is why Today no longer has to fall
    * back to an anonymous grey example when the photo slot is empty.
    */
-  collectible?: BikeLook | null
+  collectible?: string | null
   /** The collectible's name, so it can be captioned as the rider's own. */
   collectibleName?: string | null
 }
@@ -378,7 +378,7 @@ export default function W3BikeHero({
           initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }}
           style={{ position: 'absolute', inset: '18px 20px 52px', borderRadius: 26, overflow: 'hidden', border: `1px solid ${T.rule}` }}
         >
-          <W3BikeStage look={collectible} pad="16px 12px 26px" />
+          <W3BikeStage src={collectible} alt={collectibleName ?? 'Dein Rad'} />
         </motion.div>
 
         {/* The photo studio stays an OFFER, in the floating-action position the

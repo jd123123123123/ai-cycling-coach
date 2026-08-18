@@ -5,8 +5,7 @@ import { bikeSoul } from './w3BikeSoul'
 import W3GarageView from './W3GarageView'
 import W3Loading from './W3Loading'
 import W3LoadError from './W3LoadError'
-import { useEquipItem, useGarageCollection } from '../../hooks/useShop'
-import { useRiderLifetime } from './w3RiderStats'
+import { useEnsureBuildRender, useEquipItem, useGarageCollection } from '../../hooks/useShop'
 import type { ShopItem } from './w3shop'
 
 /**
@@ -28,6 +27,10 @@ export default function W3GaragePage() {
   const navigate = useNavigate()
   const { data, isLoading, isError, refetch, isFetching } = useGarageCollection()
   const equip = useEquipItem()
+  // The garage is where a build is looked at, so it is where one gets made.
+  // A stock build asks for nothing; anything else is composed once, ever, for
+  // every rider who assembles the same bike.
+  const { isRendering } = useEnsureBuildRender()
 
   const owned = useMemo(() => new Set(data?.owned ?? []), [data?.owned])
 
@@ -41,7 +44,6 @@ export default function W3GaragePage() {
     return [start, new Date()] as const
   }, [])
   const { data: recent, isSuccess: ridesLoaded } = useActivitiesRange(from, to)
-  const lifetime = useRiderLifetime()
 
   const soul = useMemo(() => {
     // No answer yet → no mood. The hero renders unlit rather than guessing.
@@ -65,7 +67,11 @@ export default function W3GaragePage() {
 
     return bikeSoul({
       now,
-      km: lifetime.loaded ? lifetime.distKm : null,
+      // THE SERVER'S NUMBER, NOT THE RIDER'S LIFETIME. This is drawn on the
+      // frame, so it has to be what this frame did: km since the bike was
+      // claimed. Rider lifetime distance used to sit here, which meant a bike
+      // claimed this morning announced years of riding it never did.
+      km: data?.bike_km ?? null,
       km7d,
       rodeToday,
       // The plan is not read here — a bike with no ride yet today is "ready",
@@ -73,7 +79,7 @@ export default function W3GaragePage() {
       hasSessionToday: !rodeToday,
       daysSinceRide: lastRide == null ? null : Math.floor((startOfToday - lastRide) / dayMs) + (rodeToday ? 0 : 1),
     })
-  }, [ridesLoaded, recent, lifetime.loaded, lifetime.distKm])
+  }, [ridesLoaded, recent, data?.bike_km])
 
   if (isLoading && !data) return <W3Loading label="Lade deine Garage…" />
   // A failed load must never render as an empty garage — see W3LoadError.
@@ -95,6 +101,8 @@ export default function W3GaragePage() {
       loadout={data?.loadout}
       busyId={equip.isPending ? (equip.variables ?? null) : null}
       soul={soul}
+      render={data?.render ?? null}
+      rendering={isRendering}
       onEquip={(item: ShopItem) => equip.mutate(item.id)}
       onOpenShop={() => navigate('/e/w3-shop')}
     />

@@ -8,7 +8,6 @@ import { STARTER_BIKE_ID } from '../w3/w3bikes'
 import { STOCK_PARTS, SLOTS } from '../w3/w3parts'
 import { stateOf } from '../w3/W3ShopView'
 import { purchaseError } from '../w3/W3ShopPage'
-import { BIKE_LOOK, PART_LOOK, resolveLook } from '../../utils/w3bikePaint'
 import type { Loadout } from '../../api/shop'
 
 const loadout = (over: Partial<Loadout> = {}): Loadout => ({
@@ -156,56 +155,46 @@ describe('purchaseError', () => {
 })
 
 /**
- * The bike drawing is only worth having if a purchase is VISIBLE. Before it,
- * the catalogue art was 26 independent renders plus 24 separate part photos
- * with no shared skeleton, so equipping something could not change the picture
- * and every cosmetic in the shop was money for nothing. These are the tests
- * that stop that from silently coming back.
+ * A part is only worth money if equipping it VISIBLY changes the bike, and the
+ * bike is only photographed correctly if every part can be DESCRIBED to the
+ * image model. The prompt is that description — the same one the part's own
+ * catalogue art was generated from — so a part without one would be silently
+ * skipped by the composer and render as though it were never fitted.
+ *
+ * The server has the matching assertions over its generated mirror
+ * (`tests/test_shop.py::TestBuildRender`); these guard the source of truth.
  */
-describe('every part a rider can buy changes what the bike looks like', () => {
-  const base = BIKE_LOOK[STARTER_BIKE_ID]
+describe('every catalogue item can be described to the image model', () => {
+  const all = [...SHOP_BIKES, ...SHOP_PARTS]
 
-  it('the starter bike — the one every rider is forced to claim — can be drawn', () => {
-    expect(base).toBeDefined()
+  it('nothing in the catalogue is missing its prompt', () => {
+    expect(all.filter((i) => !i.prompt?.trim()).map((i) => i.id)).toEqual([])
   })
 
-  it('every catalogue bike has a look, or a rider could own an undrawable bike', () => {
-    expect(SHOP_BIKES.filter((b) => !BIKE_LOOK[b.id]).map((b) => b.id)).toEqual([])
-  })
-
-  it('every part maps to a look override', () => {
-    expect(SHOP_PARTS.filter((p) => !PART_LOOK[p.id]).map((p) => p.id)).toEqual([])
-  })
-
-  it('every PRICED part visibly changes the drawing', () => {
-    // A stock part is the bike's own, so changing nothing is correct for it.
-    // Anything a rider pays for must alter at least one drawn property.
-    const inert = SHOP_PARTS
-      .filter((p) => p.price > 0)
-      .filter((p) => JSON.stringify(resolveLook(STARTER_BIKE_ID, [p.id])) === JSON.stringify(base))
-      .map((p) => p.id)
-    expect(inert).toEqual([])
-  })
-
-  it('two different parts in the same slot never draw identically', () => {
-    // This is the check that caught the real bug: `saddle-lime` and
-    // `saddle-white` both collapsed to the plain standard saddle, so buying
-    // either produced the same picture as the other and as stock.
-    for (const slot of SLOTS) {
-      const looks = SHOP_PARTS
-        .filter((p) => p.slot === slot.slot)
-        .map((p) => JSON.stringify(resolveLook(STARTER_BIKE_ID, [p.id])))
-      expect(new Set(looks).size).toBe(looks.length)
+  it('no two items share a prompt', () => {
+    // Two parts described identically would compose into the same picture, so
+    // one of them would be a purchase that changes nothing — the exact bug the
+    // composed render exists to fix.
+    const seen = new Map<string, string>()
+    const clashes: string[] = []
+    for (const item of all) {
+      const prior = seen.get(item.prompt)
+      if (prior) clashes.push(`${prior} / ${item.id}`)
+      else seen.set(item.prompt, item.id)
     }
+    expect(clashes).toEqual([])
   })
 
-  it('layers parts in slot order and ignores ids the catalogue has dropped', () => {
-    const look = resolveLook(STARTER_BIKE_ID, ['frame-lime', 'wheels-gold', 'not-a-real-part'])
-    expect(look?.wheel).toBe('gold')
-    expect(look?.frame).not.toBe(base.frame)
+  it('every priced part names something concrete enough to render', () => {
+    // A one-word prompt ("gold") gives the model nothing to place on the bike.
+    const thin = SHOP_PARTS
+      .filter((p) => p.price > 0 && p.prompt.trim().split(/\s+/).length < 4)
+      .map((p) => p.id)
+    expect(thin).toEqual([])
   })
 
-  it('has nothing to draw for a rider with no bike', () => {
-    expect(resolveLook(null, ['frame-lime'])).toBeNull()
+  it('the starter bike — the one every rider is forced to claim — is describable', () => {
+    const starter = SHOP_BIKES.find((b) => b.id === STARTER_BIKE_ID)
+    expect(starter?.prompt?.trim()).toBeTruthy()
   })
 })

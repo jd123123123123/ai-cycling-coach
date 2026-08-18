@@ -8,8 +8,6 @@ import W3StatusBar from './W3StatusBar'
 import { W3Coin } from './W3Coin'
 import { TIERS } from './w3bikes'
 import { artFit, type ShopItem } from './w3shop'
-import W3BikeStage from './W3BikeStage'
-import { BIKE_LOOK } from '../../utils/w3bikePaint'
 
 /**
  * W3 · Dein erstes Rad — the last step of onboarding, and the only one with no
@@ -83,27 +81,16 @@ export default function W3FirstBikeView({
             position: 'absolute', inset: 0,
             background: `radial-gradient(64% 54% at 50% 54%, ${T.acid}1F 0%, transparent 72%)`,
           }} />
-          {/* The bike is DRAWN, and lit, exactly as it will be in the garage
-              five seconds from now — the first thing a rider sees of their bike
-              must be the thing they'll keep seeing. The light stage is inset
-              rather than full-bleed so the dark onboarding ground still frames
-              it and the acid glow still reads behind. */}
           {picked && (
-            <motion.div
+            <motion.img
               key={picked.id}
+              src={picked.art}
+              alt={picked.name}
               initial={reduce ? false : { opacity: 0, scale: 1.04 }}
               animate={claimed && !reduce ? { opacity: 1, scale: 1.03 } : { opacity: 1, scale: 1 }}
               transition={{ duration: claimed ? 0.6 : 0.5, ease: EASE }}
-              style={{ position: 'absolute', inset: '10px 20px 26px' }}
-            >
-              {BIKE_LOOK[picked.id]
-                ? (
-                  <div style={{ position: 'absolute', inset: 0, borderRadius: 24, overflow: 'hidden', border: `1px solid ${T.rule}` }}>
-                    <W3BikeStage look={BIKE_LOOK[picked.id]} pad="12px 10px 22px" />
-                  </div>
-                )
-                : <img src={picked.art} alt={picked.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: artFit(picked) }} />}
-            </motion.div>
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: artFit(picked) }}
+            />
           )}
 
           {/* The stamp. It lands only after the server said yes. */}
@@ -147,13 +134,7 @@ export default function W3FirstBikeView({
                   flex: 1, minWidth: 0, padding: 6, borderRadius: 14, cursor: claimed ? 'default' : 'pointer',
                   background: T.tile, border: `1px solid ${o.id === picked?.id ? T.acid : 'transparent'}`,
                 }}>
-                {BIKE_LOOK[o.id]
-                  ? (
-                    <div style={{ position: 'relative', width: '100%', height: 34, borderRadius: 9, overflow: 'hidden' }}>
-                      <W3BikeStage look={BIKE_LOOK[o.id]} pad="2px 1px 4px" shadow={false} />
-                    </div>
-                  )
-                  : <img src={o.art} alt={o.name} style={{ width: '100%', height: 34, objectFit: artFit(o) }} />}
+                <img src={o.art} alt={o.name} style={{ width: '100%', height: 34, objectFit: artFit(o) }} />
               </button>
             ))}
           </div>

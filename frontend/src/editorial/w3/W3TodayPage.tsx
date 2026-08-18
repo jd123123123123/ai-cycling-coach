@@ -7,7 +7,6 @@ import { useStreak } from '../../hooks/useStreak'
 import { useGarage, useDayScene, useRenderDayScene } from '../../hooks/useGarage'
 import { useGarageCollection } from '../../hooks/useShop'
 import { itemById } from './w3shop'
-import { resolveLook } from '../../utils/w3bikePaint'
 import { useWallet } from '../../hooks/useWallet'
 import type { DayPose } from '../../api/garage'
 import { useAdaptive } from '../../hooks/useAdaptive'
@@ -278,14 +277,10 @@ export default function W3TodayPage() {
   // it. Already fetched by W3Guard on the way in, so this is a cache read.
   const { data: collection } = useGarageCollection()
   const collectibleBike = itemById(collection?.loadout.bike)
-  // Memoised on the five ids it is derived from: `resolveLook` builds a fresh
-  // object every call, and an unstable value here would make the whole view
-  // model recompute on every render instead of when the build actually changes.
-  const lo = collection?.loadout
-  const collectibleLook = useMemo(
-    () => resolveLook(lo?.bike, [lo?.frame ?? null, lo?.wheels ?? null, lo?.bars ?? null, lo?.saddle ?? null]),
-    [lo?.bike, lo?.frame, lo?.wheels, lo?.bars, lo?.saddle],
-  )
+  // The composed photograph of their build when one has been made, and the
+  // bike's own catalogue photo until then — the same fallback the garage uses,
+  // so the bike does not change appearance between the two screens.
+  const collectibleArt = collection?.render ?? collectibleBike?.art ?? null
   const { data: adaptive } = useAdaptive()
   // The REAL week-ahead plan (today + next 6 days) — the same source the Train
   // tab reads. Each DayPlan carries its title / target_tss / category / interval
@@ -684,7 +679,7 @@ export default function W3TodayPage() {
       // and the reason Today no longer shows a stranger's bike to a rider who
       // owns one. `useGarageCollection` is already warm — W3Guard runs it to
       // enforce the first-bike claim before this route mounts.
-      collectible: collectibleLook,
+      collectible: collectibleArt,
       collectibleName: collectibleBike?.name ?? null,
       // REAL: today's composed hero, read from the server cache. Null until the
       // read lands; `status` is the honest reason there is no image yet, and
@@ -762,7 +757,7 @@ export default function W3TodayPage() {
     garage, garageLoading, sceneLoading, dayScene, scenePose, renderScene.isPending, wallet,
     // Without these the memo never re-runs when the collection query lands, and
     // the hero would keep showing the empty state to a rider who owns a bike.
-    collectibleLook, collectibleBike,
+    collectibleArt, collectibleBike,
   ])
 
   // Real adapt that PERSISTS: Easier/Harder/Shorter/Indoor hit POST

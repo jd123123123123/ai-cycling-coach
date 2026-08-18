@@ -8,8 +8,6 @@ import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import { W3Coin, W3Price } from './W3Coin'
 import { artFit, bikesByTier, partsBySlot, isEquipped, itemById, type ShopItem } from './w3shop'
-import W3BikeStage from './W3BikeStage'
-import { BIKE_LOOK, resolveLook } from '../../utils/w3bikePaint'
 import type { Loadout } from '../../api/shop'
 
 /**
@@ -80,19 +78,14 @@ function ItemRow({ item, state, busy, onOpen }: {
         fontFamily: FONT,
       }}
     >
-      {/* Bikes are DRAWN here, matching the garage exactly — a rider who buys
-          the bike in this row must recognise it when it lands. Parts keep their
-          own art: at 56px a whole bike is unreadable, and a saddle photographed
-          alone is the clearer thumbnail. The sheet is where a part gets shown
-          on the actual bike. */}
+      {/* Art. `contain` because a bike and a saddle have wildly different
+          aspect ratios and cropping either one loses the thing being sold. */}
       <div style={{
-        flex: 'none', position: 'relative', width: 76, height: 56, borderRadius: 12,
-        background: T.surface2, display: 'grid', placeItems: 'center', overflow: 'hidden',
+        flex: 'none', width: 76, height: 56, borderRadius: 12, background: T.surface2,
+        display: 'grid', placeItems: 'center', overflow: 'hidden',
       }}>
-        {item.kind === 'bike' && BIKE_LOOK[item.id]
-          ? <W3BikeStage look={BIKE_LOOK[item.id]} pad="5px 3px 8px" shadow={false} />
-          : <img src={item.art} alt="" loading="lazy"
-              style={{ width: '100%', height: '100%', objectFit: artFit(item) }} />}
+        <img src={item.art} alt="" loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: artFit(item) }} />
       </div>
 
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -130,26 +123,14 @@ function Chip({ label, acid = false }: { label: string; acid?: boolean }) {
 // A full-screen overlay rather than the pen's separate ITEM route: the decision
 // to spend belongs next to the list it was made from, and an overlay keeps the
 // rider's place in a 25-item ladder instead of restoring scroll on the way back.
-function ItemSheet({ item, state, loadout, balance, busy, onBuy, onEquip, onClose }: {
-  item: ShopItem; state: ItemState; loadout: Loadout | undefined
+function ItemSheet({ item, state, balance, busy, onBuy, onEquip, onClose }: {
+  item: ShopItem; state: ItemState
   balance: number | null; busy: boolean
   onBuy: () => void; onEquip: () => void; onClose: () => void
 }) {
   const reduce = useReducedMotion()
   const after = balance != null ? balance - item.price : null
   const short = balance != null ? item.price - balance : null
-
-  // ── The try-on ──────────────────────────────────────────────────────────
-  // A bike shows itself, stock. A PART shows the rider's own bike wearing it,
-  // which is the one question a cosmetic shop has to answer and the reason the
-  // parts are worth money at all. Without a bike to put it on there is nothing
-  // honest to preview, so it falls back to the part's own art.
-  const preview = item.kind === 'bike'
-    ? BIKE_LOOK[item.id] ?? null
-    : resolveLook(loadout?.bike, [
-        loadout?.frame ?? null, loadout?.wheels ?? null,
-        loadout?.bars ?? null, loadout?.saddle ?? null, item.id,
-      ])
 
   // Escape closes, and the list behind stops scrolling while the sheet is up.
   // Without the scroll lock a drag on the sheet scrolls the catalogue
@@ -183,18 +164,19 @@ function ItemSheet({ item, state, loadout, balance, busy, onBuy, onEquip, onClos
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {/* Hero */}
         <div style={{ position: 'relative', width: '100%', height: 300, background: T.surface, display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
-          {preview
-            ? <W3BikeStage look={preview} pad="34px 14px 46px" />
-            : <img src={item.art} alt={item.name}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: artFit(item) }} />}
-          {/* Named, because a picture of a whole bike on a saddle's page needs
-              saying: this is YOUR bike with the thing on it. */}
-          {preview && item.kind === 'part' && (
+          <img src={item.art} alt={item.name}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: artFit(item) }} />
+          {/* Bought parts are seen ON the bike in the garage, where the build is
+              photographed. Faking that here would mean composing a picture for
+              something the rider has not bought — an image-model call per browse
+              rather than per build, which is the one thing this cache exists to
+              avoid. So the shop sells the object and the garage shows the bike. */}
+          {item.kind === 'part' && (
             <span style={{
               position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
               fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, whiteSpace: 'nowrap',
-              color: T.acid, background: T.sheet, padding: '5px 10px', borderRadius: 100,
-            }}>AN DEINEM RAD</span>
+              color: T.quiet, background: T.sheet, padding: '5px 10px', borderRadius: 100,
+            }}>AN DEINEM RAD ZU SEHEN, SOBALD ES ANGELEGT IST</span>
           )}
           <button onClick={onClose} aria-label="Schließen"
             style={{ position: 'absolute', top: 14, left: 14, width: 36, height: 36, borderRadius: 100, background: '#00000080', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
@@ -377,7 +359,7 @@ export default function W3ShopView({
             key={open.id}
             item={open}
             state={stateOf(open, owned, loadout, balance)}
-            loadout={loadout}
+
             balance={balance}
             busy={busyId === open.id}
             onBuy={() => onBuy(open)}

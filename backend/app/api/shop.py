@@ -19,12 +19,12 @@ RLS-protected via get_db_for_user — a rider only ever sees their own garage.
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.user import User
-from app.services import shop
+from app.services import bike_render, shop
 
 router = APIRouter(prefix="/shop", tags=["shop"])
 
@@ -129,3 +129,41 @@ async def equip(
         ) from None
     await db.commit()
     return {"loadout": loadout}
+
+
+@router.post("/render", summary="Compose the photograph of the rider's current build")
+async def render_build(
+    background: BackgroundTasks,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Ask for the composed picture of whatever the rider is currently riding.
+
+    Explicit, and never automatic on a read: composing costs an image-model call,
+    so it happens when a rider changes their build and the app asks for it — not
+    every time somebody opens the garage.
+
+    THE ANSWER IS OFTEN INSTANT AND FREE. A stock build is the static catalogue
+    art (``stock``), and a build somebody else already made is already in the
+    cache (``ok``) — that second case is the whole reason this cache is keyed by
+    the build rather than by the rider. Only a genuinely new combination starts
+    a render, and only the caller that wins the insert race pays for it.
+
+    The work runs in the background: the rider keeps looking at their plain bike
+    and the picture arrives on a later poll.
+    """
+    garage = await shop.get_garage(db, current_user.id)
+    await db.commit()
+    key = garage["build_key"]
+    status_now = garage["render_status"]
+
+    if key is None or status_now in ("stock", "ok", "pending"):
+        return {"build_key": key, "status": status_now, "render": garage["render"]}
+
+    # `failed` is retried: the usual cause is a temporarily missing image model.
+    if status_now == "failed":
+        await shop.reset_render(db, key)
+
+    if await bike_render.claim(db, key):
+        background.add_task(bike_render.render_in_background, key)
+    return {"build_key": key, "status": bike_render.STATUS_PENDING, "render": None}

@@ -32,14 +32,14 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.activity import Activity
 from app.models.rewards import REASON_ONBOARDING_BIKE, REASON_PART_PURCHASE, Wallet
 from app.models.shop import SOURCE_GRANT, SOURCE_PURCHASE, GarageItem, GarageLoadout
-from app.services import w3catalog
-from app.services import rewards
+from app.services import bike_render, rewards, w3catalog
 from app.services.rewards import _credit
 from app.services.w3catalog import CATALOG, FREE_ITEM_IDS, STOCK_PARTS
 
@@ -117,6 +117,64 @@ async def _balance(db: AsyncSession, user_id: int, *, lock: bool = False) -> int
     affordable-on-their-own purchases can never together overdraw the wallet."""
     wallet = await db.get(Wallet, user_id, with_for_update=True if lock else None)
     return int(wallet.balance) if wallet is not None else 0
+
+
+async def _bike_km(db: AsyncSession, user_id: int, bike_id: str | None) -> float | None:
+    """Kilometres ridden SINCE this bike was acquired — the only mileage that is
+    honestly this bike's.
+
+    The garage draws this number on the bike itself, and placement is a claim: a
+    plate on the frame says "you did these kilometres on THIS bike". Rider
+    lifetime distance would make that plate a lie on the day it matters most —
+    a bike claimed this morning would announce thousands of kilometres it was
+    never ridden, on a frame that is visibly box-fresh. So the window opens at
+    `acquired_at` and nothing before it counts.
+
+    Returns None when there is no bike or no ownership row; the garage renders
+    that as no plate rather than a zero, because "no answer" and "you have ridden
+    nothing on it yet" are different statements and only one of them is known.
+    """
+    if bike_id is None:
+        return None
+    rows = await db.execute(
+        select(GarageItem.acquired_at).where(
+            GarageItem.user_id == user_id, GarageItem.item_id == bike_id
+        )
+    )
+    acquired = rows.scalars().first()
+    if acquired is None:
+        return None
+    totals = await db.execute(
+        select(func.coalesce(func.sum(Activity.distance_meters), 0.0)).where(
+            Activity.user_id == user_id, Activity.started_at >= acquired
+        )
+    )
+    return round(float(totals.scalars().first() or 0.0) / 1000.0, 1)
+
+
+async def _render_state(
+    db: AsyncSession, loadout: GarageLoadout | None
+) -> tuple[str | None, str, str | None]:
+    """The composed photograph of THIS build, if one has been rendered.
+
+    A stock build has none by design — that picture is the static catalogue art
+    the app already ships, so it costs nothing and needs no cache. Everything
+    else is looked up, never rendered here: a read must not wait on an image
+    model.
+
+    Shared by `get_garage` and `claim_first_bike` because both return the whole
+    garage shape to the same client cache. When the claim omitted these, the
+    cache took `undefined` for all three the moment a rider got their first
+    bike — the one moment every new rider passes through.
+    """
+    bike_id = loadout.bike_id if loadout is not None else None
+    key = bike_render.build_key(bike_id, bike_render.slots_of(loadout))
+    if not key or bike_render.is_stock(key):
+        return key, "stock" if bike_render.is_stock(key) else "none", None
+    row = await bike_render.get_cached(db, key)
+    if row is None:
+        return key, "none", None
+    return key, row.status, row.image
 
 
 def _loadout_dict(loadout: GarageLoadout | None) -> dict:
@@ -265,12 +323,22 @@ async def claim_first_bike(db: AsyncSession, user_id: int, item_id: str) -> dict
     await rewards.grant_onboarding(db, user_id, REASON_ONBOARDING_BIKE)
     await db.commit()
 
+    loadout = await db.get(GarageLoadout, user_id)
+    key, render_status, render_image = await _render_state(db, loadout)
+
     return {
         "item_id": item_id,
         "price": 0,
         "balance": await _balance(db, user_id),
         "owned": sorted(await _owned_ids(db, user_id)),
-        "loadout": _loadout_dict(await db.get(GarageLoadout, user_id)),
+        "loadout": _loadout_dict(loadout),
+        "build_key": key,
+        "render_status": render_status,
+        "render": render_image,
+        # The claim is the moment a bike starts counting, so this is the one
+        # response that must carry it: it goes null -> 0.0 here, and the garage
+        # reads it straight from the cache without a refetch.
+        "bike_km": await _bike_km(db, user_id, item_id),
     }
 
 
@@ -336,12 +404,25 @@ async def purchase(db: AsyncSession, user_id: int, item_id: str) -> dict:
     )
     await db.commit()
 
+    # THE SAME SHAPE AS A CLAIM, AND AS THE GARAGE. The client writes this
+    # response straight into its cache instead of refetching (a refetch would
+    # flash a stale balance on the one screen that just took the rider's
+    # RideCoin), so any key missing here would land in that cache as `undefined`
+    # — and a build_key of `undefined` reads as "no bike" downstream.
+    loadout = await db.get(GarageLoadout, user_id)
+    key, render_status, render_image = await _render_state(db, loadout)
     return {
         "item_id": item_id,
         "price": item.price,
         "balance": balance - item.price,
         "owned": sorted(owned | {item_id}),
-        "loadout": _loadout_dict(await db.get(GarageLoadout, user_id)),
+        "loadout": _loadout_dict(loadout),
+        # Buying changes what is OWNED, never what is worn, so the build and its
+        # photograph are deliberately unchanged here.
+        "build_key": key,
+        "render_status": render_status,
+        "render": render_image,
+        "bike_km": await _bike_km(db, user_id, loadout.bike_id if loadout else None),
     }
 
 
@@ -383,6 +464,20 @@ async def equip(db: AsyncSession, user_id: int, item_id: str) -> dict:
     return _loadout_dict(loadout)
 
 
+async def reset_render(db: AsyncSession, build_key: str) -> None:
+    """Drop a failed render so the next ask tries again.
+
+    A failure is almost always the image model being briefly unavailable, and a
+    build that failed once must not be permanently pictureless. Only `failed`
+    rows are cleared — an `ok` render is never re-paid for, and a `pending` one
+    is somebody else's in-flight work.
+    """
+    row = await bike_render.get_cached(db, build_key)
+    if row is not None and row.status == bike_render.STATUS_FAILED:
+        await db.delete(row)
+        await db.commit()
+
+
 async def get_garage(db: AsyncSession, user_id: int) -> dict:
     """Balance + everything owned + what is currently worn.
 
@@ -392,8 +487,20 @@ async def get_garage(db: AsyncSession, user_id: int) -> dict:
     included. That null bike is exactly what the onboarding gate keys on, so it
     is always present as a key and never simply absent."""
     await ensure_starter(db, user_id)
+    loadout = await db.get(GarageLoadout, user_id)
+    bike_id = loadout.bike_id if loadout is not None else None
+
+    key, render_status, render_image = await _render_state(db, loadout)
+
     return {
         "balance": await _balance(db, user_id),
         "owned": sorted(await _owned_ids(db, user_id)),
-        "loadout": _loadout_dict(await db.get(GarageLoadout, user_id)),
+        "loadout": _loadout_dict(loadout),
+        "build_key": key,
+        "render_status": render_status,
+        "render": render_image,
+        # Computed here rather than on the client: honest mileage needs every
+        # ride since the bike was claimed, which can be months of activities.
+        # The client would have to download them all to add them up.
+        "bike_km": await _bike_km(db, user_id, bike_id),
     }

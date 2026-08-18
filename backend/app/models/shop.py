@@ -30,6 +30,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -100,4 +101,47 @@ class GarageLoadout(Base):
     saddle_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+
+
+class BikeRender(Base):
+    """The composed photograph of one BUILD — a bike wearing a set of parts.
+
+    WHY THIS IS NOT PER-RIDER, AND HAS NO ``user_id``. The picture of a lime
+    Rostlaube on gold rims is the same picture for everyone who builds one. The
+    cache key is the build, so a combination is rendered ONCE for the entire
+    user base and is free for every rider after the first — which is what makes
+    paying an image model for this affordable at all. It is also why this table
+    carries no RLS policy: there is nothing private in it, and two riders
+    sharing a render is the point rather than a leak.
+
+    WHY RENDER AT ALL. The alternative was drawing the bike as vectors so parts
+    could be composited. That works, and it is honest, but it does not look like
+    the rest of the catalogue: 26 bikes rendered by an image model next to one
+    drawn by hand reads as a downgrade the moment a rider equips anything. So
+    the parts are applied the same way the bikes were made — by the model, from
+    the real base photograph, through the same locked camera.
+
+    STATUS is the honest state machine: ``pending`` while a render is in flight,
+    ``ok`` with an image, ``failed`` when the model refused or is unavailable.
+    The UI shows the plain bike until an ``ok`` lands, so a slow or missing image
+    model degrades to exactly what shipped before rather than to a hole.
+    """
+
+    __tablename__ = "bike_renders"
+
+    # "<bike>|<frame>|<wheels>|<bars>|<saddle>", stock slots collapsed to "-".
+    # Deterministic and human-readable, so a bad render can be found and deleted
+    # by reading the key.
+    build_key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    # The composed WebP as a data URL. Nullable while pending or after a failure.
+    image: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Why a render failed, kept for support rather than shown to riders.
+    detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False,
     )
