@@ -71,6 +71,8 @@ const W3SessionPage = lazyWithRetry(() => import('./editorial/w3/W3SessionPage')
 const W3SessionPreview = lazyWithRetry(() => import('./editorial/w3/W3SessionPreview'))
 const W3RidesPage = lazyWithRetry(() => import('./editorial/w3/W3RidesPage'))
 const W3RidesPreview = lazyWithRetry(() => import('./editorial/w3/W3RidesPreview'))
+const W3GaragePage = lazyWithRetry(() => import('./editorial/w3/W3GaragePage'))
+const W3ShopPage = lazyWithRetry(() => import('./editorial/w3/W3ShopPage'))
 const W3BikeStudioPage = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPage'))
 const W3BikeStudioPreview = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPreview'))
 const W3RideDetailPage = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPage'))
@@ -392,6 +394,11 @@ function AppRoutes() {
           <Route path="/e/w3-session-preview" element={<W3SessionPreview />} />
           <Route path="/e/w3-rides" element={<ProtectedRoute checkOnboarding><W3RidesPage /></ProtectedRoute>} />
           <Route path="/e/w3-rides-preview" element={<W3RidesPreview />} />
+          {/* The GARAGE tab: the bike you ride + the shop you buy it from. The
+              bike-studio photo upload stays reachable by URL but is no longer a
+              tab — see W3GarageView's header for why the ladder replaced it. */}
+          <Route path="/e/w3-garage" element={<ProtectedRoute checkOnboarding><W3GaragePage /></ProtectedRoute>} />
+          <Route path="/e/w3-shop" element={<ProtectedRoute checkOnboarding><W3ShopPage /></ProtectedRoute>} />
           <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />
           <Route path="/e/w3-bike-studio-preview" element={<W3BikeStudioPreview />} />
           <Route path="/e/w3-ride/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />

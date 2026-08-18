@@ -3,8 +3,9 @@ import { motion, useReducedMotion } from 'motion/react'
 import {
   Watch, Activity as ActivityIcon, Zap, HeartPulse, Sparkles, Globe2,
   Route as RouteIcon, Bike, Timer, Mountain, Gauge, Flame, Medal,
-  ChevronRight, Coins, UserRound,
+  ChevronRight, UserRound,
 } from 'lucide-react'
+import { W3Coin } from './W3Coin'
 import W3NavMenu from './W3NavMenu'
 import W3TabBar from './W3TabBar'
 import { T, FONT, EASE, grow, Kicker, band, card } from './w3tokens'
@@ -257,7 +258,10 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
                 <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, color: vm.coin.balance === DASH ? T.quiet : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.coin.balance}</span>
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.coin.foot}</span>
               </div>
-              <div style={{ flex: 'none', width: 44, height: 44, borderRadius: 100, background: T.surface2, display: 'grid', placeItems: 'center' }}><Coins size={20} color={T.mid} /></div>
+              {/* The RideCoin mark itself, not a grey outline of two discs in a
+                  grey circle. This is the app's main balance surface, so it is
+                  where the currency should look like it's worth having. */}
+              <div style={{ flex: 'none', width: 44, height: 44, borderRadius: 100, background: T.surface2, display: 'grid', placeItems: 'center' }}><W3Coin size={26} /></div>
             </div>
             <div style={{ display: 'flex', gap: 2, height: 12 }}>
               {Array.from({ length: SEG }).map((_, i) => (

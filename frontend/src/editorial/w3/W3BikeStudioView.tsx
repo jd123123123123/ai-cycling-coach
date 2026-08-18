@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike, Plus, Loader2, Coins } from 'lucide-react'
+import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike, Plus, Loader2 } from 'lucide-react'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
 import './w3.css'
+import { W3Coin } from './W3Coin'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3Loading from './W3Loading'
@@ -141,7 +142,7 @@ function RewardBlock({ reward, pending }: { reward?: { granted: number; balance:
       <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
         <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: 'uppercase', color: T.quiet }}>Guthaben</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <Coins size={14} color={T.mid} />
+          <W3Coin size={15} />
           <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap' }}>{balance}</span>
         </div>
       </div>

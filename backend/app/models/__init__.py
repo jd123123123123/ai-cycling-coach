@@ -27,6 +27,7 @@ from app.models.rewards import Wallet, PointsLedger  # noqa: F401
 from app.models.challenge import ChallengeEnrollment  # noqa: F401
 from app.models.referral import Referral  # noqa: F401
 from app.models.garage import DayScene, GarageAsset, RideScene  # noqa: F401
+from app.models.shop import GarageItem, GarageLoadout  # noqa: F401
 from app.models.strength import (  # noqa: F401
     StrengthRoutine,
     RoutineExercise,
@@ -46,4 +47,5 @@ __all__ = [
     "StrengthRoutine", "RoutineExercise", "StrengthSession", "StrengthSetLog",
     "Wallet", "PointsLedger", "ChallengeEnrollment", "Referral",
     "DayScene", "GarageAsset", "RideScene",
+    "GarageItem", "GarageLoadout",
 ]

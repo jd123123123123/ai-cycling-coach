@@ -32,7 +32,7 @@ import { scheduleW3TabPrefetch } from './w3TabChunks'
 const TABS: { key: string; label: string; icon: typeof Activity; route: string }[] = [
   { key: 'today', label: 'HEUTE', icon: Activity, route: 'w3-today' },
   { key: 'rides', label: 'FAHRTEN', icon: RouteIcon, route: 'w3-rides' },
-  { key: 'garage', label: 'GARAGE', icon: Bike, route: 'w3-bike-studio' },
+  { key: 'garage', label: 'GARAGE', icon: Bike, route: 'w3-garage' },
   { key: 'wins', label: 'ERFOLGE', icon: Trophy, route: 'w3-wins' },
   { key: 'biker', label: 'BIKER', icon: UserRound, route: 'w3-biker' },
 ]
@@ -46,6 +46,7 @@ export default function W3TabBar() {
   // screens map to their closest tab so the bar never wrongly lights "Today".
   const p = loc.pathname
   const related: [RegExp, string][] = [
+    [/w3-shop|w3-bike-studio/, 'garage'],
     [/w3-session|w3-ride/, 'rides'],
     [/w3-crew|w3-referral/, 'biker'],
     [/w3-challenge/, 'wins'],

@@ -37,16 +37,17 @@
 // ── Tier 1 · the bottom tabs ──────────────────────────────────────────────
 export const loadW3Today = () => import('./W3TodayPage')
 export const loadW3Rides = () => import('./W3RidesPage')
-export const loadW3BikeStudio = () => import('./W3BikeStudioPage')
+export const loadW3Garage = () => import('./W3GaragePage')
 export const loadW3Wins = () => import('./W3WinsPage')
 export const loadW3Biker = () => import('./W3BikerPage')
 
-const TABS = [loadW3Today, loadW3Rides, loadW3BikeStudio, loadW3Wins, loadW3Biker]
+const TABS = [loadW3Today, loadW3Rides, loadW3Garage, loadW3Wins, loadW3Biker]
 
 // ── Tier 2 · the non-tab destinations reachable from Today / Rides ────────
 // Ordered by how soon a rider typically reaches them, cheapest-and-likeliest
 // first, so an interrupted warm-up has still bought the most.
 const SECONDARY = [
+  () => import('./W3ShopPage'),          // /e/w3-shop         — the garage's own CTA
   () => import('./W3RideDetailPage'),    // /e/w3-ride/:id     — tapping a ride
   () => import('./W3ReadinessPage'),     // /e/w3-readiness    — Today's hero
   () => import('./W3PlanPage'),          // /e/w3-plan         — Today's plan strip
