@@ -31,7 +31,7 @@ export default function W3OnboardRewardsPage() {
   return (
     <W3OnboardRewardsView
       tiles={tiles}
-      onNext={() => navigate('/e/w3-onboard-garage')}
+      onNext={() => navigate('/e/w3-first-bike')}
       onSkip={skip}
     />
   )

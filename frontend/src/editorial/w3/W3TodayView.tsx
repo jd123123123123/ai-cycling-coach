@@ -5,6 +5,7 @@ import { Flame, CalendarRange, Sparkles, Star } from 'lucide-react'
 import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, grow, Kicker, DASH } from './w3tokens'
 import W3BikeHero, { type W3BikeHeroScene } from './W3BikeHero'
+import type { BikeLook } from '../../utils/w3bikePaint'
 import W3RiderAvatar from './W3RiderAvatar'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -69,6 +70,10 @@ export interface W3Vm {
   bikeName: string
   bikeImage: string | null
   bikeLoading: boolean
+  /** The RideCoin bike they own, as ridden — the hero's honest fallback when no
+   *  photographed bike has been rendered yet. Null only until the garage loads. */
+  collectible: BikeLook | null
+  collectibleName: string | null
   /** The rider's digitalised portrait (garage), or null — the identity card
    *  shows an empty seat rather than a photo they never chose. */
   riderImage: string | null
@@ -232,6 +237,7 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
         <W3BikeHero
           image={vm.bikeImage} name={vm.bikeName} loading={vm.bikeLoading}
           scene={vm.scene} composing={vm.sceneComposing} onCompose={onComposeScene}
+          collectible={vm.collectible} collectibleName={vm.collectibleName}
           identity={{ handle: vm.handle, rider: vm.riderImage, coins: vm.coins, streak: vm.streak }} />
 
         {/* ── Hero: readiness + charge meter ──

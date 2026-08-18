@@ -73,10 +73,15 @@ class GarageLoadout(Base):
     """What the rider's bike looks like right now: the frame under them and the
     four cosmetics on it.
 
-    ``bike_id`` is NOT NULL — there is always a bike, because every rider is
-    granted the starter one (`services/shop.ensure_starter`). The four slot
-    columns are nullable so a slot can be left bare, and so a new slot can be
-    added later without back-filling every rider.
+    There is no row at all until the rider CLAIMS their first bike
+    (`services/shop.claim_first_bike`) — a missing row is how the server says
+    "this rider has no bike yet", which is what the onboarding gate reads.
+
+    ``bike_id`` is nullable for one narrow case: a rider who has claimed no bike
+    still owns the free stock parts and may equip one, and `shop.equip` creates
+    the row for them rather than failing. The four slot columns are nullable so a
+    slot can be left bare, and so a new slot can be added later without
+    back-filling every rider.
 
     The slot columns are named ``<slot>_id`` to match `w3catalog.PART_SLOTS`
     exactly — `shop.equip` derives the column from the part's slot, so a new
@@ -88,7 +93,7 @@ class GarageLoadout(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
     )
-    bike_id: Mapped[str] = mapped_column(String(48), nullable=False)
+    bike_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
     frame_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
     wheels_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
     bars_id: Mapped[str | None] = mapped_column(String(48), nullable=True)

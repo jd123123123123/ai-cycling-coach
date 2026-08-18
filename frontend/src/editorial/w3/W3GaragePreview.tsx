@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import W3GarageView from './W3GarageView'
 import { T } from './w3tokens'
+import { bikeSoul } from './w3BikeSoul'
 import { STARTER_BIKE_ID } from './w3bikes'
 import { STOCK_PARTS } from './w3parts'
 import type { Loadout } from '../../api/shop'
@@ -58,6 +59,11 @@ export default function W3GaragePreview() {
         ))}
       </div>
       <W3GarageView
+        soul={bikeSoul({
+          now: new Date(2026, 7, 18, 18, 30),   // dusk, so the wash is visible
+          km: 8214, km7d: 218, rodeToday: false,
+          hasSessionToday: true, daysSinceRide: 1,
+        })}
         balance={c.balance}
         owned={new Set<string>(c.owned)}
         loadout={c.loadout}

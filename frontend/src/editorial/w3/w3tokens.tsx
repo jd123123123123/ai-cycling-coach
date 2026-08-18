@@ -10,6 +10,13 @@ export const T = {
   // how a design system starts to drift.
   cardTop: '#1A1A1A', cardMid: '#151515', cardBot: '#131313',
   sheet: '#171717', tile: '#1E1E1E',
+  // The bike stage. A DRAWN bike has near-black parts (standard saddle, matte
+  // frames, deep carbon rims) that disappear on the app's dark ground, so every
+  // surface showing a bike lights it the way the photographs used to light
+  // themselves. One triple, so the garage, the shop and the first-bike screen
+  // cannot end up with three different studios.
+  stageHi: '#E8E9E6', stageMid: '#C9CBC7', stageLo: '#A9ACA8',
+  shadowSoft: '#00000059',
   acid: '#C8FF00', acidDim: '#C8FF001F', acidDeep: '#8FBF00',
   ink: '#FFFFFF', mid: '#9BA0A6', quiet: '#6E7379',
   rule: '#FFFFFF14', stroke: '#FFFFFF1A',

@@ -8,6 +8,7 @@ import { STARTER_BIKE_ID } from '../w3/w3bikes'
 import { STOCK_PARTS, SLOTS } from '../w3/w3parts'
 import { stateOf } from '../w3/W3ShopView'
 import { purchaseError } from '../w3/W3ShopPage'
+import { BIKE_LOOK, PART_LOOK, resolveLook } from '../../utils/w3bikePaint'
 import type { Loadout } from '../../api/shop'
 
 const loadout = (over: Partial<Loadout> = {}): Loadout => ({
@@ -151,5 +152,60 @@ describe('purchaseError', () => {
   it('gives a retryable sentence for a network failure or a 500', () => {
     expect(purchaseError(new Error('network down'), fixie, 9999)).toMatch(/noch einmal/i)
     expect(purchaseError(axios(500), fixie, 9999)).toMatch(/noch einmal/i)
+  })
+})
+
+/**
+ * The bike drawing is only worth having if a purchase is VISIBLE. Before it,
+ * the catalogue art was 26 independent renders plus 24 separate part photos
+ * with no shared skeleton, so equipping something could not change the picture
+ * and every cosmetic in the shop was money for nothing. These are the tests
+ * that stop that from silently coming back.
+ */
+describe('every part a rider can buy changes what the bike looks like', () => {
+  const base = BIKE_LOOK[STARTER_BIKE_ID]
+
+  it('the starter bike — the one every rider is forced to claim — can be drawn', () => {
+    expect(base).toBeDefined()
+  })
+
+  it('every catalogue bike has a look, or a rider could own an undrawable bike', () => {
+    expect(SHOP_BIKES.filter((b) => !BIKE_LOOK[b.id]).map((b) => b.id)).toEqual([])
+  })
+
+  it('every part maps to a look override', () => {
+    expect(SHOP_PARTS.filter((p) => !PART_LOOK[p.id]).map((p) => p.id)).toEqual([])
+  })
+
+  it('every PRICED part visibly changes the drawing', () => {
+    // A stock part is the bike's own, so changing nothing is correct for it.
+    // Anything a rider pays for must alter at least one drawn property.
+    const inert = SHOP_PARTS
+      .filter((p) => p.price > 0)
+      .filter((p) => JSON.stringify(resolveLook(STARTER_BIKE_ID, [p.id])) === JSON.stringify(base))
+      .map((p) => p.id)
+    expect(inert).toEqual([])
+  })
+
+  it('two different parts in the same slot never draw identically', () => {
+    // This is the check that caught the real bug: `saddle-lime` and
+    // `saddle-white` both collapsed to the plain standard saddle, so buying
+    // either produced the same picture as the other and as stock.
+    for (const slot of SLOTS) {
+      const looks = SHOP_PARTS
+        .filter((p) => p.slot === slot.slot)
+        .map((p) => JSON.stringify(resolveLook(STARTER_BIKE_ID, [p.id])))
+      expect(new Set(looks).size).toBe(looks.length)
+    }
+  })
+
+  it('layers parts in slot order and ignores ids the catalogue has dropped', () => {
+    const look = resolveLook(STARTER_BIKE_ID, ['frame-lime', 'wheels-gold', 'not-a-real-part'])
+    expect(look?.wheel).toBe('gold')
+    expect(look?.frame).not.toBe(base.frame)
+  })
+
+  it('has nothing to draw for a rider with no bike', () => {
+    expect(resolveLook(null, ['frame-lime'])).toBeNull()
   })
 })

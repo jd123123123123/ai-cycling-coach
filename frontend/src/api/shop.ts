@@ -17,7 +17,9 @@ import { apiClient } from './client'
 /** The four cosmetic slots plus the bike itself. Mirrors the server's loadout
  *  columns; `null` means the rider is wearing the bike's own stock part. */
 export interface Loadout {
-  bike: string
+  /** NULL until the rider claims their free first bike. This null is what the
+   *  onboarding gate keys on, so it is load-bearing, not a defensive maybe. */
+  bike: string | null
   frame: string | null
   wheels: string | null
   bars: string | null
@@ -49,6 +51,15 @@ export async function fetchGarage(): Promise<Garage> {
 // 402 = not enough RideCoin, 409 = already owned, 404 = no such item.
 export async function buyItem(itemId: string): Promise<PurchaseResult> {
   const res = await apiClient.post<PurchaseResult>(`/shop/buy/${itemId}`)
+  return res.data
+}
+
+// POST /shop/claim/{item_id} — take the free first bike. This is the ONE bike
+// nobody pays for, and it can be claimed once ever: 409 once the rider owns any
+// bike, 400 if the id is not a free starter bike (the server checks the price,
+// so a client cannot claim its way to a 15,000 RC prototype), 404 if unknown.
+export async function claimFirstBike(itemId: string): Promise<PurchaseResult> {
+  const res = await apiClient.post<PurchaseResult>(`/shop/claim/${itemId}`)
   return res.data
 }
 

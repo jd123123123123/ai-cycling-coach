@@ -7,6 +7,7 @@ import W3RideCelebrationWatcher from './editorial/w3/W3RideCelebrationWatcher'
 import W3AvatarGate from './editorial/w3/W3AvatarGate'
 import W3WeekReviewGate from './editorial/w3/W3WeekReviewGate'
 import ProtectedRoute from './components/ProtectedRoute'
+import W3Guard from './editorial/w3/W3Guard'
 import ScrollToTop from './components/ScrollToTop'
 import ErrorBoundary from './components/ErrorBoundary'
 import AppLoading from './components/AppLoading'
@@ -389,19 +390,19 @@ function AppRoutes() {
 
           {/* EDITORIAL II — a second design system, mounted alongside the first. */}
           <Route path="/e/today" element={<ProtectedRoute checkOnboarding><EditorialTodayPage /></ProtectedRoute>} />
-          <Route path="/e/w3-today" element={<ProtectedRoute checkOnboarding><W3TodayPage /></ProtectedRoute>} />
+          <Route path="/e/w3-today" element={<ProtectedRoute checkOnboarding><W3Guard><W3TodayPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-today-preview" element={<W3TodayPreview />} />
           <Route path="/e/w3-session" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
           <Route path="/e/w3-session/:id" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
           <Route path="/e/w3-session-preview" element={<W3SessionPreview />} />
-          <Route path="/e/w3-rides" element={<ProtectedRoute checkOnboarding><W3RidesPage /></ProtectedRoute>} />
+          <Route path="/e/w3-rides" element={<ProtectedRoute checkOnboarding><W3Guard><W3RidesPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-rides-preview" element={<W3RidesPreview />} />
           {/* The GARAGE tab: the bike you ride + the shop you buy it from. The
               bike-studio photo upload stays reachable by URL but is no longer a
               tab — see W3GarageView's header for why the ladder replaced it. */}
-          <Route path="/e/w3-garage" element={<ProtectedRoute checkOnboarding><W3GaragePage /></ProtectedRoute>} />
+          <Route path="/e/w3-garage" element={<ProtectedRoute checkOnboarding><W3Guard><W3GaragePage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-garage-preview" element={<W3GaragePreview />} />
-          <Route path="/e/w3-shop" element={<ProtectedRoute checkOnboarding><W3ShopPage /></ProtectedRoute>} />
+          <Route path="/e/w3-shop" element={<ProtectedRoute checkOnboarding><W3Guard><W3ShopPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-shop-preview" element={<W3ShopPreview />} />
           <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />
           <Route path="/e/w3-bike-studio-preview" element={<W3BikeStudioPreview />} />
@@ -411,7 +412,7 @@ function AppRoutes() {
           <Route path="/e/w3-connected-preview" element={<W3ConnectCelebratePreview />} />
           <Route path="/e/w3-avatar-onboard" element={<ProtectedRoute checkOnboarding><W3AvatarOnboardPage /></ProtectedRoute>} />
           <Route path="/e/w3-avatar-onboard-preview" element={<W3AvatarOnboardPreview />} />
-          <Route path="/e/w3-biker" element={<ProtectedRoute checkOnboarding><W3BikerPage /></ProtectedRoute>} />
+          <Route path="/e/w3-biker" element={<ProtectedRoute checkOnboarding><W3Guard><W3BikerPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-biker-preview" element={<W3BikerPreview />} />
           <Route path="/e/w3-first-bike" element={<ProtectedRoute checkOnboarding><W3FirstBikePage /></ProtectedRoute>} />
           <Route path="/e/w3-first-bike-preview" element={<W3FirstBikePreview />} />
@@ -460,7 +461,7 @@ function AppRoutes() {
           <Route path="/e/w3-login" element={<W3LoginPage />} />
           <Route path="/e/w3-register" element={<W3RegisterPage />} />
           <Route path="/e/w3-auth-preview" element={<W3AuthPreview />} />
-          <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3WinsPage /></ProtectedRoute>} />
+          <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3Guard><W3WinsPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />
           <Route path="/e/w3-challenges-preview" element={<W3ChallengesPreview />} />
@@ -482,8 +483,9 @@ function AppRoutes() {
           {/* Default redirect */}
           <Route path="/" element={<RootRedirect />} />
 
-          {/* Catch-all: redirect unknown paths to dashboard (ProtectedRoute handles auth check) */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* Catch-all: unknown paths land in the W3 app, not the retired v4
+              dashboard. ProtectedRoute + W3Guard handle auth and onboarding. */}
+          <Route path="*" element={<Navigate to="/e/w3-today" replace />} />
         </Routes>
       </PageTransition>
     </Suspense>

@@ -14,9 +14,9 @@ function isDesignSystem(v: unknown): v is DesignSystem {
 export function readDesignSystem(): DesignSystem {
   try {
     const raw = localStorage.getItem(KEY)
-    return isDesignSystem(raw) ? raw : 'v4'
+    return isDesignSystem(raw) ? raw : 'editorial2'
   } catch {
-    return 'v4'
+    return 'editorial2'
   }
 }
 
@@ -33,9 +33,19 @@ export function designSystemFromSearch(search: string): DesignSystem | null {
   return isDesignSystem(raw) ? raw : null
 }
 
+/**
+ * Where each system lands.
+ *
+ * `editorial2` — the W3 app — is now the DEFAULT and the only one anything
+ * links to. The v4 dashboard is not deleted (it still holds surfaces the W3 app
+ * has not replaced, and deleting it would be a much larger, riskier change than
+ * hiding it), but nothing navigates there any more: it takes a deliberate
+ * `?ds=v4` to reach it. `editorial2` also moved off the older `/e/today` onto
+ * the W3 Today, which is the screen the tab bar and every W3 route assume.
+ */
 export const LANDING: Record<DesignSystem, string> = {
   v4: '/dashboard',
-  editorial2: '/e/today',
+  editorial2: '/e/w3-today',
 }
 
 /** Root-redirect target. A ?ds= in the URL both wins and sticks. */

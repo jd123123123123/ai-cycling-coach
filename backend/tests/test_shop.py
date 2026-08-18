@@ -1,16 +1,21 @@
-"""The W3 shop — the free first bike, the sink, and the price nobody can forge.
+"""The W3 shop — the claimed first bike, the sink, and the price nobody can forge.
 
-Four things are worth protecting here, and each has a test that fails loudly:
+Five things are worth protecting here, and each has a test that fails loudly:
 
 1. THE MIRROR CANNOT DRIFT. `services/w3catalog` is generated from the two
    TypeScript catalogues; `TestCatalogDrift` re-parses them and compares. Edit
    `w3bikes.ts` without re-running `scripts/sync_catalog.py` and this file goes
    red — which is the point, because a stale mirror is a mispriced shop.
-2. THE STARTER GRANT IS REPLAYABLE. It runs on every read, so it must be a no-op
-   the second time.
-3. MONEY MOVES EXACTLY ONCE. One purchase = one ledger row = one debit. A second
+2. THE STOCK-PARTS GRANT IS REPLAYABLE. It runs on every read, so it must be a
+   no-op the second time — and it must never hand out a bike, because a bike
+   that arrives by itself makes the claim step theatre.
+3. THE FIRST BIKE IS CLAIMED, ONCE, AND ONLY IF IT IS FREE. `claim_first_bike`
+   writes ownership at price 0, so anything that is not a price-0 bike must be
+   refused, and a rider who already owns a bike must be refused too.
+4. MONEY MOVES EXACTLY ONCE. One purchase = one ledger row = one debit. A second
    buy, a lost race, or too small a balance must all leave the wallet untouched.
-4. YOU ONLY WEAR WHAT YOU OWN.
+   The 150 RC onboarding bike grant is paid once, by the claim, ever.
+5. YOU ONLY WEAR WHAT YOU OWN.
 
 There is no real-Postgres fixture in this repo (see tests/api/test_crew_social_api.py),
 so `FakeDB` below is a small stateful AsyncSession stand-in that models the two
@@ -274,16 +279,77 @@ class TestCatalogDrift:
 
 
 # --------------------------------------------------------------------------- #
-# 2. The free first bike.
+# 2. The free stock parts — and pointedly NOT a bike.
 # --------------------------------------------------------------------------- #
 class TestEnsureStarter:
-    async def test_grants_the_starter_bike_the_stock_parts_and_wears_them(self):
+    async def test_grants_the_stock_parts_and_no_bike_and_no_loadout(self):
+        """The whole point of the change: nothing arrives by itself except parts.
+
+        A bike granted on the first read would make "choose your bike" theatre,
+        and would leave the onboarding gate with only a localStorage flag to key
+        off — which re-onboards anyone on a new device or a cleared cache.
+        """
         db = FakeDB()
         assert await shop.ensure_starter(db, USER) is True
 
         owned = {i.item_id for i in db.items}
-        assert owned == set(w3catalog.FREE_ITEM_IDS)
+        assert owned == set(w3catalog.STOCK_PARTS.values())
+        assert all(i.kind == "part" for i in db.items)
+        assert w3catalog.STARTER_BIKE_ID not in owned
         assert all(i.source == "grant" and i.price_paid == 0 for i in db.items)
+
+        # No loadout row at all — a missing row is how the server says "no bike".
+        assert USER not in db.loadouts
+
+    async def test_is_idempotent_so_it_is_safe_on_every_read(self):
+        db = FakeDB()
+        await shop.ensure_starter(db, USER)
+        first = list(db.items)
+
+        for _ in range(3):
+            assert await shop.ensure_starter(db, USER) is False
+
+        assert db.items == first          # no duplicate rows
+        assert USER not in db.loadouts    # and still no bike appeared
+
+    async def test_the_grant_neither_costs_nor_pays_ridecoin(self):
+        # Nothing is charged for a free part — and the 150 RC onboarding bike
+        # grant is no longer paid here: it belongs to the claim.
+        db = FakeDB(balance=500)
+        await shop.ensure_starter(db, USER)
+        assert db.ledger == []
+        assert db.balance == 500
+
+    async def test_reading_the_garage_forever_never_pays_the_bike_grant(self):
+        """The 150 RC head start is paid for OWNING a bike, and until the rider
+        claims one they do not own one. Repeated garage reads must not pay it."""
+        db = FakeDB()
+        await shop.ensure_starter(db, USER)
+        await shop.get_garage(db, USER)
+        await shop.get_garage(db, USER)
+
+        assert [r for r in db.ledger if r.reason == REASON_ONBOARDING_BIKE] == []
+        assert db.balance == 0
+
+    async def test_a_raced_first_load_leaves_the_rider_whole(self):
+        # Two first requests at once: ours loses the insert. The other one
+        # granted the same free set, so this must be quiet, not a 500.
+        db = FakeDB(race_on=w3catalog.STOCK_PARTS["frame"])
+        assert await shop.ensure_starter(db, USER) is False
+        assert db.rollbacks == 1
+
+
+# --------------------------------------------------------------------------- #
+# 2b. Claiming the first bike — the deliberate act.
+# --------------------------------------------------------------------------- #
+class TestClaimFirstBike:
+    async def test_claiming_the_free_starter_grants_it_wears_it_and_pays_once(self):
+        db = FakeDB(balance=250)
+        out = await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+
+        bike = [i for i in db.items if i.item_id == w3catalog.STARTER_BIKE_ID]
+        assert len(bike) == 1
+        assert bike[0].source == "grant" and bike[0].price_paid == 0
 
         loadout = db.loadouts[USER]
         assert loadout.bike_id == w3catalog.STARTER_BIKE_ID
@@ -292,51 +358,104 @@ class TestEnsureStarter:
         assert loadout.bars_id == w3catalog.STOCK_PARTS["bars"]
         assert loadout.saddle_id == w3catalog.STOCK_PARTS["saddle"]
 
-    async def test_is_idempotent_so_it_is_safe_on_every_read(self):
-        db = FakeDB()
-        await shop.ensure_starter(db, USER)
-        first = list(db.items)
-        loadout = db.loadouts[USER]
-
-        for _ in range(3):
-            assert await shop.ensure_starter(db, USER) is False
-
-        assert db.items == first          # no duplicate rows
-        assert db.loadouts[USER] is loadout  # and the loadout was not replaced
-
-    async def test_the_grant_never_costs_ridecoin(self):
-        db = FakeDB(balance=500)
-        await shop.ensure_starter(db, USER)
-        # Nothing is charged for a free item...
-        assert [row for row in db.ledger if row.amount < 0] == []
-        # ...and the only credit is the one-time onboarding head start.
-        assert db.balance == 500 + BIKE_GRANT
-
-    async def test_pays_the_onboarding_head_start_exactly_once(self):
-        """The 150 RC bike grant moved here from the retired photo studio.
-
-        It used to be gated on a `garage_assets` row that only the studio could
-        create, so once the studio stopped being a tab the grant became
-        unclaimable and new riders could collect just 250 of the 400 RC head
-        start the spec calls EQUAL. Paying it here restores that — but it must
-        stay a ONE-time grant however many times the garage is read.
-        """
-        db = FakeDB()
-        await shop.ensure_starter(db, USER)
-        await shop.ensure_starter(db, USER)
-        await shop.get_garage(db, USER)
-
         grants = [r for r in db.ledger if r.reason == REASON_ONBOARDING_BIKE]
-        assert len(grants) == 1
-        assert grants[0].amount == BIKE_GRANT
+        assert len(grants) == 1 and grants[0].amount == BIKE_GRANT
+        assert db.balance == 250 + BIKE_GRANT
+
+        # Same shape as a purchase, at price 0.
+        assert set(out) == {"item_id", "price", "balance", "owned", "loadout"}
+        assert out["item_id"] == w3catalog.STARTER_BIKE_ID
+        assert out["price"] == 0
+        assert out["balance"] == 250 + BIKE_GRANT
+        assert set(out["owned"]) == set(w3catalog.FREE_ITEM_IDS)
+        assert out["loadout"]["bike"] == w3catalog.STARTER_BIKE_ID
+        assert db.commits == 1
+
+    async def test_claiming_twice_is_refused_and_pays_the_grant_only_once(self):
+        db = FakeDB()
+        await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+
+        with pytest.raises(shop.AlreadyOwnedError):
+            await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+
+        assert len([i for i in db.items if i.item_id == w3catalog.STARTER_BIKE_ID]) == 1
+        assert len([r for r in db.ledger if r.reason == REASON_ONBOARDING_BIKE]) == 1
         assert db.balance == BIKE_GRANT
 
-    async def test_a_raced_first_load_leaves_the_rider_whole(self):
-        # Two first requests at once: ours loses the insert. The other one
-        # granted the same free set, so this must be quiet, not a 500.
+    async def test_a_rider_who_already_bought_a_bike_cannot_claim_a_free_one(self):
+        # It is the FIRST bike. Owning ANY bike closes the door, however it was got.
+        db = FakeDB(balance=1000)
+        await shop.purchase(db, USER, FIXIE)
+
+        with pytest.raises(shop.AlreadyOwnedError):
+            await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+
+        assert not [i for i in db.items if i.item_id == w3catalog.STARTER_BIKE_ID]
+        assert [r for r in db.ledger if r.reason == REASON_ONBOARDING_BIKE] == []
+
+    async def test_a_rider_auto_granted_a_bike_before_this_change_is_untouched(self):
+        """Riders already in production: the old code auto-granted `rustbucket`
+        and a loadout row. They own a bike, so the claim refuses and nothing of
+        theirs is rewritten — the gate simply passes them through."""
+        db = FakeDB(balance=400)
+        db.items.append(
+            GarageItem(
+                user_id=USER, item_id=w3catalog.STARTER_BIKE_ID, kind="bike",
+                source="grant", price_paid=0,
+            )
+        )
+        db.loadouts[USER] = GarageLoadout(
+            user_id=USER, bike_id=w3catalog.STARTER_BIKE_ID,
+            frame_id=w3catalog.STOCK_PARTS["frame"], wheels_id=None,
+            bars_id=None, saddle_id=None,
+        )
+        db._snapshot()
+
+        with pytest.raises(shop.AlreadyOwnedError):
+            await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+
+        assert db.loadouts[USER].bike_id == w3catalog.STARTER_BIKE_ID
+        assert db.loadouts[USER].wheels_id is None   # their loadout, unrewritten
+        assert db.balance == 400
+
+    # Literals, not the FIXIE constant below: parametrize is evaluated at import.
+    @pytest.mark.parametrize("item_id", ["steel-fixie", "pro-prototype"])
+    async def test_claiming_a_priced_bike_is_refused_and_moves_nothing(self, item_id):
+        # THE security boundary: claiming writes ownership for free, so a priced
+        # bike must never get through it — 15 000 RC for one POST otherwise.
+        db = FakeDB(balance=20_000)
+        with pytest.raises(shop.NotClaimableError):
+            await shop.claim_first_bike(db, USER, item_id)
+
+        assert not [i for i in db.items if i.item_id == item_id]
+        assert db.ledger == []              # nothing credited...
+        assert db.balance == 20_000         # ...and nothing debited
+        assert USER not in db.loadouts
+
+    async def test_claiming_a_free_part_is_refused(self):
+        # Price 0, but not a bike — and already owned anyway.
+        db = FakeDB()
+        with pytest.raises(shop.NotClaimableError):
+            await shop.claim_first_bike(db, USER, w3catalog.STOCK_PARTS["saddle"])
+        assert USER not in db.loadouts
+
+    async def test_claiming_an_unknown_id_never_reaches_the_database(self):
+        db = FakeDB(balance=100)
+        with pytest.raises(shop.UnknownItemError):
+            await shop.claim_first_bike(db, USER, "carbon-unicorn")
+        assert db.items == [] and db.ledger == [] and db.loadouts == {}
+
+    async def test_a_lost_race_creates_no_second_loadout_and_pays_nothing(self):
+        # Two taps at once: the read said "no bike", the INSERT hit the unique
+        # constraint. The other request made the rider a bike owner already.
         db = FakeDB(race_on=w3catalog.STARTER_BIKE_ID)
-        assert await shop.ensure_starter(db, USER) is False
-        assert db.rollbacks == 1
+        with pytest.raises(shop.AlreadyOwnedError):
+            await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+
+        assert USER not in db.loadouts
+        assert db.ledger == []
+        assert db.rollbacks >= 1
+        assert db.commits == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -350,6 +469,8 @@ DEEP_WHEELS = "wheels-deep"    # 1200 RC
 class TestPurchase:
     async def test_debits_exactly_once_and_writes_one_ledger_row(self):
         db = FakeDB(balance=1000)
+        await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+        commits_before = db.commits
         out = await shop.purchase(db, USER, FIXIE)
 
         assert len(db.purchases) == 1
@@ -369,7 +490,15 @@ class TestPurchase:
         assert out["balance"] == 1000 + BIKE_GRANT - FIXIE_PRICE
         assert FIXIE in out["owned"]
         assert out["loadout"]["bike"] == w3catalog.STARTER_BIKE_ID  # buying is not wearing
-        assert db.commits == 1  # item + ledger settled together
+        assert db.commits == commits_before + 1  # item + ledger settled together
+
+    async def test_buying_a_bike_before_claiming_one_does_not_invent_a_loadout(self):
+        # Ownership and the loadout are separate facts. A rider who skipped the
+        # claim and bought a bike outright is wearing nothing, honestly.
+        db = FakeDB(balance=1000)
+        out = await shop.purchase(db, USER, FIXIE)
+        assert out["loadout"]["bike"] is None
+        assert USER not in db.loadouts
 
     async def test_charges_the_server_price_not_a_hopeful_one(self):
         # 15 000 RC prototype against a 100 RC wallet: refused on the catalogue's
@@ -411,21 +540,20 @@ class TestPurchase:
         assert db.commits == 0
 
     async def test_too_little_balance_moves_nothing(self):
-        # Seeded below the head start, so the rider is still exactly 1 RC short
-        # AFTER `ensure_starter` has paid it — otherwise the grant would make
-        # this purchase affordable and the test would prove nothing.
-        db = FakeDB(balance=FIXIE_PRICE - 1 - BIKE_GRANT)
+        # One RC short. `ensure_starter` credits nothing any more, so the seeded
+        # balance is the balance the purchase is judged against.
+        db = FakeDB(balance=FIXIE_PRICE - 1)
         with pytest.raises(shop.InsufficientBalanceError) as e:
             await shop.purchase(db, USER, FIXIE)
 
         assert e.value.price == FIXIE_PRICE
         assert e.value.balance == FIXIE_PRICE - 1
-        assert db.purchases == []          # the head start is a credit, not a debit
+        assert db.purchases == []
         assert db.balance == FIXIE_PRICE - 1
         assert not [i for i in db.items if i.item_id == FIXIE]
 
     async def test_exactly_enough_is_enough(self):
-        db = FakeDB(balance=FIXIE_PRICE - BIKE_GRANT)
+        db = FakeDB(balance=FIXIE_PRICE)
         await shop.purchase(db, USER, FIXIE)
         assert db.balance == 0
 
@@ -435,9 +563,20 @@ class TestPurchase:
             await shop.purchase(db, USER, "carbon-unicorn")
         assert db.items == [] and db.ledger == []
 
-    async def test_the_free_starter_cannot_be_bought(self):
-        # It is already owned the moment the garage is read.
+    async def test_the_free_starter_is_claimed_not_bought(self):
+        """The old premise ("it is already owned the moment the garage is read")
+        is gone — the rider owns no bike until they claim one. Selling it here
+        for 0 RC would be a second, silent route to bike ownership that skips the
+        loadout and the grant, so `purchase` refuses it outright."""
         db = FakeDB(balance=1000)
+        with pytest.raises(shop.NotClaimableError):
+            await shop.purchase(db, USER, w3catalog.STARTER_BIKE_ID)
+        assert db.purchases == []
+        assert not [i for i in db.items if i.item_id == w3catalog.STARTER_BIKE_ID]
+
+    async def test_the_free_starter_is_already_owned_once_claimed(self):
+        db = FakeDB(balance=1000)
+        await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
         with pytest.raises(shop.AlreadyOwnedError):
             await shop.purchase(db, USER, w3catalog.STARTER_BIKE_ID)
         assert db.purchases == []
@@ -449,6 +588,7 @@ class TestPurchase:
 class TestEquip:
     async def test_a_part_goes_into_its_own_slot_and_disturbs_nothing_else(self):
         db = FakeDB(balance=2000)
+        await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
         await shop.purchase(db, USER, DEEP_WHEELS)
         loadout = await shop.equip(db, USER, DEEP_WHEELS)
 
@@ -458,14 +598,28 @@ class TestEquip:
 
     async def test_a_bike_goes_into_the_bike_slot(self):
         db = FakeDB(balance=1000)
+        await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
         await shop.purchase(db, USER, FIXIE)
         loadout = await shop.equip(db, USER, FIXIE)
         assert loadout["bike"] == FIXIE
         assert loadout["frame"] == w3catalog.STOCK_PARTS["frame"]
 
+    async def test_equipping_a_part_with_no_loadout_row_yet_does_not_blow_up(self):
+        # A rider who has claimed no bike owns the stock parts and can equip one.
+        # There is no loadout row to write into, so equip makes one — with a null
+        # bike, because they still have no bike.
+        db = FakeDB()
+        await shop.ensure_starter(db, USER)
+        assert USER not in db.loadouts
+
+        loadout = await shop.equip(db, USER, w3catalog.STOCK_PARTS["saddle"])
+        assert loadout["saddle"] == w3catalog.STOCK_PARTS["saddle"]
+        assert loadout["bike"] is None
+        assert db.loadouts[USER].saddle_id == w3catalog.STOCK_PARTS["saddle"]
+
     async def test_equipping_something_you_do_not_own_is_refused(self):
         db = FakeDB(balance=10_000)
-        await shop.ensure_starter(db, USER)
+        await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
         with pytest.raises(shop.NotOwnedError):
             await shop.equip(db, USER, FIXIE)
         assert db.loadouts[USER].bike_id == w3catalog.STARTER_BIKE_ID
@@ -480,28 +634,43 @@ class TestEquip:
 # 5. The garage read.
 # --------------------------------------------------------------------------- #
 class TestGetGarage:
-    async def test_a_brand_new_rider_already_has_a_bike(self):
+    async def test_a_brand_new_rider_has_parts_and_no_bike(self):
+        """THE ONBOARDING GATE'S SIGNAL. `loadout.bike` must come back present
+        and null — not absent — for a rider who has claimed nothing, on any
+        device, because that null is the only thing the gate trusts."""
         db = FakeDB(balance=250)
         garage = await shop.get_garage(db, USER)
 
-        assert garage["balance"] == 250 + BIKE_GRANT
+        assert garage["balance"] == 250          # no grant until the bike is claimed
+        assert set(garage["owned"]) == set(w3catalog.STOCK_PARTS.values())
+        assert not [i for i in garage["owned"] if w3catalog.CATALOG[i].kind == "bike"]
+        assert set(garage["loadout"]) == {"bike", "frame", "wheels", "bars", "saddle"}
+        assert garage["loadout"] == {
+            "bike": None, "frame": None, "wheels": None, "bars": None, "saddle": None,
+        }
+
+    async def test_the_claim_is_what_puts_a_bike_in_the_garage(self):
+        db = FakeDB(balance=250)
+        await shop.claim_first_bike(db, USER, w3catalog.STARTER_BIKE_ID)
+        garage = await shop.get_garage(db, USER)
+
         assert set(garage["owned"]) == set(w3catalog.FREE_ITEM_IDS)
         assert garage["loadout"]["bike"] == w3catalog.STARTER_BIKE_ID
-        assert set(garage["loadout"]) == {"bike", "frame", "wheels", "bars", "saddle"}
+        assert garage["balance"] == 250 + BIKE_GRANT
 
     async def test_owned_grows_with_purchases(self):
         db = FakeDB(balance=1000)
         await shop.purchase(db, USER, FIXIE)
         garage = await shop.get_garage(db, USER)
         assert FIXIE in garage["owned"]
-        assert garage["balance"] == 1000 + BIKE_GRANT - FIXIE_PRICE
+        assert garage["balance"] == 1000 - FIXIE_PRICE
 
 
 # --------------------------------------------------------------------------- #
 # 6. The HTTP contract the frontend is built against.
 # --------------------------------------------------------------------------- #
-# The onboarding bike grant that `ensure_starter` now pays on a rider's first
-# look at the garage (it used to be claimable only in the retired photo studio).
+# The onboarding bike grant, paid by `claim_first_bike` (it used to be claimable
+# only in the retired photo studio, and briefly on the first garage read).
 # Imported, not typed as 150, so the tests move when the constant moves.
 BIKE_GRANT = ONBOARDING_GRANT_RC[REASON_ONBOARDING_BIKE]
 
@@ -529,9 +698,44 @@ class TestShopApi:
         assert r.status_code == 200
         body = r.json()
         assert set(body) == {"balance", "owned", "loadout"}
+        assert body["balance"] == CLIENT_BALANCE
+        # No bike until it is claimed — and `bike` is a present, null key, which
+        # is what the onboarding gate reads over the wire.
+        assert "bike" in body["loadout"] and body["loadout"]["bike"] is None
+        assert w3catalog.STARTER_BIKE_ID not in body["owned"]
+
+    def test_claim_returns_the_full_contract_and_pays_the_grant(self, client_db):
+        client, db = client_db
+        r = client.post(f"/shop/claim/{w3catalog.STARTER_BIKE_ID}")
+        assert r.status_code == 200
+        body = r.json()
+        assert set(body) == {"item_id", "price", "balance", "owned", "loadout"}
+        assert body["item_id"] == w3catalog.STARTER_BIKE_ID
+        assert body["price"] == 0
         assert body["balance"] == CLIENT_BALANCE + BIKE_GRANT
         assert body["loadout"]["bike"] == w3catalog.STARTER_BIKE_ID
         assert w3catalog.STARTER_BIKE_ID in body["owned"]
+        assert len([r for r in db.ledger if r.reason == REASON_ONBOARDING_BIKE]) == 1
+
+        # And the garage now says the same thing on the next device.
+        assert client.get("/shop").json()["loadout"]["bike"] == w3catalog.STARTER_BIKE_ID
+
+    def test_claiming_twice_is_409(self, client_db):
+        client, db = client_db
+        assert client.post(f"/shop/claim/{w3catalog.STARTER_BIKE_ID}").status_code == 200
+        assert client.post(f"/shop/claim/{w3catalog.STARTER_BIKE_ID}").status_code == 409
+        assert len([r for r in db.ledger if r.reason == REASON_ONBOARDING_BIKE]) == 1
+
+    def test_claiming_an_unknown_item_is_404(self, client_db):
+        client, _ = client_db
+        assert client.post("/shop/claim/carbon-unicorn").status_code == 404
+
+    def test_claiming_a_priced_bike_is_400_and_costs_nothing(self, client_db):
+        client, db = client_db
+        assert client.post(f"/shop/claim/{FIXIE}").status_code == 400
+        assert client.post("/shop/claim/pro-prototype").status_code == 400
+        assert db.balance == CLIENT_BALANCE
+        assert not [i for i in db.items if i.kind == "bike"]
 
     def test_buy_returns_the_full_contract(self, client_db):
         client, db = client_db
@@ -541,12 +745,18 @@ class TestShopApi:
         assert set(body) == {"item_id", "price", "balance", "owned", "loadout"}
         assert body["item_id"] == FIXIE
         assert body["price"] == FIXIE_PRICE
-        assert body["balance"] == CLIENT_BALANCE + BIKE_GRANT - FIXIE_PRICE
+        assert body["balance"] == CLIENT_BALANCE - FIXIE_PRICE
         assert len(db.purchases) == 1
 
     def test_unknown_item_is_404(self, client_db):
         client, _ = client_db
         assert client.post("/shop/buy/carbon-unicorn").status_code == 404
+
+    def test_buying_the_free_first_bike_is_400(self, client_db):
+        client, db = client_db
+        r = client.post(f"/shop/buy/{w3catalog.STARTER_BIKE_ID}")
+        assert r.status_code == 400
+        assert not [i for i in db.items if i.kind == "bike"]
 
     def test_already_owned_is_409(self, client_db):
         client, db = client_db
@@ -558,10 +768,11 @@ class TestShopApi:
         client, db = client_db
         r = client.post("/shop/buy/pro-prototype")
         assert r.status_code == 402
-        assert db.balance == CLIENT_BALANCE + BIKE_GRANT   # refused: nothing debited
+        assert db.balance == CLIENT_BALANCE   # refused: nothing debited
 
     def test_equip_returns_the_loadout(self, client_db):
         client, _ = client_db
+        client.post(f"/shop/claim/{w3catalog.STARTER_BIKE_ID}")
         client.post(f"/shop/buy/{DEEP_WHEELS}")
         r = client.post(f"/shop/equip/{DEEP_WHEELS}")
         assert r.status_code == 200
@@ -587,7 +798,12 @@ class TestShopApi:
         # A router that is imported but never included is a real failure mode in
         # this app's history (garage_router). Assert the paths exist.
         paths = {r.path for r in app.routes}
-        assert {"/shop", "/shop/buy/{item_id}", "/shop/equip/{item_id}"} <= paths
+        assert {
+            "/shop",
+            "/shop/buy/{item_id}",
+            "/shop/claim/{item_id}",
+            "/shop/equip/{item_id}",
+        } <= paths
 
 
 def test_ledger_reason_is_the_one_the_economy_already_knows():

@@ -1,6 +1,6 @@
-"""/shop/* — the RideCoin sink: what you own, what you buy, what you wear.
+"""/shop/* — the RideCoin sink: what you own, what you claim, buy and wear.
 
-Three endpoints, one shape. `GET /shop` is the whole garage in a single read
+Four endpoints, one shape. `GET /shop` is the whole garage in a single read
 (balance + owned ids + loadout) because every shop surface needs all three to
 decide whether a tile is owned, affordable or equipped — three round trips would
 just be the same answer split up.
@@ -8,10 +8,12 @@ just be the same answer split up.
 PRICES ARE NEVER IN A REQUEST. `POST /shop/buy/{item_id}` takes an id and
 nothing else; the amount comes from `services/w3catalog`, the server's generated
 mirror of the frontend catalogue. There is deliberately no body to tamper with.
+`POST /shop/claim/{item_id}` is the same idea with a harder edge: it writes an
+ownership row for free, so it accepts nothing but a price-0 bike.
 
 The service raises typed refusals and this layer is the only place that turns
 them into status codes: 404 unknown item, 409 already owned / not owned,
-402 insufficient balance.
+402 insufficient balance, 400 not a free first bike.
 
 RLS-protected via get_db_for_user — a rider only ever sees their own garage.
 """
@@ -34,11 +36,11 @@ async def get_shop(
 ) -> dict:
     """Everything the shop and the garage need to render.
 
-    This is also where the free first bike happens: `get_garage` runs the
-    idempotent starter grant, so a rider who has never opened the shop still
-    comes back owning the Rostlaube and wearing it. That makes this GET a
-    writer, hence the commit — the alternative (a separate "initialise me" call)
-    is a step that can be skipped and would leave riders with no bike.
+    `get_garage` runs the idempotent stock-parts grant, which makes this GET a
+    writer — hence the commit. It does NOT hand out a bike: a rider who has
+    never claimed one comes back with `loadout.bike == null` and no bike in
+    `owned`, and that is the server-side fact the onboarding gate reads on every
+    device instead of a localStorage flag.
     """
     garage = await shop.get_garage(db, current_user.id)
     await db.commit()
@@ -66,10 +68,46 @@ async def buy(
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No such item: {item_id}") from None
     except shop.AlreadyOwnedError:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Already owned: {item_id}") from None
+    except shop.NotClaimableError:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{item_id} is the free first bike — claim it, don't buy it",
+        ) from None
     except shop.InsufficientBalanceError as e:
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
             f"{item_id} costs {e.price} RC — balance is {e.balance} RC",
+        ) from None
+
+
+@router.post(
+    "/claim/{item_id}",
+    summary="Claim the free first bike — once, ever",
+)
+async def claim(
+    item_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Take the free first bike as a deliberate act, and start wearing it.
+
+    Returns the same shape as `/shop/buy` (at price 0) plus the loadout, so the
+    onboarding step can draw the result without a follow-up GET. 404 unknown
+    item, 409 the rider already owns a bike (this is the FIRST one), 400 for
+    anything that is not a price-0 bike — the last is what stops a client from
+    claiming the 15 000 RC prototype for nothing.
+    """
+    try:
+        return await shop.claim_first_bike(db, current_user.id, item_id)
+    except shop.UnknownItemError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No such item: {item_id}") from None
+    except shop.AlreadyOwnedError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "You already have a bike",
+        ) from None
+    except shop.NotClaimableError:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"{item_id} is not a free first bike",
         ) from None
 
 

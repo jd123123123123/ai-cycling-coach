@@ -9,7 +9,7 @@ import { STARTER_BIKE } from './starterBike'
  */
 const spark = (bars: number[], hi: string) => ({ bars, hi })
 
-const FIXTURE: W3Vm = {
+export const FIXTURE: W3Vm = {
   handle: '@jonathan.ghost',
   tierLine: 'Umfangsblock · Woche 2 von 4',
   // The preview demos the "rider HAS a bike" hero; the empty state is what a
@@ -17,6 +17,10 @@ const FIXTURE: W3Vm = {
   bikeName: 'Starter Bike',
   bikeImage: STARTER_BIKE,
   bikeLoading: false,
+  // The preview demos the photographed-bike hero, so the collectible fallback
+  // it would degrade to is not exercised here.
+  collectible: null,
+  collectibleName: null,
   // The preview has no garage and no image model, so it demos the hero's SECOND
   // fallback: the bike collectible with the offer to compose today's scene.
   riderImage: null,

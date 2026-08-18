@@ -7,6 +7,9 @@ import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import { W3Coin, W3Price } from './W3Coin'
 import { artFit, itemById, type ShopItem } from './w3shop'
+import { LIGHT_WASH, type BikeSoul } from './w3BikeSoul'
+import W3BikeStage from './W3BikeStage'
+import { BIKE_LOOK, resolveLook } from '../../utils/w3bikePaint'
 import { SLOTS, type PartSlot } from './w3parts'
 import { TIERS } from './w3bikes'
 import type { Loadout } from '../../api/shop'
@@ -35,15 +38,25 @@ export interface W3GarageProps {
   loadout: Loadout | undefined
   /** Item id being equipped right now. */
   busyId: string | null
+  /** What this bike has been through — the light in the room, the road still on
+   *  it, and the one honest line about it. Null until the ride feed answers;
+   *  the hero then renders unlit rather than inventing a mood. */
+  soul: BikeSoul | null
   onEquip: (item: ShopItem) => void
   onOpenShop: () => void
 }
 
 const TIER_LABEL = new Map(TIERS.map((t) => [t.tier, t.label]))
 
-export default function W3GarageView({ balance, owned, loadout, busyId, onEquip, onOpenShop }: W3GarageProps) {
+export default function W3GarageView({ balance, owned, loadout, busyId, soul, onEquip, onOpenShop }: W3GarageProps) {
   const reduce = useReducedMotion()
   const bike = itemById(loadout?.bike)
+  // The bike AS RIDDEN: the model plus every equipped part layered over it.
+  // Everything the rider bought is in this one object, which is why the hero
+  // finally changes when they buy something.
+  const look = resolveLook(loadout?.bike, [
+    loadout?.frame ?? null, loadout?.wheels ?? null, loadout?.bars ?? null, loadout?.saddle ?? null,
+  ])
 
   // Owned bikes, cheapest first — the ladder read as a collection. The one
   // being ridden is pulled out into the hero, so it isn't repeated here.
@@ -76,21 +89,64 @@ export default function W3GarageView({ balance, owned, loadout, busyId, onEquip,
               already grown to — the bike overflowed its 210px stage by 59px and
               sat on top of its own name. */}
           <div style={{ position: 'relative', height: 232, overflow: 'hidden' }}>
-            {bike ? (
-              <motion.img
-                key={bike.id}
-                src={bike.art}
-                alt={bike.name}
-                initial={reduce ? false : { opacity: 0, scale: 1.03 }}
+            {bike && look ? (
+              <motion.div
+                key={`${bike.id}-${look.frame}-${look.wheel}-${look.bar}-${look.saddle}-${look.tape}`}
+                initial={reduce ? false : { opacity: 0, scale: 1.02 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, ease: EASE }}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: artFit(bike) }}
-              />
+                transition={{ duration: 0.42, ease: EASE }}
+                style={{ position: 'absolute', inset: 0 }}
+              >
+                {/* One stage, shared with the shop and the first-bike screen,
+                    so the same bike never looks like two different objects. */}
+                <W3BikeStage look={look} pad="18px 12px 30px" />
+              </motion.div>
             ) : (
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>Noch kein Rad</span>
               </div>
             )}
+            {/* ── The light in the room ────────────────────────────────────
+                A tint and a vignette keyed to the real hour. The art is a fixed
+                studio photograph, so this is the only thing that can make a
+                6am garage feel different from a 9pm one — and it is what stops
+                the hero being the same dead JPEG every single day. */}
+            {soul && (
+              <>
+                <div aria-hidden style={{
+                  position: 'absolute', inset: 0, pointerEvents: 'none',
+                  background: LIGHT_WASH[soul.light].tint,
+                }} />
+                <div aria-hidden style={{
+                  position: 'absolute', inset: 0, pointerEvents: 'none',
+                  background: `radial-gradient(120% 90% at 50% 42%, transparent 40%, ${T.bg} 140%)`,
+                  opacity: LIGHT_WASH[soul.light].vignette,
+                }} />
+              </>
+            )}
+
+            {/* ── The road it is still carrying ────────────────────────────
+                Speckle weighted to the bottom, where spray actually lands, at
+                an opacity that IS the rider's last week of riding. A bike that
+                has not moved gets none of this — the clean bike is the honest
+                answer, and the motivating one. */}
+            {soul && soul.grime > 0.02 && (
+              <div aria-hidden style={{
+                position: 'absolute', inset: 0, pointerEvents: 'none',
+                opacity: soul.grime, mixBlendMode: 'multiply',
+                // IRREGULAR ON PURPOSE. A tiled dot pattern renders as a visible
+                // halftone screen — it read as a printing artefact laid over the
+                // photo, not as dirt. Road spray has no period: a few soft blobs
+                // at odd positions, weighted to where the wheels throw it.
+                background:
+                  'radial-gradient(58% 30% at 14% 94%, #4A3F3273, transparent 72%),' +
+                  'radial-gradient(44% 24% at 61% 99%, #4A3F3266, transparent 74%),' +
+                  'radial-gradient(32% 20% at 88% 90%, #5B4B3A59, transparent 72%),' +
+                  'radial-gradient(26% 16% at 37% 86%, #5B4B3A40, transparent 76%),' +
+                  'linear-gradient(180deg, transparent 58%, #4A3F324D 100%)',
+              }} />
+            )}
+
             {/* The bike art's studio backdrop is light, and the card below it is
                 not. This gradient is the join: it fades the bottom of the photo
                 into the card so the two read as one lit object rather than a
@@ -99,6 +155,24 @@ export default function W3GarageView({ balance, owned, loadout, busyId, onEquip,
               position: 'absolute', left: 0, right: 0, bottom: 0, height: 88,
               background: `linear-gradient(180deg, transparent, ${T.cardTop})`,
             }} />
+
+            {/* ── The odometer, ON the bike ────────────────────────────────
+                Not a stat card beside it: bikes carry their own mileage, and
+                putting the number on the object is what turns a catalogue photo
+                into the thing you did those kilometres on. */}
+            {soul?.km != null && (
+              <div style={{
+                position: 'absolute', left: S.lg, bottom: S.md,
+                display: 'flex', alignItems: 'baseline', gap: 5,
+                padding: '5px 10px', borderRadius: 8,
+                background: '#0B0B0BA6', border: `1px solid ${T.rule}`,
+              }}>
+                <span style={{ ...TNUM, fontSize: 15, fontWeight: 700, letterSpacing: -0.4, color: T.ink }}>
+                  {Math.round(soul.km).toLocaleString('de-DE')}
+                </span>
+                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>KM</span>
+              </div>
+            )}
           </div>
 
           <div style={{ padding: `0 ${S.xl}px ${S.xl}px`, display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -107,6 +181,11 @@ export default function W3GarageView({ balance, owned, loadout, busyId, onEquip,
               {bike?.name ?? '—'}
             </span>
             {bike && <span style={{ fontSize: 12.5, fontWeight: 500, color: T.mid }}>{bike.blurb}</span>}
+            {soul && (
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: soul.stance === 'idle' ? T.warn : T.acid, paddingTop: 2 }}>
+                {soul.line}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -143,8 +222,13 @@ export default function W3GarageView({ balance, owned, loadout, busyId, onEquip,
                   border: `1px solid ${ridden ? T.acid : 'transparent'}`,
                   cursor: ridden ? 'default' : 'pointer',
                 }}>
-                <div style={{ flex: 'none', width: 68, height: 50, borderRadius: 11, background: T.surface2, overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
-                  <img src={b.art} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: artFit(b) }} />
+                {/* Drawn, not photographed: this is the same bike as the hero
+                    above it, and two renderings of one object in one scroll is
+                    the inconsistency the vector figure exists to remove. */}
+                <div style={{ flex: 'none', position: 'relative', width: 68, height: 50, borderRadius: 11, background: T.surface2, overflow: 'hidden' }}>
+                  {BIKE_LOOK[b.id]
+                    ? <W3BikeStage look={BIKE_LOOK[b.id]} pad="4px 2px 7px" shadow={false} />
+                    : <img src={b.art} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: artFit(b) }} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>

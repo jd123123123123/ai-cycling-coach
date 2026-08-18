@@ -4,6 +4,8 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Plus, Pencil, Sparkles, UserRound } from 'lucide-react'
 import { T, FONT, EASE, DASH, Kicker } from './w3tokens'
 import { POSE_LABEL } from './w3Pose'
+import W3BikeStage from './W3BikeStage'
+import type { BikeLook } from '../../utils/w3bikePaint'
 import type { DayPose, SceneStatus } from '../../api/garage'
 
 /**
@@ -88,6 +90,18 @@ export interface W3BikeHeroProps {
   /** Explicit intent to compose today's scene. Absent → no offer is made. */
   onCompose?: () => void
   identity: W3BikeHeroIdentity
+  /**
+   * The RideCoin bike the rider owns, as ridden — model plus equipped parts.
+   *
+   * This is a DIFFERENT bike from `image`: that one is a render of their real
+   * machine from a photo they uploaded, this one is the collectible they claimed
+   * in onboarding and upgrade with kilometres. Every rider has the second (the
+   * first-bike step cannot be skipped), which is why Today no longer has to fall
+   * back to an anonymous grey example when the photo slot is empty.
+   */
+  collectible?: BikeLook | null
+  /** The collectible's name, so it can be captioned as the rider's own. */
+  collectibleName?: string | null
 }
 
 /** One floating circular action, the pen's top-right cluster. */
@@ -198,7 +212,7 @@ function IdentityCard({ identity, bikeName, hasBike }: {
 }
 
 export default function W3BikeHero({
-  image, name, loading, scene, composing, onCompose, identity,
+  image, name, loading, scene, composing, onCompose, identity, collectible, collectibleName,
 }: W3BikeHeroProps) {
   const reduce = useReducedMotion()
   const navigate = useNavigate()
@@ -210,11 +224,17 @@ export default function W3BikeHero({
   // possible — never over a missing rider, a missing bike, or a missing model.
   const canCompose = !!onCompose && !composing && status === 'not_generated' && !!image
 
+  // The identity card's "bike" is whichever one the rider actually has. Before
+  // the collectible existed, no photo meant no bike and the card said so; now a
+  // rider who owns a claimed bike must never be told their garage is empty.
+  const heroName = image ? name : (collectibleName ?? name)
+  const heroHasBike = !!image || !!collectible
+
   const frame = (children: ReactNode) => (
     <div style={{ background: T.bg }}>
       <div style={{ position: 'relative', height: HERO_H, overflow: 'hidden' }}>{children}</div>
       <div style={{ padding: '0 20px', marginTop: -34, position: 'relative', zIndex: 2 }}>
-        <IdentityCard identity={identity} bikeName={name} hasBike={!!image} />
+        <IdentityCard identity={identity} bikeName={heroName} hasBike={heroHasBike} />
       </div>
     </div>
   )
@@ -342,7 +362,45 @@ export default function W3BikeHero({
     )
   }
 
-  // ── 3. No bike yet — the pen's spotlit example (QK4WB). ──
+  // ── 3. No photographed bike — but the rider still owns one. ──
+  //
+  // This used to be a dimmed stock photo under a "BEISPIEL" label, which was
+  // the honest thing to show when the rider genuinely had no bike at all. They
+  // always have one now: onboarding forces a first-bike claim, and the shop
+  // ladder is built on it. Showing a stranger's bike to someone who owns a bike
+  // is both a worse screen and a less true one — this shows THEIRS, drawn
+  // exactly as the garage draws it, and keeps the photo studio as an offer
+  // rather than a prerequisite.
+  if (collectible) {
+    return frame(
+      <>
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }}
+          style={{ position: 'absolute', inset: '18px 20px 52px', borderRadius: 26, overflow: 'hidden', border: `1px solid ${T.rule}` }}
+        >
+          <W3BikeStage look={collectible} pad="16px 12px 26px" />
+        </motion.div>
+
+        {/* The photo studio stays an OFFER, in the floating-action position the
+            hero already uses. No caption: the identity card directly below
+            prints the bike's name, and the bottom 34px of this frame is under
+            it anyway. */}
+        <button
+          onClick={() => navigate('/e/w3-bike-studio')}
+          style={{
+            position: 'absolute', top: 30, right: 32, display: 'flex', alignItems: 'center', gap: 6,
+            cursor: 'pointer', fontFamily: FONT, padding: '7px 12px', borderRadius: 100,
+            background: T.bg, border: `1px solid ${T.rule}`,
+          }}>
+          <Plus size={13} color={T.acid} strokeWidth={2.6} />
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, color: T.mid }}>Echtes Rad</span>
+        </button>
+      </>,
+    )
+  }
+
+  // ── 3b. Genuinely nothing — the pen's spotlit example (QK4WB). ──
+  // Reachable only before the garage query resolves an owned bike.
   return frame(
     <>
       {/* The studio spotlight: a soft pool of light with the example inside it. */}

@@ -1,11 +1,13 @@
 import { useCallback, useMemo } from 'react'
-import { Navigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
 import { useStreak } from '../../hooks/useStreak'
 import { useGarage, useDayScene, useRenderDayScene } from '../../hooks/useGarage'
+import { useGarageCollection } from '../../hooks/useShop'
+import { itemById } from './w3shop'
+import { resolveLook } from '../../utils/w3bikePaint'
 import { useWallet } from '../../hooks/useWallet'
 import type { DayPose } from '../../api/garage'
 import { useAdaptive } from '../../hooks/useAdaptive'
@@ -20,7 +22,6 @@ import { forecastRideRc, formatMultiplier, nextStreakTier, streakMultiplier } fr
 import { DASH, T } from './w3tokens'
 import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
-import { hasSeenW3Onboarding } from './w3Onboarding'
 import { poseForDay } from './w3Pose'
 import { BLOCK_DE } from './W3WhyToday'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type W3Block, type OnAdapt } from './W3TodayView'
@@ -273,6 +274,18 @@ export default function W3TodayPage() {
   // The rider's garage — real state now, so the hero can show THEIR bike (or
   // honestly show that they don't have one yet).
   const { data: garage, isLoading: garageLoading } = useGarage()
+  // The RideCoin collection — the bike they own and the parts they've bolted to
+  // it. Already fetched by W3Guard on the way in, so this is a cache read.
+  const { data: collection } = useGarageCollection()
+  const collectibleBike = itemById(collection?.loadout.bike)
+  // Memoised on the five ids it is derived from: `resolveLook` builds a fresh
+  // object every call, and an unstable value here would make the whole view
+  // model recompute on every render instead of when the build actually changes.
+  const lo = collection?.loadout
+  const collectibleLook = useMemo(
+    () => resolveLook(lo?.bike, [lo?.frame ?? null, lo?.wheels ?? null, lo?.bars ?? null, lo?.saddle ?? null]),
+    [lo?.bike, lo?.frame, lo?.wheels, lo?.bars, lo?.saddle],
+  )
   const { data: adaptive } = useAdaptive()
   // The REAL week-ahead plan (today + next 6 days) — the same source the Train
   // tab reads. Each DayPlan carries its title / target_tss / category / interval
@@ -666,6 +679,13 @@ export default function W3TodayPage() {
       bikeImage: garage?.bike?.image_base64 ?? null,
       bikeLoading: garageLoading || sceneLoading,
       riderImage: garage?.rider?.image_base64 ?? null,
+      // REAL: the collectible they claimed and have been upgrading. A separate
+      // thing from `bikeImage` (that one is a render of their actual machine),
+      // and the reason Today no longer shows a stranger's bike to a rider who
+      // owns one. `useGarageCollection` is already warm — W3Guard runs it to
+      // enforce the first-bike claim before this route mounts.
+      collectible: collectibleLook,
+      collectibleName: collectibleBike?.name ?? null,
       // REAL: today's composed hero, read from the server cache. Null until the
       // read lands; `status` is the honest reason there is no image yet, and
       // composing only ever happens on the rider's tap (`composeScene`).
@@ -740,6 +760,9 @@ export default function W3TodayPage() {
   }, [
     model, user, streak, adaptive, week, ftp, todayWeather, weekActs,
     garage, garageLoading, sceneLoading, dayScene, scenePose, renderScene.isPending, wallet,
+    // Without these the memo never re-runs when the collection query lands, and
+    // the hero would keep showing the empty state to a rider who owns a bike.
+    collectibleLook, collectibleBike,
   ])
 
   // Real adapt that PERSISTS: Easier/Harder/Shorter/Indoor hit POST
@@ -771,13 +794,9 @@ export default function W3TodayPage() {
     }
   }, [qc])
 
-  // First-open gate: a rider who has never seen the W3 intro lands on the
-  // onboarding chain instead of a cold Today. localStorage-backed, so it fires
-  // once per browser; the Garage step marks it seen. (After all hooks, so the
-  // Rules of Hooks hold regardless of this branch.)
-  if (user && !hasSeenW3Onboarding()) {
-    return <Navigate to="/e/w3-onboard-welcome" replace />
-  }
+  // The first-open gate lives in `W3Guard` now (it wraps this route), because
+  // it also has to enforce owning a bike — and that check needs the garage
+  // query, which does not belong on Today's critical path.
 
   return <W3TodayView vm={vm} onAdapt={onAdapt} onComposeScene={composeScene} />
 }
