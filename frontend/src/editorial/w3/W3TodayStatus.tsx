@@ -63,8 +63,8 @@ const CH = 104
 
 interface Pt { i: number; date: Date; ctl: number; atl: number; tsb: number }
 
-function LoadChart({ pts, peak, peakIdx, cur, onScrub }: {
-  pts: Pt[]; peak: number; peakIdx: number; cur: number; onScrub: (i: number | null) => void
+function LoadChart({ pts, peak, peakIdx, cur, showPeak, onScrub }: {
+  pts: Pt[]; peak: number; peakIdx: number; cur: number; showPeak: boolean; onScrub: (i: number | null) => void
 }) {
   const reduce = useReducedMotion()
   const ref = useRef<HTMLDivElement>(null)
@@ -109,14 +109,26 @@ function LoadChart({ pts, peak, peakIdx, cur, onScrub }: {
 
           {/* Baseline (0) and the window's own peak — the only two rules drawn. */}
           <line x1={0} y1={CH} x2={CW} y2={CH} stroke={T.rule} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          <line x1={0} y1={y(peak)} x2={CW} y2={y(peak)} stroke={T.d2} strokeWidth={1} strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+          {/* Drawn only when the peak is somewhere BEHIND the rider. Standing on
+              your own best, the line runs through today's dot and reads as a
+              decorative rule — exactly the kind of gridline this chart avoids. */}
+          {showPeak && (
+            <line x1={0} y1={y(peak)} x2={CW} y2={y(peak)} stroke={T.d2} strokeWidth={1} strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+          )}
 
           <motion.path d={area} fill="url(#w3ctlFill)"
             initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, ease: EASE, delay: 0.1 }} />
-          {/* Ermüdung (ATL) — the faster line riding over the fitness base. */}
-          <motion.path d={line('atl')} fill="none" stroke={T.cool} strokeOpacity={0.75} strokeWidth={1.25} strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+          {/* The two ANIMATED paths deliberately omit vectorEffect. `pathLength`
+              is a stroke-dash offset in user units; with
+              preserveAspectRatio="none" a non-scaling stroke measures its dash
+              in unstretched space, so the drawn line stops short of its own
+              endpoint by the stretch factor. Letting the stroke scale keeps the
+              dash and the render in one space — the 3% width distortion at
+              300→310px is invisible, a line that misses its endpoint is not.
+              The static reference lines above keep their crisp 1px. */}
+          <motion.path d={line('atl')} fill="none" stroke={T.cool} strokeOpacity={0.75} strokeWidth={1.25} strokeLinejoin="round"
             initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.85, ease: EASE, delay: 0.15 }} />
-          <motion.path d={line('ctl')} fill="none" stroke={T.acid} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
+          <motion.path d={line('ctl')} fill="none" stroke={T.acid} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
             initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.9, ease: EASE }} />
 
           {/* Peak marker — only when it isn't today (today already has the dot). */}
@@ -291,7 +303,7 @@ export default function W3TodayStatus() {
         </div>
 
         {/* ── The 90-day curve. Drag to read any day. ── */}
-        <LoadChart pts={pts} peak={peak} peakIdx={peakIdx} cur={cur} onScrub={setHov} />
+        <LoadChart pts={pts} peak={peak} peakIdx={peakIdx} cur={cur} showPeak={!atPeak} onScrub={setHov} />
 
         {/* ── Readout: today, or the scrubbed day ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>

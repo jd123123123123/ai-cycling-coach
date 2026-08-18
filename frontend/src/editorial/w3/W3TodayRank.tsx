@@ -36,8 +36,10 @@ const num = (n: number) => n.toLocaleString('de-DE')
 /** Per-day points, capped at 150 by the server — the strip's own ceiling. */
 const DAY_CAP = 150
 /** Identity hues for the other riders — W3 tokens only, so the crew table can
- *  never drift from the design system. Acid is reserved for the rider. */
-const MEMBER_HUES = [T.evening, T.cool, T.training, T.warn, T.d4]
+ *  never drift from the design system. Acid is reserved for the rider, and
+ *  T.training is deliberately NOT in here: at 6px it is close enough to acid
+ *  that a crew-mate's row read as a second "you" at a glance. */
+const MEMBER_HUES = [T.evening, T.cool, T.warn, T.d4, T.d3]
 
 /** One rider's row: rank, name, their own week as micro-bars, their points. */
 function Row({ r, rank, hue, reduce, delay }: { r: StandingRow; rank: number; hue: string; reduce: boolean | null; delay: number }) {
@@ -75,9 +77,11 @@ function Head({ tag }: { tag: string | null }) {
         <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Dein Rang</span>
         <span style={{ ...ellipsis, fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Erarbeitet, nicht gekauft</span>
       </div>
+      {/* Neutral on purpose: the pill repeats the rank the card states one line
+          below in 40px type. The acid here belongs to the rider's own row. */}
       {tag && (
-        <div style={{ flex: 'none', padding: '7px 13px', borderRadius: 100, background: T.acidDim }}>
-          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: T.acid }}>{tag}</span>
+        <div style={{ flex: 'none', padding: '7px 13px', borderRadius: 100, background: T.surface2 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: T.mid }}>{tag}</span>
         </div>
       )}
     </div>

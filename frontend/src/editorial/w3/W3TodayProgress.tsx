@@ -74,9 +74,16 @@ function Spark({ values, hue, reduce }: { values: number[]; hue: string; reduce:
   const y = (v: number) => H - 3 - ((v - lo) / span) * (H - 6)
   const d = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
   return (
+    // NOTE: this animates OPACITY, not pathLength. `pathLength` is implemented
+    // as a stroke-dash offset measured in user units, and this viewBox is 100
+    // units wide stretched to ~130px by preserveAspectRatio="none" — so with
+    // vectorEffect="non-scaling-stroke" the dash under-covers the path by the
+    // stretch factor and the line visibly stops ~30% short of its own endpoint
+    // dot. The big CTL chart gets away with pathLength because its viewBox is
+    // within ~3% of its rendered width; a sparkline is not.
     <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
-      <motion.path d={d} fill="none" stroke={T.d3} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
-        initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.7, ease: EASE }} />
+      <motion.path d={d} fill="none" stroke={T.d4} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
+        initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, ease: EASE }} />
       <circle cx={x(values.length - 1)} cy={y(values[values.length - 1])} r={2.6} fill={hue} style={{ filter: `drop-shadow(0 0 5px ${hue})` }} />
     </svg>
   )
