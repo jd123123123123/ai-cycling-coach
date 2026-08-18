@@ -7,6 +7,7 @@ import { useAchievements } from '../../hooks/useAchievements'
 import { useRewardChallenges, useJoinChallenge } from '../../hooks/useRewardChallenges'
 import type { ChallengeMetric, RewardChallenge } from '../../api/rewardChallenges'
 import { T, FONT, EASE, grow } from './w3tokens'
+import { S, lux, TNUM } from './w3surfaces'
 
 /**
  * W3 · Today "Dein Fortschritt" — the athlete's real fitness goals (FTP, VO₂max,
@@ -106,14 +107,17 @@ function Metric({ icon: Icon, label, unit, sum, points, pick, reduce }: {
   const delta = sum?.delta ?? null
   const flat = delta == null || Math.abs(delta) < 0.05
   const good = delta != null && (sum?.lower_is_better ? delta < 0 : delta > 0)
-  const dHue = flat ? T.quiet : good ? T.acid : T.mid
+  // Ink, not acid. Two season deltas side by side, each with its own acid
+  // sparkline endpoint, put four acid marks in one row and left nothing for
+  // the challenge bar below — which is the section's actual call to action.
+  const dHue = flat ? T.quiet : good ? T.ink : T.mid
   return (
-    <div style={{ flex: 1, minWidth: 0, padding: '14px 13px 15px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 9 }}>
+    <div style={{ ...lux(18), flex: 1, minWidth: 0, padding: '15px 14px 16px', gap: S.sm }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-        <span style={{ width: 24, height: 24, flex: 'none', borderRadius: 8, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Icon size={12} color={T.acid} /></span>
+        <span style={{ width: 24, height: 24, flex: 'none', borderRadius: 8, background: T.acidDim, border: `1px solid ${T.acid}24`, display: 'grid', placeItems: 'center' }}><Icon size={12} color={T.acid} /></span>
         <span style={{ ...ellipsis, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{label}</span>
       </div>
-      <span style={{ ...ellipsis, fontSize: 24, fontWeight: 800, letterSpacing: -0.8, color: latest == null ? T.quiet : T.ink }}>
+      <span style={{ ...ellipsis, ...TNUM, fontSize: 25, fontWeight: 800, letterSpacing: -0.9, color: latest == null ? T.quiet : T.ink }}>
         {latest == null ? '—' : nf.format(Math.round(latest))}
         {unit && latest != null && <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}> {unit}</span>}
       </span>
@@ -218,21 +222,21 @@ export default function W3TodayProgress() {
 
       {/* ── FTP — the number a cyclist actually trains for. Real watts, real
            W/kg, and progress only against a goal the rider set themselves. ── */}
-      <div style={{ borderRadius: 22, background: T.surface, padding: '16px 18px 17px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, minWidth: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
+      <div style={{ ...lux(22), padding: S.xl, gap: S.md, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: S.md, minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ width: 24, height: 24, flex: 'none', borderRadius: 8, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Zap size={12} color={T.acid} /></span>
+              <span style={{ width: 24, height: 24, flex: 'none', borderRadius: 8, background: T.acidDim, border: `1px solid ${T.acid}24`, display: 'grid', placeItems: 'center' }}><Zap size={12} color={T.acid} /></span>
               <span style={{ ...ellipsis, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>FTP · SCHWELLENLEISTUNG</span>
             </div>
-            <span style={{ ...ellipsis, fontSize: 34, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1, color: ftp == null ? T.quiet : T.ink }}>
+            <span style={{ ...ellipsis, ...TNUM, fontSize: 38, fontWeight: 800, letterSpacing: -1.6, lineHeight: 1, color: ftp == null ? T.quiet : T.ink }}>
               {ftp == null ? '—' : nf.format(Math.round(ftp))}
               {ftp != null && <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}> W</span>}
             </span>
           </div>
-          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-            <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.5, color: wkg == null ? T.quiet : T.ink }}>{wkg == null ? '—' : dec(wkg, 2)}</span>
-            <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>W/KG</span>
+          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+            <span style={{ ...TNUM, fontSize: 20, fontWeight: 700, letterSpacing: -0.6, color: wkg == null ? T.quiet : T.ink }}>{wkg == null ? '—' : dec(wkg, 2)}</span>
+            <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>W/KG</span>
           </div>
         </div>
 
@@ -259,7 +263,7 @@ export default function W3TodayProgress() {
 
       {/* Live challenges — real progress toward each real target */}
       {active.length > 0 && (
-        <div style={{ padding: '6px 18px 10px', borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ ...lux(22), padding: '8px 20px 12px' }}>
           {active.slice(0, 3).map((c, i) => (
             <ChallengeRow key={c.key} c={c} i={i} lead={i === 0 && !c.completed} daysLeft={daysLeft} reduce={reduce} onOpen={openChallenges} />
           ))}
@@ -275,7 +279,7 @@ export default function W3TodayProgress() {
           rewards are real catalog values; NO progress is shown, because the
           rider is not enrolled and the server has not scored them. */}
       {challenges && active.length === 0 && available.length > 0 && (
-        <div style={{ padding: '16px 18px 10px', borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ ...lux(22), padding: '18px 20px 12px' }}>
           <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, color: T.mid, paddingBottom: 4 }}>
             Keine Challenge aktiv. Mach mit — sie zählt die Fahrten, die du diesen Monat schon gemacht hast.
           </span>

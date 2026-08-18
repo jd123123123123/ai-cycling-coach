@@ -6,6 +6,7 @@ import { useCurrentWeek } from '../../hooks/useCurrentWeek'
 import { useGoalTrajectory } from '../../hooks/useGoalTrajectory'
 import { parseISO, fmtDEShort, DE_MONTHS_SHORT } from './w3plan'
 import { T, FONT, EASE, Kicker, DASH } from './w3tokens'
+import { S, lux, hairline, TNUM } from './w3surfaces'
 
 /**
  * W3 · Today "Dein aktueller Status" — where the rider's fitness actually
@@ -291,24 +292,24 @@ export default function W3TodayStatus() {
     <div style={{ ...band(26), gap: 14 }}>
       <Head tag={tag} />
 
-      <div style={{ background: T.surface, borderRadius: 24, padding: 20, display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+      <div style={{ ...lux(26), padding: S.xl, gap: S.xl, minWidth: 0 }}>
 
         {/* ── Headline: the number, and what it means ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, minWidth: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: S.md, minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: S.xs, minWidth: 0, flex: 1 }}>
             <Kicker>Fitness · CTL</Kicker>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 46, fontWeight: 700, letterSpacing: -1.8, lineHeight: 0.95, color: atPeak ? T.acid : T.ink, textShadow: atPeak ? `0 0 24px ${T.acid}55` : 'none' }}>{ctlNow}</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: S.sm, minWidth: 0 }}>
+              <span style={{ ...TNUM, fontSize: 52, fontWeight: 700, letterSpacing: -2.4, lineHeight: 0.92, color: atPeak ? T.acid : T.ink, textShadow: atPeak ? `0 0 28px ${T.acid}4D` : 'none' }}>{ctlNow}</span>
               {d28 != null && (
-                <span style={{ fontSize: 13, fontWeight: 700, color: d28 >= 0 ? T.acid : T.mid, flex: 'none' }}>
+                <span style={{ ...TNUM, fontSize: 13, fontWeight: 700, color: d28 >= 0 ? T.acid : T.mid, flex: 'none' }}>
                   {signed(Math.round(d28))} <span style={{ color: T.quiet, fontWeight: 600 }}>/ 4 Wo.</span>
                 </span>
               )}
             </div>
-            <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.4, color: T.mid, minWidth: 0 }}>{meaning}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid, minWidth: 0, paddingTop: 2 }}>{meaning}</span>
           </div>
           {atPeak && (
-            <span style={{ flex: 'none', padding: '6px 11px', borderRadius: 100, background: T.acidDim, fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>BESTWERT</span>
+            <span style={{ flex: 'none', padding: '6px 12px', borderRadius: 100, background: T.acidDim, border: `1px solid ${T.acid}2E`, fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>BESTWERT</span>
           )}
         </div>
 
@@ -325,7 +326,7 @@ export default function W3TodayStatus() {
           <Legend hue={T.mid} label="Form" value={signed(Math.round(cp.tsb))} />
         </div>
 
-        <div style={{ height: 1, background: T.rule }} />
+        <div style={hairline(-S.xs)} />
 
         {/* ── Form: the real TSB on a named scale, with the band's meaning ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
@@ -338,27 +339,37 @@ export default function W3TodayStatus() {
             <span style={{ ...ellipsis, flex: 1, fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: fb.hue === T.warn ? T.warn : T.ink, textAlign: 'right' }}>{fb.label} · {signed(tsbNow)}</span>
           </div>
 
-          {/* The scale itself: four real bands, a marker at the rider's TSB. */}
-          <div style={{ position: 'relative', width: '100%', height: 10 }}>
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', gap: 2, borderRadius: 100, overflow: 'hidden' }}>
+          {/* The scale: five real bands as separate capsules, the rider's own
+              band lit, and a needle standing ON the track rather than floating
+              over it. Each segment keeps its own rounded ends so the gauge
+              reads as a set of named zones, not one bar with a stripe. */}
+          <div style={{ position: 'relative', width: '100%', height: 8, marginTop: 2 }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', gap: 3 }}>
               {FORM_BANDS.map((b) => {
                 const w = ((Math.min(b.to, FORM_MAX) - Math.max(b.from, FORM_MIN)) / (FORM_MAX - FORM_MIN)) * 100
                 const on = b.label === fb.label
-                return <div key={b.label} style={{ width: `${Math.max(0, w)}%`, background: on ? b.hue : T.surface2, opacity: on ? 0.5 : 1 }} />
+                return (
+                  <div key={b.label} style={{
+                    width: `${Math.max(0, w)}%`, borderRadius: 100,
+                    background: on ? b.hue : '#FFFFFF14',
+                    opacity: on ? 0.55 : 1,
+                    boxShadow: on ? `0 0 12px ${b.hue}59` : 'none',
+                  }} />
+                )
               })}
             </div>
             <motion.div
-              initial={reduce ? false : { opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, ease: EASE, delay: 0.25 }}
+              initial={reduce ? false : { opacity: 0, scaleY: 0.4 }} animate={{ opacity: 1, scaleY: 1 }} transition={{ duration: 0.5, ease: EASE, delay: 0.25 }}
               style={{
-                position: 'absolute', top: -3, height: 16, width: 4, borderRadius: 100, background: fb.hue,
+                position: 'absolute', top: -4, height: 16, width: 3, borderRadius: 100, background: fb.hue,
                 left: `${((Math.min(FORM_MAX, Math.max(FORM_MIN, last.tsb)) - FORM_MIN) / (FORM_MAX - FORM_MIN)) * 100}%`,
-                transform: 'translateX(-50%)', boxShadow: `0 0 8px ${fb.hue}88`,
+                transform: 'translateX(-50%)', boxShadow: `0 0 10px ${fb.hue}, 0 0 0 3px ${T.bg}`,
               }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 8.5, fontWeight: 600, color: T.quiet }}>−45 · müde</span>
-            <span style={{ fontSize: 8.5, fontWeight: 600, color: T.quiet }}>0</span>
-            <span style={{ fontSize: 8.5, fontWeight: 600, color: T.quiet }}>+30 · frisch</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 2 }}>
+            <span style={{ fontSize: 8.5, fontWeight: 600, letterSpacing: 0.2, color: T.quiet }}>−45 · müde</span>
+            <span style={{ fontSize: 8.5, fontWeight: 600, letterSpacing: 0.2, color: T.quiet }}>0</span>
+            <span style={{ fontSize: 8.5, fontWeight: 600, letterSpacing: 0.2, color: T.quiet }}>+30 · frisch</span>
           </div>
           <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.5, color: T.mid, minWidth: 0 }}>{fb.meaning}</span>
           <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.4, color: T.quiet, minWidth: 0 }}>
@@ -370,25 +381,27 @@ export default function W3TodayStatus() {
         {/* ── Where this leads: the server's own forward simulation ── */}
         {projTo != null && projWeeks != null && projWeeks > 0 && (
           <>
-            <div style={{ height: 1, background: T.rule }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div style={hairline(-S.xs)} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: S.md, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: S.sm, minWidth: 0 }}>
                 <Flag size={12} color={T.quiet} style={{ flex: 'none' }} />
                 <span style={{ ...ellipsis, flex: 1, fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>
                   {projWhere ?? 'Wohin das führt'}
                 </span>
                 {track && (
-                  <span style={{ flex: 'none', padding: '4px 9px', borderRadius: 100, background: `${track.hue}1F`, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: track.hue }}>{track.text}</span>
+                  <span style={{ flex: 'none', padding: '4px 10px', borderRadius: 100, background: `${track.hue}1A`, border: `1px solid ${track.hue}2E`, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: track.hue }}>{track.text}</span>
                 )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              {/* now → then, on its own tile so the projection reads as a
+                  separate object from the measured present above it */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: S.md, minWidth: 0, background: '#FFFFFF08', borderRadius: 16, padding: '13px 14px' }}>
                 <Step label="heute" value={String(ctlNow)} dim />
-                <ArrowRight size={16} color={T.quiet} style={{ flex: 'none' }} />
+                <ArrowRight size={15} color={T.d2} style={{ flex: 'none' }} />
                 <Step label={`in ${projWeeks} ${projWeeks === 1 ? 'Woche' : 'Wochen'}`} value={String(projTo)} />
                 {trajOk && traj?.ctl_target != null && (
                   <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flex: 'none' }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: T.mid }}>{Math.round(traj.ctl_target)}</span>
-                    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>ZIELWERT</span>
+                    <span style={{ ...TNUM, fontSize: 13, fontWeight: 700, color: T.mid }}>{Math.round(traj.ctl_target)}</span>
+                    <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>ZIELWERT</span>
                   </div>
                 )}
               </div>
@@ -430,18 +443,18 @@ function Head({ tag }: { tag: string | null }) {
 function Legend({ hue, label, value }: { hue: string; label: string; value: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 'none' }}>
-      <span style={{ width: 6, height: 6, borderRadius: 2, background: hue, flex: 'none' }} />
+      <span style={{ width: 5, height: 5, borderRadius: 100, background: hue, flex: 'none', boxShadow: `0 0 6px ${hue}80` }} />
       <span style={{ fontSize: 9, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap' }}>{label}</span>
-      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: -0.3, color: T.ink, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      <span style={{ ...TNUM, fontSize: 12.5, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{value}</span>
     </div>
   )
 }
 
 function Step({ label, value, dim }: { label: string; value: string; dim?: boolean }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 'none', minWidth: 0 }}>
-      <span style={{ fontSize: dim ? 20 : 26, fontWeight: 700, letterSpacing: -0.8, lineHeight: 1, color: dim ? T.mid : T.ink }}>{value}</span>
-      <span style={{ ...ellipsis, fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet }}>{label}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 'none', minWidth: 0 }}>
+      <span style={{ ...TNUM, fontSize: dim ? 21 : 28, fontWeight: 700, letterSpacing: dim ? -0.7 : -1.1, lineHeight: 1, color: dim ? T.mid : T.ink }}>{value}</span>
+      <span style={{ ...ellipsis, fontSize: 8, fontWeight: 700, letterSpacing: 0.9, textTransform: 'uppercase', color: T.quiet }}>{label}</span>
     </div>
   )
 }

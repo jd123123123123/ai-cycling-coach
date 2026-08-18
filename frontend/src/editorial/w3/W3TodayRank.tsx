@@ -4,6 +4,7 @@ import { Users, ChevronRight, Crown, Route as RouteIcon } from 'lucide-react'
 import { useMyCrew, useCrewStandings } from '../../hooks/useCrew'
 import type { StandingRow } from '../../api/crew'
 import { T, FONT, EASE, grow, Kicker } from './w3tokens'
+import { S, lux, hairline, TNUM } from './w3surfaces'
 
 /**
  * W3 · Today "Dein Rang" — the rider's real standing in their real crew.
@@ -68,11 +69,12 @@ function Row({ r, rank, hue, reduce, delay, leader }: {
       display: 'flex', alignItems: 'center', gap: 9, minWidth: 0,
       // The rider's own row is lifted off the table so it can be found without
       // reading — the only row that gets a surface of its own.
-      background: me ? T.surface2 : 'transparent',
-      borderRadius: 12, padding: me ? '7px 9px' : '7px 0', margin: me ? '0 -9px' : 0,
+      background: me ? '#FFFFFF0D' : 'transparent',
+      border: `1px solid ${me ? T.rule : 'transparent'}`,
+      borderRadius: 14, padding: me ? '8px 10px' : '8px 0', margin: me ? '0 -10px' : 0,
     }}>
-      <span style={{ flex: 'none', width: 13, fontSize: podium ? 12 : 11, fontWeight: podium ? 800 : 700, color: me ? T.acid : podium ? T.mid : T.quiet, fontVariantNumeric: 'tabular-nums' }}>{rank}</span>
-      <span style={{ flex: 'none', width: 8, height: 8, borderRadius: 100, background: me ? T.acid : hue, boxShadow: me ? `0 0 8px ${T.acid}99` : 'none' }} />
+      <span style={{ ...TNUM, flex: 'none', width: 13, fontSize: podium ? 12 : 11, fontWeight: podium ? 800 : 700, color: me ? T.acid : podium ? T.mid : T.quiet }}>{rank}</span>
+      <span style={{ flex: 'none', width: 8, height: 8, borderRadius: 100, background: me ? T.acid : hue, boxShadow: me ? `0 0 9px ${T.acid}A6` : `0 0 6px ${hue}59` }} />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
           <span style={{ ...ellipsis, minWidth: 0, fontSize: 13, fontWeight: me ? 700 : 600, color: me ? T.acid : T.ink }}>
@@ -89,11 +91,11 @@ function Row({ r, rank, hue, reduce, delay, leader }: {
           return (
             <motion.span key={i}
               initial={reduce ? false : { height: 2 }} animate={{ height: h }} transition={grow(delay + i * 0.03)}
-              style={{ width: 4.5, height: h, borderRadius: 1.5, background: p > 0 ? (me ? T.acid : hue) : T.surface2 }} />
+              style={{ width: 4.5, height: h, borderRadius: 100, background: p > 0 ? (me ? T.acid : hue) : '#FFFFFF12' }} />
           )
         })}
       </div>
-      <span style={{ flex: 'none', width: 38, textAlign: 'right', fontSize: 13, fontWeight: 700, letterSpacing: -0.3, color: me ? T.acid : T.mid, fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ ...TNUM, flex: 'none', width: 38, textAlign: 'right', fontSize: 13, fontWeight: 700, letterSpacing: -0.3, color: me ? T.acid : T.mid }}>
         {num(r.weekly_score)}
       </span>
     </div>
@@ -206,7 +208,7 @@ export default function W3TodayRank() {
     <div style={{ ...band(26), gap: 14 }}>
       <Head tag={`#${rank} VON ${total}`} />
 
-      <div style={{ background: T.surface, borderRadius: 24, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+      <div style={{ ...lux(26), padding: S.xl, gap: S.lg, minWidth: 0 }}>
 
         {/* ── Headline: the rank, and the one thing to do about it ── */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, minWidth: 0 }}>
@@ -214,22 +216,22 @@ export default function W3TodayRank() {
             <Kicker>Diese Woche{crew?.crew ? ` · ${crew.crew.name}` : ''}</Kicker>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
               {/* Leading a crew of one is not a win — no acid for that. */}
-              <span style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.6, lineHeight: 1, color: rank === 1 && total > 1 ? T.acid : T.ink, textShadow: rank === 1 && total > 1 ? `0 0 22px ${T.acid}55` : 'none' }}>#{rank}</span>
+              <span style={{ ...TNUM, fontSize: 46, fontWeight: 700, letterSpacing: -2.2, lineHeight: 0.94, color: rank === 1 && total > 1 ? T.acid : T.ink, textShadow: rank === 1 && total > 1 ? `0 0 26px ${T.acid}4D` : 'none' }}>#{rank}</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>von {total}</span>
             </div>
-            <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.4, color: T.mid, minWidth: 0 }}>{gapLine}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid, minWidth: 0, paddingTop: 2 }}>{gapLine}</span>
           </div>
-          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.5, color: T.ink, fontVariantNumeric: 'tabular-nums' }}>{num(me.weekly_score)}</span>
-            <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>PUNKTE</span>
+          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+            <span style={{ ...TNUM, fontSize: 18, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{num(me.weekly_score)}</span>
+            <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>PUNKTE</span>
             {/* The honest reference: 100 points per day IS the rider's own
                 full target, so `perfect` is "week fully hit", not a ceiling
                 (the daily cap is 150, so a big day can push you past it). */}
-            <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{num(perfect)} = Ziel erfüllt</span>
+            <span style={{ ...TNUM, fontSize: 9.5, fontWeight: 600, color: T.quiet, paddingTop: 2 }}>{num(perfect)} = Ziel erfüllt</span>
           </div>
         </div>
 
-        <div style={{ height: 1, background: T.rule }} />
+        <div style={hairline(-S.xs)} />
 
         {/* ── The table: every rider's real week, day by day ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
@@ -247,7 +249,7 @@ export default function W3TodayRank() {
         {/* ── What the crew put down TOGETHER. The one line in this card that is
              not a competition — it is why the crew is worth being in. ── */}
         {crewTss > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 14, background: T.surface2, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', borderRadius: 14, background: '#FFFFFF08', minWidth: 0 }}>
             <RouteIcon size={13} color={T.mid} style={{ flex: 'none' }} />
             <span style={{ ...ellipsis, flex: 1, fontSize: 11, fontWeight: 600, color: T.mid }}>
               Zusammen diese Woche: {crewKm != null ? `${num(Math.round(crewKm))} km · ` : ''}{num(crewTss)} TSS

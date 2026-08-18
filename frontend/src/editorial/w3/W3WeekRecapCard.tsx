@@ -9,6 +9,7 @@ import {
 import { useWeekReviewVm, recapHasStory } from './useWeekReviewVm'
 import type { W3WeekReviewVm, W3ReviewTone } from './W3WeekReviewView'
 import { T, FONT, EASE, grow, DASH } from './w3tokens'
+import { S, lux, hairline, TNUM } from './w3surfaces'
 
 /**
  * W3 · Today — "Deine letzte Woche" as a BUTTON, and the celebration popup
@@ -83,11 +84,15 @@ function WeekShape({ vm, h, reduce, labels = true }: {
               initial={reduce ? false : { height: 2 }}
               animate={{ height: Math.max(2, Math.round((d.pct / 100) * barMax)) }}
               transition={grow(i * 0.04)}
-              style={{ width: '52%', borderRadius: 2, background: d.peak ? T.acid : d.pct > 0 ? T.d3 : T.surface2, boxShadow: d.peak ? `0 0 10px ${T.acid}66` : 'none' }} />
+              // radius 3, NOT a pill: these bars are wide and often short, and
+              // a fully rounded 20×8 rect is a lozenge, not a bar — the whole
+              // strip read as a row of dots. Pill caps are for the narrow-and-
+              // tall bars in the crew table, where they actually work.
+              style={{ width: '52%', borderRadius: 3, background: d.peak ? T.acid : d.pct > 0 ? T.d3 : '#FFFFFF12', boxShadow: d.peak ? `0 0 12px ${T.acid}59` : 'none' }} />
           </div>
         ))}
       </div>
-      <div style={{ height: 1, background: T.rule }} />
+      <div style={hairline()} />
       {labels && (
         <div style={{ display: 'flex', gap: 3, width: '100%' }}>
           {vm.days.map((d, i) => (
@@ -134,9 +139,13 @@ function RecapModal({ vm, onClose }: { vm: W3WeekReviewVm; onClose: () => void }
         transition={{ duration: 0.42, ease: EASE }}
         style={{
           position: 'relative', width: '100%', maxWidth: 390, maxHeight: '92dvh', overflowY: 'auto',
-          background: T.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          // Lit from the top edge, like every other W3 surface — a flat sheet
+          // against a blurred backdrop reads as a dialog, not as an object.
+          background: `linear-gradient(180deg, ${T.sheet} 0%, ${T.bg} 220px)`,
+          borderTopLeftRadius: 30, borderTopRightRadius: 30,
           border: `1px solid ${T.stroke}`, borderBottom: 'none',
-          display: 'flex', flexDirection: 'column', gap: 18, padding: '10px 20px 28px',
+          boxShadow: '0 -24px 60px #000000A6, inset 0 1px 0 #FFFFFF12',
+          display: 'flex', flexDirection: 'column', gap: S.xl, padding: `10px ${S.xl}px ${S.section}px`,
         }}>
 
         {vm.celebrate && <Confetti reduce={reduce} />}
@@ -147,7 +156,7 @@ function RecapModal({ vm, onClose }: { vm: W3WeekReviewVm; onClose: () => void }
             band edge to edge. */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          position: 'sticky', top: 0, zIndex: 3, background: T.bg,
+          position: 'sticky', top: 0, zIndex: 3, background: T.sheet,
           margin: '0 -20px', padding: '8px 20px 10px',
         }}>
           <span style={{ width: 34 }} />
@@ -171,7 +180,7 @@ function RecapModal({ vm, onClose }: { vm: W3WeekReviewVm; onClose: () => void }
         </div>
 
         {/* the week's load against the plan it was measured on */}
-        <div style={{ background: T.surface, borderRadius: 22, padding: 18, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+        <div style={{ ...lux(22), padding: S.xl, gap: S.md, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, minWidth: 0 }}>
             <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: -1.6, lineHeight: 0.95, color: T.ink }}>{nf(vm.tssDone)}</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet, paddingBottom: 5 }}>TSS</span>
@@ -196,12 +205,12 @@ function RecapModal({ vm, onClose }: { vm: W3WeekReviewVm; onClose: () => void }
           {vm.stats.map((s) => {
             const Icon = STAT_ICON[s.icon]
             return (
-              <div key={s.label} style={{ flex: 1, minWidth: 0, background: T.surface, borderRadius: 16, padding: '12px 9px', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+              <div key={s.label} style={{ ...lux(16), flex: 1, minWidth: 0, padding: '13px 10px 12px', gap: 7, alignItems: 'flex-start' }}>
                 <Icon size={13} color={T.quiet} />
-                <span style={{ ...ellipsis, width: '100%', fontSize: 17, fontWeight: 800, letterSpacing: -0.6, color: s.value === DASH ? T.quiet : T.ink }}>
+                <span style={{ ...ellipsis, ...TNUM, width: '100%', fontSize: 18, fontWeight: 800, letterSpacing: -0.7, color: s.value === DASH ? T.quiet : T.ink }}>
                   {s.value}{s.unit && <span style={{ fontSize: 9, fontWeight: 600, color: T.quiet }}> {s.unit}</span>}
                 </span>
-                <span style={{ ...ellipsis, width: '100%', fontSize: 7.5, fontWeight: 700, letterSpacing: 0.7, color: T.quiet }}>{s.label}</span>
+                <span style={{ ...ellipsis, width: '100%', fontSize: 7.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>{s.label}</span>
               </div>
             )
           })}
@@ -229,8 +238,8 @@ function RecapModal({ vm, onClose }: { vm: W3WeekReviewVm; onClose: () => void }
 
         {/* the moment worth celebrating — a real PB, else the biggest ride */}
         {vm.moment && (
-          <div style={{ background: T.surface, borderRadius: 22, padding: 18, display: 'flex', gap: 13, alignItems: 'flex-start', minWidth: 0 }}>
-            <span style={{ width: 36, height: 36, flex: 'none', borderRadius: 12, background: T.acidDim, display: 'grid', placeItems: 'center' }}>
+          <div style={{ ...lux(22), flexDirection: 'row', padding: S.xl, gap: 13, alignItems: 'flex-start', minWidth: 0, borderColor: `${T.acid}24` }}>
+            <span style={{ width: 38, height: 38, flex: 'none', borderRadius: 13, background: T.acidDim, border: `1px solid ${T.acid}2E`, display: 'grid', placeItems: 'center' }}>
               <Trophy size={17} color={T.acid} />
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
@@ -253,7 +262,7 @@ function RecapModal({ vm, onClose }: { vm: W3WeekReviewVm; onClose: () => void }
         )}
 
         {/* ── ACT 2 · what it means for this week ── */}
-        <div style={{ height: 1, background: T.rule }} />
+        <div style={hairline()} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           {/* Quiet kicker: the acid on this screenful belongs to the headline
@@ -269,7 +278,7 @@ function RecapModal({ vm, onClose }: { vm: W3WeekReviewVm; onClose: () => void }
 
           {/* last week's bar next to this week's — the ramp, made visible */}
           {vm.nextTss != null && (
-            <div style={{ background: T.surface, borderRadius: 22, padding: 18, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+            <div style={{ ...lux(22), padding: S.xl, gap: S.md, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 9, minWidth: 0 }}>
                 <span style={{ fontSize: 32, fontWeight: 700, letterSpacing: -1.1, lineHeight: 1, color: T.ink }}>{nf(vm.nextTss)}</span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, paddingBottom: 3 }}>TSS</span>
@@ -353,9 +362,8 @@ export default function W3WeekRecapCard() {
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         style={{
-          width: '100%', border: `1px solid ${T.stroke}`, borderRadius: 24, padding: 18, cursor: 'pointer',
-          background: T.surface, fontFamily: FONT, textAlign: 'left',
-          display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0,
+          ...lux(26), padding: S.xl, cursor: 'pointer',
+          fontFamily: FONT, textAlign: 'left', gap: S.lg, minWidth: 0,
         }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
           <span style={{ flex: 'none', fontSize: 9, fontWeight: 700, letterSpacing: 1.4, color: hue }}>{vm.kicker}</span>
