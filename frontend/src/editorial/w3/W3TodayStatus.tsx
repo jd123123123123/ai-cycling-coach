@@ -59,7 +59,7 @@ const bandFor = (tsb: number): FormBand => FORM_BANDS.find((b) => tsb >= b.from 
 
 // ── The chart ───────────────────────────────────────────────────────────────
 const CW = 300 // viewBox units; strokes stay 1:1 via vectorEffect
-const CH = 104
+const CH = 124
 
 interface Pt { i: number; date: Date; ctl: number; atl: number; tsb: number }
 
@@ -102,9 +102,15 @@ function LoadChart({ pts, peak, peakIdx, cur, showPeak, onScrub }: {
         <svg width="100%" height={CH} viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
           <defs>
             <linearGradient id="w3ctlFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={T.acid} stopOpacity={0.34} />
-              <stop offset="100%" stopColor={T.acid} stopOpacity={0.02} />
+              <stop offset="0%" stopColor={T.acid} stopOpacity={0.38} />
+              <stop offset="62%" stopColor={T.acid} stopOpacity={0.10} />
+              <stop offset="100%" stopColor={T.acid} stopOpacity={0} />
             </linearGradient>
+            {/* The fitness line glows; fatigue does not. One hero, one voice. */}
+            <filter id="w3ctlGlow" x="-8%" y="-40%" width="116%" height="180%">
+              <feGaussianBlur stdDeviation="2.4" result="b" />
+              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
           </defs>
 
           {/* Baseline (0) and the window's own peak — the only two rules drawn. */}
@@ -126,9 +132,13 @@ function LoadChart({ pts, peak, peakIdx, cur, showPeak, onScrub }: {
               dash and the render in one space — the 3% width distortion at
               300→310px is invisible, a line that misses its endpoint is not.
               The static reference lines above keep their crisp 1px. */}
-          <motion.path d={line('atl')} fill="none" stroke={T.cool} strokeOpacity={0.75} strokeWidth={1.25} strokeLinejoin="round"
+          {/* No strokeDasharray here: motion implements `pathLength` AS a dash
+              offset, so an explicit dash pattern on the same element fights it
+              and the line renders in fragments. Fatigue is separated from
+              fitness by weight and opacity instead. */}
+          <motion.path d={line('atl')} fill="none" stroke={T.cool} strokeOpacity={0.65} strokeWidth={1.25} strokeLinejoin="round"
             initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.85, ease: EASE, delay: 0.15 }} />
-          <motion.path d={line('ctl')} fill="none" stroke={T.acid} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
+          <motion.path d={line('ctl')} fill="none" stroke={T.acid} strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" filter="url(#w3ctlGlow)"
             initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.9, ease: EASE }} />
 
           {/* Peak marker — only when it isn't today (today already has the dot). */}

@@ -12,6 +12,7 @@ import W3RecoveryNudge from './W3RecoveryNudge'
 import W3TodayProgress from './W3TodayProgress'
 import W3TodayStatus from './W3TodayStatus'
 import W3TodayRank from './W3TodayRank'
+import W3WeekRecapCard from './W3WeekRecapCard'
 import W3WhyToday from './W3WhyToday'
 import W3ScoreCard from './W3ScoreCard'
 import { W3CoachFab } from './W3CoachChat'
@@ -335,6 +336,13 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
         {/* ── Navigation, not week content: the season goal + the whole plan ── */}
         <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks}
           onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
+
+        {/* ── Letzte Woche — the weekly story as a tappable card, opening the
+             celebration popup. Shares ONE producer (`useWeekReviewVm`) with the
+             full /e/w3-week-review page, and renders nothing when last week
+             held no story. It sits here on purpose: the bridge from what you
+             did to where you now stand. ── */}
+        <W3WeekRecapCard />
 
         {/* ── Dein aktueller Status — the real 90-day CTL/ATL curve on a proper
              axis, what the number MEANS (peak / "so fit wie zuletzt am …" /

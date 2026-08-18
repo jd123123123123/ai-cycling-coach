@@ -11,17 +11,20 @@
 //  · crew points are each rider's share of THEIR OWN target — the card says so
 //    and converts the gap back into the rider's own TSS;
 //  · no crew → an honest empty state, NEVER the old fixture riders.
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import W3TodayStatus from '../w3/W3TodayStatus'
 import W3TodayRank from '../w3/W3TodayRank'
+import W3WeekRecapCard from '../w3/W3WeekRecapCard'
 
 const pmcMock = vi.fn()
 const weekMock = vi.fn()
 const trajMock = vi.fn()
 const crewMock = vi.fn()
 const standingsMock = vi.fn()
+const recapVmMock = vi.fn()
+const hasStoryMock = vi.fn()
 
 vi.mock('../../hooks/usePMC', () => ({ usePMC: () => pmcMock() }))
 vi.mock('../../hooks/useCurrentWeek', () => ({ useCurrentWeek: () => weekMock() }))
@@ -29,6 +32,10 @@ vi.mock('../../hooks/useGoalTrajectory', () => ({ useGoalTrajectory: () => trajM
 vi.mock('../../hooks/useCrew', () => ({
   useMyCrew: () => crewMock(),
   useCrewStandings: () => standingsMock(),
+}))
+vi.mock('../w3/useWeekReviewVm', () => ({
+  useWeekReviewVm: () => recapVmMock(),
+  recapHasStory: () => hasStoryMock(),
 }))
 
 afterEach(cleanup)
@@ -38,6 +45,8 @@ beforeEach(() => {
   trajMock.mockReturnValue({ data: undefined })
   crewMock.mockReturnValue({ data: undefined })
   standingsMock.mockReturnValue({ data: undefined })
+  recapVmMock.mockReturnValue({ vm: null, recap: undefined, isLoading: false, isError: false })
+  hasStoryMock.mockReturnValue(false)
 })
 
 const iso = (daysAgo: number) => {
@@ -183,5 +192,84 @@ describe('Dein Rang', () => {
     renderIn(<W3TodayRank />)
     expect(screen.getByText(/dein Anteil an deinem EIGENEN Tagesziel \(60 TSS\)/)).toBeTruthy()
     expect(screen.getByText(/mehr Stunden allein bringen niemanden nach vorn/)).toBeTruthy()
+  })
+
+  it('shows what the crew put down together', () => {
+    standingsMock.mockReturnValue({
+      data: {
+        crew_id: 1, week_start: iso(3), week_end: iso(-3),
+        daily_target_tss: 60, weekly_target_tss: 420, points_basis: 'own_weekly_target',
+        standings: [
+          row({ user_id: 1, handle: 'du', is_you: true, weekly_tss: 200, distance_km: 120 }),
+          row({ user_id: 2, handle: 'timo', weekly_tss: 150, distance_km: 80 }),
+        ],
+      },
+    })
+    renderIn(<W3TodayRank />)
+    // 120 + 80 km, 200 + 150 TSS — summed from the same fields the rows show.
+    expect(screen.getByText(/Zusammen diese Woche: 200 km · 350 TSS/)).toBeTruthy()
+  })
+})
+
+describe('Letzte Woche — the Today card and its popup', () => {
+  const VM = {
+    rangeLabel: '10. Aug – 16. Aug', weekTag: 'KW 33', tone: 'strong' as const, celebrate: true,
+    kicker: 'LETZTE WOCHE', title: 'Woche', titleAccent: 'geliefert.', tssDone: 452,
+    complianceLabel: '452 VON 470 TSS GEPLANT', compliancePct: 96,
+    verdict: 'Genau im Korridor. Genau so entsteht Form.',
+    stats: [
+      { icon: 'rides' as const, label: 'FAHRTEN', value: '5', unit: '' },
+      { icon: 'timer' as const, label: 'SATTELZEIT', value: '8:24', unit: 'h' },
+      { icon: 'route' as const, label: 'DISTANZ', value: '219', unit: 'km' },
+      { icon: 'climb' as const, label: 'HÖHENMETER', value: '2.910', unit: 'm' },
+    ],
+    days: Array.from({ length: 7 }, (_, i) => ({ letter: 'MDMDFSS'[i], num: String(10 + i), pct: i * 14, label: '', peak: i === 5 })),
+    deltas: [{ label: 'TSS', value: '+64', dir: 'up' as const }],
+    tiles: [], moment: { badge: 'DURCHBRUCH', title: 'Neue 20-Minuten-Bestleistung', detail: '300 W' },
+    fitness: { delta: '+2,6', dir: 'up' as const, now: 'CTL 73', note: 'Gewachsen.' },
+    nextBlock: 'Aufbaublock · Woche 2 von 4', nextTitle: 'Jetzt wird', nextAccent: 'aufgebaut.',
+    nextTss: 486, nextTssNote: 'geplant für Mo – So', rampFromLabel: 'letzte Woche geplant', rampFrom: 470,
+    preface: null,
+    evidence: [{ key: 'block', label: 'BLOCK', value: 'Aufbaublock', note: 'Volumen sammeln.' }],
+    planDays: [], planDaysLabel: 'DER PLAN',
+  }
+
+  it('renders NOTHING when last week held no story', () => {
+    recapVmMock.mockReturnValue({ vm: VM, recap: {}, isLoading: false, isError: false })
+    hasStoryMock.mockReturnValue(false)
+    const { container } = renderIn(<W3WeekRecapCard />)
+    expect(container.textContent).toBe('')
+  })
+
+  it('is a button — it never opens itself', () => {
+    recapVmMock.mockReturnValue({ vm: VM, recap: {}, isLoading: false, isError: false })
+    hasStoryMock.mockReturnValue(true)
+    renderIn(<W3WeekRecapCard />)
+    expect(screen.getByText('LETZTE WOCHE')).toBeTruthy()
+    expect(screen.getByText('geliefert.')).toBeTruthy()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('opens the celebration popup on tap, with what it means for the new week', () => {
+    recapVmMock.mockReturnValue({ vm: VM, recap: {}, isLoading: false, isError: false })
+    hasStoryMock.mockReturnValue(true)
+    renderIn(<W3WeekRecapCard />)
+    fireEvent.click(screen.getByRole('button', { name: /LETZTE WOCHE/i }))
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(screen.getByText('WAS DAS FÜR DIESE WOCHE HEISST')).toBeTruthy()
+    expect(screen.getByText('aufgebaut.')).toBeTruthy()
+    // The planned TSS appears as the hero number AND on its compare bar.
+    expect(screen.getAllByText('486').length).toBeGreaterThan(0)
+    expect(screen.getByText('DURCHBRUCH')).toBeTruthy()
+  })
+
+  it('never celebrates a week that did not happen', () => {
+    recapVmMock.mockReturnValue({
+      vm: { ...VM, tone: 'empty' as const, celebrate: false, moment: null, title: 'Keine Fahrt', titleAccent: 'letzte Woche.' },
+      recap: {}, isLoading: false, isError: false,
+    })
+    hasStoryMock.mockReturnValue(true)
+    renderIn(<W3WeekRecapCard />)
+    expect(screen.queryByText('ZU FEIERN')).toBeNull()
   })
 })

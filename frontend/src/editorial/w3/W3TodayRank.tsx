@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
-import { Users, ChevronRight } from 'lucide-react'
+import { Users, ChevronRight, Crown, Route as RouteIcon } from 'lucide-react'
 import { useMyCrew, useCrewStandings } from '../../hooks/useCrew'
 import type { StandingRow } from '../../api/crew'
 import { T, FONT, EASE, grow, Kicker } from './w3tokens'
@@ -41,29 +41,59 @@ const DAY_CAP = 150
  *  that a crew-mate's row read as a second "you" at a glance. */
 const MEMBER_HUES = [T.evening, T.cool, T.warn, T.d4, T.d3]
 
-/** One rider's row: rank, name, their own week as micro-bars, their points. */
-function Row({ r, rank, hue, reduce, delay }: { r: StandingRow; rank: number; hue: string; reduce: boolean | null; delay: number }) {
+/** One rider's row. TWO lines, because a points total on its own is abstract:
+ *  the second line carries what riders actually talk about — km and TSS — plus
+ *  the attainment of that rider's OWN target, which is the thing the points are
+ *  really made of. Every figure is a server field (`distance_km`, `weekly_tss`,
+ *  `weekly_target_tss`); a null one is dropped from the line, never shown as 0. */
+function Row({ r, rank, hue, reduce, delay, leader }: {
+  r: StandingRow; rank: number; hue: string; reduce: boolean | null; delay: number; leader: boolean
+}) {
   const me = r.is_you
   const days = r.daily_pct ?? []
+  const pct = r.weekly_target_tss && r.weekly_target_tss > 0
+    ? Math.round((r.weekly_tss / r.weekly_target_tss) * 100)
+    : null
+  const meta = [
+    r.distance_km != null && r.distance_km > 0 ? `${num(Math.round(r.distance_km))} km` : null,
+    r.weekly_tss > 0 ? `${num(r.weekly_tss)} TSS` : null,
+    pct != null ? `${pct} % vom Ziel` : null,
+  ].filter(Boolean).join(' · ')
+
+  // The podium reads at a glance: 1–3 get a weighted rank numeral, the rest
+  // stay quiet. No invented medals — just typographic rank.
+  const podium = rank <= 3
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-      <span style={{ flex: 'none', width: 16, fontSize: 11, fontWeight: 700, color: me ? T.acid : T.quiet, fontVariantNumeric: 'tabular-nums' }}>{rank}</span>
-      <span style={{ flex: 'none', width: 8, height: 8, borderRadius: 100, background: me ? T.acid : hue }} />
-      <span style={{ ...ellipsis, flex: 1, fontSize: 13, fontWeight: me ? 700 : 600, color: me ? T.acid : T.ink }}>
-        {me ? 'Du' : `@${r.handle}`}
-      </span>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 9, minWidth: 0,
+      // The rider's own row is lifted off the table so it can be found without
+      // reading — the only row that gets a surface of its own.
+      background: me ? T.surface2 : 'transparent',
+      borderRadius: 12, padding: me ? '7px 9px' : '7px 0', margin: me ? '0 -9px' : 0,
+    }}>
+      <span style={{ flex: 'none', width: 13, fontSize: podium ? 12 : 11, fontWeight: podium ? 800 : 700, color: me ? T.acid : podium ? T.mid : T.quiet, fontVariantNumeric: 'tabular-nums' }}>{rank}</span>
+      <span style={{ flex: 'none', width: 8, height: 8, borderRadius: 100, background: me ? T.acid : hue, boxShadow: me ? `0 0 8px ${T.acid}99` : 'none' }} />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+          <span style={{ ...ellipsis, minWidth: 0, fontSize: 13, fontWeight: me ? 700 : 600, color: me ? T.acid : T.ink }}>
+            {me ? 'Du' : `@${r.handle}`}
+          </span>
+          {leader && <Crown size={11} color={T.warn} style={{ flex: 'none' }} />}
+        </div>
+        {meta && <span style={{ ...ellipsis, fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{meta}</span>}
+      </div>
       {/* Their real week, day by day — the bar IS the data, not a scaled proxy. */}
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'flex-end', gap: 2, height: 20 }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'flex-end', gap: 2, height: 22 }}>
         {days.map((p, i) => {
-          const h = Math.max(2, Math.round(Math.min(1, p / DAY_CAP) * 20))
+          const h = Math.max(2, Math.round(Math.min(1, p / DAY_CAP) * 22))
           return (
             <motion.span key={i}
               initial={reduce ? false : { height: 2 }} animate={{ height: h }} transition={grow(delay + i * 0.03)}
-              style={{ width: 5, height: h, borderRadius: 1.5, background: p > 0 ? (me ? T.acid : hue) : T.surface2 }} />
+              style={{ width: 4.5, height: h, borderRadius: 1.5, background: p > 0 ? (me ? T.acid : hue) : T.surface2 }} />
           )
         })}
       </div>
-      <span style={{ flex: 'none', width: 40, textAlign: 'right', fontSize: 13, fontWeight: 700, letterSpacing: -0.3, color: me ? T.acid : T.mid, fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ flex: 'none', width: 38, textAlign: 'right', fontSize: 13, fontWeight: 700, letterSpacing: -0.3, color: me ? T.acid : T.mid, fontVariantNumeric: 'tabular-nums' }}>
         {num(r.weekly_score)}
       </span>
     </div>
@@ -162,6 +192,16 @@ export default function W3TodayRank() {
     : [...rows.slice(0, VISIBLE - 1), me]
   const gapRow = meIdx >= VISIBLE
 
+  // ── What the crew did TOGETHER ────────────────────────────────────────────
+  // The one number nobody competes over, and the reason a crew is worth being
+  // in. Summed from the same per-member fields the table shows; `distance_km`
+  // is nullable, so the km half is dropped rather than under-reported when any
+  // member is missing it.
+  const crewTss = rows.reduce((s, r) => s + r.weekly_tss, 0)
+  const allHaveKm = rows.every((r) => r.distance_km != null)
+  const crewKm = allHaveKm ? rows.reduce((s, r) => s + (r.distance_km ?? 0), 0) : null
+  const crewRides = rows.filter((r) => r.weekly_tss > 0).length
+
   return (
     <div style={{ ...band(26), gap: 14 }}>
       <Head tag={`#${rank} VON ${total}`} />
@@ -198,10 +238,23 @@ export default function W3TodayRank() {
               {gapRow && i === shown.length - 1 && (
                 <span style={{ fontSize: 11, fontWeight: 700, color: T.quiet, paddingLeft: 4 }}>⋯</span>
               )}
-              <Row r={r} rank={rows.indexOf(r) + 1} hue={MEMBER_HUES[i % MEMBER_HUES.length]} reduce={reduce} delay={i * 0.05} />
+              <Row r={r} rank={rows.indexOf(r) + 1} hue={MEMBER_HUES[i % MEMBER_HUES.length]}
+                reduce={reduce} delay={i * 0.05} leader={total > 1 && rows.indexOf(r) === 0} />
             </div>
           ))}
         </div>
+
+        {/* ── What the crew put down TOGETHER. The one line in this card that is
+             not a competition — it is why the crew is worth being in. ── */}
+        {crewTss > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 14, background: T.surface2, minWidth: 0 }}>
+            <RouteIcon size={13} color={T.mid} style={{ flex: 'none' }} />
+            <span style={{ ...ellipsis, flex: 1, fontSize: 11, fontWeight: 600, color: T.mid }}>
+              Zusammen diese Woche: {crewKm != null ? `${num(Math.round(crewKm))} km · ` : ''}{num(crewTss)} TSS
+              {crewRides > 0 ? ` · ${crewRides} von ${total} am Start` : ''}
+            </span>
+          </div>
+        )}
 
         {/* ── Your own bar: the denominator behind your points ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
