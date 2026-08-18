@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowLeft, Check, Loader2, X } from 'lucide-react'
 import { T, FONT, Kicker } from './w3tokens'
@@ -7,7 +7,7 @@ import './w3.css'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import { W3Coin, W3Price } from './W3Coin'
-import { artFit, bikesByTier, partsBySlot, isEquipped, type ShopItem } from './w3shop'
+import { artFit, bikesByTier, partsBySlot, isEquipped, itemById, type ShopItem } from './w3shop'
 import type { Loadout } from '../../api/shop'
 
 /**
@@ -52,9 +52,10 @@ const nf = new Intl.NumberFormat('de-DE')
 
 /** The state an item is in for THIS rider — one derivation, so a tile, the
  *  sheet and the CTA can never disagree about whether something is affordable. */
-type ItemState = 'equipped' | 'owned' | 'affordable' | 'tooExpensive'
+export type ItemState = 'equipped' | 'owned' | 'affordable' | 'tooExpensive'
 
-function stateOf(item: ShopItem, owned: Set<string>, loadout: Loadout | undefined, balance: number | null): ItemState {
+// eslint-disable-next-line react-refresh/only-export-components -- pure derivation, exported so it can be tested directly
+export function stateOf(item: ShopItem, owned: Set<string>, loadout: Loadout | undefined, balance: number | null): ItemState {
   if (isEquipped(loadout, item)) return 'equipped'
   if (owned.has(item.id)) return 'owned'
   if (balance != null && balance >= item.price) return 'affordable'
@@ -130,8 +131,25 @@ function ItemSheet({ item, state, balance, busy, onBuy, onEquip, onClose }: {
   const after = balance != null ? balance - item.price : null
   const short = balance != null ? item.price - balance : null
 
+  // Escape closes, and the list behind stops scrolling while the sheet is up.
+  // Without the scroll lock a drag on the sheet scrolls the catalogue
+  // underneath it, so dismissing lands the rider somewhere they never were.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [onClose])
+
   return (
     <motion.div
+      role="dialog"
+      aria-modal="true"
+      aria-label={item.name}
       initial={reduce ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={reduce ? undefined : { opacity: 0 }}
@@ -247,13 +265,15 @@ export default function W3ShopView({
   const [tab, setTab] = useState<ShopTab>('bikes')
   const [openId, setOpenId] = useState<string | null>(null)
 
-  const groups = tab === 'bikes'
-    ? bikesByTier().map((g) => ({ key: g.tier, label: g.label, note: g.note, items: g.items }))
-    : partsBySlot().map((g) => ({ key: g.slot, label: g.label, note: g.note, items: g.items }))
+  // The catalogue is static, so these are computed once per tab rather than on
+  // every render — the sheet's busy/error transitions were re-walking all 50
+  // entries and rebuilding both group arrays each time.
+  const groups = useMemo(() => (tab === 'bikes'
+    ? bikesByTier().map((g) => ({ key: g.tier as string, label: g.label, note: g.note, items: g.items }))
+    : partsBySlot().map((g) => ({ key: g.slot as string, label: g.label, note: g.note, items: g.items }))
+  ), [tab])
 
-  const open = openId
-    ? [...bikesByTier(), ...partsBySlot()].flatMap((g) => g.items).find((i) => i.id === openId) ?? null
-    : null
+  const open = useMemo(() => (openId ? itemById(openId) : null), [openId])
 
   return (
     <div className="w3-frame" style={{ fontFamily: FONT, background: T.bg, color: T.ink, minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>

@@ -30,9 +30,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.rewards import REASON_PART_PURCHASE, Wallet
+from app.models.rewards import REASON_ONBOARDING_BIKE, REASON_PART_PURCHASE, Wallet
 from app.models.shop import SOURCE_GRANT, SOURCE_PURCHASE, GarageItem, GarageLoadout
 from app.services import w3catalog
+from app.services import rewards
 from app.services.rewards import _credit
 from app.services.w3catalog import CATALOG, FREE_ITEM_IDS, STARTER_BIKE_ID, STOCK_PARTS
 
@@ -166,6 +167,19 @@ async def ensure_starter(db: AsyncSession, user_id: int) -> bool:
         await db.rollback()
         logger.info("starter grant raced for user %s; the other request won", user_id)
         return False
+
+    # ── The onboarding bike grant, paid here now ──────────────────────────────
+    # It used to be claimable only by photographing your bike in the studio
+    # (`POST /rewards/onboarding/bike`, gated on a `garage_assets` row). The
+    # studio is no longer a tab, so that 150 RC became unreachable and new
+    # riders could only ever collect 250 of the 400 RC head start that the spec
+    # calls EQUAL — while everyone who onboarded earlier kept their 400.
+    #
+    # Owning a bike is what the grant was always paying for, and now every rider
+    # owns one the moment they look at the garage. `grant_onboarding` is
+    # idempotent per reason, so a legacy rider who already claimed it in the
+    # studio is not paid twice.
+    await rewards.grant_onboarding(db, user_id, REASON_ONBOARDING_BIKE)
     return True
 
 

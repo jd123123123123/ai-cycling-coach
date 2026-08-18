@@ -72,7 +72,9 @@ const W3SessionPreview = lazyWithRetry(() => import('./editorial/w3/W3SessionPre
 const W3RidesPage = lazyWithRetry(() => import('./editorial/w3/W3RidesPage'))
 const W3RidesPreview = lazyWithRetry(() => import('./editorial/w3/W3RidesPreview'))
 const W3GaragePage = lazyWithRetry(() => import('./editorial/w3/W3GaragePage'))
+const W3GaragePreview = lazyWithRetry(() => import('./editorial/w3/W3GaragePreview'))
 const W3ShopPage = lazyWithRetry(() => import('./editorial/w3/W3ShopPage'))
+const W3ShopPreview = lazyWithRetry(() => import('./editorial/w3/W3ShopPreview'))
 const W3BikeStudioPage = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPage'))
 const W3BikeStudioPreview = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPreview'))
 const W3RideDetailPage = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPage'))
@@ -398,7 +400,9 @@ function AppRoutes() {
               bike-studio photo upload stays reachable by URL but is no longer a
               tab — see W3GarageView's header for why the ladder replaced it. */}
           <Route path="/e/w3-garage" element={<ProtectedRoute checkOnboarding><W3GaragePage /></ProtectedRoute>} />
+          <Route path="/e/w3-garage-preview" element={<W3GaragePreview />} />
           <Route path="/e/w3-shop" element={<ProtectedRoute checkOnboarding><W3ShopPage /></ProtectedRoute>} />
+          <Route path="/e/w3-shop-preview" element={<W3ShopPreview />} />
           <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />
           <Route path="/e/w3-bike-studio-preview" element={<W3BikeStudioPreview />} />
           <Route path="/e/w3-ride/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />

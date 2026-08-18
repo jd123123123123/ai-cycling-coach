@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import W3GarageView from './W3GarageView'
 import W3Loading from './W3Loading'
+import W3LoadError from './W3LoadError'
 import { useEquipItem, useGarageCollection } from '../../hooks/useShop'
 import type { ShopItem } from './w3shop'
 
@@ -22,12 +23,23 @@ import type { ShopItem } from './w3shop'
  */
 export default function W3GaragePage() {
   const navigate = useNavigate()
-  const { data, isLoading } = useGarageCollection()
+  const { data, isLoading, isError, refetch, isFetching } = useGarageCollection()
   const equip = useEquipItem()
 
   const owned = useMemo(() => new Set(data?.owned ?? []), [data?.owned])
 
   if (isLoading && !data) return <W3Loading label="Lade deine Garage…" />
+  // A failed load must never render as an empty garage — see W3LoadError.
+  if (isError && !data) {
+    return (
+      <W3LoadError
+        title="Deine Garage lädt nicht"
+        detail="Wir konnten nicht abrufen, was dir gehört. Deine Räder sind sicher — das ist nur die Verbindung."
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+      />
+    )
+  }
 
   return (
     <W3GarageView

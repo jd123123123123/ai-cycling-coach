@@ -36,9 +36,10 @@ from app.dependencies import (
     get_db_for_user,
 )
 from app.main import app
-from app.models.rewards import REASON_PART_PURCHASE, PointsLedger, Wallet
+from app.models.rewards import REASON_ONBOARDING_BIKE, REASON_PART_PURCHASE, PointsLedger, Wallet
 from app.models.shop import GarageItem, GarageLoadout
 from app.services import shop, w3catalog
+from app.services.rewards import ONBOARDING_GRANT_RC
 
 USER = 7
 BACKEND = Path(__file__).resolve().parents[1]
@@ -56,6 +57,11 @@ class _Result:
 
     def all(self):
         return list(self._values)
+
+    def first(self):
+        """`rewards.grant_onboarding` asks `.first()` on its idempotency read —
+        None means "never credited", anything else means "already paid"."""
+        return self._values[0] if self._values else None
 
 
 class FakeDB:
@@ -159,6 +165,18 @@ class FakeDB:
         if entity is GarageItem:
             uid = _int_param(stmt)
             return _Result(i.item_id for i in self.items if i.user_id == uid)
+        if entity is PointsLedger:
+            # `ensure_starter` pays the onboarding bike grant, and
+            # `rewards.grant_onboarding` first asks whether this reason has ever
+            # been credited — that idempotency read is what lands here.
+            uid = _int_param(stmt)
+            reason = next(
+                (v for v in stmt.compile().params.values() if isinstance(v, str)), None
+            )
+            return _Result(
+                row.id for row in self.ledger
+                if row.user_id == uid and (reason is None or row.reason == reason)
+            )
         raise AssertionError(f"FakeDB cannot execute {stmt}")  # pragma: no cover
 
     # -- assertions helpers ------------------------------------------------- #
@@ -289,8 +307,29 @@ class TestEnsureStarter:
     async def test_the_grant_never_costs_ridecoin(self):
         db = FakeDB(balance=500)
         await shop.ensure_starter(db, USER)
-        assert db.ledger == []
-        assert db.balance == 500
+        # Nothing is charged for a free item...
+        assert [row for row in db.ledger if row.amount < 0] == []
+        # ...and the only credit is the one-time onboarding head start.
+        assert db.balance == 500 + BIKE_GRANT
+
+    async def test_pays_the_onboarding_head_start_exactly_once(self):
+        """The 150 RC bike grant moved here from the retired photo studio.
+
+        It used to be gated on a `garage_assets` row that only the studio could
+        create, so once the studio stopped being a tab the grant became
+        unclaimable and new riders could collect just 250 of the 400 RC head
+        start the spec calls EQUAL. Paying it here restores that — but it must
+        stay a ONE-time grant however many times the garage is read.
+        """
+        db = FakeDB()
+        await shop.ensure_starter(db, USER)
+        await shop.ensure_starter(db, USER)
+        await shop.get_garage(db, USER)
+
+        grants = [r for r in db.ledger if r.reason == REASON_ONBOARDING_BIKE]
+        assert len(grants) == 1
+        assert grants[0].amount == BIKE_GRANT
+        assert db.balance == BIKE_GRANT
 
     async def test_a_raced_first_load_leaves_the_rider_whole(self):
         # Two first requests at once: ours loses the insert. The other one
@@ -318,7 +357,7 @@ class TestPurchase:
         assert row.amount == -FIXIE_PRICE           # signed: a purchase is negative
         assert row.reason == REASON_PART_PURCHASE
         assert row.context == {"item_id": FIXIE, "kind": "bike", "name": "Der Fixie"}
-        assert db.balance == 1000 - FIXIE_PRICE
+        assert db.balance == 1000 + BIKE_GRANT - FIXIE_PRICE
 
         bought = [i for i in db.items if i.item_id == FIXIE]
         assert len(bought) == 1
@@ -327,7 +366,7 @@ class TestPurchase:
 
         assert out["item_id"] == FIXIE
         assert out["price"] == FIXIE_PRICE
-        assert out["balance"] == 1000 - FIXIE_PRICE
+        assert out["balance"] == 1000 + BIKE_GRANT - FIXIE_PRICE
         assert FIXIE in out["owned"]
         assert out["loadout"]["bike"] == w3catalog.STARTER_BIKE_ID  # buying is not wearing
         assert db.commits == 1  # item + ledger settled together
@@ -372,18 +411,21 @@ class TestPurchase:
         assert db.commits == 0
 
     async def test_too_little_balance_moves_nothing(self):
-        db = FakeDB(balance=FIXIE_PRICE - 1)
+        # Seeded below the head start, so the rider is still exactly 1 RC short
+        # AFTER `ensure_starter` has paid it — otherwise the grant would make
+        # this purchase affordable and the test would prove nothing.
+        db = FakeDB(balance=FIXIE_PRICE - 1 - BIKE_GRANT)
         with pytest.raises(shop.InsufficientBalanceError) as e:
             await shop.purchase(db, USER, FIXIE)
 
         assert e.value.price == FIXIE_PRICE
         assert e.value.balance == FIXIE_PRICE - 1
-        assert db.ledger == []
+        assert db.purchases == []          # the head start is a credit, not a debit
         assert db.balance == FIXIE_PRICE - 1
         assert not [i for i in db.items if i.item_id == FIXIE]
 
     async def test_exactly_enough_is_enough(self):
-        db = FakeDB(balance=FIXIE_PRICE)
+        db = FakeDB(balance=FIXIE_PRICE - BIKE_GRANT)
         await shop.purchase(db, USER, FIXIE)
         assert db.balance == 0
 
@@ -398,7 +440,7 @@ class TestPurchase:
         db = FakeDB(balance=1000)
         with pytest.raises(shop.AlreadyOwnedError):
             await shop.purchase(db, USER, w3catalog.STARTER_BIKE_ID)
-        assert db.ledger == []
+        assert db.purchases == []
 
 
 # --------------------------------------------------------------------------- #
@@ -442,7 +484,7 @@ class TestGetGarage:
         db = FakeDB(balance=250)
         garage = await shop.get_garage(db, USER)
 
-        assert garage["balance"] == 250
+        assert garage["balance"] == 250 + BIKE_GRANT
         assert set(garage["owned"]) == set(w3catalog.FREE_ITEM_IDS)
         assert garage["loadout"]["bike"] == w3catalog.STARTER_BIKE_ID
         assert set(garage["loadout"]) == {"bike", "frame", "wheels", "bars", "saddle"}
@@ -452,12 +494,17 @@ class TestGetGarage:
         await shop.purchase(db, USER, FIXIE)
         garage = await shop.get_garage(db, USER)
         assert FIXIE in garage["owned"]
-        assert garage["balance"] == 1000 - FIXIE_PRICE
+        assert garage["balance"] == 1000 + BIKE_GRANT - FIXIE_PRICE
 
 
 # --------------------------------------------------------------------------- #
 # 6. The HTTP contract the frontend is built against.
 # --------------------------------------------------------------------------- #
+# The onboarding bike grant that `ensure_starter` now pays on a rider's first
+# look at the garage (it used to be claimable only in the retired photo studio).
+# Imported, not typed as 150, so the tests move when the constant moves.
+BIKE_GRANT = ONBOARDING_GRANT_RC[REASON_ONBOARDING_BIKE]
+
 CALLER = SimpleNamespace(id=USER, email="jannis@evori.ai", display_name=None, is_active=True)
 # Enough to afford the 1200 RC deep-section wheels the equip tests buy, and
 # nowhere near the 15 000 RC prototype the 402 test asks for.
@@ -482,7 +529,7 @@ class TestShopApi:
         assert r.status_code == 200
         body = r.json()
         assert set(body) == {"balance", "owned", "loadout"}
-        assert body["balance"] == CLIENT_BALANCE
+        assert body["balance"] == CLIENT_BALANCE + BIKE_GRANT
         assert body["loadout"]["bike"] == w3catalog.STARTER_BIKE_ID
         assert w3catalog.STARTER_BIKE_ID in body["owned"]
 
@@ -494,7 +541,7 @@ class TestShopApi:
         assert set(body) == {"item_id", "price", "balance", "owned", "loadout"}
         assert body["item_id"] == FIXIE
         assert body["price"] == FIXIE_PRICE
-        assert body["balance"] == CLIENT_BALANCE - FIXIE_PRICE
+        assert body["balance"] == CLIENT_BALANCE + BIKE_GRANT - FIXIE_PRICE
         assert len(db.purchases) == 1
 
     def test_unknown_item_is_404(self, client_db):
@@ -511,7 +558,7 @@ class TestShopApi:
         client, db = client_db
         r = client.post("/shop/buy/pro-prototype")
         assert r.status_code == 402
-        assert db.balance == CLIENT_BALANCE
+        assert db.balance == CLIENT_BALANCE + BIKE_GRANT   # refused: nothing debited
 
     def test_equip_returns_the_loadout(self, client_db):
         client, _ = client_db

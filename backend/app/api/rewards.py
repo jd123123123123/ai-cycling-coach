@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.garage import GarageAsset
+from app.models.shop import GarageItem
 from app.models.rewards import (
     REASON_ONBOARDING_BIKE,
     REASON_ONBOARDING_DEVICE,
@@ -65,16 +66,31 @@ async def get_ride_breakdown(
 
 
 async def _has_garage_bike(db: AsyncSession, user_id: int) -> bool:
-    """Does this rider actually have a digitalised bike? The bike grant pays for
-    a bike sitting in the garage (``garage_assets`` kind='bike'), never for an
-    attempt: a render that the image model couldn't complete saves nothing, and
-    must therefore pay nothing."""
-    row = await db.execute(
+    """Does this rider actually have a bike? Either kind counts.
+
+    Originally this only asked `garage_assets` — a bike the rider had
+    photographed and had rendered in the studio. The studio is no longer a tab
+    (the bike ladder replaced it), so that question now answers "no" for every
+    new rider forever, and the 150 RC would be unclaimable.
+
+    Owning a catalogue bike counts too, which every rider does from their first
+    look at the garage. In practice `shop.ensure_starter` already pays this
+    grant directly; this widened check exists so the endpoint cannot answer
+    "no_bike_yet" to someone who is visibly sitting on a bike.
+    """
+    asset = await db.execute(
         select(GarageAsset.id).where(
             GarageAsset.user_id == user_id, GarageAsset.kind == "bike",
         )
     )
-    return row.first() is not None
+    if asset.first() is not None:
+        return True
+    owned = await db.execute(
+        select(GarageItem.id).where(
+            GarageItem.user_id == user_id, GarageItem.kind == "bike",
+        )
+    )
+    return owned.first() is not None
 
 
 @router.post(

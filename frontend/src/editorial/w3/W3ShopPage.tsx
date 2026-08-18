@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import W3ShopView from './W3ShopView'
 import W3Loading from './W3Loading'
+import W3LoadError from './W3LoadError'
 import { useBuyItem, useEquipItem, useGarageCollection } from '../../hooks/useShop'
 import type { ShopItem } from './w3shop'
 
@@ -20,7 +21,8 @@ import type { ShopItem } from './w3shop'
  */
 const nf = new Intl.NumberFormat('de-DE')
 
-function purchaseError(err: unknown, item: ShopItem | null, balance: number | null): string {
+// eslint-disable-next-line react-refresh/only-export-components -- pure mapping, exported so the sentences can be tested
+export function purchaseError(err: unknown, item: ShopItem | null, balance: number | null): string {
   const status = err instanceof AxiosError ? err.response?.status : undefined
   if (status === 402) {
     const short = item && balance != null ? item.price - balance : null
@@ -35,7 +37,7 @@ function purchaseError(err: unknown, item: ShopItem | null, balance: number | nu
 
 export default function W3ShopPage() {
   const navigate = useNavigate()
-  const { data, isLoading } = useGarageCollection()
+  const { data, isLoading, isError, refetch, isFetching } = useGarageCollection()
   const buy = useBuyItem()
   const equip = useEquipItem()
   const [error, setError] = useState<string | null>(null)
@@ -46,6 +48,18 @@ export default function W3ShopPage() {
     : null
 
   if (isLoading && !data) return <W3Loading label="Lade den Shop…" />
+  // Without this the shop would render every item as unaffordable (balance
+  // null) and unowned — an invitation to buy things you may already own.
+  if (isError && !data) {
+    return (
+      <W3LoadError
+        title="Der Shop lädt nicht"
+        detail="Wir konnten dein Guthaben nicht abrufen. Ohne das zeigen wir dir lieber keine Preise."
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+      />
+    )
+  }
 
   return (
     <W3ShopView
