@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { Flame, CalendarRange, Sparkles, Star } from 'lucide-react'
 import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
-import { T, FONT, grow, Kicker, DASH } from './w3tokens'
+import { T, FONT, grow, Kicker, DASH, Reveal } from './w3tokens'
 import W3BikeHero, { type W3BikeHeroScene } from './W3BikeHero'
 import W3RiderAvatar from './W3RiderAvatar'
 import W3StatusBar from './W3StatusBar'
@@ -350,22 +350,33 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
              full /e/w3-week-review page, and renders nothing when last week
              held no story. It sits here on purpose: the bridge from what you
              did to where you now stand. ── */}
-        <W3WeekRecapCard />
+        <Reveal><W3WeekRecapCard /></Reveal>
+
+        {/* ── The lower half arrives as you reach it ─────────────────────────
+             These four sections are the long tail of the scroll, and a long
+             tail that is entirely static reads as a list rather than a page.
+             Each lifts and fades ONCE as its top edge arrives (see `Reveal`).
+
+             Wrapped HERE rather than inside each component on purpose: each of
+             these owns its own `band(26)` root, and the reveal is a property of
+             how Today composes them, not of what they are — W3TodayProgress
+             renders the same on its own preview route without inheriting a
+             scroll behaviour it never asked for. ── */}
 
         {/* ── Dein aktueller Status — the real 90-day CTL/ATL curve on a proper
              axis, what the number MEANS (peak / "so fit wie zuletzt am …" /
              the 4-week move), the form band, and the server's own forward
              projection. Self-fetching (usePMC + /weeks + /coach/trajectory),
              like W3WhyToday and W3TodayProgress. ── */}
-        <W3TodayStatus />
+        <Reveal><W3TodayStatus /></Reveal>
 
         {/* ── Dein Rang — REAL crew standings (GET /crews/me/standings). The old
              fixture leaderboard and its invented "um die Welt" challenge are
              gone; no crew now renders an honest empty state. ── */}
-        <W3TodayRank />
+        <Reveal><W3TodayRank /></Reveal>
 
         {/* ── Your progress: real fitness goals (FTP/VO2max/20-min) + challenges ── */}
-        <W3TodayProgress />
+        <Reveal><W3TodayProgress /></Reveal>
 
         <W3CoachFab />
         <W3TabBar />

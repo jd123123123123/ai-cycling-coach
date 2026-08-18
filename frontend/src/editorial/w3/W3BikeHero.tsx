@@ -177,11 +177,14 @@ function IdentityCard({ identity, bikeName, hasBike }: {
             <UserRound size={24} strokeWidth={1.6} color={T.acid} />
           </button>
         )}
+        {/* THE HANDLE IS NOT REPEATED HERE. The status bar states who you are
+            ~250px above, with an avatar of its own; printing "@handle" again
+            under a second portrait was the same fact twice inside one viewport.
+            This card's subject is the machine and what it has earned, so the
+            bike takes the primary line and the kicker says which card this is. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: T.ink, letterSpacing: -0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {identity.handle}
-          </span>
-          <span style={{ fontSize: 11.5, fontWeight: 500, color: hasBike ? T.mid : T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <Kicker>Dein Rad</Kicker>
+          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3, color: hasBike ? T.ink : T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {hasBike ? bikeName : 'Noch kein Bike in der Garage'}
           </span>
         </div>
