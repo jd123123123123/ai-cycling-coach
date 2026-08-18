@@ -539,7 +539,10 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
 
       {isToday && (
         <>
-          <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} />
+          {/* Guarded like the future-day branch below: with no prescribed
+              session there are no bars to draw, and an empty chart frame is
+              better than the invented profile this used to fall back to. */}
+          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} />}
           <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{workDesc}</span>
         </>
       )}

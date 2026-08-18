@@ -35,13 +35,14 @@ export type { W3DayFull, W3Weather, W3Block, OnAdapt, AdaptResult } from './W3Se
  * the top is just `W3StatusBar` breathing room.
  *
  * This file is a PURE function of `vm`; `W3TodayPage` builds the vm from real
- * hooks (`useTodayModel`, `useStreak`, `useWallet`). Fields that map to real
- * coaching data resolve to a value or an honest `null` (rendered "—"); fields
- * that belong to the not-yet-built reward economy (per-ride earn, the Garage
- * upgrade + second currency, the crew challenge) are DESIGN FIXTURES
- * reproducing the pen, each marked `fixture:` in the vm. The earn rate is NOT
- * one of them any more — it is derived from the rider's real streak through
- * the single tier table in `api/rewards.ts`, which mirrors rewards.py.
+ * hooks (`useTodayModel`, `useStreak`, `useWallet`). Every field resolves to a
+ * real value or an honest `null` (rendered "—" or omitted) — the reward-economy
+ * fixtures this comment used to list are all gone; see the vm's own header.
+ *
+ * The three lower sections are NOT part of `vm`: `W3TodayStatus`,
+ * `W3TodayRank`, `W3TodayProgress` and `W3WeekRecapCard` fetch their own data,
+ * because each of them needs sources (PMC, crew standings, season trends, the
+ * weekly recap) that nothing else on this screen reads.
  */
 
 // ── view model ──

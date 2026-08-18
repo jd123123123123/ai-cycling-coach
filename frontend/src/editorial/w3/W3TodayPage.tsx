@@ -52,13 +52,27 @@ function baselineOf(series: number[] | null | undefined): { mean: number; n: num
  * The bike hero is real too: `useGarage()` returns the collectible the rider
  * actually rendered in the studio, or null, and the View shows the offer to
  * make one rather than a stock stand-in.
- * What remains of the reward-economy layer (Power/Cycle balances, the Garage
- * upgrade, the crew challenge) has no backend yet, so those fields are DESIGN
- * FIXTURES reproducing the pen; each is marked `fixture:` below. The EARN RATE
- * left that list on 2026-08-13: it is now derived from the rider's real streak
- * through `api/rewards.ts`'s single tier table, which mirrors the server's
- * `rewards.streak_multiplier()` (hard-capped at ×1.5 — the old hardcoded
- * "1.75×" was a rate the backend could never actually pay out).
+ * THERE ARE NO FIXTURES LEFT IN THIS VM. That sentence used to read "what
+ * remains of the reward-economy layer … are DESIGN FIXTURES reproducing the
+ * pen, each marked `fixture:` below"; the list emptied out over 2026-08-13/18:
+ *
+ *  · earn rate      — the rider's real streak through `api/rewards.ts`'s single
+ *                     tier table, mirroring `rewards.streak_multiplier()`
+ *                     (hard-capped at ×1.5; the old hardcoded "1.75×" was a
+ *                     rate the backend could never actually pay out).
+ *  · per-ride earn  — `forecastRideRc()`, the port of `rewards.base_ride_rc()`
+ *                     × the real multiplier, labelled as the forecast it is and
+ *                     null on a rest day.
+ *  · tier line      — the real mesocycle block from `/weeks/current`, null
+ *                     without a plan (was "Silber · Woche 6 von 16").
+ *  · crew standings — moved out of the vm entirely into `W3TodayRank`, which
+ *                     reads `/crews/me/standings` (was three invented riders
+ *                     under an invented "um die Welt" challenge).
+ *  · power profile  — real interval blocks, or an empty array. No session no
+ *                     longer synthesises an 11-bar workout nobody prescribed.
+ *
+ * Keep it that way: a number in this file either has an endpoint behind it or
+ * is `null`.
  */
 
 /** The line under the rider's handle: which block they're in and how far into
@@ -503,15 +517,22 @@ export default function W3TodayPage() {
       { w: 0.4, work: false, label: 'Ausfahren' },
     ]
     // Today's power profile: the REAL interval blocks when the plan has them;
-    // else the model's blocks; else the synthesized endurance envelope (only
-    // when a day genuinely has no intervals); else the null-safe fixture shape.
+    // else the model's blocks; else the synthesized endurance envelope — which
+    // is only drawn when a session genuinely EXISTS and simply carries no
+    // intervals (a steady ride materialises to 1–2 blocks and would otherwise
+    // render as one flat beam).
+    //
+    // With no session at all: NO BARS. This used to fall through to an invented
+    // 11-bar interval shape labelled "Block 1…Block 11" — a workout the rider
+    // was never prescribed, drawn at full fidelity on the day they had nothing.
+    // An empty array is the honest answer, and the card omits the chart.
     const blocks: W3Block[] = todayPlan && todayPlan.intervals.length > 0
       ? blocksFromIntervals(todayPlan.intervals, ftp)
       : realBlocks.length > 2
         ? realBlocks
         : session
           ? enduranceProfile
-          : [0.28, 0.4, 0.5, 0.9, 0.22, 0.92, 0.22, 0.94, 0.22, 0.95, 0.3].map((w, i) => ({ w, work: i % 2 === 1 && i > 2 && i < 10, label: `Block ${i + 1}` }))
+          : []
 
     // NOTE: CTL/ATL/TSB no longer travel through this vm either. "Dein
     // aktueller Status" is `W3TodayStatus`, which reads the full 90-day
