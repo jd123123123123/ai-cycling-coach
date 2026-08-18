@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { buyItem, claimFirstBike, equipItem, fetchGarage, renderBuild, type Garage } from '../api/shop'
 
@@ -36,6 +36,14 @@ export function useEnsureBuildRender(enabled = true) {
   const status = data?.render_status
   const key = data?.build_key
 
+  // ASKED ONCE PER BUILD. A `failed` render is retried — the usual cause is a
+  // briefly missing image model — but retrying it on sight would loop: the ask
+  // clears the failure, the render fails again, the poll reports `failed`, and
+  // the effect fires again forever, paying for an image-model call each time.
+  // The ref caps it at one attempt per build per mount, so a genuinely broken
+  // render costs one call and then quietly falls back to the plain bike.
+  const asked = useRef<string | null>(null)
+
   const ask = useMutation({
     mutationFn: renderBuild,
     onSuccess: (res) => {
@@ -48,6 +56,8 @@ export function useEnsureBuildRender(enabled = true) {
   useEffect(() => {
     if (!enabled || !key) return
     if (status !== 'none' && status !== 'failed') return
+    if (asked.current === key) return
+    asked.current = key
     mutate()
     // `key` is in the deps so a rider who changes their build asks again for
     // the NEW one; without it a second swap would never be photographed.
