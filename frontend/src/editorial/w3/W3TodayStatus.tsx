@@ -191,7 +191,14 @@ export default function W3TodayStatus() {
   let peakIdx = 0
   for (let i = 1; i < n; i++) if (pts[i].ctl > pts[peakIdx].ctl) peakIdx = i
   const peak = pts[peakIdx].ctl
-  const atPeak = last.ctl >= peak - 0.5
+  // A "Bestwert" has to be earned against a real history. A rider four weeks
+  // into their first block is at their 90-day high every single morning by
+  // construction — the badge would fire forever and mean nothing. Below a
+  // month of actual training the meaning line falls through to the 4-week
+  // move instead, which is both truer and more useful to them.
+  const MIN_HISTORY_DAYS = 28
+  const trainedDays = pts.reduce((s, p) => s + (p.ctl > 0 ? 1 : 0), 0)
+  const atPeak = last.ctl >= peak - 0.5 && trainedDays >= MIN_HISTORY_DAYS
 
   /** CTL `d` days ago (nearest stored day), or null when the window is shorter. */
   const ctlDaysAgo = (d: number): number | null => {
@@ -226,7 +233,9 @@ export default function W3TodayStatus() {
             : `${signed(Math.round(d28))} CTL in vier Wochen. Weniger Last als im Vormonat.`
           : `Stabil auf CTL ${ctlNow} — du hältst dein Niveau.`
 
-  const cur = hov ?? n - 1
+  // Clamped: a scrub index survives in state across a PMC refetch, and a
+  // shorter series would otherwise index past the end and crash the card.
+  const cur = Math.max(0, Math.min(n - 1, hov ?? n - 1))
   const cp = pts[cur]
 
   // ── The projection: where this leads ──────────────────────────────────────

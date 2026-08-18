@@ -76,6 +76,18 @@ describe('Dein aktueller Status', () => {
     expect(screen.getByText(/Höchster Fitnessstand der letzten 40 Tage/)).toBeTruthy()
   })
 
+  it('withholds the BESTWERT badge from a rider with no real history behind it', () => {
+    // 90 stored days, but only 20 of them carry any training: this rider is at
+    // their "90-day high" every morning by construction, so the badge would be
+    // free dopamine. The 4-week move is shown instead.
+    const ctls = [...Array.from({ length: 70 }, () => 0), ...Array.from({ length: 20 }, (_, i) => 1 + i)]
+    pmcMock.mockReturnValue({ data: { entries: pmcOf(ctls) } })
+    renderIn(<W3TodayStatus />)
+    expect(screen.queryByText('BESTWERT')).toBeNull()
+    expect(screen.queryByText(/Höchster Fitnessstand/)).toBeNull()
+    expect(screen.getByText(/CTL in vier Wochen/)).toBeTruthy()
+  })
+
   it('does NOT call it a peak when the rider is below their own best', () => {
     // Rose to 70, then fell away — today is not the best day in the window.
     const ctls = [...Array.from({ length: 30 }, (_, i) => 40 + i), ...Array.from({ length: 10 }, (_, i) => 69 - i * 3)]
