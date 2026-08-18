@@ -52,7 +52,12 @@ export function GhostBike({ opacity = 0.3 }: { opacity?: number }) {
   )
 }
 
-const HERO_H = 320
+// The art is `contain`, so at 390px wide it resolves to ~246px tall and a 320px
+// box letterboxed it with ~74px of dead ground — which read as a catalogue
+// listing AND pushed the readiness gauge down into the floating action button,
+// so the score's last bars sat under it on load. Measured at 390×844: the meter
+// ended at y=711 against a FAB starting at y=684. Sized to the art instead.
+const HERO_H = 248
 
 export interface W3BikeHeroScene {
   /** The composed rider-on-bike image (data URL), or null when none exists. */

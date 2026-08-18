@@ -56,6 +56,13 @@ export interface W3ScoreCardProps {
   ariaLabel?: string
 }
 
+/* NO COUNT-UP ON THE SCORE. Tried and removed deliberately: animating the
+ * numeral from 0 means the card renders a readiness of 0 for ~600ms, and in
+ * this domain 0 is not a neutral tween value — it is an alarming reading. The
+ * file's own rule is that a number the data never made must not appear, so the
+ * motion in this card belongs to the meter, which fills from empty honestly
+ * because an empty meter claims nothing. */
+
 /** The charge-meter — a row of bars filled in proportion to the real score.
  *  An honest gauge: no score → no bars, not a half-full default. */
 export function W3ChargeMeter({ fill, accent = T.acid }: { fill: number | null; accent?: string }) {
@@ -130,6 +137,13 @@ export default function W3ScoreCard({
           </div>
         )}
       </div>
+
+      {/* THE METER BELONGS TO THE NUMBER, NOT TO THE ASIDE. Without this rule
+          the bars sit directly under the aside's caption ("17 Tage Streak · noch
+          13 bis 1,5×") and the eye binds them to it — 16 of 18 lit reads as a
+          streak tracker instead of what it is, 88 out of 100 readiness. The
+          hairline closes the header block so the gauge reads as the score's. */}
+      <div style={{ height: 1, background: T.stroke, marginTop: -2 }} />
 
       <W3ChargeMeter fill={fill} accent={accent} />
 
