@@ -16,12 +16,13 @@ import { parseISO, fmtDEShort, DE_WD2 } from './w3plan'
 import { useTodayWeather, type TodayWeather } from '../../hooks/useTodayWeather'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { isPresent } from '../data/value'
-import { formatMultiplier, nextStreakTier, streakMultiplier } from '../../api/rewards'
+import { forecastRideRc, formatMultiplier, nextStreakTier, streakMultiplier } from '../../api/rewards'
 import { DASH, T } from './w3tokens'
 import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
 import { hasSeenW3Onboarding } from './w3Onboarding'
 import { poseForDay } from './w3Pose'
+import { BLOCK_DE } from './W3WhyToday'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type W3Block, type OnAdapt } from './W3TodayView'
 import type { W3Weather, W3WeatherHour } from './W3Sections'
 
@@ -59,6 +60,20 @@ function baselineOf(series: number[] | null | undefined): { mean: number; n: num
  * `rewards.streak_multiplier()` (hard-capped at ×1.5 — the old hardcoded
  * "1.75×" was a rate the backend could never actually pay out).
  */
+
+/** The line under the rider's handle: which block they're in and how far into
+ *  it. Real, from `/weeks/current` → `meso_block`. Null without a plan, so the
+ *  header shows the handle alone rather than a stand-in.
+ *
+ *  Reuses `BLOCK_DE` and the same "Woche n von 4" phrasing W3WhyToday already
+ *  uses — one vocabulary for the block, not two that can drift apart. */
+function blockLine(meso: { block_position: string; block_index_in_meso: number } | null): string | null {
+  const block = meso ? BLOCK_DE[meso.block_position] : null
+  if (!block) return null
+  const weekNo = meso != null && meso.block_index_in_meso >= 0 ? meso.block_index_in_meso + 1 : null
+  if (weekNo == null) return block.name
+  return `${block.name} · ${weekNo <= 4 ? `Woche ${weekNo} von 4` : `Woche ${weekNo}`}`
+}
 
 /** Build a spark from a REAL series, or null when there isn't one (the card
  *  then draws an empty track — see `Spark` in W3TodayView).
@@ -616,7 +631,12 @@ export default function W3TodayPage() {
 
     return {
       handle: user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider'),
-      tierLine: 'Silber · Woche 6 von 16', // fixture: tier/season not modelled yet
+      // Was 'Silber · Woche 6 von 16' — a tier and a season the app does not
+      // model, invented under the handle of every rider. Replaced with the one
+      // thing that IS true about where they stand: their real block and how far
+      // into it they are (`/weeks/current` → meso_block). Null when there is no
+      // plan, and the View then renders nothing rather than a stand-in.
+      tierLine: blockLine(meso),
       // REAL: the rider's own digitalised bike. The name comes from the vision
       // pass reading their photo; "Your bike" is only a label fallback for a
       // render the model couldn't name — never a stand-in for a missing bike,
@@ -680,7 +700,21 @@ export default function W3TodayPage() {
       sessionFtpPct: session?.intensityFactor != null ? `${Math.round(session.intensityFactor * 100)}%` : '—',
       sessionBlocks: blocks,
       sessionFtpTag: 'FTP',
-      sessionEarn: 'Diese Fahrt bringt RideCoin nach TSS', // fixture: RideCoin not built
+      // Was a fixture sentence that named no number. RideCoin IS built, and the
+      // earn is computable: base = 1 RC per planned TSS (capped at 150), times
+      // the rider's real streak multiplier — both ported from
+      // `services/rewards.py` in `api/rewards.ts`, so there is one ladder, not
+      // a second hand-written one. Labelled as the forecast it is ("bringt ca."),
+      // because the session has not been ridden yet, and null on a rest day or
+      // an unset session rather than promising RideCoin for nothing.
+      sessionEarn: (() => {
+        const rc = forecastRideRc(session?.tss ?? null, streak?.streak ?? null)
+        if (rc == null) return null
+        const mult = streakMultiplier(streak?.streak ?? 0)
+        return mult > 1
+          ? `Bringt ca. ${rc.toLocaleString('de-DE')} RC · ${formatMultiplier(mult)} Streak`
+          : `Bringt ca. ${rc.toLocaleString('de-DE')} RC`
+      })(),
     }
   }, [
     model, user, streak, adaptive, week, ftp, todayWeather, weekActs,

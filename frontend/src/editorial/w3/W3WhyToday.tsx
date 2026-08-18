@@ -46,7 +46,7 @@ const SEV_COLOR: Record<Severity, string> = {
 const ARROW: Record<AdaptationChange['direction'], string> = { up: '↑', down: '↓', flat: '→' }
 
 /** Issurin block position → what that week is FOR, in plain German. */
-const BLOCK_DE: Record<string, { name: string; means: string }> = {
+export const BLOCK_DE: Record<string, { name: string; means: string }> = {
   accumulation: { name: 'Umfangsblock', means: 'Umfang vor Intensität — hier wird die aerobe Basis breit gemacht' },
   transmutation: { name: 'Intensitätsblock', means: 'die Basis wird in wettkampfspezifische Schärfe umgesetzt' },
   realization: { name: 'Formblock', means: 'Last runter, Schärfe rein — die Form wird scharf gestellt' },

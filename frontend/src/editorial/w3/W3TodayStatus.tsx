@@ -309,7 +309,11 @@ export default function W3TodayStatus() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
             <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet, flex: 'none' }}>Form · TSB</span>
-            <span style={{ ...ellipsis, flex: 1, fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: fb.hue, textAlign: 'right' }}>{fb.label} · {signed(tsbNow)}</span>
+            {/* The band's colour lives in the gauge below, not in this label —
+                otherwise "Produktiver Aufbau" shouts as loudly as the CTL
+                headline and the screen has two competing focal points. Amber
+                is the one exception: a band that asks for attention says so. */}
+            <span style={{ ...ellipsis, flex: 1, fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: fb.hue === T.warn ? T.warn : T.ink, textAlign: 'right' }}>{fb.label} · {signed(tsbNow)}</span>
           </div>
 
           {/* The scale itself: four real bands, a marker at the rider's TSB. */}
@@ -381,6 +385,10 @@ export default function W3TodayStatus() {
   )
 }
 
+/** The section head. Its pill is deliberately NOT acid: the form value it
+ *  carries is stated again — with its band and its arithmetic — inside the
+ *  card, so shouting it here would spend the screen's one loud slot on a
+ *  duplicate. The acid in this section belongs to the CTL headline + curve. */
 function Head({ tag }: { tag: string | null }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -389,8 +397,8 @@ function Head({ tag }: { tag: string | null }) {
         <span style={{ ...ellipsis, fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Erarbeitet, nicht gekauft</span>
       </div>
       {tag && (
-        <div style={{ flex: 'none', padding: '7px 13px', borderRadius: 100, background: T.acidDim }}>
-          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: T.acid }}>{tag}</span>
+        <div style={{ flex: 'none', padding: '7px 13px', borderRadius: 100, background: T.surface2 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: T.mid }}>{tag}</span>
         </div>
       )}
     </div>

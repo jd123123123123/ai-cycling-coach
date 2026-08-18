@@ -59,7 +59,7 @@ export interface W3Signal {
 }
 export interface W3Vm {
   handle: string
-  tierLine: string
+  tierLine: string | null
   avatarUrl: string | null
   avatarInitial: string
   // The rider's digitalised bike (garage). `bikeImage` is null until they've
@@ -117,7 +117,7 @@ export interface W3Vm {
   sessionFtpPct: string
   sessionBlocks: W3Block[]
   sessionFtpTag: string
-  sessionEarn: string // fixture
+  sessionEarn: string | null
 }
 
 // ── primitives ──
@@ -207,7 +207,9 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
             <W3RiderAvatar size={34} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>{vm.handle}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 400, color: T.quiet }}>{vm.tierLine}</span>
+              {/* Null without a plan — the handle stands alone rather than
+                  carrying an invented tier. */}
+              {vm.tierLine && <span style={{ fontSize: 11.5, fontWeight: 400, color: T.quiet }}>{vm.tierLine}</span>}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

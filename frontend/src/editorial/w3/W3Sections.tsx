@@ -264,7 +264,7 @@ function WeatherLine({ w, isToday, dateLabel }: { w: W3Weather; isToday: boolean
 // ────────────────────────────────────────────────────────────────────────
 export interface W3Block { w: number; work: boolean; label: string }
 export interface TodaySession {
-  dur: string | null; blocks: W3Block[]; ftpTag: string; earn: string
+  dur: string | null; blocks: W3Block[]; ftpTag: string; earn: string | null
 }
 
 export function IntervalBars({ blocks, ftpTag, h = 96 }: { blocks: W3Block[]; ftpTag: string; h?: number }) {
@@ -574,10 +574,14 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
 
       {isToday && (
         <>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Zap size={14} color={T.acid} style={{ flex: 'none' }} />
-            <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.earn}</span>
-          </div>
+          {/* Only when the session has a computable earn — a rest day or an
+              unset session promises no RideCoin rather than a vague sentence. */}
+          {session.earn && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Zap size={14} color={T.acid} style={{ flex: 'none' }} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.earn}</span>
+            </div>
+          )}
           <button onClick={() => navigate('/e/w3-session')}
             style={{ height: 52, width: '100%', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 7px 0 20px' }}>
             <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>Training ansehen</span>

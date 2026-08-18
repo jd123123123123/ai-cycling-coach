@@ -11,7 +11,7 @@ const spark = (bars: number[], hi: string) => ({ bars, hi })
 
 const FIXTURE: W3Vm = {
   handle: '@jonathan.ghost',
-  tierLine: 'Silber · Woche 6 von 16',
+  tierLine: 'Umfangsblock · Woche 2 von 4',
   // The preview demos the "rider HAS a bike" hero; the empty state is what a
   // real rider sees until they render one in the studio.
   bikeName: 'Starter Bike',
@@ -106,7 +106,7 @@ const FIXTURE: W3Vm = {
     { w: 0.8, work: true, label: 'Block 4 · 290 W' }, { w: 0.25, work: false, label: 'Ausfahren · 140 W' },
   ],
   sessionFtpTag: 'FTP 292 W',
-  sessionEarn: 'Diese Fahrt bringt 4.200 POWER · 12 CYCLE',
+  sessionEarn: 'Bringt ca. 112 RC · 1,25× Streak',
   // NOTE: "Dein aktueller Status", "Dein Rang" and "Dein Fortschritt" are no
   // longer part of this vm — they are self-fetching sections (W3TodayStatus /
   // W3TodayRank / W3TodayProgress) reading /training-load/pmc, /crews/me and

@@ -120,6 +120,32 @@ export function streakMultiplier(streakDays: number): number {
   return 1.0
 }
 
+/** 1 RC per TSS point — mirrors `rewards.RC_PER_TSS`. */
+export const RC_PER_TSS = 1.0
+/** A ride's earning plateaus here — mirrors `rewards.PER_RIDE_SOFT_CAP`. */
+export const PER_RIDE_SOFT_CAP = 150
+
+/** Base RideCoin a ride of `tss` earns before any multiplier.
+ *  Port of `rewards.base_ride_rc()`. No measured stress → no reward, so a null
+ *  or zero TSS earns nothing rather than a hopeful guess. */
+export function baseRideRc(tss: number | null | undefined): number {
+  if (!tss || tss <= 0) return 0
+  return Math.min(PER_RIDE_SOFT_CAP, Math.round(tss * RC_PER_TSS))
+}
+
+/** What a planned session is on track to pay: its base times the rider's
+ *  current streak multiplier. A FORECAST — the session has not been ridden, so
+ *  callers must label it as such. Null when there is no planned TSS to compute
+ *  from, which is the honest answer for a rest day or an unset session. */
+export function forecastRideRc(
+  plannedTss: number | null | undefined,
+  streakDays: number | null | undefined,
+): number | null {
+  const base = baseRideRc(plannedTss)
+  if (base <= 0) return null
+  return Math.round(base * streakMultiplier(streakDays ?? 0))
+}
+
 /** The next tier up from `streakDays`, or null once the rider is at the cap.
  *  Lets a surface say "3 more days → ×1.4" from the same table, never a second
  *  hand-written ladder. */
