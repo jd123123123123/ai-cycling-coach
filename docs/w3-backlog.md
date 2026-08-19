@@ -240,8 +240,20 @@ staggered fill is genuinely good and is still the only motion that belongs to
 this product specifically. Nothing in the interface is *cycling* — no cadence,
 no chain, no wheel. The reveals I added are correct and invisible, which is what
 reveals should be, but they are not character.
-Second: the isolation baseline sits at **27 raw hex offenders**. A design system
-with 27 colours declared outside it is 27 chances to drift.
+Second: the isolation gate. It sits at **26 files** with raw hex outside the
+token system — but the headline finding is that **this test could never pass.**
+It flagged `w3/w3tokens.tsx`, the W3 palette itself, which must contain hex or
+there is nothing to tokenise against. The rule predates W3 and exempts
+`tokens.css` for exactly that reason; W3's palette was never added. So the
+suite has carried a permanently-red assertion, and "baseline 27" became a
+number people step over rather than a bar anyone could clear.
+
+Exemption extended to the palette source, so the gate is now *achievable* and
+the remaining 26 are real debt. Started paying it down (`W3ChallengesView` no
+longer hard-codes `#0B0B0B` three times where `T.bg` exists), but this is a
+26-file editing job, not a refactor to rush at the end of a session. One caveat
+worth knowing: some remaining values have no token (`#0F0F0F` sits between `bg`
+and `surface`) — those need a palette decision, not a find-and-replace.
 
 ### What none of the three asked for
 More charts. Two of the four I proposed already existed. The scarce resource in

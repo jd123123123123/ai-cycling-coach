@@ -74,6 +74,14 @@ describe('editorial isolation', () => {
       // against tokens.css, not style values written into editorial/ code.
       // That's the same class of exception as tokens.css itself.
       if (f.endsWith(`${path.sep}__tests__${path.sep}tokens.test.ts`)) return false
+      // `w3/w3tokens.tsx` IS the W3 palette — the same role tokens.css plays
+      // for the original editorial surfaces, and exempt for the same reason:
+      // a palette source must contain hex or there is nothing to tokenise
+      // against. This rule predates W3, so its source file was never added to
+      // the exception and the assertion could not reach [] no matter how clean
+      // the components were. A gate that can never be green teaches everyone
+      // to scroll past a red test, which costs more than the rule earns.
+      if (f.endsWith(`${path.sep}w3${path.sep}w3tokens.tsx`)) return false
       const src = stripComments(readFileSync(f, 'utf8'))
       return /#[0-9a-fA-F]{6}\b/.test(src)
     })

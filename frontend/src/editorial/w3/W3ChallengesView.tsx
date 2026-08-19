@@ -163,7 +163,7 @@ export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; o
                 <svg width={120} height={120} viewBox="0 0 120 120" style={{ position: 'absolute', inset: 0 }}>
                   <path d={SEAL} fill={T.acid} />
                 </svg>
-                <Flame size={40} color="#0B0B0B" strokeWidth={2.4} style={{ position: 'relative' }} />
+                <Flame size={40} color={T.bg} strokeWidth={2.4} style={{ position: 'relative' }} />
               </div>
             </div>
 
@@ -171,7 +171,7 @@ export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; o
             <div style={{ background: T.surface, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontSize: 23, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{m.name}</span>
-                <span style={{ flex: 'none', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.acid, padding: '6px 11px', borderRadius: 100, background: '#0B0B0B' }}>{m.daysLeftLabel}</span>
+                <span style={{ flex: 'none', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.acid, padding: '6px 11px', borderRadius: 100, background: T.bg }}>{m.daysLeftLabel}</span>
               </div>
               <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>{m.blurb}</span>
 
@@ -218,7 +218,7 @@ export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; o
               return (
                 <button key={o.key} onClick={() => onJoin?.(o.key)} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: '14px 0', border: 0, background: 'transparent', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}`, cursor: onJoin ? 'pointer' : 'default', fontFamily: FONT, textAlign: 'left', width: '100%' }}>
                   <div style={{ width: 44, height: 44, borderRadius: 14, flex: 'none', display: 'grid', placeItems: 'center', background: o.accent ? T.acid : T.surface2 }}>
-                    <Ic size={20} color={o.accent ? '#0B0B0B' : T.mid} strokeWidth={2.2} />
+                    <Ic size={20} color={o.accent ? T.bg : T.mid} strokeWidth={2.2} />
                   </div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{o.title}</span>
