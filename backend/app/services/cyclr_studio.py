@@ -445,13 +445,73 @@ def _scene_prompt(rider_desc: str, bike_desc: str, training_context: str) -> str
     )
 
 
-async def compose_scene(rider_desc: str, bike_desc: str, training_context: str) -> tuple[str | None, str, str]:
-    """The rider-on-bike hero for a given training context / GPX scene."""
+#: Appended when the rider's and bike's own renders are handed in as image
+#: inputs. Without it the model treats them as loose inspiration.
+_REFERENCE_MANDATE = (
+    "\n\nCRITICAL — THE SUPPLIED REFERENCE IMAGES ARE THE SOURCE OF TRUTH, above any wording in "
+    "this prompt. The FIRST image is the rider's own character render: reproduce that exact face, "
+    "the same head shape and proportions, the same eyes, the same hair, the same facial hair, the "
+    "same skin tone and the same body build and limb thickness — this is the same character, in a "
+    "new pose. The SECOND image is the rider's own bicycle: reproduce that exact bike — the same "
+    "frame shape and colour, the same decals and lettering, the same wheels, rim depth, tyres and "
+    "components. Do NOT redesign either, do NOT re-letter the frame, and do NOT drift toward a "
+    "more realistic or a more generic figure. Only the POSE and the SURROUNDINGS are new."
+)
+
+
+async def compose_scene(
+    rider_desc: str,
+    bike_desc: str,
+    training_context: str,
+    *,
+    rider_img: str | None = None,
+    bike_img: str | None = None,
+) -> tuple[str | None, str, str]:
+    """The rider-on-bike hero for a given training context / GPX scene.
+
+    PASS THE RENDERS WHEN YOU HAVE THEM. Text-only composition re-derives both
+    subjects from words on every call, and words are lossy in exactly the places
+    that matter: measured on a real Standert, the garage bike read "standert"
+    correctly while the same bike in a scene came back branded "IRELER", and the
+    character drifted from the stylised bust toward a realistic adult with thin
+    limbs. Handing the two collectibles in as image inputs anchors both, so the
+    rider on the mountain is recognisably the rider in the garage.
+
+    Degrades cleanly: with no images this is exactly the old text-only path, so
+    a rider who has a description but no render still gets a scene.
+    """
     prompt = _scene_prompt(rider_desc, bike_desc, training_context)
+    refs = [i for i in (rider_img, bike_img) if i]
+    if refs:
+        prompt += _REFERENCE_MANDATE
     if not _gemini_ready():
         return None, prompt, "image_model_unavailable"
-    img = await _generate(prompt, prompt)
-    return img, prompt, "ok" if img else "image_model_unavailable"
+    if not refs:
+        img = await _generate(prompt, prompt)
+        return img, prompt, "ok" if img else "image_model_unavailable"
+
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
+    # Images FIRST, prompt last — the same order `compose_rider` uses, and the
+    # order the model weights references most strongly.
+    contents = [_img_part(i) for i in refs] + [prompt]
+    resp = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            response_modalities=["Image"],
+            seed=_seed(prompt),
+            image_config=types.ImageConfig(aspect_ratio="1:1", image_size="1K"),
+        ),
+    )
+    for part in resp.candidates[0].content.parts:
+        data = getattr(part, "inline_data", None)
+        if data and data.data:
+            return _to_data_url(data.data), prompt, "ok"
+    return None, prompt, "image_model_unavailable"
 
 
 def _rider_compose_prompt() -> str:

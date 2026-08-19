@@ -623,8 +623,12 @@ async def render_day_scene(
     bike = await _get_asset(db, current_user.id, "bike")
     assert rider is not None and bike is not None  # _missing_asset just proved it
     ctx = day_context(pose)
+    # The rider's own renders ride along as image references, so the figure on
+    # the day-state hero is recognisably the one in their garage rather than a
+    # fresh interpretation of the same words.
     image, prompt, render_status = await cyclr_studio.compose_scene(
         rider.description or "", bike.description or "", ctx,
+        rider_img=rider.image_url, bike_img=bike.image_url,
     )
     if image:
         if cached is None:
@@ -706,8 +710,11 @@ async def render_scene(
         distance_m=activity.distance_meters,
         elevation_gain_m=activity.elevation_gain_m,
     ))
+    # Same here: a ride hero must show the rider's actual bike, down to the
+    # lettering on the frame. Text alone re-derives it and gets that wrong.
     image, prompt, render_status = await cyclr_studio.compose_scene(
         rider.description, bike.description, ctx,
+        rider_img=rider.image_url, bike_img=bike.image_url,
     )
     if image:
         if cached is None:

@@ -213,7 +213,16 @@ async def main() -> int:
               f"→ terrain '{ride_scene.terrain_key(geo)}'")
 
         ctx = ride_scene.training_context("endurance", geo)
-        img, _, status = await cyclr_studio.compose_scene(rider_desc, bike_desc, ctx)
+        # The collectibles ride along as image references when they exist, which
+        # is what keeps the scene's bike lettered "standert" and the scene's
+        # rider the same character as the bust.
+        rider_png = out / "rider.webp"
+        bike_png = out / "bike.webp"
+        img, _, status = await cyclr_studio.compose_scene(
+            rider_desc, bike_desc, ctx,
+            rider_img=_as_data_url(rider_png) if rider_png.exists() else None,
+            bike_img=_as_data_url(bike_png) if bike_png.exists() else None,
+        )
         print(f"[scene] render: {status}")
         if img:
             _write(out / "scene", img)
