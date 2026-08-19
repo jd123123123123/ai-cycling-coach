@@ -78,10 +78,21 @@ constraint visible instead of stated in prose.
 show the same profile with actual overlaid — where each interval landed against
 its band. This is the single most re-opened screen in TrainingPeaks/Xert.
 
-### 6. Sleep and HRV are cited but never plotted
+### 6. ◐ Sleep and HRV are cited but never plotted
 **AM.** "HRV liegt 14 % über dem Schnitt" — over *what* average, and trending
-how? WHOOP's whole product is the 30-day baseline band with today's dot on it.
-One sparkline with a shaded normal range would replace three sentences.
+how? WHOOP's whole product is the baseline band with today's reading on it.
+
+**Half done.** `W3RecoveryNudge`'s sparkline drew each signal's `series` but
+omitted the `baseline` it is judged against — a shape with no level. The
+baseline is now a dashed rule, folded into the scaling domain so it stays in
+the box on exactly the mornings this card exists for (today outside the recent
+range). 3 tests.
+
+**Still open:** that card only appears when `level !== 'none'` — it is an
+illness/downturn early-warning, not an always-on trend. A general HRV trend
+needs a series endpoint of its own; the data exists (`DailyMetric.hrv_status`,
+30-day window already assembled in `api/health.py`), but nothing serves it
+outside the warning payload.
 
 ---
 
