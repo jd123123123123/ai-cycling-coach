@@ -41,32 +41,73 @@ from app.config import settings
 # The direction now matches the bikes: stylised realism, matte materials,
 # controlled studio light with one acid rim, believable athletic proportions.
 # Character comes from posture and attitude, never from cartoon devices.
+# ── THE HOUSE STYLE ─────────────────────────────────────────────────────────
+#
+# Adopted 2026-08-19 from `cycl_r-studio-3`, the owner's own working studio,
+# after comparing its output against this file's previous direction. This
+# REVERSES the note that used to sit here — the old constants read "NOT cute,
+# NOT kawaii, NOT a vinyl toy, NOT chibi" and pushed a restrained, grown-up
+# product-campaign look. The studio's premium designer-toy direction is what the
+# owner chose on the evidence, so it is the house style now.
+#
+# NOTE THE ONE BOUNDARY: this style governs the rider, the bike collectible and
+# the composed rider-on-bike scenes. It does NOT govern past-ride heroes — those
+# render through `ride_framing`, which is deliberately photorealistic because it
+# was built and tuned against a different reference the owner supplied for that
+# specific surface. Two registers, on purpose. See `ride_framing`'s header.
 GENERAL_STYLE = (
-    "Premium editorial 3D render in a restrained, grown-up style — the look of a high-end product "
-    "campaign, not a toy or a cartoon. Matte, tactile materials with fine surface detail, a single "
-    "controlled key light plus soft fill, and one crisp lime-green (#C8FF00) rim light picking out "
-    "the silhouette. Deep near-black or dark neutral ground, restrained palette, cinematic contrast, "
-    "sharp focus, high-quality octane render. NOT cute, NOT kawaii, NOT a vinyl toy, NOT chibi — no "
-    "oversized heads, no glossy plastic sheen, no comic effects, no emoji, no text."
+    "Playful, cool, highly attractive, and extremely likable 3D designer vinyl toy aesthetic "
+    "(similar to premium kawaii Web3 avatars). It must look stylish, awesome, and aesthetically "
+    "pleasing. Bold vibrant colors, clean soft studio lighting, chunky toy proportions, "
+    "high-quality octane render."
 )
 CHARACTER_STYLE = (
-    "The character is a stylised but believable athlete with realistic human proportions — a "
-    "cyclist's build, NOT a toy figurine and NOT an oversized head. CRITICAL: hair MUST be an exact "
-    "1:1 match to the described person (exact cut, colour, volume, style), and the face must be a "
-    "flattering but adult likeness with accurate skin tone and eyebrows — composed and determined, "
-    "never cutesy, never a wide-eyed cartoon. CRITICAL: the kit MUST be hyper-realistic and highly "
-    "detailed — intricate folds under tension, seams, zip, the sheen of technical lycra — so the "
-    "fabric reads as real even though the figure is stylised."
+    "CRITICAL AESTHETIC MANDATE: The character MUST be an incredibly appealing, lovable, and "
+    "charismatic 3D avatar in a premium Web3 designer toy style. "
+    "1) THE FACE AND HEAD: MUST be a perfectly smooth, perfectly round sphere. The facial features "
+    "(eyes, eyebrows, mouth, distinct beard, tattoos) MUST NOT be hyper-realistic 3D sculpted. "
+    "They MUST be rendered as minimalist, lovable, 2D flat vector decals (thick bold lines, simple "
+    "cute geometric cutouts) sitting completely flush against the smooth spherical face, like a "
+    "printed graphic on a round vinyl toy. HOWEVER, the exact skin tone (DO NOT change their race "
+    "or skin color) and specific facial hair shape MUST perfectly capture the person's unique 1:1 "
+    "likeness, just translated into this cute, simple spherical decal style. "
+    "2) THE BODY AND CLOTHING: MUST be oversized, chunky, and wild with highly detailed, "
+    "hyper-realistic clothing fabrics for intense textural contrast against the simple flat "
+    "spherical head."
 )
 BIKE_STYLE = (
-    "The bicycle must maintain perfect, realistic mechanical geometry (accurate triangular frame) "
-    "but with slightly chunky, premium proportions to match the cool 3D toy character seamlessly."
+    "The bicycle must maintain perfect, realistic mechanical geometry but with slightly chunky, "
+    "premium proportions to match the cool 3D toy character seamlessly. CRITICAL: The wheels and "
+    "spokes MUST be perfectly sharp, crisp, and static. NO motion blur, NO spinning effect."
 )
 ISOLATED_BIKE_STYLE = (
     "The bicycle MUST be an isolated, standalone object with NO rider, NO hands, and NO human "
-    "figures present in the image. It must maintain perfect, realistic mechanical geometry "
-    "(accurate triangular frame) but with slightly chunky, premium proportions to match the 3D "
-    "toy aesthetic."
+    "figures present in the image. It must maintain perfect mechanical geometry but with slightly "
+    "chunky, premium proportions to match the 3D toy aesthetic. CRITICAL: The wheels and spokes "
+    "MUST be perfectly sharp, crisp, and static. NO motion blur, NO spinning effect."
+)
+
+# The studio's grounding mandate, and the single best line in it. Without this a
+# generated scene reads as a bike sticker pasted over a landscape; with it the
+# terrain closes over the contact patch and the whole thing becomes one object.
+GROUNDING = (
+    "CRITICAL GROUNDING: The bicycle and rider MUST NOT look like they are floating or lazily "
+    "pasted on top of the background. The environment's ground surface (grass, dirt, snow, gravel "
+    "or road) MUST physically wrap around and partially cover the bottom of the tires, firmly "
+    "grounding the bicycle into the terrain like a real 3D diorama or physical model."
+)
+
+# The studio's integration mandate, for cosmetic swaps. A part that keeps its
+# own former context — chair legs, a rucksack's straps — is the failure mode
+# this exists to name, and naming it explicitly is what fixes it.
+INTEGRATION = (
+    "INTEGRATION MANDATE: ANY new part MUST be structurally integrated into the bicycle's "
+    "mechanical design. It cannot look like it is floating, lazily copy-pasted, or retaining "
+    "parts that belong to its previous form. For example, if fitting an office chair as a saddle, "
+    "completely REMOVE the chair's wheels and legs and fuse its top directly to the seatpost, so "
+    "the result looks like a fully functional, custom-built bicycle component. Adjust mounting "
+    "brackets, hardware colours and scale so everything looks like it physically belongs on this "
+    "frame."
 )
 # The SAME starter kit for every rider — cosmetics (new kits/looks) are unlocked
 # later with points, never taken from the source photo. This keeps avatars
@@ -80,14 +121,25 @@ DEFAULT_KIT = (
 )
 
 _ANALYSIS = {
+    # The likeness clause is the studio's, and adopting it fixes a real defect
+    # rather than merely changing a look. The previous prompt asked for a
+    # "flattering", "extremely awesome" translation of the person's "vibe" and
+    # never once told the model to preserve skin tone or ethnic features — so a
+    # model optimising for "attractive" was free to lighten skin and westernise
+    # features, and nothing in the prompt objected. The studio's version makes
+    # accurate skin tone and ethnic identity an explicit, repeated requirement.
+    # That is not a style preference; a rider must recognise themselves.
     "rider": (
         "You are an expert prompt engineer. Analyze this image to extract the person's distinct "
-        "physical features. CRITICAL: You MUST provide a 1:1 EXACT, highly detailed description of "
-        "their hair (exact style, length, texture, color, hairline, volume). Describe their "
-        "eyebrows, eye shape, skin tone, clothing, and accessories so they can be sculpted into an "
-        "incredibly cool, highly attractive, charming, and stylish 3D vinyl toy character. "
-        "Translate their vibe into something extremely flattering and awesome (like a beloved "
-        "stylish protagonist). The hair description must be perfectly accurate to guarantee a 1:1 match."
+        "physical features. CRITICAL: You MUST accurately describe their EXACT skin tone (e.g. "
+        "pale, fair, olive, brown, dark brown) and ethnic identity. Describe their distinct facial "
+        "structure, jawline, eye shape (noting ethnic features precisely and respectfully), eye "
+        "colour, eyebrows, and realistic facial hair or beard. The description MUST ensure they "
+        "are recreated with their exact 1:1 likeness WITHOUT losing their real skin colour or "
+        "ethnic features. Describe their hair exactly — style, length, texture, colour, hairline, "
+        "volume — as 3D sculpted hair. "
+        "OUTFIT OVERRIDE: describe the clothing as the app's starter kit and ignore whatever they "
+        "are actually wearing in the photo."
     ),
     "bike": (
         "You are an expert prompt engineer and cycling aficionado. Analyze this bicycle. "
@@ -310,6 +362,7 @@ def _scene_prompt(rider_desc: str, bike_desc: str, training_context: str) -> str
         f"bike read as one set. Do not use a three-quarter or front-on angle. "
         f"Do not crop or zoom in; both wheels, the rider's head, and "
         f"BOTH FEET must be 100% visible with consistent padding around the edges. "
+        f"{GROUNDING} "
         f"{GENERAL_STYLE} {CHARACTER_STYLE} {BIKE_STYLE}"
     )
 

@@ -68,13 +68,22 @@ def terrain_key(g: RideGeo) -> str:
 
 
 # How the background must be RENDERED — appended to every backdrop, ride-derived
-# or starter, so a scene never drifts into photorealism away from the character.
+# or starter.
+#
+# THE RULE IS "MATCH THE CHARACTER", and what the character IS changed on
+# 2026-08-19 when `cyclr_studio` adopted the studio's designer-toy house style.
+# This constant used to enforce the opposite ("never a toy diorama") and would
+# have torn every scene in half: a chunky vinyl rider on a restrained cinematic
+# landscape. Measured on a Dolomites render, a background left to its own
+# devices comes back photoreal while the rider stays toy, and the seam between
+# them is the first thing the eye finds. So the background follows the figure.
 _RENDER_STYLE = (
-    "Render the background in the SAME restrained, cinematic style as the character: "
-    "matte surfaces, atmospheric depth, controlled directional light and deep shadow, "
-    "muted palette with one lime-green (#C8FF00) accent in the light. Simplified and "
-    "stylised rather than photoreal, but never a cartoon, never a toy diorama, never "
-    "bright and sunny."
+    "CRITICAL STYLE RULE: render the entire background landscape in the EXACT same premium 3D "
+    "designer toy aesthetic as the character — beautifully sculpted, chunky, smooth matte "
+    "materials, vibrant but controlled colour, soft octane lighting, like a high-end miniature "
+    "vinyl diorama. The rock, trees, grass and road must read as tactile sculpted models, NOT as "
+    "photorealistic nature. Never a flat cartoon and never a photograph: a premium physical model "
+    "of a place."
 )
 
 # The SHARED starter backdrop: the one scene every rider begins in.
@@ -103,9 +112,22 @@ def scene_descriptor(g: RideGeo) -> str:
         base = "an empty stretch of road in soft directional light, quiet and atmospheric"
     else:
         base = _TERRAIN[terrain_key(g)]
-    # Prepend the real place only when a geocoder resolved it upstream.
+
+    # THE PLACE LEADS. It used to be appended — "<generic mountain text>, a
+    # stylised interpretation of the Dolomites" — and the generic clause won
+    # every time: measured on real Dolomites coordinates, the render came back
+    # as anonymous dark-grey crags with none of the pale limestone the range is
+    # known for, because `_TERRAIN["mountain"]` had already spent five adjectives
+    # describing a different mountain.
+    #
+    # So a resolved place becomes the subject and the terrain bucket demotes to
+    # a qualifier. Without a place nothing changes — the terrain sentence stands
+    # alone exactly as before, and no location is ever invented.
     if g.place_name:
-        base = f"{base}, a stylised interpretation of {g.place_name}"
+        base = (
+            f"the real roads of {g.place_name}, rendered so the specific rock, vegetation and "
+            f"landforms that place is actually known for are unmistakable — {base}"
+        )
     return f"BACKGROUND: {base}. {_RENDER_STYLE}"
 
 
