@@ -197,6 +197,58 @@ Some components branch on `useReducedMotion()`, the new `Reveal` reads
 
 ---
 
+## Review pass — three readers on the current build
+
+Written after the fixes, against what is actually on screen at 390×844. Scores
+are my judgement in each role, not a measured user study — nobody outside this
+session has seen it, and nothing is deployed.
+
+### The amateur (5–8 h/week, opens the app to be told what to do) — 8/10
+Today answers the only question they came with, in the first viewport: a
+readiness number, a word for it, and what the plan wants. The gauge finally
+reads as belonging to that number, and it is no longer half-hidden behind the
+action button.
+
+What still costs them: **the bike hero takes the top 248px before the answer**.
+On WHOOP the score is the first pixel. Here it is third, after a photograph and
+an identity card. That is a deliberate product bet on collection over coaching —
+worth making consciously, not by layout inheritance.
+Second: "Warum diese Einheit" is *better* (figures lifted, conclusion said once)
+but still four stacked reasons deep. This reader wants one sentence and a
+tap-to-expand, not three.
+
+### The racer (structured, owns a power meter) — 7/10, was 5/10
+The power curve landing in "Dein Fortschritt" is the difference. It is their
+artefact: log axis, PRs marked, every value printed. Before this session they
+had CTL/ATL/TSB and no way to see 5 s through 60 min without leaving for a
+screen W3 does not link to.
+
+What still costs them: **no execution overlay after a ride** — the target
+profile is drawn before, and nothing compares actual against it after. That is
+the screen this reader re-opens most in any other tool, and it is the biggest
+remaining hole in the app for them. Zones, phenotype and cohort bands are also
+still stranded on the old `/power-profile`.
+
+### The interface designer (WHOOP / Gentler Streak bar) — 7/10, was 5/10
+The system reads as one thing now: shared tokens, one reveal mechanism, honest
+empty states that say what will fill them rather than printing dashes. Three
+separate repetitions are gone (motto, handle, rest-day consequence) — repetition
+was this design's most consistent tell.
+
+What still costs it: **one signature moment, not several.** The charge meter's
+staggered fill is genuinely good and is still the only motion that belongs to
+this product specifically. Nothing in the interface is *cycling* — no cadence,
+no chain, no wheel. The reveals I added are correct and invisible, which is what
+reveals should be, but they are not character.
+Second: the isolation baseline sits at **27 raw hex offenders**. A design system
+with 27 colours declared outside it is 27 chances to drift.
+
+### What none of the three asked for
+More charts. Two of the four I proposed already existed. The scarce resource in
+this codebase is not capability — it is entry points and editing.
+
+---
+
 ## Testing notes
 
 - `/e/w3-*-preview` routes render from fixtures and need no auth — this is the
