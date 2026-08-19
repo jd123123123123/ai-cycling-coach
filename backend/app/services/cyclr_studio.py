@@ -69,37 +69,71 @@ GENERAL_STYLE = (
 # constant and leaked into the ISOLATED renders, where there is no scene to
 # model: the rider bust came back standing in an invented, blurred living room.
 # A portrait and an object want a clean ground; only a scene wants a world.
+# ── HOW THESE PROMPTS ARE WRITTEN ───────────────────────────────────────────
+#
+# Google's own guidance for this model family is explicit: DESCRIBE THE SCENE,
+# do not list keywords. A flowing descriptive paragraph beats a pile of
+# comma-separated tags, because the model reads narrative context rather than
+# matching terms.
+#
+# Two consequences, and both changed this file:
+#
+#  1. PROSE, NOT LISTS. Earlier versions were slabs of shouted fragments —
+#     "NO pores, NO wrinkles, NO blemishes, NO visible skin texture" — which is
+#     precisely the anti-pattern. They now read as a director's brief.
+#  2. POSITIVE, NOT NEGATIVE. A negation has to name the thing it forbids, and
+#     naming it is itself a strong signal to a diffusion model: "no wrinkles"
+#     puts wrinkles in the context window. Say what the surface IS instead —
+#     "smooth matte vinyl" — and the unwanted thing never enters the prompt.
+#
+# Negations are kept only where there is no positive way to say it and the
+# failure is severe (inventing brand text on a frame, changing someone's skin
+# colour). Everywhere else, describe the target.
 CHARACTER_STYLE = (
-    "CRITICAL AESTHETIC MANDATE: a warm, charismatic STYLISED 3D character — a modern animated "
-    "mascot, NOT a realistic human. This is deliberately caricatured proportion, not a lifelike "
-    "adult figure, and NOT a flat vector graphic either.\n"
-    "1) THE HEAD: large and noticeably OVERSIZED relative to the body — roughly one third of the "
-    "figure's total height. Its shape is WIDE AND ROUND: as wide as it is tall, with full rounded "
-    "cheeks, a broad soft cranium and a short, small, rounded chin. A LONG, narrow, oval or "
-    "elongated head is wrong — widen and shorten it. The face occupies the lower half of that "
-    "round shape, leaving a generous rounded forehead above. Fully 3D SCULPTED with real volume "
-    "and smooth matte skin.\n"
-    "THE EYES ARE THE FOCAL POINT: BIG, round and wide-set, each with a clearly visible white "
-    "sclera, a large coloured iris, a dark pupil and a bright specular catchlight. They read as "
-    "friendly and alert from across a room. Small, narrow or realistically-scaled eyes are wrong. "
-    "Eyebrows, nose, mouth and facial hair are modelled geometry with real depth and soft "
-    "shadowing — never flat decals, stickers or line art painted on a sphere. The nose is small "
-    "and soft.\n"
-    "CRITICAL LIKENESS: the exact skin tone (DO NOT change their race or skin colour), the hair's "
-    "exact cut, colour and curl, and the exact shape of any beard or moustache MUST capture the "
-    "person 1:1 — carried INTO this stylisation, never used as an excuse to abandon it and render "
-    "a realistic portrait instead.\n"
-    "2) THE BODY: small relative to that big head, and deliberately CHUNKY — thick, soft, tubular "
-    "limbs that look inflated rather than muscled, full rounded shoulders, plump forearms and "
-    "calves that taper only slightly, and simple mitten-like hands with no separated fingers. "
-    "Every form is smooth and swollen; there is NO bony detail, NO visible musculature, NO tendons, "
-    "NO knee caps, NO sharp edge anywhere on the figure.\n"
-    "CRITICAL PROPORTIONS — this is where a realistic render goes wrong: the whole figure is only "
-    "about three to four heads tall. The torso is SHORT and stout, and the arms and legs are SHORT "
-    "and THICK. Long thin limbs, a stretched femur, a wiry forearm, a slim athletic build or "
-    "anatomically-correct adult proportions are all WRONG, no matter how well rendered. Think a "
-    "collectible designer figure of a cyclist, not a photograph of one. "
-    "The kit is clean matte fabric stretched smoothly over that volume with soft simple folds."
+    "The character is a warm, instantly likeable stylised 3D collectible figure. The whole look "
+    "rests on one contrast: a SIMPLE, CLEAN, beautifully designed face set against a "
+    "HYPER-DETAILED, richly textured outfit. Reduce the face; lavish the clothing.\n\n"
+
+    "THE FACE. Think of it as a designed object rather than a portrait. The skin is one perfectly "
+    "smooth, even, matte surface — the flawless finish of a high-end vinyl collectible, softly "
+    "shaded, with gentle ambient occlusion where forms meet. Features are few, generous and "
+    "beautifully placed. The eyes are large, round, wide-set and clean, each with a bright white "
+    "sclera, a big clear coloured iris, a dark pupil and one crisp catchlight; they look warm, "
+    "open and pleased to see you. The nose is small, soft and rounded. The mouth rests in a "
+    "gentle, genuine, closed-lipped smile — relaxed and content, the expression of someone happy "
+    "with their day. The head is large relative to the body, roughly a third of the figure's "
+    "height, and its silhouette is wide and round: full soft cheeks, a broad cranium and a short "
+    "rounded chin.\n\n"
+
+    "THE VIEWER MUST LIKE THIS CHARACTER IMMEDIATELY. This is a rider looking at their own "
+    "avatar, and they should be delighted by it — charming, a little cool, genuinely appealing. "
+    "Flattering, always.\n\n"
+
+    "THE LIKENESS lives in exactly four things, and every one of them is reproduced faithfully "
+    "from the description: the hair — its precise cut, length, colour, parting and curl pattern; "
+    "the facial hair — the exact shape and colour of the moustache or beard; the skin tone and "
+    "ethnic features, reproduced truthfully and never lightened or altered; and the overall shape "
+    "of the face. Those four make the person unmistakable while everything else stays simplified. "
+    "Render them as clean sculpted geometry: the hair is styled into distinct soft locks with "
+    "real volume, and the moustache is a crisp, well-groomed shape. Resist adding fine realistic "
+    "detail to the skin in pursuit of the likeness — the four anchors already carry it, and "
+    "realism only makes the result less appealing.\n\n"
+
+    "THE BODY is small beneath that big head, soft and chunky: thick tubular arms and legs with "
+    "generous rounded volume, full shoulders, plump forearms and calves, and simple mitten hands "
+    "with no separated fingers. Every form is smooth and inflated, sculpted in the same clean "
+    "matte finish as the face. The whole figure stands about three to four heads tall, with a "
+    "short stout torso and short thick limbs — a collectible designer figure of a cyclist rather "
+    "than a photograph of one. Slim athletic proportions and anatomical musculature are wrong "
+    "here, however well rendered.\n\n"
+
+    "THE OUTFIT IS WHERE ALL THE DETAIL GOES, and it should look expensive. Render the fabric "
+    "with real, visible material quality: the fine woven texture of technical lycra catching the "
+    "light, crisp flatlock seams tracing the panels, a zip with individual teeth and a small "
+    "pull, elasticated cuffs and hem gripping the limbs, subtle sheen variation between matte and "
+    "satin panels, and soft natural folds where the fabric gathers at the shoulders and elbows. "
+    "The kit reads as a real, well-made garment on a simplified figure — that is the whole point "
+    "of the contrast."
 )
 BIKE_STYLE = (
     "The bicycle must maintain perfect, realistic mechanical geometry but with slightly chunky, "
@@ -138,12 +172,20 @@ INTEGRATION = (
 # The SAME starter kit for every rider — cosmetics (new kits/looks) are unlocked
 # later with points, never taken from the source photo. This keeps avatars
 # consistent and app-branded from day one.
+#: The kit is where the detail budget goes — see `CHARACTER_STYLE`'s contrast
+#: rule. Written as a garment a person would actually own rather than as a
+#: colour spec, because the model renders material it can picture.
 DEFAULT_KIT = (
-    "MANDATORY STARTER KIT: Dress the character in the app's default cycling kit — a fitted "
-    "lime-green (#C8FF00) and matte-black cycling jersey with a bold 'W3' wordmark logo centred on "
-    "the chest and a thin lime accent stripe, plus matching black bib shorts. IGNORE any clothing "
-    "from the source photo and use this EXACT kit, identical for every rider, so the starter look "
-    "is always consistent."
+    "THE STARTER KIT, worn by every rider so the look is consistent from day one, and described "
+    "here as the garment it is. A fitted short-sleeved cycling jersey in matte black with bold "
+    "acid lime-green (#C8FF00) side panels and sleeves, a bold white 'W3' wordmark across the "
+    "chest and a thin lime accent stripe, worn over matching black bib shorts. "
+    "Render the fabric richly: the fine ribbed weave of technical lycra catching the light, crisp "
+    "flatlock seams tracing every panel join, a full-length front zip with individual teeth and a "
+    "small pull tab at the collar, a gripper band at the hem and cuffs, and the subtle sheen "
+    "difference between the matte black panels and the satin lime ones. Soft natural folds gather "
+    "at the shoulders and the inside of the elbows where a real jersey would. "
+    "This kit replaces whatever the person wore in their photograph."
 )
 
 _ANALYSIS = {
@@ -155,17 +197,35 @@ _ANALYSIS = {
     # features, and nothing in the prompt objected. The studio's version makes
     # accurate skin tone and ethnic identity an explicit, repeated requirement.
     # That is not a style preference; a rider must recognise themselves.
+    # WRITTEN FOR A STYLISED AVATAR, NOT A PORTRAIT — and that is the point.
+    #
+    # The previous version asked for "distinct facial structure, jawline, eye
+    # shape, realistic facial hair". Every one of those is a realism cue, and a
+    # specific description beats a general style instruction every time: the
+    # render came back as a semi-realistic adult no matter how firmly the style
+    # constant asked for a simplified designed face. The description was
+    # fighting the art direction and winning.
+    #
+    # So this pass now extracts only what CARRIES the likeness in this style —
+    # hair, facial hair, skin tone, face shape — and is told plainly what the
+    # output is for.
     "rider": (
-        "You are an expert prompt engineer. Analyze this image to extract the person's distinct "
-        "physical features. CRITICAL: You MUST accurately describe their EXACT skin tone (e.g. "
-        "pale, fair, olive, brown, dark brown) and ethnic identity. Describe their distinct facial "
-        "structure, jawline, eye shape (noting ethnic features precisely and respectfully), eye "
-        "colour, eyebrows, and realistic facial hair or beard. The description MUST ensure they "
-        "are recreated with their exact 1:1 likeness WITHOUT losing their real skin colour or "
-        "ethnic features. Describe their hair exactly — style, length, texture, colour, hairline, "
-        "volume — as 3D sculpted hair. "
-        "OUTFIT OVERRIDE: describe the clothing as the app's starter kit and ignore whatever they "
-        "are actually wearing in the photo."
+        "You are describing a real person so an artist can sculpt them as a SIMPLIFIED, stylised "
+        "3D collectible avatar — not a realistic portrait. Recognition in that style comes from a "
+        "few big shapes, so describe those precisely and leave fine detail out.\n\n"
+        "Cover exactly these, in a short flowing paragraph:\n"
+        "1. HAIR — the single most identifying feature. Its exact colour, length, cut, parting, "
+        "and whether it is straight, wavy, curly or coily, plus how much volume it has.\n"
+        "2. FACIAL HAIR — the exact shape and colour of any moustache, beard or stubble, or state "
+        "plainly that there is none.\n"
+        "3. SKIN TONE and ethnic features — described accurately and respectfully. This must be "
+        "reproduced truthfully and must never be lightened or altered.\n"
+        "4. THE OVERALL SHAPE of the face — round, square, long, heart-shaped — and eye colour.\n\n"
+        "Keep it to those. Do NOT describe pores, wrinkles, blemishes, skin texture, fine jawline "
+        "structure, or anything that would push an artist toward photorealism — that detail makes "
+        "this style worse, not better. Describe the person warmly and flatteringly; this is "
+        "someone's own avatar and they should be pleased with it.\n\n"
+        "Say nothing about their clothing: the avatar wears a fixed kit."
     ),
     "bike": (
         "You are an expert prompt engineer and cycling aficionado. Analyze this bicycle. "
@@ -404,52 +464,101 @@ async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str 
 #: that must match is handed over as an image, never as a description.
 _BUILD_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_build.webp"
 
+#: A shipped picture of the FACE TREATMENT the house style wants — big round
+#: clean eyes, few features, smooth matte surface, warm expression.
+#:
+#: Same lesson as the build and the bike, learned a third time: the face was
+#: described in careful narrative prose — "large, round, wide-set, bright white
+#: sclera, warm and open" — and still came back with small narrow eyes on a
+#: long semi-realistic head. Google's own guidance for this model family says
+#: reference images beat description and that each image's ROLE should be named
+#: explicitly, so there are now two, and the prompt says what each is for.
+_FACE_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_face.webp"
+
 #: Used with the reference. The danger of a style image is that the model copies
 #: the WRONG things from it, so what to take and what to ignore is spelled out.
 _BUILD_MANDATE = (
-    "\n\nCRITICAL — THE SUPPLIED IMAGE IS A BUILD REFERENCE ONLY. Copy from it exactly one thing: "
-    "the BODY PROPORTIONS AND LIMB SHAPE — the thick soft tubular arms and legs, the short stout "
-    "torso, the generous rounded volumes, the oversized round head relative to the body, the "
-    "simple mitten hands. Match that build closely.\n"
-    "TAKE NOTHING ELSE FROM IT. Do NOT copy its person, its face, its skin tone, its ethnicity, "
-    "its hair, its clothing, its colours, its pose, its bicycle or its background. The character "
-    "you render is the person described in the text above and NOBODY ELSE — their face, their "
-    "skin tone, their hair and their kit come only from that description. The reference supplies "
-    "the sculpt; the description supplies the person."
+    "\n\nTHE ROLE OF EACH ATTACHED IMAGE — they are style references, not people to copy.\n\n"
+    "IMAGE 1 is the FACE-TREATMENT reference. Match how that face is MADE: the big, round, clean, "
+    "wide-set eyes with their bright white sclera and clear iris, the very small number of "
+    "features, the perfectly smooth matte surface with no texture, the soft rounded head shape, "
+    "and the warm friendly expression. That level of simplification is the target — your render "
+    "should look like it came from the same designer's hand.\n\n"
+    "IMAGE 2 is the BODY-SCULPT reference. Match its build: thick soft tubular arms and legs, "
+    "short stout torso, generous rounded volumes, a head oversized relative to the body, simple "
+    "mitten hands.\n\n"
+    "WHO the character is comes only from the written description above — their hair, their facial "
+    "hair, their skin tone, their face shape. The two people in the attached images are strangers "
+    "and none of their features belong in this render: not their skin colour, not their hair, not "
+    "their clothing, colours, pose, bicycle or background. Take the STYLE from the images and the "
+    "PERSON from the description.\n\n"
+    "IN PARTICULAR, THE HEAD IS BARE. The reference figure wears a helmet; this character does "
+    "not. Show the full hairstyle uncovered, from the hairline to the crown, with nothing on the "
+    "head at all — no helmet, no cap, no headband, no sunglasses. The hair is the strongest thing "
+    "carrying this person's likeness and it must be completely visible."
 )
 
 
-def _build_reference() -> str | None:
-    """The build reference as a data URL, or None when it is not on disk.
+def _style_references() -> list[str]:
+    """The face and build references, as data URLs, IN ROLE ORDER.
 
-    Optional by design: a missing asset costs the proportion anchor and nothing
-    else, so a deploy that forgets to ship it degrades to the old text-only
+    Order is part of the contract: `_BUILD_MANDATE` calls them "IMAGE 1" and
+    "IMAGE 2", so face must come first. Either may be absent — each is optional
+    by design, and a deploy that ships neither degrades to the old text-only
     render rather than failing to make an avatar at all.
     """
-    try:
-        raw = _BUILD_REF.read_bytes()
-    except OSError:
-        return None
-    return "data:image/webp;base64," + base64.b64encode(raw).decode()
+    out: list[str] = []
+    for path in (_FACE_REF, _BUILD_REF):
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            continue
+        out.append("data:image/webp;base64," + base64.b64encode(raw).decode())
+    return out
+
+
+async def _generate_with_refs(prompt: str, refs: list[str], seed_src: str) -> str | None:
+    """One render conditioned on several style references at once."""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
+    resp = client.models.generate_content(
+        model=model,
+        contents=[_img_part(r) for r in refs] + [prompt],
+        config=types.GenerateContentConfig(
+            response_modalities=["Image"],
+            seed=_seed(seed_src),
+            image_config=types.ImageConfig(aspect_ratio="1:1", image_size="1K"),
+        ),
+    )
+    for part in resp.candidates[0].content.parts:
+        data = getattr(part, "inline_data", None)
+        if data and data.data:
+            return _to_data_url(data.data)
+    return None
 
 
 async def render_isolated(description: str, kind: str) -> tuple[str | None, str, str]:
     """Render the standalone avatar bust or isolated bike from a description.
 
-    The RIDER is additionally conditioned on the shipped build reference, which
-    is the only thing that reliably holds the caricatured proportions — see
-    `_BUILD_REF`. The bike is not: its shape must come from the rider's own
-    photograph, and `render_bike_from_photo` is the path that does that.
+    The RIDER is conditioned on TWO shipped style references — the face
+    treatment and the body sculpt — because prose could not hold either. Both
+    were described in careful narrative and both still drifted toward a
+    semi-realistic adult; the images hold them. The bike takes no style
+    reference: its shape must come from the rider's own photograph, which is
+    what `render_bike_from_photo` is for.
     """
     prompt = _isolated_prompt(description, kind)
 
     if kind == "rider":
-        ref = _build_reference()
-        if ref:
+        refs = _style_references()
+        if refs:
             prompt += _BUILD_MANDATE
             if not _gemini_ready():
                 return None, prompt, "image_model_unavailable"
-            img = await edit_image(ref, prompt, description)
+            img = await _generate_with_refs(prompt, refs, description)
             return img, prompt, "ok" if img else "image_model_unavailable"
 
     if not _gemini_ready():
