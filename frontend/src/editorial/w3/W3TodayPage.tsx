@@ -4,11 +4,10 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
 import { useStreak } from '../../hooks/useStreak'
-import { useGarage, useDayScene, useRenderDayScene } from '../../hooks/useGarage'
+import { useGarage } from '../../hooks/useGarage'
 import { useGarageCollection } from '../../hooks/useShop'
 import { itemById } from './w3shop'
 import { useWallet } from '../../hooks/useWallet'
-import type { DayPose } from '../../api/garage'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
@@ -21,7 +20,6 @@ import { forecastRideRc, formatMultiplier, nextStreakTier, streakMultiplier } fr
 import { DASH, T } from './w3tokens'
 import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
-import { poseForDay } from './w3Pose'
 import { BLOCK_DE } from './W3WhyToday'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type W3Block, type OnAdapt } from './W3TodayView'
 import type { W3Weather, W3WeatherHour } from './W3Sections'
@@ -297,34 +295,15 @@ export default function W3TodayPage() {
   const qc = useQueryClient()
   const ftp = profile?.ftp_watts ?? null
 
-  // ── Which scene today asks for ──────────────────────────────────────────
-  // The hero puts the rider on their bike doing what the day actually calls
-  // for, so the pose is derived from the SAME real inputs the rest of the page
-  // reads: the day-state, and — on a training day — the prescribed intensity of
-  // the real session. The IF thresholds mirror the server's `_pose_for`, so a
-  // ride and the day that prescribed it never disagree about how hard it was.
-  //
-  // This is also the cache key: one composed image per pose, forever. It has to
-  // be computed OUTSIDE the vm memo because the cached-scene read hangs off it.
-  const scenePose = useMemo<DayPose>(() => {
-    const plan = (week?.days ?? []).find((d) => d.is_today) ?? null
-    const dd = adaptive?.daily_decision?.planned ?? null
-    // The real prescribed intensity: the week plan's, else the coach's daily
-    // decision via the Coggan relation. Null when neither carries TSS AND a
-    // duration — nothing is claimed about an effort we can't compute.
-    const iff = plan && isSessionDay(plan)
-      ? planIF(plan)
-      : dd?.target_tss && dd?.duration_minutes
-        ? Math.sqrt(dd.target_tss / ((dd.duration_minutes / 60) * 100))
-        : null
-    return poseForDay(state, iff)
-  }, [state, week, adaptive])
-
-  // The cheap cached read — never composes. `isLoading` folds into the hero's
-  // loading state so the bike doesn't flash in before its scene.
-  const { data: dayScene, isLoading: sceneLoading } = useDayScene(scenePose)
-  const renderScene = useRenderDayScene()
-  const composeScene = useCallback(() => { renderScene.mutate(scenePose) }, [renderScene, scenePose])
+  // ── No day scene. Deliberately. ─────────────────────────────────────────
+  // Today used to derive a pose, read `/garage/scene/today` for a composed
+  // rider-on-bike image, and offer to render one on tap. The pen's stage
+  // (`W3TodayStage`) shows the rider bust and the isolated bike SEPARATELY —
+  // two renders the rider already owns — so this screen now needs no scene at
+  // all. That removes an image-model round trip, a mutation, and the app's most
+  // failure-prone prompt from its most visited screen. `poseForDay` and the
+  // scene hooks still serve the RIDE surfaces, where a composed scene is the
+  // whole point.
 
   const vm = useMemo<W3Vm>(() => {
     const realWeather = buildWeather(todayWeather)
@@ -685,7 +664,7 @@ export default function W3TodayPage() {
       // which stays `bikeImage: null` and gets the hero's empty state.
       bikeName: garage?.bike?.name ?? 'Dein Bike',
       bikeImage: garage?.bike?.image_base64 ?? null,
-      bikeLoading: garageLoading || sceneLoading,
+      bikeLoading: garageLoading,
       riderImage: garage?.rider?.image_base64 ?? null,
       // REAL: the collectible they claimed and have been upgrading. A separate
       // thing from `bikeImage` (that one is a render of their actual machine),
@@ -694,13 +673,6 @@ export default function W3TodayPage() {
       // enforce the first-bike claim before this route mounts.
       collectible: collectibleArt,
       collectibleName: collectibleBike?.name ?? null,
-      // REAL: today's composed hero, read from the server cache. Null until the
-      // read lands; `status` is the honest reason there is no image yet, and
-      // composing only ever happens on the rider's tap (`composeScene`).
-      scene: dayScene
-        ? { image: dayScene.image_base64, status: dayScene.status, pose: scenePose }
-        : null,
-      sceneComposing: renderScene.isPending,
       // REAL: the RideCoin wallet balance. "—" until it loads — never a number
       // the ledger can't account for.
       coins: wallet ? wallet.balance.toLocaleString('de-DE') : null,
@@ -767,7 +739,7 @@ export default function W3TodayPage() {
     }
   }, [
     model, user, streak, adaptive, week, ftp, todayWeather, weekActs,
-    garage, garageLoading, sceneLoading, dayScene, scenePose, renderScene.isPending, wallet,
+    garage, garageLoading, wallet,
     // Without these the memo never re-runs when the collection query lands, and
     // the hero would keep showing the empty state to a rider who owns a bike.
     collectibleArt, collectibleBike,
@@ -806,5 +778,5 @@ export default function W3TodayPage() {
   // it also has to enforce owning a bike — and that check needs the garage
   // query, which does not belong on Today's critical path.
 
-  return <W3TodayView vm={vm} onAdapt={onAdapt} onComposeScene={composeScene} />
+  return <W3TodayView vm={vm} onAdapt={onAdapt} />
 }

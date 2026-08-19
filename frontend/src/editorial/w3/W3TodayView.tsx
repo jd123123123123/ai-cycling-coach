@@ -1,11 +1,11 @@
 import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { Flame, CalendarRange, Sparkles, Star } from 'lucide-react'
+import { Sparkles, Star } from 'lucide-react'
 import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, grow, Kicker, DASH, Reveal } from './w3tokens'
-import W3BikeHero, { type W3BikeHeroScene } from './W3BikeHero'
-import W3RiderAvatar from './W3RiderAvatar'
+import W3TodayStage from './W3TodayStage'
+import W3TodayDock from './W3TodayDock'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryNudge from './W3RecoveryNudge'
@@ -15,8 +15,6 @@ import W3TodayRank from './W3TodayRank'
 import W3WeekRecapCard from './W3WeekRecapCard'
 import W3WhyToday from './W3WhyToday'
 import W3ScoreCard from './W3ScoreCard'
-import { W3CoachFab } from './W3CoachChat'
-import W3NavMenu, { W3NavIcon } from './W3NavMenu'
 import './w3.css'
 
 export type { W3DayFull, W3Weather, W3Block, OnAdapt, AdaptResult } from './W3Sections'
@@ -77,10 +75,6 @@ export interface W3Vm {
   /** The rider's digitalised portrait (garage), or null — the identity card
    *  shows an empty seat rather than a photo they never chose. */
   riderImage: string | null
-  /** Today's composed rider-on-bike scene + why there isn't one. Null until the
-   *  cheap cached read lands. Composing is never automatic. */
-  scene: W3BikeHeroScene | null
-  sceneComposing: boolean
   /** REAL RideCoin balance (`useWallet`), localised — null → "—". */
   coins: string | null
   streak: number | null
@@ -183,12 +177,17 @@ function SignalCard({ label, sig }: { label: string; sig: W3Signal | null }) {
 // section itself knows what its acid pill should say.
 const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: `0 20px ${padBottom}px` })
 
-export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
+/**
+ * `onComposeScene` is GONE, and its absence is the point. The old hero offered
+ * to compose the rider onto the bike — a slow, paid `cyclr_studio.compose_scene`
+ * call with a long defensive anatomy block, reachable from the app's most
+ * visited screen. The pen's stage shows the two isolated renders the rider
+ * already owns instead, so Today composes nothing and can no longer fail on a
+ * mangled limb. Scene composition still exists for RIDES, where it belongs.
+ */
+export default function W3TodayView({ vm, onAdapt }: {
   vm: W3Vm
   onAdapt?: OnAdapt
-  /** Explicit intent to compose today's hero scene — a slow, paid image-model
-   *  call, so it is only ever reachable through a tap. */
-  onComposeScene?: () => void
 }) {
   const navigate = useNavigate()
   // The week strip and the training card share ONE selection: tapping a day
@@ -204,41 +203,58 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
 
-        {/* ── Safe-area breathing room — NOT a faked status bar ── */}
-        <W3StatusBar />
+        {/* ── THE PEN SCREEN ──────────────────────────────────────────────
+             Frames `YIU3g` / `qv4Aw`, rebuilt: one viewport that answers the
+             day on its own — the rider and their bike on a lit stage, and one
+             dock carrying readiness. Everything below this block is the scroll,
+             and a rider who never scrolls has already been answered.
 
-        {/* ── Header: rider + streak + bell ── */}
-        <div style={{ padding: '10px 20px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            {/* Reads the garage, not `users.avatar_url` — see W3RiderAvatar. */}
-            <W3RiderAvatar size={34} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>{vm.handle}</span>
-              {/* Null without a plan — the handle stands alone rather than
-                  carrying an invented tier. */}
-              {vm.tierLine && <span style={{ fontSize: 11.5, fontWeight: 400, color: T.quiet }}>{vm.tierLine}</span>}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 5, alignItems: 'center', padding: '7px 11px', borderRadius: 100, background: T.acidDim }}>
-              <Flame size={13} color={T.acid} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.acid }}>{vm.streak ?? DASH}</span>
-            </div>
-            <W3NavIcon to="/e/w3-plan" label="Trainingsplan"><CalendarRange size={16} color={T.ink} /></W3NavIcon>
-            <W3NavMenu />
+             Sized to the viewport MINUS the fixed tab bar, so the dock lands
+             exactly above it the way it does in the pen, on any device height
+             rather than only at 844. ── */}
+        <div style={{
+          height: 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
+          display: 'flex', flexDirection: 'column', background: T.heroBg,
+        }}>
+          <W3StatusBar />
+
+          <W3TodayStage
+            vm={{
+              handle: vm.handle,
+              role: vm.tierLine,
+              rider: vm.riderImage,
+              // The rider's own render first, their collectible second, and the
+              // labelled example only when neither exists. Never a stock bike
+              // presented as theirs.
+              bike: vm.bikeImage ?? vm.collectible,
+              bikeName: vm.bikeName,
+              coins: vm.coins,
+              streak: vm.streak,
+              bonus: vm.earnRate === DASH ? null : vm.earnRate,
+            }} />
+
+          {/* The pen's bottom slot: padding 16, one panel, centred. */}
+          <div style={{ padding: 16, flex: 'none' }}>
+            <W3TodayDock
+              vm={{
+                score: vm.readiness,
+                state: vm.readinessWord,
+                // `vm.readiness` is already withheld upstream when the wearable
+                // is stale (utils/readinessGate). The dock states that absence
+                // rather than drawing a zero into a meter.
+                scoreNote: null,
+                // `earnRate` already carries its × (api/rewards formatMultiplier),
+                // so appending one here printed "1,4××".
+                bonus: vm.earnRate === DASH ? null : vm.earnRate,
+                stats: [
+                  { label: 'HRV', value: vm.hrv ? `${vm.hrv.value} ${vm.hrv.unit}`.trim() : null },
+                  { label: 'RUHEPULS', value: vm.rhr ? vm.rhr.value : null },
+                  { label: 'SCHLAF', value: vm.sleep ? vm.sleep.value : null },
+                ],
+              }}
+              onOpen={() => navigate('/e/w3-readiness')} />
           </div>
         </div>
-
-        {/* ── Hero: the rider ON their own bike, in the scene today's plan calls
-             for — flowing into their identity card (pen `GSdj0`). Degrades to
-             the bike collectible alone, then to a labelled example. The bike
-             name, the balance and the streak live in the card now; the old
-             separate garage band above the hero was folded into it. ── */}
-        <W3BikeHero
-          image={vm.bikeImage} name={vm.bikeName} loading={vm.bikeLoading}
-          scene={vm.scene} composing={vm.sceneComposing} onCompose={onComposeScene}
-          collectible={vm.collectible} collectibleName={vm.collectibleName}
-          identity={{ handle: vm.handle, rider: vm.riderImage, coins: vm.coins, streak: vm.streak }} />
 
         {/* ── Hero: readiness + charge meter ──
              The card is `W3ScoreCard` now — the same element grades a finished
@@ -378,7 +394,6 @@ export default function W3TodayView({ vm, onAdapt, onComposeScene }: {
         {/* ── Your progress: real fitness goals (FTP/VO2max/20-min) + challenges ── */}
         <Reveal><W3TodayProgress /></Reveal>
 
-        <W3CoachFab />
         <W3TabBar />
 
       </div>

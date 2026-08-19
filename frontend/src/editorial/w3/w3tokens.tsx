@@ -17,8 +17,28 @@ export const T = {
   // cannot end up with three different studios.
   stageHi: '#E8E9E6', stageMid: '#C9CBC7', stageLo: '#A9ACA8',
   shadowSoft: '#00000059',
-  acid: '#C8FF00', acidDim: '#C8FF001F', acidDeep: '#8FBF00',
+  acid: '#BFFF3C', acidDim: '#BFFF3C1F', acidDeep: '#8FBF00',
   ink: '#FFFFFF', mid: '#9BA0A6', quiet: '#6E7379',
+
+  // ── TODAY'S HERO (pen frames `YIU3g` / `qv4Aw`, read 2026-08-19) ─────────
+  // `hero*`, NOT `stage*`: the `stageHi/Mid/Lo` triple above is the light a
+  // DRAWN bike is lit with, a different idea that happens to share the word.
+  //
+  // Today's hero is its own small palette and is NOT the card palette either.
+  // These are darker and cooler than the `surface` family, which is why they
+  // get their own names rather than being approximated — `surface`/`surface2`
+  // exist for the LIT `lux()` cards and carry a gradient and a hairline this
+  // screen deliberately does not use.
+  heroBg: '#0B0B0C',         // the frame ground — blue-black, not neutral
+  heroChip: '#2A2A2C',       // floating corner chips + the round icon button
+  heroDock: '#1A1A1C',       // the readiness dock, flat, no border
+  heroInk: '#111114',        // text ON acid (the handle pill)
+  heroMid: '#8E8E96',        // dock kickers
+  heroOff: '#3A3A3F',        // an unfilled meter segment
+  lilac: '#EFD6FE',          // the RideCoin asterisk, and only that
+  // The floor: a linear sweep that gets LIGHTER toward the bottom, so the bike
+  // reads as standing in a studio rather than floating on a void.
+  heroFloor: ['#0B0B0C', '#141416', '#333336', '#47474B'] as const,
   rule: '#FFFFFF14', stroke: '#FFFFFF1A',
   d2: '#FFFFFF33', d3: '#FFFFFF4D', d4: '#FFFFFF8C',
   training: '#2BE68F', evening: '#7B5CFF', cool: '#6B8CFF',

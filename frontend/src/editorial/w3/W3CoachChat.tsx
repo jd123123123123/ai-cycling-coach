@@ -159,13 +159,31 @@ export default function W3CoachChat({ onClose }: { onClose: () => void }) {
 }
 
 /** Floating "Ask coach" button — mount once per W3 tab screen, above the nav. */
-export function W3CoachFab() {
+/**
+ * `variant="chip"` exists because Today's dock (pen `qv4Aw`) now occupies the
+ * bottom of the first viewport, exactly where the fixed FAB sits — measured at
+ * 390×844, the button landed on top of the dock's SCHLAF value. A screen whose
+ * primary panel is permanently half-covered by a floating button is broken, and
+ * nudging the FAB up only moves the collision to whatever scrolls under it next.
+ *
+ * So on Today the coach becomes a stage chip in the left column, in the same
+ * round-button language as the nav gear beside it. Every other screen keeps the
+ * FAB, where nothing is pinned to the bottom to collide with.
+ */
+export function W3CoachFab({ variant = 'fab', background = T.acid, iconColor = T.bg }: {
+  variant?: 'fab' | 'chip'
+  background?: string
+  iconColor?: string
+}) {
   const [open, setOpen] = useState(false)
+  const chip = variant === 'chip'
   return (
     <>
       <button onClick={() => setOpen(true)} aria-label="Coach fragen"
-        style={{ position: 'fixed', right: 'max(16px, calc(50vw - 179px))', bottom: 'calc(104px + env(safe-area-inset-bottom))', zIndex: 60, width: 56, height: 56, borderRadius: 100, border: 0, background: T.acid, boxShadow: `0 6px 24px ${T.acid}55`, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
-        <Sparkles size={24} color={T.bg} />
+        style={chip
+          ? { width: 44, height: 44, borderRadius: 100, border: 0, background, display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 0 }
+          : { position: 'fixed', right: 'max(16px, calc(50vw - 179px))', bottom: 'calc(104px + env(safe-area-inset-bottom))', zIndex: 60, width: 56, height: 56, borderRadius: 100, border: 0, background, boxShadow: `0 6px 24px ${T.acid}55`, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+        <Sparkles size={chip ? 20 : 24} color={iconColor} />
       </button>
       <AnimatePresence>{open && <W3CoachChat onClose={() => setOpen(false)} />}</AnimatePresence>
     </>

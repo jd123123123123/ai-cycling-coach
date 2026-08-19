@@ -21,11 +21,9 @@ export const FIXTURE: W3Vm = {
   // it would degrade to is not exercised here.
   collectible: null,
   collectibleName: null,
-  // The preview has no garage and no image model, so it demos the hero's SECOND
-  // fallback: the bike collectible with the offer to compose today's scene.
+  // The preview has no garage, so the stage demos its empty states: the empty
+  // seat where the rider bust goes, and the labelled example bike.
   riderImage: null,
-  scene: { image: null, status: 'not_generated', pose: 'hard' },
-  sceneComposing: false,
   coins: '1.448',
   weekDoneLabel: '4 von 6 erledigt',
   avatarUrl: null,

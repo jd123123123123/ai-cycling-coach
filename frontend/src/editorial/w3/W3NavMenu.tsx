@@ -38,7 +38,22 @@ export function W3NavIcon({ to, children, label }: { to: string; children: React
   )
 }
 
-export default function W3NavMenu({ color = T.ink }: { color?: string }) {
+/**
+ * The trigger is configurable because Today's stage (pen `YIU3g`/`qv4Aw`) shows
+ * it as a 44px gear on the stage floor rather than a 38px burger in a header —
+ * but it must open the SAME sheet. Every route above is reachable only from
+ * here, so giving that screen its own lookalike button would have stranded them
+ * the moment the two drifted apart.
+ */
+export default function W3NavMenu({
+  color = T.ink, size = 38, iconSize = 17, background = T.surface, Icon = Menu,
+}: {
+  color?: string
+  size?: number
+  iconSize?: number
+  background?: string
+  Icon?: typeof Menu
+}) {
   const nav = useNavigate()
   const reduce = useReducedMotion()
   const [open, setOpen] = useState(false)
@@ -46,8 +61,8 @@ export default function W3NavMenu({ color = T.ink }: { color?: string }) {
   return (
     <>
       <button onClick={() => setOpen(true)} aria-label="Menü"
-        style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
-        <Menu size={17} color={color} />
+        style={{ width: size, height: size, borderRadius: 100, background, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 0 }}>
+        <Icon size={iconSize} color={color} />
       </button>
       <AnimatePresence>
         {open && (
