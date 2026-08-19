@@ -56,6 +56,18 @@ def terrain_key(g: RideGeo) -> str:
         if g.max_altitude_m is not None and g.min_altitude_m is not None
         else None
     )
+
+    # ABSOLUTE CLIMB, before any ratio. Measured on a real Maratona dles
+    # Dolomites file: 6 053 m of ascent came back as "flat", because the ratio
+    # needs a distance, the distance was missing, and 0/0 fell through every
+    # test to the default. A ride with four figures of climbing is not flat
+    # whatever else is unknown about it — and the generic "wide open plain"
+    # clause then beat the resolved place, so the Dolomites rendered as a field.
+    if gain >= 2000:
+        return "mountain"
+    if gain >= 800 and dist_km <= 0:
+        return "hilly"
+
     # Big sustained altitude range OR steep average → mountain.
     if ratio >= 15 or (alt_range is not None and alt_range >= 600):
         return "mountain"

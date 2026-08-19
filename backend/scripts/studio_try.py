@@ -87,18 +87,40 @@ def _first_fix(gpx: pathlib.Path) -> tuple[float, float] | None:
     return (float(lat.group(1)), float(lon.group(1))) if lat and lon else None
 
 
-def _gpx_totals(gpx: pathlib.Path) -> tuple[float | None, float | None]:
-    """Rough distance and climb, from the track's own elevation points.
+def _gpx_totals(gpx: pathlib.Path) -> dict:
+    """Distance, climb and altitude range from the track itself.
 
-    Distance is left None — deriving it properly needs haversine over every
-    point, and `ride_scene` only uses it to pick a terrain bucket that the
-    elevation range already dominates. Better a null than a bad number.
+    Distance was originally left None on the reasoning that the elevation
+    already dominates the terrain bucket. It does not: run on a real Maratona
+    file, 6 053 m of ascent came back as terrain "flat", because the ratio
+    `ride_scene` uses is metres-per-km and 0/0 falls through to the default.
+    `terrain_key` is hardened against that now, but the honest fix is also to
+    hand it the numbers it asks for — haversine over the track is twenty lines.
     """
-    eles = [float(m) for m in re.findall(r"<ele>(-?\d+\.?\d*)</ele>", gpx.read_text(errors="ignore"))]
-    if len(eles) < 2:
-        return None, None
-    climb = sum(max(0.0, b - a) for a, b in zip(eles, eles[1:]))
-    return None, climb
+    import math
+
+    text = gpx.read_text(errors="ignore")
+    pts = [
+        (float(a), float(b))
+        for a, b in re.findall(r'lat="(-?\d+\.?\d*)"\s+lon="(-?\d+\.?\d*)"', text)
+    ]
+    eles = [float(m) for m in re.findall(r"<ele>(-?\d+\.?\d*)</ele>", text)]
+
+    dist_m = None
+    if len(pts) >= 2:
+        total = 0.0
+        for (la1, lo1), (la2, lo2) in zip(pts, pts[1:]):
+            p1, p2 = math.radians(la1), math.radians(la2)
+            dp, dl = p2 - p1, math.radians(lo2 - lo1)
+            a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+            total += 6_371_000 * 2 * math.asin(min(1.0, math.sqrt(a)))
+        dist_m = total
+
+    climb = lo = hi = None
+    if len(eles) >= 2:
+        climb = sum(max(0.0, b - a) for a, b in zip(eles, eles[1:]))
+        lo, hi = min(eles), max(eles)
+    return {"distance_m": dist_m, "climb_m": climb, "min_alt": lo, "max_alt": hi}
 
 
 async def main() -> int:
@@ -174,13 +196,16 @@ async def main() -> int:
         place = await ride_place.resolve(lat, lng)
         print(f"[scene] place: {place or 'UNKNOWN — terrain only, no place invented'}")
 
-        dist, climb = _gpx_totals(args.gpx)
+        t = _gpx_totals(args.gpx)
         geo = ride_scene.RideGeo(
-            distance_m=dist, elevation_gain_m=climb,
+            distance_m=t["distance_m"], elevation_gain_m=t["climb_m"],
+            min_altitude_m=t["min_alt"], max_altitude_m=t["max_alt"],
             start_lat=lat, start_lng=lng, place_name=place,
         )
-        print(f"[scene] climb {climb:.0f} m → terrain '{ride_scene.terrain_key(geo)}'"
-              if climb else "[scene] no elevation in file → neutral terrain")
+        km = (t["distance_m"] or 0) / 1000
+        print(f"[scene] {km:.0f} km, {t['climb_m'] or 0:.0f} m climb, "
+              f"{t['min_alt'] or 0:.0f}–{t['max_alt'] or 0:.0f} m "
+              f"→ terrain '{ride_scene.terrain_key(geo)}'")
 
         ctx = ride_scene.training_context("endurance", geo)
         img, _, status = await cyclr_studio.compose_scene(rider_desc, bike_desc, ctx)
