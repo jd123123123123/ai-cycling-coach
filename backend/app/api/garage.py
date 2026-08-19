@@ -32,7 +32,7 @@ from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
 from app.models.garage import DayScene, GarageAsset, RideScene
 from app.models.user import User
-from app.services import cyclr_studio
+from app.services import cyclr_studio, rewards, workshop
 from app.services.ride_scene import DAY_POSES, RideGeo, day_context, training_context
 
 router = APIRouter(prefix="/garage", tags=["garage"])
@@ -130,6 +130,110 @@ async def get_garage(
     )
     assets = {a.kind: a for a in result.scalars().all()}
     return GarageOut(rider=_to_out(assets.get("rider")), bike=_to_out(assets.get("bike")))
+
+
+# ── the workshop ────────────────────────────────────────────────────────────
+class ComponentOut(BaseModel):
+    id: str
+    name_de: str
+    action_de: str
+    km_since: float
+    interval_km: float
+    km_total: float
+    #: Unharvested Service Bonus sitting on this component right now.
+    bonus_rc: int
+    #: "fresh" | "due" | "overdue" — never a failure state, and never blocking.
+    status: str
+    progress: float
+    #: True once the pile has stopped growing. It has NOT shrunk.
+    accrual_stopped: bool
+
+
+class WorkshopOut(BaseModel):
+    components: list[ComponentOut]
+    total_bonus_rc: int
+    #: Whether the +12 % fresh-drivetrain earn bonus is currently live.
+    drivetrain_fresh: bool
+    #: The genuine drag of a dirty chain, in watts. Null while fresh — the app
+    #: states a measured fact or says nothing, never a zero implying a reading.
+    drivetrain_watts: float | None
+    chain_km_total: float
+    chain_record_km: float
+    balance: int
+
+
+class ServiceOut(BaseModel):
+    component_id: str
+    name_de: str
+    paid_rc: int
+    balance: int
+    km_serviced: float
+    new_record: bool
+    record_km: float
+    #: The refreshed workshop, so the screen redraws without a second round trip.
+    workshop: WorkshopOut
+
+
+def _workshop_out(view: workshop.WorkshopView, balance: int) -> WorkshopOut:
+    return WorkshopOut(
+        components=[ComponentOut(**vars(c)) for c in view.components],
+        total_bonus_rc=view.total_bonus_rc,
+        drivetrain_fresh=view.drivetrain_fresh,
+        drivetrain_watts=view.drivetrain_watts,
+        chain_km_total=round(view.chain_km_total, 1),
+        chain_record_km=round(view.chain_record_km, 1),
+        balance=balance,
+    )
+
+
+@router.get("/workshop", response_model=WorkshopOut, summary="The bike's condition and its unharvested Service Bonus")
+async def get_workshop(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> WorkshopOut:
+    """Every component's wear, and what servicing it would pay right now.
+
+    A writer, like `GET /shop` before it: component rows are created lazily on
+    first read so a new component never needs a backfill. Hence the commit.
+    """
+    view = await workshop.read(db, current_user.id)
+    balance = await rewards.balance_of(db, current_user.id)
+    await db.commit()
+    return _workshop_out(view, balance)
+
+
+@router.post("/workshop/service/{component_id}", response_model=ServiceOut, summary="Service a component and harvest its Service Bonus")
+async def service_component(
+    component_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> ServiceOut:
+    """Reset one component's interval and CREDIT the bonus it banked.
+
+    There is no failure mode here worth a non-200 except an unknown component.
+    Servicing something you cleaned yesterday pays 0 RC and says so — it is a
+    fair trade the rider is allowed to make, not an error. Nothing in this path
+    can ever debit; see `services/workshop`.
+    """
+    try:
+        result = await workshop.service(db, current_user.id, component_id)
+    except workshop.UnknownComponentError:
+        raise HTTPException(
+            http_status.HTTP_404_NOT_FOUND, f"No such component: {component_id}"
+        ) from None
+
+    view = await workshop.read(db, current_user.id)
+    await db.commit()
+    return ServiceOut(
+        component_id=result.component_id,
+        name_de=result.name_de,
+        paid_rc=result.paid_rc,
+        balance=result.balance,
+        km_serviced=result.km_serviced,
+        new_record=result.new_record,
+        record_km=result.record_km,
+        workshop=_workshop_out(view, result.balance),
+    )
 
 
 @router.post("/asset/render", response_model=AssetRenderResponse)

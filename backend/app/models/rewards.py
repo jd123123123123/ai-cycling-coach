@@ -34,6 +34,16 @@ REASON_STREAK_BONUS = "streak_bonus"
 REASON_CHALLENGE_BONUS = "challenge_bonus"
 REASON_REFERRAL_BONUS = "referral_bonus"
 REASON_PART_PURCHASE = "part_purchase"
+#: The harvest. Credited when a rider services a component, sized by the
+#: kilometres they rode on it — the counterpart to `ride_earn`, and the reason
+#: the maintenance loop can exist without any reason code that debits for
+#: neglect. See `services/workshop.service`.
+REASON_SERVICE_BONUS = "service_bonus"
+#: Reaching a new Eddington number. Rare, one-off, superlinear.
+REASON_EDDINGTON = "eddington"
+#: What a conditional equipment bonus added to a ride, banked alongside the
+#: ride's own earn so the ledger can show WHY a ride paid more than its TSS.
+REASON_GEAR_BONUS = "gear_bonus"
 REASON_ADJUSTMENT = "adjustment"
 
 ONBOARDING_REASONS = {

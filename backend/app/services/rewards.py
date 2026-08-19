@@ -222,6 +222,62 @@ async def _credit(
     return row
 
 
+class InsufficientBalanceError(Exception):
+    """Not enough RideCoin. Carries both figures so the caller can say which."""
+
+    def __init__(self, needed: int, balance: int) -> None:
+        super().__init__(f"needs {needed} RC, balance is {balance} RC")
+        self.needed = needed
+        self.balance = balance
+
+
+async def balance_of(db: AsyncSession, user_id: int, *, lock: bool = False) -> int:
+    """The rider's balance. `lock=True` takes `FOR UPDATE`, so everything read
+    after it sees a balance no other spend by this rider can move until commit."""
+    stmt = select(Wallet).where(Wallet.user_id == user_id)
+    if lock:
+        stmt = stmt.with_for_update()
+    wallet = (await db.execute(stmt)).scalar_one_or_none()
+    return int(wallet.balance) if wallet is not None else 0
+
+
+async def spend(
+    db: AsyncSession,
+    user_id: int,
+    amount: int,
+    reason: str,
+    *,
+    context: dict | None = None,
+) -> int:
+    """Debit RideCoin, and return the balance left behind.
+
+    THE ONLY DEBIT IN THE APPLICATION, and the reason this function exists at
+    all. Until now the only path that moved money the other way was buried in
+    `shop.purchase`, so deleting the shop — which the garage rework does — would
+    have made RideCoin unspendable by construction while every faucet kept
+    running. Every sink goes through here.
+
+    Takes `FOR UPDATE` before reading, so two concurrent spends cannot both see
+    the same balance and both succeed. Raises `InsufficientBalanceError` before
+    writing anything: a refusal must leave no ledger line and move no coins.
+
+    The caller owns the transaction. This flushes so the row is visible to
+    follow-up reads in the same unit of work, and commits nothing — the item
+    being bought and the money paying for it must land or fail together.
+    """
+    if amount <= 0:
+        raise ValueError("spend amount must be positive")
+
+    balance = await balance_of(db, user_id, lock=True)
+    if amount > balance:
+        raise InsufficientBalanceError(amount, balance)
+
+    # Signed: a spend is a negative credit, so one ledger and one balance column
+    # carry both directions and can never disagree about the total.
+    await _credit(db, user_id, reason, -amount, context=context)
+    return balance - amount
+
+
 async def _already_awarded(
     db: AsyncSession, user_id: int, activity_id: int, reason: str
 ) -> bool:
