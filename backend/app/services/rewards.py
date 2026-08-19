@@ -40,7 +40,18 @@ RC_PER_TSS = 1.0            # k = 1: 1 RideCoin per TSS point
 PER_RIDE_SOFT_CAP = 150     # a ride's *earning* plateaus at TSS 150
 ONBOARDING_PHOTO_RC = 125   # add your photo / create avatar
 ONBOARDING_DEVICE_RC = 125  # connect your watch
-ONBOARDING_BIKE_RC = 150    # digitalise your bike in the studio (garage bike asset)
+# Paid by `shop.claim_first_bike` — the moment a rider claims their free first
+# bike. The comment here used to read "digitalise your bike in the studio", which
+# was true until the studio stopped being a tab; it then described a flow that
+# could no longer pay it, and reading this line is what convinced two separate
+# passes that the grant had been stranded. It has not: it is idempotent per
+# reason and the claim path grants it on every new rider.
+#
+# There IS still a second door — POST /rewards/onboarding/bike (api/rewards.py)
+# maps kind="bike" to the same reason, left from the studio flow. It cannot
+# double-pay (grant_onboarding is idempotent), but it is a live endpoint for a
+# retired surface and wants deleting once nothing calls it.
+ONBOARDING_BIKE_RC = 150
 
 # reason -> amount, EXPLICIT. This used to be inferred from the reason string
 # (`reason.endswith("photo")` picking one of two amounts), which silently paid
