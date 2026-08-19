@@ -14,9 +14,9 @@ describe('design system switch', () => {
     expect(readDesignSystem()).toBe('editorial2')
   })
 
+  // Only editorial2 round-trips. v4 deliberately does not persist — see
+  // "does not remember v4 even when it is asked to" below.
   it('round-trips the stored preference', () => {
-    writeDesignSystem('v4')
-    expect(readDesignSystem()).toBe('v4')
     writeDesignSystem('editorial2')
     expect(readDesignSystem()).toBe('editorial2')
   })
@@ -33,16 +33,39 @@ describe('design system switch', () => {
     expect(designSystemFromSearch('')).toBeNull()
   })
 
-  it('lands on W3 Today by default, and on /dashboard only when v4 is stored', () => {
+  it('lands on W3 Today by default', () => {
     // W3 Today, not the older /e/today: that is the screen the tab bar and
     // every W3 route assume, and the guard that enforces onboarding wraps it.
     expect(resolveLandingPath('')).toBe('/e/w3-today')
-    writeDesignSystem('v4')
-    expect(resolveLandingPath('')).toBe('/dashboard')
   })
 
-  it('?ds= overrides the stored preference and persists it', () => {
+  // REPORTED FROM PRODUCTION 2026-08-19: a rider logged in after a deploy and
+  // saw neither the new app nor the new onboarding. Their browser still carried
+  // `designSystem: 'v4'` from the one time they opened the documented `?ds=v4`
+  // escape hatch, and the root redirect had been answering /dashboard ever
+  // since — across every release, with nothing in the product able to undo it.
+  it('never lets a stored v4 pin a rider to the retired app', () => {
+    localStorage.setItem('designSystem', 'v4')
+    expect(resolveLandingPath('')).toBe('/e/w3-today')
+    // …and the stale value is cleared, so the browser heals itself.
+    expect(localStorage.getItem('designSystem')).toBeNull()
+  })
+
+  it('does not remember v4 even when it is asked to', () => {
     writeDesignSystem('v4')
+    expect(localStorage.getItem('designSystem')).toBeNull()
+    expect(readDesignSystem()).toBe('editorial2')
+  })
+
+  it('still reaches the old app for one visit via ?ds=v4', () => {
+    // The escape hatch has to keep working — v4 holds surfaces W3 has not
+    // replaced. It just does not survive the reload any more.
+    expect(resolveLandingPath('?ds=v4')).toBe('/dashboard')
+    expect(resolveLandingPath('')).toBe('/e/w3-today')
+  })
+
+  it('?ds=editorial2 overrides a stored value and persists it', () => {
+    localStorage.setItem('designSystem', 'v4')
     expect(resolveLandingPath('?ds=editorial2')).toBe('/e/w3-today')
     expect(readDesignSystem()).toBe('editorial2')
   })

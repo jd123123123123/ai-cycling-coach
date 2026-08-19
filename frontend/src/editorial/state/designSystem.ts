@@ -1,7 +1,21 @@
 /**
- * Which design system the athlete lands in. A persisted preference so the
- * choice survives reloads, plus ?ds= so either system is one URL away without
- * digging through settings.
+ * Which design system the athlete lands in.
+ *
+ * `?ds=` still reaches either system, but ONLY `editorial2` is remembered.
+ *
+ * WHY v4 IS NO LONGER STICKY. This began as a symmetric preference, from when
+ * both systems were live choices. Once W3 became the only thing anything links
+ * to, that symmetry turned into a trap: anyone who had ever opened `?ds=v4` —
+ * which is the documented way to reach the old app, so everyone testing it did
+ * — had `designSystem: 'v4'` written to their browser and was then pinned to
+ * the retired app across every later release, with nothing in the product able
+ * to move them off it. Reported from production 2026-08-19: a rider logged in
+ * after a deploy and saw neither the new app nor the new onboarding, because
+ * their root redirect had been answering `/dashboard` for weeks.
+ *
+ * So v4 is now opt-in per navigation: `?ds=v4` lands you there for that visit,
+ * a reload returns you to W3, and a browser already carrying the stale value is
+ * healed the next time it reads it.
  */
 export type DesignSystem = 'v4' | 'editorial2'
 
@@ -14,6 +28,12 @@ function isDesignSystem(v: unknown): v is DesignSystem {
 export function readDesignSystem(): DesignSystem {
   try {
     const raw = localStorage.getItem(KEY)
+    // A stored 'v4' is stale by definition now — clear it rather than honour
+    // it, so a pinned browser fixes itself instead of needing a console.
+    if (raw === 'v4') {
+      localStorage.removeItem(KEY)
+      return 'editorial2'
+    }
     return isDesignSystem(raw) ? raw : 'editorial2'
   } catch {
     return 'editorial2'
@@ -21,6 +41,10 @@ export function readDesignSystem(): DesignSystem {
 }
 
 export function writeDesignSystem(ds: DesignSystem): void {
+  // Deliberately one-way: only the default is remembered. Persisting 'v4' is
+  // what stranded riders on the old app, and the escape hatch does not need
+  // memory to work — the URL carries it.
+  if (ds !== 'editorial2') return
   try {
     localStorage.setItem(KEY, ds)
   } catch {
