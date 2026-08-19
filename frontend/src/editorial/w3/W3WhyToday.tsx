@@ -78,11 +78,47 @@ interface Reason {
   principle: string | null
   /** Where the number came from — measured overnight vs derived from training. */
   provenance: string | null
+  /** A real proportion to DRAW, when two structured numbers exist for it.
+   *  Only ever set from numeric fields — never parsed back out of prose. */
+  meter?: { value: number; max: number; caption: string } | null
+}
+
+/**
+ * Pull the measurement to the front of the row so it can be SEEN.
+ *
+ * The explainer hands us whole sentences — "HRV liegt 14 % über dem Schnitt —
+ * gut erholt" — and three of those stacked is the wall of text this card had
+ * become. The number is the thing the rider is looking for, so it gets lifted
+ * out and set large, with the remainder of the sentence as its caption.
+ *
+ * This is TYPOGRAPHY, NOT PARSING FOR MEANING: the figure shown is a substring
+ * of the sentence the server already wrote, and if no leading figure is found
+ * the sentence is printed exactly as before. Nothing is computed, rounded or
+ * re-worded here.
+ */
+function liftFigure(detail: string): { figure: string; rest: string } | null {
+  const m = detail.match(/([+−-]?\d+(?:[.,]\d+)?)\s*(%|W\/kg|W|bpm|ms|TSS)?/)
+  if (!m || m.index == null) return null
+  // Take the TAIL after the figure — never cut the figure out of the middle.
+  // Removing it in place breaks the sentence: "TSB liegt bei +17 — frisch"
+  // would render as "TSB liegt bei — frisch". What comes before the number is
+  // only the signal's own name ("HRV liegt", "TSB liegt bei"), which the row
+  // label already states, so dropping the head loses nothing and reads clean.
+  const rest = detail
+    .slice(m.index + m[0].length)
+    .replace(/^[\s,–—-]+/, '')
+    .trim()
+  if (rest.length <= 2) return null
+  return { figure: (m[1] + (m[2] ?? '')).replace('-', '−'), rest }
 }
 
 function ReasonRow({ r, open, onToggle }: { r: Reason; open: boolean; onToggle: () => void }) {
   const reduce = useReducedMotion()
   const c = SEV_COLOR[r.severity]
+  // A row that already DRAWS its proportion keeps its sentence whole — the
+  // hours line reads "10 h/Woche angegeben", where the unit is glued to the
+  // next word and a lift would strand "/Woche angegeben".
+  const figure = r.meter ? null : liftFigure(r.detail)
   return (
     <div style={{ display: 'flex', borderRadius: 16, background: T.surface2, overflow: 'hidden' }}>
       {/* Severity rail — an easing day and a green-light day never look alike. */}
@@ -115,13 +151,43 @@ function ReasonRow({ r, open, onToggle }: { r: Reason; open: boolean; onToggle: 
           )}
         </div>
 
-        {/* The evidence — never "du bist erholt", always the number. */}
-        <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: T.ink, minWidth: 0 }}>{r.detail}</span>
+        {/* The evidence — never "du bist erholt", always the number, and the
+            number set large enough to be read at a glance instead of found
+            inside a sentence. */}
+        {figure ? (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, width: '100%', minWidth: 0 }}>
+            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, lineHeight: 1, color: c, flex: 'none' }}>
+              {figure.figure}
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.35, color: T.mid, minWidth: 0 }}>
+              {figure.rest}
+            </span>
+          </div>
+        ) : (
+          <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: T.ink, minWidth: 0 }}>{r.detail}</span>
+        )}
 
-        {/* What it did to the session. */}
-        <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4, color: T.mid, minWidth: 0 }}>
-          <span style={{ color: c, fontWeight: 700 }}>→ </span>{r.action}
-        </span>
+        {/* A drawn proportion, where two real numbers exist for one. */}
+        {r.meter && r.meter.max > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%', minWidth: 0 }}>
+            <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF0F', overflow: 'hidden' }}>
+              <motion.div
+                initial={reduce ? false : { width: 0 }}
+                animate={{ width: `${Math.max(2, Math.min(100, (r.meter.value / r.meter.max) * 100))}%` }}
+                transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
+                style={{ height: '100%', borderRadius: 100, background: c }} />
+            </div>
+            <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{r.meter.caption}</span>
+          </div>
+        )}
+
+        {/* What it did to the session. Suppressed when the card already states
+            this consequence once above every row (see `sharedAction`). */}
+        {r.action && (
+          <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4, color: T.mid, minWidth: 0 }}>
+            <span style={{ color: c, fontWeight: 700 }}>→ </span>{r.action}
+          </span>
+        )}
 
         {open && r.principle && (
           <motion.span
@@ -197,10 +263,24 @@ export default function W3WhyToday() {
       arrow: '→',
       detail: `Du hast ${num(hoursNote.declared_hours, hoursNote.declared_hours % 1 ? 1 : 0)} h/Woche angegeben — der Plan startet bei ${num(hoursNote.start_hours, 1)} h`,
       action: 'Die Wochenlast ist an deine aktuelle Fitness gekoppelt, nicht an deinen Kalender.',
+      // The one row here that owns two real numbers, so it is the one row that
+      // can honestly be DRAWN: how much of the declared week the plan currently
+      // starts at. Straight from the fields — nothing read back out of the text.
+      meter: {
+        value: hoursNote.start_hours,
+        max: hoursNote.declared_hours,
+        caption: `${num(hoursNote.start_hours, 1)} h von ${num(hoursNote.declared_hours, hoursNote.declared_hours % 1 ? 1 : 0)} h angegeben`,
+      },
       principle: 'Dein Trainingsstand (CTL) trägt aktuell nur dieses Startvolumen. Der Plan steigert es um maximal 8 % pro Woche — schneller aufgebauter Umfang wird nicht zu Fitness, sondern zu Ermüdung.',
       provenance: 'aus deinem Plan',
     })
   }
+
+  // A consequence that lands under two or more signals is a fact about the DAY,
+  // not about any one signal — hoisted so it is read once instead of repeated.
+  const actionCounts = new Map<string, number>()
+  for (const r of reasons) if (r.action) actionCounts.set(r.action, (actionCounts.get(r.action) ?? 0) + 1)
+  const sharedAction = [...actionCounts.entries()].find(([, n]) => n > 1)?.[0] ?? null
 
   // ── The lead: one plain sentence, from the block the week sits in ────────
   const blockInfo = meso ? BLOCK_DE[meso.block_position] ?? null : null
@@ -269,11 +349,27 @@ export default function W3WhyToday() {
           </div>
         )}
 
+        {/* SAID ONCE, NOT UNDER EVERY ROW. On a rest day the override gives HRV
+            and TSB the identical consequence sentence, so the card printed the
+            same line twice within four lines of itself. When a consequence is
+            shared it belongs to the day, not to each signal: it is stated here
+            once and struck from the rows below. */}
+        {sharedAction && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '11px 13px', borderRadius: 14, background: T.surface2 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: accent, flex: 'none', lineHeight: 1.4 }}>→</span>
+            <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid, minWidth: 0 }}>{sharedAction}</span>
+          </div>
+        )}
+
         {/* The reasons, each naming its own evidence. */}
         {reasons.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {reasons.map((r) => (
-              <ReasonRow key={r.key} r={r} open={open === r.key} onToggle={() => setOpen(open === r.key ? null : r.key)} />
+              <ReasonRow
+                key={r.key}
+                r={sharedAction && r.action === sharedAction ? { ...r, action: '' } : r}
+                open={open === r.key}
+                onToggle={() => setOpen(open === r.key ? null : r.key)} />
             ))}
           </div>
         )}

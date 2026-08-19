@@ -73,7 +73,12 @@ describe('W3WhyToday', () => {
     render(<W3WhyToday />)
 
     // The measurement, verbatim from GET /coach/brief → adaptations.changes[].
-    expect(screen.getByText(/HRV liegt 9% über dem Schnitt/)).toBeTruthy()
+    // The measurement is SHOWN, not narrated: the figure is lifted out and set
+    // large, with the rest of the server's sentence as its caption. Both halves
+    // must still be on screen — the number must never appear without what it
+    // measures, and the caption must never appear without its number.
+    expect(screen.getByText('9%')).toBeTruthy()
+    expect(screen.getByText(/über dem Schnitt — gut erholt/)).toBeTruthy()
     // What it did to today's session.
     expect(screen.getByText(/grünes Licht für eine Qualitäts/)).toBeTruthy()
     // Today's real session by name, from GET /weeks/current.
@@ -151,13 +156,38 @@ describe('W3WhyToday', () => {
     render(<W3WhyToday />)
 
     // The measurement survives untouched …
-    expect(screen.getByText(/HRV liegt 9% über dem Schnitt/)).toBeTruthy()
+    // The measurement is SHOWN, not narrated: the figure is lifted out and set
+    // large, with the rest of the server's sentence as its caption. Both halves
+    // must still be on screen — the number must never appear without what it
+    // measures, and the caption must never appear without its number.
+    expect(screen.getByText('9%')).toBeTruthy()
+    expect(screen.getByText(/über dem Schnitt — gut erholt/)).toBeTruthy()
     // … but the invitation to go hard does not.
     expect(screen.queryByText(/grünes Licht für eine Qualitäts/)).toBeNull()
     expect(screen.getByText(/Der Plan hält heute trotzdem Ruhetag/)).toBeTruthy()
     expect(screen.getByText(/über den Tag entscheidet der Plan/)).toBeTruthy()
     // And the row is no longer coloured as a green light.
     expect(screen.getByText('HRV').style.color).not.toBe(hexToRgb(T.acid))
+  })
+
+  // OWNER 2026-08-19: "die section ist zu lang, zu textuell". On a rest day the
+  // override hands EVERY green signal the same consequence sentence, so a card
+  // with a green HRV and a green TSB printed that sentence twice within a few
+  // lines of itself. A consequence shared by several signals is a fact about
+  // the day, so it is stated once, above the rows.
+  it('states a consequence shared by two signals once, not under each of them', () => {
+    const CHANGE_TSB = { ...CHANGE_HRV, signal: 'Form (TSB)', detail: 'TSB liegt bei +17 — frisch', kind: 'load' as const }
+    briefMock.mockReturnValue({ data: { adaptations: { summary: 'x', changes: [CHANGE_HRV, CHANGE_TSB] } } })
+    weekMock.mockReturnValue({
+      data: { days: [{ is_today: true, title: 'Ruhetag', category: 'rest' }], meso_block: meso },
+    })
+    render(<W3WhyToday />)
+
+    expect(screen.getAllByText(/Der Plan hält heute trotzdem Ruhetag/)).toHaveLength(1)
+    // Both signals still carry their own evidence — dedupe removes the repeated
+    // consequence, never a measurement.
+    expect(screen.getByText('9%')).toBeTruthy()
+    expect(screen.getByText('+17')).toBeTruthy()
   })
 
   it('leaves a green signal green on a training day', () => {
