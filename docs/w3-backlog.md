@@ -27,6 +27,44 @@ Ordered by value per unit of risk. Items marked ✅ are done in this branch.
 
 ---
 
+## OWNER FEEDBACK 2026-08-19 — from using the live app
+
+Captured verbatim in intent, ranked by whether it is a bug or a design ask.
+None of these are started.
+
+### F1. Rest day still renders the workout chart — BUG
+"Ruhetag zeigt anstatt Ruhetag-Animation oder Daten immer noch das beam chart
+mit FTP etc." Same family as the phantom eleven-bar workout (`209ec86`): the
+session furniture renders on a day the plan prescribes rest. A rest day needs
+its own composition — what recovery is doing, not an empty interval profile.
+Start at `W3TodayView`'s session band and the `day.rest` flag.
+
+### F2. "Bestes Fenster" missing on future rides — BUG
+Visible for today, absent when browsing a future day. Likely the weather/window
+producer only resolving for the current date.
+
+### F3. Hero images are not attractive — DESIGN
+"Die Bilder im Hero sowohl bei den Detail-Rides als auch im Today sind alles
+andere als attraktiv, witzig und animierend." Both surfaces. The Today hero was
+just bled to the edges with type over it, which is a step, not the answer — the
+underlying art is still a catalogue render on a studio ground. This wants a
+concept, not another crop: what IS the picture at the top of Today?
+
+### F4. First AI-coach summary is too long — DESIGN/COPY
+Too much text before the rider gets anything. Same disease as "Warum diese
+Einheit" had; the fix there (lift the figure, say the conclusion once) is the
+pattern to reuse.
+
+### F5. "Letzte Woche" should be Spotify-Wrapped — DESIGN, the big one
+"Geile Slides, viel Dopamin, Erfolge feiern, und zum Schluss ein Screen zum
+Sharen mit den Freunden und der Zusammenfassung der Woche." A full-screen
+slide deck, not a card: one fact per slide, celebratory motion, ending on a
+shareable summary. `W3WeekRecapCard` + `/e/w3-week-review` are the seam, and
+`w3share.ts` already exists. This is the largest item in this file and the one
+most likely to be felt.
+
+---
+
 ## P0 — known-broken, cheap, affects everyone
 
 ### 1. ✅ `whileInView` resolves immediately — migrated to `useInView`
