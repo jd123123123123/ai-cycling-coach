@@ -335,14 +335,50 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
             stack below is the whole content height, and the photo takes exactly
             what is left of the viewport. An in-flow `height: 100%` img would
             resolve to its intrinsic height here and push the CTA off-screen. */}
-        <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 200, background: '#232427', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 200, background: T.bg, overflow: 'hidden' }}>
           {heroImageUrl
-            ? <img src={heroImageUrl} alt="Dein Collectible-Rider" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 28%' }} />
-            : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: T.quiet }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-                  <Bike size={72} strokeWidth={1.2} color="#3A3A3A" /><span style={{ fontSize: 12, fontWeight: 600 }}>Hier steht dein Rider</span>
+            ? (
+              <motion.img
+                src={heroImageUrl} alt="Dein Collectible-Rider"
+                initial={reduce ? false : { opacity: 0, scale: 1.08 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.9, ease: EASE }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 28%' }} />
+            )
+            : (
+              /* THE EMPTY STATE IS THE SELL. This is the screen asking for a
+                 photo, so what stands in for the photo has to make the rider
+                 want one — a flat grey slab with a grey bicycle on it argued
+                 the opposite. It is now the W3 stage: an acid bloom breathing
+                 under a knocked-back silhouette, so the empty frame reads as a
+                 place waiting to be filled rather than a failed image. */
+              <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+                <motion.div aria-hidden
+                  animate={reduce ? undefined : { opacity: [0.5, 0.85, 0.5], scale: [1, 1.06, 1] }}
+                  transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}2E, transparent)`, filter: 'blur(6px)' }} />
+                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' }}>
+                  {/* A PORTRAIT FRAME, NOT A LOOSE ICON. The dashed acid seat is
+                      already this system's "your image belongs here" (the empty
+                      rider in W3BikeHero uses it), and a frame states the offer
+                      that an icon alone only hints at. It breathes so the empty
+                      slot reads as waiting rather than broken. */}
+                  <motion.div
+                    animate={reduce ? undefined : { scale: [1, 1.035, 1] }}
+                    transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+                    style={{
+                      width: 168, height: 168, borderRadius: 40, display: 'grid', placeItems: 'center',
+                      border: `2px dashed ${T.acid}66`, background: `${T.acid}0A`,
+                      boxShadow: `0 0 60px ${T.acid}1F`,
+                    }}>
+                    <Bike size={72} strokeWidth={1.2} color={T.acid} />
+                  </motion.div>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', color: T.acid }}>
+                    Hier steht dein Rider
+                  </span>
                 </div>
-              </div>}
+              </div>
+            )}
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 150, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
         </div>
 
@@ -353,7 +389,15 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
             <Sparkles size={11} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.acid }}>NOCH EINE SACHE</span>
           </div>
 
-          <span style={{ marginTop: 10, fontSize: 30, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.05, color: T.ink }}>Jetzt kommst du rein</span>
+          {/* TWO-TONE DISPLAY, the W3 idiom for a line that has to land (the
+              celebration screen sets "Cobbles" against "beaten." the same way).
+              One flat ink sentence was the quietest thing on the most
+              persuasive screen in the product; the acid falls on "rein",
+              because being in is the whole offer. */}
+          <span style={{ marginTop: 10, fontSize: 34, fontWeight: 700, letterSpacing: -1.4, lineHeight: 1.02, color: T.ink }}>
+            Jetzt kommst du{' '}
+            <span style={{ color: T.acid, textShadow: `0 0 30px ${T.acid}59` }}>rein</span>
+          </span>
           <span style={{ marginTop: 8, fontSize: 13.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>
             Ein Foto — und du wirst zum Collectible-Rider, das Gesicht jeder deiner Fahrten.
           </span>

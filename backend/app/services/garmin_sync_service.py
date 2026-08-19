@@ -630,10 +630,23 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
 
         # Backfill elevation gain (Höhenmeter) for NULL rows that carry a raw_data
         # blob — self-heals historical/COROS rides. Best-effort, never breaks sync.
+        #
+        # UNBOUNDED, NOT 90 DAYS. Reported 2026-08-19: lifetime Höhenmeter came
+        # back too low. The cause is not the extractor — it is that a ride whose
+        # column is NULL contributes 0 to every lifetime sum (the frontend
+        # reducer does `elevation_gain_m ?? 0`), silently, and a 90-day window
+        # meant any older ride that missed the value could never be healed. A
+        # rider with four years of history had most of their ascent counted as
+        # zero for good.
+        #
+        # Safe to run over the whole history: the query already filters to
+        # `elevation_gain_m IS NULL AND raw_data IS NOT NULL`, so it is
+        # self-limiting — once a row is filled it stops matching, and after the
+        # first pass there is nothing left to scan.
         try:
             from app.services.activity_service import backfill_missing_elevation
 
-            await backfill_missing_elevation(db, user_id, days=90)
+            await backfill_missing_elevation(db, user_id, days=None)
         except Exception:  # noqa: BLE001 — backfill must never break a sync
             logger.warning(
                 "backfill_missing_elevation failed after sync (user_id=%s) — non-fatal",

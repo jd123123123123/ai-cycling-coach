@@ -1,13 +1,22 @@
 import W3AvatarOnboardView from './W3AvatarOnboardView'
 import { SHOWCASE_RIDER } from './showcaseRider'
 
-/** TEMP preview — the "AVATAR UNLOCKED" reveal (pen lQimK, reworked).
- *  /e/w3-avatar-onboard-preview is unguarded. */
+/** TEMP preview — the avatar onboarding, every stage.
+ *  /e/w3-avatar-onboard-preview is unguarded.
+ *
+ *  `?stage=` picks which one: `intro` (the "Jetzt kommst du rein" invite),
+ *  `generating`, `unavailable`, or `revealed` (default). The invite was
+ *  unreachable here before, so its empty state — the frame that stands in for
+ *  the photo it is asking for — could not be looked at without editing this
+ *  file. `?photo=0` drops the hero image to see exactly that empty frame. */
 export default function W3AvatarOnboardPreview() {
+  const params = new URLSearchParams(window.location.search)
+  const stage = (params.get('stage') ?? 'revealed') as 'intro' | 'generating' | 'unavailable' | 'revealed'
+  const photo = params.get('photo') !== '0'
   return (
     <W3AvatarOnboardView
-      heroImageUrl={SHOWCASE_RIDER}
-      stage="revealed"
+      heroImageUrl={photo ? SHOWCASE_RIDER : null}
+      stage={stage}
       reveal={{
         avatarUrl: SHOWCASE_RIDER,
         handle: '@jannis',

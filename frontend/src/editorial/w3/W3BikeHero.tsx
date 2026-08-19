@@ -307,23 +307,42 @@ export default function W3BikeHero({
   if (image) {
     return frame(
       <>
-        {/* Ambient bloom, so the card sits in light rather than on a slab. */}
-        <div aria-hidden style={{ position: 'absolute', left: '50%', top: 110, transform: 'translate(-50%, -50%)', width: 340, height: 200, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}22, transparent)` }} />
+        {/* FULL BLEED, NOT A CARD IN A CASE. The collectible used to float as a
+            236px rounded square on the dark ground, which read as a catalogue
+            listing — a product shot with a price missing. Bled to the edges and
+            given its own name in type, the same photograph becomes a plate: the
+            magazine treatment the composed-scene branch above already uses, so
+            the two states of this slot now speak one language instead of two.
 
-        {/* Flex, not absolute offsets: the collectible takes whatever height is
-            left after the footer, so the offer below it can never be pushed
-            under the picture on a short screen. */}
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '16px 20px 44px' }}>
-          <motion.div
-            initial={reduce ? false : { opacity: 0, scale: 0.94 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, ease: EASE }}
-            style={{ flex: '1 1 auto', minHeight: 0, aspectRatio: '1 / 1', maxWidth: 236, borderRadius: 28, overflow: 'hidden', border: `1px solid ${T.stroke}`, boxShadow: '0 18px 40px #00000066' }}>
-            <img src={image} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-          </motion.div>
+            `cover` on 1:1 art in a 390x248 band crops to the middle, which is
+            where the bike is. The studio ground the render carries becomes the
+            plate's own light rather than a pale slab, because the scrim below
+            carries it down into the page. */}
+        <motion.img
+          src={image} alt={name}
+          initial={reduce ? false : { opacity: 0, scale: 1.06 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.7, ease: EASE }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
 
+        {/* Two scrims doing different jobs: the foot dissolves the picture into
+            the page so the card below grows out of it, and the lower-left wash
+            buys contrast for the type without dimming the bike itself. */}
+        <div aria-hidden style={{ position: 'absolute', inset: 0, background: `linear-gradient(to bottom, transparent 46%, ${T.bg}A6 80%, ${T.bg} 100%)` }} />
+        <div aria-hidden style={{ position: 'absolute', inset: 0, background: `linear-gradient(105deg, ${T.bg}99 0%, ${T.bg}26 46%, transparent 68%)` }} />
+
+        {/* The plate's caption — the object names itself, where a catalogue
+            tile would have made you look elsewhere for it. */}
+        <div style={{ position: 'absolute', left: 20, right: 20, bottom: 16, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+          <Kicker>Dein Rad</Kicker>
+          <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: -0.9, lineHeight: 1.05, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {name}
+          </span>
+        </div>
+
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '16px 20px 44px', justifyContent: 'flex-end', pointerEvents: 'none' }}>
           {/* What the rider gets for the tap — or, honestly, why they can't. */}
-          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center', maxWidth: 300 }}>
+          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, textAlign: 'right', maxWidth: 300, marginLeft: 'auto', pointerEvents: 'auto' }}>
             {canCompose ? (
               <>
                 <span style={{ fontSize: 12, fontWeight: 600, color: T.mid, lineHeight: 1.3 }}>
