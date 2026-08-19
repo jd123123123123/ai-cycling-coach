@@ -56,12 +56,15 @@ CONDITION_BONUS_PCT = 12
 # ── slots ───────────────────────────────────────────────────────────────────
 #: One item may be equipped per slot. Five slots is enough for a real decision
 #: and few enough that a rider can hold the whole loadout in their head.
+#: Labels are short because the loadout rail draws all five across a 390 px
+#: screen — "GLÜCKSBRINGER" truncated to "GLÜCKSBRIN…" there, which is the kind
+#: of detail that makes a screen look unfinished. Kept German and kept whole.
 SLOTS: dict[str, str] = {
     "tyres": "REIFEN",
     "wheels": "LAUFRÄDER",
     "mounted": "ANBAU",
     "cockpit": "COCKPIT",
-    "charm": "GLÜCKSBRINGER",
+    "charm": "GLÜCK",
 }
 
 #: Rarity drives price and how loudly the item is drawn. It does NOT strictly
