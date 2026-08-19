@@ -40,8 +40,13 @@ _TERRAIN = {
 }
 
 
-def _terrain_key(g: RideGeo) -> str:
-    """Terrain from the ride's own numbers. Offline, no external calls."""
+def terrain_key(g: RideGeo) -> str:
+    """Terrain from the ride's own numbers. Offline, no external calls.
+
+    Public because `ride_framing` reads it to decide which framing a ride
+    EARNED. One terrain classifier, so the backdrop a Today scene describes and
+    the world a past ride is shot in can never disagree about the same ride.
+    """
     dist_km = (g.distance_m or 0) / 1000
     gain = g.elevation_gain_m or 0
     # metres climbed per km — the standard "how hilly" ratio.
@@ -97,7 +102,7 @@ def scene_descriptor(g: RideGeo) -> str:
     if (g.distance_m or 0) <= 0 and g.elevation_gain_m is None:
         base = "an empty stretch of road in soft directional light, quiet and atmospheric"
     else:
-        base = _TERRAIN[_terrain_key(g)]
+        base = _TERRAIN[terrain_key(g)]
     # Prepend the real place only when a geocoder resolved it upstream.
     if g.place_name:
         base = f"{base}, a stylised interpretation of {g.place_name}"
