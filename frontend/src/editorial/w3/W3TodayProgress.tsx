@@ -6,6 +6,8 @@ import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useAchievements } from '../../hooks/useAchievements'
 import { useRewardChallenges, useJoinChallenge } from '../../hooks/useRewardChallenges'
 import type { ChallengeMetric, RewardChallenge } from '../../api/rewardChallenges'
+import { usePowerProfileView } from '../../hooks/usePowerProfileView'
+import W3PowerCurve from './W3PowerCurve'
 import { T, FONT, EASE, grow } from './w3tokens'
 import { S, lux, TNUM } from './w3surfaces'
 
@@ -176,6 +178,7 @@ export default function W3TodayProgress() {
   const reduce = useReducedMotion()
   const navigate = useNavigate()
   const { data: trends } = useSeasonTrends()
+  const { data: power } = usePowerProfileView()
   const { data: profile } = useAthleteProfile()
   const { data: challenges } = useRewardChallenges()
   const { data: ach } = useAchievements()
@@ -289,6 +292,19 @@ export default function W3TodayProgress() {
           </div>
         )}
       </div>
+      )}
+
+      {/* ── The power-duration curve ─────────────────────────────────────────
+           Served by GET /analytics/power-profile-view since long before W3, and
+           drawn only on the old app's /power-profile screen — which W3's five
+           tabs give no way to reach. Mounted here, beside FTP, because this is
+           the surface a rider comes to for "am I getting stronger". Renders
+           nothing until the server says `available` and two real durations
+           exist, so a rider with no power meter never sees an empty frame. ── */}
+      {power?.available && power.curve && (
+        <div style={{ ...lux(22), padding: S.xl, gap: S.md, minWidth: 0 }}>
+          <W3PowerCurve curve={power.curve} />
+        </div>
       )}
 
       {/* Season metrics — the rider's own monthly series, not a single number */}

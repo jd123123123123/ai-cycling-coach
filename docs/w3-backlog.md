@@ -86,8 +86,15 @@ out of the W3 design system into the old app's chrome mid-journey. The screen
 needs re-composing in W3 tokens — the same "resurrect means redesign" rule that
 applies to every orphan in this repo.
 
-Suggested shape: a `W3PowerView` on the FAHRTEN tab or off the FTP card in
-"Dein Fortschritt", consuming the existing hook unchanged. Server work: none.
+**✅ Ported.** `W3PowerCurve` draws the hero curve in W3 tokens and is mounted
+in "Dein Fortschritt" beside FTP, consuming `usePowerProfileView` unchanged.
+Server work: none, as predicted. Log-x (a linear axis buries 5 s–1 min in the
+first 2 % of the width), null durations dropped rather than zeroed, PRs marked,
+every plotted watt also printed as a number. 9 tests.
+
+**Still open from the old screen:** zones, phenotype, cohort bands and
+sprint/pedaling are all in the same payload and still only drawn on
+`/power-profile`. The curve was the valuable half; the rest is a further port.
 
 ### 4. Load is a number, never a shape — and the ramp series already exists
 **PRO/AM.** CTL/ATL/TSB exist in `W3TodayStatus` as a 90-day curve, which is

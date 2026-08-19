@@ -75,7 +75,14 @@ export function useInView(amount = 0.15) {
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    // Guarded, not assumed. `matchMedia` and `IntersectionObserver` are absent
+    // in jsdom and in some embedded webviews, and an unguarded call here throws
+    // during mount — taking the whole section down to hide an animation. With
+    // neither available the content is simply shown, which is the correct
+    // fallback for a progressive enhancement.
+    const prefersLess = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersLess || typeof IntersectionObserver !== 'function') {
       setInstant(true); setInView(true); return
     }
     const io = new IntersectionObserver(([e]) => {
