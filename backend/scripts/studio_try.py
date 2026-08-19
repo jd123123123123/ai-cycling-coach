@@ -157,7 +157,12 @@ async def main() -> int:
     if args.bike:
         bike_desc = await _describe(args.bike, "bike", out)
         if bike_desc:
-            img, _, status = await cyclr_studio.render_isolated(bike_desc, "bike")
+            # FROM THE PHOTO, not from the description. A description is lossy
+            # however dense, and the rider recognises their bike by exactly the
+            # details it loses — decal placement, rim depth, the real brand.
+            img, _, status = await cyclr_studio.render_bike_from_photo(
+                _as_data_url(args.bike), bike_desc,
+            )
             print(f"[bike] render: {status}")
             if img:
                 base = _write(out / "bike", img)

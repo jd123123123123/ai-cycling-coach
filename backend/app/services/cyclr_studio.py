@@ -56,24 +56,49 @@ from app.config import settings
 # was built and tuned against a different reference the owner supplied for that
 # specific surface. Two registers, on purpose. See `ride_framing`'s header.
 GENERAL_STYLE = (
-    "Playful, cool, highly attractive, and extremely likable 3D designer vinyl toy aesthetic "
-    "(similar to premium kawaii Web3 avatars). It must look stylish, awesome, and aesthetically "
-    "pleasing. Bold vibrant colors, clean soft studio lighting, chunky toy proportions, "
-    "high-quality octane render."
+    "Premium, high-fidelity 3D render in a warm animated-feature style — richly detailed, "
+    "beautifully lit and genuinely expensive-looking. Smooth matte materials with subtle surface "
+    "texture, soft rounded forms, physically-based shading, ray-traced global illumination, gentle "
+    "ambient occlusion in the creases and a real depth of field. Confident saturated colour under "
+    "controlled cinematic lighting. "
+    "NOT a flat vector illustration, NOT a cheap plastic toy render, NOT a cartoon."
 )
+# The "everything in frame is modelled with the same care, no empty voids"
+# mandate lives in `ride_scene._RENDER_STYLE`, NOT here. It was briefly in this
+# constant and leaked into the ISOLATED renders, where there is no scene to
+# model: the rider bust came back standing in an invented, blurred living room.
+# A portrait and an object want a clean ground; only a scene wants a world.
 CHARACTER_STYLE = (
-    "CRITICAL AESTHETIC MANDATE: The character MUST be an incredibly appealing, lovable, and "
-    "charismatic 3D avatar in a premium Web3 designer toy style. "
-    "1) THE FACE AND HEAD: MUST be a perfectly smooth, perfectly round sphere. The facial features "
-    "(eyes, eyebrows, mouth, distinct beard, tattoos) MUST NOT be hyper-realistic 3D sculpted. "
-    "They MUST be rendered as minimalist, lovable, 2D flat vector decals (thick bold lines, simple "
-    "cute geometric cutouts) sitting completely flush against the smooth spherical face, like a "
-    "printed graphic on a round vinyl toy. HOWEVER, the exact skin tone (DO NOT change their race "
-    "or skin color) and specific facial hair shape MUST perfectly capture the person's unique 1:1 "
-    "likeness, just translated into this cute, simple spherical decal style. "
-    "2) THE BODY AND CLOTHING: MUST be oversized, chunky, and wild with highly detailed, "
-    "hyper-realistic clothing fabrics for intense textural contrast against the simple flat "
-    "spherical head."
+    "CRITICAL AESTHETIC MANDATE: a warm, charismatic STYLISED 3D character — a modern animated "
+    "mascot, NOT a realistic human. This is deliberately caricatured proportion, not a lifelike "
+    "adult figure, and NOT a flat vector graphic either.\n"
+    "1) THE HEAD: large and noticeably OVERSIZED relative to the body — roughly one third of the "
+    "figure's total height. Its shape is WIDE AND ROUND: as wide as it is tall, with full rounded "
+    "cheeks, a broad soft cranium and a short, small, rounded chin. A LONG, narrow, oval or "
+    "elongated head is wrong — widen and shorten it. The face occupies the lower half of that "
+    "round shape, leaving a generous rounded forehead above. Fully 3D SCULPTED with real volume "
+    "and smooth matte skin.\n"
+    "THE EYES ARE THE FOCAL POINT: BIG, round and wide-set, each with a clearly visible white "
+    "sclera, a large coloured iris, a dark pupil and a bright specular catchlight. They read as "
+    "friendly and alert from across a room. Small, narrow or realistically-scaled eyes are wrong. "
+    "Eyebrows, nose, mouth and facial hair are modelled geometry with real depth and soft "
+    "shadowing — never flat decals, stickers or line art painted on a sphere. The nose is small "
+    "and soft.\n"
+    "CRITICAL LIKENESS: the exact skin tone (DO NOT change their race or skin colour), the hair's "
+    "exact cut, colour and curl, and the exact shape of any beard or moustache MUST capture the "
+    "person 1:1 — carried INTO this stylisation, never used as an excuse to abandon it and render "
+    "a realistic portrait instead.\n"
+    "2) THE BODY: small relative to that big head, and deliberately CHUNKY — thick, soft, tubular "
+    "limbs that look inflated rather than muscled, full rounded shoulders, plump forearms and "
+    "calves that taper only slightly, and simple mitten-like hands with no separated fingers. "
+    "Every form is smooth and swollen; there is NO bony detail, NO visible musculature, NO tendons, "
+    "NO knee caps, NO sharp edge anywhere on the figure.\n"
+    "CRITICAL PROPORTIONS — this is where a realistic render goes wrong: the whole figure is only "
+    "about three to four heads tall. The torso is SHORT and stout, and the arms and legs are SHORT "
+    "and THICK. Long thin limbs, a stretched femur, a wiry forearm, a slim athletic build or "
+    "anatomically-correct adult proportions are all WRONG, no matter how well rendered. Think a "
+    "collectible designer figure of a cyclist, not a photograph of one. "
+    "The kit is clean matte fabric stretched smoothly over that volume with soft simple folds."
 )
 BIKE_STYLE = (
     "The bicycle must maintain perfect, realistic mechanical geometry but with slightly chunky, "
@@ -283,7 +308,12 @@ def _isolated_prompt(description: str, kind: str) -> str:
             f"shot from a direct frontal angle (0-degree profile). They must be looking dead "
             f"straight into the lens, perfectly centered. Do NOT show a side profile. Do NOT show "
             f"the full body or legs. Focus on translating the distinct features, expression, and skin "
-            f"tone to the figure while maintaining the toy aesthetic. {DEFAULT_KIT} "
+            f"tone to the figure. {DEFAULT_KIT} "
+            # Stated explicitly, because without it the render invents a setting:
+            # a blurred living room turned up behind the bust the first time the
+            # style asked for a richly modelled world.
+            f"BACKGROUND: a clean, plain, softly-lit studio ground in a single muted colour with a "
+            f"gentle vignette. NO room, NO furniture, NO scenery, NO props, NO text. "
             f"{GENERAL_STYLE} {CHARACTER_STYLE}"
         )
     return (
@@ -313,6 +343,54 @@ def split_name(description: str | None) -> tuple[str | None, str | None]:
     if name and len(name) > 80:
         name = name[:80].rstrip()
     return name, (rest.strip() if sep else None) or None
+
+
+#: Generated images cannot spell. Left to itself the model writes plausible
+#: nonsense onto a frame — a real Standert came back branded "GRAVEL MONSTER"
+#: and "LAUEK" — which is worse than no branding at all, because it looks like
+#: the app got the rider's bike wrong rather than declining to letter it.
+NO_INVENTED_TEXT = (
+    "CRITICAL — NO INVENTED LETTERING: reproduce brand names, logos and decal TEXT only where they "
+    "are clearly legible in the source photograph, and reproduce them exactly. Where text is not "
+    "clearly readable, render that decal as an abstract shape, a colour block or nothing at all. "
+    "NEVER invent a brand name, a model name, a slogan or any word. Misspelled or fabricated "
+    "lettering on the frame, rims or tyres is a failure."
+)
+
+
+async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str | None, str, str]:
+    """The rider's bike collectible, rendered FROM THE PHOTO — 1:1.
+
+    WHY THIS EXISTS ALONGSIDE `render_isolated`. That path renders from the
+    vision description alone, and a description is lossy no matter how dense:
+    run on a real Standert Kieswerk it produced the right colour and roughly the
+    right bike, with the wrong decals, the wrong wheel depth and an invented
+    brand. The rider recognises their bike by exactly those details.
+
+    Handing the photograph in as the input image anchors the geometry, the
+    paint, the decals and the component spec to the real machine, and the prompt
+    then only has to ask for a change of RENDER STYLE. The description still
+    rides along because it survives the photo — every later scene and build is
+    composed from it — but it is no longer the only source of truth.
+    """
+    prompt = (
+        "Re-render the bicycle in the supplied photograph as a premium 3D model.\n\n"
+        "THIS IS A RESTYLE, NOT A REDESIGN. The bicycle must be 1:1 IDENTICAL to the photograph: "
+        "the same frame geometry and tube shapes, the same paint colour and finish, the same "
+        "decals in the same places, the same handlebar, saddle, wheels, rim depth, tyres, "
+        "drivetrain and brakes. Change NOTHING about the machine itself — not the colour, not the "
+        "shape, not a single component. Only the rendering style changes.\n\n"
+        f"REFERENCE DETAIL (from the same photograph): [{description}]\n\n"
+        f"{NO_INVENTED_TEXT}\n\n"
+        f"{BIKE_CAMERA} "
+        "Set the bicycle on a clean, soft, neutral light-grey studio backdrop with a subtle contact "
+        "shadow directly beneath the wheels. The background must be plain — no props, no scenery. "
+        f"{GENERAL_STYLE} {ISOLATED_BIKE_STYLE}"
+    )
+    if not _gemini_ready():
+        return None, prompt, "image_model_unavailable"
+    img = await edit_image(photo_b64, prompt, description or photo_b64[:64])
+    return img, prompt, "ok" if img else "image_model_unavailable"
 
 
 async def render_isolated(description: str, kind: str) -> tuple[str | None, str, str]:

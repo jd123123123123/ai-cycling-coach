@@ -90,12 +90,20 @@ def terrain_key(g: RideGeo) -> str:
 # devices comes back photoreal while the rider stays toy, and the seam between
 # them is the first thing the eye finds. So the background follows the figure.
 _RENDER_STYLE = (
-    "CRITICAL STYLE RULE: render the entire background landscape in the EXACT same premium 3D "
-    "designer toy aesthetic as the character — beautifully sculpted, chunky, smooth matte "
-    "materials, vibrant but controlled colour, soft octane lighting, like a high-end miniature "
-    "vinyl diorama. The rock, trees, grass and road must read as tactile sculpted models, NOT as "
-    "photorealistic nature. Never a flat cartoon and never a photograph: a premium physical model "
-    "of a place."
+    "CRITICAL STYLE RULE: the environment is modelled with the SAME care and the same level of "
+    "detail as the character — one coherent, high-fidelity 3D scene, never a figure standing in "
+    "front of a backdrop.\n"
+    "DETAIL: build the world out of real geometry. Individual plants, distinct blades of grass, "
+    "separate leaves, layered foliage, real rock formations with visible strata, road surface with "
+    "actual texture and a painted edge line. Foreground elements sit BETWEEN the camera and the "
+    "rider — leaves, grasses or rocks close to the lens, thrown out of focus — so the scene has "
+    "genuine depth rather than a flat plane behind the subject.\n"
+    "LIGHT: cinematic and directional, with a clear key, real shadows that fall across the terrain, "
+    "atmospheric haze in the distance and a rich falloff into darkness at the frame edges. "
+    "Ray-traced global illumination and soft ambient occlusion where forms meet.\n"
+    "MATERIALS: smooth matte surfaces with subtle texture, saturated but controlled colour. "
+    "Stylised and sculpted rather than photographic — but DENSE and expensive-looking, never a "
+    "sparse toy diorama, never simple grey lumps, never an empty gradient sky."
 )
 
 # The SHARED starter backdrop: the one scene every rider begins in.
