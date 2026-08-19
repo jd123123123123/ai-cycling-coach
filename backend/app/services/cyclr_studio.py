@@ -25,6 +25,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import pathlib
 from typing import Any
 
 from app.config import settings
@@ -393,9 +394,64 @@ async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str 
     return img, prompt, "ok" if img else "image_model_unavailable"
 
 
+#: A shipped picture of the character BUILD the house style wants — thick
+#: tubular limbs, short stout torso, big round head.
+#:
+#: WHY AN IMAGE AND NOT MORE WORDS. The prompt described this build four times
+#: across two rounds, in progressively blunter language, and every render came
+#: back with near-anatomical limbs: the model has a very strong prior for
+#: "cyclist" and prose loses to it. The same lesson the bike learned — anything
+#: that must match is handed over as an image, never as a description.
+_BUILD_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_build.webp"
+
+#: Used with the reference. The danger of a style image is that the model copies
+#: the WRONG things from it, so what to take and what to ignore is spelled out.
+_BUILD_MANDATE = (
+    "\n\nCRITICAL — THE SUPPLIED IMAGE IS A BUILD REFERENCE ONLY. Copy from it exactly one thing: "
+    "the BODY PROPORTIONS AND LIMB SHAPE — the thick soft tubular arms and legs, the short stout "
+    "torso, the generous rounded volumes, the oversized round head relative to the body, the "
+    "simple mitten hands. Match that build closely.\n"
+    "TAKE NOTHING ELSE FROM IT. Do NOT copy its person, its face, its skin tone, its ethnicity, "
+    "its hair, its clothing, its colours, its pose, its bicycle or its background. The character "
+    "you render is the person described in the text above and NOBODY ELSE — their face, their "
+    "skin tone, their hair and their kit come only from that description. The reference supplies "
+    "the sculpt; the description supplies the person."
+)
+
+
+def _build_reference() -> str | None:
+    """The build reference as a data URL, or None when it is not on disk.
+
+    Optional by design: a missing asset costs the proportion anchor and nothing
+    else, so a deploy that forgets to ship it degrades to the old text-only
+    render rather than failing to make an avatar at all.
+    """
+    try:
+        raw = _BUILD_REF.read_bytes()
+    except OSError:
+        return None
+    return "data:image/webp;base64," + base64.b64encode(raw).decode()
+
+
 async def render_isolated(description: str, kind: str) -> tuple[str | None, str, str]:
-    """Render the standalone avatar bust or isolated bike from a description."""
+    """Render the standalone avatar bust or isolated bike from a description.
+
+    The RIDER is additionally conditioned on the shipped build reference, which
+    is the only thing that reliably holds the caricatured proportions — see
+    `_BUILD_REF`. The bike is not: its shape must come from the rider's own
+    photograph, and `render_bike_from_photo` is the path that does that.
+    """
     prompt = _isolated_prompt(description, kind)
+
+    if kind == "rider":
+        ref = _build_reference()
+        if ref:
+            prompt += _BUILD_MANDATE
+            if not _gemini_ready():
+                return None, prompt, "image_model_unavailable"
+            img = await edit_image(ref, prompt, description)
+            return img, prompt, "ok" if img else "image_model_unavailable"
+
     if not _gemini_ready():
         return None, prompt, "image_model_unavailable"
     img = await _generate(prompt, description)
