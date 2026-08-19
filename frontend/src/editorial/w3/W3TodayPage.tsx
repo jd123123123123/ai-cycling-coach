@@ -623,7 +623,20 @@ export default function W3TodayPage() {
         // rendered interval beams under the heading "Ruhetag". Today is rest
         // when the coach handed us no session; any other day when its plan
         // exists and prescribes no work.
-        rest: isToday ? !session : (plan != null && !planIsSession),
+        // THE PLAN GETS A VOTE ON TODAY, NOT JUST THE SESSION FEED. This read
+        // `isToday ? !session : …`, so today counted as rest only when the
+        // coach handed us nothing at all. When a session object arrives ALONGSIDE
+        // a rest-category plan — which is what happens on a real rest day that
+        // still carries a placeholder — `!session` was false, the card fell
+        // through to the session branch, and drew interval beams and an FTP
+        // line under a day the plan had prescribed as rest. Reported from the
+        // live app 2026-08-19; "Warum diese Einheit" said Ruhetag on the same
+        // screen, which is exactly the contradiction the rider saw.
+        // `isSessionDay` already treats category 'rest' as rest, so today now
+        // asks it the same question every other day is asked.
+        rest: isToday
+          ? (!session || (plan != null && !planIsSession))
+          : (plan != null && !planIsSession),
         title,
         dateLabel: `${DE_WD2[i] ?? d.letter}, ${fmtDEShort(dt)}`, weekday: WD[i] ?? d.letter,
         targetW, ftpPct, blocks: dayBlocks,

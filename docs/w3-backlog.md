@@ -32,16 +32,37 @@ Ordered by value per unit of risk. Items marked ✅ are done in this branch.
 Captured verbatim in intent, ranked by whether it is a bug or a design ask.
 None of these are started.
 
-### F1. Rest day still renders the workout chart — BUG
+### F1. ◐ Rest day rendered the workout chart — ROOT CAUSE FIXED
 "Ruhetag zeigt anstatt Ruhetag-Animation oder Daten immer noch das beam chart
-mit FTP etc." Same family as the phantom eleven-bar workout (`209ec86`): the
-session furniture renders on a day the plan prescribes rest. A rest day needs
-its own composition — what recovery is doing, not an empty interval profile.
-Start at `W3TodayView`'s session band and the `day.rest` flag.
+mit FTP etc."
 
-### F2. "Bestes Fenster" missing on future rides — BUG
-Visible for today, absent when browsing a future day. Likely the weather/window
-producer only resolving for the current date.
+The rest branch existed and was correct; today never reached it. `rest` was
+`isToday ? !session : …`, so today counted as rest only when the coach handed
+back nothing at all. On a real rest day that still carries a session
+placeholder, `!session` is false, the card fell through to the session branch,
+and drew interval beams and an FTP line under a day the plan had prescribed as
+rest — while "Warum diese Einheit" on the same screen said Ruhetag. Today now
+asks `isSessionDay` the same question every other day is asked, and that helper
+already treats `category: 'rest'` as rest.
+
+**Still open — the design half of the ask:** "anstatt Ruhetag-Animation oder
+Daten". The rest branch is currently a moon icon, a heading and one sentence.
+It is honest but inert, and a rest day is a third of the training week. It
+wants its own composition: what recovery is actually doing (HRV trending back,
+the load being absorbed), not just the absence of a workout.
+
+### F2. ✗ NOT A BUG — "Bestes Fenster" has no data for future days
+Checked: `/weather/today` is a TODAY-ONLY hourly forecast
+(`backend/app/api/weather.py`), and `W3Sections` documents the consequence at
+its weather block — any other selected day "says so plainly rather than
+borrowing today's numbers", and past days get nothing because a "ride now"
+window is meaningless once the day is gone.
+
+So the window is absent on future rides because the forecast does not exist,
+not because the UI drops it. Making it work is a **feature**: a multi-day hourly
+forecast endpoint, then widening `W3Weather` past its today-only contract. Worth
+doing — picking your window is exactly how an amateur plans a week — but it is
+backend work, not a fix.
 
 ### F3. Hero images are not attractive — DESIGN
 "Die Bilder im Hero sowohl bei den Detail-Rides als auch im Today sind alles
