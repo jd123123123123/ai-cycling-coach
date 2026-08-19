@@ -60,18 +60,48 @@ deliberate rest composition, not a session card with empty slots.
 
 ## P1 — the numbers a cyclist actually opens the app for
 
-### 3. There is no power-duration curve anywhere
-**PRO.** This is the single most-missed artefact for any trained cyclist. CP
-and W′ services already exist (`science-engine-modules`), so the data is there.
-A log-x curve with the rider's own bests at 5s / 1min / 5min / 20min / 60min,
-this season against last, is the highest-value chart this app does not have.
+### 3. The power-duration curve EXISTS and is unreachable — port it, don't build it
+**PRO.** Corrected 2026-08-19 after checking rather than assuming. My first
+draft of this item said "there is no power-duration curve anywhere". Wrong. The
+whole thing is built, served and routed:
 
-### 4. Load is a number, never a shape
+- `backend/app/services/power_profile_view.py` — hero mean-max curve at
+  5 s / 15 s / 1 min / 5 min / 20 min / 60 min with recent-PR flags, FTP + W/kg
+  + monthly progression, Coggan zones, phenotype, cohort bands, durability.
+- `GET /analytics/power-profile-view?lang=de` — already wired
+  (`api/analytics.py:81`), returns `{available: false}` honestly with no power
+  rides.
+- `frontend/src/hooks/usePowerProfileView.ts` and
+  `frontend/src/pages/PowerProfileView.tsx` — both alive.
+- `App.tsx:377` still routes `/power-profile`.
+
+**It was never deleted** (`git log`: last touched by the transparency drawer and
+the CP/W′ engine work, not by a removal). It became invisible when the old app
+was hidden behind `?ds=v4` and W3's five tabs — HEUTE / FAHRTEN / GARAGE /
+ERFOLGE / BIKER — gave it no entry point.
+
+So this is a **port, not a build**, which makes it far cheaper than it looked.
+The one rule: do NOT link W3 straight at `/power-profile`. That drops the rider
+out of the W3 design system into the old app's chrome mid-journey. The screen
+needs re-composing in W3 tokens — the same "resurrect means redesign" rule that
+applies to every orphan in this repo.
+
+Suggested shape: a `W3PowerView` on the FAHRTEN tab or off the FTP card in
+"Dein Fortschritt", consuming the existing hook unchanged. Server work: none.
+
+### 4. Load is a number, never a shape — and the ramp series already exists
 **PRO/AM.** CTL/ATL/TSB exist in `W3TodayStatus` as a 90-day curve, which is
 good. But the *weekly* view has no ramp visualisation — the thing that tells you
-whether you are building or digging a hole. A 6-week ramp bar (planned vs
-actual TSS, with the 8%/week ceiling drawn as a line) makes the coach's central
-constraint visible instead of stated in prose.
+whether you are building or digging a hole. "Warum diese Einheit" states the
+8 %/week ceiling in prose; nobody draws it.
+
+**The series is already on the wire:** `weekly_tss_targets: number[]` on
+`api/plan.ts` (both plan shapes), and `planned_tss` / actual on
+`api/weeklyRecap.ts`. A ramp bar of planned-vs-actual per week, with the
+current week marked and the 8 % ceiling as a rule, needs no server work either.
+
+This and item 3 are the two highest-value charts in the app and **neither needs
+a backend change** — which is the single most useful thing this audit found.
 
 ### 5. Intervals have no execution graph after the ride
 **PRO.** `4 × 8 Schwelle` shows a target profile before the ride. After it,
