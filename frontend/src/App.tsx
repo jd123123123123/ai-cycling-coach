@@ -76,6 +76,7 @@ const W3GaragePage = lazyWithRetry(() => import('./editorial/w3/W3GaragePage'))
 const W3GaragePreview = lazyWithRetry(() => import('./editorial/w3/W3GaragePreview'))
 const W3WorkshopPreview = lazyWithRetry(() => import('./editorial/w3/W3WorkshopPreview'))
 const W3GearPreview = lazyWithRetry(() => import('./editorial/w3/W3GearPreview'))
+const W3GarageStagePreview = lazyWithRetry(() => import('./editorial/w3/W3GarageStagePreview'))
 const W3ShopPage = lazyWithRetry(() => import('./editorial/w3/W3ShopPage'))
 const W3ShopPreview = lazyWithRetry(() => import('./editorial/w3/W3ShopPreview'))
 const W3BikeStudioPage = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPage'))
@@ -406,6 +407,7 @@ function AppRoutes() {
           <Route path="/e/w3-garage-preview" element={<W3GaragePreview />} />
           <Route path="/e/w3-workshop-preview" element={<W3WorkshopPreview />} />
           <Route path="/e/w3-gear-preview" element={<W3GearPreview />} />
+          <Route path="/e/w3-garage-stage-preview" element={<W3GarageStagePreview />} />
           <Route path="/e/w3-shop" element={<ProtectedRoute checkOnboarding><W3Guard><W3ShopPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-shop-preview" element={<W3ShopPreview />} />
           <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />
