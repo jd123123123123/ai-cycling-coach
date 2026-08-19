@@ -53,42 +53,62 @@ export const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'c
  * a band never becomes a containing block for the fixed tab bar or the action
  * button that render inside this tree.
  */
+/**
+ * "Is this on screen yet?" — the mechanism behind every W3 scroll animation.
+ *
+ * WHY THIS EXISTS RATHER THAN `whileInView`. Motion's viewport prop resolves
+ * immediately in this app: measured on Today, four wrappers sat at opacity 1
+ * with no transform at scrollTop 0 while their tops were at y=2224+, and an
+ * IntersectionObserver on the SAME element correctly reported
+ * isIntersecting:false, ratio 0. Not reduced motion, no MotionConfig, and it
+ * still resolved with an unconditional `initial`. Every `whileInView` bar fill
+ * in the app was therefore already full before the rider ever reached it.
+ *
+ * Returns true once and stays true — a bar that has been read must not empty
+ * itself and refill when the rider scrolls back up.
+ */
+export function useInView(amount = 0.15) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [inView, setInView] = useState(false)
+  const [instant, setInstant] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setInstant(true); setInView(true); return
+    }
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return
+      setInView(true)
+      io.disconnect()
+    }, { threshold: amount })
+    io.observe(el)
+    // An element taller than the viewport can never reach its ratio, so it
+    // would stay hidden forever; accept "top edge passed" as well.
+    const onScroll = () => {
+      const b = el.getBoundingClientRect()
+      if (b.top < window.innerHeight * 0.9) {
+        setInView(true); io.disconnect(); window.removeEventListener('scroll', onScroll)
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => { io.disconnect(); window.removeEventListener('scroll', onScroll) }
+  }, [amount])
+
+  return { ref, inView, instant }
+}
+
 export function Reveal({ children, style, delay = 0, amount = 0.15 }: {
   children: ReactNode
   style?: CSSProperties
   delay?: number
   amount?: number
 }) {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const [shown, setShown] = useState(false)
-  const [instant, setInstant] = useState(false)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    // Asked for less motion → the content is simply there. `instant` drops the
-    // transition too, so it does not even cross-fade in: a reveal that still
-    // fades is still motion, which is the thing that was opted out of.
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setInstant(true); setShown(true); return
-    }
-    const io = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return
-      setShown(true)
-      io.disconnect()          // `once` — never re-animate what has been read
-    }, { threshold: amount })
-    io.observe(el)
-    // A band TALLER than the viewport can never reach its ratio, so it would
-    // hang at opacity 0 forever. The rootMargin-free observer above answers the
-    // common case; this covers the tall one by also accepting "top edge passed".
-    const onScroll = () => {
-      const b = el.getBoundingClientRect()
-      if (b.top < window.innerHeight * 0.9) { setShown(true); io.disconnect(); window.removeEventListener('scroll', onScroll) }
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
-    return () => { io.disconnect(); window.removeEventListener('scroll', onScroll) }
-  }, [amount])
+  // `instant` drops the transition too, so a reduced-motion rider does not even
+  // get a cross-fade: a reveal that still fades is still motion.
+  const { ref, inView: shown, instant } = useInView(amount)
 
   return (
     <div

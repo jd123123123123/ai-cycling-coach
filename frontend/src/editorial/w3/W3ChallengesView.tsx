@@ -2,7 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import {
   ArrowLeft, History, Flame, Zap, Sunrise, Mountain, Repeat, Info,
 } from 'lucide-react'
-import { T, FONT, grow, band, Kicker } from './w3tokens'
+import { T, FONT, grow, band, Kicker, useInView } from './w3tokens'
 import W3TabBar from './W3TabBar'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
@@ -78,6 +78,47 @@ function sealPath(bumps: number, R: number, C: number) {
 }
 const SEAL = sealPath(11, 46, 60)
 
+/**
+ * The two scroll-triggered gauges on this screen, each owning its own observer.
+ *
+ * Both used motion's `whileInView`, which resolves immediately in this app —
+ * measured elsewhere, an element at y=2224 with scrollTop 0 sat at its FINAL
+ * value while an IntersectionObserver on the same node correctly reported
+ * isIntersecting:false. A progress bar that is already full when you reach it
+ * is not an animation, so these drive off `useInView` (see w3tokens) instead.
+ */
+function SegmentedGauge({ segs, reduce }: { segs: boolean[]; reduce: boolean | null }) {
+  const { ref, inView } = useInView(0.8)
+  return (
+    <div ref={ref} style={{ display: 'flex', gap: 3, alignItems: 'stretch' }}>
+      {segs.map((on, i) => (
+        on ? (
+          <motion.div key={i}
+            initial={reduce ? false : { scaleX: 0, opacity: 0 }}
+            animate={inView ? { scaleX: 1, opacity: 1 } : undefined}
+            transition={grow(i * 0.035)}
+            style={{ flex: 1, height: 13, borderRadius: 3, background: T.acid, transformOrigin: 'left' }} />
+        ) : (
+          <div key={i} style={{ flex: 1, height: 13, borderRadius: 3, background: '#FFFFFF14' }} />
+        )
+      ))}
+    </div>
+  )
+}
+
+function ProgressBar({ pct, reduce }: { pct: number; reduce: boolean | null }) {
+  const { ref, inView } = useInView(0.8)
+  return (
+    <div ref={ref} style={{ height: 6, borderRadius: 100, background: '#FFFFFF0F', overflow: 'hidden' }}>
+      <motion.div
+        initial={reduce ? false : { width: 0 }}
+        animate={inView ? { width: `${Math.max(0, Math.min(100, pct))}%` } : undefined}
+        transition={grow(0.05)}
+        style={{ height: '100%', borderRadius: 100, background: T.acid }} />
+    </div>
+  )
+}
+
 export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; onJoin?: (key: string) => void }) {
   const reduce = useReducedMotion()
   const m = vm.monthly
@@ -135,16 +176,7 @@ export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; o
               <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>{m.blurb}</span>
 
               {/* Segmented gauge */}
-              <div style={{ display: 'flex', gap: 3, alignItems: 'stretch' }}>
-                {segs.map((on, i) => (
-                  on ? (
-                    <motion.div key={i} initial={reduce ? false : { scaleX: 0, opacity: 0 }} whileInView={{ scaleX: 1, opacity: 1 }} viewport={{ once: true, amount: 0.8 }} transition={grow(i * 0.035)}
-                      style={{ flex: 1, height: 13, borderRadius: 3, background: T.acid, transformOrigin: 'left' }} />
-                  ) : (
-                    <div key={i} style={{ flex: 1, height: 13, borderRadius: 3, background: '#FFFFFF14' }} />
-                  )
-                ))}
-              </div>
+              <SegmentedGauge segs={segs} reduce={reduce} />
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{m.progressLabel}</span>
@@ -170,10 +202,7 @@ export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; o
                   <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.2, color: T.acid, lineHeight: 1 }}>{c.pct}%</span>
                   <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, textAlign: 'right' }}>{c.progressNote}</span>
                 </div>
-                <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF0F', overflow: 'hidden' }}>
-                  <motion.div initial={reduce ? false : { width: 0 }} whileInView={{ width: `${Math.max(0, Math.min(100, c.pct))}%` }} viewport={{ once: true, amount: 0.8 }} transition={grow(0.05)}
-                    style={{ height: '100%', borderRadius: 100, background: T.acid }} />
-                </div>
+                <ProgressBar pct={c.pct} reduce={reduce} />
                 <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{c.youNote}</span>
               </div>
             </div>

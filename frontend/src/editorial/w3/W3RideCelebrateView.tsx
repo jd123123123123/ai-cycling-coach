@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import {
   Check, Share2, X, Route as RouteIcon, Timer, Zap, Mountain, Flame, TrendingUp, ChevronsRight,
 } from 'lucide-react'
-import { T, FONT, EASE, grow, band } from './w3tokens'
+import { T, FONT, EASE, grow, band, useInView } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
 
@@ -75,6 +75,27 @@ function useCountUp(target: number, run: boolean, reduce: boolean | null, ms = 7
     return () => cancelAnimationFrame(raf)
   }, [target, run, reduce, ms])
   return n
+}
+
+/** The power split, rising as it comes into view.
+ *
+ *  Was `whileInView`, which resolves immediately in this app (measured: an
+ *  element well below the fold sat at its final value while an
+ *  IntersectionObserver on the same node reported isIntersecting:false), so the
+ *  bars were already standing before the rider scrolled to them. */
+function ZoneBars({ zones, reduce }: { zones: W3CelebZone[]; reduce: boolean | null }) {
+  const { ref, inView } = useInView(0.3)
+  return (
+    <div ref={ref} style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: 96 }}>
+      {zones.map((z, i) => (
+        <motion.div key={i}
+          initial={reduce ? false : { scaleY: 0 }}
+          animate={inView ? { scaleY: 1 } : undefined}
+          transition={grow(i * 0.05)}
+          style={{ flex: 1, height: `${Math.max(8, z.pct)}%`, minHeight: 8, transformOrigin: 'bottom', borderRadius: 4, background: z.peak ? T.acid : T.acidDeep, opacity: z.peak ? 1 : 0.5 }} />
+      ))}
+    </div>
+  )
 }
 
 export default function W3RideCelebrateView({
@@ -213,12 +234,7 @@ export default function W3RideCelebrateView({
                     <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Hier warst du am stärksten</span>
                     <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: T.quiet }}>{vm.ftp}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: 96 }}>
-                    {vm.zones.map((z, i) => (
-                      <motion.div key={i} initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true }} transition={grow(i * 0.05)}
-                        style={{ flex: 1, height: `${Math.max(8, z.pct)}%`, minHeight: 8, transformOrigin: 'bottom', borderRadius: 4, background: z.peak ? T.acid : T.acidDeep, opacity: z.peak ? 1 : 0.5 }} />
-                    ))}
-                  </div>
+                  <ZoneBars zones={vm.zones} reduce={reduce} />
                   <div style={{ display: 'flex', gap: 5 }}>
                     {vm.zones.map((z, i) => (
                       <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
