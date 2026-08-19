@@ -84,13 +84,43 @@ def test_edit_prompt_preserves_the_bike_and_never_restates_it():
     assert "Change ONLY the world around it" in p
 
 
-def test_garden_is_the_reference_layer_for_layer():
-    """The framing transcribed from the reference frame keeps its four
-    distinguishing features: a defocused near band, crimson in that band only,
-    a sharp mown lawn, and hedging that dissolves to black."""
+def test_garden_keeps_the_four_corrections_the_renders_earned():
+    """Three rounds against the real image model got `garden` onto the
+    reference. Each round fixed one defect, and each fix is one clause — so
+    these assert the CORRECTIONS survive, not the prose around them.
+
+    Round 1 produced a dim, flatly-lit bike in a foliage tunnel with a band of
+    dead black overhead. Round 2 fixed exposure, framing and the tunnel. Round 3
+    melted the near band and crushed the upper third. Reword these freely; if
+    one of the four ideas below goes missing, the render regresses to a
+    specific, known-bad picture.
+    """
     g = rf.FRAMINGS["garden"]
-    assert "defocused" in g.foreground and "crimson" in g.foreground
-    assert "never be in focus" in g.foreground
+
+    # Round 3: the near band is the blurriest thing in frame. Round 1 and 2 both
+    # rendered readable leaves and petals, which is what made them look like
+    # snapshots rather than the reference.
+    assert "defocused" in g.foreground
+    assert "unreadable" in g.foreground
+    assert "crimson" in g.foreground
+
+    # Round 2: a low border, not an archway. Round 1 closed the hedges in around
+    # the bike like a tunnel.
+    assert "NOT a tunnel" in g.foreground
+
+    # Round 3: the upper third carries no detail at all.
+    assert "COMPLETE BLACK" in g.backdrop
+
+    # The ground stays sharp — it is the only thing in the frame that is.
     assert "mown" in g.ground
-    assert "dissolves completely into black" in g.backdrop
     assert "three colour families only" in g.palette
+
+
+def test_the_subject_is_lit_and_the_world_is_not():
+    """Round 1's defect, and the one most likely to come back: the falloff was
+    read as applying to the bicycle too, so the model returned a dim bike in a
+    dim garden. The contrast between a bright subject and a dark world IS the
+    look — every framing inherits this, so it lives on the shared light."""
+    assert "BRIGHTEST OBJECT" in rf.SCENE_LIGHT
+    assert "NEVER TO THE BICYCLE" in rf.SCENE_LIGHT
+    assert "underexposed" in rf.SCENE_LIGHT   # named as a thing NOT to do

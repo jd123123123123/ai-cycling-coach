@@ -49,22 +49,29 @@ SCENE_CAMERA = (
     "side, so the chainring, chain and rear cassette all face the camera), at eye level with the "
     "bike's centre, the bike facing to the RIGHT of frame. Shoot as if on an 85-105mm short "
     "telephoto: NO wide-angle distortion, both wheels perfectly circular and never foreshortened, "
-    "no converging verticals. The bicycle is centred and occupies roughly 85% of the frame width "
-    "with even padding on all sides; nothing is cropped. The focal plane sits exactly on the "
+    "no converging verticals. The bicycle is centred and FILLS THE FRAME — it occupies at least "
+    "85% of the frame width and is vertically centred, with only a narrow, even margin around it. "
+    "Do not leave a large empty band of dark space above the bicycle. Nothing is cropped: both "
+    "wheels, the bars and the saddle are fully in frame. The focal plane sits exactly on the "
     "drive side of the frame, at an aperture around f/2.0 — the bike is razor sharp from wheel to "
     "wheel while everything nearer and further falls away into genuine optical bokeh. Do NOT use "
     "a three-quarter view, a low hero angle, or a top-down view."
 )
 
 SCENE_LIGHT = (
-    "LIGHTING: a single hard key light from the front-left, roughly 35 degrees above the horizon "
-    "and 20 degrees off the camera axis, raking across the drive side and drawing one continuous "
-    "specular highlight along the top tube and down tube. A cooler rim light from behind-left "
-    "separates the bike from the background and catches the edges of whatever surrounds it. NO "
-    "fill on the shadow side — the shadows stay deep, clean and black. The falloff is aggressive "
-    "and physically correct: this is a stage light, not daylight, so everything more than about "
-    "two metres past the bicycle sinks to near-black. There is no sky and no horizon line in "
-    "frame. A soft, believable contact shadow sits directly beneath both wheels."
+    "LIGHTING: THE BICYCLE IS THE BRIGHTEST OBJECT IN THE FRAME and must be fully, richly exposed "
+    "— every tube, rim and component clearly lit and legible, its metal genuinely gleaming. A "
+    "single hard key light from the front-left, roughly 35 degrees above the horizon and 20 "
+    "degrees off the camera axis, rakes across the drive side and draws one bright continuous "
+    "specular highlight running the full length of the top tube and down tube. A distinct cooler "
+    "rim light from behind-left separates the bicycle's silhouette from the background and catches "
+    "the edges of whatever surrounds it. "
+    "THE AGGRESSIVE FALLOFF APPLIES TO THE SURROUNDINGS, NEVER TO THE BICYCLE: the world past it "
+    "sinks quickly to near-black, while the bicycle stays bright — that contrast between a lit "
+    "subject and a dark world is the entire look. Do NOT render a dim, flat, underexposed or "
+    "evenly-lit scene. No fill on the bicycle's shadow side; its shadows stay deep and clean. "
+    "There is no sky and no horizon line in frame. A soft, believable contact shadow sits directly "
+    "beneath both wheels."
 )
 
 SCENE_RENDER = (
@@ -146,12 +153,16 @@ FRAMINGS: dict[str, Framing] = {
         name_de="Garten",
         price_rc=900,
         foreground=(
-            "a band of extremely defocused dark-green foliage across the bottom edge of the frame "
-            "and creeping a little way up both the left and right edges, so close to the lens that "
-            "it is unrecognisable as individual leaves — pure soft shape and shadow. Two or three "
-            "muted crimson blooms sit in that near band at bottom-centre, reduced to warm circles "
-            "of colour. This near layer is what frames the bicycle and darkens the corners; it must "
-            "never be in focus and must never obscure a wheel"
+            "a band of extremely defocused dark-green foliage across the bottom edge of the frame, "
+            "rising no higher than the lower quarter of the left and right edges — a low near "
+            "border, NOT a tunnel or an archway, and never closing in around the bicycle. It sits "
+            "so close to the lens that it is EXTREMELY out of focus — individual leaves, stems and "
+            "petals must be completely unreadable, melted into soft blobs of colour and shadow with "
+            "no hard edge anywhere in this layer. Two or three muted crimson blooms sit in that "
+            "near band at bottom-centre, reduced to nothing but warm circles of colour. This is the "
+            "most defocused thing in the picture, far blurrier than the background. It frames the "
+            "bicycle and darkens the corners; it must never come into focus and must never obscure "
+            "a wheel"
         ),
         ground=(
             "a closely mown summer lawn, tack-sharp directly beneath the bicycle with individual "
@@ -160,8 +171,9 @@ FRAMINGS: dict[str, Framing] = {
         ),
         backdrop=(
             "dense, dark boxwood hedging and clipped topiary massed behind the bicycle at about "
-            "wheel-top height, softly defocused, with tall shrubs closing in at the left and right "
-            "edges; the planting dissolves completely into black by the upper third of the frame"
+            "wheel-top height, softly defocused, with tall shrubs at the left and right edges; the "
+            "planting falls away fast and dissolves into COMPLETE BLACK across the whole upper "
+            "third of the frame — no detail, no shape and no light survives up there"
         ),
         palette=(
             "three colour families only — deep greens from near-black through to a lit mid-green, "
