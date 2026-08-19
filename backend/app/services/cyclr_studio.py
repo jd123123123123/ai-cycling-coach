@@ -9,9 +9,12 @@ Three stages, matching the reference:
 1. ``analyze_asset(photo, kind)`` — vision pass. `kind='rider'` extracts a
    1:1-exact description (hair especially); `kind='bike'` extracts a dense,
    literal, double-triangle-accurate description.
-2. ``render_isolated(description, kind)`` — the standalone avatar (front-facing
-   bust) or isolated bike, in the toy-vinyl style, with a DETERMINISTIC seed so
-   the same photo always yields the same asset (free consistency + caching).
+2. ``render_isolated(description, kind, seed_src=...)`` — the standalone avatar
+   (front-facing bust) or isolated bike. The seed comes from the PHOTO, not the
+   description: the vision pass returns different prose on every run even at
+   temperature 0, so seeding on its output handed a rider a different face each
+   time they re-rendered. Same photo, same asset — which is also what makes the
+   result cacheable.
 3. ``compose_scene(rider_desc, bike_desc, training_context)`` — the full-body
    rider-on-bike hero, locked-camera, where `training_context` is the pose +
    scene. For a ride/session this is built from the ride's real GPS via
@@ -547,7 +550,9 @@ async def _generate_with_refs(prompt: str, refs: list[str], seed_src: str) -> st
     return None
 
 
-async def render_isolated(description: str, kind: str) -> tuple[str | None, str, str]:
+async def render_isolated(
+    description: str, kind: str, *, seed_src: str | None = None,
+) -> tuple[str | None, str, str]:
     """Render the standalone avatar bust or isolated bike from a description.
 
     The RIDER is conditioned on TWO shipped style references — the face
@@ -556,8 +561,17 @@ async def render_isolated(description: str, kind: str) -> tuple[str | None, str,
     semi-realistic adult; the images hold them. The bike takes no style
     reference: its shape must come from the rider's own photograph, which is
     what `render_bike_from_photo` is for.
+
+    SEED FROM THE PHOTO, NOT THE DESCRIPTION. `seed_src` exists because the
+    module's promise — "the same photo always yields the same asset" — was
+    false. The seed used to come from the description, and the vision pass
+    returns different prose on every run even at temperature 0, so two renders
+    of one selfie produced two different faces. Measured: same photo, two runs,
+    two descriptions of different lengths and two unrelated images. Callers that
+    hold the photo pass it here; the description is only the fallback.
     """
     prompt = _isolated_prompt(description, kind)
+    seed = seed_src or description
 
     if kind == "rider":
         refs = _style_references()
@@ -565,12 +579,12 @@ async def render_isolated(description: str, kind: str) -> tuple[str | None, str,
             prompt += _BUILD_MANDATE
             if not _gemini_ready():
                 return None, prompt, "image_model_unavailable"
-            img = await _generate_with_refs(prompt, refs, description)
+            img = await _generate_with_refs(prompt, refs, seed)
             return img, prompt, "ok" if img else "image_model_unavailable"
 
     if not _gemini_ready():
         return None, prompt, "image_model_unavailable"
-    img = await _generate(prompt, description)
+    img = await _generate(prompt, seed)
     return img, prompt, "ok" if img else "image_model_unavailable"
 
 
@@ -587,7 +601,8 @@ async def render_from_photo(photo_b64: str, kind: str) -> dict[str, Any]:
         # The model returned only a name line — nothing to render from.
         return {"name": name, "description": None, "image": None,
                 "prompt": _isolated_prompt("", kind), "status": "image_model_unavailable"}
-    img, prompt, status = await render_isolated(description, kind)
+    # The photo is the stable identity here; the description is not.
+    img, prompt, status = await render_isolated(description, kind, seed_src=photo_b64)
     return {"name": name, "description": description, "image": img, "prompt": prompt, "status": status}
 
 
