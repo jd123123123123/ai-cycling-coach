@@ -239,12 +239,18 @@ _ANALYSIS = {
 # Today hero can crop it predictably. Without this the model wanders between
 # three-quarter views and crops, and no two renders are comparable.
 BIKE_CAMERA = (
-    "LOCKED CAMERA ANGLE: a strict side-on profile view of the bicycle from its DRIVE SIDE (the "
-    "right-hand side, so the chainring, chain and rear cassette all face the camera), shot at "
-    "eye level with a straight-on, non-perspective framing. The bike faces to the RIGHT of frame. "
-    "Both wheels must be fully visible and perfectly circular (not foreshortened), the whole bike "
-    "centered with clean even padding on all sides, nothing cropped. Do NOT use a three-quarter "
-    "angle, a low hero angle, or a top-down view."
+    "LOCKED CAMERA: a FLAT SIDE ELEVATION of the bicycle — an orthographic side view, as in a "
+    "manufacturer's catalogue photograph or a technical drawing. The camera sits exactly level "
+    "with the bike's centre, perfectly perpendicular to it, with a long lens and no perspective "
+    "at all.\n"
+    "THE TEST FOR THIS IS THE WHEELS: both are perfect circles of IDENTICAL size, and neither is "
+    "an ellipse. If the far wheel looks smaller than the near one, or you can see any of the "
+    "bike's width — the far side of the bars, the far crank, the top of the saddle, the far side "
+    "of the tyres — the camera has rotated and the render is wrong. From this angle the bicycle "
+    "is a flat silhouette with no depth showing.\n"
+    "It is seen from its DRIVE SIDE (the right-hand side, so the chainring, chain and rear "
+    "cassette face the camera) and faces to the RIGHT of frame, centred with clean even padding, "
+    "nothing cropped."
 )
 
 
@@ -430,12 +436,28 @@ async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str 
     composed from it — but it is no longer the only source of truth.
     """
     prompt = (
-        "Re-render the bicycle in the supplied photograph as a premium 3D model.\n\n"
+        # THE CAMERA LEADS. It sat after the restyle instruction for three
+        # attempts and the render kept coming back rotated a few degrees toward
+        # the viewer — a "product render" prior the model applies by default.
+        # Moved to the first line, where it is read as the frame for everything
+        # after it rather than a caveat on it.
+        "KEEP THE EXACT CAMERA OF THE SUPPLIED PHOTOGRAPH. It is a dead-flat side elevation and "
+        "the bicycle must not rotate by even one degree. Do not turn it toward the viewer, do not "
+        "add perspective, and do not make it more three-dimensional: from this angle the bicycle "
+        "is a flat silhouette, both wheels are perfect circles of equal size, and none of the "
+        "bike's width is visible — no far-side handlebar, no far crank, no top of the saddle.\n\n"
+        "Now re-render that bicycle, in that orientation, as a premium 3D model.\n\n"
         "THIS IS A RESTYLE, NOT A REDESIGN. The bicycle must be 1:1 IDENTICAL to the photograph: "
         "the same frame geometry and tube shapes, the same paint colour and finish, the same "
         "decals in the same places, the same handlebar, saddle, wheels, rim depth, tyres, "
         "drivetrain and brakes. Change NOTHING about the machine itself — not the colour, not the "
         "shape, not a single component. Only the rendering style changes.\n\n"
+        "KEEP THE PHOTOGRAPH'S CAMERA EXACTLY. It is already a flat, straight-on side elevation, "
+        "and the bicycle must stay in precisely that orientation — do not rotate it even slightly "
+        "toward the viewer, and do not add perspective or a three-quarter turn to make it look "
+        "more dimensional. Overlay your result on the original and the two silhouettes should sit "
+        "on top of each other: both wheels perfect circles of equal size, and none of the bike's "
+        "width showing.\n\n"
         f"REFERENCE DETAIL (from the same photograph): [{description}]\n\n"
         f"{NO_INVENTED_TEXT}\n\n"
         f"{BIKE_CAMERA} "
