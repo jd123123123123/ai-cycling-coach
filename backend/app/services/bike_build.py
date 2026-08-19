@@ -1,0 +1,149 @@
+"""The rider's bike, wearing what they equipped.
+
+This is `cycl_r-studio-3`'s `/api/upgrade-bike` rebased onto the rider's OWN
+bike and this app's gear catalogue, with the two mandates from that endpoint
+that do the heavy lifting kept verbatim in spirit:
+
+  · INTEGRATION — a new part must be structurally fused into the machine, not
+    pasted on with its former context still attached. The studio's own example
+    is the right one: fitting an office chair as a saddle means removing the
+    chair's wheels and legs and fusing its top to the seatpost.
+  · The bike is EDITED, never redrawn. The rider's stored render goes back to
+    the model as an input image with "change only these components". That is
+    what keeps the frame, the camera, the colours and the light identical
+    between two builds — `docs/w3-bike-customisation.md` measured it: a wheel
+    swap moves 5.4 % of pixels, a saddle 0.9 %, and three changes in one call
+    5.8 %. It also proved the two rules below.
+
+TWO RULES FROM THAT MEASUREMENT, and both are load-bearing:
+
+  1. ONE CALL PER BUILD, not one per part. Three changes cost no more than one.
+  2. ALWAYS EDIT FROM THE ORIGINAL. Stacking drifts (5.3 % → 6.3 % over two
+     steps), so a build is composed from the rider's base render every time and
+     never from an already-edited image.
+
+WHAT THIS IS NOT. Only items with a described visual change appear; a
+Glücksbringer that lives in the rider's jersey pocket does not alter the
+photograph, and inventing a change for it would put objects on the bike that are
+not on the bike. `VISUALS` is deliberately smaller than the catalogue.
+"""
+from __future__ import annotations
+
+import hashlib
+
+from app.services import earn_modifiers as em
+
+#: item id → the change to ask the model for. Only items that genuinely alter
+#: the machine's appearance are here. Written in English: this is prompt text,
+#: never UI copy — the same split `ride_scene` makes.
+VISUALS: dict[str, str] = {
+    # tyres
+    "gravel_tyres": "Replace BOTH tyres with wide, chunky knobbly gravel tyres with tan sidewalls",
+    "slicks": "Replace BOTH tyres with narrow glossy black slick road tyres with no tread",
+    "winter_tyres": "Replace BOTH tyres with studded winter tyres, metal spikes visible in the tread",
+    "tubulars": "Replace BOTH tyres with very narrow lightweight tubular racing tyres",
+    "balloon_tyres": "Replace BOTH tyres with very fat cream-coloured balloon tyres",
+    # wheels
+    "climbing_wheels": "Replace BOTH wheels with shallow low-profile lightweight rims with thin spokes",
+    "aero_wheels": "Replace BOTH wheels with deep-section aerodynamic carbon rims with bladed spokes",
+    "disc_wheel": "Replace the REAR wheel with a solid carbon disc wheel with no spokes, keeping the front wheel spoked",
+    "steel_rims": "Replace BOTH wheels with polished chrome steel box-section rims with bright chrome spokes",
+    "deep_carbon": "Replace BOTH wheels with very deep-section glossy carbon rims",
+    # mounted
+    "mudguards": "Fit full-length matte black mudguards over both wheels, properly mounted to the frame and fork",
+    "dynamo_light": "Fit a small polished chrome dynamo headlight to the fork crown, with its wire running neatly along the fork",
+    "bikepacking_bags": "Fit olive-green canvas bikepacking bags: a saddle bag behind the seatpost and a frame bag inside the main triangle, strapped tight",
+    "second_cage": "Fit a second bottle cage with a bottle in it on the seat tube",
+    "frame_pump": "Fit a slim silver frame pump along the seat tube",
+    "rack": "Fit a tubular metal rear luggage rack over the back wheel, bolted at the dropouts and seatstays",
+    # cockpit
+    "power_meter": "Fit a power meter pod to the drive-side crank arm",
+    "aero_bars": "Fit clip-on time-trial aero bar extensions to the handlebar, with arm pads",
+    "climbing_bars": "Replace the handlebar with a flared drop bar, wrapped in matching tape",
+    "bell": "Fit a small polished brass bell to the handlebar next to the stem",
+    "bar_bag": "Fit a small waxed-canvas handlebar bag to the front of the bars with leather straps",
+    # charm — only the ones that are physically ON the bike
+    "lanterne_rouge": "Fit a small vintage red lantern with a brass body to the rear of the saddle rails",
+    "goat_charm": "Hang a tiny brass mountain-goat charm from the head tube on a short chain",
+    "banana": "Drape a banana peel over the back of the saddle",
+    "regel_neun": "Apply a round weatherproof sticker with a bold number 9 to the top tube",
+}
+
+INTEGRATION = (
+    "INTEGRATION MANDATE: every fitted part MUST be structurally integrated into the bicycle's "
+    "mechanical design. Nothing may float, look pasted on, or keep parts belonging to its "
+    "previous form. Mounting hardware, brackets, bolts, cable runs and straps must be present "
+    "and physically plausible, scaled correctly to this frame, and finished so the part looks "
+    "like it was built for this bicycle. A part that merely hovers in roughly the right place is "
+    "wrong."
+)
+
+
+def build_key(asset_id: int, asset_stamp: str, equipped: list[str]) -> str:
+    """The cache key for one build of one rider's bike.
+
+    Includes the ASSET's identity and a stamp of its own render, so re-uploading
+    a bike invalidates every build of the old one rather than serving a build of
+    a bicycle that no longer exists.
+
+    Unlike the catalogue-bike era this key can NOT be global: the base image is
+    the rider's own bike, so no two riders share a picture. It is hashed to keep
+    it short and stable regardless of how many items exist.
+    """
+    worn = "|".join(sorted(i for i in equipped if i in VISUALS))
+    raw = f"a{asset_id}:{asset_stamp}:{worn}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+def is_stock(equipped: list[str]) -> bool:
+    """True when nothing worn changes the picture.
+
+    The common case, and it must stay free: a rider wearing only pocket charms
+    sees their own base render with no call made at all.
+    """
+    return not any(i in VISUALS for i in equipped)
+
+
+def describe(equipped: list[str]) -> list[str]:
+    """The changes to ask for, in catalogue order so the prompt is stable.
+
+    Order matters for the cache: two loadouts that differ only in the order the
+    rider equipped them must produce one key and one prompt, not two.
+    """
+    worn = {i for i in equipped if i in VISUALS}
+    return [VISUALS[m.id] for m in em.catalogue() if m.id in worn]
+
+
+def edit_prompt(equipped: list[str]) -> str:
+    """The full instruction: this exact bicycle, wearing these parts.
+
+    The bike arrives as an IMAGE, so it is deliberately not re-described here —
+    describing it again invites the model to redraw the one thing that must stay
+    pixel-identical.
+    """
+    from app.services.cyclr_studio import (
+        BIKE_CAMERA, GENERAL_STYLE, ISOLATED_BIKE_STYLE,
+    )
+
+    changes = describe(equipped)
+    ground = (
+        "Set the bicycle on a clean, soft, neutral light-grey studio backdrop with a subtle "
+        "contact shadow directly beneath the wheels. The background must be plain — no props, "
+        "no scenery, no text, no watermark."
+    )
+    return (
+        "Edit the bicycle in the supplied photograph. Keep the SAME bicycle: the same frame "
+        "geometry, the same paint and finish, the same camera, the same position in frame, the "
+        "same scale and the same background. Change ONLY the components listed below and leave "
+        "every other part of the bicycle exactly as it is.\n\n"
+        + "\n".join(f"- {c}" for c in changes)
+        + "\n\nEVERY LISTED PART IS BRAND NEW AND MUST BE FITTED COMPLETELY: clean and uniform "
+        "over its whole surface, with none of the old part's wear showing through it. A rider "
+        "paid for these, so a half-applied or patchy result is wrong. Anything NOT listed keeps "
+        "its existing condition and character.\n\n"
+        f"{INTEGRATION}\n\n"
+        "The result must be a photograph of one coherent, physically correct bicycle: new wheels "
+        "sit in the existing dropouts, a new handlebar on the existing steerer, bags strapped to "
+        "real mounting points. "
+        f"{BIKE_CAMERA} {ground} {GENERAL_STYLE} {ISOLATED_BIKE_STYLE}"
+    )

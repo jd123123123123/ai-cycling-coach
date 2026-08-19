@@ -399,6 +399,43 @@ def _rider_compose_prompt() -> str:
     )
 
 
+async def edit_image(base_b64: str, prompt: str, seed_src: str, size: str = "1K") -> str | None:
+    """Image-conditioned edit: hand a picture back with an instruction.
+
+    The difference from `_generate` is the whole reason `bike_build` works. A
+    text-only render redraws the bicycle from a description and the result
+    differs from the last one in every pixel; an edit keeps the frame, the
+    paint, the camera and the light and moves only what was asked for.
+    `docs/w3-bike-customisation.md` measured it — a wheel swap moves 5.4 % of
+    pixels, a saddle 0.9 %.
+
+    ALWAYS pass the rider's ORIGINAL render as `base_b64`, never an
+    already-edited one: the same note measured stacking drifting from 5.3 % to
+    6.3 % over two steps, which is how a bike slowly stops being the bike.
+    """
+    if not _gemini_ready():
+        return None
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
+    resp = client.models.generate_content(
+        model=model,
+        contents=[_img_part(base_b64), prompt],
+        config=types.GenerateContentConfig(
+            response_modalities=["Image"],
+            seed=_seed(seed_src),
+            image_config=types.ImageConfig(aspect_ratio="1:1", image_size=size),
+        ),
+    )
+    for part in resp.candidates[0].content.parts:
+        data = getattr(part, "inline_data", None)
+        if data and data.data:
+            return _to_data_url(data.data)
+    return None
+
+
 def _img_part(photo_b64: str):
     from google.genai import types
     mime = "image/jpeg"

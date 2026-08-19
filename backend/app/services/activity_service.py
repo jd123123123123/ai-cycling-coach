@@ -341,6 +341,17 @@ async def create_activity(
             from app.services import referral
 
             await referral.accrue_for_ride(user_id, int(award["total"]))
+
+        # The bike economy settles on the same ingestion: the component
+        # odometers absorb this ride's kilometres, the equipped loadout pays
+        # what its conditional bonuses actually earned on THIS ride, and a new
+        # Eddington number pays its milestone. Every step is idempotent per
+        # activity and individually guarded — see `ride_economy.settle`.
+        from app.services import ride_economy
+
+        await ride_economy.settle(
+            db, user_id, activity, int((award or {}).get("total", 0)),
+        )
     except Exception as exc:
         logger.warning(
             "RideCoin award failed for user_id=%s after activity create (non-fatal): %s",

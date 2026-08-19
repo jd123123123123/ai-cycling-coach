@@ -31,8 +31,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
 from app.models.garage import DayScene, GarageAsset, RideScene
+from app.models.shop import BikeRender
 from app.models.user import User
-from app.services import cyclr_studio, gear, rewards, workshop
+from app.services import bike_build, cyclr_studio, gear, rewards, workshop
 from app.services.ride_scene import DAY_POSES, RideGeo, day_context, training_context
 
 router = APIRouter(prefix="/garage", tags=["garage"])
@@ -130,6 +131,74 @@ async def get_garage(
     )
     assets = {a.kind: a for a in result.scalars().all()}
     return GarageOut(rider=_to_out(assets.get("rider")), bike=_to_out(assets.get("bike")))
+
+
+# ── the built bike ──────────────────────────────────────────────────────────
+class BikeBuildOut(BaseModel):
+    """The rider's bike wearing what they equipped."""
+
+    #: The composed build, the plain bike when nothing worn changes the picture,
+    #: or null when neither exists yet.
+    image_base64: str | None
+    #: "stock" — nothing equipped alters the machine, this is the base render
+    #: "ok" — a composed build, from cache or freshly rendered
+    #: "needs_bike" — the rider has not digitalised a bike yet
+    #: "image_model_unavailable" — honest gating; the base render is returned
+    status: str
+    #: What was asked of the model, so a build can always be explained.
+    changes: list[str]
+
+
+@router.get("/bike/build", response_model=BikeBuildOut, summary="The rider's bike, wearing their equipped gear")
+async def get_bike_build(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> BikeBuildOut:
+    """The bike as currently built. Cached; renders on demand, once per build.
+
+    A loadout whose items are all pocket charms is `stock` and costs nothing —
+    the rider's own base render is returned with no model call at all. Only a
+    combination that actually changes the machine is ever composed, and only the
+    first time anyone in this garage wears it.
+    """
+    bike = await _get_asset(db, current_user.id, "bike")
+    if bike is None or not bike.image_url:
+        return BikeBuildOut(image_base64=None, status="needs_bike", changes=[])
+
+    equipped = await gear.equipped_ids(db, current_user.id)
+    if bike_build.is_stock(equipped):
+        return BikeBuildOut(image_base64=bike.image_url, status="stock", changes=[])
+
+    stamp = (bike.updated_at or bike.created_at).isoformat()
+    key = bike_build.build_key(bike.id, stamp, equipped)
+    changes = bike_build.describe(equipped)
+
+    cached = (await db.execute(
+        select(BikeRender).where(BikeRender.build_key == key)
+    )).scalar_one_or_none()
+    if cached is not None and cached.image:
+        return BikeBuildOut(image_base64=cached.image, status="ok", changes=changes)
+
+    # ALWAYS from the rider's ORIGINAL render, never from a previous build:
+    # `docs/w3-bike-customisation.md` measured stacked edits drifting, which is
+    # how a bike slowly stops being the bike.
+    image = await cyclr_studio.edit_image(
+        bike.image_url, bike_build.edit_prompt(equipped), key,
+    )
+    if not image:
+        # Honest degradation: the rider keeps seeing their real bike rather than
+        # an error or a placeholder. Nothing is cached, so it retries later.
+        return BikeBuildOut(
+            image_base64=bike.image_url, status="image_model_unavailable", changes=changes,
+        )
+
+    if cached is None:
+        cached = BikeRender(build_key=key)
+        db.add(cached)
+    cached.image = image
+    cached.status = "ok"
+    await db.commit()
+    return BikeBuildOut(image_base64=image, status="ok", changes=changes)
 
 
 # ── the gear shop ───────────────────────────────────────────────────────────
