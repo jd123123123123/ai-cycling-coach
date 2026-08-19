@@ -96,19 +96,36 @@ every plotted watt also printed as a number. 9 tests.
 sprint/pedaling are all in the same payload and still only drawn on
 `/power-profile`. The curve was the valuable half; the rest is a further port.
 
-### 4. Load is a number, never a shape — and the ramp series already exists
-**PRO/AM.** CTL/ATL/TSB exist in `W3TodayStatus` as a 90-day curve, which is
-good. But the *weekly* view has no ramp visualisation — the thing that tells you
-whether you are building or digging a hole. "Warum diese Einheit" states the
-8 %/week ceiling in prose; nobody draws it.
+### 4. ✗ WITHDRAWN — the load ramp already exists, one tap from Today
+**PRO/AM.** Corrected 2026-08-19, the second time this audit was wrong the same
+way. I wrote "the weekly view has no ramp visualisation". It has one:
 
-**The series is already on the wire:** `weekly_tss_targets: number[]` on
-`api/plan.ts` (both plan shapes), and `planned_tss` / actual on
-`api/weeklyRecap.ts`. A ramp bar of planned-vs-actual per week, with the
-current week marked and the 8 % ceiling as a rule, needs no server work either.
+- `buildWeeklyBars()` in `w3plan.ts` builds the 12-week chart from the real
+  `weekly_tss_targets` series, renders **planned vs actual** per week (past
+  weeks show ridden TSS, the current week is marked, future weeks show target),
+  and detects recovery weeks as a ≥12 % dip below both neighbours.
+- Drawn by `W3PlanPage` at `/e/w3-plan`.
+- Reachable from Today: the "Ganzer Plan · 12 Wochen" card in `WeekNavCards`
+  navigates straight to it.
 
-This and item 3 are the two highest-value charts in the app and **neither needs
-a backend change** — which is the single most useful thing this audit found.
+So this is not missing and not even stranded. **The real, much smaller gap:**
+"Warum diese Einheit" states the 8 %/week ceiling in prose on Today, right
+next to a card that links to the chart which shows it — and never says so.
+That is a one-line affordance, not a charting project.
+
+---
+
+## THE PATTERN THIS AUDIT ACTUALLY FOUND
+
+Two of the four "missing" charts were already built. The power curve was
+complete, served and routed but unreachable from W3's tabs; the load ramp is
+complete AND reachable, and I still missed it by reading Today instead of
+following its own links.
+
+**Before adding a chart to this app, grep for it.** The failure mode here is
+not missing capability — it is capability the W3 migration left without an
+entry point, or that a reviewer never clicked through to. An audit that reads
+one surface and infers absence will keep producing this mistake.
 
 ### 5. Intervals have no execution graph after the ride
 **PRO.** `4 × 8 Schwelle` shows a target profile before the ride. After it,
