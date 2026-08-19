@@ -74,6 +74,7 @@ const W3RidesPage = lazyWithRetry(() => import('./editorial/w3/W3RidesPage'))
 const W3RidesPreview = lazyWithRetry(() => import('./editorial/w3/W3RidesPreview'))
 const W3GaragePage = lazyWithRetry(() => import('./editorial/w3/W3GaragePage'))
 const W3GaragePreview = lazyWithRetry(() => import('./editorial/w3/W3GaragePreview'))
+const W3WorkshopPreview = lazyWithRetry(() => import('./editorial/w3/W3WorkshopPreview'))
 const W3ShopPage = lazyWithRetry(() => import('./editorial/w3/W3ShopPage'))
 const W3ShopPreview = lazyWithRetry(() => import('./editorial/w3/W3ShopPreview'))
 const W3BikeStudioPage = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPage'))
@@ -402,6 +403,7 @@ function AppRoutes() {
               tab — see W3GarageView's header for why the ladder replaced it. */}
           <Route path="/e/w3-garage" element={<ProtectedRoute checkOnboarding><W3Guard><W3GaragePage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-garage-preview" element={<W3GaragePreview />} />
+          <Route path="/e/w3-workshop-preview" element={<W3WorkshopPreview />} />
           <Route path="/e/w3-shop" element={<ProtectedRoute checkOnboarding><W3Guard><W3ShopPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-shop-preview" element={<W3ShopPreview />} />
           <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />
