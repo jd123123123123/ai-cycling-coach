@@ -122,7 +122,7 @@ export default function W3AvatarGate() {
               <div style={{ position: 'relative', width: 104, height: 104, borderRadius: 100, border: `2px dashed ${T.acid}66`, display: 'grid', placeItems: 'center', background: T.surface }}>
                 <UserRound size={40} strokeWidth={1.4} color={T.quiet} />
                 <div style={{ position: 'absolute', right: -2, bottom: -2, width: 34, height: 34, borderRadius: 100, background: T.acid, display: 'grid', placeItems: 'center', boxShadow: `0 0 20px ${T.acid}66` }}>
-                  <Plus size={17} color="#0B0B0B" strokeWidth={2.6} />
+                  <Plus size={17} color={T.bg} strokeWidth={2.6} />
                 </div>
               </div>
             </div>
@@ -140,8 +140,8 @@ export default function W3AvatarGate() {
             </span>
 
             <button ref={primaryRef} onClick={create}
-              style={{ width: '100%', height: 54, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 4 }}>
-              <Camera size={18} color="#0B0B0B" />Rider erstellen
+              style={{ width: '100%', height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 4 }}>
+              <Camera size={18} color={T.bg} />Rider erstellen
             </button>
             <button onClick={dismiss}
               style={{ width: '100%', height: 40, background: 'transparent', border: 0, color: T.quiet, fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>

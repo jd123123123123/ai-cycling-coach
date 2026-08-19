@@ -55,7 +55,7 @@ export default function W3ConnectCelebrateView({ vm, onContinue }: { vm: W3Conne
   const km = useCountUp(vm.km, revealed)
 
   const ARC = 2 * Math.PI * 128
-  const VIOLET = '#7B5CFF'
+  const VIOLET = T.evening
 
   return (
     <div className="w3-root">

@@ -187,7 +187,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
       <div className="w3-root">
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg, position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: 120, left: '50%', transform: 'translateX(-50%)', width: 460, height: 460, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}1F, transparent)` }} />
-          {['#C8FF00', '#7B5CFF', '#00E5FF', '#FFB020', '#C8FF00', '#7B5CFF'].map((c, i) => (
+          {[T.acid, T.evening, '#00E5FF', T.warn, T.acid, T.evening].map((c, i) => (
             <motion.div key={i} initial={reduce ? false : { y: -20, opacity: 0 }} animate={{ y: [-20, 700], opacity: [0, 1, 0], rotate: [0, 220] }} transition={{ duration: 2.6, delay: i * 0.14, repeat: Infinity, repeatDelay: 0.8 }}
               style={{ position: 'absolute', top: 0, left: `${12 + i * 14}%`, width: 6, height: 12, borderRadius: 2, background: c, zIndex: 1 }} />
           ))}
@@ -236,7 +236,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
             )}
 
             <div style={{ width: '100%', marginTop: 'auto', paddingTop: 4, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={p.onBack} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+              <button onClick={p.onBack} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
                 In die Garage
               </button>
               {/* `onSave` downloads the render to the device — so it says that.
@@ -290,7 +290,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
             {unavailable && (
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
                 {p.photoUrl && <img src={p.photoUrl} alt="Dein Bike" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.18, filter: 'saturate(1.3)' }} />}
-                <Bike size={120} strokeWidth={1.2} color="#0B0B0B" style={{ opacity: 0.55, position: 'relative' }} />
+                <Bike size={120} strokeWidth={1.2} color={T.bg} style={{ opacity: 0.55, position: 'relative' }} />
                 <div style={{ position: 'absolute', bottom: 14, left: 14, right: 14, padding: '9px 12px', borderRadius: 12, background: 'rgba(11,11,11,.72)', fontSize: 10.5, fontWeight: 600, color: '#fff', textAlign: 'center' }}>
                   Studio nicht verfügbar — kein Bildmodell verbunden
                 </div>

@@ -24,7 +24,7 @@ import W3StatusBar from './W3StatusBar'
  * forfeiture gate. One-shot: a claimed ride opens straight in the settled state.
  */
 
-const VIOLET = '#7B5CFF'
+const VIOLET = T.evening
 const VIOLET_DIM = '#7B5CFF24'
 
 export interface W3CelebStat { icon: 'route' | 'timer' | 'power' | 'climb'; label: string; value: string; unit: string }

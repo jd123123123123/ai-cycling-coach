@@ -65,10 +65,10 @@ const PRIMARY = [
   { key: 'saddleTime' as const, icon: Timer, label: 'SATTELZEIT' },
 ]
 const INSIGHT_META: Record<W3InsightKey, { icon: ComponentType<{ size?: number; color?: string }>; hue: string }> = {
-  elevation: { icon: Mountain, hue: '#7B5CFF' },
+  elevation: { icon: Mountain, hue: T.evening },
   longest: { icon: RouteIcon, hue: '#00E5FF' },
-  speed: { icon: Gauge, hue: '#2BE68F' },
-  burned: { icon: Flame, hue: '#FFB020' },
+  speed: { icon: Gauge, hue: T.training },
+  burned: { icon: Flame, hue: T.warn },
 }
 const DASH = '—'
 const SEG = 24

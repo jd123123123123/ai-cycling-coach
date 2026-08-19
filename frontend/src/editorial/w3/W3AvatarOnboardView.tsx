@@ -67,7 +67,7 @@ const PERKS: { icon: typeof Mountain; label: string }[] = [
 
 /** Reveal confetti palette — the generating stage falls in the same colours so
  *  the wait and the unlock read as one continuous moment. */
-const CONFETTI = ['#C8FF00', '#7B5CFF', '#00E5FF', '#FFB020', '#C8FF00', '#7B5CFF']
+const CONFETTI = [T.acid, T.evening, '#00E5FF', T.warn, T.acid, T.evening]
 
 /**
  * The two phases the render pipeline genuinely runs, in this order: the vision
@@ -94,10 +94,10 @@ const PRIMARY = [
   { icon: Timer, label: 'SATTELZEIT', key: 'saddleTime' as const },
 ]
 const INSIGHT_META: Record<InsightKey, { icon: typeof Mountain; hue: string }> = {
-  elevation: { icon: Mountain, hue: '#7B5CFF' },
+  elevation: { icon: Mountain, hue: T.evening },
   longest: { icon: RouteIcon, hue: '#00E5FF' },
-  speed: { icon: Gauge, hue: '#2BE68F' },
-  burned: { icon: Flame, hue: '#FFB020' },
+  speed: { icon: Gauge, hue: T.training },
+  burned: { icon: Flame, hue: T.warn },
 }
 
 export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', reveal, failure, onPick, onSkip, onTake }: W3AvatarOnboardProps) {
@@ -188,7 +188,7 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
               <button onClick={onPick} aria-label="Neues Foto" style={{ width: 44, height: 44, borderRadius: 100, background: '#00000066', backdropFilter: 'blur(4px)', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={20} color={T.ink} /></button>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '8px 12px', borderRadius: 100, background: '#00000066', backdropFilter: 'blur(4px)' }}>
-                  <div style={{ width: 11, height: 11, borderRadius: 100, background: '#0B0B0B', border: `1px solid ${T.d3}` }} />
+                  <div style={{ width: 11, height: 11, borderRadius: 100, background: T.bg, border: `1px solid ${T.d3}` }} />
                   <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 0.8, color: T.quiet }}>BASIC BLACK</span>
                 </div>
                 <div style={{ width: 34, height: 34, borderRadius: 100, background: '#00000066', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center' }}><Plus size={15} color={T.acid} /></div>
@@ -259,8 +259,8 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
             </div>
 
             <div style={{ width: '100%', display: 'flex', gap: 8, marginTop: 2 }}>
-              <button onClick={onTake} style={{ flex: 1, height: 52, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-                Übernehmen<ArrowRight size={18} color="#0B0B0B" />
+              <button onClick={onTake} style={{ flex: 1, height: 52, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+                Übernehmen<ArrowRight size={18} color={T.bg} />
               </button>
               <button onClick={onShareCard} disabled={!cardReady} aria-label="Karte teilen"
                 style={{ flex: 'none', height: 52, padding: '0 18px', borderRadius: 100, background: T.surface2, border: `1px solid ${T.stroke}`, color: T.ink, fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: cardReady ? 'pointer' : 'default', opacity: cardReady ? 1 : 0.55, display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
@@ -308,7 +308,7 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
             </span>
           )}
           <button onClick={onPick}
-            style={{ width: '100%', maxWidth: 320, height: 54, borderRadius: 100, border: 0, background: T.acid, color: '#0B0B0B', fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 6 }}>
+            style={{ width: '100%', maxWidth: 320, height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 6 }}>
             Nochmal versuchen
           </button>
           <button onClick={onSkip}

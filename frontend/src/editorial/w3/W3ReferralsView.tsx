@@ -12,7 +12,7 @@ import './w3.css'
  * a claimable window turns lime.
  */
 
-const VIOLET = '#7B5CFF'
+const VIOLET = T.evening
 const AVATAR_TINTS = ['#B9A7EE', '#A7D8EE', '#EEC7A7', '#A7EEC0', '#EEA7D2']
 
 export interface W3ReferralRow {

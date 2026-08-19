@@ -429,7 +429,7 @@ export default function W3TodayPage() {
             : base != null
               ? subOf(`${signed(value - base.mean)} ggü. ${base.n}-Tage-Ø`, value - base.mean <= 0)
               : { sub: null, subHue: NEUTRAL }
-          return { value: String(Math.round(value)), unit: 'bpm', ...s, spark: sparkFrom(rhrSeries, '#C8FF00') }
+          return { value: String(Math.round(value)), unit: 'bpm', ...s, spark: sparkFrom(rhrSeries, T.acid) }
         })()
       : null
 

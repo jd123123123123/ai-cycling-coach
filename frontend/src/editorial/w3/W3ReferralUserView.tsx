@@ -11,7 +11,7 @@ import './w3.css'
  * All stats are the referred rider's real training.
  */
 
-const VIOLET = '#7B5CFF'
+const VIOLET = T.evening
 
 export interface W3ReferralUserVm {
   handle: string

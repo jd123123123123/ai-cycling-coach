@@ -8,7 +8,7 @@ import { T, FONT } from './w3tokens'
  * Saves a REAL weekly crew challenge (metric distance_km) everyone is scored
  * against. Step ±100 km, 100–20,000.
  */
-const VIOLET = '#7B5CFF'
+const VIOLET = T.evening
 const STEP = 100
 const MINK = 100
 const MAXK = 20000

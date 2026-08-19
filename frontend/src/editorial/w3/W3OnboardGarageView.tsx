@@ -18,7 +18,7 @@ export interface W3OnboardGarageProps {
 
 // fixture: cosmetic swatches + unlock count — no per-part backend behind the
 // starter bike yet, so these illustrate the garage rather than report state.
-const SWATCHES = [T.acid, '#7B5CFF', '#E8EAED', '#2BE68F']
+const SWATCHES = [T.acid, T.evening, '#E8EAED', T.training]
 
 export default function W3OnboardGarageView({ bikeImageUrl, onStart, onSkip }: W3OnboardGarageProps) {
   const reduce = useReducedMotion()

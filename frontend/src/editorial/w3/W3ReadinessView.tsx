@@ -36,7 +36,7 @@ export interface W3ReadinessVm {
 export interface W3ReadinessActions { onBack?: () => void }
 
 const ICONS: Record<DriverIcon, typeof Activity> = { hrv: Activity, rhr: HeartPulse, sleep: Moon, battery: BatteryCharging, stress: Waves, recovery: Timer, vo2: Wind }
-const HUE: Record<DriverIcon, string> = { hrv: '#00E5FF', rhr: '#FF6A8A', sleep: '#7B5CFF', battery: '#2BE68F', stress: '#FFB020', recovery: '#6B8CFF', vo2: '#C8FF00' }
+const HUE: Record<DriverIcon, string> = { hrv: '#00E5FF', rhr: '#FF6A8A', sleep: T.evening, battery: T.training, stress: T.warn, recovery: T.cool, vo2: T.acid }
 
 const band = (pb: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: `0 20px ${pb}px` })
 /** Bubbly card: big radius + a soft top-lit gradient + hairline. */
