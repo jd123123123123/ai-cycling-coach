@@ -687,7 +687,13 @@ _REFERENCE_MANDATE = (
     "new pose. The SECOND image is the rider's own bicycle: reproduce that exact bike — the same "
     "frame shape and colour, the same decals and lettering, the same wheels, rim depth, tyres and "
     "components. Do NOT redesign either, do NOT re-letter the frame, and do NOT drift toward a "
-    "more realistic or a more generic figure. Only the POSE and the SURROUNDINGS are new."
+    "more realistic or a more generic figure. Only the POSE and the SURROUNDINGS are new.\n\n"
+    "THE POSE IS THE ONE EXCEPTION, AND IT OUTRANKS THE REFERENCES. Both of them show a figure "
+    "standing still, and that stillness must not leak into this render. The posture is whatever "
+    "the action above describes, taken literally and at full commitment: if it says out of the "
+    "saddle with hands in the drops and the torso low and driving, draw exactly that — do not "
+    "settle the rider back onto the hoods or sit them upright because the reference figure is. "
+    "The references govern WHO and WHAT; the action governs HOW THEY ARE MOVING."
 )
 
 
