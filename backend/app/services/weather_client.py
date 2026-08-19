@@ -136,7 +136,11 @@ async def fetch_ride_weather(
         "longitude": round(lng, 3),
         "start_date": start.date().isoformat(),
         "end_date": end.date().isoformat(),
-        "hourly": "wind_speed_10m,wind_direction_10m,temperature_2m",
+        # `precipitation` is here for the bike economy's weather-conditional
+        # gear (Schutzbleche, Regel-9): without it `was_wet` can only ever be
+        # None, and a modifier whose fact is None never fires — so those items
+        # would be unwinnable rather than rare.
+        "hourly": "wind_speed_10m,wind_direction_10m,temperature_2m,precipitation",
         "wind_speed_unit": "ms",
         "timezone": "UTC",
     }

@@ -77,6 +77,12 @@ const W3GaragePreview = lazyWithRetry(() => import('./editorial/w3/W3GaragePrevi
 const W3WorkshopPreview = lazyWithRetry(() => import('./editorial/w3/W3WorkshopPreview'))
 const W3GearPreview = lazyWithRetry(() => import('./editorial/w3/W3GearPreview'))
 const W3GarageStagePreview = lazyWithRetry(() => import('./editorial/w3/W3GarageStagePreview'))
+const W3GarageHome = lazyWithRetry(() =>
+  import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3GarageHome })))
+const W3GearScreen = lazyWithRetry(() =>
+  import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3GearScreen })))
+const W3WorkshopScreen = lazyWithRetry(() =>
+  import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3WorkshopScreen })))
 const W3ShopPage = lazyWithRetry(() => import('./editorial/w3/W3ShopPage'))
 const W3ShopPreview = lazyWithRetry(() => import('./editorial/w3/W3ShopPreview'))
 const W3BikeStudioPage = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPage'))
@@ -403,7 +409,15 @@ function AppRoutes() {
           {/* The GARAGE tab: the bike you ride + the shop you buy it from. The
               bike-studio photo upload stays reachable by URL but is no longer a
               tab — see W3GarageView's header for why the ladder replaced it. */}
-          <Route path="/e/w3-garage" element={<ProtectedRoute checkOnboarding><W3Guard><W3GaragePage /></W3Guard></ProtectedRoute>} />
+          {/* The garage is the bike economy's hub now: the built bike, the five
+              loadout slots and what they bring, with the shop and the workshop
+              as their own screens. The old catalogue garage (`W3GaragePage`)
+              still answers `/e/w3-garage-old` until the shop it depends on is
+              removed — see docs/superpowers/specs/2026-08-19-own-bike-customisation-design.md */}
+          <Route path="/e/w3-garage" element={<ProtectedRoute checkOnboarding><W3Guard><W3GarageHome /></W3Guard></ProtectedRoute>} />
+          <Route path="/e/w3-gear" element={<ProtectedRoute checkOnboarding><W3Guard><W3GearScreen /></W3Guard></ProtectedRoute>} />
+          <Route path="/e/w3-workshop" element={<ProtectedRoute checkOnboarding><W3Guard><W3WorkshopScreen /></W3Guard></ProtectedRoute>} />
+          <Route path="/e/w3-garage-old" element={<ProtectedRoute checkOnboarding><W3Guard><W3GaragePage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-garage-preview" element={<W3GaragePreview />} />
           <Route path="/e/w3-workshop-preview" element={<W3WorkshopPreview />} />
           <Route path="/e/w3-gear-preview" element={<W3GearPreview />} />

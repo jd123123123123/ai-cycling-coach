@@ -34,8 +34,8 @@ const nf = (n: number) => n.toLocaleString('de-DE')
  *  generated on (`scripts/generate_gear_art.py`), so the frame and the
  *  photograph inside it agree. */
 const RARITY_HUE: Record<GearRarity, string> = {
-  common: '#9DB39A',
-  rare: '#98A6D8',
+  common: T.rareCommon,
+  rare: T.rareRare,
   legendary: T.acid,
 }
 const RARITY_DE: Record<GearRarity, string> = {

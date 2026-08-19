@@ -36,6 +36,12 @@ export const T = {
   heroMid: '#8E8E96',        // dock kickers
   heroOff: '#3A3A3F',        // an unfilled meter segment
   lilac: '#EFD6FE',          // the RideCoin asterisk, and only that
+  // Gear rarity. These are the tinted grounds the item art was generated on
+  // (`backend/scripts/generate_gear_art.py`), so the frame drawn around a tile
+  // and the photograph inside it agree. Legendary has no entry — it is `acid`,
+  // because the loudest rarity should be the brand's own colour.
+  rareCommon: '#9DB39A',     // sage
+  rareRare: '#98A6D8',       // periwinkle
   // The floor: a linear sweep that gets LIGHTER toward the bottom, so the bike
   // reads as standing in a studio rather than floating on a void.
   heroFloor: ['#0B0B0C', '#141416', '#333336', '#47474B'] as const,

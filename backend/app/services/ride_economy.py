@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity import Activity
 from app.models.rewards import REASON_EDDINGTON, REASON_GEAR_BONUS
 from app.services import earn_modifiers as em
+from app.services import ride_facts
 from app.services import bike_wear, eddington, gear, rewards, workshop
 
 logger = logging.getLogger(__name__)
@@ -43,11 +44,11 @@ async def _ride_facts(
 ) -> em.RideFacts:
     """Translate one activity into the facts the modifiers ask about.
 
-    Fields the activity cannot answer are left None on purpose — see the module
-    docstring. `surface`, `was_wet`, `temp_c`, `with_crew` and
-    `honoured_easy_day` are not columns on `activities`; they are left None
-    until each has a real source, which means the items depending on them
-    simply do not fire yet rather than firing on a guess.
+    The five that `activities` cannot answer on its own — surface, wetness,
+    temperature, crew and the easy-day judgement — are resolved by
+    `ride_facts`, each from a real source and each returning None the moment it
+    cannot answer honestly. A resolver failing costs its own fact and nothing
+    else: the ride still earns everything the remaining facts support.
     """
     dist = activity.distance_meters
     dur = activity.duration_seconds
@@ -58,14 +59,35 @@ async def _ride_facts(
     if activity.tss and dur and dur > 0:
         iff = (activity.tss / ((dur / 3600) * 100)) ** 0.5
 
+    async def _safe(coro, default):
+        try:
+            return await coro
+        except Exception:
+            logger.info("a ride fact failed to resolve (non-fatal)", exc_info=True)
+            return default
+
+    was_wet, temp_c = await _safe(ride_facts.weather_of(db, activity), (None, None))
+    with_crew = await _safe(ride_facts.with_crew_of(db, user_id, activity), None)
+    easy = await _safe(ride_facts.honoured_easy_day_of(db, user_id, activity), None)
+
+    try:
+        surface = ride_facts.surface_of(activity)
+    except Exception:
+        surface = None
+
     started = activity.started_at
     return em.RideFacts(
         distance_m=dist,
         elevation_gain_m=activity.elevation_gain_m,
         duration_s=dur,
         avg_speed_kmh=avg_kmh,
+        was_wet=was_wet,
+        temp_c=temp_c,
+        surface=surface,
         start_hour=started.hour if started else None,
         intensity_factor=iff,
+        with_crew=with_crew,
+        honoured_easy_day=easy,
         has_power=activity.average_power is not None,
         drivetrain_fresh=bike_wear.drivetrain_fresh(chain_km_since),
     )

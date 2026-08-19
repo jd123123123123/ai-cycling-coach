@@ -62,3 +62,26 @@ export async function unequipGear(itemId: string): Promise<Gear> {
   const res = await apiClient.post<Gear>(`/garage/gear/unequip/${itemId}`)
   return res.data
 }
+
+// ── the built bike ──────────────────────────────────────────────────────────
+// The rider's own render, wearing what they equipped. Composed once per build
+// by `bike_build`'s image-conditioned edit and cached server-side, so browsing
+// costs nothing and only a genuinely new combination is ever rendered.
+
+export interface BikeBuild {
+  /** The composed build, the plain bike when nothing worn changes the picture,
+   *  or null when the rider has not digitalised a bike yet. */
+  image_base64: string | null
+  /** "stock" — nothing equipped alters the machine
+   *  "ok" — a composed build
+   *  "needs_bike" — no bike in the garage yet
+   *  "image_model_unavailable" — honest gating; the base render comes back */
+  status: string
+  /** What was asked of the model, so a build can always be explained. */
+  changes: string[]
+}
+
+export async function fetchBikeBuild(): Promise<BikeBuild> {
+  const res = await apiClient.get<BikeBuild>('/garage/bike/build')
+  return res.data
+}
