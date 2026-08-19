@@ -28,6 +28,7 @@ from app.models.challenge import ChallengeEnrollment  # noqa: F401
 from app.models.referral import Referral  # noqa: F401
 from app.models.garage import DayScene, GarageAsset, RideScene  # noqa: F401
 from app.models.bike_wear import BikeComponent  # noqa: F401
+from app.models.bike_gear import BikeGear  # noqa: F401
 from app.models.shop import GarageItem, GarageLoadout  # noqa: F401
 from app.models.strength import (  # noqa: F401
     StrengthRoutine,

@@ -32,7 +32,7 @@ from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
 from app.models.garage import DayScene, GarageAsset, RideScene
 from app.models.user import User
-from app.services import cyclr_studio, rewards, workshop
+from app.services import cyclr_studio, gear, rewards, workshop
 from app.services.ride_scene import DAY_POSES, RideGeo, day_context, training_context
 
 router = APIRouter(prefix="/garage", tags=["garage"])
@@ -130,6 +130,130 @@ async def get_garage(
     )
     assets = {a.kind: a for a in result.scalars().all()}
     return GarageOut(rider=_to_out(assets.get("rider")), bike=_to_out(assets.get("bike")))
+
+
+# ── the gear shop ───────────────────────────────────────────────────────────
+class GearItemOut(BaseModel):
+    id: str
+    name_de: str
+    slot: str
+    slot_label: str
+    rarity: str
+    pct: int
+    price_rc: int
+    why: str
+    flavour_de: str
+    owned: bool
+    equipped: bool
+    affordable: bool
+
+
+class GearOut(BaseModel):
+    items: list[GearItemOut]
+    balance: int
+    #: slot id → German label, so the client never hard-codes the slot names.
+    slots: dict[str, str]
+
+
+@router.get("/gear", response_model=GearOut, summary="The equipment catalogue, marked up with what the rider owns")
+async def get_gear(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> GearOut:
+    """Every item, owned or not.
+
+    Unaffordable items are RETURNED, not hidden: an item you cannot yet buy is a
+    goal, and a catalogue that hides its goals stops being something to work
+    toward. `affordable` lets the client draw the difference.
+    """
+    view = await gear.read(db, current_user.id)
+    return GearOut(
+        items=[GearItemOut(**vars(i)) for i in view.items],
+        balance=view.balance,
+        slots=view.slots,
+    )
+
+
+@router.post("/gear/buy/{item_id}", response_model=GearOut, summary="Buy one item at the server's price")
+async def buy_gear(
+    item_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> GearOut:
+    """Spend RideCoin on equipment.
+
+    The price is NEVER in the request — it comes from the catalogue, so there is
+    no body to tamper with. 404 unknown item, 409 already owned, 402 too poor,
+    and in every refusal case not one RideCoin has moved and no row exists.
+
+    Returns the refreshed catalogue so the shop redraws without a follow-up GET,
+    which would otherwise flash a stale balance on the one screen that just took
+    the rider's coins.
+    """
+    try:
+        await gear.buy(db, current_user.id, item_id)
+    except gear.UnknownItemError:
+        raise HTTPException(http_status.HTTP_404_NOT_FOUND, f"No such item: {item_id}") from None
+    except gear.AlreadyOwnedError:
+        raise HTTPException(http_status.HTTP_409_CONFLICT, f"Already owned: {item_id}") from None
+    except rewards.InsufficientBalanceError as e:
+        raise HTTPException(
+            http_status.HTTP_402_PAYMENT_REQUIRED,
+            f"Costs {e.needed} RC — balance is {e.balance} RC",
+        ) from None
+
+    view = await gear.read(db, current_user.id)
+    await db.commit()
+    return GearOut(
+        items=[GearItemOut(**vars(i)) for i in view.items],
+        balance=view.balance, slots=view.slots,
+    )
+
+
+@router.post("/gear/equip/{item_id}", response_model=GearOut, summary="Wear an owned item")
+async def equip_gear(
+    item_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> GearOut:
+    """Move an item into its slot, displacing whatever was there.
+
+    Displacement is silent and automatic because the slot holds exactly one
+    thing — asking "remove your gravel tyres first?" is a dialogue about a rule
+    the rider can already see.
+    """
+    try:
+        await gear.equip(db, current_user.id, item_id)
+    except gear.UnknownItemError:
+        raise HTTPException(http_status.HTTP_404_NOT_FOUND, f"No such item: {item_id}") from None
+    except gear.NotOwnedError:
+        raise HTTPException(http_status.HTTP_409_CONFLICT, f"Not owned: {item_id}") from None
+
+    view = await gear.read(db, current_user.id)
+    await db.commit()
+    return GearOut(
+        items=[GearItemOut(**vars(i)) for i in view.items],
+        balance=view.balance, slots=view.slots,
+    )
+
+
+@router.post("/gear/unequip/{item_id}", response_model=GearOut, summary="Take an owned item off")
+async def unequip_gear(
+    item_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> GearOut:
+    try:
+        await gear.unequip(db, current_user.id, item_id)
+    except gear.NotOwnedError:
+        raise HTTPException(http_status.HTTP_409_CONFLICT, f"Not owned: {item_id}") from None
+
+    view = await gear.read(db, current_user.id)
+    await db.commit()
+    return GearOut(
+        items=[GearItemOut(**vars(i)) for i in view.items],
+        balance=view.balance, slots=view.slots,
+    )
 
 
 # ── the workshop ────────────────────────────────────────────────────────────

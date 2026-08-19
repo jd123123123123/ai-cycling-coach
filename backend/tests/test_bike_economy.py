@@ -125,16 +125,118 @@ def test_modifiers_only_fire_when_the_ride_actually_matched():
     assert em.MODIFIERS["mudguards"].applies(wet_gravel) is True
 
 
-def test_the_total_bonus_is_capped():
-    """Uncapped additive multipliers are how game economies die: the faucet
-    opens and the drain does not."""
-    everything = _facts(
-        surface="gravel", was_wet=True, in_dark=True, drivetrain_fresh=True,
-        distance_m=150_000, elevation_gain_m=2000, avg_speed_kmh=30,
+def test_nothing_in_the_catalogue_is_free():
+    """Items are BOUGHT. There is no starter item, no free tier and no grant —
+    a zero price would be a silent free unlock, and `gear.buy` is the only
+    writer of ownership rows precisely so this stays true."""
+    for m in em.catalogue():
+        assert m.price_rc > 0, f"{m.id} is free"
+        assert m.rarity in em.RARITIES
+    assert all(p > 0 for p in em.PRICE_BY_RARITY.values())
+
+
+def test_rarity_prices_rise():
+    p = em.PRICE_BY_RARITY
+    assert p["common"] < p["rare"] < p["legendary"]
+
+
+def test_every_item_has_a_real_slot_and_a_reason():
+    """A slotless item would dodge the one-per-slot rule and stack for free."""
+    for m in em.catalogue():
+        assert m.slot in em.SLOTS, f"{m.id} has no slot"
+        assert m.why and m.flavour_de, f"{m.id} has no copy"
+        assert 0 < m.pct <= em.MAX_BONUS_PCT
+
+
+def test_the_catalogue_is_worth_collecting():
+    """Enough breadth that every slot is a genuine choice, and enough total
+    value that the currency has somewhere to go for a long time. A currency
+    with nothing left to buy stops being worth earning."""
+    by_slot: dict[str, int] = {}
+    for m in em.catalogue():
+        by_slot[m.slot] = by_slot.get(m.slot, 0) + 1
+    assert len(by_slot) == len(em.SLOTS)
+    assert min(by_slot.values()) >= 4, "a slot with fewer than 4 items is not a choice"
+
+
+def test_one_item_per_slot_is_enforced_on_equip():
+    two_tyres = ["gravel_tyres", "slicks"]
+    with pytest.raises(em.SlotConflictError):
+        em.validate_loadout(two_tyres)
+    # One per slot, five slots — the maximum legal loadout.
+    em.validate_loadout(["gravel_tyres", "aero_wheels", "mudguards", "bell", "banana"])
+
+
+def test_a_stale_loadout_never_costs_a_rider_their_earn():
+    """`resolve` runs on the award path for a ride that ALREADY happened. A
+    loadout that has since become illegal must resolve, not raise — and when two
+    items share a slot the better one wins, so the rider is never quietly given
+    the worse of two things they own."""
+    facts = _facts(surface="gravel", was_wet=False)
+    b = em.resolve(["gravel_tyres", "slicks", "retired_item"], facts)
+    fired = [h for h in b.hits if h.fired]
+    assert any(h.id == "gravel_tyres" for h in fired)
+    assert b.total_pct == em.MODIFIERS["gravel_tyres"].pct
+
+
+def test_set_bonuses_need_the_whole_set_and_the_right_day():
+    """A set that paid on every ride would be the flat multiplier rule 1
+    forbids, so sets are conditional too."""
+    gravel_day = _facts(surface="gravel")
+    road_day = _facts(surface="road")
+
+    partial = em.resolve(["gravel_tyres"], gravel_day)
+    assert not any(s.id == "set_gravel" for s in partial.sets)
+
+    complete = em.resolve(["gravel_tyres", "climbing_bars"], gravel_day)
+    assert any(s.id == "set_gravel" and s.fired for s in complete.sets)
+
+    wrong_day = em.resolve(["gravel_tyres", "climbing_bars"], road_day)
+    assert any(s.id == "set_gravel" and not s.fired for s in wrong_day.sets)
+
+
+def test_the_charm_slot_rewards_things_a_coach_wants():
+    """`lanterne_rouge` pays for taking the easy day easy — the hardest thing to
+    get an enthusiastic athlete to do and the one a training plan most needs.
+    If this ever stops firing, the economy has stopped serving the coaching."""
+    lr = em.MODIFIERS["lanterne_rouge"]
+    assert lr.slot == "charm"
+    assert lr.applies(_facts(honoured_easy_day=True)) is True
+    assert lr.applies(_facts(honoured_easy_day=False)) is False
+    assert lr.applies(_facts()) is False
+
+
+def test_the_cap_is_reachable_with_a_legal_loadout():
+    """Uncapped additive multipliers are how game economies die. But the cap
+    must also be REACHABLE, or it is decoration — a ceiling nobody can touch
+    does not constrain anything.
+
+    A legal maximum: one item per slot, on the worst day of the year. Cold, wet,
+    dark, mountainous, off-road and long — the ride that earns every one of
+    them at once."""
+    epic = _facts(
+        surface="gravel", was_wet=True, temp_c=1, in_dark=True,
+        distance_m=140_000, elevation_gain_m=2400, avg_speed_kmh=19,
+        duration_s=7 * 3600, drivetrain_fresh=True,
     )
-    b = em.resolve(list(em.MODIFIERS), everything)
+    loadout = ["winter_tyres", "climbing_wheels", "dynamo_light", "climbing_bars", "regel_neun"]
+    em.validate_loadout(loadout)          # it really is legal
+    b = em.resolve(loadout, epic)
     assert b.total_pct == em.MAX_BONUS_PCT
     assert b.capped is True
+
+
+def test_wearing_everything_is_not_possible_so_owning_everything_is_not_a_win():
+    """Passing the whole catalogue must NOT stack it. Owning more widens the
+    choice; it must never raise the floor, or the loadout stops being a
+    decision and the collection becomes a checklist."""
+    day = _facts(surface="gravel", was_wet=True, in_dark=True, drivetrain_fresh=True,
+                 distance_m=150_000, elevation_gain_m=2000, avg_speed_kmh=30)
+    everything = em.resolve(list(em.MODIFIERS), day)
+    # At most one hit per slot, plus the slotless condition bonus.
+    slots = [h.slot for h in everything.hits if h.slot]
+    assert len(slots) == len(set(slots)), "two items from one slot were counted"
+    assert len(everything.hits) <= len(em.SLOTS) + 1
 
 
 def test_the_cap_is_reported_not_swallowed():
@@ -169,7 +271,7 @@ def test_maintenance_is_a_bonus_that_switches_on_never_a_penalty():
 
 def test_the_equipment_layer_can_only_ever_add():
     for pct in (0, 12, 60):
-        b = em.EarnBreakdown(total_pct=pct, capped=False, hits=[])
+        b = em.EarnBreakdown(total_pct=pct, capped=False, hits=[], sets=[])
         assert em.bonus_rc(200, b) >= 0
     assert em.bonus_rc(0, em.resolve(["gravel_tyres"], _facts(surface="gravel"))) == 0
 
