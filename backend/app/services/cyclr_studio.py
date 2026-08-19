@@ -423,6 +423,49 @@ NO_INVENTED_TEXT = (
 )
 
 
+def pad_to_square(photo_b64: str) -> str:
+    """Letterbox a photo to 1:1 on its own edge colour, without cropping.
+
+    WHY THIS EXISTS. Every render is requested at `aspect_ratio="1:1"`, but a
+    bike photograph is almost always landscape. Handing a wide image to a square
+    render forces the model to RECOMPOSE — and recomposing is exactly when it
+    re-frames the subject, which for a bicycle means quietly rotating it a few
+    degrees toward the viewer. Four rounds of increasingly blunt camera wording
+    moved that angle but never removed it; the aspect mismatch was doing the
+    damage upstream of the words.
+
+    Padded on the sampled edge colour rather than white, so a studio-sweep
+    photograph gains no visible seam and the model reads one continuous
+    background instead of a picture pasted on a card.
+
+    Returns the original string untouched if Pillow is unavailable or the image
+    cannot be read — this is an improvement to fidelity, never a dependency.
+    """
+    try:
+        import io
+
+        from PIL import Image
+    except Exception:
+        return photo_b64
+
+    try:
+        raw = photo_b64.split(",", 1)[1] if photo_b64.startswith("data:") else photo_b64
+        im = Image.open(io.BytesIO(base64.b64decode(raw))).convert("RGB")
+        w, h = im.size
+        if w == h:
+            return photo_b64
+        side = max(w, h)
+        # Sample a corner for the fill: on a product shot that is the sweep.
+        bg = im.getpixel((0, 0))
+        canvas = Image.new("RGB", (side, side), bg)
+        canvas.paste(im, ((side - w) // 2, (side - h) // 2))
+        buf = io.BytesIO()
+        canvas.save(buf, "WEBP", quality=92, method=6)
+        return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return photo_b64
+
+
 async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str | None, str, str]:
     """The rider's bike collectible, rendered FROM THE PHOTO — 1:1.
 
@@ -470,7 +513,9 @@ async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str 
     )
     if not _gemini_ready():
         return None, prompt, "image_model_unavailable"
-    img = await edit_image(photo_b64, prompt, description or photo_b64[:64])
+    # Squared FIRST — see `pad_to_square`. A landscape photo rendered at 1:1
+    # makes the model recompose, and recomposing is when the bike rotates.
+    img = await edit_image(pad_to_square(photo_b64), prompt, photo_b64)
     return img, prompt, "ok" if img else "image_model_unavailable"
 
 

@@ -59,3 +59,52 @@ def test_the_photo_pipeline_seeds_on_the_photo():
 
     src = inspect.getsource(c.render_from_photo)
     assert "seed_src=photo_b64" in src
+
+
+# ── squaring the input ───────────────────────────────────────────────────────
+
+def test_padding_squares_without_cropping():
+    """The fix for the bike's camera. A landscape photo rendered at 1:1 makes
+    the model recompose, and recomposing is when it rotates the bicycle a few
+    degrees toward the viewer — four rounds of blunter camera wording moved
+    that angle but never removed it. Squaring the INPUT removed it."""
+    import io
+
+    from PIL import Image
+
+    im = Image.new("RGB", (1600, 1280), (240, 238, 236))
+    buf = io.BytesIO()
+    im.save(buf, "WEBP")
+    src = "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+
+    out = c.pad_to_square(src)
+    padded = Image.open(io.BytesIO(base64.b64decode(out.split(",", 1)[1])))
+    assert padded.size == (1600, 1600), "must pad to the long edge"
+
+
+def test_padding_leaves_a_square_photo_alone():
+    """No re-encode, no quality loss, no work, when there is nothing to do."""
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (800, 800), (10, 10, 10)).save(buf, "WEBP")
+    src = "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+    assert c.pad_to_square(src) is src
+
+
+def test_padding_never_breaks_the_pipeline():
+    """It improves fidelity; it is not a dependency. Anything unreadable comes
+    back untouched so the render still happens."""
+    assert c.pad_to_square("not-an-image") == "not-an-image"
+    assert c.pad_to_square("data:image/webp;base64,####") == "data:image/webp;base64,####"
+
+
+def test_the_bike_path_squares_before_editing():
+    """One call, easy to lose in a refactor, and the camera silently rotates
+    again if it goes."""
+    import inspect
+
+    src = inspect.getsource(c.render_bike_from_photo)
+    assert "pad_to_square(photo_b64)" in src
