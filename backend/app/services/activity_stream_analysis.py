@@ -149,6 +149,14 @@ def _gps(latitude: list, longitude: list) -> dict | None:
 # 50-row page stays a modest payload.
 ROUTE_SKETCH_POINTS = 48
 
+# ONE ride, drawn across a whole phone screen, is a different problem. 48 points
+# over a 50 km ride is a point every kilometre: every bend is cut, every switch-
+# back becomes a straight line, and a rider looking at the roads they know sees
+# a shape that is NOT the ride they did — which is worse than no map, because it
+# is confidently wrong. 1 200 keeps the corners at map zoom and still costs
+# about 25 KB, which is nothing against the basemap tiles beside it.
+ROUTE_DETAIL_POINTS = 1200
+
 
 def route_sketch_polyline(streams: dict | None, max_points: int = ROUTE_SKETCH_POINTS) -> list[list[float]] | None:
     """[[lat, lng], …] for a list-sized route sketch, or None without GPS.

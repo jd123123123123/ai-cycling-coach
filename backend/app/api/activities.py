@@ -20,7 +20,11 @@ from app.models.user import User
 from app.schemas.activity import ActivityCreate, ActivityListResponse, ActivityRead
 from app.schemas.ride_feedback import RideFeedbackIn, RideFeedbackRead
 from app.services import activity_service
-from app.services.activity_stream_analysis import analyze_stream_blob, route_sketch_polyline
+from app.services.activity_stream_analysis import (
+    ROUTE_DETAIL_POINTS,
+    analyze_stream_blob,
+    route_sketch_polyline,
+)
 from app.services.athlete_service import get_or_create_profile
 
 router = APIRouter(prefix="/activities", tags=["activities"])
@@ -200,7 +204,8 @@ async def get_activity(
     ).first()
     if row is not None:
         out.route_polyline = route_sketch_polyline(
-            {"latitude": _as_points(row[0]), "longitude": _as_points(row[1])}
+            {"latitude": _as_points(row[0]), "longitude": _as_points(row[1])},
+            max_points=ROUTE_DETAIL_POINTS,
         )
     return out
 

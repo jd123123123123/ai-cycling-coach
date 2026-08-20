@@ -1,13 +1,52 @@
 /// <reference types="vitest/config" />
-import { realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+
+/**
+ * Ship MapLibre's tile worker.
+ *
+ * MapLibre resolves its worker at RUNTIME, from inside its own bundle:
+ *   new URL('./maplibre-gl-worker.mjs', import.meta.url)
+ * In a production build that resolves to `/assets/maplibre-gl-worker.mjs` — a
+ * file the bundler never emits, because nothing IMPORTS it. The result is the
+ * nastiest possible failure: the map constructs, fetches its style and every
+ * tile (all 200s), reports its sources loaded, and then never fires `load`,
+ * never paints, and never errors. Every route page fell back to its SVG trace
+ * on every device, and the tile provider looked innocent because it was.
+ *
+ * Dev has the same problem for a different reason (the worker's real path lies
+ * outside the Vite root in a git worktree), which is why `server.fs.allow`
+ * below exists. Both are the same missing file seen from two angles.
+ *
+ * Copied from the installed package rather than vendored into the repo, so it
+ * can never drift from the version actually bundled.
+ */
+function maplibreWorker() {
+  // TWO files, not one. The worker is an ES module that imports the library's
+  // shared core from a SIBLING path (`./maplibre-gl-shared.mjs`), so shipping
+  // the worker alone gets it as far as being fetched and no further: it fails
+  // to instantiate, silently, with the same end result as not shipping it.
+  // `shared` has no imports of its own, so the pair is the whole graph.
+  const FILES = ['maplibre-gl-worker.mjs', 'maplibre-gl-shared.mjs']
+  return {
+    name: 'maplibre-worker-asset',
+    apply: 'build' as const,
+    generateBundle(this: { emitFile: (f: { type: 'asset'; fileName: string; source: string }) => void }) {
+      for (const name of FILES) {
+        const from = realpathSync(fileURLToPath(new URL(`./node_modules/maplibre-gl/dist/${name}`, import.meta.url)))
+        this.emitFile({ type: 'asset', fileName: `assets/${name}`, source: readFileSync(from, 'utf8') })
+      }
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), maplibreWorker()],
   // MapLibre GL must not go through esbuild dep pre-bundling. It spawns a web
   // worker for tile parsing, and the pre-bundled copy resolves that worker's
   // URL incorrectly: the map constructs, fetches its style and every TileJSON,
