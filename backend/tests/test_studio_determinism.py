@@ -108,3 +108,72 @@ def test_the_bike_path_squares_before_editing():
 
     src = inspect.getsource(c.render_bike_from_photo)
     assert "pad_to_square(photo_b64)" in src
+
+
+# ── the render never raises ─────────────────────────────────────────────────
+
+class _Boom:
+    """A client whose every call fails the way the real one did in production."""
+
+    def __init__(self, message: str, calls: list) -> None:
+        self._message, self._calls = message, calls
+        self.models = self
+
+    def generate_content(self, **kw):
+        self._calls.append(kw["config"].image_config.image_size)
+        raise RuntimeError(self._message)
+
+
+def _patched(monkeypatch, message: str) -> list:
+    """Point `_render` at a client that always fails, and record the sizes it
+    was asked for."""
+    calls: list = []
+    import google.genai as genai
+    monkeypatch.setattr(genai, "Client", lambda **kw: _Boom(message, calls))
+    return calls
+
+
+def test_a_provider_failure_degrades_instead_of_raising(monkeypatch):
+    """THE BUG, PINNED. `RENDER_SIZE` moved to 2K while the deployed model was
+    the lite tier, which renders 1K only, so every call raised `400 Image size
+    2K is not supported` — and with nothing catching it `POST
+    /garage/asset/render` answered 500 and onboarding died. A picture that
+    cannot be made is the same class of event as a missing API key, and this
+    module's contract has always been to degrade rather than crash.
+    """
+    import asyncio
+    from app.services import cyclr_studio as c
+
+    _patched(monkeypatch, "429 RESOURCE_EXHAUSTED: prepayment credits depleted")
+    assert asyncio.run(c._render(["hi"], "seed", "2K")) is None
+
+
+def test_a_size_refusal_is_retried_once_smaller(monkeypatch):
+    """A size the model will not render is a preference meeting a fact, so it
+    falls back rather than failing: a smaller picture beats no picture, and it
+    makes raising `RENDER_SIZE` safe before every deployment has caught up."""
+    import asyncio
+    from app.services import cyclr_studio as c
+
+    calls = _patched(monkeypatch, "400 INVALID_ARGUMENT: Image size 2K is not supported for this model")
+    assert asyncio.run(c._render(["hi"], "seed", "2K")) is None
+    assert calls == ["2K", c.FALLBACK_SIZE], "should try the asked size, then fall back once"
+
+
+def test_any_other_failure_is_not_retried(monkeypatch):
+    """Retrying a quota error at a smaller size just spends the same refusal
+    twice and doubles the latency of a failure the rider is already waiting on."""
+    import asyncio
+    from app.services import cyclr_studio as c
+
+    calls = _patched(monkeypatch, "429 RESOURCE_EXHAUSTED")
+    assert asyncio.run(c._render(["hi"], "seed", "2K")) is None
+    assert calls == ["2K"]
+
+
+def test_the_size_refusal_matcher_reads_the_real_message():
+    from app.services import cyclr_studio as c
+
+    real = "400 INVALID_ARGUMENT. {'error': {'message': 'Image size 2K is not supported for this model'}}"
+    assert c._is_size_refusal(RuntimeError(real))
+    assert not c._is_size_refusal(RuntimeError("429 RESOURCE_EXHAUSTED"))

@@ -676,6 +676,13 @@ export default function W3TodayPage() {
       // Same for the face: the bust WEARING its helmet and glasses when one has
       // been composed, the bare-headed collectible until then.
       riderImage: today?.rider_image ?? garage?.rider?.image_base64 ?? null,
+      // A composed render is one the Today endpoint returned that ISN'T the
+      // plain garage collectible — the machine wearing its parts, standing
+      // somewhere. It is a photograph of a place and needs the opposite
+      // treatment to a cut-out on a studio sweep; see `W3TodayStage.SCENE_ART`.
+      bikeInScene: Boolean(
+        today?.bike_image && today.bike_image !== garage?.bike?.image_base64,
+      ),
       stages: today?.stages,
       stage: today?.stage,
       onSelectStage: selectStage.mutate,

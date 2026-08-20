@@ -27,10 +27,13 @@ from __future__ import annotations
 
 import base64
 import importlib.util
+import logging
 import pathlib
 from typing import Any
 
 from app.config import settings
+
+log = logging.getLogger(__name__)
 
 # ── Style constants (verbatim from the cycl_r-studio reference) ──
 # ── Art direction ──
@@ -342,28 +345,96 @@ async def analyze_asset(photo_b64: str, kind: str) -> str | None:
     return (resp.text or "").strip() or None
 
 
-async def _generate(prompt: str, seed_src: str, size: str = "") -> str | None:
-    """Render one image at `size`, defaulting to `RENDER_SIZE`."""
-    size = size or RENDER_SIZE
+# ── the one place this module talks to the image model ──────────────────────
+
+#: The size the model fell back to when it refused the one we asked for. Every
+#: image model in this family renders 1K; only the paid tiers render 2K.
+FALLBACK_SIZE = "1K"
+
+
+def _is_size_refusal(err: Exception) -> bool:
+    """A 400 that means "not at that resolution", rather than a real fault.
+
+    Matched on the message because the SDK gives no code for it: the API answers
+    `400 INVALID_ARGUMENT — Image size 2K is not supported for this model`.
+    """
+    m = str(err).lower()
+    return "image size" in m and "not supported" in m
+
+
+async def _render(contents: list, seed_src: str, size: str) -> str | None:
+    """Ask the image model for one picture. Returns None rather than raising.
+
+    THIS FUNCTION EXISTS BECAUSE OF A 500. `RENDER_SIZE` moved to 2K while the
+    deployed `IMAGE_MODEL` was still the lite tier, which renders 1K only — so
+    every call raised `ClientError: 400 Image size 2K is not supported`, and
+    because nothing caught it, `POST /garage/asset/render` answered 500 and the
+    rider's onboarding died on a configuration mismatch.
+
+    The module's contract has always been honest degradation: "with no provider
+    or key, every function returns the prompt it WOULD send and
+    `image_model_unavailable`, never a fake". That contract was only ever
+    enforced against `_gemini_ready()` — configuration — and not against the
+    call itself, so a quota exhaustion, a timeout, a safety refusal or a size
+    the model does not support all crashed instead of degrading. They are the
+    same class of event as a missing key: the picture cannot be made right now.
+
+    TWO BEHAVIOURS, DELIBERATELY DIFFERENT:
+
+      · A SIZE REFUSAL IS RETRIED ONCE, at 1K. `RENDER_SIZE` is a preference and
+        the model's capability is a fact; a smaller picture is a far better
+        answer than no picture, and it makes the setting safe to raise before
+        every deployment's model has caught up.
+      · EVERYTHING ELSE DEGRADES. Logged at warning with the model and size, so
+        a depleted quota is diagnosable from the logs rather than from a 500.
+    """
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
     model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
-    resp = client.models.generate_content(
-        model=model,
-        contents=[prompt],
-        config=types.GenerateContentConfig(
-            response_modalities=["Image"],
-            seed=_seed(seed_src),
-            image_config=types.ImageConfig(aspect_ratio="1:1", image_size=size),
-        ),
-    )
-    for part in resp.candidates[0].content.parts:
-        data = getattr(part, "inline_data", None)
-        if data and data.data:
-            return _to_data_url(data.data)
+
+    for attempt_size in (size, FALLBACK_SIZE):
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_modalities=["Image"],
+                    seed=_seed(seed_src),
+                    image_config=types.ImageConfig(
+                        aspect_ratio="1:1", image_size=attempt_size,
+                    ),
+                ),
+            )
+        except Exception as err:
+            if attempt_size != FALLBACK_SIZE and _is_size_refusal(err):
+                log.info(
+                    "%s cannot render %s; retrying at %s", model, attempt_size, FALLBACK_SIZE,
+                )
+                continue
+            log.warning(
+                "image render failed (model=%s size=%s): %s", model, attempt_size, err,
+            )
+            return None
+
+        try:
+            for part in resp.candidates[0].content.parts:
+                data = getattr(part, "inline_data", None)
+                if data and data.data:
+                    return _to_data_url(data.data)
+        except (AttributeError, IndexError, TypeError):
+            # A response with no candidates at all — a safety refusal looks like
+            # this. Not an error to raise on; there is simply no image.
+            log.warning("image model returned no image (model=%s)", model)
+        return None
+
     return None
+
+
+async def _generate(prompt: str, seed_src: str, size: str = "") -> str | None:
+    """Render one image at `size`, defaulting to `RENDER_SIZE`."""
+    return await _render([prompt], seed_src, size or RENDER_SIZE)
 
 
 def _to_data_url(png: bytes) -> str:
@@ -701,25 +772,8 @@ async def _generate_with_refs(prompt: str, refs: list[str], seed_src: str) -> st
     The practical consequence when tuning these prompts: one render is one
     sample, and two prompts cannot be compared on one draw each.
     """
-    from google import genai
-    from google.genai import types
 
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
-    resp = client.models.generate_content(
-        model=model,
-        contents=[_img_part(r) for r in refs] + [prompt],
-        config=types.GenerateContentConfig(
-            response_modalities=["Image"],
-            seed=_seed(seed_src),
-            image_config=types.ImageConfig(aspect_ratio="1:1", image_size=RENDER_SIZE),
-        ),
-    )
-    for part in resp.candidates[0].content.parts:
-        data = getattr(part, "inline_data", None)
-        if data and data.data:
-            return _to_data_url(data.data)
-    return None
+    return await _render([_img_part(r) for r in refs] + [prompt], seed_src, RENDER_SIZE)
 
 
 async def render_isolated(
@@ -949,28 +1003,12 @@ async def compose_scene(
         img = await _generate(prompt, prompt)
         return img, prompt, "ok" if img else "image_model_unavailable"
 
-    from google import genai
-    from google.genai import types
 
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
     # Images FIRST, prompt last — the same order `compose_rider` uses, and the
     # order the model weights references most strongly.
     contents = [_img_part(i) for i in refs] + [prompt]
-    resp = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            response_modalities=["Image"],
-            seed=_seed(prompt),
-            image_config=types.ImageConfig(aspect_ratio="1:1", image_size=RENDER_SIZE),
-        ),
-    )
-    for part in resp.candidates[0].content.parts:
-        data = getattr(part, "inline_data", None)
-        if data and data.data:
-            return _to_data_url(data.data), prompt, "ok"
-    return None, prompt, "image_model_unavailable"
+    img = await _render(contents, prompt, RENDER_SIZE)
+    return (img, prompt, "ok") if img else (None, prompt, "image_model_unavailable")
 
 
 def _rider_compose_prompt() -> str:
@@ -1014,11 +1052,7 @@ async def edit_image(
     """
     if not _gemini_ready():
         return None
-    from google import genai
-    from google.genai import types
 
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
     # The base image FIRST and always: it is the thing that must survive the
     # edit unchanged. `extra` is for a second picture the instruction refers to
     # — a place plate the bike is being set into — and it is deliberately not
@@ -1029,20 +1063,7 @@ async def edit_image(
     if extra_b64:
         contents.append(_img_part(extra_b64))
     contents.append(prompt)
-    resp = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            response_modalities=["Image"],
-            seed=_seed(seed_src),
-            image_config=types.ImageConfig(aspect_ratio="1:1", image_size=size),
-        ),
-    )
-    for part in resp.candidates[0].content.parts:
-        data = getattr(part, "inline_data", None)
-        if data and data.data:
-            return _to_data_url(data.data)
-    return None
+    return await _render(contents, seed_src, size)
 
 
 def _img_part(photo_b64: str):
@@ -1074,26 +1095,11 @@ async def compose_rider(
     prompt = _rider_compose_prompt()
     if not _gemini_ready():
         return {"image": None, "prompt": prompt, "status": "image_model_unavailable"}
-    from google import genai
-    from google.genai import types
 
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
-    resp = client.models.generate_content(
-        model=model,
-        contents=[prompt, _img_part(self_b64), _img_part(bike_b64), _img_part(helmet_b64)],
-        config=types.GenerateContentConfig(
-            response_modalities=["Image"],
-            seed=_seed(self_b64[:64] + bike_b64[:32] + helmet_b64[:32]),
-            image_config=types.ImageConfig(aspect_ratio="1:1", image_size=size),
-        ),
-    )
-    for part in resp.candidates[0].content.parts:
-        data = getattr(part, "inline_data", None)
-        if data and data.data:
-            # `_to_data_url`, not a raw PNG: this is the same inline-stored,
-            # JSON-carried image every other render produces, and a 2K PNG here
-            # is ~2.7 MB once base64'd.
-            img = _to_data_url(data.data)
-            return {"image": img, "prompt": prompt, "status": "ok"}
-    return {"image": None, "prompt": prompt, "status": "image_model_unavailable"}
+    # `_render` transcodes through `_to_data_url` like every other path here —
+    # this function used to hand back a raw PNG, which at 2K is ~2.7 MB once
+    # base64'd into the JSON response.
+    seed_src = self_b64[:64] + bike_b64[:32] + helmet_b64[:32]
+    contents = [prompt, _img_part(self_b64), _img_part(bike_b64), _img_part(helmet_b64)]
+    img = await _render(contents, seed_src, size)
+    return {"image": img, "prompt": prompt, "status": "ok" if img else "image_model_unavailable"}

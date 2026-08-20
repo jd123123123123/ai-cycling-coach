@@ -38,10 +38,14 @@ import { W3CoachFab } from './W3CoachChat'
  *  here is deliberate and easy to destroy by nudging one value: the handle pill
  *  OVERLAPS the avatar by 14px, which is what fuses bust and name into one
  *  object instead of two stacked ones. */
-const AVATAR = 176
-const GLOW = 240
-const HANDLE_OVERLAP = -14
-const BIKE_H = 268
+// RESIZED 2026-08-20 against the reference screen: the bust was 176 on a 390
+// frame — 45% of the width — which made the avatar the subject and left the
+// bike a strip at the bottom. In the reference the proportion is the other way
+// round: the face identifies the rider, the machine is the hero.
+const AVATAR = 130
+const GLOW = 178
+const HANDLE_OVERLAP = -12
+const BIKE_H = 300
 
 /**
  * The bike art is a RECTANGLE with a light studio ground baked into it —
@@ -69,8 +73,35 @@ const BIKE_ART = {
   WebkitMaskImage: 'radial-gradient(72% 66% at 50% 56%, #000 52%, transparent 100%)',
 }
 
+/**
+ * A COMPOSED bike — wearing its parts, standing in the place the rider chose —
+ * is a photograph of a scene, not a cut-out on a studio sweep, so it gets the
+ * exact opposite treatment to `BIKE_ART`.
+ *
+ * No `screen` blend: that exists to make a white studio ground ADD to the dark
+ * floor, and applied to a night road it washes the whole scene into grey. No
+ * radial mask either: the mask dissolves a rectangle's edges because the studio
+ * art has edges that must not read as a card — a scene is meant to reach the
+ * frame, and dissolving it would put a vignette over the landscape the rider
+ * just paid for.
+ *
+ * It fills the width and crops vertically (`cover`), because the plates are
+ * composed square and the stage is not: the interest is in the middle band
+ * where the road and the bike are, and the sky is what can afford to go.
+ */
+const SCENE_ART = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover' as const,
+  display: 'block' as const,
+}
+
 export interface W3StageVm {
   handle: string
+  /** True when `bike` is a COMPOSED render — the machine wearing its parts,
+   *  standing in a real place — rather than the isolated studio collectible.
+   *  The two need opposite treatment; see `BIKE_ART`. */
+  bikeInScene?: boolean
   /** Where the bike is standing, and everywhere else the rider owns. Absent
    *  (or a single stage) draws no rail — see `W3StageRail`. */
   stages?: Stage[]
@@ -247,7 +278,11 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
           justifyContent: 'center', paddingTop: 21,
         }}>
         {vm.bike ? (
-          <img src={vm.bike} alt={vm.bikeName} style={{ ...BIKE_ART, objectFit: 'contain' }} />
+          <img
+            src={vm.bike}
+            alt={vm.bikeName}
+            style={vm.bikeInScene ? SCENE_ART : { ...BIKE_ART, objectFit: 'contain' }}
+          />
         ) : (
           <div style={{ position: 'relative', width: '103%', height: '100%', display: 'grid', placeItems: 'end center' }}>
             <div style={BIKE_ART}><GhostBike /></div>

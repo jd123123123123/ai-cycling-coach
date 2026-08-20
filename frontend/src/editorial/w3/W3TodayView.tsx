@@ -67,6 +67,8 @@ export interface W3Vm {
   // this screen did before backdrops existed.
   stages?: import('../../api/garage').Stage[]
   stage?: string
+  /** The bike picture is a composed scene, not the studio collectible. */
+  bikeInScene?: boolean
   onSelectStage?: (id: string) => void
   stageRendering?: boolean
   avatarUrl: string | null
@@ -237,6 +239,7 @@ export default function W3TodayView({ vm, onAdapt }: {
               // presented as theirs.
               bike: vm.bikeImage ?? vm.collectible,
               bikeName: vm.bikeName,
+              bikeInScene: vm.bikeInScene,
               coins: vm.coins,
               streak: vm.streak,
               bonus: vm.earnRate === DASH ? null : vm.earnRate,
