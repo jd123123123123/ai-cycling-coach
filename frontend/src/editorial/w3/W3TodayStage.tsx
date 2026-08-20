@@ -69,11 +69,16 @@ const BIKE_ART = {
   // hide, so the machine simply sits in the space at its true proportions and
   // the stage's own floor shows through around it.
   objectFit: 'contain' as const,
-  objectPosition: 'center 55%',
+  // ON THE FLOOR, NOT ABOVE IT. The room render puts its pool of light low in
+  // the frame, and a cut-out centred in the box hovered a good 15% of the stage
+  // above that pool — which is the "flying bike" all over again, just against a
+  // nicer background. Pushed down onto the light, where the wheels meet a floor
+  // that is actually drawn there.
+  objectPosition: 'center 82%',
   // The cut-out is trimmed to the machine itself, so 100% of the box IS the
   // bicycle rather than a bicycle with studio around it. It can finally be
   // drawn at the size the stage was always offering.
-  padding: '0 8px 22px',
+  padding: '0 10px 4%',
   boxSizing: 'border-box' as const,
   display: 'block' as const,
   // NO SCREEN BLEND AND NO MASK. Both existed for one reason: the art arrived
@@ -94,10 +99,11 @@ const BIKE_ART = {
 const BIKE_SHADOW = {
   position: 'absolute' as const,
   left: '50%',
-  bottom: '11%',
+  // Sits with the contact patches, not with the bottom of the box.
+  bottom: '5%',
   transform: 'translateX(-50%)',
-  width: '76%',
-  height: 26,
+  width: '72%',
+  height: 22,
   borderRadius: '50%',
   background: 'radial-gradient(closest-side, rgba(0,0,0,0.62), rgba(0,0,0,0))',
   pointerEvents: 'none' as const,
