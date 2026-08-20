@@ -91,6 +91,7 @@ const W3BikeStudioPreview = lazyWithRetry(() => import('./editorial/w3/W3BikeStu
 const W3RideDetailPage = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPage'))
 const W3RideMapPage = lazyWithRetry(() => import('./editorial/w3/W3RideMapPage'))
 const W3RideMapPreview = lazyWithRetry(() => import('./editorial/w3/W3RideMapPreview'))
+const W3NitroPreview = lazyWithRetry(() => import('./editorial/w3/W3NitroPreview'))
 const W3RideDetailPreview = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPreview'))
 const W3ConnectCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePage'))
 const W3ConnectCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePreview'))
@@ -437,6 +438,7 @@ function AppRoutes() {
               `W3RideMapPage` on why an embedded map must not eat a scroll. */}
           <Route path="/e/w3-ride-map/:id" element={<ProtectedRoute checkOnboarding><W3RideMapPage /></ProtectedRoute>} />
           <Route path="/e/w3-ride-map-preview" element={<W3RideMapPreview />} />
+          <Route path="/e/w3-nitro-preview" element={<W3NitroPreview />} />
           <Route path="/e/w3-connected" element={<ProtectedRoute checkOnboarding><W3ConnectCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-connected-preview" element={<W3ConnectCelebratePreview />} />
           <Route path="/e/w3-avatar-onboard" element={<ProtectedRoute checkOnboarding><W3AvatarOnboardPage /></ProtectedRoute>} />

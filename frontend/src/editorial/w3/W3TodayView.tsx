@@ -10,6 +10,8 @@ import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3WorkshopNudge from './W3WorkshopNudge'
+import W3RouteCard from './W3RouteCard'
+import W3FormCard from './W3FormCard'
 import W3TodayProgress from './W3TodayProgress'
 import W3TodayStatus from './W3TodayStatus'
 import W3TodayRank from './W3TodayRank'
@@ -405,6 +407,19 @@ export default function W3TodayView({ vm, onAdapt }: {
              the brief's adaptation explainer + the real mesocycle block, and
              renders nothing when neither is on the wire. ── */}
         <W3WhyToday />
+
+        {/* ── Where to ride it. Directly under the week card, because that is
+             where "what am I doing today" has just been answered and "where"
+             is the next question a rider actually asks. Every road on it is one
+             they have ridden before — see `W3RouteCard`. Renders nothing on a
+             rest day, or before there is any GPS history to draw on. ── */}
+        <W3RouteCard />
+
+        {/* ── Wo du stehst — fitness, fatigue and form as one reading. Below
+             the day and the road, because it is the slow story: it answers
+             "is the block working", which is a question about six weeks, not
+             about this morning. ── */}
+        <Reveal><W3FormCard /></Reveal>
 
         {/* ── The bike's own errand, when it has one. Below the training and
              above the navigation on purpose: it is a real job with a real

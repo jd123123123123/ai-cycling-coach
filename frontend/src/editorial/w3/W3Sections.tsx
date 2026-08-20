@@ -726,6 +726,13 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
   day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt
 }) {
   const reduce = useReducedMotion()
+  // Computed here, not passed in: the seven tiles already carry every number,
+  // and a prop for their own sum is a second source of truth for one figure.
+  // Ridden counts where it exists and planned stands in where it does not, so
+  // the left-hand number is "what the week has actually cost so far".
+  const doneTss = Math.round(days.reduce((s, d) => s + (d.actual || 0), 0))
+  const planTss = Math.round(days.reduce((s, d) => s + Math.max(d.actual, d.planned ?? 0), 0))
+  const weekTss = planTss > 0 ? `${doneTss} VON ${planTss} TSS` : loadLabel
   // band(26), like every other band on Today. This one sat at 20 and was the
   // only section whose bottom gap did not match its neighbours — the eye reads
   // that inconsistency as a mistake long before it can name it.
@@ -741,7 +748,12 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
           </div>
           <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
             {doneChip && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, color: T.mid, padding: '5px 10px', borderRadius: 100, background: T.surface2 }}>{doneChip}</span>}
-            <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{loadLabel}</span>
+            {/* "486 von 620 TSS" — the week as one figure, which is the thing
+                the seven tiles below add up to and the only way to see at a
+                glance whether the week is on course. */}
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, color: T.quiet, fontVariantNumeric: 'tabular-nums' }}>
+              {weekTss}
+            </span>
           </div>
         </div>
 
@@ -763,10 +775,15 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
             return (
               <button key={i} onClick={() => onSelect(i)} aria-pressed={active} aria-label={`${d.dateLabel}, ${STATUS[d.status].label}, Intensität ${lit} von ${BEAM_STEPS}`}
                 style={{
+                  // A TILE, not a bare column. Pen `Fd638` gives every day its
+                  // own surface, and it earns its keep: seven equal tiles read
+                  // as one strip of the same kind of thing, where seven columns
+                  // of floating marks read as a chart with no frame. Today's
+                  // tile is the acid one — the only lit object in the row.
                   flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-                  padding: '8px 0 7px', borderRadius: 13, cursor: 'pointer', fontFamily: FONT,
-                  background: active ? (isToday ? T.acidDim : T.surface2) : 'transparent',
-                  border: `1px solid ${active && isToday ? `${T.acid}59` : 'transparent'}`,
+                  padding: '9px 0 8px', borderRadius: 14, cursor: 'pointer', fontFamily: FONT,
+                  background: isToday ? T.acidDim : active ? T.heroChip : T.d1,
+                  border: `1px solid ${isToday ? `${T.acid}59` : 'transparent'}`,
                 }}>
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: isToday ? T.acid : active ? T.mid : T.quiet }}>{d.letter}</span>
                 <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.4, fontVariantNumeric: 'tabular-nums', color: isToday ? T.acid : active ? T.ink : T.mid }}>{d.num}</span>
