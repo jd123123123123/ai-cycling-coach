@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react'
-import {
+import { ScanFace,
   Menu, X, Activity, CalendarRange, CalendarCheck, Target, Route as RouteIcon, Bike, Trophy,
   Flag, Users, UserRound, Settings,
 } from 'lucide-react'
@@ -19,7 +19,12 @@ const ITEMS: { label: string; sub: string; icon: typeof Activity; route: string 
   { label: 'Wochenrückblick', sub: 'Letzte Woche + diese Woche', icon: CalendarCheck, route: '/e/w3-week-review' },
   { label: 'Dein Ziel', sub: 'Zielevent + Lücken', icon: Target, route: '/e/w3-goal' },
   { label: 'Fahrten', sub: 'Dein Verlauf', icon: RouteIcon, route: '/e/w3-rides' },
-  { label: 'Garage', sub: 'Dein Bike-Studio', icon: Bike, route: '/e/w3-bike-studio' },
+  // Both studios are reachable here for the same reason: onboarding asks for
+  // each photograph exactly once, so this menu is the ONLY way a rider changes
+  // their face or their bike afterwards. Without these two entries the answer
+  // to "I want a better photo" would be "clear your storage".
+  { label: 'Dein Bike', sub: 'Foto neu aufnehmen', icon: Bike, route: '/e/w3-bike-studio' },
+  { label: 'Dein Avatar', sub: 'Foto neu aufnehmen', icon: ScanFace, route: '/e/w3-avatar-onboard' },
   { label: 'Erfolge', sub: 'Abzeichen + Challenges', icon: Trophy, route: '/e/w3-wins' },
   { label: 'Challenges', sub: 'Monatsziele', icon: Flag, route: '/e/w3-challenges' },
   { label: 'Crew', sub: 'Deine Fahrer', icon: Users, route: '/e/w3-crew' },

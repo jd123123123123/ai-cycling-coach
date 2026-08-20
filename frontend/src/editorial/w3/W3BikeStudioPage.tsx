@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useGarage, useRenderAsset } from '../../hooks/useGarage'
 import { useGrantOnboarding } from '../../hooks/useWallet'
 import { HIDDEN_FILE_INPUT } from './w3tokens'
@@ -31,6 +31,11 @@ import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
 
 export default function W3BikeStudioPage() {
   const navigate = useNavigate()
+  // `?next=` — set when this screen is a step in onboarding rather than a
+  // place the rider chose to visit. Defaults to Today, which is what it always
+  // did before the photo step joined the chain.
+  const [search] = useSearchParams()
+  const nextRoute = search.get('next') || '/e/w3-today'
   const fileRef = useRef<HTMLInputElement>(null)
   const { data: garage, isLoading: garageLoading } = useGarage()
   const render = useRenderAsset()
@@ -151,7 +156,11 @@ export default function W3BikeStudioPage() {
         reward={reward} rewardPending={rewardPending}
         // The reveal's primary action lands on Today, where the bike they just
         // made is now the hero — the payoff, not a dead-end back-stack pop.
-        onBack={() => navigate('/e/w3-today')}
+        // Where "done" leads depends on why the rider is here. Reached from the
+        // menu it lands on Today, where the bike they just made is the hero.
+        // Reached as a step in onboarding it carries `?next=`, and continues
+        // the chain instead of dropping them into the app half-set-up.
+        onBack={() => navigate(nextRoute)}
         onPick={() => fileRef.current?.click()}
         celebrate={celebrate}
         onReset={reset}

@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { ChevronRight, Store } from 'lucide-react'
 import { T, FONT, EASE, Kicker } from './w3tokens'
-import { S, lux, luxTile, TNUM } from './w3surfaces'
+import { S, luxTile, TNUM } from './w3surfaces'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -90,14 +90,21 @@ export default function W3GarageView({
       {/* ── The bike you ride ──────────────────────────────────────────────
           A spotlit stage rather than a card on a card: the bike is the subject
           of this screen and everything else is annotation. */}
-      <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ ...lux(26), overflow: 'hidden' }}>
+      {/* FULL BLEED, NOT A CARD. The stage was inset 20px and rounded into a
+          `lux` card, so the bike — the subject of the whole screen — sat in a
+          box in the middle of it. It now runs edge to edge and the annotation
+          hangs below, which is the arrangement the rider asked for twice. */}
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ overflow: 'hidden' }}>
           {/* The stage. The art is pinned to the box with `inset: 0` rather
               than sized in percentages: a percentage height on a centred grid
               child resolves against the auto row, which the square image had
               already grown to — the bike overflowed its 210px stage by 59px and
               sat on top of its own name. */}
-          <div style={{ position: 'relative', height: 232, overflow: 'hidden' }}>
+          {/* 232 → 46svh. A fixed 232px stage is a letterbox on a 844px phone
+              and a postage stamp on anything taller; the bike should take the
+              upper half of the screen on every device. */}
+          <div style={{ position: 'relative', height: '46svh', minHeight: 260, overflow: 'hidden' }}>
             {bike && hero ? (
               <motion.div
                 // Keyed on the picture, so the composed build cross-fades in
@@ -229,7 +236,12 @@ export default function W3GarageView({
           </span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: S.sm }}>
+        {/* THE PICKER, AS A GRID. It was a vertical list of rows, which reads
+            as a settings screen: you scan labels, not machines. A rider with
+            several bikes is choosing between OBJECTS, so the object is the
+            thing to show — two up, each in its own lit tile, the one being
+            ridden ringed in acid. Tapping one mounts it. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: S.sm }}>
           {ownedBikes.map((b) => {
             const ridden = b.id === loadout?.bike
             return (
@@ -237,29 +249,37 @@ export default function W3GarageView({
                 onClick={ridden ? undefined : () => onEquip(b)}
                 disabled={ridden || busyId === b.id}
                 style={{
-                  ...luxTile(18), flexDirection: 'row', alignItems: 'center', gap: S.md,
-                  padding: S.md, width: '100%', textAlign: 'left', fontFamily: FONT,
+                  ...luxTile(18), flexDirection: 'column', alignItems: 'stretch', gap: S.sm,
+                  padding: S.sm, textAlign: 'left', fontFamily: FONT,
                   border: `1px solid ${ridden ? T.acid : 'transparent'}`,
                   cursor: ridden ? 'default' : 'pointer',
                 }}>
                 {/* The bike's own catalogue photo, not the composed build: this
-                    row is "which bike", and the build belongs to whichever one
-                    is being ridden — shown once, in the hero. */}
-                <div style={{ flex: 'none', width: 68, height: 50, borderRadius: 11, background: T.surface2, overflow: 'hidden' }}>
-                  <img src={b.art} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: artFit(b) }} />
+                    tile is "which bike", and the build belongs to whichever one
+                    is being ridden — shown once, in the hero above. */}
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', borderRadius: 12, background: T.surface2, overflow: 'hidden' }}>
+                  <img src={b.art} alt="" loading="lazy"
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: artFit(b) }} />
+                  {busyId === b.id && (
+                    <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: '#00000080' }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: T.acid }}>WIRD GEHOLT …</span>
+                    </div>
+                  )}
                 </div>
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
-                  <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, color: T.quiet }}>
-                    {TIER_LABEL.get(b.tier ?? 'starter') ?? ''}
-                  </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '0 4px 4px' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                    <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 0.6, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {TIER_LABEL.get(b.tier ?? 'starter') ?? ''}
+                    </span>
+                    <span style={{
+                      flex: 'none', fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9,
+                      color: ridden ? T.acid : T.quiet,
+                      background: ridden ? T.acidDim : T.surface2,
+                      padding: '4px 8px', borderRadius: 100,
+                    }}>{ridden ? 'GEFAHREN' : 'AUFSTEIGEN'}</span>
+                  </div>
                 </div>
-                <span style={{
-                  flex: 'none', fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9,
-                  color: ridden ? T.acid : T.quiet,
-                  background: ridden ? T.acidDim : T.surface2,
-                  padding: '5px 9px', borderRadius: 100,
-                }}>{ridden ? 'GEFAHREN' : 'AUFSTEIGEN'}</span>
               </button>
             )
           })}

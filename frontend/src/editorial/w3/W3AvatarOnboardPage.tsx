@@ -22,7 +22,19 @@ import W3AvatarOnboardView, { type AvatarStage, type AvatarReveal, type AvatarIn
  * model is not provisioned (`status !== "ok"`) the rider lands on an honest
  * "studio unavailable" stage with a retry — never silently skipped onward.
  */
-const NEXT = '/e/w3-first-bike'
+// THE RIDER'S OWN BIKE JOINS THE CHAIN, 2026-08-20. Onboarding asked for a
+// photo of the rider's FACE and then for a claim on a collectible bike, and
+// never once asked for a photograph of the bicycle they actually own — so a
+// rider finished onboarding with an avatar, a catalogue bike, and an empty
+// garage slot where their real machine belongs. Every surface that shows "their
+// bike" then had nothing to show.
+//
+// The photo step now sits between the two and carries the rest of the chain in
+// `?next=`, so a rider who skips it still lands on the claim rather than being
+// dropped into the app half-set-up. It is asked ONCE, here, because it is a
+// step in a chain rather than a gate: `W3Guard` never forces it again, and the
+// menu's "Dein Bike" entry is where a rider changes it later.
+const NEXT = '/e/w3-bike-studio?next=' + encodeURIComponent('/e/w3-first-bike')
 
 interface AssetRenderResponse { description: string | null; prompt: string; image_base64: string | null; status: string }
 

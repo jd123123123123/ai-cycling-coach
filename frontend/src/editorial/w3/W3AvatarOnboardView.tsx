@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Camera, Sparkles, Mountain, Users, Trophy, ArrowRight, ArrowLeft, Bike, Loader2, Route as RouteIcon, Timer, Plus, BadgeCheck, Gauge, Flame, Share2, Check, ScanFace, Wand2 } from 'lucide-react'
+import { Camera, Sparkles, Mountain, Users, Trophy, ArrowRight, ArrowLeft, Bike, UserRound, Loader2, Route as RouteIcon, Timer, Plus, BadgeCheck, Gauge, Flame, Share2, Check, ScanFace, Wand2 } from 'lucide-react'
 import { T, FONT, EASE, DASH, band } from './w3tokens'
 import { renderAvatarCard, sharePoster, shareTextOrCopy } from './w3share'
 import './w3.css'
@@ -67,7 +67,26 @@ const PERKS: { icon: typeof Mountain; label: string }[] = [
 
 /** Reveal confetti palette — the generating stage falls in the same colours so
  *  the wait and the unlock read as one continuous moment. */
-const CONFETTI = [T.acid, T.evening, '#00E5FF', T.warn, T.acid, T.evening]
+/**
+ * The burst. TWO COLOURS, ONE SHOT.
+ *
+ * It used to be six pieces in four colours — acid, violet, cyan, amber —
+ * falling on an INFINITE loop with a 0.8s repeat delay. Confetti that never
+ * stops is not a celebration, it is a screensaver: the moment never resolves,
+ * and the eye keeps being pulled back to the top of the screen while the rider
+ * is trying to read their own name. It also imported two accent colours that
+ * appear nowhere else in W3.
+ *
+ * Now it falls once, in the house's own acid and lilac, and then the screen is
+ * still. Twelve pieces rather than six, because a single pass needs enough of
+ * them to read as a burst.
+ */
+const CONFETTI = Array.from({ length: 12 }, (_, i) => ({
+  hue: i % 3 === 0 ? T.lilac : T.acid,
+  left: 6 + i * 7.6,
+  delay: (i % 5) * 0.06,
+  drift: i % 2 === 0 ? 14 : -14,
+}))
 
 /**
  * The two phases the render pipeline genuinely runs, in this order: the vision
@@ -170,7 +189,6 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
   // ── Reveal: "AVATAR UNLOCKED" ──
   if (stage === 'revealed' && reveal) {
     const r = reveal
-    const initial = r.handle.replace('@', '').charAt(0).toUpperCase() || '?'
     return (
       <div className="w3-root">
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
@@ -178,9 +196,14 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
           {/* Cover: rider + header + confetti */}
           <div style={{ position: 'relative', height: 264, background: '#141414', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', width: 320, height: 240, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}33, transparent)` }} />
-            {CONFETTI.map((c, i) => (
-              <motion.div key={i} initial={reduce ? false : { y: -20, opacity: 0 }} animate={{ y: [-20, 264], opacity: [0, 1, 0], rotate: [0, 180] }} transition={{ duration: 2.4, delay: i * 0.13, repeat: Infinity, repeatDelay: 0.8 }}
-                style={{ position: 'absolute', top: 0, left: `${12 + i * 14}%`, width: 6, height: 12, borderRadius: 2, background: c }} />
+            {!reduce && CONFETTI.map((c, i) => (
+              <motion.div
+                key={i}
+                initial={{ y: -24, x: 0, opacity: 0, rotate: 0 }}
+                animate={{ y: 268, x: c.drift, opacity: [0, 1, 1, 0], rotate: 220 }}
+                transition={{ duration: 1.9, delay: 0.15 + c.delay, ease: 'easeIn' }}
+                style={{ position: 'absolute', top: 0, left: `${c.left}%`, width: 5, height: 11, borderRadius: 100, background: c.hue }}
+              />
             ))}
             {heroImageUrl && <img src={heroImageUrl} alt="Dein Rider" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 18%' }} />}
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
@@ -196,76 +219,107 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
             </div>
           </div>
 
-          {/* Bottom panel — compact, one page */}
-          <div style={{ ...band(16), paddingTop: 0, marginTop: -14, gap: 9, alignItems: 'center', position: 'relative', zIndex: 2 }}>
-            <motion.div initial={reduce ? false : { scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, ease: EASE, delay: 0.2 }}
-              style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 14px', borderRadius: 100, background: T.acid, boxShadow: `0 0 24px ${T.acid}88` }}>
-              <Sparkles size={13} color="#121212" /><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: '#121212' }}>AVATAR ENTSPERRT</span>
+          {/* ── The moment ────────────────────────────────────────────────
+              REBUILT 2026-08-20. This panel stacked seven different visual
+              systems on top of each other — an acid pill, a handle chip, a
+              level bar, a bordered three-cell stat strip, four 2x2 tiles each
+              with its OWN hue and gradient and border, then two buttons — at
+              `gap: 9` with eight type sizes and six accent colours. Every
+              element shouted, so none of them landed, and the one line that is
+              actually the reward ("4.812 km — 12 % um die Erde") was not on the
+              screen at all.
+
+              Now: ONE accent, ONE card treatment, THREE type sizes, and the
+              headline as the hero. The four insight tiles become one quiet row
+              of facts under it — they are lifetime stats the rider can read any
+              time on their profile, and here they are the encore, not the act. */}
+          <div style={{ ...band(20), paddingTop: 0, marginTop: -18, gap: 20, alignItems: 'center', position: 'relative', zIndex: 2 }}>
+            <motion.div
+              initial={reduce ? false : { scale: 0.7, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5, ease: EASE, delay: 0.15 }}
+              style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '8px 16px', borderRadius: 100, background: T.acid, boxShadow: `0 0 30px ${T.acid}66` }}
+            >
+              <Sparkles size={14} color={T.heroInk} />
+              <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.2, color: T.heroInk }}>AVATAR ENTSPERRT</span>
             </motion.div>
 
-            {/* Handle chip (ShareCard style) + LVL badge */}
-            <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
-                <div style={{ width: 42, height: 42, borderRadius: 100, overflow: 'hidden', background: T.surface2, border: `2px solid ${T.acid}`, display: 'grid', placeItems: 'center', flex: 'none' }}>
-                  {r.avatarUrl ? <img src={r.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 17, fontWeight: 700, color: T.mid }}>{initial}</span>}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>{r.handle}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>{r.role}</span>
-                </div>
+            {/* Who they are. One line, big, with the level as a quiet suffix
+                rather than a second acid pill competing with the one above. */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.8, color: T.ink }}>{r.handle}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>{r.role}</span>
+                <span aria-hidden style={{ width: 3, height: 3, borderRadius: 100, background: T.quiet }} />
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.acid }}>LEVEL {r.level}</span>
               </div>
-              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.3, color: '#121212', padding: '6px 12px', borderRadius: 100, background: T.acid }}>LVL {r.level}</span>
             </div>
 
-            {/* Slim level bar */}
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {/* THE REWARD LINE — what all that riding adds up to. It was in the
+                view model the whole time and never drawn. */}
+            {r.headline && (
+              <motion.span
+                initial={reduce ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: EASE, delay: 0.35 }}
+                style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.3, lineHeight: 1.35, color: T.ink, textAlign: 'center', maxWidth: 300 }}
+              >
+                {r.headline}
+              </motion.span>
+            )}
+
+            {/* Level progress, unlabelled until it needs words. */}
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7 }}>
               <div style={{ height: 6, borderRadius: 100, background: T.surface2, overflow: 'hidden' }}>
-                <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(r.levelPct * 100)}%` }} transition={{ duration: 0.9, ease: EASE, delay: 0.3 }}
-                  style={{ height: '100%', borderRadius: 100, background: `linear-gradient(90deg, ${T.acidDeep}, ${T.acid})`, boxShadow: `0 0 8px ${T.acid}88` }} />
+                <motion.div
+                  initial={reduce ? false : { width: 0 }}
+                  animate={{ width: `${Math.round(r.levelPct * 100)}%` }}
+                  transition={{ duration: 1.1, ease: EASE, delay: 0.5 }}
+                  style={{ height: '100%', borderRadius: 100, background: `linear-gradient(90deg, ${T.acidDeep}, ${T.acid})` }}
+                />
               </div>
-              <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet, alignSelf: 'flex-end' }}>{r.xpNote}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, alignSelf: 'center' }}>{r.xpNote}</span>
             </div>
 
-            {/* Stats primary — 3 cells */}
-            <div style={{ display: 'flex', width: '100%', borderRadius: 18, background: T.surface, border: `1px solid ${T.stroke}`, overflow: 'hidden' }}>
-              {PRIMARY.map((p, i) => {
-                const Ic = p.icon
-                const v = r.primary[p.key]
+            {/* ONE card, three numbers, one tone. Was a bordered strip of three
+                plus four hued tiles — seven numbers fighting each other. */}
+            <div style={{ display: 'flex', width: '100%', borderRadius: 20, background: T.surface, overflow: 'hidden' }}>
+              {PRIMARY.map((pr, i) => {
+                const v = r.primary[pr.key]
                 return (
-                  <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, padding: '12px 8px', alignItems: 'flex-start', borderLeft: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
-                    <Ic size={18} color={T.acid} />
-                    <span style={{ fontSize: 8.5, fontWeight: 600, letterSpacing: 0.6, color: T.quiet }}>{p.label}</span>
-                    <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.5, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
+                  <div key={pr.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, padding: '16px 10px', alignItems: 'center', borderLeft: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
+                    <span style={{ fontSize: 21, fontWeight: 800, letterSpacing: -0.6, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.7, color: T.quiet, textAlign: 'center' }}>{pr.label}</span>
                   </div>
                 )
               })}
             </div>
 
-            {/* Secondary — dopamine insight tiles (2×2) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: '100%' }}>
-              {r.secondary.map((t) => {
-                const meta = INSIGHT_META[t.key]; const Ic = meta.icon
-                return (
-                  <div key={t.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '11px 12px', borderRadius: 16, background: `linear-gradient(180deg, ${meta.hue}14, ${T.surface})`, border: `1px solid ${meta.hue}2E` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ width: 26, height: 26, borderRadius: 8, background: `${meta.hue}22`, display: 'grid', placeItems: 'center' }}><Ic size={14} color={meta.hue} /></div>
-                      <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.6, color: T.quiet }}>{t.label}</span>
+            {/* The encore: the same four insights, as one quiet list. Same
+                treatment for every row, so the eye reads them as a set instead
+                of as four unrelated cards. */}
+            {r.secondary.length > 0 && (
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+                {r.secondary.map((tile, i) => {
+                  const Ic = INSIGHT_META[tile.key].icon
+                  return (
+                    <div key={tile.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 2px', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
+                      <Ic size={16} color={T.acid} strokeWidth={2.2} />
+                      <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: T.mid }}>{tile.caption}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: tile.value === '—' ? T.quiet : T.ink }}>{tile.value}</span>
                     </div>
-                    <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.5, color: t.value === '—' ? T.quiet : T.ink }}>{t.value}</span>
-                    <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.25, color: meta.hue }}>{t.caption}</span>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            )}
 
-            <div style={{ width: '100%', display: 'flex', gap: 8, marginTop: 2 }}>
-              <button onClick={onTake} style={{ flex: 1, height: 52, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-                Übernehmen<ArrowRight size={18} color={T.bg} />
+            <div style={{ width: '100%', display: 'flex', gap: 10 }}>
+              <button onClick={onTake} style={{ flex: 1, height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.heroInk, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+                Übernehmen<ArrowRight size={18} color={T.heroInk} />
               </button>
               <button onClick={onShareCard} disabled={!cardReady} aria-label="Karte teilen"
-                style={{ flex: 'none', height: 52, padding: '0 18px', borderRadius: 100, background: T.surface2, border: `1px solid ${T.stroke}`, color: T.ink, fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: cardReady ? 'pointer' : 'default', opacity: cardReady ? 1 : 0.55, display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
-                {cardReady ? <Share2 size={17} color={T.acid} /> : <Loader2 size={17} color={T.quiet} className="w3-spin" />}
-                Teilen
+                style={{ flex: 'none', width: 54, height: 54, borderRadius: 100, background: T.surface2, border: 0, color: T.ink, fontFamily: FONT, cursor: cardReady ? 'pointer' : 'default', opacity: cardReady ? 1 : 0.55, display: 'grid', placeItems: 'center' }}>
+                {cardReady ? <Share2 size={19} color={T.acid} /> : <Loader2 size={19} color={T.quiet} className="w3-spin" />}
               </button>
             </div>
             {shareNote && <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{shareNote}</span>}
@@ -467,7 +521,7 @@ function W3AvatarGenerating({ heroImageUrl }: { heroImageUrl: string | null }) {
             {CONFETTI.map((c, i) => (
               <motion.div key={i} initial={{ y: -24, opacity: 0 }} animate={{ y: [-24, 900], opacity: [0, 0.85, 0], rotate: [0, 180] }}
                 transition={{ duration: 3.6, delay: i * 0.5, repeat: Infinity, repeatDelay: 1.8, ease: 'linear' }}
-                style={{ position: 'absolute', top: 0, left: `${9 + i * 15}%`, width: 5, height: 11, borderRadius: 2, background: c }} />
+                style={{ position: 'absolute', top: 0, left: `${c.left}%`, width: 5, height: 11, borderRadius: 100, background: c.hue }} />
             ))}
           </div>
         )}
@@ -492,7 +546,15 @@ function W3AvatarGenerating({ heroImageUrl }: { heroImageUrl: string | null }) {
             <div style={{ position: 'absolute', inset: 2, borderRadius: 24, overflow: 'hidden', background: '#232427' }}>
               {heroImageUrl
                 ? <img src={heroImageUrl} alt="Dein Foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 25%', filter: 'brightness(0.62) saturate(0.85)' }} />
-                : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}><Bike size={64} strokeWidth={1.2} color="#3A3A3A" /></div>}
+                : (
+                  // A PERSON, NOT A BICYCLE. This slot is the rider's own
+                  // photograph being turned into their avatar, and it stood
+                  // empty behind a bicycle icon — the wrong object entirely on
+                  // the one screen that is asking for a face.
+                  <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+                    <UserRound size={64} strokeWidth={1.2} color={T.heroOff} />
+                  </div>
+                )}
               {/* acid scan sweep — the transformation, running over their face */}
               {!reduce && (
                 <motion.div aria-hidden animate={{ y: [-82, CARD_H] }} transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}

@@ -45,6 +45,9 @@ import { W3CoachFab } from './W3CoachChat'
 const AVATAR = 130
 const GLOW = 178
 const HANDLE_OVERLAP = -12
+// The bike's minimum height, and the reason it is a floor rather than a size:
+// the stage is a flex column and the bike takes what the avatar block leaves.
+// At 268 that remainder was a letterbox in the middle of the screen.
 const BIKE_H = 300
 
 /**
@@ -64,7 +67,11 @@ const BIKE_H = 300
  * the same shape, so both need the same treatment.
  */
 const BIKE_ART = {
-  width: '103%',
+  // 118%, was 103%. The radial mask eats the outer ~15% of the box, so a bike
+  // drawn at container width lost its wheels to the falloff and read smaller
+  // than the space it was given. Overdrawing puts the machine back at the size
+  // of the stage and lets the mask dissolve only the empty ground around it.
+  width: '118%',
   maxHeight: '100%',
   height: '100%',
   display: 'block' as const,
@@ -274,10 +281,24 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
         transition={{ duration: 0.6, ease: EASE, delay: 0.08 }}
         style={{
           position: 'relative', zIndex: 1, width: '100%', flex: '1 1 auto',
-          minHeight: 0, display: 'flex', alignItems: 'flex-end',
-          justifyContent: 'center', paddingTop: 21,
+          // `minHeight: BIKE_H` rather than 0: the bike is the subject of this
+          // screen and must never be squeezed below a readable size by whatever
+          // sits above it. `paddingTop: 8` (was 21) buys that space back.
+          minHeight: BIKE_H, display: 'flex', alignItems: 'flex-end',
+          justifyContent: 'center', paddingTop: 8,
         }}>
         {vm.bike ? (
+          // ONE TREATMENT, NOT TWO. This was gated on `bikeInScene` — full
+          // bleed for a composed render, a masked, screen-blended cut-out for
+          // the plain garage one — and the gate was the bug: a rider with no
+          // composed build (every rider, until they equip something) got the
+          // small treatment, so the machine sat in the middle of the screen as
+          // a card while the stage around it stayed empty. The bike is the
+          // subject either way. It fills the stage either way.
+          //
+          // The screen-blend and the radial mask stay for the studio render
+          // ONLY because that art has a pale ground baked in and needs its
+          // edges dissolved; the scene render already reaches its own frame.
           <img
             src={vm.bike}
             alt={vm.bikeName}
