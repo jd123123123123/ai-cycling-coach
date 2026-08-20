@@ -142,3 +142,31 @@ def test_the_bike_is_stood_on_the_ground_it_is_given():
     world = bike_build.edit_prompt([], world="BACKGROUND: a gravel track.")
     assert "closes over the bottom of both tyres" in world
     assert "nobody in the picture" in world
+
+
+# ── the cut-out ─────────────────────────────────────────────────────────────
+
+def test_a_missing_cut_out_keeps_the_photograph(monkeypatch):
+    """NEVER FATAL. A cut-out that cannot be made costs the transparency and
+    nothing else — the rider keeps the render, which is exactly what the app
+    showed before the step existed."""
+    from app.services import cutout, cyclr_studio
+
+    monkeypatch.setattr(cutout, "cut_out", lambda _img: None)
+    original = "data:image/webp;base64,AAAA"
+    assert cyclr_studio._cut_out(original) == original
+
+
+def test_the_cut_out_is_used_when_it_works(monkeypatch):
+    from app.services import cutout, cyclr_studio
+
+    monkeypatch.setattr(cutout, "cut_out", lambda _img: "data:image/png;base64,BBBB")
+    assert cyclr_studio._cut_out("data:image/webp;base64,AAAA").startswith("data:image/png")
+
+
+def test_an_unavailable_dependency_degrades(monkeypatch):
+    """A deploy that ships without rembg must return None, not raise."""
+    from app.services import cutout
+
+    monkeypatch.setattr(cutout, "available", lambda: False)
+    assert cutout.cut_out("data:image/webp;base64,AAAA") is None

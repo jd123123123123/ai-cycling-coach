@@ -141,6 +141,26 @@ BIKE_STYLE = (
     "premium proportions to match the cool 3D toy character seamlessly. CRITICAL: The wheels and "
     "spokes MUST be perfectly sharp, crisp, and static. NO motion blur, NO spinning effect."
 )
+#: THE GROUND EVERY BIKE STANDS ON, and it is the app's own.
+#:
+#: Bikes were rendered on "a clean, soft, neutral LIGHT-GREY studio backdrop"
+#: — a pale square dropped onto a near-black app, which is why Today had to
+#: screen-blend and radially mask the art to stop it reading as a lit card in
+#: the middle of the screen, and why it could never simply fill the frame: a
+#: bright rectangle has edges that must be hidden. The whole CSS apparatus
+#: existed to disguise the ground the render came with.
+#:
+#: This is `backdrops.studio_black` said in the bike's own language, so the free
+#: default stage and the plain collectible are the SAME picture rather than two
+#: that have to be reconciled.
+BIKE_GROUND = (
+    "Set the bicycle on a near-black studio ground: deep matte darkness falling away on every "
+    "side with no horizon and no scenery at all, a soft pool of light on the floor beneath the "
+    "wheels, a real contact shadow under each tyre, and a gentle falloff into pure black at the "
+    "edges of frame. The bicycle is the only colour in the picture. The background must be plain "
+    "— no props, no scenery, no text."
+)
+
 ISOLATED_BIKE_STYLE = (
     "The bicycle MUST be an isolated, standalone object with NO rider, NO hands, and NO human "
     "figures present in the image. It must maintain perfect mechanical geometry but with slightly "
@@ -508,7 +528,7 @@ def _isolated_prompt(description: str, kind: str, wear: str = "") -> str:
         )
     return (
         f"An isolated 3D bicycle inspired by this description: [{description}]. "
-        f"{BIKE_CAMERA} {GENERAL_STYLE} {ISOLATED_BIKE_STYLE}"
+        f"{BIKE_CAMERA} {BIKE_GROUND} {GENERAL_STYLE} {ISOLATED_BIKE_STYLE}"
     )
 
 
@@ -591,6 +611,19 @@ def pad_to_square(photo_b64: str) -> str:
         return photo_b64
 
 
+
+def _cut_out(image: str) -> str:
+    """Free the bicycle from its ground, keeping the original if that fails.
+
+    ONLY THE BIKE. The rider bust is drawn as a portrait with its own vignette
+    and is never placed on another background, so cutting it out would buy
+    nothing and cost the soft edge the portrait is composed with.
+    """
+    from app.services import cutout
+
+    return cutout.cut_out(image) or image
+
+
 async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str | None, str, str]:
     """The rider's bike collectible, rendered FROM THE PHOTO — 1:1.
 
@@ -631,9 +664,7 @@ async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str 
         "width showing.\n\n"
         f"REFERENCE DETAIL (from the same photograph): [{description}]\n\n"
         f"{NO_INVENTED_TEXT}\n\n"
-        f"{BIKE_CAMERA} "
-        "Set the bicycle on a clean, soft, neutral light-grey studio backdrop with a subtle contact "
-        "shadow directly beneath the wheels. The background must be plain — no props, no scenery. "
+        f"{BIKE_CAMERA} {BIKE_GROUND} "
         f"{GENERAL_STYLE} {ISOLATED_BIKE_STYLE}"
     )
     if not _gemini_ready():
@@ -641,6 +672,10 @@ async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str 
     # Squared FIRST — see `pad_to_square`. A landscape photo rendered at 1:1
     # makes the model recompose, and recomposing is when the bike rotates.
     img = await edit_image(pad_to_square(photo_b64), prompt, photo_b64)
+    # Transparent from here on, so every surface can stand this bike wherever it
+    # likes without blending, masking or asking a model to composite.
+    if img:
+        img = _cut_out(img)
     return img, prompt, "ok" if img else "image_model_unavailable"
 
 
@@ -838,6 +873,8 @@ async def render_from_photo(photo_b64: str, kind: str) -> dict[str, Any]:
                 "prompt": _isolated_prompt("", kind), "status": "image_model_unavailable"}
     # The photo is the stable identity here; the description is not.
     img, prompt, status = await render_isolated(description, kind, seed_src=photo_b64)
+    if img and kind == "bike":
+        img = _cut_out(img)
     return {"name": name, "description": description, "image": img, "prompt": prompt, "status": status}
 
 

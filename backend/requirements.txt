@@ -23,3 +23,5 @@ openai>=1.40.0
 pillow>=11.0.0
 # Gemini SDK for the cyclr_studio image pipeline (services/cyclr_studio.py)
 google-genai>=2.17.0
+rembg
+onnxruntime

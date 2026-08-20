@@ -177,11 +177,10 @@ def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False) -
             "nobody in the picture: the bicycle stands alone."
         )
     else:
-        ground = (
-            "Set the bicycle on a clean, soft, neutral light-grey studio backdrop with a subtle "
-            "contact shadow directly beneath the wheels. The background must be plain — no props, "
-            "no scenery, no text, no watermark."
-        )
+        # The same near-black ground the collectible itself is shot on, so a
+        # build and a plain render are the same picture with different parts.
+        from app.services.cyclr_studio import BIKE_GROUND
+        ground = BIKE_GROUND
     # THE PREAMBLE DEPENDS ON WHAT IS BEING CHANGED, and conflating the two cost
     # two failed renders. A PARTS swap must hold the camera, the position, the
     # scale and the background still — that is the whole reason an edit beats a

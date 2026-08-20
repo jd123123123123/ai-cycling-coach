@@ -67,21 +67,25 @@ const BIKE_H = 300
  * the same shape, so both need the same treatment.
  */
 const BIKE_ART = {
-  // 118%, was 103%. The radial mask eats the outer ~15% of the box, so a bike
-  // drawn at container width lost its wheels to the falloff and read smaller
-  // than the space it was given. Overdrawing puts the machine back at the size
-  // of the stage and lets the mask dissolve only the empty ground around it.
-  width: '118%',
-  // Bottom-aligned inside the square: the render has its own ground and light
-  // baked in near the bottom, so centring it left a band of empty studio under
-  // the wheels and pushed the machine up away from the floor it stands on.
-  alignSelf: 'flex-end' as const,
-  maxHeight: '100%',
+  width: '100%',
   height: '100%',
+  // CONTAIN, because the bike is now a CUT-OUT (`services/cutout.py`): a PNG
+  // with nothing behind it. There is no ground to crop away and no rectangle to
+  // hide, so the machine simply sits in the space at its true proportions and
+  // the stage's own floor shows through around it.
+  objectFit: 'contain' as const,
+  objectPosition: 'center 58%',
   display: 'block' as const,
-  mixBlendMode: 'screen' as const,
-  maskImage: 'radial-gradient(72% 66% at 50% 56%, #000 52%, transparent 100%)',
-  WebkitMaskImage: 'radial-gradient(72% 66% at 50% 56%, #000 52%, transparent 100%)',
+  // NO SCREEN BLEND AND NO MASK. Both existed for one reason: the art arrived
+  // on a pale grey studio ground, and a bright rectangle on a near-black app has
+  // edges that must be dissolved. The blend also cost real contrast, lifting
+  // every dark part of the machine toward grey. With transparency there is
+  // nothing to dissolve.
+  //
+  // A cut-out has no contact shadow either, and a bike floating with none reads
+  // as a sticker — so the stage draws one under it in CSS, where it is always
+  // in the right place instead of wherever the model happened to paint it.
+  filter: 'drop-shadow(0 18px 26px rgba(0,0,0,0.55))',
 }
 
 /**
@@ -285,22 +289,21 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
         transition={{ duration: 0.6, ease: EASE, delay: 0.08 }}
         style={{
           position: 'relative', zIndex: 1, width: '100%',
-          // A SQUARE BOX AS WIDE AS THE SCREEN, and this is the whole fix.
+          // FILL THE SPACE, DO NOT FIT INTO IT.
           //
-          // The renders are square. This box used to be `flex: 1 1 auto` — it
-          // took whatever height the avatar block left over, about 300px on a
-          // 844pt phone — and with `objectFit: contain` the limiting dimension
-          // of a square image in a 390x300 box is the HEIGHT. So the bike drew
-          // at 300x300, centred, with 45px of dead stage either side: the
-          // letterbox in the middle of the screen, no matter how wide the art
-          // was told to be. Widening the image could never fix it; the box had
-          // to stop being height-driven.
+          // Two goes at this, and both were half right. `flex: 1 1 auto` with
+          // `contain` drew a 300x300 bike in a 390-wide stage — the letterbox.
+          // `aspectRatio: 1` fixed the width and broke the height: a 390px
+          // square below a 230px avatar block is taller than the stage, so the
+          // wheels were cut off by the panel below.
           //
-          // `aspectRatio: 1` makes the box exactly as tall as the screen is
-          // wide, so the square render fills the full width every time, on any
-          // device. `flex: '0 0 auto'` keeps the column from shrinking it back.
-          aspectRatio: '1 / 1', flex: '0 0 auto',
-          display: 'flex', alignItems: 'flex-end',
+          // The box takes the room that is actually there, and the art COVERS
+          // it — scaled to the width, cropped top and bottom. That crop is free
+          // now that bikes render on a near-black ground (`BIKE_GROUND`): what
+          // gets cut is empty studio, not machine. Before, with the pale grey
+          // ground, cropping would have sliced a bright rectangle in half.
+          flex: '1 1 auto', minHeight: 0,
+          display: 'flex', alignItems: 'stretch',
           justifyContent: 'center', paddingTop: 0,
         }}>
         {vm.bike ? (
@@ -315,11 +318,7 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
           // The screen-blend and the radial mask stay for the studio render
           // ONLY because that art has a pale ground baked in and needs its
           // edges dissolved; the scene render already reaches its own frame.
-          <img
-            src={vm.bike}
-            alt={vm.bikeName}
-            style={vm.bikeInScene ? SCENE_ART : { ...BIKE_ART, objectFit: 'contain' }}
-          />
+          <img src={vm.bike} alt={vm.bikeName} style={vm.bikeInScene ? SCENE_ART : BIKE_ART} />
         ) : (
           <div style={{ position: 'relative', width: '103%', height: '100%', display: 'grid', placeItems: 'end center' }}>
             <div style={BIKE_ART}><GhostBike /></div>
