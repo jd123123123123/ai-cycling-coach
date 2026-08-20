@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, Wind, Droplets, Thermometer, type LucideIcon } from 'lucide-react'
@@ -8,6 +8,44 @@ import { T, FONT, EASE, grow, Kicker, card, band, DASH } from './w3tokens'
 // "Deine Woche" — ONE card: the week's day selector, the selected day's
 // training, and the selected day's weather. Selecting a day drives all three.
 // ────────────────────────────────────────────────────────────────────────
+// ── the four-step day beam ──────────────────────────────────────────────
+//
+// A day's load used to be drawn as ONE tick whose height scaled continuously
+// against the hardest day of that week. Two things were wrong with it. It was
+// unreadable — nobody estimates 9 px against 14 px — and it was RELATIVE, so an
+// easy week rescaled itself and its easiest ride drew the same tall tick as a
+// race. The same effort looked different depending on the company it kept.
+//
+// Four steps fix both. You can count four. And the thresholds below are
+// ABSOLUTE daily TSS, so a 60 TSS endurance hour lights two steps in every week
+// of the year — which is the only way a rider can read the strip across weeks
+// and see a block get harder.
+//
+// The cuts are the ones cyclists already say out loud about a day: under 50 is
+// a recovery spin, 50-100 is an endurance ride, 100-150 is a real interval day,
+// and past 150 is the long hard one you feel tomorrow. They were briefly 45/90/
+// 135, which put the fixture's own 45 TSS "Erholungsfahrt" on two steps — the
+// label and the beam disagreed on the same card.
+const BEAM_STEPS = 4
+const BEAM_SEG = 3
+const BEAM_GAP = 2
+const BEAM_CUTS = [1, 50, 100, 150]
+const BEAM_EMPTY = '#FFFFFF14'
+const BEAM_COL: CSSProperties = {
+  width: '58%',
+  display: 'flex',
+  flexDirection: 'column-reverse',
+  gap: BEAM_GAP,
+  // Reserve the full column whatever is lit, so the numbers above stay on one
+  // baseline across the week.
+  height: BEAM_STEPS * BEAM_SEG + (BEAM_STEPS - 1) * BEAM_GAP,
+}
+
+/** How many of the four steps this day's load lights. 0 for a rest day. */
+export function beamSteps(tss: number): number {
+  return BEAM_CUTS.filter((cut) => tss >= cut).length
+}
+
 export type DayStatus = 'today' | 'hit' | 'missed' | 'over' | 'rest' | 'upcoming'
 export interface W3DayFull {
   letter: string
@@ -689,7 +727,6 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
   day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt
 }) {
   const reduce = useReducedMotion()
-  const max = Math.max(1, ...days.map((d) => Math.max(d.actual, d.planned ?? 0)))
   // band(26), like every other band on Today. This one sat at 20 and was the
   // only section whose bottom gap did not match its neighbours — the eye reads
   // that inconsistency as a mistake long before it can name it.
@@ -714,15 +751,18 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
           {days.map((d, i) => {
             const isToday = d.status === 'today'
             const active = i === selected
-            const val = Math.max(d.actual, d.planned ?? 0)
-            const tick = val <= 0 ? 2 : Math.max(3, Math.round((val / max) * 14))
+            const lit = beamSteps(Math.max(d.actual, d.planned ?? 0))
+            // Brighter than the old tick needed to be. A continuous bar was read
+            // by its height and could afford to be faint; four steps are read by
+            // COUNTING them, and a step at 30% white on a #161616 card cannot be
+            // counted at arm's length.
             const hue = isToday ? T.acid
               : d.status === 'missed' ? T.warn
                 : d.status === 'over' ? T.cool
-                  : active ? T.d4
-                    : d.status === 'hit' ? T.d3 : T.d2
+                  : active ? T.ink
+                    : d.status === 'hit' ? T.d4 : T.d3
             return (
-              <button key={i} onClick={() => onSelect(i)} aria-pressed={active} aria-label={`${d.dateLabel}, ${STATUS[d.status].label}`}
+              <button key={i} onClick={() => onSelect(i)} aria-pressed={active} aria-label={`${d.dateLabel}, ${STATUS[d.status].label}, Intensität ${lit} von ${BEAM_STEPS}`}
                 style={{
                   flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
                   padding: '8px 0 7px', borderRadius: 13, cursor: 'pointer', fontFamily: FONT,
@@ -731,9 +771,24 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
                 }}>
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: isToday ? T.acid : active ? T.mid : T.quiet }}>{d.letter}</span>
                 <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.4, fontVariantNumeric: 'tabular-nums', color: isToday ? T.acid : active ? T.ink : T.mid }}>{d.num}</span>
-                <div style={{ width: '100%', height: 14, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-                  <motion.div initial={reduce ? false : { height: 0 }} animate={{ height: tick }} transition={grow(i * 0.03)}
-                    style={{ width: '58%', height: tick, borderRadius: 2, background: hue }} />
+                <div aria-hidden style={BEAM_COL}>
+                  {Array.from({ length: BEAM_STEPS }, (_, s) => (
+                    <motion.div key={s}
+                      initial={reduce ? false : { scaleX: 0.3 }}
+                      animate={{ scaleX: 1 }}
+                      transition={grow(i * 0.03 + s * 0.04)}
+                      style={{
+                        height: BEAM_SEG, borderRadius: 1.5,
+                        // An unlit step is a SLOT, not a bar: visible enough to
+                        // be counted against the card, far enough below every
+                        // lit hue that it can never be mistaken for load that
+                        // was actually ridden. `surface2` was neither — at
+                        // #202020 on a #161616 card it simply disappeared, and
+                        // a beam you cannot count the empty half of is just the
+                        // old variable-length bar with steps in it.
+                        background: s < lit ? hue : BEAM_EMPTY,
+                      }} />
+                  ))}
                 </div>
               </button>
             )
